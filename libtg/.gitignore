@@ -1,0 +1,4 @@
+*.swp
+*.un~
+api_id.h
+test.db
