@@ -6,6 +6,8 @@ Status: **done** · *in progress* · planned · out of scope
 
 The app was fully rewritten onto TDLib. `libtg` — the hand-written MTProto stack — is gone. What remains is ~2500 lines written for this app plus TDLib itself, loaded at runtime as `libtdjson.dylib`.
 
+Current per-feature state, with counts and gaps, is in [docs/status/README.md](status/README.md). The tables in sections 1–7 are the planning record that led to it; where they disagree with a status file, the status file was checked against the code on 7 November 2026.
+
 ---
 
 ## 1 · Messaging core
@@ -106,13 +108,15 @@ The app was fully rewritten onto TDLib. `libtg` — the hand-written MTProto sta
 | | Push notifications | needs `aps-environment` entitlement |
 | | Background fetch | |
 | | arm64 build | Makefile target exists, unexercised since rewrite |
-| | Crash reporting | pulled by hand today |
+| | Crash reporting | pulled by hand on 7 November 2026 |
 
 ---
 
 ## 6 · The rest of Telegram
 
 TDLib is 1.8.66 — the API is mostly there. The question is almost always the screen, not the protocol.
+
+The tables below are the planning record, not the current state. What is done, partial, missing or dev-only per feature is in [docs/status/README.md](status/README.md); several rows here were built after this section was written.
 
 ### Reachable, not yet written
 
@@ -231,6 +235,8 @@ An audit of `src/Controllers/` reveals that while core messaging, 1:1 voice call
 
 ## 8 · Half-done and missing (audit of 7 November 2026)
 
+Row by row against official, area by area: [docs/status/](status/README.md) (its README ranks the 15 most-hit gaps).
+
 What exists but gives the user less than it promises, or what the parity audit
 found and nobody built. Every row was checked against the code on 7 November;
 the parity audit's own files predate wave 1 and list much that is done since.
@@ -241,7 +247,7 @@ Section 7 above keeps the stubs and harnesses; this one is the user's path.
 | Feature | There now | Missing | Where |
 |---|---|---|---|
 | Custom emoji in text | Static picture inline (iOS 7+), 192-picture LRU | Animation (tier-gated); iOS 6 keeps the fallback emoji | `TGMessageLayout.mm`, `TGCustomEmojiStore` |
-| Emoji status by names | Chat list rows, own profile | Chat header title, group sender names, member rows | `TGChatViewController+Chrome.m`, `+Cells.m` |
+| Emoji status by names | Chat list rows, own profile, chat header, group sender names | Member rows | `TGChatViewController+Chrome.m`, `+Cells.m` |
 | Undrawable characters | Stripped in sticker panel titles only | Chat titles, names, previews: one such character costs 0.4-2.8 s on a 4S | `TGStripUndrawableScalars` |
 | Chat list badges | Unread count, mention badge | Reaction badge, poll-vote badge, compact counts ("1.2K"), blank badge for marked unread | `TGChatListViewController.m:1912`, `TGChatCell.m` |
 | Chat list preview | Text, "Draft:", sender | Photo/video thumbnail at the start, type glyph | `TGChatCell.m` |
@@ -263,7 +269,7 @@ Section 7 above keeps the stubs and harnesses; this one is the user's path.
 | Unofficial app warning | — | `uses_unofficial_app` line above the card | details card |
 | Profile rating | — | `rating` / `pending_rating` level | header |
 | Media panes | Stories, Archive, Media, Files, Music, Voice, Links, Groups | GIFs pane (`searchMessagesFilterAnimation`), pane counts in the subtitle, month sections in the grid | `TGProfileViewController+Media.m` |
-| Gifts | Emoji plus star count, first 20 | Sticker artwork, collectible model, paging past 20 | `+Media.m` |
+| Gifts | Artwork, collectibles with backdrop and number, notes, every page, channel gifts | Animated artwork; not checked on the 4S (this account has no gifts) | `+Media.m`, `TGGiftFlatten.m` |
 
 ### Contacts and calls
 
@@ -349,12 +355,12 @@ Checked on the 4S with the dev showcase rows, not yet with real messages.
 
 | What | Now | Missing |
 |---|---|---|
-| In message text | Static picture inline on iOS 7+, 192-picture LRU; iOS 6 shows the fallback emoji | Animation (tier-gated, the sticker pipeline) |
-| Sending | — : `sendMessage` carries no entities at all, so neither custom emoji nor formatting go out; the Format Text sheet's `**` arrives as literal stars | Composer that keeps custom emoji ids through typing; send through `parseMarkdown` so markup and custom emoji travel together |
-| Editing | Parses Markdown, but a custom emoji in the edited text turns into its fallback and is lost | Prefill through `getMarkdownText`, save with the entities |
-| Picker | Emoji panel has no custom emoji tab | Installed custom emoji packs; Premium gate (non-Premium: Saved Messages only) |
-| Reactions | A custom emoji reaction shows as "★ 3" | Its picture in the chip; choosing one (Premium) |
-| Emoji status | Chat list rows, own profile, status picker | Chat header, group sender names, member rows |
+| In message text | Picture inline on iOS 7+ (iOS 6 shows the fallback); animated through the sticker pipeline where stickers animate, up to 3 per bubble | Animation not yet checked on the 4S |
+| Sending | `TGComposerText` keeps the ids through typing; Send goes through `parseMarkdown`, so real custom emoji and the Format Text markup go out; seen working on the 4S in Saved Messages | — |
+| Editing | Pre-fills through `getMarkdownText` and saves with the entities | Not yet checked on the 4S |
+| Picker | Custom tab with the installed packs; without Premium only Saved Messages takes them | — |
+| Reactions | Its picture in the chip | Choosing a custom reaction (Premium) |
+| Emoji status | Chat list rows, own profile, status picker, chat header, group sender names | Member rows |
 | Names and previews | Fallback emoji | Pictures where a name or preview line is drawn |
 
 ### Still missing in message types after 7 November
