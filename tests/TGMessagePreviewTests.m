@@ -348,4 +348,137 @@ static NSString *pvPreview(NSDictionary *content) {
 			@"content" : @{@"@type" : @"messageVideo"}}), @"Video");
 }
 
+#pragma mark - custom emoji in preview
+
+static NSDictionary *lpCustomEmojiEntity(NSInteger offset, NSInteger length, id customEmojiId) {
+	return @{
+		@"offset" : @(offset),
+		@"length" : @(length),
+		@"type"   : @{
+			@"@type"           : @"textEntityTypeCustomEmoji",
+			@"custom_emoji_id" : customEmojiId,
+		},
+	};
+}
+
+- (void)testPreviewCustomEmoji_MatchingTextMessageReturnsEntity {
+	NSArray *entities = @[lpCustomEmojiEntity(6, 2, @(12345))];
+	NSArray *result = TGPreviewCustomEmoji(@"Hello \U0001F600", @"Hello \U0001F600", entities);
+	XCTAssertEqual(result.count, 1U);
+	XCTAssertEqualObjects(result[0][@"offset"], @(6));
+	XCTAssertEqualObjects(result[0][@"length"], @(2));
+	XCTAssertEqualObjects(result[0][@"customEmojiId"], @(12345));
+}
+
+- (void)testPreviewCustomEmoji_MultipleEntitiesKeptInOffsetOrder {
+	NSArray *entities = @[
+		lpCustomEmojiEntity(8, 2, @(200)),
+		lpCustomEmojiEntity(0, 2, @(100)),
+	];
+	NSArray *result = TGPreviewCustomEmoji(@"\U0001F600 text \U0001F601", @"\U0001F600 text \U0001F601", entities);
+	XCTAssertEqual(result.count, 2U);
+	XCTAssertEqualObjects(result[0][@"offset"], @(0));
+	XCTAssertEqualObjects(result[0][@"customEmojiId"], @(100));
+	XCTAssertEqualObjects(result[1][@"offset"], @(8));
+	XCTAssertEqualObjects(result[1][@"customEmojiId"], @(200));
+}
+
+- (void)testPreviewCustomEmoji_EntityPastPreviewLengthDropped {
+	NSArray *entities = @[
+		lpCustomEmojiEntity(0, 2, @(111)),
+		lpCustomEmojiEntity(8, 2, @(222)),
+	];
+	// Preview cut to 6 code units; the entity at offset 8 is past its end.
+	NSArray *result = TGPreviewCustomEmoji(@"\U0001F600 cut", @"\U0001F600 cut longer text \U0001F601", entities);
+	XCTAssertEqual(result.count, 1U);
+	XCTAssertEqualObjects(result[0][@"offset"], @(0));
+	XCTAssertEqualObjects(result[0][@"customEmojiId"], @(111));
+}
+
+- (void)testPreviewCustomEmoji_EntityPartiallyPastEndDropped {
+	// Preview length is 5; entity at offset 4 with length 2 ends at 6 > 5.
+	NSArray *entities = @[lpCustomEmojiEntity(4, 2, @(999))];
+	NSArray *result = TGPreviewCustomEmoji(@"12345", @"123456789", entities);
+	XCTAssertEqual(result.count, 0U);
+}
+
+- (void)testPreviewCustomEmoji_NonCustomEmojiEntitiesIgnored {
+	NSArray *entities = @[
+		@{
+			@"offset" : @(0),
+			@"length" : @(5),
+			@"type"   : @{@"@type" : @"textEntityTypeBold"},
+		},
+		lpCustomEmojiEntity(6, 2, @(555)),
+	];
+	NSArray *result = TGPreviewCustomEmoji(@"Hello \U0001F600", @"Hello \U0001F600", entities);
+	XCTAssertEqual(result.count, 1U);
+	XCTAssertEqualObjects(result[0][@"offset"], @(6));
+	XCTAssertEqualObjects(result[0][@"customEmojiId"], @(555));
+}
+
+- (void)testPreviewCustomEmoji_MismatchedPreviewReturnsEmpty {
+	// A type word like "Photo" does not match caption text starting with "Sunset".
+	NSArray *entities = @[lpCustomEmojiEntity(0, 2, @(777))];
+	NSArray *result = TGPreviewCustomEmoji(@"Photo", @"Sunset at the beach", entities);
+	XCTAssertEqual(result.count, 0U);
+}
+
+- (void)testPreviewCustomEmoji_CaptionCustomEmojiIncluded {
+	NSArray *entities = @[lpCustomEmojiEntity(5, 2, @(888))];
+	NSString *caption = @"Nice \U0001F600";
+	NSArray *result = TGPreviewCustomEmoji(caption, caption, entities);
+	XCTAssertEqual(result.count, 1U);
+	XCTAssertEqualObjects(result[0][@"offset"], @(5));
+	XCTAssertEqualObjects(result[0][@"customEmojiId"], @(888));
+}
+
+- (void)testPreviewCustomEmoji_NilAndEmptyInputsSafe {
+	XCTAssertEqual(TGPreviewCustomEmoji(nil, @"hello", @[]).count, 0U);
+	XCTAssertEqual(TGPreviewCustomEmoji(@"hello", nil, @[]).count, 0U);
+	XCTAssertEqual(TGPreviewCustomEmoji(@"hello", @"hello", nil).count, 0U);
+	XCTAssertEqual(TGPreviewCustomEmoji(@"", @"hello", @[]).count, 0U);
+	XCTAssertEqual(TGPreviewCustomEmoji(@"hello", @"", @[]).count, 0U);
+}
+
+- (void)testPreviewCustomEmoji_CustomEmojiIdAsStringOrNumber {
+	NSArray *entities = @[
+		lpCustomEmojiEntity(0, 2, @"9876543210123"),
+		lpCustomEmojiEntity(6, 2, @(12345LL)),
+	];
+	NSArray *result = TGPreviewCustomEmoji(@"\U0001F600 ok \U0001F601", @"\U0001F600 ok \U0001F601", entities);
+	XCTAssertEqual(result.count, 2U);
+	XCTAssertEqualObjects(result[0][@"customEmojiId"], @(9876543210123LL));
+	XCTAssertEqualObjects(result[1][@"customEmojiId"], @(12345LL));
+}
+
+- (void)testPreviewCustomEmoji_FlattenedDictionaryAndArraySupported {
+	NSArray *entities = @[
+		@{@"offset": @(0), @"length": @(2), @"customEmojiId": @(321)},
+		@[@(6), @(2), @(654)],
+	];
+	NSArray *result = TGPreviewCustomEmoji(@"\U0001F600 ok \U0001F601", @"\U0001F600 ok \U0001F601", entities);
+	XCTAssertEqual(result.count, 2U);
+	XCTAssertEqualObjects(result[0][@"customEmojiId"], @(321));
+	XCTAssertEqualObjects(result[1][@"customEmojiId"], @(654));
+}
+
+- (void)testPreviewCustomEmoji_MalformedEntitiesSkipped {
+	NSArray *entities = @[
+		@{@"offset": @(-1), @"length": @(2), @"customEmojiId": @(10)},
+		@{@"offset": @(0), @"length": @(0), @"customEmojiId": @(20)},
+		@{@"offset": @(0), @"length": @(2), @"customEmojiId": @(0)},
+		@{},
+		@"not a dict",
+	];
+	NSArray *result = TGPreviewCustomEmoji(@"hello", @"hello", entities);
+	XCTAssertEqual(result.count, 0U);
+}
+
+- (void)testPreviewCustomEmoji_ServiceMessageHasNoMessageTextReturnsEmpty {
+	// Service previews have no message text / caption.
+	NSArray *result = TGPreviewCustomEmoji(@"Alice joined the group", nil, @[]);
+	XCTAssertEqual(result.count, 0U);
+}
+
 @end

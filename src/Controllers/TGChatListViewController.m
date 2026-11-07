@@ -238,8 +238,8 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 				selector:@selector(reload) object:nil];
 		[weakSelf performSelector:@selector(reload) withObject:nil afterDelay:0.3];
 	};
-	// A status picture arrived: the visible rows draw it, at most every 0.2 s
-	// while a screenful of them comes in.
+	// A status or preview custom emoji picture arrived: the visible rows draw it,
+	// at most every 0.3 s while a burst comes in.
 	[[NSNotificationCenter defaultCenter] addObserverForName:TGCustomEmojiLoadedNotification
 			object:nil queue:[NSOperationQueue mainQueue]
 		usingBlock:^(NSNotification *note){
@@ -248,7 +248,7 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 			return;
 		[NSObject cancelPreviousPerformRequestsWithTarget:me
 				selector:@selector(reloadVisibleRows) object:nil];
-		[me performSelector:@selector(reloadVisibleRows) withObject:nil afterDelay:0.2];
+		[me performSelector:@selector(reloadVisibleRows) withObject:nil afterDelay:0.3];
 	}];
 	[[NSNotificationCenter defaultCenter] addObserverForName:TGStoriesChangedNotification
 			object:nil queue:[NSOperationQueue mainQueue]
@@ -1906,9 +1906,11 @@ static NSString *TGChatDate(NSTimeInterval unix) {
 	} else if ([draft length]){
 		[cell setDraftPreview:draft];
 	} else if (c[@"previewText"]){
-		[cell setPreview:c[@"previewText"] author:c[@"lastAuthor"]];
+		[cell setPreview:c[@"previewText"] author:c[@"lastAuthor"] customEmoji:c[@"previewCustomEmoji"]];
+	} else if (c[@"text"]){
+		[cell setPreview:c[@"text"] author:nil customEmoji:c[@"previewCustomEmoji"]];
 	} else {
-		cell.previewLabel.text = c[@"text"];
+		cell.previewLabel.text = @"";
 	}
 
 	cell.onlineDot.hidden = ![c[@"isOnline"] boolValue];

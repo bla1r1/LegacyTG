@@ -2,6 +2,7 @@
 #import "TGChatCell.h"
 #import "TGChatListRowGeometry.h"
 #import "TGTheme.h"
+#import "TGCustomEmojiStore.h"
 #import <QuartzCore/QuartzCore.h>
 #import "TGStyle.h"
 
@@ -161,20 +162,104 @@ static UIFont *TGChatCellTitleFont(void) {
 }
 
 - (void)setPreview:(NSString *)text author:(NSString *)author {
+	[self setPreview:text author:author customEmoji:nil];
+}
+
+- (void)setPreview:(NSString *)text author:(NSString *)author customEmoji:(NSArray *)customEmoji {
 	TGTheme *theme = [TGTheme shared];
 	text = text ?: @"";
-	if (!author.length || ![self.previewLabel respondsToSelector:@selector(setAttributedText:)]) {
+
+	Class attachmentClass = NSClassFromString(@"NSTextAttachment");
+	BOOL canUseAttachments = (attachmentClass != nil && [NSAttributedString respondsToSelector:@selector(attributedStringWithAttachment:)]);
+
+	if (![self.previewLabel respondsToSelector:@selector(setAttributedText:)]) {
 		self.previewLabel.text = author.length ? [NSString stringWithFormat:@"%@: %@", author, text] : text;
 		return;
 	}
-	NSString *prefix = [author stringByAppendingString:@": "];
+
+	if (!author.length && (!canUseAttachments || customEmoji.count == 0)) {
+		self.previewLabel.text = text;
+		self.previewLabel.textColor = [theme secondaryTextColour];
+		return;
+	}
+
+	NSString *prefix = author.length ? [author stringByAppendingString:@": "] : @"";
+	NSUInteger authorOffset = prefix.length;
+	NSString *fullText = authorOffset > 0 ? [prefix stringByAppendingString:text] : text;
+
 	NSMutableAttributedString *line = [[NSMutableAttributedString alloc]
-			initWithString:[prefix stringByAppendingString:text]
+			initWithString:fullText
 				attributes:@{NSFontAttributeName: self.previewLabel.font,
 							 NSForegroundColorAttributeName: [theme secondaryTextColour]}];
-	[line addAttribute:NSForegroundColorAttributeName
-				 value:[theme primaryTextColour]
-				 range:NSMakeRange(0, prefix.length)];
+
+	if (authorOffset > 0) {
+		[line addAttribute:NSForegroundColorAttributeName
+					 value:[theme primaryTextColour]
+					 range:NSMakeRange(0, authorOffset)];
+	}
+
+	if (canUseAttachments && customEmoji.count > 0) {
+		NSMutableArray *entries = [NSMutableArray array];
+		for (id item in customEmoji) {
+			NSInteger off = 0;
+			NSInteger len = 0;
+			int64_t eid = 0;
+			if ([item isKindOfClass:[NSDictionary class]]) {
+				NSDictionary *dict = (NSDictionary *)item;
+				off = [dict[@"offset"] integerValue];
+				len = [dict[@"length"] integerValue];
+				eid = [dict[@"customEmojiId"] longLongValue];
+			} else if ([item isKindOfClass:[NSArray class]]) {
+				NSArray *arr = (NSArray *)item;
+				if (arr.count >= 3) {
+					off = [arr[0] integerValue];
+					len = [arr[1] integerValue];
+					eid = [arr[2] longLongValue];
+				}
+			}
+			if (len > 0 && eid > 0) {
+				[entries addObject:@{
+					@"offset" : @(off),
+					@"length" : @(len),
+					@"id"     : @(eid)
+				}];
+			}
+		}
+
+		// Sort from highest offset backwards so replacing earlier glyphs is not affected.
+		[entries sortUsingComparator:^NSComparisonResult(NSDictionary *a, NSDictionary *b) {
+			return [b[@"offset"] compare:a[@"offset"]];
+		}];
+
+		UIFont *font = self.previewLabel.font ?: TGFontBody();
+		CGFloat side = font.pointSize;
+
+		for (NSDictionary *entry in entries) {
+			NSUInteger off = [entry[@"offset"] unsignedIntegerValue] + authorOffset;
+			NSUInteger len = [entry[@"length"] unsignedIntegerValue];
+			int64_t eid = [entry[@"id"] longLongValue];
+
+			if (off + len > line.length) {
+				continue;
+			}
+
+			UIImage *picture = [[TGCustomEmojiStore shared] imageForId:eid side:side];
+			if (!picture) {
+				// Picture still loading; keep fallback text.
+				continue;
+			}
+
+			id attachment = [[attachmentClass alloc] init];
+			[attachment setImage:picture];
+			[attachment setBounds:CGRectMake(0, roundf(font.descender), side, side)];
+
+			NSAttributedString *glyph = [NSAttributedString attributedStringWithAttachment:attachment];
+			if (glyph) {
+				[line replaceCharactersInRange:NSMakeRange(off, len) withAttributedString:glyph];
+			}
+		}
+	}
+
 	self.previewLabel.attributedText = line;
 }
 

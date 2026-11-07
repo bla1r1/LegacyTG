@@ -29,9 +29,11 @@
 #import "TGMediaViewer.h"
 #import "TGPollPresentation.h"
 #import "TGChecklistPresentation.h"
-#import "TGGiftViewer.h"
+#import "TGGiftViewController.h"
 #import "TGStoryViewerViewController.h"
+#if TG_DEV
 #import "TGCommunityViewController.h"
+#endif
 #import "TGMusicPlayer.h"
 #import "TGDevShowcase.h"
 
@@ -791,6 +793,15 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 /// Until the answer lands the subtitle stays empty; a presence line or a Mute
 /// button for a channel you never joined is worse than no line at all.
 - (void)loadChatKindAndChrome {
+	// The posting rights take a round trip; a channel read from the chat list
+	// hides the composer meanwhile instead of offering a field nobody may use.
+	for (NSDictionary *row in [TGClient shared].chats){
+		if ([row[@"id"] longLongValue] == self.chatId){
+			if ([row[@"isChannel"] boolValue])
+				self.inputBar.hidden = YES;
+			break;
+		}
+	}
 	__weak typeof(self) weakSelf = self;
 	[[TGClient shared] chatKindForChat:self.chatId completion:^(NSDictionary *kind){
 		TGChatViewController *me = weakSelf;
@@ -1468,13 +1479,21 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 		NSDictionary *gift = [m[@"gift"] isKindOfClass:NSDictionary.class] ? m[@"gift"] : @{};
 		NSNumber *thumb = [gift[@"stickerThumbFileId"] longLongValue] ? gift[@"stickerThumbFileId"]
 				: @(card.imageFileId);
-		[TGGiftViewer showGift:@{
-			@"starCount"    : gift[@"starCount"] ?: @0,
-			@"message"      : gift[@"text"] ?: @"",
-			@"thumbFileId"  : thumb ?: @0,
-			@"senderUserId" : gift[@"senderUserId"] ?: @0,
-			@"date"         : m[@"date"] ?: @0,
-		} inView:self.view];
+		NSMutableDictionary *dict = [NSMutableDictionary dictionaryWithDictionary:@{
+			@"starCount"          : gift[@"starCount"] ?: @0,
+			@"note"               : gift[@"text"] ?: @"",
+			@"senderUserId"       : gift[@"senderUserId"] ?: @0,
+			@"date"               : m[@"date"] ?: @0,
+			@"thumbFileId"        : thumb ?: @0,
+			@"stickerThumbFileId" : thumb ?: @0,
+		}];
+		if (gift[@"stickerFileId"])
+			dict[@"stickerFileId"] = gift[@"stickerFileId"];
+		if (gift[@"isCollectible"])
+			dict[@"isCollectible"] = gift[@"isCollectible"];
+		TGGiftViewController *vc = [[TGGiftViewController alloc] initWithGift:dict];
+		vc.hidesBottomBarWhenPushed = YES;
+		[self.navigationController pushViewController:vc animated:YES];
 		break;
 	}
 	case TGMessageCardActionOpenStory: {
@@ -1531,18 +1550,9 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 	case TGMessageCardActionOpenCommunity: {
 		int64_t communityId = card.actionTargetId;
 		if (communityId != 0) {
-			NSDictionary *comm = nil;
-			for (NSDictionary *c in [TGClient shared].communities) {
-				if ([c[@"id"] longLongValue] == communityId) {
-					comm = c;
-					break;
-				}
-			}
-			if (!comm)
-				comm = @{@"id" : @(communityId), @"name" : @"Community"};
-			TGCommunityViewController *vc = [[TGCommunityViewController alloc] initWithCommunity:comm];
-			vc.hidesBottomBarWhenPushed = YES;
-			[self.navigationController pushViewController:vc animated:YES];
+			[TGChatViewController openCommunity:communityId
+									 navigation:self.navigationController
+										 inView:self.view];
 		}
 		break;
 	}
@@ -2258,4 +2268,58 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
     }
 }
 
+
++ (void)openCommunity:(int64_t)communityId
+		 navigation:(UINavigationController *)navigation
+			 inView:(UIView *)view {
+	if (!communityId || !navigation)
+		return;
+#if TG_DEV
+	NSDictionary *community = nil;
+	for (NSDictionary *c in [TGClient shared].communities)
+		if ([c[@"id"] longLongValue] == communityId)
+			community = c;
+	TGCommunityViewController *screen = [[TGCommunityViewController alloc]
+			initWithCommunity:community ?: @{@"id" : @(communityId), @"name" : @"Community"}];
+	screen.hidesBottomBarWhenPushed = YES;
+	[navigation pushViewController:screen animated:YES];
+#else
+	// The community screen is an admin harness; a reader needs its chats.
+	__weak UINavigationController *weakNav = navigation;
+	__weak UIView *weakView = view;
+	[[TGClient shared] communityFullInfo:communityId completion:^(NSDictionary *info, NSString *error){
+		dispatch_async(dispatch_get_main_queue(), ^{
+			UIView *host = weakView;
+			if (!host)
+				return;
+			NSMutableArray *chats = [NSMutableArray array];
+			for (NSDictionary *chat in info[@"chats"]){
+				if ([chat isKindOfClass:NSDictionary.class] && ![chat[@"hidden"] boolValue] &&
+					[chat[@"chatId"] longLongValue] != 0)
+					[chats addObject:chat];
+			}
+			if (!chats.count){
+				[TGAlertSheet showMessage:@"This community has no chats you can open."
+									title:@"Community" inView:host];
+				return;
+			}
+			NSMutableArray *titles = [NSMutableArray array];
+			for (NSDictionary *chat in chats){
+				NSString *title = chat[@"title"];
+				if (!title.length)
+					title = [[TGClient shared] titleForChat:[chat[@"chatId"] longLongValue]];
+				[titles addObject:title.length ? title : @"Chat"];
+			}
+			[TGAlertSheet showChoices:titles title:@"Community" destructiveIndex:-1 inView:host
+							 onChoice:^(NSInteger index){
+				TGChatViewController *chat = [[TGChatViewController alloc] init];
+				chat.chatId = [chats[(NSUInteger)index][@"chatId"] longLongValue];
+				chat.chatTitle = titles[(NSUInteger)index];
+				chat.hidesBottomBarWhenPushed = YES;
+				[weakNav pushViewController:chat animated:YES];
+			}];
+		});
+	}];
+#endif
+}
 @end

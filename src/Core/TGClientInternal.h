@@ -69,6 +69,9 @@ NSArray *TGMediaPageAppending(NSArray *existing, NSArray *more);
 @property (nonatomic, copy)   void (^pauseDone)(void);
 - (void)clientClosed;
 @property (nonatomic, copy)   NSString *pendingPhoneNumber;
+/// Tells the chat list (onChatsChanged) and every other listener
+/// (TGChatsChangedNotification). Main thread.
+- (void)chatsChanged;
 @property (nonatomic, strong) NSMutableDictionary *chatsById;   // id -> mutable info
 @property (nonatomic, strong) NSMutableDictionary *usersById;   // id -> display name
 /// Bounded at TGRawUserCacheCap: every user the session has ever seen used
@@ -337,6 +340,7 @@ NSDictionary *TGFlattenReplyMarkup(NSDictionary *markup);
 NSString *TGMessagePreview(NSDictionary *message);
 NSString *TGKnownMessagePreview(NSDictionary *message);
 NSString *TGServicePreview(NSDictionary *message);
+NSArray *TGPreviewCustomEmoji(NSString *previewText, NSString *messageText, NSArray *entities);
 NSString *TGRichMessageText(NSDictionary *content);
 NSString *TGPhraseFromTypeName(NSString *ctype);
 NSString *TGReactionSummary(NSDictionary *m);

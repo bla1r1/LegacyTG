@@ -963,4 +963,20 @@ static void joinTestReply(TGClient *c, NSDictionary *request, NSDictionary *answ
 	XCTAssertTrue(sent);
 }
 
+/// The Folders page used to take onChatsChanged over, and the chat list never
+/// heard of a new message again. A change now reaches the block and every
+/// listener of TGChatsChangedNotification.
+- (void)testChatsChanged_ReachesTheListBlockAndTheNotification {
+	TGClient *c = T();
+	__block NSInteger blockCalls = 0, notes = 0;
+	c.onChatsChanged = ^{ blockCalls++; };
+	id observer = [[NSNotificationCenter defaultCenter] addObserverForName:TGChatsChangedNotification
+			object:nil queue:nil usingBlock:^(NSNotification *note){ notes++; }];
+	[c chatsChanged];
+	[[NSNotificationCenter defaultCenter] removeObserver:observer];
+	c.onChatsChanged = nil;
+	XCTAssertEqual(blockCalls, (NSInteger)1);
+	XCTAssertEqual(notes, (NSInteger)1);
+}
+
 @end

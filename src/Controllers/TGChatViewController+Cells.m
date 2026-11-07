@@ -325,7 +325,9 @@ static char kTGReactionChipInfoKey;
 		cell.viewsEye.hidden = NO;
 		UIColor *eyeCol = mine ? [theme timeMineColour] : [theme timeColour];
 		cell.viewsEye.image = [TGIcons glyphNamed:@"eye" colour:eyeCol side:kStampEyeSide];
-		CGFloat eyeX = layout.timeFrame.origin.x - (kStampEyeSide + kStampEyePad);
+		// The layout reserved the eye's room at the stamp's start; left of it
+		// is the last line of text.
+		CGFloat eyeX = layout.timeFrame.origin.x;
 		CGFloat eyeY = layout.timeFrame.origin.y + TGCenteredOrigin(TGMetricStampHeight, kStampEyeSide);
 		cell.viewsEye.frame = CGRectMake(eyeX, eyeY, kStampEyeSide, kStampEyeSide);
 		[cell.bubble bringSubviewToFront:cell.viewsEye];
@@ -343,6 +345,12 @@ static char kTGReactionChipInfoKey;
 	cell.time.text = (onPicture || [self albumContinuesAfterRow:indexPath.row]) ? @"" : layout.stamp;
 	cell.time.textColor = mine ? [theme timeMineColour] : [theme timeColour];
 	cell.time.frame = layout.timeFrame;
+	if (!cell.viewsEye.hidden && !onPicture) {
+		CGRect timeFrame = layout.timeFrame;
+		timeFrame.origin.x += kStampEyeSide + kStampEyePad;
+		timeFrame.size.width -= kStampEyeSide + kStampEyePad;
+		cell.time.frame = timeFrame;
+	}
 
 	cell.ticks.hidden = !mine;
 	if (mine && onPicture) {

@@ -60,6 +60,7 @@ static NSArray *TGEffectIdList(id value){
 }
 
 NSString *const TGChatReadOutboxChangedNotification = @"TGChatReadOutboxChangedNotification";
+NSString *const TGChatsChangedNotification = @"TGChatsChangedNotification";
 NSString *const TGChatReplyMarkupChangedNotification = @"TGChatReplyMarkupChangedNotification";
 NSString *const TGConnectionStateChangedNotification = @"TGConnectionStateChangedNotification";
 NSString *const TGUserStatusChangedNotification = @"TGUserStatusChangedNotification";
@@ -111,6 +112,12 @@ static BOOL TGVerboseClientLog(void) {
 }
 
 @implementation TGClient
+
+- (void)chatsChanged {
+	if (self.onChatsChanged)
+		self.onChatsChanged();
+	[[NSNotificationCenter defaultCenter] postNotificationName:TGChatsChangedNotification object:nil];
+}
 
 - (NSUInteger)chatsCached {
 	return self.chatsById.count;
@@ -1552,8 +1559,7 @@ NSDictionary *TGFormattedText(NSString *text) {
 		// The chat list learns the pill strip and the All chats merge from
 		// this update too; silently returning left both stale until the
 		// user wandered into a folder and back. The call site is main.
-		if (self.onChatsChanged)
-			self.onChatsChanged();
+		[self chatsChanged];
 		return;
 	}
 	case TGUpdateGroupCall:

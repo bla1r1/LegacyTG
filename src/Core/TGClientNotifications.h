@@ -7,6 +7,9 @@
 /// Posted on the main queue when the other side reads your messages in a
 /// chat; userInfo carries "chatId".
 extern NSString *const TGChatReadOutboxChangedNotification;
+/// The chat list or the folders changed. onChatsChanged belongs to the chat
+/// list; any other screen listens here instead of taking that block over.
+extern NSString *const TGChatsChangedNotification;
 // Fired when updateConnectionState arrives, so screens that need not own the
 // single onConnectionState slot can still see the network change (B4).
 extern NSString *const TGConnectionStateChangedNotification;

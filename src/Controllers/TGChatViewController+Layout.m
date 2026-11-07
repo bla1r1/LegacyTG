@@ -93,7 +93,8 @@ UIColor *TGSenderColour(int64_t userId) {
 			sig = [[sig substringToIndex:16] stringByAppendingString:@"..."];
 		}
 		if (sig.length > 0) {
-			return [NSString stringWithFormat:@"%@, %@ %@", sig, count, time];
+			// The eye sits before the first word, so the count must be it.
+			return [NSString stringWithFormat:@"%@ %@, %@", count, sig, time];
 		}
 		return [NSString stringWithFormat:@"%@ %@", count, time];
 	}

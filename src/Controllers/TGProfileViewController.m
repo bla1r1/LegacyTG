@@ -9,7 +9,6 @@
 #import "TGMusicPlayer.h"
 #import "TGChatViewController.h"
 #import "TGSimilarChannelsViewController.h"
-#import "TGCommunityViewController.h"
 #import "TGDMTopicsViewController.h"
 #import "UIImage+WebP.h"
 #import <AVFoundation/AVFoundation.h>
@@ -2251,19 +2250,9 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 	} else if ([kind isEqualToString:@"linkedChat"]){
 		[self openChat:self.linkedChatId title:self.linkedChatTitle message:0];
 	} else if ([kind isEqualToString:@"community"]){
-		NSDictionary *targetComm = nil;
-		for (NSDictionary *comm in [TGClient shared].communities) {
-			if ([comm[@"id"] longLongValue] == self.communityId) {
-				targetComm = comm;
-				break;
-			}
-		}
-		if (!targetComm) {
-			targetComm = @{@"id": @(self.communityId), @"name": @"Community"};
-		}
-		TGCommunityViewController *commVC = [[TGCommunityViewController alloc] initWithCommunity:targetComm];
-		commVC.hidesBottomBarWhenPushed = YES;
-		[self.navigationController pushViewController:commVC animated:YES];
+		[TGChatViewController openCommunity:self.communityId
+								 navigation:self.navigationController
+									 inView:self.view];
 	} else if ([kind isEqualToString:@"directMessages"]){
 		[self openDirectMessages];
 	} else if ([kind isEqualToString:@"similarChannels"]){

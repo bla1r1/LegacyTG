@@ -52,6 +52,22 @@ static NSNumber *TGExtractStickerFileId(NSDictionary *sticker) {
 	return nil;
 }
 
+static NSString *TGExtractStickerFormat(NSDictionary *sticker) {
+	if (![sticker isKindOfClass:[NSDictionary class]])
+		return @"";
+	id formatObj = sticker[@"format"];
+	NSString *rawFormat = [formatObj isKindOfClass:[NSDictionary class]]
+			? formatObj[@"@type"]
+			: ([formatObj isKindOfClass:[NSString class]] ? formatObj : @"");
+	if ([rawFormat isEqualToString:@"stickerFormatTgs"] || [rawFormat isEqualToString:@"tgs"])
+		return @"tgs";
+	if ([rawFormat isEqualToString:@"stickerFormatWebm"] || [rawFormat isEqualToString:@"webm"])
+		return @"webm";
+	if ([rawFormat isEqualToString:@"stickerFormatWebp"] || [rawFormat isEqualToString:@"webp"])
+		return @"webp";
+	return @"";
+}
+
 NSDictionary *TGFlattenReceivedGift(NSDictionary *receivedGift) {
 	if (![receivedGift isKindOfClass:[NSDictionary class]])
 		return nil;
@@ -192,6 +208,13 @@ NSDictionary *TGFlattenReceivedGift(NSDictionary *receivedGift) {
 		if (modelThumbFileId)
 			out[@"modelThumbFileId"] = modelThumbFileId;
 
+		NSNumber *modelStickerFileId = TGExtractStickerFileId(modelSticker);
+		if (modelStickerFileId)
+			out[@"modelStickerFileId"] = modelStickerFileId;
+		NSString *modelStickerFormat = TGExtractStickerFormat(modelSticker);
+		if (modelStickerFormat.length)
+			out[@"modelStickerFormat"] = modelStickerFormat;
+
 		NSDictionary *symbol = [giftObj[@"symbol"] isKindOfClass:[NSDictionary class]] ? giftObj[@"symbol"] : nil;
 		NSString *symbolName = [symbol[@"name"] isKindOfClass:[NSString class]] ? symbol[@"name"] : @"";
 		out[@"symbolName"] = symbolName;
@@ -238,6 +261,10 @@ NSDictionary *TGFlattenReceivedGift(NSDictionary *receivedGift) {
 		NSNumber *stickerFileId = TGExtractStickerFileId(sticker);
 		if (stickerFileId)
 			out[@"stickerFileId"] = stickerFileId;
+
+		NSString *stickerFormat = TGExtractStickerFormat(sticker);
+		if (stickerFormat.length)
+			out[@"stickerFormat"] = stickerFormat;
 	}
 
 	return out;

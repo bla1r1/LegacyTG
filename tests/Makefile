@@ -335,25 +335,34 @@ official_sim: $(OFFICIAL_SIM_BINARY)
 
 build: $(TEST_BINARY) $(CLIENT_BINARY) $(SIM_BINARY) $(OFFICIAL_SIM_BINARY)
 
-$(TEST_BINARY): $(TEST_BINARY_DEPS)
+# One object per source, with header dependencies: a change rebuilds the
+# files it touches and relinks, instead of recompiling ~120 sources in one
+# clang call every time. Both binaries share objects (same CFLAGS); run with
+# -j to compile them in parallel.
+OBJDIR := $(BUILD)/obj
+objs_of = $(patsubst /%,$(OBJDIR)/%.o,$(abspath $(1)))
+TEST_OBJS   := $(call objs_of,$(C_SRCS) $(OBJC_SRCS) $(TEST_HELPER_SRCS) $(TESTS)/main.m)
+CLIENT_OBJS := $(call objs_of,$(CLIENT_OBJC_SRCS) $(CLIENT_HELPER_SRCS) $(TESTS)/main_client.mm)
+
+# No ccache here: in depend mode with -fmodules it served a stale
+# main_client object after a test file #imported into it changed (five new
+# tests never ran). make's own -MMD dependencies already rebuild only what
+# changed.
+
+$(OBJDIR)/%.o: /%
+	@mkdir -p $(dir $@)
+	@$(CLANG) $(CFLAGS) -MMD -MP -c /$* -o $@
+
+-include $(TEST_OBJS:.o=.d) $(CLIENT_OBJS:.o=.d)
+
+$(TEST_BINARY): $(TEST_OBJS)
 	@mkdir -p $(BUILD)
-	$(CLANG) $(CFLAGS) \
-	    $(C_SRCS) \
-	    $(OBJC_SRCS) \
-	    $(TEST_HELPER_SRCS) \
-	    $(TESTS)/main.m \
-	    $(LDFLAGS) \
-	    -o $@
+	$(CLANG) $(CFLAGS) $(TEST_OBJS) $(LDFLAGS) -o $@
 	@echo "  Built $(notdir $@)"
 
-$(CLIENT_BINARY): $(CLIENT_BINARY_DEPS)
+$(CLIENT_BINARY): $(CLIENT_OBJS)
 	@mkdir -p $(BUILD)
-	$(CLANG) $(CFLAGS) \
-	    $(CLIENT_OBJC_SRCS) \
-	    $(CLIENT_HELPER_SRCS) \
-	    $(TESTS)/main_client.mm \
-	    $(LDFLAGS) \
-	    -o $@
+	$(CLANG) $(CFLAGS) $(CLIENT_OBJS) $(LDFLAGS) -o $@
 	@echo "  Built $(notdir $@)"
 
 $(SIM_BINARY): $(SIM_BINARY_DEPS)

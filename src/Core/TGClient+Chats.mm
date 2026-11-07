@@ -22,6 +22,95 @@ NSString *TGServicePreview(NSDictionary *message) {
 			});
 }
 
+/// Custom emoji entities for the chat list's preview line. When the preview
+/// begins with the message's text/caption, entities that fit within the preview
+/// are returned; entities that extend beyond its end (if cut) are dropped.
+NSArray *TGPreviewCustomEmoji(NSString *previewText, NSString *messageText, NSArray *entities) {
+	if (![previewText isKindOfClass:NSString.class] || ![messageText isKindOfClass:NSString.class] ||
+		![entities isKindOfClass:NSArray.class] || previewText.length == 0 || messageText.length == 0 ||
+		entities.count == 0) {
+		return @[];
+	}
+
+	NSUInteger checkLen = MIN(previewText.length, messageText.length);
+	if (![[previewText substringToIndex:checkLen] isEqualToString:[messageText substringToIndex:checkLen]]) {
+		return @[];
+	}
+
+	NSMutableArray *result = [NSMutableArray array];
+	for (id item in entities) {
+		NSInteger offset = 0;
+		NSInteger length = 0;
+		int64_t emojiId = 0;
+
+		if ([item isKindOfClass:NSDictionary.class]) {
+			NSDictionary *dict = (NSDictionary *)item;
+			id typeObj = dict[@"type"];
+			if ([typeObj isKindOfClass:NSDictionary.class]) {
+				NSString *typeStr = typeObj[@"@type"];
+				if ([typeStr isKindOfClass:NSString.class] && [typeStr isEqualToString:@"textEntityTypeCustomEmoji"]) {
+					id rawId = typeObj[@"custom_emoji_id"];
+					if ([rawId isKindOfClass:NSNumber.class] || [rawId isKindOfClass:NSString.class]) {
+						emojiId = [rawId longLongValue];
+					}
+				}
+			}
+			if (emojiId == 0) {
+				id rawId = dict[@"customEmojiId"] ?: dict[@"custom_emoji_id"];
+				if ([rawId isKindOfClass:NSNumber.class] || [rawId isKindOfClass:NSString.class]) {
+					emojiId = [rawId longLongValue];
+				}
+			}
+			id offsetObj = dict[@"offset"];
+			id lengthObj = dict[@"length"];
+			if (([offsetObj isKindOfClass:NSNumber.class] || [offsetObj isKindOfClass:NSString.class]) &&
+				([lengthObj isKindOfClass:NSNumber.class] || [lengthObj isKindOfClass:NSString.class])) {
+				offset = [offsetObj integerValue];
+				length = [lengthObj integerValue];
+			}
+		} else if ([item isKindOfClass:NSArray.class]) {
+			NSArray *arr = (NSArray *)item;
+			if (arr.count >= 3) {
+				id offsetObj = arr[0];
+				id lengthObj = arr[1];
+				id idObj = arr[2];
+				if (([offsetObj isKindOfClass:NSNumber.class] || [offsetObj isKindOfClass:NSString.class]) &&
+					([lengthObj isKindOfClass:NSNumber.class] || [lengthObj isKindOfClass:NSString.class]) &&
+					([idObj isKindOfClass:NSNumber.class] || [idObj isKindOfClass:NSString.class])) {
+					offset = [offsetObj integerValue];
+					length = [lengthObj integerValue];
+					emojiId = [idObj longLongValue];
+				}
+			}
+		}
+
+		if (emojiId <= 0 || offset < 0 || length <= 0) {
+			continue;
+		}
+
+		if ((NSUInteger)(offset + length) > previewText.length ||
+			(NSUInteger)(offset + length) > messageText.length) {
+			continue;
+		}
+
+		[result addObject:@{
+			@"offset"        : @(offset),
+			@"length"        : @(length),
+			@"customEmojiId" : @(emojiId),
+		}];
+	}
+
+	[result sortUsingComparator:^NSComparisonResult(NSDictionary *a, NSDictionary *b) {
+		NSInteger offA = [a[@"offset"] integerValue];
+		NSInteger offB = [b[@"offset"] integerValue];
+		if (offA < offB) return NSOrderedAscending;
+		if (offA > offB) return NSOrderedDescending;
+		return NSOrderedSame;
+	}];
+
+	return result;
+}
+
 NSString *TGKnownMessagePreview(NSDictionary *message) {
 	NSDictionary *content = message[@"content"];
 	NSString *ctype = content[@"@type"];
@@ -1231,8 +1320,8 @@ static NSInteger TGForumTopicColour(NSInteger index) {
 			[out addObject:@{@"id" : chatId, @"title" : @""}];
 			[me request:@{@"@type" : @"getChat", @"chat_id" : chatId}
 			 completion:^(NSDictionary *chat){
-				if ([chat[@"title"] length] && me.onChatsChanged)
-					me.onChatsChanged();
+				if ([chat[@"title"] length])
+					[me chatsChanged];
 			}];
 		}
 		collect(slot, out);
@@ -1447,8 +1536,7 @@ static NSDictionary *TGFolderObject(NSString *name, NSString *icon,
 		if ([out indexOfObject:folder] == NSNotFound)
 			[out addObject:folder];
 	self.folders = out;
-	if (self.onChatsChanged)
-		self.onChatsChanged();
+	[self chatsChanged];
 	[self send:@{
 		@"@type"                  : @"reorderChatFolders",
 		@"chat_folder_ids"        : folderIds ?: @[],
@@ -1841,6 +1929,9 @@ static BOOL TGGroupStatusIsMember(NSDictionary *status) {
 		// the one request that has to know: searchSecretMessages is the
 		// only spelling TDLib answers there.
 		info[@"isSecret"] = @([chatType isEqualToString:@"chatTypeSecret"]);
+		// A channel opens without a composer until TDLib says who may post.
+		info[@"isChannel"] = @([chatType isEqualToString:@"chatTypeSupergroup"] &&
+							   [chat[@"type"][@"is_channel"] boolValue]);
 	}
 
 	// A forum keeps several threads in one chat, so it opens on a topic list
@@ -1894,6 +1985,8 @@ static BOOL TGGroupStatusIsMember(NSDictionary *status) {
 	if ([last isKindOfClass:NSDictionary.class]){
 		info[@"text"] = [self previewForLastMessage:last inChat:info];
 		info[@"date"] = last[@"date"] ?: @(0);
+	} else {
+		[info removeObjectForKey:@"previewCustomEmoji"];
 	}
 
 	if (self.updateCoalescer) {
@@ -1914,6 +2007,26 @@ static BOOL TGGroupStatusIsMember(NSDictionary *status) {
 	info[@"lastId"] = last[@"id"] ?: @(0);
 	info[@"lastOutgoing"] = @([last[@"is_outgoing"] boolValue]);
 	[info removeObjectForKey:@"lastAuthor"];
+
+	NSDictionary *content = [last[@"content"] isKindOfClass:NSDictionary.class] ? last[@"content"] : nil;
+	NSDictionary *formatted = nil;
+	if (content) {
+		NSString *ctype = content[@"@type"];
+		if ([ctype isEqualToString:@"messageText"]) {
+			formatted = [content[@"text"] isKindOfClass:NSDictionary.class] ? content[@"text"] : nil;
+		} else if ([content[@"caption"] isKindOfClass:NSDictionary.class]) {
+			formatted = content[@"caption"];
+		}
+	}
+	NSString *messageText = [formatted isKindOfClass:NSDictionary.class] ? formatted[@"text"] : nil;
+	NSArray *entities = [formatted isKindOfClass:NSDictionary.class] ? formatted[@"entities"] : nil;
+	NSArray *customEmoji = TGPreviewCustomEmoji(text, messageText, entities);
+	if (customEmoji.count) {
+		info[@"previewCustomEmoji"] = customEmoji;
+	} else {
+		[info removeObjectForKey:@"previewCustomEmoji"];
+	}
+
 	// "Alice joined the group" already names Alice; "Alice: " in front of it
 	// would say it twice, and "You: You pinned..." reads worse.
 	if (TGServicePreview(last))
@@ -2135,7 +2248,7 @@ static BOOL TGGroupStatusIsMember(NSDictionary *status) {
 	if (count == 0){
 		self.chats = @[];
 		self.archivedChats = @[];
-		if (self.onChatsChanged) self.onChatsChanged();
+		[self chatsChanged];
 		if (self.onArchiveChanged) self.onArchiveChanged();
 		return;
 	}
@@ -2194,8 +2307,7 @@ static BOOL TGGroupStatusIsMember(NSDictionary *status) {
 	self.chats = main;
 	self.archivedChats = archived;
 
-	if (self.onChatsChanged)
-		self.onChatsChanged();
+	[self chatsChanged];
 	if (self.onArchiveChanged)
 		self.onArchiveChanged();
 }
