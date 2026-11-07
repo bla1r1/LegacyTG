@@ -12,14 +12,17 @@
 #import "TGSheet.h"
 #import "TGTheme.h"
 #import "TGMessageCard.h"
+#import "TGComposerText.h"
 #import "TGIcons.h"
 #import "TGSnackbar.h"
 #import "TGMessageLayout.h"
 #import "TGBubbleCell.h"
+#import "TGChatCell.h"
 #import "TGMediaViewer.h"
 #import "TGEmojiPanel.h"
 #import "TGStreamingVoicePlayer.h"
 #import "TGImageLruCache.h"
+#import "TGCustomEmojiStore.h"
 #import <MediaPlayer/MediaPlayer.h>
 #import <AVFoundation/AVFoundation.h>
 #import <CoreLocation/CoreLocation.h>
@@ -176,6 +179,8 @@ FOUNDATION_EXPORT CGFloat TGPollOptionRowHeight(NSDictionary *option, CGFloat ro
 @property (nonatomic, strong) NSMutableDictionary *pendingPollVotes;
 /// Ids of spoiler pictures tapped open in this visit, as official keeps them.
 @property (nonatomic, strong) NSMutableSet *revealedSpoilers;
+/// The composer's text with its custom emoji ids; follows every edit of self.input.
+@property (nonatomic, strong) TGComposerText *composerText;
 // Chrome (TGChatViewController+Chrome)
 @property (nonatomic, assign) int64_t readInboxAtOpen;   // where you had read up to
 @property (nonatomic, assign) int64_t unreadFromId;      // the "Unread Messages" bar goes above it
@@ -199,6 +204,7 @@ FOUNDATION_EXPORT CGFloat TGPollOptionRowHeight(NSDictionary *option, CGFloat ro
 - (void)titleSubtitleOwnerChanged:(NSNotification *)note;
 @property (nonatomic, strong) NSMutableSet *gifsRequested;
 @property (nonatomic, strong) UILabel *titleNameLabel;
+@property (nonatomic, strong) UIImageView *titleStatusIcon;
 @property (nonatomic, strong) UILabel *titleSubtitleLabel;
 /// The message the chat has pinned, so the menu offers Unpin on that one and
 /// Pin on every other. Zero when nothing is pinned.
@@ -444,6 +450,9 @@ FOUNDATION_EXPORT CGFloat TGPollOptionRowHeight(NSDictionary *option, CGFloat ro
 - (void)pollVoteTapped:(UIButton *)button;
 /// The card button of a message row: open the person, chat, gift, story, game or giveaway.
 - (void)openCard:(TGMessageCard *)card ofMessage:(int64_t)messageId;
+/// Puts a custom emoji at the cursor: the field shows its fallback (or its
+/// picture on iOS 7+), composerText keeps the id. Called by the emoji panel.
+- (void)insertCustomEmoji:(int64_t)emojiId fallback:(NSString *)fallback;
 - (void)docRowTapped:(UIButton *)sender;
 - (void)callCellButtonTapped:(UIButton *)btn;
 - (void)contactCallButtonTapped:(UIButton *)btn;
@@ -460,6 +469,7 @@ FOUNDATION_EXPORT CGFloat TGPollOptionRowHeight(NSDictionary *option, CGFloat ro
 - (void)buildChrome;
 - (void)applyChromeTheme:(TGTheme *)theme;
 - (void)layoutChrome;
+- (void)updateTitleEmojiStatus;
 - (BOOL)isNearBottom;
 - (void)noteArrivedWhileAway;
 - (void)chromeDidScroll;

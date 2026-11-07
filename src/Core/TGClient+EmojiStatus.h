@@ -10,6 +10,12 @@ FOUNDATION_EXPORT int64_t TGEmojiStatusCustomEmojiId(NSDictionary *status);
 
 @interface TGClient (EmojiStatus)
 
+/// The custom emoji id of a cached user's status, or 0 if none or not cached.
+- (int64_t)emojiStatusIdForUser:(int64_t)userId;
+
+/// The custom emoji id of a cached chat's status, or 0 if none or not cached.
+- (int64_t)emojiStatusIdForChat:(int64_t)chatId;
+
 /// Up to eight statuses Telegram places after the default Premium badge.
 /// Each entry is an NSNumber custom-emoji id.
 - (void)themedEmojiStatusesWithCompletion:(void (^)(NSArray *emojiIds))completion;

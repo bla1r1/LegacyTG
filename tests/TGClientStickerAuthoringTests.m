@@ -537,4 +537,128 @@ static NSDictionary *newStickerS(NSInteger fileId) {
 	XCTAssertEqual(countS(c, @"setSupergroupStickerSet"), (NSUInteger)0);
 }
 
+static NSDictionary *cpSticker(id customEmojiId, NSString *emoji) {
+	return @{
+		@"emoji"     : emoji ?: @"",
+		@"full_type" : @{
+			@"@type"           : @"stickerFullTypeCustomEmoji",
+			@"custom_emoji_id" : customEmojiId ?: @0
+		}
+	};
+}
+
+static NSDictionary *cpCustomEmojiSetRaw(id setId, NSString *title, NSArray *stickers) {
+	NSMutableDictionary *d = [NSMutableDictionary dictionary];
+	d[@"@type"] = @"stickerSet";
+	if (setId) d[@"id"] = setId;
+	if (title) d[@"title"] = title;
+	if (stickers) d[@"stickers"] = stickers;
+	return d;
+}
+
+- (void)testCustomEmojiSet_EmptyOrInvalidReturnsNilOrEmpty {
+	XCTAssertTrue(TGFlattenCustomEmojiSet(nil) == nil);
+	XCTAssertTrue(TGFlattenCustomEmojiSet((id)[NSNull null]) == nil);
+	XCTAssertTrue(TGFlattenCustomEmojiSet(@{@"@type" : @"error", @"message" : @"fail"}) == nil);
+	XCTAssertEqualObjects(TGFlattenCustomEmojiSets(nil), @[]);
+	XCTAssertEqualObjects(TGFlattenCustomEmojiSets((id)[NSNull null]), @[]);
+}
+
+- (void)testCustomEmojiSet_ExtractsTitleAndEmojis {
+	NSDictionary *raw = cpCustomEmojiSetRaw(@(1), @"Duckies", @[
+		cpSticker(@(12345), @"smile"),
+		cpSticker(@(67890), @"cool")
+	]);
+	NSDictionary *flat = TGFlattenCustomEmojiSet(raw);
+	XCTAssertEqualObjects(flat[@"title"], @"Duckies");
+	NSArray *emojis = flat[@"emojis"];
+	XCTAssertEqual(emojis.count, (NSUInteger)2);
+	XCTAssertEqualObjects(emojis[0][@"customEmojiId"], @(12345));
+	XCTAssertEqualObjects(emojis[0][@"emoji"], @"smile");
+	XCTAssertEqualObjects(emojis[1][@"customEmojiId"], @(67890));
+	XCTAssertEqualObjects(emojis[1][@"emoji"], @"cool");
+}
+
+- (void)testCustomEmojiSet_HandlesStringAndNumberCustomEmojiIds {
+	NSDictionary *raw = cpCustomEmojiSetRaw(@(2), @"BigNumbers", @[
+		cpSticker(@"9988776655443322", @"hi"),
+		cpSticker(@(4433221100LL), @"bye")
+	]);
+	NSDictionary *flat = TGFlattenCustomEmojiSet(raw);
+	NSArray *emojis = flat[@"emojis"];
+	XCTAssertEqual(emojis.count, (NSUInteger)2);
+	XCTAssertEqualObjects(emojis[0][@"customEmojiId"], @(9988776655443322LL));
+	XCTAssertEqualObjects(emojis[1][@"customEmojiId"], @(4433221100LL));
+}
+
+- (void)testCustomEmojiSet_FiltersZeroOrMissingCustomEmojiId {
+	NSDictionary *raw = cpCustomEmojiSetRaw(@(3), @"Filtered", @[
+		cpSticker(@(0), @"zero"),
+		@{@"emoji" : @"missing"},
+		(id)[NSNull null],
+		cpSticker(@(555), @"ok")
+	]);
+	NSDictionary *flat = TGFlattenCustomEmojiSet(raw);
+	NSArray *emojis = flat[@"emojis"];
+	XCTAssertEqual(emojis.count, (NSUInteger)1);
+	XCTAssertEqualObjects(emojis[0][@"customEmojiId"], @(555));
+	XCTAssertEqualObjects(emojis[0][@"emoji"], @"ok");
+}
+
+- (void)testCustomEmojiSet_ExtractsRootCustomEmojiId {
+	NSDictionary *raw = cpCustomEmojiSetRaw(@(4), @"RootId", @[
+		@{
+			@"emoji"           : @"root",
+			@"custom_emoji_id" : @(888)
+		}
+	]);
+	NSDictionary *flat = TGFlattenCustomEmojiSet(raw);
+	NSArray *emojis = flat[@"emojis"];
+	XCTAssertEqual(emojis.count, (NSUInteger)1);
+	XCTAssertEqualObjects(emojis[0][@"customEmojiId"], @(888));
+}
+
+- (void)testCustomEmojiSets_FlattensMultipleSets {
+	NSDictionary *set1 = cpCustomEmojiSetRaw(@(10), @"Set 1", @[cpSticker(@(1), @"a")]);
+	NSDictionary *set2 = cpCustomEmojiSetRaw(@(20), @"Set 2", @[cpSticker(@(2), @"b")]);
+	NSArray *sets = @[set1, (id)[NSNull null], @{@"@type" : @"error"}, set2];
+	NSArray *flatSets = TGFlattenCustomEmojiSets(sets);
+	XCTAssertEqual(flatSets.count, (NSUInteger)2);
+	XCTAssertEqualObjects(flatSets[0][@"title"], @"Set 1");
+	XCTAssertEqualObjects(flatSets[1][@"title"], @"Set 2");
+}
+
+- (void)testInstalledCustomEmojiSets_EmptyResultReturnsEmptyArray {
+	TGClient *c = S();
+	__block BOOL done = NO;
+	__block NSArray *received = nil;
+	[c installedCustomEmojiSetsWithCompletion:^(NSArray *sets){
+		done = YES;
+		received = sets;
+	}];
+	NSDictionary *sent = lastS(c, @"getInstalledStickerSets");
+	XCTAssertEqualObjects(sent[@"sticker_type"][@"@type"], @"stickerTypeCustomEmoji");
+	answerS(c, @{@"@type" : @"stickerSets", @"sets" : @[]});
+	XCTAssertTrue(done);
+	XCTAssertEqualObjects(received, @[]);
+}
+
+- (void)testInstalledCustomEmojiSets_FetchesEachSetAndReturnsFlattened {
+	TGClient *c = S();
+	__block BOOL done = NO;
+	__block NSArray *received = nil;
+	[c installedCustomEmojiSetsWithCompletion:^(NSArray *sets){
+		done = YES;
+		received = sets;
+	}];
+	answerS(c, @{@"@type" : @"stickerSets", @"sets" : @[@{@"id" : @(101), @"title" : @"Set 101"}]});
+	NSDictionary *req = lastS(c, @"getStickerSet");
+	XCTAssertEqualObjects(req[@"set_id"], @(101));
+	answerS(c, cpCustomEmojiSetRaw(@(101), @"Set 101", @[cpSticker(@(999), @"star")]));
+	XCTAssertTrue(done);
+	XCTAssertEqual(received.count, (NSUInteger)1);
+	XCTAssertEqualObjects(received[0][@"title"], @"Set 101");
+	XCTAssertEqualObjects(received[0][@"emojis"][0][@"customEmojiId"], @(999));
+}
+
 @end

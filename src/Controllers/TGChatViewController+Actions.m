@@ -1335,25 +1335,21 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 		// to know which request to send.
 		self.editingIsCaption = [m[@"photoId"] isKindOfClass:NSNumber.class] ||
 								[m[@"docId"] isKindOfClass:NSNumber.class];
-		NSString *fallback = m[@"text"];
-		self.input.text = fallback;
+		NSString *text = [m[@"text"] isKindOfClass:NSString.class] ? m[@"text"] : @"";
+		NSArray *entities = [m[@"entities"] isKindOfClass:NSArray.class] ? m[@"entities"] : @[];
+		NSDictionary *inFt = @{
+			@"@type" : @"formattedText",
+			@"text" : text,
+			@"entities" : entities
+		};
+		NSDictionary *ft = [[TGClient shared] markdownForEditing:inFt];
+		NSString *editText = [ft[@"text"] isKindOfClass:NSString.class] ? ft[@"text"] : text;
+		NSArray *editEntities = [ft[@"entities"] isKindOfClass:NSArray.class] ? ft[@"entities"] : entities;
+		self.input.text = editText;
+		self.composerText = [[TGComposerText alloc] initWithText:editText entities:editEntities];
 		[self showComposeBanner:self.editingIsCaption ? @"Editing caption" : @"Editing"];
 		[self.input becomeFirstResponder];
-		// What Telegram puts back as markdown is what the sender typed, and
-		// it arrives late: the render is already in the composer, and whatever
-		// Telegram says the origin was replaces it - unless another tap has
-		// typed over the fallback already.
-		int64_t chatId = self.chatId;
-		__weak typeof(self) weakSelf = self;
-		[[TGClient shared] markdownOfMessage:messageId inChat:chatId
-								  completion:^(NSString *markdown){
-			TGChatViewController *me = weakSelf;
-			NSString *current = me.input.text;
-			if (!me || me.editingId != messageId)
-				return;
-			if ([current isEqualToString:fallback] && markdown.length)
-				me.input.text = markdown;
-		}];
+		[self inputChanged];
 
 	} else if ([action isEqualToString:@"Add to Favourites"]){
 		[[TGClient shared] setSticker:TGStickerFileId(m) favourite:YES];

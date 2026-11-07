@@ -429,6 +429,17 @@ static const CGFloat kActionBarCloseSide = TGMetricButtonLargeH;
 	self.jumpBadge.hidden = YES;
 	[self.jumpButton addSubview:self.jumpBadge];
 
+	if (!self.titleStatusIcon && self.titleNameLabel.superview){
+		self.titleStatusIcon = [[UIImageView alloc] init];
+		self.titleStatusIcon.contentMode = UIViewContentModeScaleAspectFit;
+		self.titleStatusIcon.hidden = YES;
+		[self.titleNameLabel.superview addSubview:self.titleStatusIcon];
+	}
+	[[NSNotificationCenter defaultCenter] addObserver:self
+											 selector:@selector(chromeCustomEmojiLoaded:)
+												 name:TGCustomEmojiLoadedNotification
+											   object:nil];
+
 	[self applyChromeTheme:theme];
 	[self layoutChrome];
 }
@@ -478,6 +489,7 @@ static UIImage *TGJumpChevron(UIColor *colour) {
 /// Both hang off the table's frame, which moves with the keyboard and the
 /// panel; called from wherever that frame changes.
 - (void)layoutChrome {
+	[self updateTitleEmojiStatus];
 	CGRect table = self.table.frame;
 	// Clear of the reply / edit strip when one is showing over the table. The
 	// strip rides directly on the composer, so it has to be placed here rather
@@ -728,6 +740,7 @@ static const CGFloat kReplyPull = TGMetricReplyPull;   // how far a bubble trave
 /// the typing dots, then the resting last-seen. B4: a chat opened offline
 /// used to sit at its captured status and never say "Waiting for network".
 - (void)titleSubtitleOwnerChanged:(NSNotification *)note {
+	[self updateTitleEmojiStatus];
 	NSString *network = TGNetworkSubtitleForState(
 			(NSInteger)[TGClient shared].connectionState, nil);
 	if (network.length){
@@ -837,9 +850,78 @@ static const CGFloat kReplyPull = TGMetricReplyPull;   // how far a bubble trave
 }
 
 - (void)stopChrome {
+	[[NSNotificationCenter defaultCenter] removeObserver:self
+													 name:TGCustomEmojiLoadedNotification
+												   object:nil];
 	[self.typingTimer invalidate];
 	self.typingTimer = nil;
 	[NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(fadeFloatingDate) object:nil];
+}
+
+#pragma mark - header emoji status
+
+- (void)updateTitleEmojiStatus {
+	if (!self.titleNameLabel || !self.titleNameLabel.superview)
+		return;
+
+	if (!self.titleStatusIcon){
+		self.titleStatusIcon = [[UIImageView alloc] init];
+		self.titleStatusIcon.contentMode = UIViewContentModeScaleAspectFit;
+		self.titleStatusIcon.hidden = YES;
+		[self.titleNameLabel.superview addSubview:self.titleStatusIcon];
+	}
+
+	BOOL isSaved = (self.chatId == [[TGClient shared] savedMessagesChatId]) ||
+			[[TGClient shared] chatIsSavedMessages:self.chatId];
+	BOOL isPrivate = !self.isGroup && (self.chatId > 0) && !isSaved;
+
+	int64_t statusId = 0;
+	if (isPrivate){
+		for (NSDictionary *chat in [TGClient shared].chats){
+			if ([chat[@"id"] longLongValue] == self.chatId){
+				if (![chat[@"isSaved"] boolValue])
+					statusId = [chat[@"emojiStatusId"] longLongValue];
+				break;
+			}
+		}
+		if (statusId == 0)
+			statusId = [[TGClient shared] emojiStatusIdForUser:self.chatId];
+	}
+
+	CGFloat statusSide = [TGChatCell statusSide];
+	UIImage *status = (isPrivate && statusId != 0)
+			? [[TGCustomEmojiStore shared] imageForId:statusId side:statusSide] : nil;
+
+	if (status){
+		self.titleStatusIcon.image = status;
+		self.titleStatusIcon.hidden = NO;
+
+		CGFloat titleTextW = ceilf(TGLineTextSize(self.titleNameLabel.text,
+				self.titleNameLabel.font).width);
+		CGFloat gap = TGMetricPadSmall;
+		CGFloat maxTitleW = kTitleWidth - statusSide - gap;
+		CGFloat titleW = MIN(titleTextW, maxTitleW);
+		CGFloat clusterW = titleW + gap + statusSide;
+		CGFloat startX = TGCenteredOrigin(kTitleWidth, clusterW);
+
+		self.titleNameLabel.frame = CGRectMake(startX, TGMetricBorderWidth,
+				titleW, TGMetricLineRow);
+		self.titleNameLabel.textAlignment = NSTextAlignmentLeft;
+
+		self.titleStatusIcon.frame = CGRectMake(startX + titleW + gap,
+				TGMetricBorderWidth + TGCenteredOrigin(TGMetricLineRow, statusSide),
+				statusSide, statusSide);
+	} else {
+		self.titleStatusIcon.image = nil;
+		self.titleStatusIcon.hidden = YES;
+		self.titleNameLabel.frame = CGRectMake(TGMetricZero, TGMetricBorderWidth,
+				kTitleWidth, TGMetricLineRow);
+		self.titleNameLabel.textAlignment = NSTextAlignmentCenter;
+	}
+}
+
+- (void)chromeCustomEmojiLoaded:(NSNotification *)note {
+	[self updateTitleEmojiStatus];
 }
 
 @end

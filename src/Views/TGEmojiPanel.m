@@ -13,6 +13,7 @@
 #import "TGMessageLayout.h"
 #import "TGAlertSheet.h"
 #import "TGLottieView.h"
+#import "TGCustomEmojiStore.h"
 #import <objc/runtime.h>
 
 static const char kTGItemDataKey = 0;
@@ -158,6 +159,8 @@ static UIImage *TGBackspaceImage(UIColor *colour) {
 @property (nonatomic, strong) NSMutableSet *requested;   // grid indexes asked for
 
 @property (nonatomic, strong) NSArray *stickerSets;      // installed, as the store gives them
+@property (nonatomic, strong) NSArray *customEmojiSets;
+@property (nonatomic, assign) BOOL customEmojiLoaded;
 @property (nonatomic, strong) NSString *gifQuery;        // nil for the saved ones
 /// Telegram's categories once they have arrived. Empty means the built-in set
 /// from TGEmojiData is still what the strip draws.
@@ -240,9 +243,9 @@ static UIImage *TGBackspaceImage(UIColor *colour) {
 	self.tabsLine.autoresizingMask = UIViewAutoresizingFlexibleWidth;
 	[self.tabs addSubview:self.tabsLine];
 
-	NSArray *titles = @[@"Emoji", @"Stickers", @"GIFs"];
+	NSArray *titles = @[@"Emoji", @"Stickers", @"GIFs", @"Custom"];
 	NSMutableArray *buttons = [NSMutableArray array];
-	CGFloat tabW = TGMetricChatRow;
+	CGFloat tabW = TGMetricPersonRow;
 	CGFloat x = TGCenteredOrigin(w, tabW * titles.count);
 	for (NSUInteger i = 0; i < titles.count; i++){
 		UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
@@ -273,6 +276,9 @@ static UIImage *TGBackspaceImage(UIColor *colour) {
 	[[NSNotificationCenter defaultCenter] addObserver:self
 			selector:@selector(stickerListsChanged)
 				name:TGStickerListsChangedNotification object:nil];
+	[[NSNotificationCenter defaultCenter] addObserver:self
+			selector:@selector(customEmojiLoaded:)
+				name:TGCustomEmojiLoadedNotification object:nil];
 	[self applyTheme];
 	[self selectTab:TGEmojiPanelTabEmoji];
 	return self;
@@ -288,6 +294,7 @@ static UIImage *TGBackspaceImage(UIColor *colour) {
 - (void)stickerListsChanged {
 	if (self.tab == TGEmojiPanelTabEmoji)
 		return;
+	self.customEmojiLoaded = NO;
 	[NSObject cancelPreviousPerformRequestsWithTarget:self
 			selector:@selector(reselectCurrentTab) object:nil];
 	[self performSelector:@selector(reselectCurrentTab) withObject:nil afterDelay:0.3];
@@ -355,10 +362,63 @@ static UIImage *TGBackspaceImage(UIColor *colour) {
 			[me reloadStrip];
 			[me loadStickerFeed];
 		}];
+	} else if (tab == TGEmojiPanelTabCustomEmoji){
+		[self loadCustomEmojiSetsIfNeeded];
 	} else {
 		[self reloadStrip];
 		[self loadItemsForStripIndex:0];
 	}
+}
+
+- (void)loadCustomEmojiSetsIfNeeded {
+	if (self.customEmojiLoaded){
+		[self reloadStrip];
+		[self loadCustomEmojiFeed];
+		return;
+	}
+	self.emptyLabel.text = @"No custom emoji packs";
+	self.emptyLabel.textColor = [[TGTheme shared] secondaryTextColour];
+	self.emptyLabel.hidden = NO;
+	__weak typeof(self) weakSelf = self;
+	[[TGStickerStore shared] installedCustomEmojiSetsWithCompletion:^(NSArray *sets){
+		TGEmojiPanel *me = weakSelf;
+		if (!me)
+			return;
+		me.customEmojiLoaded = YES;
+		me.customEmojiSets = sets ?: @[];
+		if (me.tab != TGEmojiPanelTabCustomEmoji)
+			return;
+		[me reloadStrip];
+		[me loadCustomEmojiFeed];
+	}];
+}
+
+- (void)loadCustomEmojiFeed {
+	self.generation++;
+	NSMutableArray *flat = [NSMutableArray array];
+	NSMutableArray *sections = [NSMutableArray array];
+	for (NSUInteger i = 0; i < self.customEmojiSets.count; i++){
+		NSDictionary *set = self.customEmojiSets[i];
+		if (![set isKindOfClass:NSDictionary.class])
+			continue;
+		NSArray *emojis = set[@"emojis"];
+		if (![emojis isKindOfClass:NSArray.class] || !emojis.count)
+			continue;
+		NSString *title = [set[@"title"] isKindOfClass:NSString.class] ? set[@"title"] : @"";
+		[sections addObject:[@{
+			@"title"    : title,
+			@"strip"    : @(i),
+			@"location" : @(flat.count),
+			@"length"   : @(emojis.count)
+		} mutableCopy]];
+		[flat addObjectsFromArray:emojis];
+	}
+	self.items = flat;
+	self.sections = sections;
+	self.emptyLabel.text = @"No custom emoji packs";
+	self.emptyLabel.textColor = [[TGTheme shared] secondaryTextColour];
+	self.emptyLabel.hidden = flat.count > 0;
+	[self reloadGrid];
 }
 
 #pragma mark - strip
@@ -427,6 +487,16 @@ static UIImage *TGBackspaceImage(UIColor *colour) {
 		}
 		case TGEmojiPanelTabGIFs:
 			return @[@{@"title" : @"Saved"}, @{@"title" : @"Search"}];
+		case TGEmojiPanelTabCustomEmoji: {
+			NSMutableArray *out = [NSMutableArray array];
+			for (NSDictionary *set in self.customEmojiSets){
+				NSString *title = [set isKindOfClass:NSDictionary.class] &&
+						[set[@"title"] isKindOfClass:NSString.class] ? set[@"title"] : @"";
+				if (title.length)
+					[out addObject:@{@"title" : title}];
+			}
+			return out;
+		}
 	}
 	return @[];
 }
@@ -507,9 +577,9 @@ static UIImage *TGBackspaceImage(UIColor *colour) {
 	if (self.tab == TGEmojiPanelTabGIFs)
 		self.gifQuery = nil;   // "Saved"
 
-	// Stickers are one feed: the strip moves within it rather than swapping
+	// Stickers and custom emoji are feeds: the strip moves within them rather than swapping
 	// what the grid holds. A set still loading has no section yet.
-	if (self.tab == TGEmojiPanelTabStickers && self.sections.count){
+	if ((self.tab == TGEmojiPanelTabStickers || self.tab == TGEmojiPanelTabCustomEmoji) && self.sections.count){
 		for (NSDictionary *section in self.sections){
 			if ([section[@"strip"] integerValue] != button.tag)
 				continue;
@@ -674,6 +744,10 @@ static UIImage *TGBackspaceImage(UIColor *colour) {
 				[[TGStickerStore shared] searchAnimations:self.gifQuery inChat:self.chatId completion:got];
 			else
 				[[TGStickerStore shared] savedAnimationsWithCompletion:got];
+			break;
+		}
+		case TGEmojiPanelTabCustomEmoji: {
+			[self loadCustomEmojiFeed];
 			break;
 		}
 	}
@@ -951,7 +1025,8 @@ static UIImage *TGBackspaceImage(UIColor *colour) {
 - (CGSize)cellSize {
 	CGFloat w = self.grid.bounds.size.width;
 	switch (self.tab){
-		case TGEmojiPanelTabEmoji: {
+		case TGEmojiPanelTabEmoji:
+		case TGEmojiPanelTabCustomEmoji: {
 			NSUInteger columns = MAX(1, (NSUInteger)floorf(w / kEmojiCell));
 			CGFloat side = floorf(w / columns);
 			return CGSizeMake(side, kEmojiCell);
@@ -1010,8 +1085,11 @@ static UIImage *TGBackspaceImage(UIColor *colour) {
 					CGRectMake(TGMetricPad, y + TGMetricPadSmall, w - TGDoubled(TGMetricPad),
 					kHeaderHeight - TGDoubled(TGMetricBubbleRowInset))];
 			header.tag = kHeaderTag;
-			header.text = TGStripUndrawableScalars([section[@"title"] uppercaseString]);
-			header.font = TGFontMicroStrong();
+			header.text = (self.tab == TGEmojiPanelTabCustomEmoji)
+					? TGStripUndrawableScalars(section[@"title"] ?: @"")
+					: TGStripUndrawableScalars([section[@"title"] uppercaseString]);
+			header.font = (self.tab == TGEmojiPanelTabCustomEmoji)
+					? TGFontCaption() : TGFontMicroStrong();
 			header.textColor = [theme secondaryTextColour];
 			header.backgroundColor = [UIColor clearColor];
 			[self.grid addSubview:header];
@@ -1109,6 +1187,20 @@ static UIImage *TGBackspaceImage(UIColor *colour) {
 		button.titleLabel.font = TGFontEmoji();
 		NSString *str = [item isKindOfClass:NSString.class] ? (NSString *)item : @"";
 		[button setTitle:str forState:UIControlStateNormal];
+	} else if (self.tab == TGEmojiPanelTabCustomEmoji){
+		button.imageEdgeInsets = UIEdgeInsetsZero;
+		button.imageView.contentMode = UIViewContentModeScaleAspectFit;
+		int64_t emojiId = 0;
+		if ([item isKindOfClass:NSDictionary.class]){
+			id rawId = item[@"customEmojiId"];
+			if ([rawId respondsToSelector:@selector(longLongValue)])
+				emojiId = [rawId longLongValue];
+		}
+		if (emojiId > 0){
+			UIImage *image = [[TGCustomEmojiStore shared] imageForId:emojiId side:TGMetricListAvatar];
+			if (image)
+				[button setImage:image forState:UIControlStateNormal];
+		}
 	} else if (self.tab == TGEmojiPanelTabStickers){
 		button.imageEdgeInsets = UIEdgeInsetsMake(TGMetricAlertTextGap, TGMetricAlertTextGap, TGMetricAlertTextGap, TGMetricAlertTextGap);
 		button.imageView.contentMode = UIViewContentModeScaleAspectFit;
@@ -1192,6 +1284,30 @@ static UIImage *TGBackspaceImage(UIColor *colour) {
 - (void)loadVisibleImages {
 	if (self.tab == TGEmojiPanelTabEmoji)
 		return;
+	if (self.tab == TGEmojiPanelTabCustomEmoji){
+		for (NSNumber *key in [self.cells allKeys]){
+			NSUInteger index = key.unsignedIntegerValue;
+			if (index >= self.items.count || [self.requested containsObject:key])
+				continue;
+			[self.requested addObject:key];
+			id item = self.items[index];
+			if (![item isKindOfClass:NSDictionary.class])
+				continue;
+			id rawId = item[@"customEmojiId"];
+			if (![rawId respondsToSelector:@selector(longLongValue)])
+				continue;
+			int64_t emojiId = [rawId longLongValue];
+			if (emojiId <= 0)
+				continue;
+			UIImage *image = [[TGCustomEmojiStore shared] imageForId:emojiId side:TGMetricListAvatar];
+			if (image){
+				UIButton *button = self.cells[key];
+				button.imageView.contentMode = UIViewContentModeScaleAspectFit;
+				[button setImage:image forState:UIControlStateNormal];
+			}
+		}
+		return;
+	}
 	for (NSNumber *key in [self.cells allKeys]){
 		NSUInteger index = key.unsignedIntegerValue;
 		if (index >= self.items.count || [self.requested containsObject:key])
@@ -1204,6 +1320,33 @@ static UIImage *TGBackspaceImage(UIColor *colour) {
 		if ([thumbId integerValue] <= 0 || [TGPanelImageCache() objectForKey:thumbId])
 			continue;
 		[self loadImageForFile:thumbId.integerValue into:self.cells[key] generation:self.generation];
+	}
+}
+
+- (void)customEmojiLoaded:(NSNotification *)note {
+	if (self.tab != TGEmojiPanelTabCustomEmoji)
+		return;
+	id rawLoaded = [note.userInfo isKindOfClass:NSDictionary.class] ? note.userInfo[@"id"] : nil;
+	int64_t loadedId = [rawLoaded respondsToSelector:@selector(longLongValue)] ? [rawLoaded longLongValue] : 0;
+	for (NSNumber *key in [self.cells allKeys]){
+		NSUInteger index = key.unsignedIntegerValue;
+		if (index >= self.items.count)
+			continue;
+		id item = self.items[index];
+		if (![item isKindOfClass:NSDictionary.class])
+			continue;
+		id rawId = item[@"customEmojiId"];
+		if (![rawId respondsToSelector:@selector(longLongValue)])
+			continue;
+		int64_t emojiId = [rawId longLongValue];
+		if (loadedId > 0 && emojiId != loadedId)
+			continue;
+		UIButton *button = self.cells[key];
+		UIImage *image = [[TGCustomEmojiStore shared] imageForId:emojiId side:TGMetricListAvatar];
+		if (image){
+			button.imageView.contentMode = UIViewContentModeScaleAspectFit;
+			[button setImage:image forState:UIControlStateNormal];
+		}
 	}
 }
 
@@ -1815,6 +1958,28 @@ static UIImage *TGBackspaceImage(UIColor *colour) {
 		case TGEmojiPanelTabGIFs:
 			[self.delegate emojiPanel:self didPickAnimation:item];
 			break;
+		case TGEmojiPanelTabCustomEmoji: {
+			int64_t emojiId = 0;
+			NSString *fallback = @"";
+			if ([item isKindOfClass:NSDictionary.class]){
+				id rawId = item[@"customEmojiId"];
+				if ([rawId respondsToSelector:@selector(longLongValue)])
+					emojiId = [rawId longLongValue];
+				if ([item[@"emoji"] isKindOfClass:NSString.class])
+					fallback = item[@"emoji"];
+			}
+			if (![[TGStickerStore shared] accountHasPremium] &&
+				self.chatId != [[TGStickerStore shared] myUserId]){
+				[TGAlertSheet showMessage:@"Custom emoji need Telegram Premium"
+									title:nil
+								   inView:(self.window ?: self)];
+				return;
+			}
+			if ([self.delegate respondsToSelector:@selector(emojiPanel:didPickCustomEmoji:fallback:)]){
+				[self.delegate emojiPanel:self didPickCustomEmoji:emojiId fallback:fallback];
+			}
+			break;
+		}
 	}
 }
 

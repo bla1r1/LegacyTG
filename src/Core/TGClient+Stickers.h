@@ -281,4 +281,20 @@
 /// instead of the ordinary shelf.
 - (void)clearRecentStickersAttached:(BOOL)attached;
 
+/// Custom emoji packs installed on this account, each shaped as:
+/// @{@"title": NSString, @"emojis": @[@{@"customEmojiId": NSNumber, @"emoji": NSString}]}
+- (void)installedCustomEmojiSetsWithCompletion:(void (^)(NSArray *sets))completion;
+
 @end
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/// Flattens a TDLib stickerSet dictionary into @{@"title": NSString, @"emojis": @[@{@"customEmojiId": NSNumber, @"emoji": NSString}]}.
+NSDictionary *TGFlattenCustomEmojiSet(NSDictionary *set);
+NSArray *TGFlattenCustomEmojiSets(NSArray *sets);
+
+#ifdef __cplusplus
+}
+#endif

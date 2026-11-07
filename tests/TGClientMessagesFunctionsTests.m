@@ -71,6 +71,14 @@ static NSDictionary *plain(NSDictionary *d) {
 			options:0 error:nil];
 }
 
+static const char *ctFakeTdExecError(void *client, const char *request) {
+	return "{\"@type\":\"error\",\"code\":400,\"message\":\"PARSE_ERROR\"}";
+}
+
+static const char *ctFakeTdExecMarkdown(void *client, const char *request) {
+	return "{\"@type\":\"formattedText\",\"text\":\"bold text\",\"entities\":[{\"@type\":\"textEntity\",\"offset\":0,\"length\":4,\"type\":{\"@type\":\"textEntityTypeBold\"}}]}";
+}
+
 @implementation TGClientMessagesFunctionsTests
 
 // ─── message links ───────────────────────────────────────────────────────────
@@ -1280,6 +1288,159 @@ static NSDictionary *altV(int side, NSString *codec, int fileId) {
 	XCTAssertEqualObjects(content[@"@type"], @"inputMessageVideo");
 	XCTAssertTrue(content[@"self_destruct_type"] == [NSNull null]
 			|| content[@"self_destruct_type"] == nil);
+}
+
+// ─── formatted text with custom emoji (Task E1) ──────────────────────────────
+
+- (void)testSendFormattedText_PutsEntitiesThroughUntouched {
+	TGClient *c = M();
+	NSDictionary *formatted = @{
+		@"@type" : @"formattedText",
+		@"text"  : @"hello 😀",
+		@"entities" : @[
+			@{
+				@"@type"  : @"textEntity",
+				@"offset" : @(6),
+				@"length" : @(2),
+				@"type"   : @{
+					@"@type"           : @"textEntityTypeCustomEmoji",
+					@"custom_emoji_id" : @(9999LL),
+				},
+			},
+		],
+	};
+
+	[c sendFormattedText:formatted toChat:123 thread:0 replyTo:0];
+
+	NSDictionary *sent = lastM(c, @"sendMessage");
+	XCTAssertEqualObjects(sent[@"chat_id"], @(123));
+	XCTAssertEqualObjects(sent[@"message_thread_id"], @(0));
+	XCTAssertTrue(sent[@"reply_to"] == nil);
+
+	NSDictionary *content = sent[@"input_message_content"];
+	XCTAssertEqualObjects(content[@"@type"], @"inputMessageText");
+	XCTAssertEqualObjects(content[@"text"][@"text"], @"hello 😀");
+	NSArray *entities = content[@"text"][@"entities"];
+	XCTAssertEqual(entities.count, 1U);
+	XCTAssertEqualObjects(entities[0][@"offset"], @(6));
+	XCTAssertEqualObjects(entities[0][@"length"], @(2));
+	XCTAssertEqualObjects(entities[0][@"type"][@"custom_emoji_id"], @(9999LL));
+}
+
+- (void)testSendFormattedText_ReplyToPresentWhenNonZero {
+	TGClient *c = M();
+	NSDictionary *formatted = @{
+		@"@type"    : @"formattedText",
+		@"text"     : @"replying",
+		@"entities" : @[],
+	};
+
+	[c sendFormattedText:formatted toChat:100 thread:200 replyTo:300];
+
+	NSDictionary *sent = lastM(c, @"sendMessage");
+	XCTAssertEqualObjects(sent[@"chat_id"], @(100));
+	XCTAssertEqualObjects(sent[@"message_thread_id"], @(200));
+	XCTAssertEqualObjects(sent[@"reply_to"][@"@type"], @"inputMessageReplyToMessage");
+	XCTAssertEqualObjects(sent[@"reply_to"][@"message_id"], @(300));
+}
+
+- (void)testSendFormattedText_NilPayloadSendsEmptyFormattedText {
+	TGClient *c = M();
+	[c sendFormattedText:nil toChat:123 thread:0 replyTo:0];
+
+	NSDictionary *sent = lastM(c, @"sendMessage");
+	NSDictionary *content = sent[@"input_message_content"];
+	XCTAssertEqualObjects(content[@"text"][@"@type"], @"formattedText");
+	XCTAssertEqualObjects(content[@"text"][@"text"], @"");
+	XCTAssertEqual([content[@"text"][@"entities"] count], 0U);
+}
+
+- (void)testEditMessage_CarriesEntities {
+	TGClient *c = M();
+	NSDictionary *formatted = @{
+		@"@type" : @"formattedText",
+		@"text"  : @"edited 😀",
+		@"entities" : @[
+			@{
+				@"@type"  : @"textEntity",
+				@"offset" : @(7),
+				@"length" : @(2),
+				@"type"   : @{
+					@"@type"           : @"textEntityTypeCustomEmoji",
+					@"custom_emoji_id" : @(8888LL),
+				},
+			},
+		],
+	};
+
+	[c editMessage:555 inChat:444 formattedText:formatted];
+
+	NSDictionary *sent = lastM(c, @"editMessageText");
+	XCTAssertEqualObjects(sent[@"chat_id"], @(444));
+	XCTAssertEqualObjects(sent[@"message_id"], @(555));
+
+	NSDictionary *content = sent[@"input_message_content"];
+	XCTAssertEqualObjects(content[@"@type"], @"inputMessageText");
+	XCTAssertEqualObjects(content[@"text"][@"text"], @"edited 😀");
+	NSArray *entities = content[@"text"][@"entities"];
+	XCTAssertEqual(entities.count, 1U);
+	XCTAssertEqualObjects(entities[0][@"type"][@"custom_emoji_id"], @(8888LL));
+}
+
+- (void)testMarkdownParsed_ReturnsInputWhenTDLibAnswersError {
+	TGClient *c = M();
+	NSDictionary *input = @{
+		@"@type"    : @"formattedText",
+		@"text"     : @"*hello* 😀",
+		@"entities" : @[
+			@{
+				@"@type"  : @"textEntity",
+				@"offset" : @(8),
+				@"length" : @(2),
+				@"type"   : @{
+					@"@type"           : @"textEntityTypeCustomEmoji",
+					@"custom_emoji_id" : @(123LL),
+				},
+			},
+		],
+	};
+
+	// When td_exec is NULL, executeSynchronously returns nil -> markdownParsed returns input
+	c.td_exec = NULL;
+	NSDictionary *out1 = [c markdownParsed:input];
+	XCTAssertEqualObjects(out1, input);
+
+	// When td_exec returns error -> markdownParsed returns input
+	c.td_exec = ctFakeTdExecError;
+	NSDictionary *out2 = [c markdownParsed:input];
+	XCTAssertEqualObjects(out2, input);
+
+	// When td_exec returns formattedText -> returns parsed result
+	c.td_exec = ctFakeTdExecMarkdown;
+	NSDictionary *out3 = [c markdownParsed:input];
+	XCTAssertEqualObjects(out3[@"text"], @"bold text");
+	XCTAssertEqual([out3[@"entities"] count], 1U);
+
+	c.td_exec = NULL;
+}
+
+- (void)testMarkdownForEditing_ReturnsInputWhenTDLibAnswersError {
+	TGClient *c = M();
+	NSDictionary *input = @{
+		@"@type"    : @"formattedText",
+		@"text"     : @"hello",
+		@"entities" : @[],
+	};
+
+	c.td_exec = NULL;
+	NSDictionary *out1 = [c markdownForEditing:input];
+	XCTAssertEqualObjects(out1, input);
+
+	c.td_exec = ctFakeTdExecError;
+	NSDictionary *out2 = [c markdownForEditing:input];
+	XCTAssertEqualObjects(out2, input);
+
+	c.td_exec = NULL;
 }
 
 @end

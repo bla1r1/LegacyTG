@@ -533,6 +533,73 @@ NSAttributedString *TGAttributedMessageTextRevealing(NSString *text, NSArray *en
 	return str;
 }
 
+NSArray *TGCustomEmojiRectsInText(NSAttributedString *text, CGFloat width) {
+	if (!text.length || width <= 0)
+		return @[];
+
+	Class lmClass = NSClassFromString(@"NSLayoutManager");
+	Class tcClass = NSClassFromString(@"NSTextContainer");
+	Class tsClass = NSClassFromString(@"NSTextStorage");
+	if (!lmClass || !tcClass || !tsClass)
+		return @[];
+
+	NSTextStorage *storage = [[tsClass alloc] initWithAttributedString:text];
+	NSLayoutManager *layoutManager = [[lmClass alloc] init];
+	CGSize containerSize = CGSizeMake(width, CGFLOAT_MAX);
+	NSTextContainer *container = [[tcClass alloc] initWithSize:containerSize];
+	container.lineFragmentPadding = 0;
+	[layoutManager addTextContainer:container];
+	[storage addLayoutManager:layoutManager];
+	[layoutManager ensureLayoutForTextContainer:container];
+
+	NSMutableArray *results = [NSMutableArray array];
+	[text enumerateAttribute:@"TGCustomEmojiId"
+					 inRange:NSMakeRange(0, text.length)
+					 options:0
+				  usingBlock:^(id value, NSRange range, BOOL *stop) {
+		if (!value || ![value isKindOfClass:NSNumber.class])
+			return;
+		int64_t emojiId = [value longLongValue];
+		if (emojiId == 0)
+			return;
+
+		NSRange glyphRange = [layoutManager glyphRangeForCharacterRange:range actualCharacterRange:NULL];
+		if (glyphRange.location == NSNotFound || glyphRange.length == 0)
+			return;
+
+		CGRect glyphRect = [layoutManager boundingRectForGlyphRange:glyphRange inTextContainer:container];
+		if (CGRectIsEmpty(glyphRect))
+			return;
+
+		CGFloat side = glyphRect.size.width;
+		id attachment = [text attribute:NSAttachmentAttributeName atIndex:range.location effectiveRange:NULL];
+		if ([attachment respondsToSelector:@selector(bounds)]) {
+			CGRect b = [attachment bounds];
+			if (b.size.width > 0)
+				side = b.size.width;
+		}
+		CGRect emojiRect = CGRectMake(glyphRect.origin.x,
+									  glyphRect.origin.y + TGHalf(glyphRect.size.height - side),
+									  side,
+									  side);
+		emojiRect = CGRectIntegral(emojiRect);
+
+		NSValue *rectVal = nil;
+#if TARGET_OS_IPHONE
+		rectVal = [NSValue valueWithCGRect:emojiRect];
+#else
+		rectVal = [NSValue valueWithBytes:&emojiRect objCType:@encode(CGRect)];
+#endif
+
+		[results addObject:@{
+			@"id"   : @(emojiId),
+			@"rect" : rectVal ?: [NSNull null]
+		}];
+	}];
+
+	return results;
+}
+
 NSAttributedString *TGAttributedMessageText(NSString *text, NSArray *entities, UIFont *baseFont, UIColor *textColor) {
 	return TGAttributedMessageTextRevealing(text, entities, baseFont, textColor, NO);
 }

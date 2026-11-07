@@ -23,6 +23,13 @@ extern NSString *const TGStickerListsChangedNotification;
 
 /// Installed sets, shaped as "id", "title", "cover", "count".
 - (void)installedStickerSetsWithCompletion:(void (^)(NSArray *sets))completion;
+/// Custom emoji packs installed on this account, each shaped as
+/// @{@"title": NSString, @"emojis": @[@{@"customEmojiId": NSNumber, @"emoji": NSString}]}.
+- (void)installedCustomEmojiSetsWithCompletion:(void (^)(NSArray *sets))completion;
+/// Whether this account has Telegram Premium.
+- (BOOL)accountHasPremium;
+/// The account's own user id (chatId of Saved Messages).
+- (int64_t)myUserId;
 /// Stickers of one set; `setId` is the set's NSNumber id.
 - (void)stickersInSet:(id)setId completion:(void (^)(NSArray *stickers))completion;
 - (void)favoriteStickersWithCompletion:(void (^)(NSArray *stickers))completion;

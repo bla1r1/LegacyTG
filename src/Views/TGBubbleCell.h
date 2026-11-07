@@ -18,6 +18,11 @@
 @property (nonatomic, strong) UIImageView *picture;
 @property (nonatomic, strong) UILabel *time;
 @property (nonatomic, strong) TGLottieView *lottie;
+/// Overlay animation views for animated custom emoji in message body text.
+@property (nonatomic, strong) NSMutableArray *customEmojiViews;
+- (TGLottieView *)customEmojiViewAtIndex:(NSUInteger)index;
+- (void)hideCustomEmojiViewsFromIndex:(NSUInteger)startIndex;
+- (void)stopCustomEmojiAnimations;
 @property (nonatomic, strong) UILabel *icon;
 @property (nonatomic, strong) UILabel *subtitle;
 @property (nonatomic, strong) UILabel *sender;

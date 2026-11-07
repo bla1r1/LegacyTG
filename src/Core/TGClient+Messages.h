@@ -59,6 +59,19 @@
 
 - (void)sendText:(NSString *)text toChat:(int64_t)chatId;
 
+/// Markdown in `formattedText`'s text parsed by parseMarkdown, which keeps
+/// the entities already there (custom emoji) and moves their offsets.
+/// Synchronous; returns the input when TDLib refuses it.
+- (NSDictionary *)markdownParsed:(NSDictionary *)formattedText;
+/// A message's text as the composer edits it: markup back in the text
+/// (getMarkdownText), custom emoji kept as entities. Synchronous.
+- (NSDictionary *)markdownForEditing:(NSDictionary *)formattedText;
+/// sendMessage with inputMessageText carrying this formattedText as is.
+- (void)sendFormattedText:(NSDictionary *)formattedText toChat:(int64_t)chatId
+				   thread:(int64_t)threadId replyTo:(int64_t)replyToId;
+/// editMessageText with this formattedText as is.
+- (void)editMessage:(int64_t)messageId inChat:(int64_t)chatId formattedText:(NSDictionary *)formattedText;
+
 /// Send into a forum topic.
 - (void)sendText:(NSString *)text toChat:(int64_t)chatId thread:(int64_t)threadId;
 

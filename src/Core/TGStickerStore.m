@@ -21,6 +21,40 @@
 	[[TGClient shared] installedStickerSetsWithCompletion:completion];
 }
 
+- (void)installedCustomEmojiSetsWithCompletion:(void (^)(NSArray *sets))completion {
+	[[TGClient shared] installedCustomEmojiSetsWithCompletion:^(NSArray *sets){
+		if (!completion)
+			return;
+		if ([NSThread isMainThread]){
+			completion(sets);
+		} else {
+			dispatch_async(dispatch_get_main_queue(), ^{
+				completion(sets);
+			});
+		}
+	}];
+}
+
+- (BOOL)accountHasPremium {
+	id me = [TGClient shared].me;
+	if (![me isKindOfClass:NSDictionary.class])
+		return NO;
+	id prem = me[@"is_premium"];
+	if ([prem respondsToSelector:@selector(boolValue)])
+		return [prem boolValue];
+	return NO;
+}
+
+- (int64_t)myUserId {
+	id me = [TGClient shared].me;
+	if (![me isKindOfClass:NSDictionary.class])
+		return 0;
+	id uid = me[@"id"];
+	if ([uid respondsToSelector:@selector(longLongValue)])
+		return [uid longLongValue];
+	return 0;
+}
+
 - (void)stickersInSet:(id)setId completion:(void (^)(NSArray *stickers))completion {
 	[[TGClient shared] stickersInSet:setId completion:completion];
 }

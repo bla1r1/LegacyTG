@@ -620,9 +620,148 @@ static NSDate *PGDate(NSInteger year, NSInteger month, NSInteger day) {
 			   completion:^(NSInteger n){ count = n; }];
 	NSDictionary *r = lastP(c, @"getChatMessageCount");
 	XCTAssertEqualObjects(r[@"filter"][@"@type"], @"searchMessagesFilterAudio");
-	XCTAssertNil(r[@"topic_id"]);
+	XCTAssertTrue(r[@"topic_id"] == nil);
 	answerP(c, plainP(@{@"@type" : @"count", @"count" : @(9)}));
 	XCTAssertEqual(count, 9);
+}
+
+#pragma mark - cached emoji status accessors
+
+- (void)testEmojiStatusIdForUser_ReadsFromRawUserCache {
+	TGClient *c = P();
+	c.rawUsersById[@(42)] = @{
+		@"id" : @(42),
+		@"emoji_status" : @{
+			@"@type" : @"emojiStatus",
+			@"type" : @{
+				@"@type" : @"emojiStatusTypeCustomEmoji",
+				@"custom_emoji_id" : @(999888),
+			},
+		},
+	};
+	XCTAssertEqual([c emojiStatusIdForUser:42], 999888LL);
+}
+
+- (void)testEmojiStatusIdForUser_UpgradedGift {
+	TGClient *c = P();
+	c.rawUsersById[@(43)] = @{
+		@"id" : @(43),
+		@"emoji_status" : @{
+			@"@type" : @"emojiStatus",
+			@"type" : @{
+				@"@type" : @"emojiStatusTypeUpgradedGift",
+				@"model_custom_emoji_id" : @(777666),
+			},
+		},
+	};
+	XCTAssertEqual([c emojiStatusIdForUser:43], 777666LL);
+}
+
+- (void)testEmojiStatusIdForUser_MissingOrZero {
+	TGClient *c = P();
+	XCTAssertEqual([c emojiStatusIdForUser:99], 0LL);
+	XCTAssertEqual([c emojiStatusIdForUser:0], 0LL);
+	XCTAssertEqual([c emojiStatusIdForUser:-5], 0LL);
+}
+
+- (void)testEmojiStatusIdForChat_ReadsFromChatsById {
+	TGClient *c = P();
+	c.chatsById[@(100)] = [@{@"id" : @(100), @"emojiStatusId" : @(555444)} mutableCopy];
+	XCTAssertEqual([c emojiStatusIdForChat:100], 555444LL);
+	XCTAssertEqual([c emojiStatusIdForChat:200], 0LL);
+	XCTAssertEqual([c emojiStatusIdForChat:0], 0LL);
+}
+
+- (void)testEmojiStatusIdForChat_SavedMessagesHasNoBadge {
+	TGClient *c = P();
+	c.chatsById[@(101)] = [@{@"id" : @(101), @"isSaved" : @YES, @"emojiStatusId" : @(555444)} mutableCopy];
+	XCTAssertEqual([c emojiStatusIdForChat:101], 0LL);
+}
+
+#pragma mark - gifts
+
+- (void)testGiftsForOwner_UserSenderRequestShape {
+	TGClient *c = P();
+	NSDictionary *owner = @{@"@type" : @"messageSenderUser", @"user_id" : @(42)};
+	[c giftsForOwner:owner offset:@"" completion:nil];
+	NSDictionary *r = lastP(c, @"getReceivedGifts");
+	XCTAssertEqualObjects(r[@"owner_id"][@"@type"], @"messageSenderUser");
+	XCTAssertEqualObjects(r[@"owner_id"][@"user_id"], @(42));
+	XCTAssertEqualObjects(r[@"offset"], @"");
+	XCTAssertEqualObjects(r[@"limit"], @(50));
+}
+
+- (void)testGiftsForOwner_ChatSenderRequestShape {
+	TGClient *c = P();
+	NSDictionary *owner = @{@"@type" : @"messageSenderChat", @"chat_id" : @(-100555)};
+	[c giftsForOwner:owner offset:@"page_2" completion:nil];
+	NSDictionary *r = lastP(c, @"getReceivedGifts");
+	XCTAssertEqualObjects(r[@"owner_id"][@"@type"], @"messageSenderChat");
+	XCTAssertEqualObjects(r[@"owner_id"][@"chat_id"], @(-100555));
+	XCTAssertEqualObjects(r[@"offset"], @"page_2");
+	XCTAssertEqualObjects(r[@"limit"], @(50));
+}
+
+- (void)testGiftsForOwner_ParsesPagingAndGifts {
+	TGClient *c = P();
+	__block NSArray *receivedGifts = nil;
+	__block NSString *receivedNext = nil;
+	__block NSInteger receivedTotal = -1;
+	NSDictionary *owner = @{@"@type" : @"messageSenderUser", @"user_id" : @(42)};
+	[c giftsForOwner:owner offset:@"" completion:^(NSArray *gifts, NSString *nextOffset, NSInteger totalCount){
+		receivedGifts = gifts;
+		receivedNext = nextOffset;
+		receivedTotal = totalCount;
+	}];
+	NSDictionary *reply = @{
+		@"@type" : @"receivedGifts",
+		@"total_count" : @(120),
+		@"next_offset" : @"next_abc",
+		@"gifts" : @[
+			@{
+				@"@type" : @"receivedGift",
+				@"received_gift_id" : @"rg1",
+				@"gift" : @{
+					@"@type" : @"sentGiftRegular",
+					@"gift" : @{
+						@"id" : @(10),
+						@"star_count" : @(5),
+					},
+				},
+			},
+		],
+	};
+	answerP(c, plainP(reply));
+	XCTAssertEqual(receivedTotal, 120);
+	XCTAssertEqualObjects(receivedNext, @"next_abc");
+	XCTAssertEqual(receivedGifts.count, 1);
+	XCTAssertEqualObjects(receivedGifts[0][@"receivedGiftId"], @"rg1");
+}
+
+- (void)testGiftsForUser_ForwardsToUserSender {
+	TGClient *c = P();
+	__block NSArray *receivedGifts = nil;
+	[c giftsForUser:77 completion:^(NSArray *gifts){
+		receivedGifts = gifts;
+	}];
+	NSDictionary *r = lastP(c, @"getReceivedGifts");
+	XCTAssertEqualObjects(r[@"owner_id"][@"@type"], @"messageSenderUser");
+	XCTAssertEqualObjects(r[@"owner_id"][@"user_id"], @(77));
+	XCTAssertEqualObjects(r[@"limit"], @(50));
+	NSDictionary *reply = @{
+		@"@type" : @"receivedGifts",
+		@"total_count" : @(1),
+		@"next_offset" : @"",
+		@"gifts" : @[
+			@{
+				@"@type" : @"receivedGift",
+				@"received_gift_id" : @"rg_u77",
+			},
+		],
+	};
+	answerP(c, plainP(reply));
+	XCTAssertEqual(receivedGifts.count, 1);
+	XCTAssertEqualObjects(receivedGifts[0][@"receivedGiftId"], @"rg_u77");
 }
 
 @end

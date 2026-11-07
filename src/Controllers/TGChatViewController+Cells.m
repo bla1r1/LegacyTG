@@ -6,9 +6,13 @@
 #import "TGStyle.h"
 #import "TGMusicPlayer.h"
 #import "TGMessageAudienceViewController.h"
+#import "TGCustomEmojiStore.h"
+#import "TGStickerBudget.h"
+#import "TGDevice.h"
 
 @implementation TGChatViewController (Cells)
 
+static const NSUInteger kMaxCustomEmojiPerBubble = 3;
 static char kTGReactionChipInfoKey;
 
 #pragma mark - table
@@ -38,6 +42,8 @@ static char kTGReactionChipInfoKey;
 	// before the branch returns.
 	UIView *reactionChips = [cell.contentView viewWithTag:0x9005];
 	reactionChips.hidden = YES;
+	UIImageView *senderStatus = (UIImageView *)[cell.bubble viewWithTag:0x9006];
+	senderStatus.hidden = YES;
 
 	// 1. Who wrote it. This runs before the service and audio branches
 	// return: the layout indents the bubble by the avatar column and keeps a
@@ -55,7 +61,35 @@ static char kTGReactionChipInfoKey;
 		cell.sender.hidden = NO;
 		cell.sender.text = layout.senderName;
 		cell.sender.textColor = TGSenderColour(senderId);
-		cell.sender.frame = layout.senderFrame;
+
+		int64_t statusId = [[TGClient shared] emojiStatusIdForUser:senderId];
+		CGFloat statusSide = TGMetricLineMicro;
+		UIImage *statusImg = statusId != 0
+				? [[TGCustomEmojiStore shared] imageForId:statusId side:statusSide] : nil;
+
+		if (statusImg) {
+			if (!senderStatus) {
+				senderStatus = [[UIImageView alloc] init];
+				senderStatus.tag = 0x9006;
+				senderStatus.contentMode = UIViewContentModeScaleAspectFit;
+				[cell.bubble addSubview:senderStatus];
+			}
+			senderStatus.image = statusImg;
+			senderStatus.hidden = NO;
+
+			CGFloat nameW = ceilf(TGTextSize(layout.senderName, cell.sender.font, 0).width);
+			CGFloat gap = TGMetricPadTiny;
+			CGFloat maxNameW = layout.senderFrame.size.width - statusSide - gap;
+			nameW = MIN(nameW, maxNameW);
+
+			cell.sender.frame = CGRectMake(layout.senderFrame.origin.x,
+					layout.senderFrame.origin.y, nameW, layout.senderFrame.size.height);
+			senderStatus.frame = CGRectMake(layout.senderFrame.origin.x + nameW + gap,
+					layout.senderFrame.origin.y + TGCenteredOrigin(layout.senderFrame.size.height, statusSide),
+					statusSide, statusSide);
+		} else {
+			cell.sender.frame = layout.senderFrame;
+		}
 	}
 
 	// 2. Service cells (service messages, separators, polls, docs, contacts, locations)
@@ -141,6 +175,7 @@ static char kTGReactionChipInfoKey;
 		TGSetBodyText(cell.body, m[@"text"], [theme primaryTextColour]);
 	}
 	cell.body.frame = layout.bodyFrame;
+	[self configureCustomEmojiInCell:cell message:m layout:layout];
 
 	// 7b. Link preview block
 	if (!CGRectIsEmpty(layout.linkPreviewFrame)) {
@@ -325,10 +360,94 @@ static char kTGReactionChipInfoKey;
 	return white ? [TGIcons ticksWhite:NO] : [TGIcons ticksColour:[[TGTheme shared] ticksColour] read:NO];
 }
 
+- (void)configureCustomEmojiInCell:(TGBubbleCell *)cell message:(NSDictionary *)m layout:(TGMessageLayout *)layout {
+	if (![TGCapabilities canPlayAnimatedStickers] || ![TGCapabilities animatedStickersWanted]) {
+		[cell stopCustomEmojiAnimations];
+		return;
+	}
+	if (cell.body.hidden || !cell.body.attributedText.length) {
+		[cell stopCustomEmojiAnimations];
+		return;
+	}
+
+	TGStickerBudget budget = TGStickerBudgetForMemory([TGCapabilities memoryMB]);
+	if (budget.frameCap <= 0) {
+		[cell stopCustomEmojiAnimations];
+		return;
+	}
+
+	NSArray *emojiRects = TGCustomEmojiRectsInText(cell.body.attributedText, layout.bodyFrame.size.width);
+	if (!emojiRects.count) {
+		[cell stopCustomEmojiAnimations];
+		return;
+	}
+
+	// On single-core hardware the decode must not contend with the drag.
+	BOOL scrollSettled = [TGDevice tier] != TGDeviceTierVintage ||
+			!(self.table.isDragging || self.table.isDecelerating);
+
+	NSUInteger maxEmoji = MIN(kMaxCustomEmojiPerBubble, emojiRects.count);
+	NSUInteger activeCount = 0;
+
+	for (NSUInteger i = 0; i < maxEmoji; i++) {
+		NSDictionary *entry = emojiRects[i];
+		int64_t emojiId = [entry[@"id"] longLongValue];
+		NSValue *rectVal = entry[@"rect"];
+		if (![rectVal isKindOfClass:NSValue.class])
+			continue;
+		CGRect rect = CGRectZero;
+		[rectVal getValue:&rect];
+		if (CGRectIsEmpty(rect))
+			continue;
+
+		NSDictionary *anim = [[TGCustomEmojiStore shared] animationForId:emojiId];
+		if (!anim) {
+			// Static WebP or still resolving: the inline glyph underneath serves as fallback.
+			continue;
+		}
+
+		NSNumber *fileId = anim[@"fileId"];
+		if (![fileId isKindOfClass:NSNumber.class] || fileId.longLongValue <= 0)
+			continue;
+
+		NSString *animPath = self.lottiePaths[fileId];
+		if (!animPath.length) {
+			if (![self.imagesRequested containsObject:fileId]) {
+				[self.imagesRequested addObject:fileId];
+				__weak typeof(self) weakSelf = self;
+				[[TGClient shared] downloadFile:fileId.integerValue
+									   priority:TGDownloadPriorityOnScreen
+									 completion:^(NSString *path) {
+					TGChatViewController *me = weakSelf;
+					if (!me) return;
+					if (path) me.lottiePaths[fileId] = path;
+					[me.imagesRequested removeObject:fileId];
+					[me reloadTableDebounced];
+				}];
+			}
+			continue;
+		}
+
+		TGLottieView *view = [cell customEmojiViewAtIndex:activeCount];
+		view.frame = rect;
+		__weak typeof(self) weakSelf = self;
+		view.onStickerReady = ^{ [weakSelf reloadTableDebounced]; };
+		BOOL playable = [view loadStickerFile:animPath];
+		view.hidden = !playable;
+		if (playable && scrollSettled) {
+			[view play];
+		}
+		activeCount++;
+	}
+
+	[cell hideCustomEmojiViewsFromIndex:activeCount];
+}
+
 - (void)tableView:(UITableView *)tableView didEndDisplayingCell:(UITableViewCell *)tableCell forRowAtIndexPath:(NSIndexPath *)indexPath {
 	if (![tableCell isKindOfClass:TGBubbleCell.class]) return;
 	TGBubbleCell *cell = (TGBubbleCell *)tableCell;
 	[cell stopLoopingVideo];
+	[cell stopCustomEmojiAnimations];
 }
 
 #pragma mark - runs
@@ -600,17 +719,36 @@ UIImage *TGBubbleBackImage(TGTheme *theme, BOOL mine, BOOL first, BOOL last) {
 	CGFloat x = TGMetricZero;
 	for (NSDictionary *group in groups){
 		NSString *emoji = group[@"emoji"];
-		NSString *glyph = emoji.length ? emoji : @"\u2605";
+		int64_t customEmojiId = [group[@"customEmojiId"] longLongValue];
 		NSInteger count = [group[@"count"] integerValue];
 		int64_t userId = [group[@"userId"] longLongValue];
 		BOOL single = (count == 1 && userId > 0);
-		NSString *text = single ? glyph
-				: [NSString stringWithFormat:@"%@ %ld", glyph, (long)count];
 
-		CGFloat chipW = TGTextSize(text, TGFontCaption(), 0).width
-				+ TGDoubled(TGMetricReactionChipInset);
-		if (single)
-			chipW += TGMetricReactionChipAvatar + TGMetricReactionChipGap;
+		BOOL isCustom = (customEmojiId != 0);
+		CGFloat emojiSide = TGMetricReactionChipAvatar;
+		UIImage *customEmojiImg = isCustom
+				? [[TGCustomEmojiStore shared] imageForId:customEmojiId side:emojiSide] : nil;
+
+		NSString *text = nil;
+		CGFloat chipW = TGMetricZero;
+
+		if (customEmojiImg) {
+			text = single ? @"" : [NSString stringWithFormat:@"%ld", (long)count];
+			chipW = TGDoubled(TGMetricReactionChipInset) + emojiSide;
+			if (single)
+				chipW += TGMetricReactionChipAvatar + TGMetricReactionChipGap;
+			if (text.length)
+				chipW += TGMetricReactionChipGap + TGTextSize(text, TGFontCaption(), 0).width;
+		} else {
+			NSString *glyph = emoji.length ? emoji : @"\u2605";
+			text = single ? glyph
+					: [NSString stringWithFormat:@"%@ %ld", glyph, (long)count];
+			chipW = TGTextSize(text, TGFontCaption(), 0).width
+					+ TGDoubled(TGMetricReactionChipInset);
+			if (single)
+				chipW += TGMetricReactionChipAvatar + TGMetricReactionChipGap;
+		}
+
 		chipW = MIN(chipW, maxW);
 		if (x > TGMetricZero && x + chipW > maxW)
 			break;
@@ -642,14 +780,28 @@ UIImage *TGBubbleBackImage(TGTheme *theme, BOOL mine, BOOL first, BOOL last) {
 			textX += side + TGMetricReactionChipGap;
 		}
 
-		UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(textX,
-				TGMetricZero, chipW - textX - TGMetricReactionChipInset,
-				TGMetricReactionChipHeight)];
-		label.font = TGFontCaption();
-		label.text = text;
-		label.textColor = [theme primaryTextColour];
-		label.backgroundColor = [UIColor clearColor];
-		[chip addSubview:label];
+		if (customEmojiImg) {
+			UIImageView *emojiView = [[UIImageView alloc] initWithFrame:CGRectMake(
+					textX, TGCenteredOrigin(TGMetricReactionChipHeight, emojiSide),
+					emojiSide, emojiSide)];
+			emojiView.image = customEmojiImg;
+			emojiView.contentMode = UIViewContentModeScaleAspectFit;
+			[chip addSubview:emojiView];
+			textX += emojiSide;
+			if (text.length)
+				textX += TGMetricReactionChipGap;
+		}
+
+		if (text.length) {
+			UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(textX,
+					TGMetricZero, chipW - textX - TGMetricReactionChipInset,
+					TGMetricReactionChipHeight)];
+			label.font = TGFontCaption();
+			label.text = text;
+			label.textColor = [theme primaryTextColour];
+			label.backgroundColor = [UIColor clearColor];
+			[chip addSubview:label];
+		}
 
 		[chip addGestureRecognizer:[[UITapGestureRecognizer alloc]
 				initWithTarget:self action:@selector(reactionChipTapped:)]];

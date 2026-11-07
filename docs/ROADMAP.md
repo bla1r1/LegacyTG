@@ -345,6 +345,32 @@ Checked on the 4S with the dev showcase rows, not yet with real messages.
 | Live location | Time left, last update | Heading arrow on the pin; the line moves on reload, not every minute |
 | Service actions | Sentence | The buttons official attaches: set suggested photo, accept birthdate, open suggested post |
 
+### Custom emoji (audit of 7 November)
+
+| What | Now | Missing |
+|---|---|---|
+| In message text | Static picture inline on iOS 7+, 192-picture LRU; iOS 6 shows the fallback emoji | Animation (tier-gated, the sticker pipeline) |
+| Sending | — : `sendMessage` carries no entities at all, so neither custom emoji nor formatting go out; the Format Text sheet's `**` arrives as literal stars | Composer that keeps custom emoji ids through typing; send through `parseMarkdown` so markup and custom emoji travel together |
+| Editing | Parses Markdown, but a custom emoji in the edited text turns into its fallback and is lost | Prefill through `getMarkdownText`, save with the entities |
+| Picker | Emoji panel has no custom emoji tab | Installed custom emoji packs; Premium gate (non-Premium: Saved Messages only) |
+| Reactions | A custom emoji reaction shows as "★ 3" | Its picture in the chip; choosing one (Premium) |
+| Emoji status | Chat list rows, own profile, status picker | Chat header, group sender names, member rows |
+| Names and previews | Fallback emoji | Pictures where a name or preview line is drawn |
+
+### Still missing in message types after 7 November
+
+Blocked by whole features the app lacks: Pay on invoices and paid-media
+unlock (no payments, no Stars), Join on video chats (no group-call audio).
+Small, rarely noticed: the story picture inside its card, rich-message
+formatting, video cover and scrub preview, call discard reasons past
+missed/declined, service-action buttons (set suggested photo, accept
+birthdate, open suggested post), the countdown on timed media, animated gift
+artwork, poll option media, the heading arrow on live locations and a
+per-minute refresh of their line, slot machine reels, adding checklist tasks.
+Built on 7 November and checked only against dev showcase rows, not real
+messages: spoilers, dice, sending view-once media, caption above media, paid
+media previews, file thumbnails, voice transcription text, every card.
+
 ### One-time and protected content
 
 | What | Now | Missing |

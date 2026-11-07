@@ -14,12 +14,15 @@
 - (void)emojiPanel:(TGEmojiPanel *)panel didPickSticker:(NSDictionary *)sticker;
 /// A GIF in the shape TGStickerStore's animation reads give.
 - (void)emojiPanel:(TGEmojiPanel *)panel didPickAnimation:(NSDictionary *)animation;
+@optional
+- (void)emojiPanel:(TGEmojiPanel *)panel didPickCustomEmoji:(int64_t)emojiId fallback:(NSString *)emoji;
 @end
 
 typedef NS_ENUM(NSInteger, TGEmojiPanelTab) {
 	TGEmojiPanelTabEmoji = 0,
 	TGEmojiPanelTabStickers,
-	TGEmojiPanelTabGIFs
+	TGEmojiPanelTabGIFs,
+	TGEmojiPanelTabCustomEmoji
 };
 
 @interface TGEmojiPanel : UIView

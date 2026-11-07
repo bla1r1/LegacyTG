@@ -44,6 +44,9 @@ typedef UIImage *(*TGCustomEmojiProvider)(int64_t emojiId, CGFloat side);
 void TGSetCustomEmojiProvider(TGCustomEmojiProvider provider);
 /// The square a custom emoji takes in text set in `font`: one line high.
 CGFloat TGCustomEmojiSide(UIFont *font);
+/// Rects and custom emoji IDs for attachments in attributed text laid out at `width`.
+/// Returns an array of dictionaries: @{ @"id": @(emojiId), @"rect": [NSValue valueWithCGRect:rect] }.
+NSArray *TGCustomEmojiRectsInText(NSAttributedString *text, CGFloat width);
 NSAttributedString *TGAttributedMessageText(NSString *text, NSArray *entities, UIFont *baseFont, UIColor *textColor);
 /// The same text with spoiler runs either drawn under an opaque plate or, once
 /// the reader has tapped the bubble, left as plain text. The plain call above

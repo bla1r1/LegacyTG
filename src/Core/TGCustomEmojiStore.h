@@ -18,6 +18,13 @@ extern NSString *const TGCustomEmojiLoadedNotification;
 /// for within 50 ms go to TDLib as one getCustomEmojiStickers call.
 - (UIImage *)imageForId:(int64_t)emojiId side:(CGFloat)side;
 
+/// The sticker animation info { @"fileId": @(fileId), @"format": @"tgs"|"webm" }
+/// or nil for static (webp) or unknown.
+- (NSDictionary *)animationForId:(int64_t)emojiId;
+
+/// Ingest stickers returned by TDLib (e.g. from getCustomEmojiStickers or tests).
+- (void)receiveStickers:(NSArray *)stickers forIds:(NSArray *)ids;
+
 /// Forgets every picture and pending request, for an account switch.
 - (void)reset;
 

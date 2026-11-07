@@ -1,5 +1,6 @@
 #import "TGClientInternal.h"
 #import "TGStatusText.h"
+#import "TGGiftFlatten.h"
 
 /// Defined with the autosave reads below; the update branch above it only
 /// needs the same flattening so both paths produce one row shape.
@@ -12,40 +13,9 @@ static NSString *TGScopeType(NSString *scope) {
 	return @"notificationSettingsScopePrivateChats";
 }
 
-/// Flatten one TDLib story down to what a profile row needs.
-/// One gift as the list wants it. A gift wears a sticker: its thumbnail is
-/// the still picture the row draws (a WebP sticker doubles as its own
-/// thumbnail, per the sticker panel's rule), and the emoji beside it is the
-/// glyph every layout falls back to. "title" does not exist in the schema -
-/// the old flatten invented it, and every gift rendered identically.
+/// Kept as a compatibility call into the pure gift flattening utility.
 static NSDictionary *TGFlattenGift(NSDictionary *entry) {
-	NSDictionary *gift = entry[@"gift"][@"gift"] ?: entry[@"gift"];
-	NSDictionary *sticker = gift[@"sticker"];
-	NSString *format = sticker[@"format"][@"@type"] ?: @"";
-	BOOL webp = [format isEqualToString:@"stickerFormatWebp"];
-
-	NSDictionary *thumbnail = sticker[@"thumbnail"];
-	NSString *thumbFormat = thumbnail[@"format"][@"@type"] ?: @"";
-	NSNumber *thumbId = thumbnail[@"file"][@"id"];
-	BOOL thumbIsPicture = [thumbFormat isEqualToString:@"thumbnailFormatWebp"] ||
-						  [thumbFormat isEqualToString:@"thumbnailFormatJpeg"] ||
-						  [thumbFormat isEqualToString:@"thumbnailFormatPng"];
-	if (!thumbId || !thumbIsPicture)
-		thumbId = webp ? sticker[@"sticker"][@"id"] : nil;
-
-	NSString *message = entry[@"message"][@"text"];
-	NSMutableDictionary *out = [@{
-		@"date"      : entry[@"date"] ?: @(0),
-		@"emoji"     : sticker[@"emoji"] ?: @"",
-		@"starCount" : gift[@"star_count"] ?: @(0),
-		// Who gave it: the tile badge and the viewer's "From" row read here.
-		@"senderUserId" : entry[@"sender_id"][@"user_id"] ?: @(0),
-	} mutableCopy];
-	if (message.length)
-		out[@"message"] = message;
-	if (thumbId)
-		out[@"thumbFileId"] = thumbId;
-	return out;
+	return TGFlattenReceivedGift(entry);
 }
 
 NSDictionary *TGFlattenStory(NSDictionary *story) {
@@ -272,19 +242,40 @@ NSString *TGFirstUsername(NSDictionary *user) {
 }
 
 - (void)giftsForUser:(int64_t)userId completion:(void (^)(NSArray *))completion {
-	[self request:@{
-		@"@type"    : @"getReceivedGifts",
-		@"owner_id" : @{@"@type" : @"messageSenderUser", @"user_id" : @(userId)},
-		@"offset"   : @"",
-		@"limit"    : @(20),
-	} completion:^(NSDictionary *result){
+	[self giftsForOwner:@{@"@type" : @"messageSenderUser", @"user_id" : @(userId)}
+				 offset:@""
+			 completion:^(NSArray *gifts, NSString *nextOffset, NSInteger totalCount){
+		if (completion)
+			completion(gifts);
+	}];
+}
+
+- (void)giftsForOwner:(NSDictionary *)ownerId
+			   offset:(NSString *)offset
+		   completion:(void (^)(NSArray *gifts, NSString *nextOffset, NSInteger totalCount))completion {
+	NSMutableDictionary *query = [NSMutableDictionary dictionaryWithDictionary:@{
+		@"@type" : @"getReceivedGifts",
+		@"limit" : @(50),
+		@"offset": offset ?: @"",
+	}];
+	if (ownerId)
+		query[@"owner_id"] = ownerId;
+
+	[self request:query completion:^(NSDictionary *result){
 		NSMutableArray *out = [NSMutableArray array];
 		for (NSDictionary *entry in result[@"gifts"]){
 			if (![entry isKindOfClass:NSDictionary.class])
 				continue;
-			[out addObject:TGFlattenGift(entry)];
+			NSDictionary *flat = TGFlattenReceivedGift(entry);
+			if (flat)
+				[out addObject:flat];
 		}
-		if (completion) completion(out);
+		NSString *nextOffset = [result[@"next_offset"] isKindOfClass:NSString.class]
+				? result[@"next_offset"] : @"";
+		NSInteger totalCount = [result[@"total_count"] respondsToSelector:@selector(integerValue)]
+				? [result[@"total_count"] integerValue] : (NSInteger)out.count;
+		if (completion)
+			completion(out, nextOffset, totalCount);
 	}];
 }
 
