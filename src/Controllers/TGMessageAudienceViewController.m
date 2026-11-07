@@ -10,6 +10,8 @@
 #import "TGMessageAudienceViewController.h"
 #import "TGAlertSheet.h"
 #import "TGClient.h"
+#import "TGNameWithStatus.h"
+#import "TGCustomEmojiStore.h"
 #import "TGFastDate.h"
 #import "TGIcons.h"
 #import "TGOptions.h"
@@ -85,8 +87,10 @@ static NSString *TGAudienceDate(NSTimeInterval unix) {
 		  avatar:(UIImage *)avatar
 		   theme:(TGTheme *)theme {
 	_face.image = avatar;
-	_name.text = row[@"name"] ?: @"User";
-	_name.textColor = [theme primaryTextColour];
+	int64_t userId = [row[@"userId"] longLongValue];
+	int64_t chatId = [row[@"chatId"] longLongValue];
+	int64_t statusId = userId ? [[TGClient shared] emojiStatusIdForUser:userId] : (chatId ? [[TGClient shared] emojiStatusIdForChat:chatId] : 0);
+	_name.attributedText = TGNameWithStatus(row[@"name"] ?: @"User", statusId, _name.font ?: TGFontBody(), [theme primaryTextColour]);
 	_detail.text = row[@"detail"] ?: @"";
 	_detail.textColor = [theme secondaryTextColour];
 	self.backgroundColor = [theme listBackgroundColour];
@@ -167,7 +171,29 @@ static NSString *TGAudienceDate(NSTimeInterval unix) {
 		[self.tableView addGestureRecognizer:hold];
 	}
 
+	__weak typeof(self) weakSelf = self;
+	[[NSNotificationCenter defaultCenter] addObserverForName:TGCustomEmojiLoadedNotification
+													  object:nil
+													   queue:[NSOperationQueue mainQueue]
+												  usingBlock:^(NSNotification *note){
+		TGMessageAudienceViewController *me = weakSelf;
+		if (!me) return;
+		[NSObject cancelPreviousPerformRequestsWithTarget:me selector:@selector(reloadVisibleRows) object:nil];
+		[me performSelector:@selector(reloadVisibleRows) withObject:nil afterDelay:0.3];
+	}];
+
 	[self loadPeople];
+}
+
+- (void)reloadVisibleRows {
+	NSArray *visible = [self.tableView indexPathsForVisibleRows];
+	if (visible.count) {
+		[self.tableView reloadRowsAtIndexPaths:visible withRowAnimation:UITableViewRowAnimationNone];
+	}
+}
+
+- (void)dealloc {
+	[[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 - (void)viewWillAppear:(BOOL)animated {

@@ -1,5 +1,6 @@
 #import "TGPerf.h"
 #import "TGChatViewControllerInternal.h"
+#import "TGNameWithStatus.h"
 #import "TGCapabilities.h"
 #import "TGStyle.h"
 #import "TGDevShowcase.h"
@@ -24,6 +25,25 @@ UIColor *TGSenderColour(int64_t userId) {
 
 #pragma mark - geometry
 
+/// Finds the replied message dictionary if already loaded in quotes or messages.
+- (NSDictionary *)repliedMessageFor:(NSDictionary *)m {
+	NSNumber *replyId = m[@"replyId"];
+	if (![replyId isKindOfClass:NSNumber.class])
+		return nil;
+	int64_t rid = [replyId longLongValue];
+	if (rid == 0)
+		return nil;
+	NSDictionary *fetched = self.quotes[replyId];
+	if (fetched)
+		return fetched;
+	for (NSDictionary *candidate in self.messages) {
+		if ([candidate isKindOfClass:NSDictionary.class] && [candidate[@"id"] longLongValue] == rid) {
+			return candidate;
+		}
+	}
+	return nil;
+}
+
 /// Size of the text inside a bubble, and of the bubble itself.
 /// The quote block a reply carries, and the "forwarded from" line above it.
 - (NSString *)quoteTextFor:(NSDictionary *)m {
@@ -33,10 +53,29 @@ UIColor *TGSenderColour(int64_t userId) {
 	NSString *inline_ = m[@"replyText"];
 	if (inline_.length)
 		return inline_;
-	NSDictionary *fetched = self.quotes[replyId];
+	NSDictionary *fetched = [self repliedMessageFor:m];
 	if (!fetched)
 		return @"...";
 	return TGDescribeMessageContent(fetched);
+}
+
+- (NSArray *)quoteEntitiesFor:(NSDictionary *)m {
+	NSNumber *replyId = m[@"replyId"];
+	if (![replyId isKindOfClass:NSNumber.class])
+		return nil;
+	NSString *inline_ = m[@"replyText"];
+	if (inline_.length) {
+		NSArray *entities = m[@"quoteEntities"];
+		return [entities isKindOfClass:NSArray.class] ? entities : nil;
+	}
+	NSDictionary *fetched = [self repliedMessageFor:m];
+	if (!fetched)
+		return nil;
+	if ([fetched[@"text"] length]) {
+		NSArray *entities = fetched[@"entities"];
+		return [entities isKindOfClass:NSArray.class] ? entities : nil;
+	}
+	return nil;
 }
 
 /// Who wrote the message being answered. Only known once the original has been
@@ -45,12 +84,23 @@ UIColor *TGSenderColour(int64_t userId) {
 	NSNumber *replyId = [m[@"replyId"] isKindOfClass:NSNumber.class] ? m[@"replyId"] : nil;
 	if (!replyId)
 		return nil;
-	NSDictionary *original = self.quotes[replyId];
+	NSDictionary *original = [self repliedMessageFor:m];
 	if (!original)
 		return nil;
 	if ([original[@"outgoing"] boolValue])
 		return @"You";
 	return [[TGClient shared] nameForUserId:[original[@"senderId"] longLongValue]];
+}
+
+- (int64_t)quoteAuthorStatusIdFor:(NSDictionary *)m {
+	NSNumber *replyId = [m[@"replyId"] isKindOfClass:NSNumber.class] ? m[@"replyId"] : nil;
+	if (!replyId)
+		return 0;
+	NSDictionary *original = [self repliedMessageFor:m];
+	if (!original || [original[@"outgoing"] boolValue])
+		return 0;
+	int64_t senderId = [original[@"senderId"] longLongValue];
+	return [[TGClient shared] emojiStatusIdForUser:senderId];
 }
 
 - (CGFloat)decorationHeightFor:(NSDictionary *)m {
@@ -151,23 +201,31 @@ UIColor *TGSenderColour(int64_t userId) {
 	}
 	cell.forwardLabel.frame = CGRectMake(kPadH, topY, width - TGDoubled(kPadH), TGMetricSenderLineHeight);
 
-	NSString *line = [NSString stringWithFormat:@"Forwarded from %@", from];
+	int64_t forwardStatusId = 0;
+	id forwardUid = m[@"forwardUserId"] ?: m[@"forwardSenderId"];
+	if ([forwardUid respondsToSelector:@selector(longLongValue)]) {
+		forwardStatusId = [[TGClient shared] emojiStatusIdForUser:[forwardUid longLongValue]];
+	}
+	if (forwardStatusId == 0) {
+		id forwardCid = m[@"forwardChatId"];
+		if ([forwardCid respondsToSelector:@selector(longLongValue)]) {
+			forwardStatusId = [[TGClient shared] emojiStatusIdForChat:[forwardCid longLongValue]];
+		}
+	}
+
 	if ([cell.forwardLabel respondsToSelector:@selector(setAttributedText:)]){
 		NSMutableAttributedString *styled =
-				[[NSMutableAttributedString alloc] initWithString:line];
-		[styled addAttribute:NSForegroundColorAttributeName
-					   value:[theme secondaryTextColour]
-					   range:NSMakeRange(0, line.length)];
-		[styled addAttribute:NSForegroundColorAttributeName
-					   value:[theme accentColour]
-					   range:NSMakeRange(15, from.length)];
-		[styled addAttribute:NSFontAttributeName
-					   value:TGFontMetaStrong()
-					   range:NSMakeRange(15, from.length)];
+				[[NSMutableAttributedString alloc] initWithString:@"Forwarded from "
+													   attributes:@{
+					NSForegroundColorAttributeName: [theme secondaryTextColour],
+					NSFontAttributeName: cell.forwardLabel.font ?: TGFontMeta()
+				}];
+		NSAttributedString *fromWithStatus = TGNameWithStatus(from, forwardStatusId, TGFontMetaStrong(), [theme accentColour]);
+		[styled appendAttributedString:fromWithStatus];
 		cell.forwardLabel.attributedText = styled;
 	} else {
 		cell.forwardLabel.textColor = [theme accentColour];
-		cell.forwardLabel.text = line;
+		cell.forwardLabel.text = [NSString stringWithFormat:@"Forwarded from %@", from];
 	}
 	return TGMetricQuoteForwardLine;
 }
@@ -766,7 +824,15 @@ static UIImage *TGImageFromMinithumbnail(id mini) {
 		contentW = kBubbleMaxW;
 	CGFloat senderH = senderName.length ? TGMetricSenderLineHeight : TGMetricZero;
 	if (senderName.length) {
+		int64_t statusId = [[TGClient shared] emojiStatusIdForUser:senderId];
+		NSAttributedString *senderAttr = TGNameWithStatus(senderName, statusId, TGFontMetaStrong(), nil);
 		CGFloat senderW = TGTextSize(senderName, TGFontMetaStrong(), 0).width;
+		if (senderAttr.length > 0 && [senderAttr respondsToSelector:@selector(boundingRectWithSize:options:context:)]) {
+			CGRect r = [senderAttr boundingRectWithSize:CGSizeMake(CGFLOAT_MAX, TGMetricSenderLineHeight)
+												options:NSStringDrawingUsesLineFragmentOrigin | NSStringDrawingUsesFontLeading
+												context:nil];
+			senderW = ceilf(r.size.width);
+		}
 		contentW = MAX(contentW, senderW);
 	}
 
@@ -837,6 +903,7 @@ static UIImage *TGImageFromMinithumbnail(id mini) {
 	layout.stamp = [self stampFor:m];
 	layout.quoteText = quoted;
 	layout.quoteAuthor = [self quoteAuthorFor:m];
+	layout.quoteEntities = [self quoteEntitiesFor:m];
 
 	layout.tailFrame = CGRectZero;
 

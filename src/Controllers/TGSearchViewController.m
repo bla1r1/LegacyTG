@@ -4,6 +4,8 @@
 #import "TGSearchViewController.h"
 #import "TGChatViewController.h"
 #import "TGClient.h"
+#import "TGNameWithStatus.h"
+#import "TGCustomEmojiStore.h"
 #import "TGTheme.h"
 #import "TGIcons.h"
 #import <QuartzCore/QuartzCore.h>
@@ -147,6 +149,15 @@ static NSString *TGPublicPostText(NSDictionary *message) {
 		[weakSelf.tableView reloadData];
 	}];
 
+	[[NSNotificationCenter defaultCenter] addObserverForName:TGCustomEmojiLoadedNotification
+			object:nil queue:[NSOperationQueue mainQueue]
+		 usingBlock:^(NSNotification *note) {
+		TGSearchViewController *me = weakSelf;
+		if (!me) return;
+		[NSObject cancelPreviousPerformRequestsWithTarget:me selector:@selector(reloadVisibleRows) object:nil];
+		[me performSelector:@selector(reloadVisibleRows) withObject:nil afterDelay:0.3];
+	}];
+
 	// A row's fate is not a control: the hold reaches what a tap cannot, and
 	// the same pattern as the topics list carries it.
 	UILongPressGestureRecognizer *hold = [[UILongPressGestureRecognizer alloc]
@@ -164,6 +175,13 @@ static NSString *TGPublicPostText(NSDictionary *message) {
 - (void)dealloc {
 	[[NSNotificationCenter defaultCenter] removeObserver:self];
 	[NSObject cancelPreviousPerformRequestsWithTarget:self];
+}
+
+- (void)reloadVisibleRows {
+	NSArray *visible = [self.tableView indexPathsForVisibleRows];
+	if (visible.count) {
+		[self.tableView reloadRowsAtIndexPaths:visible withRowAnimation:UITableViewRowAnimationNone];
+	}
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -982,6 +1000,7 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 			cell.imageView.image = [TGIcons glyphNamed:@"search"
 												colour:[theme secondaryTextColour]
 												  side:TGMetricListAvatar - TGMetricPadLarge];
+			cell.accessoryType = UITableViewCellAccessoryNone;
 			return cell;
 		}
 		// The last row of a log is the clear action.
@@ -1004,6 +1023,7 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 		if (indexPath.section == 3){
 			cell.textLabel.text = [NSString stringWithFormat:@"#%@", self.recentTags[indexPath.row]];
 			cell.detailTextLabel.text = @"Recent hashtag";
+			cell.accessoryType = UITableViewCellAccessoryNone;
 			return cell;
 		}
 		if (indexPath.section == 4){
@@ -1013,16 +1033,26 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 			return cell;
 		}
 		NSDictionary *c = [self emptyStateRowAt:indexPath];
-		cell.textLabel.text = c[@"title"];
-		cell.textLabel.textColor = [theme primaryTextColour];
+		int64_t cid = [c[@"id"] longLongValue];
+		int64_t statusId = [c[@"emojiStatusId"] longLongValue];
+		if (statusId == 0 && cid > 0) {
+			statusId = [[TGClient shared] emojiStatusIdForUser:cid];
+		}
+		if (indexPath.section == 0) {
+			cell.textLabel.attributedText = TGNameWithStatus(c[@"title"] ?: @"", statusId, cell.textLabel.font, [theme primaryTextColour]);
+		} else {
+			cell.textLabel.text = c[@"title"];
+			cell.textLabel.textColor = [theme primaryTextColour];
+		}
 		cell.detailTextLabel.text = c[@"previewText"];
-		cell.imageView.image = [self avatarForChat:[c[@"id"] longLongValue]
+		cell.imageView.image = [self avatarForChat:cid
 											 title:c[@"title"]
 											fileId:c[@"photoFileId"]];
 	} else if (indexPath.section == 0) {
 		cell.textLabel.text = self.suggestions[indexPath.row];
 		cell.textLabel.textColor = [theme primaryTextColour];
 		cell.detailTextLabel.text = @"Suggestion";
+		cell.accessoryType = UITableViewCellAccessoryNone;
 	} else if (indexPath.section == 1) {
 		NSDictionary *c = self.chatHits[indexPath.row];
 		// A public chat the list has never seen answers with no title until
@@ -1041,12 +1071,13 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 											fileId:c[@"photoFileId"]];
 	} else if (indexPath.section == 2) {
 		NSDictionary *u = self.contactHits[indexPath.row];
+		int64_t uid = [u[@"id"] longLongValue];
 		NSString *name = [u[@"name"] length] ? u[@"name"]
-				: [[TGClient shared] nameForUserId:[u[@"id"] longLongValue]];
-		cell.textLabel.text = name ?: @"";
-		cell.textLabel.textColor = [theme primaryTextColour];
+				: [[TGClient shared] nameForUserId:uid];
+		int64_t statusId = [[TGClient shared] emojiStatusIdForUser:uid];
+		cell.textLabel.attributedText = TGNameWithStatus(name ?: @"", statusId, cell.textLabel.font, [theme primaryTextColour]);
 		cell.detailTextLabel.text = nil;
-		cell.imageView.image = [self avatarForChat:[u[@"id"] longLongValue]
+		cell.imageView.image = [self avatarForChat:uid
 											 title:name
 											fileId:nil];
 	} else if (indexPath.section == 3) {
@@ -1069,7 +1100,7 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 		cell.textLabel.text = [NSString stringWithFormat:@"#%@", self.hashtagHits[indexPath.row]];
 		cell.textLabel.textColor = [theme primaryTextColour];
 		cell.detailTextLabel.text = @"Search public posts";
-		cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+		cell.accessoryType = UITableViewCellAccessoryNone;
 	} else if (indexPath.section == 5) {
 		if (indexPath.row >= (NSInteger)self.publicHits.count){
 			cell.textLabel.text = @"Load More Public Posts";

@@ -238,13 +238,16 @@ static NSDictionary *TGStoryFlatten(NSDictionary *story) {
 	NSDictionary *origin = TGStoryDict(repost[@"origin"]);
 	NSString *chosen = TGStoryReactionEmojis(@[@{@"type" :
 			TGStoryDict(story[@"chosen_reaction_type"])}]).firstObject ?: @"";
+	NSArray *captionEntities = [TGStoryDict(story[@"caption"])[@"entities"] isKindOfClass:NSArray.class]
+			? TGStoryDict(story[@"caption"])[@"entities"] : @[];
 	NSMutableDictionary *out = [@{
-		@"storyId"        : story[@"id"] ?: @(0),
-		@"chatId"         : story[@"poster_chat_id"] ?: @(0),
-		@"posterKind"     : TGStoryDict(story[@"poster_id"])[@"@type"] ?: @"",
-		@"date"           : story[@"date"] ?: @(0),
-		@"caption"        : TGStoryDict(story[@"caption"])[@"text"] ?: @"",
-		@"contentKind"    : contentKind,
+		@"storyId"         : story[@"id"] ?: @(0),
+		@"chatId"          : story[@"poster_chat_id"] ?: @(0),
+		@"posterKind"      : TGStoryDict(story[@"poster_id"])[@"@type"] ?: @"",
+		@"date"            : story[@"date"] ?: @(0),
+		@"caption"         : TGStoryDict(story[@"caption"])[@"text"] ?: @"",
+		@"captionEntities" : captionEntities,
+		@"contentKind"     : contentKind,
 		@"isVideo"        : @([contentKind isEqualToString:@"video"]),
 		@"isLive"         : @([contentKind isEqualToString:@"live"]),
 		@"groupCallId"    : content[@"group_call_id"] ?: @(0),

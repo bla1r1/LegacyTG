@@ -38,6 +38,8 @@ typedef NS_ENUM(NSInteger, TGMessageCardAction) {
 @property (nonatomic, assign) TGMessageCardAction action;
 @property (nonatomic, assign) int64_t actionTargetId;
 @property (nonatomic, assign) int64_t actionChatId;
+/// Emoji status ID next to the title (e.g. for shared user cards).
+@property (nonatomic, assign) int64_t titleStatusEmojiId;
 @end
 
 /// The card for a flattened message row (TGFlattenMessage output, with the

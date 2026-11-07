@@ -910,13 +910,21 @@ static const CGFloat kMeTextInset  = TGMetricPadMedium;
 		cell.accessoryType = [row[TGRowChecked] boolValue]
 				? UITableViewCellAccessoryCheckmark : UITableViewCellAccessoryNone;
 	} else if ([kind isEqualToString:TGKindDisclosure]){
-		cell.accessoryView = [[UIImageView alloc] initWithImage:[TGIcons skeuomorphicDisclosureChevron]];
+		if ([row[TGRowOpens] boolValue]) {
+			cell.accessoryView = [[UIImageView alloc] initWithImage:[TGIcons skeuomorphicDisclosureChevron]];
+		} else {
+			cell.accessoryView = nil;
+		}
 		cell.accessoryType = UITableViewCellAccessoryNone;
 	} else if ([kind isEqualToString:TGKindAction]){
 		cell.textLabel.textColor = [theme accentColour];
 		cell.textLabel.textAlignment = NSTextAlignmentCenter;
 	} else if ([kind isEqualToString:TGKindPlain]){
 		cell.textLabel.textColor = [theme secondaryTextColour];
+		cell.selectionStyle = UITableViewCellSelectionStyleNone;
+	}
+
+	if (row[TGRowTap] == nil && ![kind isEqualToString:TGKindProfile]) {
 		cell.selectionStyle = UITableViewCellSelectionStyleNone;
 	}
 
@@ -986,9 +994,12 @@ static const CGFloat kMeTextInset  = TGMetricPadMedium;
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)path {
+	NSDictionary *row = [self rowAt:path];
+	if (!row[TGRowTap] && ![row[TGRowKind] isEqualToString:TGKindProfile]) {
+		return;
+	}
 	[tableView deselectRowAtIndexPath:path animated:YES];
 
-	NSDictionary *row = [self rowAt:path];
 	if ([row[TGRowKind] isEqualToString:TGKindProfile]){
 		[self openMyProfile];
 		return;

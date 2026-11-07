@@ -199,8 +199,9 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 	cell.textLabel.text = row[@"title"];
 	cell.detailTextLabel.text = row[@"detail"] ?: @"";
 	BOOL tappable = row[@"action"] != nil;
-	cell.accessoryType = tappable ? UITableViewCellAccessoryDisclosureIndicator
-								  : UITableViewCellAccessoryNone;
+	cell.accessoryType = (tappable && [row[@"opens"] boolValue])
+			? UITableViewCellAccessoryDisclosureIndicator
+			: UITableViewCellAccessoryNone;
 	cell.selectionStyle = tappable ? UITableViewCellSelectionStyleDefault
 								   : UITableViewCellSelectionStyleNone;
 	cell.textLabel.textColor = kind == TGBusinessRowDestructive
@@ -221,11 +222,12 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)path {
-	[tableView deselectRowAtIndexPath:path animated:YES];
 	NSDictionary *row = [self rowAt:path];
 	NSString *action = row[@"action"];
-	if (action.length)
-		[self didChooseAction:action row:row];
+	if (!action.length)
+		return;
+	[tableView deselectRowAtIndexPath:path animated:YES];
+	[self didChooseAction:action row:row];
 }
 
 @end
@@ -319,19 +321,19 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 			@"feature list; a row Telegram refuses opens with its own sentence "
 			@"instead of disappearing.",
 			@[
-		TGBAction(@"Business Profile", name, @"profile"),
-		TGBAction(@"Links to Chat", @"Short links that suggest a first message", @"links"),
+		TGBOpenAction(@"Business Profile", name, @"profile"),
+		TGBOpenAction(@"Links to Chat", @"Short links that suggest a first message", @"links"),
 	])];
 
 	[sections addObject:TGBSection(@"AUTOMATED MESSAGES", nil, @[
-		TGBAction(@"Greeting Messages", [self greetingDetail], @"greeting"),
-		TGBAction(@"Away Messages", [self awayDetail], @"away"),
+		TGBOpenAction(@"Greeting Messages", [self greetingDetail], @"greeting"),
+		TGBOpenAction(@"Away Messages", [self awayDetail], @"away"),
 	])];
 
 	[sections addObject:TGBSection(@"BUSINESS INFO", nil, @[
-		TGBAction(@"Location", [self locationDetail], @"location"),
-		TGBAction(@"Opening Hours", [self hoursDetail], @"hours"),
-		TGBAction(@"Intro", [self introDetail], @"intro"),
+		TGBOpenAction(@"Location", [self locationDetail], @"location"),
+		TGBOpenAction(@"Opening Hours", [self hoursDetail], @"hours"),
+		TGBOpenAction(@"Intro", [self introDetail], @"intro"),
 	])];
 
 	[sections addObject:TGBSection(@"CHATBOTS",
@@ -339,10 +341,10 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 			@"bot's connection. A user account has no connection id; these "
 			@"pages send the real request and show Telegram's refusal.",
 			@[
-		TGBAction(@"Business Connection",
+		TGBOpenAction(@"Business Connection",
 				TGBusinessStoredConnectionId().length ? TGBusinessStoredConnectionId() : @"Not set",
 				@"connection"),
-		TGBAction(@"Business Messages", @"Send, edit, read and pin", @"messages"),
+		TGBOpenAction(@"Business Messages", @"Send, edit, read and pin", @"messages"),
 	])];
 
 	NSMutableArray *featureRows = [NSMutableArray array];

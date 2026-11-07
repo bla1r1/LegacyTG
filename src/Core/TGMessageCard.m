@@ -13,6 +13,7 @@ FOUNDATION_EXPORT NSString *TGMessageCardPrice(NSString *currency, int64_t amoun
 		_kicker = @"";
 		_title = @"";
 		_lines = @[];
+		_titleStatusEmojiId = 0;
 	}
 	return self;
 }

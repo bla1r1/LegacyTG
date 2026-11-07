@@ -2,6 +2,8 @@
 #import "TGNewContactViewController.h"
 #import "TGChatViewController.h"
 #import "TGClient.h"
+#import "TGNameWithStatus.h"
+#import "TGCustomEmojiStore.h"
 #import "TGIcons.h"
 #import "TGTheme.h"
 #import <QuartzCore/QuartzCore.h>
@@ -212,7 +214,24 @@ static NSInteger TGPresenceRank(NSDictionary *status, double *outWasOnline) {
 		[me.tableView reloadData];
 	}];
 
+	[[NSNotificationCenter defaultCenter] addObserverForName:TGCustomEmojiLoadedNotification
+													  object:nil
+													   queue:[NSOperationQueue mainQueue]
+												  usingBlock:^(NSNotification *note){
+		TGContactsViewController *me = weakContacts;
+		if (!me) return;
+		[NSObject cancelPreviousPerformRequestsWithTarget:me selector:@selector(reloadVisibleRows) object:nil];
+		[me performSelector:@selector(reloadVisibleRows) withObject:nil afterDelay:0.3];
+	}];
+
 	[self loadContacts];
+}
+
+- (void)reloadVisibleRows {
+	NSArray *visible = [self.tableView indexPathsForVisibleRows];
+	if (visible.count) {
+		[self.tableView reloadRowsAtIndexPaths:visible withRowAnimation:UITableViewRowAnimationNone];
+	}
 }
 
 - (void)sortTapped {
@@ -492,11 +511,13 @@ static NSString *TGContactName(NSDictionary *u) {
 	if (!u)
 		return cell;
 	NSString *name = TGContactName(u);
+	int64_t uid = [u[@"id"] longLongValue];
+	int64_t statusEmojiId = [[TGClient shared] emojiStatusIdForUser:uid];
 	UIColor *bg = [[TGTheme shared] listBackgroundColour];
 	cell.backgroundColor = bg;
 	cell.textLabel.backgroundColor = bg;
 	cell.textLabel.opaque = YES;
-	cell.textLabel.text = name;
+	cell.textLabel.attributedText = TGNameWithStatus(name ?: @"", statusEmojiId, TGFontBody(), [[TGTheme shared] primaryTextColour]);
 	cell.textLabel.font = TGFontBody();
 	cell.detailTextLabel.backgroundColor = bg;
 	cell.detailTextLabel.opaque = YES;
@@ -527,7 +548,6 @@ static NSString *TGContactName(NSDictionary *u) {
 			: UITableViewCellAccessoryNone;
 
 	TGContactCell *contactCell = (TGContactCell *)cell;
-	int64_t uid = [u[@"id"] longLongValue];
 	contactCell.avatarUser = uid;
 
 	UIImage *photo = [[TGMemberAvatarStore shared] cachedAvatarForUser:uid side:TGMetricListAvatar];

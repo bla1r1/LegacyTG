@@ -312,7 +312,16 @@ static UIFont *TGChatCellTitleFont(void) {
 	CGFloat muteW = self.muteIcon.hidden ? 0 : kMuteRoom;
 	CGFloat statusW = self.statusIcon.hidden ? 0 : kStatusRoom;
 	CGFloat titleRoom = MAX(0, titleRight - kTextLeft - muteW - statusW);
-	CGFloat titleW = MIN(ceilf(TGChatCellTextSize(self.titleLabel.text, self.titleLabel.font).width), titleRoom);
+	CGFloat textW = 0;
+	if (self.titleLabel.attributedText.length > 0 && [self.titleLabel.attributedText respondsToSelector:@selector(boundingRectWithSize:options:context:)]) {
+		CGRect r = [self.titleLabel.attributedText boundingRectWithSize:CGSizeMake(CGFLOAT_MAX, TGMetricLineRow)
+															   options:NSStringDrawingUsesLineFragmentOrigin | NSStringDrawingUsesFontLeading
+															   context:nil];
+		textW = ceilf(r.size.width);
+	} else {
+		textW = ceilf(TGChatCellTextSize(self.titleLabel.text, self.titleLabel.font).width);
+	}
+	CGFloat titleW = MIN(textW, titleRoom);
 	self.titleLabel.frame = CGRectMake(kTextLeft, kFirstLineTop, titleW, TGMetricLineRow);
 	CGFloat afterTitle = kTextLeft + titleW + TGMetricBubbleRowInset;
 	if (!self.statusIcon.hidden){

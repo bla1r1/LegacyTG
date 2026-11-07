@@ -287,7 +287,7 @@ static UIImage *TGBackgroundPreview(UIImage *source, NSInteger fillColour) {
 		cell.imageView.clipsToBounds = YES;
 		cell.imageView.layer.cornerRadius = TGMetricCornerSmall;
 		cell.backgroundColor = [theme cardBackgroundColour];
-		cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+		cell.accessoryType = UITableViewCellAccessoryNone;
 		cell.selectionStyle = UITableViewCellSelectionStyleBlue;
 		return cell;
 	}
@@ -325,8 +325,10 @@ static UIImage *TGBackgroundPreview(UIImage *source, NSInteger fillColour) {
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
 	NSDictionary *row = [self rowAt:indexPath];
+	if (!row || [row[@"kind"] isEqualToString:@"plain"])
+		return;
+	[tableView deselectRowAtIndexPath:indexPath animated:YES];
 	if ([row[@"kind"] isEqualToString:@"background"])
 		[self showActionsForBackground:row[@"background"]
 							 installed:[row[@"installed"] boolValue]];

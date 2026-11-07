@@ -23,6 +23,13 @@ static NSMutableDictionary *TGNetRow(NSString *title, NSString *detail,
 	return row;
 }
 
+static NSMutableDictionary *TGNetOpenRow(NSString *title, NSString *detail,
+										 void (^tap)(void)) {
+	NSMutableDictionary *row = TGNetRow(title, detail, tap);
+	row[@"opens"] = @YES;
+	return row;
+}
+
 static NSString *TGNetworkTypeTitle(NSString *type) {
 	if ([type isEqualToString:@"none"])    return @"None";
 	if ([type isEqualToString:@"mobile"])  return @"Mobile";
@@ -125,13 +132,13 @@ static NSDictionary *TGNetSection(NSString *header, NSString *footer, NSArray *r
 	];
 
 	NSArray *diagnostics = @[
-		TGNetRow(@"TDLib State", stateDetail, ^{
+		TGNetOpenRow(@"TDLib State", stateDetail, ^{
 			[weakSelf showCurrentState];
 		}),
-		TGNetRow(@"Application Config", @"Tap to read", ^{
+		TGNetOpenRow(@"Application Config", @"Tap to read", ^{
 			[weakSelf showApplicationConfig];
 		}),
-		TGNetRow(@"Database Statistics", @"Tap to read", ^{
+		TGNetOpenRow(@"Database Statistics", @"Tap to read", ^{
 			[weakSelf showDatabaseStatistics];
 		}),
 	];
@@ -209,13 +216,14 @@ static NSDictionary *TGNetSection(NSString *header, NSString *footer, NSArray *r
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
 	NSInteger flat = [self flatRowForIndexPath:indexPath];
 	if (flat < 0 || flat >= (NSInteger)self.rows.count)
 		return;
 	void (^tap)(void) = self.rows[(NSUInteger)flat][@"tap"];
-	if (tap)
-		tap();
+	if (!tap)
+		return;
+	[tableView deselectRowAtIndexPath:indexPath animated:YES];
+	tap();
 }
 
 #pragma mark - network type

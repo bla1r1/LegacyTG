@@ -38,6 +38,13 @@ static inline NSDictionary *TGBAction(NSString *title, NSString *detail,
 	return TGBRow(title, detail, action, TGBusinessRowAction);
 }
 
+static inline NSDictionary *TGBOpenAction(NSString *title, NSString *detail,
+										  NSString *action) {
+	NSMutableDictionary *row = [TGBAction(title, detail, action) mutableCopy];
+	row[@"opens"] = @YES;
+	return row;
+}
+
 static inline NSDictionary *TGBDestructive(NSString *title, NSString *action) {
 	return TGBRow(title, nil, action, TGBusinessRowDestructive);
 }

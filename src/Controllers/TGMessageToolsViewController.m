@@ -35,7 +35,7 @@
 
 	NSMutableArray *messageRows = [NSMutableArray array];
 	if (self.isChecklist){
-		[messageRows addObject:TGTier2Row(@"Checklist", @"Open the task editor", ^{
+		[messageRows addObject:TGTier2OpenRow(@"Checklist", @"Open the task editor", ^{
 			TGChecklistViewController *screen = [[TGChecklistViewController alloc]
 					initWithChatId:weakSelf.chatId
 						 messageId:weakSelf.messageId
@@ -45,7 +45,7 @@
 		})];
 	}
 	if (self.hasSuggestedPost){
-		[messageRows addObject:TGTier2Row(@"Suggested Post", @"Approve or decline", ^{
+		[messageRows addObject:TGTier2OpenRow(@"Suggested Post", @"Approve or decline", ^{
 			TGSuggestedPostViewController *screen =
 					[[TGSuggestedPostViewController alloc]
 							initWithChatId:weakSelf.chatId
@@ -66,7 +66,7 @@
 
 	NSMutableArray *richRows = [NSMutableArray array];
 	[richRows addObject:TGTier2Action(@"Send as Rich Draft", ^{ [weakSelf sendDraft]; })];
-	[richRows addObject:TGTier2Row(@"AI Compose", nil, ^{
+	[richRows addObject:TGTier2OpenRow(@"AI Compose", nil, ^{
 		TGAiComposeViewController *screen = [[TGAiComposeViewController alloc] init];
 		screen.chatId = weakSelf.chatId;
 		screen.chatTitle = weakSelf.chatTitle;

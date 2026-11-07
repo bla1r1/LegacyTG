@@ -6,6 +6,7 @@
 #import "TGFastDate.h"
 #import "TGTextDraw.h"
 #import "TGChatViewControllerInternal.h"
+#import "TGNameWithStatus.h"
 #import <QuartzCore/QuartzCore.h>
 #import "TGAlertSheet.h"
 #import "TGStatusText.h"
@@ -864,11 +865,9 @@ static const CGFloat kReplyPull = TGMetricReplyPull;   // how far a bubble trave
 	if (!self.titleNameLabel || !self.titleNameLabel.superview)
 		return;
 
-	if (!self.titleStatusIcon){
-		self.titleStatusIcon = [[UIImageView alloc] init];
-		self.titleStatusIcon.contentMode = UIViewContentModeScaleAspectFit;
+	if (self.titleStatusIcon){
+		self.titleStatusIcon.image = nil;
 		self.titleStatusIcon.hidden = YES;
-		[self.titleNameLabel.superview addSubview:self.titleStatusIcon];
 	}
 
 	BOOL isSaved = (self.chatId == [[TGClient shared] savedMessagesChatId]) ||
@@ -886,38 +885,15 @@ static const CGFloat kReplyPull = TGMetricReplyPull;   // how far a bubble trave
 		}
 		if (statusId == 0)
 			statusId = [[TGClient shared] emojiStatusIdForUser:self.chatId];
+	} else if (!isSaved) {
+		statusId = [[TGClient shared] emojiStatusIdForChat:self.chatId];
 	}
 
-	CGFloat statusSide = [TGChatCell statusSide];
-	UIImage *status = (isPrivate && statusId != 0)
-			? [[TGCustomEmojiStore shared] imageForId:statusId side:statusSide] : nil;
-
-	if (status){
-		self.titleStatusIcon.image = status;
-		self.titleStatusIcon.hidden = NO;
-
-		CGFloat titleTextW = ceilf(TGLineTextSize(self.titleNameLabel.text,
-				self.titleNameLabel.font).width);
-		CGFloat gap = TGMetricPadSmall;
-		CGFloat maxTitleW = kTitleWidth - statusSide - gap;
-		CGFloat titleW = MIN(titleTextW, maxTitleW);
-		CGFloat clusterW = titleW + gap + statusSide;
-		CGFloat startX = TGCenteredOrigin(kTitleWidth, clusterW);
-
-		self.titleNameLabel.frame = CGRectMake(startX, TGMetricBorderWidth,
-				titleW, TGMetricLineRow);
-		self.titleNameLabel.textAlignment = NSTextAlignmentLeft;
-
-		self.titleStatusIcon.frame = CGRectMake(startX + titleW + gap,
-				TGMetricBorderWidth + TGCenteredOrigin(TGMetricLineRow, statusSide),
-				statusSide, statusSide);
-	} else {
-		self.titleStatusIcon.image = nil;
-		self.titleStatusIcon.hidden = YES;
-		self.titleNameLabel.frame = CGRectMake(TGMetricZero, TGMetricBorderWidth,
-				kTitleWidth, TGMetricLineRow);
-		self.titleNameLabel.textAlignment = NSTextAlignmentCenter;
-	}
+	NSString *rawTitle = self.chatTitle ?: (self.titleNameLabel.text ?: @"");
+	self.titleNameLabel.attributedText = TGNameWithStatus(rawTitle, statusId, self.titleNameLabel.font, [[TGTheme shared] barTitleColour]);
+	self.titleNameLabel.frame = CGRectMake(TGMetricZero, TGMetricBorderWidth,
+			kTitleWidth, TGMetricLineRow);
+	self.titleNameLabel.textAlignment = NSTextAlignmentCenter;
 }
 
 - (void)chromeCustomEmojiLoaded:(NSNotification *)note {

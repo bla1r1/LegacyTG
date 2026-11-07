@@ -184,14 +184,13 @@ titleForFooterInSection:(NSInteger)section {
 			[row[@"silent"] boolValue] ? @" · silent" : @""];
 	cell.detailTextLabel.font = TGFontSubhead();
 	cell.detailTextLabel.textColor = [[TGTheme shared] secondaryTextColour];
-	cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+	cell.accessoryType = UITableViewCellAccessoryNone;
 	cell.selectionStyle = UITableViewCellSelectionStyleBlue;
 	return cell;
 }
 
 - (void)tableView:(UITableView *)tableView
 didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
 	if (self.pending && indexPath.section == 0)
 		return;
 	NSInteger index = [self groupIndexForSection:indexPath.section];
@@ -201,6 +200,7 @@ didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
 	NSArray *notifications = group[@"notifications"];
 	if (indexPath.row >= (NSInteger)notifications.count)
 		return;
+	[tableView deselectRowAtIndexPath:indexPath animated:YES];
 	NSDictionary *row = notifications[(NSUInteger)indexPath.row];
 	int32_t groupId = (int32_t)[group[@"id"] intValue];
 	int32_t notificationId = (int32_t)[row[@"id"] intValue];

@@ -86,6 +86,41 @@ static NSDictionary *dcDiceSlotMachine(NSDictionary *background) {
 	XCTAssertFalse([second[@"isBeingChosen"] boolValue]);
 }
 
+- (void)testPoll_CarriesQuestionAndOptionEntities {
+	NSArray *qEntities = @[@{
+		@"@type"  : @"textEntity",
+		@"offset" : @0,
+		@"length" : @4,
+		@"type"   : @{@"@type" : @"textEntityTypeCustomEmoji", @"custom_emoji_id" : @"101"},
+	}];
+	NSArray *optEntities = @[@{
+		@"@type"  : @"textEntity",
+		@"offset" : @0,
+		@"length" : @3,
+		@"type"   : @{@"@type" : @"textEntityTypeCustomEmoji", @"custom_emoji_id" : @"102"},
+	}];
+	NSDictionary *out = TGFlattenInteractiveContent(@{
+		@"@type" : @"messagePoll",
+		@"poll"  : @{
+			@"@type"     : @"poll",
+			@"id"        : @(123),
+			@"question"  : @{@"@type" : @"formattedText", @"text" : @"Poll?", @"entities" : qEntities},
+			@"options"   : @[
+				@{@"@type" : @"pollOption", @"text" : @{@"text" : @"Opt 1", @"entities" : optEntities},
+				  @"voter_count" : @1, @"vote_percentage" : @100,
+				  @"is_chosen" : @NO, @"is_being_chosen" : @NO},
+			],
+		},
+	});
+	NSDictionary *poll = out[@"poll"];
+	XCTAssertTrue(poll != nil);
+	XCTAssertEqualObjects(poll[@"question"], @"Poll?");
+	XCTAssertEqualObjects(poll[@"questionEntities"], qEntities);
+	XCTAssertEqual([poll[@"options"] count], (NSUInteger)1);
+	XCTAssertEqualObjects(poll[@"options"][0][@"text"], @"Opt 1");
+	XCTAssertEqualObjects(poll[@"options"][0][@"entities"], optEntities);
+}
+
 /// A poll still being typed into TDLib has no type object, no options and no
 /// voters. Every key must still answer with the right empty value.
 - (void)testPoll_RegularMinimalFillsDefaults {
@@ -473,6 +508,40 @@ static NSDictionary *dcDiceSlotMachine(NSDictionary *background) {
 	NSDictionary *task = out[@"checklist"][@"tasks"][0];
 	XCTAssertEqual([task[@"completedByUserId"] longLongValue], 0LL);
 	XCTAssertEqual([out[@"checklist"][@"doneCount"] integerValue], (NSInteger)1);
+}
+
+- (void)testChecklist_CarriesTitleAndTaskEntities {
+	NSArray *titleEntities = @[@{
+		@"@type"  : @"textEntity",
+		@"offset" : @0,
+		@"length" : @4,
+		@"type"   : @{@"@type" : @"textEntityTypeCustomEmoji", @"custom_emoji_id" : @"201"},
+	}];
+	NSArray *taskEntities = @[@{
+		@"@type"  : @"textEntity",
+		@"offset" : @0,
+		@"length" : @3,
+		@"type"   : @{@"@type" : @"textEntityTypeCustomEmoji", @"custom_emoji_id" : @"202"},
+	}];
+	NSDictionary *out = TGFlattenInteractiveContent(@{
+		@"@type": @"messageChecklist",
+		@"list" : @{
+			@"@type" : @"checklist",
+			@"title" : @{@"text" : @"List", @"entities" : titleEntities},
+			@"tasks" : @[
+				@{@"@type" : @"checklistTask", @"id" : @1,
+				  @"text" : @{@"text" : @"Buy", @"entities" : taskEntities},
+				  @"completion_date" : @0},
+			],
+		},
+	});
+	NSDictionary *list = out[@"checklist"];
+	XCTAssertTrue(list != nil);
+	XCTAssertEqualObjects(list[@"title"], @"List");
+	XCTAssertEqualObjects(list[@"titleEntities"], titleEntities);
+	XCTAssertEqual([list[@"tasks"] count], (NSUInteger)1);
+	XCTAssertEqualObjects(list[@"tasks"][0][@"text"], @"Buy");
+	XCTAssertEqualObjects(list[@"tasks"][0][@"entities"], taskEntities);
 }
 
 #pragma mark - story

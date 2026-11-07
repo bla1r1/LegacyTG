@@ -613,7 +613,7 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 		cell.detailTextLabel.text = index == NSNotFound ? tab
 				: [tab stringByReplacingCharactersInRange:NSMakeRange(0, 1)
 						withString:[[tab substringToIndex:1] uppercaseString]];
-		cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+		cell.accessoryType = UITableViewCellAccessoryNone;
 		return cell;
 	}
 
@@ -627,12 +627,12 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 		if (path.row == 0){
 			cell.textLabel.text = @"Birthday";
 			cell.detailTextLabel.text = [self birthdayText];
-			cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+			cell.accessoryType = UITableViewCellAccessoryNone;
 		} else {
 			cell.textLabel.text = @"Birthday Privacy";
 			cell.detailTextLabel.text = self.birthdayPrivacy.length
 					? TGBirthdayPrivacyLabel(self.birthdayPrivacy) : nil;
-			cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+			cell.accessoryType = UITableViewCellAccessoryNone;
 			cell.selectionStyle = UITableViewCellSelectionStyleBlue;
 		}
 		return cell;
@@ -727,6 +727,8 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)path {
+	if ((path.section == 4 && path.row == 0) || path.section < 3)
+		return;
 	[tableView deselectRowAtIndexPath:path animated:YES];
 	if (path.section == 3 && path.row == 0){
 		[self editBirthday];

@@ -116,21 +116,23 @@
 	cell.detailTextLabel.text = row[@"detail"];
 	cell.detailTextLabel.font = TGFontSubhead();
 	cell.detailTextLabel.textColor = [[TGTheme shared] secondaryTextColour];
-	cell.accessoryType = row[@"tap"] ? UITableViewCellAccessoryDisclosureIndicator
-									 : UITableViewCellAccessoryNone;
+	cell.accessoryType = (row[@"tap"] && [row[@"opens"] boolValue])
+			? UITableViewCellAccessoryDisclosureIndicator
+			: UITableViewCellAccessoryNone;
 	cell.selectionStyle = row[@"tap"] ? UITableViewCellSelectionStyleBlue
 									  : UITableViewCellSelectionStyleNone;
 	return cell;
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
 	if (indexPath.row >= (NSInteger)self.rows.count)
 		return;
 	NSDictionary *row = self.rows[indexPath.row];
 	void (^tap)(void) = row[@"tap"];
-	if (tap)
-		tap();
+	if (!tap)
+		return;
+	[tableView deselectRowAtIndexPath:indexPath animated:YES];
+	tap();
 }
 
 @end

@@ -311,6 +311,7 @@ APP_SRC_M := \
 	src/UI/TGAlertSheet.m \
 	src/Views/TGMessageCardLayout.m \
 	src/Views/TGMessageCardView.m \
+	src/Views/TGNameWithStatus.m \
 	src/Views/TGMediaVeilBlur.m \
 	src/Views/TGMediaVeil.m \
 	src/UI/TGSnackbar.m \

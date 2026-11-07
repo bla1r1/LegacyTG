@@ -77,14 +77,20 @@
 	[self rebuildRows];
 }
 
-- (NSDictionary *)rowWithTitle:(NSString *)title detail:(NSString *)detail tap:(void (^)(void))tap {
+- (NSDictionary *)rowWithTitle:(NSString *)title detail:(NSString *)detail opens:(BOOL)opens tap:(void (^)(void))tap {
 	NSMutableDictionary *row = [NSMutableDictionary dictionary];
 	row[@"title"] = title ?: @"";
 	if (detail.length)
 		row[@"detail"] = detail;
+	if (opens)
+		row[@"opens"] = @YES;
 	if (tap)
 		row[@"tap"] = tap;
 	return row;
+}
+
+- (NSDictionary *)rowWithTitle:(NSString *)title detail:(NSString *)detail tap:(void (^)(void))tap {
+	return [self rowWithTitle:title detail:detail opens:NO tap:tap];
 }
 
 - (NSString *)callDetail:(NSString *)key yes:(NSString *)yes no:(NSString *)no {
@@ -163,6 +169,7 @@
 				tap:^{ [weakSelf toggleStartNotification]; }]];
 		[rows addObject:[self rowWithTitle:@"Streams and Data"
 				detail:@"Channels, segments, encryption check"
+				opens:YES
 				tap:^{ [weakSelf openStreams]; }]];
 		[rows addObject:[self rowWithTitle:@"Decline an Invitation"
 				detail:@"By the service message id"

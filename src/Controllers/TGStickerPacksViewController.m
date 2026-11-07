@@ -172,14 +172,14 @@
 	cell.detailTextLabel.textColor = [theme secondaryTextColour];
 	cell.textLabel.font = TGFontRow();
 	cell.detailTextLabel.font = TGFontCaption();
-	cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+	cell.accessoryType = UITableViewCellAccessoryNone;
 	return cell;
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
 	UITableViewCell *cell = [self baseCell:tableView];
 	cell.accessoryView = nil;
-	cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+	cell.accessoryType = UITableViewCellAccessoryNone;
 	cell.textLabel.textColor = [[TGTheme shared] primaryTextColour];
 	cell.detailTextLabel.text = nil;
 	cell.selectionStyle = UITableViewCellSelectionStyleDefault;
@@ -188,6 +188,7 @@
 		if (indexPath.row == 0){
 			cell.textLabel.text = @"New Sticker Pack";
 			cell.detailTextLabel.text = @"Title, short name and a first sticker";
+			cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
 		} else if (indexPath.row == 1){
 			cell.textLabel.text = @"Search by Short Name";
 			cell.detailTextLabel.text = @"Look up a pack by its t.me name";
@@ -204,6 +205,7 @@
 			cell.textLabel.text = @"No packs yet";
 			cell.detailTextLabel.text = @"New Sticker Pack makes the first one";
 			cell.accessoryType = UITableViewCellAccessoryNone;
+			cell.selectionStyle = UITableViewCellSelectionStyleNone;
 			return cell;
 		}
 		NSDictionary *set = _ownedSets[(NSUInteger)indexPath.row];
@@ -231,6 +233,7 @@
 			cell.textLabel.text = @"Telegram has nothing to recommend";
 			cell.detailTextLabel.text = nil;
 			cell.accessoryType = UITableViewCellAccessoryNone;
+			cell.selectionStyle = UITableViewCellSelectionStyleNone;
 			return cell;
 		}
 		NSDictionary *set = _trendingSets[(NSUInteger)indexPath.row];
@@ -250,10 +253,13 @@
 				: @"Nothing here yet";
 		cell.accessoryType = list.count ? UITableViewCellAccessoryDisclosureIndicator
 										: UITableViewCellAccessoryNone;
+		cell.selectionStyle = list.count ? UITableViewCellSelectionStyleDefault
+										 : UITableViewCellSelectionStyleNone;
 		return cell;
 	}
 
 	if (indexPath.section == 6){
+		cell.selectionStyle = UITableViewCellSelectionStyleNone;
 		if (!_archivedSets.count){
 			cell.textLabel.text = @"No archived packs";
 			cell.detailTextLabel.text = @"Archive a pack to move it here";
@@ -288,11 +294,13 @@
 						   @"Paste ids from a message that carries them"];
 		cell.textLabel.text = titles[(NSUInteger)indexPath.row];
 		cell.detailTextLabel.text = notes[(NSUInteger)indexPath.row];
+		cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
 		return cell;
 	}
 
 	cell.textLabel.text = @"Greeting Stickers";
 	cell.detailTextLabel.text = @"What Telegram suggests for a greeting";
+	cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
 	return cell;
 }
 
@@ -308,6 +316,18 @@
 #pragma mark - choosing
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
+	if (indexPath.section == 6)
+		return;
+	if (indexPath.section == 1 && !_ownedSets.count)
+		return;
+	if (indexPath.section == 2 && !_trendingSets.count)
+		return;
+	if (indexPath.section == 5){
+		BOOL recent = indexPath.row == 0;
+		NSArray *list = recent ? _recentStickers : _favoriteStickers;
+		if (!list.count)
+			return;
+	}
 	[tableView deselectRowAtIndexPath:indexPath animated:YES];
 
 	if (indexPath.section == 0){

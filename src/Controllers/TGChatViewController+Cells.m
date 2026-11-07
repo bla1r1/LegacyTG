@@ -1,5 +1,6 @@
 #import "TGPerf.h"
 #import "TGChatViewControllerInternal.h"
+#import "TGNameWithStatus.h"
 #import <QuartzCore/QuartzCore.h>
 #import <objc/runtime.h>
 #import "TGCapabilities.h"
@@ -80,37 +81,9 @@ static char kTGReactionChipInfoKey;
 		cell.senderAvatar.frame = layout.senderAvatarFrame;
 
 		cell.sender.hidden = NO;
-		cell.sender.text = layout.senderName;
-		cell.sender.textColor = TGSenderColour(senderId);
-
 		int64_t statusId = [[TGClient shared] emojiStatusIdForUser:senderId];
-		CGFloat statusSide = TGMetricLineMicro;
-		UIImage *statusImg = statusId != 0
-				? [[TGCustomEmojiStore shared] imageForId:statusId side:statusSide] : nil;
-
-		if (statusImg) {
-			if (!senderStatus) {
-				senderStatus = [[UIImageView alloc] init];
-				senderStatus.tag = 0x9006;
-				senderStatus.contentMode = UIViewContentModeScaleAspectFit;
-				[cell.bubble addSubview:senderStatus];
-			}
-			senderStatus.image = statusImg;
-			senderStatus.hidden = NO;
-
-			CGFloat nameW = ceilf(TGTextSize(layout.senderName, cell.sender.font, 0).width);
-			CGFloat gap = TGMetricPadTiny;
-			CGFloat maxNameW = layout.senderFrame.size.width - statusSide - gap;
-			nameW = MIN(nameW, maxNameW);
-
-			cell.sender.frame = CGRectMake(layout.senderFrame.origin.x,
-					layout.senderFrame.origin.y, nameW, layout.senderFrame.size.height);
-			senderStatus.frame = CGRectMake(layout.senderFrame.origin.x + nameW + gap,
-					layout.senderFrame.origin.y + TGCenteredOrigin(layout.senderFrame.size.height, statusSide),
-					statusSide, statusSide);
-		} else {
-			cell.sender.frame = layout.senderFrame;
-		}
+		cell.sender.attributedText = TGNameWithStatus(layout.senderName, statusId, cell.sender.font, TGSenderColour(senderId));
+		cell.sender.frame = layout.senderFrame;
 	}
 
 	// 2. Service cells (service messages, separators, polls, docs, contacts, locations)
@@ -163,14 +136,20 @@ static char kTGReactionChipInfoKey;
 		cell.quoteAuthor.hidden = NO;
 		cell.quoteAuthor.font = TGFontCaptionStrong();
 		cell.quoteAuthor.textColor = [theme accentColour];
-		cell.quoteAuthor.text = layout.quoteAuthor ?: @"Reply";
+		NSString *qAuthor = layout.quoteAuthor ?: @"Reply";
+		int64_t authorStatusId = [self quoteAuthorStatusIdFor:m];
+		cell.quoteAuthor.attributedText = TGNameWithStatus(qAuthor, authorStatusId, cell.quoteAuthor.font, [theme accentColour]);
 		cell.quoteAuthor.frame = layout.quoteAuthorFrame;
 
 		cell.quote.hidden = NO;
 		cell.quote.numberOfLines = 1;
 		cell.quote.font = TGFontCaption();
 		cell.quote.textColor = [theme primaryTextColour];
-		cell.quote.text = layout.quoteText;
+		if (layout.quoteEntities.count) {
+			cell.quote.attributedText = TGAttributedMessageText(layout.quoteText, layout.quoteEntities, cell.quote.font, cell.quote.textColor);
+		} else {
+			cell.quote.text = layout.quoteText;
+		}
 		cell.quote.frame = layout.quoteFrame;
 
 		NSNumber *replyId = [m[@"replyId"] isKindOfClass:NSNumber.class]

@@ -66,7 +66,7 @@
 		weakSelf.addEmojis = !weakSelf.addEmojis;
 		[weakSelf rebuild];
 	})];
-	[inputRows addObject:TGTier2Row(@"Send To", self.chatTitle.length
+	[inputRows addObject:TGTier2OpenRow(@"Send To", self.chatTitle.length
 			? self.chatTitle : @"Choose a chat", ^{
 		[weakSelf chooseChat];
 	})];
@@ -89,7 +89,7 @@
 
 	NSMutableArray *sendRows = [NSMutableArray array];
 	if (self.result.length){
-		[sendRows addObject:TGTier2Row(@"Result", [self short:self.result], ^{
+		[sendRows addObject:TGTier2OpenRow(@"Result", [self short:self.result], ^{
 			[weakSelf showResult];
 		})];
 	}

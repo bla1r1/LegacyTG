@@ -1,5 +1,7 @@
 #import "TGProfileViewControllerInternal.h"
 #import "TGClientInternal.h"
+#import "TGNameWithStatus.h"
+#import "TGCustomEmojiStore.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
 #import "TGMemberCell.h"
@@ -405,6 +407,24 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 		[weakSelf buildHeader];
 		[weakSelf.tableView reloadData];
 	}];
+
+	[[NSNotificationCenter defaultCenter] addObserverForName:TGCustomEmojiLoadedNotification
+			object:nil queue:[NSOperationQueue mainQueue]
+		 usingBlock:^(NSNotification *note) {
+		TGProfileViewController *me = weakSelf;
+		if (!me)
+			return;
+		[NSObject cancelPreviousPerformRequestsWithTarget:me selector:@selector(reloadEmojiStatusRows) object:nil];
+		[me performSelector:@selector(reloadEmojiStatusRows) withObject:nil afterDelay:0.3];
+	}];
+}
+
+- (void)reloadEmojiStatusRows {
+	[self buildHeader];
+	NSArray *visible = [self.tableView indexPathsForVisibleRows];
+	if (visible.count) {
+		[self.tableView reloadRowsAtIndexPaths:visible withRowAnimation:UITableViewRowAnimationNone];
+	}
 }
 
 - (void)dealloc {
@@ -591,18 +611,24 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 			CGRectMake(kHeaderTextInset, kAvatarTop + side + kNameTop,
 					width - TGDoubled(kHeaderTextInset), TGMetricLineTitle)];
 	nameLabel.autoresizingMask = UIViewAutoresizingFlexibleWidth;
-	nameLabel.text = self.name;
 	nameLabel.font = TGFontTitle();
 	nameLabel.textAlignment = NSTextAlignmentCenter;
 	nameLabel.backgroundColor = [UIColor clearColor];
 	nameLabel.textColor = [[TGTheme shared] primaryTextColour];
+	nameLabel.attributedText = TGNameWithStatus(self.name ?: @"", self.emojiStatusId, TGFontTitle(), [[TGTheme shared] primaryTextColour]);
 	[header addSubview:nameLabel];
 	// The marks sit after the centred name. Both are plain images, never masks.
-	CGFloat markX = TGHalf(width) + TGHalf(MIN([self.name sizeWithFont:TGFontTitle()].width,
+	CGFloat measuredNameW = [self.name sizeWithFont:TGFontTitle()].width;
+	if (nameLabel.attributedText.length > 0 && [nameLabel.attributedText respondsToSelector:@selector(boundingRectWithSize:options:context:)]) {
+		CGRect r = [nameLabel.attributedText boundingRectWithSize:CGSizeMake(CGFLOAT_MAX, TGMetricLineTitle)
+														  options:NSStringDrawingUsesLineFragmentOrigin | NSStringDrawingUsesFontLeading
+														  context:nil];
+		measuredNameW = ceilf(r.size.width);
+	}
+	CGFloat markX = TGHalf(width) + TGHalf(MIN(measuredNameW,
 			nameLabel.bounds.size.width)) + TGMetricPadSmall;
 	CGFloat markY = kAvatarTop + side + kNameTop + TGCenteredOrigin(TGMetricLineTitle, kNameBadge);
-	for (UIImage *mark in @[self.isVerified ? [TGIcons verifiedBadge] : [NSNull null],
-							self.emojiStatusImage ?: (id)[NSNull null]]){
+	for (UIImage *mark in @[self.isVerified ? [TGIcons verifiedBadge] : [NSNull null]]){
 		if (![mark isKindOfClass:UIImage.class])
 			continue;
 		UIImageView *badge = [[UIImageView alloc] initWithFrame:
@@ -1738,7 +1764,7 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 				: (([kind isEqualToString:@"similarChannels"] && self.similarChannelsCompositeImage)
 					? self.similarChannelsCompositeImage.size.width : TGMetricMenuGlyph);
 		CGFloat left = TGMetricPadLarge + iconW + TGMetricPadMedium;
-		BOOL hasAccessory = [kind isEqualToString:@"channel"] || [kind isEqualToString:@"businessLocation"] ||
+		BOOL hasAccessory = [kind isEqualToString:@"channel"] ||
 				[kind isEqualToString:@"linkedChat"] || [kind isEqualToString:@"community"] ||
 				[kind isEqualToString:@"similarChannels"];
 		CGFloat rightMargin = hasAccessory ? (TGMetricMenuGlyph + TGMetricPadMedium) : TGMetricPadLarge;
@@ -1791,8 +1817,9 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 		int64_t userId = [member[@"id"] longLongValue];
 		NSString *name = [member[@"name"] length]
 				? member[@"name"] : [[TGClient shared] nameForUserId:userId];
+		int64_t statusEmojiId = [[TGClient shared] emojiStatusIdForUser:userId];
 		[memberCell setName:name userId:userId status:member[@"status"]
-						tag:member[@"tag"] inTable:tableView];
+						tag:member[@"tag"] statusEmojiId:statusEmojiId inTable:tableView];
 		return memberCell;
 	}
 
@@ -1823,7 +1850,7 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 		NSDictionary *row = self.details[indexPath.row];
 		NSString *kind = row[@"kind"];
 		TGTheme *theme = [TGTheme shared];
-		detailCell.accessoryType = ([kind isEqualToString:@"channel"] || [kind isEqualToString:@"businessLocation"] ||
+		detailCell.accessoryType = ([kind isEqualToString:@"channel"] ||
 				[kind isEqualToString:@"linkedChat"] || [kind isEqualToString:@"community"] ||
 				[kind isEqualToString:@"similarChannels"])
 				? UITableViewCellAccessoryDisclosureIndicator : UITableViewCellAccessoryNone;
@@ -2143,7 +2170,7 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 				cell.imageView.image = [TGIcons glyphNamed:@"forward"
 													colour:[[TGTheme shared] secondaryTextColour]
 													  side:kLinkGlyph];
-				cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+				cell.accessoryType = UITableViewCellAccessoryNone;
 			} else if ([kind isEqualToString:@"groups"]) {
 				cell.textLabel.text = [m[@"title"] length] ? m[@"title"] : @"Group";
 				cell.detailTextLabel.text = nil;

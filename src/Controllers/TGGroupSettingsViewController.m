@@ -63,11 +63,25 @@ static NSMutableDictionary *TGInfoRow(NSString *title, NSString *detail,
 	return TGRow(title, detail, action, TGGroupRowInfo);
 }
 
+static NSMutableDictionary *TGOpenRow(NSString *title, NSString *detail,
+									  NSString *action) {
+	NSMutableDictionary *row = TGInfoRow(title, detail, action);
+	row[@"opens"] = @YES;
+	return row;
+}
+
 static NSMutableDictionary *TGActionRow(NSString *title, NSString *detail,
 										NSString *action, BOOL destructive) {
 	NSMutableDictionary *row = TGRow(title, detail, action, TGGroupRowAction);
 	if (destructive)
 		row[@"destructive"] = @YES;
+	return row;
+}
+
+static NSMutableDictionary *TGOpenActionRow(NSString *title, NSString *detail,
+											NSString *action, BOOL destructive) {
+	NSMutableDictionary *row = TGActionRow(title, detail, action, destructive);
+	row[@"opens"] = @YES;
 	return row;
 }
 
@@ -463,7 +477,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 		[info addObject:TGDisabledRow(@"Group Photo", noInfoRight, @"photo")];
 		[info addObject:TGDisabledRow(@"Group Name", nameDetail, @"name")];
 	} else {
-		[info addObject:TGInfoRow(@"Group Photo",
+		[info addObject:TGOpenRow(@"Group Photo",
 				manager ? photoDetail : (self.hasPhoto ? @"Set" : @"None"),
 				manager ? @"photo" : nil)];
 		[info addObject:TGInfoRow(@"Group Name", nameDetail, manager ? @"name" : nil)];
@@ -533,7 +547,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 					@"An administrator with the invite right adds people",
 					@"addMembers")];
 		else if (self.canInvite)
-			[people addObject:TGActionRow(@"Add Members", nil, @"addMembers", NO)];
+			[people addObject:TGOpenActionRow(@"Add Members", nil, @"addMembers", NO)];
 		[people addObject:TGActionRow(@"Find Member", @"Search by name or @username",
 									  @"findMember", NO)];
 		for (NSDictionary *member in self.members)
@@ -548,9 +562,9 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 
 	// ── calls ───────────────────────────────────────────────────────────
 	NSMutableArray *calls = [NSMutableArray array];
-	[calls addObject:TGActionRow(@"Group Call",
+	[calls addObject:TGOpenActionRow(@"Group Call",
 			@"Join, leave or manage the active call", @"groupCall", NO)];
-	[calls addObject:TGActionRow(@"Video Chat",
+	[calls addObject:TGOpenActionRow(@"Video Chat",
 			@"Create, schedule and record", @"videoChat", NO)];
 	[sections addObject:TGSection(@"Calls",
 			@"A video chat is a group call bound to this chat. The call screen "
@@ -586,7 +600,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 								: @"Off")
 						: @"Telegram does not allow this group to turn it on",
 				@"antispam", self.aggressiveAntiSpam, self.canToggleAntiSpam)];
-		[behaviour addObject:TGActionRow(@"Anti-Spam False Positives",
+		[behaviour addObject:TGOpenActionRow(@"Anti-Spam False Positives",
 				@"Report a message deleted by mistake", @"antispamFalsePositive",
 				NO)];
 		[behaviour addObject:TGSwitchRow(@"Join by Request",
@@ -693,7 +707,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 	// ── tools ───────────────────────────────────────────────────────────
 	if (manager){
 		NSMutableArray *tools = [NSMutableArray array];
-		[tools addObject:TGActionRow(@"Chat Tools", @"Log, statistics, theme",
+		[tools addObject:TGOpenActionRow(@"Chat Tools", @"Log, statistics, theme",
 									 @"chatTools", NO)];
 		if (channel)
 			[tools addObject:TGActionRow(@"Direct Messages", @"Reader replies",
@@ -819,8 +833,9 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 	// member view does; blue there sells a tap that does not exist.
 	cell.detailTextLabel.textColor = tappable ? [theme cellDetailColour]
 											  : [theme secondaryTextColour];
-	cell.accessoryType = tappable ? UITableViewCellAccessoryDisclosureIndicator
-								  : UITableViewCellAccessoryNone;
+	cell.accessoryType = (tappable && [row[@"opens"] boolValue])
+			? UITableViewCellAccessoryDisclosureIndicator
+			: UITableViewCellAccessoryNone;
 	cell.selectionStyle = tappable ? UITableViewCellSelectionStyleDefault
 								   : UITableViewCellSelectionStyleNone;
 	if (disabled)
@@ -964,19 +979,21 @@ targetIndexPathForMoveFromRowAtIndexPath:(NSIndexPath *)source
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)path {
-	[tableView deselectRowAtIndexPath:path animated:YES];
 	NSDictionary *row = [self rowAtPath:path];
 	if (!row)
 		return;
 	if ([row[@"kind"] integerValue] == TGGroupRowMember){
+		[tableView deselectRowAtIndexPath:path animated:YES];
 		// The row is a person: open their profile, never a chat. Send
 		// Message and the administrator actions live on the hold.
 		[TGGroupMemberActions openProfileForMember:row[@"member"] from:self];
 		return;
 	}
 	NSString *action = row[@"action"];
-	if (action.length)
-		[self runAction:action];
+	if (!action.length || [row[@"disabled"] boolValue])
+		return;
+	[tableView deselectRowAtIndexPath:path animated:YES];
+	[self runAction:action];
 }
 
 #pragma mark - switches

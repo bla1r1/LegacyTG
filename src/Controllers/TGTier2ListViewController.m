@@ -13,6 +13,7 @@ NSString *const TGTier2RowTap         = @"tap";
 NSString *const TGTier2RowChecked     = @"checked";
 NSString *const TGTier2RowSubtitle    = @"subtitle";
 NSString *const TGTier2RowDestructive = @"destructive";
+NSString *const TGTier2RowOpens       = @"opens";
 
 NSString *const TGTier2KindPlain       = @"plain";
 NSString *const TGTier2KindDisclosure  = @"disclosure";
@@ -27,6 +28,12 @@ NSMutableDictionary *TGTier2Row(NSString *title, NSString *detail, void (^tap)(v
 		row[TGTier2RowDetail] = detail;
 	if (tap)
 		row[TGTier2RowTap] = [tap copy];
+	return row;
+}
+
+NSMutableDictionary *TGTier2OpenRow(NSString *title, NSString *detail, void (^tap)(void)) {
+	NSMutableDictionary *row = TGTier2Row(title, detail, tap);
+	row[TGTier2RowOpens] = @YES;
 	return row;
 }
 
@@ -145,18 +152,24 @@ NSDictionary *TGTier2Section(NSString *header, NSString *footer, NSArray *rows) 
 		cell.accessoryType = [row[TGTier2RowChecked] boolValue]
 				? UITableViewCellAccessoryCheckmark : UITableViewCellAccessoryNone;
 	else if ([kind isEqualToString:TGTier2KindDisclosure])
-		cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+		cell.accessoryType = [row[TGTier2RowOpens] boolValue]
+				? UITableViewCellAccessoryDisclosureIndicator : UITableViewCellAccessoryNone;
 	else if ([kind isEqualToString:TGTier2KindAction])
 		cell.textLabel.textColor = [[TGTheme shared] accentColour];
+
+	if (row[TGTier2RowTap] == nil) {
+		cell.selectionStyle = UITableViewCellSelectionStyleNone;
+	}
 	return cell;
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
 	NSDictionary *row = self.sections[indexPath.section][@"rows"][indexPath.row];
 	void (^tap)(void) = row[TGTier2RowTap];
-	if (tap)
-		tap();
+	if (!tap)
+		return;
+	[tableView deselectRowAtIndexPath:indexPath animated:YES];
+	tap();
 }
 
 @end

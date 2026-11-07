@@ -124,7 +124,8 @@
 			? @"Tap to add the story here" : @"Tap to open";
 	cell.textLabel.font = TGFontBody();
 	cell.detailTextLabel.font = TGFontSubhead();
-	cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+	cell.accessoryType = self.storyToAdd ? UITableViewCellAccessoryNone
+										 : UITableViewCellAccessoryDisclosureIndicator;
 	cell.selectionStyle = UITableViewCellSelectionStyleBlue;
 	NSNumber *photoId = album[@"photoFileId"];
 	if ([photoId isKindOfClass:NSNumber.class] && photoId.integerValue > 0){
@@ -145,9 +146,9 @@
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
 	if (indexPath.row >= (NSInteger)self.albums.count)
 		return;
+	[tableView deselectRowAtIndexPath:indexPath animated:YES];
 	NSDictionary *album = self.albums[indexPath.row];
 	int32_t albumId = [album[@"albumId"] intValue];
 	if (self.storyToAdd){

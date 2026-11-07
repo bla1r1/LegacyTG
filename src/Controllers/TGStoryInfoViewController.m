@@ -332,20 +332,20 @@ static NSString *TGStoryDateText(NSNumber *unixTime) {
 	cell.detailTextLabel.font = TGFontSubhead();
 	cell.detailTextLabel.textColor = [[TGTheme shared] secondaryTextColour];
 	cell.detailTextLabel.numberOfLines = 4;
-	cell.accessoryType = row[@"tap"] ? UITableViewCellAccessoryDisclosureIndicator
-									 : UITableViewCellAccessoryNone;
+	cell.accessoryType = UITableViewCellAccessoryNone;
 	cell.selectionStyle = row[@"tap"] ? UITableViewCellSelectionStyleBlue
 									  : UITableViewCellSelectionStyleNone;
 	return cell;
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
 	if (indexPath.row >= (NSInteger)self.rows.count)
 		return;
 	void (^tap)(void) = self.rows[indexPath.row][@"tap"];
-	if (tap)
-		tap();
+	if (!tap)
+		return;
+	[tableView deselectRowAtIndexPath:indexPath animated:YES];
+	tap();
 }
 
 @end

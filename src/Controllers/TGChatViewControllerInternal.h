@@ -183,6 +183,8 @@ FOUNDATION_EXPORT CGFloat TGPollOptionRowHeight(NSDictionary *option, CGFloat ro
 @property (nonatomic, strong) NSMutableSet *revealedSpoilers;
 /// The composer's text with its custom emoji ids; follows every edit of self.input.
 @property (nonatomic, strong) TGComposerText *composerText;
+/// Image view overlays placed over custom emoji fallback glyphs in the composer.
+@property (nonatomic, strong) NSMutableArray *composerEmojiViews;
 // Chrome (TGChatViewController+Chrome)
 @property (nonatomic, assign) int64_t readInboxAtOpen;   // where you had read up to
 @property (nonatomic, assign) int64_t unreadFromId;      // the "Unread Messages" bar goes above it
@@ -303,6 +305,8 @@ FOUNDATION_EXPORT CGFloat TGPollOptionRowHeight(NSDictionary *option, CGFloat ro
 			  isTelegramScheme:(BOOL)isTelegramScheme
 						  host:(NSString *)host;
 - (void)loadPinnedMessage;
+- (void)showPinnedBanner:(NSString *)text;
+- (void)showPinnedBanner:(NSString *)text entities:(NSArray *)entities;
 - (void)hidePinnedBanner;
 - (void)pinnedBannerTapped;
 - (void)stopPlayback;
@@ -457,6 +461,8 @@ FOUNDATION_EXPORT CGFloat TGPollOptionRowHeight(NSDictionary *option, CGFloat ro
 /// Puts a custom emoji at the cursor: the field shows its fallback (or its
 /// picture on iOS 7+), composerText keeps the id. Called by the emoji panel.
 - (void)insertCustomEmoji:(int64_t)emojiId fallback:(NSString *)fallback;
+/// Updates invisible fallback ranges and places picture overlays for custom emoji in self.input.
+- (void)refreshComposerEmojiOverlay;
 - (void)docRowTapped:(UIButton *)sender;
 - (void)callCellButtonTapped:(UIButton *)btn;
 - (void)contactCallButtonTapped:(UIButton *)btn;
@@ -474,6 +480,7 @@ FOUNDATION_EXPORT CGFloat TGPollOptionRowHeight(NSDictionary *option, CGFloat ro
 - (void)applyChromeTheme:(TGTheme *)theme;
 - (void)layoutChrome;
 - (void)updateTitleEmojiStatus;
+- (int64_t)quoteAuthorStatusIdFor:(NSDictionary *)m;
 - (BOOL)isNearBottom;
 - (void)noteArrivedWhileAway;
 - (void)chromeDidScroll;

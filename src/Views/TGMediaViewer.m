@@ -16,6 +16,7 @@
 #import "TGDevShowcase.h"
 #import "TGFileInfoViewController.h"
 #import "TGForwardPicker.h"
+#import "TGMessageLayout.h"
 
 // The chrome sits over the picture rather than beside it, which is what makes
 // the picture the whole screen. Both strips fade out on a tap and come back on
@@ -865,7 +866,13 @@ static CGAffineTransform TGTransformOnto(CGRect resting, CGRect target) {
 			(long)(self.index + 1), (unsigned long)self.items.count, date];
 	[self refreshAvatarForUserId:senderId title:sender];
 
-	self.captionLabel.text = item[@"text"] ?: @"";
+	NSString *text = [item[@"text"] isKindOfClass:NSString.class] ? item[@"text"] : @"";
+	NSArray *entities = [item[@"entities"] isKindOfClass:NSArray.class] ? item[@"entities"] : nil;
+	if (entities.count && text.length) {
+		self.captionLabel.attributedText = TGAttributedMessageText(text, entities, self.captionLabel.font, self.captionLabel.textColor);
+	} else {
+		self.captionLabel.text = text;
+	}
 	self.saveButton.hidden = TGViewerItemLocked(item);
 
 	BOOL isVideo = [item[@"kind"] isEqualToString:@"messageVideo"];

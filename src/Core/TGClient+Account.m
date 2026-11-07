@@ -64,12 +64,15 @@ NSDictionary *TGFlattenStory(NSDictionary *story) {
 		videoDuration = video[@"duration"];
 	}
 
+	NSArray *captionEntities = [story[@"caption"][@"entities"] isKindOfClass:NSArray.class]
+			? story[@"caption"][@"entities"] : @[];
 	NSMutableDictionary *out = [@{
-		@"storyId"  : story[@"id"] ?: @(0),
-		@"date"     : story[@"date"] ?: @(0),
-		@"caption"  : story[@"caption"][@"text"] ?: @"",
-		@"isVideo"  : @([kind isEqualToString:@"storyContentVideo"]),
-		@"viewers"  : story[@"interaction_info"][@"view_count"] ?: @(0),
+		@"storyId"         : story[@"id"] ?: @(0),
+		@"date"            : story[@"date"] ?: @(0),
+		@"caption"         : story[@"caption"][@"text"] ?: @"",
+		@"captionEntities" : captionEntities,
+		@"isVideo"         : @([kind isEqualToString:@"storyContentVideo"]),
+		@"viewers"         : story[@"interaction_info"][@"view_count"] ?: @(0),
 	} mutableCopy];
 	if (fileId)
 		out[@"photoId"] = fileId;

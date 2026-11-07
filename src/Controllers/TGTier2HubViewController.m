@@ -49,17 +49,17 @@
 			: nil;
 
 	NSMutableArray *toolRows = [NSMutableArray array];
-	[toolRows addObject:TGTier2Row(@"Communities", communityDetail, ^{
+	[toolRows addObject:TGTier2OpenRow(@"Communities", communityDetail, ^{
 		TGCommunitiesViewController *screen = [[TGCommunitiesViewController alloc] init];
 		screen.hidesBottomBarWhenPushed = YES;
 		[weakSelf.navigationController pushViewController:screen animated:YES];
 	})];
-	[toolRows addObject:TGTier2Row(@"Saved Replies", replyDetail, ^{
+	[toolRows addObject:TGTier2OpenRow(@"Saved Replies", replyDetail, ^{
 		TGQuickRepliesViewController *screen = [[TGQuickRepliesViewController alloc] init];
 		screen.hidesBottomBarWhenPushed = YES;
 		[weakSelf.navigationController pushViewController:screen animated:YES];
 	})];
-	[toolRows addObject:TGTier2Row(@"AI Compose", nil, ^{
+	[toolRows addObject:TGTier2OpenRow(@"AI Compose", nil, ^{
 		TGAiComposeViewController *screen = [[TGAiComposeViewController alloc] init];
 		screen.hidesBottomBarWhenPushed = YES;
 		[weakSelf.navigationController pushViewController:screen animated:YES];

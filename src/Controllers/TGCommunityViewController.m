@@ -169,7 +169,7 @@ static const CGFloat kCommunityPhotoBar  = 92.0f;
 		}
 		NSString *detail = [chat[@"hidden"] boolValue] ? @"Hidden" : nil;
 		NSString *displayTitle = title.length ? title : [NSString stringWithFormat:@"Chat %lld", (long long)chatId];
-		[chatRows addObject:TGTier2Row(displayTitle, detail, ^{
+		[chatRows addObject:TGTier2OpenRow(displayTitle, detail, ^{
 			if (weakSelf.navigationController)
 				[weakSelf openChat:chatId title:displayTitle];
 		})];

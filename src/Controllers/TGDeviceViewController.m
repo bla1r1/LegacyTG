@@ -86,6 +86,8 @@
 		cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1
 									  reuseIdentifier:@"row"];
 	cell.selectionStyle = UITableViewCellSelectionStyleNone;
+	cell.accessoryType = UITableViewCellAccessoryNone;
+	cell.accessoryView = nil;
 	cell.textLabel.font = TGFontBody();
 	cell.detailTextLabel.font = TGFontSubhead();
 	[[TGTheme shared] styleCell:cell];
@@ -149,9 +151,9 @@
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
 	if (indexPath.section != 3)
 		return;
+	[tableView deselectRowAtIndexPath:indexPath animated:YES];
 	// Log out — confirm before doing anything irreversible
 	[TGAlertSheet showConfirm:@"Are you sure you want to log out?"
 						title:@"Log out"

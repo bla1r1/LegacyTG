@@ -20,6 +20,13 @@ static NSMutableDictionary *TGRow(NSString *title, NSString *detail,
 	return row;
 }
 
+static NSMutableDictionary *TGOpenRow(NSString *title, NSString *detail,
+									  void (^tap)(void)) {
+	NSMutableDictionary *row = TGRow(title, detail, tap);
+	row[@"opens"] = @YES;
+	return row;
+}
+
 static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows) {
 	NSMutableDictionary *section = [NSMutableDictionary dictionary];
 	if (header) section[@"header"] = header;
@@ -146,12 +153,12 @@ static NSString *TGWriteBackground(UIColor *colour) {
 	__weak typeof(self) weakSelf = self;
 
 	NSMutableArray *insights = [NSMutableArray array];
-	[insights addObject:TGRow(@"Event Log", self.isGroup ? nil : @"Groups only",
+	[insights addObject:TGOpenRow(@"Event Log", self.isGroup ? nil : @"Groups only",
 			^{ [weakSelf showEventLog]; })];
-	[insights addObject:TGRow(@"Statistics", self.isGroup ? nil : @"Groups only",
+	[insights addObject:TGOpenRow(@"Statistics", self.isGroup ? nil : @"Groups only",
 			^{ [weakSelf showStatistics]; })];
-	[insights addObject:TGRow(@"Similar Chats", nil, ^{ [weakSelf showSimilarChats]; })];
-	[insights addObject:TGRow(@"Recommended Chats", nil,
+	[insights addObject:TGOpenRow(@"Similar Chats", nil, ^{ [weakSelf showSimilarChats]; })];
+	[insights addObject:TGOpenRow(@"Recommended Chats", nil,
 			^{ [weakSelf showRecommendedChats]; })];
 
 	NSMutableArray *moderation = [NSMutableArray array];
@@ -255,17 +262,26 @@ static NSString *TGWriteBackground(UIColor *colour) {
 	cell.detailTextLabel.text = row[@"detail"];
 	cell.detailTextLabel.font = TGFontSubhead();
 	cell.detailTextLabel.textColor = [[TGTheme shared] secondaryTextColour];
-	cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-	cell.selectionStyle = UITableViewCellSelectionStyleBlue;
+	cell.accessoryType = (row[@"tap"] && [row[@"opens"] boolValue])
+			? UITableViewCellAccessoryDisclosureIndicator
+			: UITableViewCellAccessoryNone;
+	cell.selectionStyle = row[@"tap"] ? UITableViewCellSelectionStyleBlue
+									  : UITableViewCellSelectionStyleNone;
 	return cell;
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
-	NSDictionary *row = self.sections[indexPath.section][@"rows"][indexPath.row];
+	if (indexPath.section >= (NSInteger)self.sections.count)
+		return;
+	NSArray *rows = self.sections[indexPath.section][@"rows"];
+	if (indexPath.row >= (NSInteger)rows.count)
+		return;
+	NSDictionary *row = rows[indexPath.row];
 	void (^tap)(void) = row[@"tap"];
-	if (tap)
-		tap();
+	if (!tap)
+		return;
+	[tableView deselectRowAtIndexPath:indexPath animated:YES];
+	tap();
 }
 
 #pragma mark - insights
@@ -334,6 +350,7 @@ static NSString *TGWriteBackground(UIColor *colour) {
 		for (NSDictionary *chat in chats){
 			[rows addObject:@{@"title" : chat[@"title"] ?: @"Channel",
 							  @"detail" : @"Open",
+							  @"opens" : @YES,
 							  @"tap" : ^{
 				[me openChat:chat];
 			}}];
@@ -363,6 +380,7 @@ static NSString *TGWriteBackground(UIColor *colour) {
 		for (NSDictionary *chat in chats){
 			[rows addObject:@{@"title" : chat[@"title"] ?: @"Channel",
 							  @"detail" : @"Open",
+							  @"opens" : @YES,
 							  @"tap" : ^{
 				TGChatViewController *vc = [[TGChatViewController alloc] init];
 				vc.chatId = [chat[@"id"] longLongValue];

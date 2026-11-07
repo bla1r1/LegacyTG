@@ -19,6 +19,9 @@ TGMessageCard *TGChatCardForRow(NSDictionary *m) {
 		card.buttonTitle = nil;
 		card.action = TGMessageCardActionNone;
 	}
+	if (card.action == TGMessageCardActionOpenUser && card.actionTargetId != 0) {
+		card.titleStatusEmojiId = [[TGClient shared] emojiStatusIdForUser:card.actionTargetId];
+	}
 	return card;
 }
 
@@ -121,7 +124,12 @@ TGMessageCard *TGChatCardForRow(NSDictionary *m) {
 		cell.body.numberOfLines = 0;
 		cell.body.font = TGFontBodyStrong();
 		cell.body.textColor = [checklistTheme primaryTextColour];
-		cell.body.text = title;
+		NSArray *titleEntities = [checklist[@"titleEntities"] isKindOfClass:NSArray.class] ? checklist[@"titleEntities"] : nil;
+		if (titleEntities.count) {
+			cell.body.attributedText = TGAttributedMessageText(title, titleEntities, cell.body.font, cell.body.textColor);
+		} else {
+			cell.body.text = title;
+		}
 		CGFloat y = kPadV + (layout.senderName.length ? TGMetricSenderLineHeight : TGMetricZero);
 		cell.body.frame = CGRectMake(kPadH, y, contentW, titleSize.height);
 		y += titleSize.height;
@@ -189,7 +197,12 @@ TGMessageCard *TGChatCardForRow(NSDictionary *m) {
 				label.font = TGFontBody();
 				label.textColor = [checklistTheme primaryTextColour];
 				label.backgroundColor = [UIColor clearColor];
-				label.text = text;
+				NSArray *taskEntities = [task[@"entities"] isKindOfClass:NSArray.class] ? task[@"entities"] : nil;
+				if (taskEntities.count) {
+					label.attributedText = TGAttributedMessageText(text, taskEntities, label.font, label.textColor);
+				} else {
+					label.text = text;
+				}
 				[row addSubview:label];
 
 				rowY += rowH;
@@ -273,7 +286,12 @@ TGMessageCard *TGChatCardForRow(NSDictionary *m) {
 		cell.body.numberOfLines = 0;
 		cell.body.font = TGFontBodyStrong();
 		cell.body.textColor = [pollTheme primaryTextColour];
-		cell.body.text = question;
+		NSArray *questionEntities = [poll[@"questionEntities"] isKindOfClass:NSArray.class] ? poll[@"questionEntities"] : nil;
+		if (questionEntities.count) {
+			cell.body.attributedText = TGAttributedMessageText(question, questionEntities, cell.body.font, cell.body.textColor);
+		} else {
+			cell.body.text = question;
+		}
 		CGFloat y = kPadV + (layout.senderName.length ? TGMetricSenderLineHeight : TGMetricZero);
 		cell.body.frame = CGRectMake(kPadH, y, contentW, questionSize.height);
 		y += questionSize.height;
@@ -376,10 +394,15 @@ TGMessageCard *TGChatCardForRow(NSDictionary *m) {
 				UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(kPollTextColumn,
 						textY, textW, textH)];
 				label.numberOfLines = 0;
-				label.text = optionText;
 				label.font = TGFontSubhead();
 				label.textColor = [pollTheme primaryTextColour];
 				label.backgroundColor = [UIColor clearColor];
+				NSArray *optEntities = [option[@"entities"] isKindOfClass:NSArray.class] ? option[@"entities"] : nil;
+				if (optEntities.count) {
+					label.attributedText = TGAttributedMessageText(optionText, optEntities, label.font, label.textColor);
+				} else {
+					label.text = optionText;
+				}
 				[row addSubview:label];
 
 				if (showsResults) {
@@ -635,9 +658,14 @@ TGMessageCard *TGChatCardForRow(NSDictionary *m) {
 		if (layout.bodyFrame.size.height > 0 && caption.length) {
 			cell.captionLabel.hidden = NO;
 			cell.captionLabel.frame = layout.bodyFrame;
-			cell.captionLabel.text = caption;
-			cell.captionLabel.textColor = [cardTheme primaryTextColour];
 			cell.captionLabel.font = TGFontBody();
+			cell.captionLabel.textColor = [cardTheme primaryTextColour];
+			NSArray *entities = [m[@"entities"] isKindOfClass:NSArray.class] ? m[@"entities"] : nil;
+			if (entities.count) {
+				cell.captionLabel.attributedText = TGAttributedMessageText(caption, entities, cell.captionLabel.font, cell.captionLabel.textColor);
+			} else {
+				cell.captionLabel.text = caption;
+			}
 			[cell.bubble bringSubviewToFront:cell.captionLabel];
 		} else {
 			cell.captionLabel.hidden = YES;

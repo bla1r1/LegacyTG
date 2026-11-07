@@ -2,6 +2,7 @@
 #import "TGMessageCardView.h"
 #import "TGMessageLayout.h"
 #import "TGStyle.h"
+#import <dlfcn.h>
 #import <math.h>
 #import <string.h>
 
@@ -49,8 +50,28 @@ TGMessageCardFrames TGMessageCardLayout(TGMessageCard *card, CGFloat width) {
 
 	// 3. Title
 	if (card.title.length > 0 && columnWidth > 0.0f) {
-		CGSize measured = TGTextSize(card.title, TGFontBodyStrong(), columnWidth);
-		CGFloat titleHeight = ceil(MIN(measured.height, 2.0f * TGMetricLineBody));
+		CGFloat titleHeight = 0.0f;
+		if (card.titleStatusEmojiId != 0) {
+			typedef NSAttributedString *(*TGNameWithStatusFn)(NSString *, int64_t, UIFont *, UIColor *);
+			static TGNameWithStatusFn sTGNameWithStatus = NULL;
+			static dispatch_once_t onceToken;
+			dispatch_once(&onceToken, ^{
+				sTGNameWithStatus = (TGNameWithStatusFn)dlsym(RTLD_DEFAULT, "TGNameWithStatus");
+			});
+			if (sTGNameWithStatus) {
+				NSAttributedString *attr = sTGNameWithStatus(card.title, card.titleStatusEmojiId, TGFontBodyStrong(), nil);
+				if (attr && [attr respondsToSelector:@selector(boundingRectWithSize:options:context:)]) {
+					CGRect r = [attr boundingRectWithSize:CGSizeMake(columnWidth, CGFLOAT_MAX)
+												  options:NSStringDrawingUsesLineFragmentOrigin | NSStringDrawingUsesFontLeading
+												  context:nil];
+					titleHeight = ceil(MIN(r.size.height, 2.0f * TGMetricLineBody));
+				}
+			}
+		}
+		if (titleHeight <= 0.0f) {
+			CGSize measured = TGTextSize(card.title, TGFontBodyStrong(), columnWidth);
+			titleHeight = ceil(MIN(measured.height, 2.0f * TGMetricLineBody));
+		}
 		frames.title = CGRectMake(columnX, currentY, columnWidth, titleHeight);
 		currentY = CGRectGetMaxY(frames.title) + kCardLineGap;
 	}

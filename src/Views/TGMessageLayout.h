@@ -102,6 +102,7 @@ CGFloat TGInlineStampY(CGRect bodyFrame);
 @property (nonatomic, copy)   NSString *senderName;
 @property (nonatomic, copy)   NSString *quoteText;
 @property (nonatomic, copy)   NSString *quoteAuthor;
+@property (nonatomic, strong) NSArray  *quoteEntities;
 @property (nonatomic, assign) BOOL isService;
 @property (nonatomic, assign) BOOL isSticker;
 @property (nonatomic, assign) BOOL isVoice;
