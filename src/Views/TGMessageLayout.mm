@@ -380,7 +380,31 @@ CGFloat TGCustomEmojiSide(UIFont *font) {
 	return ceilf(font.ascender - font.descender);
 }
 
-NSAttributedString *TGAttributedMessageText(NSString *text, NSArray *entities, UIFont *baseFont, UIColor *textColor) {
+BOOL TGEntitiesHaveSpoiler(NSArray *entities) {
+	if (![entities isKindOfClass:[NSArray class]])
+		return NO;
+	for (id ent in entities) {
+		if (![ent isKindOfClass:[NSDictionary class]])
+			continue;
+		NSDictionary *entity = (NSDictionary *)ent;
+		id typeObj = entity[@"type"];
+		NSString *type = nil;
+		if ([typeObj isKindOfClass:[NSDictionary class]]) {
+			id inner = ((NSDictionary *)typeObj)[@"@type"];
+			if ([inner isKindOfClass:[NSString class]])
+				type = inner;
+		} else if ([typeObj isKindOfClass:[NSString class]]) {
+			type = (NSString *)typeObj;
+		}
+		if (!type && [entity[@"@type"] isKindOfClass:[NSString class]])
+			type = entity[@"@type"];
+		if ([type isEqualToString:@"textEntityTypeSpoiler"] || [type isEqualToString:@"messageEntitySpoiler"])
+			return YES;
+	}
+	return NO;
+}
+
+NSAttributedString *TGAttributedMessageTextRevealing(NSString *text, NSArray *entities, UIFont *baseFont, UIColor *textColor, BOOL revealSpoilers) {
 	if (!text.length)
 		return nil;
 	if (!baseFont)
@@ -469,7 +493,13 @@ NSAttributedString *TGAttributedMessageText(NSString *text, NSArray *entities, U
 				   [type isEqualToString:@"textEntityTypeBotCommand"]) {
 			[str addAttribute:NSForegroundColorAttributeName value:linkColour range:range];
 		} else if ([type isEqualToString:@"textEntityTypeSpoiler"] || [type isEqualToString:@"messageEntitySpoiler"]) {
-			[str addAttribute:NSBackgroundColorAttributeName value:TGColourCodeBlockBackground() range:range];
+			// The same colour in both roles makes the glyphs disappear into a
+			// solid plate without changing the run's width or height.
+			if (!revealSpoilers) {
+				UIColor *plate = TGColourCodeBlockBackground();
+				[str addAttribute:NSBackgroundColorAttributeName value:plate range:range];
+				[str addAttribute:NSForegroundColorAttributeName value:plate range:range];
+			}
 		} else if ([type isEqualToString:@"textEntityTypeCustomEmoji"] && [typeObj isKindOfClass:NSDictionary.class]) {
 			int64_t emojiId = [typeObj[@"custom_emoji_id"] longLongValue];
 			if (emojiId)
@@ -501,6 +531,10 @@ NSAttributedString *TGAttributedMessageText(NSString *text, NSArray *entities, U
 	}
 
 	return str;
+}
+
+NSAttributedString *TGAttributedMessageText(NSString *text, NSArray *entities, UIFont *baseFont, UIColor *textColor) {
+	return TGAttributedMessageTextRevealing(text, entities, baseFont, textColor, NO);
 }
 
 void TGSetBodyText(UILabel *label, NSString *text, UIColor *colour) {

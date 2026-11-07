@@ -1,3 +1,4 @@
+#import "TGServiceMessageText.h"
 #import "TGClientInternal.h"
 #include <vector>
 #include <algorithm>
@@ -9,9 +10,38 @@
 /// Preview text for a chat's last message, for the types it knows by name.
 /// Returns nil for everything else, so callers can tell "known, said this"
 /// from "unknown, you are on your own". TDLib nests the content by type.
+/// A service action's sentence with the names this client already holds, or
+/// nil when the message is not a service action. The chat list shows it as
+/// is: the actor is inside the sentence, so no "Name:" goes in front.
+NSString *TGServicePreview(NSDictionary *message) {
+	return TGServiceMessageText(message,
+			^NSString *(int64_t userId){ return [[TGClient shared] nameForUserId:userId]; },
+			^NSString *(int64_t chatId){
+				NSString *title = [TGClient shared].chatsById[@(chatId)][@"title"];
+				return [title isKindOfClass:NSString.class] && title.length ? title : nil;
+			});
+}
+
 NSString *TGKnownMessagePreview(NSDictionary *message) {
 	NSDictionary *content = message[@"content"];
 	NSString *ctype = content[@"@type"];
+
+	NSString *service = TGServicePreview(message);
+	if (service)
+		return service;
+
+	// The caption is what the sender wrote, so it beats the media's own label.
+	if ([ctype isEqualToString:@"messagePhoto"] ||
+		[ctype isEqualToString:@"messageVideo"] ||
+		[ctype isEqualToString:@"messageAnimation"] ||
+		[ctype isEqualToString:@"messageAudio"] ||
+		[ctype isEqualToString:@"messageDocument"] ||
+		[ctype isEqualToString:@"messageVoiceNote"] ||
+		[ctype isEqualToString:@"messagePaidMedia"]){
+		NSString *caption = content[@"caption"][@"text"];
+		if (caption.length)
+			return caption;
+	}
 
 	if ([ctype isEqualToString:@"messageText"])
 		return content[@"text"][@"text"] ?: @"";
@@ -23,39 +53,100 @@ NSString *TGKnownMessagePreview(NSDictionary *message) {
 		return @"Voice message";
 	if ([ctype isEqualToString:@"messageVideoNote"])
 		return @"Video message";
-	if ([ctype isEqualToString:@"messageSticker"])
-		return @"Sticker";
-	if ([ctype isEqualToString:@"messageDocument"])
-		return @"Document";
-	if ([ctype isEqualToString:@"messageAudio"])
-		return @"Audio";
+	if ([ctype isEqualToString:@"messageSticker"]){
+		NSString *emoji = content[@"sticker"][@"emoji"];
+		return emoji.length ? [emoji stringByAppendingString:@" Sticker"] : @"Sticker";
+	}
+	if ([ctype isEqualToString:@"messageDocument"]){
+		NSString *name = content[@"document"][@"file_name"];
+		return name.length ? name : @"File";
+	}
+	if ([ctype isEqualToString:@"messageAudio"]){
+		NSString *performer = content[@"audio"][@"performer"];
+		NSString *title = content[@"audio"][@"title"];
+		if (performer.length && title.length)
+			return [NSString stringWithFormat:@"%@ – %@", performer, title];
+		if (performer.length || title.length)
+			return performer.length ? performer : title;
+		return @"Music";
+	}
 	if ([ctype isEqualToString:@"messageAnimation"])
 		return @"GIF";
 	if ([ctype isEqualToString:@"messageAnimatedEmoji"])
 		return content[@"emoji"] ?: @"Emoji";
-	if ([ctype isEqualToString:@"messageContact"])
-		return @"Contact";
-	if ([ctype isEqualToString:@"messageVenue"])
-		return @"Venue";
-	if ([ctype isEqualToString:@"messageLocation"])
-		return @"Location";
-	if ([ctype isEqualToString:@"messageCall"])
-		return @"Call";
-	if ([ctype isEqualToString:@"messageChatJoinByLink"] ||
-		[ctype isEqualToString:@"messageChatJoinByRequest"])
-		return @"joined the group";
-	if ([ctype isEqualToString:@"messageChatAddMembers"])
-		return @"added a member";
-	if ([ctype isEqualToString:@"messageChatDeleteMember"])
-		return @"left the group";
-	if ([ctype isEqualToString:@"messageChatChangeTitle"])
-		return @"renamed the group";
-	if ([ctype isEqualToString:@"messageChatChangePhoto"])
-		return @"changed the group photo";
-	if ([ctype isEqualToString:@"messagePinMessage"])
-		return @"pinned a message";
-	if ([ctype isEqualToString:@"messagePoll"])
-		return @"Poll";
+	if ([ctype isEqualToString:@"messageContact"]){
+		NSString *first = content[@"contact"][@"first_name"];
+		NSString *last = content[@"contact"][@"last_name"];
+		NSString *name = [@[first ?: @"", last ?: @""] componentsJoinedByString:@" "];
+		name = [name stringByTrimmingCharactersInSet:
+				[NSCharacterSet whitespaceCharacterSet]];
+		return name.length ? name : @"Contact";
+	}
+	if ([ctype isEqualToString:@"messageVenue"]){
+		NSString *title = content[@"venue"][@"title"];
+		return title.length ? title : @"Venue";
+	}
+	if ([ctype isEqualToString:@"messageLocation"]){
+		BOOL live = [content[@"live_period"] longLongValue] > 0 ||
+					[content[@"location"][@"live_period"] longLongValue] > 0;
+		return live ? @"Live Location" : @"Location";
+	}
+	if ([ctype isEqualToString:@"messageLiveLocation"])
+		return @"Live Location";
+	if ([ctype isEqualToString:@"messagePoll"]){
+		NSString *question = content[@"poll"][@"question"][@"text"];
+		if (!question.length)
+			return @"Poll";
+		BOOL quiz = [content[@"poll"][@"type"][@"@type"]
+					 isEqualToString:@"pollTypeQuiz"];
+		return quiz ? [@"📊 Quiz: " stringByAppendingString:question]
+					: [@"📊 " stringByAppendingString:question];
+	}
+	if ([ctype isEqualToString:@"messageChecklist"]){
+		NSString *title = content[@"list"][@"title"][@"text"];
+		return title.length ? [@"☑️ " stringByAppendingString:title] : @"Checklist";
+	}
+	if ([ctype isEqualToString:@"messageDice"]){
+		NSString *emoji = content[@"emoji"];
+		return emoji.length ? emoji : @"Dice";
+	}
+	if ([ctype isEqualToString:@"messageGame"]){
+		NSString *title = content[@"game"][@"title"];
+		return title.length ? [@"🎮 " stringByAppendingString:title] : @"🎮 Game";
+	}
+	if ([ctype isEqualToString:@"messageInvoice"]){
+		NSString *title = content[@"product_info"][@"title"];
+		return title.length ? title : @"Invoice";
+	}
+	if ([ctype isEqualToString:@"messagePaidMedia"])
+		return @"Paid media";
+	if ([ctype isEqualToString:@"messageGiveaway"])
+		return @"Giveaway";
+	if ([ctype isEqualToString:@"messageGiveawayWinners"])
+		return @"Giveaway results";
+	if ([ctype isEqualToString:@"messageGift"])
+		return @"🎁 Gift";
+	if ([ctype isEqualToString:@"messageUpgradedGift"]){
+		NSString *title = content[@"gift"][@"title"];
+		return title.length ? [@"🎁 " stringByAppendingString:title] : @"🎁 Gift";
+	}
+	if ([ctype isEqualToString:@"messageStory"])
+		return @"Story";
+	if ([ctype isEqualToString:@"messageCall"]){
+		NSString *reason = content[@"discard_reason"][@"@type"];
+		BOOL video = [content[@"is_video"] boolValue];
+		if ([reason isEqualToString:@"callDiscardReasonMissed"] ||
+			[reason isEqualToString:@"callDiscardReasonDeclined"])
+			return video ? @"Missed video call" : @"Missed call";
+		// A message with no is_outgoing is not a real one, but callers that
+		// only know the type still get a sensible word.
+		if (!message[@"is_outgoing"])
+			return video ? @"Video call" : @"Call";
+		BOOL outgoing = [message[@"is_outgoing"] boolValue];
+		if (video)
+			return outgoing ? @"Outgoing video call" : @"Incoming video call";
+		return outgoing ? @"Outgoing call" : @"Incoming call";
+	}
 	if ([ctype isEqualToString:@"messageRichMessage"]){
 		NSString *t = TGRichMessageText(content);
 		return t.length ? t : @"Rich message";
@@ -1823,6 +1914,10 @@ static BOOL TGGroupStatusIsMember(NSDictionary *status) {
 	info[@"lastId"] = last[@"id"] ?: @(0);
 	info[@"lastOutgoing"] = @([last[@"is_outgoing"] boolValue]);
 	[info removeObjectForKey:@"lastAuthor"];
+	// "Alice joined the group" already names Alice; "Alice: " in front of it
+	// would say it twice, and "You: You pinned..." reads worse.
+	if (TGServicePreview(last))
+		return text;
 	if ([last[@"is_outgoing"] boolValue]){
 		if (![info[@"isSaved"] boolValue])
 			info[@"lastAuthor"] = @"You";

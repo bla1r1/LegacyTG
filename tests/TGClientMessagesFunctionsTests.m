@@ -1234,4 +1234,52 @@ static NSDictionary *altV(int side, NSString *codec, int fileId) {
 	XCTAssertFalse(ok);
 }
 
+// ─── view-once photos and videos ─────────────────────────────────────────────
+
+/// The one-time picture goes out with the same self destruct a one-time voice
+/// note uses: gone the moment it is opened, not after a timer.
+- (void)testSendPhotoOnce_CarriesImmediateSelfDestruct {
+	TGClient *c = M();
+	[c sendPhotoAtPath:@"/tmp/once.jpg" viewOnce:YES toChat:7];
+
+	NSDictionary *content = lastM(c, @"sendMessage")[@"input_message_content"];
+	XCTAssertEqualObjects(content[@"@type"], @"inputMessagePhoto");
+	XCTAssertEqualObjects(content[@"photo"][@"photo"][@"path"], @"/tmp/once.jpg");
+	XCTAssertEqualObjects(content[@"self_destruct_type"][@"@type"],
+			@"messageSelfDestructTypeImmediately");
+}
+
+/// The old send keeps its shape: TDLib's "no self destruct" is a null, and it
+/// must not pick up the one-time mark just because the method grew a sibling.
+- (void)testSendPhotoPlain_CarriesNoSelfDestruct {
+	TGClient *c = M();
+	[c sendPhotoAtPath:@"/tmp/plain.jpg" toChat:7];
+
+	NSDictionary *content = lastM(c, @"sendMessage")[@"input_message_content"];
+	XCTAssertEqualObjects(content[@"@type"], @"inputMessagePhoto");
+	XCTAssertTrue(content[@"self_destruct_type"] == [NSNull null]
+			|| content[@"self_destruct_type"] == nil);
+}
+
+- (void)testSendVideoOnce_CarriesImmediateSelfDestruct {
+	TGClient *c = M();
+	[c sendVideoAtPath:@"/tmp/once.mov" viewOnce:YES toChat:7];
+
+	NSDictionary *content = lastM(c, @"sendMessage")[@"input_message_content"];
+	XCTAssertEqualObjects(content[@"@type"], @"inputMessageVideo");
+	XCTAssertEqualObjects(content[@"video"][@"video"][@"path"], @"/tmp/once.mov");
+	XCTAssertEqualObjects(content[@"self_destruct_type"][@"@type"],
+			@"messageSelfDestructTypeImmediately");
+}
+
+- (void)testSendVideoPlain_CarriesNoSelfDestruct {
+	TGClient *c = M();
+	[c sendVideoAtPath:@"/tmp/plain.mov" toChat:7];
+
+	NSDictionary *content = lastM(c, @"sendMessage")[@"input_message_content"];
+	XCTAssertEqualObjects(content[@"@type"], @"inputMessageVideo");
+	XCTAssertTrue(content[@"self_destruct_type"] == [NSNull null]
+			|| content[@"self_destruct_type"] == nil);
+}
+
 @end

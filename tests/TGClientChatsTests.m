@@ -307,6 +307,23 @@ static void joinTestReply(TGClient *c, NSDictionary *request, NSDictionary *answ
 	XCTAssertEqual(TGEmojiStatusCustomEmojiId(nil), 0LL);
 }
 
+/// A service line names its actor itself, so the list puts no "Name:" in
+/// front of it, in a group or for your own action.
+- (void)testPreview_ServiceLineCarriesNoSeparateAuthor {
+	TGClient *c = T();
+	c.usersById[@(9301)] = @"Alice";
+	deliverNewChat(c, @{ @"@type" : @"chat", @"id" : @(-5501), @"title" : @"Club",
+			@"type" : @{@"@type" : @"chatTypeBasicGroup", @"basic_group_id" : @(5501)},
+			@"positions" : @[pos(@"chatListMain", 310, NO)],
+			@"last_message" : @{ @"@type" : @"message", @"id" : @(8), @"date" : @(8),
+					@"is_outgoing" : @NO,
+					@"sender_id" : @{@"@type" : @"messageSenderUser", @"user_id" : @(9301)},
+					@"content" : @{@"@type" : @"messageChatJoinByLink"}} });
+	NSDictionary *info = knownChat(c, -5501);
+	XCTAssertTrue([info[@"previewText"] hasPrefix:@"Alice"]);
+	XCTAssertTrue(info[@"lastAuthor"] == nil);
+}
+
 - (void)testMergeChat_SavedMessagesRowIsMarked {
 	TGClient *c = T();
 	c.me = @{@"id" : @777};
@@ -470,15 +487,16 @@ static void joinTestReply(TGClient *c, NSDictionary *request, NSDictionary *answ
 						  @"Voice message");
 	XCTAssertEqualObjects(TGMessagePreview(@{@"content" : @{@"@type" : @"messageCall"}}),
 						  @"Call");
+	// Service actions say who did it; with no sender known that is "Someone".
 	XCTAssertEqualObjects(TGMessagePreview(@{@"content" : @{@"@type" : @"messagePinMessage"}}),
-						  @"pinned a message");
+						  @"Someone pinned a message");
 	XCTAssertEqualObjects(TGMessagePreview(@{@"content" : @{@"@type" : @"messageChatAddMembers"}}),
-						  @"added a member");
+						  @"Someone added members");
 	XCTAssertEqualObjects(TGMessagePreview(@{@"content" : @{@"@type" : @"messagePoll"}}),
 						  @"Poll");
 	// Everything else becomes a phrase of its own type name.
-	XCTAssertEqualObjects(TGMessagePreview(@{@"content" : @{@"@type" : @"messageGameScore"}}),
-						  @"Game score");
+	XCTAssertEqualObjects(TGMessagePreview(@{@"content" : @{@"@type" : @"messageMeteorShowerStarted"}}),
+						  TGPhraseFromTypeName(@"messageMeteorShowerStarted"));
 	XCTAssertEqualObjects(TGMessagePreview(@{@"content" : @{}}), @"");
 	XCTAssertEqualObjects(TGMessagePreview(@{}), @"");
 }

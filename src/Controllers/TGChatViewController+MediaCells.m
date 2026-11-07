@@ -218,7 +218,7 @@
 			}
 		};
 
-		if (!layout.bodySize.height) {
+		if (layout.stampOnPicture) {
 			cell.mediaStamp.hidden = NO;
 			cell.mediaStamp.backgroundColor = [theme mediaStampColour];
 			cell.mediaStamp.text = mine ? [NSString stringWithFormat:@"  %@", layout.stamp] : layout.stamp;
@@ -281,7 +281,9 @@
 			[cell.bubble bringSubviewToFront:cell.icon];
 		}
 
-		if (!layout.bodySize.height) {
+		[self placeVeilOn:cell message:m layout:layout picture:img];
+
+		if (layout.stampOnPicture) {
 			cell.mediaStamp.hidden = NO;
 			cell.mediaStamp.backgroundColor = [theme mediaStampColour];
 			cell.mediaStamp.text = mine ? [NSString stringWithFormat:@"  %@", layout.stamp] : layout.stamp;
@@ -294,6 +296,65 @@
 		cell.picture.hidden = YES;
 		cell.picture.image = nil;
 	}
+}
+
+/// A one-time or timed picture shows "Tap to view" over a blur and opens
+/// once; a spoiler shows the blur alone until it is tapped. Touches go
+/// through the veil to the row, which decides between the two. Paid media
+/// shows an "Unlock for N Stars" button whose tap informs that Stars are
+/// not yet supported.
+- (void)placeVeilOn:(TGBubbleCell *)cell message:(NSDictionary *)m
+			 layout:(TGMessageLayout *)layout picture:(UIImage *)img {
+	NSString *kind = m[@"kind"];
+	BOOL isPaid = [m[@"paidPreview"] boolValue] || [kind isEqualToString:@"messagePaidMedia"];
+	BOOL media = [kind isEqualToString:@"messagePhoto"] || [kind isEqualToString:@"messageVideo"] ||
+			[kind isEqualToString:@"messageAnimation"];
+	BOOL once = [m[@"viewOnce"] boolValue] || [m[@"destructSeconds"] integerValue] > 0;
+	BOOL spoiler = [m[@"hasSpoiler"] boolValue] && ![self.revealedSpoilers containsObject:m[@"id"] ?: @0];
+	TGMediaVeilKind veil = isPaid ? TGMediaVeilKindPaid
+			: !media ? TGMediaVeilKindNone
+			: once ? TGMediaVeilKindViewOnce
+			: spoiler ? TGMediaVeilKindSpoiler : TGMediaVeilKindNone;
+	if (veil == TGMediaVeilKindNone){
+		cell.veilView.hidden = YES;
+		return;
+	}
+	if (!cell.veilView){
+		cell.veilView = [[TGMediaVeilView alloc] initWithFrame:CGRectZero];
+		// The picture under it is rounded; a rasterised rounded clip is
+		// drawn once, not on every scroll frame.
+		cell.veilView.layer.cornerRadius = TGMetricCornerMedium;
+		cell.veilView.layer.masksToBounds = YES;
+		cell.veilView.layer.shouldRasterize = YES;
+		cell.veilView.layer.rasterizationScale = [UIScreen mainScreen].scale;
+	}
+	if (veil == TGMediaVeilKindPaid) {
+		cell.veilView.userInteractionEnabled = YES;
+		int64_t starCount = [m[@"starCount"] longLongValue];
+		if (!starCount && [m[@"paidMedia"] isKindOfClass:NSDictionary.class]) {
+			starCount = [m[@"paidMedia"][@"starCount"] longLongValue];
+		}
+		cell.veilView.starCount = starCount;
+		__weak typeof(self) weakSelf = self;
+		cell.veilView.onTap = ^(TGMediaVeilKind k) {
+			TGChatViewController *me = weakSelf;
+			if (me) {
+				[TGSnackbar showInView:me.view
+								  text:@"Paying with Stars is not available in this app yet."
+							   seconds:2 onCommit:nil];
+			}
+		};
+	} else {
+		cell.veilView.userInteractionEnabled = NO;
+		cell.veilView.onTap = nil;
+	}
+	if (cell.veilView.superview != cell.bubble)
+		[cell.bubble addSubview:cell.veilView];
+	cell.veilView.frame = layout.pictureFrame;
+	cell.veilView.kind = veil;
+	[cell.veilView setPicture:img];
+	[cell.bubble bringSubviewToFront:cell.veilView];
+	cell.disc.hidden = YES;
 }
 
 #pragma mark - GIFs

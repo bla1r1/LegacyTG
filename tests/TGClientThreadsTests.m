@@ -208,6 +208,20 @@ static NSDictionary *inlineMarkup(void) {
 	XCTAssertTrue(alert);
 }
 
+/// A game card's Play asks the bot for the game's page by its short name;
+/// a data payload would get the game bot's "unknown button" instead.
+- (void)testBots_GameAsksForTheGamePage {
+	TGClient *c = H();
+	__block NSString *url = nil;
+	[c pressCallbackButton:@{@"gameShortName" : @"tetris"} inChat:-5 messageId:12
+				completion:^(NSString *t, BOOL a, NSString *u, NSString *e){ url = u; }];
+	NSDictionary *sent = lastH(c, @"getCallbackQueryAnswer");
+	XCTAssertEqualObjects(sent[@"payload"][@"@type"], @"callbackQueryPayloadGame");
+	XCTAssertEqualObjects(sent[@"payload"][@"game_short_name"], @"tetris");
+	answerH(c, @{@"@type" : @"callbackQueryAnswer", @"text" : @"", @"show_alert" : @NO, @"url" : @"https://t.me/game"});
+	XCTAssertEqualObjects(url, @"https://t.me/game");
+}
+
 - (void)testBots_LoginAsksBeforeSigningIn {
 	TGClient *c = H();
 	__block NSString *domain = nil, *url = @"unset";
@@ -244,6 +258,28 @@ static NSDictionary *inlineMarkup(void) {
 	keyboard = @{};
 	[c replyKeyboardForChat:-5 completion:^(NSDictionary *k){ keyboard = k; }];
 	XCTAssertNil(keyboard, @"no message means the keyboard is gone");
+}
+
+#pragma mark - checklist tasks
+
+- (void)testChecklists_MarkDoneSendsTheTaskInTheDoneList {
+	TGClient *c = H();
+	[c markChecklistTask:41 done:YES inMessage:12 chat:-5];
+	NSDictionary *sent = lastH(c, @"markChecklistTasksAsDone");
+	XCTAssertEqual([sent[@"chat_id"] longLongValue], -5LL);
+	XCTAssertEqual([sent[@"message_id"] longLongValue], 12LL);
+	XCTAssertEqualObjects(sent[@"marked_as_done_task_ids"], (@[@41]));
+	XCTAssertEqualObjects(sent[@"marked_as_not_done_task_ids"], (@[]));
+}
+
+- (void)testChecklists_MarkNotDoneSendsTheTaskInTheNotDoneList {
+	TGClient *c = H();
+	[c markChecklistTask:42 done:NO inMessage:13 chat:-6];
+	NSDictionary *sent = lastH(c, @"markChecklistTasksAsDone");
+	XCTAssertEqual([sent[@"chat_id"] longLongValue], -6LL);
+	XCTAssertEqual([sent[@"message_id"] longLongValue], 13LL);
+	XCTAssertEqualObjects(sent[@"marked_as_done_task_ids"], (@[]));
+	XCTAssertEqualObjects(sent[@"marked_as_not_done_task_ids"], (@[@42]));
 }
 
 @end

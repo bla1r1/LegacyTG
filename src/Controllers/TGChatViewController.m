@@ -27,6 +27,10 @@
 #import "TGPopupMenu.h"
 #import "TGSnackbar.h"
 #import "TGMediaViewer.h"
+#import "TGPollPresentation.h"
+#import "TGChecklistPresentation.h"
+#import "TGGiftViewer.h"
+#import "TGStoryViewerViewController.h"
 #import "TGMusicPlayer.h"
 #import "TGDevShowcase.h"
 
@@ -1247,11 +1251,11 @@ static const NSInteger kChatDiscussBarTag = 0x9023;
 	}];
 }
 
-/// The option that was tapped opens its own card: what TDLib says the answer
-/// still allows, then the vote. Voting is still one tap later, because the
-/// vote is irreversible and the card is the honest place to say what the
-/// answer can be used for. Which poll it belongs to comes from the cell it
-/// sits in, because a button knows nothing about messages.
+/// A tap votes, unless the poll has already heard from you or closed. A
+/// single-answer poll sends its one option at once; a multiple-answer poll
+/// keeps the tapped answers as a draft and the bubble grows a Vote button.
+/// The answer's developer card is gone: it told the voter nothing Telegram
+/// shows, and it put a second tap between them and the vote.
 - (void)pollOptionTapped:(UIButton *)option {
 	UIView *view = option;
 	while (view && ![view isKindOfClass:TGBubbleCell.class])
@@ -1268,60 +1272,224 @@ static const NSInteger kChatDiscussBarTag = 0x9023;
 			break;
 		}
 	}
-	NSArray *options = message[@"pollOptions"];
-	NSDictionary *pollOption = (index >= 0 && index < (NSInteger)options.count)
-			? options[(NSUInteger)index] : nil;
-	NSString *optionId = pollOption[@"id"];
-	id optionText = pollOption[@"text"];
-	NSString *label = [optionText isKindOfClass:NSDictionary.class]
-			? (optionText[@"text"] ?: @"")
-			: ([optionText isKindOfClass:NSString.class] ? optionText : @"This answer");
-	BOOL closed = [message[@"pollClosed"] boolValue];
+	NSDictionary *poll = [message[@"poll"] isKindOfClass:NSDictionary.class]
+			? message[@"poll"] : nil;
+	NSArray *options = [poll[@"options"] isKindOfClass:NSArray.class]
+			? poll[@"options"] : @[];
+	if (!poll || index < 0 || index >= (NSInteger)options.count)
+		return;
+	// Closed polls and polls this account voted in show their results; their
+	// options are labels, not votes.
+	if (TGPollShowsResults(poll))
+		return;
+
+	int64_t messageId = cell.pollMessageId;
+	int64_t chatId = self.chatId;
+	__weak typeof(self) weakSelf = self;
+
+	if (![poll[@"allowsMultiple"] boolValue]){
+		[[TGClient shared] votePoll:messageId inChat:chatId options:@[@(index)]];
+		// TDLib answers with an updated message; re-read so the shares move.
+		dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
+				(int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+			[weakSelf reload];
+		});
+		return;
+	}
+
+	if (!self.pendingPollVotes)
+		self.pendingPollVotes = [NSMutableDictionary dictionary];
+	NSNumber *key = @(messageId);
+	NSMutableIndexSet *pending = self.pendingPollVotes[key];
+	if (![pending isKindOfClass:NSMutableIndexSet.class]){
+		pending = [NSMutableIndexSet indexSet];
+		self.pendingPollVotes[key] = pending;
+	}
+	if ([pending containsIndex:(NSUInteger)index])
+		[pending removeIndex:(NSUInteger)index];
+	else
+		[pending addIndex:(NSUInteger)index];
+	if (!pending.count)
+		[self.pendingPollVotes removeObjectForKey:key];
+
+	// The Vote button changes the bubble's height, so the cached geometry and
+	// the row both have to be rebuilt.
+	[self.layoutCache removeLayoutForMessageId:messageId];
+	NSIndexPath *path = [self.table indexPathForCell:cell];
+	if (path)
+		[self.table reloadRowsAtIndexPaths:@[path]
+						 withRowAnimation:UITableViewRowAnimationNone];
+}
+
+/// A task row is a toggle when the checklist lets this account mark tasks.
+/// TDLib answers with an updated message, so the row reloads once it does.
+- (void)checklistTaskTapped:(UIButton *)taskRow {
+	UIView *view = taskRow;
+	while (view && ![view isKindOfClass:TGBubbleCell.class])
+		view = view.superview;
+	TGBubbleCell *cell = (TGBubbleCell *)view;
+	if (!cell || !cell.pollMessageId)
+		return;
+
+	NSInteger index = taskRow.tag - 0x9300;
+	NSDictionary *message = nil;
+	for (NSDictionary *candidate in self.messages){
+		if ([candidate[@"id"] longLongValue] == cell.pollMessageId){
+			message = candidate;
+			break;
+		}
+	}
+	NSDictionary *checklist = [message[@"checklist"] isKindOfClass:NSDictionary.class]
+			? message[@"checklist"] : nil;
+	NSArray *tasks = [checklist[@"tasks"] isKindOfClass:NSArray.class]
+			? checklist[@"tasks"] : @[];
+	if (!checklist || index < 0 || index >= (NSInteger)tasks.count)
+		return;
+	if (!TGChecklistCanToggle(checklist))
+		return;
+
+	NSDictionary *task = [tasks[(NSUInteger)index] isKindOfClass:NSDictionary.class]
+			? tasks[(NSUInteger)index] : nil;
+	if (!task)
+		return;
+	int64_t taskId = [task[@"taskId"] longLongValue];
+	if (!taskId)
+		return;
+
+	int64_t messageId = cell.pollMessageId;
+	int64_t chatId = self.chatId;
+	BOOL done = TGChecklistTaskDone(task);
+	__weak typeof(self) weakSelf = self;
+	[[TGClient shared] markChecklistTask:taskId done:!done inMessage:messageId chat:chatId];
+	dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
+			(int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+		[weakSelf reload];
+	});
+}
+
+/// A card's button, as the official clients answer it.
+- (void)openCard:(TGMessageCard *)card ofMessage:(int64_t)messageId {
+	NSDictionary *m = nil;
+	for (NSDictionary *candidate in self.messages){
+		if ([candidate[@"id"] longLongValue] == messageId){
+			m = candidate;
+			break;
+		}
+	}
+	__weak typeof(self) weakSelf = self;
+	switch (card.action){
+	case TGMessageCardActionOpenUser: {
+		TGProfileViewController *profile = [[TGProfileViewController alloc]
+				initWithChatId:card.actionTargetId userId:card.actionTargetId title:card.title];
+		[self.navigationController pushViewController:profile animated:YES];
+		break;
+	}
+	case TGMessageCardActionOpenChat: {
+		TGChatViewController *chat = [[TGChatViewController alloc] init];
+		chat.chatId = card.actionTargetId;
+		chat.chatTitle = card.title;
+		chat.hidesBottomBarWhenPushed = YES;
+		[self.navigationController pushViewController:chat animated:YES];
+		break;
+	}
+	case TGMessageCardActionViewGift: {
+		NSDictionary *gift = [m[@"gift"] isKindOfClass:NSDictionary.class] ? m[@"gift"] : @{};
+		NSNumber *thumb = [gift[@"stickerThumbFileId"] longLongValue] ? gift[@"stickerThumbFileId"]
+				: @(card.imageFileId);
+		[TGGiftViewer showGift:@{
+			@"starCount"    : gift[@"starCount"] ?: @0,
+			@"message"      : gift[@"text"] ?: @"",
+			@"thumbFileId"  : thumb ?: @0,
+			@"senderUserId" : gift[@"senderUserId"] ?: @0,
+			@"date"         : m[@"date"] ?: @0,
+		} inView:self.view];
+		break;
+	}
+	case TGMessageCardActionOpenStory: {
+		TGStoryViewerViewController *viewer = [[TGStoryViewerViewController alloc]
+				initWithChatId:card.actionChatId title:@"Story"
+					   stories:@[@(card.actionTargetId)] startIndex:0 canManage:NO];
+		UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:viewer];
+		nav.navigationBar.barStyle = UIBarStyleBlack;
+		nav.navigationBar.translucent = YES;
+		[self presentViewController:nav animated:YES completion:nil];
+		break;
+	}
+	case TGMessageCardActionPlayGame: {
+		// A game is a web page the bot hands out for this message.
+		NSDictionary *game = [m[@"game"] isKindOfClass:NSDictionary.class] ? m[@"game"] : @{};
+		[[TGClient shared] pressCallbackButton:@{@"gameShortName" : game[@"shortName"] ?: @""}
+										inChat:self.chatId messageId:messageId
+									completion:^(NSString *text, BOOL alert, NSString *url, NSString *error){
+			dispatch_async(dispatch_get_main_queue(), ^{
+				TGChatViewController *me = weakSelf;
+				if (url.length)
+					[[UIApplication sharedApplication] openURL:[NSURL URLWithString:url]];
+				else if (me)
+					[TGSnackbar showInView:me.view text:(text.length ? text : @"The game did not open.")
+								   seconds:2 onCommit:nil];
+			});
+		}];
+		break;
+	}
+	case TGMessageCardActionOpenGiveaway: {
+		int64_t giveawayId = card.actionTargetId ?: messageId;
+		[[TGClient shared] giveawayInfoForChat:self.chatId message:giveawayId
+									completion:^(NSDictionary *info, NSString *error){
+			dispatch_async(dispatch_get_main_queue(), ^{
+				TGChatViewController *me = weakSelf;
+				if (!me)
+					return;
+				NSString *body;
+				if (!info)
+					body = @"Could not load this giveaway.";
+				else if ([info[@"isWinner"] boolValue])
+					body = [info[@"giftCode"] length]
+						? [NSString stringWithFormat:@"You won a prize in this giveaway. Your gift code: %@", info[@"giftCode"]]
+						: @"You won a prize in this giveaway.";
+				else if ([info[@"isEnded"] boolValue])
+					body = @"This giveaway has ended.";
+				else
+					body = @"This giveaway is still running.";
+				[TGAlertSheet showMessage:body title:@"Giveaway" inView:me.view];
+			});
+		}];
+		break;
+	}
+	default:
+		break;
+	}
+}
+
+/// Sends every draft answer of a multiple-answer poll in one request. TDLib
+/// wants the whole set at once; the empty set is how a vote is retracted.
+- (void)pollVoteTapped:(UIButton *)button {
+	UIView *view = button;
+	while (view && ![view isKindOfClass:TGBubbleCell.class])
+		view = view.superview;
+	TGBubbleCell *cell = (TGBubbleCell *)view;
+	if (!cell || !cell.pollMessageId)
+		return;
+
+	int64_t messageId = cell.pollMessageId;
+	NSNumber *key = @(messageId);
+	NSArray *indexes = TGPollVoteIndexes(self.pendingPollVotes[key]);
+	if (!indexes.count)
+		return;
+	[self.pendingPollVotes removeObjectForKey:key];
+
+	[[TGClient shared] votePoll:messageId inChat:self.chatId options:indexes];
+	[self.layoutCache removeLayoutForMessageId:messageId];
+	NSIndexPath *path = [self.table indexPathForCell:cell];
+	if (path)
+		[self.table reloadRowsAtIndexPaths:@[path]
+						 withRowAnimation:UITableViewRowAnimationNone];
 
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] pollOptionProperties:(optionId ?: @"")
-								 ofMessage:cell.pollMessageId
-									inChat:self.chatId
-								completion:^(NSDictionary *properties, NSString *error){
-		TGChatViewController *me = weakSelf;
-		if (!me)
-			return;
-
-		NSString *body;
-		if (properties){
-			body = [NSString stringWithFormat:
-					@"Can be deleted: %@\nCan be replied to: %@\n"
-					@"Can be replied to in another chat: %@\nCan get a link: %@",
-					[properties[@"canBeDeleted"] boolValue] ? @"yes" : @"no",
-					[properties[@"canBeReplied"] boolValue] ? @"yes" : @"no",
-					[properties[@"canBeRepliedInAnotherChat"] boolValue] ? @"yes" : @"no",
-					[properties[@"canGetLink"] boolValue] ? @"yes" : @"no"];
-		} else {
-			body = error ?: @"Telegram did not answer with the answer's properties.";
-		}
-
-		void (^vote)(void) = ^{
-			[[TGClient shared] votePoll:cell.pollMessageId
-								 inChat:me.chatId
-								options:@[@(index)]];
-			// TDLib answers with an updated message; re-read so the shares move.
-			dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
-					(int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-				[me reload];
-			});
-		};
-
-		if (closed){
-			[TGAlertSheet showMessage:body title:label inView:me.view];
-			return;
-		}
-		[TGAlertSheet showChoices:@[@"Vote for this answer"]
-							title:label
-						  message:body
-				 destructiveIndex:-1
-						   inView:me.view
-						 onChoice:^(NSInteger choice){ vote(); }];
-	}];
+	dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
+			(int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+		[weakSelf reload];
+	});
 }
 
 #pragma mark - pinned message
@@ -1581,6 +1749,12 @@ static const NSInteger kChatDiscussBarTag = 0x9023;
 		return;
 	}
 
+	// "Alice pinned a message" leads to that message, as official does.
+	if ([kind isEqualToString:@"messagePinMessage"] && [m[@"pinnedMessageId"] longLongValue]){
+		[self jumpToReplyById:[m[@"pinnedMessageId"] longLongValue]];
+		return;
+	}
+
 	// Contact card tap
 	if ([kind isEqualToString:@"messageContact"]){
 		[self handleContactTapForMessage:m];
@@ -1649,6 +1823,46 @@ static const NSInteger kChatDiscussBarTag = 0x9023;
 			return;
 		}
 		[self playVideoNoteForMessage:m atRow:indexPath.row];
+		return;
+	}
+
+	// Paid media cannot be unlocked with Stars in this app yet.
+	if ([kind isEqualToString:@"messagePaidMedia"] || [m[@"paidPreview"] boolValue]){
+		[TGSnackbar showInView:self.view
+						  text:@"Paying with Stars is not available in this app yet."
+					   seconds:2 onCommit:nil];
+		return;
+	}
+
+	// The first tap on a spoiler takes the cover off; the next opens it.
+	if ([m[@"hasSpoiler"] boolValue] && m[@"id"] && ![self.revealedSpoilers containsObject:m[@"id"]] &&
+		![m[@"viewOnce"] boolValue] && ![m[@"destructSeconds"] integerValue]){
+		if (!self.revealedSpoilers)
+			self.revealedSpoilers = [NSMutableSet set];
+		[self.revealedSpoilers addObject:m[@"id"]];
+		[tableView reloadRowsAtIndexPaths:@[indexPath] withRowAnimation:UITableViewRowAnimationFade];
+		return;
+	}
+
+	// Text spoilers keep the same bargain for the words: the first tap draws
+	// them out from under their plate, and they stay revealed for this visit.
+	NSArray *textEntities = m[@"entities"];
+	if (TGEntitiesHaveSpoiler(textEntities) && m[@"id"] &&
+		![self.revealedSpoilers containsObject:m[@"id"]]) {
+		if (!self.revealedSpoilers)
+			self.revealedSpoilers = [NSMutableSet set];
+		[self.revealedSpoilers addObject:m[@"id"]];
+		[tableView reloadRowsAtIndexPaths:@[indexPath] withRowAnimation:UITableViewRowAnimationFade];
+		return;
+	}
+
+	// A one-time or timed picture opens alone - no paging to its neighbours -
+	// and tells TDLib it was opened, which starts the sender's clock. TDLib
+	// then swaps the content for "expired"; the viewer keeps the file it has.
+	if (([kind isEqualToString:@"messagePhoto"] || [kind isEqualToString:@"messageVideo"]) &&
+		([m[@"viewOnce"] boolValue] || [m[@"destructSeconds"] integerValue] > 0)){
+		[[TGClient shared] openContentOfMessage:[m[@"id"] longLongValue] inChat:self.chatId];
+		[TGMediaViewer presentItems:@[m] startAt:0 inChat:self.chatId isAlbum:NO];
 		return;
 	}
 

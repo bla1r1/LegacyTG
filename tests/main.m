@@ -22,6 +22,7 @@
 #import "TGCallVideoTests.m"
 #import "TGLibTgvoipHooksTests.m"
 #import "TGMessageLayoutTests.m"
+#import "TGMessageCardLayoutTests.m"
 #import "TGSoftVideoClockTests.m"
 
 int main(int argc, char *argv[]) {

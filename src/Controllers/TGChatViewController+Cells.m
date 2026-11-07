@@ -136,7 +136,7 @@ static char kTGReactionChipInfoKey;
 	cell.body.font = TGFontAtSize([TGTheme shared].messageFontSize);
 	NSArray *entities = m[@"entities"];
 	if (entities.count) {
-		cell.body.attributedText = TGAttributedMessageText(m[@"text"], entities, TGFontAtSize([TGTheme shared].messageFontSize), [theme primaryTextColour]);
+		cell.body.attributedText = TGAttributedMessageTextRevealing(m[@"text"], entities, TGFontAtSize([TGTheme shared].messageFontSize), [theme primaryTextColour], [self.revealedSpoilers containsObject:m[@"id"] ?: @0]);
 	} else {
 		TGSetBodyText(cell.body, m[@"text"], [theme primaryTextColour]);
 	}

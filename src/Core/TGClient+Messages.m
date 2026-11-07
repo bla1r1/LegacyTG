@@ -140,8 +140,12 @@
 	[self request:@{@"@type" : @"getCallbackQueryAnswer",
 					@"chat_id" : @(chatId),
 					@"message_id" : @(messageId),
-					@"payload" : @{@"@type" : @"callbackQueryPayloadData",
-								   @"data" : button[@"data"] ?: @""}}
+					// A game button asks for the game's page, not for data.
+					@"payload" : [button[@"gameShortName"] length]
+						? @{@"@type" : @"callbackQueryPayloadGame",
+							@"game_short_name" : button[@"gameShortName"]}
+						: @{@"@type" : @"callbackQueryPayloadData",
+							@"data" : button[@"data"] ?: @""}}
 	   completion:^(NSDictionary *answer){
 		if (!completion)
 			return;
@@ -851,8 +855,15 @@
 }
 
 - (void)sendVideoAtPath:(NSString *)path toChat:(int64_t)chatId {
+	[self sendVideoAtPath:path viewOnce:NO toChat:chatId];
+}
+
+- (void)sendVideoAtPath:(NSString *)path viewOnce:(BOOL)viewOnce toChat:(int64_t)chatId {
 	if (!path.length)
 		return;
+	id destruct = viewOnce
+			? @{@"@type" : @"messageSelfDestructTypeImmediately"}
+			: [NSNull null];
 	[self send:@{
 		@"@type"                : @"sendMessage",
 		@"chat_id"              : @(chatId),
@@ -862,6 +873,7 @@
 				@"@type" : @"inputVideo",
 				@"video" : @{@"@type" : @"inputFileLocal", @"path" : path},
 			},
+			@"self_destruct_type" : destruct,
 		},
 	}];
 }
@@ -962,8 +974,15 @@
 }
 
 - (void)sendPhotoAtPath:(NSString *)path toChat:(int64_t)chatId {
+	[self sendPhotoAtPath:path viewOnce:NO toChat:chatId];
+}
+
+- (void)sendPhotoAtPath:(NSString *)path viewOnce:(BOOL)viewOnce toChat:(int64_t)chatId {
 	if (!path.length)
 		return;
+	id destruct = viewOnce
+			? @{@"@type" : @"messageSelfDestructTypeImmediately"}
+			: [NSNull null];
 	[self send:@{
 		@"@type"                : @"sendMessage",
 		@"chat_id"              : @(chatId),
@@ -973,6 +992,7 @@
 				@"@type" : @"inputPhoto",
 				@"photo" : @{@"@type" : @"inputFileLocal", @"path" : path},
 			},
+			@"self_destruct_type" : destruct,
 		},
 	}];
 }
@@ -983,6 +1003,17 @@
 		@"chat_id"    : @(chatId),
 		@"message_id" : @(messageId),
 		@"option_ids" : optionIds ?: @[],
+	}];
+}
+
+- (void)markChecklistTask:(int64_t)taskId done:(BOOL)done inMessage:(int64_t)messageId chat:(int64_t)chatId {
+	NSArray *one = @[@(taskId)];
+	[self send:@{
+		@"@type"                      : @"markChecklistTasksAsDone",
+		@"chat_id"                    : @(chatId),
+		@"message_id"                 : @(messageId),
+		@"marked_as_done_task_ids"    : done ? one : @[],
+		@"marked_as_not_done_task_ids": done ? @[] : one,
 	}];
 }
 

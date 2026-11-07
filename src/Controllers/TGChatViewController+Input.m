@@ -747,7 +747,7 @@ static void TGTextFieldSetSelectedRange(UITextField *tf, NSRange range) {
 	TGAttachSheet *sheet = [TGAttachSheet showInView:host];
 	__weak typeof(self) weakSelf = self;
 	sheet.onPhoto = ^(UIImage *image){
-		[weakSelf sendImage:image];
+		[weakSelf confirmSendingImage:image];
 	};
 	sheet.onPhotos = ^(NSArray *images){
 		[weakSelf sendImageAlbum:images];

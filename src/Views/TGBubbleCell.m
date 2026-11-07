@@ -88,6 +88,14 @@ static const CGFloat kSendRingMinimum = 0.2f;
 	self.captionLabel.hidden = YES;
 	[self.bubble addSubview:self.captionLabel];
 
+	self.transcriptionLabel = [[UILabel alloc] init];
+	self.transcriptionLabel.numberOfLines = 0;
+	self.transcriptionLabel.lineBreakMode = NSLineBreakByWordWrapping;
+	self.transcriptionLabel.font = TGFontSubhead();
+	self.transcriptionLabel.backgroundColor = [UIColor clearColor];
+	self.transcriptionLabel.hidden = YES;
+	[self.bubble addSubview:self.transcriptionLabel];
+
 	self.sender = [[UILabel alloc] init];
 	self.sender.font = TGFontMetaStrong();
 	self.sender.lineBreakMode = NSLineBreakByTruncatingTail;
@@ -647,6 +655,8 @@ static const CGFloat kSendRingMinimum = 0.2f;
 
 - (void)resetForReuse {
 	[self unparkViews];
+	self.cardView.hidden = YES;
+	self.veilView.hidden = YES;
 	[self stopLoopingVideo];
 	[self hideSendRing];
 	self.icon.hidden = YES;
@@ -681,6 +691,9 @@ static const CGFloat kSendRingMinimum = 0.2f;
 	self.captionLabel.text = nil;
 	self.captionLabel.attributedText = nil;
 	self.captionLabel.numberOfLines = 0;
+	self.transcriptionLabel.hidden = YES;
+	self.transcriptionLabel.text = nil;
+	self.transcriptionLabel.numberOfLines = 0;
 	self.time.text = nil;
 	self.ticks.hidden = YES;
 	self.ticks.image = nil;
@@ -699,7 +712,7 @@ static const CGFloat kSendRingMinimum = 0.2f;
 	// Hidden instead: the poll branch rebuilds them when the message under
 	// the cell actually changes.
 	for (UIView *old in self.bubble.subviews) {
-		if (old.tag >= 0x9100 && old.tag < 0x9300) old.hidden = YES;
+		if (old.tag >= 0x9100 && old.tag < 0x9400) old.hidden = YES;
 	}
 
 	// A round note moves the clock and the ticks out of the bubble, because a

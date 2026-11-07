@@ -233,6 +233,12 @@ APP_SRC_M := \
 	src/Core/TGClient.m \
 	src/Core/TGStickerStore.m \
 	src/Core/TGEmojiStore.m \
+	src/Core/TGServiceMessageText.m \
+	src/Core/TGMessageContentCommerce.m \
+	src/Core/TGMessageContentInteractive.m \
+	src/Core/TGMessageCard.m \
+	src/Core/TGLiveLocation.m \
+	src/Core/TGPinnedLine.m \
 	src/Core/TGCustomEmojiStore.m \
 	src/Core/TGMediaStore.m \
 	src/Core/TGMemberAvatarStore.m \
@@ -302,6 +308,10 @@ APP_SRC_M := \
 	src/UI/TGSheet.m \
 	src/UI/TGAlertSheet.m \
 	src/Views/TGGiftViewer.m \
+	src/Views/TGMessageCardLayout.m \
+	src/Views/TGMessageCardView.m \
+	src/Views/TGMediaVeilBlur.m \
+	src/Views/TGMediaVeil.m \
 	src/UI/TGSnackbar.m \
 	src/Views/TGPlayerView.m \
 	src/UI/TGEmptyView.m \
@@ -320,6 +330,8 @@ APP_SRC_M := \
 	src/Controllers/TGPlaceholderViewController.m \
 	src/Controllers/TGQRViewController.m \
 	src/Controllers/TGUIFormat.m \
+	src/Controllers/TGPollPresentation.m \
+	src/Controllers/TGChecklistPresentation.m \
 	src/Controllers/TGLoginViewController.m \
 	src/Controllers/TGLoginViewController+Phone.m \
 	src/Controllers/TGLoginViewController+Steps.m \
