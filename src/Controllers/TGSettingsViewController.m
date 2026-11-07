@@ -427,7 +427,11 @@
 			weakSelf.recommendedFolders = folders;
 			[weakSelf rebuild];
 		}];
-		[TGClient shared].onChatsChanged = ^{ [weakSelf rebuild]; };
+		// onChatsChanged is the chat list's; taking it over here left the list
+		// deaf to new messages until the app restarted.
+		[[NSNotificationCenter defaultCenter] removeObserver:self name:TGChatsChangedNotification object:nil];
+		[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(rebuild)
+													 name:TGChatsChangedNotification object:nil];
 		return;
 	}
 

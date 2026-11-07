@@ -25,6 +25,7 @@ static const CGFloat kAvatar    = TGMetricChatAvatar;
 /// The preview, with whoever wrote it ("Ivan:", "You:") in the title colour
 /// ahead of the text, the way their list sets the speaker apart.
 - (void)setPreview:(NSString *)text author:(NSString *)author;
+- (void)setPreview:(NSString *)text author:(NSString *)author customEmoji:(NSArray *)customEmoji;
 - (void)setDraftPreview:(NSString *)draftText;
 
 - (void)applyTheme;

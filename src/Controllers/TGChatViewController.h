@@ -41,4 +41,10 @@
 - (void)executeDeleteMessages:(NSArray *)ids revoke:(BOOL)revoke;
 - (void)forwardSelectedMessages;
 
+/// Opens a community: its chats as a list to pick from (the full community
+/// screen in dev builds, where its admin tools live).
++ (void)openCommunity:(int64_t)communityId
+		 navigation:(UINavigationController *)navigation
+			 inView:(UIView *)view;
+
 @end

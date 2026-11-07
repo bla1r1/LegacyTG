@@ -89,7 +89,7 @@ wait_for_device() {
 # ------------------------------------------------------------------ build ---
 build() {
 	say "building armv7"
-	if ! make -C "$ROOT" DEV=1 ipa-armv7 > "$LOGDIR/build-$STAMP.log" 2>&1; then
+	if ! make -j"$(sysctl -n hw.ncpu)" -C "$ROOT" DEV=1 ipa-armv7 > "$LOGDIR/build-$STAMP.log" 2>&1; then
 		echo "BUILD FAILED - see $LOGDIR/build-$STAMP.log" >&2
 		grep -iE "error:|fixup error|Undefined symbols" "$LOGDIR/build-$STAMP.log" | head -20 >&2
 		return 1

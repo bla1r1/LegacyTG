@@ -567,7 +567,11 @@ static NSArray *TGCallGradient(NSArray *colours) {
     self.remoteVideoContainer.frame = b;
 
     self.emojiLabel.frame = CGRectMake(gutter, y, textWidth, TGMetricCallEmojiHeight);
-    self.backButton.frame = CGRectMake(TGMetricPadSmall, 0,
+    // iOS 7 lays the screen under the status bar; the button starts below
+    // it. iOS 6 has no layout guide and no overlap.
+    CGFloat statusTop = [self respondsToSelector:@selector(topLayoutGuide)]
+            ? self.topLayoutGuide.length : 0;
+    self.backButton.frame = CGRectMake(TGMetricPadSmall, statusTop,
             TGMetricCallLabelWidth, TGMetricRow);
     y += TGMetricCallEmojiHeight + TGMetricPadLarge;
 

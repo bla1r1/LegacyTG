@@ -309,7 +309,6 @@ APP_SRC_M := \
 	src/UI/TGPopupMenu.m \
 	src/UI/TGSheet.m \
 	src/UI/TGAlertSheet.m \
-	src/Views/TGGiftViewer.m \
 	src/Views/TGMessageCardLayout.m \
 	src/Views/TGMessageCardView.m \
 	src/Views/TGMediaVeilBlur.m \
@@ -416,6 +415,7 @@ APP_SRC_M := \
 	src/Controllers/TGProfileViewController+Actions.m \
 	src/Controllers/TGProfileViewController+Media.m \
 	src/Controllers/TGProfileViewController+Tier2.m \
+	src/Controllers/TGGiftViewController.m \
 	src/Controllers/TGEditProfileViewController.m \
 	src/Controllers/TGUsernameSettingsViewController.m \
 	src/Controllers/TGGroupSettingsViewController.m \
@@ -602,11 +602,11 @@ ipa: ipa-armv7 ipa-arm64
 	# universal build installed on a 4S with no TDLib at all.
 	@cp -f "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/libtdjson.dylib" "$(BUILD_DIR)/fat_app/$(APP_NAME).app/" 2>/dev/null || echo "[!] no armv7 libtdjson.dylib to package"
 	@codesign -s - --force "$(BUILD_DIR)/fat_app/$(APP_NAME).app" 2>/dev/null || true
-	@rm -rf "$(BUILD_DIR)/Payload"
-	@mkdir -p "$(BUILD_DIR)/Payload"
-	@cp -rf "$(BUILD_DIR)/fat_app/$(APP_NAME).app" "$(BUILD_DIR)/Payload/"
-	@cd "$(BUILD_DIR)" && zip -qr "$(IPA_FILE)" Payload
-	@rm -rf "$(BUILD_DIR)/Payload" "$(BUILD_DIR)/fat_app"
+	@rm -rf "$(BUILD_DIR)/stage-fat"
+	@mkdir -p "$(BUILD_DIR)/stage-fat/Payload"
+	@cp -rf "$(BUILD_DIR)/fat_app/$(APP_NAME).app" "$(BUILD_DIR)/stage-fat/Payload/"
+	@cd "$(BUILD_DIR)/stage-fat" && zip -qr "$(IPA_FILE)" Payload
+	@rm -rf "$(BUILD_DIR)/stage-fat" "$(BUILD_DIR)/fat_app"
 	@echo ""
 	@echo "================================================================="
 	@echo "  [SUCCESS] All IPA packages built successfully!"
@@ -636,11 +636,13 @@ ipa-armv7: $(MACHOFIX) $(ARMV7_ALL_OBJS)
 	@echo "[+] Repairing armv7 Mach-O (__PAGEZERO, LC_MAIN, Thumb bits)..."
 	$(MACHOFIX) "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/$(APP_NAME)"
 	@ldid -S "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/$(APP_NAME)" 2>/dev/null || true
-	@rm -rf "$(BUILD_DIR)/Payload" "$(IPA_ARMV7)"
-	@mkdir -p "$(BUILD_DIR)/Payload"
-	@cp -rf "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app" "$(BUILD_DIR)/Payload/"
-	@cd "$(BUILD_DIR)" && zip -qr "$(IPA_ARMV7)" Payload
-	@rm -rf "$(BUILD_DIR)/Payload"
+	@# Each package stages in its own folder: under -j the three used to share
+	@# build/Payload and zip each other's half-copied bundles.
+	@rm -rf "$(BUILD_DIR)/stage-armv7" "$(IPA_ARMV7)"
+	@mkdir -p "$(BUILD_DIR)/stage-armv7/Payload"
+	@cp -rf "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app" "$(BUILD_DIR)/stage-armv7/Payload/"
+	@cd "$(BUILD_DIR)/stage-armv7" && zip -qr "$(IPA_ARMV7)" Payload
+	@rm -rf "$(BUILD_DIR)/stage-armv7"
 
 ipa-arm64: $(ARM64_ALL_OBJS)
 	@echo "[+] Building 64-bit arm64 app bundle..."
@@ -654,11 +656,13 @@ ipa-arm64: $(ARM64_ALL_OBJS)
 	@cp -f "$(ROOT_DIR)/resources/sounds/"*.mp3 "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
 	@cp -rf "$(ROOT_DIR)/images/"* "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
 	@codesign -s - --force "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app" 2>/dev/null || true
-	@rm -rf "$(BUILD_DIR)/Payload" "$(IPA_ARM64)"
-	@mkdir -p "$(BUILD_DIR)/Payload"
-	@cp -rf "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app" "$(BUILD_DIR)/Payload/"
-	@cd "$(BUILD_DIR)" && zip -qr "$(IPA_ARM64)" Payload
-	@rm -rf "$(BUILD_DIR)/Payload"
+	@# Each package stages in its own folder: under -j the three used to share
+	@# build/Payload and zip each other's half-copied bundles.
+	@rm -rf "$(BUILD_DIR)/stage-arm64" "$(IPA_ARM64)"
+	@mkdir -p "$(BUILD_DIR)/stage-arm64/Payload"
+	@cp -rf "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app" "$(BUILD_DIR)/stage-arm64/Payload/"
+	@cd "$(BUILD_DIR)/stage-arm64" && zip -qr "$(IPA_ARM64)" Payload
+	@rm -rf "$(BUILD_DIR)/stage-arm64"
 
 # ------------------------------------------------------------------------------
 # Object Compilation Rules (32-bit armv7)

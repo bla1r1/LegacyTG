@@ -1,6 +1,8 @@
 #import "TGProfileViewControllerInternal.h"
 #import "TGMediaViewer.h"
-#import "TGGiftViewer.h"
+#import "TGGiftViewController.h"
+#import "TGLottieView.h"
+#import <objc/runtime.h>
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
 #import "TGStoryViewerViewController.h"
@@ -243,6 +245,35 @@ static const CGFloat kVideoMarkInset = TGMetricPadWide;
 	return nil;
 }
 
+static const char kGiftTileTagKey;
+
++ (void)loadCollectibleBackdropWithCenterColor:(int32_t)centerColor
+									 edgeColor:(int32_t)edgeColor
+										  side:(CGFloat)side
+									completion:(void (^)(UIImage *image))completion {
+	if (!completion)
+		return;
+
+	NSString *key = [NSString stringWithFormat:@"%x-%x@%g", centerColor, edgeColor, side];
+	static NSCache *cache = nil;
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{
+		cache = [[NSCache alloc] init];
+	});
+	UIImage *cached = [cache objectForKey:key];
+	if (cached) {
+		completion(cached);
+		return;
+	}
+
+	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+		UIImage *img = [[self class] collectibleBackdropWithCenterColor:centerColor edgeColor:edgeColor side:side];
+		dispatch_async(dispatch_get_main_queue(), ^{
+			completion(img);
+		});
+	});
+}
+
 + (UIImage *)collectibleBackdropWithCenterColor:(int32_t)centerColor
 									  edgeColor:(int32_t)edgeColor
 										   side:(CGFloat)side {
@@ -325,35 +356,77 @@ static const CGFloat kVideoMarkInset = TGMetricPadWide;
 			 toView:(UIView *)container
 			   side:(CGFloat)side {
 	BOOL isCollectible = [tile[@"isCollectible"] boolValue];
+	NSString *giftTag = tile[@"receivedGiftId"];
+	if (![giftTag isKindOfClass:[NSString class]] || !giftTag.length) {
+		giftTag = [NSString stringWithFormat:@"gift_%ld", (long)index];
+	}
 
 	if (isCollectible) {
 		int32_t centerColor = [tile[@"backdropCenterColor"] intValue];
 		int32_t edgeColor = [tile[@"backdropEdgeColor"] intValue];
 		UIImageView *bg = [[UIImageView alloc] initWithFrame:frame];
-		bg.image = [[self class] collectibleBackdropWithCenterColor:centerColor edgeColor:edgeColor side:side];
 		bg.contentMode = UIViewContentModeScaleAspectFill;
 		bg.clipsToBounds = YES;
 		[container addSubview:bg];
+		objc_setAssociatedObject(bg, &kGiftTileTagKey, giftTag, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
-		UIImageView *art = [[UIImageView alloc] initWithFrame:frame];
-		art.contentMode = UIViewContentModeScaleAspectFit;
-		art.clipsToBounds = YES;
-		[container addSubview:art];
+		__weak typeof(bg) weakBg = bg;
+		__weak typeof(container) weakContainer = container;
+		NSString *curTag = giftTag;
+		[[self class] loadCollectibleBackdropWithCenterColor:centerColor edgeColor:edgeColor side:side completion:^(UIImage *img){
+			if (weakBg.superview == weakContainer && [objc_getAssociatedObject(weakBg, &kGiftTileTagKey) isEqualToString:curTag]) {
+				weakBg.image = img;
+			}
+		}];
 
 		NSNumber *thumbId = tile[@"modelThumbFileId"];
+		NSNumber *stickerId = tile[@"modelStickerFileId"];
+
 		if ([thumbId isKindOfClass:[NSNumber class]] && thumbId.integerValue > 0) {
+			UIImageView *art = [[UIImageView alloc] initWithFrame:frame];
+			art.contentMode = UIViewContentModeScaleAspectFit;
+			art.clipsToBounds = YES;
+			[container addSubview:art];
+			objc_setAssociatedObject(art, &kGiftTileTagKey, giftTag, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
 			__weak typeof(art) weakArt = art;
 			[[TGClient shared] downloadFile:thumbId.integerValue
 								   priority:TGDownloadPriorityOnScreen
 								 completion:^(NSString *path){
 				if (!path.length) return;
-				dispatch_async(dispatch_get_main_queue(), ^{
+				dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
 					UIImage *img = [TGIcons decodedImageAtPath:path
 												   fittingSize:CGSizeMake(side, side)
 														  fill:NO
 														 scale:[UIScreen mainScreen].scale];
-					if (img && weakArt)
-						weakArt.image = img;
+					if (!img) return;
+					dispatch_async(dispatch_get_main_queue(), ^{
+						if (weakArt.superview == weakContainer && [objc_getAssociatedObject(weakArt, &kGiftTileTagKey) isEqualToString:curTag]) {
+							weakArt.image = img;
+						}
+					});
+				});
+			}];
+		} else if ([stickerId isKindOfClass:[NSNumber class]] && stickerId.integerValue > 0) {
+			TGLottieView *lottie = [[TGLottieView alloc] initWithFrame:frame];
+			lottie.clipsToBounds = YES;
+			[container addSubview:lottie];
+			objc_setAssociatedObject(lottie, &kGiftTileTagKey, giftTag, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+			__weak typeof(lottie) weakLottie = lottie;
+			[[TGClient shared] downloadFile:stickerId.integerValue
+								   priority:TGDownloadPriorityOnScreen
+								 completion:^(NSString *path){
+				if (!path.length) return;
+				dispatch_async(dispatch_get_main_queue(), ^{
+					if (weakLottie.superview != weakContainer || ![objc_getAssociatedObject(weakLottie, &kGiftTileTagKey) isEqualToString:curTag])
+						return;
+					weakLottie.onStickerReady = ^{
+						[weakLottie stop];
+					};
+					if ([weakLottie loadStickerFile:path]) {
+						[weakLottie stop];
+					}
 				});
 			}];
 		}
@@ -373,31 +446,79 @@ static const CGFloat kVideoMarkInset = TGMetricPadWide;
 		bg.clipsToBounds = YES;
 		[container addSubview:bg];
 
-		UIImageView *art = [[UIImageView alloc] initWithFrame:frame];
-		art.contentMode = UIViewContentModeScaleAspectFit;
-		art.clipsToBounds = YES;
-		NSString *emoji = tile[@"emoji"];
-		if (emoji.length && [TGCapabilities canDrawEmoji:emoji]) {
-			art.image = [[self class] giftTileGlyph:emoji side:side];
-		}
-		[container addSubview:art];
-
+		// The picture keeps clear of the star count under it.
+		CGRect artFrame = CGRectMake(frame.origin.x + TGMetricPad, frame.origin.y + TGMetricPadSmall,
+				side - TGDoubled(TGMetricPad), side - TGMetricLineCaption - TGMetricPadTiny - TGMetricPadSmall);
 		NSNumber *thumbId = tile[@"thumbFileId"];
+		NSNumber *stickerId = tile[@"stickerFileId"];
+		NSString *curTag = giftTag;
+		__weak typeof(container) weakContainer = container;
+
 		if ([thumbId isKindOfClass:[NSNumber class]] && thumbId.integerValue > 0) {
+			UIImageView *art = [[UIImageView alloc] initWithFrame:artFrame];
+			art.contentMode = UIViewContentModeScaleAspectFit;
+			art.clipsToBounds = YES;
+			[container addSubview:art];
+			objc_setAssociatedObject(art, &kGiftTileTagKey, giftTag, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
 			__weak typeof(art) weakArt = art;
 			[[TGClient shared] downloadFile:thumbId.integerValue
 								   priority:TGDownloadPriorityOnScreen
 								 completion:^(NSString *path){
 				if (!path.length) return;
-				dispatch_async(dispatch_get_main_queue(), ^{
+				dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
 					UIImage *img = [TGIcons decodedImageAtPath:path
 												   fittingSize:CGSizeMake(side, side)
 														  fill:NO
 														 scale:[UIScreen mainScreen].scale];
-					if (img && weakArt)
-						weakArt.image = img;
+					if (!img) return;
+					dispatch_async(dispatch_get_main_queue(), ^{
+						if (weakArt.superview == weakContainer && [objc_getAssociatedObject(weakArt, &kGiftTileTagKey) isEqualToString:curTag]) {
+							weakArt.image = img;
+						}
+					});
 				});
 			}];
+		} else if ([stickerId isKindOfClass:[NSNumber class]] && stickerId.integerValue > 0) {
+			NSString *emoji = tile[@"emoji"];
+			if ([emoji isKindOfClass:[NSString class]] && emoji.length && [TGCapabilities canDrawEmoji:emoji]) {
+				UIImageView *emojiArt = [[UIImageView alloc] initWithFrame:artFrame];
+				emojiArt.contentMode = UIViewContentModeScaleAspectFit;
+				emojiArt.clipsToBounds = YES;
+				emojiArt.image = [[self class] giftTileGlyph:emoji side:side];
+				[container addSubview:emojiArt];
+			}
+
+			TGLottieView *lottie = [[TGLottieView alloc] initWithFrame:artFrame];
+			lottie.clipsToBounds = YES;
+			[container addSubview:lottie];
+			objc_setAssociatedObject(lottie, &kGiftTileTagKey, giftTag, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+			__weak typeof(lottie) weakLottie = lottie;
+			[[TGClient shared] downloadFile:stickerId.integerValue
+								   priority:TGDownloadPriorityOnScreen
+								 completion:^(NSString *path){
+				if (!path.length) return;
+				dispatch_async(dispatch_get_main_queue(), ^{
+					if (weakLottie.superview != weakContainer || ![objc_getAssociatedObject(weakLottie, &kGiftTileTagKey) isEqualToString:curTag])
+						return;
+					weakLottie.onStickerReady = ^{
+						[weakLottie stop];
+					};
+					if ([weakLottie loadStickerFile:path]) {
+						[weakLottie stop];
+					}
+				});
+			}];
+		} else {
+			NSString *emoji = tile[@"emoji"];
+			if ([emoji isKindOfClass:[NSString class]] && emoji.length && [TGCapabilities canDrawEmoji:emoji]) {
+				UIImageView *art = [[UIImageView alloc] initWithFrame:artFrame];
+				art.contentMode = UIViewContentModeScaleAspectFit;
+				art.clipsToBounds = YES;
+				art.image = [[self class] giftTileGlyph:emoji side:side];
+				[container addSubview:art];
+			}
 		}
 
 		UILabel *starLabel = [[UILabel alloc] initWithFrame:CGRectMake(
@@ -788,7 +909,9 @@ static const CGFloat kVideoMarkInset = TGMetricPadWide;
 	NSArray *rows = [self selectedMediaRows];
 	if (index < 0 || index >= (NSInteger)rows.count)
 		return;
-	[TGGiftViewer showGift:rows[index] inView:self.view];
+	TGGiftViewController *vc = [[TGGiftViewController alloc] initWithGift:rows[index]];
+	vc.hidesBottomBarWhenPushed = YES;
+	[self.navigationController pushViewController:vc animated:YES];
 }
 
 /// Displays full-screen view for the selected story.

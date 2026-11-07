@@ -763,6 +763,8 @@ static CGImageRef TGRasterizeLottieFrame(TGLottieModel *model, double frame, CGS
 
 @interface TGLottieView ()
 @property (nonatomic, copy) NSString *loadedPath;
+/// The file this view asked for while its model was still being built.
+@property (nonatomic, copy) NSString *waitingPath;
 @property (nonatomic, strong) TGLottieModel *model;
 @property (nonatomic, strong) TGWebMStreamPlayer *webMPlayer;
 @property (nonatomic, assign) NSUInteger currentFrameIndex;
@@ -842,6 +844,16 @@ static NSCache *TGLottieStickerCache(void) {
 				[TGCapabilities memoryMB]).cacheTotalBytes;
 	});
 	return cache;
+}
+
+/// Views that asked for a file while it was being built, by path. Each gets
+/// the file the moment the build lands, not only the view that started it:
+/// a grid that rebuilt its tiles mid-build left every new tile blank.
+static NSMapTable *TGLottieWaiters(void) {
+	static NSMapTable *table = nil;
+	static dispatch_once_t onceToken;
+	dispatch_once(&onceToken, ^{ table = [NSMapTable strongToStrongObjectsMapTable]; });
+	return table;
 }
 
 static NSMutableSet *TGLottieBuilding(void) {
@@ -959,12 +971,20 @@ static BOOL sBuildsDeferred = NO;
 						(size_t)(model.firstFrame.size.width * model.firstFrame.scale),
 						(size_t)(model.firstFrame.size.height * model.firstFrame.scale), 1);
 			[cache setObject:model forKey:path cost:cost];
-			// This very view still wants the file: show it here at once, the
-			// row reload brings every other visible cell of it in line.
-			if (model.firstFrame && [weakSelf.loadedPath isEqualToString:path])
-				weakSelf.layer.contents = (__bridge id)model.firstFrame.CGImage;
-			if (weakSelf.onStickerReady)
-				weakSelf.onStickerReady();
+			// Every view still waiting for this file loads it now from the
+			// cache and hears it is ready; one reused for another file since
+			// has a different waitingPath and is skipped.
+			NSHashTable *waiters = [TGLottieWaiters() objectForKey:path];
+			[TGLottieWaiters() removeObjectForKey:path];
+			for (TGLottieView *view in waiters.allObjects){
+				if (![view.waitingPath isEqualToString:path])
+					continue;
+				view.waitingPath = nil;
+				[view loadStickerFileInner:path];
+				if (view.onStickerReady)
+					view.onStickerReady();
+			}
+			(void)weakSelf;
 		});
 	});
 }
@@ -991,6 +1011,17 @@ static BOOL sBuildsDeferred = NO;
 	NSCache *cache = TGLottieStickerCache();
 	TGLottieModel *model = [cache objectForKey:path];
 
+	if (!model){
+		// Remember who asked, whether this call starts the build or one is
+		// already running for another view.
+		self.waitingPath = path;
+		NSHashTable *waiters = [TGLottieWaiters() objectForKey:path];
+		if (!waiters){
+			waiters = [NSHashTable weakObjectsHashTable];
+			[TGLottieWaiters() setObject:waiters forKey:path];
+		}
+		[waiters addObject:self];
+	}
 	if (!model && ![TGLottieBuilding() containsObject:path]) {
 		// First look at this file: the parse and the first raster never run
 		// on the main thread, so the scroll is not held by them. Until they

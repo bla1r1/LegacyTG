@@ -151,6 +151,7 @@ static NSDictionary *gfSampleCollectible(void) {
 	XCTAssertEqualObjects(d[@"emoji"], @"🎂");
 	XCTAssertEqualObjects(d[@"thumbFileId"], @(101));
 	XCTAssertEqualObjects(d[@"stickerFileId"], @(202));
+	XCTAssertEqualObjects(d[@"stickerFormat"], @"webp");
 }
 
 - (void)testFlatten_CollectibleGiftCommonFields {
@@ -177,11 +178,69 @@ static NSDictionary *gfSampleCollectible(void) {
 	XCTAssertEqualObjects(d[@"number"], @(42));
 	XCTAssertEqualObjects(d[@"modelName"], @"Jack-o-Lantern");
 	XCTAssertEqualObjects(d[@"modelThumbFileId"], @(303));
+	XCTAssertEqualObjects(d[@"modelStickerFileId"], @(404));
+	XCTAssertEqualObjects(d[@"modelStickerFormat"], @"webp");
 	XCTAssertEqualObjects(d[@"symbolName"], @"Ghost");
 	XCTAssertEqualObjects(d[@"backdropName"], @"Haunted Sunset");
 	XCTAssertEqualObjects(d[@"backdropCenterColor"], @(0xFFAA00));
 	XCTAssertEqualObjects(d[@"backdropEdgeColor"], @(0x330066));
 	XCTAssertEqualObjects(d[@"backdropTextColor"], @(0xFFEEDD));
+}
+
+- (void)testFlatten_RegularGiftStickerFormats {
+	NSDictionary *inTgs = @{
+		@"gift" : @{
+			@"gift" : @{
+				@"sticker" : gfRegularSticker(nil, nil, @"stickerFormatTgs", @(201), @""),
+			},
+		},
+	};
+	NSDictionary *dTgs = TGFlattenReceivedGift(inTgs);
+	XCTAssertEqualObjects(dTgs[@"stickerFileId"], @(201));
+	XCTAssertEqualObjects(dTgs[@"stickerFormat"], @"tgs");
+
+	NSDictionary *inWebm = @{
+		@"gift" : @{
+			@"gift" : @{
+				@"sticker" : gfRegularSticker(nil, nil, @"stickerFormatWebm", @(202), @""),
+			},
+		},
+	};
+	NSDictionary *dWebm = TGFlattenReceivedGift(inWebm);
+	XCTAssertEqualObjects(dWebm[@"stickerFileId"], @(202));
+	XCTAssertEqualObjects(dWebm[@"stickerFormat"], @"webm");
+}
+
+- (void)testFlatten_CollectibleGiftModelStickerFormats {
+	NSDictionary *inTgs = @{
+		@"gift" : @{
+			@"@type" : @"sentGiftUpgraded",
+			@"gift"  : @{
+				@"@type" : @"upgradedGift",
+				@"model" : @{
+					@"sticker" : gfRegularSticker(nil, nil, @"stickerFormatTgs", @(301), @""),
+				},
+			},
+		},
+	};
+	NSDictionary *dTgs = TGFlattenReceivedGift(inTgs);
+	XCTAssertEqualObjects(dTgs[@"modelStickerFileId"], @(301));
+	XCTAssertEqualObjects(dTgs[@"modelStickerFormat"], @"tgs");
+
+	NSDictionary *inWebm = @{
+		@"gift" : @{
+			@"@type" : @"sentGiftUpgraded",
+			@"gift"  : @{
+				@"@type" : @"upgradedGift",
+				@"model" : @{
+					@"sticker" : gfRegularSticker(nil, nil, @"stickerFormatWebm", @(302), @""),
+				},
+			},
+		},
+	};
+	NSDictionary *dWebm = TGFlattenReceivedGift(inWebm);
+	XCTAssertEqualObjects(dWebm[@"modelStickerFileId"], @(302));
+	XCTAssertEqualObjects(dWebm[@"modelStickerFormat"], @"webm");
 }
 
 - (void)testFlatten_NoteFromFormattedText {

@@ -1,3 +1,4 @@
+#import "UIImage+WebP.h"
 #import "TGTextDraw.h"
 #import "TGIconsInternal.h"
 #import "TGStyle.h"
@@ -287,6 +288,10 @@ static UIImage *TGGlyphAvatar(CGFloat side, void (^draw)(CGContextRef ctx, CGFlo
 	// crash that killed entering a profile, B15's second act). The data-backed
 	// path is the one that survived 117 chats of avatars on the same device.
 	UIImage *loaded = [UIImage imageWithContentsOfFile:path];
+	// UIImage reads no WebP before iOS 14; sticker and gift thumbnails are
+	// WebP, so they came back nil and drew nothing.
+	if (!loaded && [path.pathExtension.lowercaseString isEqualToString:@"webp"])
+		loaded = [UIImage convertFromWebP:path compressedData:nil error:nil];
 	if (!loaded)
 		return nil;
 	return [self decodedImage:loaded fittingSize:target fill:fill scale:scale];
