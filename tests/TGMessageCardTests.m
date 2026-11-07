@@ -1197,4 +1197,66 @@ static NSDictionary *mcUser(id userId, NSString *firstName, NSString *lastName, 
 	XCTAssertEqual((int64_t)sNum.actionChatId, (int64_t)sStr.actionChatId);
 }
 
+#pragma mark - Community Card
+
+- (void)testCommunityCard_Channel_BuildsCard {
+	NSDictionary *row = @{
+		@"id" : @101,
+		@"kind" : @"messageChatAddedToCommunity",
+		@"communityId" : @555,
+		@"channelPost" : @YES,
+	};
+	TGMessageCard *card = TGMessageCardForRow(row);
+	XCTAssertTrue(card != nil);
+	XCTAssertEqualObjects(card.kicker, @"Community");
+	XCTAssertEqualObjects(card.title, @"Channel added to a community");
+	XCTAssertEqualObjects(card.buttonTitle, @"View");
+	XCTAssertEqual(card.action, TGMessageCardActionOpenCommunity);
+	XCTAssertEqual((int64_t)card.actionTargetId, (int64_t)555);
+}
+
+- (void)testCommunityCard_Group_BuildsCard {
+	NSDictionary *row = @{
+		@"id" : @102,
+		@"kind" : @"messageChatAddedToCommunity",
+		@"communityId" : @777,
+		@"channelPost" : @NO,
+	};
+	TGMessageCard *card = TGMessageCardForRow(row);
+	XCTAssertTrue(card != nil);
+	XCTAssertEqualObjects(card.kicker, @"Community");
+	XCTAssertEqualObjects(card.title, @"Group added to a community");
+	XCTAssertEqualObjects(card.buttonTitle, @"View");
+	XCTAssertEqual(card.action, TGMessageCardActionOpenCommunity);
+	XCTAssertEqual((int64_t)card.actionTargetId, (int64_t)777);
+}
+
+- (void)testCommunityCard_UnknownChat_BuildsCard {
+	NSDictionary *row = @{
+		@"id" : @103,
+		@"kind" : @"messageChatAddedToCommunity",
+		@"communityId" : @888,
+	};
+	TGMessageCard *card = TGMessageCardForRow(row);
+	XCTAssertTrue(card != nil);
+	XCTAssertEqualObjects(card.kicker, @"Community");
+	XCTAssertEqualObjects(card.title, @"Chat added to a community");
+	XCTAssertEqualObjects(card.buttonTitle, @"View");
+	XCTAssertEqual(card.action, TGMessageCardActionOpenCommunity);
+	XCTAssertEqual((int64_t)card.actionTargetId, (int64_t)888);
+}
+
+- (void)testCommunityCard_StringCommunityId_Matches {
+	NSDictionary *row = @{
+		@"id" : @104,
+		@"kind" : @"messageChatAddedToCommunity",
+		@"communityId" : @"999",
+		@"isChannel" : @YES,
+	};
+	TGMessageCard *card = TGMessageCardForRow(row);
+	XCTAssertTrue(card != nil);
+	XCTAssertEqualObjects(card.title, @"Channel added to a community");
+	XCTAssertEqual((int64_t)card.actionTargetId, (int64_t)999);
+}
+
 @end

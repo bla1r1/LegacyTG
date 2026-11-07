@@ -425,6 +425,45 @@ static NSDictionary *fxTextContent(NSString *text) {
 	XCTAssertEqual([flat[@"viewCount"] integerValue], (NSInteger)0);
 }
 
+- (void)testFlatten_AuthorSignatureAndViewsPresent {
+	NSDictionary *flat = TGFlattenMessage(fxMsg(fxTextContent(@"channel news"), @{
+		@"author_signature" : @"Chief Editor",
+		@"interaction_info" : @{@"view_count" : @(1250)}
+	}));
+	XCTAssertEqualObjects(flat[@"authorSignature"], @"Chief Editor");
+	XCTAssertEqualObjects(flat[@"viewCount"], @(1250));
+}
+
+- (void)testFlatten_AuthorSignatureAbsentWhenMissingOrEmpty {
+	NSDictionary *flat = TGFlattenMessage(fxMsg(fxTextContent(@"unsigned post"), nil));
+	XCTAssertEqualObjects(flat[@"authorSignature"], @"");
+	XCTAssertEqualObjects(flat[@"viewCount"], @(0));
+
+	NSDictionary *emptySig = TGFlattenMessage(fxMsg(fxTextContent(@"empty"), @{
+		@"author_signature" : @""
+	}));
+	XCTAssertEqualObjects(emptySig[@"authorSignature"], @"");
+}
+
+- (void)testFlatten_AuthorSignatureHandlesNullAndWrongTypes {
+	NSDictionary *flat = TGFlattenMessage(fxMsg(fxTextContent(@"post"), @{
+		@"author_signature" : [NSNull null],
+		@"interaction_info" : [NSNull null]
+	}));
+	XCTAssertEqualObjects(flat[@"authorSignature"], @"");
+	XCTAssertEqualObjects(flat[@"viewCount"], @(0));
+}
+
+- (void)testFlatten_ViewCountPresentAndAbsent {
+	NSDictionary *withViews = TGFlattenMessage(fxMsg(fxTextContent(@"views"), @{
+		@"interaction_info" : @{@"view_count" : @(42)}
+	}));
+	XCTAssertEqualObjects(withViews[@"viewCount"], @(42));
+
+	NSDictionary *withoutViews = TGFlattenMessage(fxMsg(fxTextContent(@"no views"), @{}));
+	XCTAssertEqualObjects(withoutViews[@"viewCount"], @(0));
+}
+
 - (void)testFlatten_RichMessageUnpacksBlocks {
 	NSDictionary *richContent = @{
 		@"@type" : @"messageRichMessage",
@@ -871,6 +910,38 @@ static NSDictionary *pmPaidMediaMsgContent(id starCount, NSString *caption, NSAr
 	XCTAssertEqualObjects(flat[@"paidPreview"], @YES);
 	XCTAssertEqualObjects(flat[@"mediaWidth"], @(200));
 	XCTAssertEqualObjects(flat[@"mediaHeight"], @(200));
+}
+
+#pragma mark - Community ID flattening
+
+- (void)testChatAddedToCommunity_FlattensCommunityId {
+	NSDictionary *content = @{
+		@"@type" : @"messageChatAddedToCommunity",
+		@"community_id" : @(12345),
+	};
+	NSDictionary *flat = TGFlattenMessage(fxMsg(content, nil));
+	XCTAssertEqualObjects(flat[@"kind"], @"messageChatAddedToCommunity");
+	XCTAssertEqualObjects(flat[@"communityId"], @(12345));
+}
+
+- (void)testChatJoinFromCommunity_FlattensCommunityId {
+	NSDictionary *content = @{
+		@"@type" : @"messageChatJoinFromCommunity",
+		@"community_id" : @(67890),
+	};
+	NSDictionary *flat = TGFlattenMessage(fxMsg(content, nil));
+	XCTAssertEqualObjects(flat[@"kind"], @"messageChatJoinFromCommunity");
+	XCTAssertEqualObjects(flat[@"communityId"], @(67890));
+}
+
+- (void)testChatAddedToCommunity_StringCommunityId {
+	NSDictionary *content = @{
+		@"@type" : @"messageChatAddedToCommunity",
+		@"community_id" : @"9876543210",
+	};
+	NSDictionary *flat = TGFlattenMessage(fxMsg(content, nil));
+	XCTAssertEqualObjects(flat[@"kind"], @"messageChatAddedToCommunity");
+	XCTAssertEqual([flat[@"communityId"] longLongValue], 9876543210LL);
 }
 
 @end

@@ -26,7 +26,7 @@ TGMessageCard *TGChatCardForRow(NSDictionary *m) {
 
 - (BOOL)configureServiceCell:(TGBubbleCell *)cell message:(NSDictionary *)m layout:(TGMessageLayout *)layout isMine:(BOOL)mine indexPath:(NSIndexPath *)indexPath {
 	// Service messages & separators
-	if (layout.isService) {
+	if (layout.isService && !layout.isCard) {
 		TGTheme *serviceTheme = [TGTheme shared];
 		NSString *line = [self serviceLineForMessage:m];
 

@@ -2,6 +2,16 @@ Channel-specific behaviour: posting, admin surface, comments, views, signatures,
 
 Counts: 34 done, 13 partial, 8 missing, 1 dev-only.
 
+**What is built.** Channels are part of M7 and gained their own tools there: posting, read-only
+subscriber chrome, join and mute, subscriber count, settings, usernames and
+public/private type, comments through the linked discussion group, direct
+messages, send-as, reactions, stickers, accent and theme, and similar
+channels.
+
+M36 owns the administration detail: per-admin rights, invite-link rows,
+statistics graphs, boosts and the event log. The bubble still drops the author
+forward counts, which are M44; views and the signature went into the stamp on 7 November 2026.
+
 | Feature | Official | Here | Where | Note |
 |---|---|---|---|---|
 | Create a channel | Official: Create a channel | partial | `Controllers/TGChatListViewController.m:1282` | Compose sheet sends `createSupergroup` with `is_channel`, then asks for a name in an alert. |
@@ -20,8 +30,8 @@ Counts: 34 done, 13 partial, 8 missing, 1 dev-only.
 | Invite links | Official: Invite links | partial | `Controllers/TGGroupSettingsViewController.m:1908` | Alert of raw URLs and "N joined"; no dates, limits, QR or separate revoked section. |
 | Subscription invite links | Official: Subscription invite links | done | `Controllers/TGGroupSettingsViewController.m:2160` | Creates a paid subscription link. |
 | Sign messages | Official: Sign messages | done | `Controllers/TGGroupSettingsViewController.m:576` | `sign_messages` switch in Permissions and Behaviour. |
-| Post author signature | Official: Post author signature | missing | `Core/TGMessageFlatten.m:817` | `author_signature` is read only for a forward origin; the bubble never prints it. |
-| View count on a bubble | Official: View count on a bubble | partial | `Controllers/TGChatViewController+Actions.m:579` | "Viewed by N" in the hold menu and readers sheet; the bubble has no eye or count. |
+| Post author signature | Official: Post author signature | done | `Controllers/TGChatViewController+Layout.m` (`stampFor:`) | Signed posts print the signature before the views in the stamp. |
+| View count on a bubble | Official: View count on a bubble | done | `Controllers/TGChatViewController+Cells.m` (`placeViewsEyeIn:`) | Eye glyph and compact count (`TGCompactCount`) before the time on every post kind; checked on the 4S on 7 November 2026. |
 | Forward count | Official: Forward count | missing | `Core/TGMessageFlatten.m:906` | `forward_count` is not flattened or drawn. |
 | Message-level view statistics | Official: Message-level view statistics | done | `Controllers/TGChatViewController+Actions.m:1464` | Views and reaction graphs in the Message Info sheet. |
 | Channel statistics screen | Official: Channel statistics screen | partial | `Controllers/TGChatToolsViewController.m:301` | `getChatStatistics` rows with totals; no graphs or per-post sections. |
@@ -33,7 +43,7 @@ Counts: 34 done, 13 partial, 8 missing, 1 dev-only.
 | Create a discussion group | Official: Create a discussion group | done | `Controllers/TGChatToolsViewController.m:634` | `chooseDiscussionGroup` links or creates one. |
 | Discussion row with the peer name | Official: Discussion row with the peer name | partial | `Controllers/TGChatToolsViewController.m:184` | "Discussion Group — Linked/None" in Chat Tools; no peer name. |
 | Channel Direct Messages | Official: Channel Direct Messages | done | `Controllers/TGGroupSettingsViewController.m:1719` | Enables/manages the channel's DM tab and topics. |
-| Direct Messages profile row | Official: Direct Messages profile row | done | `Controllers/TGProfileViewController.m:976` | Opens or manages the channel's DM chat. |
+| Direct Messages profile row | Official: Direct Messages profile row | done | `Controllers/TGProfileViewController+Actions.m` | The "message" tile opens the channel's DM chat; the chat's bottom bar has the same button. |
 | Channel admin rights | Official: Channel admin rights | partial | `Core/TGClient+Groups.m:395` | Promote sends the default `TGAdminRights()`; no per-administrator checkbox screen. |
 | Default admin rights presets | Official: Default admin rights presets | done | `Controllers/TGAdminRightsViewController.m:115` | Group and channel defaults chosen from Telegram's presets. |
 | Granular member permissions | Official: Granular member permissions | partial | `Controllers/TGGroupSettingsViewController.m:565` | Three presets only: all, messages only, read only. |

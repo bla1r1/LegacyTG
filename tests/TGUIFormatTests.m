@@ -62,4 +62,34 @@
 	XCTAssertEqualObjects(TGUIFormatScheduledWhen(0, base), @"");
 }
 
+- (void)testCompactCount {
+	// 0..999 as is
+	XCTAssertEqualObjects(TGCompactCount(0), @"0");
+	XCTAssertEqualObjects(TGCompactCount(42), @"42");
+	XCTAssertEqualObjects(TGCompactCount(999), @"999");
+	// 1K..10K with 1 decimal place, drop .0
+	XCTAssertEqualObjects(TGCompactCount(1000), @"1K");
+	XCTAssertEqualObjects(TGCompactCount(1049), @"1K");
+	XCTAssertEqualObjects(TGCompactCount(1050), @"1.1K");
+	XCTAssertEqualObjects(TGCompactCount(1234), @"1.2K");
+	XCTAssertEqualObjects(TGCompactCount(9949), @"9.9K");
+	XCTAssertEqualObjects(TGCompactCount(9950), @"10K");
+	// 10K..1M without decimal places
+	XCTAssertEqualObjects(TGCompactCount(10000), @"10K");
+	XCTAssertEqualObjects(TGCompactCount(12345), @"12K");
+	XCTAssertEqualObjects(TGCompactCount(999499), @"999K");
+	// Rollover to 1M and rounding
+	XCTAssertEqualObjects(TGCompactCount(999500), @"1M");
+	XCTAssertEqualObjects(TGCompactCount(999999), @"1M");
+	XCTAssertEqualObjects(TGCompactCount(1000000), @"1M");
+	// Below 10M with 1 decimal place
+	XCTAssertEqualObjects(TGCompactCount(1234567), @"1.2M");
+	XCTAssertEqualObjects(TGCompactCount(9949999), @"9.9M");
+	XCTAssertEqualObjects(TGCompactCount(9950000), @"10M");
+	// 10M and above
+	XCTAssertEqualObjects(TGCompactCount(12345678), @"12M");
+	// Billions
+	XCTAssertEqualObjects(TGCompactCount(1500000000), @"1.5B");
+}
+
 @end

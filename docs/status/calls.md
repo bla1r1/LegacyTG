@@ -2,6 +2,16 @@ Calls: 1:1 audio, the call UI, recent calls, group calls and video chats. Parity
 
 Counts: 41 done, 4 partial, 6 missing, 5 dev-only.
 
+**What is built.** M13 is the 1:1 audio path: `createCall`, `acceptCall`, `discardCall`,
+VoiceProcessingIO with Opus, echo cancellation, mute, speaker, the call screen
+with emoji key and rating, and call rows in chat. Recent calls, the All/Missed
+filter and the optional Calls tab landed with it.
+
+The group-call screens are wired from M7 — participants, mute/volume/hand/ban,
+messages, RTMP, recording, stream segments — but M21 still has to supply the
+RTP mixing. Video calls are M22, dev-only until the engine reaches an official
+client.
+
 | Feature | Official | Here | Where | Note |
 |---|---|---|---|---|
 | Start a 1:1 call | Official: Start a 1:1 call | done | `Calls/TGCall.mm:615` | `createCall` with the supported protocol. |

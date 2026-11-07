@@ -17,6 +17,7 @@ typedef NS_ENUM(NSInteger, TGMessageCardAction) {
 	TGMessageCardActionOpenStory,    ///< actionTargetId is the story id, actionChatId the poster
 	TGMessageCardActionOpenGiveaway, ///< actionTargetId is the giveaway message id
 	TGMessageCardActionViewGift,
+	TGMessageCardActionOpenCommunity,
 };
 
 @interface TGMessageCard : NSObject

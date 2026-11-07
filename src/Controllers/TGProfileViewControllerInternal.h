@@ -130,6 +130,11 @@ NSURL *TGProfileFirstURL(NSString *text, NSArray *entities);
 @property (nonatomic, assign) BOOL canManageDirectMessages;
 @property (nonatomic, assign) int64_t communityId;
 @property (nonatomic, strong) NSArray *similarChatIds;
+@property (nonatomic, strong) NSMutableDictionary *chatAvatars;
+@property (nonatomic, strong) NSMutableSet *requestedChatAvatars;
+@property (nonatomic, strong) NSMutableDictionary *similarChannelAvatars;
+@property (nonatomic, strong) NSMutableSet *similarChannelsRequested;
+@property (nonatomic, strong) UIImage *similarChannelsCompositeImage;
 @property (nonatomic, assign) BOOL isBot;
 @property (nonatomic, assign) BOOL birthdayToday;
 @property (nonatomic, assign) int64_t emojiStatusId;
@@ -165,6 +170,7 @@ NSURL *TGProfileFirstURL(NSString *text, NSArray *entities);
 - (void)applyAvatarImageAtPath:(NSString *)path;
 - (void)buildMusicStripIn:(UIView *)header atY:(CGFloat)y;
 - (void)musicStripTapped;
+- (void)loadSimilarChannelsAvatars;
 
 /// The description the group profile's details section reads.
 @property (nonatomic, copy) NSString *chatDescription;
@@ -186,6 +192,7 @@ NSURL *TGProfileFirstURL(NSString *text, NSArray *entities);
 /// The invite link the info card and menu copy; kept apart from the rows so
 /// a reload can name it without rebuilding the card.
 @property (nonatomic, copy) NSString *inviteLink;
+@property (nonatomic, assign) BOOL descriptionExpanded;
 
 - (void)loadOwnRole;
 - (void)updateGroupStatus;
@@ -193,6 +200,9 @@ NSURL *TGProfileFirstURL(NSString *text, NSArray *entities);
 - (BOOL)isOwnProfile;
 - (void)editProfileTapped;
 - (void)addStoryTapped;
+- (void)leaveChatTapped;
+- (void)reloadCommunityRow;
+- (void)loadCommunityPhotoOrAvatars;
 - (void)openChat:(int64_t)chatId title:(NSString *)title message:(int64_t)messageId;
 
 @end

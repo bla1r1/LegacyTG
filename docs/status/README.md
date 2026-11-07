@@ -2,6 +2,8 @@
 
 Audit of 7 November 2026 against `src/` at `1450576`. Each area file has one row per feature with the official behaviour, the state here (`done`, `partial`, `missing`, `dev-only`) and the `file:line` that was checked. A missing feature has `—` in the Where column.
 
+**What is built.** M1–M19 built the TDLib bridge, login, chat list, chat, media, stickers, groups and channels, voice notes, themes, search, stories, profiles, calls, settings, notifications, message types and custom emoji. Each area file names the milestone behind its rows; the new roadmap is [../ROADMAP.md](../ROADMAP.md), and the observed gaps with an owning milestone are in [../gaps.md](../gaps.md).
+
 ## Areas
 
 - [chat-list](chat-list.md) — 30 done, 16 partial, 22 missing, 0 dev-only. List engine, rows, badges, folders, archive, stories strip and search.
@@ -27,7 +29,7 @@ Totals: 476 done, 258 partial, 205 missing, 18 dev-only across 957 rows.
 Ranked by how often an ordinary user would hit it: chat and chat list first, then profile, media, then settings.
 
 1. **Send a file or a music track** — the attach sheet has no document or audio picker and no `inputMessageDocument` request. `chat`, `media`.
-2. **Custom emoji cannot be sent, picked or animated** — the composer drops the id, the panel has no custom-emoji tab, and text shows a still picture. `chat`, `media`, `message-types`.
+2. **Custom emoji are sent and picked, but not everywhere** — the composer keeps ids and the panel has a custom tab; animation through the sticker pipeline is not checked on a 4S, and member rows still draw no status emoji. `chat`, `media`, `message-types`.
 3. **Chat-list previews and badges** — no reaction badge, no poll-vote badge, no compact counts, no photo/video thumbnail and no type glyph. `chat-list`.
 4. **No unread badge on the Chats tab** — the root tab bar has no `badgeValue` update. `chat-list`.
 5. **No story ring on chat rows or profile avatars** — only the strip bubble has a ring. `chat-list`, `stories`, `profile`.

@@ -96,10 +96,142 @@ static const CGFloat kMusicTitleTop   = TGMetricPadSmall;
 static const CGFloat kMusicArtistTop  = TGMetricPadSmall + TGMetricLineMicro;
 static const CGFloat kMusicChevronSide = TGMetricGiftStar;
 
+static const CGFloat kMinDetailTextWidth = TGMetricActionRow;
+static const CGFloat kSimilarChannelsOverlapRatio = 2.0f / 3.0f;
+
+static int64_t TGProfileChatIdFromItem(id item) {
+	if ([item isKindOfClass:[NSDictionary class]]) {
+		id rawId = item[@"id"];
+		if ([rawId respondsToSelector:@selector(longLongValue)])
+			return [rawId longLongValue];
+	} else if ([item respondsToSelector:@selector(longLongValue)]) {
+		return [item longLongValue];
+	}
+	return 0;
+}
+
+static NSString *TGProfileRowGlyphName(NSString *kind) {
+	if (![kind isKindOfClass:[NSString class]])
+		return nil;
+	if ([kind isEqualToString:@"phone"])
+		return @"call";
+	if ([kind isEqualToString:@"username"])
+		return @"mention";
+	if ([kind isEqualToString:@"birthday"])
+		return @"star";
+	if ([kind isEqualToString:@"bio"] || [kind isEqualToString:@"about"] ||
+		[kind isEqualToString:@"note"] || [kind isEqualToString:@"addBio"])
+		return @"edit";
+	if ([kind isEqualToString:@"channel"] || [kind isEqualToString:@"linkedChat"] ||
+		[kind isEqualToString:@"community"] || [kind isEqualToString:@"similarChannels"] ||
+		[kind isEqualToString:@"directMessages"])
+		return @"chat";
+	if ([kind isEqualToString:@"businessLocation"])
+		return @"archive";
+	if ([kind isEqualToString:@"invite"])
+		return @"forward";
+	if ([kind isEqualToString:@"addContact"])
+		return @"contacts";
+	if ([kind isEqualToString:@"warning"])
+		return @"close";
+	return nil;
+}
+
+/// Overlaps up to three avatars with CoreGraphics into a single bitmap.
+/// Each circular face is clipped in the context, separated from its neighbour
+/// by a ring cut into the prior face using cardBackgroundColour.
+static UIImage *TGProfileCompositeSimilarAvatars(NSArray *images, UIColor *ringColour) {
+	if (!images.count)
+		return nil;
+	CGFloat side = TGMetricMenuGlyph;
+	CGFloat scale = [UIScreen mainScreen].scale;
+	CGFloat shift = ceilf(side * kSimilarChannelsOverlapRatio);
+	NSUInteger count = images.count;
+	CGFloat totalWidth = (count == 1) ? side : (shift * (count - 1) + side);
+	CGSize totalSize = CGSizeMake(totalWidth, side);
+
+	UIGraphicsBeginImageContextWithOptions(totalSize, NO, scale);
+	CGContextRef ctx = UIGraphicsGetCurrentContext();
+
+	CGFloat ringWidth = TGMetricBorderThick;
+	if (!ringColour)
+		ringColour = [[TGTheme shared] cardBackgroundColour];
+
+	for (NSUInteger i = 0; i < count; i++) {
+		CGFloat x = i * shift;
+		CGRect avatarRect = CGRectMake(x, 0, side, side);
+
+		if (i > 0) {
+			CGContextSaveGState(ctx);
+			CGFloat prevX = (i - 1) * shift;
+			CGRect prevRect = CGRectMake(prevX, 0, side, side);
+			UIBezierPath *prevAvatarClip = [UIBezierPath bezierPathWithOvalInRect:prevRect];
+			[prevAvatarClip addClip];
+
+			CGRect ringRect = CGRectInset(avatarRect, -ringWidth, -ringWidth);
+			UIBezierPath *ringPath = [UIBezierPath bezierPathWithOvalInRect:ringRect];
+			[ringColour setFill];
+			[ringPath fill];
+			CGContextRestoreGState(ctx);
+		}
+
+		CGContextSaveGState(ctx);
+		UIBezierPath *clipPath = [UIBezierPath bezierPathWithOvalInRect:avatarRect];
+		[clipPath addClip];
+
+		UIImage *img = images[i];
+		[img drawInRect:avatarRect];
+		CGContextRestoreGState(ctx);
+	}
+
+	UIImage *result = UIGraphicsGetImageFromCurrentImageContext();
+	UIGraphicsEndImageContext();
+	return result;
+}
+
+static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGFloat width, CGFloat maxH) {
+	if (!text.length)
+		return @"";
+	CGSize fullSize = [text sizeWithFont:font constrainedToSize:CGSizeMake(width, CGFLOAT_MAX) lineBreakMode:NSLineBreakByWordWrapping];
+	if (fullSize.height <= maxH + 1.0f)
+		return text;
+
+	NSString *moreSuffix = @"... more";
+	NSUInteger low = 0;
+	NSUInteger high = text.length;
+	NSUInteger best = 0;
+	while (low <= high) {
+		NSUInteger mid = (low + high) / 2;
+		NSString *cand = [NSString stringWithFormat:@"%@ %@", [text substringToIndex:mid], moreSuffix];
+		CGSize sz = [cand sizeWithFont:font constrainedToSize:CGSizeMake(width, CGFLOAT_MAX) lineBreakMode:NSLineBreakByWordWrapping];
+		if (sz.height <= maxH + 1.0f) {
+			best = mid;
+			low = mid + 1;
+		} else {
+			if (mid == 0) break;
+			high = mid - 1;
+		}
+	}
+	NSString *base = [text substringToIndex:best];
+	NSRange lastSpace = [base rangeOfCharacterFromSet:[NSCharacterSet whitespaceAndNewlineCharacterSet] options:NSBackwardsSearch];
+	if (lastSpace.location != NSNotFound && lastSpace.location > 0) {
+		base = [base substringToIndex:lastSpace.location];
+	}
+	base = [base stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+	if (!base.length && best > 0)
+		base = [text substringToIndex:best];
+	return [NSString stringWithFormat:@"%@... more", base];
+}
+
 @interface TGProfileDetailCell : UITableViewCell
 @property (nonatomic, strong) UIImageView *iconView;
 @property (nonatomic, strong) UILabel *titleLabel;
 @property (nonatomic, strong) UILabel *subtitleLabel;
+@property (nonatomic, assign) CGFloat iconWidth;
+@property (nonatomic, copy) NSString *rowKind;
+@property (nonatomic, assign) int64_t rowChatId;
+@property (nonatomic, strong) UIButton *rightButton;
+@property (nonatomic, copy) void (^onRightButtonTapped)(void);
 @end
 
 @implementation TGProfileDetailCell
@@ -122,8 +254,31 @@ static const CGFloat kMusicChevronSide = TGMetricGiftStar;
 		_subtitleLabel.lineBreakMode = NSLineBreakByWordWrapping;
 		_subtitleLabel.backgroundColor = [UIColor clearColor];
 		[self.contentView addSubview:_subtitleLabel];
+
+		_rightButton = [UIButton buttonWithType:UIButtonTypeCustom];
+		_rightButton.backgroundColor = [UIColor clearColor];
+		[_rightButton addTarget:self action:@selector(rightButtonTapped:) forControlEvents:UIControlEventTouchUpInside];
+		_rightButton.hidden = YES;
+		[self.contentView addSubview:_rightButton];
 	}
 	return self;
+}
+
+- (void)rightButtonTapped:(UIButton *)button {
+	if (self.onRightButtonTapped)
+		self.onRightButtonTapped();
+}
+
+- (void)prepareForReuse {
+	[super prepareForReuse];
+	_iconWidth = 0;
+	_iconView.image = nil;
+	_rowKind = nil;
+	_rowChatId = 0;
+	_rightButton.hidden = YES;
+	_onRightButtonTapped = nil;
+	_subtitleLabel.attributedText = nil;
+	_subtitleLabel.text = nil;
 }
 
 - (void)layoutSubviews {
@@ -131,20 +286,30 @@ static const CGFloat kMusicChevronSide = TGMetricGiftStar;
 	CGFloat width = self.contentView.bounds.size.width;
 	CGFloat left = TGMetricPadLarge;
 	if (self.iconView.image) {
-		self.iconView.frame = CGRectMake(left, TGMetricPadMedium, TGMetricMenuGlyph, TGMetricMenuGlyph);
-		left += TGMetricMenuGlyph + TGMetricPadMedium;
+		CGFloat iconW = (self.iconWidth > 0) ? self.iconWidth : TGMetricMenuGlyph;
+		self.iconView.frame = CGRectMake(left, TGMetricPadMedium, iconW, TGMetricMenuGlyph);
+		left += iconW + TGMetricPadMedium;
 	} else {
 		self.iconView.frame = CGRectZero;
 	}
-	CGFloat rightMargin = (self.accessoryType != UITableViewCellAccessoryNone)
-			? (TGMetricMenuGlyph + TGMetricPadMedium) : TGMetricPadLarge;
+	CGFloat rightMargin = TGMetricPadLarge;
+	if (self.rightButton && !self.rightButton.hidden) {
+		CGFloat btnSide = TGMetricMenuGlyph;
+		self.rightButton.frame = CGRectMake(width - TGMetricPadLarge - btnSide,
+				TGCenteredOrigin(self.contentView.bounds.size.height, btnSide),
+				btnSide, btnSide);
+		rightMargin = TGMetricPadLarge + btnSide + TGMetricPadMedium;
+	} else if (self.accessoryType != UITableViewCellAccessoryNone) {
+		rightMargin = TGMetricMenuGlyph + TGMetricPadMedium;
+	}
 	CGFloat textWidth = width - left - rightMargin;
-	if (textWidth < 50.0f) textWidth = 50.0f;
+	if (textWidth < kMinDetailTextWidth) textWidth = kMinDetailTextWidth;
 
 	CGFloat y = TGMetricPadSmall;
 	if (self.titleLabel.text.length) {
-		self.titleLabel.frame = CGRectMake(left, y, textWidth, TGMetricLineCaption);
-		y += TGMetricLineCaption + TGMetricPadTiny;
+		CGFloat titleH = [self.rowKind isEqualToString:@"community"] ? TGMetricLineBody : TGMetricLineCaption;
+		self.titleLabel.frame = CGRectMake(left, y, textWidth, titleH);
+		y += titleH + TGMetricPadTiny;
 	} else {
 		self.titleLabel.frame = CGRectZero;
 	}
@@ -175,6 +340,10 @@ static const CGFloat kMusicChevronSide = TGMetricGiftStar;
 		_memberCount = 0;
 		_canManage = NO;
 		_canInvite = NO;
+		_chatAvatars = [NSMutableDictionary dictionary];
+		_requestedChatAvatars = [NSMutableSet set];
+		_similarChannelAvatars = [NSMutableDictionary dictionary];
+		_similarChannelsRequested = [NSMutableSet set];
 	}
 	return self;
 }
@@ -278,6 +447,10 @@ static const CGFloat kMusicChevronSide = TGMetricGiftStar;
 	self.tableView.backgroundColor = [theme groupedBackgroundColour];
 	self.tableView.separatorColor = [theme separatorColour];
 	[theme styleNavigationBar:self.navigationController.navigationBar];
+	if (self.similarChannelsCompositeImage) {
+		self.similarChannelsCompositeImage = nil;
+		[self checkAndCompositeSimilarChannelsAvatars];
+	}
 }
 
 /// The profile as the current client draws it: a large picture centred, the
@@ -633,56 +806,81 @@ static const CGFloat kMusicChevronSide = TGMetricGiftStar;
 			me.hasDirectMessages = [info[@"hasDirectMessages"] boolValue];
 			me.canManageDirectMessages = [info[@"canManageDirectMessages"] boolValue];
 			[me updateGroupStatus];
-			NSMutableArray *rows = [NSMutableArray array];
-			if ([info[@"description"] length])
-				[rows addObject:@{@"kind" : @"about", @"label" : @"about",
-						@"value" : info[@"description"]}];
-			// No administrator count: the member rows carry an Owner or
-			// Admin badge beside the people who hold that role, which says
-			// who they are instead of only how many there are.
-			if (me.inviteLink.length)
-				[rows addObject:@{@"kind" : @"invite", @"label" : @"invite link",
-						@"value" : me.inviteLink}];
-			if (me.linkedChatTitle.length)
-				[rows addObject:@{@"kind" : @"linkedChat",
-						@"label" : (me.isChannel ? @"discussion" : @"linked channel"),
-						@"value" : me.linkedChatTitle}];
 			me.communityId = [info[@"communityId"] longLongValue];
+			NSMutableArray *rows = [NSMutableArray array];
+
 			if (me.communityId != 0) {
-				NSDictionary *fullComm = [[TGClient shared] cachedCommunityFullInfo:me.communityId];
-				NSArray *commChats = fullComm[@"chats"];
-				NSString *commTitle = nil;
-				if (commChats.count > 0) {
-					commTitle = [NSString stringWithFormat:@"%lu chats and groups", (unsigned long)commChats.count];
-				} else {
-					for (NSDictionary *comm in [TGClient shared].communities) {
-						if ([comm[@"id"] longLongValue] == me.communityId) {
-							commTitle = comm[@"name"];
-							break;
-						}
-					}
-					if (!commTitle.length) {
-						commTitle = @"Chat pool";
+				NSDictionary *commRecord = nil;
+				for (NSDictionary *c in [TGClient shared].communities) {
+					if ([c[@"id"] longLongValue] == me.communityId) {
+						commRecord = c;
+						break;
 					}
 				}
-				[rows addObject:@{@"kind" : @"community",
-						@"label" : @"community",
-						@"value" : commTitle}];
+				NSDictionary *fullComm = [[TGClient shared] cachedCommunityFullInfo:me.communityId];
+				NSString *commName = commRecord[@"name"];
+				if (!commName.length && [fullComm[@"name"] isKindOfClass:[NSString class]]) {
+					commName = fullComm[@"name"];
+				}
+				if (!commName.length) {
+					commName = @"Community";
+				}
+				NSArray *commChats = [fullComm[@"chats"] isKindOfClass:[NSArray class]] ? fullComm[@"chats"] : @[];
+				NSString *commSubtitle = nil;
+				if (commChats.count > 0) {
+					commSubtitle = [NSString stringWithFormat:@"Community with %lu chats", (unsigned long)commChats.count];
+				} else {
+					commSubtitle = @"Community";
+				}
+				[rows addObject:@{
+					@"kind" : @"community",
+					@"label" : commName,
+					@"value" : commSubtitle,
+					@"communityId" : @(me.communityId)
+				}];
 			}
-			if (me.isChannel && me.similarChatIds.count)
-				[rows addObject:@{@"kind" : @"similarChannels",
-						@"label" : @"similar channels",
-						@"value" : [NSString stringWithFormat:@"%lu channels", (unsigned long)me.similarChatIds.count]}];
+
+			if (me.inviteLink.length)
+				[rows addObject:@{
+					@"kind" : @"invite",
+					@"label" : (me.isChannel ? @"share link" : @"invite link"),
+					@"value" : me.inviteLink
+				}];
+
+			if ([info[@"description"] length])
+				[rows addObject:@{
+					@"kind" : @"about",
+					@"label" : (me.isChannel ? @"description" : @"about"),
+					@"value" : info[@"description"]
+				}];
+
+			if (me.linkedChatTitle.length)
+				[rows addObject:@{
+					@"kind" : @"linkedChat",
+					@"label" : (me.isChannel ? @"discussion" : @"linked channel"),
+					@"value" : me.linkedChatTitle
+				}];
+
+			if (me.isChannel && me.similarChatIds.count) {
+				[rows addObject:@{
+					@"kind" : @"similarChannels",
+					@"label" : @"similar channels",
+					@"value" : [NSString stringWithFormat:@"%lu channels", (unsigned long)me.similarChatIds.count]}];
+				[me loadSimilarChannelsAvatars];
+			}
 			me.details = rows;
 			[me buildHeader];
 			[me reloadTableDebounced];
 
-			if (me.communityId != 0 && ![[TGClient shared] cachedCommunityFullInfo:me.communityId]) {
-				[[TGClient shared] communityFullInfo:me.communityId completion:^(NSDictionary *cinfo, NSString *err){
-					TGProfileViewController *again = weakSelf;
-					if (!again) return;
-					[again reloadTableDebounced];
-				}];
+			if (me.communityId != 0) {
+				[me loadCommunityPhotoOrAvatars];
+				if (![[TGClient shared] cachedCommunityFullInfo:me.communityId]) {
+					[[TGClient shared] communityFullInfo:me.communityId completion:^(NSDictionary *cinfo, NSString *err){
+						TGProfileViewController *again = weakSelf;
+						if (!again) return;
+						[again reloadCommunityRow];
+					}];
+				}
 			}
 
 			if (me.isChannel){
@@ -706,6 +904,7 @@ static const CGFloat kMusicChevronSide = TGMetricGiftStar;
 						again.details = updated;
 						[again reloadTableDebounced];
 					}
+					[again loadSimilarChannelsAvatars];
 				}];
 			}
 
@@ -733,6 +932,13 @@ static const CGFloat kMusicChevronSide = TGMetricGiftStar;
 								@"value" : again.linkedChatTitle}];
 						again.details = updated;
 						[again reloadTableDebounced];
+					}
+					int64_t targetLinkedId = again.linkedChatId;
+					if (targetLinkedId && !again.chatAvatars[@(targetLinkedId)]) {
+						NSNumber *fileId = linkedChat[@"photo"][@"small"][@"id"];
+						if ([fileId isKindOfClass:[NSNumber class]] && fileId.integerValue > 0) {
+							[again downloadAvatarWithFileId:fileId.integerValue chatId:targetLinkedId kind:@"linkedChat" cell:nil];
+						}
 					}
 				}];
 			}
@@ -815,7 +1021,7 @@ static const CGFloat kMusicChevronSide = TGMetricGiftStar;
 					weakSelf.storedMediaKind = mainTab;
 			}
 			int64_t personalChatId = [info[@"personalChatId"] longLongValue];
-			if (personalChatId > 0)
+			if (personalChatId != 0)   // a channel id is negative
 				[weakSelf fetchPersonalChannel:personalChatId];
 			[weakSelf buildHeader];
 			[weakSelf reloadTableDebounced];
@@ -938,6 +1144,9 @@ static const CGFloat kMusicChevronSide = TGMetricGiftStar;
 			@"title" : title,
 			@"photoFileId" : [photoId isKindOfClass:NSNumber.class] ? photoId : @0,
 		};
+		if ([photoId isKindOfClass:[NSNumber class]] && photoId.integerValue > 0 && !me.chatAvatars[@(chatId)]) {
+			[me downloadAvatarWithFileId:photoId.integerValue chatId:chatId kind:@"channel" cell:nil];
+		}
 		NSMutableArray *rows = [me.details mutableCopy];
 		[rows insertObject:@{@"kind" : @"channel", @"label" : @"personal channel",
 				@"value" : title} atIndex:0];
@@ -953,6 +1162,370 @@ static const CGFloat kMusicChevronSide = TGMetricGiftStar;
 
 - (void)doReloadTable {
 	[self.tableView reloadData];
+}
+
+#pragma mark - row avatars and composite icons
+
+- (void)loadAvatarForChatId:(int64_t)chatId kind:(NSString *)kind cell:(TGProfileDetailCell *)cell {
+	if (!chatId)
+		return;
+	if (self.chatAvatars[@(chatId)])
+		return;
+	if ([self.requestedChatAvatars containsObject:@(chatId)])
+		return;
+	[self.requestedChatAvatars addObject:@(chatId)];
+
+	NSNumber *photoFileId = [[TGClient shared] photoFileIdForChat:chatId];
+	if (![photoFileId isKindOfClass:[NSNumber class]] || photoFileId.integerValue <= 0) {
+		if ([kind isEqualToString:@"channel"]) {
+			NSNumber *pId = self.personalChannel[@"photoFileId"];
+			if ([pId isKindOfClass:[NSNumber class]] && pId.integerValue > 0) {
+				photoFileId = pId;
+			}
+		}
+	}
+	if ([photoFileId isKindOfClass:[NSNumber class]] && photoFileId.integerValue > 0) {
+		[self downloadAvatarWithFileId:photoFileId.integerValue chatId:chatId kind:kind cell:cell];
+		return;
+	}
+
+	__weak typeof(self) weakSelf = self;
+	__weak TGProfileDetailCell *weakCell = cell;
+	[[TGClient shared] chatRecordForChat:chatId completion:^(NSDictionary *chat){
+		TGProfileViewController *me = weakSelf;
+		if (!me || ![chat isKindOfClass:[NSDictionary class]])
+			return;
+		NSNumber *fileId = chat[@"photo"][@"small"][@"id"];
+		if ([fileId isKindOfClass:[NSNumber class]] && fileId.integerValue > 0) {
+			[me downloadAvatarWithFileId:fileId.integerValue chatId:chatId kind:kind cell:weakCell];
+		}
+	}];
+}
+
+- (void)downloadAvatarWithFileId:(NSInteger)fileId chatId:(int64_t)chatId kind:(NSString *)kind cell:(TGProfileDetailCell *)cell {
+	__weak typeof(self) weakSelf = self;
+	__weak TGProfileDetailCell *weakCell = cell;
+	[[TGClient shared] downloadFile:fileId
+						   priority:TGDownloadPriorityAvatar
+						 completion:^(NSString *path){
+		if (!path.length)
+			return;
+		CGFloat side = TGMetricMenuGlyph;
+		CGFloat scale = [UIScreen mainScreen].scale;
+		dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+			UIImage *image = [TGIcons decodedImageAtPath:path
+											 fittingSize:CGSizeMake(side, side)
+													fill:YES
+												   scale:scale];
+			UIImage *round = [TGIcons roundedImage:image
+											 size:CGSizeMake(side, side)
+										   radius:TGHalf(side)
+										  corners:UIRectCornerAllCorners];
+			if (!round)
+				return;
+			dispatch_async(dispatch_get_main_queue(), ^{
+				TGProfileViewController *me = weakSelf;
+				if (me) {
+					me.chatAvatars[@(chatId)] = round;
+				}
+				TGProfileDetailCell *c = weakCell;
+				if (c && [c.rowKind isEqualToString:kind] && c.rowChatId == chatId) {
+					c.iconView.image = round;
+				}
+				if (me && [kind isEqualToString:@"communityChat"]) {
+					NSDictionary *fullComm = [[TGClient shared] cachedCommunityFullInfo:me.communityId];
+					NSArray *chats = [fullComm[@"chats"] isKindOfClass:[NSArray class]] ? fullComm[@"chats"] : @[];
+					NSUInteger count = MIN((NSUInteger)3, chats.count);
+					NSMutableArray *cids = [NSMutableArray arrayWithCapacity:count];
+					for (NSUInteger i = 0; i < count; i++) {
+						int64_t cId = [chats[i][@"chatId"] longLongValue];
+						if (cId != 0) [cids addObject:@(cId)];
+					}
+					[me checkAndCompositeCommunityAvatars:cids];
+				}
+			});
+		});
+	}];
+}
+
+- (void)loadSimilarChannelsAvatars {
+	if (!self.isChannel || !self.similarChatIds.count)
+		return;
+	if (self.similarChannelsCompositeImage)
+		return;
+
+	NSUInteger count = MIN((NSUInteger)3, self.similarChatIds.count);
+	for (NSUInteger i = 0; i < count; i++) {
+		int64_t cId = TGProfileChatIdFromItem(self.similarChatIds[i]);
+		if (!cId)
+			continue;
+		if (self.similarChannelAvatars[@(cId)])
+			continue;
+		if ([self.similarChannelsRequested containsObject:@(cId)])
+			continue;
+		[self.similarChannelsRequested addObject:@(cId)];
+
+		NSNumber *photoFileId = [[TGClient shared] photoFileIdForChat:cId];
+		if ([photoFileId isKindOfClass:[NSNumber class]] && photoFileId.integerValue > 0) {
+			[self downloadSimilarAvatarWithFileId:photoFileId.integerValue chatId:cId];
+			continue;
+		}
+
+		__weak typeof(self) weakSelf = self;
+		[[TGClient shared] chatRecordForChat:cId completion:^(NSDictionary *chat){
+			TGProfileViewController *me = weakSelf;
+			if (!me || ![chat isKindOfClass:[NSDictionary class]])
+				return;
+			NSNumber *fileId = chat[@"photo"][@"small"][@"id"];
+			if ([fileId isKindOfClass:[NSNumber class]] && fileId.integerValue > 0) {
+				[me downloadSimilarAvatarWithFileId:fileId.integerValue chatId:cId];
+			} else {
+				NSString *title = chat[@"title"] ?: @"";
+				CGFloat side = TGMetricMenuGlyph;
+				UIImage *initials = [TGIcons avatarWithInitials:[TGIcons initialsForTitle:title]
+														   size:side
+													   colourId:cId];
+				if (initials) {
+					[me handleSimilarAvatarLoaded:initials forChatId:cId];
+				}
+			}
+		}];
+	}
+}
+
+- (void)downloadSimilarAvatarWithFileId:(NSInteger)fileId chatId:(int64_t)chatId {
+	__weak typeof(self) weakSelf = self;
+	[[TGClient shared] downloadFile:fileId
+						   priority:TGDownloadPriorityAvatar
+						 completion:^(NSString *path){
+		TGProfileViewController *me = weakSelf;
+		if (!me)
+			return;
+		CGFloat side = TGMetricMenuGlyph;
+		CGFloat scale = [UIScreen mainScreen].scale;
+		if (!path.length) {
+			NSString *title = [[TGClient shared] titleForChat:chatId] ?: @"";
+			UIImage *initials = [TGIcons avatarWithInitials:[TGIcons initialsForTitle:title]
+													   size:side
+												   colourId:chatId];
+			if (initials) {
+				[me handleSimilarAvatarLoaded:initials forChatId:chatId];
+			}
+			return;
+		}
+		dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+			UIImage *image = [TGIcons decodedImageAtPath:path
+											 fittingSize:CGSizeMake(side, side)
+													fill:YES
+												   scale:scale];
+			UIImage *round = [TGIcons roundedImage:image
+											 size:CGSizeMake(side, side)
+										   radius:TGHalf(side)
+										  corners:UIRectCornerAllCorners];
+			dispatch_async(dispatch_get_main_queue(), ^{
+				TGProfileViewController *again = weakSelf;
+				if (!again)
+					return;
+				UIImage *picture = round;
+				if (!picture) {
+					NSString *title = [[TGClient shared] titleForChat:chatId] ?: @"";
+					picture = [TGIcons avatarWithInitials:[TGIcons initialsForTitle:title]
+													 size:side
+												 colourId:chatId];
+				}
+				if (picture) {
+					[again handleSimilarAvatarLoaded:picture forChatId:chatId];
+				}
+			});
+		});
+	}];
+}
+
+- (void)handleSimilarAvatarLoaded:(UIImage *)avatar forChatId:(int64_t)chatId {
+	if (!avatar)
+		return;
+	self.similarChannelAvatars[@(chatId)] = avatar;
+	[self checkAndCompositeSimilarChannelsAvatars];
+}
+
+- (void)checkAndCompositeSimilarChannelsAvatars {
+	NSUInteger count = MIN((NSUInteger)3, self.similarChatIds.count);
+	if (count == 0)
+		return;
+	NSMutableArray *images = [NSMutableArray arrayWithCapacity:count];
+	for (NSUInteger i = 0; i < count; i++) {
+		int64_t cId = TGProfileChatIdFromItem(self.similarChatIds[i]);
+		UIImage *img = self.similarChannelAvatars[@(cId)];
+		if (!img)
+			return;
+		[images addObject:img];
+	}
+
+	UIColor *ringColour = [[TGTheme shared] cardBackgroundColour];
+	__weak typeof(self) weakSelf = self;
+	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+		UIImage *composite = TGProfileCompositeSimilarAvatars(images, ringColour);
+		dispatch_async(dispatch_get_main_queue(), ^{
+			TGProfileViewController *me = weakSelf;
+			if (!me || !composite)
+				return;
+			me.similarChannelsCompositeImage = composite;
+			[me reloadTableDebounced];
+		});
+	});
+}
+
+- (void)reloadCommunityRow {
+	if (self.communityId == 0) return;
+	NSDictionary *commRecord = nil;
+	for (NSDictionary *c in [TGClient shared].communities) {
+		if ([c[@"id"] longLongValue] == self.communityId) {
+			commRecord = c;
+			break;
+		}
+	}
+	NSDictionary *fullComm = [[TGClient shared] cachedCommunityFullInfo:self.communityId];
+	NSString *commName = commRecord[@"name"];
+	if (!commName.length && [fullComm[@"name"] isKindOfClass:[NSString class]]) {
+		commName = fullComm[@"name"];
+	}
+	if (!commName.length) {
+		commName = @"Community";
+	}
+	NSArray *commChats = [fullComm[@"chats"] isKindOfClass:[NSArray class]] ? fullComm[@"chats"] : @[];
+	NSString *commSubtitle = nil;
+	if (commChats.count > 0) {
+		commSubtitle = [NSString stringWithFormat:@"Community with %lu chats", (unsigned long)commChats.count];
+	} else {
+		commSubtitle = @"Community";
+	}
+
+	NSMutableArray *updated = [self.details mutableCopy];
+	BOOL found = NO;
+	for (NSUInteger i = 0; i < updated.count; i++) {
+		NSDictionary *r = updated[i];
+		if ([r[@"kind"] isEqualToString:@"community"]) {
+			updated[i] = @{
+				@"kind" : @"community",
+				@"label" : commName,
+				@"value" : commSubtitle,
+				@"communityId" : @(self.communityId)
+			};
+			found = YES;
+			break;
+		}
+	}
+	if (!found) {
+		[updated insertObject:@{
+			@"kind" : @"community",
+			@"label" : commName,
+			@"value" : commSubtitle,
+			@"communityId" : @(self.communityId)
+		} atIndex:0];
+	}
+	self.details = updated;
+	[self loadCommunityPhotoOrAvatars];
+	[self reloadTableDebounced];
+}
+
+- (void)loadCommunityPhotoOrAvatars {
+	if (self.communityId == 0) return;
+	if (self.chatAvatars[@(self.communityId)]) return;
+
+	NSDictionary *commRecord = nil;
+	for (NSDictionary *c in [TGClient shared].communities) {
+		if ([c[@"id"] longLongValue] == self.communityId) {
+			commRecord = c;
+			break;
+		}
+	}
+	NSDictionary *fullComm = [[TGClient shared] cachedCommunityFullInfo:self.communityId];
+	int64_t photoId = [commRecord[@"photoFileId"] respondsToSelector:@selector(longLongValue)]
+			? [commRecord[@"photoFileId"] longLongValue] : 0;
+	if (photoId == 0 && [fullComm[@"photoFileId"] respondsToSelector:@selector(longLongValue)]) {
+		photoId = [fullComm[@"photoFileId"] longLongValue];
+	}
+
+	__weak typeof(self) weakSelf = self;
+	if (photoId != 0) {
+		[[TGClient shared] downloadFile:photoId priority:TGDownloadPriorityAvatar completion:^(NSString *path){
+			if (!path.length) return;
+			CGFloat side = TGMetricMenuGlyph;
+			CGFloat scale = [UIScreen mainScreen].scale;
+			dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+				UIImage *image = [TGIcons decodedImageAtPath:path fittingSize:CGSizeMake(side, side) fill:YES scale:scale];
+				UIImage *round = [TGIcons roundedImage:image size:CGSizeMake(side, side) radius:TGHalf(side) corners:UIRectCornerAllCorners];
+				if (!round) return;
+				dispatch_async(dispatch_get_main_queue(), ^{
+					TGProfileViewController *me = weakSelf;
+					if (!me) return;
+					me.chatAvatars[@(me.communityId)] = round;
+					[me reloadTableDebounced];
+				});
+			});
+		}];
+		return;
+	}
+
+	NSArray *chats = [fullComm[@"chats"] isKindOfClass:[NSArray class]] ? fullComm[@"chats"] : @[];
+	NSUInteger count = MIN((NSUInteger)3, chats.count);
+	if (count == 0) return;
+
+	NSMutableArray *chatIds = [NSMutableArray arrayWithCapacity:count];
+	for (NSUInteger i = 0; i < count; i++) {
+		NSDictionary *ch = [chats[i] isKindOfClass:[NSDictionary class]] ? chats[i] : @{};
+		int64_t cId = [ch[@"chatId"] longLongValue];
+		if (cId != 0) [chatIds addObject:@(cId)];
+	}
+	if (!chatIds.count) return;
+
+	for (NSNumber *cidNum in chatIds) {
+		int64_t cId = [cidNum longLongValue];
+		if (self.chatAvatars[@(cId)]) continue;
+		NSNumber *pFileId = [[TGClient shared] photoFileIdForChat:cId];
+		if ([pFileId isKindOfClass:[NSNumber class]] && pFileId.integerValue > 0) {
+			[self downloadAvatarWithFileId:pFileId.integerValue chatId:cId kind:@"communityChat" cell:nil];
+			continue;
+		}
+		[[TGClient shared] chatRecordForChat:cId completion:^(NSDictionary *chat){
+			TGProfileViewController *me = weakSelf;
+			if (!me || ![chat isKindOfClass:[NSDictionary class]]) return;
+			NSNumber *fileId = chat[@"photo"][@"small"][@"id"];
+			if ([fileId isKindOfClass:[NSNumber class]] && fileId.integerValue > 0) {
+				[me downloadAvatarWithFileId:fileId.integerValue chatId:cId kind:@"communityChat" cell:nil];
+			} else {
+				NSString *title = chat[@"title"] ?: @"";
+				CGFloat side = TGMetricMenuGlyph;
+				UIImage *initials = [TGIcons avatarWithInitials:[TGIcons initialsForTitle:title] size:side colourId:cId];
+				if (initials) {
+					me.chatAvatars[@(cId)] = initials;
+					[me checkAndCompositeCommunityAvatars:chatIds];
+				}
+			}
+		}];
+	}
+	[self checkAndCompositeCommunityAvatars:chatIds];
+}
+
+- (void)checkAndCompositeCommunityAvatars:(NSArray *)chatIds {
+	if (!chatIds.count) return;
+	NSMutableArray *images = [NSMutableArray arrayWithCapacity:chatIds.count];
+	for (NSNumber *cidNum in chatIds) {
+		UIImage *img = self.chatAvatars[cidNum];
+		if (!img) return;
+		[images addObject:img];
+	}
+	UIColor *ringColour = [[TGTheme shared] cardBackgroundColour];
+	__weak typeof(self) weakSelf = self;
+	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+		UIImage *composite = TGProfileCompositeSimilarAvatars(images, ringColour);
+		dispatch_async(dispatch_get_main_queue(), ^{
+			TGProfileViewController *me = weakSelf;
+			if (!me || !composite) return;
+			me.chatAvatars[@(me.communityId)] = composite;
+			[me reloadTableDebounced];
+		});
+	});
 }
 
 - (void)scrollViewDidScroll:(UIScrollView *)scrollView {
@@ -972,10 +1545,7 @@ static const CGFloat kMusicChevronSide = TGMetricGiftStar;
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
 	if (section == kSectionDetails) return self.details.count;
-	if (section == kSectionDirectMessages) {
-		BOOL hasDM = (self.directMessagesChatId != 0) || self.hasDirectMessages || self.canManageDirectMessages;
-		return (self.isChannel && hasDM) ? 1 : 0;
-	}
+	if (section == kSectionDirectMessages) return 0;
 	// Stories and Gifts live in the bar above the shared section now, so the
 	// standalone sections would show the same rows a second time.
 	if (section == kSectionStories) return 0;
@@ -1163,16 +1733,38 @@ static const CGFloat kMusicChevronSide = TGMetricGiftStar;
 	if (indexPath.section == kSectionDetails && indexPath.row < (NSInteger)self.details.count){
 		NSDictionary *row = self.details[indexPath.row];
 		NSString *kind = row[@"kind"];
-		CGFloat left = TGMetricPadLarge + TGMetricMenuGlyph + TGMetricPadMedium;
-		BOOL hasAccessory = [kind isEqualToString:@"channel"] || [kind isEqualToString:@"businessLocation"] || [kind isEqualToString:@"linkedChat"] || [kind isEqualToString:@"community"];
+		UIImage *commImg = self.chatAvatars[@(self.communityId)];
+		CGFloat iconW = ([kind isEqualToString:@"community"] && commImg)
+				? commImg.size.width
+				: (([kind isEqualToString:@"similarChannels"] && self.similarChannelsCompositeImage)
+					? self.similarChannelsCompositeImage.size.width : TGMetricMenuGlyph);
+		CGFloat left = TGMetricPadLarge + iconW + TGMetricPadMedium;
+		BOOL hasAccessory = [kind isEqualToString:@"channel"] || [kind isEqualToString:@"businessLocation"] ||
+				[kind isEqualToString:@"linkedChat"] || [kind isEqualToString:@"community"] ||
+				[kind isEqualToString:@"similarChannels"];
 		CGFloat rightMargin = hasAccessory ? (TGMetricMenuGlyph + TGMetricPadMedium) : TGMetricPadLarge;
+		if ([kind isEqualToString:@"invite"] || [kind isEqualToString:@"username"]) {
+			rightMargin = TGMetricPadLarge + TGMetricMenuGlyph + TGMetricPadMedium;
+		}
 		CGFloat textWidth = tableView.bounds.size.width - left - rightMargin - TGDoubled(TGMetricPad);
-		if (textWidth < 50.0f) textWidth = 50.0f;
+		if (textWidth < kMinDetailTextWidth) textWidth = kMinDetailTextWidth;
 		NSString *val = row[@"value"] ?: @"";
 		CGFloat textH = [val sizeWithFont:TGFontBody()
 				constrainedToSize:CGSizeMake(textWidth, CGFLOAT_MAX)
 					lineBreakMode:NSLineBreakByWordWrapping].height;
+		if ([kind isEqualToString:@"about"] && !self.descriptionExpanded) {
+			CGFloat threeLinesH = [@"A\nB\nC" sizeWithFont:TGFontBody()
+										constrainedToSize:CGSizeMake(textWidth, CGFLOAT_MAX)
+											lineBreakMode:NSLineBreakByWordWrapping].height;
+			if (textH > threeLinesH + 1.0f) {
+				textH = threeLinesH;
+			}
+		}
 		CGFloat labelH = [row[@"label"] length] ? (TGMetricLineCaption + TGMetricPadTiny) : 0;
+		if ([kind isEqualToString:@"community"]) {
+			labelH = TGMetricLineBody + TGMetricPadTiny;
+			textH = TGMetricLineSubhead;
+		}
 		CGFloat totalH = TGMetricPadSmall + labelH + ceilf(textH) + TGMetricPadMedium;
 		return MAX(TGMetricPersonRow, totalH);
 	}
@@ -1232,35 +1824,140 @@ static const CGFloat kMusicChevronSide = TGMetricGiftStar;
 		NSDictionary *row = self.details[indexPath.row];
 		NSString *kind = row[@"kind"];
 		TGTheme *theme = [TGTheme shared];
-		detailCell.accessoryType = ([kind isEqualToString:@"channel"] || [kind isEqualToString:@"businessLocation"] || [kind isEqualToString:@"linkedChat"] || [kind isEqualToString:@"community"])
+		detailCell.accessoryType = ([kind isEqualToString:@"channel"] || [kind isEqualToString:@"businessLocation"] ||
+				[kind isEqualToString:@"linkedChat"] || [kind isEqualToString:@"community"] ||
+				[kind isEqualToString:@"similarChannels"])
 				? UITableViewCellAccessoryDisclosureIndicator : UITableViewCellAccessoryNone;
 
-		UIImage *icon = nil;
+		detailCell.rowKind = kind;
+		detailCell.iconWidth = 0;
+
+		UIColor *glyphColour = [theme accentColour];
+		if ([kind isEqualToString:@"bio"] || [kind isEqualToString:@"about"] ||
+			[kind isEqualToString:@"note"] || [kind isEqualToString:@"warning"]) {
+			glyphColour = [theme secondaryTextColour];
+		} else if ([kind isEqualToString:@"birthday"] && self.birthdayToday) {
+			glyphColour = [theme onlineColour];
+		}
+
 		CGFloat iconSide = TGMetricMenuGlyph;
-		if ([kind isEqualToString:@"phone"]) {
-			icon = [TGIcons glyphNamed:@"call" colour:[theme accentColour] side:iconSide];
-		} else if ([kind isEqualToString:@"username"]) {
-			icon = [TGIcons glyphNamed:@"mention" colour:[theme accentColour] side:iconSide];
-		} else if ([kind isEqualToString:@"birthday"]) {
-			icon = [TGIcons glyphNamed:@"star" colour:self.birthdayToday ? [theme onlineColour] : [theme accentColour] side:iconSide];
-		} else if ([kind isEqualToString:@"bio"] || [kind isEqualToString:@"about"] || [kind isEqualToString:@"note"]) {
-			icon = [TGIcons glyphNamed:@"edit" colour:[theme secondaryTextColour] side:iconSide];
-		} else if ([kind isEqualToString:@"channel"] || [kind isEqualToString:@"linkedChat"] || [kind isEqualToString:@"community"]) {
-			icon = [TGIcons glyphNamed:@"chat" colour:[theme accentColour] side:iconSide];
-		} else if ([kind isEqualToString:@"businessLocation"]) {
-			icon = [TGIcons glyphNamed:@"archive" colour:[theme accentColour] side:iconSide];
+		UIImage *icon = nil;
+		if ([kind isEqualToString:@"channel"]) {
+			int64_t targetChatId = [self.personalChannel[@"chatId"] longLongValue];
+			detailCell.rowChatId = targetChatId;
+			UIImage *cached = targetChatId ? self.chatAvatars[@(targetChatId)] : nil;
+			if (cached) {
+				icon = cached;
+			} else {
+				icon = [TGIcons glyphNamed:@"chat" colour:glyphColour side:iconSide];
+				if (targetChatId) {
+					[self loadAvatarForChatId:targetChatId kind:kind cell:detailCell];
+				}
+			}
+		} else if ([kind isEqualToString:@"linkedChat"]) {
+			int64_t targetChatId = self.linkedChatId;
+			detailCell.rowChatId = targetChatId;
+			UIImage *cached = targetChatId ? self.chatAvatars[@(targetChatId)] : nil;
+			if (cached) {
+				icon = cached;
+			} else {
+				icon = [TGIcons glyphNamed:@"chat" colour:glyphColour side:iconSide];
+				if (targetChatId) {
+					[self loadAvatarForChatId:targetChatId kind:kind cell:detailCell];
+				}
+			}
+		} else if ([kind isEqualToString:@"similarChannels"]) {
+			detailCell.rowChatId = self.chatId;
+			if (self.similarChannelsCompositeImage) {
+				icon = self.similarChannelsCompositeImage;
+				detailCell.iconWidth = self.similarChannelsCompositeImage.size.width;
+			} else {
+				icon = [TGIcons glyphNamed:@"chat" colour:glyphColour side:iconSide];
+				[self loadSimilarChannelsAvatars];
+			}
+		} else if ([kind isEqualToString:@"community"]) {
+			detailCell.rowChatId = self.communityId;
+			detailCell.titleLabel.font = TGFontBodyStrong();
+			detailCell.titleLabel.textColor = [theme primaryTextColour];
+			detailCell.subtitleLabel.font = TGFontSubhead();
+			detailCell.subtitleLabel.textColor = [theme secondaryTextColour];
+			UIImage *cached = self.chatAvatars[@(self.communityId)];
+			if (cached) {
+				icon = cached;
+				detailCell.iconWidth = cached.size.width;
+			} else {
+				icon = [TGIcons glyphNamed:@"chat" colour:glyphColour side:iconSide];
+				[self loadCommunityPhotoOrAvatars];
+			}
+		} else {
+			detailCell.titleLabel.font = TGFontMeta();
+			detailCell.subtitleLabel.font = TGFontBody();
+			detailCell.rowChatId = 0;
+			NSString *glyphName = TGProfileRowGlyphName(kind);
+			if (glyphName.length) {
+				icon = [TGIcons glyphNamed:glyphName colour:glyphColour side:iconSide];
+			}
 		}
 		detailCell.iconView.image = icon;
 
+		if ([kind isEqualToString:@"invite"] || [kind isEqualToString:@"username"]) {
+			detailCell.rightButton.hidden = NO;
+			[detailCell.rightButton setImage:[TGIcons glyphNamed:@"copy" colour:[theme accentColour] side:TGMetricMenuGlyph] forState:UIControlStateNormal];
+			__weak typeof(self) weakSelf = self;
+			NSString *valToCopy = row[@"value"];
+			detailCell.onRightButtonTapped = ^{
+				[weakSelf copyDetailValue:valToCopy];
+			};
+		} else {
+			detailCell.rightButton.hidden = YES;
+			detailCell.onRightButtonTapped = nil;
+		}
+
 		detailCell.titleLabel.text = row[@"label"];
-		detailCell.titleLabel.textColor = [theme secondaryTextColour];
-		detailCell.subtitleLabel.text = row[@"value"];
-		BOOL plain = [kind isEqualToString:@"bio"] || [kind isEqualToString:@"note"] ||
-				[kind isEqualToString:@"about"];
-		BOOL today = [kind isEqualToString:@"birthday"] && self.birthdayToday;
-		detailCell.subtitleLabel.textColor = [kind isEqualToString:@"warning"] ? [theme destructiveColour]
-				: (today ? [theme onlineColour]
-				: (plain ? [theme primaryTextColour] : [theme accentColour]));
+		if (![kind isEqualToString:@"community"]) {
+			detailCell.titleLabel.textColor = [theme secondaryTextColour];
+		}
+
+		if ([kind isEqualToString:@"about"]) {
+			NSString *val = row[@"value"] ?: @"";
+			CGFloat textWidth = detailCell.contentView.bounds.size.width - (TGMetricPadLarge + iconSide + TGMetricPadMedium) - TGMetricPadLarge;
+			if (textWidth < kMinDetailTextWidth) textWidth = kMinDetailTextWidth;
+			CGFloat threeLinesH = [@"A\nB\nC" sizeWithFont:TGFontBody()
+										constrainedToSize:CGSizeMake(textWidth, CGFLOAT_MAX)
+											lineBreakMode:NSLineBreakByWordWrapping].height;
+			CGSize fullSize = [val sizeWithFont:TGFontBody()
+							  constrainedToSize:CGSizeMake(textWidth, CGFLOAT_MAX)
+								  lineBreakMode:NSLineBreakByWordWrapping];
+			if (!self.descriptionExpanded && fullSize.height > threeLinesH + 1.0f) {
+				NSString *truncated = TGProfileTruncateToThreeLines(val, TGFontBody(), textWidth, threeLinesH);
+				NSMutableAttributedString *attr = [[NSMutableAttributedString alloc] initWithString:truncated
+					attributes:@{
+						NSFontAttributeName : TGFontBody(),
+						NSForegroundColorAttributeName : [theme primaryTextColour]
+					}];
+				NSRange moreRange = [truncated rangeOfString:@"more" options:NSBackwardsSearch];
+				if (moreRange.location != NSNotFound) {
+					[attr addAttribute:NSForegroundColorAttributeName value:[theme accentColour] range:moreRange];
+				}
+				detailCell.subtitleLabel.attributedText = attr;
+			} else {
+				detailCell.subtitleLabel.attributedText = nil;
+				detailCell.subtitleLabel.text = val;
+				detailCell.subtitleLabel.textColor = [theme primaryTextColour];
+			}
+		} else if ([kind isEqualToString:@"community"]) {
+			detailCell.subtitleLabel.attributedText = nil;
+			detailCell.subtitleLabel.text = row[@"value"];
+			detailCell.subtitleLabel.textColor = [theme secondaryTextColour];
+		} else {
+			detailCell.subtitleLabel.attributedText = nil;
+			detailCell.subtitleLabel.text = row[@"value"];
+			BOOL plain = [kind isEqualToString:@"bio"] || [kind isEqualToString:@"note"];
+			BOOL today = [kind isEqualToString:@"birthday"] && self.birthdayToday;
+			detailCell.subtitleLabel.textColor = [kind isEqualToString:@"warning"] ? [theme destructiveColour]
+					: (today ? [theme onlineColour]
+					: (plain ? [theme primaryTextColour] : [theme accentColour]));
+		}
 		[detailCell setNeedsLayout];
 		return detailCell;
 	}
@@ -1587,6 +2284,13 @@ static const CGFloat kMusicChevronSide = TGMetricGiftStar;
 		NSURL *url = TGProfileFirstURL(row[@"value"], self.bioEntities);
 		if (url)
 			[[UIApplication sharedApplication] openURL:url];
+	} else if ([kind isEqualToString:@"about"]){
+		if (!self.descriptionExpanded) {
+			self.descriptionExpanded = YES;
+			[self reloadTableDebounced];
+			return;
+		}
+		[self copyDetailValue:row[@"value"]];
 	} else if ([kind isEqualToString:@"phone"] || [kind isEqualToString:@"username"] ||
 			   [kind isEqualToString:@"invite"] || [kind isEqualToString:@"birthday"]){
 		[self copyDetailValue:row[@"value"]];

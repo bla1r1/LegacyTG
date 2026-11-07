@@ -2,6 +2,15 @@ Bots, payments, Stars, gifts and the wallet surfaces. No file in `src/` sends th
 
 Counts: 2 done, 8 partial, 19 missing, 7 dev-only.
 
+**What is built.** Bots and payments are the least built area: two rows done (bot reply keyboards
+and owned-bot settings), eight partial and nineteen missing. M16 draws invoice,
+gift, giveaway, paid-media and Stars message types as cards; M40 owns inline
+mode, Web Apps, commands and guest bots.
+
+M20 owns the money path: checkout, Premium, Stars, gifts, boosts, TON,
+Passport and StoreKit. Until it exists, the release UI reads state and
+explains that purchase happens in an official client.
+
 | Feature | Official | Here | Where | Note |
 |---|---|---|---|---|
 | Bot reply keyboard | Official: Bot reply keyboard | done | `Controllers/TGChatViewController+Bots.m:103` | Keyboard rows/one-time/placeholder are drawn and send text. |

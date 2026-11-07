@@ -2,6 +2,20 @@ Every `MessageContent` type in `tdlib/td/td/generate/scheme/td_api.tl` (108 on 7
 
 Counts: 86 done, 26 partial, 8 missing, 0 dev-only.
 
+**What is built.** M16 is the 7 November sweep: service sentences for about 75 types, a chat-list
+preview for every known content, and structured fields in the flatten model.
+The same day's card and veil wave gave invoices, gifts, giveaways, games,
+shared peers, video chats and stories one `TGMessageCard`, spoilers and
+one-time media one `TGMediaVeil`, and rebuilt polls with multiple answers,
+quiz marks, retraction and statistics.
+
+M17 followed with custom emoji in text, reactions and names. Names and
+chat-list previews still fall back to the emoji character, and member rows do
+not draw a status emoji, which is M36. Of the 108 `MessageContent` types, all
+draw except stake dice; the remaining detail — rich-message blocks, the story
+picture in its card, poll option media, animated gift artwork, countdowns and
+service-action buttons — is M44.
+
 | Feature | Official | Here | Where | Note |
 |---|---|---|---|---|
 | messageText | Chat draws this content type | done | `Core/TGMessageFlatten.m:768` | Text with entities, spoiler reveal and custom emoji attachments is drawn by the bubble body. |

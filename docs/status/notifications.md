@@ -2,6 +2,15 @@ Notifications: scopes, per-chat exceptions, sounds, the Active list, push regist
 
 Counts: 8 done, 6 partial, 11 missing, 1 dev-only.
 
+**What is built.** M15 built notification settings and push: three scopes and their previews,
+per-chat exceptions, custom sounds, reaction and story switches, reset,
+`registerDevice` and routing from a push to its chat and message. Development
+builds also expose the Active Notifications table.
+
+M31 adds category pages, the in-app banner, a permission warning, badge
+settings, exception editing and sound assignment. Push delivery still depends
+on an APNs certificate for the official bundle ID.
+
 | Feature | Official | Here | Where | Note |
 |---|---|---|---|---|
 | Notification scopes | Official: Notification scopes | done | `Controllers/TGSettingsViewController+PrivacyPages.m:82` | Three mute switches under "Show notifications for". |

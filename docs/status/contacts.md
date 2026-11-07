@@ -2,6 +2,14 @@ Contacts: the list, presence, sorting, search, adding and importing people, and 
 
 Counts: 18 done, 15 partial, 11 missing, 0 dev-only.
 
+**What is built.** M12 built the contact list: server-loaded contacts, presence on every row,
+sorting by last seen or name with an A-Z rail, local search, add contact,
+block, share, delete and secret chat. The call list that shares the tab is
+M13: All/Missed filter, redial and the optional fourth tab.
+
+M32 adds what is absent: Invite Friends, contacts permission, phone-book
+import, formatted country code and live phone resolution.
+
 | Feature | Official | Here | Where | Note |
 |---|---|---|---|---|
 | Contacts list | Official: Contacts list | done | `Controllers/TGContactsViewController.m:293` | `contactsWithCompletion:` fills the list; avatars load from the member store. |

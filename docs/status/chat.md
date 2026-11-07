@@ -2,6 +2,17 @@ Chat screen: history, bubbles, composer, message actions, search, scheduling and
 
 Counts: 54 done, 16 partial, 21 missing, 0 dev-only.
 
+**What is built.** The chat screen is M4: 60-message pages, live appends, date separators,
+unread divider, album collage, sender names and avatars, bubbles, stamps,
+reply/forward/edit/delete, drafts, typing, pins, reactions and multi-select.
+Read state is batched on open and scroll; scheduled sends and the queue screen
+came from the same work.
+
+M10 added text search, M16 rebuilt polls, cards and veils for every content
+type, and M17 added the composer text model that keeps custom emoji ids and
+sends or edits formatted text. Search filters are M26, the failed-send mark
+M27, and poll creation, silent/repeated send and forward options M23 and M35.
+
 | Feature | Official | Here | Where | Note |
 |---|---|---|---|---|
 | History load, 60 messages | Official: History load, 60 messages | done | `Controllers/TGChatViewController.m:658` | `historyForChat:limit:60` fills the table on open. |
@@ -28,11 +39,11 @@ Counts: 54 done, 16 partial, 21 missing, 0 dev-only.
 | Spoiler text reveal | Official: Spoiler text reveal | done | `Controllers/TGChatViewController+Cells.m:136` | Per-message reveal set drives `TGAttributedMessageTextRevealing`. |
 | Reaction chips under a bubble | Official: Reaction chips under a bubble | done | `Controllers/TGChatViewController+Cells.m:577` | One reactor shows their face; more show emoji and count. |
 | Reaction picker and send | Official: Reaction picker and send | done | `Controllers/TGChatViewController+Actions.m:1558` | Bar sends `addMessageReaction`; holding a reaction makes it default. |
-| Custom emoji in text | Official: Custom emoji in text | partial | `Views/TGMessageLayout.mm:512` | Static attachment on iOS 7+; iOS 6 falls back to the emoji character; no animation. |
+| Custom emoji in text | Official: Custom emoji in text | done | `Views/TGMessageLayout.mm:512` | Picture inline on iOS 7+ (iOS 6 shows the fallback); animated through the sticker pipeline where stickers animate, up to 3 per bubble; animation not yet checked on the 4S. |
 | Composer text field and send | Official: Composer text field and send | done | `Controllers/TGChatViewController+Input.m:352` | Trimmed text goes through `sendText:thread:replyTo:`. |
 | Markdown send | Official: Markdown send | partial | `Controllers/TGChatViewController+Input.m:410` | `sendText` parses markup, but the new `sendFormattedText:` path is an empty stub. |
 | Formatted send/edit interface | Official: Formatted send/edit interface | partial | `Core/TGClient+Messages.m:526` | `sendFormattedText:` and `editMessage:…formattedText:` are empty stubs added at HEAD. |
-| Send custom emoji ids | Official: Send custom emoji ids | missing | `Controllers/TGChatViewController+Input.m:348` | `insertCustomEmoji:fallback:` appends only the fallback and ignores the id; `TGComposerText` has no controller. |
+| Send custom emoji ids | Official: Send custom emoji ids | done | `Core/TGComposerText.m`, `Controllers/TGChatViewController+Input.m` | `TGComposerText` keeps the ids; Send goes through `parseMarkdown` and `sendFormattedText`; seen on the 4S in Saved Messages on 7 November 2026. |
 | File and music picker | Official: File and music picker | missing | `Views/TGAttachSheet.h:8` | No document picker and no `inputMessageDocument` / `inputMessageAudio` request. |
 | Attach sheet | Official: Attach sheet | done | `Controllers/TGChatViewController+Input.m:747` | Gallery, camera, location, contact, checklist, quick reply, dice, ephemeral. |
 | Pick photo / video / album | Official: Pick photo / video / album | done | `Controllers/TGChatViewController+Actions.m:1741` | Picker accepts images and movies; multi-select sends an album. |
@@ -40,7 +51,7 @@ Counts: 54 done, 16 partial, 21 missing, 0 dev-only.
 | Round video note record/play | Official: Round video note record/play | done | `Controllers/TGChatViewController+Audio.m:736` | `TGVideoNoteRecorder` writes the file; bubble plays it in a circle. |
 | Sticker and GIF send | Official: Sticker and GIF send | done | `Controllers/TGChatViewController+Input.m:717` | Panel picks send `sendStickerWithFileId:` / `sendAnimation:`. |
 | GIF caption | Official: GIF caption | missing | `Core/TGClient+Stickers.m:405` | `sendAnimation` has no caption parameter or caption step. |
-| Custom emoji tab in picker | Official: Custom emoji tab in picker | missing | `Views/TGEmojiPanel.m:243` | Tabs are Emoji, Stickers, GIFs only. |
+| Custom emoji tab in picker | Official: Custom emoji tab in picker | done | `Views/TGEmojiPanel.m` | Custom tab with the installed packs; without Premium only Saved Messages takes them. |
 | Reply | Official: Reply | done | `Controllers/TGChatViewController+Actions.m:746` | Sets reply target and opens the composer. |
 | Forward | Official: Forward | done | `Controllers/TGChatViewController+Actions.m:772` | Single and batched forwards through `TGForwardPicker`. |
 | Forward with a new caption | Official: Forward with a new caption | missing | `Controllers/TGForwardPicker.m:154` | Picker chooses chats only and calls `forwardMessages`; no `copy_options`. |

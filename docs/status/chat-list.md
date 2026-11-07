@@ -2,6 +2,22 @@ Chats screen: the list engine, rows, folders, archive, stories strip and search.
 
 Counts: 30 done, 16 partial, 22 missing, 0 dev-only.
 
+**What is built.** The list engine is M3. `loadChatSnapshot` paints the previous list before
+`loadChats` answers, twelve retries fall back to the cached list, and
+`onChatsChanged` re-sorts by TDLib order. Rows carry unread and mention
+badges, mute and online marks, emoji status, avatar or initials, preview text,
+drafts and pins; the archive, folder strip, drag order and bulk actions are in
+the same milestone.
+
+M10 added pull-down search with local title hits and appended message hits.
+M11 added the stories strip, the collapsed story beside the title and the tile
+hold menu; M16 gave the preview every content type, and M17 put emoji status
+on the row and in group sender names.
+
+The missing half is M24 (thumbnails, type glyph, reaction and poll badges,
+compact counts, tab badge, folder tags) and M25 (a story ring on every row).
+Search filters and tokens are M26.
+
 | Feature | Official | Here | Where | Note |
 |---|---|---|---|---|
 | First paint from a saved snapshot | Official: First paint from a saved snapshot | done | `Controllers/TGChatListViewController.m:121` | `loadChatSnapshot` draws the previous list before `loadChats` answers. |

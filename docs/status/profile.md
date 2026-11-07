@@ -2,6 +2,17 @@ User, group and channel profiles: header, details, action tiles, media panes and
 
 Counts: 45 done, 32 partial, 29 missing, 0 dev-only.
 
+**What is built.** Profiles came together across M12: header and details, verified and
+emoji-status marks, action tiles, block/report/share, edit fields and birthday
+privacy, and the media panes with stories, archive, media, music, voice, links
+and groups. M11 added the stories tab and archive, and M13 the call tile and
+its permission gate.
+
+The missing surfaces are M28 (cover, QR, Premium star, rating, verifier note)
+and M29 (GIF and Polls panes, photo/video split, month sections, calendar,
+multi-select, pane search). Most remaining rows are layout differences, not
+missing data.
+
 | Feature | Official | Here | Where | Note |
 |---|---|---|---|---|
 | Profile header | Official: Profile header | done | `Controllers/TGProfileViewController.m:380` | Name, marks and status line draw from the full-info answer. |
@@ -16,7 +27,7 @@ Counts: 45 done, 32 partial, 29 missing, 0 dev-only.
 | Business location row | Official: Business location row | partial | `Controllers/TGProfileViewController.m:887` | Address only; hours, state and map thumbnail are absent. |
 | Personal note | Official: Personal note | done | `Controllers/TGProfileViewController.m:890` | Note visible only to this account; entities are kept. |
 | Add to Contacts row | Official: Add to Contacts row | done | `Controllers/TGProfileViewController.m:894` | Shown for a stranger who is not a bot. |
-| Personal channel row | Official: Personal channel row | done | `Controllers/TGProfileViewController.m:926` | One row above the card that opens the channel. |
+| Personal channel row | Official: Personal channel row | done | `Controllers/TGProfileViewController.m:941` | Opens the channel; until 7 November 2026 a `> 0` check on the (negative) channel id kept it from ever loading. |
 | Common groups pane | Official: Common groups pane | partial | `Controllers/TGProfileViewController+Media.m:180` | Pane exists but `TGProfileTabKinds` is called with `hasCommonGroups = NO`, so the tab never appears; the More menu still lists titles. |
 | Action tiles | Official: Action tiles | done | `Controllers/TGProfileViewController+Actions.m:107` | Tiles build per profile kind; own profile has Saved, Story, More. |
 | Own profile hides Message/Call | Official: Own profile hides Message/Call | done | `Controllers/TGProfileViewController+Actions.m:107` | `own` branch builds Saved, Story and More only. |

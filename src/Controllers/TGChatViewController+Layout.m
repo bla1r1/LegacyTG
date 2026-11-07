@@ -5,6 +5,7 @@
 #import "TGDevShowcase.h"
 #import "TGPollPresentation.h"
 #import "TGPinnedLine.h"
+#import "TGUIFormat.h"
 
 CGFloat TGPollOptionRowHeight(NSDictionary *option, CGFloat rowWidth) {
 	CGFloat textW = rowWidth - kPollTextColumn - kPollShareWidth - TGMetricPadTiny;
@@ -73,12 +74,42 @@ UIColor *TGSenderColour(int64_t userId) {
 /// "12:29" for incoming, "12:29 ✓✓" for outgoing, "12:29 edited" when the
 /// message has been changed - the line Telegram tucks into the corner of the
 /// bubble. The mark follows the clock; a prefix moves every stamp two words in.
+/// Channel posts and forwarded posts with views show their view count and signature.
 - (NSString *)stampFor:(NSDictionary *)m {
-	return TGMessageStamp([m[@"date"] doubleValue], [m[@"edited"] boolValue]);
+	NSString *time = TGMessageStamp([m[@"date"] doubleValue], [m[@"edited"] boolValue]);
+	int64_t viewCount = 0;
+	id rawViews = m[@"viewCount"];
+	if ([rawViews respondsToSelector:@selector(longLongValue)]) {
+		viewCount = [rawViews longLongValue];
+	}
+	if (viewCount > 0) {
+		NSString *count = TGCompactCount(viewCount);
+		NSString *sig = @"";
+		id rawSig = m[@"authorSignature"];
+		if ([rawSig isKindOfClass:NSString.class]) {
+			sig = (NSString *)rawSig;
+		}
+		if (sig.length > 16) {
+			sig = [[sig substringToIndex:16] stringByAppendingString:@"..."];
+		}
+		if (sig.length > 0) {
+			return [NSString stringWithFormat:@"%@, %@ %@", sig, count, time];
+		}
+		return [NSString stringWithFormat:@"%@ %@", count, time];
+	}
+	return time;
 }
 
 - (CGFloat)timeWidthFor:(NSDictionary *)m {
 	CGFloat w = TGTextSize([self stampFor:m], TGFontMicro(), 0).width + TGMetricPadTiny;
+	int64_t viewCount = 0;
+	id rawViews = m[@"viewCount"];
+	if ([rawViews respondsToSelector:@selector(longLongValue)]) {
+		viewCount = [rawViews longLongValue];
+	}
+	if (viewCount > 0) {
+		w += kStampEyeSide + kStampEyePad;
+	}
 	if ([m[@"outgoing"] boolValue])
 		w += TGMetricStampTicksRoom;
 	return w;
@@ -445,8 +476,10 @@ static UIImage *TGImageFromMinithumbnail(id mini) {
 	layout.isRound = isRound;
 	layout.isPoll = isPoll;
 	layout.isChecklist = isChecklist;
-	TGMessageCard *card = isService ? nil : TGChatCardForRow(m);
+	BOOL isCommunityCard = [kind isEqualToString:@"messageChatAddedToCommunity"];
+	TGMessageCard *card = (isService && !isCommunityCard) ? nil : TGChatCardForRow(m);
 	layout.isCard = card != nil;
+	layout.isService = isService && !layout.isCard;
 	layout.isTrack = isTrack;
 	layout.isCall = isCall;
 	layout.isDoc = isDoc;
@@ -471,7 +504,7 @@ static UIImage *TGImageFromMinithumbnail(id mini) {
 		return layout;
 	}
 
-	if (isService) {
+	if (isService && !layout.isCard) {
 		NSString *line = [self serviceLineForMessage:m];
 		UIFont *font = TGFontMeta();
 		CGFloat textW = MIN(TGTextSize(line, font, 0).width,
@@ -568,9 +601,14 @@ static UIImage *TGImageFromMinithumbnail(id mini) {
 		} else {
 			layout.bodyFrame = CGRectZero;
 		}
-		layout.timeFrame = CGRectMake(width - layout.timeWidth - kPadH,
+		CGFloat eyeRoom = 0;
+		int64_t viewCount = [m[@"viewCount"] respondsToSelector:@selector(longLongValue)] ? [m[@"viewCount"] longLongValue] : 0;
+		if (viewCount > 0) {
+			eyeRoom = kStampEyeSide + kStampEyePad;
+		}
+		layout.timeFrame = CGRectMake(width - layout.timeWidth - kPadH + eyeRoom,
 									  height - kPadV - TGMetricStampHeight,
-									  layout.timeWidth, TGMetricStampHeight);
+									  layout.timeWidth - eyeRoom, TGMetricStampHeight);
 		layout.rowHeight = height + TGDoubled(TGMetricBubbleRowInset);
 		if (msgId) self.layoutCache[msgId] = layout;
 		return layout;
@@ -883,7 +921,12 @@ static UIImage *TGImageFromMinithumbnail(id mini) {
 	CGFloat stampY = inlineStamp ? TGInlineStampY(layout.bodyFrame)
 			: (bubbleH - kPadV - TGMetricStampHeight);
 	CGFloat tickW = mine ? TGMetricStampTicksRoom : TGMetricZero;
-	layout.timeFrame = CGRectMake(bubbleW - timeW - kPadH, stampY, timeW - tickW, TGMetricStampHeight);
+	CGFloat eyeRoom = 0;
+	int64_t viewCount = [m[@"viewCount"] respondsToSelector:@selector(longLongValue)] ? [m[@"viewCount"] longLongValue] : 0;
+	if (viewCount > 0) {
+		eyeRoom = kStampEyeSide + kStampEyePad;
+	}
+	layout.timeFrame = CGRectMake(bubbleW - timeW - kPadH + eyeRoom, stampY, timeW - tickW - eyeRoom, TGMetricStampHeight);
 
 	CGFloat rowH = TGDoubled(kPadV) + [self decorationHeightFor:m] +
 			(inlineStamp || stampOnPicture ? TGMetricZero : TGMetricLineMicro);

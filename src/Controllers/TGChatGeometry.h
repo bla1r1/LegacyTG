@@ -18,6 +18,8 @@ static const CGFloat kInputHeight = TGMetricInputBarHeight;
 /// The reply / edit strip above the composer: two lines, the way their client
 /// shows who is being answered and what they said.
 static const CGFloat kComposeBannerHeight = TGMetricRow;
+/// The channel bottom bar: button height and icon sizes.
+static const CGFloat kChannelBarIconSide     = TGMetricMenuGlyph;
 
 // ── the chat's own geometry ──────────────────────────────────────────────────
 // This screen's own dimensions, which no other screen has any use for: a call
@@ -207,16 +209,30 @@ static const CGFloat kTitleRow        = TGMetricListAvatar;
 static const CGFloat kPinnedBanner    = 34.0f;
 /// The cross that dismisses the banner.
 static const CGFloat kBannerCloseGlyph = 16.0f;
+/// The eye glyph beside a channel post's view count.
+static const CGFloat kStampEyeSide     = TGMetricStampHeight;
+static const CGFloat kStampEyePad      = TGMetricPadTiny;
 
 // The three placers a cell configure uses; pure functions over the cell's
 // own parts.
 
 static inline void TGPlaceStamp(TGBubbleCell *cell, CGRect bubbleFrame,
 								CGFloat timeWidth, BOOL mine) {
+	CGFloat eyeRoom = 0;
+	if (cell.viewsEye && !cell.viewsEye.hidden) {
+		eyeRoom = kStampEyeSide + kStampEyePad;
+		CGFloat startX = bubbleFrame.size.width - timeWidth - kPadH;
+		CGFloat stampY = bubbleFrame.size.height - TGMetricStampBottomInset;
+		cell.viewsEye.frame = CGRectMake(
+				startX,
+				stampY + TGCenteredOrigin(TGMetricStampHeight, kStampEyeSide),
+				kStampEyeSide,
+				kStampEyeSide);
+	}
 	cell.time.frame = CGRectMake(
-			bubbleFrame.size.width - timeWidth - kPadH,
+			bubbleFrame.size.width - timeWidth - kPadH + eyeRoom,
 			bubbleFrame.size.height - TGMetricStampBottomInset,
-			timeWidth - (mine ? TGMetricStampTicksRoom : 0),
+			timeWidth - (mine ? TGMetricStampTicksRoom : 0) - eyeRoom,
 			TGMetricStampHeight);
 }
 

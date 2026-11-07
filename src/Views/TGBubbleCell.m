@@ -255,6 +255,10 @@ static const NSUInteger kMaxCustomEmojiViews = 3;
 	self.time.textAlignment = NSTextAlignmentRight;
 	[self.bubble addSubview:self.time];
 
+	self.viewsEye = [[UIImageView alloc] init];
+	self.viewsEye.hidden = YES;
+	[self.bubble addSubview:self.viewsEye];
+
 	self.contactSeparatorH = [[UIView alloc] init];
 	self.contactSeparatorH.hidden = YES;
 	[self.bubble addSubview:self.contactSeparatorH];
@@ -698,6 +702,8 @@ static const NSUInteger kMaxCustomEmojiViews = 3;
 	self.transcriptionLabel.text = nil;
 	self.transcriptionLabel.numberOfLines = 0;
 	self.time.text = nil;
+	self.viewsEye.hidden = YES;
+	self.viewsEye.image = nil;
 	self.ticks.hidden = YES;
 	self.ticks.image = nil;
 	self.contactCallButton.hidden = YES;
@@ -723,6 +729,8 @@ static const NSUInteger kMaxCustomEmojiViews = 3;
 	// own coordinates, so a reused cell has to get them back first.
 	if (self.time.superview != self.bubble)
 		[self.bubble addSubview:self.time];
+	if (self.viewsEye.superview != self.bubble)
+		[self.bubble addSubview:self.viewsEye];
 	if (self.ticks.superview != self.bubble)
 		[self.bubble addSubview:self.ticks];
 	if (self.mediaStamp.superview != self.bubble) {
