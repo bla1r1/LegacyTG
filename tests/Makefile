@@ -79,6 +79,8 @@ OBJC_SRCS := \
     $(SRC)/Calls/TGCallVideoEngine.mm \
     $(SRC)/Calls/TGCall.mm \
     $(SRC)/Views/TGMessageLayout.mm \
+    $(SRC)/Views/TGMessageCardLayout.m \
+    $(SRC)/Core/TGMessageCard.m \
     $(SRC)/Core/TGStyle.m \
     $(SRC)/Core/TGBase64.m \
     $(SRC)/Core/TGPerf.m \
@@ -103,6 +105,12 @@ CLIENT_OBJC_SRCS := \
     $(SRC)/Core/TGUpdateBatcher.mm \
     $(SRC)/Core/TGClient+Messages.m \
     $(SRC)/Core/TGMessageFlatten.m \
+    $(SRC)/Core/TGServiceMessageText.m \
+    $(SRC)/Core/TGMessageContentCommerce.m \
+    $(SRC)/Core/TGMessageContentInteractive.m \
+    $(SRC)/Core/TGMessageCard.m \
+    $(SRC)/Core/TGLiveLocation.m \
+    $(SRC)/Core/TGPinnedLine.m \
     $(SRC)/Core/TGClient+MessageMeta.m \
     $(SRC)/Core/TGClient+SavedMessages.m \
     $(SRC)/Core/TGClient+Notifications.m \
@@ -152,7 +160,10 @@ CLIENT_OBJC_SRCS := \
     $(SRC)/Core/TGStickerBudget.m \
     $(SRC)/Core/TGPerf.m \
     $(SRC)/Controllers/TGUIFormat.m \
+    $(SRC)/Controllers/TGPollPresentation.m \
+    $(SRC)/Controllers/TGChecklistPresentation.m \
     $(SRC)/Views/TGChatListRowGeometry.m \
+    $(SRC)/Views/TGMediaVeilBlur.m \
     $(SRC)/Core/TGPlaybackQueue.m \
     $(SRC)/Core/TGProfileTabs.m \
     $(SRC)/Core/TGPasscode.m
@@ -188,6 +199,7 @@ TEST_SRCS := \
     $(TESTS)/TGCallVideoTests.m \
     $(TESTS)/TGLibTgvoipHooksTests.m \
     $(TESTS)/TGMessageLayoutTests.m \
+    $(TESTS)/TGMessageCardLayoutTests.m \
     $(TESTS)/TGSoftVideoClockTests.m
 
 CLIENT_TEST_SRCS := \
@@ -207,6 +219,16 @@ CLIENT_TEST_SRCS := \
     $(TESTS)/TGClientMessagesFunctionsTests.m \
     $(TESTS)/TGClientRecordOnceTests.m \
     $(TESTS)/TGMessageParserTests.m \
+    $(TESTS)/TGServiceMessageTextTests.m \
+    $(TESTS)/TGMessagePreviewTests.m \
+    $(TESTS)/TGMessageContentCommerceTests.m \
+    $(TESTS)/TGMessageContentInteractiveTests.m \
+    $(TESTS)/TGMessageCardTests.m \
+    $(TESTS)/TGLiveLocationTests.m \
+    $(TESTS)/TGPinnedLineTests.m \
+    $(TESTS)/TGPollPresentationTests.m \
+    $(TESTS)/TGChecklistPresentationTests.m \
+    $(TESTS)/TGMediaVeilBlurTests.m \
     $(TESTS)/TGClientAccountTests.m \
     $(TESTS)/TGClientProfileTests.m \
     $(TESTS)/TGClientComposeTests.m \

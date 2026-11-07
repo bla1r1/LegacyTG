@@ -5,6 +5,22 @@
 #import "TGChatViewControllerInternal.h"
 #import <QuartzCore/QuartzCore.h>
 #import "TGStyle.h"
+#import "TGPollPresentation.h"
+#import "TGLiveLocation.h"
+#import "TGChecklistPresentation.h"
+
+/// The card a chat row shows, without the buttons this app cannot honour
+/// yet: there is no payment form and no group-call audio, and a Pay or Join
+/// that does nothing is worse than none. Layout and cell both call this, so
+/// the height always matches what is drawn.
+TGMessageCard *TGChatCardForRow(NSDictionary *m) {
+	TGMessageCard *card = TGMessageCardForRow(m);
+	if (card.action == TGMessageCardActionPay || card.action == TGMessageCardActionJoinCall){
+		card.buttonTitle = nil;
+		card.action = TGMessageCardActionNone;
+	}
+	return card;
+}
 
 @implementation TGChatViewController (ServiceCells)
 
@@ -12,12 +28,7 @@
 	// Service messages & separators
 	if (layout.isService) {
 		TGTheme *serviceTheme = [TGTheme shared];
-		NSString *who = m[@"separator"] ? nil : [[TGClient shared] nameForUserId:[m[@"senderId"] longLongValue]];
-		NSString *text = m[@"text"] ?: @"";
-		NSString *line = text;
-		if (who.length && ![text hasPrefix:@"Group "] && ![text hasPrefix:@"Chat "] && ![text hasPrefix:@"Screenshot "] && ![text hasPrefix:@"You "]) {
-			line = [NSString stringWithFormat:@"%@ %@", who, text];
-		}
+		NSString *line = [self serviceLineForMessage:m];
 
 		cell.bubble.frame = layout.bubbleFrame;
 		cell.bubble.backgroundColor = [serviceTheme serviceBubbleColour];
@@ -43,12 +54,211 @@
 		return YES;
 	}
 
+	// Invoices, gifts, giveaways, games, shared peers, calls, stories
+	if (layout.isCard) {
+		TGTheme *theme = [TGTheme shared];
+		cell.bubble.frame = layout.bubbleFrame;
+		cell.bubble.backgroundColor = mine ? [theme bubbleMineColour] : [theme bubbleTheirsColour];
+		cell.bubble.layer.borderWidth = TGMetricBorderNone;
+		cell.bubble.layer.borderColor = [UIColor clearColor].CGColor;
+		cell.bubble.layer.cornerRadius = [theme bubbleCornerRadius];
+		cell.body.hidden = YES;
+		cell.subtitle.hidden = YES;
+		cell.picture.hidden = YES;
+		cell.disc.hidden = YES;
+
+		if (!cell.cardView)
+			cell.cardView = [[TGMessageCardView alloc] initWithFrame:CGRectZero];
+		if (cell.cardView.superview != cell.bubble)
+			[cell.bubble addSubview:cell.cardView];
+		cell.cardView.hidden = NO;
+		TGMessageCard *card = TGChatCardForRow(m);
+		CGFloat width = layout.bubbleFrame.size.width - TGDoubled(kPadH);
+		CGFloat senderH = layout.senderName.length ? TGMetricSenderLineHeight : TGMetricZero;
+		cell.cardView.frame = CGRectMake(kPadH, kPadV + senderH, width,
+				TGMessageCardLayout(card, width).size.height);
+		int64_t messageId = [m[@"id"] longLongValue];
+		__weak typeof(self) weakSelf = self;
+		cell.cardView.onAction = ^(TGMessageCard *tapped){
+			[weakSelf openCard:tapped ofMessage:messageId];
+		};
+		[cell.cardView showCard:card];
+
+		cell.time.text = layout.stamp;
+		cell.time.textColor = mine ? [theme timeMineColour] : [theme timeColour];
+		TGPlaceStamp(cell, layout.bubbleFrame, layout.timeWidth, mine);
+		cell.ticks.hidden = !mine;
+		if (mine) {
+			cell.ticks.image = [self ticksForMessage:m white:NO];
+			TGPlaceTicks(cell, layout.bubbleFrame);
+		}
+		return YES;
+	}
+
+	// Checklists
+	if (layout.isChecklist) {
+		TGTheme *checklistTheme = [TGTheme shared];
+		NSDictionary *checklist = [m[@"checklist"] isKindOfClass:NSDictionary.class]
+				? m[@"checklist"] : @{};
+		NSString *title = [checklist[@"title"] isKindOfClass:NSString.class]
+				? checklist[@"title"] : @"Checklist";
+		NSArray *tasks = [checklist[@"tasks"] isKindOfClass:NSArray.class]
+				? checklist[@"tasks"] : @[];
+		BOOL canToggle = TGChecklistCanToggle(checklist);
+		int64_t msgId = [m[@"id"] longLongValue];
+
+		cell.bubble.frame = layout.bubbleFrame;
+		cell.bubble.backgroundColor = mine ? [checklistTheme bubbleMineColour] : [checklistTheme bubbleTheirsColour];
+		cell.bubble.layer.borderWidth = TGMetricBorderNone;
+		cell.bubble.layer.borderColor = [UIColor clearColor].CGColor;
+		cell.bubble.layer.cornerRadius = [checklistTheme bubbleCornerRadius];
+
+		CGFloat contentW = layout.bubbleFrame.size.width - TGDoubled(kPadH);
+		CGFloat textW = contentW - kChecklistTextColumn;
+		CGSize titleSize = TGTextSize(title, TGFontBodyStrong(), contentW);
+
+		cell.body.hidden = NO;
+		cell.body.numberOfLines = 0;
+		cell.body.font = TGFontBodyStrong();
+		cell.body.textColor = [checklistTheme primaryTextColour];
+		cell.body.text = title;
+		CGFloat y = kPadV + (layout.senderName.length ? TGMetricSenderLineHeight : TGMetricZero);
+		cell.body.frame = CGRectMake(kPadH, y, contentW, titleSize.height);
+		y += titleSize.height;
+		if (tasks.count)
+			y += kChecklistTitleGap;
+
+		cell.subtitle.hidden = YES;
+		cell.subtitle.text = @"";
+
+		NSUInteger revision = 5381;
+		revision = revision * 33 + title.length;
+		revision = revision * 33 + tasks.count;
+		revision = revision * 33 + (canToggle ? 1 : 0);
+		for (id raw in tasks) {
+			NSDictionary *task = [raw isKindOfClass:NSDictionary.class] ? raw : @{};
+			NSString *text = [task[@"text"] isKindOfClass:NSString.class]
+					? task[@"text"] : @"";
+			revision = revision * 33 + text.length;
+			revision = revision * 33 + (TGChecklistTaskDone(task) ? 1 : 0);
+		}
+
+		if (cell.pollMessageId == msgId && cell.pollRevision == revision) {
+			for (UIView *row in cell.bubble.subviews) {
+				if (row.tag >= 0x9300 && row.tag < 0x9400) row.hidden = NO;
+			}
+		} else {
+			for (UIView *old in [cell.bubble.subviews copy]) {
+				if (old.tag >= 0x9300 && old.tag < 0x9400) [old removeFromSuperview];
+			}
+			cell.pollMessageId = msgId;
+			cell.pollRevision = revision;
+
+			CGFloat rowY = y;
+			for (NSUInteger i = 0; i < tasks.count; i++) {
+				id raw = tasks[i];
+				NSDictionary *task = [raw isKindOfClass:NSDictionary.class]
+						? raw : @{};
+				NSString *text = [task[@"text"] isKindOfClass:NSString.class]
+						? task[@"text"] : @"";
+				BOOL done = TGChecklistTaskDone(task);
+				CGFloat textH = TGTextSize(text, TGFontBody(), textW).height;
+				CGFloat rowH = MAX(kChecklistRow, textH);
+
+				UIButton *row = [UIButton buttonWithType:UIButtonTypeCustom];
+				row.frame = CGRectMake(kPadH, rowY, contentW, rowH);
+				row.tag = 0x9300 + (NSInteger)i;
+				row.enabled = canToggle;
+				[row addTarget:self action:@selector(checklistTaskTapped:) forControlEvents:UIControlEventTouchUpInside];
+				[cell.bubble addSubview:row];
+
+				// The mark sits on the task's first line, wherever the text lands.
+				CGFloat textY = TGCenteredOrigin(rowH, textH);
+				UIView *dot = [[UIView alloc] initWithFrame:CGRectMake(TGMetricZero,
+						textY + TGCenteredOrigin(MIN(textH, TGMetricLineBody), TGMetricPollDotSide),
+						TGMetricPollDotSide, TGMetricPollDotSide)];
+				dot.layer.cornerRadius = TGHalf(TGMetricPollDotSide);
+				dot.layer.borderWidth = TGMetricBorderMedium;
+				dot.layer.borderColor = [checklistTheme accentColour].CGColor;
+				dot.backgroundColor = done ? [checklistTheme accentColour] : [UIColor clearColor];
+				[row addSubview:dot];
+
+				UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(kChecklistTextColumn,
+						textY, textW, textH)];
+				label.numberOfLines = 0;
+				label.font = TGFontBody();
+				label.textColor = [checklistTheme primaryTextColour];
+				label.backgroundColor = [UIColor clearColor];
+				label.text = text;
+				[row addSubview:label];
+
+				rowY += rowH;
+			}
+
+			rowY += kChecklistProgressGap;
+			UILabel *progress = [[UILabel alloc] initWithFrame:
+					CGRectMake(kPadH, rowY, contentW, kChecklistProgressLine)];
+			progress.tag = 0x93FF;
+			progress.font = TGFontMeta();
+			progress.textColor = [checklistTheme secondaryTextColour];
+			progress.backgroundColor = [UIColor clearColor];
+			progress.text = TGChecklistProgressLine(checklist);
+			[cell.bubble addSubview:progress];
+		}
+
+		cell.picture.hidden = YES;
+		cell.disc.hidden = YES;
+		cell.time.text = layout.stamp;
+		cell.time.textColor = mine ? [checklistTheme timeMineColour] : [checklistTheme timeColour];
+		TGPlaceStamp(cell, layout.bubbleFrame, layout.timeWidth, mine);
+		cell.ticks.hidden = !mine;
+		if (mine) {
+			cell.ticks.image = [self ticksForMessage:m white:NO];
+			TGPlaceTicks(cell, layout.bubbleFrame);
+		}
+		return YES;
+	}
+
 	// Polls
 	if (layout.isPoll) {
 		TGTheme *pollTheme = [TGTheme shared];
-		NSArray *options = m[@"pollOptions"];
-		NSString *question = m[@"pollQuestion"] ?: @"Poll";
-		BOOL closed = [m[@"pollClosed"] boolValue];
+		NSDictionary *poll = [m[@"poll"] isKindOfClass:NSDictionary.class]
+				? m[@"poll"] : @{
+					@"question"        : [m[@"pollQuestion"] isKindOfClass:NSString.class]
+							? m[@"pollQuestion"] : @"Poll",
+					@"options"         : [m[@"pollOptions"] isKindOfClass:NSArray.class]
+							? m[@"pollOptions"] : @[],
+					@"totalVoterCount" : [m[@"pollTotal"] isKindOfClass:NSNumber.class]
+							? m[@"pollTotal"] : @0,
+					@"isClosed"        : [m[@"pollClosed"] isKindOfClass:NSNumber.class]
+							? m[@"pollClosed"] : @NO,
+					@"isQuiz"          : [m[@"pollQuiz"] isKindOfClass:NSNumber.class]
+							? m[@"pollQuiz"] : @NO,
+				};
+		NSArray *options = [poll[@"options"] isKindOfClass:NSArray.class]
+				? poll[@"options"] : @[];
+		NSString *question = [poll[@"question"] isKindOfClass:NSString.class]
+				? poll[@"question"] : @"Poll";
+		NSString *description = [poll[@"description"] isKindOfClass:NSString.class]
+				? poll[@"description"] : @"";
+		NSString *explanation = [poll[@"explanation"] isKindOfClass:NSString.class]
+				? poll[@"explanation"] : @"";
+		BOOL closed = [poll[@"isClosed"] boolValue];
+		BOOL multiple = [poll[@"allowsMultiple"] boolValue];
+		BOOL showsResults = TGPollShowsResults(poll);
+
+		NSString *kindLine = TGPollKindLine(poll);
+		NSString *closesLine = TGPollClosesLine(poll,
+				[[NSDate date] timeIntervalSince1970]);
+		if (closesLine.length)
+			kindLine = [NSString stringWithFormat:@"%@, e%@", kindLine,
+					[closesLine substringFromIndex:1]];
+
+		int64_t msgId = [m[@"id"] longLongValue];
+		NSMutableIndexSet *pending = self.pendingPollVotes[@(msgId)];
+		BOOL hasPending = [pending isKindOfClass:NSIndexSet.class] && pending.count > 0;
+		BOOL showVote = multiple && !closed && !showsResults && hasPending;
+		BOOL showExplanation = showsResults && explanation.length > 0;
 
 		cell.bubble.frame = layout.bubbleFrame;
 		cell.bubble.backgroundColor = mine ? [pollTheme bubbleMineColour] : [pollTheme bubbleTheirsColour];
@@ -56,30 +266,57 @@
 		cell.bubble.layer.borderColor = [UIColor clearColor].CGColor;
 		cell.bubble.layer.cornerRadius = [pollTheme bubbleCornerRadius];
 
+		CGFloat contentW = layout.bubbleFrame.size.width - TGDoubled(kPadH);
+		CGSize questionSize = TGTextSize(question, TGFontBodyStrong(), contentW);
+
 		cell.body.hidden = NO;
 		cell.body.numberOfLines = 0;
 		cell.body.font = TGFontBodyStrong();
 		cell.body.textColor = [pollTheme primaryTextColour];
 		cell.body.text = question;
-		CGSize qs = TGTextSize(question, cell.body.font, layout.bubbleFrame.size.width - TGDoubled(kPadH));
-		cell.body.frame = CGRectMake(kPadH, kPadV, layout.bubbleFrame.size.width - TGDoubled(kPadH), qs.height);
+		CGFloat y = kPadV + (layout.senderName.length ? TGMetricSenderLineHeight : TGMetricZero);
+		cell.body.frame = CGRectMake(kPadH, y, contentW, questionSize.height);
+		y += questionSize.height;
 
-		cell.subtitle.hidden = NO;
-		cell.subtitle.font = TGFontMeta();
-		cell.subtitle.textColor = [pollTheme secondaryTextColour];
-		cell.subtitle.text = closed ? @"Final results"
-			: [NSString stringWithFormat:@"%@ voted",
-					[m[@"pollTotal"] integerValue] == 0 ? @"Nobody" : m[@"pollTotal"]];
-		cell.subtitle.frame = CGRectMake(kPadH, kPadV + qs.height + TGMetricPadTiny,
-				layout.bubbleFrame.size.width - TGDoubled(kPadH), TGMetricLineCaption);
-
-		int64_t msgId = [m[@"id"] longLongValue];
-		NSUInteger revision = (NSUInteger)([m[@"pollTotal"] integerValue] * 31
-				+ (NSInteger)options.count * 7 + (closed ? 1 : 0));
-		for (NSUInteger i = 0; i < options.count; i++) {
-			if ([options[i][@"is_chosen"] boolValue])
-				revision += (i + 1) * 131;
+		if (description.length) {
+			CGFloat descriptionH = TGTextSize(description, TGFontSubhead(),
+					contentW).height;
+			cell.subtitle.hidden = NO;
+			cell.subtitle.numberOfLines = 0;
+			cell.subtitle.font = TGFontSubhead();
+			cell.subtitle.textColor = [pollTheme secondaryTextColour];
+			cell.subtitle.text = description;
+			y += kPollDescriptionGap;
+			cell.subtitle.frame = CGRectMake(kPadH, y, contentW, descriptionH);
+			y += descriptionH;
+		} else {
+			cell.subtitle.hidden = YES;
+			cell.subtitle.text = @"";
 		}
+
+		CGFloat kindY = y + kPollKindGap;
+		CGFloat optionsY = kindY + kPollKindLine + kPollOptionsGap;
+
+		NSUInteger revision = 5381;
+		revision = revision * 33 + (NSUInteger)[poll[@"totalVoterCount"] longLongValue];
+		revision = revision * 33 + options.count;
+		revision = revision * 33 + (closed ? 1 : 0);
+		revision = revision * 33 + (showsResults ? 1 : 0);
+		revision = revision * 33 + (multiple ? 1 : 0);
+		revision = revision * 33 + (NSUInteger)([poll[@"correctOption"] longLongValue] + 1);
+		revision = revision * 33 + description.length;
+		revision = revision * 33 + explanation.length;
+		revision = revision * 33 + kindLine.length;
+		for (NSUInteger i = 0; i < options.count; i++) {
+			NSDictionary *option = [options[i] isKindOfClass:NSDictionary.class]
+					? options[i] : @{};
+			revision = revision * 33 + TGPollOptionText(option).length;
+			revision = revision * 33 + (NSUInteger)(TGPollMarkForOption(poll, i) + 1);
+			revision = revision * 33 + (NSUInteger)[option[@"percent"] longLongValue];
+			if ([pending containsIndex:i])
+				revision = revision * 33 + (i + 1);
+		}
+
 		if (cell.pollMessageId == msgId && cell.pollRevision == revision) {
 			for (UIView *row in cell.bubble.subviews) {
 				if (row.tag >= 0x9100 && row.tag < 0x9200) row.hidden = NO;
@@ -91,65 +328,135 @@
 			cell.pollMessageId = msgId;
 			cell.pollRevision = revision;
 
-			CGFloat y = kPadV + qs.height + kPollVotedLine;
+			UILabel *kind = [[UILabel alloc] initWithFrame:
+					CGRectMake(kPadH, kindY, contentW, kPollKindLine)];
+			kind.tag = 0x91E0;
+			kind.font = TGFontMeta();
+			kind.textColor = [pollTheme secondaryTextColour];
+			kind.backgroundColor = [UIColor clearColor];
+			kind.text = kindLine;
+			[cell.bubble addSubview:kind];
+
+			CGFloat rowW = layout.bubbleFrame.size.width - TGDoubled(kPadH);
+			CGFloat rowY = optionsY;
 			for (NSUInteger i = 0; i < options.count; i++) {
-				NSDictionary *option = options[i];
-				BOOL chosen = [option[@"is_chosen"] boolValue];
-				NSInteger share = [option[@"vote_percentage"] integerValue];
+				NSDictionary *option = [options[i] isKindOfClass:NSDictionary.class]
+						? options[i] : @{};
+				TGPollMark mark = TGPollMarkForOption(poll, i);
+				BOOL pendingHere = multiple && [pending containsIndex:i];
+				BOOL filled = mark != TGPollMarkNone || pendingHere;
+				UIColor *dotColour = mark == TGPollMarkWrong
+						? [pollTheme destructiveColour] : [pollTheme accentColour];
+
+				NSString *optionText = TGPollOptionText(option);
+				CGFloat textW = rowW - kPollTextColumn - kPollShareWidth - TGMetricPadTiny;
+				CGFloat textH = TGTextSize(optionText, TGFontSubhead(), textW).height;
+				CGFloat rowH = TGPollOptionRowHeight(option, rowW);
+				CGFloat textY = TGMetricPadTiny;
 
 				UIButton *row = [UIButton buttonWithType:UIButtonTypeCustom];
-				row.frame = CGRectMake(kPadH, y, layout.bubbleFrame.size.width - TGDoubled(kPadH), kPollRow);
+				row.frame = CGRectMake(kPadH, rowY, rowW, rowH);
 				row.tag = 0x9100 + (NSInteger)i;
-				row.enabled = !closed;
+				row.enabled = !closed && !showsResults;
 				[row addTarget:self action:@selector(pollOptionTapped:) forControlEvents:UIControlEventTouchUpInside];
 				[cell.bubble addSubview:row];
 
-				UIView *dot = [[UIView alloc] initWithFrame:CGRectMake(TGMetricZero, TGCenteredOrigin(kPollRow, TGMetricPollDotSide),
+				// The dot marks the first line, wherever a wrapped option puts
+				// the rest of its text.
+				UIView *dot = [[UIView alloc] initWithFrame:CGRectMake(TGMetricZero,
+						textY + TGCenteredOrigin(TGMetricLineSubhead, TGMetricPollDotSide),
 						TGMetricPollDotSide, TGMetricPollDotSide)];
-				dot.layer.cornerRadius = TGHalf(TGMetricPollDotSide);
+				dot.layer.cornerRadius = multiple
+						? TGMetricCornerSmall : TGHalf(TGMetricPollDotSide);
 				dot.layer.borderWidth = TGMetricBorderMedium;
-				dot.layer.borderColor = [pollTheme accentColour].CGColor;
-				dot.backgroundColor = chosen ? [pollTheme accentColour] : [UIColor clearColor];
+				dot.layer.borderColor = dotColour.CGColor;
+				dot.backgroundColor = filled ? dotColour : [UIColor clearColor];
 				[row addSubview:dot];
 
-				UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(kPollTextColumn, TGMetricPadTiny,
-						row.bounds.size.width - kPollTextColumn - kPollShareWidth - TGMetricPadTiny,
-						TGMetricLineRow)];
-				id optText = option[@"text"];
-				if ([optText isKindOfClass:NSDictionary.class]) {
-					label.text = optText[@"text"] ?: @"";
-				} else if ([optText isKindOfClass:NSString.class]) {
-					label.text = (NSString *)optText;
-				} else {
-					label.text = @"";
-				}
+				UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(kPollTextColumn,
+						textY, textW, textH)];
+				label.numberOfLines = 0;
+				label.text = optionText;
 				label.font = TGFontSubhead();
 				label.textColor = [pollTheme primaryTextColour];
 				label.backgroundColor = [UIColor clearColor];
 				[row addSubview:label];
 
-				UILabel *percent = [[UILabel alloc] initWithFrame:CGRectMake(row.bounds.size.width - kPollShareWidth, TGMetricPadTiny,
-						kPollShareWidth, TGMetricLineRow)];
-				percent.text = [NSString stringWithFormat:@"%ld%%", (long)share];
-				percent.font = TGFontCaption();
-				percent.textAlignment = NSTextAlignmentRight;
-				percent.textColor = [pollTheme secondaryTextColour];
-				percent.backgroundColor = [UIColor clearColor];
-				[row addSubview:percent];
+				if (showsResults) {
+					NSInteger share = [option[@"percent"] isKindOfClass:NSNumber.class]
+							? [option[@"percent"] integerValue] : 0;
+					UILabel *percent = [[UILabel alloc] initWithFrame:
+							CGRectMake(rowW - kPollShareWidth, textY,
+									kPollShareWidth, TGMetricLineRow)];
+					percent.text = [NSString stringWithFormat:@"%ld%%", (long)share];
+					percent.font = TGFontCaption();
+					percent.textAlignment = NSTextAlignmentRight;
+					percent.textColor = [pollTheme secondaryTextColour];
+					percent.backgroundColor = [UIColor clearColor];
+					[row addSubview:percent];
 
-				UIView *track = [[UIView alloc] initWithFrame:CGRectMake(kPollTextColumn, kPollRow - kPollTrackDrop - kPollTrackHeight,
-						row.bounds.size.width - kPollTextColumn, kPollTrackHeight)];
-				track.backgroundColor = [pollTheme separatorColour];
-				[row addSubview:track];
+					// The track stays under the text: below a wrapped option it
+					// drops to the bottom of the taller row.
+					CGFloat trackY = MAX(textY + textH,
+							rowH - kPollTrackDrop - kPollTrackHeight);
+					UIView *track = [[UIView alloc] initWithFrame:
+							CGRectMake(kPollTextColumn, trackY,
+									rowW - kPollTextColumn, kPollTrackHeight)];
+					track.backgroundColor = [pollTheme separatorColour];
+					[row addSubview:track];
 
-				UIView *fill = [[UIView alloc] initWithFrame:CGRectMake(kPollTextColumn, kPollRow - kPollTrackDrop - kPollTrackHeight,
-						(row.bounds.size.width - kPollTextColumn) * share / TGPercentFull,
-						kPollTrackHeight)];
-				fill.backgroundColor = [pollTheme accentColour];
-				[row addSubview:fill];
+					UIView *fill = [[UIView alloc] initWithFrame:
+							CGRectMake(kPollTextColumn, trackY,
+									(rowW - kPollTextColumn) * share / TGPercentFull,
+									kPollTrackHeight)];
+					fill.backgroundColor = [pollTheme accentColour];
+					[row addSubview:fill];
+				}
 
-				y += kPollRow;
+				rowY += rowH;
 			}
+
+			CGFloat stackY = rowY;
+			if (showVote) {
+				UIButton *vote = [UIButton buttonWithType:UIButtonTypeCustom];
+				vote.tag = 0x91F0;
+				stackY += kPollVoteGap;
+				vote.frame = CGRectMake(kPadH, stackY, contentW, kPollVoteHeight);
+				vote.titleLabel.font = TGFontBodyStrong();
+				[vote setTitle:@"Vote" forState:UIControlStateNormal];
+				[vote setTitleColor:[pollTheme accentColour] forState:UIControlStateNormal];
+				[vote setTitleColor:[pollTheme accentColour] forState:UIControlStateHighlighted];
+				vote.backgroundColor = [UIColor clearColor];
+				[vote addTarget:self action:@selector(pollVoteTapped:) forControlEvents:UIControlEventTouchUpInside];
+				[cell.bubble addSubview:vote];
+				stackY += kPollVoteHeight;
+			}
+
+			if (showExplanation) {
+				CGFloat explanationH = TGTextSize(explanation, TGFontCaption(),
+						contentW).height;
+				stackY += kPollExplanationGap;
+				UILabel *note = [[UILabel alloc] initWithFrame:
+						CGRectMake(kPadH, stackY, contentW, explanationH)];
+				note.tag = 0x91F2;
+				note.numberOfLines = 0;
+				note.font = TGFontCaption();
+				note.textColor = [pollTheme secondaryTextColour];
+				note.backgroundColor = [UIColor clearColor];
+				note.text = explanation;
+				[cell.bubble addSubview:note];
+				stackY += explanationH;
+			}
+
+			stackY += kPollFooterGap;
+			UILabel *footer = [[UILabel alloc] initWithFrame:
+					CGRectMake(kPadH, stackY, contentW, kPollFooterLine)];
+			footer.tag = 0x91F1;
+			footer.font = TGFontMeta();
+			footer.textColor = [pollTheme secondaryTextColour];
+			footer.backgroundColor = [UIColor clearColor];
+			footer.text = TGPollVotesLine(poll);
+			[cell.bubble addSubview:footer];
 		}
 
 		cell.picture.hidden = YES;
@@ -184,6 +491,8 @@
 		}
 
 		cell.docMessageId = [m[@"id"] longLongValue];
+		__weak typeof(self) weakSelf = self;
+		__weak TGBubbleCell *weakCell = cell;
 
 		for (UIView *old in [cell.bubble.subviews copy]) {
 			if (old.tag >= 0x9200 && old.tag < 0x9300) [old removeFromSuperview];
@@ -229,6 +538,70 @@
 			disc.userInteractionEnabled = NO;
 			disc.image = [TGIcons fileDiscOfSide:kFileDisc];
 			[tile addSubview:disc];
+
+			NSNumber *thumbId = [docMsg[@"docThumbFileId"] isKindOfClass:NSNumber.class]
+					? docMsg[@"docThumbFileId"] : nil;
+			if (thumbId.longLongValue > 0) {
+				UIImageView *thumb = [[UIImageView alloc] initWithFrame:
+						CGRectMake(TGMetricZero, TGMetricZero, kFileTile, kFileTile)];
+				thumb.contentMode = UIViewContentModeScaleAspectFill;
+				thumb.clipsToBounds = YES;
+				thumb.userInteractionEnabled = NO;
+				thumb.hidden = YES;
+				[tile addSubview:thumb];
+
+				UIImage *cached = self.images[thumbId];
+				if (cached) {
+					thumb.image = cached;
+					thumb.hidden = NO;
+					disc.hidden = YES;
+				} else if (![self.imagesRequested containsObject:thumbId]) {
+					[self.imagesRequested addObject:thumbId];
+					int64_t guardId = [m[@"id"] longLongValue];
+					CGFloat screenScale = [UIScreen mainScreen].scale;
+					[[TGClient shared] downloadFile:[thumbId integerValue]
+										 completion:^(NSString *path){
+						if (!path.length) {
+							dispatch_async(dispatch_get_main_queue(), ^{
+								[weakSelf.imagesRequested removeObject:thumbId];
+							});
+							return;
+						}
+						dispatch_async(dispatch_get_global_queue(
+								DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
+							dispatch_semaphore_wait(TGIconsDecodeGate(),
+									DISPATCH_TIME_FOREVER);
+							__block UIImage *image = nil;
+							@autoreleasepool {
+								image = [TGIcons decodedImageAtPath:path
+										fittingSize:CGSizeMake(kFileTile, kFileTile)
+											   fill:YES scale:screenScale];
+							}
+							dispatch_semaphore_signal(TGIconsDecodeGate());
+							if (!image) {
+								dispatch_async(dispatch_get_main_queue(), ^{
+									[weakSelf.imagesRequested removeObject:thumbId];
+								});
+								return;
+							}
+							dispatch_async(dispatch_get_main_queue(), ^{
+								TGChatViewController *me = weakSelf;
+								TGBubbleCell *guardCell = weakCell;
+								if (!me || guardCell.docMessageId != guardId ||
+										thumb.superview == nil) {
+									[me.imagesRequested removeObject:thumbId];
+									return;
+								}
+								me.images[thumbId] = image;
+								[me.imagesRequested removeObject:thumbId];
+								thumb.image = image;
+								thumb.hidden = NO;
+								disc.hidden = YES;
+							});
+						});
+					}];
+				}
+			}
 
 			CGFloat textX = kFileTile + kTileTextGap;
 			CGFloat textW = rowW - textX;
@@ -448,6 +821,18 @@
 		}
 		if ([vTitle isEqualToString:vAddr]) {
 			vAddr = @"";
+		}
+		// A live location says whether it still moves and when it last did,
+		// in place of an address.
+		NSDictionary *live = [m[@"live"] isKindOfClass:NSDictionary.class] ? m[@"live"] : nil;
+		if (live) {
+			NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
+			vTitle = TGLiveLocationStatus(live, [m[@"date"] doubleValue], now);
+			// Official writes only the freshness here; the line is one
+			// narrow row, and heading and alert would be cut off anyway.
+			// ponytail: heading as an arrow on the pin, when the map grows one.
+			vAddr = TGLiveLocationUpdated([m[@"editDate"] doubleValue], now)
+					?: TGLiveLocationRadius([live[@"proximityRadius"] longLongValue]) ?: @"";
 		}
 
 		CGFloat locTimeW = layout.timeWidth;

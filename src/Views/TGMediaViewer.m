@@ -84,6 +84,8 @@ static const int kSoftVideoMaxLongSide = 720;
 @property (nonatomic, strong) UILabel *dateLabel;
 @property (nonatomic, strong) UIImageView *authorAvatar;
 @property (nonatomic, strong) UIButton *moreButton;
+/// Hidden on a page whose message TDLib will not let out of the chat.
+@property (nonatomic, strong) UIButton *saveButton;
 @property (nonatomic, strong) NSNumber *avatarFileId;
 @property (nonatomic, strong) UILabel *captionLabel;
 @property (nonatomic, strong) UIScrollView *thumbStrip;
@@ -135,6 +137,13 @@ static const int kSoftVideoMaxLongSide = 720;
 @property (nonatomic, strong) UIButton *playButton;
 @property (nonatomic, strong) UILabel *timeLabel;
 @end
+
+/// Pages come from chats, profiles and galleries; only a chat message says
+/// whether it may leave, and only an explicit NO locks it.
+static BOOL TGViewerItemLocked(NSDictionary *item) {
+	id saveable = item[@"canBeSaved"];
+	return [saveable isKindOfClass:NSNumber.class] && ![saveable boolValue];
+}
 
 @implementation TGMediaViewer
 
@@ -606,6 +615,7 @@ static CGAffineTransform TGTransformOnto(CGRect resting, CGRect target) {
 	[save addTarget:self action:@selector(saveCurrent)
 	 forControlEvents:UIControlEventTouchUpInside];
 	[self.bottomBar addSubview:save];
+	self.saveButton = save;
 
 	// The video strip lives in the bottom bar and only appears on a video page.
 	self.playButton = [UIButton buttonWithType:UIButtonTypeCustom];
@@ -856,6 +866,7 @@ static CGAffineTransform TGTransformOnto(CGRect resting, CGRect target) {
 	[self refreshAvatarForUserId:senderId title:sender];
 
 	self.captionLabel.text = item[@"text"] ?: @"";
+	self.saveButton.hidden = TGViewerItemLocked(item);
 
 	BOOL isVideo = [item[@"kind"] isEqualToString:@"messageVideo"];
 	BOOL isAnim = [item[@"kind"] isEqualToString:@"messageAnimation"];
@@ -1614,12 +1625,18 @@ static CGAffineTransform TGTransformOnto(CGRect resting, CGRect target) {
 	if (!m)
 		return;
 
-	NSMutableArray *choices = [NSMutableArray arrayWithObjects:
-			@"Share", @"Forward", @"Copy Caption", nil];
+	// TDLib's can_be_saved is NO in a protected chat and for one-time media:
+	// the picture may be looked at, not shared, saved or copied.
+	BOOL saveable = !TGViewerItemLocked(m);
+	NSMutableArray *choices = saveable
+			? [NSMutableArray arrayWithObjects:@"Share", @"Forward", @"Copy Caption", nil]
+			: [NSMutableArray array];
 	NSInteger destructive = -1;
 	if ([self currentFileId]){
-		[choices addObject:@"Save to Camera Roll"];
-		[choices addObject:@"Add to Downloads"];
+		if (saveable){
+			[choices addObject:@"Save to Camera Roll"];
+			[choices addObject:@"Add to Downloads"];
+		}
 		[choices addObject:@"File Info"];
 		[choices addObject:@"Delete from Device"];
 		destructive = (NSInteger)choices.count - 1;
@@ -1655,6 +1672,8 @@ static CGAffineTransform TGTransformOnto(CGRect resting, CGRect target) {
 }
 
 - (void)shareCurrent {
+	if (TGViewerItemLocked([self currentItem]))
+		return;
 	UIImage *image = self.originals[@(self.index)];
 	if (!image && ![self.placeholderPages containsObject:@(self.index)]){
 		UIView *page = self.pages[@(self.index)];
@@ -1878,6 +1897,8 @@ static CGAffineTransform TGTransformOnto(CGRect resting, CGRect target) {
 
 - (void)saveCurrent {
 	NSDictionary *item = [self currentItem];
+	if (TGViewerItemLocked(item))
+		return;
 	BOOL isVideo = [item[@"kind"] isEqualToString:@"messageVideo"];
 	if (isVideo){
 		NSNumber *fileId = [self currentFileId];

@@ -4,12 +4,17 @@
 #import <UIKit/UIKit.h>
 #import "TGMessageLayout.h"
 #import "TGLottieView.h"
+#import "TGMessageCardView.h"
+#import "TGMediaVeil.h"
 
 @interface TGBubbleCell : UITableViewCell
 
 @property (nonatomic, strong) UIView *bubble;
 @property (nonatomic, strong) UILabel *body;
 @property (nonatomic, strong) UILabel *captionLabel;
+/// The second line under a voice note: its transcription, or the words that
+/// say one is on the way. Kept apart from the caption so both can show.
+@property (nonatomic, strong) UILabel *transcriptionLabel;
 @property (nonatomic, strong) UIImageView *picture;
 @property (nonatomic, strong) UILabel *time;
 @property (nonatomic, strong) TGLottieView *lottie;
@@ -71,6 +76,10 @@
 /// whether it is closed. Keeping it lets a reused cell keep its rows while
 /// still rebuilding them the moment a vote lands.
 @property (nonatomic, assign) NSUInteger pollRevision;
+/// Made on the first card row this cell shows, hidden on every other row.
+@property (nonatomic, strong) TGMessageCardView *cardView;
+/// Covers a spoiler or one-time picture; made on first use, hidden otherwise.
+@property (nonatomic, strong) TGMediaVeilView *veilView;
 @property (nonatomic, strong) UILabel *forwardLabel;
 
 // Contact card components

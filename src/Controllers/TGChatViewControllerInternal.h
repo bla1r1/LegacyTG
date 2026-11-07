@@ -11,6 +11,7 @@
 #import "TGRecordBar.h"
 #import "TGSheet.h"
 #import "TGTheme.h"
+#import "TGMessageCard.h"
 #import "TGIcons.h"
 #import "TGSnackbar.h"
 #import "TGMessageLayout.h"
@@ -29,6 +30,13 @@
 #import "TGChatGeometry.h"
 
 @class TGMessageStreamStore;
+
+FOUNDATION_EXPORT TGMessageCard *TGChatCardForRow(NSDictionary *m);
+
+/// One poll option's row: the text measured at `rowWidth`, plus the row's own
+/// padding, and never under kPollRow. Layout and cell both call it, so the
+/// height they place and the height they draw cannot drift.
+FOUNDATION_EXPORT CGFloat TGPollOptionRowHeight(NSDictionary *option, CGFloat rowWidth);
 
 @interface TGChatViewController () <UISearchBarDelegate, CLLocationManagerDelegate, TGEmojiPanelDelegate,
 		UIScrollViewDelegate, AVAudioPlayerDelegate, TGStreamingVoicePlayerDelegate,
@@ -163,6 +171,11 @@
 @property (nonatomic, strong) TGEmojiPanel *stickerPanel;   // emoji, stickers, GIFs
 @property (nonatomic, strong) TGMessageLayoutCache *layoutCache;
 @property (nonatomic, strong) NSMutableDictionary *gifPaths;       // docId -> local MP4
+/// Draft answers of a multiple-answer poll, per message id, before the Vote
+/// button sends them all at once.
+@property (nonatomic, strong) NSMutableDictionary *pendingPollVotes;
+/// Ids of spoiler pictures tapped open in this visit, as official keeps them.
+@property (nonatomic, strong) NSMutableSet *revealedSpoilers;
 // Chrome (TGChatViewController+Chrome)
 @property (nonatomic, assign) int64_t readInboxAtOpen;   // where you had read up to
 @property (nonatomic, assign) int64_t unreadFromId;      // the "Unread Messages" bar goes above it
@@ -409,6 +422,10 @@
 - (BOOL)stampFitsInlineFor:(NSDictionary *)m;
 - (CGFloat)layoutForwardIn:(TGBubbleCell *)cell message:(NSDictionary *)m width:(CGFloat)width;
 - (CGFloat)pollHeightFor:(NSDictionary *)m;
+/// The final service line: who did it, plus the pinned message quoted when
+/// that message is loaded. Layout and cell both draw this one string.
+- (NSString *)serviceLineForMessage:(NSDictionary *)m;
+- (CGFloat)checklistHeightFor:(NSDictionary *)m;
 - (BOOL)stampSitsOnPictureFor:(NSDictionary *)m;
 - (CGSize)bodySizeFor:(NSDictionary *)m;
 - (UIImage *)imageFor:(NSDictionary *)m;
@@ -423,6 +440,10 @@
 - (BOOL)continuesAlbumAtRow:(NSInteger)row;
 - (BOOL)albumContinuesAfterRow:(NSInteger)row;
 - (void)pollOptionTapped:(UIButton *)option;
+- (void)checklistTaskTapped:(UIButton *)taskRow;
+- (void)pollVoteTapped:(UIButton *)button;
+/// The card button of a message row: open the person, chat, gift, story, game or giveaway.
+- (void)openCard:(TGMessageCard *)card ofMessage:(int64_t)messageId;
 - (void)docRowTapped:(UIButton *)sender;
 - (void)callCellButtonTapped:(UIButton *)btn;
 - (void)contactCallButtonTapped:(UIButton *)btn;
@@ -446,6 +467,12 @@
 - (void)showChatAction:(NSString *)action resting:(NSString *)resting;
 - (void)stopChrome;
 - (void)sendImage:(UIImage *)image;
+- (void)sendImage:(UIImage *)image viewOnce:(BOOL)viewOnce;
+/// Asks whether the picture or video goes as a normal message or a one-time
+/// one before staging the file.
+- (void)confirmSendingImage:(UIImage *)image;
+- (void)confirmSendingVideoAtPath:(NSString *)path;
+- (void)sendVideoAtPath:(NSString *)path viewOnce:(BOOL)viewOnce;
 
 - (BOOL)configureServiceCell:(TGBubbleCell *)cell message:(NSDictionary *)m layout:(TGMessageLayout *)layout isMine:(BOOL)mine indexPath:(NSIndexPath *)indexPath;
 - (BOOL)configureAudioCell:(TGBubbleCell *)cell message:(NSDictionary *)m layout:(TGMessageLayout *)layout isMine:(BOOL)mine indexPath:(NSIndexPath *)indexPath;

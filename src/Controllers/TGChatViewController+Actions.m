@@ -12,6 +12,7 @@
 #import "TGMessageToolsViewController.h"
 #import "TGSponsoredMessagesViewController.h"
 #import "TGGameScoresViewController.h"
+#import "TGPollPresentation.h"
 #import <CoreImage/CoreImage.h>
 #import <QuartzCore/QuartzCore.h>
 
@@ -539,7 +540,9 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 
 	[items addObject:@{@"title" : @"Reply", @"icon" : @"reply"}];
 
-	if (text.length)
+	// A protected chat or a one-time picture lets nothing out of the chat.
+	BOOL saveable = ![m[@"canBeSaved"] isEqual:@NO];
+	if (text.length && saveable)
 		[items addObject:@{@"title" : @"Copy", @"icon" : @"copy"}];
 
 	// A caption is edited by its own request, which is why only text could be
@@ -552,7 +555,8 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 						   @"icon" : @"pin"}];
 
 	[items addObject:@{@"title" : @"Copy Link", @"icon" : @"copy"}];
-	[items addObject:@{@"title" : @"Forward", @"icon" : @"forward"}];
+	if (saveable)
+		[items addObject:@{@"title" : @"Forward", @"icon" : @"forward"}];
 #if TG_DEV
 	// One row for the Tier 2 message tools: checklists, suggested posts,
 	// fact checks and the AI/rich requests that read this one message.
@@ -583,6 +587,10 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 	// Closing a poll is the sender's to do, and only while it is still open.
 	if (mine && [m[@"pollOptions"] count] && ![m[@"pollClosed"] boolValue])
 		[items addObject:@{@"title" : @"Stop Poll", @"icon" : @"select"}];
+	// A poll that lets the voter change their mind: retracting sends the empty
+	// answer set, which TDLib reads as "no answers".
+	if (TGPollCanRetract([m[@"poll"] isKindOfClass:NSDictionary.class] ? m[@"poll"] : nil))
+		[items addObject:@{@"title" : @"Retract Vote", @"icon" : @"select"}];
 	// A poll's crowd and its options: voters answered, an option made after
 	// the fact, an option taken out of it.
 	if ([m[@"pollOptions"] count]){
@@ -837,6 +845,17 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 						onConfirm:^{
 			[[TGClient shared] stopPoll:messageId inChat:weakSelf.chatId];
 		}];
+
+	} else if ([action isEqualToString:@"Retract Vote"]){
+		// The empty answer set is how TDLib takes a vote back; the updated
+		// message follows, and the row re-reads a second later.
+		[[TGClient shared] votePoll:messageId inChat:self.chatId options:@[]];
+		[self.layoutCache removeLayoutForMessageId:messageId];
+		__weak typeof(self) weakSelf = self;
+		dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
+				(int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+			[weakSelf reload];
+		});
 
 	} else if ([action isEqualToString:@"Stop Live Location"]){
 		// The pin comes off the map: an edit whose period says zero, which
@@ -1246,11 +1265,11 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 		__weak typeof(self) weakSelf = self;
 		[[TGClient shared] recognizeSpeechInChat:self.chatId message:messageId
 									  completion:^(BOOL ok, NSString *error){
+			if (ok) return;   // the bubble says "Transcribing..." until the text lands
 			TGChatViewController *me = weakSelf;
 			if (!me) return;
-			NSString *text = ok
-					? @"Telegram is transcribing. The text arrives with the message."
-					: (error.length ? error : @"Telegram refused the transcription.");
+			NSString *text = error.length ? error
+					: @"Could not transcribe this voice message.";
 			[TGAlertSheet showMessage:text title:@"Transcribe" inView:me.view];
 		}];
 
@@ -1726,7 +1745,7 @@ static NSString *TGStatGraphLine(NSDictionary *graph, NSString *label) {
 
 	NSURL *movie = info[UIImagePickerControllerMediaURL];
 	if (movie){
-		[[TGClient shared] sendVideoAtPath:movie.path toChat:self.chatId];
+		[self confirmSendingVideoAtPath:movie.path];
 		return;
 	}
 
@@ -1739,7 +1758,7 @@ static NSString *TGStatGraphLine(NSDictionary *graph, NSString *label) {
 		return;
 	}
 	if (image)
-		[self sendImage:image];
+		[self confirmSendingImage:image];
 }
 
 /// The picked picture replaces the one already on Telegram: the same message
@@ -1774,10 +1793,58 @@ static NSString *TGStatGraphLine(NSDictionary *graph, NSString *label) {
 	}];
 }
 
+/// A single picture has no preview screen here, so the last step before it
+/// goes out is this choice - the place their timer button sits on the preview.
+- (void)confirmSendingImage:(UIImage *)image {
+	if (!image)
+		return;
+	// TDLib allows one-time media only in a chat with one person (a positive
+	// chat id); everywhere else the picture goes out with no extra tap.
+	if (self.chatId <= 0){
+		[self sendImage:image viewOnce:NO];
+		return;
+	}
+	__weak typeof(self) weakSelf = self;
+	[TGAlertSheet showChoices:@[@"Send", @"Send as View Once"]
+						title:nil
+			 destructiveIndex:-1
+					   inView:self.view
+					 onChoice:^(NSInteger index){
+		[weakSelf sendImage:image viewOnce:(index == 1)];
+	}];
+}
+
+- (void)confirmSendingVideoAtPath:(NSString *)path {
+	if (!path.length)
+		return;
+	if (self.chatId <= 0){
+		[self sendVideoAtPath:path viewOnce:NO];
+		return;
+	}
+	__weak typeof(self) weakSelf = self;
+	[TGAlertSheet showChoices:@[@"Send", @"Send as View Once"]
+						title:nil
+			 destructiveIndex:-1
+					   inView:self.view
+					 onChoice:^(NSInteger index){
+		[weakSelf sendVideoAtPath:path viewOnce:(index == 1)];
+	}];
+}
+
+- (void)sendVideoAtPath:(NSString *)path viewOnce:(BOOL)viewOnce {
+	if (!path.length)
+		return;
+	[[TGClient shared] sendVideoAtPath:path viewOnce:viewOnce toChat:self.chatId];
+}
+
 /// TDLib wants a path, so the picture is written to a temporary file first -
 /// one per photo, since two sent in a row would otherwise overwrite each
 /// other before the first has uploaded.
 - (void)sendImage:(UIImage *)image {
+	[self sendImage:image viewOnce:NO];
+}
+
+- (void)sendImage:(UIImage *)image viewOnce:(BOOL)viewOnce {
 	if (!image)
 		return;
 	CFUUIDRef uuid = CFUUIDCreate(NULL);
@@ -1789,7 +1856,7 @@ static NSString *TGStatGraphLine(NSDictionary *graph, NSString *label) {
 		NSLog(@"cannot stage the picked image");
 		return;
 	}
-	[[TGClient shared] sendPhotoAtPath:path toChat:self.chatId];
+	[[TGClient shared] sendPhotoAtPath:path viewOnce:viewOnce toChat:self.chatId];
 }
 
 /// Several pictures as one message. Each is staged on disk the way a single

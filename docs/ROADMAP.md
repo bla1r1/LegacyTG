@@ -226,3 +226,150 @@ An audit of `src/Controllers/` reveals that while core messaging, 1:1 voice call
 - **Settings Payment Dev Flows**:
   - *Current state*: Order validation (`validateOrderFlow`) triggers a sequence of 8 successive text input alerts.
   - *Closure requirement*: Replace with a single structured checkout form or gate behind developer menu.
+
+---
+
+## 8 · Half-done and missing (audit of 7 November 2026)
+
+What exists but gives the user less than it promises, or what the parity audit
+found and nobody built. Every row was checked against the code on 7 November;
+the parity audit's own files predate wave 1 and list much that is done since.
+Section 7 above keeps the stubs and harnesses; this one is the user's path.
+
+### Chat and chat list
+
+| Feature | There now | Missing | Where |
+|---|---|---|---|
+| Custom emoji in text | Static picture inline (iOS 7+), 192-picture LRU | Animation (tier-gated); iOS 6 keeps the fallback emoji | `TGMessageLayout.mm`, `TGCustomEmojiStore` |
+| Emoji status by names | Chat list rows, own profile | Chat header title, group sender names, member rows | `TGChatViewController+Chrome.m`, `+Cells.m` |
+| Undrawable characters | Stripped in sticker panel titles only | Chat titles, names, previews: one such character costs 0.4-2.8 s on a 4S | `TGStripUndrawableScalars` |
+| Chat list badges | Unread count, mention badge | Reaction badge, poll-vote badge, compact counts ("1.2K"), blank badge for marked unread | `TGChatListViewController.m:1912`, `TGChatCell.m` |
+| Chat list preview | Text, "Draft:", sender | Photo/video thumbnail at the start, type glyph | `TGChatCell.m` |
+| Delivery state in rows | Read ticks | Clock while sending, failed mark | `TGChatCell.m` |
+| Unread badge on the Chats tab | — | Tab badge from the main list's unread count | `RootViewController.m` |
+| Protected content | `hasProtectedContent` stored on the row | Forward, save to camera roll and copy still allowed in such chats | `TGClient+Chats.mm:1932`, chat actions, `TGMediaViewer.m` |
+| Bot buttons | Callback, URL, login URL, switch inline, copy text, user | Web App, Buy, Game, callback with password: shown, do nothing | `TGMessageFlatten.m`, `TGChatViewController+Bots.m` |
+| Paid messages | — | Price per message in the composer for a user who charges Stars | composer |
+
+### Profile
+
+| Feature | There now | Missing | Where |
+|---|---|---|---|
+| Own profile | Redesigned (no title, online, three tiles, Add a bio, empty Stories state) | QR code of the username (screen does not exist) | `TGProfileViewController*.m` |
+| Premium | — | Star badge beside the name (the old "subscription" row is gone) | header |
+| Profile cover | — | `profile_accent_color_id` gradient and background emoji behind the header | header |
+| Verification | Verified mark | Third-party verifier note (`bot_verification`) with its emoji | details card |
+| Business | Location address as a row | Opening hours, open/closed now, map thumbnail | details card |
+| Unofficial app warning | — | `uses_unofficial_app` line above the card | details card |
+| Profile rating | — | `rating` / `pending_rating` level | header |
+| Media panes | Stories, Archive, Media, Files, Music, Voice, Links, Groups | GIFs pane (`searchMessagesFilterAnimation`), pane counts in the subtitle, month sections in the grid | `TGProfileViewController+Media.m` |
+| Gifts | Emoji plus star count, first 20 | Sticker artwork, collectible model, paging past 20 | `+Media.m` |
+
+### Contacts and calls
+
+| Feature | There now | Missing | Where |
+|---|---|---|---|
+| Calls tab | Optional fourth tab, switch on Recent Calls | New Call row / button with a contact picker | `TGSettingsViewController+Pages.m` |
+| Invite Friends | — | First row of Contacts, share link | `TGContactsViewController.m` |
+| Video calls | Dev builds only, release shows "in progress" | Picture to an official client and back; no video stand on the Mac | `TGCallVideoEngine.mm`, `calls_notes.md` |
+
+### Settings and privacy
+
+| Feature | There now | Missing | Where |
+|---|---|---|---|
+| Language | Picks a TDLib language pack | Interface is English only: ~2200 hard-coded strings, no lookup | everywhere |
+| Data and Storage | Five screens (Storage, Downloads, Autosave, Network, File Tools) | One screen with sections; storage by file type; auto-download summary of the preset in force | `TGSettingsViewController+NetworkPages.m` |
+| Auto-download | Switches | `setAutoDownloadOverMobile` overwrites the size caps with 10 MB | `TGClient+Files.mm:306` |
+| Chat colour | Picker | Picking a group's or channel's colour sends `background_custom_emoji_id: 0` and erases its emoji | `TGClient+ChatTools.m:975` |
+| Last Seen | Value with exceptions count | Always Share With / Never Share With lists | privacy pages |
+| Birthday and bio privacy | — | Who-can-see line under the fields in Edit Profile | `TGEditProfileViewController.m` |
+| Gifts privacy | — | Who may send, Show Gift Button, accepted gift types | privacy pages |
+| Folders | Folder list | Chat count per folder, recommended folders inline | settings |
+| Send a Gift | — | Recipient picker and gift grid | settings |
+| Settings search | — | Index of pages | settings |
+
+### Stories
+
+| Feature | There now | Missing | Where |
+|---|---|---|---|
+| Story camera | Photos | Video recording | `TGStoryCameraViewController.m` |
+
+### Developer talk on the user's path
+
+Section 7 lists whole screens that are harnesses. These are ordinary screens
+that speak TDLib to the person using them.
+
+| What the user sees | Where | Fix |
+|---|---|---|
+| TDLib's own error text, e.g. `PHONE_CODE_INVALID` or "Bad Request: ...", in about 157 alerts and toasts; "Telegram refused that." when there is none | Core passes `result[@"message"]` up; `TGAlertSheet showMessage:error` across Controllers | One table from error code to a sentence, applied where Core returns the error |
+| "File Tools — Generate, upload, read back" in Data and Storage: a file-generation harness | `TGSettingsViewController+NetworkPages.m:55`, `TGFileToolsViewController.m` | Move behind `TG_DEV` |
+| "Network — Type, state, usage, graphs" with a "TDLib State" section and footers about TDLib resetting counters | `NetworkPages.m:66`, `TGNetworkViewController.m:106-162, 278` | Keep Network Usage; move the state page behind `TG_DEV` |
+| "Active Notifications": TDLib's local notification list, footers about APNs and TDLib counting | `TGSettingsViewController+PrivacyPages.m:173-179, 413-480`, `TGActiveNotificationsViewController.m` | Move behind `TG_DEV` |
+| Footers that explain TDLib: "not autosaved by TDLib", "A proxy is TDLib's own", "TDLib has no document autosave", "Each slice is one kind of file TDLib keeps" | `NetworkPages.m:64, 110, 744, 1011`, `TGStorageViewController.m:208` | Rewrite as what the setting does |
+| Footers that promise a refusal: "a non-Premium account is refused", "Custom styles are a Premium feature and the refusal is shown", stealth mode | `TGEmojiStatusViewController.m:364`, `TGTextStylesViewController.m:77`, `TGStoriesMenuViewController.m:35` | Show the Premium state instead, or hide for non-Premium |
+| Login links "Web Login Token" (paste a token) and "Enter a QR Link" (paste a tg:// link) | `TGLoginViewController+Steps.m:269, 368, 666, 713` | A QR scanner for "log in from this phone"; drop the paste paths or move them to `TG_DEV` |
+| "Paste ids from a message that carries them" in sticker packs | `TGStickerPacksViewController.m:288` | Open packs from the message instead |
+| "TDLib did not resolve that id to a chat." | `TGSettingsViewController+Pages.m:1906` | Human sentence |
+| Payment data dump with "Payload:" | `PrivacyPages.m:851` | Show order lines, not the raw record |
+| "This client has no web view to solve it" for a captcha | `PrivacyPages.m:907` | Web view (iOS 6 has UIWebView) or a plain "open in Safari" |
+| Group settings Calls footer: "this client has no group-call audio engine" | `TGGroupSettingsViewController.m:558` | Hide the row until group calls play audio |
+
+### Message types
+
+On 7 November the service sentences (about 75 types), the chat list preview
+of every content and the structured fields went in, and the same day the
+bubbles followed: one card (`TGMessageCard`, `TGMessageCardView`) for
+invoices, gifts, giveaways, games, shared peers, video chats and stories;
+one veil (`TGMediaVeil`) for spoilers and one-time media; polls rebuilt.
+Checked on the 4S with the dev showcase rows, not yet with real messages.
+
+| Type | Now | Missing |
+|---|---|---|
+| Invoice | Card: title, description, photo | Pay (no payment form in the app) |
+| Giveaway, giveaway winners | Card: prize, date, winners; Learn More asks TDLib | — |
+| Gift, upgraded gift | Card: artwork, stars, note, model; View opens the gift sheet | Animated artwork |
+| Users shared, chat shared | Card with picture; Open goes to the profile or chat | — |
+| Group call, video chat | Card: state, duration | Join (no group-call audio) |
+| Game | Card; Play opens the game page | — |
+| Story in a message | Card; Open shows the story | The story's picture in the card |
+| Poll | Vote on tap, multiple answers, quiz marks and explanation, Retract Vote, description, close time, long answers wrap | Option media; live countdown (it moves on reload) |
+| Pinned message | 'Alice pinned "Hello wor..."' when the message is loaded; tap jumps to it | — |
+| Checklist | Tasks with marks, "1 of 3 completed", tap toggles | Adding tasks |
+| Paid media | Blurred preview with "Unlock for N Stars" | Unlocking (no Stars payments) |
+| Dice | The throw plays as an animated sticker | Slot machine reels and lever |
+| Rich message | Plain paragraphs | Formatting, tables, media blocks |
+| Photo, video, GIF | Drawn; spoilers blurred until tapped; caption above media | Video cover and scrub preview |
+| Document | Drawn with its thumbnail | — |
+| Audio, voice note | Caption; transcription text under the voice note | — |
+| Call | Row; video calls say so | Discard reasons past missed/declined |
+| Live location | Time left, last update | Heading arrow on the pin; the line moves on reload, not every minute |
+| Service actions | Sentence | The buttons official attaches: set suggested photo, accept birthdate, open suggested post |
+
+### One-time and protected content
+
+| What | Now | Missing |
+|---|---|---|
+| View-once voice and round notes | Sent and received, "1" mark, opened with `openMessageContent` | — |
+| View-once photo and video | Blurred with "Tap to view"; opens alone, sends `openMessageContent`; no save, share or forward | — |
+| Timer media | Blurred, opens alone like view-once | Countdown while open |
+| Spoilers | Media and text hidden until the first tap | — |
+| Protected chats | Copy, Forward and Save gone from the menu, multi-select and the viewer (`can_be_saved`) | — |
+| Sending view-once photo/video | Photo and video in private chats ("Send as View Once") | Timer choice |
+
+### Data TDLib sends that no screen shows
+
+From a schema-against-code audit of 18 objects (315 rows); the service-message
+rows it found were closed by the sentences above.
+
+| Field | Where official shows it |
+|---|---|
+| `message.author_signature` | Signature under signed channel posts and anonymous admins |
+| `messageInteractionInfo.view_count` | Eye and count on every channel post (flattened as `viewCount`, unused by the bubble) |
+| `messageInteractionInfo.forward_count` | Forwards beside the views |
+| `message.via_bot_user_id` | "via @bot" on inline-bot messages |
+| `linkPreview.type` | The picture of a link preview (only title, site and description are read) |
+| `messageForwardInfo.source` | "View original" on forwarded channel posts |
+| `user.active_story_state` | Story ring around avatars in lists |
+| `chat.background` | The chat's own wallpaper (stored as `chatBackground`, never applied) |
+| `supergroupFullInfo.gift_count`, `userFullInfo.gift_count` | Gift counts on profiles |
+| `supergroupFullInfo.bot_verification` | Third-party verification badge on channels |

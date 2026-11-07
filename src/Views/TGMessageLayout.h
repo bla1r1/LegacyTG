@@ -45,6 +45,12 @@ void TGSetCustomEmojiProvider(TGCustomEmojiProvider provider);
 /// The square a custom emoji takes in text set in `font`: one line high.
 CGFloat TGCustomEmojiSide(UIFont *font);
 NSAttributedString *TGAttributedMessageText(NSString *text, NSArray *entities, UIFont *baseFont, UIColor *textColor);
+/// The same text with spoiler runs either drawn under an opaque plate or, once
+/// the reader has tapped the bubble, left as plain text. The plain call above
+/// keeps them hidden, which is what a bubble shows until that tap.
+NSAttributedString *TGAttributedMessageTextRevealing(NSString *text, NSArray *entities, UIFont *baseFont, UIColor *textColor, BOOL revealSpoilers);
+/// YES when any entity marks a spoiler, in either TDLib spelling.
+BOOL TGEntitiesHaveSpoiler(NSArray *entities);
 void TGSetBodyText(UILabel *label, NSString *text, UIColor *colour);
 CGSize TGTextSize(NSString *text, UIFont *font, CGFloat width);
 CGSize TGTextSizeWithEntities(NSString *text, NSArray *entities, UIFont *font, CGFloat width);
@@ -97,6 +103,10 @@ CGFloat TGInlineStampY(CGRect bodyFrame);
 @property (nonatomic, assign) BOOL isSticker;
 @property (nonatomic, assign) BOOL isVoice;
 @property (nonatomic, assign) BOOL isPoll;
+/// A checklist: its title, one tappable row per task and a progress line.
+@property (nonatomic, assign) BOOL isChecklist;
+/// Invoices, gifts, giveaways, games, shared peers, calls, stories: one card.
+@property (nonatomic, assign) BOOL isCard;
 @property (nonatomic, assign) BOOL isCall;
 @property (nonatomic, assign) BOOL isDoc;
 /// A track: a file with a title and a performer of its own, drawn as one

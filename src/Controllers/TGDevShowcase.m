@@ -559,6 +559,14 @@ static NSData *TGShowcaseWaveform(void) {
 		],
 		@"pollClosed"   : @NO,
 		@"pollQuiz"     : @NO,
+		@"poll" : @{@"question" : @"Which sticker format is faster on iOS 7?",
+			@"description" : @"Pick every one you have tried.",
+			@"options" : @[
+				@{@"text" : @"Optimized Vector Lottie (.tgs)", @"voterCount" : @45, @"percent" : @41, @"isChosen" : @NO},
+				@{@"text" : @"Hardware VP9 Video (.webm)", @"voterCount" : @65, @"percent" : @59, @"isChosen" : @NO}],
+			@"totalVoterCount" : @110, @"isAnonymous" : @YES, @"isClosed" : @NO, @"isQuiz" : @NO,
+			@"allowsMultiple" : @YES, @"allowsRevoting" : @YES, @"correctOption" : @(-1),
+			@"explanation" : @"", @"closeDate" : @0, @"openPeriod" : @0},
 	}];
 
 	// 21. Closed Quiz Poll
@@ -577,6 +585,14 @@ static NSData *TGShowcaseWaveform(void) {
 		],
 		@"pollClosed"   : @YES,
 		@"pollQuiz"     : @YES,
+		@"poll" : @{@"question" : @"What processor powers the iPhone 4S?", @"description" : @"",
+			@"options" : @[
+				@{@"text" : @"Apple A4", @"voterCount" : @5, @"percent" : @5, @"isChosen" : @YES},
+				@{@"text" : @"Apple A5 (Dual Core)", @"voterCount" : @92, @"percent" : @92, @"isChosen" : @NO},
+				@{@"text" : @"Apple A6", @"voterCount" : @3, @"percent" : @3, @"isChosen" : @NO}],
+			@"totalVoterCount" : @100, @"isAnonymous" : @NO, @"isClosed" : @YES, @"isQuiz" : @YES,
+			@"allowsMultiple" : @NO, @"allowsRevoting" : @NO, @"correctOption" : @1,
+			@"explanation" : @"The 4S runs a dual-core A5.", @"closeDate" : @0, @"openPeriod" : @0},
 	}];
 
 	// 22. Voice Call (Answered)
@@ -613,6 +629,8 @@ static NSData *TGShowcaseWaveform(void) {
 		@"date"       : @(baseTime + 240),
 		@"kind"       : @"messageGame",
 		@"text"       : @"🎮 Corsairs - HTML5 Telegram Game",
+		@"game" : @{@"gameId" : @1, @"shortName" : @"corsairs", @"title" : @"Corsairs",
+			@"description" : @"An HTML5 sea battle", @"photoFileId" : @0, @"animationFileId" : @0},
 	}];
 
 	// 25. Invoice
@@ -624,6 +642,9 @@ static NSData *TGShowcaseWaveform(void) {
 		@"date"       : @(baseTime + 250),
 		@"kind"       : @"messageInvoice",
 		@"text"       : @"Invoice: Telegram Premium (1 Year) — $29.99",
+		@"invoice" : @{@"title" : @"Telegram Premium (1 Year)", @"description" : @"Faster downloads and more",
+			@"photoFileId" : @0, @"currency" : @"USD", @"totalAmount" : @2999, @"isTest" : @YES,
+			@"receiptMessageId" : @0},
 	}];
 
 	// 26. Story
@@ -635,6 +656,7 @@ static NSData *TGShowcaseWaveform(void) {
 		@"date"       : @(baseTime + 260),
 		@"kind"       : @"messageStory",
 		@"text"       : @"Telegram Story",
+		@"story" : @{@"posterChatId" : @(senderPeer), @"storyId" : @1, @"viaMention" : @NO},
 	}];
 
 	// 27. Unread Separator
@@ -671,6 +693,47 @@ static NSData *TGShowcaseWaveform(void) {
 		@"service"    : @YES,
 		@"text"       : @"took a screenshot",
 	}];
+
+	// 31-34. Cards that only the structured keys draw
+	[list addObject:@{@"id" : @31, @"chatId" : @(kDevChatId), @"senderId" : @(senderPeer),
+		@"outgoing" : @NO, @"date" : @(baseTime + 291), @"kind" : @"messageGift", @"text" : @"Gift",
+		@"gift" : @{@"giftId" : @7, @"stickerFileId" : @0, @"stickerThumbFileId" : @0, @"starCount" : @50,
+			@"text" : @"Happy birthday!", @"senderUserId" : @(senderPeer), @"isSaved" : @YES,
+			@"wasConverted" : @NO, @"wasUpgraded" : @NO, @"sellStarCount" : @0}}];
+	[list addObject:@{@"id" : @32, @"chatId" : @(kDevChatId), @"senderId" : @(senderPeer),
+		@"outgoing" : @NO, @"date" : @(baseTime + 292), @"kind" : @"messageGiveaway", @"text" : @"Giveaway",
+		@"giveaway" : @{@"winnerCount" : @3, @"premiumMonths" : @3, @"starCount" : @0,
+			@"winnersSelectionDate" : @(baseTime + 86400), @"onlyNewMembers" : @YES,
+			@"prizeDescription" : @"", @"stickerFileId" : @0}}];
+	[list addObject:@{@"id" : @33, @"chatId" : @(kDevChatId), @"senderId" : @(senderBot),
+		@"outgoing" : @YES, @"date" : @(baseTime + 293), @"kind" : @"messageUsersShared", @"text" : @"Shared contact",
+		@"sharedUsers" : @[@{@"userId" : @(senderPeer), @"firstName" : @"Pavel", @"lastName" : @"",
+			@"username" : @"durov", @"photoFileId" : @0}]}];
+	[list addObject:@{@"id" : @34, @"chatId" : @(kDevChatId), @"senderId" : @(senderPeer),
+		@"outgoing" : @NO, @"date" : @(baseTime + 294), @"kind" : @"messagePhoto",
+		@"text" : @"", @"viewOnce" : @YES, @"mediaWidth" : @800, @"mediaHeight" : @600}];
+	[list addObject:@{@"id" : @35, @"chatId" : @(kDevChatId), @"senderId" : @(senderPeer),
+		@"outgoing" : @NO, @"date" : @(baseTime + 295), @"kind" : @"messageChecklist",
+		@"text" : @"Groceries",
+		@"checklist" : @{@"title" : @"Groceries",
+			@"tasks" : @[
+				@{@"taskId" : @1, @"text" : @"Milk",
+				  @"completedByUserId" : @(senderPeer), @"completionDate" : @(baseTime + 296)},
+				@{@"taskId" : @2, @"text" : @"Bread",
+				  @"completedByUserId" : @0, @"completionDate" : @0},
+				@{@"taskId" : @3, @"text" : @"Eggs",
+				  @"completedByUserId" : @0, @"completionDate" : @0}],
+			@"othersCanAddTasks" : @YES, @"othersCanMarkTasksAsDone" : @YES,
+			@"canAddTasks" : @YES, @"canMarkTasksAsDone" : @YES,
+			@"doneCount" : @1, @"totalCount" : @3}}];
+
+	// 36. Live location, still moving
+	[list addObject:@{@"id" : @36, @"chatId" : @(kDevChatId), @"senderId" : @(senderPeer),
+		@"outgoing" : @NO, @"date" : @(now - 300), @"kind" : @"messageLiveLocation",
+		@"lat" : @(52.52), @"lon" : @(13.405), @"text" : @"Live Location",
+		@"live" : @{@"livePeriod" : @3600, @"heading" : @45, @"proximityRadius" : @500,
+			@"expiresIn" : @3300, @"isForever" : @NO},
+		@"editDate" : @(now - 120)}];
 
 	// 30. Final interactive text
 	[list addObject:@{

@@ -119,6 +119,23 @@
 		cell.subtitle.textColor = [cardTheme fileMetaColour];
 		cell.subtitle.text = second;
 
+		NSString *caption = [m[@"caption"] isKindOfClass:NSString.class]
+				? m[@"caption"] : @"";
+		if (caption.length) {
+			CGFloat capW = layout.bubbleFrame.size.width - TGDoubled(kPadH);
+			CGSize capSize = TGTextSize(caption, TGFontBody(), capW);
+			cell.captionLabel.hidden = NO;
+			cell.captionLabel.font = TGFontBody();
+			cell.captionLabel.textColor = [cardTheme primaryTextColour];
+			cell.captionLabel.text = caption;
+			cell.captionLabel.frame = CGRectMake(kPadH, fwd + kTrackRow + TGMetricPadSmall,
+					capW, capSize.height);
+			[cell.bubble bringSubviewToFront:cell.captionLabel];
+		} else {
+			cell.captionLabel.hidden = YES;
+		}
+		cell.transcriptionLabel.hidden = YES;
+
 		cell.time.frame = layout.timeFrame;
 		return YES;
 	}
@@ -149,7 +166,8 @@
 		BOOL sending = [m[@"sending"] boolValue];
 		cell.disc.image = sending ? [TGIcons cancelDiscOfSide:disc]
 				: [TGIcons mediaDiscOfSide:disc playing:isPlaying];
-		cell.disc.frame = CGRectMake(kPadH, fwd + TGCenteredOrigin(layout.bubbleFrame.size.height - fwd, disc), disc, disc);
+		cell.disc.frame = CGRectMake(kPadH, fwd + TGCenteredOrigin(TGMetricPersonRow, disc),
+				disc, disc);
 		if (sending)
 			[cell showSendRingWithProgress:[self ringProgressForMessage:m]];
 		else
@@ -188,8 +206,42 @@
 		cell.body.font = TGFontMeta();
 		cell.body.textColor = [voiceTheme secondaryTextColour];
 		cell.body.text = durText;
-		cell.body.frame = CGRectMake(left, layout.bubbleFrame.size.height - TGMetricLineRow,
+		cell.body.frame = CGRectMake(left, fwd + TGMetricPersonRow - TGMetricLineRow,
 				MAX(TGTextSize(durText, TGFontMeta(), 0).width, kVoiceClockMinimum), TGMetricLineMicro);
+
+		NSString *caption = [m[@"caption"] isKindOfClass:NSString.class]
+				? m[@"caption"] : @"";
+		NSString *transcription = [m[@"transcription"] isKindOfClass:NSString.class]
+				? m[@"transcription"] : @"";
+		if ([m[@"transcriptionPending"] boolValue])
+			transcription = @"Transcribing...";
+		CGFloat textW = layout.bubbleFrame.size.width - TGDoubled(kPadH);
+		CGFloat underRow = fwd + TGMetricPersonRow + TGMetricPadSmall;
+		CGSize capSize = CGSizeZero;
+		if (caption.length) {
+			capSize = TGTextSize(caption, TGFontBody(), textW);
+			cell.captionLabel.hidden = NO;
+			cell.captionLabel.font = TGFontBody();
+			cell.captionLabel.textColor = [voiceTheme primaryTextColour];
+			cell.captionLabel.text = caption;
+			cell.captionLabel.frame = CGRectMake(kPadH, underRow, textW, capSize.height);
+			[cell.bubble bringSubviewToFront:cell.captionLabel];
+		} else {
+			cell.captionLabel.hidden = YES;
+		}
+		if (transcription.length) {
+			CGFloat transY = underRow + capSize.height
+					+ (caption.length ? TGMetricPadTiny : TGMetricZero);
+			CGSize transSize = TGTextSize(transcription, TGFontSubhead(), textW);
+			cell.transcriptionLabel.hidden = NO;
+			cell.transcriptionLabel.font = TGFontSubhead();
+			cell.transcriptionLabel.textColor = [voiceTheme secondaryTextColour];
+			cell.transcriptionLabel.text = transcription;
+			cell.transcriptionLabel.frame = CGRectMake(kPadH, transY, textW, transSize.height);
+			[cell.bubble bringSubviewToFront:cell.transcriptionLabel];
+		} else {
+			cell.transcriptionLabel.hidden = YES;
+		}
 
 		cell.unreadDot.hidden = !unplayed;
 		if (unplayed){

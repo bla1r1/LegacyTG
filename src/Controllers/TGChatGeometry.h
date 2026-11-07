@@ -81,6 +81,30 @@ static const CGFloat kPollTrackDrop   = TGMetricPadSmall;
 static const CGFloat kPollTrackHeight = TGMetricPadTiny;
 /// The "N voted" line under a poll's question.
 static const CGFloat kPollVotedLine   = TGMetricPadTiny + TGMetricLineRow;
+/// A poll bubble's text stack: the description, then the kind line, then the
+/// options. The same constants are read by the cell and by pollHeightFor:.
+static const CGFloat kPollDescriptionGap = TGMetricPadTiny;
+static const CGFloat kPollKindGap        = TGMetricPadTiny;
+static const CGFloat kPollKindLine       = TGMetricLineCaption;
+static const CGFloat kPollOptionsGap     = TGMetricPadSmall;
+/// The "Vote" button under a multiple-answer poll's draft answers.
+static const CGFloat kPollVoteHeight     = TGMetricButtonSmallH;
+static const CGFloat kPollVoteGap        = TGMetricPadTiny;
+/// A quiz's explanation under the options, and the votes line under it all.
+static const CGFloat kPollExplanationGap = TGMetricPadSmall;
+static const CGFloat kPollFooterGap      = TGMetricPadSmall;
+static const CGFloat kPollFooterLine     = TGMetricLineCaption;
+/// The room the stamp keeps below the votes line.
+static const CGFloat kPollStampRoom      = TGMetricLineBody;
+/// A checklist bubble: the title, one row per task, then the progress line.
+/// The cell and checklistHeightFor: read the same constants, so the rows and
+/// the bubble cannot drift apart.
+static const CGFloat kChecklistTitleGap    = TGMetricPadSmall;
+static const CGFloat kChecklistRow         = TGMetricPollRow;
+static const CGFloat kChecklistTextColumn  = TGMetricPadLarge + TGMetricPad;
+static const CGFloat kChecklistProgressGap = TGMetricPadSmall;
+static const CGFloat kChecklistProgressLine = TGMetricLineMicro;
+static const CGFloat kChecklistStampRoom   = TGMetricLineBody;
 /// A call bubble's arrow, and the button on its right.
 static const CGFloat kCallArrow       = 16.0f;
 static const CGFloat kCallButton      = 32.0f;

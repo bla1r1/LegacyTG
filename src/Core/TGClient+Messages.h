@@ -187,6 +187,9 @@
 /// Send a video file from the library.
 - (void)sendVideoAtPath:(NSString *)path toChat:(int64_t)chatId;
 
+/// The same video as a view-once message: it opens once and is gone.
+- (void)sendVideoAtPath:(NSString *)path viewOnce:(BOOL)viewOnce toChat:(int64_t)chatId;
+
 /// Share a point on the map.
 - (void)sendLocation:(double)latitude longitude:(double)longitude toChat:(int64_t)chatId;
 
@@ -214,8 +217,15 @@
 /// Send a local image file. TDLib uploads it and echoes the message back.
 - (void)sendPhotoAtPath:(NSString *)path toChat:(int64_t)chatId;
 
+/// The same picture as a view-once message: it opens once and is gone.
+- (void)sendPhotoAtPath:(NSString *)path viewOnce:(BOOL)viewOnce toChat:(int64_t)chatId;
+
 /// Vote in a poll. `optionIds` are indexes into the poll's options.
 - (void)votePoll:(int64_t)messageId inChat:(int64_t)chatId options:(NSArray *)optionIds;
+
+/// Tick or untick one task of a checklist. TDLib carries the two directions
+/// in two vectors, so one of them is always empty.
+- (void)markChecklistTask:(int64_t)taskId done:(BOOL)done inMessage:(int64_t)messageId chat:(int64_t)chatId;
 
 /// Adds a note to the chat without sending it to anyone: TDLib stores it in
 /// the history like any other message. The completion gets its id, or 0.

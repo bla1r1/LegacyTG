@@ -512,4 +512,110 @@ static BOOL TGTestOldFonts(UTF32Char c) {
 	XCTAssertFalse(mismatch);
 }
 
+// ──────────────────────────────────────────────────────────────────────────────
+#pragma mark - text spoilers
+
+static NSDictionary *spSpoilerEntity(NSInteger offset, NSInteger length, NSString *type) {
+	return @{@"offset" : @(offset), @"length" : @(length),
+			 @"type" : @{@"@type" : type}};
+}
+
+/// A hidden spoiler is the plate colour in both roles, so the glyphs vanish
+/// into the bar instead of staying readable.
+- (void)testSpoiler_HiddenRangeDrawsGlyphsInThePlateColour {
+	UIFont *font = [UIFont systemFontOfSize:15];
+	NSAttributedString *str = TGAttributedMessageTextRevealing(@"before secret after",
+			@[spSpoilerEntity(7, 6, @"textEntityTypeSpoiler")], font,
+			[UIColor blackColor], NO);
+	UIColor *background = [str attribute:NSBackgroundColorAttributeName
+			atIndex:7 effectiveRange:NULL];
+	UIColor *foreground = [str attribute:NSForegroundColorAttributeName
+			atIndex:7 effectiveRange:NULL];
+	XCTAssertTrue(background != nil);
+	XCTAssertEqualObjects(foreground, background,
+			@"the words must be the same colour as the plate that hides them");
+	XCTAssertTrue([background isEqual:TGColourCodeBlockBackground()]);
+}
+
+/// Once revealed, the run carries no spoiler attributes: it reads like the
+/// rest of the message.
+- (void)testSpoiler_RevealedRangeHasNoSpoilerAttributes {
+	UIFont *font = [UIFont systemFontOfSize:15];
+	NSAttributedString *str = TGAttributedMessageTextRevealing(@"before secret after",
+			@[spSpoilerEntity(7, 6, @"messageEntitySpoiler")], font,
+			[UIColor blackColor], YES);
+	XCTAssertTrue([str attribute:NSBackgroundColorAttributeName
+			atIndex:7 effectiveRange:NULL] == nil);
+	UIColor *foreground = [str attribute:NSForegroundColorAttributeName
+			atIndex:7 effectiveRange:NULL];
+	XCTAssertFalse([foreground isEqual:TGColourCodeBlockBackground()]);
+	XCTAssertTrue([foreground isEqual:[UIColor blackColor]]);
+}
+
+/// The plate must not leak past the entity's range.
+- (void)testSpoiler_TextOutsideRangeKeepsNormalColour {
+	UIFont *font = [UIFont systemFontOfSize:15];
+	NSAttributedString *str = TGAttributedMessageTextRevealing(@"before secret after",
+			@[spSpoilerEntity(7, 6, @"textEntityTypeSpoiler")], font,
+			[UIColor blackColor], NO);
+	UIColor *outside = [str attribute:NSForegroundColorAttributeName
+			atIndex:0 effectiveRange:NULL];
+	XCTAssertTrue([outside isEqual:[UIColor blackColor]]);
+	XCTAssertTrue([str attribute:NSBackgroundColorAttributeName
+			atIndex:0 effectiveRange:NULL] == nil);
+}
+
+/// Every existing caller uses the old entry point; it must leave spoilers
+/// hidden.
+- (void)testAttributedMessageText_HidesSpoilersByDefault {
+	UIFont *font = [UIFont systemFontOfSize:15];
+	NSAttributedString *str = TGAttributedMessageText(@"hide me",
+			@[spSpoilerEntity(0, 7, @"textEntityTypeSpoiler")], font,
+			[UIColor blackColor]);
+	UIColor *background = [str attribute:NSBackgroundColorAttributeName
+			atIndex:0 effectiveRange:NULL];
+	UIColor *foreground = [str attribute:NSForegroundColorAttributeName
+			atIndex:3 effectiveRange:NULL];
+	XCTAssertTrue([background isEqual:TGColourCodeBlockBackground()]);
+	XCTAssertEqualObjects(foreground, background);
+}
+
+- (void)testEntitiesHaveSpoiler_RecognisesBothSpellings {
+	XCTAssertTrue(TGEntitiesHaveSpoiler(@[spSpoilerEntity(0, 4, @"textEntityTypeSpoiler")]));
+	XCTAssertTrue(TGEntitiesHaveSpoiler(@[@{@"offset" : @0, @"length" : @4,
+			@"@type" : @"messageEntitySpoiler"}]));
+}
+
+- (void)testEntitiesHaveSpoiler_PlainEntitiesAreNotSpoilers {
+	XCTAssertFalse(TGEntitiesHaveSpoiler(@[spSpoilerEntity(0, 4, @"textEntityTypeBold")]));
+	XCTAssertFalse(TGEntitiesHaveSpoiler(nil));
+	XCTAssertFalse(TGEntitiesHaveSpoiler(@[]));
+}
+
+- (void)testEntitiesHaveSpoiler_NSNullIsSafe {
+	XCTAssertFalse(TGEntitiesHaveSpoiler((NSArray *)[NSNull null]));
+	XCTAssertFalse(TGEntitiesHaveSpoiler(@[[NSNull null]]));
+}
+
+- (void)testEntitiesHaveSpoiler_GarbageEntriesAreSkipped {
+	XCTAssertFalse(TGEntitiesHaveSpoiler(@[@"not-an-entity", @42,
+			@{@"type" : [NSNull null]}, @{@"type" : @{@"@type" : [NSNull null]}}]));
+	XCTAssertTrue(TGEntitiesHaveSpoiler(@[@"junk",
+			spSpoilerEntity(0, 2, @"messageEntitySpoiler")]));
+}
+
+/// Hiding or showing must not insert or drop a character: the bubble was
+/// measured against the plain text's length.
+- (void)testSpoiler_LengthMatchesTextInBothModes {
+	UIFont *font = [UIFont systemFontOfSize:15];
+	NSString *text = @"one hidden two";
+	NSArray *entities = @[spSpoilerEntity(4, 6, @"textEntityTypeSpoiler")];
+	NSAttributedString *hidden = TGAttributedMessageTextRevealing(text, entities,
+			font, [UIColor blackColor], NO);
+	NSAttributedString *shown = TGAttributedMessageTextRevealing(text, entities,
+			font, [UIColor blackColor], YES);
+	XCTAssertEqual(hidden.length, text.length);
+	XCTAssertEqual(shown.length, text.length);
+}
+
 @end

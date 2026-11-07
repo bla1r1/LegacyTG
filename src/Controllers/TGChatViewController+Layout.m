@@ -3,6 +3,15 @@
 #import "TGCapabilities.h"
 #import "TGStyle.h"
 #import "TGDevShowcase.h"
+#import "TGPollPresentation.h"
+#import "TGPinnedLine.h"
+
+CGFloat TGPollOptionRowHeight(NSDictionary *option, CGFloat rowWidth) {
+	CGFloat textW = rowWidth - kPollTextColumn - kPollShareWidth - TGMetricPadTiny;
+	CGFloat textH = TGTextSize(TGPollOptionText(option), TGFontSubhead(), textW).height;
+	return MAX(kPollRow, textH + TGDoubled(TGMetricPadTiny));
+}
+#import "TGBase64.h"
 
 UIColor *TGSenderColour(int64_t userId) {
 	// The colour the person picked in their own profile, as Telegram draws it;
@@ -131,19 +140,135 @@ UIColor *TGSenderColour(int64_t userId) {
 	return TGMetricQuoteForwardLine;
 }
 
-/// Question, the "N voted" line, one row per option, and the stamp.
+/// A checklist's title, one row per task and the progress line under them.
+/// The cell places the same stack from the same constants.
+- (CGFloat)checklistHeightFor:(NSDictionary *)m {
+	NSDictionary *checklist = [m[@"checklist"] isKindOfClass:NSDictionary.class]
+			? m[@"checklist"] : @{};
+	NSString *title = [checklist[@"title"] isKindOfClass:NSString.class]
+			? checklist[@"title"] : @"Checklist";
+	NSArray *tasks = [checklist[@"tasks"] isKindOfClass:NSArray.class]
+			? checklist[@"tasks"] : @[];
+
+	CGFloat contentW = kBubbleMaxW - TGDoubled(kPadH);
+	CGFloat textW = contentW - kChecklistTextColumn;
+	CGSize titleSize = TGTextSize(title, TGFontBodyStrong(), contentW);
+
+	CGFloat height = kPadV + titleSize.height;
+	if (tasks.count)
+		height += kChecklistTitleGap;
+	for (id raw in tasks) {
+		NSDictionary *task = [raw isKindOfClass:NSDictionary.class] ? raw : @{};
+		NSString *text = [task[@"text"] isKindOfClass:NSString.class]
+				? task[@"text"] : @"";
+		CGFloat textH = TGTextSize(text, TGFontBody(), textW).height;
+		height += MAX(kChecklistRow, textH);
+	}
+	height += kChecklistProgressGap + kChecklistProgressLine + kChecklistStampRoom;
+	return height;
+}
+
+/// Question, then the description and kind line, one row per option, a Vote
+/// button for a multiple-answer draft, the quiz explanation and the votes
+/// line. The cell places the same stack from the same constants, so this
+/// height and that layout cannot drift.
 - (CGFloat)pollHeightFor:(NSDictionary *)m {
-	NSString *question = m[@"pollQuestion"] ?: @"Poll";
-	CGSize qs = TGTextSize(question, TGFontBodyStrong(),
-			kBubbleMaxW - TGDoubled(kPadH));
-	NSArray *options = m[@"pollOptions"];
-	return kPadV + qs.height + TGMetricPadTiny + TGMetricLineRow
-			+ kPollRow * options.count + TGMetricLineBody;
+	NSDictionary *poll = [m[@"poll"] isKindOfClass:NSDictionary.class]
+			? m[@"poll"] : @{
+				@"question"        : [m[@"pollQuestion"] isKindOfClass:NSString.class]
+						? m[@"pollQuestion"] : @"Poll",
+				@"options"         : [m[@"pollOptions"] isKindOfClass:NSArray.class]
+						? m[@"pollOptions"] : @[],
+				@"totalVoterCount" : [m[@"pollTotal"] isKindOfClass:NSNumber.class]
+						? m[@"pollTotal"] : @0,
+				@"isClosed"        : [m[@"pollClosed"] isKindOfClass:NSNumber.class]
+						? m[@"pollClosed"] : @NO,
+			};
+	NSString *question = [poll[@"question"] isKindOfClass:NSString.class]
+			? poll[@"question"] : @"Poll";
+	NSString *description = [poll[@"description"] isKindOfClass:NSString.class]
+			? poll[@"description"] : @"";
+	NSString *explanation = [poll[@"explanation"] isKindOfClass:NSString.class]
+			? poll[@"explanation"] : @"";
+	NSArray *options = [poll[@"options"] isKindOfClass:NSArray.class]
+			? poll[@"options"] : @[];
+
+	NSNumber *key = @([m[@"id"] longLongValue]);
+	NSMutableIndexSet *pending = self.pendingPollVotes[key];
+	BOOL showVote = [poll[@"allowsMultiple"] boolValue]
+			&& ![poll[@"isClosed"] boolValue]
+			&& !TGPollShowsResults(poll)
+			&& [pending isKindOfClass:NSIndexSet.class] && pending.count > 0;
+	BOOL showExplanation = TGPollShowsResults(poll) && explanation.length > 0;
+
+	CGFloat textW = kBubbleMaxW - TGDoubled(kPadH);
+	CGSize questionSize = TGTextSize(question, TGFontBodyStrong(), textW);
+	CGFloat descriptionH = description.length
+			? TGTextSize(description, TGFontSubhead(), textW).height
+			: TGMetricZero;
+	CGFloat explanationH = showExplanation
+			? TGTextSize(explanation, TGFontCaption(), textW).height
+			: TGMetricZero;
+
+	CGFloat height = kPadV + questionSize.height;
+	if (descriptionH > TGMetricZero)
+		height += kPollDescriptionGap + descriptionH;
+	height += kPollKindGap + kPollKindLine + kPollOptionsGap;
+	for (NSDictionary *option in options)
+		height += TGPollOptionRowHeight(option, textW);
+	if (showVote)
+		height += kPollVoteGap + kPollVoteHeight;
+	if (explanationH > TGMetricZero)
+		height += kPollExplanationGap + explanationH;
+	height += kPollFooterGap + kPollFooterLine + kPollStampRoom;
+	return height;
+}
+
+/// The service line as drawn: who acted, and for a pin, the quoted message
+/// once it is loaded. The service text is made in Core, which cannot see the
+/// chat's messages, so the quote is added here at display time.
+- (NSString *)serviceLineForMessage:(NSDictionary *)m {
+	NSString *separator = m[@"separator"];
+	NSString *who = separator ? nil
+			: [[TGClient shared] nameForUserId:[m[@"senderId"] longLongValue]];
+	id rawText = m[@"text"];
+	NSString *text = [rawText isKindOfClass:NSString.class] ? rawText : @"";
+	NSString *line = text;
+	if (who.length && ![text hasPrefix:@"Group "] && ![text hasPrefix:@"Chat "] &&
+			![text hasPrefix:@"Screenshot "] && ![text hasPrefix:@"You "]) {
+		line = [NSString stringWithFormat:@"%@ %@", who, text];
+	}
+
+	NSString *kind = [m[@"kind"] isKindOfClass:NSString.class] ? m[@"kind"] : @"";
+	if (![kind isEqualToString:@"messagePinMessage"])
+		return line;
+
+	id rawId = m[@"pinnedMessageId"];
+	if (![rawId isKindOfClass:NSNumber.class] && ![rawId isKindOfClass:NSString.class])
+		return line;
+	int64_t pinnedId = [rawId longLongValue];
+	if (pinnedId == 0)
+		return line;
+
+	for (id candidate in self.messages) {
+		if (![candidate isKindOfClass:NSDictionary.class])
+			continue;
+		id candidateId = candidate[@"id"];
+		if (![candidateId isKindOfClass:NSNumber.class] &&
+				![candidateId isKindOfClass:NSString.class])
+			continue;
+		if ([candidateId longLongValue] == pinnedId)
+			return TGPinnedLine(line, candidate);
+	}
+	return line;
 }
 
 /// A picture with no caption carries its own stamp on a plate, so the bubble
-/// does not need a strip of empty space under it for one.
+/// does not need a strip of empty space under it for one. Caption above puts
+/// the picture at the bottom of the bubble, so the stamp sits on it too.
 - (BOOL)stampSitsOnPictureFor:(NSDictionary *)m {
+	if ([m[@"captionAbove"] isKindOfClass:[NSNumber class]] && [m[@"captionAbove"] boolValue])
+		return YES;
 	if ([m[@"isAlbum"] boolValue] && [self bodySizeFor:m].height == 0)
 		return YES;
 	return [self imageSizeFor:m].height > 0 && [self bodySizeFor:m].height == 0 &&
@@ -160,10 +285,53 @@ UIColor *TGSenderColour(int64_t userId) {
 			kBubbleMaxW - TGDoubled(kPadH));
 }
 
+static UIImage *TGImageFromMinithumbnail(id mini) {
+	NSData *data = nil;
+	if ([mini isKindOfClass:NSData.class]) {
+		data = (NSData *)mini;
+	} else if ([mini isKindOfClass:NSDictionary.class]) {
+		NSString *b64 = mini[@"data"];
+		if ([b64 isKindOfClass:NSString.class] && b64.length)
+			data = TGBase64Decode(b64);
+	} else if ([mini isKindOfClass:NSString.class]) {
+		data = TGBase64Decode((NSString *)mini);
+	}
+	if (data.length) {
+		return [UIImage imageWithData:data];
+	}
+	return nil;
+}
+
 - (UIImage *)imageFor:(NSDictionary *)m {
 	UIImage *map = self.maps[m[@"id"]];
 	if (map)
 		return map;
+	if ([m[@"paidPreview"] boolValue]) {
+		NSNumber *msgId = m[@"id"];
+		if ([msgId isKindOfClass:NSNumber.class]) {
+			UIImage *cached = self.images[msgId];
+			if (cached)
+				return cached;
+		}
+		id mini = nil;
+		NSDictionary *paid = m[@"paidMedia"];
+		if ([paid isKindOfClass:NSDictionary.class]) {
+			NSArray *items = paid[@"items"];
+			if ([items isKindOfClass:NSArray.class] && items.count > 0 && [items[0] isKindOfClass:NSDictionary.class]) {
+				mini = items[0][@"minithumbnail"];
+			}
+		}
+		if (!mini) {
+			mini = m[@"minithumbnail"];
+		}
+		UIImage *decoded = TGImageFromMinithumbnail(mini);
+		if (decoded) {
+			if ([msgId isKindOfClass:NSNumber.class]) {
+				self.images[msgId] = decoded;
+			}
+			return decoded;
+		}
+	}
 	NSNumber *fileId = m[@"photoId"];
 	if ([fileId isKindOfClass:NSNumber.class]) {
 		UIImage *cached = self.images[fileId];
@@ -181,17 +349,22 @@ UIColor *TGSenderColour(int64_t userId) {
 }
 
 - (CGSize)imageSizeFor:(NSDictionary *)m {
-	UIImage *img = [self imageFor:m];
 	CGFloat w = 0, h = 0;
-	if (img) {
-		w = img.size.width;
-		h = img.size.height;
-	} else if ([m[@"mediaWidth"] floatValue] > 0 && [m[@"mediaHeight"] floatValue] > 0) {
+	if ([m[@"paidPreview"] boolValue] && [m[@"mediaWidth"] floatValue] > 0 && [m[@"mediaHeight"] floatValue] > 0) {
 		w = [m[@"mediaWidth"] floatValue];
 		h = [m[@"mediaHeight"] floatValue];
-	} else if ([m[@"photoId"] isKindOfClass:NSNumber.class]) {
-		w = kImageMax;
-		h = kImageMax * TGMetricMediaRatioLandscape;
+	} else {
+		UIImage *img = [self imageFor:m];
+		if (img) {
+			w = img.size.width;
+			h = img.size.height;
+		} else if ([m[@"mediaWidth"] floatValue] > 0 && [m[@"mediaHeight"] floatValue] > 0) {
+			w = [m[@"mediaWidth"] floatValue];
+			h = [m[@"mediaHeight"] floatValue];
+		} else if ([m[@"photoId"] isKindOfClass:NSNumber.class]) {
+			w = kImageMax;
+			h = kImageMax * TGMetricMediaRatioLandscape;
+		}
 	}
 	if (w <= 0 || h <= 0)
 		return CGSizeZero;
@@ -199,6 +372,24 @@ UIColor *TGSenderColour(int64_t userId) {
 	CGFloat scale = MIN(kImageMax / w, kImageMax / h);
 	scale = MIN(scale, TGMetricScaleFull);
 	return CGSizeMake(floorf(w * scale), floorf(h * scale));
+}
+
+/// Cards, polls and checklists from someone else in a group say who sent
+/// them, like every other bubble: a name line on top, the avatar beside the
+/// bubble's foot. Returns the bubble height with the name line in it.
+- (CGFloat)placeGroupSender:(TGMessageLayout *)layout message:(NSDictionary *)m
+					   mine:(BOOL)mine width:(CGFloat)width height:(CGFloat)height x:(CGFloat *)x {
+	NSString *senderName = (self.isGroup && !mine)
+			? [[TGClient shared] nameForUserId:[m[@"senderId"] longLongValue]] : nil;
+	if (!senderName.length)
+		return height;
+	height += TGMetricSenderLineHeight;
+	*x += kAvatarSide + TGMetricPadSmall + kTailWidth;
+	layout.senderName = senderName;
+	layout.senderFrame = CGRectMake(kPadH, kPadV, width - TGDoubled(kPadH), TGMetricLineMicro);
+	layout.senderAvatarFrame = CGRectMake(TGMetricPad,
+			MAX(TGMetricPadTiny, TGMetricBubbleRowInset + height - kAvatarSide), kAvatarSide, kAvatarSide);
+	return height;
 }
 
 - (TGMessageLayout *)layoutForMessage:(NSDictionary *)m atRow:(NSInteger)row {
@@ -225,10 +416,17 @@ UIColor *TGSenderColour(int64_t userId) {
 	BOOL mine = [m[@"outgoing"] boolValue];
 	NSString *kind = m[@"kind"];
 	BOOL isSticker = [kind isEqualToString:@"messageSticker"] || [kind isEqualToString:@"messageAnimatedEmoji"];
+	// A dice that came with its sticker draws like one: the thumbnail has no
+	// bubble fill, border or caption while the animation file arrives. A dice
+	// without a sticker keeps its value text.
+	if ([kind isEqualToString:@"messageDice"] &&
+		([m[@"docName"] length] || [m[@"photoId"] isKindOfClass:NSNumber.class]))
+		isSticker = YES;
 	BOOL isVoice = [kind isEqualToString:@"messageVoiceNote"];
 	BOOL isRound = [kind isEqualToString:@"messageVideoNote"];
 	BOOL isService = [m[@"service"] boolValue];
 	BOOL isPoll = [kind isEqualToString:@"messagePoll"];
+	BOOL isChecklist = [kind isEqualToString:@"messageChecklist"];
 	// A track is a document with a title and a performer of its own. It was
 	// drawn as the document it also is, which is why music looked like a file.
 	BOOL isTrack = [kind isEqualToString:@"messageAudio"];
@@ -246,6 +444,9 @@ UIColor *TGSenderColour(int64_t userId) {
 	layout.isVoice = isVoice;
 	layout.isRound = isRound;
 	layout.isPoll = isPoll;
+	layout.isChecklist = isChecklist;
+	TGMessageCard *card = isService ? nil : TGChatCardForRow(m);
+	layout.isCard = card != nil;
 	layout.isTrack = isTrack;
 	layout.isCall = isCall;
 	layout.isDoc = isDoc;
@@ -271,12 +472,7 @@ UIColor *TGSenderColour(int64_t userId) {
 	}
 
 	if (isService) {
-		NSString *who = separator ? nil : [[TGClient shared] nameForUserId:[m[@"senderId"] longLongValue]];
-		NSString *text = m[@"text"] ?: @"";
-		NSString *line = text;
-		if (who.length && ![text hasPrefix:@"Group "] && ![text hasPrefix:@"Chat "] && ![text hasPrefix:@"Screenshot "] && ![text hasPrefix:@"You "]) {
-			line = [NSString stringWithFormat:@"%@ %@", who, text];
-		}
+		NSString *line = [self serviceLineForMessage:m];
 		UIFont *font = TGFontMeta();
 		CGFloat textW = MIN(TGTextSize(line, font, 0).width,
 				tableW - TGDoubled(kServicePlateMargin));
@@ -291,10 +487,34 @@ UIColor *TGSenderColour(int64_t userId) {
 		return layout;
 	}
 
+	if (card) {
+		CGFloat width = kBubbleMaxW;
+		CGFloat x = mine ? (tableW - width - TGMetricPad) : TGMetricPad;
+		CGFloat cardH = TGMessageCardLayout(card, width - TGDoubled(kPadH)).size.height;
+		CGFloat height = [self placeGroupSender:layout message:m mine:mine width:width
+				height:kPadV + cardH + kPadV + kPollStampRoom x:&x];
+		layout.bubbleFrame = CGRectMake(x, TGMetricBubbleRowInset, width, height);
+		layout.rowHeight = height + TGDoubled(TGMetricBubbleRowInset);
+		if (msgId) self.layoutCache[msgId] = layout;
+		return layout;
+	}
+
+	if (isChecklist) {
+		CGFloat width = kBubbleMaxW;
+		CGFloat x = mine ? (tableW - width - TGMetricPad) : TGMetricPad;
+		CGFloat height = [self placeGroupSender:layout message:m mine:mine width:width
+				height:[self checklistHeightFor:m] x:&x];
+		layout.bubbleFrame = CGRectMake(x, TGMetricBubbleRowInset, width, height);
+		layout.rowHeight = height + TGDoubled(TGMetricBubbleRowInset);
+		if (msgId) self.layoutCache[msgId] = layout;
+		return layout;
+	}
+
 	if (isPoll) {
 		CGFloat width = kBubbleMaxW;
 		CGFloat x = mine ? (tableW - width - TGMetricPad) : TGMetricPad;
-		CGFloat height = [self pollHeightFor:m];
+		CGFloat height = [self placeGroupSender:layout message:m mine:mine width:width
+				height:[self pollHeightFor:m] x:&x];
 		layout.bubbleFrame = CGRectMake(x, TGMetricBubbleRowInset, width, height);
 		layout.rowHeight = height + TGDoubled(TGMetricBubbleRowInset);
 		if (msgId) self.layoutCache[msgId] = layout;
@@ -449,7 +669,8 @@ UIColor *TGSenderColour(int64_t userId) {
 	if (senderName.length && [senderTag isKindOfClass:NSString.class] && senderTag.length)
 		senderName = [NSString stringWithFormat:@"%@ · %@", senderName, senderTag];
 
-	BOOL inlineStamp = [self stampFitsInlineFor:m];
+	BOOL stampOnPicture = [self stampSitsOnPictureFor:m];
+	BOOL inlineStamp = !stampOnPicture && [self stampFitsInlineFor:m];
 	NSString *lpSite = m[@"linkPreviewSite"];
 	NSString *lpTitle = m[@"linkPreviewTitle"];
 	NSString *lpDesc = m[@"linkPreviewDesc"];
@@ -513,7 +734,35 @@ UIColor *TGSenderColour(int64_t userId) {
 	CGFloat bubbleW = MAX(contentW + TGDoubled(kPadH),
 			timeW + TGDoubled(kPadH) + TGMetricPad);
 	bubbleW = MIN(bubbleW, kBubbleMaxW + TGDoubled(kPadH));
-	BOOL stampOnPicture = [self stampSitsOnPictureFor:m];
+
+	// A caption under a voice note or a track, and the transcription under a
+	// voice note, are text inside the same bubble. Measure them here so the
+	// bubble and the row grow by the same amount the cell draws.
+	CGFloat audioCaptionH = TGMetricZero;
+	CGFloat audioTranscriptionH = TGMetricZero;
+	CGFloat audioExtraH = TGMetricZero;
+	if (isVoice || isTrack){
+		CGFloat textW = bubbleW - TGDoubled(kPadH);
+		NSString *caption = [m[@"caption"] isKindOfClass:NSString.class]
+				? m[@"caption"] : @"";
+		if (caption.length)
+			audioCaptionH = TGTextSize(caption, TGFontBody(), textW).height;
+		if (isVoice){
+			NSString *transcription = [m[@"transcription"] isKindOfClass:NSString.class]
+					? m[@"transcription"] : @"";
+			if ([m[@"transcriptionPending"] boolValue])
+				transcription = @"Transcribing...";
+			if (transcription.length)
+				audioTranscriptionH = TGTextSize(transcription, TGFontSubhead(), textW).height;
+		}
+		if (audioCaptionH > TGMetricZero || audioTranscriptionH > TGMetricZero)
+			audioExtraH = TGMetricPadSmall + audioCaptionH
+					+ ((audioCaptionH > TGMetricZero && audioTranscriptionH > TGMetricZero)
+						? TGMetricPadTiny : TGMetricZero)
+					+ audioTranscriptionH + TGMetricStampBottomInset;
+	}
+
+	stampOnPicture = [self stampSitsOnPictureFor:m];
 	CGFloat bubbleH = TGDoubled(kPadV) + senderH
 			+ (inlineStamp || stampOnPicture ? TGMetricZero : TGMetricLineMicro)
 			+ [self decorationHeightFor:m]
@@ -523,12 +772,13 @@ UIColor *TGSenderColour(int64_t userId) {
 			+ (hasLinkPreview ? (linkPreviewH + (body.height > 0 ? TGMetricPadSmall : TGMetricZero)) : TGMetricZero);
 	if (isVoice)
 		bubbleH = TGMetricPersonRow + senderH
-				+ ([m[@"forward"] length] ? TGMetricQuoteForwardLine : TGMetricZero);
+				+ ([m[@"forward"] length] ? TGMetricQuoteForwardLine : TGMetricZero)
+				+ audioExtraH;
 	// A track's row is fixed below, but its bubble was still measured by the
 	// generic formula, so the two disagreed: the bubble ran past the row it
 	// was given and sat on top of the message above it.
 	if (isTrack)
-		bubbleH = kTrackRow + senderH + forwarded;
+		bubbleH = kTrackRow + senderH + forwarded + audioExtraH;
 
 	CGFloat x = mine ? (tableW - bubbleW - TGMetricPad) : TGMetricPad;
 	CGFloat top = [self continuesAlbumAtRow:row] ? TGMetricZero : TGMetricBubbleRowInset;
@@ -569,19 +819,36 @@ UIColor *TGSenderColour(int64_t userId) {
 					y + collageH - TGMetricFloatingDateHeight, plateW, TGMetricLineCaption);
 		}
 		y += collageH + TGMetricPadSmall;
+		layout.bodyFrame = CGRectMake(kPadH, y, innerW, body.height);
+		if (body.height > 0)
+			y += body.height + (hasLinkPreview ? TGMetricPadSmall : TGMetricZero);
 	} else if (pic.height > 0) {
+		BOOL captionAbove = [m[@"captionAbove"] isKindOfClass:[NSNumber class]] &&
+				[m[@"captionAbove"] boolValue] && body.height > 0;
+		if (captionAbove) {
+			layout.bodyFrame = CGRectMake(kPadH, y, innerW, body.height);
+			y += body.height + TGMetricPadSmall;
+		}
 		CGFloat picW = (body.height > 0) ? innerW : pic.width;
 		layout.pictureFrame = CGRectMake(kPadH, y, picW, pic.height);
-		if (!body.height) {
+		if (stampOnPicture) {
 			CGFloat plateW = timeW + (mine ? TGMetricGroupAvatarSide : TGMetricLineMicro);
-			layout.mediaStampFrame = CGRectMake(kPadH + pic.width - plateW - kMediaStampInset,
+			layout.mediaStampFrame = CGRectMake(kPadH + picW - plateW - kMediaStampInset,
 					y + pic.height - TGMetricFloatingDateHeight, plateW, TGMetricLineCaption);
 		}
-		y += pic.height + TGMetricPadSmall;
+		if (captionAbove) {
+			y += pic.height + (hasLinkPreview ? TGMetricPadSmall : TGMetricZero);
+		} else {
+			y += pic.height + TGMetricPadSmall;
+			layout.bodyFrame = CGRectMake(kPadH, y, innerW, body.height);
+			if (body.height > 0)
+				y += body.height + (hasLinkPreview ? TGMetricPadSmall : TGMetricZero);
+		}
+	} else {
+		layout.bodyFrame = CGRectMake(kPadH, y, innerW, body.height);
+		if (body.height > 0)
+			y += body.height + (hasLinkPreview ? TGMetricPadSmall : TGMetricZero);
 	}
-	layout.bodyFrame = CGRectMake(kPadH, y, bubbleW - TGDoubled(kPadH), body.height);
-	if (body.height > 0)
-		y += body.height + (hasLinkPreview ? TGMetricPadSmall : TGMetricZero);
 
 	if (hasLinkPreview) {
 		CGFloat lY = y;
@@ -626,11 +893,15 @@ UIColor *TGSenderColour(int64_t userId) {
 	else if (pic.height > 0) rowH += pic.height + TGMetricPadSmall;
 	if (body.height > 0) rowH += body.height;
 	if (hasLinkPreview) rowH += linkPreviewH + (body.height > 0 ? TGMetricPadSmall : TGMetricZero);
-	if (isVoice) rowH = TGMetricVoicePillHeight + forwarded;
+	if (isVoice) rowH = TGMetricVoicePillHeight + forwarded + audioExtraH;
 	// Fixed, like a voice note: the artwork and the two lines beside it do
 	// not grow with the title, which is truncated instead.
 	// One expression for the row and the bubble, so they cannot drift apart.
-	if (isTrack) rowH = kTrackRow + forwarded + senderH;
+	if (isTrack) rowH = kTrackRow + forwarded + senderH + audioExtraH;
+	// The caption sits below the row, and a sender line makes the bubble
+	// taller than the pill formula above; never let the row clip it.
+	if ((isVoice || isTrack) && audioExtraH > TGMetricZero)
+		rowH = MAX(rowH, bubbleH);
 
 	// Reactions sit under the bubble rather than in it, the way Telegram draws
 	// them: the pill is its own object on the chat canvas. Their height is

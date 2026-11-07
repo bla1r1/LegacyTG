@@ -6,6 +6,10 @@
 // summarised, waveform decoded. Shared by the client, its categories
 // and the message stream store; declared in TGClientInternal.h.
 //
+#import "TGServiceMessageText.h"
+#import "TGMessageContentCommerce.h"
+#import "TGMessageContentInteractive.h"
+#import "TGLiveLocation.h"
 #import "TGClientInternal.h"
 #import "TGBase64.h"
 #import "TGCapabilities.h"
@@ -339,13 +343,25 @@ NSString *TGRichMessageText(NSDictionary *content) {
 }
 
 /// Flatten a TDLib message into what the UI needs.
+/// Names for the service sentences, from what the client already holds.
+static NSString *(^TGFlattenUserName)(int64_t) = ^NSString *(int64_t userId){
+	return [[TGClient shared] nameForUserId:userId];
+};
+static NSString *(^TGFlattenChatTitle)(int64_t) = ^NSString *(int64_t chatId){
+	NSString *title = [TGClient shared].chatsById[@(chatId)][@"title"];
+	return [title isKindOfClass:NSString.class] && title.length ? title : nil;
+};
+
 NSDictionary *TGFlattenMessage(NSDictionary *m) {
 	NSDictionary *content = m[@"content"];
 	NSString *ctype = content[@"@type"];
 	NSNumber *photoFileId = nil;   // an image to show in the bubble
 	NSNumber *docFileId   = nil;   // a file to play or offer for download
+	NSNumber *docThumbFileId = nil; // the picture on a document's tile
 	NSNumber *docSize     = nil;   // its size in bytes, where it matters
 	NSString *docName     = nil;
+	NSString *transcription = @""; // a voice note's text, once recognized
+	BOOL transcriptionPending = NO;
 	NSString *extra       = nil;   // text the content itself carries
 	NSNumber *latitude = nil, *longitude = nil;
 	NSDictionary *contactDict = nil;
@@ -357,6 +373,7 @@ NSDictionary *TGFlattenMessage(NSDictionary *m) {
 			? m[@"self_destruct_type"][@"@type"] : @"";
 	NSNumber *albumCoverId = nil;
 	BOOL isService = NO;
+	NSString *serviceText = nil;
 	NSString *callState = nil;     // "missed" or "answered" on a call message
 	BOOL liveEditable = NO;        // a live location with time left to edit
 	NSDictionary *pollInfo = @{};  // what the poll of this message still allows
@@ -366,9 +383,13 @@ NSDictionary *TGFlattenMessage(NSDictionary *m) {
 	int docWidth = 0, docHeight = 0;
 	NSNumber *videoFallbackId = nil;
 	BOOL hasStickers = NO;   // media other stickers were attached to
+	BOOL captionAbove = NO;
+	BOOL paidPreview = NO;
+	int64_t starCount = 0;
 
 	if ([ctype isEqualToString:@"messagePhoto"]){
 		hasStickers = [content[@"photo"][@"has_stickers"] boolValue];
+		captionAbove = [content[@"show_caption_above_media"] boolValue];
 		NSArray *sizes = content[@"photo"][@"sizes"];
 		if (sizes.count){
 			bigPhotoFileId = [sizes lastObject][@"photo"][@"id"];
@@ -395,6 +416,7 @@ NSDictionary *TGFlattenMessage(NSDictionary *m) {
 
 	} else if ([ctype isEqualToString:@"messageVideo"]){
 		hasStickers = [content[@"video"][@"has_stickers"] boolValue];
+		captionAbove = [content[@"show_caption_above_media"] boolValue];
 		photoFileId = content[@"video"][@"thumbnail"][@"file"][@"id"];
 		// Vintage plays video with the software decoder, whose measured ceiling
 		// is 720 on the long side. Other tiers keep the hardware decoder's
@@ -420,6 +442,7 @@ NSDictionary *TGFlattenMessage(NSDictionary *m) {
 
 	} else if ([ctype isEqualToString:@"messageAnimation"]){
 		hasStickers = [content[@"animation"][@"has_stickers"] boolValue];
+		captionAbove = [content[@"show_caption_above_media"] boolValue];
 		// Telegram GIFs are MP4, so they play like any video.
 		photoFileId = content[@"animation"][@"thumbnail"][@"file"][@"id"];
 		docFileId   = content[@"animation"][@"animation"][@"id"];
@@ -458,6 +481,10 @@ NSDictionary *TGFlattenMessage(NSDictionary *m) {
 
 	} else if ([ctype isEqualToString:@"messageDocument"]){
 		photoFileId = content[@"document"][@"thumbnail"][@"file"][@"id"];
+		id thumbId = content[@"document"][@"thumbnail"][@"file"][@"id"];
+		docThumbFileId = ([thumbId isKindOfClass:NSNumber.class] ||
+						  [thumbId isKindOfClass:NSString.class])
+				? @([thumbId longLongValue]) : @(0);
 		docFileId   = content[@"document"][@"document"][@"id"];
 		docName     = content[@"document"][@"file_name"];
 		NSNumber *size = content[@"document"][@"document"][@"size"];
@@ -473,6 +500,19 @@ NSDictionary *TGFlattenMessage(NSDictionary *m) {
 		// Telegram sends the shape of the sound with the message: five bits
 		// per sample, which is what the bars in the bubble are drawn from.
 		waveform  = TGBase64Decode(content[@"voice_note"][@"waveform"]);
+		NSDictionary *speech = [content[@"voice_note"][@"speech_recognition_result"]
+				isKindOfClass:NSDictionary.class]
+				? content[@"voice_note"][@"speech_recognition_result"] : nil;
+		NSString *speechType = [speech[@"@type"] isKindOfClass:NSString.class]
+				? speech[@"@type"] : @"";
+		if ([speechType isEqualToString:@"speechRecognitionResultPending"]){
+			transcriptionPending = YES;
+			transcription = [speech[@"partial_text"] isKindOfClass:NSString.class]
+					? speech[@"partial_text"] : @"";
+		} else if ([speechType isEqualToString:@"speechRecognitionResultText"]){
+			transcription = [speech[@"text"] isKindOfClass:NSString.class]
+					? speech[@"text"] : @"";
+		}
 		extra = @"";
 
 	} else if ([ctype isEqualToString:@"messageAudio"]){
@@ -514,59 +554,11 @@ NSDictionary *TGFlattenMessage(NSDictionary *m) {
 			@"address" : v[@"address"] ?: @"",
 		};
 
-	} else if ([ctype isEqualToString:@"messageChatAddMembers"]){
-		NSMutableArray *names = [NSMutableArray array];
-		for (NSNumber *uid in content[@"member_user_ids"])
-			[names addObject:[[TGClient shared] nameForUserId:uid.longLongValue] ?: @"someone"];
-		extra = [NSString stringWithFormat:@"%@ joined the group",
-				[names componentsJoinedByString:@", "]];
-		isService = YES;
-
-	} else if ([ctype isEqualToString:@"messageChatDeleteMember"]){
-		NSString *who = [[TGClient shared] nameForUserId:
-				[content[@"user_id"] longLongValue]] ?: @"someone";
-		extra = [NSString stringWithFormat:@"%@ left the group", who];
-		isService = YES;
-
-	} else if ([ctype isEqualToString:@"messageChatJoinByLink"] ||
-			   [ctype isEqualToString:@"messageChatJoinByRequest"]){
-		extra = @"joined the group via invite link";
-		isService = YES;
-
-	} else if ([ctype isEqualToString:@"messageChatChangeTitle"]){
-		extra = [NSString stringWithFormat:@"Group renamed to \"%@\"",
-				content[@"title"] ?: @""];
-		isService = YES;
-
-	} else if ([ctype isEqualToString:@"messageChatChangePhoto"]){
-		extra = @"Group photo changed";
-		isService = YES;
-
-	} else if ([ctype isEqualToString:@"messageChatDeletePhoto"]){
-		extra = @"Group photo removed";
-		isService = YES;
-
-	} else if ([ctype isEqualToString:@"messagePinMessage"]){
-		extra = @"pinned a message";
-		isService = YES;
-
-	} else if ([ctype isEqualToString:@"messageBasicGroupChatCreate"] ||
-			   [ctype isEqualToString:@"messageSupergroupChatCreate"]){
-		extra = [NSString stringWithFormat:@"Group \"%@\" created",
-				content[@"title"] ?: @""];
-		isService = YES;
-
-	} else if ([ctype isEqualToString:@"messageChatUpgradeTo"] ||
-			   [ctype isEqualToString:@"messageChatUpgradeFrom"]){
-		extra = @"Group upgraded to a supergroup";
-		isService = YES;
-
-	} else if ([ctype isEqualToString:@"messageChatSetTheme"]){
-		extra = @"Chat theme changed";
-		isService = YES;
-
-	} else if ([ctype isEqualToString:@"messageScreenshotTaken"]){
-		extra = @"Screenshot taken";
+	} else if ((serviceText = TGServiceMessageText(m, TGFlattenUserName, TGFlattenChatTitle))){
+		// Every service action - members, pins, topics, boosts, gifts,
+		// payments, video chats - says one sentence with its actor in it.
+		// TGServiceMessageText owns the wording; nil means not a service.
+		extra = serviceText;
 		isService = YES;
 
 	} else if ([ctype isEqualToString:@"messageCall"]){
@@ -578,9 +570,11 @@ NSDictionary *TGFlattenMessage(NSDictionary *m) {
 					  [reason isEqualToString:@"callDiscardReasonDeclined"];
 		BOOL outgoing = [m[@"is_outgoing"] boolValue];
 
-		extra = missed
-			? (outgoing ? @"Cancelled call" : @"Missed call")
-			: (outgoing ? @"Outgoing call" : @"Incoming call");
+		// A video call says so, as in their list of calls.
+		NSString *noun = [content[@"is_video"] boolValue] ? @"video call" : @"call";
+		extra = [NSString stringWithFormat:@"%@ %@", missed
+			? (outgoing ? @"Cancelled" : @"Missed")
+			: (outgoing ? @"Outgoing" : @"Incoming"), noun];
 		if (!missed && dur.integerValue > 0)
 			extra = [NSString stringWithFormat:@"%@, %ld:%02ld", extra,
 					(long)(dur.integerValue / 60), (long)(dur.integerValue % 60)];
@@ -588,16 +582,62 @@ NSDictionary *TGFlattenMessage(NSDictionary *m) {
 		isService = NO;
 
 	} else if ([ctype isEqualToString:@"messageDice"]){
-		extra = [NSString stringWithFormat:@"%@  %@",
-				content[@"emoji"] ?: @"Dice", content[@"value"] ?: @""];
+		// The throw itself is a sticker, not text: final_state has the one it
+		// landed on, initial_state the rolling frame until it does. A slot
+		// machine's background stands for the whole machine; its reels are
+		// still the sticker's own and are not drawn here.
+		NSDictionary *state = [content[@"final_state"] isKindOfClass:NSDictionary.class]
+				? content[@"final_state"] : content[@"initial_state"];
+		NSDictionary *diceState = [state isKindOfClass:NSDictionary.class] ? state : nil;
+		NSString *diceKind = [diceState[@"@type"] isKindOfClass:NSString.class]
+				? diceState[@"@type"] : @"";
+		NSDictionary *diceSticker = nil;
+		if ([diceKind isEqualToString:@"diceStickersRegular"])
+			diceSticker = diceState[@"sticker"];
+		else if ([diceKind isEqualToString:@"diceStickersSlotMachine"])
+			diceSticker = diceState[@"background"];
+		if (![diceSticker isKindOfClass:NSDictionary.class])
+			diceSticker = nil;
+
+		id stickerFile = diceSticker[@"sticker"][@"id"];
+		NSNumber *stickerId = ([stickerFile isKindOfClass:NSNumber.class] ||
+				[stickerFile isKindOfClass:NSString.class]) &&
+				[stickerFile longLongValue] != 0
+				? @([stickerFile longLongValue]) : nil;
+		id thumbFile = diceSticker[@"thumbnail"][@"file"][@"id"];
+		NSNumber *thumbId = ([thumbFile isKindOfClass:NSNumber.class] ||
+				[thumbFile isKindOfClass:NSString.class]) &&
+				[thumbFile longLongValue] != 0
+				? @([thumbFile longLongValue]) : nil;
+		NSString *diceFormat = [diceSticker[@"format"][@"@type"] isKindOfClass:NSString.class]
+				? diceSticker[@"format"][@"@type"] : @"";
+
+		if (stickerId && [diceFormat isEqualToString:@"stickerFormatTgs"]){
+			docFileId   = stickerId;
+			photoFileId = thumbId;
+			docName     = @"tgs";
+			extra       = @"";
+		} else if (stickerId && [diceFormat isEqualToString:@"stickerFormatWebm"]){
+			docFileId   = stickerId;
+			photoFileId = thumbId;
+			docName     = @"webm";
+			extra       = @"";
+		} else if (stickerId && [diceFormat isEqualToString:@"stickerFormatWebp"]){
+			photoFileId = stickerId;
+			extra       = @"";
+		} else {
+			NSString *emoji = [content[@"emoji"] isKindOfClass:NSString.class]
+					? content[@"emoji"] : @"Dice";
+			id value = content[@"value"];
+			NSString *valueText = ([value isKindOfClass:NSNumber.class] ||
+					[value isKindOfClass:NSString.class])
+					? [NSString stringWithFormat:@"%@", value] : @"";
+			extra = [NSString stringWithFormat:@"%@  %@", emoji, valueText];
+		}
 
 	} else if ([ctype isEqualToString:@"messageGame"]){
 		extra = [NSString stringWithFormat:@"Game: %@",
 				content[@"game"][@"title"] ?: @""];
-
-	} else if ([ctype isEqualToString:@"messageUnsupported"]){
-		extra = @"Message not supported on this client";
-		isService = YES;
 
 	} else if ([ctype isEqualToString:@"messagePoll"]){
 		// Rendered by the chat as a question with its options and their share
@@ -663,8 +703,36 @@ NSDictionary *TGFlattenMessage(NSDictionary *m) {
 		extra = posterName.length ? [NSString stringWithFormat:@"Story by %@", posterName] : @"Story";
 
 	} else if ([ctype isEqualToString:@"messagePaidMedia"]){
-		extra = [NSString stringWithFormat:@"Paid media, %@ stars",
-				content[@"star_count"] ?: @0];
+		NSDictionary *commerce = TGFlattenCommerceContent(content);
+		NSDictionary *paid = commerce[@"paidMedia"];
+		if ([paid isKindOfClass:NSDictionary.class]) {
+			if ([paid[@"starCount"] respondsToSelector:@selector(longLongValue)])
+				starCount = [paid[@"starCount"] longLongValue];
+			NSArray *items = paid[@"items"];
+			if ([items isKindOfClass:NSArray.class] && items.count > 0 && [items[0] isKindOfClass:NSDictionary.class]) {
+				NSDictionary *first = items[0];
+				mediaWidth = [first[@"width"] intValue];
+				mediaHeight = [first[@"height"] intValue];
+				if ([first[@"kind"] isEqualToString:@"preview"]) {
+					paidPreview = YES;
+				}
+			}
+		}
+		if (starCount == 0 && [content[@"star_count"] respondsToSelector:@selector(longLongValue)]) {
+			starCount = [content[@"star_count"] longLongValue];
+		}
+		NSArray *rawMedia = [content[@"media"] isKindOfClass:NSArray.class] ? content[@"media"] : @[];
+		if (mediaWidth == 0 && rawMedia.count > 0 && [rawMedia[0] isKindOfClass:NSDictionary.class]) {
+			mediaWidth = [rawMedia[0][@"width"] intValue];
+			mediaHeight = [rawMedia[0][@"height"] intValue];
+			if (!paidPreview && ![rawMedia[0][@"@type"] isEqualToString:@"paidMediaPhoto"] &&
+				![rawMedia[0][@"@type"] isEqualToString:@"paidMediaVideo"]) {
+				paidPreview = YES;
+			}
+		}
+		if (!paidPreview) {
+			extra = [NSString stringWithFormat:@"Paid media, %lld stars", (long long)starCount];
+		}
 
 	} else if ([ctype isEqualToString:@"messageChecklist"]){
 		NSDictionary *list = content[@"checklist"];
@@ -676,12 +744,6 @@ NSDictionary *TGFlattenMessage(NSDictionary *m) {
 					task[@"text"][@"text"] ?: @""];
 		extra = [lines stringByTrimmingCharactersInSet:
 				[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-
-	} else if ([ctype hasPrefix:@"messageExpired"]){
-		// A self-destructing photo that has gone. Saying so is the whole
-		// content; an empty bubble would look like a bug.
-		extra = @"Expired media";
-		isService = YES;
 
 	}
 
@@ -700,9 +762,12 @@ NSDictionary *TGFlattenMessage(NSDictionary *m) {
 
 	// A caption wins; then whatever the content itself says; and for a plain
 	// picture, nothing at all - the image speaks for itself.
-	NSString *caption = content[@"caption"][@"text"];
+	NSString *caption = [content[@"caption"] isKindOfClass:NSDictionary.class]
+			? content[@"caption"][@"text"]
+			: ([content[@"caption"] isKindOfClass:NSString.class] ? content[@"caption"] : nil);
 	NSString *text;
 	if (caption.length)      text = caption;
+	else if (paidPreview)    text = @"";
 	else if (extra.length)   text = extra;
 	else if (photoFileId)    text = @"";
 	else {
@@ -723,7 +788,7 @@ NSDictionary *TGFlattenMessage(NSDictionary *m) {
 	// text message, say. An empty bubble reads as a bug, so it says what it
 	// is as a service line. The unknown types never reach this: the preview
 	// above already gave them their phrase, as a service line.
-	if (!text.length && !photoFileId && !docFileId && !latitude){
+	if (!text.length && !photoFileId && !docFileId && !latitude && !paidPreview){
 		text = TGPhraseFromTypeName(ctype);
 		isService = YES;
 	}
@@ -806,6 +871,8 @@ NSDictionary *TGFlattenMessage(NSDictionary *m) {
 		@"hasStickers" : @(hasStickers),
 		@"mediaWidth": @(mediaWidth),
 		@"mediaHeight": @(mediaHeight),
+		@"paidPreview": @(paidPreview),
+		@"starCount" : @(starCount),
 		@"linkPreviewSite"  : lpSite ?: @"",
 		@"linkPreviewTitle" : lpTitle ?: @"",
 		@"linkPreviewDesc"  : lpDesc ?: @"",
@@ -817,8 +884,11 @@ NSDictionary *TGFlattenMessage(NSDictionary *m) {
 		@"docHeight" : @(docHeight),
 		@"docId"     : docFileId   ?: [NSNull null],
 		@"videoFallbackId" : videoFallbackId ?: [NSNull null],
+		@"docThumbFileId" : docThumbFileId ?: @(0),
 		@"docName"   : docName     ?: @"",
 		@"docSize"   : docSize     ?: @(0),
+		@"transcription" : transcription ?: @"",
+		@"transcriptionPending" : @(transcriptionPending),
 		@"service"   : @(isService),
 		// Several photos sent together share an album id; the chat draws them
 		// as one block rather than as unrelated messages.
@@ -872,6 +942,14 @@ NSDictionary *TGFlattenMessage(NSDictionary *m) {
 		// watched. Telegram draws both as not-yet-heard until they are, so
 		// the chat has to know which ones they are.
 		@"channelPost" : @([m[@"is_channel_post"] boolValue]),
+		// TDLib says NO for a protected chat and for self-destructing media:
+		// then nothing may leave the chat - no copy, forward or save. A local
+		// message TDLib never described is ours to keep.
+		@"canBeSaved" : @(m[@"can_be_saved"] ? [m[@"can_be_saved"] boolValue] : YES),
+		// Photos, videos and GIFs can have their caption placed above the media.
+		@"captionAbove" : @(captionAbove),
+		// Photos, videos and GIFs sent as spoilers stay covered until tapped.
+		@"hasSpoiler" : @([content[@"has_spoiler"] boolValue]),
 		@"unplayed"  : @(([ctype isEqualToString:@"messageVoiceNote"] &&
 							![content[@"is_listened"] boolValue]) ||
 						 ([ctype isEqualToString:@"messageVideoNote"] &&
@@ -904,13 +982,27 @@ NSDictionary *TGFlattenMessage(NSDictionary *m) {
 								? content[@"text"][@"entities"] : @[]),
 	};
 
-	// Only a sending row pays for the extra mutable copy: every other row
-	// keeps the literal dictionary it has always been.
-	if ([m[@"sending_state"][@"@type"]
-			isEqualToString:@"messageSendingStatePending"]){
-		NSMutableDictionary *sending = [row mutableCopy];
-		sending[@"sending"] = @YES;
-		return sending;
+	// Paid media, invoices, giveaways, gifts, polls, pins, shared chats,
+	// calls, checklists, stories, games, dice: the structured fields their
+	// bubbles draw from. Nil for every other content.
+	NSDictionary *structured = TGFlattenCommerceContent(content)
+			?: TGFlattenInteractiveContent(content);
+	// A live location also needs its last move, to say how fresh it is.
+	NSDictionary *live = TGFlattenLiveLocation(content);
+	if (live)
+		structured = @{@"live" : live, @"editDate" : @([m[@"edit_date"] longLongValue])};
+	BOOL sending = [m[@"sending_state"][@"@type"]
+			isEqualToString:@"messageSendingStatePending"];
+
+	// Only those rows and a sending row pay for the extra mutable copy:
+	// every other row keeps the literal dictionary it has always been.
+	if (structured || sending){
+		NSMutableDictionary *richer = [row mutableCopy];
+		if (structured)
+			[richer addEntriesFromDictionary:structured];
+		if (sending)
+			richer[@"sending"] = @YES;
+		return richer;
 	}
 	return row;
 }

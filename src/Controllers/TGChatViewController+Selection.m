@@ -157,8 +157,16 @@ static void TGAnimateSelectionCheckbox(TGChatViewController *chat, int64_t messa
 		[self.editDeleteButton setTitle:@"Delete" forState:UIControlStateNormal];
 	}
 
-	self.editForwardButton.enabled = enabled;
-	self.editForwardButton.alpha = enabled ? TGAlphaOpaque : TGAlphaDisabled;
+	// One protected message in the selection keeps the whole batch home.
+	BOOL forwardable = enabled;
+	for (NSDictionary *m in self.messages){
+		if ([m[@"canBeSaved"] isEqual:@NO] && [self.selectedMessageIds containsObject:m[@"id"]]){
+			forwardable = NO;
+			break;
+		}
+	}
+	self.editForwardButton.enabled = forwardable;
+	self.editForwardButton.alpha = forwardable ? TGAlphaOpaque : TGAlphaDisabled;
 	if (count > 0) {
 		[self.editForwardButton setTitle:[NSString stringWithFormat:@"Forward (%lu)", (unsigned long)count] forState:UIControlStateNormal];
 	} else {
