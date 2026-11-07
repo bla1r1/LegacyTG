@@ -2,6 +2,16 @@ Login, sign-up and account switching: every auth step, the account slots, sessio
 
 Counts: 25 done, 4 partial, 0 missing, 2 dev-only.
 
+**What is built.** M2 is the auth path: phone and code, sign-up name and terms, 2FA password and
+recovery, email steps, QR login and scan, web token, Firebase SMS, change
+phone, temporary password and application verification. Three account slots
+each run their own TDLib directory; switching restarts the client on that
+slot.
+
+The account UI is still flat — names with a check, no avatars or per-account
+logout — and auth errors carry TDLib's own text, which is M34. Passkeys and
+OAuth stay in the `TG_DEV` console.
+
 | Feature | Official | Here | Where | Note |
 |---|---|---|---|---|
 | Sign in by phone and code | Official: Sign in by phone and code | done | `Controllers/TGLoginViewController+Steps.m:1` | Phone, code and password steps are driven by `authorizationStateWait*`. |

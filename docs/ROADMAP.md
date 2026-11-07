@@ -1,407 +1,544 @@
-# LegacyTG Roadmap
+# LegacyTG roadmap
 
-Telegram client for iPhone 3GS/4/4S on iOS 6–7, built on TDLib.
+Status: `done` · `initial` (usable first version) · `partial` · `planned` · `deferred` · `wontfix`.
 
-Status: **done** · *in progress* · planned · out of scope
+LegacyTG is a Telegram client for iOS 6.0–12.5.7 on armv7 and arm64: an
+Objective-C UIKit UI over TDLib 1.8.66, loaded at runtime as
+`libtdjson.dylib`. The hand-written libtg MTProto stack is gone; about 2500
+lines written for this app sit on the TDLib API. Features gate by device tier
+(Vintage, Legacy, Modern, Full), not by iOS version; Settings > This Device
+explains every missing button. Vintage is the iPhone 3GS/4 and iPod touch 4
+(256–512 MB, armv7, never past iOS 7); Legacy the 4S/5/5c and iPod touch 5
+(armv7, up to iOS 10); Modern the 5s/6/6+ and iPod touch 6 (first 64-bit,
+stopped at 12.5); Full the 6s and later (2 GB+).
 
-The app was fully rewritten onto TDLib. `libtg` — the hand-written MTProto stack — is gone. What remains is ~2500 lines written for this app plus TDLib itself, loaded at runtime as `libtdjson.dylib`.
+The closed milestones below are the order the work landed. What each one built
+is described by subject in the area guides: [login and accounts](status/login-accounts.md),
+[chat list](status/chat-list.md), [chat](status/chat.md),
+[message types](status/message-types.md), [media](status/media.md),
+[profile](status/profile.md), [groups](status/groups.md),
+[channels](status/channels.md), [contacts](status/contacts.md),
+[calls](status/calls.md), [stories](status/stories.md),
+[settings](status/settings.md), [privacy and security](status/privacy-security.md),
+[notifications](status/notifications.md) and
+[bots and payments](status/bots-payments.md). Counts are in
+[status/README.md](status/README.md). Observed gaps are in [gaps.md](gaps.md).
+Where an old plan and a status file disagree, the status file was checked
+against `src/` on 7 November 2026.
 
-Current per-feature state, with counts and gaps, is in [docs/status/README.md](status/README.md). The tables in sections 1–7 are the planning record that led to it; where they disagree with a status file, the status file was checked against the code on 7 November 2026.
+## Closed milestones
 
----
+One line each; the linked guide describes what it built.
 
-## 1 · Messaging core
-
-| | Feature | Notes |
+| Milestone | Status | Summary |
 |---|---|---|
-| **done** | Sign in by phone, code, 2FA | 1.3 s from launch to authorized on a 4S |
-| **done** | Chat list with avatars, previews, badges | |
-| **done** | Message history, paged | |
-| **done** | Send text | |
-| **done** | Live updates in an open chat | `updateNewMessage` |
-| **done** | Read receipts | `viewMessages` |
-| **done** | Reply | quoted message shown above |
-| **done** | Forward | source named on the message |
-| **done** | Edit | marked as edited |
-| **done** | Delete | long press |
-| **done** | Draft persistence | |
-| **done** | Typing indicators | takes over the header subtitle |
-| **done** | Search in chat and globally | in-chat search lives in the profile |
-| **done** | Pinned message banner | |
-| **done** | Reactions | shown on messages; thumbs up |
-| | Message multi-select | one at a time |
-| **done** | Jump to quoted message | scrolls and flashes |
-| **done** | Unread separator and jump-to-unread | |
-| | Scheduled and silent sending | |
-| **done** | Saved Messages | from the Folders menu |
+| M1 Build and TDLib bridge | done | armv7 Makefile, TDLib submodule, `libtdjson.dylib` split (static linking exceeds the 16 MB branch limit), `tools/machofix.c`, opus, iOS 7 target. [status overview](status/README.md) |
+| M2 Login and accounts | done | Phone, code, 2FA, email and QR steps; sign-up, terms, password recovery; three account slots, each with its own TDLib directory. 1.3 s from launch to authorized on a 4S. [login-accounts](status/login-accounts.md) |
+| M3 Chat list | done | Snapshot first paint, 12 `loadChats` retries, live re-sort, rows, archive, folder strip, drag order, bulk actions. [chat-list](status/chat-list.md) |
+| M4 Chat core | done | Paged history, bubbles, reply/forward/edit/delete, drafts, typing, pins, reactions, multi-select, scheduled sends, secret chats. [chat](status/chat.md) |
+| M5 Media and files | done | Photo viewer, video and GIF playback, document preview, save to camera roll, downloads with cancel, file information. [media](status/media.md) |
+| M6 Stickers and GIFs | done | WebP stills, TGS Lottie, WebM VP9 alpha, pack install by link/search, favourites, editor, custom emoji packs. [media](status/media.md) |
+| M7 Groups, forums and channels | done | Member actions, permissions, invite links, forum topics, channel comments, direct messages, send-as, channel settings. [groups](status/groups.md), [channels](status/channels.md) |
+| M8 Voice and video notes | done | Opus record/play, waveform, speed, transcription line, round video recorder and player; 4 s records to 22 KB on a 4S. [media](status/media.md) |
+| M9 Themes, icons and design tokens | done | UIKit draws the chrome on every iOS version (`996512d`, `8e0d1b4`); the app draws only the chat, sheets, snackbars, viewer, player and call screen. Procedural SVG icon set (`6861366`) with outline/filled pairs; `TGStyle`, `TGTheme+Colours`, six-step spacing, light theme. [settings](status/settings.md) |
+| M10 Search | done | In-chat text search, global search over chats/messages/media, local-first and server results, no-match states. [chat](status/chat.md), [chat-list](status/chat-list.md) |
+| M11 Stories | done | 48 story functions on screens: strip, viewer, reactions, posting, period/privacy, albums, archive, statistics, public search. [stories](status/stories.md) |
+| M12 Profiles and contacts | done | User, group and channel profiles; own profile with three tiles, online line and Add a bio; editing, action tiles, media panes, music strip; contacts list, add, block, share. [profile](status/profile.md), [contacts](status/contacts.md) |
+| M13 1:1 calls | done | tgcalls 9.0.0 signalling and media, VoiceProcessingIO audio, call screen, emoji key, rating, recent calls. Modern clients still refuse this version; two peers that accept 2.4.4 still work. [calls](status/calls.md) |
+| M14 Settings and privacy | done | Telegram-shaped Settings, passcode, two-step, sessions, blocked users, visibility rules, storage, data and network pages. [settings](status/settings.md), [privacy-security](status/privacy-security.md) |
+| M15 Notifications and push | done | Three scopes and previews, exceptions, sounds, reaction and story settings, `registerDevice`, push routing to chat and message. Delivery needs the APNs certificate held for the official bundle ID. [notifications](status/notifications.md) |
+| M16 Message types, cards and veils | done | Service sentences for about 75 types, previews for every content type, structured fields, one card for commerce and shared peers, one veil for spoilers/view-once/paid media, polls rebuilt, protected chats block copy/forward/save. Checked on the 4S with dev showcase rows, not yet with real messages. [message-types](status/message-types.md) |
+| M17 Custom emoji | done | Composer keeps ids and sends or edits real custom emoji; picker tab; reactions, header and sender names; animation through the sticker pipeline, up to 3 per bubble; fallback emoji on iOS 6. Without Premium only Saved Messages accepts them. [chat](status/chat.md), [message-types](status/message-types.md) |
+| M18 Device tiers, delivery and iOS 6 | done | Tier gates and This Device, `scripts/devrun.sh`, `TG_DEV` fenced out of release, Mac Catalyst probe, iOS 6 selector/base64/image-decode fixes. [settings](status/settings.md) |
+| M19 Performance and C/C++ migration | done | yyjson zero-copy parsing, streaming Opus, vector Lottie math, TDLib update coalescing, controller decomposition, 1271 client and 185 call host tests. [C_CPP_MIGRATION_PLAN.md](C_CPP_MIGRATION_PLAN.md) |
 
-## 2 · Media
+## Open milestones
 
-| | Feature | Notes |
+In the order they are meant to be taken. Payments and group-call audio unblock
+the largest number of dead buttons; the rest are parity work on screens that
+already exist.
+
+| Milestone | Status | Left |
 |---|---|---|
-| **done** | Photos inline, full-screen viewer | hold to save |
-| **done** | Video and video notes | `MPMoviePlayerViewController` |
-| **done** | Voice notes, played | Opus → PCM via libopusfile |
-| **done** | WebP stickers | libwebp |
-| **done** | Animated `.tgs` stickers | `TGLottieView` |
-| **done** | Documents with name and size | |
-| **done** | Send photo from library | |
-| **done** | Video stickers (`.webm`) | VP9 with alpha via `TGWebMDecoder` & streaming player |
-| | Lottie: mattes, trim paths, repeaters | gradients done; the rest approximate |
-| **done** | Record and send voice note | libopusenc; 4 s → 22 KB on a 4S |
-| **done** | Send video, location, contacts | no file browser on iOS 7 |
-| **done** | Albums (grouped media) | one block, one timestamp |
-| *in progress* | Download progress and cancel | progress shown; no cancel |
-| **done** | Save to camera roll | hold the full-screen image |
-| **done** | GIF autoplay | muted loop on A5+; Power Saving switch |
-| **done** | Send stickers and GIFs | GIF search through @gif |
-| *in progress* | Sticker sets: install, browse, favourites | browse and favourites done; install by link in |
-| *in progress* | Photo viewer | zooms; no swipe between photos |
-| **done** | Polls | tap to vote |
+| M20 Payments, Stars and gifts | `planned` | Pay path, Premium purchase, Stars, gifts, TON, Passport, StoreKit. |
+| M21 Group-call audio | `planned` | RTP mixing and AudioUnit playback in the group-call screen. |
+| M22 Video calls | `partial` | Dev-only engine; picture to an official client, release gate. |
+| M23 Sending files, music and send options | `planned` | Document/audio picker, music streaming, silent and repeated sends, GIF caption. |
+| M24 Chat-list previews and badges | `planned` | Thumbnails, type glyph, reaction/poll badges, compact counts, tab badge, folder tags. |
+| M25 Story rings | `planned` | Ring on every row and profile avatar, own-story tile. |
+| M26 Chat search filters | `planned` | Sender/media/date chips, result opens the hit, search tokens, global scopes. |
+| M27 Failed-send mark | `planned` | Failed icon in the bubble and row, retry without the hold menu. |
+| M28 Profile cover, QR and Premium badge | `planned` | Accent gradient, background emoji, QR screen, star badge, rating, verifier note. |
+| M29 Profile media tabs | `planned` | GIF and Polls panes, photo/video split, month sections, calendar, counts, multi-select. |
+| M30 Settings search | `planned` | A page index and a search field over every Settings row. |
+| M31 Notification pages | `planned` | Category pages, in-app banner, permission warning, badge settings, exception editing. |
+| M32 Contacts invite and import | `planned` | Invite Friends row, address-book permission, phone-book import, formatted phone add. |
+| M33 Localisation | `planned` | Lookup for about 2200 hard-coded English strings, plural and gender forms. |
+| M34 Developer talk on the user's path | `partial` | Error table for 157 alerts, harness pages behind `TG_DEV`, footers rewritten. |
+| M35 Message actions still missing | `planned` | Poll creation, copy in multi-select, forward with caption, share to topic, reply quote, pinned list. |
+| M36 Group administration and channel tools | `partial` | Admin rights editor, invite-link detail, removed users, statistics graphs, boosts. |
+| M37 Settings and appearance detail | `partial` | Privacy exception lists, storage maximum, theme thumbnails, background colour/gradient, wallpaper collection. |
+| M38 Media polish | `partial` | Live photos, scrub preview, music streaming, Lottie mattes/trim paths, sticker keyword search, link preview picture. |
+| M39 Stories after the strip | `partial` | Camera video, reply/share/repost, live-story playback and hosting, comments. |
+| M40 Bots and mini apps | `planned` | Inline mode, Web App host, bot commands, guest bots, game scores, web-app buttons. |
+| M41 Dark theme | `deferred` | Night and Auto-Night were removed; the app is light-only by decision. |
+| M42 Landscape and iPad | `deferred` | Portrait iPhone layout only; no iPad or landscape pass. |
+| M43 Platform delivery and device coverage | `partial` | iOS 6 device run, 4-inch check, background fetch, crash reporting, arm64 `libtdjson`. |
+| M44 Message detail and unread TDLib fields | `partial` | Rich-message blocks, author signature, view/forward counts, gift counts, service-action buttons. |
 
-## 3 · Chats and groups
+## M20: Payments, Stars and gifts
 
-| | Feature | Notes |
-|---|---|---|
-| **done** | Groups and supergroups | sender names, per-person colours |
-| **done** | Service messages | joins, leaves, renames, pins |
-| **done** | Forum topics | opens on topic list |
-| **done** | Member count in header | |
-| **done** | Profile screen | avatar, phone, members, shared media, gifts |
-| **done** | Sender avatars in groups | |
-| **done** | Start a new chat from contacts | |
-| *in progress* | Channels | read, join, mute; no comments/reactions |
-| | Secret chats | disabled at TDLib init |
-| **done** | Archive | row above the list |
-| **done** | Chat folders | |
-| **done** | Mute, pin, leave, delete | hold a row |
-| *in progress* | Group member list, admin actions | list in profile; no admin actions |
-| | Invite links | |
-| | Create group or channel | join only |
-| | Create/manage forum topics | read only |
-| **done** | Block a user | from profile |
-| **done** | Online status / last seen | private chat header |
+- [ ] `planned` A checkout form that sends `getPaymentForm` and
+  `sendPaymentForm`; invoice Pay and paid-media unlock reuse it.
+- [ ] `planned` Premium purchase, Stars balance and top-up, star
+  subscriptions, sending gifts, gift collections and resale.
+- [ ] `planned` TON wallet, Passport and StoreKit receipt assignment;
+  `canPurchaseFromStore` and `assignStoreTransaction` are never sent today.
+- [ ] `planned` Paid messages: a Stars price row in the composer for a user
+  who charges per message.
+- [ ] `planned` Premium server features that need a paid account, including
+  translation and transcription beyond the free TDLib path.
+- [ ] `planned` TON staking calls stay behind `TG_DEV`; the old stake-dice dump
+  is already replaced by the animated dice picker from M16.
+- [ ] `planned` Order validation: the eight successive text alerts become one
+  checkout form, or move behind `TG_DEV`.
 
-## 4 · Presentation
+**Blocked by:** no App Store receipt for this bundle ID and no payment
+provider. StoreKit and Fragment both require the official app identity.
 
-| | Feature | Notes |
-|---|---|---|
-| **done** | Chrome is the system's | `996512d` + `8e0d1b4`: bars, grouped tables, cells, switches, search, alerts draw by UIKit on every supported iOS version; the app keeps drawing only the chat, sheets, snackbars, viewer, player, call screen |
-| **done** | Procedural icon set | every glyph drawn from published SVG paths (`6861366`); the tab bar carries outline/filled pairs |
-| out of scope | Dark theme | light only: Night and Auto-Night removed, dark theme files refused (`8e86854`) |
-| | Telegram wallpaper collection | `getBackgrounds` not called |
-| **done** | Font size setting | Appearance → Message Text Size |
-| | Landscape / iPad layouts | portrait iPhone only |
-| | 4-inch screen check | built for 3.5-inch, never tested on a 5/5c |
-| | Localisation | English only, hardcoded |
-| **done** | Import official client themes | `.tgios-theme` and `.attheme`; zipped exports rejected |
-| **done** | Chat wallpaper | photo from library |
+**Closes:** `bots-payments.md` — Pay an invoice, Paid media, Paid messages,
+Premium purchase, Stars balance, Star subscriptions, Send a gift, Gift
+collections, Gift auctions and resale, Boosts, TON wallet, Passport, StoreKit
+purchases, Refund a Star payment.
 
-## 5 · Platform and delivery
+## M21: Group-call audio
 
-| | Feature | Notes |
-|---|---|---|
-| **done** | armv7 build on iOS 7.1.2 | `tools/machofix.c` repairs linker breakage |
-| **done** | TDLib as a dylib | static linking exceeds the 16 MB armv7 branch limit |
-| **done** | Unattended device runs | `scripts/devrun.sh` |
-| *in progress* | iOS 6 support | iOS 7-only calls are guarded; never run on real iOS 6 |
-| | Push notifications | needs `aps-environment` entitlement |
-| | Background fetch | |
-| | arm64 build | Makefile target exists, unexercised since rewrite |
-| | Crash reporting | pulled by hand on 7 November 2026 |
+- [ ] `planned` WebRTC/RTP multi-peer audio, AudioUnit playback and recording,
+  per-participant volume and mute in `TGGroupCallViewController`.
+- [ ] `planned` Decode the join payload and keep the call in the app, instead
+  of returning it to TDLib and leaving `client has no group-call audio engine`
+  on screen.
+- [ ] `planned` Active-speaker video decode for video chats; screen-share
+  payloads stop being pasted by hand, and stream segments stop being raw
+  OGG/MP4 files in `/tmp`.
+- [ ] `planned` The sample AES buttons in the video-chat tools move behind
+  `TG_DEV`; they test crypto, not a call.
 
----
+**Blocked by:** tgcalls is WebRTC and C++17; there is no armv7 build and iOS 7
+has no VideoToolbox encoder. The signalling, participant list, RTMP URLs and
+recording flags are already wired.
 
-## 6 · The rest of Telegram
+**Closes:** `calls.md` — Group-call audio; `groups.md` — Group-call audio;
+`message-types.md` — Join on group-call and video-chat cards.
 
-TDLib is 1.8.66 — the API is mostly there. The question is almost always the screen, not the protocol.
+## M22: Video calls
 
-The tables below are the planning record, not the current state. What is done, partial, missing or dev-only per feature is in [docs/status/README.md](status/README.md); several rows here were built after this section was written.
+- [ ] `partial` `TGCallVideoEngine` captures camera frames, sends H.264 RTP and
+  draws the remote preview; `canEncodeVideoCall` returns NO without `TG_DEV`.
+- [ ] `planned` A call to an official client and back, plus a video stand on
+  the Mac; neither exists, so the engine has only been exercised locally.
+- [ ] `planned` Release gate in `TGCapabilities` and the "in progress" label
+  replaced by the real tile.
 
-### Reachable, not yet written
+**Blocked by:** the missing second-party test and the same tgcalls/WebRTC
+stack limit as M21.
 
-| Feature | TDLib call | Note |
-|---|---|---|
-| Stories: view | `getChatActiveStories`, `getStory` | photo/video would draw; the ring in the chat list is the bigger job |
-| Premium status | `getPremiumState` | |
-| Auto-download rules | `setAutoDownloadSettings` | worth having on 3G |
-| Per-chat notification settings | `setChatNotificationSettings` | mute is all that's wired |
-| Privacy settings | `getUserPrivacySettingRules` | last seen, photo, calls, forwards |
-| 2FA setup | `setPassword`, `getPasswordState` | login already handles an existing password |
-| Create group/channel | `createNewBasicGroupChat` etc. | joining works |
-| Invite links | `createChatInviteLink` | |
-| Admin actions | `setChatMemberStatus` | member list is read-only |
-| Forum topic creation | `createForumTopic` | topics are read-only |
-| Scheduled/silent sending | `messageSendOptions` | |
-| Message multi-select | — | one at a time |
-| Sticker set browser | `getInstalledStickerSets` | recents strip only |
-| GIF panel / saved GIFs | `getSavedAnimations` | |
-| Reaction picker | `getAvailableReactions` | one hardcoded thumbs up |
-| Folder editing | `createChatFolder` | folders are read-only |
-| Story posting | `sendStory` | |
+**Closes:** `calls.md` — Private video calls, Video call engine, Local/remote
+video layout, Switch camera; `profile.md` — Video call tile.
 
-### Blocked by the machine
+## M23: Sending files, music and send options
 
-Device tiers — a feature asks for a tier, not an iOS version. `Settings > This device` explains what each missing button is waiting for.
+- [ ] `planned` Document and audio pickers in the attach sheet, with
+  `inputMessageDocument` and `inputMessageAudio`; today the sheet has gallery,
+  camera, location, contact, checklist, quick reply, dice and ephemeral only.
+- [ ] `planned` Music streaming: `TGMusicPlayer` downloads the whole file
+  before playback; an `AudioFileStream` path is needed for long tracks.
+- [ ] `planned` Silent send and repeated scheduled messages through
+  `messageSendOptions`; normal send builds no options and `repeat_period` is
+  hardcoded to 0.
+- [ ] `planned` GIF caption on the way out; incoming captions already draw.
+- [ ] `planned` A timer choice when sending a view-once photo or video; the
+  view-once send itself exists in private chats.
 
-| Tier | Devices | RAM |
-|---|---|---|
-| Vintage | iPhone 3GS/4, iPod touch 4 | 256–512 MB, never past iOS 7 |
-| Legacy | iPhone 4S/5/5c, iPod touch 5 | up to iOS 10 |
-| Modern | iPhone 5s/6/6+, iPod touch 6 | first 64-bit, stopped at 12.5 |
-| Full | iPhone 6s+ | 2 GB+ |
+**Blocked by:** nothing beyond the screen work; TDLib 1.8.66 has the calls.
 
-| Feature | Gate |
-|---|---|
-| Custom emoji in message text | not built on any device; shown as the plain emoji |
-| Mini apps, web apps | `canRunWebApps` — iOS 9+, WKWebView JS |
-| Multiple accounts | Every device, one active at a time; each has its own TDLib directory |
-| Video calls | `canEncodeVideoCall` — blocked: tgcalls is WebRTC/C++17, no armv7 build, iOS 7 has no VideoToolbox encoder |
-| Voice calls | **built, but the other end refuses.** libtgvoip compiles and rings — modern Telegram iOS rejects with "cannot accept this call with this version". Works between two peers that still accept 2.4.4 |
+**Closes:** `chat.md` — File and music picker, Silent send, Repeated scheduled
+message, GIF caption; `media.md` — Document and audio attachments, Music
+streaming; `message-types.md` — GIF caption.
 
-The arm64 build links (`make ipa-arm64`); what's missing is an arm64 `libtdjson.dylib` — same build script, second architecture.
+## M24: Chat-list previews and badges
 
-### Blocked by not being the official app
+- [ ] `planned` Photo and video thumbnail at the start of the preview, and a
+  content-type glyph beside it.
+- [ ] `planned` Reaction and poll-vote badges, compact counts ("1.2K"), folder
+  tags on the row, and the unread count on the Chats tab.
+- [ ] `planned` A typing preview that names the sender, a Saved Messages row,
+  and a pinned-row tint.
+- [ ] `planned` Strip undrawable scalars from chat titles, names and previews;
+  one such character costs 0.4–2.8 s on a 4S. Only the sticker panel titles
+  strip them today.
 
-| Feature | Why |
-|---|---|
-| Buying Premium / Stars / gifts | StoreKit / Fragment; no App Store receipt |
-| Push notifications | APNs cert is held by Telegram's servers for the official bundle ID |
-| Translation / transcription | Premium server features |
+**Blocked by:** row-model fields (`unreadPollVotes`, `chat_lists`, story state)
+that the list does not copy today.
 
-### Just not written yet
+**Closes:** `chat-list.md` — Reaction badge, Poll-vote badge, Compact counts,
+Pinned row tint, Photo/video thumbnail in the preview, Content-type glyph in
+the preview, Folder tags on the row, Saved Messages row, Unread badge on the
+Chats tab; `chat.md` — typing sender; `stories.md` — My Story first tile.
 
-| Feature | Why |
-|---|---|
-| Secret chats | disabled at TDLib init — one flag — plus key-verification screens |
-| Live locations | background location iOS 7 kills; iOS 9+ has the API |
-| Group calls / live streams | same tgcalls wall as video, plus mixing |
+## M25: Story rings
 
----
+- [ ] `planned` Draw the active-story ring around every chat-row avatar and
+  the profile header avatar, with the seen/unseen and close-friends states.
+- [ ] `planned` Turn the own-profile tile into a ring when own stories exist;
+  the plus always draws today.
+- [ ] `planned` Read `user.active_story_state` in list and profile cells; the
+  strip already has a ring.
 
-## 7 · Audit: Stubbed & Semi-functional Surfaces (Real Closure Backlog)
+**Blocked by:** no shared ring view; each of the three cells draws its own
+avatar.
 
-An audit of `src/Controllers/` reveals that while core messaging, 1:1 voice calls (`tgcalls 9.0.0`), standard stories, stickers, and profile workflows are fully functional, several screens and entry points were added to satisfy TDLib coverage metrics (`scripts/tdlib_wired.py`) or wire protocol stubs. They have dedicated UI controllers but lack underlying media engines, expose bot-only methods to user accounts, or act as raw debug harnesses.
+**Closes:** `chat-list.md` — Story ring on every row avatar; `profile.md` —
+Story ring around the avatar; `stories.md` — Story ring on every chat row
+avatar; `message-types.md`/old section 8 — `user.active_story_state`.
 
-### 1. Group Calls & Video Streaming (Signaling wired, media engine missing)
-- **`TGGroupCallViewController` («Group Call»)**:
-  - *Current state*: Joins call signaling in TDLib, updates participant states and mute flags. However, audio and video pipelines do not exist. Code explicitly states: `self.noteLabel.text = @"Joined. This client has no group-call audio engine."` and `@"TDLib records the flag; there is no frame to pause"`.
-  - *Closure requirement*: Implement WebRTC/RTP multi-peer audio mixing and AudioUnit playback/recording pipeline; wire video decode for active speaker.
-- **`TGVideoChatSetupViewController` & `TGVideoChatStreamViewController`**:
-  - *Current state*: Administrative/debug tables. Screen sharing (`startScreenSharing`) opens a text alert asking the user to manually type the raw join payload string. Stream segment fetcher saves raw OGG/MP4 chunks to `/tmp` with status note: `@"client has no group-call media engine to decode it in-app"`. Cryptographic test buttons run sample AES checks.
-  - *Closure requirement*: Replace manual payload text prompts with internal tgcalls pipeline; integrate stream receiver with a hardware/software player rather than file dump.
-- **`TGLiveStoryViewController` («Live Story»)**:
-  - *Current state*: Opens from `TGStoryViewerViewController` ("Open Live Story"). Inherits from `TGListViewController` and merely lists RTMP address, streamer ID, and reaction buttons. Joining copies the tgcalls payload to `UIPasteboard`. No video player pipeline exists.
-  - *Closure requirement*: AVPlayer / RTMP streaming player overlay inside `TGStoryViewerViewController` for live broadcast playback.
+## M26: Chat search filters
 
-### 2. Bot-Only & Staff Functions Exposed in User UI (Always Refused by Server)
-- **`TGEphemeralViewController` («Ephemeral»)**:
-  - *Current state*: Linked in chat attach menu (+) > More > «Ephemeral». Calls `sendEphemeralMessage`. Explicit comment: `@"sendEphemeralMessage is for bots. A user account sees Telegram's refusal sentence"`.
-  - *Closure requirement*: Remove from user chat attach sheet; gate behind bot session mode or map to self-destructing media.
-- **Settings > «Bot Tools»**:
-  - *Current state*: 7 rows (Prepared Keyboard Button, Close Web App, Bot Name/Description, Bot Menu Button, etc.) prompting user for numeric Bot IDs via `TGAlertSheet` and failing with server refusal.
-  - *Closure requirement*: Hide from user settings; move into a bot management section accessible only when managing a bot token.
-- **`TGAdminRightsViewController` («Default Admin Rights»)**:
-  - *Current state*: Settings > Privacy & Security > Default Admin Rights. Calls `setDefaultGroupAdministratorRights` which is bot-only. Code notes: `@"Both requests are bot-only: a user account is expected to see the refusal"`.
-  - *Closure requirement*: Restrict to bot administration views.
-- **`TGBusinessProfileViewController` (under Telegram Business)**:
-  - *Current state*: Name/Bio/Photo fields call `setBusinessAccount*` with `connectionId`. Without an active bot business connection, Telegram always returns refusal.
-  - *Closure requirement*: Separate user subscriber settings (hours, location, away messages — which work) from bot business connection fields.
-- **`TGBusinessConnectionViewController` & `TGBusinessMessagesViewController`**:
-  - *Current state*: Manual test harness where user must paste a bot connection ID, chat ID, and message ID to trigger bot calls (`sendBusinessMessage`, etc.).
-  - *Closure requirement*: Relocate to developer options or remove.
+- [ ] `planned` Sender, media and date chips in in-chat search; the query is
+  text-only today.
+- [ ] `planned` Open the message a result names instead of replacing the feed
+  and returning to the bottom.
+- [ ] `planned` Search tokens for archive, folder, peer and date, the missing
+  global scopes (Channels, Apps, Posts, Downloads), and a Downloads shortcut.
 
-### 3. Non-Interactive Stubs & Raw Diagnostic Harnesses
-- **`TGDiceViewController` («Stake Dice»)**:
-  - *Current state*: Linked in attach sheet (+) and profile More. Calls TON staking gambling API `getStakeDiceState`. Has **no `didSelectRowAtIndexPath`** (completely read-only, non-interactive dump of state hashes and amounts).
-  - *Closure requirement*: Replace with official Telegram animated dice picker (`🎲`, `🎯`, `🏀`, `⚽`, `🎰`, `🎳`) to send dice emoji messages.
-- **`TGGameScoresViewController` («Game Scores»)**:
-  - *Current state*: Opened from game message context menu. Form asking for manual text input of Chat ID, Message ID, User ID, and Score to call bot-only `setGameScore`.
-  - *Closure requirement*: Convert to a native high scores leaderboard displaying `getGameHighScores`.
-- **`TGStarsGiftsViewController` («Premium, Stars and Gifts»)**:
-  - *Current state*: Linked under Tier 3 Audit as "Read-only". 30 action buttons dumping raw strings into an `answerLines` label. No StoreKit or payment provider.
-  - *Closure requirement*: Build a true visual gifts catalogue and stars balance card, or move raw dumps to debug.
-- **`TGTestHarnessViewController`, `TGSupportInfoViewController`, `TGWebProxyCarrierViewController`, `TGEnvironmentViewController`**:
-  - *Current state*: Settings > Tier 3 Audit. Diagnostic screens directly calling TDLib internal `test*` methods, staff support notes, or manual postMessage carriers.
-  - *Closure requirement*: Move behind `TG_DEV` debug menu, out of release Settings.
-- **`TGChatToolsViewController` Manual ID Prompts**:
-  - *Current state*: "Answer Protected-Content Request" and "Answer Join Request Query" ask user to manually type numeric Message ID / Query ID.
-  - *Closure requirement*: Present structured selection lists for pending requests.
-- **Settings Payment Dev Flows**:
-  - *Current state*: Order validation (`validateOrderFlow`) triggers a sequence of 8 successive text input alerts.
-  - *Closure requirement*: Replace with a single structured checkout form or gate behind developer menu.
+**Blocked by:** `TGSearchViewController` has no result-to-message route.
 
----
+**Closes:** `chat.md` — Search in chat, Search result opens the message;
+`chat-list.md` — Global search screen, Search results use real rows, Search
+tokens, Downloads shortcut.
 
-## 8 · Half-done and missing (audit of 7 November 2026)
+## M27: Failed-send mark
 
-Row by row against official, area by area: [docs/status/](status/README.md) (its README ranks the 15 most-hit gaps).
+- [ ] `planned` A failed icon on the bubble and on the chat-list row when
+  TDLib reports `messageSendingStateFailed`.
+- [ ] `planned` Tap or hold to retry without opening the full hold menu; keep
+  the existing Retry row as the fallback.
 
-What exists but gives the user less than it promises, or what the parity audit
-found and nobody built. Every row was checked against the code on 7 November;
-the parity audit's own files predate wave 1 and list much that is done since.
-Section 7 above keeps the stubs and harnesses; this one is the user's path.
+**Blocked by:** the cell reads only the sent/read state, not the failed state.
 
-### Chat and chat list
+**Closes:** `chat.md` — Failed delivery mark; `chat-list.md` — Delivery ticks
+on your last message.
 
-| Feature | There now | Missing | Where |
-|---|---|---|---|
-| Custom emoji in text | Static picture inline (iOS 7+), 192-picture LRU | Animation (tier-gated); iOS 6 keeps the fallback emoji | `TGMessageLayout.mm`, `TGCustomEmojiStore` |
-| Emoji status by names | Chat list rows, own profile, chat header, group sender names | Member rows | `TGChatViewController+Chrome.m`, `+Cells.m` |
-| Undrawable characters | Stripped in sticker panel titles only | Chat titles, names, previews: one such character costs 0.4-2.8 s on a 4S | `TGStripUndrawableScalars` |
-| Chat list badges | Unread count, mention badge | Reaction badge, poll-vote badge, compact counts ("1.2K"), blank badge for marked unread | `TGChatListViewController.m:1912`, `TGChatCell.m` |
-| Chat list preview | Text, "Draft:", sender | Photo/video thumbnail at the start, type glyph | `TGChatCell.m` |
-| Delivery state in rows | Read ticks | Clock while sending, failed mark | `TGChatCell.m` |
-| Unread badge on the Chats tab | — | Tab badge from the main list's unread count | `RootViewController.m` |
-| Protected content | `hasProtectedContent` stored on the row | Forward, save to camera roll and copy still allowed in such chats | `TGClient+Chats.mm:1932`, chat actions, `TGMediaViewer.m` |
-| Bot buttons | Callback, URL, login URL, switch inline, copy text, user | Web App, Buy, Game, callback with password: shown, do nothing | `TGMessageFlatten.m`, `TGChatViewController+Bots.m` |
-| Paid messages | — | Price per message in the composer for a user who charges Stars | composer |
+## M28: Profile cover, QR and Premium badge
 
-### Profile
+- [ ] `planned` Paint the `profile_accent_color_id` gradient and background
+  emoji behind the header; the id is stored and never drawn.
+- [ ] `planned` A QR screen for the account's username, reachable from the
+  profile and Settings; the only QR screen today is the login scanner.
+- [ ] `planned` Star badge beside a Premium name, profile rating, the
+  third-party verifier note (`bot_verification`) and the
+  `uses_unofficial_app` warning.
+- [ ] `planned` Gift-derived name colour and the gift count on the header.
+- [ ] `planned` Business opening hours, open/closed now and the map thumbnail
+  on a business profile; only the address is flattened today.
 
-| Feature | There now | Missing | Where |
-|---|---|---|---|
-| Own profile | Redesigned (no title, online, three tiles, Add a bio, empty Stories state) | QR code of the username (screen does not exist) | `TGProfileViewController*.m` |
-| Premium | — | Star badge beside the name (the old "subscription" row is gone) | header |
-| Profile cover | — | `profile_accent_color_id` gradient and background emoji behind the header | header |
-| Verification | Verified mark | Third-party verifier note (`bot_verification`) with its emoji | details card |
-| Business | Location address as a row | Opening hours, open/closed now, map thumbnail | details card |
-| Unofficial app warning | — | `uses_unofficial_app` line above the card | details card |
-| Profile rating | — | `rating` / `pending_rating` level | header |
-| Media panes | Stories, Archive, Media, Files, Music, Voice, Links, Groups | GIFs pane (`searchMessagesFilterAnimation`), pane counts in the subtitle, month sections in the grid | `TGProfileViewController+Media.m` |
-| Gifts | Artwork, collectibles with backdrop and number, notes, every page, channel gifts | Animated artwork; not checked on the 4S (this account has no gifts) | `+Media.m`, `TGGiftFlatten.m` |
+**Blocked by:** header layout and the missing QR generator; TDLib already
+returns the fields.
 
-### Contacts and calls
+**Closes:** `profile.md` — Premium star badge, Profile cover, Profile colour
+screen, Profile rating, Third-party verification note, Unofficial app warning,
+QR code of the username, Background emoji on the cover, Gift-derived name
+colour, Gift counts; Business location row, Opening hours row, Business hours
+and map; `settings.md` — QR bar item.
 
-| Feature | There now | Missing | Where |
-|---|---|---|---|
-| Calls tab | Optional fourth tab, switch on Recent Calls | New Call row / button with a contact picker | `TGSettingsViewController+Pages.m` |
-| Invite Friends | — | First row of Contacts, share link | `TGContactsViewController.m` |
-| Video calls | Dev builds only, release shows "in progress" | Picture to an official client and back; no video stand on the Mac | `TGCallVideoEngine.mm`, `calls_notes.md` |
+## M29: Profile media tabs
 
-### Settings and privacy
+- [ ] `planned` GIF (`searchMessagesFilterAnimation`) and Polls panes; the
+  tab list has Stories, Archive, Media, Files, Music, Voice, Links and Groups.
+- [ ] `planned` Split photos and videos, add month sections and a calendar,
+  show pane counts in the subtitle, and keep the tab strip under the bar.
+- [ ] `planned` Multi-select and search inside a pane; Files, Voice and Links
+  rows become actionable.
 
-| Feature | There now | Missing | Where |
-|---|---|---|---|
-| Language | Picks a TDLib language pack | Interface is English only: ~2200 hard-coded strings, no lookup | everywhere |
-| Data and Storage | Five screens (Storage, Downloads, Autosave, Network, File Tools) | One screen with sections; storage by file type; auto-download summary of the preset in force | `TGSettingsViewController+NetworkPages.m` |
-| Auto-download | Switches | `setAutoDownloadOverMobile` overwrites the size caps with 10 MB | `TGClient+Files.mm:306` |
-| Chat colour | Picker | Picking a group's or channel's colour sends `background_custom_emoji_id: 0` and erases its emoji | `TGClient+ChatTools.m:975` |
-| Last Seen | Value with exceptions count | Always Share With / Never Share With lists | privacy pages |
-| Birthday and bio privacy | — | Who-can-see line under the fields in Edit Profile | `TGEditProfileViewController.m` |
-| Gifts privacy | — | Who may send, Show Gift Button, accepted gift types | privacy pages |
-| Folders | Folder list | Chat count per folder, recommended folders inline | settings |
-| Send a Gift | — | Recipient picker and gift grid | settings |
-| Settings search | — | Index of pages | settings |
+**Blocked by:** `TGProfileTabs` has no kind for either filter and the grid is
+one flat page.
 
-### Stories
+**Closes:** `profile.md` — GIF pane, Polls pane, Photo/video split, Month
+sections and calendar, Multi-select in media, Pane search, Files rows, Voice
+rows, Links rows, Tabs, Tab counts.
 
-| Feature | There now | Missing | Where |
-|---|---|---|---|
-| Story camera | Photos | Video recording | `TGStoryCameraViewController.m` |
+## M30: Settings search
 
-### Developer talk on the user's path
+- [ ] `planned` One index of every Settings page and row, matched by title and
+  synonyms, with a result opening the page.
+- [ ] `planned` Keep the index local; no TDLib call is involved.
 
-Section 7 lists whole screens that are harnesses. These are ordinary screens
-that speak TDLib to the person using them.
+**Blocked by:** none; the Settings tree is built in code and has no registry.
 
-| What the user sees | Where | Fix |
-|---|---|---|
-| TDLib's own error text, e.g. `PHONE_CODE_INVALID` or "Bad Request: ...", in about 157 alerts and toasts; "Telegram refused that." when there is none | Core passes `result[@"message"]` up; `TGAlertSheet showMessage:error` across Controllers | One table from error code to a sentence, applied where Core returns the error |
-| "File Tools — Generate, upload, read back" in Data and Storage: a file-generation harness | `TGSettingsViewController+NetworkPages.m:55`, `TGFileToolsViewController.m` | Move behind `TG_DEV` |
-| "Network — Type, state, usage, graphs" with a "TDLib State" section and footers about TDLib resetting counters | `NetworkPages.m:66`, `TGNetworkViewController.m:106-162, 278` | Keep Network Usage; move the state page behind `TG_DEV` |
-| "Active Notifications": TDLib's local notification list, footers about APNs and TDLib counting | `TGSettingsViewController+PrivacyPages.m:173-179, 413-480`, `TGActiveNotificationsViewController.m` | Move behind `TG_DEV` |
-| Footers that explain TDLib: "not autosaved by TDLib", "A proxy is TDLib's own", "TDLib has no document autosave", "Each slice is one kind of file TDLib keeps" | `NetworkPages.m:64, 110, 744, 1011`, `TGStorageViewController.m:208` | Rewrite as what the setting does |
-| Footers that promise a refusal: "a non-Premium account is refused", "Custom styles are a Premium feature and the refusal is shown", stealth mode | `TGEmojiStatusViewController.m:364`, `TGTextStylesViewController.m:77`, `TGStoriesMenuViewController.m:35` | Show the Premium state instead, or hide for non-Premium |
-| Login links "Web Login Token" (paste a token) and "Enter a QR Link" (paste a tg:// link) | `TGLoginViewController+Steps.m:269, 368, 666, 713` | A QR scanner for "log in from this phone"; drop the paste paths or move them to `TG_DEV` |
-| "Paste ids from a message that carries them" in sticker packs | `TGStickerPacksViewController.m:288` | Open packs from the message instead |
-| "TDLib did not resolve that id to a chat." | `TGSettingsViewController+Pages.m:1906` | Human sentence |
-| Payment data dump with "Payload:" | `PrivacyPages.m:851` | Show order lines, not the raw record |
-| "This client has no web view to solve it" for a captcha | `PrivacyPages.m:907` | Web view (iOS 6 has UIWebView) or a plain "open in Safari" |
-| Group settings Calls footer: "this client has no group-call audio engine" | `TGGroupSettingsViewController.m:558` | Hide the row until group calls play audio |
+**Closes:** `settings.md` — Settings search.
 
-### Message types
+## M31: Notification pages
 
-On 7 November the service sentences (about 75 types), the chat list preview
-of every content and the structured fields went in, and the same day the
-bubbles followed: one card (`TGMessageCard`, `TGMessageCardView`) for
-invoices, gifts, giveaways, games, shared peers, video chats and stories;
-one veil (`TGMediaVeil`) for spoilers and one-time media; polls rebuilt.
-Checked on the 4S with the dev showcase rows, not yet with real messages.
+- [ ] `planned` Category sub-pages (private chats, groups, channels, stories)
+  instead of three mute switches.
+- [ ] `planned` An in-app banner, notification permission warning, badge
+  settings, Add Exception, assignment of a custom sound, and lock-screen name
+  display.
+- [ ] `planned` Preserve mention, pinned and story flags when muting; today
+  muting rewrites the record with two fields.
 
-| Type | Now | Missing |
-|---|---|---|
-| Invoice | Card: title, description, photo | Pay (no payment form in the app) |
-| Giveaway, giveaway winners | Card: prize, date, winners; Learn More asks TDLib | — |
-| Gift, upgraded gift | Card: artwork, stars, note, model; View opens the gift sheet | Animated artwork |
-| Users shared, chat shared | Card with picture; Open goes to the profile or chat | — |
-| Group call, video chat | Card: state, duration | Join (no group-call audio) |
-| Game | Card; Play opens the game page | — |
-| Story in a message | Card; Open shows the story | The story's picture in the card |
-| Poll | Vote on tap, multiple answers, quiz marks and explanation, Retract Vote, description, close time, long answers wrap | Option media; live countdown (it moves on reload) |
-| Pinned message | 'Alice pinned "Hello wor..."' when the message is loaded; tap jumps to it | — |
-| Checklist | Tasks with marks, "1 of 3 completed", tap toggles | Adding tasks |
-| Paid media | Blurred preview with "Unlock for N Stars" | Unlocking (no Stars payments) |
-| Dice | The throw plays as an animated sticker | Slot machine reels and lever |
-| Rich message | Plain paragraphs | Formatting, tables, media blocks |
-| Photo, video, GIF | Drawn; spoilers blurred until tapped; caption above media | Video cover and scrub preview |
-| Document | Drawn with its thumbnail | — |
-| Audio, voice note | Caption; transcription text under the voice note | — |
-| Call | Row; video calls say so | Discard reasons past missed/declined |
-| Live location | Time left, last update | Heading arrow on the pin; the line moves on reload, not every minute |
-| Service actions | Sentence | The buttons official attaches: set suggested photo, accept birthdate, open suggested post |
+**Blocked by:** the notification settings screen has no model beyond the
+three scopes.
 
-### Custom emoji (audit of 7 November)
+**Closes:** `notifications.md` — Category sub-pages, In-app notification
+banner, Notification warning badge, Badge settings, Add an exception, Assign a
+custom sound, Display names on the lock screen, Pinned and mention flags,
+Muted-until wording; `settings.md` — Notifications and Sounds, Notification
+warning badge.
 
-| What | Now | Missing |
-|---|---|---|
-| In message text | Picture inline on iOS 7+ (iOS 6 shows the fallback); animated through the sticker pipeline where stickers animate, up to 3 per bubble | Animation not yet checked on the 4S |
-| Sending | `TGComposerText` keeps the ids through typing; Send goes through `parseMarkdown`, so real custom emoji and the Format Text markup go out; seen working on the 4S in Saved Messages | — |
-| Editing | Pre-fills through `getMarkdownText` and saves with the entities | Not yet checked on the 4S |
-| Picker | Custom tab with the installed packs; without Premium only Saved Messages takes them | — |
-| Reactions | Its picture in the chip | Choosing a custom reaction (Premium) |
-| Emoji status | Chat list rows, own profile, status picker, chat header, group sender names | Member rows |
-| Names and previews | Fallback emoji | Pictures where a name or preview line is drawn |
+## M32: Contacts invite and import
 
-### Still missing in message types after 7 November
+- [ ] `planned` Invite Friends as the first Contacts row, sharing the
+  account's t.me link.
+- [ ] `planned` Address-book permission, phone-book import and the import
+  footer; only `importedContactCount` is read today.
+- [ ] `planned` Country code and formatted phone in Add Contact, live phone
+  resolution and QR add.
+- [ ] `planned` A New Call row with a contact picker, and active group calls
+  above Recent Calls in the shared calls tab.
 
-Blocked by whole features the app lacks: Pay on invoices and paid-media
-unlock (no payments, no Stars), Join on video chats (no group-call audio).
-Small, rarely noticed: the story picture inside its card, rich-message
-formatting, video cover and scrub preview, call discard reasons past
-missed/declined, service-action buttons (set suggested photo, accept
-birthdate, open suggested post), the countdown on timed media, animated gift
-artwork, poll option media, the heading arrow on live locations and a
-per-minute refresh of their line, slot machine reels, adding checklist tasks.
-Built on 7 November and checked only against dev showcase rows, not real
-messages: spoilers, dice, sending view-once media, caption above media, paid
-media previews, file thumbnails, voice transcription text, every card.
+**Blocked by:** the app never asks for contacts permission.
 
-### One-time and protected content
+**Closes:** `contacts.md` — Invite Friends, Contacts permission banner, Import
+a phone book, Import footer, Live phone resolution, Country code and formatted
+phone, Note/sync-to-phone/QR add, New Call row, Active group calls above Recent
+Calls; `calls.md` — New Call row, Active group calls above Recent Calls.
 
-| What | Now | Missing |
-|---|---|---|
-| View-once voice and round notes | Sent and received, "1" mark, opened with `openMessageContent` | — |
-| View-once photo and video | Blurred with "Tap to view"; opens alone, sends `openMessageContent`; no save, share or forward | — |
-| Timer media | Blurred, opens alone like view-once | Countdown while open |
-| Spoilers | Media and text hidden until the first tap | — |
-| Protected chats | Copy, Forward and Save gone from the menu, multi-select and the viewer (`can_be_saved`) | — |
-| Sending view-once photo/video | Photo and video in private chats ("Send as View Once") | Timer choice |
+## M33: Localisation
 
-### Data TDLib sends that no screen shows
+- [ ] `planned` A string lookup for about 2200 hard-coded English strings;
+  the Language page changes TDLib's pack, not the interface.
+- [ ] `planned` Plural and gender forms, and `native_name` in the Language row
+  instead of the pack's `name`.
+- [ ] `planned` Language translation controls on the Language page.
 
-From a schema-against-code audit of 18 objects (315 rows); the service-message
-rows it found were closed by the sentences above.
+**Blocked by:** every screen carries literal English; there is no key table.
 
-| Field | Where official shows it |
-|---|---|
-| `message.author_signature` | Signature under signed channel posts and anonymous admins |
-| `messageInteractionInfo.view_count` | Eye and count on every channel post (flattened as `viewCount`, unused by the bubble) |
-| `messageInteractionInfo.forward_count` | Forwards beside the views |
-| `message.via_bot_user_id` | "via @bot" on inline-bot messages |
-| `linkPreview.type` | The picture of a link preview (only title, site and description are read) |
-| `messageForwardInfo.source` | "View original" on forwarded channel posts |
-| `user.active_story_state` | Story ring around avatars in lists |
-| `chat.background` | The chat's own wallpaper (stored as `chatBackground`, never applied) |
-| `supergroupFullInfo.gift_count`, `userFullInfo.gift_count` | Gift counts on profiles |
-| `supergroupFullInfo.bot_verification` | Third-party verification badge on channels |
+**Closes:** `settings.md` — Language, Language row value, Language translation
+controls; old section 8 — Language.
+
+## M34: Developer talk on the user's path
+
+- [ ] `partial` One table from TDLib error code to an English sentence,
+  applied where Core returns the error. About 157 alerts and toasts still
+  print `PHONE_CODE_INVALID` or "Bad Request: ..."; "Telegram refused that."
+  stands in when there is no message.
+- [ ] `planned` Move File Tools, the TDLib state page, Active Notifications,
+  call diagnostics, the bot console (seven bot-tool rows), the Stars console
+  and the test harnesses behind `TG_DEV`.
+- [ ] `planned` Rewrite footers that explain TDLib ("not autosaved by TDLib",
+  "TDLib's own") as what the setting does; hide or replace footers that
+  promise a refusal.
+- [ ] `planned` Remove the login "Web Login Token" and "Enter a QR Link" paste
+  paths, the sticker "paste ids" path, the "TDLib did not resolve that id to a
+  chat." sentence, the raw payment dump and the "no web view" captcha
+  sentence.
+- [ ] `planned` Hide the group settings Calls footer ("this client has no
+  group-call audio engine") until M21 lands.
+
+**Blocked by:** the harness screens are the only route to their TDLib calls
+today; they need a dev menu before they leave release Settings.
+
+**Closes:** `login-accounts.md` — Auth errors as sentences; `settings.md` —
+Data and Storage (File Tools, network state), Language pack tools;
+`notifications.md` — Active Notifications; `calls.md` — Call log and debug
+diagnostics; `channels.md` — Revenue/star statistics.
+
+## M35: Message actions still missing
+
+- [ ] `planned` Poll creation in the attach sheet (`inputMessagePoll`).
+- [ ] `planned` Copy in multi-select, forward with a new caption
+  (`copy_options`), share into a forum topic (`topic_id`) and reply with a
+  chosen quote (`inputTextQuote`).
+- [ ] `planned` A pinned-message list, not only the one-message banner.
+- [ ] `planned` Secret-chat key-verification screens; the chat itself starts
+  through `createSecretChatWithUser:`.
+- [ ] `planned` Convert the game, protected-content and join-request manual ID
+  prompts into structured selection lists.
+
+**Blocked by:** each is a request shape the Core wrappers do not expose.
+
+**Closes:** `chat.md` — Poll creation, Copy in multi-select, Forward with a
+new caption, Share into a forum topic, Reply with a chosen quote, Pinned
+message list, Inline bot mode; `chat-list.md` — compose search; `groups.md` —
+join request rows.
+
+## M36: Group administration and channel tools
+
+- [ ] `partial` A per-administrator rights editor; promote sends one fixed
+  `TGAdminRights()` object.
+- [ ] `partial` Invite-link rows with dates, limits, QR and a revoked section;
+  join-request rows with date and bio; a members tab with paging.
+- [ ] `planned` Administrators, removed/banned users, linked channel and
+  scam/fake warning rows.
+- [ ] `planned` Statistics graphs, boost surfaces, channel post statistics,
+  author signature and forward count on the bubble.
+
+**Blocked by:** TDLib returns the data; the screens read a flat 100-event list
+or only the first page.
+
+**Closes:** `groups.md` — Per-admin rights editor, Temporarily restrict a
+member, Member list, Member search with sections, Invite links screen,
+Join requests row and screen, Member rows, Member counts, Administrators row
+and screen, Removed / banned users screen, Linked channel row, Boosts,
+Statistics with graphs, Recent actions, Available-reactions label,
+Reactions settings; `channels.md` — Channel admin rights, Channel statistics
+screen, Event log, Invite links, Public link on the profile, Post author
+signature, View count on a bubble, Forward count, Post statistics on the
+bubble, Boosts.
+
+## M37: Settings and appearance detail
+
+- [ ] `partial` Privacy exception lists (Always/Never Share With), bio and
+  gifts privacy, voice-message and added-by-phone rules.
+- [ ] `planned` Storage maximum, KEEP MEDIA per peer type, per-chat
+  exceptions, and the Data and Storage merge into one page with sections.
+- [ ] `partial` Theme thumbnails, a chat-theme picker that applies, accent
+  and background colour/gradient/pattern controls, and the official wallpaper
+  collection (`getBackgrounds` is never called). Import handles
+  `.tgios-theme` and `.attheme`; zipped exports are rejected.
+- [ ] `planned` Text size across the UI, not only chat text; fix the mobile
+  cap overwrite (`setAutoDownloadOverMobile` writes 10 MB) and the chat-colour
+  setter that erases a group's emoji. Folder rows get counts and recommended
+  folders appear inline.
+
+**Blocked by:** the theme model has one light palette; background editing is
+six fixed textures and a photo.
+
+**Closes:** `privacy-security.md` — Privacy exception lists, Bio privacy,
+Gifts privacy, Voice message privacy, Added-by-phone privacy, Storage:
+maximum cache size, Storage: KEEP MEDIA per peer type, Storage: chats view;
+`settings.md` — Theme list, Chat theme picker, Accent colour chooser, Chat
+background page, Background colour/gradient/pattern, Photo wallpaper crop,
+Text size, Folder editor, Telegram Defaults presentation; old
+section 4 — Telegram wallpaper collection.
+
+## M38: Media polish
+
+- [ ] `partial` Live and motion photos: the photo branch ignores
+  `content.video`.
+- [ ] `partial` Video cover and scrub preview; the scrubber exists but shows
+  no frame.
+- [ ] `partial` Lottie mattes, trim paths and repeaters; gradients and mask
+  fills are done, the rest is approximate.
+- [ ] `planned` Sticker pack search by keyword, link-preview pictures, saved
+  GIFs (`getSavedAnimations`) and custom-emoji animation checked on a 4S.
+
+**Blocked by:** decoder and layout work; no new TDLib call for most of it.
+
+**Closes:** `media.md` — Live and motion photos, Video cover and scrub
+preview, Sticker pack search by keyword, Link preview picture, Custom emoji
+images; `message-types.md` — Live and motion photos, Link preview card.
+
+## M39: Stories after the strip
+
+- [ ] `partial` Camera video: `AVCaptureStillImageOutput` only; imported
+  video posts with its duration.
+- [ ] `planned` Reply to a story with a message, share/repost a story, and
+  story comments.
+- [ ] `partial` Live story playback and hosting: metadata, RTMP key, join and
+  donor lists work; joining copies the tgcalls payload and there is no RTMP
+  player or camera encoder.
+- [ ] `planned` Story albums on the profile as shelves, not only in the
+  Stories menu.
+
+**Blocked by:** the same media stack as M21, plus the camera movie output.
+
+**Closes:** `stories.md` — Story camera video, Reply to a story with a
+message, Share or repost a story, Live story screen, Live story playback,
+Live story host, Story comments and paid pins, Story albums on the profile;
+`profile.md` — Story albums on the profile.
+
+## M40: Bots and mini apps
+
+- [ ] `planned` Inline bot mode (`@bot query`) with a result list and
+  `sendInlineQueryResult`.
+- [ ] `planned` A Web App host; `canRunWebApps` needs iOS 9 and WKWebView JS.
+- [ ] `planned` Bot commands and menu button screen, guest bots, game scores,
+  and the Web App/Pay/Game/password inline buttons that answer "needs a newer
+  Telegram" today.
+- [ ] `planned` Hide or relocate the bot-only business, Default Admin Rights
+  and ephemeral calls that a user account can only be refused.
+
+**Blocked by:** Web Apps need a browser view this target does not carry; the
+bot-only calls need a bot session.
+
+**Closes:** `bots-payments.md` — Inline bot mode, Bot Web Apps, Bot commands
+and menu button, Guest bots, Owned bots; `chat.md` — Bot inline buttons,
+Inline bot mode, Bot Web Apps, Ephemeral bot replies; old section 7 — Bot
+Tools, Ephemeral, Business connection harnesses.
+
+## M41: Dark theme
+
+- [ ] `deferred` Night and Auto-Night were removed in `8e86854`; dark theme
+  files are refused. The app is light-only by decision.
+- [ ] `deferred` Reopening means a second palette through `TGTheme+Colours`,
+  a design pass over every screen, and a token audit.
+
+**Blocked by:** the light-only design decision, not by TDLib.
+
+**Closes:** nothing today; the status row stays `missing` by intent.
+`settings.md` — Night Theme and Auto-Night.
+
+## M42: Landscape and iPad
+
+- [ ] `deferred` The layout is portrait iPhone only. A 4-inch check was never
+  run on a 5/5c, and there is no iPad layout.
+
+**Blocked by:** no design for either size class; rotation support was added
+for iOS 6 screens but no layout pass followed.
+
+**Closes:** nothing today.
+
+## M43: Platform delivery and device coverage
+
+- [ ] `partial` iOS 6 support: iOS 7-only calls are guarded; the build has
+  never run on a real iOS 6 device.
+- [ ] `partial` A 4-inch screen check on a 5/5c; the UI was built for
+  3.5-inch.
+- [ ] `planned` Background fetch and crash reporting; crashes are pulled by
+  hand (7 November 2026).
+- [ ] `planned` An arm64 `libtdjson.dylib`; `make ipa-arm64` links but the
+  dylib is built for armv7 only.
+
+**Blocked by:** hardware on the bench and a second architecture in the TDLib
+build script.
+
+**Closes:** old section 5 rows — iOS 6 support, Push delivery, Background
+fetch, arm64 build, Crash reporting.
+
+## M44: Message detail and unread TDLib fields
+
+- [ ] `partial` Rich messages: paragraphs, headings and lists flatten to
+  plain lines; formatting, tables, media blocks and button rows do not draw.
+- [ ] `partial` The story's own picture in its card, poll option media, the
+  timer countdown, service-action buttons (set suggested photo, accept
+  birthdate, open suggested post), slot-machine reels, adding checklist
+  tasks, call discard reasons, live-location heading and per-minute refresh,
+  and animated gift artwork. Background live-location updates need iOS 9;
+  iOS 7 kills them.
+- [ ] `planned` `message.author_signature`, `view_count`, `forward_count`,
+  `via_bot_user_id`, `linkPreview.type`, `messageForwardInfo.source`,
+  `chat.background`, gift counts and `supergroupFullInfo.bot_verification`
+  are returned by TDLib and never drawn.
+
+**Blocked by:** the flatten model drops the fields or the bubble has no slot
+for them; none needs a new request.
+
+**Closes:** `message-types.md` — messageRichMessage, messageStory,
+messageGift, messageUpgradedGift, messageChecklist, messageGroupCall,
+messageVideoChatScheduled, messageLiveLocation, Live and motion photos,
+Buttons inside rich messages, Poll option media, Signed gift note, AI summary
+block, DateTime entity; `channels.md` — Post author signature, Post
+statistics on the bubble, Forward count; `chat.md` — Message Info; old
+section 8 — Data TDLib sends that no screen shows.

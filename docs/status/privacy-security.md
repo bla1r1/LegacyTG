@@ -2,6 +2,15 @@ Privacy and security: the lock, two-step, sessions, blocked users, visibility ru
 
 Counts: 34 done, 29 partial, 19 missing, 0 dev-only.
 
+**What is built.** M14 built the lock and security surface: passcode with auto-lock, two-step
+verification, login email, change phone, sessions and websites, blocked users,
+six visibility rules, read receipts, close friends, data controls and payment
+records. The storage page and network page are from M5 and M14.
+
+M37 fills the exception lists, storage maximum and per-chat rules; M31 the
+notification half that shares this screen. The raw TDLib text in security
+alerts is M34.
+
 | Feature | Official | Here | Where | Note |
 |---|---|---|---|---|
 | Passcode row at the top of Security | Official: Passcode row at the top of Security | done | `Controllers/TGSettingsViewController+PrivacyPages.m:1080` | Passcode Lock is the first Security row; the page has on/off/change and auto-lock. |

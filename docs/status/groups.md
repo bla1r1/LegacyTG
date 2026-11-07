@@ -2,6 +2,15 @@ Groups and forums: creating, the member list, member actions, permissions, invit
 
 Counts: 48 done, 29 partial, 11 missing, 0 dev-only.
 
+**What is built.** M7 built groups and forums: creation, the member list and action sheet,
+ownership transfer, permissions and slow mode, invite links, join requests,
+topics with create/rename/icon/close/pin/delete, and the group-call entry.
+Channel-side behaviour lives in `channels.md`.
+
+M36 owns the administration half that is still flat: a per-admin rights
+editor, member paging, invite-link detail, administrators and removed-user
+screens, statistics graphs and boosts. Group-call audio is M21.
+
 | Feature | Official | Here | Where | Note |
 |---|---|---|---|---|
 | Create a basic group | Official: Create a basic group | done | `Controllers/TGContactsViewController.m:620` | Contact picker with group mode sends `createNewBasicGroupChat`. |
@@ -85,7 +94,7 @@ Counts: 48 done, 29 partial, 11 missing, 0 dev-only.
 | Group calls tab entry | Official: Group calls tab entry | done | `Controllers/TGProfileViewController+Actions.m:384` | "Calls" row in the group profile menu. |
 | View with Topics entry | Official: View with Topics entry | done | `Controllers/TGProfileViewController+Actions.m:385` | "View with Topics" pushes the topic list. |
 | Import migration history | Official: Import migration history | done | `Controllers/TGGroupSettingsViewController.m:1820` | Reads a Telegram export from Documents. |
-| Communities | Official: Communities | partial | `Controllers/TGCommunitiesViewController.m:1` | Hub exists; entry is still in the dev hub, and the chat list has no community row. |
+| Communities | Official: Communities | partial | `Controllers/TGProfileViewController.m`, `Core/TGMessageCard.m` | A channel or group profile shows its community (picture, name, chat count) and opens it; "added to a community" draws as a card with View. The communities list itself is still reached only from the dev hub. |
 | Scam / fake warning | Official: Scam / fake warning | missing | — | Group and channel `verification_status` is not read. |
 | Members tab / row with total | Official: Members tab / row with total | missing | — | No tab and no row; the list is a section of the profile. |
 | Administrators row and screen | Official: Administrators row and screen | missing | — | `administratorsOfChat` is only used by the member action sheet. |

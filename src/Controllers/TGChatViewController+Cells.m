@@ -12,6 +12,27 @@
 
 @implementation TGChatViewController (Cells)
 
+/// Documents, voice notes, polls, cards and locations place their stamp with
+/// TGPlaceStamp, which leaves room for the eye only when it is showing; the
+/// text path shows it itself. A channel post of any of those kinds turns the
+/// eye on here and places the stamp again so the count and the eye line up.
+- (void)placeViewsEyeIn:(TGBubbleCell *)cell message:(NSDictionary *)m
+				 layout:(TGMessageLayout *)layout mine:(BOOL)mine {
+	if (layout.isService || !cell.viewsEye.hidden || !cell.time.text.length || cell.time.hidden)
+		return;
+	if ([m[@"viewCount"] longLongValue] <= 0)
+		return;
+	TGTheme *theme = [TGTheme shared];
+	cell.viewsEye.image = [TGIcons glyphNamed:@"eye"
+									  colour:(mine ? [theme timeMineColour] : [theme timeColour])
+										side:kStampEyeSide];
+	cell.viewsEye.hidden = NO;
+	TGPlaceStamp(cell, layout.bubbleFrame, layout.timeWidth, mine);
+	if (mine)
+		TGPlaceTicks(cell, layout.bubbleFrame);
+	[cell.bubble bringSubviewToFront:cell.viewsEye];
+}
+
 static const NSUInteger kMaxCustomEmojiPerBubble = 3;
 static char kTGReactionChipInfoKey;
 
@@ -94,6 +115,7 @@ static char kTGReactionChipInfoKey;
 
 	// 2. Service cells (service messages, separators, polls, docs, contacts, locations)
 	if ([self configureServiceCell:cell message:m layout:layout isMine:mine indexPath:indexPath]) {
+		[self placeViewsEyeIn:cell message:m layout:layout mine:mine];
 		UITableViewCell *done = [self finalizeCell:cell message:m layout:layout isMine:mine];
 		TGPerfReport("cell", [m[@"kind"] UTF8String], cellStart, 33.0);
 		return done;
@@ -101,6 +123,7 @@ static char kTGReactionChipInfoKey;
 
 	// 3. Audio cells (calls, audio tracks, voice notes)
 	if ([self configureAudioCell:cell message:m layout:layout isMine:mine indexPath:indexPath]) {
+		[self placeViewsEyeIn:cell message:m layout:layout mine:mine];
 		UITableViewCell *done = [self finalizeCell:cell message:m layout:layout isMine:mine];
 		TGPerfReport("cell", [m[@"kind"] UTF8String], cellStart, 33.0);
 		return done;
@@ -293,6 +316,30 @@ static char kTGReactionChipInfoKey;
 
 	// 9. Time & delivery ticks
 	BOOL onPicture = !cell.mediaStamp.hidden;
+	int64_t viewCount = 0;
+	id rawViews = m[@"viewCount"];
+	if ([rawViews respondsToSelector:@selector(longLongValue)]) {
+		viewCount = [rawViews longLongValue];
+	}
+	if (viewCount > 0 && !onPicture && ![self albumContinuesAfterRow:indexPath.row]) {
+		cell.viewsEye.hidden = NO;
+		UIColor *eyeCol = mine ? [theme timeMineColour] : [theme timeColour];
+		cell.viewsEye.image = [TGIcons glyphNamed:@"eye" colour:eyeCol side:kStampEyeSide];
+		CGFloat eyeX = layout.timeFrame.origin.x - (kStampEyeSide + kStampEyePad);
+		CGFloat eyeY = layout.timeFrame.origin.y + TGCenteredOrigin(TGMetricStampHeight, kStampEyeSide);
+		cell.viewsEye.frame = CGRectMake(eyeX, eyeY, kStampEyeSide, kStampEyeSide);
+		[cell.bubble bringSubviewToFront:cell.viewsEye];
+	} else if (viewCount > 0 && onPicture) {
+		cell.viewsEye.hidden = NO;
+		cell.viewsEye.image = [TGIcons glyphNamed:@"eye" colour:[theme onMediaColour] side:kStampEyeSide];
+		CGFloat eyeX = layout.mediaStampFrame.origin.x + TGMetricPadSmall;
+		CGFloat eyeY = layout.mediaStampFrame.origin.y + TGCenteredOrigin(layout.mediaStampFrame.size.height, kStampEyeSide);
+		cell.viewsEye.frame = CGRectMake(eyeX, eyeY, kStampEyeSide, kStampEyeSide);
+		[cell.bubble bringSubviewToFront:cell.viewsEye];
+	} else {
+		cell.viewsEye.hidden = YES;
+	}
+
 	cell.time.text = (onPicture || [self albumContinuesAfterRow:indexPath.row]) ? @"" : layout.stamp;
 	cell.time.textColor = mine ? [theme timeMineColour] : [theme timeColour];
 	cell.time.frame = layout.timeFrame;

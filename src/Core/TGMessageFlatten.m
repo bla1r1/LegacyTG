@@ -855,6 +855,20 @@ NSDictionary *TGFlattenMessage(NSDictionary *m) {
 			? (lp[@"description"][@"text"] ?: @"") : (lp[@"description"] ?: @"");
 	NSString *lpUrl = lp[@"url"] ?: @"";
 
+	NSString *authorSignature = @"";
+	id rawSig = m[@"author_signature"];
+	if ([rawSig isKindOfClass:NSString.class]) {
+		authorSignature = (NSString *)rawSig;
+	}
+
+	int64_t viewCount = 0;
+	if ([m[@"interaction_info"] isKindOfClass:NSDictionary.class]) {
+		id rawViews = m[@"interaction_info"][@"view_count"];
+		if ([rawViews respondsToSelector:@selector(longLongValue)]) {
+			viewCount = [rawViews longLongValue];
+		}
+	}
+
 	NSDictionary *row = @{
 		@"id"        : m[@"id"] ?: @(0),
 		@"caption"   : caption    ?: @"",
@@ -903,7 +917,9 @@ NSDictionary *TGFlattenMessage(NSDictionary *m) {
 		@"reactionGroups" : TGFlattenReactionGroups(m),
 		// How many times a channel or group message was seen. Zero where
 		// Telegram did not count, which is every private chat.
-		@"viewCount" : m[@"interaction_info"][@"view_count"] ?: @(0),
+		@"viewCount" : @(viewCount),
+		// The author signature on a channel post or forwarded message, empty string when unsigned.
+		@"authorSignature" : authorSignature,
 		// Your own reaction, so the menu can offer to take it off.
 		@"myReaction" : TGMyReactionEmoji(m) ?: @"",
 		// Buttons a bot put under its message, and the keyboard it asked for.
@@ -993,15 +1009,22 @@ NSDictionary *TGFlattenMessage(NSDictionary *m) {
 		structured = @{@"live" : live, @"editDate" : @([m[@"edit_date"] longLongValue])};
 	BOOL sending = [m[@"sending_state"][@"@type"]
 			isEqualToString:@"messageSendingStatePending"];
+	BOOL hasCommunity = ([ctype isEqualToString:@"messageChatAddedToCommunity"] ||
+			[ctype isEqualToString:@"messageChatJoinFromCommunity"]);
 
 	// Only those rows and a sending row pay for the extra mutable copy:
 	// every other row keeps the literal dictionary it has always been.
-	if (structured || sending){
+	if (structured || sending || hasCommunity){
 		NSMutableDictionary *richer = [row mutableCopy];
 		if (structured)
 			[richer addEntriesFromDictionary:structured];
 		if (sending)
 			richer[@"sending"] = @YES;
+		if (hasCommunity) {
+			int64_t cid = [content[@"community_id"] respondsToSelector:@selector(longLongValue)]
+					? [content[@"community_id"] longLongValue] : 0;
+			richer[@"communityId"] = @(cid);
+		}
 		return richer;
 	}
 	return row;

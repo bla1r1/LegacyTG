@@ -57,6 +57,8 @@ FOUNDATION_EXPORT CGFloat TGPollOptionRowHeight(NSDictionary *option, CGFloat ro
 @property (nonatomic, strong) NSMutableSet *imagesRequested;
 @property (nonatomic, strong) TGStreamingVoicePlayer *voicePlayer;
 @property (nonatomic, assign) BOOL anchorToBottom;
+@property (nonatomic, assign) BOOL isChannel;
+@property (nonatomic, assign) BOOL isChannelMember;
 @property (nonatomic, strong) NSMutableDictionary *lottiePaths;   // fileId -> path
 @property (nonatomic, strong) TGImageLruCache *maps;             // messageId -> UIImage (cap 20)
 @property (nonatomic, strong) NSMutableSet *mapsRequested;
@@ -323,6 +325,8 @@ FOUNDATION_EXPORT CGFloat TGPollOptionRowHeight(NSDictionary *option, CGFloat ro
 - (void)openFileWithViewer:(NSString *)filePath;
 - (void)handleMessageTap:(NSDictionary *)m;
 - (void)reloadTableDebounced;
+- (void)showChannelBottomBar;
+- (void)directMessagesFromChat:(UIButton *)sender;
 
 @end
 

@@ -221,8 +221,21 @@
 		if (layout.stampOnPicture) {
 			cell.mediaStamp.hidden = NO;
 			cell.mediaStamp.backgroundColor = [theme mediaStampColour];
-			cell.mediaStamp.text = mine ? [NSString stringWithFormat:@"  %@", layout.stamp] : layout.stamp;
-			cell.mediaStamp.textAlignment = mine ? NSTextAlignmentLeft : NSTextAlignmentCenter;
+			int64_t mediaViews = [m[@"viewCount"] respondsToSelector:@selector(longLongValue)] ? [m[@"viewCount"] longLongValue] : 0;
+			if (mediaViews > 0) {
+				cell.viewsEye.hidden = NO;
+				cell.viewsEye.image = [TGIcons glyphNamed:@"eye" colour:[theme onMediaColour] side:kStampEyeSide];
+				CGFloat eyeX = layout.mediaStampFrame.origin.x + TGMetricPadSmall;
+				CGFloat eyeY = layout.mediaStampFrame.origin.y + TGCenteredOrigin(layout.mediaStampFrame.size.height, kStampEyeSide);
+				cell.viewsEye.frame = CGRectMake(eyeX, eyeY, kStampEyeSide, kStampEyeSide);
+				cell.mediaStamp.text = mine ? [NSString stringWithFormat:@"   %@  ", layout.stamp] : [NSString stringWithFormat:@"   %@", layout.stamp];
+				cell.mediaStamp.textAlignment = NSTextAlignmentLeft;
+				[cell.bubble bringSubviewToFront:cell.viewsEye];
+			} else {
+				cell.viewsEye.hidden = YES;
+				cell.mediaStamp.text = mine ? [NSString stringWithFormat:@"  %@", layout.stamp] : layout.stamp;
+				cell.mediaStamp.textAlignment = mine ? NSTextAlignmentLeft : NSTextAlignmentCenter;
+			}
 			cell.mediaStamp.frame = layout.mediaStampFrame;
 			[cell.bubble bringSubviewToFront:cell.mediaStamp];
 		}
@@ -286,8 +299,21 @@
 		if (layout.stampOnPicture) {
 			cell.mediaStamp.hidden = NO;
 			cell.mediaStamp.backgroundColor = [theme mediaStampColour];
-			cell.mediaStamp.text = mine ? [NSString stringWithFormat:@"  %@", layout.stamp] : layout.stamp;
-			cell.mediaStamp.textAlignment = mine ? NSTextAlignmentLeft : NSTextAlignmentCenter;
+			int64_t mediaViews = [m[@"viewCount"] respondsToSelector:@selector(longLongValue)] ? [m[@"viewCount"] longLongValue] : 0;
+			if (mediaViews > 0) {
+				cell.viewsEye.hidden = NO;
+				cell.viewsEye.image = [TGIcons glyphNamed:@"eye" colour:[theme onMediaColour] side:kStampEyeSide];
+				CGFloat eyeX = layout.mediaStampFrame.origin.x + TGMetricPadSmall;
+				CGFloat eyeY = layout.mediaStampFrame.origin.y + TGCenteredOrigin(layout.mediaStampFrame.size.height, kStampEyeSide);
+				cell.viewsEye.frame = CGRectMake(eyeX, eyeY, kStampEyeSide, kStampEyeSide);
+				cell.mediaStamp.text = mine ? [NSString stringWithFormat:@"   %@  ", layout.stamp] : [NSString stringWithFormat:@"   %@", layout.stamp];
+				cell.mediaStamp.textAlignment = NSTextAlignmentLeft;
+				[cell.bubble bringSubviewToFront:cell.viewsEye];
+			} else {
+				cell.viewsEye.hidden = YES;
+				cell.mediaStamp.text = mine ? [NSString stringWithFormat:@"  %@", layout.stamp] : layout.stamp;
+				cell.mediaStamp.textAlignment = mine ? NSTextAlignmentLeft : NSTextAlignmentCenter;
+			}
 			cell.mediaStamp.frame = layout.mediaStampFrame;
 			[cell.bubble bringSubviewToFront:cell.mediaStamp];
 		}

@@ -30,6 +30,9 @@ NSString *TGUIFormatFullPhone(NSString *prefix, NSString *number);
 /// count, and an empty query matches everything.
 BOOL TGUIFormatChatMatches(NSString *title, NSString *query);
 
+/// Compact count for post views: 0..999 as is, 1.2K, 12K, 1M, 1.2M.
+NSString *TGCompactCount(int64_t n);
+
 #ifdef __cplusplus
 }
 #endif

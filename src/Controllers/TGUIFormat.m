@@ -102,3 +102,32 @@ BOOL TGUIFormatChatMatches(NSString *title, NSString *query) {
 						   options:(NSCaseInsensitiveSearch |
 									NSDiacriticInsensitiveSearch)].location != NSNotFound;
 }
+
+static NSString *TGFormatScaled(int64_t n, double divisor, const char *suffix) {
+	double val = (double)n / divisor;
+	if (val < 9.95) {
+		long long tenths = (long long)round(val * 10.0);
+		long long whole = tenths / 10;
+		long long frac = tenths % 10;
+		if (frac == 0) {
+			return [NSString stringWithFormat:@"%lld%s", whole, suffix];
+		}
+		return [NSString stringWithFormat:@"%lld.%lld%s", whole, frac, suffix];
+	} else {
+		long long whole = (long long)round(val);
+		return [NSString stringWithFormat:@"%lld%s", whole, suffix];
+	}
+}
+
+NSString *TGCompactCount(int64_t n) {
+	if (n < 1000) {
+		return [NSString stringWithFormat:@"%lld", (long long)n];
+	}
+	if (n >= 999500000LL) {
+		return TGFormatScaled(n, 1000000000.0, "B");
+	}
+	if (n >= 999500LL) {
+		return TGFormatScaled(n, 1000000.0, "M");
+	}
+	return TGFormatScaled(n, 1000.0, "K");
+}

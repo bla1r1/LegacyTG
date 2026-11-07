@@ -17,6 +17,8 @@
 @property (nonatomic, strong) UILabel *transcriptionLabel;
 @property (nonatomic, strong) UIImageView *picture;
 @property (nonatomic, strong) UILabel *time;
+/// Eye glyph beside a channel post's view count.
+@property (nonatomic, strong) UIImageView *viewsEye;
 @property (nonatomic, strong) TGLottieView *lottie;
 /// Overlay animation views for animated custom emoji in message body text.
 @property (nonatomic, strong) NSMutableArray *customEmojiViews;

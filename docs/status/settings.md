@@ -2,6 +2,16 @@ Every Settings page and the rows that actually open something, plus the Appearan
 
 Counts: 11 done, 47 partial, 25 missing, 1 dev-only.
 
+**What is built.** M14 built the Settings tree and its pages: account header, sessions, folders,
+proxy, notifications, privacy, data and storage, appearance, power saving,
+language pack picker, stickers, Premium state, Business, Help, This Device and
+log out. M9 supplies the appearance controls and the shared tokens behind
+every row; M15 the notification switches.
+
+M30 adds search. M33 replaces the hard-coded English. M34 removes the harness
+pages and TDLib footers from the user's path, and M37 the remaining appearance
+and privacy detail.
+
 | Feature | Official | Here | Where | Note |
 |---|---|---|---|---|
 | Root list | Official: Root list | done | `Controllers/TGSettingsViewController+Pages.m:82` | Profile card, account rows, app settings, help, This Device, Log out. |

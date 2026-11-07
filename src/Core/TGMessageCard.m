@@ -445,5 +445,34 @@ TGMessageCard *TGMessageCardForRow(NSDictionary *row) {
 		return card;
 	}
 
+	// 11. community
+	NSString *kind = TGMCString(row[@"kind"]);
+	if ([kind isEqualToString:@"messageChatAddedToCommunity"]) {
+		TGMessageCard *card = [[TGMessageCard alloc] init];
+		card.kicker = @"Community";
+		NSString *title = @"Chat added to a community";
+		id channelPostVal = row[@"channelPost"];
+		id isChannelVal = row[@"isChannel"];
+		if (channelPostVal != nil || isChannelVal != nil) {
+			BOOL isChan = [channelPostVal boolValue] || [isChannelVal boolValue];
+			title = isChan ? @"Channel added to a community" : @"Group added to a community";
+		}
+		card.title = title;
+		card.lines = @[];
+		int64_t photoId = TGMCInt64(row[@"imageFileId"]);
+		if (photoId == 0)
+			photoId = TGMCInt64(row[@"photoFileId"]);
+		card.imageFileId = photoId;
+		card.imageAspect = 1.0f;
+		card.imageIsRound = YES;
+		card.buttonTitle = @"View";
+		card.action = TGMessageCardActionOpenCommunity;
+		int64_t commId = TGMCInt64(row[@"communityId"]);
+		if (commId == 0)
+			commId = TGMCInt64(row[@"community_id"]);
+		card.actionTargetId = commId;
+		return card;
+	}
+
 	return nil;
 }

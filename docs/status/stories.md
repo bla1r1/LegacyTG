@@ -2,6 +2,15 @@ Stories: the strip, the viewer, posting, albums, interactions and live stories. 
 
 Counts: 21 done, 5 partial, 8 missing, 1 dev-only.
 
+**What is built.** M11 wired the 48 story functions to screens: strip, viewer with pause and
+reactions, info and statistics, posting with period and privacy, albums,
+archive, notifications, stealth mode and public search. M12 put the Stories
+and Archive tabs on the profile.
+
+M25 adds the ring to every row and profile avatar; M39 adds camera video,
+reply/share/repost, live-story playback and hosting, and comments. Business
+stories stay behind `TG_DEV` because no business connection is modelled.
+
 | Feature | Official | Here | Where | Note |
 |---|---|---|---|---|
 | Stories strip on the chat list | Official: Stories strip on the chat list | done | `Controllers/TGChatListViewController.m:1785` | Horizontal story rings above the first chat. |

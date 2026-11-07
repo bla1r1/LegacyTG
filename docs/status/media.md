@@ -2,6 +2,16 @@ Media: the viewer, players, downloads, attachments and sticker handling. Parity 
 
 Counts: 19 done, 8 partial, 7 missing, 0 dev-only.
 
+**What is built.** M5 built the viewer and players: paging photos with zoom, AVPlayer video with
+the software fallback on Vintage, looping GIFs, the music queue, document
+preview, save to camera roll, download progress and cancel, and the Downloads
+manager. M8 added voice notes and the round video recorder.
+
+M6 owns sticker handling: WebP, TGS via `TGLottieView`, WebM VP9 alpha, pack
+install, archive, editor and favourites. M23 adds document and audio
+attachment plus streaming, M38 the live-photo, scrub-preview and Lottie
+detail.
+
 | Feature | Official | Here | Where | Note |
 |---|---|---|---|---|
 | Photo viewer | Official: Photo viewer | done | `Views/TGMediaViewer.m:226` | Paging scroll view, double-tap zoom, one page built lazily per item. |
@@ -29,7 +39,7 @@ Counts: 19 done, 8 partial, 7 missing, 0 dev-only.
 | Sticker install and archive | Official: Sticker install and archive | done | `Controllers/TGStickerPacksViewController.m:21` | Owned, trending, custom emoji, recent, archived; create/edit/search/clear. |
 | Sticker authoring | Official: Sticker authoring | done | `Controllers/TGStickerEditorViewController.m:30` | Rename, short name, type, add/remove/reorder stickers, delete pack. |
 | Animated stickers | Official: Animated stickers | done | `Controllers/TGChatViewController+Cells.m` | `TGLottieView` for TGS and the WebM decoder for VP9 alpha. |
-| Custom emoji images | Official: Custom emoji images | partial | `Views/TGMessageLayout.mm:512` | Static attachment on iOS 7+, fallback emoji on iOS 6; no animation. |
+| Custom emoji images | Official: Custom emoji images | done | `Views/TGMessageLayout.mm:512`, `Core/TGCustomEmojiStore.m` | Static on iOS 6 fallback / iOS 7+ picture; tgs and webm animate through the sticker pipeline under its budget. |
 | Live and motion photos | Official: Live and motion photos | partial | `Core/TGMessageFlatten.m:226` | The photo branch reads the still sizes and ignores `content.video`. |
 | GIF caption | Official: GIF caption | partial | `Core/TGMessageFlatten.m:530` | Incoming captions draw; `sendAnimation` has no caption. |
 | Sticker/emoji custom tab | Official: Sticker/emoji custom tab | missing | `Views/TGEmojiPanel.m:243` | Tabs are Emoji, Stickers and GIFs only. |

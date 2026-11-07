@@ -31,6 +31,7 @@
 #import "TGChecklistPresentation.h"
 #import "TGGiftViewer.h"
 #import "TGStoryViewerViewController.h"
+#import "TGCommunityViewController.h"
 #import "TGMusicPlayer.h"
 #import "TGDevShowcase.h"
 
@@ -55,6 +56,7 @@ static const NSInteger kChatMuteBarTag = 0x9020;
 static const NSInteger kChatJoinGroupBarTag = 0x9021;
 static const NSInteger kChatJoinChannelBarTag = 0x9022;
 static const NSInteger kChatDiscussBarTag = 0x9023;
+static const NSInteger kChatChannelBottomBarTag = 0x9024;
 
 #pragma mark - controller
 
@@ -798,6 +800,8 @@ static const NSInteger kChatDiscussBarTag = 0x9023;
 		BOOL isGroup = [kind[@"isGroup"] boolValue];
 		BOOL isChannel = [kind[@"isChannel"] boolValue];
 		BOOL isMember = [kind[@"isMember"] boolValue];
+		me.isChannel = isChannel;
+		me.isChannelMember = isMember;
 		NSInteger count = [kind[@"memberCount"] integerValue];
 		// A chat opened from a profile came in as private, and the rows laid out so
 		// far took no sender line or group spacing.
@@ -831,26 +835,31 @@ static const NSInteger kChatDiscussBarTag = 0x9023;
 				again.directMessagesChatId = [info[@"directMessagesChatId"] longLongValue];
 				again.hasDirectMessages = [info[@"hasDirectMessages"] boolValue];
 				again.canManageDirectMessages = [info[@"canManageDirectMessages"] boolValue];
-				if (isMember){
-					[again applyPostingRightsForGroup:YES channel:YES member:YES];
-				}
+				[again applyPostingRightsForGroup:YES channel:YES member:isMember];
 			}];
 		}
 	}];
 }
 
-/// The bottom bar is one of three: the composer, Mute for a channel you
-/// follow, or Join for a group or channel you have not joined. A joined group
-/// always gets the composer back, even if posting is restricted.
+/// The bottom bar is one of three: the composer, the channel bottom bar for
+/// a channel you follow or have not joined, or Join for a group you have
+/// not joined. A joined group always gets the composer back, even if posting
+/// is restricted.
 - (void)applyPostingRightsForGroup:(BOOL)isGroup
 						  channel:(BOOL)isChannel
 						   member:(BOOL)isMember {
+	self.isChannel = isChannel;
+	self.isChannelMember = isMember;
 	[self removeComposerStandIn];
 
 	if (isGroup && !isMember){
-		[self showComposerStandIn:(isChannel ? @"Join Channel" : @"Join Group")
-						   action:@selector(joinFromChat:)
-							  tag:(isChannel ? kChatJoinChannelBarTag : kChatJoinGroupBarTag)];
+		if (isChannel){
+			[self showChannelBottomBar];
+		} else {
+			[self showComposerStandIn:@"Join Group"
+							   action:@selector(joinFromChat:)
+								  tag:kChatJoinGroupBarTag];
+		}
 		return;
 	}
 
@@ -871,44 +880,105 @@ static const NSInteger kChatDiscussBarTag = 0x9023;
 			me.inputBar.hidden = NO;
 			return;
 		}
-		if (channel && me.linkedChatId > 0){
-			[me showChannelBottomBarWithDiscuss];
+		if (channel){
+			[me showChannelBottomBar];
 			return;
 		}
-		[me showComposerStandIn:(channel ? @"Mute channel" : @"Mute chat")
+		[me showComposerStandIn:@"Mute chat"
 						 action:@selector(muteFromChat:)
 							tag:kChatMuteBarTag];
 	}];
 }
 
-- (void)showChannelBottomBarWithDiscuss {
+/// A channel's bottom bar: one solid strip like the composer it replaces,
+/// with plain UIKit-style buttons - icons on the left for Direct Messages and
+/// the discussion, the mute toggle (or Join Channel) as a word in the middle,
+/// search on the right. The idea is official's; the look is this app's.
+- (void)showChannelBottomBar {
 	self.inputBar.hidden = YES;
 	[self removeComposerStandIn];
+
 	CGRect barFrame = self.inputBar.frame;
-	CGFloat halfW = floorf(TGHalf(barFrame.size.width));
+	TGTheme *theme = [TGTheme shared];
 
-	UIButton *muteBar = [UIButton buttonWithType:UIButtonTypeCustom];
-	muteBar.frame = CGRectMake(barFrame.origin.x, barFrame.origin.y, halfW, barFrame.size.height);
-	muteBar.tag = kChatMuteBarTag;
-	muteBar.backgroundColor = [[TGTheme shared] inputBarColour];
-	muteBar.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleRightMargin | UIViewAutoresizingFlexibleTopMargin;
-	[muteBar setTitleColor:[[TGTheme shared] accentColour] forState:UIControlStateNormal];
-	muteBar.titleLabel.font = TGFontBody();
-	BOOL muted = [[TGClient shared] isChatMuted:self.chatId];
-	[muteBar setTitle:(muted ? @"Unmute" : @"Mute") forState:UIControlStateNormal];
-	[muteBar addTarget:self action:@selector(muteFromChat:) forControlEvents:UIControlEventTouchUpInside];
-	[self.view addSubview:muteBar];
+	UIView *container = [[UIView alloc] initWithFrame:barFrame];
+	container.tag = kChatChannelBottomBarTag;
+	container.backgroundColor = [theme inputBarColour];
+	container.autoresizingMask = UIViewAutoresizingFlexibleWidth |
+								 UIViewAutoresizingFlexibleTopMargin;
 
-	UIButton *discussBar = [UIButton buttonWithType:UIButtonTypeCustom];
-	discussBar.frame = CGRectMake(barFrame.origin.x + halfW, barFrame.origin.y, barFrame.size.width - halfW, barFrame.size.height);
-	discussBar.tag = kChatDiscussBarTag;
-	discussBar.backgroundColor = [[TGTheme shared] inputBarColour];
-	discussBar.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleTopMargin;
-	[discussBar setTitleColor:[[TGTheme shared] accentColour] forState:UIControlStateNormal];
-	discussBar.titleLabel.font = TGFontBody();
-	[discussBar setTitle:@"Discuss" forState:UIControlStateNormal];
-	[discussBar addTarget:self action:@selector(discussFromChat:) forControlEvents:UIControlEventTouchUpInside];
-	[self.view addSubview:discussBar];
+	UIView *hair = [[UIView alloc] initWithFrame:CGRectMake(0, 0, barFrame.size.width,
+															TGMetricBorderWidth)];
+	hair.backgroundColor = [theme separatorColour];
+	hair.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+	[container addSubview:hair];
+
+	CGFloat side = barFrame.size.height;
+	UIButton *(^iconButton)(NSString *, SEL, CGFloat) = ^UIButton *(NSString *glyph, SEL action, CGFloat x){
+		UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
+		button.frame = CGRectMake(x, 0, side, side);
+		button.showsTouchWhenHighlighted = YES;
+		[button setImage:[TGIcons glyphNamed:glyph colour:[theme accentColour] side:kChannelBarIconSide]
+				forState:UIControlStateNormal];
+		[button addTarget:self action:action forControlEvents:UIControlEventTouchUpInside];
+		[container addSubview:button];
+		return button;
+	};
+
+	// Channel and supergroup chat ids are negative: "present" is non-zero.
+	CGFloat leftW = 0;
+	if (self.directMessagesChatId != 0){
+		iconButton(@"chat", @selector(directMessagesFromChat:), leftW);
+		leftW += side;
+	}
+	if (self.linkedChatId != 0){
+		UIButton *discuss = iconButton(@"chats", @selector(discussFromChat:), leftW);
+		discuss.tag = kChatDiscussBarTag;
+		leftW += side;
+	}
+	UIButton *search = iconButton(@"search", @selector(toggleChatSearch), barFrame.size.width - side);
+	search.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin;
+
+	// The word sits in the middle of the bar whatever stands at either end.
+	CGFloat inset = MAX(leftW, side);
+	UIButton *centre = [UIButton buttonWithType:UIButtonTypeCustom];
+	centre.frame = CGRectMake(inset, 0, barFrame.size.width - TGDoubled(inset), side);
+	centre.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+	centre.titleLabel.font = TGFontBody();
+	[centre setTitleColor:[theme accentColour] forState:UIControlStateNormal];
+	[centre setTitleColor:[theme secondaryTextColour] forState:UIControlStateHighlighted];
+	if (!self.isChannelMember){
+		centre.tag = kChatJoinChannelBarTag;
+		[centre setTitle:@"Join Channel" forState:UIControlStateNormal];
+		[centre addTarget:self action:@selector(joinFromChat:) forControlEvents:UIControlEventTouchUpInside];
+	} else {
+		centre.tag = kChatMuteBarTag;
+		BOOL muted = [[TGClient shared] isChatMuted:self.chatId];
+		[centre setTitle:(muted ? @"Unmute" : @"Mute") forState:UIControlStateNormal];
+		[centre addTarget:self action:@selector(muteFromChat:) forControlEvents:UIControlEventTouchUpInside];
+	}
+	[container addSubview:centre];
+	[self.view addSubview:container];
+}
+
+- (void)directMessagesFromChat:(UIButton *)sender {
+	int64_t targetId = self.directMessagesChatId;
+	if (targetId <= 0)
+		return;
+
+	if (self.canManageDirectMessages){
+		TGDMTopicsViewController *topics = [[TGDMTopicsViewController alloc] init];
+		topics.chatId = targetId;
+		topics.chatTitle = self.chatTitle.length ? self.chatTitle : @"Channel";
+		topics.hidesBottomBarWhenPushed = YES;
+		[self.navigationController pushViewController:topics animated:YES];
+	} else {
+		TGChatViewController *chat = [[TGChatViewController alloc] init];
+		chat.chatId = targetId;
+		chat.chatTitle = [NSString stringWithFormat:@"%@ · Direct", self.chatTitle.length ? self.chatTitle : @"Channel"];
+		chat.hidesBottomBarWhenPushed = YES;
+		[self.navigationController pushViewController:chat animated:YES];
+	}
 }
 
 - (void)docRowTapped:(UIButton *)sender {
@@ -935,7 +1005,7 @@ static const NSInteger kChatDiscussBarTag = 0x9023;
 }
 
 - (void)discussFromChat:(UIButton *)sender {
-	if (self.linkedChatId <= 0) return;
+	if (self.linkedChatId == 0) return;
 	TGChatViewController *chat = [[TGChatViewController alloc] init];
 	chat.chatId = self.linkedChatId;
 	chat.chatTitle = @"Discussion";
@@ -960,6 +1030,7 @@ static const NSInteger kChatDiscussBarTag = 0x9023;
 }
 
 - (void)removeComposerStandIn {
+	[[self.view viewWithTag:kChatChannelBottomBarTag] removeFromSuperview];
 	[[self.view viewWithTag:kChatMuteBarTag] removeFromSuperview];
 	[[self.view viewWithTag:kChatDiscussBarTag] removeFromSuperview];
 	[[self.view viewWithTag:kChatJoinGroupBarTag] removeFromSuperview];
@@ -985,6 +1056,7 @@ static const NSInteger kChatDiscussBarTag = 0x9023;
 			return;
 		}
 		me.isGroup = YES;
+		me.isChannelMember = YES;
 		[me applyPostingRightsForGroup:YES channel:isChannel member:YES];
 	}];
 }
@@ -992,7 +1064,7 @@ static const NSInteger kChatDiscussBarTag = 0x9023;
 - (void)muteFromChat:(UIButton *)button {
 	BOOL muting = [button.currentTitle hasPrefix:@"Mute"];
 	[[TGClient shared] setChat:self.chatId muted:muting];
-	NSString *title = muting ? @"Unmute" : (button.bounds.size.width < 200.0f ? @"Mute" : @"Mute channel");
+	NSString *title = muting ? @"Unmute" : ((button.bounds.size.width < 200.0f || button.superview.tag == kChatChannelBottomBarTag) ? @"Mute" : @"Mute channel");
 	[button setTitle:title forState:UIControlStateNormal];
 }
 
@@ -1454,6 +1526,24 @@ static const NSInteger kChatDiscussBarTag = 0x9023;
 				[TGAlertSheet showMessage:body title:@"Giveaway" inView:me.view];
 			});
 		}];
+		break;
+	}
+	case TGMessageCardActionOpenCommunity: {
+		int64_t communityId = card.actionTargetId;
+		if (communityId != 0) {
+			NSDictionary *comm = nil;
+			for (NSDictionary *c in [TGClient shared].communities) {
+				if ([c[@"id"] longLongValue] == communityId) {
+					comm = c;
+					break;
+				}
+			}
+			if (!comm)
+				comm = @{@"id" : @(communityId), @"name" : @"Community"};
+			TGCommunityViewController *vc = [[TGCommunityViewController alloc] initWithCommunity:comm];
+			vc.hidesBottomBarWhenPushed = YES;
+			[self.navigationController pushViewController:vc animated:YES];
+		}
 		break;
 	}
 	default:

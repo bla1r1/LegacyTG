@@ -127,21 +127,31 @@ static UIImage *TGSolidImage(UIColor *colour) {
 			[tiles addObject:@[@"call",  @"call"]];
 		if (self.canCall && self.canVideoCall && [TGCapabilities canEncodeVideoCall])
 			[tiles addObject:@[@"video", @"video"]];
-	} else if (!self.userId && self.canInvite && !self.isChannel){
-		// The group's equivalent of Message: the one thing a profile does
-		// with people. A plain member does not get it, and neither does an
-		// administrator without the invite right. A channel invites through
-		// its link, not through a picker.
-		[tiles addObject:@[@"plus", @"add"]];
-	}
-	// Your own profile has nobody to call and nothing to mute.
-	if (!own)
 		[tiles addObject:@[(self.muted ? @"unmute" : @"mute"),
 						   (self.muted ? @"unmute" : @"mute")]];
-	if (!own && self.onSearchTapped)
-		[tiles addObject:@[@"search", @"search"]];
-	if (!own)
+		if (self.onSearchTapped)
+			[tiles addObject:@[@"search", @"search"]];
 		[tiles addObject:@[@"more", @"more"]];
+	} else if (self.isChannel){
+		// For a channel you follow, the tiles are "message" (only when it has Direct Messages),
+		// "mute"/"unmute", "leave", "more".
+		BOOL hasDM = (self.directMessagesChatId != 0) || self.hasDirectMessages || self.canManageDirectMessages;
+		if (hasDM)
+			[tiles addObject:@[@"chat", @"message"]];
+		[tiles addObject:@[(self.muted ? @"unmute" : @"mute"),
+						   (self.muted ? @"unmute" : @"mute")]];
+		[tiles addObject:@[@"logout", @"leave"]];   // a door, not a bin: leaving deletes nothing
+		[tiles addObject:@[@"more", @"more"]];
+	} else {
+		// Group
+		if (self.canInvite)
+			[tiles addObject:@[@"plus", @"add"]];
+		[tiles addObject:@[(self.muted ? @"unmute" : @"mute"),
+						   (self.muted ? @"unmute" : @"mute")]];
+		if (self.onSearchTapped)
+			[tiles addObject:@[@"search", @"search"]];
+		[tiles addObject:@[@"more", @"more"]];
+	}
 
 	CGFloat width = header.bounds.size.width;
 	CGFloat gap = 6, margin = 10;
@@ -222,7 +232,12 @@ static UIImage *TGSolidImage(UIColor *colour) {
 										  name:self.name
 									  outgoing:YES];
 	} else if ([action isEqualToString:@"message"]){
-		[self messageTapped];
+		if (self.isChannel)
+			[self openDirectMessages];
+		else
+			[self messageTapped];
+	} else if ([action isEqualToString:@"leave"]){
+		[self leaveChatTapped];
 	} else if ([action isEqualToString:@"add"]){
 		[self addMemberTapped];
 	} else if ([action hasSuffix:@"mute"]){
@@ -471,6 +486,24 @@ static UIImage *TGSolidImage(UIColor *colour) {
 						 onChoice:^(NSInteger index){
 			[me reportThisChatWithOption:options[(NSUInteger)index][@"id"]];
 		}];
+	}];
+}
+
+- (void)leaveChatTapped {
+	int64_t chatId = self.chatId;
+	NSString *what = self.isChannel ? @"channel" : @"group";
+	NSString *title = self.isChannel ? @"Leave Channel" : @"Leave Group";
+	[TGAlertSheet showConfirm:[NSString stringWithFormat:
+					@"You will stop receiving messages from this %@.", what]
+						title:title
+					   action:@"Leave"
+				  destructive:YES
+					   inView:self.view
+					onConfirm:^{
+		// deleteChat removes the row and leaves the group in one call,
+		// so a later message cannot put it back on the list.
+		[[TGClient shared] deleteChat:chatId];
+		[self.navigationController popToRootViewControllerAnimated:YES];
 	}];
 }
 
@@ -956,20 +989,7 @@ static UIImage *TGSolidImage(UIColor *colour) {
 	}
 
 	if ([title isEqualToString:@"Leave Group"] || [title isEqualToString:@"Leave Channel"]){
-		int64_t chatId = self.chatId;
-		NSString *what = self.isChannel ? @"channel" : @"group";
-		[TGAlertSheet showConfirm:[NSString stringWithFormat:
-						@"You will stop receiving messages from this %@.", what]
-							title:title
-						   action:@"Leave"
-					  destructive:YES
-						   inView:self.view
-						onConfirm:^{
-			// deleteChat removes the row and leaves the group in one call,
-			// so a later message cannot put it back on the list.
-			[[TGClient shared] deleteChat:chatId];
-			[self.navigationController popToRootViewControllerAnimated:YES];
-		}];
+		[self leaveChatTapped];
 		return;
 	}
 
