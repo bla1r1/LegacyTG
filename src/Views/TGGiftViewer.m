@@ -6,15 +6,16 @@
 #import "TGTheme.h"
 #import "TGIcons.h"
 #import "TGMediaStore.h"
+#import "TGCapabilities.h"
 #import <QuartzCore/QuartzCore.h>
 #import "TGStyle.h"
 
-static const CGFloat kSide    = TGMetricPadLarge;   ///< card side margin, as TGAttachSheet pads its rows
-static const CGFloat kRow     = TGMetricRow;
-static const CGFloat kButton  = TGMetricButtonHeight;
-static const CGFloat kClose   = TGMetricCloseSide;
-static const CGFloat kAvatar  = TGMetricGiftAvatar;
-static const CGFloat kStar    = TGMetricGiftStar;
+static const CGFloat kSide       = TGMetricPadLarge;   ///< card side margin, as TGAttachSheet pads its rows
+static const CGFloat kRow        = TGMetricRow;
+static const CGFloat kButton     = TGMetricButtonHeight;
+static const CGFloat kClose      = TGMetricCloseSide;
+static const CGFloat kAvatar     = TGMetricGiftAvatar;
+static const CGFloat kStar       = TGMetricGiftStar;
 static const CGFloat kCloseGlyph = 16.0f;   ///< the cross inside kClose
 /// The caption column on the left of a row, and the gap between a value and
 /// the face or star that sits in front of it.
@@ -28,6 +29,10 @@ static const CGFloat kTitleLine  = 24.0f;
 /// The note a gift may carry, padded as a service plate is.
 static const CGFloat kNotePadH   = TGMetricPadMedium + TGMetricPadTiny;
 static const CGFloat kNotePadV   = TGMetricPadMedium;
+static const CGFloat kTopMargin  = TGMetricPadMedium;
+static const CGFloat kGapSmall   = TGMetricPadTiny;
+static const CGFloat kGapMedium  = TGMetricPadMedium;
+static const CGFloat kGapLarge   = TGMetricPadLarge;
 
 // Both of these used to pick with respondsToSelector:, which lies on 6.1.6 -
 // see TGTextDraw.h.
@@ -40,8 +45,8 @@ static CGFloat TGGiftTextHeight(NSString *text, UIFont *font, CGFloat width) {
 }
 
 static UIImage *TGGiftArtworkGlyph(NSString *emoji, CGFloat side) {
-	if (!emoji.length)
-		emoji = @"🎁";
+	if (!emoji.length || ![TGCapabilities canDrawEmoji:emoji])
+		return nil;
 	static NSCache *cache = nil;
 	static dispatch_once_t once;
 	dispatch_once(&once, ^{
@@ -64,8 +69,53 @@ static UIImage *TGGiftArtworkGlyph(NSString *emoji, CGFloat side) {
 #pragma clang diagnostic pop
 	UIImage *img = UIGraphicsGetImageFromCurrentImageContext();
 	UIGraphicsEndImageContext();
-	[cache setObject:img forKey:key];
+	if (img)
+		[cache setObject:img forKey:key];
 	return img;
+}
+
+static UIImage *TGGiftCollectibleBackdrop(int32_t centerColor, int32_t edgeColor, CGFloat side) {
+	static NSCache *cache = nil;
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{
+		cache = [[NSCache alloc] init];
+	});
+	NSString *key = [NSString stringWithFormat:@"%x-%x@%g", centerColor, edgeColor, side];
+	UIImage *cached = [cache objectForKey:key];
+	if (cached)
+		return cached;
+
+	static const CGFloat kRGBDivisor = 255.0f;
+	CGFloat rC = ((centerColor >> 16) & 0xFF) / kRGBDivisor;
+	CGFloat gC = ((centerColor >> 8)  & 0xFF) / kRGBDivisor;
+	CGFloat bC = ( centerColor        & 0xFF) / kRGBDivisor;
+
+	CGFloat rE = ((edgeColor >> 16) & 0xFF) / kRGBDivisor;
+	CGFloat gE = ((edgeColor >> 8)  & 0xFF) / kRGBDivisor;
+	CGFloat bE = ( edgeColor        & 0xFF) / kRGBDivisor;
+
+	CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+	CGFloat components[8] = {
+		rC, gC, bC, 1.0f,
+		rE, gE, bE, 1.0f
+	};
+	CGFloat locations[2] = { 0.0f, 1.0f };
+	CGGradientRef gradient = CGGradientCreateWithColorComponents(colorSpace, components, locations, 2);
+
+	UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), YES, [UIScreen mainScreen].scale);
+	CGContextRef ctx = UIGraphicsGetCurrentContext();
+	CGPoint center = CGPointMake(TGHalf(side), TGHalf(side));
+	CGFloat radius = side;
+	CGContextDrawRadialGradient(ctx, gradient, center, 0, center, radius, kCGGradientDrawsAfterEndLocation);
+	UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+	UIGraphicsEndImageContext();
+
+	CGGradientRelease(gradient);
+	CGColorSpaceRelease(colorSpace);
+
+	if (image)
+		[cache setObject:image forKey:key];
+	return image;
 }
 
 static NSString *TGGiftStamp(NSNumber *unix) {
@@ -80,6 +130,19 @@ static NSString *TGGiftStamp(NSNumber *unix) {
 	});
 	return [fmt stringFromDate:[NSDate dateWithTimeIntervalSince1970:unix.doubleValue]];
 }
+
+@interface TGGiftViewer ()
+- (void)addTableAtY:(CGFloat)tableY
+			  width:(CGFloat)width
+			   gift:(NSDictionary *)gift
+			  stars:(NSInteger)stars
+	  isCollectible:(BOOL)isCollectible;
+- (UILabel *)addRightLabel:(NSString *)text
+						at:(CGPoint)rightCentre
+					  bold:(BOOL)bold
+					colour:(UIColor *)colour;
+- (void)addFromRowAtY:(CGFloat)y right:(CGFloat)right gift:(NSDictionary *)gift;
+@end
 
 @implementation TGGiftViewer {
 	UIView *_card;
@@ -102,24 +165,28 @@ static NSString *TGGiftStamp(NSNumber *unix) {
 	CGFloat width = self.bounds.size.width ?: TGMetricScreenWidth;
 	CGFloat inner = width - TGDoubled(kSide);
 
+	BOOL isCollectible = [gift[@"isCollectible"] boolValue];
 	NSString *emoji = gift[@"emoji"] ?: @"";
-	NSString *message = gift[@"message"];
+	NSString *note = [gift[@"note"] isKindOfClass:[NSString class]] && [gift[@"note"] length] > 0
+			? gift[@"note"]
+			: ([gift[@"message"] isKindOfClass:[NSString class]] ? gift[@"message"] : @"");
 	NSInteger stars = MAX(0, [gift[@"starCount"] integerValue]);
 
 	// Heights first: the card is as tall as its contents, the way the
 	// official sheet grows for a gift that carries a note.
 	UIFont *messageFont = TGFontBody();
 	CGFloat artSide = floorf(MIN(TGMetricGiftArtMaxSide, inner * TGMetricGiftArtRatio));
-	CGFloat messageH = message.length
-			? TGGiftTextHeight(message, messageFont, inner - 24) + 20 : 0;
+	CGFloat messageH = note.length
+			? TGGiftTextHeight(note, messageFont, inner - TGDoubled(kNotePadH)) + TGDoubled(kNotePadV) : 0;
 
-	CGFloat y = 12;
-	CGFloat artY = y + kClose + 4;
-	CGFloat titleY = artY + artSide + 10;
-	CGFloat tableY = titleY + 24 + 14;
-	CGFloat messageY = tableY + kRow * 3 + (message.length ? 14 : 0);
-	CGFloat okY = messageY + messageH + 16;
-	CGFloat cardHeight = okY + kButton + 16;
+	NSInteger rowCount = isCollectible ? 5 : 3;
+	CGFloat y = kTopMargin;
+	CGFloat artY = y + kClose + kGapSmall;
+	CGFloat titleY = artY + artSide + kGapMedium;
+	CGFloat tableY = titleY + kTitleLine + kGapMedium;
+	CGFloat messageY = tableY + kRow * rowCount + (note.length ? kGapMedium : 0);
+	CGFloat okY = messageY + messageH + kGapLarge;
+	CGFloat cardHeight = okY + kButton + kGapLarge;
 
 	_card = [self addCardOfHeight:cardHeight edgeToEdge:YES];
 
@@ -139,16 +206,26 @@ static NSString *TGGiftStamp(NSNumber *unix) {
 		  forControlEvents:UIControlEventTouchUpInside];
 	[_card addSubview:close];
 
-	UIImageView *art = [[UIImageView alloc] initWithFrame:CGRectMake(
-			TGCenteredOrigin(width, artSide), artY, artSide, artSide)];
+	CGRect artFrame = CGRectMake(TGCenteredOrigin(width, artSide), artY, artSide, artSide);
+	if (isCollectible) {
+		int32_t centerColor = [gift[@"backdropCenterColor"] intValue];
+		int32_t edgeColor = [gift[@"backdropEdgeColor"] intValue];
+		UIImageView *bg = [[UIImageView alloc] initWithFrame:artFrame];
+		bg.image = TGGiftCollectibleBackdrop(centerColor, edgeColor, artSide);
+		bg.layer.cornerRadius = TGMetricCornerCard;
+		bg.layer.masksToBounds = YES;
+		[_card addSubview:bg];
+	}
+
+	UIImageView *art = [[UIImageView alloc] initWithFrame:artFrame];
 	art.contentMode = UIViewContentModeScaleAspectFit;
-	art.image = TGGiftArtworkGlyph(emoji, artSide);
+	if (!isCollectible) {
+		art.image = TGGiftArtworkGlyph(emoji, artSide);
+	}
 	art.clipsToBounds = YES;
 	[_card addSubview:art];
 
-	// The artwork is the sticker's still picture; the emoji glyph above is
-	// the placeholder it wears until the download lands.
-	NSNumber *thumbId = gift[@"thumbFileId"];
+	NSNumber *thumbId = isCollectible ? gift[@"modelThumbFileId"] : gift[@"thumbFileId"];
 	if ([thumbId isKindOfClass:NSNumber.class] && thumbId.integerValue > 0){
 		[[TGMediaStore shared] downloadFile:thumbId.integerValue
 							   completion:^(NSString *path){
@@ -170,39 +247,45 @@ static NSString *TGGiftStamp(NSNumber *unix) {
 		}];
 	}
 
-	// The schema carries no gift name, so the heading is the plain word and
-	// the stars ride the Value row, as they do officially.
 	UILabel *titleLabel = [[UILabel alloc] initWithFrame:CGRectMake(
 			kSide, titleY, inner, kTitleLine)];
-	titleLabel.text = @"Gift";
+	if (isCollectible) {
+		NSString *title = gift[@"title"] ?: @"";
+		NSInteger number = [gift[@"number"] integerValue];
+		titleLabel.text = title.length
+				? [NSString stringWithFormat:@"%@ #%ld", title, (long)number]
+				: [NSString stringWithFormat:@"#%ld", (long)number];
+	} else {
+		titleLabel.text = @"Gift";
+	}
 	titleLabel.font = TGFontTitle();
 	titleLabel.textColor = [theme primaryTextColour];
 	titleLabel.textAlignment = NSTextAlignmentCenter;
 	titleLabel.backgroundColor = [UIColor clearColor];
 	[_card addSubview:titleLabel];
 
-	[self addTableAtY:tableY width:width gift:gift stars:stars];
+	[self addTableAtY:tableY width:width gift:gift stars:stars isCollectible:isCollectible];
 
-	if (message.length){
+	if (note.length){
 		// A note comes with the gift the way a service plate carries text
 		// in a chat: the same colours, so a theme reaches it too.
-		UIView *note = [[UIView alloc] initWithFrame:CGRectMake(
+		UIView *noteBubble = [[UIView alloc] initWithFrame:CGRectMake(
 				kSide, messageY, inner, messageH)];
-		note.backgroundColor = [theme serviceBubbleColour];
-		note.layer.cornerRadius = TGMetricCornerCard;
-		note.layer.masksToBounds = YES;
-		[_card addSubview:note];
+		noteBubble.backgroundColor = [theme serviceBubbleColour];
+		noteBubble.layer.cornerRadius = TGMetricCornerCard;
+		noteBubble.layer.masksToBounds = YES;
+		[_card addSubview:noteBubble];
 
 		UILabel *text = [[UILabel alloc] initWithFrame:CGRectMake(
 				kNotePadH, kNotePadV, inner - TGDoubled(kNotePadH),
 				messageH - TGDoubled(kNotePadV))];
-		text.text = message;
+		text.text = note;
 		text.font = messageFont;
 		text.textColor = [theme serviceTextColour];
 		text.numberOfLines = 0;
 		text.textAlignment = NSTextAlignmentCenter;
 		text.backgroundColor = [UIColor clearColor];
-		[note addSubview:text];
+		[noteBubble addSubview:text];
 	}
 
 	UIButton *ok = [UIButton buttonWithType:UIButtonTypeCustom];
@@ -218,16 +301,19 @@ static NSString *TGGiftStamp(NSNumber *unix) {
 	[_card addSubview:ok];
 }
 
-/// From / Date / Value, read as settings rows do: the caption grey on the
-/// left, the value on the right, a hairline between them. No row fill - the
-/// card is the surface, the way the official table sits on the sheet.
+/// Rows are read as settings rows do: the caption grey on the left, the value
+/// on the right, a hairline between them. Regular gifts show From / Date / Value;
+/// collectibles show From / Date / Model / Symbol / Backdrop.
 - (void)addTableAtY:(CGFloat)tableY
 			  width:(CGFloat)width
 			   gift:(NSDictionary *)gift
-			  stars:(NSInteger)stars {
+			  stars:(NSInteger)stars
+	  isCollectible:(BOOL)isCollectible {
 	TGTheme *theme = [TGTheme shared];
 	CGFloat inner = width - TGDoubled(kSide);
-	NSArray *labels = @[@"From", @"Date", @"Value"];
+	NSArray *labels = isCollectible
+			? @[@"From", @"Date", @"Model", @"Symbol", @"Backdrop"]
+			: @[@"From", @"Date", @"Value"];
 
 	for (NSInteger i = 0; i < (NSInteger)labels.count; i++){
 		CGFloat y = tableY + kRow * i;
@@ -249,12 +335,26 @@ static NSString *TGGiftStamp(NSNumber *unix) {
 
 		// The value hugs the right edge; its width is whatever the text needs.
 		CGFloat right = width - kSide;
-		if (i == 1){
+		if (i == 0){
+			[self addFromRowAtY:y right:right gift:gift];
+		} else if (i == 1){
 			[self addRightLabel:TGGiftStamp(gift[@"date"])
 							 at:CGPointMake(right, y + TGHalf(kRow))
 						   bold:NO
 						 colour:[theme primaryTextColour]];
-		} else if (i == 2){
+		} else if (isCollectible){
+			NSString *val = @"";
+			if (i == 2)
+				val = gift[@"modelName"] ?: @"";
+			else if (i == 3)
+				val = gift[@"symbolName"] ?: @"";
+			else if (i == 4)
+				val = gift[@"backdropName"] ?: @"";
+			[self addRightLabel:val
+							 at:CGPointMake(right, y + TGHalf(kRow))
+						   bold:YES
+						 colour:[theme primaryTextColour]];
+		} else {
 			UIFont *font = TGFontBodyStrong();
 			NSString *count = [NSString stringWithFormat:@"%ld", (long)stars];
 			CGFloat countW = ceilf(TGGiftTextSize(count, font).width);
@@ -270,8 +370,6 @@ static NSString *TGGiftStamp(NSNumber *unix) {
 									  colour:[[TGTheme shared] giftStarColour]
 										side:kStar];
 			[_card addSubview:star];
-		} else {
-			[self addFromRowAtY:y right:right gift:gift];
 		}
 	}
 }
@@ -297,10 +395,15 @@ static NSString *TGGiftStamp(NSNumber *unix) {
 /// The sender rides the right of the From row: their face beside their name
 /// in the accent colour, the face downloaded like every other avatar here.
 - (void)addFromRowAtY:(CGFloat)y right:(CGFloat)right gift:(NSDictionary *)gift {
+	BOOL isPrivate = [gift[@"isPrivate"] boolValue];
 	NSInteger userId = [gift[@"senderUserId"] longLongValue];
-	NSString *name = [[TGMediaStore shared] nameForUserId:userId];
+	NSString *name = nil;
+	if (isPrivate)
+		name = @"Anonymous";
+	else if (userId > 0)
+		name = [[TGMediaStore shared] nameForUserId:userId];
 	if (!name.length)
-		name = @"Unknown";
+		name = isPrivate ? @"Anonymous" : @"Unknown";
 
 	UIFont *font = TGFontBodyStrong();
 	CGFloat available = right - kSide - kCaptionW - kAvatar - kValueGap;
@@ -324,27 +427,29 @@ static NSString *TGGiftStamp(NSNumber *unix) {
 	face.image = [TGIcons avatarWithInitials:first size:kAvatar colourId:userId];
 	[_card addSubview:face];
 
-	// The cached initials give way to the photo when it lands.
-	NSNumber *fileId = [[TGMediaStore shared] photoFileIdForUserId:userId];
-	if ([fileId isKindOfClass:NSNumber.class] && fileId.integerValue > 0){
-		__weak UIImageView *weakFace = face;
-		[[TGMediaStore shared] downloadFile:fileId.integerValue
-							   completion:^(NSString *path){
-			if (!path.length)
-				return;
-			dispatch_async(dispatch_get_global_queue(
-					DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
-				UIImage *photo = [TGIcons decodedImage:
-						[UIImage imageWithContentsOfFile:path]
-						fittingSize:CGSizeMake(kAvatar, kAvatar)
-						fill:YES scale:[UIScreen mainScreen].scale];
-				if (!photo)
+	// The cached initials give way to the photo when it lands, unless anonymous.
+	if (!isPrivate && userId > 0){
+		NSNumber *fileId = [[TGMediaStore shared] photoFileIdForUserId:userId];
+		if ([fileId isKindOfClass:NSNumber.class] && fileId.integerValue > 0){
+			__weak UIImageView *weakFace = face;
+			[[TGMediaStore shared] downloadFile:fileId.integerValue
+								   completion:^(NSString *path){
+				if (!path.length)
 					return;
-				dispatch_async(dispatch_get_main_queue(), ^{
-					weakFace.image = photo;
+				dispatch_async(dispatch_get_global_queue(
+						DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
+					UIImage *photo = [TGIcons decodedImage:
+							[UIImage imageWithContentsOfFile:path]
+							fittingSize:CGSizeMake(kAvatar, kAvatar)
+							fill:YES scale:[UIScreen mainScreen].scale];
+					if (!photo)
+						return;
+					dispatch_async(dispatch_get_main_queue(), ^{
+						weakFace.image = photo;
+					});
 				});
-			});
-		}];
+			}];
+		}
 	}
 }
 

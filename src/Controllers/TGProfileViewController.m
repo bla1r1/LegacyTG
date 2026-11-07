@@ -52,8 +52,8 @@ static NSString *TGProfileShortDate(NSNumber *date) {
 /// starts here, and the sticker thumbnail replaces the image once the
 /// download lands - until then the row is never blank (B5).
 static UIImage *TGGiftGlyph(NSString *emoji) {
-	if (!emoji.length)
-		emoji = @"🎁";
+	if (!emoji.length || ![TGCapabilities canDrawEmoji:emoji])
+		return nil;
 	static NSCache *cache = nil;
 	static dispatch_once_t once;
 	dispatch_once(&once, ^{ cache = [[NSCache alloc] init]; });
@@ -1338,22 +1338,31 @@ static const CGFloat kMusicChevronSide = TGMetricGiftStar;
 
 	if (indexPath.section == kSectionGifts){
 		NSDictionary *gift = self.gifts[indexPath.row];
+		BOOL isCollectible = [gift[@"isCollectible"] boolValue];
 		NSString *emoji = gift[@"emoji"] ?: @"";
-		NSString *message = gift[@"message"];
-		cell.textLabel.text = (message.length && emoji.length)
-				? [NSString stringWithFormat:@"%@ %@", emoji, message]
-				: (emoji.length ? emoji : @"Gift");
+		NSString *message = gift[@"note"] ?: gift[@"message"];
+		if (isCollectible) {
+			NSString *title = gift[@"title"] ?: @"";
+			cell.textLabel.text = title.length
+					? [NSString stringWithFormat:@"%@ #%ld", title, (long)[gift[@"number"] integerValue]]
+					: [NSString stringWithFormat:@"#%ld", (long)[gift[@"number"] integerValue]];
+			cell.detailTextLabel.text = TGProfileShortDate(gift[@"date"]) ?: @"";
+		} else {
+			cell.textLabel.text = (message.length && emoji.length)
+					? [NSString stringWithFormat:@"%@ %@", emoji, message]
+					: (emoji.length ? emoji : @"Gift");
+			NSString *stars = [NSString stringWithFormat:@"%lu stars",
+					(unsigned long)[gift[@"starCount"] integerValue]];
+			cell.detailTextLabel.text = [NSString stringWithFormat:@"%@ · %@",
+					TGProfileShortDate(gift[@"date"]) ?: @"", stars];
+		}
 		cell.textLabel.font = TGFontBody();
 		cell.textLabel.textColor = [[TGTheme shared] primaryTextColour];
-		NSString *stars = [NSString stringWithFormat:@"%lu stars",
-				(unsigned long)[gift[@"starCount"] integerValue]];
-		cell.detailTextLabel.text = [NSString stringWithFormat:@"%@ · %@",
-				TGProfileShortDate(gift[@"date"]) ?: @"", stars];
 		cell.detailTextLabel.font = TGFontMeta();
 		cell.detailTextLabel.textColor = [[TGTheme shared] secondaryTextColour];
 
 		cell.imageView.image = TGGiftGlyph(emoji);
-		NSNumber *thumbId = gift[@"thumbFileId"];
+		NSNumber *thumbId = isCollectible ? gift[@"modelThumbFileId"] : gift[@"thumbFileId"];
 		if ([thumbId isKindOfClass:NSNumber.class]){
 			__weak UITableViewCell *weakCell = cell;
 			[[TGClient shared] downloadFile:thumbId.integerValue
@@ -1445,17 +1454,26 @@ static const CGFloat kMusicChevronSide = TGMetricGiftStar;
 				cell.imageView.image = nil;
 				cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
 			} else if ([kind isEqualToString:@"gifts"]) {
+				BOOL isCollectible = [m[@"isCollectible"] boolValue];
 				NSString *emoji = m[@"emoji"] ?: @"";
-				NSString *message = m[@"message"];
-				cell.textLabel.text = (message.length && emoji.length)
-						? [NSString stringWithFormat:@"%@ %@", emoji, message]
-						: (emoji.length ? emoji : @"Gift");
-				NSString *stars = [NSString stringWithFormat:@"%lu stars",
-						(unsigned long)[m[@"starCount"] integerValue]];
-				cell.detailTextLabel.text = [NSString stringWithFormat:@"%@ · %@",
-						TGProfileShortDate(m[@"date"]) ?: @"", stars];
+				NSString *message = m[@"note"] ?: m[@"message"];
+				if (isCollectible) {
+					NSString *title = m[@"title"] ?: @"";
+					cell.textLabel.text = title.length
+							? [NSString stringWithFormat:@"%@ #%ld", title, (long)[m[@"number"] integerValue]]
+							: [NSString stringWithFormat:@"#%ld", (long)[m[@"number"] integerValue]];
+					cell.detailTextLabel.text = TGProfileShortDate(m[@"date"]) ?: @"";
+				} else {
+					cell.textLabel.text = (message.length && emoji.length)
+							? [NSString stringWithFormat:@"%@ %@", emoji, message]
+							: (emoji.length ? emoji : @"Gift");
+					NSString *stars = [NSString stringWithFormat:@"%lu stars",
+							(unsigned long)[m[@"starCount"] integerValue]];
+					cell.detailTextLabel.text = [NSString stringWithFormat:@"%@ · %@",
+							TGProfileShortDate(m[@"date"]) ?: @"", stars];
+				}
 				cell.imageView.image = TGGiftGlyph(emoji);
-				NSNumber *thumbId = m[@"thumbFileId"];
+				NSNumber *thumbId = isCollectible ? m[@"modelThumbFileId"] : m[@"thumbFileId"];
 				if ([thumbId isKindOfClass:NSNumber.class]){
 					__weak UITableViewCell *weakCell = cell;
 					[[TGClient shared] downloadFile:thumbId.integerValue

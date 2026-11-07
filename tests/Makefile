@@ -110,6 +110,8 @@ CLIENT_OBJC_SRCS := \
     $(SRC)/Core/TGMessageContentInteractive.m \
     $(SRC)/Core/TGMessageCard.m \
     $(SRC)/Core/TGLiveLocation.m \
+    $(SRC)/Core/TGComposerText.m \
+    $(SRC)/Core/TGGiftFlatten.m \
     $(SRC)/Core/TGPinnedLine.m \
     $(SRC)/Core/TGClient+MessageMeta.m \
     $(SRC)/Core/TGClient+SavedMessages.m \
@@ -225,6 +227,8 @@ CLIENT_TEST_SRCS := \
     $(TESTS)/TGMessageContentInteractiveTests.m \
     $(TESTS)/TGMessageCardTests.m \
     $(TESTS)/TGLiveLocationTests.m \
+    $(TESTS)/TGComposerTextTests.m \
+    $(TESTS)/TGGiftFlattenTests.m \
     $(TESTS)/TGPinnedLineTests.m \
     $(TESTS)/TGPollPresentationTests.m \
     $(TESTS)/TGChecklistPresentationTests.m \
@@ -259,7 +263,8 @@ CLIENT_TEST_SRCS := \
     $(TESTS)/TGStickerImageTests.m \
     $(TESTS)/TGChatListRowGeometryTests.m \
     $(TESTS)/TGSVGPathTests.m \
-    $(TESTS)/TGUIFormatTests.m
+    $(TESTS)/TGUIFormatTests.m \
+    $(TESTS)/TGCustomEmojiStoreTests.m
 
 TEST_BINARY := $(BUILD)/TGCallTests
 CLIENT_BINARY := $(BUILD)/TGClientTests

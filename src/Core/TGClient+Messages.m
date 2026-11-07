@@ -521,6 +521,67 @@
 	}];
 }
 
+- (NSDictionary *)markdownParsed:(NSDictionary *)formattedText {
+	if (![formattedText isKindOfClass:[NSDictionary class]])
+		return formattedText;
+	NSDictionary *parsed = [self executeSynchronously:@{
+		@"@type" : @"parseMarkdown",
+		@"text"  : formattedText,
+	}];
+	if ([parsed isKindOfClass:[NSDictionary class]] && [parsed[@"@type"] isEqualToString:@"formattedText"])
+		return parsed;
+	return formattedText;
+}
+
+- (NSDictionary *)markdownForEditing:(NSDictionary *)formattedText {
+	if (![formattedText isKindOfClass:[NSDictionary class]])
+		return formattedText;
+	NSDictionary *result = [self executeSynchronously:@{
+		@"@type" : @"getMarkdownText",
+		@"text"  : formattedText,
+	}];
+	if ([result isKindOfClass:[NSDictionary class]] && [result[@"@type"] isEqualToString:@"formattedText"])
+		return result;
+	return formattedText;
+}
+
+- (void)sendFormattedText:(NSDictionary *)formattedText toChat:(int64_t)chatId
+				   thread:(int64_t)threadId replyTo:(int64_t)replyToId {
+	NSDictionary *empty = @{@"@type" : @"formattedText", @"text" : @"", @"entities" : @[]};
+	NSDictionary *textPayload = [formattedText isKindOfClass:[NSDictionary class]] ? formattedText : empty;
+
+	NSMutableDictionary *request = [@{
+		@"@type"                : @"sendMessage",
+		@"chat_id"              : @(chatId),
+		@"message_thread_id"    : @(threadId),
+		@"input_message_content": @{
+			@"@type" : @"inputMessageText",
+			@"text"  : textPayload,
+		},
+	} mutableCopy];
+
+	if (replyToId != 0)
+		request[@"reply_to"] = @{@"@type" : @"inputMessageReplyToMessage",
+								 @"message_id" : @(replyToId)};
+
+	[self send:request];
+}
+
+- (void)editMessage:(int64_t)messageId inChat:(int64_t)chatId formattedText:(NSDictionary *)formattedText {
+	NSDictionary *empty = @{@"@type" : @"formattedText", @"text" : @"", @"entities" : @[]};
+	NSDictionary *textPayload = [formattedText isKindOfClass:[NSDictionary class]] ? formattedText : empty;
+
+	[self send:@{
+		@"@type"                : @"editMessageText",
+		@"chat_id"              : @(chatId),
+		@"message_id"           : @(messageId),
+		@"input_message_content": @{
+			@"@type" : @"inputMessageText",
+			@"text"  : textPayload,
+		},
+	}];
+}
+
 - (void)editMessage:(int64_t)messageId inChat:(int64_t)chatId text:(NSString *)text {
 	[self send:@{
 		@"@type"                : @"editMessageText",

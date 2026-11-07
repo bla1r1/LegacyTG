@@ -11,6 +11,7 @@
 #import "TGStyle.h"
 #import "TGStreamingVoicePlayer.h"
 #import "TGEditProfileViewController.h"
+#import "TGCapabilities.h"
 
 static const CGFloat kActionTile = TGMetricActionTile;
 
@@ -89,6 +90,7 @@ NSURL *TGProfileFirstURL(NSString *text, NSArray *entities);
 @property (nonatomic, strong) NSMutableDictionary *mediaCounts;
 @property (nonatomic, strong) NSArray *members;
 @property (nonatomic, strong) NSArray *gifts;
+@property (nonatomic, copy) NSString *giftsNextOffset;
 @property (nonatomic, strong) NSArray *stories;
 @property (nonatomic, strong) NSArray *archivedStories;
 /// The first saved track from userFullInfo, shown under the action plates
@@ -209,6 +211,7 @@ NSURL *TGProfileFirstURL(NSString *text, NSArray *entities);
 
 @interface TGProfileViewController (Media)
 
+- (NSDictionary *)giftOwnerSenderId;
 + (CGFloat)storySideForWidth:(CGFloat)width;
 - (void)loadMedia;
 - (void)fetchAllMediaCounts;

@@ -16,6 +16,7 @@ static const CGFloat kSendRingLineWidth = 2.0f;
 /// Telegram keeps a sliver of the ring visible before any progress arrives, so
 /// a send that has not started does not look like a disc with no control.
 static const CGFloat kSendRingMinimum = 0.2f;
+static const NSUInteger kMaxCustomEmojiViews = 3;
 
 @interface TGBubbleCell () {
 	CTFrameRef _textFrame;          // the laid-out body text, for hit-testing
@@ -231,6 +232,8 @@ static const CGFloat kSendRingMinimum = 0.2f;
 	self.lottie = [[TGLottieView alloc] initWithFrame:CGRectZero];
 	self.lottie.hidden = YES;
 	[self.bubble addSubview:self.lottie];
+
+	self.customEmojiViews = [[NSMutableArray alloc] initWithCapacity:kMaxCustomEmojiViews];
 
 	self.forwardLabel = [[UILabel alloc] init];
 	self.forwardLabel.font = TGFontMeta();
@@ -746,6 +749,7 @@ static const CGFloat kSendRingMinimum = 0.2f;
 	self.forwardLabel.attributedText = nil;
 	self.lottie.hidden = YES;
 	[self.lottie stop];
+	[self stopCustomEmojiAnimations];
 
 	self.collageView.hidden = YES;
 	self.collageMoreLabel.hidden = YES;
@@ -766,6 +770,34 @@ static const CGFloat kSendRingMinimum = 0.2f;
 	self.body.textColor = [theme primaryTextColour];
 	[self.contactCallButton setTitleColor:[theme accentColour] forState:UIControlStateNormal];
 	[self.contactAddButton setTitleColor:[theme accentColour] forState:UIControlStateNormal];
+}
+
+- (TGLottieView *)customEmojiViewAtIndex:(NSUInteger)index {
+	if (!self.customEmojiViews)
+		self.customEmojiViews = [[NSMutableArray alloc] initWithCapacity:kMaxCustomEmojiViews];
+	while (self.customEmojiViews.count <= index) {
+		TGLottieView *view = [[TGLottieView alloc] initWithFrame:CGRectZero];
+		view.hidden = YES;
+		view.backgroundColor = [UIColor clearColor];
+		[self.body addSubview:view];
+		[self.customEmojiViews addObject:view];
+	}
+	return self.customEmojiViews[index];
+}
+
+- (void)hideCustomEmojiViewsFromIndex:(NSUInteger)startIndex {
+	for (NSUInteger i = startIndex; i < self.customEmojiViews.count; i++) {
+		TGLottieView *view = self.customEmojiViews[i];
+		view.hidden = YES;
+		[view stop];
+	}
+}
+
+- (void)stopCustomEmojiAnimations {
+	for (TGLottieView *view in self.customEmojiViews) {
+		view.hidden = YES;
+		[view stop];
+	}
 }
 
 @end

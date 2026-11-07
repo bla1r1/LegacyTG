@@ -28,6 +28,8 @@
 #import "TGMessageContentInteractiveTests.m"
 #import "TGMessageCardTests.m"
 #import "TGLiveLocationTests.m"
+#import "TGComposerTextTests.m"
+#import "TGGiftFlattenTests.m"
 #import "TGPinnedLineTests.m"
 #import "TGPollPresentationTests.m"
 #import "TGChecklistPresentationTests.m"
@@ -68,6 +70,7 @@
 #import "TGUIFormatTests.m"
 #import "TGClientMessagesFunctionsTests.m"
 #import "TGClientRecordOnceTests.m"
+#import "TGCustomEmojiStoreTests.m"
 
 int main(int argc, char *argv[]) {
 	@autoreleasepool {

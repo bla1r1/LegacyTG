@@ -1179,4 +1179,99 @@ static NSDictionary *TGReactionAnimation(NSDictionary *reaction) {
 	}];
 }
 
+- (void)installedCustomEmojiSetsWithCompletion:(void (^)(NSArray *))completion {
+	[self request:@{@"@type"        : @"getInstalledStickerSets",
+					@"sticker_type" : @{@"@type" : @"stickerTypeCustomEmoji"}}
+	   completion:^(NSDictionary *result){
+		NSArray *setInfos = [result[@"sets"] isKindOfClass:NSArray.class] ? result[@"sets"] : @[];
+		if (!setInfos.count){
+			if (completion) completion(@[]);
+			return;
+		}
+
+		NSMutableArray *collected = [NSMutableArray arrayWithCapacity:setInfos.count];
+		for (NSUInteger i = 0; i < setInfos.count; i++)
+			[collected addObject:[NSNull null]];
+
+		__block NSUInteger remaining = setInfos.count;
+		for (NSUInteger i = 0; i < setInfos.count; i++){
+			NSDictionary *info = setInfos[i];
+			id setId = [info isKindOfClass:NSDictionary.class] ? info[@"id"] : nil;
+			NSString *infoTitle = ([info isKindOfClass:NSDictionary.class] &&
+								   [info[@"title"] isKindOfClass:NSString.class]) ? info[@"title"] : @"";
+			if (!setId){
+				collected[i] = @{@"title" : infoTitle, @"emojis" : @[]};
+				if (--remaining == 0){
+					if (completion) completion(collected);
+				}
+				continue;
+			}
+			[self request:@{@"@type" : @"getStickerSet", @"set_id" : setId}
+			   completion:^(NSDictionary *setResult){
+				NSDictionary *flat = TGFlattenCustomEmojiSet(setResult);
+				if (!flat){
+					flat = @{@"title" : infoTitle, @"emojis" : @[]};
+				} else if (![flat[@"title"] length] && infoTitle.length){
+					NSMutableDictionary *m = [flat mutableCopy];
+					m[@"title"] = infoTitle;
+					flat = m;
+				}
+				collected[i] = flat;
+				if (--remaining == 0){
+					NSMutableArray *finalSets = [NSMutableArray array];
+					for (id item in collected){
+						if ([item isKindOfClass:NSDictionary.class])
+							[finalSets addObject:item];
+					}
+					if (completion) completion(finalSets);
+				}
+			}];
+		}
+	}];
+}
+
 @end
+
+NSDictionary *TGFlattenCustomEmojiSet(NSDictionary *set) {
+	if (![set isKindOfClass:NSDictionary.class])
+		return nil;
+	if ([set[@"@type"] isEqualToString:@"error"])
+		return nil;
+	NSString *title = [set[@"title"] isKindOfClass:NSString.class] ? set[@"title"] : @"";
+	NSMutableArray *emojis = [NSMutableArray array];
+	NSArray *stickers = [set[@"stickers"] isKindOfClass:NSArray.class] ? set[@"stickers"] : @[];
+	for (NSDictionary *sticker in stickers){
+		if (![sticker isKindOfClass:NSDictionary.class])
+			continue;
+		id ft = sticker[@"full_type"];
+		id rawId = [ft isKindOfClass:NSDictionary.class] ? ft[@"custom_emoji_id"] : nil;
+		if (!rawId)
+			rawId = sticker[@"custom_emoji_id"];
+		if (![rawId respondsToSelector:@selector(longLongValue)])
+			continue;
+		int64_t customEmojiId = [rawId longLongValue];
+		if (customEmojiId <= 0)
+			continue;
+		NSString *emoji = [sticker[@"emoji"] isKindOfClass:NSString.class] ? sticker[@"emoji"] : @"";
+		[emojis addObject:@{
+			@"customEmojiId" : @(customEmojiId),
+			@"emoji"         : emoji
+		}];
+	}
+	return @{
+		@"title"  : title,
+		@"emojis" : emojis
+	};
+}
+
+NSArray *TGFlattenCustomEmojiSets(NSArray *sets) {
+	if (![sets isKindOfClass:NSArray.class])
+		return @[];
+	NSMutableArray *out = [NSMutableArray array];
+	for (NSDictionary *set in sets){
+		NSDictionary *flat = TGFlattenCustomEmojiSet(set);
+		if (flat)
+			[out addObject:flat];
+	}
+	return out;
+}

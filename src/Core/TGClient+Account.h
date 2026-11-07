@@ -303,6 +303,11 @@
 /// Gifts a user has received and kept on their profile: "title", "starCount".
 - (void)giftsForUser:(int64_t)userId completion:(void (^)(NSArray *gifts))completion;
 
+/// Gifts an owner (user or chat sender) has received, paged by offset.
+- (void)giftsForOwner:(NSDictionary *)ownerId
+			   offset:(NSString *)offset
+		   completion:(void (^)(NSArray *gifts, NSString *nextOffset, NSInteger totalCount))completion;
+
 /// Stories on a profile: the ones kept on the page, or the ones still live if
 /// none are kept. Each: "storyId", "date", "caption", "photoId" (a file id for
 /// the picture or a video's poster frame), "isVideo", "viewers".

@@ -65,8 +65,9 @@
 	self.input.textColor = [[TGTheme shared] primaryTextColour];
 	self.input.font = TGFontBody();
 	self.input.returnKeyType = UIReturnKeySend;
-		self.input.delegate = self;
+	self.input.delegate = self;
 	self.input.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+	self.composerText = [[TGComposerText alloc] initWithText:@"" entities:@[]];
 	[self.inputBar addSubview:self.input];
 
 	self.sendButton = [UIButton buttonWithType:UIButtonTypeCustom];
@@ -345,6 +346,45 @@ static const NSInteger kBannerSubtitleTag = 72;
 
 #pragma mark - sending
 
+static NSRange TGTextFieldSelectedRange(UITextField *tf) {
+	UITextRange *r = tf.selectedTextRange;
+	if (!r) return NSMakeRange(NSNotFound, 0);
+	NSInteger start = [tf offsetFromPosition:tf.beginningOfDocument toPosition:r.start];
+	NSInteger end = [tf offsetFromPosition:tf.beginningOfDocument toPosition:r.end];
+	return NSMakeRange(start, end - start);
+}
+
+static void TGTextFieldSetSelectedRange(UITextField *tf, NSRange range) {
+	if (range.location == NSNotFound) return;
+	UITextPosition *start = [tf positionFromPosition:tf.beginningOfDocument offset:range.location];
+	UITextPosition *end = [tf positionFromPosition:start offset:range.length];
+	if (start && end) {
+		tf.selectedTextRange = [tf textRangeFromPosition:start toPosition:end];
+	}
+}
+
+- (void)insertCustomEmoji:(int64_t)emojiId fallback:(NSString *)fallback {
+	if (!fallback.length)
+		return;
+	if (!self.composerText) {
+		self.composerText = [[TGComposerText alloc] initWithText:self.input.text ?: @"" entities:@[]];
+	} else if (![self.composerText.text isEqualToString:self.input.text ?: @""]) {
+		[self.composerText resetText:self.input.text ?: @""];
+	}
+	NSString *text = self.input.text ?: @"";
+	NSRange r = TGTextFieldSelectedRange(self.input);
+	NSUInteger index = (r.location != NSNotFound && r.location <= text.length) ? r.location : text.length;
+	NSUInteger replaceLen = (r.location != NSNotFound && r.location + r.length <= text.length) ? r.length : 0;
+	if (replaceLen > 0) {
+		[self.composerText replaceCharactersInRange:NSMakeRange(index, replaceLen) withString:@""];
+		text = [text stringByReplacingCharactersInRange:NSMakeRange(index, replaceLen) withString:@""];
+	}
+	[self.composerText insertCustomEmoji:emojiId fallback:fallback atIndex:index];
+	self.input.text = [text stringByReplacingCharactersInRange:NSMakeRange(index, 0) withString:fallback];
+	TGTextFieldSetSelectedRange(self.input, NSMakeRange(index + fallback.length, 0));
+	[self inputChanged];
+}
+
 - (void)sendTapped {
 	NSString *text = [self.input.text stringByTrimmingCharactersInSet:
 			[NSCharacterSet whitespaceAndNewlineCharacterSet]];
@@ -363,15 +403,25 @@ static const NSInteger kBannerSubtitleTag = 72;
 							   seconds:2 onCommit:nil];
 		}];
 		self.editingIsCaption = NO;
-	} else if (self.editingId != 0)
-		[[TGClient shared] editMessage:self.editingId inChat:self.chatId text:text];
-	else
-		[[TGClient shared] sendText:text toChat:self.chatId
-							 thread:self.threadId replyTo:self.replyToId];
+	} else {
+		if (!self.composerText) {
+			self.composerText = [[TGComposerText alloc] initWithText:self.input.text ?: @"" entities:@[]];
+		} else if (![self.composerText.text isEqualToString:self.input.text ?: @""]) {
+			[self.composerText resetText:self.input.text ?: @""];
+		}
+		NSDictionary *ft = [[TGClient shared] markdownParsed:[self.composerText formattedText]];
+		if (self.editingId != 0) {
+			[[TGClient shared] editMessage:self.editingId inChat:self.chatId formattedText:ft];
+		} else {
+			[[TGClient shared] sendFormattedText:ft toChat:self.chatId
+										  thread:self.threadId replyTo:self.replyToId];
+		}
+	}
 
 	// Before clearComposeState, so inputChanged sees an empty field and puts
 	// the microphone back in the send button's place.
 	self.input.text = @"";
+	self.composerText = [[TGComposerText alloc] initWithText:@"" entities:@[]];
 	[self clearComposeState];
 	// The draft was this text; it has been sent, so it is not a draft now.
 	[[TGClient shared] setDraft:@"" inChat:self.chatId thread:self.threadId replyTo:0];
@@ -385,23 +435,6 @@ static const NSInteger kBannerSubtitleTag = 72;
 }
 
 #pragma mark - sending later
-
-static NSRange TGTextFieldSelectedRange(UITextField *tf) {
-	UITextRange *r = tf.selectedTextRange;
-	if (!r) return NSMakeRange(NSNotFound, 0);
-	NSInteger start = [tf offsetFromPosition:tf.beginningOfDocument toPosition:r.start];
-	NSInteger end = [tf offsetFromPosition:tf.beginningOfDocument toPosition:r.end];
-	return NSMakeRange(start, end - start);
-}
-
-static void TGTextFieldSetSelectedRange(UITextField *tf, NSRange range) {
-	if (range.location == NSNotFound) return;
-	UITextPosition *start = [tf positionFromPosition:tf.beginningOfDocument offset:range.location];
-	UITextPosition *end = [tf positionFromPosition:start offset:range.length];
-	if (start && end) {
-		tf.selectedTextRange = [tf textRangeFromPosition:start toPosition:end];
-	}
-}
 
 - (void)showFormattingSheet {
 	__weak typeof(self) weakSelf = self;
@@ -439,6 +472,7 @@ static void TGTextFieldSetSelectedRange(UITextField *tf, NSRange range) {
 			TGTextFieldSetSelectedRange(self.input, NSMakeRange(prefix.length, 0));
 		}
 	}
+	[self.composerText resetText:self.input.text ?: @""];
 	[self inputChanged];
 }
 
@@ -548,6 +582,7 @@ static void TGTextFieldSetSelectedRange(UITextField *tf, NSRange range) {
 						 thread:self.threadId replyTo:self.replyToId
 					  scheduled:state];
 	self.input.text = @"";
+	self.composerText = [[TGComposerText alloc] initWithText:@"" entities:@[]];
 	[self clearComposeState];
 	[[TGClient shared] setDraft:@"" inChat:self.chatId thread:self.threadId replyTo:0];
 	[[TGClient shared] cancelTypingInChat:self.chatId thread:self.threadId];
@@ -595,6 +630,25 @@ static void TGTextFieldSetSelectedRange(UITextField *tf, NSRange range) {
 	[self sendHeldText:[TGClient scheduledAtDate:date]];
 	// The queue has one more in it than the menu last said.
 	self.scheduledCount++;
+}
+
+- (BOOL)textField:(UITextField *)textField shouldChangeCharactersInRange:(NSRange)range replacementString:(NSString *)string {
+	if (textField == self.input) {
+		if (!self.composerText) {
+			self.composerText = [[TGComposerText alloc] initWithText:self.input.text ?: @"" entities:@[]];
+		} else if (![self.composerText.text isEqualToString:self.input.text ?: @""]) {
+			[self.composerText resetText:self.input.text ?: @""];
+		}
+		[self.composerText replaceCharactersInRange:range withString:string];
+	}
+	return YES;
+}
+
+- (BOOL)textFieldShouldClear:(UITextField *)textField {
+	if (textField == self.input) {
+		self.composerText = [[TGComposerText alloc] initWithText:@"" entities:@[]];
+	}
+	return YES;
 }
 
 - (BOOL)textFieldShouldReturn:(UITextField *)textField {
@@ -696,7 +750,12 @@ static void TGTextFieldSetSelectedRange(UITextField *tf, NSRange range) {
 
 - (void)emojiPanel:(TGEmojiPanel *)panel didPickEmoji:(NSString *)emoji {
 	self.input.text = [(self.input.text ?: @"") stringByAppendingString:emoji];
+	[self.composerText resetText:self.input.text ?: @""];
 	[self inputChanged];
+}
+
+- (void)emojiPanel:(TGEmojiPanel *)panel didPickCustomEmoji:(int64_t)emojiId fallback:(NSString *)emoji {
+	[self insertCustomEmoji:emojiId fallback:emoji];
 }
 
 - (void)emojiPanelDidBackspace:(TGEmojiPanel *)panel {
@@ -707,6 +766,7 @@ static void TGTextFieldSetSelectedRange(UITextField *tf, NSRange range) {
 	// delete what the eye sees as one character.
 	NSRange last = [text rangeOfComposedCharacterSequenceAtIndex:text.length - 1];
 	self.input.text = [text substringToIndex:last.location];
+	[self.composerText resetText:self.input.text ?: @""];
 	[self inputChanged];
 }
 

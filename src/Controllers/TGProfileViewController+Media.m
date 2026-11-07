@@ -8,6 +8,7 @@
 #import "TGProfileTrackCell.h"
 #import "TGClientInternal.h"
 #import "TGIcons.h"
+#import "TGCapabilities.h"
 
 /// The address a piece of text links to: a text link's own URL, or the first URL
 /// typed in it. Nil when it has none.
@@ -124,7 +125,7 @@ static BOOL TGKindIsStories(NSString *kind) {
 				me.mediaCounts[kind] = @(count);
 				[me reloadTableDebounced];
 			}];
-		else
+		else if (![kind isEqualToString:@"gifts"])
 			me.mediaCounts[kind] = @(safe.count);
 		if ([kind isEqualToString:@"media"] || TGKindIsStories(kind) ||
 				[kind isEqualToString:@"gifts"]){
@@ -139,10 +140,20 @@ static BOOL TGKindIsStories(NSString *kind) {
 	} else if ([kind isEqualToString:@"archive"]){
 		[[TGClient shared] archivedStoriesForChat:self.chatId completion:done];
 	} else if ([kind isEqualToString:@"gifts"]){
-		if (self.userId)
-			[[TGClient shared] giftsForUser:self.userId completion:done];
-		else
+		NSDictionary *owner = [self giftOwnerSenderId];
+		if (owner){
+			__weak typeof(self) weakProfile = self;
+			[[TGClient shared] giftsForOwner:owner offset:@"" completion:^(NSArray *gifts, NSString *nextOffset, NSInteger totalCount){
+				TGProfileViewController *me = weakProfile;
+				if (!me) return;
+				me.giftsNextOffset = nextOffset;
+				if (totalCount > 0)
+					me.mediaCounts[@"gifts"] = @(totalCount);
+				done(gifts);
+			}];
+		} else {
 			done(@[]);
+		}
 	} else if ([kind isEqualToString:@"groups"]){
 		[[TGClient shared] groupsInCommonWithUser:self.userId completion:done];
 	} else {
@@ -224,12 +235,66 @@ static const CGFloat kVideoMarkInset = TGMetricPadWide;
 	return floorf((width - kStoryGridGap * (kStoryGridCols - 1)) / kStoryGridCols);
 }
 
+- (NSDictionary *)giftOwnerSenderId {
+	if (self.userId)
+		return @{@"@type" : @"messageSenderUser", @"user_id" : @(self.userId)};
+	if (self.chatId)
+		return @{@"@type" : @"messageSenderChat", @"chat_id" : @(self.chatId)};
+	return nil;
+}
+
++ (UIImage *)collectibleBackdropWithCenterColor:(int32_t)centerColor
+									  edgeColor:(int32_t)edgeColor
+										   side:(CGFloat)side {
+	static NSCache *cache = nil;
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{
+		cache = [[NSCache alloc] init];
+	});
+	NSString *key = [NSString stringWithFormat:@"%x-%x@%g", centerColor, edgeColor, side];
+	UIImage *cached = [cache objectForKey:key];
+	if (cached)
+		return cached;
+
+	static const CGFloat kRGBDivisor = 255.0f;
+	CGFloat rC = ((centerColor >> 16) & 0xFF) / kRGBDivisor;
+	CGFloat gC = ((centerColor >> 8)  & 0xFF) / kRGBDivisor;
+	CGFloat bC = ( centerColor        & 0xFF) / kRGBDivisor;
+
+	CGFloat rE = ((edgeColor >> 16) & 0xFF) / kRGBDivisor;
+	CGFloat gE = ((edgeColor >> 8)  & 0xFF) / kRGBDivisor;
+	CGFloat bE = ( edgeColor        & 0xFF) / kRGBDivisor;
+
+	CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+	CGFloat components[8] = {
+		rC, gC, bC, 1.0f,
+		rE, gE, bE, 1.0f
+	};
+	CGFloat locations[2] = { 0.0f, 1.0f };
+	CGGradientRef gradient = CGGradientCreateWithColorComponents(colorSpace, components, locations, 2);
+
+	UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), YES, [UIScreen mainScreen].scale);
+	CGContextRef ctx = UIGraphicsGetCurrentContext();
+	CGPoint center = CGPointMake(TGHalf(side), TGHalf(side));
+	CGFloat radius = side;
+	CGContextDrawRadialGradient(ctx, gradient, center, 0, center, radius, kCGGradientDrawsAfterEndLocation);
+	UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+	UIGraphicsEndImageContext();
+
+	CGGradientRelease(gradient);
+	CGColorSpaceRelease(colorSpace);
+
+	if (image)
+		[cache setObject:image forKey:key];
+	return image;
+}
+
 /// A gift tile wears its emoji drawn large - the artwork the tab strip
-/// carries until a decodable picture exists. Like TGGiftGlyph in the main
-/// file, but sized for the grid, and the tile colour sits behind it (B5).
+/// carries until a decodable picture exists. Sized for the grid, checking
+/// canDrawEmoji so unavailable emoji do not stall the device.
 + (UIImage *)giftTileGlyph:(NSString *)emoji side:(CGFloat)side {
-	if (!emoji.length)
-		emoji = @"🎁";
+	if (!emoji.length || ![TGCapabilities canDrawEmoji:emoji])
+		return nil;
 	static NSCache *cache = nil;
 	static dispatch_once_t once;
 	dispatch_once(&once, ^{ cache = [[NSCache alloc] init]; });
@@ -249,8 +314,110 @@ static const CGFloat kVideoMarkInset = TGMetricPadWide;
 #pragma clang diagnostic pop
 	UIImage *img = UIGraphicsGetImageFromCurrentImageContext();
 	UIGraphicsEndImageContext();
-	[cache setObject:img forKey:key];
+	if (img)
+		[cache setObject:img forKey:key];
 	return img;
+}
+
+- (void)addGiftTile:(NSDictionary *)tile
+			  frame:(CGRect)frame
+			  index:(NSInteger)index
+			 toView:(UIView *)container
+			   side:(CGFloat)side {
+	BOOL isCollectible = [tile[@"isCollectible"] boolValue];
+
+	if (isCollectible) {
+		int32_t centerColor = [tile[@"backdropCenterColor"] intValue];
+		int32_t edgeColor = [tile[@"backdropEdgeColor"] intValue];
+		UIImageView *bg = [[UIImageView alloc] initWithFrame:frame];
+		bg.image = [[self class] collectibleBackdropWithCenterColor:centerColor edgeColor:edgeColor side:side];
+		bg.contentMode = UIViewContentModeScaleAspectFill;
+		bg.clipsToBounds = YES;
+		[container addSubview:bg];
+
+		UIImageView *art = [[UIImageView alloc] initWithFrame:frame];
+		art.contentMode = UIViewContentModeScaleAspectFit;
+		art.clipsToBounds = YES;
+		[container addSubview:art];
+
+		NSNumber *thumbId = tile[@"modelThumbFileId"];
+		if ([thumbId isKindOfClass:[NSNumber class]] && thumbId.integerValue > 0) {
+			__weak typeof(art) weakArt = art;
+			[[TGClient shared] downloadFile:thumbId.integerValue
+								   priority:TGDownloadPriorityOnScreen
+								 completion:^(NSString *path){
+				if (!path.length) return;
+				dispatch_async(dispatch_get_main_queue(), ^{
+					UIImage *img = [TGIcons decodedImageAtPath:path
+												   fittingSize:CGSizeMake(side, side)
+														  fill:NO
+														 scale:[UIScreen mainScreen].scale];
+					if (img && weakArt)
+						weakArt.image = img;
+				});
+			}];
+		}
+
+		UILabel *numLabel = [[UILabel alloc] initWithFrame:CGRectMake(
+				frame.origin.x, frame.origin.y + side - TGMetricLineCaption - TGMetricPadTiny,
+				side, TGMetricLineCaption)];
+		numLabel.text = [NSString stringWithFormat:@"#%ld", (long)[tile[@"number"] integerValue]];
+		numLabel.font = TGFontCaptionStrong();
+		numLabel.textColor = [[TGTheme shared] onMediaColour];
+		numLabel.textAlignment = NSTextAlignmentCenter;
+		numLabel.backgroundColor = [UIColor clearColor];
+		[container addSubview:numLabel];
+	} else {
+		UIView *bg = [[UIView alloc] initWithFrame:frame];
+		bg.backgroundColor = [[TGTheme shared] fileTileColour];
+		bg.clipsToBounds = YES;
+		[container addSubview:bg];
+
+		UIImageView *art = [[UIImageView alloc] initWithFrame:frame];
+		art.contentMode = UIViewContentModeScaleAspectFit;
+		art.clipsToBounds = YES;
+		NSString *emoji = tile[@"emoji"];
+		if (emoji.length && [TGCapabilities canDrawEmoji:emoji]) {
+			art.image = [[self class] giftTileGlyph:emoji side:side];
+		}
+		[container addSubview:art];
+
+		NSNumber *thumbId = tile[@"thumbFileId"];
+		if ([thumbId isKindOfClass:[NSNumber class]] && thumbId.integerValue > 0) {
+			__weak typeof(art) weakArt = art;
+			[[TGClient shared] downloadFile:thumbId.integerValue
+								   priority:TGDownloadPriorityOnScreen
+								 completion:^(NSString *path){
+				if (!path.length) return;
+				dispatch_async(dispatch_get_main_queue(), ^{
+					UIImage *img = [TGIcons decodedImageAtPath:path
+												   fittingSize:CGSizeMake(side, side)
+														  fill:NO
+														 scale:[UIScreen mainScreen].scale];
+					if (img && weakArt)
+						weakArt.image = img;
+				});
+			}];
+		}
+
+		UILabel *starLabel = [[UILabel alloc] initWithFrame:CGRectMake(
+				frame.origin.x, frame.origin.y + side - TGMetricLineCaption - TGMetricPadTiny,
+				side, TGMetricLineCaption)];
+		NSInteger stars = [tile[@"starCount"] integerValue];
+		starLabel.text = (stars == 1) ? @"1 Star" : [NSString stringWithFormat:@"%ld Stars", (long)stars];
+		starLabel.font = TGFontCaptionStrong();
+		starLabel.textColor = [[TGTheme shared] primaryTextColour];
+		starLabel.textAlignment = NSTextAlignmentCenter;
+		starLabel.backgroundColor = [UIColor clearColor];
+		[container addSubview:starLabel];
+	}
+
+	UIButton *tap = [UIButton buttonWithType:UIButtonTypeCustom];
+	tap.frame = frame;
+	tap.tag = 700 + index;
+	[tap addTarget:self action:@selector(giftTileTapped:)
+		  forControlEvents:UIControlEventTouchUpInside];
+	[container addSubview:tap];
 }
 
 - (CGFloat)storyGridHeight {
@@ -310,32 +477,7 @@ static const CGFloat kVideoMarkInset = TGMetricPadWide;
 		CGRect frame = CGRectMake(c * (side + kStoryGridGap), 0, side, side);
 
 		if (giftKind) {
-			NSString *emoji = tile[@"emoji"];
-			UIImageView *glyph = [[UIImageView alloc] initWithFrame:frame];
-			glyph.image = [[self class] giftTileGlyph:emoji side:side];
-			glyph.contentMode = UIViewContentModeScaleAspectFit;
-			glyph.backgroundColor = [[TGTheme shared] fileTileColour];
-			glyph.clipsToBounds = YES;
-			[cell.contentView addSubview:glyph];
-
-			NSInteger userId = [tile[@"senderUserId"] longLongValue];
-			NSString *name = [[TGClient shared] nameForUserId:userId];
-			NSString *first = [TGIcons initialsForTitle:name];
-			UIButton *face = [UIButton buttonWithType:UIButtonTypeCustom];
-			face.frame = CGRectMake(frame.origin.x + TGMetricPadSmall, TGMetricPadSmall, kStoryFace, kStoryFace);
-			face.layer.cornerRadius = TGMetricCornerCard;
-			face.layer.masksToBounds = YES;
-			face.enabled = NO;
-			[face setImage:[TGIcons avatarWithInitials:first size:kStoryFace colourId:userId]
-				  forState:UIControlStateNormal];
-			[cell.contentView addSubview:face];
-
-			UIButton *tap = [UIButton buttonWithType:UIButtonTypeCustom];
-			tap.frame = frame;
-			tap.tag = 700 + i;
-			[tap addTarget:self action:@selector(giftTileTapped:)
-				  forControlEvents:UIControlEventTouchUpInside];
-			[cell.contentView addSubview:tap];
+			[self addGiftTile:tile frame:frame index:i toView:cell.contentView side:side];
 			continue;
 		}
 
@@ -417,38 +559,7 @@ static const CGFloat kVideoMarkInset = TGMetricPadWide;
 								  side, side);
 
 		if (giftKind){
-			// Gift tiles read like the official gifts grid: the emoji is
-			// the artwork, tile colour behind it, and the sender's face
-			// rides the top-left corner. No download ride-alongs on the
-			// strip - the glyph is cached and free, and the 4S has paid
-			// enough queue time (B5).
-			NSString *emoji = tile[@"emoji"];
-			UIImageView *glyph = [[UIImageView alloc] initWithFrame:frame];
-			glyph.image = [[self class] giftTileGlyph:emoji side:side];
-			glyph.contentMode = UIViewContentModeScaleAspectFit;
-			glyph.backgroundColor = [[TGTheme shared] fileTileColour];
-			glyph.clipsToBounds = YES;
-			[cell.contentView addSubview:glyph];
-
-			NSInteger userId = [tile[@"senderUserId"] longLongValue];
-			NSString *name = [[TGClient shared] nameForUserId:userId];
-			NSString *first = [TGIcons initialsForTitle:name];
-			UIButton *face = [UIButton buttonWithType:UIButtonTypeCustom];
-			face.frame = CGRectMake(TGMetricPadSmall, TGMetricPadSmall, kStoryFace, kStoryFace);
-			face.layer.cornerRadius = TGMetricCornerCard;
-			face.layer.masksToBounds = YES;
-			face.enabled = NO;
-			[face setImage:[TGIcons avatarWithInitials:first size:kStoryFace
-											  colourId:userId]
-				  forState:UIControlStateNormal];
-			[cell.contentView addSubview:face];
-
-			UIButton *tap = [UIButton buttonWithType:UIButtonTypeCustom];
-			tap.frame = frame;
-			tap.tag = 700 + i;
-			[tap addTarget:self action:@selector(giftTileTapped:)
-				  forControlEvents:UIControlEventTouchUpInside];
-			[cell.contentView addSubview:tap];
+			[self addGiftTile:tile frame:frame index:i toView:cell.contentView side:side];
 			continue;
 		}
 
@@ -705,6 +816,36 @@ static const CGFloat kVideoMarkInset = TGMetricPadWide;
 	if (self.isLoadingMoreMedia) return;
 
 	NSString *kind = [self selectedMediaKind];
+	if ([kind isEqualToString:@"gifts"]) {
+		if (!self.giftsNextOffset.length)
+			return;
+		NSDictionary *owner = [self giftOwnerSenderId];
+		if (!owner)
+			return;
+
+		self.isLoadingMoreMedia = YES;
+		__weak typeof(self) weakProfile = self;
+		[[TGClient shared] giftsForOwner:owner offset:self.giftsNextOffset completion:^(NSArray *more, NSString *nextOffset, NSInteger totalCount){
+			dispatch_async(dispatch_get_main_queue(), ^{
+				TGProfileViewController *me = weakProfile;
+				if (!me) return;
+				me.isLoadingMoreMedia = NO;
+				me.giftsNextOffset = nextOffset;
+				if (totalCount > 0)
+					me.mediaCounts[@"gifts"] = @(totalCount);
+				if (more.count) {
+					NSMutableArray *combined = [NSMutableArray arrayWithArray:me.gifts ?: @[]];
+					[combined addObjectsFromArray:more];
+					me.gifts = combined;
+					me.storyGridCellCache = nil;
+					me.mediaGridCacheContent = nil;
+					[me reloadTableDebounced];
+				}
+			});
+		}];
+		return;
+	}
+
 	NSString *filter = nil;
 	NSArray *currentList = nil;
 

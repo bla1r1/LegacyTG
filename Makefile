@@ -238,6 +238,8 @@ APP_SRC_M := \
 	src/Core/TGMessageContentInteractive.m \
 	src/Core/TGMessageCard.m \
 	src/Core/TGLiveLocation.m \
+	src/Core/TGComposerText.m \
+	src/Core/TGGiftFlatten.m \
 	src/Core/TGPinnedLine.m \
 	src/Core/TGCustomEmojiStore.m \
 	src/Core/TGMediaStore.m \
