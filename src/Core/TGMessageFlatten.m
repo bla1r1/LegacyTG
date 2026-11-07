@@ -798,11 +798,26 @@ NSDictionary *TGFlattenMessage(NSDictionary *m) {
 	NSDictionary *replyTo = m[@"reply_to"];
 	NSNumber *replyId = nil;
 	NSString *replyText = nil;
+	NSArray *quoteEntities = nil;
 	if ([replyTo[@"@type"] isEqualToString:@"messageReplyToMessage"]){
 		replyId = replyTo[@"message_id"];
 		// Newer TDLib carries the quoted text inline; otherwise the chat view
 		// fetches the original by id.
-		replyText = replyTo[@"quote"][@"text"][@"text"] ?: replyTo[@"quote"][@"text"];
+		id quoteObj = replyTo[@"quote"];
+		if ([quoteObj isKindOfClass:[NSDictionary class]]){
+			id quoteTextObj = quoteObj[@"text"];
+			if ([quoteTextObj isKindOfClass:[NSDictionary class]]){
+				replyText = quoteTextObj[@"text"];
+				if ([quoteTextObj[@"entities"] isKindOfClass:[NSArray class]]){
+					quoteEntities = quoteTextObj[@"entities"];
+				}
+			} else if ([quoteTextObj isKindOfClass:[NSString class]]){
+				replyText = quoteTextObj;
+				if ([quoteObj[@"entities"] isKindOfClass:[NSArray class]]){
+					quoteEntities = quoteObj[@"entities"];
+				}
+			}
+		}
 	}
 
 	NSString *forwardFrom = nil;
@@ -873,8 +888,9 @@ NSDictionary *TGFlattenMessage(NSDictionary *m) {
 		@"id"        : m[@"id"] ?: @(0),
 		@"caption"   : caption    ?: @"",
 		@"text"      : text,
-		@"replyId"   : replyId    ?: [NSNull null],
-		@"replyText" : replyText  ?: @"",
+		@"replyId"       : replyId    ?: [NSNull null],
+		@"replyText"     : replyText  ?: @"",
+		@"quoteEntities" : quoteEntities ?: @[],
 		@"forward"   : forwardFrom ?: @"",
 		@"edited"    : @([m[@"edit_date"] doubleValue] > 0),
 		@"kind"      : ctype ?: @"",

@@ -2,7 +2,9 @@
 // TGMemberCell.m - the picture inset and the name beside it.
 //
 #import "TGMemberCell.h"
+#import "TGNameWithStatus.h"
 #import "TGStyle.h"
+#import "TGTheme.h"
 #import "TGIcons.h"
 #import "TGMemberAvatarStore.h"
 #import "TGBadge.h"
@@ -52,7 +54,16 @@ static const CGFloat kMemberBadgeGap = TGMetricPadSmall;
 		 status:(NSString *)status
 			tag:(NSString *)tag
 		inTable:(UITableView *)tableView {
-	self.textLabel.text = name ?: @"";
+	[self setName:name userId:userId status:status tag:tag statusEmojiId:0 inTable:tableView];
+}
+
+- (void)setName:(NSString *)name
+		 userId:(int64_t)userId
+		 status:(NSString *)status
+			tag:(NSString *)tag
+  statusEmojiId:(int64_t)statusEmojiId
+		inTable:(UITableView *)tableView {
+	self.textLabel.attributedText = TGNameWithStatus(name ?: @"", statusEmojiId, self.textLabel.font ?: TGFontBody(), self.textLabel.textColor ?: [[TGTheme shared] primaryTextColour]);
 	[self setRole:status tag:tag];
 
 	CGSize side = CGSizeMake(TGMetricListAvatar, TGMetricListAvatar);

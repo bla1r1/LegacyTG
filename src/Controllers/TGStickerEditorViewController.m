@@ -135,7 +135,7 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
 	UITableViewCell *cell = [self cellForTable:tableView];
-	cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+	cell.accessoryType = UITableViewCellAccessoryNone;
 
 	if (self.creating){
 		switch (indexPath.row){
@@ -170,6 +170,7 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 				cell.detailTextLabel.text = self.setName.length ? self.setName
 						: (self.loadedName.length ? self.loadedName : @"-");
 				cell.accessoryType = UITableViewCellAccessoryNone;
+				cell.selectionStyle = UITableViewCellSelectionStyleNone;
 				break;
 			case 1:
 				cell.textLabel.text = @"Title";
@@ -185,12 +186,14 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 						 [self.stickerType isEqualToString:@"mask"]
 						 ? @"Masks" : @"Regular stickers");
 				cell.accessoryType = UITableViewCellAccessoryNone;
+				cell.selectionStyle = UITableViewCellSelectionStyleNone;
 				break;
 			case 3:
 				cell.textLabel.text = @"Stickers";
 				cell.detailTextLabel.text = [NSString stringWithFormat:@"%lu",
 						(unsigned long)self.stickers.count];
 				cell.accessoryType = UITableViewCellAccessoryNone;
+				cell.selectionStyle = UITableViewCellSelectionStyleNone;
 				break;
 			case 4:
 				cell.textLabel.text = @"Rename Pack";
@@ -234,6 +237,9 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 #pragma mark - choosing rows
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
+	if (!self.creating && indexPath.section == 0 &&
+		(indexPath.row == 0 || indexPath.row == 2 || indexPath.row == 3))
+		return;
 	[tableView deselectRowAtIndexPath:indexPath animated:YES];
 
 	if (self.creating){

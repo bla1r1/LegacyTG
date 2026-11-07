@@ -119,13 +119,13 @@ static NSArray *TGCustomResultRows(NSString *result) {
 			([TGClient shared].authState != TGAuthStateReady) ? TGIconRow(@"Log in to Telegram", @"privacy", TGIconTileAzure(), ^{
 				[[AppDelegate sharedDelegate] showLoginUI];
 			}) : TGIconRow(@"Accounts", @"select", TGIconTileAzure(), ^{ [weakSelf showAccountChoices]; }),
-			TGIconRow(@"My Profile", @"contacts", TGIconTileSky(), ^{
+			TGIconOpenRow(@"My Profile", @"contacts", TGIconTileSky(), ^{
 				[weakSelf openMyProfile];
 			}),
 			// Official keeps this in the top edit block, not in dev: it is a
 			// profile action for a Premium account, and Telegram answers the
 			// refusal itself for an account that is not Premium.
-			TGIconRow(@"Emoji Status", @"star", TGIconTileGold(), ^{
+			TGIconOpenRow(@"Emoji Status", @"star", TGIconTileGold(), ^{
 				TGEmojiStatusViewController *status =
 						[[TGEmojiStatusViewController alloc] init];
 				status.target = TGEmojiStatusTargetSelf;
@@ -139,23 +139,23 @@ static NSArray *TGCustomResultRows(NSString *result) {
 		// The chats and the devices they live on. Telegram keeps these above
 		// the settings that change how the app looks and sounds.
 		TGSection(nil, nil, @[
-			TGIconRow(@"Saved Messages", @"folder", TGIconTileSky(), ^{
+			TGIconOpenRow(@"Saved Messages", @"folder", TGIconTileSky(), ^{
 				[weakSelf openSavedMessages];
 			}),
-			TGIconRow(@"Recent Calls", @"call", TGIconTileGreen(), ^{
+			TGIconOpenRow(@"Recent Calls", @"call", TGIconTileGreen(), ^{
 				[weakSelf openPage:TGSettingsPageRecentCalls];
 			}),
-			TGIconTapRow(@"Devices", devicesDetail, @"devices", TGIconTileAmber(), ^{
+			TGIconTapOpenRow(@"Devices", devicesDetail, @"devices", TGIconTileAmber(), ^{
 				TGSessionsViewController *sessions = [[TGSessionsViewController alloc] init];
 				sessions.hidesBottomBarWhenPushed = YES;
 				[weakSelf.navigationController pushViewController:sessions animated:YES];
 			}),
-			TGIconTapRow(@"Chat Folders", foldersDetail, @"folder", TGIconTileCyan(), ^{
+			TGIconTapOpenRow(@"Chat Folders", foldersDetail, @"folder", TGIconTileCyan(), ^{
 				[weakSelf openPage:TGSettingsPageFolders];
 			}),
 			// The official manager is the profile: Stories and Archive tabs on one
 			// screen, instead of a menu of screens.
-			TGIconRow(@"My Stories", @"notifications", TGIconTileRed(), ^{
+			TGIconOpenRow(@"My Stories", @"notifications", TGIconTileRed(), ^{
 				[weakSelf openMyProfileOnTab:@"stories"];
 			}),
 		]),
@@ -163,28 +163,28 @@ static NSArray *TGCustomResultRows(NSString *result) {
 		// Official keeps Proxy in its own section above the app settings, not
 		// mixed into the chat and device rows.
 		TGSection(nil, nil, @[
-			TGIconTapRow(@"Proxy", proxyDetail, @"data", TGIconTileGrey(), ^{
+			TGIconTapOpenRow(@"Proxy", proxyDetail, @"data", TGIconTileGrey(), ^{
 				[weakSelf openPage:TGSettingsPageProxy];
 			}),
 		]),
 
 		TGSection(nil, nil, @[
-			TGIconRow(@"Notifications and Sounds", @"notifications", TGIconTileRed(), ^{
+			TGIconOpenRow(@"Notifications and Sounds", @"notifications", TGIconTileRed(), ^{
 				[weakSelf openPage:TGSettingsPageNotifications];
 			}),
-			TGIconRow(@"Privacy and Security", @"privacy", TGIconTileGrey(), ^{
+			TGIconOpenRow(@"Privacy and Security", @"privacy", TGIconTileGrey(), ^{
 				[weakSelf openPage:TGSettingsPagePrivacy];
 			}),
-			TGIconTapRow(@"Data and Storage", cacheDetail, @"data", TGIconTileGreen(), ^{
+			TGIconTapOpenRow(@"Data and Storage", cacheDetail, @"data", TGIconTileGreen(), ^{
 				[weakSelf openPage:TGSettingsPageData];
 			}),
-			TGIconRow(@"Appearance", @"chat", TGIconTileSky(), ^{
+			TGIconOpenRow(@"Appearance", @"chat", TGIconTileSky(), ^{
 				[weakSelf openPage:TGSettingsPageAppearance];
 			}),
-			TGIconRow(@"Power Saving", @"battery", TGIconTileAmber(), ^{
+			TGIconOpenRow(@"Power Saving", @"battery", TGIconTileAmber(), ^{
 				[weakSelf openPage:TGSettingsPagePowerSaving];
 			}),
-			TGIconTapRow(@"Language", languageDetail, @"language", TGIconTileViolet(), ^{
+			TGIconTapOpenRow(@"Language", languageDetail, @"language", TGIconTileViolet(), ^{
 				[weakSelf openPage:TGSettingsPageLanguage];
 			}),
 		]),
@@ -192,7 +192,7 @@ static NSArray *TGCustomResultRows(NSString *result) {
 		// Stickers and the chat look are a pair in Telegram's list, so they
 		// are one card here rather than one row in a card of settings.
 		TGSection(nil, nil, @[
-			TGIconRow(@"Stickers and Emoji", @"star", TGIconTileViolet(), ^{
+			TGIconOpenRow(@"Stickers and Emoji", @"star", TGIconTileViolet(), ^{
 				TGStickerPacksViewController *packs =
 						[[TGStickerPacksViewController alloc] init];
 				packs.hidesBottomBarWhenPushed = YES;
@@ -211,7 +211,7 @@ static NSArray *TGCustomResultRows(NSString *result) {
 		// Out. Every row here existed before; they were mixed in with the
 		// account rows and read as settings rather than support.
 		TGSection(@"Help", nil, @[
-			TGIconRow(@"Ask a Question", @"chat", TGIconTileAmber(), ^{
+			TGIconOpenRow(@"Ask a Question", @"chat", TGIconTileAmber(), ^{
 				[weakSelf openSupport];
 			}),
 			TGIconRow(@"Telegram FAQ", @"faq", TGIconTileCyan(), ^{
@@ -238,7 +238,7 @@ static NSArray *TGCustomResultRows(NSString *result) {
 			// This Device is the one row official has no equivalent for: it
 			// explains every button this hardware cannot show. Keep it at the
 			// end, with Log out, rather than among the account settings.
-			TGIconTapRow(@"This Device", [TGDevice tierName], @"devices", TGIconTileSlate(), ^{
+			TGIconTapOpenRow(@"This Device", [TGDevice tierName], @"devices", TGIconTileSlate(), ^{
 				TGDeviceViewController *device = [[TGDeviceViewController alloc] init];
 				device.hidesBottomBarWhenPushed = YES;
 				[weakSelf.navigationController pushViewController:device animated:YES];
@@ -785,7 +785,7 @@ static NSString *TGCallDebugText(NSDictionary *call) {
 						[done componentsJoinedByString:@", "]];
 		}
 
-		NSMutableDictionary *row = [TGSubtitleRow(call[@"name"], detail, ^{
+		NSMutableDictionary *row = [TGSubtitleOpenRow(call[@"name"], detail, ^{
 			int64_t userId = [call[@"userId"] longLongValue];
 			if (userId) {
 				[TGCallViewController presentForUserId:userId name:call[@"name"] outgoing:YES];
@@ -1191,13 +1191,13 @@ static NSString *TGOrderLines(NSDictionary *order) {
 
 		TGSection(@"Consoles",
 				  @"Screens that send one request and show the answer.", @[
-			TGTapRow(@"Language Packs", @"Read and write strings, custom packs", ^{
+			TGOpenRow(@"Language Packs", @"Read and write strings, custom packs", ^{
 				[weakSelf openPage:TGSettingsPageLanguageDev];
 			}),
-			TGTapRow(@"Invoice Tools", @"Card lookup, offers, order validation", ^{
+			TGOpenRow(@"Invoice Tools", @"Card lookup, offers, order validation", ^{
 				[weakSelf openPage:TGSettingsPagePaymentDev];
 			}),
-			TGTapRow(@"Stories Menu", @"Stealth, public stories, live, exceptions", ^{
+			TGOpenRow(@"Stories Menu", @"Stealth, public stories, live, exceptions", ^{
 				TGStoriesMenuViewController *stories = [[TGStoriesMenuViewController alloc]
 						initWithChatId:[[TGClient shared] savedMessagesChatId] title:@"Your Story"];
 				stories.hidesBottomBarWhenPushed = YES;
@@ -1211,7 +1211,7 @@ static NSString *TGOrderLines(NSDictionary *order) {
 			// The component gallery is a development surface, not a setting.
 			// It sat in Appearance next to the theme picker, where a user had
 			// no reason to open it.
-			TGTapRow(@"UI Component Gallery", @"Every control and state", ^{
+			TGOpenRow(@"UI Component Gallery", @"Every control and state", ^{
 				TGGalleryViewController *gallery = [[TGGalleryViewController alloc] init];
 				gallery.hidesBottomBarWhenPushed = YES;
 				[weakSelf.navigationController pushViewController:gallery animated:YES];
@@ -1223,7 +1223,7 @@ static NSString *TGOrderLines(NSDictionary *order) {
 		TGSection(@"Capabilities",
 				  @"What this device is allowed to do, and what it is waiting "
 				  @"for when it is not.", @[
-			TGTapRow(@"Device Capabilities", nil, ^{
+			TGOpenRow(@"Device Capabilities", nil, ^{
 				TGDeviceViewController *device = [[TGDeviceViewController alloc] init];
 				device.hidesBottomBarWhenPushed = YES;
 				[weakSelf.navigationController pushViewController:device animated:YES];
@@ -1238,42 +1238,42 @@ static NSString *TGOrderLines(NSDictionary *order) {
 				  @"Surfaces for the calls a user account really can make: "
 				  @"advertisements, TDLib's environment, owned bots and the "
 				  @"read-only Premium and gift records.", @[
-			TGTapRow(@"Support Info", @"Staff tools and user diagnostic dump", ^{
+			TGOpenRow(@"Support Info", @"Staff tools and user diagnostic dump", ^{
 				TGSupportInfoViewController *support =
 						[[TGSupportInfoViewController alloc] init];
 				support.hidesBottomBarWhenPushed = YES;
 				[weakSelf.navigationController pushViewController:support animated:YES];
 			}),
-			TGTapRow(@"Sponsored Messages", @"Channel, search and video ads", ^{
+			TGOpenRow(@"Sponsored Messages", @"Channel, search and video ads", ^{
 				TGSponsoredMessagesViewController *ads =
 						[[TGSponsoredMessagesViewController alloc] init];
 				ads.hidesBottomBarWhenPushed = YES;
 				[weakSelf.navigationController pushViewController:ads animated:YES];
 			}),
-			TGTapRow(@"TDLib Environment", @"JSON, log, weather and time zones", ^{
+			TGOpenRow(@"TDLib Environment", @"JSON, log, weather and time zones", ^{
 				TGEnvironmentViewController *environment =
 						[[TGEnvironmentViewController alloc] init];
 				environment.hidesBottomBarWhenPushed = YES;
 				[weakSelf.navigationController pushViewController:environment animated:YES];
 			}),
-			TGTapRow(@"Bot Console", @"Bots this account owns and its inline bots", ^{
+			TGOpenRow(@"Bot Console", @"Bots this account owns and its inline bots", ^{
 				TGBotConsoleViewController *bots = [[TGBotConsoleViewController alloc] init];
 				bots.hidesBottomBarWhenPushed = YES;
 				[weakSelf.navigationController pushViewController:bots animated:YES];
 			}),
-			TGTapRow(@"TDLib Test Harness", @"The twelve td_api test calls", ^{
+			TGOpenRow(@"TDLib Test Harness", @"The twelve td_api test calls", ^{
 				TGTestHarnessViewController *harness =
 						[[TGTestHarnessViewController alloc] init];
 				harness.hidesBottomBarWhenPushed = YES;
 				[weakSelf.navigationController pushViewController:harness animated:YES];
 			}),
-			TGTapRow(@"Affiliate Programs", @"Catalogue, connections and channel links", ^{
+			TGOpenRow(@"Affiliate Programs", @"Catalogue, connections and channel links", ^{
 				TGAffiliateProgramsViewController *affiliate =
 						[[TGAffiliateProgramsViewController alloc] init];
 				affiliate.hidesBottomBarWhenPushed = YES;
 				[weakSelf.navigationController pushViewController:affiliate animated:YES];
 			}),
-			TGTapRow(@"Premium, Stars and Gifts", @"Read-only", ^{
+			TGOpenRow(@"Premium, Stars and Gifts", @"Read-only", ^{
 				TGStarsGiftsViewController *stars = [[TGStarsGiftsViewController alloc] init];
 				stars.hidesBottomBarWhenPushed = YES;
 				[weakSelf.navigationController pushViewController:stars animated:YES];
@@ -1844,7 +1844,7 @@ static NSString *TGOrderLines(NSDictionary *order) {
 			TGTapRow(@"Clear Temporary Files", nil, ^{
 				[weakSelf clearTemporaryFiles];
 			}),
-			TGTapRow(@"Storage Usage", nil, ^{
+			TGOpenRow(@"Storage Usage", nil, ^{
 				TGStorageViewController *storage = [[TGStorageViewController alloc] init];
 				storage.hidesBottomBarWhenPushed = YES;
 				[weakSelf.navigationController pushViewController:storage animated:YES];

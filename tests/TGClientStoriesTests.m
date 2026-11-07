@@ -226,6 +226,41 @@ static NSDictionary *albumAnswer(long long albumId) {
 	XCTAssertTrue([story[@"isPostedToChatPage"] boolValue]);
 }
 
+- (void)testStoryById_FlattensCaptionEntities {
+	TGClient *c = StoriesClient();
+	__block NSDictionary *story = nil;
+	[c story:5 fromChat:-71 completion:^(NSDictionary *got){ story = got; }];
+	NSArray *entities = @[@{
+		@"@type"  : @"textEntity",
+		@"offset" : @0,
+		@"length" : @2,
+		@"type"   : @{@"@type" : @"textEntityTypeCustomEmoji", @"custom_emoji_id" : @"88"},
+	}];
+	NSMutableDictionary *answer = [storyPhotoAnswer(5, -71) mutableCopy];
+	answer[@"caption"] = @{@"text" : @"A caption", @"entities" : entities};
+	replyStoryRequest(c, @"getStory", answer);
+	XCTAssertEqualObjects(story[@"caption"], @"A caption");
+	XCTAssertEqualObjects(story[@"captionEntities"], entities);
+}
+
+- (void)testFlattenStory_KeepsCaptionEntities {
+	NSArray *entities = @[@{
+		@"@type"  : @"textEntity",
+		@"offset" : @0,
+		@"length" : @4,
+		@"type"   : @{@"@type" : @"textEntityTypeCustomEmoji", @"custom_emoji_id" : @"77"},
+	}];
+	NSDictionary *raw = @{
+		@"id"      : @(12),
+		@"date"    : @(1700000000),
+		@"caption" : @{@"text" : @"Nice photo", @"entities" : entities},
+		@"content" : @{@"@type" : @"storyContentPhoto", @"photo" : @{@"sizes" : @[]}},
+	};
+	NSDictionary *flat = TGFlattenStory(raw);
+	XCTAssertEqualObjects(flat[@"caption"], @"Nice photo");
+	XCTAssertEqualObjects(flat[@"captionEntities"], entities);
+}
+
 #pragma mark - viewing
 
 - (void)testOpenStory_SendsBothIds {

@@ -106,16 +106,16 @@ static NSString *const kChannelPresetKey = @"TGDefaultChannelAdminRights";
 	cell.textLabel.text = path.section == 0 ? @"Group Preset" : @"Channel Preset";
 	NSString *key = path.section == 0 ? kGroupPresetKey : kChannelPresetKey;
 	cell.detailTextLabel.text = [self labelForPreset:[self savedPresetForKey:key]];
-	cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+	cell.accessoryType = UITableViewCellAccessoryNone;
 	cell.selectionStyle = self.busy ? UITableViewCellSelectionStyleNone
 									: UITableViewCellSelectionStyleBlue;
 	return cell;
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)path {
-	[tableView deselectRowAtIndexPath:path animated:YES];
 	if (self.busy)
 		return;
+	[tableView deselectRowAtIndexPath:path animated:YES];
 	BOOL channel = path.section == 1;
 	NSArray *presets = @[@"readonly", @"standard", @"posting", @"full"];
 	NSArray *titles = @[@"Read-only", @"Standard", @"Posting", @"Full"];

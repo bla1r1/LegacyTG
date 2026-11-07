@@ -17,7 +17,7 @@
 
 - (NSDictionary *)tier2BusinessRow {
 	__weak typeof(self) weakSelf = self;
-	return TGIconRow(@"Telegram Business", @"briefcase", TGIconTileAzure(), ^{
+	return TGIconOpenRow(@"Telegram Business", @"briefcase", TGIconTileAzure(), ^{
 		TGBusinessViewController *business = [[TGBusinessViewController alloc] init];
 		business.hidesBottomBarWhenPushed = YES;
 		[weakSelf.navigationController pushViewController:business animated:YES];
@@ -27,7 +27,7 @@
 #if TG_DEV
 - (NSDictionary *)tier2ProxyCarrierRow {
 	__weak typeof(self) weakSelf = self;
-	return TGIconTapRow(@"Web Proxy Carrier",
+	return TGIconTapOpenRow(@"Web Proxy Carrier",
 			@"Carrier messages and errors",
 			@"data", TGIconTileSlate(), ^{
 		TGWebProxyCarrierViewController *carrier =
@@ -39,7 +39,7 @@
 
 - (NSDictionary *)tier2ToolsRow {
 	__weak typeof(self) weakSelf = self;
-	return TGIconRow(@"Communities and Replies", @"folder", TGIconTileViolet(), ^{
+	return TGIconOpenRow(@"Communities and Replies", @"folder", TGIconTileViolet(), ^{
 		TGTier2HubViewController *screen = [[TGTier2HubViewController alloc] init];
 		screen.hidesBottomBarWhenPushed = YES;
 		[weakSelf.navigationController pushViewController:screen animated:YES];

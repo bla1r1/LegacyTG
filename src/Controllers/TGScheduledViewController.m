@@ -157,14 +157,14 @@
 	cell.detailTextLabel.textColor = [theme secondaryTextColour];
 	cell.detailTextLabel.backgroundColor = [theme listBackgroundColour];
 
-	cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+	cell.accessoryType = UITableViewCellAccessoryNone;
 	return cell;
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
 	if (indexPath.row >= (NSInteger)self.messages.count)
 		return;
+	[tableView deselectRowAtIndexPath:indexPath animated:YES];
 
 	NSDictionary *m = self.messages[indexPath.row];
 	int64_t messageId = [m[@"id"] longLongValue];

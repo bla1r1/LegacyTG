@@ -146,7 +146,7 @@
 			cell.textLabel.text = @"Username";
 			cell.detailTextLabel.text = self.editable.length
 					? [@"@" stringByAppendingString:self.editable] : @"None";
-			cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+			cell.accessoryType = UITableViewCellAccessoryNone;
 		} else {
 			cell.textLabel.text = @"Remove Username";
 			cell.textLabel.textColor = [theme destructiveColour];
@@ -260,9 +260,9 @@
 #pragma mark - choosing
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)path {
-	[tableView deselectRowAtIndexPath:path animated:YES];
 	if (path.section != 0)
 		return;
+	[tableView deselectRowAtIndexPath:path animated:YES];
 	if (path.row == 1){
 		[self removeUsername];
 		return;

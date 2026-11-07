@@ -63,7 +63,7 @@ static NSString *TGDefaultBackgroundDetail(NSDictionary *state) {
 					[NSString stringWithFormat:@"%.0f pt", theme.messageFontSize],
 					@"chat", TGIconTileSky(),
 					^{ [weakSelf chooseTextSize]; }),
-			TGIconTapRow(@"Chat Background",
+			TGIconTapOpenRow(@"Chat Background",
 					[theme wallpaperTitleForType:theme.wallpaperType],
 					@"data", TGIconTileGreen(), ^{
 				TGSettingsViewController *wp = [[TGSettingsViewController alloc] init];
@@ -95,7 +95,7 @@ static NSString *TGDefaultBackgroundDetail(NSDictionary *state) {
 				  @"profile photo with these colours. They are stored on the "
 				  @"account, not in this app's theme.",
 				  @[
-			TGIconTapRow(@"Your Color", @"Name and profile colour",
+			TGIconTapOpenRow(@"Your Color", @"Name and profile colour",
 					@"star", TGIconTilePurple(), ^{
 				TGProfileAppearanceViewController *colours =
 						[[TGProfileAppearanceViewController alloc] init];
@@ -108,7 +108,7 @@ static NSString *TGDefaultBackgroundDetail(NSDictionary *state) {
 				  @"Telegram keeps chat backgrounds on the account. The list "
 				  @"here is the one Telegram installed, and the catalogue is "
 				  @"searched on its server.", @[
-			TGIconTapRow(@"Chat Backgrounds", @"Installed, search, default",
+			TGIconTapOpenRow(@"Chat Backgrounds", @"Installed, search, default",
 					@"data", TGIconTileGreen(), ^{
 				TGBackgroundsViewController *backgrounds =
 						[[TGBackgroundsViewController alloc] init];
@@ -147,7 +147,7 @@ static NSString *TGDefaultBackgroundDetail(NSDictionary *state) {
 	];
 
 	NSMutableArray *customRows = [NSMutableArray array];
-	[customRows addObject:TGTapRow(@"Choose from Photo Library", (current == TGWallpaperTypeCustom ? @"Active" : nil), ^{
+	[customRows addObject:TGOpenRow(@"Choose from Photo Library", (current == TGWallpaperTypeCustom ? @"Active" : nil), ^{
 		[weakSelf presentWallpaperPicker];
 	})];
 	if (current != TGWallpaperTypeNone) {

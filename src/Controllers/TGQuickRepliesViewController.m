@@ -81,7 +81,7 @@
 				[weakSelf sendShortcut:shortcutId name:name];
 			})];
 		} else {
-			[rows addObject:TGTier2Row(name, detail, ^{
+			[rows addObject:TGTier2OpenRow(name, detail, ^{
 				TGQuickReplyMessagesViewController *screen =
 						[[TGQuickReplyMessagesViewController alloc]
 								initWithShortcutId:shortcutId name:name];

@@ -18,6 +18,27 @@
 // for every other one.
 #import "TGVideoNoteRecorder.h"
 
+@interface TGComposerInputField : UITextField
+@property (nonatomic, copy) void (^onLayout)(void);
+@end
+
+@implementation TGComposerInputField {
+	BOOL _inLayout;
+}
+
+- (void)layoutSubviews {
+	[super layoutSubviews];
+	if (_inLayout)
+		return;
+	_inLayout = YES;
+	if (self.onLayout) {
+		self.onLayout();
+	}
+	_inLayout = NO;
+}
+
+@end
+
 @implementation TGChatViewController (Input)
 
 - (void)buildInputBar:(CGRect)b {
@@ -50,23 +71,30 @@
 	[self.inputBar addSubview:attach];
 
 	CGFloat fieldH = kInputHeight - TGDoubled(kFieldInsetV);
-	self.input = [[UITextField alloc] initWithFrame:
+	TGComposerInputField *field = [[TGComposerInputField alloc] initWithFrame:
 			CGRectMake(kFieldLeft, kFieldInsetV, b.size.width - kFieldRoom, fieldH)];
-	self.input.borderStyle = UITextBorderStyleNone;
-	self.input.background = [TGTheme skeuomorphicWellImageWithHeight:fieldH cornerRadius:TGHalf(fieldH)];
-	self.input.backgroundColor = [UIColor clearColor];
-	self.input.layer.borderWidth = 0.0f;
-	self.input.layer.shouldRasterize = YES;
-	self.input.layer.rasterizationScale = scale;
-	self.input.leftView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, kFieldLeftPad,
+	field.borderStyle = UITextBorderStyleNone;
+	field.background = [TGTheme skeuomorphicWellImageWithHeight:fieldH cornerRadius:TGHalf(fieldH)];
+	field.backgroundColor = [UIColor clearColor];
+	field.layer.borderWidth = 0.0f;
+	field.layer.shouldRasterize = YES;
+	field.layer.rasterizationScale = scale;
+	field.leftView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, kFieldLeftPad,
 			TGMetricBorderWidth)];
-	self.input.leftViewMode = UITextFieldViewModeAlways;
-	self.input.placeholder = @"Message";
-	self.input.textColor = [[TGTheme shared] primaryTextColour];
-	self.input.font = TGFontBody();
-	self.input.returnKeyType = UIReturnKeySend;
-	self.input.delegate = self;
-	self.input.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+	field.leftViewMode = UITextFieldViewModeAlways;
+	field.placeholder = @"Message";
+	field.textColor = [[TGTheme shared] primaryTextColour];
+	field.font = TGFontBody();
+	field.returnKeyType = UIReturnKeySend;
+	field.delegate = self;
+	field.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+	field.clipsToBounds = YES;
+	__weak typeof(self) weakSelf = self;
+	field.onLayout = ^{
+		[weakSelf refreshComposerEmojiOverlay];
+	};
+	self.input = field;
+	self.composerEmojiViews = [NSMutableArray array];
 	self.composerText = [[TGComposerText alloc] initWithText:@"" entities:@[]];
 	[self.inputBar addSubview:self.input];
 
@@ -128,7 +156,14 @@
 			boolForKey:kRecordVideoModeKey];
 	[self updateRecordModeIcon];
 
+	[[NSNotificationCenter defaultCenter] addObserver:self
+											 selector:@selector(composerCustomEmojiLoaded:)
+												 name:TGCustomEmojiLoadedNotification
+											   object:nil];
+
 	[self.input addTarget:self action:@selector(inputChanged)
+		 forControlEvents:UIControlEventEditingChanged];
+	[self.input addTarget:self action:@selector(composerEditingChanged)
 		 forControlEvents:UIControlEventEditingChanged];
 	[self inputChanged];
 
@@ -219,6 +254,7 @@ static NSString *TGFirstLinkIn(NSString *text) {
 	self.previewedLink = nil;
 	[self hideComposeBannerAnimated];
 	[self inputChanged];
+	[self refreshComposerEmojiOverlay];
 }
 
 /// The strip drops back behind the composer instead of blinking out. A banner
@@ -329,6 +365,7 @@ static const NSInteger kBannerSubtitleTag = 72;
 	self.composeBanner.hidden = NO;
 	self.composeBannerShows++;
 	[self layoutChrome];
+	[self refreshComposerEmojiOverlay];
 	// Slide up from behind the composer. The strip sits below the bar in the
 	// view order, so a downward translation hides it fully while it travels.
 	// The frame is placed first, while it is untransformed.
@@ -383,6 +420,7 @@ static void TGTextFieldSetSelectedRange(UITextField *tf, NSRange range) {
 	self.input.text = [text stringByReplacingCharactersInRange:NSMakeRange(index, 0) withString:fallback];
 	TGTextFieldSetSelectedRange(self.input, NSMakeRange(index + fallback.length, 0));
 	[self inputChanged];
+	[self refreshComposerEmojiOverlay];
 }
 
 - (void)sendTapped {
@@ -474,6 +512,7 @@ static void TGTextFieldSetSelectedRange(UITextField *tf, NSRange range) {
 	}
 	[self.composerText resetText:self.input.text ?: @""];
 	[self inputChanged];
+	[self refreshComposerEmojiOverlay];
 }
 
 /// Holding Send when there is text offers what a send can wait for. With an
@@ -640,6 +679,10 @@ static void TGTextFieldSetSelectedRange(UITextField *tf, NSRange range) {
 			[self.composerText resetText:self.input.text ?: @""];
 		}
 		[self.composerText replaceCharactersInRange:range withString:string];
+		__weak typeof(self) weakSelf = self;
+		dispatch_async(dispatch_get_main_queue(), ^{
+			[weakSelf refreshComposerEmojiOverlay];
+		});
 	}
 	return YES;
 }
@@ -647,6 +690,10 @@ static void TGTextFieldSetSelectedRange(UITextField *tf, NSRange range) {
 - (BOOL)textFieldShouldClear:(UITextField *)textField {
 	if (textField == self.input) {
 		self.composerText = [[TGComposerText alloc] initWithText:@"" entities:@[]];
+		__weak typeof(self) weakSelf = self;
+		dispatch_async(dispatch_get_main_queue(), ^{
+			[weakSelf refreshComposerEmojiOverlay];
+		});
 	}
 	return YES;
 }
@@ -752,6 +799,7 @@ static void TGTextFieldSetSelectedRange(UITextField *tf, NSRange range) {
 	self.input.text = [(self.input.text ?: @"") stringByAppendingString:emoji];
 	[self.composerText resetText:self.input.text ?: @""];
 	[self inputChanged];
+	[self refreshComposerEmojiOverlay];
 }
 
 - (void)emojiPanel:(TGEmojiPanel *)panel didPickCustomEmoji:(int64_t)emojiId fallback:(NSString *)emoji {
@@ -768,6 +816,7 @@ static void TGTextFieldSetSelectedRange(UITextField *tf, NSRange range) {
 	self.input.text = [text substringToIndex:last.location];
 	[self.composerText resetText:self.input.text ?: @""];
 	[self inputChanged];
+	[self refreshComposerEmojiOverlay];
 }
 
 - (void)emojiPanel:(TGEmojiPanel *)panel didPickSticker:(NSDictionary *)sticker {
@@ -883,7 +932,184 @@ static void TGTextFieldSetSelectedRange(UITextField *tf, NSRange range) {
 		[self layoutChrome];
 	} completion:^(BOOL done){
 		[self scrollToBottomAnimated:NO];
+		[self refreshComposerEmojiOverlay];
 	}];
+}
+
+#pragma mark - custom emoji overlay
+
+- (void)composerEditingChanged {
+	[self refreshComposerEmojiOverlay];
+}
+
+- (void)composerCustomEmojiLoaded:(NSNotification *)note {
+	if (self.composerText.customEmoji.count > 0) {
+		[self refreshComposerEmojiOverlay];
+	}
+}
+
+- (void)refreshComposerEmojiOverlay {
+	if (!self.input)
+		return;
+
+	NSString *plainText = self.input.text ?: @"";
+	if (self.composerText && ![self.composerText.text isEqualToString:plainText]) {
+		[self.composerText resetText:plainText];
+	}
+
+	NSArray *customEmoji = self.composerText.customEmoji;
+	if (customEmoji.count == 0) {
+		for (UIImageView *view in self.composerEmojiViews) {
+			view.hidden = YES;
+			view.image = nil;
+		}
+		// When no custom emoji exist, revert to plain text if clearColor was applied.
+		if (self.input.attributedText.length > 0) {
+			__block BOOL hasClear = NO;
+			[self.input.attributedText enumerateAttribute:NSForegroundColorAttributeName
+												  inRange:NSMakeRange(0, self.input.attributedText.length)
+												  options:0
+											   usingBlock:^(id value, NSRange range, BOOL *stop) {
+				if ([value isEqual:[UIColor clearColor]]) {
+					hasClear = YES;
+					*stop = YES;
+				}
+			}];
+			if (hasClear) {
+				UITextRange *sel = self.input.selectedTextRange;
+				self.input.attributedText = nil;
+				self.input.text = plainText;
+				if (sel) {
+					self.input.selectedTextRange = sel;
+				}
+			}
+		}
+		return;
+	}
+
+	if (!plainText.length) {
+		for (UIImageView *view in self.composerEmojiViews) {
+			view.hidden = YES;
+			view.image = nil;
+		}
+		return;
+	}
+
+	if (!self.composerEmojiViews) {
+		self.composerEmojiViews = [NSMutableArray array];
+	}
+
+	UIView *container = [self.input respondsToSelector:@selector(textInputView)] ? self.input.textInputView : self.input;
+	if (!container) {
+		container = self.input;
+	}
+
+	NSMutableArray *images = [NSMutableArray arrayWithCapacity:customEmoji.count];
+	NSMutableArray *frames = [NSMutableArray arrayWithCapacity:customEmoji.count];
+	NSMutableArray *ranges = [NSMutableArray arrayWithCapacity:customEmoji.count];
+
+	for (id item in customEmoji) {
+		if (![item isKindOfClass:[NSDictionary class]])
+			continue;
+		NSDictionary *dict = (NSDictionary *)item;
+		id offsetObj = dict[@"offset"];
+		id lengthObj = dict[@"length"];
+		id emojiIdObj = dict[@"customEmojiId"];
+		if (!([offsetObj isKindOfClass:[NSNumber class]] || [offsetObj isKindOfClass:[NSString class]]) ||
+			!([lengthObj isKindOfClass:[NSNumber class]] || [lengthObj isKindOfClass:[NSString class]]) ||
+			!([emojiIdObj isKindOfClass:[NSNumber class]] || [emojiIdObj isKindOfClass:[NSString class]])) {
+			continue;
+		}
+
+		NSInteger offset = [offsetObj integerValue];
+		NSInteger length = [lengthObj integerValue];
+		int64_t emojiId = [emojiIdObj longLongValue];
+
+		if (offset < 0 || length <= 0 || (NSUInteger)(offset + length) > plainText.length || emojiId == 0)
+			continue;
+
+		UITextPosition *posStart = [self.input positionFromPosition:self.input.beginningOfDocument offset:offset];
+		if (!posStart)
+			continue;
+		UITextPosition *posEnd = [self.input positionFromPosition:posStart offset:length];
+		if (!posEnd)
+			continue;
+		UITextRange *textRange = [self.input textRangeFromPosition:posStart toPosition:posEnd];
+		if (!textRange)
+			continue;
+
+		CGRect rect = [self.input firstRectForRange:textRange];
+		if (CGRectIsNull(rect) || CGRectIsEmpty(rect)) {
+			rect = CGRectZero;
+		} else if (container != self.input) {
+			rect = [self.input convertRect:rect fromView:container];
+		}
+
+		CGFloat side = rect.size.height > 0 ? rect.size.height : TGMetricLineBody;
+		UIImage *image = [[TGCustomEmojiStore shared] imageForId:emojiId side:side];
+
+		CGFloat x = rect.origin.x + TGHalf(rect.size.width - side);
+		CGFloat y = rect.origin.y + TGHalf(rect.size.height - side);
+		CGRect imgFrame = (rect.size.height > 0) ? CGRectMake(x, y, side, side) : CGRectZero;
+
+		[images addObject:(image ?: [NSNull null])];
+		[frames addObject:[NSValue valueWithCGRect:imgFrame]];
+		[ranges addObject:[NSValue valueWithRange:NSMakeRange((NSUInteger)offset, (NSUInteger)length)]];
+	}
+
+	UITextRange *savedSelection = self.input.selectedTextRange;
+
+	NSMutableAttributedString *attr = [[NSMutableAttributedString alloc] initWithString:plainText
+		attributes:@{
+			NSFontAttributeName : self.input.font ?: TGFontBody(),
+			NSForegroundColorAttributeName : [[TGTheme shared] primaryTextColour],
+		}];
+
+	NSUInteger poolIndex = 0;
+	for (NSUInteger i = 0; i < ranges.count; i++) {
+		NSRange r = [ranges[i] rangeValue];
+		id imgObj = images[i];
+		CGRect imgFrame = [frames[i] CGRectValue];
+
+		if (imgObj != [NSNull null]) {
+			// Picture loaded: hide fallback glyph and position overlay image
+			[attr addAttribute:NSForegroundColorAttributeName value:[UIColor clearColor] range:r];
+
+			UIImageView *iv = nil;
+			if (poolIndex < self.composerEmojiViews.count) {
+				iv = self.composerEmojiViews[poolIndex];
+			} else {
+				iv = [[UIImageView alloc] initWithFrame:CGRectZero];
+				iv.userInteractionEnabled = NO;
+				iv.contentMode = UIViewContentModeScaleAspectFit;
+				[self.input addSubview:iv];
+				[self.composerEmojiViews addObject:iv];
+			}
+			poolIndex++;
+
+			iv.image = (UIImage *)imgObj;
+			iv.frame = imgFrame;
+			if (CGRectIsEmpty(imgFrame) || !CGRectIntersectsRect(self.input.bounds, imgFrame)) {
+				iv.hidden = YES;
+			} else {
+				iv.hidden = NO;
+			}
+		}
+		// Picture still loading: leave fallback glyph visible with normal text colour
+	}
+
+	for (NSUInteger i = poolIndex; i < self.composerEmojiViews.count; i++) {
+		UIImageView *extra = self.composerEmojiViews[i];
+		extra.hidden = YES;
+		extra.image = nil;
+	}
+
+	if (![self.input.attributedText isEqualToAttributedString:attr]) {
+		self.input.attributedText = attr;
+		if (savedSelection) {
+			self.input.selectedTextRange = savedSelection;
+		}
+	}
 }
 
 @end

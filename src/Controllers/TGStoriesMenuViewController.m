@@ -42,24 +42,31 @@
 	__weak typeof(self) weakSelf = self;
 	[rows addObject:@{@"title" : @"Add Story",
 					  @"detail" : @"Photo or video, caption and privacy",
+					  @"opens" : @YES,
 					  @"tap" : ^{ [weakSelf addStory]; }}];
 	[rows addObject:@{@"title" : @"My Story",
 					  @"detail" : @"Open your active stories",
+					  @"opens" : @YES,
 					  @"tap" : ^{ [weakSelf openMyStory]; }}];
 	[rows addObject:@{@"title" : @"Story Albums",
 					  @"detail" : @"Create, rename, order and fill",
+					  @"opens" : @YES,
 					  @"tap" : ^{ [weakSelf openAlbums]; }}];
 	[rows addObject:@{@"title" : @"Story Archive",
 					  @"detail" : @"Every story you have posted",
+					  @"opens" : @YES,
 					  @"tap" : ^{ [weakSelf openArchive]; }}];
 	[rows addObject:@{@"title" : @"Story Notifications",
 					  @"detail" : @"Chats with their own story settings",
+					  @"opens" : @YES,
 					  @"tap" : ^{ [weakSelf openNotifications]; }}];
 	[rows addObject:@{@"title" : @"Public Stories",
 					  @"detail" : @"Search by tag, location or venue",
+					  @"opens" : @YES,
 					  @"tap" : ^{ [weakSelf openPublic]; }}];
 	[rows addObject:@{@"title" : @"Start Live Story",
 					  @"detail" : @"RTMP stream or group call",
+					  @"opens" : @YES,
 					  @"tap" : ^{ [weakSelf openLive]; }}];
 	[rows addObject:@{@"title" : @"Activate Stealth Mode",
 					  @"detail" : @"Hide your views from story posters",

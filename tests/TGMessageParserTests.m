@@ -170,6 +170,23 @@ static NSDictionary *fxTextContent(NSString *text) {
 	XCTAssertEqualObjects(flat[@"replyText"], @"are you coming?");
 }
 
+/// Quoted entities are preserved alongside quoteText for custom emoji rendering.
+- (void)testFlatten_AnInlineQuoteKeepsQuoteEntities {
+	NSArray *entities = @[@{
+		@"@type"  : @"textEntity",
+		@"offset" : @0,
+		@"length" : @3,
+		@"type"   : @{@"@type" : @"textEntityTypeCustomEmoji", @"custom_emoji_id" : @"123"},
+	}];
+	NSDictionary *flat = TGFlattenMessage(fxMsg(fxTextContent(@"yes"), @{
+			@"reply_to" : @{@"@type" : @"messageReplyToMessage",
+							@"message_id" : @(4),
+							@"quote" : @{@"text" : @{@"text" : @"are you coming?",
+													 @"entities" : entities}}}}));
+	XCTAssertEqualObjects(flat[@"replyText"], @"are you coming?");
+	XCTAssertEqualObjects(flat[@"quoteEntities"], entities);
+}
+
 /// A reply to a story is not a reply to a message, and treating it as one
 /// would have the chat fetching a message id that does not exist.
 - (void)testFlatten_AReplyToSomethingOtherThanAMessageIsNotAReply {

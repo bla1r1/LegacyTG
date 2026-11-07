@@ -33,4 +33,12 @@
 			tag:(NSString *)tag
 		inTable:(UITableView *)tableView;
 
+/// The same row with the member's emoji status ID beside their name.
+- (void)setName:(NSString *)name
+		 userId:(int64_t)userId
+		 status:(NSString *)status
+			tag:(NSString *)tag
+  statusEmojiId:(int64_t)statusEmojiId
+		inTable:(UITableView *)tableView;
+
 @end

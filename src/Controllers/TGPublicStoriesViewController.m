@@ -58,6 +58,7 @@
 		if (!detail.length)
 			detail = [story[@"isVideo"] boolValue] ? @"Video story" : @"Photo story";
 		[rows addObject:@{@"title" : title, @"detail" : detail,
+						  @"opens" : @YES,
 						  @"tap" : ^{ [weakSelf openStory:story]; }}];
 	}
 	if (self.nextOffset.length)

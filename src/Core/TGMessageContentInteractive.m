@@ -26,6 +26,22 @@ static NSString *TGInteractiveText(id value) {
 	return @"";
 }
 
+/// Entities carried alongside formattedText, or nil when none are present.
+static NSArray *TGInteractiveEntities(id value) {
+	if (![value isKindOfClass:NSDictionary.class])
+		return @[];
+	id entities = value[@"entities"];
+	if ([entities isKindOfClass:NSArray.class])
+		return entities;
+	id inner = value[@"text"];
+	if ([inner isKindOfClass:NSDictionary.class]) {
+		id innerEntities = inner[@"entities"];
+		if ([innerEntities isKindOfClass:NSArray.class])
+			return innerEntities;
+	}
+	return @[];
+}
+
 static NSNumber *TGInteractiveInt64(id value) {
 	return @([value longLongValue]);
 }
@@ -94,8 +110,12 @@ static NSDictionary *TGInteractivePoll(id rawPoll, id rawDescription) {
 		for (id raw in rawOptions) {
 			if (![raw isKindOfClass:NSDictionary.class])
 				continue;
+			NSArray *optEntities = TGInteractiveEntities(raw[@"text"]);
+			if (!optEntities.count)
+				optEntities = TGInteractiveEntities(raw);
 			[options addObject:@{
 				@"text"          : TGInteractiveText(raw[@"text"]),
+				@"entities"      : optEntities,
 				@"voterCount"    : TGInteractiveInt64(raw[@"voter_count"]),
 				@"percent"       : TGInteractiveInt64(raw[@"vote_percentage"]),
 				@"isChosen"      : TGInteractiveBool(raw[@"is_chosen"]),
@@ -118,9 +138,10 @@ static NSDictionary *TGInteractivePoll(id rawPoll, id rawDescription) {
 	}
 
 	return @{
-		@"pollId"         : TGInteractiveInt64(poll[@"id"]),
-		@"question"       : TGInteractiveText(poll[@"question"]),
-		@"options"        : options,
+		@"pollId"          : TGInteractiveInt64(poll[@"id"]),
+		@"question"        : TGInteractiveText(poll[@"question"]),
+		@"questionEntities": TGInteractiveEntities(poll[@"question"]),
+		@"options"         : options,
 		@"totalVoterCount": TGInteractiveInt64(poll[@"total_voter_count"]),
 		@"isAnonymous"    : TGInteractiveBool(poll[@"is_anonymous"]),
 		@"isClosed"       : TGInteractiveBool(poll[@"is_closed"]),
@@ -215,9 +236,13 @@ static NSDictionary *TGInteractiveChecklist(id rawList) {
 				? raw[@"completed_by"] : nil;
 		if (completedBy)
 			doneCount++;
+		NSArray *taskEntities = TGInteractiveEntities(raw[@"text"]);
+		if (!taskEntities.count)
+			taskEntities = TGInteractiveEntities(raw);
 		[tasks addObject:@{
 			@"taskId"            : TGInteractiveInt64(raw[@"id"]),
 			@"text"              : TGInteractiveText(raw[@"text"]),
+			@"entities"          : taskEntities,
 			@"completedByUserId" : completedBy ? TGInteractiveInt64(completedBy[@"user_id"]) : @0,
 			@"completionDate"    : TGInteractiveInt64(raw[@"completion_date"]),
 		}];
@@ -225,6 +250,7 @@ static NSDictionary *TGInteractiveChecklist(id rawList) {
 
 	return @{@"checklist" : @{
 		@"title"                   : TGInteractiveText(list[@"title"]),
+		@"titleEntities"           : TGInteractiveEntities(list[@"title"]),
 		@"tasks"                   : tasks,
 		@"othersCanAddTasks"       : TGInteractiveBool(list[@"others_can_add_tasks"]),
 		@"othersCanMarkTasksAsDone": TGInteractiveBool(list[@"others_can_mark_tasks_as_done"]),

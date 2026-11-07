@@ -1,4 +1,5 @@
 #import "TGCustomEmojiStore.h"
+#import "TGNameWithStatus.h"
 #import "TGChatListViewControllerInternal.h"
 #import "TGPerf.h"
 #import "TGStatusText.h"
@@ -1893,7 +1894,10 @@ static NSString *TGChatDate(NSTimeInterval unix) {
 
 	NSDictionary *c = [self visibleChats][indexPath.row - header.count];
 	double cellStart = TGPerfNow();
-	cell.titleLabel.text = c[@"title"];
+	int64_t statusId = [c[@"isSaved"] boolValue] ? 0 : [c[@"emojiStatusId"] longLongValue];
+	cell.titleLabel.attributedText = TGNameWithStatus(c[@"title"] ?: @"", statusId, cell.titleLabel.font, [theme primaryTextColour]);
+	cell.statusIcon.image = nil;
+	cell.statusIcon.hidden = YES;
 	cell.dateLabel.text = TGChatDate([c[@"date"] doubleValue]);
 
 	// Someone typing takes the preview over for as long as it lasts, in their
@@ -1923,15 +1927,6 @@ static NSString *TGChatDate(NSTimeInterval unix) {
 		cell.tick.hidden = NO;
 	}
 
-	// A muted chat carries a small speaker after its title; a pinned one keeps
-	// a marker where the badge sits when it has none.
-	// A premium person's or a channel's emoji status after the name. Saved
-	// Messages is your own chat and shows none, as in Telegram.
-	int64_t statusId = [c[@"isSaved"] boolValue] ? 0 : [c[@"emojiStatusId"] longLongValue];
-	UIImage *status = statusId
-			? [[TGCustomEmojiStore shared] imageForId:statusId side:[TGChatCell statusSide]] : nil;
-	cell.statusIcon.image = status;
-	cell.statusIcon.hidden = !status;
 	[cell setNeedsLayout];
 
 	BOOL muted = [c[@"isMuted"] boolValue];

@@ -38,13 +38,13 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 
 	return @[
 		TGSection(@"STORAGE", nil, @[
-			TGIconTapRow(@"Storage Usage", nil,
+			TGIconTapOpenRow(@"Storage Usage", nil,
 					@"data", TGIconTileGreen(), ^{
 				TGStorageViewController *storage = [[TGStorageViewController alloc] init];
 				storage.hidesBottomBarWhenPushed = YES;
 				[weakSelf.navigationController pushViewController:storage animated:YES];
 			}),
-			TGIconTapRow(@"Downloads", nil,
+			TGIconTapOpenRow(@"Downloads", nil,
 					@"archive", TGIconTileSky(), ^{
 				[weakSelf openPage:TGSettingsPageDownloads];
 			}),
@@ -52,7 +52,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 					@"folder", TGIconTileCyan(), ^{
 				[weakSelf showSentFilesSheet];
 			}),
-			TGIconTapRow(@"File Tools", @"Generate, upload, read back",
+			TGIconTapOpenRow(@"File Tools", @"Generate, upload, read back",
 					@"data", TGIconTileSlate(), ^{
 				TGFileToolsViewController *tools = [[TGFileToolsViewController alloc] init];
 				tools.hidesBottomBarWhenPushed = YES;
@@ -63,7 +63,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 		TGSection(@"DATA USAGE",
 				  @"The counters cover this launch. TDLib resets them when it "
 				  @"reopens the connection.", @[
-			TGIconTapRow(@"Network", @"Type, state, usage, graphs",
+			TGIconTapOpenRow(@"Network", @"Type, state, usage, graphs",
 					@"data", TGIconTileAzure(), ^{
 				TGNetworkViewController *network = [[TGNetworkViewController alloc] init];
 				network.hidesBottomBarWhenPushed = YES;
@@ -108,7 +108,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 		TGSection(@"GALLERY AUTOSAVE",
 				  @"Telegram autosaves photos and videos it receives. Documents "
 				  @"are not autosaved by TDLib.", @[
-			TGTapRow(@"Autosave", autosaveDetail, ^{
+			TGOpenRow(@"Autosave", autosaveDetail, ^{
 				[weakSelf openPage:TGSettingsPageAutosave];
 			}),
 		]),

@@ -252,6 +252,81 @@ static NSArray *TGCallGradient(NSArray *colours) {
     return refs;
 }
 
+typedef NS_ENUM(NSInteger, TGCallCircleStyle) {
+	TGCallCircleStyleOutline = 0,
+	TGCallCircleStyleFilled,
+	TGCallCircleStyleSolid
+};
+
+/// Cached circle images for call buttons drawn flat with CoreGraphics.
+/// Outline buttons draw a stroke of TGMetricBorderMedium and fill with
+/// callControlColour on highlight. Filled and solid buttons fill the oval,
+/// dimming by TGTransformScaleButtonActive on highlight.
+static UIImage *TGCallCircleImage(CGFloat side, UIColor *colour, TGCallCircleStyle style, BOOL highlighted) {
+	static NSMutableDictionary *cache = nil;
+	static dispatch_once_t onceToken;
+	dispatch_once(&onceToken, ^{
+		cache = [[NSMutableDictionary alloc] init];
+	});
+
+	CGFloat r = 0, g = 0, b = 0, a = 1.0f;
+	if (![colour getRed:&r green:&g blue:&b alpha:&a]) {
+		CGFloat w = 0;
+		if ([colour getWhite:&w alpha:&a]) {
+			r = w; g = w; b = w;
+		} else {
+			r = 1.0f; g = 1.0f; b = 1.0f; a = 1.0f;
+		}
+	}
+
+	NSString *styleKey = (style == TGCallCircleStyleOutline) ? @"outline" :
+						 (style == TGCallCircleStyleFilled)  ? @"filled" : @"solid";
+	NSString *key = [NSString stringWithFormat:@"circle_%.0f_r%.2f_g%.2f_b%.2f_a%.2f_%@_%@",
+					 side, r, g, b, a, styleKey, highlighted ? @"high" : @"norm"];
+	UIImage *cached = cache[key];
+	if (cached)
+		return cached;
+
+	UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), NO, 0.0f);
+	CGContextRef ctx = UIGraphicsGetCurrentContext();
+
+	if (style == TGCallCircleStyleOutline) {
+		CGFloat strokeWidth = TGMetricBorderMedium;
+		CGFloat inset = TGHalf(strokeWidth);
+		CGRect rect = CGRectInset(CGRectMake(0, 0, side, side), inset, inset);
+		UIBezierPath *path = [UIBezierPath bezierPathWithOvalInRect:rect];
+		path.lineWidth = strokeWidth;
+
+		if (highlighted) {
+			[[[TGTheme shared] callControlColour] setFill];
+			[path fill];
+		}
+		[colour setStroke];
+		[path stroke];
+	} else {
+		CGRect rect = CGRectMake(0, 0, side, side);
+		UIBezierPath *path = [UIBezierPath bezierPathWithOvalInRect:rect];
+		if (highlighted) {
+			CGContextSetRGBFillColor(ctx,
+									 r * TGTransformScaleButtonActive,
+									 g * TGTransformScaleButtonActive,
+									 b * TGTransformScaleButtonActive,
+									 a);
+			[path fill];
+		} else {
+			[colour setFill];
+			[path fill];
+		}
+	}
+
+	UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+	UIGraphicsEndImageContext();
+
+	if (image)
+		cache[key] = image;
+	return image;
+}
+
 @implementation TGCallViewController
 
 + (void)previewMiniBarNamed:(NSString *)name {
@@ -422,37 +497,35 @@ static NSArray *TGCallGradient(NSArray *colours) {
     self.acceptLbl = self.lastCreatedLabel;
     [self.acceptBtn addTarget:self action:@selector(acceptCall) forControlEvents:UIControlEventTouchUpInside];
 
-    TGTheme *theme = [TGTheme shared];
-    [self.endBtn setBackgroundImage:[TGTheme buttonImageForStyle:TGButtonStyleDestructive highlighted:NO height:TGMetricCallButtonSide] forState:UIControlStateNormal];
-    [self.endBtn setBackgroundImage:[TGTheme buttonImageForStyle:TGButtonStyleDestructive highlighted:YES height:TGMetricCallButtonSide] forState:UIControlStateHighlighted];
-    self.endBtn.backgroundColor = [UIColor clearColor];
+	TGTheme *theme = [TGTheme shared];
+	UIColor *white = [theme onMediaColour];
+	UIColor *red = [theme destructiveColour];
+	UIColor *green = [theme callAcceptColour];
+	CGFloat buttonSide = TGMetricCallButtonSide;
 
-    [self.acceptBtn setBackgroundImage:[TGTheme buttonImageForStyle:TGButtonStyleSuccess highlighted:NO height:TGMetricCallButtonSide] forState:UIControlStateNormal];
-    [self.acceptBtn setBackgroundImage:[TGTheme buttonImageForStyle:TGButtonStyleSuccess highlighted:YES height:TGMetricCallButtonSide] forState:UIControlStateHighlighted];
-    self.acceptBtn.backgroundColor = [UIColor clearColor];
-    // The plates are saturated, so the end/accept glyphs stay light whatever
-    // the controls around them carry.
-    [self.endBtn setImage:[TGIcons glyphNamed:@"endcall" colour:[theme onAccentColour]
-                                         side:TGMetricCallGlyphSide]
-                 forState:UIControlStateNormal];
-    [self.acceptBtn setImage:[TGIcons glyphNamed:@"call" colour:[theme onAccentColour]
-                                           side:TGMetricCallGlyphSide]
-                    forState:UIControlStateNormal];
+	[self.endBtn setBackgroundImage:TGCallCircleImage(buttonSide, red, TGCallCircleStyleSolid, NO)
+						   forState:UIControlStateNormal];
+	[self.endBtn setBackgroundImage:TGCallCircleImage(buttonSide, red, TGCallCircleStyleSolid, YES)
+						   forState:UIControlStateHighlighted];
+	self.endBtn.backgroundColor = [UIColor clearColor];
 
-    [self.speakerBtn addTarget:self action:@selector(toggleSpeaker) forControlEvents:UIControlEventTouchUpInside];
-    [self.micBtn addTarget:self action:@selector(toggleMute) forControlEvents:UIControlEventTouchUpInside];
-    [self.videoBtn addTarget:self action:@selector(toggleVideo) forControlEvents:UIControlEventTouchUpInside];
-    [self.endBtn addTarget:self action:@selector(end) forControlEvents:UIControlEventTouchUpInside];
+	[self.acceptBtn setBackgroundImage:TGCallCircleImage(buttonSide, green, TGCallCircleStyleSolid, NO)
+							 forState:UIControlStateNormal];
+	[self.acceptBtn setBackgroundImage:TGCallCircleImage(buttonSide, green, TGCallCircleStyleSolid, YES)
+							 forState:UIControlStateHighlighted];
+	self.acceptBtn.backgroundColor = [UIColor clearColor];
 
-    for (UIButton *control in @[self.speakerBtn, self.videoBtn, self.micBtn,
-                                self.endBtn, self.acceptBtn]){
-        [control addTarget:self action:@selector(controlHeld:)
-          forControlEvents:UIControlEventTouchDown];
-        [control addTarget:self action:@selector(controlReleased:)
-          forControlEvents:UIControlEventTouchUpInside |
-                           UIControlEventTouchUpOutside |
-                           UIControlEventTouchCancel];
-    }
+	[self.endBtn setImage:[TGIcons glyphNamed:@"endcall" colour:white
+										 side:TGMetricCallGlyphSide]
+				 forState:UIControlStateNormal];
+	[self.acceptBtn setImage:[TGIcons glyphNamed:@"call" colour:white
+										   side:TGMetricCallGlyphSide]
+				   forState:UIControlStateNormal];
+
+	[self.speakerBtn addTarget:self action:@selector(toggleSpeaker) forControlEvents:UIControlEventTouchUpInside];
+	[self.micBtn addTarget:self action:@selector(toggleMute) forControlEvents:UIControlEventTouchUpInside];
+	[self.videoBtn addTarget:self action:@selector(toggleVideo) forControlEvents:UIControlEventTouchUpInside];
+	[self.endBtn addTarget:self action:@selector(end) forControlEvents:UIControlEventTouchUpInside];
     [self refreshControls];
 
     __weak typeof(self) weakSelf = self;
@@ -503,55 +576,46 @@ static NSArray *TGCallGradient(NSArray *colours) {
 #pragma mark - chrome
 
 - (UIButton *)createButtonWithTitle:(NSString *)title icon:(NSString *)icon {
-    UIButton *btn = [UIButton buttonWithType:UIButtonTypeCustom];
-    btn.frame = CGRectMake(0, 0, TGMetricCallButtonSide, TGMetricCallButtonSide);
-    btn.layer.cornerRadius = TGHalf(TGMetricCallButtonSide);
-    btn.clipsToBounds = YES;
-    btn.layer.shouldRasterize = YES;
-    btn.layer.rasterizationScale = [UIScreen mainScreen].scale;
-    // An embossed metal plate, not a flat wash: the procedural engine carves
-    // the gloss, bevel and shadow out of the token colour (§2). The two
-    // states share the same geometry, only the light differs.
-    TGTheme *theme = [TGTheme shared];
-    [btn setBackgroundImage:
-            [TGTheme skeuomorphicButtonImageWithColor:[theme callControlBaseColour]
-                                               height:TGMetricCallButtonSide
-                                          highlighted:NO
-                                         cornerRadius:TGHalf(TGMetricCallButtonSide)]
-              forState:UIControlStateNormal];
-    [btn setBackgroundImage:
-            [TGTheme skeuomorphicButtonImageWithColor:[theme callControlBaseColour]
-                                               height:TGMetricCallButtonSide
-                                          highlighted:YES
-                                         cornerRadius:TGHalf(TGMetricCallButtonSide)]
-              forState:UIControlStateHighlighted];
-    btn.backgroundColor = [UIColor clearColor];
-    // Drawn glyphs rather than emoji: iOS 7's font has no colour glyph for
-    // some of these, and the ones it does have do not match the rest of the
-    // iconography. Inactive controls sit on the steel plate, so their glyph
-    // is primary text, not white.
-    UIImage *glyph = [icon isEqualToString:@"microphone"]
-            ? [TGIcons microphoneOfSide:TGMetricCallGlyphSide colour:[theme primaryTextColour]]
-            : [TGIcons glyphNamed:icon colour:[theme primaryTextColour] side:TGMetricCallGlyphSide];
-    if (glyph){
-        [btn setImage:glyph forState:UIControlStateNormal];
-    } else {
-        [btn setTitle:icon forState:UIControlStateNormal];
-        btn.titleLabel.font = TGFontGlyph();
-    }
-    [self.view addSubview:btn];
+	UIButton *btn = [UIButton buttonWithType:UIButtonTypeCustom];
+	CGFloat side = TGMetricCallButtonSide;
+	btn.frame = CGRectMake(0, 0, side, side);
+	btn.layer.cornerRadius = TGHalf(side);
+	btn.clipsToBounds = YES;
+	btn.layer.shouldRasterize = YES;
+	btn.layer.rasterizationScale = [UIScreen mainScreen].scale;
+	btn.adjustsImageWhenHighlighted = NO;
 
-    UILabel *lbl = [[UILabel alloc] initWithFrame:
-            CGRectMake(0, 0, TGMetricCallLabelWidth, TGMetricCallLabelHeight)];
-    lbl.text = title;
-    lbl.textColor = [[TGTheme shared] onAccentColour];
-    lbl.font = TGFontMeta();
-    lbl.textAlignment = NSTextAlignmentCenter;
-    lbl.backgroundColor = [UIColor clearColor];
-    [self.view addSubview:lbl];
+	TGTheme *theme = [TGTheme shared];
+	UIColor *white = [theme onMediaColour];
 
-    self.lastCreatedLabel = lbl;
-    return btn;
+	[btn setBackgroundImage:TGCallCircleImage(side, white, TGCallCircleStyleOutline, NO)
+				   forState:UIControlStateNormal];
+	[btn setBackgroundImage:TGCallCircleImage(side, white, TGCallCircleStyleOutline, YES)
+				   forState:UIControlStateHighlighted];
+	btn.backgroundColor = [UIColor clearColor];
+
+	UIImage *glyph = [icon isEqualToString:@"microphone"]
+			? [TGIcons microphoneOfSide:TGMetricCallGlyphSide colour:white]
+			: [TGIcons glyphNamed:icon colour:white side:TGMetricCallGlyphSide];
+	if (glyph){
+		[btn setImage:glyph forState:UIControlStateNormal];
+	} else {
+		[btn setTitle:icon forState:UIControlStateNormal];
+		btn.titleLabel.font = TGFontGlyph();
+	}
+	[self.view addSubview:btn];
+
+	UILabel *lbl = [[UILabel alloc] initWithFrame:
+			CGRectMake(0, 0, TGMetricCallLabelWidth, TGMetricCallLabelHeight)];
+	lbl.text = title;
+	lbl.textColor = white;
+	lbl.font = TGFontMeta();
+	lbl.textAlignment = NSTextAlignmentCenter;
+	lbl.backgroundColor = [UIColor clearColor];
+	[self.view addSubview:lbl];
+
+	self.lastCreatedLabel = lbl;
+	return btn;
 }
 
 - (void)applyChromeLayout {
@@ -701,6 +765,7 @@ static NSArray *TGCallGradient(NSArray *colours) {
             self.bgLayer.colors = TGCallGradient([[TGTheme shared] callGradientColoursConnected]);
             [self setupEmojis];
             [self setStatusText:[self talkTimeText]];
+            [self refreshControls];
             break;
         case TGCallStateFailed:
             [self setStatusText:([TGCall shared].endReason ?: @"Call failed")];
@@ -974,123 +1039,76 @@ static NSArray *TGCallGradient(NSArray *colours) {
     }
 }
 
-// One place decides what the toggles look like, so the drawing can never
-// disagree with the call. Both used to change colour only, which on a dark
-// screen read as nothing at all. Each toggle carries two glyphs: a dark one
-// for the steel plate, a light one for the lit accent plate.
+// The buttons are flat circles: outline when idle, solid filled when active.
+// Inactive controls show white glyphs; active controls show the glyph in the
+// darker end of the call background.
 - (void)refreshControls {
-    BOOL muted = [TGCall shared].muted;
-    BOOL videoActive = [TGCall shared].videoActive;
-    TGTheme *theme = [TGTheme shared];
+	BOOL muted = [TGCall shared].muted;
+	BOOL videoActive = [TGCall shared].videoActive;
+	TGTheme *theme = [TGTheme shared];
+	UIColor *white = [theme onMediaColour];
 
-    UIImage *mic = muted
-            ? [TGIcons microphoneOffOfSide:TGMetricCallGlyphSide colour:[theme primaryTextColour]]
-            : [TGIcons microphoneOfSide:TGMetricCallGlyphSide colour:[theme primaryTextColour]];
-    // the lit state always shows the crossed-out mic, in the light colour
-    UIImage *micActive = [TGIcons microphoneOffOfSide:TGMetricCallGlyphSide
-                                               colour:[theme onAccentColour]];
-    UIImage *spk = [TGIcons glyphNamed:(self.speakerOn ? @"speakerOn" : @"speaker")
-                                colour:[theme primaryTextColour] side:TGMetricCallGlyphSide];
-    UIImage *spkActive = [TGIcons glyphNamed:(self.speakerOn ? @"speakerOn" : @"speaker")
-                                      colour:[theme onAccentColour] side:TGMetricCallGlyphSide];
-    UIImage *vid = [TGIcons glyphNamed:@"video" colour:[theme primaryTextColour] side:TGMetricCallGlyphSide];
-    UIImage *vidActive = [TGIcons glyphNamed:@"video" colour:[theme onAccentColour] side:TGMetricCallGlyphSide];
+	NSArray *grad = ([TGCall shared].state == TGCallStateEstablished)
+			? [theme callGradientColoursConnected]
+			: [theme callGradientColours];
+	UIColor *dark = [grad.lastObject isKindOfClass:[UIColor class]]
+			? grad.lastObject
+			: [theme primaryTextColour];
 
-    [self setGlyph:mic activeGlyph:micActive on:self.micBtn active:muted];
-    [self setGlyph:spk activeGlyph:spkActive on:self.speakerBtn active:self.speakerOn];
-    [self setGlyph:vid activeGlyph:vidActive on:self.videoBtn active:videoActive];
+	UIImage *mic = [TGIcons microphoneOfSide:TGMetricCallGlyphSide colour:white];
+	UIImage *micActive = [TGIcons microphoneOffOfSide:TGMetricCallGlyphSide colour:dark];
 
-    self.micLbl.text = muted ? @"Unmute" : @"Mute";
-    self.speakerLbl.text = @"Speaker";
-    self.videoLbl.text = @"Video";
-    self.micLbl.textColor = muted ? [theme callControlActiveColour] : [theme onAccentColour];
-    self.speakerLbl.textColor = self.speakerOn ? [theme callControlActiveColour] : [theme onAccentColour];
-    self.videoLbl.textColor = videoActive ? [theme callControlActiveColour] : [theme onAccentColour];
+	UIImage *spk = [TGIcons glyphNamed:(self.speakerOn ? @"speakerOn" : @"speaker")
+								colour:white side:TGMetricCallGlyphSide];
+	UIImage *spkActive = [TGIcons glyphNamed:(self.speakerOn ? @"speakerOn" : @"speaker")
+									  colour:dark side:TGMetricCallGlyphSide];
+
+	UIImage *vid = [TGIcons glyphNamed:@"video" colour:white side:TGMetricCallGlyphSide];
+	UIImage *vidActive = [TGIcons glyphNamed:@"video" colour:dark side:TGMetricCallGlyphSide];
+
+	[self setGlyph:mic activeGlyph:micActive on:self.micBtn active:muted];
+	[self setGlyph:spk activeGlyph:spkActive on:self.speakerBtn active:self.speakerOn];
+	[self setGlyph:vid activeGlyph:vidActive on:self.videoBtn active:videoActive];
+
+	self.micLbl.text = muted ? @"Unmute" : @"Mute";
+	self.speakerLbl.text = @"Speaker";
+	self.videoLbl.text = @"Video";
+	self.micLbl.textColor = white;
+	self.speakerLbl.textColor = white;
+	self.videoLbl.textColor = white;
 }
 
-// Telegram crosses a control over to white-on-light when it is on; the swap
-// is worth a frame of animation so the eye follows which button moved. The
-// plate changes with it: steel when idle, accent when lit.
+// Controls swap between white outline (off) and filled white (on).
+// UIKit swaps the highlighted image on touch down, giving flat press feedback.
 - (void)setGlyph:(UIImage *)glyph activeGlyph:(UIImage *)activeGlyph
-              on:(UIButton *)button active:(BOOL)active {
-    TGTheme *theme = [TGTheme shared];
-    [UIView transitionWithView:button duration:TGAnimationDurationFast
-                       options:UIViewAnimationOptionTransitionCrossDissolve
-                    animations:^{
-        UIImage *plate = [TGTheme skeuomorphicButtonImageWithColor:
-                (active ? [theme accentColour] : [theme callControlBaseColour])
-                                   height:TGMetricCallButtonSide
-                              highlighted:NO
-                             cornerRadius:TGHalf(TGMetricCallButtonSide)];
-        [button setBackgroundImage:plate forState:UIControlStateNormal];
-        [button setBackgroundImage:
-                [TGTheme skeuomorphicButtonImageWithColor:
-                 (active ? [theme accentColour] : [theme callControlBaseColour])
-                                    height:TGMetricCallButtonSide
-                               highlighted:YES
-                              cornerRadius:TGHalf(TGMetricCallButtonSide)]
-              forState:UIControlStateHighlighted];
-        [button setImage:active ? activeGlyph : glyph forState:UIControlStateNormal];
-    } completion:nil];
-}
+			  on:(UIButton *)button active:(BOOL)active {
+	TGTheme *theme = [TGTheme shared];
+	UIColor *white = [theme onMediaColour];
+	CGFloat side = TGMetricCallButtonSide;
 
-// Holding a control draws a ring around it that grows in under the finger and
-// fades out on release, so a press you are still making is visible.
-- (void)controlHeld:(UIButton *)button {
-    CGFloat side = TGMetricCallButtonSide;
-    UIView *ring = [[UIView alloc] initWithFrame:button.frame];
-    ring.backgroundColor = [UIColor clearColor];
-    ring.userInteractionEnabled = NO;
-    ring.layer.cornerRadius = TGHalf(side);
-    ring.layer.borderWidth = TGMetricBorderThick;
-    ring.layer.borderColor = [[[TGTheme shared] onAccentColour]
-            colorWithAlphaComponent:TGAlphaRingTrack].CGColor;
-    ring.transform = CGAffineTransformMakeScale(TGTransformScaleButtonActive,
-                                                TGTransformScaleButtonActive);
-    ring.alpha = 0;
-    ring.tag = 0xCA11;
-    [self.view insertSubview:ring belowSubview:button];
-
-    [UIView animateWithDuration:TGAnimationDurationFast animations:^{
-        ring.alpha = TGAlphaOpaque;
-        ring.transform = CGAffineTransformMakeScale(TGTransformScaleRingHeld,
-                                                    TGTransformScaleRingHeld);
-        button.transform = CGAffineTransformMakeScale(TGTransformScaleButtonActive,
-                                                      TGTransformScaleButtonActive);
-    }];
-}
-
-- (void)controlReleased:(UIButton *)button {
-    [UIView animateWithDuration:TGAnimationDurationFast animations:^{
-        button.transform = CGAffineTransformIdentity;
-        for (UIView *ring in self.view.subviews)
-            if (ring.tag == 0xCA11){
-                ring.alpha = 0;
-                ring.transform = CGAffineTransformMakeScale(TGTransformScaleRingHeld,
-                                                            TGTransformScaleRingHeld);
-            }
-    } completion:^(BOOL done){
-        for (UIView *ring in [self.view.subviews copy])
-            if (ring.tag == 0xCA11)
-                [ring removeFromSuperview];
-    }];
+	if (active) {
+		[button setBackgroundImage:TGCallCircleImage(side, white, TGCallCircleStyleFilled, NO)
+						  forState:UIControlStateNormal];
+		[button setBackgroundImage:TGCallCircleImage(side, white, TGCallCircleStyleFilled, YES)
+						  forState:UIControlStateHighlighted];
+		[button setImage:activeGlyph forState:UIControlStateNormal];
+	} else {
+		[button setBackgroundImage:TGCallCircleImage(side, white, TGCallCircleStyleOutline, NO)
+						  forState:UIControlStateNormal];
+		[button setBackgroundImage:TGCallCircleImage(side, white, TGCallCircleStyleOutline, YES)
+						  forState:UIControlStateHighlighted];
+		[button setImage:glyph forState:UIControlStateNormal];
+	}
 }
 
 - (void)end {
-    // Hanging up takes a moment to come back from the network; without this
-    // the screen just sits there and the tap looks like it was missed.
-    [self setStatusText:@"Ending..."];
-    [self setStatusPulsing:NO];
-    [UIView animateWithDuration:TGAnimationDurationFast animations:^{
-        self.endBtn.transform = CGAffineTransformMakeScale(TGTransformScaleButtonActive, TGTransformScaleButtonActive);
-    } completion:^(BOOL done){
-        [UIView animateWithDuration:TGAnimationDurationFast animations:^{
-            self.endBtn.transform = CGAffineTransformIdentity;
-        }];
-    }];
-    [self windDown];
-    [[TGCall shared] hangUp];
-    [self dismissShortly];
+	// Hanging up takes a moment to come back from the network; without this
+	// the screen just sits there and the tap looks like it was missed.
+	[self setStatusText:@"Ending..."];
+	[self setStatusPulsing:NO];
+	[self windDown];
+	[[TGCall shared] hangUp];
+	[self dismissShortly];
 }
 
 #pragma mark - leaving the screen without ending the call

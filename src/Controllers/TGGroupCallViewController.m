@@ -344,15 +344,21 @@ static NSString *TGGroupCallWhen(int32_t stamp) {
 
 #pragma mark - sections
 
-- (NSDictionary *)row:(NSString *)title detail:(NSString *)detail tap:(void (^)(void))tap {
+- (NSDictionary *)row:(NSString *)title detail:(NSString *)detail opens:(BOOL)opens tap:(void (^)(void))tap {
 	NSMutableDictionary *row = [NSMutableDictionary dictionary];
 	row[@"kind"] = @"row";
 	row[@"title"] = title ?: @"";
 	if (detail.length)
 		row[@"detail"] = detail;
+	if (opens)
+		row[@"opens"] = @YES;
 	if (tap)
 		row[@"tap"] = tap;
 	return row;
+}
+
+- (NSDictionary *)row:(NSString *)title detail:(NSString *)detail tap:(void (^)(void))tap {
+	return [self row:title detail:detail opens:NO tap:tap];
 }
 
 - (NSDictionary *)destructiveRow:(NSString *)title detail:(NSString *)detail tap:(void (^)(void))tap {
@@ -369,6 +375,7 @@ static NSString *TGGroupCallWhen(int32_t stamp) {
 		[sections addObject:@{@"header" : @"Video Chat",
 			@"rows" : @[[self row:@"Create a Video Chat"
 						   detail:@"Title, schedule and participant"
+							opens:YES
 								  tap:^{ [weakSelf openSetup]; }]]}];
 		return sections;
 	}
@@ -434,6 +441,7 @@ static NSString *TGGroupCallWhen(int32_t stamp) {
 		[people addObject:[self row:(self.participants.count
 						? @"All Participants" : @"Load Participants")
 				detail:[NSString stringWithFormat:@"%ld in the call", (long)count]
+				opens:YES
 				tap:^{ [weakSelf openParticipants]; }]];
 	}
 	[sections addObject:@{@"header" : @"People", @"rows" : people}];
@@ -445,18 +453,21 @@ static NSString *TGGroupCallWhen(int32_t stamp) {
 		NSDictionary *message = callMessages[(NSUInteger)i];
 		[messages addObject:[self row:(message[@"senderName"] ?: @"Participant")
 				detail:(message[@"text"] ?: @"Paid reaction")
+				opens:YES
 				tap:^{ [weakSelf openMessages]; }]];
 	}
 	[messages addObject:[self row:(callMessages.count ? @"All Call Messages" : @"Send a Call Message")
-			detail:@"Open the message bar" tap:^{ [weakSelf openMessages]; }]];
+			detail:@"Open the message bar" opens:YES tap:^{ [weakSelf openMessages]; }]];
 	[sections addObject:@{@"header" : @"Messages", @"rows" : messages}];
 
 	NSMutableArray *tools = [NSMutableArray array];
 	[tools addObject:[self row:@"Setup and Management"
 						detail:@"Title, recording, invite link, RTMP, switches"
+						 opens:YES
 						   tap:^{ [weakSelf openSetup]; }]];
 	[tools addObject:[self row:@"Streams and Data"
 						detail:@"Channels, segments, encryption check"
+						 opens:YES
 						   tap:^{ [weakSelf openStreams]; }]];
 	[sections addObject:@{@"header" : @"Tools", @"rows" : tools}];
 
@@ -525,23 +536,25 @@ static NSString *TGGroupCallWhen(int32_t stamp) {
 	cell.detailTextLabel.text = row[@"detail"];
 	cell.detailTextLabel.font = TGFontSubhead();
 	cell.detailTextLabel.textColor = [[TGTheme shared] secondaryTextColour];
-	cell.accessoryType = row[@"tap"] ? UITableViewCellAccessoryDisclosureIndicator
-									 : UITableViewCellAccessoryNone;
+	cell.accessoryType = (row[@"tap"] && [row[@"opens"] boolValue])
+			? UITableViewCellAccessoryDisclosureIndicator
+			: UITableViewCellAccessoryNone;
 	cell.selectionStyle = row[@"tap"] ? UITableViewCellSelectionStyleBlue
 									  : UITableViewCellSelectionStyleNone;
 	return cell;
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
 	if (indexPath.section >= (NSInteger)self.sections.count)
 		return;
 	NSArray *rows = self.sections[(NSUInteger)indexPath.section][@"rows"];
 	if (indexPath.row >= (NSInteger)rows.count)
 		return;
 	void (^tap)(void) = rows[(NSUInteger)indexPath.row][@"tap"];
-	if (tap)
-		tap();
+	if (!tap)
+		return;
+	[tableView deselectRowAtIndexPath:indexPath animated:YES];
+	tap();
 }
 
 #pragma mark - call actions

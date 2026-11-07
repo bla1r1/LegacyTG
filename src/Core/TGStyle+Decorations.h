@@ -103,8 +103,6 @@ static const CGFloat TGTransformScalePillActive   = 1.08f;
 static const CGFloat TGTransformScaleButtonActive = 0.86f;
 /// Popup menu appearance initial scale (0.85).
 static const CGFloat TGTransformScaleMenuInitial  = 0.85f;
-/// The ring a held call control wears: wider than the button it surrounds.
-static const CGFloat TGTransformScaleRingHeld     = 1.22f;
 /// Audio mic button small scale (0.30).
 static const CGFloat TGTransformScaleSmall        = 0.30f;
 

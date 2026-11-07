@@ -227,32 +227,32 @@ static BOOL sStoryFlowOpening = NO;
 	if (indexPath.row == 0){
 		cell.textLabel.text = @"Privacy";
 		cell.detailTextLabel.text = [self privacyTitle];
-		cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+		cell.accessoryType = UITableViewCellAccessoryNone;
 		return cell;
 	}
 	if (indexPath.row == 1){
 		cell.textLabel.text = @"Active For";
 		cell.detailTextLabel.text = [self activePeriodTitle];
-		cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+		cell.accessoryType = UITableViewCellAccessoryNone;
 		return cell;
 	}
 	if (indexPath.row == 2){
 		cell.textLabel.text = @"Post As";
 		cell.detailTextLabel.text = self.targetTitle ?: @"My Story";
-		cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+		cell.accessoryType = UITableViewCellAccessoryNone;
 		return cell;
 	}
 	cell.textLabel.text = @"Album IDs";
 	cell.detailTextLabel.text = self.albumIds.count
 			? [self.albumIds componentsJoinedByString:@", "] : @"None";
-	cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+	cell.accessoryType = UITableViewCellAccessoryNone;
 	return cell;
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
 	if (indexPath.section == kStorySectionOptions)
 		return;
+	[tableView deselectRowAtIndexPath:indexPath animated:YES];
 	if (indexPath.section == kStorySectionPublish){
 		if (indexPath.row == 0)
 			[self postStory];

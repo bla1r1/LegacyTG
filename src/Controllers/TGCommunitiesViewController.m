@@ -35,7 +35,7 @@
 		NSString *detail = community[@"status"];
 		if (![community[@"haveAccess"] boolValue])
 			detail = @"No access";
-		NSMutableDictionary *row = TGTier2Row(community[@"name"] ?: @"Community",
+		NSMutableDictionary *row = TGTier2OpenRow(community[@"name"] ?: @"Community",
 											  detail, ^{
 			TGCommunityViewController *screen =
 					[[TGCommunityViewController alloc] initWithCommunity:community];

@@ -8,6 +8,7 @@
 #import "TGStoryAlbumsViewController.h"
 #import "TGStoryComposerViewController.h"
 #import "TGLiveStoryViewController.h"
+#import "TGMessageLayout.h"
 #import <AVFoundation/AVFoundation.h>
 #import <QuartzCore/QuartzCore.h>
 
@@ -435,8 +436,13 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 	self.senderLabel.text = story[@"title"] ?: self.storyTitle;
 	[self refreshAuthorAvatar];
 	[self updateHeaderCounterForStory:story];
-	NSString *caption = story[@"caption"] ?: @"";
-	self.captionLabel.text = caption;
+	NSString *caption = [story[@"caption"] isKindOfClass:NSString.class] ? story[@"caption"] : @"";
+	NSArray *captionEntities = [story[@"captionEntities"] isKindOfClass:NSArray.class] ? story[@"captionEntities"] : nil;
+	if (captionEntities.count && caption.length) {
+		self.captionLabel.attributedText = TGAttributedMessageText(caption, captionEntities, self.captionLabel.font, self.captionLabel.textColor);
+	} else {
+		self.captionLabel.text = caption;
+	}
 	NSInteger viewers = [story[@"viewers"] integerValue];
 	NSInteger reactions = [story[@"reactions"] integerValue];
 	NSMutableArray *bits = [NSMutableArray array];

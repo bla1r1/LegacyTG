@@ -1259,4 +1259,18 @@ static NSDictionary *mcUser(id userId, NSString *firstName, NSString *lastName, 
 	XCTAssertEqual((int64_t)card.actionTargetId, (int64_t)999);
 }
 
+#pragma mark - Emoji Status Property
+
+- (void)testCard_TitleStatusEmojiId_DefaultsToZero {
+	TGMessageCard *card = [[TGMessageCard alloc] init];
+	XCTAssertTrue(card != nil);
+	XCTAssertEqual((int64_t)card.titleStatusEmojiId, (int64_t)0);
+}
+
+- (void)testCard_TitleStatusEmojiId_RetainsAssignedValue {
+	TGMessageCard *card = [[TGMessageCard alloc] init];
+	card.titleStatusEmojiId = 5432167890LL;
+	XCTAssertEqual((int64_t)card.titleStatusEmojiId, (int64_t)5432167890LL);
+}
+
 @end

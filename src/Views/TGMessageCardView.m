@@ -1,4 +1,5 @@
 #import "TGMessageCardView.h"
+#import "TGNameWithStatus.h"
 #import "TGStyle.h"
 #import "TGTheme.h"
 #import "TGMediaStore.h"
@@ -110,7 +111,11 @@ static const NSUInteger kCardLineViewsCount = 4;
 	// Title
 	self.title.frame = frames.title;
 	self.title.hidden = CGRectIsEmpty(frames.title);
-	self.title.text = card.title ?: @"";
+	if (card.titleStatusEmojiId != 0) {
+		self.title.attributedText = TGNameWithStatus(card.title ?: @"", card.titleStatusEmojiId, self.title.font, [[TGTheme shared] primaryTextColour]);
+	} else {
+		self.title.text = card.title ?: @"";
+	}
 
 	// Lines
 	NSUInteger lineCount = [card.lines isKindOfClass:NSArray.class] ? card.lines.count : 0;

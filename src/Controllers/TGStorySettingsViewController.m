@@ -50,6 +50,7 @@
 			@"title" : chat[@"title"] ?: @"Chat",
 			@"detail" : muted ? @"Story notifications are off"
 							  : @"Story notifications follow the default",
+			@"opens" : @YES,
 			@"tap" : ^{ [weakSelf openChat:chat]; },
 		}];
 	}

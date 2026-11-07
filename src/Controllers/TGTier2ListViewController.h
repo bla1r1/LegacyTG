@@ -14,6 +14,7 @@ extern NSString *const TGTier2RowTap;
 extern NSString *const TGTier2RowChecked;
 extern NSString *const TGTier2RowSubtitle;
 extern NSString *const TGTier2RowDestructive;
+extern NSString *const TGTier2RowOpens;
 
 extern NSString *const TGTier2KindPlain;
 extern NSString *const TGTier2KindDisclosure;
@@ -22,6 +23,7 @@ extern NSString *const TGTier2KindAction;
 extern NSString *const TGTier2KindDestructive;
 
 NSMutableDictionary *TGTier2Row(NSString *title, NSString *detail, void (^tap)(void));
+NSMutableDictionary *TGTier2OpenRow(NSString *title, NSString *detail, void (^tap)(void));
 NSMutableDictionary *TGTier2Action(NSString *title, void (^tap)(void));
 NSMutableDictionary *TGTier2Check(NSString *title, NSString *detail, BOOL checked,
 								  void (^tap)(void));

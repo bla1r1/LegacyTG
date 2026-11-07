@@ -127,7 +127,12 @@
 			cell.captionLabel.hidden = NO;
 			cell.captionLabel.font = TGFontBody();
 			cell.captionLabel.textColor = [cardTheme primaryTextColour];
-			cell.captionLabel.text = caption;
+			NSArray *entities = [m[@"entities"] isKindOfClass:NSArray.class] ? m[@"entities"] : nil;
+			if (entities.count) {
+				cell.captionLabel.attributedText = TGAttributedMessageText(caption, entities, cell.captionLabel.font, cell.captionLabel.textColor);
+			} else {
+				cell.captionLabel.text = caption;
+			}
 			cell.captionLabel.frame = CGRectMake(kPadH, fwd + kTrackRow + TGMetricPadSmall,
 					capW, capSize.height);
 			[cell.bubble bringSubviewToFront:cell.captionLabel];
@@ -223,7 +228,12 @@
 			cell.captionLabel.hidden = NO;
 			cell.captionLabel.font = TGFontBody();
 			cell.captionLabel.textColor = [voiceTheme primaryTextColour];
-			cell.captionLabel.text = caption;
+			NSArray *entities = [m[@"entities"] isKindOfClass:NSArray.class] ? m[@"entities"] : nil;
+			if (entities.count) {
+				cell.captionLabel.attributedText = TGAttributedMessageText(caption, entities, cell.captionLabel.font, cell.captionLabel.textColor);
+			} else {
+				cell.captionLabel.text = caption;
+			}
 			cell.captionLabel.frame = CGRectMake(kPadH, underRow, textW, capSize.height);
 			[cell.bubble bringSubviewToFront:cell.captionLabel];
 		} else {

@@ -738,6 +738,7 @@ static NSString *TGTopicStateLine(NSDictionary *info) {
 			@{@"title" : @"Created",
 			  @"detail" : TGTopicWhen(info[@"created"]) ?: @""},
 			@{@"title" : @"Open Topic", @"detail" : @"Read and reply",
+			  @"opens" : @YES,
 			  @"tap" : ^{ [me openTopic:info]; }},
 			@{@"title" : @"Copy Link", @"detail" : @"t.me",
 			  @"tap" : ^{

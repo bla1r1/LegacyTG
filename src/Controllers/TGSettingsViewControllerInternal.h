@@ -34,6 +34,7 @@ static NSString *const TGRowChecked  = @"checked";
 static NSString *const TGRowIcon     = @"icon";
 static NSString *const TGRowColour   = @"colour";
 static NSString *const TGRowSubtitle = @"subtitle";
+static NSString *const TGRowOpens    = @"opens";
 
 // Kinds
 static NSString *const TGKindPlain       = @"plain";
@@ -62,6 +63,12 @@ static inline NSDictionary *TGTapRow(NSString *title, NSString *detail, void (^t
 	NSMutableDictionary *row = TGRow(TGKindDisclosure, title);
 	if (detail) row[TGRowDetail] = detail;
 	if (tap) row[TGRowTap] = [tap copy];
+	return row;
+}
+
+static inline NSDictionary *TGOpenRow(NSString *title, NSString *detail, void (^tap)(void)) {
+	NSMutableDictionary *row = [TGTapRow(title, detail, tap) mutableCopy];
+	row[TGRowOpens] = @YES;
 	return row;
 }
 
@@ -102,6 +109,13 @@ static inline NSDictionary *TGSubtitleRow(NSString *title, NSString *subtitle,
 	return row;
 }
 
+static inline NSDictionary *TGSubtitleOpenRow(NSString *title, NSString *subtitle,
+									  void (^tap)(void)) {
+	NSMutableDictionary *row = [TGSubtitleRow(title, subtitle, tap) mutableCopy];
+	row[TGRowOpens] = @YES;
+	return row;
+}
+
 static inline NSString *TGPrivacyLabel(NSString *value) {
 	if (!value.length) return @"...";
 	if ([value hasPrefix:@"everybody"])
@@ -134,6 +148,13 @@ static inline NSDictionary *TGIconRow(NSString *title, NSString *icon, UIColor *
 	return row;
 }
 
+static inline NSDictionary *TGIconOpenRow(NSString *title, NSString *icon, UIColor *colour,
+								  void (^tap)(void)) {
+	NSMutableDictionary *row = [TGIconRow(title, icon, colour, tap) mutableCopy];
+	row[TGRowOpens] = @YES;
+	return row;
+}
+
 /// Telegram's settings rows pair the glyph with the value the setting holds:
 /// "Data and Storage  1.2 GB", "Language  Українська". The plain icon row has
 /// nowhere to put that value, so these pages were either glyphs or values.
@@ -142,6 +163,14 @@ static inline NSDictionary *TGIconTapRow(NSString *title, NSString *detail,
 								  void (^tap)(void)) {
 	NSMutableDictionary *row = [TGIconRow(title, icon, colour, tap) mutableCopy];
 	if (detail) row[TGRowDetail] = detail;
+	return row;
+}
+
+static inline NSDictionary *TGIconTapOpenRow(NSString *title, NSString *detail,
+									 NSString *icon, UIColor *colour,
+									 void (^tap)(void)) {
+	NSMutableDictionary *row = [TGIconTapRow(title, detail, icon, colour, tap) mutableCopy];
+	row[TGRowOpens] = @YES;
 	return row;
 }
 

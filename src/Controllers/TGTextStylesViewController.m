@@ -95,14 +95,14 @@
 			: ([style[@"isCreator"] boolValue] ? @"Created by you" : @"Telegram style");
 	cell.detailTextLabel.font = TGFontSubhead();
 	cell.detailTextLabel.textColor = [[TGTheme shared] secondaryTextColour];
-	cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+	cell.accessoryType = UITableViewCellAccessoryNone;
 	return cell;
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
 	if (indexPath.row >= (NSInteger)self.styles.count)
 		return;
+	[tableView deselectRowAtIndexPath:indexPath animated:YES];
 	[self showActionsForStyle:self.styles[indexPath.row]];
 }
 

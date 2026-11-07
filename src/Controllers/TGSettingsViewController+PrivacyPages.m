@@ -173,7 +173,7 @@ static NSString *TGNotificationGroupLabel(NSString *type) {
 				  @"TDLib keeps the notifications it showed while this app was "
 				  @"closed. They can be read and removed here without leaving "
 				  @"the chat.", @[
-			TGIconTapRow(@"Active Notifications", activeDetail,
+			TGIconTapOpenRow(@"Active Notifications", activeDetail,
 					@"notifications", TGIconTileRed(), ^{
 				TGActiveNotificationsViewController *active =
 						[[TGActiveNotificationsViewController alloc] init];
@@ -186,13 +186,14 @@ static NSString *TGNotificationGroupLabel(NSString *type) {
 				  @"the same record; only the message source moves here.",
 				  reactionRows),
 		TGSection(@"PER-CHAT EXCEPTIONS", nil, @[
-			TGIconTapRow(@"Chats With Custom Settings", nil,
+			TGIconTapOpenRow(@"Chats With Custom Settings", nil,
 					@"chat", TGIconTileAzure(), ^{
 				[[TGClient shared] notificationExceptionsWithCompletion:^(NSArray *chats){
 					NSMutableArray *rows = [NSMutableArray array];
 					for (NSDictionary *chat in chats){
 						[rows addObject:@{@"title" : chat[@"title"] ?: @"Chat",
 										  @"detail" : @"Open",
+										  @"opens" : @YES,
 										  @"tap" : ^{
 							TGChatViewController *vc = [[TGChatViewController alloc] init];
 							vc.chatId = [chat[@"id"] longLongValue];
@@ -218,7 +219,7 @@ static NSString *TGNotificationGroupLabel(NSString *type) {
 				  @"Custom sounds are stored on the account, so a chat rings the "
 				  @"same way on every device. iOS still draws the banners.",
 				  @[
-			TGIconTapRow(@"Custom Sounds",
+			TGIconTapOpenRow(@"Custom Sounds",
 					weakSelf.savedSoundsLoaded
 							? [NSString stringWithFormat:@"%lu",
 								(unsigned long)weakSelf.savedSounds.count]
@@ -534,7 +535,7 @@ static NSString *TGNotificationGroupLabel(NSString *type) {
 	// then account status and the destructive rows at the end.
 	return @[
 		TGSection(@"SECURITY", nil, @[
-			TGIconTapRow(@"Passcode Lock", [TGPasscode hasPasscode] ? @"On" : @"Off",
+			TGIconTapOpenRow(@"Passcode Lock", [TGPasscode hasPasscode] ? @"On" : @"Off",
 					@"privacy", TGIconTileSky(), ^{
 				[weakSelf openPage:TGSettingsPagePasscode];
 			}),
@@ -560,20 +561,20 @@ static NSString *TGNotificationGroupLabel(NSString *type) {
 					@"select", TGIconTileRed(), ^{
 				[weakSelf showApplicationVerification];
 			}),
-			TGIconTapRow(@"Default Admin Rights", nil,
+			TGIconTapOpenRow(@"Default Admin Rights", nil,
 					@"folder", TGIconTileAzure(), ^{
 				TGAdminRightsViewController *rights =
 						[[TGAdminRightsViewController alloc] init];
 				rights.hidesBottomBarWhenPushed = YES;
 				[weakSelf.navigationController pushViewController:rights animated:YES];
 			}),
-			TGIconTapRow(@"Active Sessions", nil,
+			TGIconTapOpenRow(@"Active Sessions", nil,
 					@"devices", TGIconTileSlate(), ^{
 				TGSessionsViewController *sessions = [[TGSessionsViewController alloc] init];
 				sessions.hidesBottomBarWhenPushed = YES;
 				[weakSelf.navigationController pushViewController:sessions animated:YES];
 			}),
-			TGIconTapRow(@"Blocked Users", nil,
+			TGIconTapOpenRow(@"Blocked Users", nil,
 					@"close", TGIconTileCoral(), ^{
 				[weakSelf openPage:TGSettingsPageBlocked];
 			}),
@@ -611,11 +612,11 @@ static NSString *TGNotificationGroupLabel(NSString *type) {
 					@"chat", TGIconTileSky(), ^{
 				[weakSelf choosePersonalChat];
 			}),
-			TGIconTapRow(@"Inactive Groups", nil,
+			TGIconTapOpenRow(@"Inactive Groups", nil,
 					@"folder", TGIconTileCyan(), ^{
 				[weakSelf showInactiveGroups];
 			}),
-			TGIconTapRow(@"My Public Chats", nil,
+			TGIconTapOpenRow(@"My Public Chats", nil,
 					@"faq", TGIconTileViolet(), ^{
 				[weakSelf showPublicChats];
 			}),
@@ -640,7 +641,7 @@ static NSString *TGNotificationGroupLabel(NSString *type) {
 				  @"Close friends are contacts you pick; the list is what "
 				  @"stories and other close-friend features read.",
 				  @[
-			TGIconTapRow(@"Close Friends",
+			TGIconTapOpenRow(@"Close Friends",
 					weakSelf.closeFriendsLoaded
 							? [NSString stringWithFormat:@"%ld",
 									(long)weakSelf.closeFriendsCount] : @"...",
@@ -715,7 +716,7 @@ static NSString *TGNotificationGroupLabel(NSString *type) {
 		]),
 
 		TGSection(@"PAYMENT AND ORDERS", nil, @[
-			TGIconTapRow(@"Orders and Payment Data", nil,
+			TGIconTapOpenRow(@"Orders and Payment Data", nil,
 					@"data", TGIconTileGreen(), ^{
 				[weakSelf openPage:TGSettingsPagePaymentData];
 			}),
@@ -967,6 +968,7 @@ static NSString *TGNotificationGroupLabel(NSString *type) {
 		for (NSDictionary *chat in chats){
 			[rows addObject:@{@"title" : chat[@"title"] ?: @"Group",
 							  @"detail" : @"Open",
+							  @"opens" : @YES,
 							  @"tap" : ^{
 				TGChatViewController *vc = [[TGChatViewController alloc] init];
 				vc.chatId = [chat[@"id"] longLongValue];
@@ -1085,7 +1087,7 @@ static NSString *TGNotificationGroupLabel(NSString *type) {
 					  @"When a passcode is set, a lock icon appears on the chat list. "
 					  @"Tap it to lock the app immediately.",
 					  @[
-				TGTapRow(@"Turn Passcode On", nil, ^{
+				TGOpenRow(@"Turn Passcode On", nil, ^{
 					TGPasscodeViewController *vc = [[TGPasscodeViewController alloc] init];
 					vc.mode = TGPasscodeModeSetup;
 					vc.onSuccess = ^{
@@ -1106,7 +1108,7 @@ static NSString *TGNotificationGroupLabel(NSString *type) {
 
 	return @[
 		TGSection(nil, nil, @[
-			TGTapRow(@"Turn Passcode Off", nil, ^{
+			TGOpenRow(@"Turn Passcode Off", nil, ^{
 				TGPasscodeViewController *vc = [[TGPasscodeViewController alloc] init];
 				vc.mode = TGPasscodeModeTurnOff;
 				vc.onSuccess = ^{
@@ -1118,7 +1120,7 @@ static NSString *TGNotificationGroupLabel(NSString *type) {
 				};
 				[weakSelf.navigationController pushViewController:vc animated:YES];
 			}),
-			TGTapRow(@"Change Passcode", nil, ^{
+			TGOpenRow(@"Change Passcode", nil, ^{
 				TGPasscodeViewController *vc = [[TGPasscodeViewController alloc] init];
 				vc.mode = TGPasscodeModeChange;
 				vc.onSuccess = ^{

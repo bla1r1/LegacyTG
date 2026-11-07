@@ -151,13 +151,14 @@
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
 	if (indexPath.row >= (NSInteger)self.stories.count){
-		if (!self.stories.count && !self.loading)
+		if (!self.stories.count || self.loading)
 			return;
+		[tableView deselectRowAtIndexPath:indexPath animated:YES];
 		[self loadMore];
 		return;
 	}
+	[tableView deselectRowAtIndexPath:indexPath animated:YES];
 	TGStoryViewerViewController *viewer = [[TGStoryViewerViewController alloc]
 			initWithChatId:self.chatId
 					 title:self.chatTitle

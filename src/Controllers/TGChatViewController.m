@@ -1605,7 +1605,8 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 			[me hidePinnedBanner];
 			return;
 		}
-		[me showPinnedBanner:text];
+		NSArray *entities = [m[@"entities"] isKindOfClass:NSArray.class] ? m[@"entities"] : nil;
+		[me showPinnedBanner:text entities:entities];
 	}];
 }
 
@@ -1640,17 +1641,28 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 }
 
 - (void)showPinnedBanner:(NSString *)text {
+	[self showPinnedBanner:text entities:nil];
+}
+
+- (void)showPinnedBanner:(NSString *)text entities:(NSArray *)entities {
 	// A second pin updates the strip in place: recreating it would blink the
 	// whole banner and churn the table inset.
 	if (self.pinnedBannerView) {
 		self.pinnedBannerView.tag++;
 		UILabel *body = (UILabel *)[self.pinnedBannerView viewWithTag:kPinnedBodyTag];
-		if ([body isKindOfClass:UILabel.class] && ![body.text isEqualToString:text]) {
-			CATransition *fade = [CATransition animation];
-			fade.type = kCATransitionFade;
-			fade.duration = TGAnimationDurationFast;
-			[body.layer addAnimation:fade forKey:@"pinnedTextFade"];
-			body.text = text;
+		if ([body isKindOfClass:UILabel.class]) {
+			BOOL textChanged = ![body.text isEqualToString:text];
+			if (textChanged) {
+				CATransition *fade = [CATransition animation];
+				fade.type = kCATransitionFade;
+				fade.duration = TGAnimationDurationFast;
+				[body.layer addAnimation:fade forKey:@"pinnedTextFade"];
+			}
+			if (entities.count && text.length) {
+				body.attributedText = TGAttributedMessageText(text, entities, body.font, body.textColor);
+			} else {
+				body.text = text;
+			}
 		}
 		// This pin may have arrived while the strip was sliding away. A fresh
 		// animation on the same two properties cancels that hide and puts the
@@ -1696,11 +1708,15 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 	UILabel *body = [[UILabel alloc] initWithFrame:CGRectMake(kPinnedTextX, TGMetricPadTiny + TGMetricLineMicro,
 			b.size.width - kPinnedTextX - TGMetricPad, TGMetricLineCaption)];
 	body.tag = kPinnedBodyTag;
-	body.text = text;
 	body.font = TGFontCaption();
 	body.textColor = [theme primaryTextColour];
 	body.backgroundColor = [UIColor clearColor];
 	body.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+	if (entities.count && text.length) {
+		body.attributedText = TGAttributedMessageText(text, entities, body.font, body.textColor);
+	} else {
+		body.text = text;
+	}
 	[banner addSubview:body];
 
 	UIView *hair = [[UIView alloc] initWithFrame:CGRectMake(0,
