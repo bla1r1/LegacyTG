@@ -1,5 +1,6 @@
 #import "TGServiceMessageText.h"
 #import "TGClientInternal.h"
+#import "TGLocalization.h"
 #include <vector>
 #include <algorithm>
 
@@ -193,7 +194,8 @@ NSString *TGKnownMessagePreview(NSDictionary *message) {
 	}
 	if ([ctype isEqualToString:@"messageChecklist"]){
 		NSString *title = content[@"list"][@"title"][@"text"];
-		return title.length ? [@"☑️ " stringByAppendingString:title] : @"Checklist";
+		return title.length ? [@"☑️ " stringByAppendingString:title]
+				: TGLocalized(@"Checklist");
 	}
 	if ([ctype isEqualToString:@"messageDice"]){
 		NSString *emoji = content[@"emoji"];
@@ -201,7 +203,8 @@ NSString *TGKnownMessagePreview(NSDictionary *message) {
 	}
 	if ([ctype isEqualToString:@"messageGame"]){
 		NSString *title = content[@"game"][@"title"];
-		return title.length ? [@"🎮 " stringByAppendingString:title] : @"🎮 Game";
+		return title.length ? [@"🎮 " stringByAppendingString:title]
+				: [@"🎮 " stringByAppendingString:TGLocalized(@"Game")];
 	}
 	if ([ctype isEqualToString:@"messageInvoice"]){
 		NSString *title = content[@"product_info"][@"title"];
@@ -214,10 +217,11 @@ NSString *TGKnownMessagePreview(NSDictionary *message) {
 	if ([ctype isEqualToString:@"messageGiveawayWinners"])
 		return @"Giveaway results";
 	if ([ctype isEqualToString:@"messageGift"])
-		return @"🎁 Gift";
+		return [@"🎁 " stringByAppendingString:TGLocalized(@"Gift")];
 	if ([ctype isEqualToString:@"messageUpgradedGift"]){
 		NSString *title = content[@"gift"][@"title"];
-		return title.length ? [@"🎁 " stringByAppendingString:title] : @"🎁 Gift";
+		return title.length ? [@"🎁 " stringByAppendingString:title]
+				: [@"🎁 " stringByAppendingString:TGLocalized(@"Gift")];
 	}
 	if ([ctype isEqualToString:@"messageStory"])
 		return @"Story";

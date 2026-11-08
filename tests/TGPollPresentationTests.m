@@ -54,24 +54,24 @@ static NSDictionary *ppOtherOption(void) {
 
 - (void)testKindLine_PublicPoll {
 	NSDictionary *poll = ppPoll(NO, NO, NO, NO, @[], 0);
-	XCTAssertEqualObjects(TGPollKindLine(poll), @"Public Poll");
+	XCTAssertEqualObjects(TGPollKindLine(poll), @"Poll");
 }
 
 #pragma mark - votes line
 
 - (void)testVotesLine_QuizNone {
 	XCTAssertEqualObjects(TGPollVotesLine(ppPoll(NO, YES, YES, NO, @[], 0)),
-			@"No answers");
+			@"Nobody answered yet");
 }
 
 - (void)testVotesLine_QuizOne {
 	XCTAssertEqualObjects(TGPollVotesLine(ppPoll(NO, YES, YES, NO, @[], 1)),
-			@"1 answer");
+			@"1 answered");
 }
 
 - (void)testVotesLine_QuizMany {
 	XCTAssertEqualObjects(TGPollVotesLine(ppPoll(NO, YES, YES, NO, @[], 7)),
-			@"7 answers");
+			@"7 answered");
 }
 
 - (void)testVotesLine_PollNone {
@@ -93,12 +93,17 @@ static NSDictionary *ppOtherOption(void) {
 
 - (void)testClosesLine_MinutesAndSeconds {
 	NSDictionary *poll = @{@"isClosed" : @NO, @"closeDate" : @300};
-	XCTAssertEqualObjects(TGPollClosesLine(poll, 1), @"Ends in 4:59");
+	XCTAssertEqualObjects(TGPollClosesLine(poll, 1), @"ends in 4:59");
 }
 
 - (void)testClosesLine_Hours {
 	NSDictionary *poll = @{@"isClosed" : @NO, @"closeDate" : @3601};
-	XCTAssertEqualObjects(TGPollClosesLine(poll, 1), @"Ends in 1:00:00");
+	XCTAssertEqualObjects(TGPollClosesLine(poll, 1), @"ends in 1:00:00");
+}
+
+- (void)testClosesLine_Days {
+	NSDictionary *poll = @{@"isClosed" : @NO, @"closeDate" : @(86400 * 3 + 1)};
+	XCTAssertEqualObjects(TGPollClosesLine(poll, 1), @"ends in 3 days");
 }
 
 - (void)testClosesLine_NilWhenClosed {

@@ -206,7 +206,7 @@ static const NSInteger kHUDBarTag     = 0x9103;
 static const CGFloat kTitleWidth      = 200.0f;
 static const CGFloat kTitleRow        = TGMetricListAvatar;
 /// The pinned-message strip under the navigation bar.
-static const CGFloat kPinnedBanner    = 34.0f;
+static const CGFloat kPinnedBanner    = 50.0f;
 /// The cross that dismisses the banner.
 static const CGFloat kBannerCloseGlyph = 16.0f;
 /// The eye glyph beside a channel post's view count.

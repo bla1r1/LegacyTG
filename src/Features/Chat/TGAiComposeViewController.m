@@ -19,7 +19,7 @@
 @implementation TGAiComposeViewController
 
 - (void)viewDidLoad {
-	self.title = @"AI Compose";
+	self.title = @"Create with AI";
 	[super viewDidLoad];
 	NSString *code = [[NSLocale currentLocale] objectForKey:NSLocaleLanguageCode];
 	self.language = code.length ? code : @"en";
@@ -52,7 +52,7 @@
 	[inputRows addObject:TGFeatureRow(@"Prompt", [self short:self.prompt], ^{
 		[weakSelf editPrompt];
 	})];
-	[inputRows addObject:TGFeatureRow(@"Style", self.style.length ? self.style : @"Keep current", ^{
+	[inputRows addObject:TGFeatureRow(@"Style", self.style.length ? self.style : @"None", ^{
 		[weakSelf editStyle];
 	})];
 	[inputRows addObject:TGFeatureRow(@"Language", self.language, ^{
@@ -66,24 +66,24 @@
 		weakSelf.addEmojis = !weakSelf.addEmojis;
 		[weakSelf rebuild];
 	})];
-	[inputRows addObject:TGFeatureOpenRow(@"Send To", self.chatTitle.length
-			? self.chatTitle : @"Choose a chat", ^{
+	[inputRows addObject:TGFeatureOpenRow(@"Recipient", self.chatTitle.length
+			? self.chatTitle : @"Select Chat", ^{
 		[weakSelf chooseChat];
 	})];
 
 	NSMutableArray *actionRows = [NSMutableArray array];
-	[actionRows addObject:TGFeatureAction(@"Compose Text with AI", ^{ [weakSelf composeText]; })];
-	[actionRows addObject:TGFeatureAction(@"Fix Text with AI", ^{ [weakSelf fixText]; })];
-	[actionRows addObject:TGFeatureAction(@"Compose Rich Message with AI", ^{
+	[actionRows addObject:TGFeatureAction(@"Create with AI", ^{ [weakSelf composeText]; })];
+	[actionRows addObject:TGFeatureAction(@"AI Editor", ^{ [weakSelf fixText]; })];
+	[actionRows addObject:TGFeatureAction(@"Compose", ^{
 		[weakSelf composeRich];
 	})];
-	[actionRows addObject:TGFeatureAction(@"Fix Rich Message with AI", ^{
+	[actionRows addObject:TGFeatureAction(@"Fix", ^{
 		[weakSelf fixRich];
 	})];
-	[actionRows addObject:TGFeatureAction(@"Create Rich Message with AI", ^{
+	[actionRows addObject:TGFeatureAction(@"Generate", ^{
 		[weakSelf createRich];
 	})];
-	[actionRows addObject:TGFeatureAction(@"Translate Rich Message", ^{
+	[actionRows addObject:TGFeatureAction(@"Translate", ^{
 		[weakSelf translateRich];
 	})];
 
@@ -93,17 +93,14 @@
 			[weakSelf showResult];
 		})];
 	}
-	[sendRows addObject:TGFeatureAction(@"Send Result as Text", ^{ [weakSelf sendResult]; })];
+	[sendRows addObject:TGFeatureAction(@"Send Message", ^{ [weakSelf sendResult]; })];
 	[sendRows addObject:TGFeatureAction(@"Send as Rich Draft", ^{
 		[weakSelf sendDraft];
 	})];
 
 	self.sections = @[
-		TGFeatureSection(nil,
-				@"The text is sent to Telegram's AI. A free account may be "
-				@"refused; the sheet says exactly what Telegram answered.",
-				inputRows),
-		TGFeatureSection(@"AI", nil, actionRows),
+		TGFeatureSection(nil, nil, inputRows),
+		TGFeatureSection(@"AI Tools", nil, actionRows),
 		TGFeatureSection(@"Result", nil, sendRows),
 	];
 	[self reloadRows];
@@ -114,7 +111,7 @@
 - (void)editText {
 	__weak typeof(self) weakSelf = self;
 	[TGAlertSheet showInput:@"Text"
-					message:@"The text the AI rewrites."
+					message:nil
 				placeholder:@"Text"
 					   text:self.text
 					 action:@"Save"
@@ -128,7 +125,7 @@
 - (void)editPrompt {
 	__weak typeof(self) weakSelf = self;
 	[TGAlertSheet showInput:@"Prompt"
-					message:@"What the new rich message should say."
+					message:nil
 				placeholder:@"Prompt"
 					   text:self.prompt
 					 action:@"Save"
@@ -141,7 +138,7 @@
 
 - (void)editStyle {
 	__weak typeof(self) weakSelf = self;
-	NSArray *titles = @[@"Keep current", @"Formal", @"Casual", @"Excited"];
+	NSArray *titles = @[@"None", @"Formal", @"Casual", @"Excited"];
 	[TGAlertSheet showChoices:titles
 						title:@"Style"
 			 destructiveIndex:-1
@@ -155,7 +152,7 @@
 - (void)editLanguage {
 	__weak typeof(self) weakSelf = self;
 	[TGAlertSheet showInput:@"Language"
-					message:@"An IETF code, such as en, uk or de."
+					message:nil
 				placeholder:@"en"
 					   text:self.language
 					 action:@"Save"
@@ -194,7 +191,7 @@
 
 - (void)composeText {
 	if (!self.text.length){
-		[self toast:@"Type some text first."];
+		[self toast:@"An error occurred."];
 		return;
 	}
 	__weak typeof(self) weakSelf = self;
@@ -204,7 +201,7 @@
 							   addEmojis:self.addEmojis
 							  completion:^(NSString *text, NSString *error){
 		if (!text){
-			[weakSelf toast:error ?: @"Telegram refused that."];
+			[weakSelf toast:error ?: @"An error occurred."];
 			return;
 		}
 		weakSelf.result = text;
@@ -214,14 +211,14 @@
 
 - (void)fixText {
 	if (!self.text.length){
-		[self toast:@"Type some text first."];
+		[self toast:@"An error occurred."];
 		return;
 	}
 	__weak typeof(self) weakSelf = self;
 	[[TGClient shared] fixTextWithAi:self.text
 						  completion:^(NSString *text, NSString *diff, NSString *error){
 		if (!text){
-			[weakSelf toast:error ?: @"Telegram refused that."];
+			[weakSelf toast:error ?: @"An error occurred."];
 			return;
 		}
 		weakSelf.result = text;
@@ -231,7 +228,7 @@
 
 - (void)composeRich {
 	if (!self.text.length){
-		[self toast:@"Type some text first."];
+		[self toast:@"An error occurred."];
 		return;
 	}
 	__weak typeof(self) weakSelf = self;
@@ -242,7 +239,7 @@
 									  addEmojis:self.addEmojis
 									 completion:^(NSString *text, NSString *error){
 		if (!text.length){
-			[weakSelf toast:error ?: @"Telegram refused that."];
+			[weakSelf toast:error ?: @"An error occurred."];
 			return;
 		}
 		weakSelf.result = text;
@@ -252,14 +249,14 @@
 
 - (void)fixRich {
 	if (!self.text.length){
-		[self toast:@"Type some text first."];
+		[self toast:@"An error occurred."];
 		return;
 	}
 	__weak typeof(self) weakSelf = self;
 	[[TGClient shared] fixRichMessageWithAi:self.text
 								  completion:^(NSString *text, NSString *error){
 		if (!text.length){
-			[weakSelf toast:error ?: @"Telegram refused that."];
+			[weakSelf toast:error ?: @"An error occurred."];
 			return;
 		}
 		weakSelf.result = text;
@@ -269,7 +266,7 @@
 
 - (void)createRich {
 	if (!self.prompt.length){
-		[self toast:@"Type a prompt first."];
+		[self toast:@"An error occurred."];
 		return;
 	}
 	__weak typeof(self) weakSelf = self;
@@ -278,7 +275,7 @@
 									 addEmojis:self.addEmojis
 									completion:^(NSString *text, NSString *error){
 		if (!text.length){
-			[weakSelf toast:error ?: @"Telegram refused that."];
+			[weakSelf toast:error ?: @"An error occurred."];
 			return;
 		}
 		weakSelf.result = text;
@@ -288,7 +285,7 @@
 
 - (void)translateRich {
 	if (!self.text.length){
-		[self toast:@"Type some text first."];
+		[self toast:@"An error occurred."];
 		return;
 	}
 	__weak typeof(self) weakSelf = self;
@@ -297,7 +294,7 @@
 									   tone:self.tone
 								 completion:^(NSString *text, NSString *error){
 		if (!text.length){
-			[weakSelf toast:error ?: @"Telegram refused that."];
+			[weakSelf toast:error ?: @"An error occurred."];
 			return;
 		}
 		weakSelf.result = text;
@@ -308,7 +305,7 @@
 - (void)showResult {
 	__weak typeof(self) weakSelf = self;
 	TGFeatureResultViewController *screen = [[TGFeatureResultViewController alloc]
-			initWithTitle:@"AI Result" body:self.result];
+			initWithTitle:@"Result" body:self.result];
 	screen.onSend = self.chatId ? ^(NSString *text){
 		[weakSelf sendText:text];
 	} : nil;
@@ -319,7 +316,7 @@
 
 - (void)sendResult {
 	if (!self.result.length){
-		[self toast:@"There is no result to send."];
+		[self toast:@"An error occurred."];
 		return;
 	}
 	[self sendText:self.result];
@@ -341,7 +338,7 @@
 	}
 	NSString *body = self.result.length ? self.result : self.text;
 	if (!body.length){
-		[self toast:@"There is no text for a draft."];
+		[self toast:@"An error occurred."];
 		return;
 	}
 	__weak typeof(self) weakSelf = self;
@@ -354,10 +351,10 @@
 								 keepOnStop:YES
 								 completion:^(BOOL ok, NSString *error){
 		if (!ok){
-			[weakSelf toast:error ?: @"Telegram refused that draft."];
+			[weakSelf toast:error ?: @"An error occurred."];
 			return;
 		}
-		[weakSelf toast:@"Draft sent"];
+		[weakSelf toast:@"Draft Saved"];
 	}];
 }
 

@@ -3,8 +3,11 @@
 #import "TGIconsInternal.h"
 #import "TGStyle.h"
 #import <ImageIO/ImageIO.h>
+#import <objc/runtime.h>
 
 #pragma mark - avatars
+
+static char kTGAvatarPathKey;
 
 static UIImage *TGGlyphAvatar(CGFloat side, void (^draw)(CGContextRef ctx, CGFloat s)) {
 	UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), NO, 0);
@@ -287,11 +290,14 @@ static UIImage *TGGlyphAvatar(CGFloat side, void (^draw)(CGContextRef ctx, CGFlo
 	// real profile photo crashed SIGSEGV 0x0 inside the image library (the
 	// crash that killed entering a profile, B15's second act). The data-backed
 	// path is the one that survived 117 chats of avatars on the same device.
-	UIImage *loaded = [UIImage imageWithContentsOfFile:path];
-	// UIImage reads no WebP before iOS 14; sticker and gift thumbnails are
-	// WebP, so they came back nil and drew nothing.
-	if (!loaded && [path.pathExtension.lowercaseString isEqualToString:@"webp"])
+	UIImage *loaded = nil;
+	if ([path.pathExtension.lowercaseString isEqualToString:@"webp"]) {
 		loaded = [UIImage convertFromWebP:path compressedData:nil error:nil];
+	} else {
+		loaded = [UIImage imageWithContentsOfFile:path];
+		if (!loaded)
+			loaded = [UIImage convertFromWebP:path compressedData:nil error:nil];
+	}
 	if (!loaded)
 		return nil;
 	return [self decodedImage:loaded fittingSize:target fill:fill scale:scale];
@@ -310,18 +316,25 @@ dispatch_semaphore_t TGIconsDecodeGate(void) {
 + (void)loadImageAtPath:(NSString *)path into:(UIImageView *)view {
 	if (!path.length || !view)
 		return;
+	objc_setAssociatedObject(view, &kTGAvatarPathKey, path, OBJC_ASSOCIATION_COPY_NONATOMIC);
 	__weak UIImageView *weakView = view;
 	CGSize target = view.bounds.size;
 	CGFloat screenScale = [UIScreen mainScreen].scale;   // UIScreen is main-thread only
+	NSString *targetPath = [path copy];
 	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
 		dispatch_semaphore_wait(TGIconsDecodeGate(), DISPATCH_TIME_FOREVER);
 		@autoreleasepool {
-			UIImage *decoded = [TGIcons decodedImageAtPath:path fittingSize:target fill:YES scale:screenScale];
+			UIImage *decoded = [TGIcons decodedImageAtPath:targetPath fittingSize:target fill:YES scale:screenScale];
 			dispatch_semaphore_signal(TGIconsDecodeGate());
 			if (!decoded)
 				return;
 			dispatch_async(dispatch_get_main_queue(), ^{
-				weakView.image = decoded;
+				UIImageView *v = weakView;
+				if (!v)
+					return;
+				NSString *current = objc_getAssociatedObject(v, &kTGAvatarPathKey);
+				if ([current isEqualToString:targetPath])
+					v.image = decoded;
 			});
 		}
 	});

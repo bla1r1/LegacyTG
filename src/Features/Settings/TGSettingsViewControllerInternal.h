@@ -7,6 +7,8 @@
 #import "TGSettingsViewController.h"
 #import "TGUI.h"
 #import "TGClient.h"
+#import "TGLocalization.h"
+#import "TGSettingsFormatting.h"
 #import "TGTheme.h"
 #import "TGThemeFile.h"
 #import "TGStorageViewController.h"
@@ -35,6 +37,7 @@ static NSString *const TGRowIcon     = @"icon";
 static NSString *const TGRowColour   = @"colour";
 static NSString *const TGRowSubtitle = @"subtitle";
 static NSString *const TGRowOpens    = @"opens";
+static NSString *const TGRowBadge    = @"badge";   // red warning mark
 
 // Kinds
 static NSString *const TGKindPlain       = @"plain";
@@ -116,16 +119,6 @@ static inline NSDictionary *TGSubtitleOpenRow(NSString *title, NSString *subtitl
 	return row;
 }
 
-static inline NSString *TGPrivacyLabel(NSString *value) {
-	if (!value.length) return @"...";
-	if ([value hasPrefix:@"everybody"])
-		return [value stringByReplacingCharactersInRange:NSMakeRange(0, 9) withString:@"Everybody"];
-	if ([value hasPrefix:@"contacts"])
-		return [value stringByReplacingCharactersInRange:NSMakeRange(0, 8) withString:@"My Contacts"];
-	if ([value hasPrefix:@"nobody"])
-		return [value stringByReplacingCharactersInRange:NSMakeRange(0, 6) withString:@"Nobody"];
-	return value;
-}
 
 static inline NSDictionary *TGActionRow(NSString *title, void (^tap)(void)) {
 	NSMutableDictionary *row = TGRow(TGKindAction, title);
@@ -175,14 +168,6 @@ static inline NSDictionary *TGIconTapOpenRow(NSString *title, NSString *detail,
 }
 
 
-static inline NSString *TGBytes(long long bytes) {
-	if (bytes <= 0)              return @"0 KB";
-	if (bytes < 1024 * 1024)     return [NSString stringWithFormat:@"%.0f KB",
-											bytes / 1024.0];
-	if (bytes < 1024LL * 1024 * 1024)
-		return [NSString stringWithFormat:@"%.1f MB", bytes / (1024.0 * 1024.0)];
-	return [NSString stringWithFormat:@"%.2f GB", bytes / (1024.0 * 1024.0 * 1024.0)];
-}
 
 @interface TGSettingsViewController (Tier2)
 /// The profile-extras card: emoji status, profile audio, text styles and the
@@ -192,7 +177,8 @@ static inline NSString *TGBytes(long long bytes) {
 @end
 
 @interface TGSettingsViewController () <
-		UIImagePickerControllerDelegate, UINavigationControllerDelegate>
+		UIImagePickerControllerDelegate, UINavigationControllerDelegate,
+		UISearchBarDelegate>
 
 @property (nonatomic, strong) NSArray *sections;
 @property (nonatomic, strong) NSMutableDictionary *privacy;    // setting -> value
@@ -202,6 +188,10 @@ static inline NSString *TGBytes(long long bytes) {
 @property (nonatomic, strong) UIImageView *avatarView;
 @property (nonatomic, strong) NSArray *languages;
 @property (nonatomic, strong) NSString *currentLanguage;
+/// The language page's navigation-bar search. The list is filtered by the
+/// native name and the pack id as the user types.
+@property (nonatomic, strong) UISearchBar *languageSearchBar;
+@property (nonatomic, copy) NSString *languageSearchText;
 /// The current pack's record, read back from getLanguagePackInfo. The actions
 /// that edit a pack need the whole object, not only the id.
 @property (nonatomic, strong) NSDictionary *languageInfo;
@@ -217,6 +207,11 @@ static inline NSString *TGBytes(long long bytes) {
 @property (nonatomic, strong) NSArray *blocked;
 @property (nonatomic, strong) NSArray *calls;
 @property (nonatomic, assign) NSInteger accountTtl;
+/// Whether the away-for answer has arrived; zero is a real value.
+@property (nonatomic, assign) BOOL accountTtlLoaded;
+/// A tap on Saved Messages before the chat id exists waits a few times for
+/// the account record rather than showing a modal "Loading..." alert.
+@property (nonatomic, assign) NSInteger savedMessagesRetries;
 /// Privacy page: the lifetime new chats start with, loaded per open.
 @property (nonatomic, assign) NSInteger autoDeleteDefault;
 @property (nonatomic, assign) BOOL hasPassword;
@@ -257,6 +252,15 @@ static inline NSString *TGBytes(long long bytes) {
 /// Data and Storage: Telegram's Low/Medium/High auto-download presets, as
 /// getAutoDownloadSettingsPresets answered them.
 @property (nonatomic, strong) NSDictionary *autoDownloadPresets;
+/// Whether the user moved an auto-download setting since this page opened;
+/// the Reset row is only active after a change.
+@property (nonatomic, assign) BOOL autoDownloadChanged;
+/// The Autosave page: which scope it was opened for, empty for the combined
+/// page the row used to show.
+@property (nonatomic, copy) NSString *autosaveScope;
+/// Chat counts per folder id, read when the folders page opens; the official
+/// row shows the count on the right.
+@property (nonatomic, strong) NSMutableDictionary *folderChatCounts;
 /// The Autosave page: private/group/channel defaults plus per-chat exceptions.
 @property (nonatomic, strong) NSDictionary *autosaveSettings;
 /// Appearance: the two accent colours this account has selected. -1 is the
@@ -297,6 +301,11 @@ static inline NSString *TGBytes(long long bytes) {
 - (void)openMyProfile;
 - (void)openMyProfileOnTab:(NSString *)tab;
 - (void)openEditProfile;
+- (void)openUsername;
+- (void)openQRCode;
+- (UIImage *)qrBarIcon;
+- (void)openFAQ;
+- (void)openTelegramTips;
 - (void)showAccountChoices;
 - (void)toast:(NSString *)text;
 - (void)pushPlaceholder:(NSString *)featureName;
@@ -390,6 +399,7 @@ static inline NSString *TGBytes(long long bytes) {
 - (NSArray *)recentCallSections;
 - (NSArray *)wallpaperSections;
 - (NSArray *)paymentSections;
+- (NSArray *)paymentDevSections;
 - (void)showBankCardLookup;
 - (void)addOfferFlow;
 - (void)validateOrderFlow;

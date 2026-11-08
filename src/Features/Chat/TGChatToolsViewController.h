@@ -7,8 +7,9 @@
 // group, the location, the local note, member positions and the photo tools.
 //
 #import <UIKit/UIKit.h>
+#import "TGTableViewController.h"
 
-@interface TGChatToolsViewController : UITableViewController
+@interface TGChatToolsViewController : TGTableViewController
 
 @property (nonatomic, assign) int64_t chatId;
 @property (nonatomic, copy) NSString *chatTitle;

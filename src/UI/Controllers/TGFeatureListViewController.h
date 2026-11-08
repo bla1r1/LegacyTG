@@ -6,6 +6,7 @@
 // rather than eight hand-written table views, the way Settings does it.
 //
 #import <UIKit/UIKit.h>
+#import "TGTableViewController.h"
 
 extern NSString *const TGFeatureRowTitle;
 extern NSString *const TGFeatureRowDetail;
@@ -29,7 +30,7 @@ NSMutableDictionary *TGFeatureCheck(NSString *title, NSString *detail, BOOL chec
 								  void (^tap)(void));
 NSDictionary *TGFeatureSection(NSString *header, NSString *footer, NSArray *rows);
 
-@interface TGFeatureListViewController : UITableViewController
+@interface TGFeatureListViewController : TGTableViewController
 
 /// Each section is "header", "footer" and "rows". Subclasses replace this
 /// and call -reloadRows.

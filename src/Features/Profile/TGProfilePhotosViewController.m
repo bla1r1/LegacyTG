@@ -35,17 +35,6 @@ static const CGFloat kEmptyLabelTop = 130.0f;
 	[self applyTheme];
 	[self refresh];
 
-	__weak typeof(self) weakSelf = self;
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGThemeChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note) {
-		[weakSelf applyTheme];
-		[weakSelf.tableView reloadData];
-	}];
-}
-
-- (void)dealloc {
-	[[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 - (void)applyTheme {
@@ -122,7 +111,7 @@ static const CGFloat kEmptyLabelTop = 130.0f;
 					[NSDate dateWithTimeIntervalSince1970:date]
 					dateStyle:NSDateFormatterMediumStyle
 					timeStyle:NSDateFormatterNoStyle]
-			: @"Profile photo";
+			: @"Profile Photos";
 
 	NSInteger fileId = [photo[@"fileId"] integerValue];
 	image.image = [TGIcons avatarWithInitials:@"?" size:TGMetricProfilePhotoSide
@@ -156,9 +145,7 @@ static const CGFloat kEmptyLabelTop = 130.0f;
 	NSDictionary *photo = self.photos[indexPath.row];
 	int64_t photoId = [photo[@"photoId"] longLongValue];
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:[NSString stringWithFormat:
-					@"Photo %ld of %lu comes off this profile. The others stay.",
-					(long)(indexPath.row + 1), (unsigned long)self.photos.count]
+	[TGAlertSheet showConfirm:@"Remove Photo"
 						title:@"Remove Photo"
 					   action:@"Remove"
 				  destructive:YES

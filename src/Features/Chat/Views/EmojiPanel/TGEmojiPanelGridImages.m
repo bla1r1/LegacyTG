@@ -293,7 +293,7 @@ static UIImage *TGBackspaceImage(UIColor *colour) {
 		// strangers until they are saved.
 		BOOL inSaved = self.gifQuery.length == 0;
 		[items addObject:(inSaved
-				? @{@"title" : @"Remove from Saved GIFs", @"icon" : @"delete",
+				? @{@"title" : @"Remove", @"icon" : @"delete",
 					@"destructive" : @YES}
 				: @{@"title" : @"Save GIF", @"icon" : @"star"})];
 		[actions addObject:inSaved ? @"unsavegif" : @"savegif"];
@@ -301,9 +301,9 @@ static UIImage *TGBackspaceImage(UIColor *colour) {
 	else {
 		BOOL already = [self stickerIsFavourite:fileId];
 		[items addObject:(already
-				? @{@"title" : @"Remove from Favourites", @"icon" : @"unpin",
+				? @{@"title" : @"Remove from Favorites", @"icon" : @"unpin",
 					@"destructive" : @YES}
-				: @{@"title" : @"Add to Favourites", @"icon" : @"pin"})];
+				: @{@"title" : @"Add to Favorites", @"icon" : @"pin"})];
 		[actions addObject:already ? @"unfav" : @"fav"];
 
 		if (strip == 1){   // Recently Used
@@ -312,10 +312,10 @@ static UIImage *TGBackspaceImage(UIColor *colour) {
 			[actions addObject:@"unrecent"];
 		}
 		if (strip >= 2 && (NSUInteger)(strip - 2) < self.stickerSets.count){
-			[items addObject:@{@"title" : @"Remove Sticker Pack", @"icon" : @"delete",
+			[items addObject:@{@"title" : @"Remove", @"icon" : @"delete",
 							   @"destructive" : @YES}];
 			[actions addObject:@"unset"];
-			[items addObject:@{@"title" : @"Archived Packs...", @"icon" : @"folder"}];
+			[items addObject:@{@"title" : @"Archived Stickers", @"icon" : @"folder"}];
 			[actions addObject:@"archived"];
 		}
 		// Filing and outline are facts about the sticker, not about the set

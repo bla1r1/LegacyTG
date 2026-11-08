@@ -56,7 +56,7 @@
 		self.locationManager.desiredAccuracy = kCLLocationAccuracyHundredMeters;
 	}
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:@[@"Share a Fixed Pin", @"Share Live Location..."]
+	[TGAlertSheet showChoices:@[@"Send Location", @"Share My Live Location for..."]
 						title:nil
 			 destructiveIndex:-1
 					   inView:self.view
@@ -65,7 +65,7 @@
 			[weakSelf startLocationUpdates];
 		else {
 			[TGAlertSheet showChoices:@[@"for 15 minutes", @"for 1 hour", @"for 8 hours"]
-								title:@"Live for..."
+								title:@"Live Location"
 					 destructiveIndex:-1
 							   inView:weakSelf.view
 							 onChoice:^(NSInteger periodIndex){
@@ -225,7 +225,7 @@
 		if (!me)
 			return;
 		[TGSnackbar showInView:me.view
-						  text:(ok ? @"Photo replaced" : @"Telegram refused that photo")
+						  text:(ok ? @"Photo updated" : @"An error occurred.")
 					   seconds:2 onCommit:nil];
 	}];
 }
@@ -242,7 +242,7 @@
 		return;
 	}
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:@[@"Send", @"Send as View Once"]
+	[TGAlertSheet showChoices:@[@"Send Message", @"View Once"]
 						title:nil
 			 destructiveIndex:-1
 					   inView:self.view
@@ -259,7 +259,7 @@
 		return;
 	}
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:@[@"Send", @"Send as View Once"]
+	[TGAlertSheet showChoices:@[@"Send Message", @"View Once"]
 						title:nil
 			 destructiveIndex:-1
 					   inView:self.view
@@ -415,7 +415,7 @@
 
 - (void)image:(UIImage *)image didFinishSavingWithError:(NSError *)error
   contextInfo:(void *)contextInfo {
-	[TGAlertSheet showMessage:(error ? @"Could not save" : @"Saved to Camera Roll")
+	[TGAlertSheet showMessage:(error ? @"An error occurred." : @"Saved to Photos.")
 						title:nil inView:self.view];
 }
 
@@ -455,7 +455,7 @@
 	UILabel *hint = [[UILabel alloc] initWithFrame:
 			CGRectMake(0, backdrop.bounds.size.height - TGMetricImageHintBottomOffset,
 					backdrop.bounds.size.width, TGMetricLineRow)];
-	hint.text = @"Hold to save";
+	hint.text = nil;
 	hint.font = TGFontMeta();
 	hint.textAlignment = NSTextAlignmentCenter;
 	hint.textColor = [[TGTheme shared] secondaryTextColour];
@@ -481,7 +481,7 @@
 		if (!me) return;
 		if (!chatId) {
 			[TGSnackbar showInView:me.navigationController.view
-							  text:[NSString stringWithFormat:@"No such account: @%@", username]
+							  text:@"An error occurred."
 						   seconds:2 onCommit:nil];
 			return;
 		}
@@ -503,7 +503,7 @@
 		if (!me) return;
 		if (!chatId){
 			[TGSnackbar showInView:me.navigationController.view
-							  text:@"That link points at no open message"
+							  text:@"An error occurred."
 						   seconds:2 onCommit:nil];
 			return;
 		}
@@ -695,7 +695,7 @@
 			[me.navigationController pushViewController:chatVC animated:YES];
 		} else {
 			[TGSnackbar showInView:me.navigationController.view
-							  text:@"Could not join chat" seconds:2 onCommit:nil];
+							  text:@"An error occurred." seconds:2 onCommit:nil];
 		}
 	}];
 }
@@ -710,7 +710,7 @@
 			return;
 		if (!set){
 			[TGSnackbar showInView:me.navigationController.view ?: me.view
-							  text:@"Telegram does not know that pack"
+							  text:@"An error occurred."
 						   seconds:2 onCommit:nil];
 			return;
 		}
@@ -732,7 +732,7 @@
 			TGChatViewController *me = weakSelf;
 			[[TGClient shared] setStickerSet:set[@"id"] installed:YES archived:NO];
 			[TGSnackbar showInView:me ? (me.navigationController.view ?: me.view) : nil
-							  text:[NSString stringWithFormat:@"%@ installed", title]
+							  text:@"Done"
 						   seconds:2 onCommit:nil];
 		}];
 	}];
@@ -747,7 +747,7 @@
 		int64_t userId = [user[@"id"] longLongValue];
 		if (!me || !userId){
 			[TGSnackbar showInView:me.navigationController.view ?: me.view
-							  text:@"No Telegram account on that number"
+							  text:@"An error occurred."
 						   seconds:2 onCommit:nil];
 			return;
 		}
@@ -776,7 +776,7 @@
 		int64_t userId = [user[@"id"] longLongValue];
 		if (!userId){
 			[TGSnackbar showInView:me.navigationController.view ?: me.view
-							  text:(error ?: @"That user link names no account")
+							  text:(error ?: @"An error occurred.")
 						   seconds:2 onCommit:nil];
 			return;
 		}
@@ -876,23 +876,34 @@
 				 browser:(NSString *)browser
 					info:(NSDictionary *)info {
 	NSString *host = [NSURL URLWithString:link].host ?: link;
-	BOOL confirm = [info[@"kind"] isEqualToString:@"confirm"];
 	BOOL write = [info[@"requestWriteAccess"] boolValue];
-	NSString *domain = info[@"domain"];
 
 	NSMutableString *message = [NSMutableString string];
-	if (browser.length)
-		[message appendFormat:@"Telegram says this opens in %@.\n",
-				[browser isEqualToString:@"inApp"] ? @"its own browser" : @"Safari"];
-	else
-		[message appendString:@"Telegram does not name a browser for this host.\n"];
-	if (confirm && domain.length)
-		[message appendFormat:@"You will sign in to %@.", domain];
-	else if (confirm)
-		[message appendString:@"The site asks you to sign in."];
-	if (write)
-		[message appendString:@"\nIt will be allowed to message you."];
 
+	__weak typeof(self) weakSelf = self;
+	// A page Telegram already knows how to read opens in the reader, with no
+	// sheet in between; the sheet is for links that leave the app.
+	if (!write){
+		[[TGClient shared] instantViewForURL:link onlyLocal:YES completion:^(NSDictionary *view){
+			TGChatViewController *me = weakSelf;
+			if (!me)
+				return;
+			NSArray *blocks = view[@"blocks"];
+			if ([blocks isKindOfClass:NSArray.class] && blocks.count){
+				[me openInstantViewForLink:link view:view];
+				return;
+			}
+			[me showLinkChoices:link host:host message:message write:write];
+		}];
+		return;
+	}
+	[self showLinkChoices:link host:host message:message write:write];
+}
+
+- (void)showLinkChoices:(NSString *)link
+				   host:(NSString *)host
+				message:(NSMutableString *)message
+				  write:(BOOL)write {
 	__weak typeof(self) weakSelf = self;
 	[TGAlertSheet showChoices:@[@"Open Link", @"Instant View", @"Copy Link"]
 						title:host
@@ -915,7 +926,7 @@
 		} else {
 			[UIPasteboard generalPasteboard].string = link;
 			[TGSnackbar showInView:me.navigationController.view ?: me.view
-							  text:@"Link copied" seconds:2 onCommit:nil];
+							  text:@"Link copied." seconds:2 onCommit:nil];
 		}
 	}];
 }
@@ -932,18 +943,48 @@
 			return;
 		NSArray *blocks = view[@"blocks"];
 		if (![blocks isKindOfClass:NSArray.class] || !blocks.count){
-			[TGAlertSheet showMessage:@"Telegram has no Instant View for this page."
+			[TGAlertSheet showMessage:@"An error occurred."
 							   title:@"Instant View"
 							   inView:me.navigationController.view ?: me.view];
 			return;
 		}
-		TGInstantViewController *reader = [[TGInstantViewController alloc] init];
-		reader.pageTitle = [NSURL URLWithString:link].host ?: @"Instant View";
-		reader.sourceURL = link;
-		reader.blocks = blocks;
-		reader.hidesBottomBarWhenPushed = YES;
-		[me.navigationController pushViewController:reader animated:YES];
+		[me openInstantViewForLink:link view:view];
 	}];
+}
+
+- (void)openInstantViewForLink:(NSString *)link view:(NSDictionary *)view {
+	NSArray *blocks = view[@"blocks"];
+	if (![blocks isKindOfClass:NSArray.class] || !blocks.count)
+		return;
+	NSString *site = view[@"site_name"];
+	if (![site isKindOfClass:NSString.class] || !site.length){
+		// TDLib's instant view does not carry the site name; the link preview
+		// does. Ask for it rather than titling every reader with the host.
+		__weak typeof(self) weakSelf = self;
+		[[TGClient shared] linkPreviewForText:link completion:^(NSDictionary *preview){
+			TGChatViewController *me = weakSelf;
+			if (!me)
+				return;
+			[me presentInstantView:link view:view site:preview[@"site"]];
+		}];
+		return;
+	}
+	[self presentInstantView:link view:view site:site];
+}
+
+- (void)presentInstantView:(NSString *)link view:(NSDictionary *)view
+					 site:(NSString *)site {
+	NSArray *blocks = view[@"blocks"];
+	if (![blocks isKindOfClass:NSArray.class] || !blocks.count)
+		return;
+	TGInstantViewController *reader = [[TGInstantViewController alloc] init];
+	reader.pageSiteName = [site isKindOfClass:NSString.class] && site.length
+			? site : nil;
+	reader.pageTitle = [NSURL URLWithString:link].host ?: @"Instant View";
+	reader.sourceURL = link;
+	reader.blocks = blocks;
+	reader.hidesBottomBarWhenPushed = YES;
+	[self.navigationController pushViewController:reader animated:YES];
 }
 
 

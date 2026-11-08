@@ -26,14 +26,14 @@
 		_scoreText = @"0";
 		_editMessage = YES;
 		_force = NO;
-		_answerLines = @[@"Load a game message's high scores or set one score."];
+		_answerLines = @[@"None"];
 	}
 	return self;
 }
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	self.title = @"Game Scores";
+	self.title = @"Game";
 	[self rebuildSections];
 }
 
@@ -51,10 +51,10 @@
 			@"inline")];
 	[ids addObject:TGBAction(@"Score", self.scoreText, @"score")];
 	[ids addObject:TGBAction(@"Edit Message",
-			self.editMessage ? @"On - tap to turn off" : @"Off - tap to turn on",
+			self.editMessage ? @"On" : @"Off",
 			@"edit")];
 	[ids addObject:TGBAction(@"Force",
-			self.force ? @"On - tap to turn off" : @"Off - tap to turn on",
+			self.force ? @"On" : @"Off",
 			@"force")];
 
 	NSMutableArray *reads = [NSMutableArray array];
@@ -70,27 +70,23 @@
 		[answers addObject:TGBInfo(line, nil)];
 
 	self.sections = @[
-		TGBSection(@"GAME", @"A game message carries chat and message ids; an "
-				@"inline game is played outside a chat and carries only the "
-				@"inline_message_id the bot returned.", ids),
-		TGBSection(@"READ", @"Reading a table is served by the game's bot, so a "
-				@"user session often gets Telegram's refusal.", reads),
-		TGBSection(@"WRITE", @"The score is the bot's to write. The refusal is "
-				@"shown; no local table is changed.", writes),
+		TGBSection(@"Game", nil, ids),
+		TGBSection(@"Read", nil, reads),
+		TGBSection(@"WRITE", nil, writes),
 		TGBSection(@"ANSWER", nil, answers),
 	];
 	[self rebuild];
 }
 
 - (void)showAnswer:(NSString *)text title:(NSString *)title {
-	self.answerLines = @[text.length ? text : @"Telegram answered with an empty value."];
+	self.answerLines = @[text.length ? text : @"An error occurred."];
 	[self rebuildSections];
 	[self showMessage:self.answerLines.firstObject title:title];
 }
 
 - (void)finish:(BOOL)ok error:(NSString *)error title:(NSString *)title {
-	self.answerLines = @[ok ? @"Telegram accepted the request."
-			: (error.length ? error : @"Telegram refused that.")];
+	self.answerLines = @[ok ? @"Done"
+			: (error.length ? error : @"An error occurred.")];
 	[self rebuildSections];
 	if (!ok)
 		[self showMessage:self.answerLines.firstObject title:title];
@@ -98,7 +94,7 @@
 
 - (void)showScores:(NSArray *)scores title:(NSString *)title {
 	if (!scores.count){
-		[self showAnswer:@"Telegram returned an empty score table." title:title];
+		[self showAnswer:@"An error occurred." title:title];
 		return;
 	}
 	NSMutableArray *lines = [NSMutableArray array];

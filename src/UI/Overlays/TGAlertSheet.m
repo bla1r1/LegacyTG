@@ -1,4 +1,5 @@
 #import "TGAlertSheet.h"
+#import "TGLocalization.h"
 
 /// The system's own alerts and sheets behind the block API the app calls:
 /// UIAlertView and UIActionSheet up to iOS 7, UIAlertController from 8. They
@@ -63,20 +64,60 @@ static NSString *TGTrimmed(NSString *text) {
 #pragma mark - the four shapes
 
 + (void)showMessage:(NSString *)message title:(NSString *)title inView:(UIView *)host {
+	message = TGLocalizedOrNil(message);
+	title = TGLocalizedOrNil(title);
 	if ([self hasAlertController]) {
 		UIAlertController *alert = [UIAlertController alertControllerWithTitle:title message:message
 				preferredStyle:UIAlertControllerStyleAlert];
-		[alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:nil]];
+		[alert addAction:[UIAlertAction actionWithTitle:TGLocalized(@"OK") style:UIAlertActionStyleCancel handler:nil]];
 		[self present:alert from:host];
 		return;
 	}
 	[[[UIAlertView alloc] initWithTitle:title message:message delegate:nil
-					  cancelButtonTitle:@"OK" otherButtonTitles:nil] show];
+					  cancelButtonTitle:TGLocalized(@"OK") otherButtonTitles:nil] show];
+}
+
++ (void)showAlertActions:(NSArray *)titles
+				   title:(NSString *)title
+				 message:(NSString *)message
+				  inView:(UIView *)host
+				onAction:(void (^)(NSInteger))onAction {
+	if (!titles.count)
+		return;
+	title = TGLocalizedOrNil(title);
+	message = TGLocalizedOrNil(message);
+	NSMutableArray *localized = [NSMutableArray arrayWithCapacity:titles.count];
+	for (NSString *t in titles)
+		[localized addObject:TGLocalizedOrNil(t)];
+	if ([self hasAlertController]) {
+		UIAlertController *alert = [UIAlertController alertControllerWithTitle:title
+				message:message preferredStyle:UIAlertControllerStyleAlert];
+		[localized enumerateObjectsUsingBlock:^(NSString *t, NSUInteger i, BOOL *stop){
+			[alert addAction:[UIAlertAction actionWithTitle:t
+					style:UIAlertActionStyleDefault handler:^(UIAlertAction *a){
+				if (onAction) onAction((NSInteger)i);
+			}]];
+		}];
+		[self present:alert from:host];
+		return;
+	}
+	TGAlertSheet *holder = [self holderWith:^(NSInteger button, NSString *text){
+		if (button >= 0 && button < (NSInteger)localized.count && onAction)
+			onAction(button);
+	}];
+	UIAlertView *alert = [[UIAlertView alloc] initWithTitle:title message:message
+			delegate:holder cancelButtonTitle:nil otherButtonTitles:nil];
+	for (NSString *t in localized)
+		[alert addButtonWithTitle:t];
+	[alert show];
 }
 
 + (void)showConfirm:(NSString *)message title:(NSString *)title
 			 action:(NSString *)actionTitle destructive:(BOOL)destructive
 			 inView:(UIView *)host onConfirm:(void (^)(void))onConfirm {
+	message = TGLocalizedOrNil(message);
+	title = TGLocalizedOrNil(title);
+	actionTitle = TGLocalizedOrNil(actionTitle);
 	// An action that destroys something asks from the bottom with a red
 	// button, as iOS itself does; anything else is a plain alert.
 	if ([self hasAlertController]) {
@@ -85,7 +126,7 @@ static NSString *TGTrimmed(NSString *text) {
 		[alert addAction:[UIAlertAction actionWithTitle:actionTitle
 				style:destructive ? UIAlertActionStyleDestructive : UIAlertActionStyleDefault
 				handler:^(UIAlertAction *a){ if (onConfirm) onConfirm(); }]];
-		[alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+		[alert addAction:[UIAlertAction actionWithTitle:TGLocalized(@"Cancel") style:UIAlertActionStyleCancel handler:nil]];
 		[self present:alert from:host];
 		return;
 	}
@@ -99,7 +140,7 @@ static NSString *TGTrimmed(NSString *text) {
 			onConfirm();
 	}];
 	[[[UIAlertView alloc] initWithTitle:title message:message delegate:holder
-					  cancelButtonTitle:@"Cancel" otherButtonTitles:actionTitle, nil] show];
+					  cancelButtonTitle:TGLocalized(@"Cancel") otherButtonTitles:actionTitle, nil] show];
 }
 
 + (void)showChoices:(NSArray *)titles title:(NSString *)title
@@ -114,6 +155,12 @@ static NSString *TGTrimmed(NSString *text) {
 			 inView:(UIView *)host onChoice:(void (^)(NSInteger index))onChoice {
 	if (!titles.count)
 		return;
+	title = TGLocalizedOrNil(title);
+	message = TGLocalizedOrNil(message);
+	NSMutableArray *localizedTitles = [NSMutableArray arrayWithCapacity:titles.count];
+	for (NSString *t in titles)
+		[localizedTitles addObject:TGLocalizedOrNil(t)];
+	titles = localizedTitles;
 	if ([self hasAlertController]) {
 		UIAlertController *sheet = [UIAlertController alertControllerWithTitle:title message:message
 				preferredStyle:UIAlertControllerStyleActionSheet];
@@ -122,7 +169,7 @@ static NSString *TGTrimmed(NSString *text) {
 					style:(NSInteger)i == destructiveIndex ? UIAlertActionStyleDestructive : UIAlertActionStyleDefault
 					handler:^(UIAlertAction *a){ if (onChoice) onChoice((NSInteger)i); }]];
 		}];
-		[sheet addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+		[sheet addAction:[UIAlertAction actionWithTitle:TGLocalized(@"Cancel") style:UIAlertActionStyleCancel handler:nil]];
 		[self present:sheet from:host];
 		return;
 	}
@@ -137,7 +184,7 @@ static NSString *TGTrimmed(NSString *text) {
 	// second row ("Group Settings") then ran the first row's action. The
 	// red styling is not worth a menu that acts on the wrong item; iOS 7+
 	// still gets it through UIAlertController above.
-	sheet.cancelButtonIndex = [sheet addButtonWithTitle:@"Cancel"];
+	sheet.cancelButtonIndex = [sheet addButtonWithTitle:TGLocalized(@"Cancel")];
 	NSInteger cancel = sheet.cancelButtonIndex;
 	holder.onButton = ^(NSInteger button, NSString *text){
 		if (button != cancel && button >= 0 && onChoice)
@@ -167,6 +214,10 @@ static NSString *TGTrimmed(NSString *text) {
 	  placeholder:(NSString *)placeholder text:(NSString *)text secure:(BOOL)secure
 		   action:(NSString *)actionTitle inView:(UIView *)host
 		 onSubmit:(void (^)(NSString *text))onSubmit {
+	title = TGLocalizedOrNil(title);
+	message = TGLocalizedOrNil(message);
+	placeholder = TGLocalizedOrNil(placeholder);
+	actionTitle = TGLocalizedOrNil(actionTitle);
 	void (^submit)(NSString *) = ^(NSString *typed){
 		NSString *clean = TGTrimmed(typed);
 		if (clean.length && onSubmit)
@@ -181,7 +232,7 @@ static NSString *TGTrimmed(NSString *text) {
 			field.secureTextEntry = secure;
 		}];
 		__weak UIAlertController *weakAlert = alert;
-		[alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+		[alert addAction:[UIAlertAction actionWithTitle:TGLocalized(@"Cancel") style:UIAlertActionStyleCancel handler:nil]];
 		[alert addAction:[UIAlertAction actionWithTitle:actionTitle style:UIAlertActionStyleDefault
 				handler:^(UIAlertAction *a){ submit(weakAlert.textFields.firstObject.text); }]];
 		[self present:alert from:host];
@@ -192,7 +243,7 @@ static NSString *TGTrimmed(NSString *text) {
 			submit(typed);
 	}];
 	UIAlertView *alert = [[UIAlertView alloc] initWithTitle:title message:message delegate:holder
-										  cancelButtonTitle:@"Cancel" otherButtonTitles:actionTitle, nil];
+										  cancelButtonTitle:TGLocalized(@"Cancel") otherButtonTitles:actionTitle, nil];
 	alert.alertViewStyle = secure ? UIAlertViewStyleSecureTextInput : UIAlertViewStylePlainTextInput;
 	UITextField *field = [alert textFieldAtIndex:0];
 	field.placeholder = placeholder;

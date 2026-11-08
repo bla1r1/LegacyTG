@@ -378,6 +378,7 @@ static BOOL TGGroupStatusIsMember(NSDictionary *status) {
 			@"isMember"    : @YES,
 			@"memberCount" : @0,
 			@"status"      : @"",
+			@"silent"      : @([chat[@"default_disable_notification"] boolValue]),
 		} mutableCopy];
 		if (!isGroup){
 			if (completion) completion(answer);
@@ -400,6 +401,12 @@ static BOOL TGGroupStatusIsMember(NSDictionary *status) {
 			}
 			answer[@"isMember"] = @(member);
 			answer[@"status"] = status[@"@type"] ?: @"";
+			// An anonymous owner or admin posts as the group; the composer
+			// says so ("Send anonymously").
+			BOOL anonymous = [status[@"is_anonymous"] boolValue] ||
+					([status[@"rights"] isKindOfClass:NSDictionary.class] &&
+					 [status[@"rights"][@"is_anonymous"] boolValue]);
+			answer[@"canBeAnonymous"] = @(anonymous && !isChannel);
 			answer[@"memberCount"] = group[@"member_count"] ?: @0;
 			if (completion) completion(answer);
 		};

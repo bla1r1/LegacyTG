@@ -4,6 +4,8 @@
 #import <QuartzCore/QuartzCore.h>
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
+#import "TGLocalization.h"
+#import "TGSettingsFormatting.h"
 
 // Their storage page opens with a ring: the total in the middle, one arc per
 // kind of file, the same colours in the list underneath. A column of numbers
@@ -17,10 +19,15 @@ static const CGFloat kRingTotalLine  = TGMetricVoicePillWidth;
 
 @interface TGStorageViewController ()
 @property (nonatomic, strong) NSArray *categories;   // name / bytes / kinds
+@property (nonatomic, strong) NSArray *categoryRows;    // preformatted title / size
 @property (nonatomic, assign) long long total;
 @property (nonatomic, assign) NSInteger fileCount;
 @property (nonatomic, assign) BOOL working;
 @property (nonatomic, assign) BOOL loaded;
+@property (nonatomic, strong) NSMutableSet *selectedKinds;
+@property (nonatomic, assign) long long selectedBytes;
+@property (nonatomic, copy) NSString *totalText;
+@property (nonatomic, copy) NSString *selectedText;
 @end
 
 @implementation TGStorageViewController
@@ -32,23 +39,11 @@ static const CGFloat kRingTotalLine  = TGMetricVoicePillWidth;
 - (void)viewDidLoad {
 	[super viewDidLoad];
 	self.title = @"Storage Usage";
-	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
-		self.edgesForExtendedLayout = UIRectEdgeNone;
 	self.categories = @[];
+	self.selectedKinds = [NSMutableSet set];
 	[self applyTheme];
 	[self refresh];
 
-	__weak typeof(self) weakSelf = self;
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGThemeChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note) {
-		[weakSelf applyTheme];
-		[weakSelf.tableView reloadData];
-	}];
-}
-
-- (void)dealloc {
-	[[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -72,25 +67,44 @@ static const CGFloat kRingTotalLine  = TGMetricVoicePillWidth;
 		weakSelf.total = bytes;
 		weakSelf.fileCount = files;
 		weakSelf.loaded = YES;
+		weakSelf.totalText = TGBytes(bytes);
 		[weakSelf.tableView reloadData];
 	}];
 	[[TGClient shared] storageBreakdownWithCompletion:^(NSArray *categories,
 														long long total){
 		weakSelf.categories = categories;
 		weakSelf.total = total;
+		weakSelf.totalText = TGBytes(total);
+		[weakSelf rebuildCategoryRows];
 		weakSelf.loaded = YES;
 		[weakSelf.tableView reloadData];
 	}];
 }
 
-static NSString *TGHumanSize(long long bytes) {
-	if (bytes < 1024)
-		return [NSString stringWithFormat:@"%lld B", bytes];
-	if (bytes < 1024 * 1024)
-		return [NSString stringWithFormat:@"%.0f KB", bytes / 1024.0];
-	if (bytes < 1024LL * 1024 * 1024)
-		return [NSString stringWithFormat:@"%.1f MB", bytes / (1024.0 * 1024)];
-	return [NSString stringWithFormat:@"%.2f GB", bytes / (1024.0 * 1024 * 1024)];
+/// Percentages and sizes are formatted here, once per refresh, rather than in
+/// cellForRow: the no-NSNumber rule applies to cell layout too, and a
+/// formatter per row is a compile per scroll.
+- (void)rebuildCategoryRows {
+	NSMutableArray *rows = [NSMutableArray arrayWithCapacity:self.categories.count];
+	for (NSDictionary *category in self.categories){
+		long long bytes = [category[@"bytes"] longLongValue];
+		double share = self.total > 0 ? (bytes / (double)self.total) * 100 : 0;
+		[rows addObject:@{
+			@"name" : category[@"name"] ?: @"",
+			@"kinds" : category[@"kinds"] ?: @[],
+			@"title" : [NSString stringWithFormat:@"%@  %.1f%%",
+					category[@"name"] ?: @"", share],
+			@"size" : TGBytes(bytes),
+		}];
+	}
+	self.categoryRows = rows;
+}
+
+/// The bottom button's label is written when the selection changes, not while
+/// a cell is being laid out.
+- (void)updateSelectedText {
+	BOOL selected = self.selectedKinds.count > 0;
+	self.selectedText = selected ? TGBytes(self.selectedBytes) : self.totalText;
 }
 
 /// Telegram's own chart palette, in the order their storage page uses it.
@@ -144,7 +158,7 @@ static UIColor *TGSliceColour(NSUInteger index) {
 	UILabel *totalLabel = [[UILabel alloc] initWithFrame:
 			CGRectMake(box.origin.x, centre.y - TGHalf(kRingTotalLine), kRingSide,
 					kRingTotalLine)];
-	totalLabel.text = self.loaded ? TGHumanSize(self.total) : @"...";
+	totalLabel.text = self.loaded ? self.totalText : @"...";
 	totalLabel.font = TGFontTitle();
 	totalLabel.textAlignment = NSTextAlignmentCenter;
 	totalLabel.textColor = [theme primaryTextColour];
@@ -157,12 +171,7 @@ static UIColor *TGSliceColour(NSUInteger index) {
 	UILabel *caption = [[UILabel alloc] initWithFrame:
 			CGRectMake(TGMetricPadMedium, kRingSide + TGMetricPadLarge,
 					width - TGDoubled(TGMetricPadMedium), TGMetricLineRow)];
-	caption.text = self.loaded
-			? (self.fileCount
-					? [NSString stringWithFormat:@"%ld files - Telegram's cache on this device.",
-							(long)self.fileCount]
-					: @"Telegram's cache on this device.")
-			: @"Reading the database...";
+	caption.text = self.loaded ? @"Telegram Cache" : @"Loading...";
 	caption.font = TGFontCaption();
 	caption.textAlignment = NSTextAlignmentCenter;
 	caption.textColor = [theme secondaryTextColour];
@@ -188,7 +197,7 @@ static UIColor *TGSliceColour(NSUInteger index) {
 #pragma mark - table
 
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-	return 2;
+	return self.selectedKinds.count ? 2 : 1;
 }
 
 - (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
@@ -200,21 +209,17 @@ static UIColor *TGSliceColour(NSUInteger index) {
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-	return section == 1 ? @"CACHE" : nil;
+	return nil;
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-	if (section == 0)
-		return @"Each slice is one kind of file TDLib keeps on this device. "
-			   @"Tap a row to remove just that kind.";
-	return @"Media stays in Telegram's cloud and is downloaded again when you "
-		   @"open the message. Nothing is deleted from Telegram.";
+	return nil;
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
 	if (section == 0)
-		return self.loaded ? MAX((NSUInteger)1, self.categories.count) : 1;
-	return 1;    // clear everything
+		return self.loaded ? MAX((NSUInteger)1, self.categoryRows.count) : 1;
+	return 1;    // clear the current selection
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView
@@ -236,9 +241,9 @@ static UIColor *TGSliceColour(NSUInteger index) {
 
 	if (path.section == 1){
 		cell.textLabel.text = self.working
-				? @"Clearing..."
-				: [NSString stringWithFormat:@"Clear Cache  %@",
-						TGHumanSize(self.total)];
+				? @"Clearing the Cache"
+				: [NSString stringWithFormat:@"%@  %@",
+						@"Clear Selected", self.selectedText ?: @""];
 		cell.textLabel.textAlignment = NSTextAlignmentCenter;
 		cell.textLabel.textColor = self.working
 				? [theme secondaryTextColour] : [theme destructiveColour];
@@ -247,28 +252,34 @@ static UIColor *TGSliceColour(NSUInteger index) {
 	}
 
 	if (!self.loaded){
-		cell.textLabel.text = @"Reading...";
+		cell.textLabel.text = @"Loading...";
 		cell.textLabel.textColor = [theme secondaryTextColour];
 		cell.detailTextLabel.text = @"";
 		cell.selectionStyle = UITableViewCellSelectionStyleNone;
 		return cell;
 	}
 
-	if (!self.categories.count){
-		cell.textLabel.text = @"Nothing cached";
+	if (!self.categoryRows.count){
+		cell.textLabel.text = @"No media files yet";
 		cell.textLabel.textColor = [theme secondaryTextColour];
 		cell.detailTextLabel.text = @"";
 		cell.selectionStyle = UITableViewCellSelectionStyleNone;
 		return cell;
 	}
 
-	NSDictionary *category = self.categories[path.row];
-	long long bytes = [category[@"bytes"] longLongValue];
-	double share = self.total > 0 ? (bytes / (double)self.total) * 100 : 0;
-	cell.textLabel.text = [NSString stringWithFormat:@"%@  %.1f%%",
-			category[@"name"], share];
-	cell.detailTextLabel.text = TGHumanSize(bytes);
+	NSDictionary *category = self.categoryRows[path.row];
+	cell.textLabel.text = category[@"title"];
+	cell.detailTextLabel.text = category[@"size"];
 	cell.imageView.image = [self dotOfColour:TGSliceColour(path.row)];
+	NSArray *kinds = category[@"kinds"];
+	BOOL allSelected = kinds.count > 0;
+	for (NSString *kind in kinds)
+		if (![self.selectedKinds containsObject:kind]){
+			allSelected = NO;
+			break;
+		}
+	cell.accessoryType = allSelected
+			? UITableViewCellAccessoryCheckmark : UITableViewCellAccessoryNone;
 	return cell;
 }
 
@@ -279,24 +290,34 @@ static UIColor *TGSliceColour(NSUInteger index) {
 
 	if (path.section == 1){
 		__weak typeof(self) weakSelf = self;
-		[TGAlertSheet showConfirm:[NSString stringWithFormat:
-						@"%@ of cached media will be removed from this device.",
-						TGHumanSize(self.total)]
-							title:@"Clear Cache"
+		NSArray *kinds = self.selectedKinds.allObjects;
+		if (!kinds.count)
+			return;
+		[TGAlertSheet showConfirm:@"Are you sure you want to clear cache?"
+							title:@"Clear Selected"
 						   action:@"Clear"
 					  destructive:YES
 						   inView:self.view
-						onConfirm:^{ [weakSelf clearKinds:@[]]; }];  // empty means every type
+						onConfirm:^{ [weakSelf clearKinds:kinds]; }];
 		return;
 	}
 
 	if (!self.categories.count)
 		return;
 	NSDictionary *category = self.categories[path.row];
-	if (![category[@"kinds"] count])
+	NSArray *kinds = category[@"kinds"];
+	if (!kinds.count)
 		return;               // "Other" is whatever the walk could not name
 
-	[self clearKinds:category[@"kinds"]];
+	// A tap selects the panel; nothing is deleted until the bottom button.
+	TGSettingsToggleKinds(self.selectedKinds, kinds);
+	[self updateSelectedBytes];
+	[self.tableView reloadData];
+}
+
+- (void)updateSelectedBytes {
+	self.selectedBytes = TGSettingsSelectedBytes(self.categories, self.selectedKinds);
+	[self updateSelectedText];
 }
 
 - (void)clearKinds:(NSArray *)kinds {
@@ -306,10 +327,13 @@ static UIColor *TGSliceColour(NSUInteger index) {
 	__weak typeof(self) weakSelf = self;
 	[[TGClient shared] clearCacheOfTypes:kinds completion:^(long long freed){
 		weakSelf.working = NO;
+		[weakSelf.selectedKinds removeAllObjects];
+		weakSelf.selectedBytes = 0;
+		[weakSelf updateSelectedText];
 		[weakSelf refresh];
-		[TGAlertSheet showMessage:[NSString stringWithFormat:@"Freed %@.",
-						TGHumanSize(freed)]
-							title:@"Storage" inView:weakSelf.view];
+		(void)freed;
+		[TGAlertSheet showMessage:@"Cache cleared."
+							title:@"Storage Usage" inView:weakSelf.view];
 	}];
 }
 

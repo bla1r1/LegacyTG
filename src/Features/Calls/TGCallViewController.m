@@ -580,7 +580,7 @@ static UIImage *TGCallCircleImage(CGFloat side, UIColor *colour, TGCallCircleSty
     [self updateLayoutForCallActive:!isRinging];
     switch (state){
         case TGCallStatePending:
-            [self setStatusText:(self.outgoing ? @"Calling..." : @"Incoming...")];
+            [self setStatusText:(self.outgoing ? @"Ringing..." : @"Incoming call")];
             [self setStatusPulsing:YES];
             break;
         case TGCallStateExchangingKeys:
@@ -672,7 +672,7 @@ static UIImage *TGCallCircleImage(CGFloat side, UIColor *colour, TGCallCircleSty
         [card addSubview:self.keyCardEmoji];
 
         self.keyCardTitle = [[UILabel alloc] initWithFrame:CGRectZero];
-        self.keyCardTitle.text = @"Encryption Key";
+        self.keyCardTitle.text = @"Encrypted";
         self.keyCardTitle.font = TGFontHeader();
         self.keyCardTitle.textColor = [[TGTheme shared] primaryTextColour];
         self.keyCardTitle.textAlignment = NSTextAlignmentCenter;
@@ -680,8 +680,7 @@ static UIImage *TGCallCircleImage(CGFloat side, UIColor *colour, TGCallCircleSty
         [card addSubview:self.keyCardTitle];
 
         self.keyCardBody = [[UILabel alloc] initWithFrame:CGRectZero];
-        self.keyCardBody.text = @"Compare these four emoji with your friend. "
-                "If they match, the call is end-to-end encrypted.";
+        self.keyCardBody.text = @"This call is end-to-end encrypted";
         self.keyCardBody.font = TGFontCaption();
         self.keyCardBody.textColor = [[TGTheme shared] secondaryTextColour];
         self.keyCardBody.textAlignment = NSTextAlignmentCenter;
@@ -745,9 +744,7 @@ static UIImage *TGCallCircleImage(CGFloat side, UIColor *colour, TGCallCircleSty
 }
 
 - (NSString *)talkTimeText {
-    NSInteger seconds = (NSInteger)[[TGCall shared] duration];
-    return [NSString stringWithFormat:@"ılı %ld:%02ld",
-            (long)(seconds / 60), (long)(seconds % 60)];
+    return TGUIFormatCallDuration([[TGCall shared] duration]);
 }
 
 - (void)tick {
@@ -772,7 +769,7 @@ static UIImage *TGCallCircleImage(CGFloat side, UIColor *colour, TGCallCircleSty
 - (void)toggleVideo {
     TGCall *call = [TGCall shared];
     if (![TGCapabilities canEncodeVideoCall]) {
-        [TGAlertSheet showMessage:@"Video calls are in progress and will come in a later version."
+        [TGAlertSheet showMessage:@"An error occurred."
                             title:@"Video" inView:self.view];
         return;
     }
@@ -936,7 +933,7 @@ static UIImage *TGCallCircleImage(CGFloat side, UIColor *colour, TGCallCircleSty
 - (void)end {
 	// Hanging up takes a moment to come back from the network; without this
 	// the screen just sits there and the tap looks like it was missed.
-	[self setStatusText:@"Ending..."];
+	[self setStatusText:@"End"];
 	[self setStatusPulsing:NO];
 	[self windDown];
 	[[TGCall shared] hangUp];
@@ -1016,13 +1013,10 @@ static UIImage *TGCallCircleImage(CGFloat side, UIColor *colour, TGCallCircleSty
     if (!window)
         return;
     NSArray *stars = @[@"★★★★★", @"★★★★", @"★★★", @"★★", @"★"];
-    NSString *name = self.peerName.length ? self.peerName : @"this call";
     __weak typeof(self) weakSelf = self;
     [TGAlertSheet showChoices:stars
-                        title:@"Rate the call"
-                      message:[NSString stringWithFormat:
-                              @"How did %@ go? Your score goes to Telegram, not "
-                              @"to the other side.", name]
+                        title:@"Rate This Call"
+                      message:@"Please rate the quality\nof your Telegram call"
              destructiveIndex:-1
                        inView:window
                      onChoice:^(NSInteger index){
@@ -1033,10 +1027,10 @@ static UIImage *TGCallCircleImage(CGFloat side, UIColor *colour, TGCallCircleSty
         me.ratedCall = YES;
         if (rating <= 3){
             [TGAlertSheet showInput:@"What went wrong?"
-                            message:@"Optional - it is read by Telegram."
-                        placeholder:@"Sound, connection, ..."
+                            message:nil
+                        placeholder:@"Add a comment..."
                                text:nil
-                             action:@"Send"
+                             action:@"Submit"
                              inView:window
                          onSubmit:^(NSString *comment){
                 [[TGCall shared] sendRating:rating comment:comment problems:@[]];

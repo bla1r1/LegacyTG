@@ -1,4 +1,5 @@
 #import "TGPerf.h"
+#import "TGLocalization.h"
 #import "TGChatViewController.h"
 #import "TGClient.h"
 #import "TGTheme.h"
@@ -28,6 +29,8 @@
 #import "TGSnackbar.h"
 #import "TGMediaViewer.h"
 #import "TGPollPresentation.h"
+#import "TGLocalization.h"
+#import "TGChatParityModel.h"
 #import "TGChecklistPresentation.h"
 #import "TGGiftViewController.h"
 #import "TGStoryViewerViewController.h"
@@ -57,6 +60,7 @@ static const NSInteger kPinnedBodyTag = 0x9010;
 /// replaces the bar instead of stacking another one on top.
 static const NSInteger kChatMuteBarTag = 0x9020;
 static const NSInteger kChatJoinGroupBarTag = 0x9021;
+static const NSInteger kChatUnblockBarTag = 0x9025;
 static const NSInteger kChatJoinChannelBarTag = 0x9022;
 static const NSInteger kChatDiscussBarTag = 0x9023;
 static const NSInteger kChatChannelBottomBarTag = 0x9024;
@@ -104,7 +108,6 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 		[self inputChanged];
 	}
 	[self reloadTableDebounced];
-	[TGSnackbar showInView:self.view text:@"Draft stopped" seconds:2 onCommit:nil];
 }
 
 /// updateVideoPublished says which message gained the video. The history is
@@ -218,6 +221,7 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 		NSArray *messages = [TGDevShowcase messagesForChatId:self.chatId];
 		TGPerfReport("chat dev", "fixtures", fixtureStart, 50.0);
 		[self noteFirstUnreadIn:messages];
+		NSArray *oldRaw = self.rawMessages ?: @[];
 		[self.streamStore resetWithMessages:messages];
 		self.rawMessages = [self.streamStore messages];
 		self.messages = [self groupedMessagesFromMessages:self.rawMessages];
@@ -235,8 +239,12 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 		// reloadData, so the layout of the whole chat runs synchronously
 		// here - the "outed" tap on this tier. The chip names it exact.
 		double tableStart = TGPerfNow();
+		for (NSNumber *messageId in TGChangedMessageIds(oldRaw, self.rawMessages))
+			[self.layoutCache removeLayoutForMessageId:messageId.longLongValue];
 		[self.table reloadData];
 		TGPerfReport("chat table", "layouts during reload", tableStart, 150.0);
+		[self refreshActionBar];
+		[self updateTitleEmojiStatus];
 		return;
 	}
 #endif
@@ -250,6 +258,7 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 		TGPerfReport("chat load", "history wait", chatStart, 300.0);
 		BOOL firstLoad = !me.unreadChecked;
 		[me noteFirstUnreadIn:messages];
+		NSArray *oldRaw = me.rawMessages ?: @[];
 		[me.streamStore resetWithMessages:messages];
 		me.rawMessages = [me.streamStore messages];
 		me.messages = [me groupedMessagesFromMessages:me.rawMessages];
@@ -271,14 +280,18 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 		// The layout of thirty visible rows is what a first paint on the A4
 		// really pays for; the network wait is logged on its own.
 		double tableStart = TGPerfNow();
+		for (NSNumber *messageId in TGChangedMessageIds(oldRaw, me.rawMessages))
+			[me.layoutCache removeLayoutForMessageId:messageId.longLongValue];
 		[me.table reloadData];
 		TGPerfReport("chat table", "reloadData", tableStart, 100.0);
+		[me refreshActionBar];
+		[me updateTitleEmojiStatus];
 		if (me.initialMessageId){
 			// Opened by a link to one message: the unread separator and the
 			// bottom both lose to the message the tap was about.
 			int64_t target = me.initialMessageId;
 			me.initialMessageId = 0;
-			[me showMessageId:target gone:@"That message is not in this chat"];
+			[me showMessageId:target gone:@"Message Deleted."];
 			[me fetchMissingImages];
 			[me resolveUnknownSenders];
 			return;
@@ -318,6 +331,11 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 	// round already.
 	[button addTarget:self action:@selector(openProfile)
 	 forControlEvents:UIControlEventTouchUpInside];
+	// Holding the avatar offers Open Profile, Statistics and Search.
+	UILongPressGestureRecognizer *avatarHold = [[UILongPressGestureRecognizer alloc]
+			initWithTarget:self action:@selector(headerHeld:)];
+	avatarHold.minimumPressDuration = 0.5;
+	[button addGestureRecognizer:avatarHold];
 
 	NSString *title = self.chatTitle ?: @"";
 	BOOL isSaved = (self.chatId == [[TGClient shared] savedMessagesChatId]);
@@ -329,6 +347,33 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 
 	self.navigationItem.rightBarButtonItem =
 			[[UIBarButtonItem alloc] initWithCustomView:button];
+
+	// Your own peer and a forum get a second right item: search is reachable
+	// from the bar, not only from the title hold.
+	int64_t selfUserId = [[TGClient shared].me[@"id"] longLongValue];
+	BOOL ownPeer = selfUserId != 0 && self.chatId == selfUserId;
+	BOOL forum = NO;
+	for (NSDictionary *row in [TGClient shared].chats){
+		if ([row[@"id"] longLongValue] == self.chatId){
+			forum = [row[@"isForum"] boolValue];
+			break;
+		}
+	}
+	if (ownPeer || forum){
+		UIButton *search = [UIButton buttonWithType:UIButtonTypeCustom];
+		search.frame = CGRectMake(0, 0, TGMetricRow, TGMetricRow);
+		[search setImage:[TGIcons glyphNamed:@"search"
+									  colour:[[TGTheme shared] barButtonColour]
+										side:TGMetricMenuGlyph]
+				forState:UIControlStateNormal];
+		[search addTarget:self action:@selector(toggleChatSearch)
+		 forControlEvents:UIControlEventTouchUpInside];
+		search.accessibilityLabel = TGLocalized(@"Search");
+		UIBarButtonItem *searchItem = [[UIBarButtonItem alloc]
+				initWithCustomView:search];
+		self.navigationItem.rightBarButtonItems =
+				@[[[UIBarButtonItem alloc] initWithCustomView:button], searchItem];
+	}
 
 	// Your own photo is not what Saved Messages is known by; the bookmark set
 	// above stays.
@@ -376,19 +421,76 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 /// Asks for the chat's real kind before drawing the header and the composer.
 /// Until the answer lands the subtitle stays empty; a presence line or a Mute
 /// button for a channel you never joined is worse than no line at all.
+/// The last answer per chat, for this run: reopening a channel draws its bar
+/// and subtitle at once instead of after the round trip.
+static NSMutableDictionary *TGChatCanSendMemo(void) {
+	static NSMutableDictionary *memo;
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{ memo = [NSMutableDictionary dictionary]; });
+	return memo;
+}
+
+static NSMutableDictionary *TGChatKindMemo(void) {
+	static NSMutableDictionary *memo;
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{ memo = [NSMutableDictionary dictionary]; });
+	return memo;
+}
+
+static NSMutableDictionary *TGChatProfileMemo(void) {
+	static NSMutableDictionary *memo;
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{ memo = [NSMutableDictionary dictionary]; });
+	return memo;
+}
+
 - (void)loadChatKindAndChrome {
-	// The posting rights take a round trip; a channel read from the chat list
-	// hides the composer meanwhile instead of offering a field nobody may use.
-	for (NSDictionary *row in [TGClient shared].chats){
-		if ([row[@"id"] longLongValue] == self.chatId){
-			if ([row[@"isChannel"] boolValue])
-				self.inputBar.hidden = YES;
-			break;
+	// getChat + getSupergroup can wait seconds behind a history load, and a
+	// channel looked like a plain chat until then. Draw what is already
+	// known - the last answer, or the chat list row (a listed channel is one
+	// you follow) - and let the answer correct it.
+	NSDictionary *profileMemo = TGChatProfileMemo()[@(self.chatId)];
+	if (profileMemo){
+		self.linkedChatId = [profileMemo[@"linkedChatId"] longLongValue];
+		self.directMessagesChatId = [profileMemo[@"directMessagesChatId"] longLongValue];
+		self.hasDirectMessages = [profileMemo[@"hasDirectMessages"] boolValue];
+		self.canManageDirectMessages = [profileMemo[@"canManageDirectMessages"] boolValue];
+	}
+	NSDictionary *known = TGChatKindMemo()[@(self.chatId)];
+	if (!known){
+		for (NSDictionary *row in [TGClient shared].chats){
+			if ([row[@"id"] longLongValue] == self.chatId){
+				if ([row[@"isGroup"] boolValue])
+					known = @{@"isGroup" : @YES, @"isMember" : @YES,
+							  @"isChannel" : @([row[@"isChannel"] boolValue])};
+				break;
+			}
 		}
 	}
+	if ([known[@"isGroup"] boolValue]){
+		BOOL isChannel = [known[@"isChannel"] boolValue];
+		BOOL isMember = [known[@"isMember"] boolValue];
+		self.isChannel = isChannel;
+		self.isChannelMember = isMember;
+		if (!self.isGroup){
+			self.isGroup = YES;
+			[self.table reloadData];
+		}
+		NSInteger count = [known[@"memberCount"] integerValue];
+		if (count > 0){
+			self.restingSubtitle = isChannel
+					? TGLocalizedPlural(@"%d subscriber", @"%d subscribers", count)
+					: TGLocalizedPlural(@"%d member", @"%d members", count);
+			[self titleSubtitleOwnerChanged:nil];
+		}
+		[self applyPostingRightsForGroup:YES channel:isChannel member:isMember];
+	}
 	__weak typeof(self) weakSelf = self;
+	int64_t memoChatId = self.chatId;
 	[[TGClient shared] chatKindForChat:self.chatId completion:^(NSDictionary *kind){
 		TGChatViewController *me = weakSelf;
+		if (kind)
+			TGChatKindMemo()[@(memoChatId)] = kind;
 		if (!me || !kind)
 			return;
 
@@ -397,6 +499,8 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 		BOOL isMember = [kind[@"isMember"] boolValue];
 		me.isChannel = isChannel;
 		me.isChannelMember = isMember;
+		me.silentPosting = [kind[@"silent"] boolValue];
+		me.canBeAnonymous = [kind[@"canBeAnonymous"] boolValue];
 		NSInteger count = [kind[@"memberCount"] integerValue];
 		// A chat opened from a profile came in as private, and the rows laid out so
 		// far took no sender line or group spacing.
@@ -414,8 +518,22 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 				[again titleSubtitleOwnerChanged:nil];
 			}];
 		} else if (count > 0){
-			me.restingSubtitle = [NSString stringWithFormat:@"%ld %@", (long)count,
-					isChannel ? @"subscribers" : @"members"];
+			NSString *members = isChannel
+					? TGLocalizedPlural(@"%d subscriber", @"%d subscribers", count)
+					: TGLocalizedPlural(@"%d member", @"%d members", count);
+			NSInteger onlineCount = 0;
+			for (NSDictionary *row in [TGClient shared].chats){
+				if ([row[@"id"] longLongValue] == me.chatId){
+					onlineCount = [row[@"onlineMembers"] integerValue];
+					break;
+				}
+			}
+			if (!isChannel && onlineCount > 1){
+				NSString *online = TGLocalizedFormat(@"%@ online", @(onlineCount));
+				me.restingSubtitle = TGLocalizedFormat(@"%@, %@", members, online);
+			} else {
+				me.restingSubtitle = members;
+			}
 			[me titleSubtitleOwnerChanged:nil];
 		}
 
@@ -424,7 +542,8 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 		if (isChannel){
 			[[TGClient shared] chatProfile:me.chatId completion:^(NSDictionary *info){
 				TGChatViewController *again = weakSelf;
-				if (!again) return;
+				if (!again || !info) return;
+				TGChatProfileMemo()[@(again.chatId)] = info;
 				int64_t linked = [info[@"linkedChatId"] longLongValue];
 				again.linkedChatId = linked;
 				again.directMessagesChatId = [info[@"directMessagesChatId"] longLongValue];
@@ -445,7 +564,10 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 						   member:(BOOL)isMember {
 	self.isChannel = isChannel;
 	self.isChannelMember = isMember;
+	[self updateComposerPlaceholder];
 	[self removeComposerStandIn];
+	self.input.enabled = YES;
+	self.sendButton.enabled = YES;
 
 	if (isGroup && !isMember){
 		if (isChannel){
@@ -464,9 +586,21 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 	}
 
 	// A channel you follow has no composer unless you may post in it; the
-	// same answer decides a private chat's bottom, as before.
+	// same answer decides a private chat's bottom, as before. The answer
+	// queues behind the history load, so a channel shows its bar at once -
+	// or the composer, if the last answer this run said you may post - and
+	// the answer only swaps it.
+	NSNumber *couldSend = TGChatCanSendMemo()[@(self.chatId)];
+	if (isChannel){
+		if ([couldSend boolValue])
+			self.inputBar.hidden = NO;
+		else
+			[self showChannelBottomBar];
+	}
 	__weak typeof(self) weakSelf = self;
+	int64_t memoChatId = self.chatId;
 	[[TGClient shared] canSendInChat:self.chatId completion:^(BOOL canSend, BOOL channel){
+		TGChatCanSendMemo()[@(memoChatId)] = @(canSend);
 		TGChatViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -479,9 +613,26 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 			[me showChannelBottomBar];
 			return;
 		}
-		[me showComposerStandIn:@"Mute chat"
-						 action:@selector(muteFromChat:)
-							tag:kChatMuteBarTag];
+		// An unwritable private chat is blocked or restricted, not muted.
+		[[TGClient shared] isUserBlocked:me.chatId completion:^(BOOL blocked){
+			TGChatViewController *again = weakSelf;
+			if (!again)
+				return;
+			if (blocked){
+				[again showComposerStandIn:TGLocalized(@"Unblock")
+								   action:@selector(unblockFromChat:)
+									  tag:kChatUnblockBarTag];
+			} else {
+				// Restricted rather than blocked: there is no Unblock to
+				// offer, but an empty strip explains nothing. Keep the field
+				// where it is, disabled, so the bottom still says this is a
+				// chat with a composer that the server will not take.
+				again.inputBar.hidden = NO;
+				again.input.enabled = NO;
+				again.sendButton.enabled = NO;
+				again.input.placeholder = TGLocalized(@"Message");
+			}
+		}];
 	}];
 }
 
@@ -522,12 +673,15 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 
 	// Channel and supergroup chat ids are negative: "present" is non-zero.
 	CGFloat leftW = 0;
+	// "chats" is not a glyph TGIcons draws; it fell back to a bare disc.
+	// Direct messages get the compose pen (official's suggest-post icon),
+	// the discussion the speech bubble.
 	if (self.directMessagesChatId != 0){
-		iconButton(@"chat", @selector(directMessagesFromChat:), leftW);
+		iconButton(@"compose", @selector(directMessagesFromChat:), leftW);
 		leftW += side;
 	}
 	if (self.linkedChatId != 0){
-		UIButton *discuss = iconButton(@"chats", @selector(discussFromChat:), leftW);
+		UIButton *discuss = iconButton(@"chat", @selector(discussFromChat:), leftW);
 		discuss.tag = kChatDiscussBarTag;
 		leftW += side;
 	}
@@ -549,7 +703,7 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 	} else {
 		centre.tag = kChatMuteBarTag;
 		BOOL muted = [[TGClient shared] isChatMuted:self.chatId];
-		[centre setTitle:(muted ? @"Unmute" : @"Mute") forState:UIControlStateNormal];
+		[centre setTitle:TGChatChannelMuteTitle(muted) forState:UIControlStateNormal];
 		[centre addTarget:self action:@selector(muteFromChat:) forControlEvents:UIControlEventTouchUpInside];
 	}
 	[container addSubview:centre];
@@ -557,8 +711,9 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 }
 
 - (void)directMessagesFromChat:(UIButton *)sender {
+	// The direct-messages group is a supergroup: its chat id is negative.
 	int64_t targetId = self.directMessagesChatId;
-	if (targetId <= 0)
+	if (targetId == 0)
 		return;
 
 	if (self.canManageDirectMessages){
@@ -570,7 +725,7 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 	} else {
 		TGChatViewController *chat = [[TGChatViewController alloc] init];
 		chat.chatId = targetId;
-		chat.chatTitle = [NSString stringWithFormat:@"%@ · Direct", self.chatTitle.length ? self.chatTitle : @"Channel"];
+		chat.chatTitle = self.chatTitle.length ? self.chatTitle : TGLocalized(@"Direct Messages");
 		chat.hidesBottomBarWhenPushed = YES;
 		[self.navigationController pushViewController:chat animated:YES];
 	}
@@ -627,6 +782,7 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 - (void)removeComposerStandIn {
 	[[self.view viewWithTag:kChatChannelBottomBarTag] removeFromSuperview];
 	[[self.view viewWithTag:kChatMuteBarTag] removeFromSuperview];
+	[[self.view viewWithTag:kChatUnblockBarTag] removeFromSuperview];
 	[[self.view viewWithTag:kChatDiscussBarTag] removeFromSuperview];
 	[[self.view viewWithTag:kChatJoinGroupBarTag] removeFromSuperview];
 	[[self.view viewWithTag:kChatJoinChannelBarTag] removeFromSuperview];
@@ -656,11 +812,20 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 	}];
 }
 
+- (void)unblockFromChat:(UIButton *)button {
+	button.enabled = NO;
+	__weak typeof(self) weakSelf = self;
+	[[TGClient shared] setUser:self.chatId blocked:NO];
+	[weakSelf applyPostingRightsForGroup:weakSelf.isGroup
+								channel:weakSelf.isChannel member:YES];
+}
+
 - (void)muteFromChat:(UIButton *)button {
-	BOOL muting = [button.currentTitle hasPrefix:@"Mute"];
+	// The state, not the button's English title: a translated title never
+	// started with "Mute", so the bar could only ever unmute.
+	BOOL muting = ![[TGClient shared] isChatMuted:self.chatId];
 	[[TGClient shared] setChat:self.chatId muted:muting];
-	NSString *title = muting ? @"Unmute" : ((button.bounds.size.width < 200.0f || button.superview.tag == kChatChannelBottomBarTag) ? @"Mute" : @"Mute channel");
-	[button setTitle:title forState:UIControlStateNormal];
+	[button setTitle:TGChatChannelMuteTitle(muting) forState:UIControlStateNormal];
 }
 
 /// YES when this message continues the album the one before it started.
@@ -684,7 +849,7 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 /// The pinned message, which may be far above whatever the chat has loaded.
 - (void)pinnedBannerTapped {
 	if (self.pinnedMessageId)
-		[self showMessageId:self.pinnedMessageId gone:@"The pinned message is gone"];
+		[self showMessageId:self.pinnedMessageId gone:@"Message Deleted."];
 }
 
 /// Scrolls to a message; when it is outside the loaded window the history is
@@ -720,9 +885,9 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 		return;
 	int64_t chatId = self.chatId, threadId = self.threadId;
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:@"Every pinned message in this chat is unpinned."
+	[TGAlertSheet showConfirm:nil
 						title:@"Unpin All Messages"
-					   action:@"Unpin All"
+					   action:@"Unpin All Messages"
 				  destructive:YES
 					   inView:self.view
 					onConfirm:^{
@@ -800,7 +965,7 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 		if (!me)
 			return;
 		if (messageId){
-			[me showMessageId:messageId gone:@"That message is gone"];
+			[me showMessageId:messageId gone:@"Message Deleted."];
 			return;
 		}
 		// The calendar query is a search and can answer nothing while the
@@ -811,11 +976,11 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 			int64_t foundId = [found[@"id"] longLongValue];
 			if (!foundId){
 				[TGSnackbar showInView:me.view
-								  text:@"Nothing that old in this chat"
+								  text:@"No Results"
 							   seconds:2 onCommit:nil];
 				return;
 			}
-			[me showMessageId:foundId gone:@"That message is gone"];
+			[me showMessageId:foundId gone:@"Message Deleted."];
 		}];
 	}];
 }
@@ -912,7 +1077,7 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 				return;
 			}
 			[TGSnackbar showInView:inner.view
-							  text:@"The replied message is gone"
+							  text:@"Message Deleted."
 						   seconds:2 onCommit:nil];
 		}];
 	}];
@@ -1101,7 +1266,7 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 				if (url.length)
 					[[UIApplication sharedApplication] openURL:[NSURL URLWithString:url]];
 				else if (me)
-					[TGSnackbar showInView:me.view text:(text.length ? text : @"The game did not open.")
+					[TGSnackbar showInView:me.view text:(text.length ? text : @"An error occurred.")
 								   seconds:2 onCommit:nil];
 			});
 		}];

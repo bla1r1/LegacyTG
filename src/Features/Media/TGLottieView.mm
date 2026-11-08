@@ -761,12 +761,25 @@ static CGImageRef TGRasterizeLottieFrame(TGLottieModel *model, double frame, CGS
 
 #pragma mark - View Implementation
 
+/// One serial queue builds every WebM player: the A4 has one core, and a
+/// screen of emoji asking at once would only add context switches.
+static dispatch_queue_t TGLottiePlayerQueue(void) {
+	static dispatch_queue_t queue;
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{
+		queue = dispatch_queue_create("org.legacy.itg.webm-open", DISPATCH_QUEUE_SERIAL);
+	});
+	return queue;
+}
+
 @interface TGLottieView ()
 @property (nonatomic, copy) NSString *loadedPath;
 /// The file this view asked for while its model was still being built.
 @property (nonatomic, copy) NSString *waitingPath;
 @property (nonatomic, strong) TGLottieModel *model;
 @property (nonatomic, strong) TGWebMStreamPlayer *webMPlayer;
+/// The file a player is being built for off the main thread.
+@property (nonatomic, copy) NSString *webMPlayerPendingPath;
 @property (nonatomic, assign) NSUInteger currentFrameIndex;
 @property (nonatomic, assign) double currentFrame;
 @property (nonatomic, strong) NSTimer *timer;
@@ -1069,16 +1082,10 @@ static BOOL sBuildsDeferred = NO;
 		// Rasterize frame 0 synchronously so the user sees the sticker
 		// immediately - but only once: it was recomputed on every reuse for
 		// as long as the background pass ran, because nothing kept it.
-		if (model.firstFrame) {
+		// Frame 0 comes from the background build; without it the loop
+		// below fills the layer, never a raster on this thread.
+		if (model.firstFrame)
 			self.layer.contents = (__bridge id)model.firstFrame.CGImage;
-		} else {
-			CGImageRef f0 = TGRasterizeLottieFrame(model, model.inPoint, targetPxSize);
-			if (f0) {
-				self.layer.contents = (__bridge id)f0;
-				model.firstFrame = [UIImage imageWithCGImage:f0];
-				CGImageRelease(f0);
-			}
-		}
 
 		// Asynchronously pre-rasterize the animation loop on a background thread
 		if (!model.isRasterizing) {
@@ -1137,22 +1144,44 @@ static BOOL sBuildsDeferred = NO;
 
 - (void)play {
 	self.isPlaying = YES;
-	if (self.loaded && self.model.isWebM && !self.webMPlayer)
+	if (self.loaded && self.model.isWebM && !self.webMPlayer) {
 		[self ensureWebMPlayer];
+		return;
+	}
 	if (self.webMPlayer) {
 		[self.webMPlayer play];
-	} else if (self.loaded && !self.timer) {
+	} else if (self.loaded && !self.model.isWebM && !self.timer) {
 		[self startTimer];
 	}
 }
 
-/// The fopen, nestegg_init and vpx_codec_dec_init of a stream player cost a
-/// few ms, so the player comes up only when something actually plays.
+/// The fopen, nestegg_init, vpx_codec_dec_init and the first VP9 frame cost
+/// tens of ms on the A4; a screen of custom emoji did them all on the main
+/// thread and froze the chat. The player is built on a background queue and
+/// handed back to the view only if it still shows the same file.
 - (void)ensureWebMPlayer {
-	if (self.webMPlayer || !self.model.isWebM)
+	NSString *path = self.model.path;
+	if (self.webMPlayer || !self.model.isWebM ||
+			[self.webMPlayerPendingPath isEqualToString:path])
 		return;
-	self.webMPlayer = [[TGWebMStreamPlayer alloc] initWithPath:self.model.path];
-	self.webMPlayer.targetLayer = self.layer;
+	self.webMPlayerPendingPath = path;
+	__weak typeof(self) weakSelf = self;
+	dispatch_async(TGLottiePlayerQueue(), ^{
+		TGWebMStreamPlayer *player = [[TGWebMStreamPlayer alloc] initWithPath:path];
+		dispatch_async(dispatch_get_main_queue(), ^{
+			TGLottieView *me = weakSelf;
+			if (!me)
+				return;
+			if ([me.webMPlayerPendingPath isEqualToString:path])
+				me.webMPlayerPendingPath = nil;
+			if (!player || ![me.model.path isEqualToString:path] || me.webMPlayer)
+				return;
+			me.webMPlayer = player;
+			player.targetLayer = me.layer;
+			if (me.isPlaying)
+				[player play];
+		});
+	});
 }
 
 - (void)stop {
@@ -1178,35 +1207,9 @@ static BOOL sBuildsDeferred = NO;
 		return;
 	}
 
-	// Fallback while background rasterizer is completing
-	double fps = 18.0;
-	double step = self.model.frameRate / fps;
-	self.currentFrame += step;
-	if (self.currentFrame >= self.model.outPoint)
-		self.currentFrame = self.model.inPoint;
-	[self setNeedsDisplay];
-}
-
-#pragma mark - drawing (fallback only when not yet rasterized)
-
-- (void)drawRect:(CGRect)rect {
-	if (!self.loaded || self.model.cachedFrames.count > 0)
-		return;
-
-	CGContextRef ctx = UIGraphicsGetCurrentContext();
-	CGContextSaveGState(ctx);
-
-	CGFloat scale = MIN(self.bounds.size.width / self.model.canvas.width,
-						self.bounds.size.height / self.model.canvas.height);
-	CGContextTranslateCTM(ctx,
-			TGCenteredOrigin(self.bounds.size.width, self.model.canvas.width * scale),
-			TGCenteredOrigin(self.bounds.size.height, self.model.canvas.height * scale));
-	CGContextScaleCTM(ctx, scale, scale);
-
-	for (NSDictionary *layer in [[self.model.layers reverseObjectEnumerator] allObjects])
-		TGDrawLottieLayer(layer, self.model.layersByInd, self.currentFrame, ctx);
-
-	CGContextRestoreGState(ctx);
+	// Until the background pass delivers the loop, frame 0 stays up. The
+	// old fallback re-rendered the vector frame in drawRect: 18 times a
+	// second on the main thread - the custom emoji freeze.
 }
 
 @end

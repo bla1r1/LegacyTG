@@ -14,6 +14,8 @@
 #import <QuartzCore/QuartzCore.h>
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
+#import "TGLocalization.h"
+#import "TGPopupMenu.h"
 #import "TGDevShowcase.h"
 #import "TGFileInfoViewController.h"
 #import "TGForwardPicker.h"
@@ -89,45 +91,64 @@ static BOOL TGViewerItemLocked(NSDictionary *item) {
 	// TDLib's can_be_saved is NO in a protected chat and for one-time media:
 	// the picture may be looked at, not shared, saved or copied.
 	BOOL saveable = !TGViewerItemLocked(m);
-	NSMutableArray *choices = saveable
-			? [NSMutableArray arrayWithObjects:@"Share", @"Forward", @"Copy Caption", nil]
-			: [NSMutableArray array];
-	NSInteger destructive = -1;
+	// TGPopupMenu reads each item's title and destructive flag, so the rows
+	// are dictionaries - a plain string crashed on item[@"title"].
+	NSMutableArray *choices = [NSMutableArray array];
+	void (^add)(NSString *, BOOL) = ^(NSString *title, BOOL destructive){
+		[choices addObject:destructive
+				? @{@"title" : title, @"destructive" : @YES}
+				: @{@"title" : title}];
+	};
+	if (saveable){
+		add(@"Share", NO);
+		add(@"Forward", NO);
+		add(@"Copy", NO);
+	}
 	if ([self currentFileId]){
 		if (saveable){
-			[choices addObject:@"Save to Camera Roll"];
-			[choices addObject:@"Add to Downloads"];
+			add(@"Save to Photos", NO);
+			add(@"Downloads", NO);
 		}
-		[choices addObject:@"File Info"];
-		[choices addObject:@"Delete from Device"];
-		destructive = (NSInteger)choices.count - 1;
+		add(@"File", NO);
+		add(@"Delete", YES);
 	}
 	if ([m[@"hasStickers"] boolValue])
-		[choices addObject:@"Sticker Packs..."];
+		add(@"Stickers", NO);
 
+	// An anchored menu, not an action sheet: iOS 6 has no UIContextMenu, so
+	// TGPopupMenu supplies the arrow and the card.
+	CGPoint anchor = CGPointMake(TGHalf(self.backdrop.bounds.size.width),
+			TGMetricPadLarge);
+	if (self.moreButton.window) {
+		CGRect buttonInBackdrop = [self.moreButton.superview
+				convertRect:self.moreButton.frame toView:self.backdrop];
+		anchor = CGPointMake(CGRectGetMidX(buttonInBackdrop),
+				CGRectGetMaxY(buttonInBackdrop));
+	}
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:choices title:@"Media"
-			 destructiveIndex:destructive inView:self.backdrop
-					 onChoice:^(NSInteger index){
+	// The header variant builds the drawn callout; the plain one hands the
+	// rows to a bottom action sheet, which is not what the More button is.
+	[TGPopupMenu showItems:choices atPoint:anchor inView:self.backdrop
+				headerView:nil
+				  onChoice:^(NSInteger index, NSString *title){
 		TGMediaViewer *me = weakSelf;
 		if (!me)
 			return;
-		NSString *what = choices[(NSUInteger)index];
-		if ([what isEqualToString:@"Share"])
+		if ([title isEqualToString:@"Share"])
 			[me shareCurrent];
-		else if ([what isEqualToString:@"Forward"])
+		else if ([title isEqualToString:@"Forward"])
 			[me forwardCurrent];
-		else if ([what isEqualToString:@"Copy Caption"])
+		else if ([title isEqualToString:@"Copy"])
 			[me copyCaption];
-		else if ([what isEqualToString:@"Save to Camera Roll"])
+		else if ([title isEqualToString:@"Save to Photos"])
 			[me saveCurrent];
-		else if ([what isEqualToString:@"Add to Downloads"])
+		else if ([title isEqualToString:@"Downloads"])
 			[me addCurrentToDownloads];
-		else if ([what isEqualToString:@"File Info"])
+		else if ([title isEqualToString:@"File"])
 			[me showFileInfo];
-		else if ([what isEqualToString:@"Delete from Device"])
+		else if ([title isEqualToString:@"Delete"])
 			[me deleteCurrentFromDevice];
-		else if ([what isEqualToString:@"Sticker Packs..."])
+		else if ([title isEqualToString:@"Stickers"])
 			[me showStickerPacksOfFile:[me currentFileId].integerValue];
 	}];
 }
@@ -157,7 +178,7 @@ static BOOL TGViewerItemLocked(NSDictionary *item) {
 			if (!me)
 				return;
 			if (!path.length){
-				[TGAlertSheet showMessage:@"The file is not downloaded yet."
+				[TGAlertSheet showMessage:@"An error occurred."
 									  title:@"Share" inView:me.backdrop];
 				return;
 			}
@@ -187,7 +208,7 @@ static BOOL TGViewerItemLocked(NSDictionary *item) {
 	int64_t messageId = [m[@"id"] longLongValue];
 	int64_t fromChat = self.chatId;
 	if (!messageId || !fromChat){
-		[TGAlertSheet showMessage:@"This item cannot be forwarded from the viewer."
+		[TGAlertSheet showMessage:@"An error occurred."
 							  title:@"Forward" inView:self.backdrop];
 		return;
 	}
@@ -204,7 +225,7 @@ static BOOL TGViewerItemLocked(NSDictionary *item) {
 								  fromChat:fromChat toChat:toChatId];
 		TGMediaViewer *me = weakSelf;
 		UIView *host = me.backdrop ?: [UIApplication sharedApplication].keyWindow;
-		[TGSnackbar showInView:host text:@"Forwarded" seconds:2 onCommit:nil];
+		[TGSnackbar showInView:host text:@"Forward" seconds:2 onCommit:nil];
 	};
 	UINavigationController *nav = [[UINavigationController alloc]
 			initWithRootViewController:picker];
@@ -214,12 +235,12 @@ static BOOL TGViewerItemLocked(NSDictionary *item) {
 - (void)copyCaption {
 	NSString *caption = [self currentItem][@"text"];
 	if (!caption.length){
-		[TGAlertSheet showMessage:@"This item has no caption."
-							  title:@"Copy Caption" inView:self.backdrop];
+		[TGAlertSheet showMessage:@"An error occurred."
+							  title:@"Copy" inView:self.backdrop];
 		return;
 	}
 	[UIPasteboard generalPasteboard].string = caption;
-	[TGSnackbar showInView:self.backdrop text:@"Caption copied" seconds:2 onCommit:nil];
+	[TGSnackbar showInView:self.backdrop text:@"Text copied." seconds:2 onCommit:nil];
 }
 
 - (void)addCurrentToDownloads {
@@ -230,7 +251,7 @@ static BOOL TGViewerItemLocked(NSDictionary *item) {
 	[[TGClient shared] addFileToDownloads:fileId.integerValue
 								   inChat:self.chatId
 								  message:[m[@"id"] longLongValue]];
-	[TGSnackbar showInView:self.backdrop text:@"Added to Downloads" seconds:2
+	[TGSnackbar showInView:self.backdrop text:@"Saved to Files." seconds:2
 				  onCommit:nil];
 }
 
@@ -245,12 +266,25 @@ static BOOL TGViewerItemLocked(NSDictionary *item) {
 }
 
 - (void)deleteCurrentFromDevice {
-	NSNumber *fileId = [self currentFileId];
-	if (!fileId)
+	NSDictionary *m = [self currentItem];
+	int64_t messageId = [m[@"id"] longLongValue];
+	if (!messageId || !self.chatId)
 		return;
-	[[TGClient shared] deleteLocalFile:fileId.integerValue];
-	[TGSnackbar showInView:self.backdrop text:@"Deleted from this device"
-					 seconds:2 onCommit:nil];
+	__weak typeof(self) weakSelf = self;
+	[TGAlertSheet showConfirm:TGLocalized(@"Delete Message")
+						title:nil
+					   action:TGLocalized(@"Delete")
+				  destructive:YES
+					   inView:self.backdrop
+					onConfirm:^{
+		TGMediaViewer *me = weakSelf;
+		if (!me)
+			return;
+		[[TGClient shared] deleteMessages:@[@(messageId)]
+								   inChat:me.chatId revoke:YES];
+		[TGSnackbar showInView:me.backdrop
+						  text:TGLocalized(@"Message Deleted.") seconds:2 onCommit:nil];
+	}];
 }
 
 

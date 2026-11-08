@@ -1,4 +1,5 @@
 #import "TGGroupSettingsViewController.h"
+#import "TGLocalization.h"
 #import "TGClient.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
@@ -136,8 +137,8 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 
 - (void)choosePermissions {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:@[@"Everything allowed", @"Messages only (no media)", @"Read only"]
-						title:@"What members may do"
+	[TGAlertSheet showChoices:@[@"All", @"Messages", @"Read-Only Mode"]
+						title:@"Permissions"
 			 destructiveIndex:-1
 					   inView:self.view
 					 onChoice:^(NSInteger index){
@@ -147,9 +148,8 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 											  completion:^(BOOL ok){
 			TGGroupSettingsViewController *me = weakSelf;
 			if (!ok){
-				[TGAlertSheet showMessage:@"Only an administrator can change what "
-										  @"members may do."
-									title:@"Permissions" inView:me.view];
+				[TGAlertSheet showMessage:@"An error occurred."
+										  title:@"Permissions" inView:me.view];
 				return;
 			}
 			[me load];
@@ -158,8 +158,14 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 }
 
 - (void)chooseSlowMode {
-	NSArray *titles = @[@"Off", @"5 seconds", @"10 seconds", @"30 seconds",
-						@"1 minute", @"5 minutes", @"15 minutes", @"1 hour"];
+	NSArray *titles = @[@"Off",
+						TGLocalizedPluralValue(@"%@ second", @"%@ seconds", @"5", 5),
+						TGLocalizedPluralValue(@"%@ second", @"%@ seconds", @"10", 10),
+						TGLocalizedPluralValue(@"%@ second", @"%@ seconds", @"30", 30),
+						TGLocalizedPluralValue(@"%@ minute", @"%@ minutes", @"1", 1),
+						TGLocalizedPluralValue(@"%@ minute", @"%@ minutes", @"5", 5),
+						TGLocalizedPluralValue(@"%@ minute", @"%@ minutes", @"15", 15),
+						TGLocalizedPluralValue(@"%@ hour", @"%@ hours", @"1", 1)];
 	static const NSInteger seconds[] = {0, 5, 10, 30, 60, 300, 900, 3600};
 	__weak typeof(self) weakSelf = self;
 	[TGAlertSheet showChoices:titles title:@"Slow Mode" destructiveIndex:-1
@@ -169,7 +175,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 										completion:^(BOOL ok){
 			TGGroupSettingsViewController *me = weakSelf;
 			if (!ok){
-				[TGAlertSheet showMessage:@"Telegram refused that delay."
+				[TGAlertSheet showMessage:@"An error occurred."
 									title:@"Slow Mode" inView:me.view];
 				return;
 			}
@@ -183,9 +189,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 
 - (void)confirmBroadcast {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:@"A broadcast group is read by its members and "
-							  @"posted to by administrators only. Telegram has "
-							  @"no way back from this."
+	[TGAlertSheet showConfirm:@"Broadcast groups can have over %@ members, but only admins can send messages in them."
 						title:@"Convert to Broadcast Group"
 					   action:@"Convert"
 				  destructive:YES
@@ -211,15 +215,15 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 	[[TGClient shared] joinRequestsForChat:self.chatId completion:^(NSArray *requests){
 		TGGroupSettingsViewController *me = weakSelf;
 		if (!requests.count){
-			[TGAlertSheet showMessage:@"Nobody is waiting at the links."
+			[TGAlertSheet showMessage:@"There are no pending join requests."
 								title:@"Join Requests" inView:me.view];
 			return;
 		}
 		NSMutableArray *rows = [NSMutableArray array];
 		for (NSDictionary *request in requests)
 			[rows addObject:request[@"name"] ?: @"?"];
-		[rows addObject:@"Approve All Requests"];
-		[rows addObject:@"Decline All Requests"];
+		[rows addObject:@"Approve"];
+		[rows addObject:@"Decline All"];
 
 		[TGAlertSheet showChoices:rows title:@"Join Requests"
 				 destructiveIndex:(NSInteger)rows.count - 1 inView:me.view
@@ -229,8 +233,8 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 				BOOL approve = index == (NSInteger)requests.count;
 				[[TGClient shared] processAllJoinRequests:me.chatId link:@""
 						approve:approve completion:^(BOOL ok){
-					[TGAlertSheet showMessage:(ok ? @"Every request was answered."
-												   : @"Telegram refused the batch.")
+					[TGAlertSheet showMessage:(ok ? @"Done"
+												   : @"An error occurred.")
 										title:@"Join Requests" inView:me.view];
 					[me showJoinRequests];
 				}];
@@ -257,7 +261,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 - (void)showWelcomeMessages {
 	__weak typeof(self) weakSelf = self;
 	int64_t chatId = self.chatId;
-	NSString *groupTitle = self.chatTitle ?: @"Welcome Messages";
+	NSString *groupTitle = self.chatTitle ?: @"Manage Welcome Messages";
 	[[TGClient shared] welcomeMessagesOfChat:chatId completion:^(NSArray *welcomes){
 		TGGroupSettingsViewController *me = weakSelf;
 		if (!me)
@@ -269,26 +273,25 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 			NSString *text = welcome[@"text"];
 			NSString *preview = text.length
 					? [text substringToIndex:MIN((NSUInteger)30, text.length)]
-					: @"(not text)";
-			[rows addObject:[NSString stringWithFormat:@"Edit — %@", preview]];
+					: @"No text";
+			[rows addObject:[NSString stringWithFormat:@"%@ — %@",
+					TGLocalized(@"Edit"), preview]];
 			[ids addObject:welcome[@"id"]];
 		}
 		[rows addObject:@"Add"];
 		if (welcomes.count)
-			[rows addObject:@"Delete One..."];
+			[rows addObject:@"Delete"];
 		[rows addObject:@"Delete All"];
 
 		NSInteger destructive = (NSInteger)[rows indexOfObject:@"Delete All"];
 		[TGAlertSheet showChoices:rows title:groupTitle
-							message:(welcomes.count
-									? @"The first one a joiner sees."
-									: @"None yet. A new joiner sees the highest one first.")
+							message:nil
 				 destructiveIndex:destructive inView:me.view
 						 onChoice:^(NSInteger index){
 			NSString *what = rows[(NSUInteger)index];
 			if ([what isEqualToString:@"Delete All"]){
-				[TGAlertSheet showConfirm:@"Every welcome message this group has is removed."
-									title:@"Welcome Messages"
+				[TGAlertSheet showConfirm:@"Delete All"
+									title:@"Manage Welcome Messages"
 								   action:@"Delete All"
 							  destructive:YES
 								   inView:me.view
@@ -298,18 +301,18 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 				}];
 				return;
 			}
-			if ([what isEqualToString:@"Delete One..."]){
+			if ([what isEqualToString:@"Delete"]){
 				NSMutableArray *previews = [NSMutableArray array];
 				for (NSUInteger i = 0; i < welcomes.count; i++){
 					NSString *text = welcomes[i][@"text"];
 					NSString *preview = text.length
 							? [text substringToIndex:MIN((NSUInteger)30, text.length)]
-							: @"(not text)";
+							: @"No text";
 					[previews addObject:[NSString stringWithFormat:@"%lu. %@",
 										 (unsigned long)(i + 1), preview]];
 				}
-				[TGAlertSheet showChoices:previews title:@"Welcome Messages"
-								   message:@"Which welcome goes?"
+				[TGAlertSheet showChoices:previews title:@"Manage Welcome Messages"
+								   message:nil
 						 destructiveIndex:0 inView:me.view
 								 onChoice:^(NSInteger which){
 					NSString *wid = [ids[(NSUInteger)which] isKindOfClass:NSString.class]
@@ -322,15 +325,14 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 				return;
 			}
 			if ([what isEqualToString:@"Add"]){
-				[TGAlertSheet showInput:@"Add Welcome" message:nil
-							placeholder:@"A word to the joiner" text:nil
+				[TGAlertSheet showInput:@"Create a Welcome Message" message:nil
+							placeholder:@"Welcome Message" text:nil
 								 action:@"Add" inView:me.view
 							 onSubmit:^(NSString *typed){
 					[[TGClient shared] addWelcomeMessageToChat:chatId text:typed
 													completion:^(BOOL ok){
 						if (!ok)
-							[TGAlertSheet showMessage:@"Telegram refused that. Only "
-													  @"an administrator adds one."
+							[TGAlertSheet showMessage:@"An error occurred."
 												title:@"Welcome" inView:me.view];
 					}];
 				}];
@@ -341,15 +343,15 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 			NSString *old = welcomes[index][@"text"];
 			NSString *welcomeId = [ids[index] isKindOfClass:NSString.class]
 					? ids[index] : [ids[index] stringValue];
-			[TGAlertSheet showInput:@"Edit Welcome" message:nil
-						placeholder:old ?: @"A word to the joiner" text:old
+			[TGAlertSheet showInput:@"Welcome Message" message:nil
+						placeholder:old ?: @"Welcome Message" text:old
 							 action:@"Save" inView:me.view
 						 onSubmit:^(NSString *typed){
 				[[TGClient shared] setWelcomeMessage:[welcomeId longLongValue]
 											  inChat:chatId text:typed
 										  completion:^(BOOL ok){
 					if (!ok)
-						[TGAlertSheet showMessage:@"Telegram refused that."
+						[TGAlertSheet showMessage:@"An error occurred."
 											title:@"Welcome" inView:me.view];
 				}];
 			}];

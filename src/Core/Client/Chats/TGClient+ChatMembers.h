@@ -146,6 +146,9 @@
 
 /// Erase the messages of a chat without leaving it.
 - (void)clearHistoryInChat:(int64_t)chatId;
+/// revoke clears it for the other side too; TDLib honours it in private
+/// chats only.
+- (void)clearHistoryInChat:(int64_t)chatId revoke:(BOOL)revoke;
 
 /// Look up a public chat by its @username, creating it locally if needed.
 /// Answers 0 when there is no such account.

@@ -46,7 +46,7 @@ NSDictionary *TGGroupCallInput(int32_t groupCallId, int64_t accessHash) {
 /// were empty rather than a success.
 static NSString *TGGCErrorText(NSDictionary *result) {
 	NSString *message = result[@"message"];
-	return [message isKindOfClass:NSString.class] ? message : @"Telegram refused that.";
+	return [message isKindOfClass:NSString.class] ? message : @"An error occurred.";
 }
 
 static BOOL TGGCSucceeded(NSDictionary *result) {
@@ -665,7 +665,7 @@ static NSDictionary *TGGCFlattenMessage(TGClient *client, NSDictionary *message)
 							   messageId:(int64_t)messageId
 							  completion:(void (^)(BOOL, NSString *))completion {
 	if (!chatId || !messageId){
-		if (completion) completion(NO, @"Name the invitation message.");
+		if (completion) completion(NO, @"An error occurred.");
 		return;
 	}
 	[self request:@{
@@ -686,7 +686,7 @@ static NSDictionary *TGGCFlattenMessage(TGClient *client, NSDictionary *message)
 	NSString *clean = [title stringByTrimmingCharactersInSet:
 			[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 	if (!groupCallId || !clean.length || clean.length > 64){
-		if (completion) completion(NO, @"A video chat title is 1 to 64 characters.");
+		if (completion) completion(NO, @"An error occurred.");
 		return;
 	}
 	[self request:@{
@@ -794,7 +794,7 @@ static NSDictionary *TGGCFlattenMessage(TGClient *client, NSDictionary *message)
 	NSString *clean = [title stringByTrimmingCharactersInSet:
 			[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 	if (!groupCallId || clean.length > 64){
-		if (completion) completion(NO, @"A recording title is at most 64 characters.");
+		if (completion) completion(NO, @"An error occurred.");
 		return;
 	}
 	[self request:@{
@@ -1001,7 +1001,7 @@ static NSDictionary *TGGCFlattenMessage(TGClient *client, NSDictionary *message)
 	NSString *clean = [text stringByTrimmingCharactersInSet:
 			[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 	if (!groupCallId || !clean.length){
-		if (completion) completion(NO, @"Write the message and name the call.");
+		if (completion) completion(NO, @"An error occurred.");
 		return;
 	}
 	[self request:@{
@@ -1024,7 +1024,7 @@ static NSDictionary *TGGCFlattenMessage(TGClient *client, NSDictionary *message)
 					 reportSpam:(BOOL)reportSpam
 					 completion:(void (^)(BOOL, NSString *))completion {
 	if (!groupCallId || ![messageIds isKindOfClass:NSArray.class] || !messageIds.count){
-		if (completion) completion(NO, @"Name the call and at least one message.");
+		if (completion) completion(NO, @"An error occurred.");
 		return;
 	}
 	[self request:@{
@@ -1250,7 +1250,7 @@ static NSDictionary *TGGCFlattenMessage(TGClient *client, NSDictionary *message)
 	[[NSNotificationCenter defaultCenter] postNotificationName:
 			TGGroupCallMessagesChangedNotification object:self
 			userInfo:@{TGGroupCallIdKey : @(callId),
-					   TGGroupCallErrorKey : message.length ? message : @"The message was not sent."}];
+					   TGGroupCallErrorKey : message.length ? message : @"Your message was not sent. Tap \"Resend\" to send this message."}];
 }
 
 /// updateGroupCallMessage is not a td_api name in every schema this client

@@ -20,7 +20,8 @@ typedef NS_ENUM(NSInteger, TGLoginStep) {
     TGLoginStepRecoveryCode
 };
 
-@interface TGLoginViewController ()
+@interface TGLoginViewController () <UIImagePickerControllerDelegate,
+        UINavigationControllerDelegate>
 
 @property (nonatomic, assign) TGLoginStep currentStep;
 /// The last name typed on the registration step, which is optional and so
@@ -29,9 +30,19 @@ typedef NS_ENUM(NSInteger, TGLoginStep) {
 /// True once the prefix has been typed or pasted, so the network's country
 /// guess does not overwrite a number that is not local.
 @property (nonatomic, assign) BOOL prefixEdited;
+/// Bumped for every phone step so an answer requested for an earlier visit
+/// cannot write its prefix into the current one.
+@property (nonatomic, assign) NSInteger countryGuessGeneration;
+/// Set when the network's country guess has been applied; a slower device
+/// lookup that lands afterwards must leave the network's answer alone.
+@property (nonatomic, assign) BOOL countryGuessResolvedByNetwork;
 @property (nonatomic, strong) UIScrollView *scrollView;
 @property (nonatomic, strong) UIImageView *brandLogoView;
 @property (nonatomic, strong) UILabel *brandLabel;
+/// The screen heading, in the content as official draws it, not in the bar.
+@property (nonatomic, strong) UILabel *headingLabel;
+/// The country row above the number field; its title is the chosen country.
+@property (nonatomic, strong) UIButton *countryButton;
 @property (nonatomic, strong) UILabel *subtitleLabel;
 /// The country and the number Telegram would write under the instructions.
 /// It is its own line so the instructions do not grow to four lines as a
@@ -45,6 +56,14 @@ typedef NS_ENUM(NSInteger, TGLoginStep) {
 @property (nonatomic, strong) UITextField *phonePrefixField;
 @property (nonatomic, strong) UIView *prefixSeparator;
 @property (nonatomic, strong) UITextField *inputField;
+/// The sign-up step's avatar control, second name field and consent label,
+/// created lazily.
+@property (nonatomic, strong) UIButton *avatarButton;
+@property (nonatomic, strong) UIImageView *avatarImageView;
+@property (nonatomic, copy) NSString *registrationPhotoPath;
+@property (nonatomic, strong) UIView *lastNameContainer;
+@property (nonatomic, strong) UITextField *lastNameField;
+@property (nonatomic, strong) UIButton *termsButton;
 @property (nonatomic, strong) UIButton *actionButton;
 @property (nonatomic, strong) UIActivityIndicatorView *spinner;
 @property (nonatomic, strong) UIBarButtonItem *nextItem;
@@ -53,6 +72,7 @@ typedef NS_ENUM(NSInteger, TGLoginStep) {
 @property (nonatomic, strong) UIButton *codeStepQrButton;
 @property (nonatomic, strong) UIImageView *qrImageView;
 @property (nonatomic, copy) NSString *savedPhoneNumber;
+@property (nonatomic, copy) NSString *savedCountryName;
 /// The part after the country code, kept so Edit on the code step returns
 /// the number that was typed rather than the code that replaced it.
 @property (nonatomic, copy) NSString *savedNationalNumber;
@@ -66,19 +86,30 @@ typedef NS_ENUM(NSInteger, TGLoginStep) {
 @property (nonatomic, assign) BOOL busy;
 /// The ghost links under a step's button that only that step has.
 @property (nonatomic, strong) NSMutableArray *stepLinks;
+/// Paints the digit boxes over the code field; the field itself stays behind
+/// them so the number pad and paste keep working.
+@property (nonatomic, strong) UIView *codeBoxesView;
+/// A code was sent and its answer has not arrived yet. A busy release while
+/// this stays YES means the check failed, since success changes the step.
+@property (nonatomic, assign) BOOL codeSubmitPending;
+/// The code boxes carry the red rejection border until the next keystroke.
+@property (nonatomic, assign) BOOL codeErrorShown;
+/// The phone-number confirmation card, on widths where the official sheet
+/// fits; nil while it is not showing.
+@property (nonatomic, strong) UIView *phoneConfirmationView;
 
 - (void)setupUI;
 - (void)applyTheme;
 - (void)actionButtonTapped;
 - (void)updateActionEnabled;
 - (BOOL)canSubmitCurrentStep;
-- (void)releaseBusyIfStepIsStill:(TGLoginStep)step;
 
 @end
 
 @interface TGLoginViewController (Phone)
 
 - (BOOL)containsKnownCountryPrefix:(NSString *)digits;
+- (BOOL)looksLikeInternationalNumber:(NSString *)text;
 - (void)processPastedPhoneNumber:(NSString *)raw;
 - (void)inputFieldChanged:(UITextField *)sender;
 - (void)prefixFieldChanged:(UITextField *)sender;
@@ -96,6 +127,18 @@ typedef NS_ENUM(NSInteger, TGLoginStep) {
 /// here; this runs again on every layout pass and rotation, so nothing on
 /// the screen keeps the frame it got while the bounds were other.
 - (void)layoutActiveStep;
+- (void)layoutPhoneStepInWidth:(CGFloat)width;
+- (void)layoutCodeStepInWidth:(CGFloat)width;
+- (void)layoutFieldStepInWidth:(CGFloat)width;
+- (void)layoutQRStepInWidth:(CGFloat)width;
+- (void)updatePrimaryActionForWidth:(CGFloat)width;
+- (void)updateCodeBoxes;
+/// Paints a rejected code: red boxes, no digits, the reason under them.
+- (void)showCodeError;
+- (UIBarButtonItem *)backItemWithAction:(SEL)action;
+- (void)confirmStopVerification;
+- (void)selectDeviceCountryPrefix;
+- (CGFloat)placeSubtitle;
 - (CGFloat)placeSubtitleAtY:(CGFloat)y;
 - (CGFloat)placeErrorAtY:(CGFloat)y width:(CGFloat)width;
 - (void)clearError;

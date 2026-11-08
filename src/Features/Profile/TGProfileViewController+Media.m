@@ -11,6 +11,8 @@
 #import "TGClientInternal.h"
 #import "TGIcons.h"
 #import "TGCapabilities.h"
+#import "TGLocalization.h"
+#import "TGProfileLogic.h"
 
 /// The address a piece of text links to: a text link's own URL, or the first URL
 /// typed in it. Nil when it has none.
@@ -191,7 +193,7 @@ static BOOL TGKindIsStories(NSString *kind) {
 	BOOL ownPublic = own && ![self showsSavedMessages];
 	NSMutableArray *out = [NSMutableArray array];
 	for (NSString *kind in TGProfileTabKinds(!own && self.stories.count, self.gifts.count > 0,
-			NO, ownPublic, self.mainMediaKind))
+			self.commonGroupCount > 0, ownPublic, self.mainMediaKind))
 		[out addObject:@{@"title" : titles[kind], @"kind" : kind}];
 	return out;
 }
@@ -206,6 +208,12 @@ static BOOL TGKindIsStories(NSString *kind) {
 	self.mediaGridCacheContent = nil;
 	[self.thumbnailsRequested removeAllObjects];
 	[self fetchMediaForKind:kind];
+	self.mediaSearchActive = NO;
+	self.mediaSearchQuery = nil;
+	self.mediaSearchBar.text = @"";
+	self.mediaSearchBar.showsCancelButton = NO;
+	[self.mediaSearchBar resignFirstResponder];
+	[self updateNavigationItem];
 	CGPoint offset = self.tableView.contentOffset;
 	[self.tableView reloadData];
 	CGFloat maxY = self.tableView.contentSize.height - self.tableView.bounds.size.height;
@@ -525,7 +533,8 @@ static const char kGiftTileTagKey;
 				frame.origin.x, frame.origin.y + side - TGMetricLineCaption - TGMetricPadTiny,
 				side, TGMetricLineCaption)];
 		NSInteger stars = [tile[@"starCount"] integerValue];
-		starLabel.text = (stars == 1) ? @"1 Star" : [NSString stringWithFormat:@"%ld Stars", (long)stars];
+		starLabel.text = TGLocalizedPluralValue(@"%@ Star", @"%@ Stars",
+				[NSString stringWithFormat:@"%ld", (long)stars], stars);
 		starLabel.font = TGFontCaptionStrong();
 		starLabel.textColor = [[TGTheme shared] primaryTextColour];
 		starLabel.textAlignment = NSTextAlignmentCenter;
@@ -806,19 +815,86 @@ static const char kGiftTileTagKey;
 			self.onSearchTapped != nil;
 }
 
-/// The rows behind the selected tab, for the list-shaped categories.
+/// The rows behind the selected tab, for the list-shaped categories. A bar
+/// search filters the list the pane already holds.
 - (NSArray *)selectedMediaRows {
 	NSString *kind = [self selectedMediaKind];
-	if ([kind isEqualToString:@"media"])   return self.photos ?: @[];
-	if ([kind isEqualToString:@"files"])   return self.files ?: @[];
-	if ([kind isEqualToString:@"music"])   return self.music ?: @[];
-	if ([kind isEqualToString:@"voice"])   return self.voice ?: @[];
-	if ([kind isEqualToString:@"links"])   return self.links ?: @[];
-	if ([kind isEqualToString:@"groups"])  return self.groupsInCommon ?: @[];
-	if ([kind isEqualToString:@"archive"]) return self.archivedStories ?: @[];
-	if ([kind isEqualToString:@"stories"]) return self.stories ?: @[];
-	if ([kind isEqualToString:@"gifts"])   return self.gifts ?: @[];
-	return @[];
+	NSArray *rows = @[];
+	if ([kind isEqualToString:@"media"])   rows = self.photos ?: @[];
+	else if ([kind isEqualToString:@"files"])   rows = self.files ?: @[];
+	else if ([kind isEqualToString:@"music"])   rows = self.music ?: @[];
+	else if ([kind isEqualToString:@"voice"])   rows = self.voice ?: @[];
+	else if ([kind isEqualToString:@"links"])   rows = self.links ?: @[];
+	else if ([kind isEqualToString:@"groups"])  rows = self.groupsInCommon ?: @[];
+	else if ([kind isEqualToString:@"archive"]) rows = self.archivedStories ?: @[];
+	else if ([kind isEqualToString:@"stories"]) rows = self.stories ?: @[];
+	else if ([kind isEqualToString:@"gifts"])   rows = self.gifts ?: @[];
+	return TGProfileMediaRowsMatchingQuery(rows, self.mediaSearchQuery, kind);
+}
+
+/// The bar's Search on Files, Music and Links opens a field above the pane,
+/// not a prompt: a prompt hid the rows it was filtering and could not show a
+/// keystroke at a time.
+- (UISearchBar *)ensureMediaSearchBar {
+	if (self.mediaSearchBar)
+		return self.mediaSearchBar;
+	UISearchBar *bar = [[UISearchBar alloc] initWithFrame:
+			CGRectMake(0, 0, self.view.bounds.size.width, TGMetricSearchBarHeight)];
+	bar.delegate = self;
+	bar.placeholder = TGLocalized(@"Search");
+	bar.autocorrectionType = UITextAutocorrectionTypeNo;
+	bar.autocapitalizationType = UITextAutocapitalizationTypeNone;
+	[[TGTheme shared] styleSearchBar:bar];
+	self.mediaSearchBar = bar;
+	return bar;
+}
+
+- (void)mediaSearchTapped {
+	self.mediaSearchActive = YES;
+	self.mediaSearchQuery = nil;
+	UISearchBar *bar = [self ensureMediaSearchBar];
+	bar.text = @"";
+	bar.showsCancelButton = YES;
+	[self updateNavigationItem];
+	[self.tableView reloadData];
+	// The field lives at the top of the pane, which may be above the rows
+	// the finger was on; bring the field into view before focusing it.
+	[self.tableView layoutIfNeeded];
+	CGRect header = [self.tableView rectForHeaderInSection:kSectionMedia];
+	[self.tableView setContentOffset:CGPointMake(0, header.origin.y) animated:NO];
+	// reloadData builds a fresh section header; focus it after the table has
+	// put the field back on screen.
+	[bar performSelector:@selector(becomeFirstResponder) withObject:nil afterDelay:0];
+}
+
+- (void)endMediaSearch {
+	self.mediaSearchActive = NO;
+	self.mediaSearchQuery = nil;
+	self.mediaSearchBar.text = @"";
+	self.mediaSearchBar.showsCancelButton = NO;
+	[self.mediaSearchBar resignFirstResponder];
+	[self updateNavigationItem];
+	[self.tableView reloadData];
+}
+
+#pragma mark - search bar
+
+- (void)searchBar:(UISearchBar *)searchBar textDidChange:(NSString *)searchText {
+	self.mediaSearchQuery = [searchText stringByTrimmingCharactersInSet:
+			[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+	[self.tableView reloadData];
+	// The field lives in a section header, which reloadData replaces. Keep
+	// the keyboard where the finger left it.
+	if (self.mediaSearchActive && !searchBar.isFirstResponder)
+		[searchBar performSelector:@selector(becomeFirstResponder) withObject:nil afterDelay:0];
+}
+
+- (void)searchBarSearchButtonClicked:(UISearchBar *)searchBar {
+	[searchBar resignFirstResponder];
+}
+
+- (void)searchBarCancelButtonClicked:(UISearchBar *)searchBar {
+	[self endMediaSearch];
 }
 
 - (void)storyTileTapped:(UIButton *)button {
@@ -844,7 +920,7 @@ static const char kGiftTileTagKey;
 	BOOL posted = [story[@"isPostedToChatPage"] boolValue];
 	NSMutableArray *choices = [NSMutableArray array];
 	if ([story[@"canToggleIsPostedToChatPage"] boolValue])
-		[choices addObject:(posted ? @"Remove from Profile" : @"Save to Profile")];
+		[choices addObject:(posted ? @"Remove from Profile" : @"Add to Profile")];
 	if ([story[@"canBeDeleted"] boolValue])
 		[choices addObject:@"Delete Story"];
 	if (!choices.count)
@@ -865,7 +941,7 @@ static const char kGiftTileTagKey;
 				TGProfileViewController *me = weakSelf;
 				if (!me) return;
 				if (!ok){
-					[TGAlertSheet showMessage:error ?: @"Telegram refused that."
+					[TGAlertSheet showMessage:error ?: @"An error occurred."
 										title:@"Delete Story" inView:me.view];
 					return;
 				}
@@ -879,7 +955,7 @@ static const char kGiftTileTagKey;
 				TGProfileViewController *me = weakSelf;
 				if (!me) return;
 				if (!ok){
-					[TGAlertSheet showMessage:error ?: @"Telegram refused that."
+					[TGAlertSheet showMessage:error ?: @"An error occurred."
 										title:@"Stories" inView:me.view];
 					return;
 				}

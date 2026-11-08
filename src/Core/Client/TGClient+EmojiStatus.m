@@ -13,7 +13,7 @@ static NSString *TGEmojiStatusError(NSDictionary *result) {
 	if (![result[@"@type"] isEqualToString:@"error"])
 		return nil;
 	NSString *message = result[@"message"];
-	return message.length ? message : @"Telegram refused that.";
+	return message.length ? message : @"An error occurred.";
 }
 
 /// custom_emoji_ids is a list of int64 numbers, and TDLib writes a value too

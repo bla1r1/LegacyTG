@@ -16,6 +16,7 @@
 #import "TGCustomEmojiStore.h"
 #import <objc/runtime.h>
 #import "TGEmojiPanelInternal.h"
+#import "TGLocalization.h"
 
 
 static const char kTGItemDataKey = 0;
@@ -259,7 +260,7 @@ static UIImage *TGBackspaceImage(UIColor *colour) {
 /// as an update the panel does not listen for, so the shelf is re-read
 /// shortly after - one highlight's length, the same beat the hold menu uses.
 - (void)askInstallForStickerSet:(NSDictionary *)set {
-	NSString *title = [set[@"title"] length] ? set[@"title"] : @"This pack";
+	NSString *title = [set[@"title"] length] ? set[@"title"] : @"Stickers";
 	NSString *counted = [NSString stringWithFormat:@"%@ - %lu stickers",
 			title, (unsigned long)[set[@"count"] unsignedIntegerValue]];
 	__weak typeof(self) weakSelf = self;
@@ -290,21 +291,21 @@ static UIImage *TGBackspaceImage(UIColor *colour) {
 			return;
 		NSArray *list = [sets isKindOfClass:NSArray.class] ? sets : @[];
 		if (!list.count){
-			[TGAlertSheet showMessage:@"No packs are archived."
-								  title:@"Archived Packs"
+			[TGAlertSheet showMessage:@"None"
+								  title:@"Archived"
 								 inView:(me.window ?: me)];
 			return;
 		}
 		NSMutableArray *rows = [NSMutableArray array];
 		for (NSDictionary *set in list){
-			NSString *title = [set[@"title"] length] ? set[@"title"] : @"Pack";
+			NSString *title = [set[@"title"] length] ? set[@"title"] : @"Stickers";
 			[rows addObject:[NSString stringWithFormat:@"%@  ·  %lu stickers",
 					title, (unsigned long)[set[@"count"] unsignedIntegerValue]]];
 		}
 		UIView *host = me.window ?: me;
 		[TGAlertSheet showChoices:rows
-							title:@"Archived Packs"
-						  message:@"Restoring one puts it back on the shelf."
+							title:@"Archived"
+						  message:nil
 				   destructiveIndex:-1
 						   inView:host
 						 onChoice:^(NSInteger index){

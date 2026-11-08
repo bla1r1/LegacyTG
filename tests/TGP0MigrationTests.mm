@@ -98,4 +98,26 @@
 	XCTAssertTrue(cache[@(101)] == nil);
 }
 
+- (void)testImageLruCache_StringKeysWithDelimitersDoNotCollide {
+	TGImageLruCache *cache = [[TGImageLruCache alloc] initWithCapacity:5];
+	UIImage *img1 = [[UIImage alloc] init];
+	UIImage *img2 = [[UIImage alloc] init];
+
+	// Previously [@"42:20" respondsToSelector:@selector(longLongValue)] returned 42,
+	// colliding with @"42:40" which also parsed as 42.
+	cache[@"42:20"] = img1;
+	cache[@"42:40"] = img2;
+
+	XCTAssertEqual((int)cache.count, 2);
+	XCTAssertEqualObjects(cache[@"42:20"], img1);
+	XCTAssertEqualObjects(cache[@"42:40"], img2);
+
+	// Non-numeric strings must not map to key 0
+	cache[@"avatar_placeholder"] = img1;
+	cache[@"other_placeholder"] = img2;
+	XCTAssertEqual((int)cache.count, 4);
+	XCTAssertEqualObjects(cache[@"avatar_placeholder"], img1);
+	XCTAssertEqualObjects(cache[@"other_placeholder"], img2);
+}
+
 @end

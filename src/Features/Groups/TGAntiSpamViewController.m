@@ -20,7 +20,7 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	self.title = @"Anti-Spam";
+	self.title = @"Telegram Anti-Spam";
 	[self load];
 }
 
@@ -48,7 +48,7 @@
 		formatter.timeStyle = NSDateFormatterShortStyle;
 		NSString *when = [formatter stringFromDate:date];
 		NSString *detail = [NSString stringWithFormat:@"%@  %@",
-				candidate[@"text"] ?: @"Deleted message", when];
+				candidate[@"text"] ?: @"Message Deleted.", when];
 		NSMutableDictionary *row = [TGBAction(
 				[NSString stringWithFormat:@"Message %@", candidate[@"messageId"] ?: @0],
 				detail, @"report") mutableCopy];
@@ -56,17 +56,14 @@
 		[rows addObject:row];
 	}
 	if (!rows.count){
-		[rows addObject:TGBInfo(@"No reportable deletions",
+		[rows addObject:TGBInfo(@"No Results",
 				self.loadError.length ? self.loadError
-						: @"Telegram did not return a deleted message marked "
-						  @"as a false positive.")];
+						: @"An error occurred.")];
 	}
 
 	self.sections = @[
 		TGBSection(@"AGGRESSIVE ANTI-SPAM",
-				@"Messages Telegram deleted on suspicion appear here only when "
-				@"the event log says they may be reported. A report asks "
-				@"Telegram to restore the message.", rows),
+				nil, rows),
 	];
 	[self rebuild];
 }
@@ -77,8 +74,7 @@
 	NSDictionary *candidate = row[@"candidate"];
 	int64_t messageId = [candidate[@"messageId"] longLongValue];
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:@"Report this deletion as a false positive? Telegram "
-			@"will review the message."
+	[TGAlertSheet showConfirm:@"Report False Positive"
 						title:@"Report False Positive"
 					   action:@"Report"
 				  destructive:NO
@@ -91,7 +87,7 @@
 			if (!page)
 				return;
 			if (!ok){
-				[page showResult:NO error:error title:@"Anti-Spam"];
+				[page showResult:NO error:error title:@"Telegram Anti-Spam"];
 				return;
 			}
 			NSMutableArray *left = [NSMutableArray array];
@@ -100,7 +96,7 @@
 					[left addObject:other];
 			page.rows = left;
 			[page rebuildSections];
-			[page showResult:YES error:nil title:@"Anti-Spam"];
+			[page showResult:YES error:nil title:@"Telegram Anti-Spam"];
 		}];
 	}];
 }

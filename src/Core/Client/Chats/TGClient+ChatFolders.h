@@ -27,7 +27,8 @@ FOUNDATION_EXPORT NSDictionary *TGMemberRowForMember(NSDictionary *member,
 /// The chat's real kind, even when the chat is not in chatsById: a chat opened
 /// from a profile or a link has no cached row, and guessing private put
 /// presence under a channel's name. The answer carries "isGroup", "isChannel",
-/// "isMember", "memberCount" and the raw "status". For a group the membership
+/// "isMember", "memberCount", the raw "status", "silent" (the chat's default
+/// silent send) and "canBeAnonymous". For a group the membership
 /// comes from the supergroup or basic group record, not from the chat.
 - (void)chatKindForChat:(int64_t)chatId
              completion:(void (^)(NSDictionary *kind))completion;

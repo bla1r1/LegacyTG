@@ -110,7 +110,7 @@ else
 ADD_DEV_SCHEMES = true
 endif
 
-WEBP_ARMV7 := -F$(ROOT_DIR)/libs -framework WebP
+WEBP_ARMV7 := -F$(ROOT_DIR)/vendor/libs -framework WebP
 WEBP_ARM64 := -L$(BUILD_DIR)/arm64/libs -lwebp
 
 # FFmpeg is the Vintage software decoder and exists for armv7 only. The arm64
@@ -225,6 +225,7 @@ APP_SRC_M := \
 	src/App/RootViewController.m \
 	src/App/main.m \
 	src/Features/Dev/TGDevBench.m \
+	src/Features/Dev/TGDevFeedback.m \
 	src/Core/Client/TGClient.m \
 	src/Core/Stores/TGStickerStore.m \
 	src/Core/Stores/TGEmojiStore.m \
@@ -250,6 +251,8 @@ APP_SRC_M := \
 	src/Core/Client/TGClient+Notifications.m \
 	src/Core/Model/TGStatusText.m \
 	src/Core/Support/TGBase64.m \
+	src/Core/Support/TGLocalization.m \
+	src/Core/Support/TGQRCode.m \
 	src/App/TGNavController.m \
 	src/Core/Client/Account/TGClient+AccountContacts.m \
 	src/Core/Client/Account/TGClient+AccountPeople.m \
@@ -344,6 +347,7 @@ APP_SRC_M := \
 	src/Views/Icons/TGIcons+Chat.m \
 	src/UI/Overlays/TGPopupMenu.m \
 	src/UI/Overlays/TGSheet.m \
+	src/UI/TGLocalizationUIKit.m \
 	src/UI/Overlays/TGAlertSheet.m \
 	src/Features/Chat/Views/TGMessageCardLayout.m \
 	src/Features/Chat/Views/TGMessageCardView.m \
@@ -354,6 +358,7 @@ APP_SRC_M := \
 	src/Features/Media/TGPlayerView.m \
 	src/UI/Overlays/TGEmptyView.m \
 	src/UI/Overlays/TGStatusBanner.m \
+	src/UI/Overlays/TGInAppNotificationBanner.m \
 	src/UI/Controls/TGButton.m \
 	src/UI/Controls/TGSlider.m \
 	src/UI/Controls/TGTextField.m \
@@ -369,6 +374,8 @@ APP_SRC_M := \
 	src/Features/Auth/TGQRViewController.m \
 	src/UI/Format/TGUIFormat.m \
 	src/Features/Chat/TGPollPresentation.m \
+	src/Features/Chat/Core/TGChatParityModel.m \
+	src/Features/Chat/Core/TGChatActionMenuModel.m \
 	src/Features/Chat/TGChecklistPresentation.m \
 	src/Features/Auth/TGLoginViewController.m \
 	src/Features/Auth/TGLoginViewController+Phone.m \
@@ -474,6 +481,7 @@ APP_SRC_M := \
 	src/Features/Dev/TGDevWebProxyCarrierViewController.m \
 	src/Features/Settings/TGSettingsViewController+Tier2.m \
 	src/Features/Contacts/TGContactsViewController.m \
+	src/Features/Contacts/TGContactSort.m \
 	src/Features/Contacts/TGCloseFriendsViewController.m \
 	src/Features/Contacts/TGNewContactViewController.m \
 	src/Features/Groups/TGTopicsViewController.m \
@@ -487,6 +495,10 @@ APP_SRC_M := \
 	src/Features/Calls/TGCallViewController.m \
 	src/Features/Settings/TGActiveNotificationsViewController.m \
 	src/UI/Controllers/TGListViewController.m \
+	src/UI/Controllers/TGViewController.m \
+	src/UI/Controllers/TGTableViewController.m \
+	src/UI/Controls/TGTableViewCell.m \
+	src/UI/Controllers/TGFormViewController.m \
 	src/Features/Settings/TGNetworkViewController.m \
 	src/Features/Chat/TGChatToolsViewController.m \
 	src/Features/Profile/Views/TGProfileDetailCell.m \
@@ -494,6 +506,7 @@ APP_SRC_M := \
 	src/Features/Profile/Core/TGProfileLifecycle.m \
 	src/Features/Profile/Core/TGProfileHeader.m \
 	src/Features/Profile/Core/TGProfileData.m \
+	src/Features/Profile/Core/TGProfileLogic.m \
 	src/Features/Profile/Core/TGProfileDetails.m \
 	src/Features/Profile/Core/TGProfileAvatars.m \
 	src/Features/Profile/Core/TGProfileTable.m \
@@ -502,8 +515,11 @@ APP_SRC_M := \
 	src/Features/Profile/TGProfileViewController+Tier2.m \
 	src/Features/BotsPayments/TGGiftViewController.m \
 	src/Features/Profile/TGEditProfileViewController.m \
+	src/Features/Profile/TGProfileBirthdaySuggestViewController.m \
 	src/Features/Settings/TGUsernameSettingsViewController.m \
+	src/Features/Settings/TGNotificationCategoryViewController.m \
 	src/Features/Groups/Views/TGGroupSwitch.m \
+	src/Features/Groups/Core/TGGroupLogic.m \
 	src/Features/Groups/Core/TGGroupBase.m \
 	src/Features/Groups/Core/TGGroupData.m \
 	src/Features/Groups/Core/TGGroupSections.m \
@@ -513,6 +529,7 @@ APP_SRC_M := \
 	src/Features/Groups/Core/TGGroupActions.m \
 	src/Features/Groups/Core/TGGroupIdentity.m \
 	src/Features/Groups/Core/TGGroupMembers.m \
+	src/Features/Groups/TGMemberListViewController.m \
 	src/Features/Groups/Core/TGGroupPermissions.m \
 	src/Features/Groups/Core/TGGroupTools.m \
 	src/Features/Groups/Core/TGGroupInvites.m \

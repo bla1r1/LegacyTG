@@ -166,8 +166,6 @@ static UIImage *TGAppearanceAvatar(UIImage *avatar, UIColor *ring) {
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
-		self.edgesForExtendedLayout = UIRectEdgeNone;
 	self.title = @"Your Color";
 	self.swatchCache = [[NSCache alloc] init];
 	[self applyTheme];
@@ -197,10 +195,6 @@ static UIImage *TGAppearanceAvatar(UIImage *avatar, UIColor *ring) {
 			name:TGAccentColorsChangedNotification object:nil];
 	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(applyTheme)
 			name:TGThemeChangedNotification object:nil];
-}
-
-- (void)dealloc {
-	[[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 - (void)applyTheme {
@@ -293,7 +287,7 @@ static UIImage *TGAppearanceAvatar(UIImage *avatar, UIColor *ring) {
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
 	if (section == 1)
-		return self.tab == kTabProfile ? @"Profile Colour" : @"Name Colour";
+		return self.tab == kTabProfile ? @"Profile" : @"Name";
 	return nil;
 }
 
@@ -330,7 +324,7 @@ static UIImage *TGAppearanceAvatar(UIImage *avatar, UIColor *ring) {
 	UITableViewCell *cell = [[UITableViewCell alloc]
 			initWithStyle:UITableViewCellStyleDefault reuseIdentifier:nil];
 	[theme styleGroupedCell:cell forRow:0 totalRows:1];
-	cell.textLabel.text = @"Reset Profile Colour";
+	cell.textLabel.text = @"Reset";
 	cell.textLabel.font = TGFontRow();
 	cell.textLabel.textColor = [theme destructiveColour];
 	cell.textLabel.textAlignment = NSTextAlignmentCenter;
@@ -346,7 +340,7 @@ static UIImage *TGAppearanceAvatar(UIImage *avatar, UIColor *ring) {
 	cell.selectionStyle = UITableViewCellSelectionStyleNone;
 
 	NSDictionary *me = [TGClient shared].me;
-	NSString *name = [me[@"first_name"] length] ? me[@"first_name"] : @"Your Name";
+	NSString *name = [me[@"first_name"] length] ? me[@"first_name"] : @"Name";
 	if ([me[@"last_name"] length])
 		name = [NSString stringWithFormat:@"%@ %@", name, me[@"last_name"]];
 
@@ -421,7 +415,7 @@ static UIImage *TGAppearanceAvatar(UIImage *avatar, UIColor *ring) {
 		if (!ok){
 			if (!failed){
 				failed = YES;
-				[TGAlertSheet showMessage:(error ?: @"Telegram refused that colour.")
+				[TGAlertSheet showMessage:(error ?: @"An error occurred.")
 									title:@"Your Color" inView:me.view];
 			}
 			return;

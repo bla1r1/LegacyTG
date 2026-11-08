@@ -264,8 +264,7 @@ TGMessageCard *TGChatCardForRow(NSDictionary *m) {
 		NSString *closesLine = TGPollClosesLine(poll,
 				[[NSDate date] timeIntervalSince1970]);
 		if (closesLine.length)
-			kindLine = [NSString stringWithFormat:@"%@, e%@", kindLine,
-					[closesLine substringFromIndex:1]];
+			kindLine = [NSString stringWithFormat:@"%@, %@", kindLine, closesLine];
 
 		int64_t msgId = [m[@"id"] longLongValue];
 		NSMutableIndexSet *pending = self.pendingPollVotes[@(msgId)];
@@ -472,13 +471,16 @@ TGMessageCard *TGChatCardForRow(NSDictionary *m) {
 			}
 
 			stackY += kPollFooterGap;
-			UILabel *footer = [[UILabel alloc] initWithFrame:
-					CGRectMake(kPadH, stackY, contentW, kPollFooterLine)];
+			UIButton *footer = [UIButton buttonWithType:UIButtonTypeCustom];
+			footer.frame = CGRectMake(kPadH, stackY, contentW, kPollFooterLine);
 			footer.tag = 0x91F1;
-			footer.font = TGFontMeta();
-			footer.textColor = [pollTheme secondaryTextColour];
+			footer.titleLabel.font = TGFontMeta();
+			footer.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeft;
+			[footer setTitleColor:[pollTheme secondaryTextColour] forState:UIControlStateNormal];
 			footer.backgroundColor = [UIColor clearColor];
-			footer.text = TGPollVotesLine(poll);
+			[footer setTitle:TGPollVotesLine(poll) forState:UIControlStateNormal];
+			[footer addTarget:self action:@selector(pollFooterTapped:)
+			 forControlEvents:UIControlEventTouchUpInside];
 			[cell.bubble addSubview:footer];
 		}
 
@@ -535,7 +537,15 @@ TGMessageCard *TGChatCardForRow(NSDictionary *m) {
 			NSString *fileName = [docMsg[@"docName"] length] ? docMsg[@"docName"] : nil;
 			NSString *fileSize = @"";
 			if ([docMsg[@"docSize"] longLongValue] > 0) {
-				fileSize = [NSString stringWithFormat:@"%.1f KB", [docMsg[@"docSize"] doubleValue] / 1024.0];
+				double bytes = [docMsg[@"docSize"] doubleValue];
+				if (bytes < 1024.0)
+					fileSize = [NSString stringWithFormat:@"%.0f B", bytes];
+				else if (bytes < 1024.0 * 1024.0)
+					fileSize = [NSString stringWithFormat:@"%.1f KB", bytes / 1024.0];
+				else if (bytes < 1024.0 * 1024.0 * 1024.0)
+					fileSize = [NSString stringWithFormat:@"%.1f MB", bytes / (1024.0 * 1024.0)];
+				else
+					fileSize = [NSString stringWithFormat:@"%.1f GB", bytes / (1024.0 * 1024.0 * 1024.0)];
 			}
 			if (!fileName.length) {
 				NSArray *lines = [docMsg[@"text"] componentsSeparatedByString:@"\n"];
@@ -911,6 +921,19 @@ TGMessageCard *TGChatCardForRow(NSDictionary *m) {
 	}
 
 	return NO;
+}
+
+- (void)pollFooterTapped:(UIButton *)button {
+	UIView *view = button;
+	while (view && ![view isKindOfClass:TGBubbleCell.class])
+		view = view.superview;
+	if (![view isKindOfClass:TGBubbleCell.class])
+		return;
+	NSIndexPath *path = [self.table indexPathForCell:(TGBubbleCell *)view];
+	if (!path || path.row >= (NSInteger)self.messages.count)
+		return;
+	self.actionMessage = self.messages[path.row];
+	[self runMessageAction:@"PollVoters"];
 }
 
 @end

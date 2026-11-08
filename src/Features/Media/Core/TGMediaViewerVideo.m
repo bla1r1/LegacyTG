@@ -184,7 +184,7 @@ static BOOL TGViewerItemLocked(NSDictionary *item) {
 }
 
 - (void)showVideoFormatAlert {
-	[TGAlertSheet showMessage:@"This video's format cannot be played on this device."
+	[TGAlertSheet showMessage:@"An error occurred."
 						title:@"Video" inView:self.backdrop];
 }
 

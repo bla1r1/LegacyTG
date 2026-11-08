@@ -16,6 +16,10 @@
 
 #import "TGSettingsViewControllerInternal.h"
 #import "TGStyle.h"
+#import "TGLocalization.h"
+
+static const CGFloat kSettingsSearchWidth = 200.0f;
+static const CGFloat kSettingsSearchHeight = 44.0f;
 
 /// A settings row whose icon keeps off the card's edge. iOS 7 insets a
 /// cell's image by itself; iOS 6 puts it hard against the rounded border, so
@@ -52,6 +56,19 @@
 }
 @end
 
+/// The two pages that delete rows keep their own bookkeeping in their
+/// category; the base class owns the one delegate method UIKit keeps.
+@interface TGSettingsViewController (TGSettingsEditing)
+- (BOOL)canEditBlockedRowAtIndexPath:(NSIndexPath *)indexPath;
+- (BOOL)canEditProxyRowAtIndexPath:(NSIndexPath *)indexPath;
+- (void)commitBlockedEditingStyle:(UITableViewCellEditingStyle)editingStyle
+				forRowAtIndexPath:(NSIndexPath *)indexPath
+					  inTableView:(UITableView *)tableView;
+- (void)commitProxyEditingStyle:(UITableViewCellEditingStyle)editingStyle
+			   forRowAtIndexPath:(NSIndexPath *)indexPath
+					 inTableView:(UITableView *)tableView;
+@end
+
 @implementation TGSettingsViewController
 
 - (id)init {
@@ -85,7 +102,25 @@
 		[filter addTarget:self action:@selector(recentCallsFilterChanged:) forControlEvents:UIControlEventValueChanged];
 		self.navigationItem.titleView = filter;
 	} else if (self.page == TGSettingsPageRoot) {
-		self.navigationItem.rightBarButtonItem = nil;
+		// The account name lives in the header, not in a navigation title.
+		// Only the bar's title is cleared: self.title = nil also blanked the
+		// tab bar's "Settings" label and the subpages' back button.
+		self.navigationItem.title = @"";
+		self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc]
+				initWithImage:[self qrBarIcon]
+				style:UIBarButtonItemStylePlain
+				target:self action:@selector(openQRCode)];
+		self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
+				initWithTitle:@"Edit" style:UIBarButtonItemStylePlain
+					   target:self action:@selector(openEditProfile)];
+	} else if (self.page == TGSettingsPageLanguage){
+		// Official puts the language search in the navigation bar.
+		UISearchBar *search = [[UISearchBar alloc] initWithFrame:
+				CGRectMake(0, 0, kSettingsSearchWidth, kSettingsSearchHeight)];
+		search.delegate = self;
+		search.placeholder = @"Search";
+		self.languageSearchBar = search;
+		self.navigationItem.titleView = search;
 	}
 
 	[self rebuild];
@@ -110,16 +145,8 @@
 		 usingBlock:^(NSNotification *note){
 		[weakSelf rebuild];
 	}];
-	// The privacy page's birthday row is fed by an update, and the Appearance
-	// page's colour lists arrive the same way. Neither page waits for a
-	// reopen when Telegram answers after it is already on screen.
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGContactCloseBirthdaysChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note){
-		weakSelf.closeBirthdayRows = [[TGClient shared] contactCloseBirthdayUsers];
-		if (weakSelf.page == TGSettingsPagePrivacy)
-			[weakSelf rebuild];
-	}];
+	// The Appearance page's colour lists arrive by update; it re-reads while
+	// open instead of waiting for Telegram to be asked again on reopen.
 	[[NSNotificationCenter defaultCenter] addObserverForName:TGAccentColorsChangedNotification
 			object:nil queue:[NSOperationQueue mainQueue]
 		 usingBlock:^(NSNotification *note){
@@ -189,10 +216,10 @@
 		case TGSettingsPageFolders:       return @"Chat Folders";
 		case TGSettingsPageProxy:         return @"Proxy";
 		case TGSettingsPageDownloads:     return @"Downloads";
-		case TGSettingsPageAutosave:      return @"Autosave";
-		case TGSettingsPageNotifications: return @"Notifications and Sounds";
-		case TGSettingsPageNotificationSounds: return @"Custom Sounds";
-		case TGSettingsPageActiveNotifications: return @"Active Notifications";
+		case TGSettingsPageAutosave:      return @"Auto-Download";
+		case TGSettingsPageNotifications: return @"Notifications";
+		case TGSettingsPageNotificationSounds: return @"Sound";
+		case TGSettingsPageActiveNotifications: return @"Notifications";
 		case TGSettingsPagePrivacy:       return @"Privacy and Security";
 		case TGSettingsPagePasscode:      return @"Passcode Lock";
 		case TGSettingsPageLanguage:      return @"Language";
@@ -230,6 +257,14 @@
 		[[TGClient shared] refreshArchiveChatListSettings:^{ [self rebuild]; }];
 }
 
+- (void)viewWillDisappear:(BOOL)animated {
+	[super viewWillDisappear:animated];
+	// A Saved Messages retry must not reach into a screen the user has left.
+	[NSObject cancelPreviousPerformRequestsWithTarget:self
+			selector:@selector(openSavedMessages) object:nil];
+	self.savedMessagesRetries = 0;
+}
+
 #pragma mark - reordering, where a page has an order
 
 /// Only the folders page has one, and the order belongs to the pill strip
@@ -261,10 +296,40 @@
 	[[TGClient shared] reorderFolderIds:order mainListAt:0];
 }
 
-/// Dragging needs no delete control beside it; the folder's own sheet deletes.
+/// Only the pages whose categories can delete rows get a delete control.
+/// Folders drag, so they keep none; the folder's own sheet deletes.
 - (UITableViewCellEditingStyle)tableView:(UITableView *)tableView
 		   editingStyleForRowAtIndexPath:(NSIndexPath *)indexPath {
+	if (self.page == TGSettingsPageBlocked || self.page == TGSettingsPageProxy)
+		return UITableViewCellEditingStyleDelete;
 	return UITableViewCellEditingStyleNone;
+}
+
+/// UIKit keeps one implementation of these two selectors per class, so the
+/// base class owns them and sends each page to its category's helper.
+- (BOOL)tableView:(UITableView *)tableView
+		canEditRowAtIndexPath:(NSIndexPath *)indexPath {
+	if (self.page == TGSettingsPageBlocked)
+		return [self canEditBlockedRowAtIndexPath:indexPath];
+	if (self.page == TGSettingsPageProxy)
+		return [self canEditProxyRowAtIndexPath:indexPath];
+	// A row that may not be edited shows no reorder control either.
+	if (self.page == TGSettingsPageFolders)
+		return [self tableView:tableView canMoveRowAtIndexPath:indexPath];
+	return NO;
+}
+
+- (void)tableView:(UITableView *)tableView
+		commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
+		 forRowAtIndexPath:(NSIndexPath *)indexPath {
+	if (self.page == TGSettingsPageBlocked)
+		[self commitBlockedEditingStyle:editingStyle
+					  forRowAtIndexPath:indexPath
+							inTableView:tableView];
+	else if (self.page == TGSettingsPageProxy)
+		[self commitProxyEditingStyle:editingStyle
+					forRowAtIndexPath:indexPath
+						  inTableView:tableView];
 }
 
 - (void)openPage:(TGSettingsPage)page {
@@ -284,19 +349,9 @@
 
 /// The version, the way their page ends with one.
 - (UIView *)tableView:(UITableView *)tableView viewForFooterInSection:(NSInteger)section {
-	// Every other footer is the system's (titleForFooterInSection:).
-	if (self.page != TGSettingsPageRoot || section != (NSInteger)self.sections.count - 1)
-		return nil;
-	NSDictionary *info = [NSBundle mainBundle].infoDictionary;
-	UILabel *label = [[UILabel alloc] initWithFrame:
-			CGRectMake(0, 0, self.view.bounds.size.width, kVersionRow)];
-	label.text = [NSString stringWithFormat:@"LegacyTG %@ (%@) armv7",
-			info[@"CFBundleShortVersionString"] ?: @"", info[@"CFBundleVersion"] ?: @""];
-	label.font = TGFontMeta();
-	label.textAlignment = NSTextAlignmentCenter;
-	label.textColor = [[TGTheme shared] secondaryTextColour];
-	label.backgroundColor = [UIColor clearColor];
-	return label;
+	(void)tableView;
+	(void)section;
+	return nil;
 }
 
 #pragma mark - loading
@@ -389,14 +444,22 @@
 			[weakSelf rebuild];
 		}];
 		[[TGClient shared] proxiesWithCompletion:^(NSArray *proxies){
-			NSString *detail = @"Off";
-			for (NSDictionary *proxy in proxies)
-				if ([proxy[@"enabled"] boolValue]){
-					detail = [proxy[@"server"] length]
-							? proxy[@"server"] : @"On";
-					break;
-				}
-			weakSelf.rootProxyDetail = detail;
+			if (!proxies.count){
+				weakSelf.rootProxyDetail = nil;
+			} else {
+				NSString *detail = @"Disabled";
+				for (NSDictionary *proxy in proxies)
+					if ([proxy[@"enabled"] boolValue]){
+						NSString *kind = proxy[@"kind"];
+						if ([kind isEqualToString:@"socks5"]) detail = @"SOCKS5";
+						else if ([kind isEqualToString:@"mtproto"]) detail = @"MTProto";
+						else if ([kind isEqualToString:@"http"]) detail = @"HTTP";
+						else if ([kind isEqualToString:@"web"]) detail = @"Web";
+						else detail = @"Disabled";
+						break;
+					}
+				weakSelf.rootProxyDetail = detail;
+			}
 			[weakSelf rebuild];
 		}];
 		return;
@@ -427,6 +490,19 @@
 			weakSelf.recommendedFolders = folders;
 			[weakSelf rebuild];
 		}];
+		if (!weakSelf.folderChatCounts)
+			weakSelf.folderChatCounts = [NSMutableDictionary dictionary];
+		for (NSDictionary *folder in [TGClient shared].folders){
+			NSInteger folderId = [folder[@"id"] integerValue];
+			if (!folderId)
+				continue;
+			[[TGClient shared] chatCountForFolder:folder
+									   completion:^(NSInteger count){
+				weakSelf.folderChatCounts[@(folderId)] = @(count);
+				if (weakSelf.page == TGSettingsPageFolders)
+					[weakSelf rebuild];
+			}];
+		}
 		// onChatsChanged is the chat list's; taking it over here left the list
 		// deaf to new messages until the app restarted.
 		[[NSNotificationCenter defaultCenter] removeObserver:self name:TGChatsChangedNotification object:nil];
@@ -476,6 +552,13 @@
 				[weakSelf rebuild];
 			}];
 		}
+		// The Notifications page used to read savedSounds before the Sound page
+		// had ever loaded them. Load them here so the summary is not blank.
+		[[TGClient shared] savedNotificationSoundsWithCompletion:^(NSArray *sounds){
+			weakSelf.savedSounds = sounds;
+			weakSelf.savedSoundsLoaded = YES;
+			[weakSelf rebuild];
+		}];
 		return;
 	}
 
@@ -503,14 +586,25 @@
 	}
 
 	if (self.page == TGSettingsPagePrivacy){
+		// Official shows an activity item in the bar until the account answers.
+		if (!self.navigationItem.rightBarButtonItem){
+			UIActivityIndicatorView *spinner = [[UIActivityIndicatorView alloc]
+					initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleGray];
+			[spinner startAnimating];
+			self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
+					initWithCustomView:spinner];
+		}
 		for (NSString *setting in [TGSettingsViewController privacySettings])
 			[[TGClient shared] privacyRule:setting completion:^(NSString *value){
 				weakSelf.privacy[setting] = value;
 				[weakSelf rebuild];
+				[weakSelf updatePrivacySpinner];
 			}];
 		[[TGClient shared] accountTtlWithCompletion:^(NSInteger days){
 			weakSelf.accountTtl = days;
+			weakSelf.accountTtlLoaded = YES;
 			[weakSelf rebuild];
+			[weakSelf updatePrivacySpinner];
 		}];
 		[[TGClient shared] defaultMessageAutoDeleteTimeWithCompletion:^(NSInteger seconds){
 			weakSelf.autoDeleteDefault = seconds;
@@ -520,12 +614,7 @@
 			weakSelf.hasPassword = has;
 			weakSelf.passwordKnown = YES;
 			[weakSelf rebuild];
-		}];
-		[[TGClient shared] newChatPrivacySettingsWithCompletion:^(NSDictionary *settings){
-			weakSelf.newChatAllowUnknown =
-					[settings[@"allow_new_chats_from_unknown_users"] boolValue];
-			weakSelf.newChatPrivacyLoaded = YES;
-			[weakSelf rebuild];
+			[weakSelf updatePrivacySpinner];
 		}];
 		NSNumber *savedPersonal =
 				[NSUserDefaults.standardUserDefaults objectForKey:
@@ -537,21 +626,16 @@
 			weakSelf.suggestFrequent = ![value boolValue];
 			[weakSelf rebuild];
 		}];
-		[[TGClient shared] readDatePrivacySettingsWithCompletion:^(BOOL show){
-			weakSelf.readDateLoaded = YES;
-			weakSelf.showReadDate = show;
-			[weakSelf rebuild];
-		}];
-		[[TGClient shared] closeFriendsWithCompletion:^(NSArray *ids){
-			weakSelf.closeFriendsLoaded = YES;
-			weakSelf.closeFriendsCount = ids.count;
-			[weakSelf rebuild];
-		}];
-		weakSelf.closeBirthdayRows = [[TGClient shared] contactCloseBirthdayUsers];
 		return;
 	}
 
 	if (self.page == TGSettingsPageData){
+		[[TGClient shared] storageStatsWithCompletion:^(long long bytes, NSInteger files){
+			(void)files;
+			weakSelf.rootCacheBytes = bytes;
+			weakSelf.rootCacheLoaded = YES;
+			[weakSelf rebuild];
+		}];
 		[[TGClient shared] networkStatsWithCompletion:^(long long sent, long long got){
 			weakSelf.networkSent = sent;
 			weakSelf.networkReceived = got;
@@ -650,12 +734,20 @@
 	}
 }
 
+- (void)updatePrivacySpinner {
+	if (self.page != TGSettingsPagePrivacy)
+		return;
+	BOOL rules = self.privacy.count >= [TGSettingsViewController privacySettings].count;
+	if (rules && self.passwordKnown && self.accountTtlLoaded)
+		self.navigationItem.rightBarButtonItem = nil;
+}
+
 /// TDLib's names without the prefix, in the order every client lists them.
 + (NSArray *)privacySettings {
 	static NSArray *settings = nil;
 	if (!settings)
 		settings = @[@"ShowStatus", @"ShowProfilePhoto", @"ShowPhoneNumber",
-					 @"AllowCalls", @"AllowChatInvites",
+					 @"ShowBirthdate", @"AllowCalls", @"AllowChatInvites",
 					 @"ShowLinkInForwardedMessages"];
 	return settings;
 }
@@ -663,8 +755,9 @@
 + (NSArray *)privacyTitles {
 	static NSArray *titles = nil;
 	if (!titles)
-		titles = @[@"Last Seen", @"Profile Photo", @"Phone Number",
-				   @"Calls", @"Group Invites", @"Forwarded Messages"];
+		titles = @[@"Last Seen & Online", @"Profile Photos", @"Phone Number",
+				   @"Birthday", @"Calls", @"Groups & Channels",
+				   @"Forwarded Messages"];
 	return titles;
 }
 
@@ -680,12 +773,12 @@
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
 	NSString *text = self.sections[section][@"header"];
-	return text.length ? text : nil;
+	return text.length ? TGLocalized(text) : nil;
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
 	NSString *text = self.sections[section][@"footer"];
-	return text.length ? text : nil;
+	return text.length ? TGLocalized(text) : nil;
 }
 
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
@@ -697,8 +790,6 @@
 }
 
 
-/// The version line that ends the root page.
-static const CGFloat kVersionRow   = 40.0f;
 /// The theme preview: a strip of wallpaper with two bubbles on it.
 static const CGFloat kPreviewInset    = TGMetricPadMedium + TGMetricPadTiny;
 static const CGFloat kPreviewTop      = TGMetricPadLarge - TGMetricPadTiny;
@@ -732,8 +823,8 @@ static const CGFloat kMeTextInset  = TGMetricPadMedium;
 
 
 - (CGFloat)tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section {
-	if (self.page == TGSettingsPageRoot && section == (NSInteger)self.sections.count - 1)
-		return TGMetricSectionFooterRoot;
+	(void)tableView;
+	(void)section;
 	return UITableViewAutomaticDimension;
 }
 
@@ -752,9 +843,11 @@ static const CGFloat kMeTextInset  = TGMetricPadMedium;
 		// Glyph, name, and the description wrapped in what is left once the
 		// switch has taken its side.
 		CGFloat width = self.tableView.bounds.size.width - TGMetricRow - TGMetricViewerBottomBar;
-		CGSize size = [(row[TGRowDetail] ?: @"") sizeWithFont:TGFontCaption()
-										   constrainedToSize:CGSizeMake(width, TGMetricImageMax)
-											   lineBreakMode:NSLineBreakByWordWrapping];
+		// The cell fills this detail through the label swizzle, so its height
+		// has to come from the translated sentence, not the English source.
+		CGSize size = [TGLocalized(row[TGRowDetail] ?: @"") sizeWithFont:TGFontCaption()
+													constrainedToSize:CGSizeMake(width, TGMetricImageMax)
+														lineBreakMode:NSLineBreakByWordWrapping];
 		return MAX(TGMetricActionTile, TGMetricPollRow + size.height);
 	}
 	return TGMetricRow;
@@ -922,6 +1015,18 @@ static const CGFloat kMeTextInset  = TGMetricPadMedium;
 	} else if ([kind isEqualToString:TGKindPlain]){
 		cell.textLabel.textColor = [theme secondaryTextColour];
 		cell.selectionStyle = UITableViewCellSelectionStyleNone;
+	}
+	if ([row[TGRowBadge] boolValue]){
+		CGFloat side = TGMetricBadgeH + TGMetricPadTiny;
+		UILabel *badge = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, side, side)];
+		badge.text = @"!";
+		badge.font = TGFontMicro();
+		badge.textAlignment = NSTextAlignmentCenter;
+		badge.textColor = [theme onAccentColour];
+		badge.backgroundColor = [theme destructiveColour];
+		badge.layer.cornerRadius = TGHalf(side);
+		badge.clipsToBounds = YES;
+		cell.accessoryView = badge;
 	}
 
 	if (row[TGRowTap] == nil && ![kind isEqualToString:TGKindProfile]) {

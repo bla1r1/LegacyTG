@@ -14,7 +14,7 @@
 	NSString *clean = text ?: @"";
 	if (!clean.length){
 		if (completion)
-			completion(nil, @"There is no text to compose.");
+			completion(nil, @"No text");
 		return;
 	}
 	[self request:@{
@@ -44,7 +44,7 @@
 	NSString *clean = text ?: @"";
 	if (!clean.length){
 		if (completion)
-			completion(nil, @"There is no text to compose.");
+			completion(nil, @"No text");
 		return;
 	}
 	[self request:@{
@@ -99,7 +99,7 @@
 	NSString *clean = text ?: @"";
 	if (!clean.length){
 		if (completion)
-			completion(nil, nil, @"There is no text to fix.");
+			completion(nil, nil, @"No text");
 		return;
 	}
 	[self request:@{
@@ -123,7 +123,7 @@
 	NSString *clean = text ?: @"";
 	if (!clean.length){
 		if (completion)
-			completion(nil, @"There is no text to fix.");
+			completion(nil, @"No text");
 		return;
 	}
 	[self request:@{
@@ -194,7 +194,7 @@
 	NSString *clean = text ?: @"";
 	if (!clean.length){
 		if (completion)
-			completion(nil, @"There is no text to translate.");
+			completion(nil, @"No text");
 		return;
 	}
 	[self request:@{

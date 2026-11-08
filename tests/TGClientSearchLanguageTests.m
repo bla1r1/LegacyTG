@@ -7,6 +7,7 @@
 // here is that every row has a request behind it and every answer lands in a
 // field the row shows.
 #import "TGTestRunner.h"
+#import "TGLocalization.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
 
@@ -396,6 +397,35 @@ static NSDictionary *plainSL(NSDictionary *d) {
 														@"value" : @"Continue"}}]}));
 	XCTAssertEqualObjects(got[0][@"key"], @"Continue");
 	XCTAssertEqualObjects(got[0][@"kind"], @"ordinary");
+}
+
+/// Two keys share the English "%1$@ %2$@" but not the Russian order; the
+/// English-keyed map keeps only one, so the keyed entry must carry the other.
+- (void)testLoadAppLanguagePack_KeepsSharedEnglishPerKey {
+	TGClient *c = SL();
+	__block BOOL done = NO;
+	[c loadAppLanguagePack:@"ru" completion:^(BOOL ok){ done = ok; }];
+	NSDictionary *(^row)(NSString *, NSString *) = ^(NSString *key, NSString *value){
+		return @{@"@type" : @"languagePackString", @"key" : key,
+				 @"value" : @{@"@type" : @"languagePackStringValueOrdinary",
+							  @"value" : value}};
+	};
+	answerSL(c, plainSL(@{@"@type" : @"languagePackStrings", @"strings" : @[
+		row(@"Date.ChatDateHeader", @"%1$@ %2$@"),
+		row(@"Notification.Other", @"%1$@ %2$@"),
+		row(@"Common.Done", @"Done")]}));
+	answerSL(c, plainSL(@{@"@type" : @"languagePackStrings", @"strings" : @[
+		row(@"Date.ChatDateHeader", @"%2$@ %1$@"),
+		row(@"Notification.Other", @"%1$@ %2$@"),
+		row(@"Common.Done", @"Готово")]}));
+	XCTAssertTrue(done);
+	NSString *header = TGLocalizedKey(@"Date.ChatDateHeader", @"%1$@ %2$@");
+	NSString *other = TGLocalizedKey(@"Notification.Other", @"%1$@ %2$@");
+	NSString *plain = TGLocalized(@"Done");
+	TGSetTelegramLanguageLookup(nil);
+	XCTAssertEqualObjects(header, @"%2$@ %1$@");
+	XCTAssertEqualObjects(other, @"%1$@ %2$@");
+	XCTAssertEqualObjects(plain, @"Готово");
 }
 
 - (void)testLanguagePackString_ReadsOneKeyBack {

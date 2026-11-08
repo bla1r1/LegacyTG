@@ -116,7 +116,7 @@
 
 - (void)finish:(BOOL)ok error:(NSString *)error title:(NSString *)title {
 	self.answerLines = @[ok ? @"Telegram accepted the request."
-			: (error.length ? error : @"Telegram refused that.")];
+			: (error.length ? error : @"An error occurred.")];
 	[self rebuildSections];
 	if (!ok)
 		[self showMessage:self.answerLines.firstObject title:title];

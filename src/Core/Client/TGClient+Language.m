@@ -3,6 +3,7 @@
 // the two text tools behind the composer's formatting preview.
 //
 #import "TGClientInternal.h"
+#import "TGLocalization.h"
 
 /// The localization target this client reads. Telegram ships one pack per
 /// target, and the user clients all read the "ios" target.
@@ -67,10 +68,24 @@ static NSArray *TGLanguagePackStrings(NSDictionary *result) {
 				@"kind" : @"ordinary",
 			}];
 		} else if ([type isEqualToString:@"languagePackStringValuePluralized"]){
+			NSMutableDictionary *forms = [NSMutableDictionary dictionary];
+			if ([value[@"one_value"] isKindOfClass:NSString.class] &&
+					[value[@"one_value"] length])
+				forms[@"one"] = value[@"one_value"];
+			if ([value[@"few_value"] isKindOfClass:NSString.class] &&
+					[value[@"few_value"] length])
+				forms[@"few"] = value[@"few_value"];
+			if ([value[@"many_value"] isKindOfClass:NSString.class] &&
+					[value[@"many_value"] length])
+				forms[@"many"] = value[@"many_value"];
+			if ([value[@"other_value"] isKindOfClass:NSString.class] &&
+					[value[@"other_value"] length])
+				forms[@"other"] = value[@"other_value"];
 			[out addObject:@{
 				@"key" : string[@"key"] ?: @"",
 				@"value" : value[@"other_value"] ?: @"",
 				@"kind" : @"pluralized",
+				@"forms" : forms,
 			}];
 		} else if ([type isEqualToString:@"languagePackStringValueDeleted"]){
 			[out addObject:@{
@@ -128,6 +143,64 @@ static void TGTextAnswer(TGClient *client, NSDictionary *request,
 	   completion:^(NSDictionary *result){
 		if (completion)
 			completion(TGLanguagePackStrings(result));
+	}];
+}
+
+- (void)loadAppLanguagePack:(NSString *)packId
+				 completion:(void (^)(BOOL ok))completion {
+	if (!packId.length || [packId isEqualToString:@"en"]){
+		TGSetTelegramLanguageLookup(nil);
+		if (completion) completion(YES);
+		return;
+	}
+	[self languagePackStrings:@"en" keys:@[] completion:^(NSArray *english){
+		[self languagePackStrings:packId keys:@[] completion:^(NSArray *target){
+			NSMutableDictionary *englishByKey = [NSMutableDictionary dictionary];
+			NSMutableDictionary *targetByKey = [NSMutableDictionary dictionary];
+			NSMutableDictionary *englishPluralByKey = [NSMutableDictionary dictionary];
+			NSMutableDictionary *targetPluralByKey = [NSMutableDictionary dictionary];
+			// A pluralized row's "value" is its other_value, which is the form a
+			// static English sentence uses when the count is unknown. The forms
+			// themselves are kept for TGLocalizedPlural.
+			for (NSDictionary *row in english){
+				if (row[@"key"] && row[@"value"])
+					englishByKey[row[@"key"]] = row[@"value"];
+				if ([row[@"kind"] isEqualToString:@"pluralized"] &&
+						[row[@"forms"] isKindOfClass:NSDictionary.class])
+					englishPluralByKey[row[@"key"]] = row[@"forms"];
+			}
+			for (NSDictionary *row in target){
+				if (row[@"key"] && row[@"value"])
+					targetByKey[row[@"key"]] = row[@"value"];
+				if ([row[@"kind"] isEqualToString:@"pluralized"] &&
+						[row[@"forms"] isKindOfClass:NSDictionary.class])
+					targetPluralByKey[row[@"key"]] = row[@"forms"];
+			}
+			NSMutableDictionary *lookup = [NSMutableDictionary dictionary];
+			NSCountedSet *shared = [[NSCountedSet alloc]
+					initWithArray:englishByKey.allValues];
+			for (NSString *key in englishByKey){
+				NSString *translated = targetByKey[key];
+				if (!translated.length)
+					continue;
+				lookup[englishByKey[key]] = translated;
+				// Only shared English values get a keyed entry: about 1 in 10,
+				// so the cached lookup stays small on 32-bit.
+				if ([shared countForObject:englishByKey[key]] > 1)
+					lookup[[TGLocalizationKeyPrefix stringByAppendingString:key]] =
+							translated;
+			}
+			NSMutableDictionary *plurals = [NSMutableDictionary dictionary];
+			for (NSString *key in englishPluralByKey){
+				NSString *englishOther = englishPluralByKey[key][@"other"];
+				NSDictionary *forms = targetPluralByKey[key];
+				if (englishOther.length && forms.count)
+					plurals[englishOther] = forms;
+			}
+			TGSetTelegramLanguageLookup(lookup);
+			TGSetTelegramLanguagePlurals(plurals);
+			if (completion) completion(lookup.count > 0 || plurals.count > 0);
+		}];
 	}];
 }
 

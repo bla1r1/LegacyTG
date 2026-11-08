@@ -158,8 +158,8 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 			// type. A blank screen would leave the user guessing why.
 			me.loaded = YES;
 			me.sections = @[TGSection(@"Group Settings",
-					@"Telegram did not return this chat. Reopen the profile to try again.",
-					@[TGInfoRow(@"Unavailable", @"No answer from Telegram", nil)])];
+					nil,
+					@[TGInfoRow(@"Unavailable", nil, nil)])];
 			[me reloadTableDebounced];
 			return;
 		}
@@ -219,6 +219,14 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 		if (!me)
 			return;
 		me.members = members ?: @[];
+		[me rebuild];
+	}];
+	[[TGClient shared] joinRequestsForChat:self.chatId
+								completion:^(NSArray *requests){
+		TGGroupSettingsViewController *me = weakSelf;
+		if (!me)
+			return;
+		me.joinRequestCount = requests.count;
 		[me rebuild];
 	}];
 }
@@ -281,7 +289,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 }
 
 - (void)showRefusal:(NSString *)error title:(NSString *)title {
-	[TGAlertSheet showMessage:(error.length ? error : @"Telegram refused that.")
+	[TGAlertSheet showMessage:(error.length ? error : @"An error occurred.")
 						title:title inView:self.view];
 }
 

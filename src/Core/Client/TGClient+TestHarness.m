@@ -23,7 +23,7 @@ static NSNumber *TGTHNumber(id value) {
 static NSString *TGTHErrorText(NSDictionary *result) {
 	NSString *message = result[@"message"];
 	return [message isKindOfClass:NSString.class] && message.length
-			? message : @"Telegram refused that.";
+			? message : @"An error occurred.";
 }
 
 static BOOL TGTHFailed(NSDictionary *result) {

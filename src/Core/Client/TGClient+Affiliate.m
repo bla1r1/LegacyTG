@@ -29,7 +29,7 @@ static NSNumber *TGAFFNumber(id value) {
 static NSString *TGAFFErrorText(NSDictionary *result) {
 	NSString *message = result[@"message"];
 	return [message isKindOfClass:NSString.class] && message.length
-			? message : @"Telegram refused that.";
+			? message : @"An error occurred.";
 }
 
 static BOOL TGAFFFailed(NSDictionary *result) {

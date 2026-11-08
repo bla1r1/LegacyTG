@@ -4,5 +4,6 @@
 // shelves and the greeting stickers. Also the way into the pack editor.
 //
 #import <UIKit/UIKit.h>
+#import "TGTableViewController.h"
 
-@interface TGStickerPacksViewController : UITableViewController @end
+@interface TGStickerPacksViewController : TGTableViewController @end

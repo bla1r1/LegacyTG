@@ -14,6 +14,7 @@
 #import <QuartzCore/QuartzCore.h>
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
+#import "TGLocalization.h"
 #import "TGDevShowcase.h"
 #import "TGFileInfoViewController.h"
 #import "TGForwardPicker.h"
@@ -450,13 +451,18 @@ static BOOL TGViewerItemLocked(NSDictionary *item) {
 		when.dateStyle = NSDateFormatterMediumStyle;
 		when.timeStyle = NSDateFormatterShortStyle;
 	}
+	NSString *language = TGAppLanguage();
+	when.locale = language.length
+			? [NSLocale localeWithLocaleIdentifier:language]
+			: [NSLocale currentLocale];
 	int64_t senderId = [item[@"senderId"] longLongValue];
 	NSString *sender = [[TGMediaStore shared] nameForUserId:senderId];
 	NSString *date = [when stringFromDate:
 			[NSDate dateWithTimeIntervalSince1970:[item[@"date"] doubleValue]]];
 	self.counterLabel.text = sender.length ? sender : @"Media";
-	self.dateLabel.text = [NSString stringWithFormat:@"%ld of %lu · %@",
-			(long)(self.index + 1), (unsigned long)self.items.count, date];
+	NSString *counter = TGLocalizedFormat(@"%1$@ of %2$@",
+			@(self.index + 1), @(self.items.count));
+	self.dateLabel.text = [NSString stringWithFormat:@"%@ · %@", counter, date];
 	[self refreshAvatarForUserId:senderId title:sender];
 
 	NSString *text = [item[@"text"] isKindOfClass:NSString.class] ? item[@"text"] : @"";

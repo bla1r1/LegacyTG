@@ -259,7 +259,7 @@ static const CGFloat kStageScaleOver = 1.03f;
 		[self.flipButton setImage:[TGRecordBar flipGlyphOfSide:TGMetricMenuGlyph
 														colour:[[TGTheme shared] primaryTextColour]]
 						 forState:UIControlStateNormal];
-		self.flipButton.accessibilityLabel = @"Switch camera";
+		self.flipButton.accessibilityLabel = @"Camera";
 		[self.flipButton addTarget:self action:@selector(flipTapped)
 				  forControlEvents:UIControlEventTouchUpInside];
 		[self.view addSubview:self.flipButton];

@@ -190,7 +190,7 @@ static UIImage *TGBackspaceImage(UIColor *colour) {
 		[self loadCustomEmojiFeed];
 		return;
 	}
-	self.emptyLabel.text = @"No custom emoji packs";
+	self.emptyLabel.text = @"No Results";
 	self.emptyLabel.textColor = [[TGTheme shared] secondaryTextColour];
 	self.emptyLabel.hidden = NO;
 	__weak typeof(self) weakSelf = self;
@@ -229,7 +229,7 @@ static UIImage *TGBackspaceImage(UIColor *colour) {
 	}
 	self.items = flat;
 	self.sections = sections;
-	self.emptyLabel.text = @"No custom emoji packs";
+	self.emptyLabel.text = @"No Results";
 	self.emptyLabel.textColor = [[TGTheme shared] secondaryTextColour];
 	self.emptyLabel.hidden = flat.count > 0;
 	[self reloadGrid];

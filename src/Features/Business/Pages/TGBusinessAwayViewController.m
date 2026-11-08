@@ -137,7 +137,7 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 - (void)rebuildSections {
 	NSMutableArray *rows = [NSMutableArray array];
 	[rows addObject:TGBSwitch(@"Send Away Message", nil, @"enabled", self.enabled, YES)];
-	[rows addObject:TGBAction(@"Shortcut ID",
+	[rows addObject:TGBAction(@"Shortcut",
 			[NSString stringWithFormat:@"%ld", (long)self.shortcutId], @"shortcut")];
 	[rows addObject:TGBAction(@"Schedule", [self scheduleDetail], @"schedule")];
 	if ([self.schedule isEqualToString:@"custom"]){
@@ -147,14 +147,10 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 				[NSString stringWithFormat:@"%d", self.endDate], @"end")];
 	}
 	self.sections = @[
-		TGBSection(@"AWAY MESSAGE",
-				@"Automatically reply with a message when this account is away.",
-				rows),
-		TGBSection(@"SCHEDULE",
-				@"Custom times are unix seconds, which is what TDLib carries.",
-				@[
+		TGBSection(@"AWAY MESSAGE", nil, rows),
+		TGBSection(@"SCHEDULE", nil, @[
 			TGBSwitch(@"Only if Offline",
-					@"Do not send the away message if you were recently online.",
+					nil,
 					@"offline", self.offlineOnly, self.enabled),
 		]),
 		TGBSection(@"RECIPIENTS", nil, @[
@@ -162,7 +158,7 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 			TGBSwitch(@"New Chats", nil, @"new", self.newChats, self.enabled),
 			TGBSwitch(@"Contacts", nil, @"contacts", self.contacts, self.enabled),
 			TGBSwitch(@"Non-Contacts", nil, @"nonContacts", self.nonContacts, self.enabled),
-			TGBSwitch(@"Exclude Selected", nil, @"exclude", self.excludeSelected, self.enabled),
+			TGBSwitch(@"Excluded Chats", nil, @"exclude", self.excludeSelected, self.enabled),
 		]),
 	];
 	[self rebuild];
@@ -198,8 +194,8 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 - (void)didChooseAction:(NSString *)action row:(NSDictionary *)row {
 	__weak typeof(self) weakSelf = self;
 	if ([action isEqualToString:@"shortcut"]){
-		[self askText:@"Shortcut ID"
-			  message:@"The quick reply shortcut that holds the away text."
+		[self askText:@"Shortcut"
+			  message:nil
 		  placeholder:@"1" text:[NSString stringWithFormat:@"%ld", (long)self.shortcutId]
 			   action:@"Save" completion:^(NSString *text){
 			weakSelf.shortcutId = [text integerValue];
@@ -208,7 +204,7 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 	} else if ([action isEqualToString:@"schedule"]){
 		[TGAlertSheet showChoices:@[@"Always Send", @"Outside of Business Hours",
 									@"Custom Schedule"]
-							title:@"Away Schedule"
+							title:@"Schedule"
 				 destructiveIndex:-1 inView:self.view
 						 onChoice:^(NSInteger index){
 			weakSelf.schedule = index == 1 ? @"outside"
@@ -218,7 +214,7 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 	} else if ([action isEqualToString:@"start"] || [action isEqualToString:@"end"]){
 		BOOL start = [action isEqualToString:@"start"];
 		[self askText:start ? @"Start Time" : @"End Time"
-			  message:@"Unix seconds."
+			  message:nil
 		  placeholder:@"1700000000"
 				 text:[NSString stringWithFormat:@"%d", start ? self.startDate : self.endDate]
 			   action:@"Save" completion:^(NSString *text){

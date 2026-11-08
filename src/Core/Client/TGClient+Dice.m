@@ -8,7 +8,7 @@ static NSString *TGDiceError(NSDictionary *result) {
 	if (![result[@"@type"] isEqualToString:@"error"])
 		return nil;
 	NSString *message = result[@"message"];
-	return message.length ? message : @"Telegram refused that.";
+	return message.length ? message : @"An error occurred.";
 }
 
 /// The order of prize_per_mille is faces 1..6, so the array is kept whole and

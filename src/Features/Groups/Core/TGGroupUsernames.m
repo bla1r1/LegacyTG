@@ -136,9 +136,8 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 
 - (void)editUsername {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"Group Username"
-					message:@"The public @name for this group or channel. Remove "
-							@"it from the row above; active names below stay."
+	[TGAlertSheet showInput:@"Set Username"
+					message:nil
 				placeholder:@"username"
 					   text:self.editable
 					 action:@"Save"
@@ -149,30 +148,26 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 		[[TGClient shared] setSupergroupUsername:username inChat:weakSelf.chatId
 				completion:^(BOOL ok, NSString *error){
 			if (!ok){
-				[weakSelf showRefusal:error title:@"Group Username"];
+				[weakSelf showRefusal:error title:@"Set Username"];
 				return;
 			}
 			[weakSelf load];
-			[TGSnackbar showInView:weakSelf.view text:@"Username updated"
-						   seconds:2 onCommit:nil];
 		}];
 	}];
 }
 
 - (void)removeUsername {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:@"Removing the editable username leaves the group "
-							  @"reachable only through its invite link or its "
-							  @"active names. Names below are not touched."
-						title:@"Remove Username"
-					   action:@"Remove"
+	[TGAlertSheet showConfirm:@"Deactivate Username"
+						title:@"Deactivate Username"
+					   action:@"Deactivate Username"
 				  destructive:YES
 					   inView:self.view
 					onConfirm:^{
 		[[TGClient shared] setSupergroupUsername:@"" inChat:weakSelf.chatId
 				completion:^(BOOL ok, NSString *error){
 			if (!ok){
-				[weakSelf showRefusal:error title:@"Remove Username"];
+				[weakSelf showRefusal:error title:@"Deactivate Username"];
 				return;
 			}
 			[weakSelf load];
@@ -182,18 +177,16 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 
 - (void)disableAllUsernames {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:@"Every active name except the editable one is "
-							  @"switched off. They stay on the group and can be "
-							  @"switched back on here."
-						title:@"Disable All Usernames"
-					   action:@"Disable"
+	[TGAlertSheet showConfirm:@"Deactivate Username"
+						title:@"Deactivate Username"
+					   action:@"Deactivate Username"
 				  destructive:YES
 					   inView:self.view
 					onConfirm:^{
 		[[TGClient shared] disableAllSupergroupUsernamesInChat:weakSelf.chatId
 				completion:^(BOOL ok, NSString *error){
 			if (!ok){
-				[weakSelf showRefusal:error title:@"Disable Usernames"];
+				[weakSelf showRefusal:error title:@"Deactivate Username"];
 				return;
 			}
 			[weakSelf load];

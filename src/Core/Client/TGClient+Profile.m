@@ -8,7 +8,7 @@ static NSString *TGProfileError(NSDictionary *result) {
 	if (![result[@"@type"] isEqualToString:@"error"])
 		return nil;
 	NSString *message = result[@"message"];
-	return message.length ? message : @"Telegram refused that.";
+	return message.length ? message : @"An error occurred.";
 }
 
 static NSString *TGMainProfileTabName(NSDictionary *tab) {

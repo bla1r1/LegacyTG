@@ -11,7 +11,7 @@
 
 static NSString *TGAppearanceError(NSDictionary *result) {
 	NSString *message = result[@"message"];
-	return [message isKindOfClass:NSString.class] ? message : @"Telegram refused that.";
+	return [message isKindOfClass:NSString.class] ? message : @"An error occurred.";
 }
 
 static NSString *TGBackgroundTypeName(NSDictionary *type) {

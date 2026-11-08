@@ -1,4 +1,5 @@
 #import "TGCustomEmojiStore.h"
+#import "TGLocalization.h"
 #import "TGNameWithStatus.h"
 #import "TGChatListViewControllerInternal.h"
 #import "TGPerf.h"
@@ -89,7 +90,7 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 		keys = @[@"id", @"title", @"date", @"text", @"previewText", @"lastAuthor",
 				@"unread", @"unreadMentions", @"markedUnread", @"isMuted",
 				@"isPinned", @"isOnline", @"isSaved", @"lastId", @"lastOutgoing",
-				@"readOutbox", @"readInbox", @"photoFileId", @"isGroup", @"isForum",
+				@"readOutbox", @"readInbox", @"isGroup", @"isForum",
 				@"isSecret", @"order", @"archiveOrder", @"supergroupId", @"draft",
 				@"emojiStatusId"];
 	});
@@ -117,6 +118,11 @@ static dispatch_semaphore_t TGAvtDecodeGate(NSInteger cap) {
 
 #pragma mark - table data
 - (void)fetchMissingAvatars {
+	// Wait until live chats from TDLib arrive: snapshot rows must not query
+	// file IDs from a prior session.
+	if (![TGClient shared].chats.count && self.cachedChats.count)
+		return;
+
 	__weak typeof(self) weakSelf = self;
 	CGFloat screenScale = [UIScreen mainScreen].scale;
 	dispatch_semaphore_t gate = TGAvtDecodeGate(2);
@@ -158,17 +164,10 @@ static dispatch_semaphore_t TGAvtDecodeGate(NSInteger cap) {
 				// the same block that took it.
 				dispatch_semaphore_wait(gate, DISPATCH_TIME_FOREVER);
 				@autoreleasepool {
-					NSData *bytes = [NSData dataWithContentsOfFile:path];
-					UIImage *img = [TGIcons decodedImage:[UIImage imageWithData:bytes
-																  scale:screenScale]
-											  fittingSize:CGSizeMake(TGMetricListAvatar, TGMetricListAvatar)
-													fill:YES
-												   scale:screenScale];
-					if (!img && bytes.length)
-						img = [TGIcons decodedImage:[UIImage imageWithContentsOfFile:path]
-											fittingSize:CGSizeMake(TGMetricListAvatar, TGMetricListAvatar)
-											   fill:YES
-											  scale:screenScale];
+					UIImage *img = [TGIcons decodedImageAtPath:path
+												   fittingSize:CGSizeMake(kAvatar, kAvatar)
+														  fill:YES
+														 scale:screenScale];
 					if (img){
 						UIImage *rounded = [TGIcons roundedImage:img
 														    size:CGSizeMake(kAvatar, kAvatar)
@@ -178,12 +177,16 @@ static dispatch_semaphore_t TGAvtDecodeGate(NSInteger cap) {
 							TGChatListViewController *me = weakSelf;
 							if (!me) { dispatch_semaphore_signal(gate); return; }
 							me.avatars[fileId] = rounded ?: img;
+							[me.avatarsRequested removeObject:fileId];
 							[me refreshListTitleView];
 							[me reloadTableDebounced];
 							dispatch_semaphore_signal(gate);
 						});
 						return;
 					}
+					dispatch_async(dispatch_get_main_queue(), ^{
+						[weakSelf.avatarsRequested removeObject:fileId];
+					});
 					dispatch_semaphore_signal(gate);
 				}
 			});
@@ -317,13 +320,17 @@ static NSString *TGChatDate(NSTimeInterval unix) {
 	if (indexPath.row < (NSInteger)header.count){
 
 		BOOL isArchive = [header[indexPath.row] isEqualToString:@"archive"];
-		cell.titleLabel.text = isArchive ? @"Archived Chats" : @"Saved Messages";
+		cell.titleLabel.text = isArchive ? TGLocalized(@"Archived Chats") : TGLocalized(@"Saved Messages");
 		NSUInteger archived = [TGClient shared].archivedChats.count;
 		cell.previewLabel.text = isArchive
 				? TGChatListArchiveSubtitle(archived)
 				: @"Your own notes and forwards";
 		cell.dateLabel.text = @"";
 		cell.badge.hidden = YES;
+		// A cell reused from a chat with unseen mentions kept its "@" on the
+		// archive row; the early return never cleared it.
+		cell.mentionBadge.hidden = YES;
+		cell.pin.hidden = YES;
 		cell.avatar.image = isArchive
 				? [TGIcons archiveAvatarOfSide:kAvatar]
 				: [TGIcons savedMessagesAvatarOfSide:kAvatar];
@@ -382,9 +389,9 @@ static NSString *TGChatDate(NSTimeInterval unix) {
 	BOOL marked = [c[@"markedUnread"] boolValue];
 	BOOL anyBadge = unread > 0 || marked;
 	cell.badge.hidden = !anyBadge;
-	// The pin is not a place-holder for the badge: a pinned chat that is also
-	// unread shows both, the count at the edge and the pin beside it.
-	cell.pin.hidden = ![c[@"isPinned"] boolValue];
+	// The unread count occupies the badge slot; the pin only shows when that
+	// slot is free.
+	cell.pin.hidden = anyBadge || ![c[@"isPinned"] boolValue];
 	if (!cell.pin.hidden)
 		cell.pin.image = [TGIcons glyphNamed:@"pin" colour:[theme listDateColour]
 									  side:kRowGlyph];
@@ -417,14 +424,8 @@ static NSString *TGChatDate(NSTimeInterval unix) {
 - (void)tableView:(UITableView *)tableView didDeselectRowAtIndexPath:(NSIndexPath *)indexPath {
 	if (!self.editingChats)
 		return;
-	UITableViewCell *cell = [tableView cellForRowAtIndexPath:indexPath];
-	if ([cell isKindOfClass:TGChatCell.class])
-		((TGChatCell *)cell).editCheck.hidden = YES;
 	[self refreshEditToolbar];
-}
-
-- (BOOL)tableView:(UITableView *)tableView canEditRowAtIndexPath:(NSIndexPath *)indexPath {
-	return indexPath.row >= (NSInteger)[self headerRows].count;
+	[self refreshListTitleView];
 }
 
 /// Edit also reorders the pinned chats: only a pinned row gets the move

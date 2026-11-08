@@ -25,6 +25,9 @@ static TGClient *T(void) {
 	c.loadChatsAttempts = 0;
 	c.onChatsChanged = nil;
 	c.onArchiveChanged = nil;
+	c.authState = TGAuthStateReady;
+	c.connectionState = TGConnectionStateReady;
+	c.readyAt = 1.0;
 	// Dirty rows left by the previous test would flush into this one.
 	[c.updateCoalescer reset];
 	return c;
@@ -924,6 +927,26 @@ static void joinTestReply(TGClient *c, NSDictionary *request, NSDictionary *answ
 	XCTAssertEqual([kind[@"memberCount"] integerValue], (NSInteger)3);
 }
 
+/// The composer's "Send anonymously" and "Silent Broadcast" come from here;
+/// before, nothing set them and those placeholders never showed.
+- (void)testChatKind_CarriesSilentAndAnonymousAdmin {
+	TGClient *c = T();
+	__block NSDictionary *kind = nil;
+	[c chatKindForChat:903 completion:^(NSDictionary *answer){ kind = answer; }];
+	joinTestReply(c, joinTestRequest(c, @"getChat"), @{
+		@"@type" : @"chat", @"id" : @(903), @"title" : @"Admins",
+		@"default_disable_notification" : @YES,
+		@"type"  : @{@"@type" : @"chatTypeSupergroup", @"supergroup_id" : @(14)},
+	});
+	joinTestReply(c, joinTestRequest(c, @"getSupergroup"), @{
+		@"@type" : @"supergroup", @"id" : @(14), @"member_count" : @(9),
+		@"status" : @{@"@type" : @"chatMemberStatusAdministrator",
+					  @"rights" : @{@"is_anonymous" : @YES}},
+	});
+	XCTAssertTrue([kind[@"silent"] boolValue]);
+	XCTAssertTrue([kind[@"canBeAnonymous"] boolValue]);
+}
+
 /// The Join bar's tap is the only thing that sends joinChat, and success is
 /// TDLib's chatJoinResultSuccess, not merely an answer.
 - (void)testJoinChat_SendsJoinChatAndReportsSuccess {
@@ -977,6 +1000,120 @@ static void joinTestReply(TGClient *c, NSDictionary *request, NSDictionary *answ
 	c.onChatsChanged = nil;
 	XCTAssertEqual(blockCalls, (NSInteger)1);
 	XCTAssertEqual(notes, (NSInteger)1);
+}
+
+/// updateNewMessage must update previewText, date and lastId in chatsById
+/// immediately without waiting for an app restart or a full chat-list reload.
+- (void)testUpdateNewMessage_UpdatesChatPreviewAndDateImmediately {
+	TGClient *c = T();
+	deliverNewChat(c, chatDict(501, @"Test Chat", 100));
+	XCTAssertEqualObjects(c.chatsById[@(501)][@"previewText"], @"last");
+
+	NSDictionary *m = @{
+		@"@type" : @"message",
+		@"id" : @2002,
+		@"chat_id" : @501,
+		@"date" : @1700005555,
+		@"is_outgoing" : @NO,
+		@"content" : @{
+			@"@type" : @"messageText",
+			@"text" : @{
+				@"@type" : @"formattedText",
+				@"text" : @"Hello fresh preview"
+			}
+		}
+	};
+	[c handleUpdate:@{@"@type" : @"updateNewMessage", @"message" : m}];
+
+	XCTAssertEqualObjects(c.chatsById[@(501)][@"previewText"], @"Hello fresh preview");
+	XCTAssertEqualObjects(c.chatsById[@(501)][@"date"], @1700005555);
+	XCTAssertEqualObjects(c.chatsById[@(501)][@"lastId"], @2002);
+}
+
+/// Incoming unmuted message must fire TGInAppNotificationReceivedNotification.
+- (void)testUpdateNewMessage_FiresInAppNotificationWhenUnmutedAndIncoming {
+	TGClient *c = T();
+	deliverNewChat(c, chatDict(502, @"Notifier Chat", 100));
+
+	__block BOOL notified = NO;
+	__block int64_t targetChatId = 0;
+	id observer = [[NSNotificationCenter defaultCenter]
+			addObserverForName:TGInAppNotificationReceivedNotification
+						object:nil
+						 queue:nil
+					usingBlock:^(NSNotification *n){
+		notified = YES;
+		targetChatId = [n.userInfo[@"chatId"] longLongValue];
+	}];
+
+	NSDictionary *m = @{
+		@"@type" : @"message",
+		@"id" : @3001,
+		@"chat_id" : @502,
+		@"date" : @1700006666,
+		@"is_outgoing" : @NO,
+		@"content" : @{
+			@"@type" : @"messageText",
+			@"text" : @{
+				@"@type" : @"formattedText",
+				@"text" : @"Ping incoming"
+			}
+		}
+	};
+	[c handleUpdate:@{@"@type" : @"updateNewMessage", @"message" : m}];
+	[[NSNotificationCenter defaultCenter] removeObserver:observer];
+
+	XCTAssertTrue(notified);
+	XCTAssertEqual(targetChatId, (int64_t)502);
+}
+
+/// Muted or outgoing messages must NOT fire in-app notification.
+- (void)testUpdateNewMessage_DoesNotFireInAppNotificationWhenMutedOrOutgoing {
+	TGClient *c = T();
+	NSDictionary *rawChat = @{
+		@"@type" : @"chat",
+		@"id" : @503,
+		@"title" : @"Muted Chat",
+		@"positions" : @[pos(@"chatListMain", 100, NO)],
+		@"notification_settings" : @{@"mute_for" : @99999}
+	};
+	deliverNewChat(c, rawChat);
+
+	__block BOOL notified = NO;
+	id observer = [[NSNotificationCenter defaultCenter]
+			addObserverForName:TGInAppNotificationReceivedNotification
+						object:nil
+						 queue:nil
+					usingBlock:^(NSNotification *n){
+		notified = YES;
+	}];
+
+	// 1. Incoming but muted chat
+	NSDictionary *m1 = @{
+		@"@type" : @"message",
+		@"id" : @4001,
+		@"chat_id" : @503,
+		@"date" : @1700007777,
+		@"is_outgoing" : @NO,
+		@"content" : @{@"@type" : @"messageText", @"text" : @{@"@type" : @"formattedText", @"text" : @"Silent"}}
+	};
+	[c handleUpdate:@{@"@type" : @"updateNewMessage", @"message" : m1}];
+	XCTAssertFalse(notified);
+
+	// 2. Outgoing message on unmuted chat
+	deliverNewChat(c, chatDict(504, @"Outgoing Chat", 100));
+	NSDictionary *m2 = @{
+		@"@type" : @"message",
+		@"id" : @4002,
+		@"chat_id" : @504,
+		@"date" : @1700008888,
+		@"is_outgoing" : @YES,
+		@"content" : @{@"@type" : @"messageText", @"text" : @{@"@type" : @"formattedText", @"text" : @"Me talking"}}
+	};
+	[c handleUpdate:@{@"@type" : @"updateNewMessage", @"message" : m2}];
+	XCTAssertFalse(notified);
+
+	[[NSNotificationCenter defaultCenter] removeObserver:observer];
 }
 
 @end

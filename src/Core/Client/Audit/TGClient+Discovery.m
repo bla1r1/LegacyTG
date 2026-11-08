@@ -119,7 +119,7 @@
 					  message:(int64_t)messageId
 				   completion:(void (^)(NSDictionary *, NSString *))completion {
 	if (!chatId || !messageId){
-		if (completion) completion(nil, @"A chat id and a message id are needed.");
+		if (completion) completion(nil, @"An error occurred.");
 		return;
 	}
 	[self request:@{@"@type" : @"getPaymentReceipt",
@@ -180,7 +180,7 @@
 					message:(int64_t)messageId
 				 completion:(void (^)(NSDictionary *, NSString *))completion {
 	if (!chatId || !messageId){
-		if (completion) completion(nil, @"A chat id and a message id are needed.");
+		if (completion) completion(nil, @"An error occurred.");
 		return;
 	}
 	[self request:@{@"@type" : @"getGiveawayInfo",

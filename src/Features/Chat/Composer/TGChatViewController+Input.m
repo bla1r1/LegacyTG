@@ -1,4 +1,6 @@
 #import "TGChatViewControllerInternal.h"
+#import "TGLocalization.h"
+#import "TGChatParityModel.h"
 #import "TGTheme.h"
 #import "TGIcons.h"
 #import "UIImage+WebP.h"
@@ -71,8 +73,12 @@
 	[self.inputBar addSubview:attach];
 
 	CGFloat fieldH = kInputHeight - TGDoubled(kFieldInsetV);
+	// The send control lives inside the field capsule; the mic sits outside
+	// it, as official places them. Nothing else goes between the two.
+	CGFloat micX = b.size.width - kSendSide - kSendInset;
+	CGFloat fieldRight = micX - kComposerInset;
 	TGComposerInputField *field = [[TGComposerInputField alloc] initWithFrame:
-			CGRectMake(kFieldLeft, kFieldInsetV, b.size.width - kFieldRoom, fieldH)];
+			CGRectMake(kFieldLeft, kFieldInsetV, fieldRight - kFieldLeft, fieldH)];
 	field.borderStyle = UITextBorderStyleNone;
 	field.background = [TGTheme skeuomorphicWellImageWithHeight:fieldH cornerRadius:TGHalf(fieldH)];
 	field.backgroundColor = [UIColor clearColor];
@@ -82,8 +88,7 @@
 	field.leftView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, kFieldLeftPad,
 			TGMetricBorderWidth)];
 	field.leftViewMode = UITextFieldViewModeAlways;
-	field.placeholder = @"Message";
-	field.textColor = [[TGTheme shared] primaryTextColour];
+	field.placeholder = TGLocalized(@"Message");	field.textColor = [[TGTheme shared] primaryTextColour];
 	field.font = TGFontBody();
 	field.returnKeyType = UIReturnKeySend;
 	field.delegate = self;
@@ -99,7 +104,7 @@
 	[self.inputBar addSubview:self.input];
 
 	self.sendButton = [UIButton buttonWithType:UIButtonTypeCustom];
-	self.sendButton.frame = CGRectMake(b.size.width - kSendSide - kSendInset, sendY,
+	self.sendButton.frame = CGRectMake(fieldRight - kSendSide - TGMetricPadTiny, sendY,
 									   kSendSide, kSendSide);
 	[self.sendButton setBackgroundImage:[TGTheme buttonImageForStyle:TGButtonStyleAction highlighted:NO height:kSendSide] forState:UIControlStateNormal];
 	[self.sendButton setBackgroundImage:[TGTheme buttonImageForStyle:TGButtonStyleAction highlighted:YES height:kSendSide] forState:UIControlStateHighlighted];
@@ -120,15 +125,10 @@
 	[self.sendButton addGestureRecognizer:sendHold];
 	[self.inputBar addSubview:self.sendButton];
 
-	// A sticker button beside the composer, as clients place it.
+	// The sticker button is retired: official keeps the field, the send
+	// control inside it and the mic outside it, with no extra glyph.
 	self.stickerButton = [UIButton buttonWithType:UIButtonTypeCustom];
-	self.stickerButton.frame = CGRectMake(b.size.width - kSendSide - kStickerInset, sendY,
-										  kStickerWidth, kSendSide);
-	[self.stickerButton setImage:[TGIcons sticker] forState:UIControlStateNormal];
-	self.stickerButton.tintColor = [[TGTheme shared] secondaryTextColour];
-	self.stickerButton.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin;
-	[self.stickerButton addTarget:self action:@selector(toggleStickerPanel)
-				 forControlEvents:UIControlEventTouchUpInside];
+	self.stickerButton.hidden = YES;
 	[self.inputBar addSubview:self.stickerButton];
 
 	// Hold to record, release to send - the gesture every client uses. It sits
@@ -137,7 +137,7 @@
 	// recording into a round video note and back, the way Telegram keeps two
 	// modes on one spot instead of a second control beside the paperclip.
 	self.micButton = [UIButton buttonWithType:UIButtonTypeCustom];
-	self.micButton.frame = self.sendButton.frame;
+	self.micButton.frame = CGRectMake(micX, sendY, kSendSide, kSendSide);
 	[self.micButton setImage:[TGIcons microphone] forState:UIControlStateNormal];
 	self.micButton.tintColor = [[TGTheme shared] secondaryTextColour];
 	self.micButton.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin;
@@ -166,8 +166,16 @@
 	[self.input addTarget:self action:@selector(composerEditingChanged)
 		 forControlEvents:UIControlEventEditingChanged];
 	[self inputChanged];
+	[self updateComposerPlaceholder];
 
 	[self.view addSubview:self.inputBar];
+}
+
+/// Official picks the field's word from the chat kind: a channel broadcasts,
+/// a group or a private chat sends a message.
+- (void)updateComposerPlaceholder {
+	self.input.placeholder = TGChatComposerPlaceholder(self.isChannel,
+			self.silentPosting, self.canBeAnonymous);
 }
 
 /// The first thing in `text` that could be a link. Not a validator - TDLib
@@ -206,9 +214,19 @@ static NSString *TGFirstLinkIn(NSString *text) {
 		}
 		return;
 	}
+	// The X closed this preview; do not ask for it again until the link
+	// changes.
+	if ([link isEqualToString:self.suppressedPreviewLink])
+		return;
+	if (self.suppressedPreviewLink.length &&
+			![link isEqualToString:self.suppressedPreviewLink])
+		self.suppressedPreviewLink = nil;
 	if ([link isEqualToString:self.previewedLink])
 		return;          // already asked about this one
 	self.previewedLink = link;
+	// A preview that takes a round trip says it is coming instead of leaving
+	// the strip blank until the answer lands.
+	[self showComposeBanner:link subtitle:TGLocalized(@"Loading...")];
 
 	__weak typeof(self) weakSelf = self;
 	[[TGClient shared] linkPreviewForText:self.input.text
@@ -252,6 +270,7 @@ static NSString *TGFirstLinkIn(NSString *text) {
 	self.editingId = 0;
 	self.editingIsCaption = NO;
 	self.previewedLink = nil;
+	self.suppressedPreviewLink = nil;
 	[self hideComposeBannerAnimated];
 	[self inputChanged];
 	[self refreshComposerEmojiOverlay];
@@ -341,7 +360,7 @@ static const NSInteger kBannerSubtitleTag = 72;
 									  colour:[[TGTheme shared] secondaryTextColour]
 										side:kBannerCloseGlyph]
 				forState:UIControlStateNormal];
-		[cancel addTarget:self action:@selector(clearComposeState)
+		[cancel addTarget:self action:@selector(dismissPreviewOrCompose)
 		 forControlEvents:UIControlEventTouchUpInside];
 		[self.composeBanner addSubview:cancel];
 
@@ -437,7 +456,7 @@ static void TGTextFieldSetSelectedRange(UITextField *tf, NSRange range) {
 							completion:^(BOOL ok){
 			if (!ok)
 				[TGSnackbar showInView:weakSelf.view
-								  text:@"Telegram refused that caption"
+								  text:@"An error occurred."
 							   seconds:2 onCommit:nil];
 		}];
 		self.editingIsCaption = NO;
@@ -476,8 +495,8 @@ static void TGTextFieldSetSelectedRange(UITextField *tf, NSRange range) {
 
 - (void)showFormattingSheet {
 	__weak typeof(self) weakSelf = self;
-	NSArray *styles = @[@"Bold (**)", @"Italic (*)", @"Code (`)", @"Spoiler (||)", @"Strikethrough (~)"];
-	[TGAlertSheet showChoices:styles title:@"Format Text" destructiveIndex:-1
+	NSArray *styles = @[@"Bold", @"Italic", @"Code", @"Spoiler", @"Strikethrough"];
+	[TGAlertSheet showChoices:styles title:@"Format" destructiveIndex:-1
 					   inView:self.navigationController.view ?: self.view
 					 onChoice:^(NSInteger index){
 		[weakSelf applyFormattingStyle:index];
@@ -522,20 +541,22 @@ static void TGTextFieldSetSelectedRange(UITextField *tf, NSRange range) {
 		return;
 	NSString *text = [self.input.text stringByTrimmingCharactersInSet:
 			[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-	if (!text.length || self.editingId != 0)
+	if (!text.length){
+		// With nothing typed the hold opens the queue, which is where the
+		// scheduled messages live; the list is not a row in the send sheet.
+		[self openScheduledMessages];
+		return;
+	}
+	if (self.editingId != 0)
 		return;
 
 	__weak typeof(self) weakSelf = self;
-	NSString *queue = self.scheduledCount > 0
-			? [NSString stringWithFormat:@"Scheduled Messages (%ld)", (long)self.scheduledCount]
-			: @"Scheduled Messages";
 	NSArray *choices = @[
-		@"Format Text...",
-		@"AI Compose",
-		@"Send At a Time...",
+		@"Format",
+		@"Create with AI",
+		@"Schedule Message",
 		@"Send When Online",
-		queue,
-		@"Preview Formatting"
+		@"Preview"
 	];
 	[TGAlertSheet showChoices:choices
 						title:nil
@@ -554,15 +575,16 @@ static void TGTextFieldSetSelectedRange(UITextField *tf, NSRange range) {
 			[weakSelf holdScheduledSheet];
 		else if (index == 3)
 			[weakSelf sendHeldText:[TGClient scheduledWhenOnline]];
-		else if (index == 4){
-			TGScheduledViewController *vc = [[TGScheduledViewController alloc] init];
-			vc.chatId = weakSelf.chatId;
-			vc.chatTitle = weakSelf.chatTitle;
-			[weakSelf.navigationController pushViewController:vc animated:YES];
-		} else {
+		else
 			[weakSelf previewFormattingOfText:text];
-		}
 	}];
+}
+
+- (void)openScheduledMessages {
+	TGScheduledViewController *vc = [[TGScheduledViewController alloc] init];
+	vc.chatId = self.chatId;
+	vc.chatTitle = self.chatTitle;
+	[self.navigationController pushViewController:vc animated:YES];
 }
 
 /// What the message will look like once Telegram reads the markup. The
@@ -575,34 +597,10 @@ static void TGTextFieldSetSelectedRange(UITextField *tf, NSRange range) {
 			TGChatViewController *me = weakSelf;
 			if (!me)
 				return;
-			NSMutableString *body = [NSMutableString string];
-			NSArray *parsed = formatted[@"entities"];
-			[body appendFormat:@"Markdown: %lu formatting %@\n\n%@",
-					(unsigned long)parsed.count,
-					parsed.count == 1 ? @"entity" : @"entities",
+			NSMutableString *body = [NSMutableString stringWithString:
 					formatted[@"text"] ?: text];
-			if (parsed.count){
-				[body appendString:@"\n\nFormatting:"];
-				for (NSDictionary *entity in parsed){
-					NSString *type = entity[@"type"][@"@type"] ?: @"";
-					if ([type hasPrefix:@"textEntityType"])
-						type = [type substringFromIndex:14];
-					[body appendFormat:@"\n• %@ at %@ for %@", type,
-							entity[@"offset"] ?: @(0), entity[@"length"] ?: @(0)];
-				}
-			}
-			if (entities.count){
-				[body appendString:@"\n\nDetected:"];
-				for (NSDictionary *entity in entities){
-					NSString *type = entity[@"type"][@"@type"] ?: @"";
-					if ([type hasPrefix:@"textEntityType"])
-						type = [type substringFromIndex:14];
-					[body appendFormat:@"\n• %@ at %@ for %@", type,
-							entity[@"offset"] ?: @(0), entity[@"length"] ?: @(0)];
-				}
-			}
 			[TGAlertSheet showMessage:body
-							   title:@"Formatting Preview"
+							   title:@"Preview"
 							   inView:me.view];
 		}];
 	}];
@@ -627,13 +625,25 @@ static void TGTextFieldSetSelectedRange(UITextField *tf, NSRange range) {
 	[[TGClient shared] cancelTypingInChat:self.chatId thread:self.threadId];
 }
 
+/// The X on the compose strip. A link preview is its own thing: closing it
+/// must not clear a reply or an edit, and must not fetch the same link again.
+- (void)dismissPreviewOrCompose {
+	if (self.replyToId == 0 && self.editingId == 0 && self.previewedLink.length){
+		self.suppressedPreviewLink = self.previewedLink;
+		self.previewedLink = nil;
+		[self hideComposeBannerAnimated];
+		return;
+	}
+	[self clearComposeState];
+}
+
 /// The date the composer's text waits for. Done reads the picker, clears
 /// the field and sends the held-back send in one move.
 - (void)holdScheduledSheet {
 	static const CGFloat kBar = TGMetricRow, kPicker = TGMetricPickerHeight;
 
 	TGSheet *sheet = [TGSheet sheetForView:self.view.window ?: self.view];
-	UIView *card = [sheet addCardOfHeight:kBar + kPicker edgeToEdge:YES];
+	UIView *card = [sheet addCardOfHeight:kBar + kPicker + kBar edgeToEdge:YES];
 
 	UIDatePicker *picker = [[UIDatePicker alloc] initWithFrame:
 			CGRectMake(0, kBar, card.bounds.size.width, kPicker)];
@@ -641,6 +651,8 @@ static void TGTextFieldSetSelectedRange(UITextField *tf, NSRange range) {
 	picker.minimumDate = [NSDate dateWithTimeIntervalSinceNow:60];
 	picker.minuteInterval = 15;
 	picker.date = [NSDate dateWithTimeIntervalSinceNow:60 * 60];
+	[picker addTarget:self action:@selector(schedulePickerChanged:)
+	 forControlEvents:UIControlEventValueChanged];
 	[card addSubview:picker];
 
 	UIToolbar *bar = [[UIToolbar alloc] initWithFrame:
@@ -650,13 +662,73 @@ static void TGTextFieldSetSelectedRange(UITextField *tf, NSRange range) {
 				target:sheet action:@selector(dismiss)],
 		[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace
 				target:nil action:nil],
-		[[UIBarButtonItem alloc] initWithTitle:@"Schedule" style:UIBarButtonItemStyleDone
-				target:self action:@selector(scheduleCommit:)],
 	];
 	[card addSubview:bar];
+
+	// The primary button says what the chosen date will do, with Send When
+	// Online as its own choice below.
+	self.schedulePrimaryButton = [UIButton buttonWithType:UIButtonTypeCustom];
+	self.schedulePrimaryButton.frame = CGRectMake(0, kBar + kPicker,
+			card.bounds.size.width, TGHalf(kBar));
+	self.schedulePrimaryButton.titleLabel.font = TGFontCaptionStrong();
+	[self.schedulePrimaryButton setTitleColor:[[TGTheme shared] accentColour]
+									 forState:UIControlStateNormal];
+	[self.schedulePrimaryButton addTarget:self action:@selector(scheduleCommit:)
+						 forControlEvents:UIControlEventTouchUpInside];
+	[card addSubview:self.schedulePrimaryButton];
+
+	UIButton *online = [UIButton buttonWithType:UIButtonTypeCustom];
+	online.frame = CGRectMake(0, kBar + kPicker + TGHalf(kBar),
+			card.bounds.size.width, TGHalf(kBar));
+	online.titleLabel.font = TGFontCaption();
+	[online setTitle:@"Send When Online" forState:UIControlStateNormal];
+	[online setTitleColor:[[TGTheme shared] accentColour] forState:UIControlStateNormal];
+	[online addTarget:self action:@selector(scheduleWhenOnline:)
+	 forControlEvents:UIControlEventTouchUpInside];
+	[card addSubview:online];
+
 	self.pickPicker = picker;
 	self.pickSheet = sheet;
+	[self schedulePickerChanged:picker];
 	[sheet present];
+}
+
+- (void)schedulePickerChanged:(UIDatePicker *)picker {
+	NSDate *date = picker.date ?: [NSDate date];
+	NSCalendar *calendar = [NSCalendar currentCalendar];
+	NSDateFormatter *clock = [[NSDateFormatter alloc] init];
+	clock.timeStyle = NSDateFormatterShortStyle;
+	clock.dateStyle = NSDateFormatterNoStyle;
+	NSString *time = [clock stringFromDate:date];
+	NSDateComponents *day = [calendar components:NSYearCalendarUnit | NSMonthCalendarUnit | NSDayCalendarUnit
+										fromDate:date];
+	NSDateComponents *today = [calendar components:NSYearCalendarUnit | NSMonthCalendarUnit | NSDayCalendarUnit
+										  fromDate:[NSDate date]];
+	NSDate *dayStart = [calendar dateFromComponents:day];
+	NSDate *todayStart = [calendar dateFromComponents:today];
+	NSInteger days = (NSInteger)lround([dayStart timeIntervalSinceDate:todayStart] / 86400.0);
+	NSString *title = nil;
+	if (days <= 0)
+		title = TGLocalizedFormat(@"Send today at %@", time);
+	else if (days == 1)
+		title = TGLocalizedFormat(@"Send tomorrow at %@", time);
+	else {
+		NSDateFormatter *medium = [[NSDateFormatter alloc] init];
+		medium.dateStyle = NSDateFormatterMediumStyle;
+		medium.timeStyle = NSDateFormatterNoStyle;
+		title = TGLocalizedFormat(@"Send on %@ at %@", [medium stringFromDate:date], time);
+	}
+	[self.schedulePrimaryButton setTitle:title forState:UIControlStateNormal];
+}
+
+- (void)scheduleWhenOnline:(UIButton *)sender {
+	[self.pickSheet dismiss];
+	self.pickSheet = nil;
+	self.pickPicker = nil;
+	self.schedulePrimaryButton = nil;
+	[self sendHeldText:[TGClient scheduledWhenOnline]];
+	self.scheduledCount++;
+	[self openScheduledMessages];
 }
 
 /// The bar's Done. The picker outlives the sheet just long enough to be
@@ -666,9 +738,12 @@ static void TGTextFieldSetSelectedRange(UITextField *tf, NSRange range) {
 	[self.pickSheet dismiss];
 	self.pickSheet = nil;
 	self.pickPicker = nil;
+	self.schedulePrimaryButton = nil;
 	[self sendHeldText:[TGClient scheduledAtDate:date]];
 	// The queue has one more in it than the menu last said.
 	self.scheduledCount++;
+	// Official lands the user on the queue so the result is visible.
+	[self openScheduledMessages];
 }
 
 - (BOOL)textField:(UITextField *)textField shouldChangeCharactersInRange:(NSRange)range replacementString:(NSString *)string {

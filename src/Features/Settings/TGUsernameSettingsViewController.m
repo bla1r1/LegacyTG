@@ -11,6 +11,7 @@
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
+#import "TGSettingsFormatting.h"
 
 /// A switch that remembers which username it changes. The row is rebuilt on
 /// every reload, so an index would point at whatever moved into its place.
@@ -21,13 +22,23 @@
 @implementation TGUsernameSwitch
 @end
 
-@interface TGUsernameSettingsViewController ()
+@interface TGUsernameSettingsViewController () <UITextFieldDelegate>
 @property (nonatomic, strong) NSDictionary *usernames;
 @property (nonatomic, strong) NSMutableArray *active;
 @property (nonatomic, strong) NSMutableArray *disabled;
 @property (nonatomic, copy) NSString *editable;
 @property (nonatomic, assign) BOOL busy;
+@property (nonatomic, strong) UITextField *inlineField;
+/// The answer under the field: Checking username..., the name is available,
+/// already taken or invalid. Empty until the field differs from the account.
+@property (nonatomic, copy) NSString *statusText;
+/// 0 checking, 1 available, 2 an error. The line takes the theme's colours.
+@property (nonatomic, assign) NSInteger statusTone;
 @end
+
+static const CGFloat kUsernamePrefixWidth = 42.0f;
+static const CGFloat kUsernameFieldHeight = 44.0f;
+static const CGFloat kUsernameFieldInset = 12.0f;
 
 @implementation TGUsernameSettingsViewController
 
@@ -37,24 +48,16 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	self.title = @"Usernames";
+	self.title = @"Username";
 	self.active = [NSMutableArray array];
 	self.disabled = [NSMutableArray array];
-	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
-		self.edgesForExtendedLayout = UIRectEdgeNone;
 	[self applyTheme];
 	[self load];
 
-	__weak typeof(self) weakSelf = self;
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGThemeChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note) {
-		[weakSelf applyTheme];
-		[weakSelf.tableView reloadData];
-	}];
 }
 
 - (void)dealloc {
+	[NSObject cancelPreviousPerformRequestsWithTarget:self];
 	[[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
@@ -81,6 +84,7 @@
 		me.disabled = [usernames[@"disabled_usernames"] isKindOfClass:NSArray.class]
 				? [usernames[@"disabled_usernames"] mutableCopy] : [NSMutableArray array];
 		me.editable = usernames[@"editable_username"] ?: @"";
+		me.statusText = nil;
 		[me updateEditButton];
 		[me.tableView reloadData];
 	}];
@@ -107,25 +111,20 @@
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-	if (section == 1) return @"Active usernames";
-	if (section == 2) return @"Disabled usernames";
+	if (section == 1) return @"LINKS ORDER";
 	return nil;
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
 	if (section == 0)
-		return @"This is the username Telegram shows first. The names below are "
-			   @"kept on the account and can be switched back on.";
-	if (section == 1 && self.active.count > 1)
-		return @"Tap Edit and drag a row to change the order on your profile.";
-	if (section == 2 && !self.disabled.count)
-		return @"Every other username is switched on.";
+		return @"Usernames must have at least 5 characters.";
 	return nil;
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
 	if (section == 0)
-		return self.editable.length ? 2 : 1;
+		return 1 + (self.statusText.length ? 1 : 0) +
+				(self.editable.length ? 1 : 0);
 	if (section == 1)
 		return self.active.count;
 	return self.disabled.count;
@@ -136,6 +135,22 @@
 {
 	TGTheme *theme = [TGTheme shared];
 	if (path.section == 0){
+		NSInteger removeRow = 1 + (self.statusText.length ? 1 : 0);
+		if (path.row == 1 && self.statusText.length){
+			UITableViewCell *status = [[UITableViewCell alloc]
+					initWithStyle:UITableViewCellStyleDefault reuseIdentifier:nil];
+			[theme styleCell:status];
+			status.textLabel.text = self.statusText;
+			status.textLabel.font = TGFontCaption();
+			status.textLabel.numberOfLines = 0;
+			status.textLabel.textColor = self.statusTone == 2
+					? [theme destructiveColour]
+					: (self.statusTone == 1 ? [theme accentColour]
+										   : [theme secondaryTextColour]);
+			status.selectionStyle = UITableViewCellSelectionStyleNone;
+			status.accessoryType = UITableViewCellAccessoryNone;
+			return status;
+		}
 		UITableViewCell *cell = [[UITableViewCell alloc]
 				initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:nil];
 		[theme styleCell:cell];
@@ -143,12 +158,39 @@
 		cell.detailTextLabel.font = TGFontBody();
 		cell.detailTextLabel.textColor = [theme cellDetailColour];
 		if (path.row == 0){
-			cell.textLabel.text = @"Username";
-			cell.detailTextLabel.text = self.editable.length
-					? [@"@" stringByAppendingString:self.editable] : @"None";
+			// The official field is inline, with t.me/ as a fixed prefix, not
+			// an alert that hides what the link will look like.
+			cell.textLabel.text = nil;
+			cell.selectionStyle = UITableViewCellSelectionStyleNone;
 			cell.accessoryType = UITableViewCellAccessoryNone;
-		} else {
-			cell.textLabel.text = @"Remove Username";
+			UILabel *prefix = [[UILabel alloc] initWithFrame:
+					CGRectMake(kUsernameFieldInset, 0, kUsernamePrefixWidth,
+							kUsernameFieldHeight)];
+			prefix.font = TGFontRow();
+			prefix.textColor = [theme secondaryTextColour];
+			prefix.backgroundColor = [UIColor clearColor];
+			prefix.text = @"t.me/";
+			[cell.contentView addSubview:prefix];
+			UITextField *field = [[UITextField alloc] initWithFrame:
+					CGRectMake(kUsernameFieldInset + kUsernamePrefixWidth, 0,
+							cell.contentView.bounds.size.width -
+									kUsernameFieldInset - kUsernamePrefixWidth -
+									kUsernameFieldInset,
+							kUsernameFieldHeight)];
+			field.font = TGFontRow();
+			field.textColor = [theme primaryTextColour];
+			field.placeholder = @"username";
+			field.text = self.editable;
+			field.autocapitalizationType = UITextAutocapitalizationTypeNone;
+			field.autocorrectionType = UITextAutocorrectionTypeNo;
+			field.returnKeyType = UIReturnKeyDone;
+			field.delegate = self;
+			[field addTarget:self action:@selector(usernameChanged:)
+					forControlEvents:UIControlEventEditingChanged];
+			[cell.contentView addSubview:field];
+			self.inlineField = field;
+		} else if (path.row == removeRow) {
+			cell.textLabel.text = @"Remove";
 			cell.textLabel.textColor = [theme destructiveColour];
 			cell.textLabel.textAlignment = NSTextAlignmentCenter;
 			cell.accessoryType = UITableViewCellAccessoryNone;
@@ -220,7 +262,7 @@
 		if (!ok){
 			me.active = [before mutableCopy];
 			[me.tableView reloadData];
-			[TGAlertSheet showMessage:(error ?: @"Telegram refused that order.")
+			[TGAlertSheet showMessage:(error ?: @"An error occurred.")
 								title:@"Username Order" inView:me.view];
 			return;
 		}
@@ -247,8 +289,8 @@
 		if (!ok){
 			sender.on = !on;
 			sender.enabled = YES;
-			[TGAlertSheet showMessage:(error ?: @"Telegram refused that username.")
-								title:@"Usernames" inView:me.view];
+			[TGAlertSheet showMessage:(error ?: @"An error occurred.")
+								title:@"Username" inView:me.view];
 			return;
 		}
 		// A name moving between active and disabled changes both sections,
@@ -263,52 +305,115 @@
 	if (path.section != 0)
 		return;
 	[tableView deselectRowAtIndexPath:path animated:YES];
-	if (path.row == 1){
+	NSInteger removeRow = 1 + (self.statusText.length ? 1 : 0);
+	if (self.editable.length && path.row == removeRow){
 		[self removeUsername];
 		return;
 	}
+	if (path.row == 0)
+		[self.inlineField becomeFirstResponder];
+}
 
-	NSString *current = self.editable;
+- (void)updateStatusText:(NSString *)text tone:(NSInteger)tone {
+	BOOL had = self.statusText.length > 0;
+	BOOL has = text.length > 0;
+	self.statusText = text;
+	self.statusTone = tone;
+	if (!self.isViewLoaded || had == has){
+		if (has)
+			[self.tableView reloadRowsAtIndexPaths:@[
+					[NSIndexPath indexPathForRow:1 inSection:0]]
+					withRowAnimation:UITableViewRowAnimationNone];
+		return;
+	}
+	// Inserting or removing the one status row keeps the text field (and the
+	// keyboard) alive; reloading the whole section would recreate the field
+	// under the user's finger.
+	[self.tableView beginUpdates];
+	if (has){
+		[self.tableView insertRowsAtIndexPaths:@[
+				[NSIndexPath indexPathForRow:1 inSection:0]]
+				withRowAnimation:UITableViewRowAnimationNone];
+	} else {
+		[self.tableView deleteRowsAtIndexPaths:@[
+				[NSIndexPath indexPathForRow:1 inSection:0]]
+				withRowAnimation:UITableViewRowAnimationNone];
+	}
+	[self.tableView endUpdates];
+}
+
+#pragma mark - live availability
+
+/// Typing stops for half a second before the check goes out: one request per
+/// pause, not one per keystroke, which is what TDLib's rate limits expect.
+- (void)usernameChanged:(UITextField *)field {
+	[NSObject cancelPreviousPerformRequestsWithTarget:self
+			selector:@selector(checkUsernameNow) object:nil];
+	NSString *typed = TGUsernameNormalized(field.text);
+	if (!TGUsernameShouldCheck(typed, self.editable)){
+		[self updateStatusText:nil tone:0];
+		return;
+	}
+	[self updateStatusText:TGUsernameAvailabilityText(@"checking", typed) tone:0];
+	[self performSelector:@selector(checkUsernameNow) withObject:nil afterDelay:0.5];
+}
+
+- (void)checkUsernameNow {
+	NSString *typed = TGUsernameNormalized(self.inlineField.text);
+	if (!TGUsernameShouldCheck(typed, self.editable))
+		return;
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"Username"
-					message:@"The name Telegram shows first. Letters, digits and "
-							@"underscores; 5 to 32 characters."
-				placeholder:@"username"
-					   text:current
-					 action:@"Save"
-					 inView:self.view
-				 onSubmit:^(NSString *text){
-		NSString *username = [text stringByReplacingOccurrencesOfString:@"@"
-															withString:@""];
-		[[TGClient shared] setUsername:username completion:^(BOOL ok){
-			if (!ok){
-				[TGAlertSheet showMessage:@"That username is not available, or "
-										  @"Telegram refused the change."
-									title:@"Username" inView:weakSelf.view];
-				return;
-			}
-			[weakSelf load];
-		}];
+	// A user account checks its own name, which TDLib spells as chat_id 0.
+	[[TGClient shared] checkUsername:typed forChat:0 completion:^(NSString *result){
+		TGUsernameSettingsViewController *me = weakSelf;
+		if (!me)
+			return;
+		NSString *current = TGUsernameNormalized(me.inlineField.text);
+		if (!TGUsernameAnswerStillApplies(typed, current))
+			return;
+		NSInteger tone = [result isEqualToString:@"ok"] ? 1
+				: ([result isEqualToString:@"checking"] ? 0 : 2);
+		[me updateStatusText:TGUsernameAvailabilityText(result, typed) tone:tone];
+	}];
+}
+
+- (BOOL)textFieldShouldReturn:(UITextField *)textField {
+	[NSObject cancelPreviousPerformRequestsWithTarget:self
+			selector:@selector(checkUsernameNow) object:nil];
+	[textField resignFirstResponder];
+	return YES;
+}
+
+- (void)textFieldDidEndEditing:(UITextField *)textField {
+	[NSObject cancelPreviousPerformRequestsWithTarget:self
+			selector:@selector(checkUsernameNow) object:nil];
+	NSString *typed = TGUsernameNormalized(textField.text);
+	if (!TGUsernameShouldCheck(typed, self.editable))
+		return;
+	__weak typeof(self) weakSelf = self;
+	[[TGClient shared] setUsername:typed completion:^(BOOL ok){
+		if (!ok){
+			[TGAlertSheet showMessage:@"An error occurred."
+								title:@"Username" inView:weakSelf.view];
+			[weakSelf.tableView reloadData];
+			return;
+		}
+		[weakSelf load];
 	}];
 }
 
 - (void)removeUsername {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:@"Removing the editable username leaves the "
-							  @"account reachable only by your phone number. "
-							  @"Other active or disabled names keep it from "
-							  @"being removed completely."
-						title:@"Remove Username"
+	[TGAlertSheet showConfirm:nil
+						title:@"Remove"
 					   action:@"Remove"
 				  destructive:YES
 					   inView:self.view
 					onConfirm:^{
 		[[TGClient shared] setUsername:@"" completion:^(BOOL ok){
 			if (!ok){
-				[TGAlertSheet showMessage:@"Telegram refused that. A name cannot "
-										  @"be removed while another one is active "
-										  @"or disabled."
-									title:@"Remove Username" inView:weakSelf.view];
+				[TGAlertSheet showMessage:@"An error occurred."
+									title:@"Remove" inView:weakSelf.view];
 				return;
 			}
 			[weakSelf load];

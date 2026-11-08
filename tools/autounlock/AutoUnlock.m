@@ -33,6 +33,54 @@ static dispatch_source_t s_record_timer = NULL;
 static int s_record_frame_index = 0;
 static int s_record_max_frames = 0;
 
+/// Completely dark the panel for a bench/stand phone. Locking the UI is the
+/// reliable path on iOS 6/7; the backlight calls are the fallback when no lock
+/// manager is present.
+static void do_screen_off(void) {
+    NSLog(@"[AutoUnlock] do_screen_off triggered");
+
+    Class lockMgrClass = objc_getClass("SBLockScreenManager");
+    id mgr = lockMgrClass ? [lockMgrClass performSelector:@selector(sharedInstance)] : nil;
+    if (mgr) {
+        if ([mgr respondsToSelector:@selector(lockUIFromSource:withOptions:)]) {
+            typedef void (*LockFn)(id, SEL, int, id);
+            LockFn fn = (LockFn)[mgr methodForSelector:@selector(lockUIFromSource:withOptions:)];
+            fn(mgr, @selector(lockUIFromSource:withOptions:), 0, nil);
+            NSLog(@"[AutoUnlock] lockUIFromSource:0 withOptions:nil executed");
+        } else if ([mgr respondsToSelector:@selector(lockUIFromSource:)]) {
+            typedef void (*LockOneFn)(id, SEL, int);
+            LockOneFn fn = (LockOneFn)[mgr methodForSelector:@selector(lockUIFromSource:)];
+            fn(mgr, @selector(lockUIFromSource:), 0);
+            NSLog(@"[AutoUnlock] lockUIFromSource:0 executed");
+        }
+    }
+
+    Class backClass = objc_getClass("SBBacklightController");
+    id back = backClass ? [backClass performSelector:@selector(sharedInstance)] : nil;
+    if (back) {
+        if ([back respondsToSelector:@selector(turnOffScreen)]) {
+            [back performSelector:@selector(turnOffScreen)];
+            NSLog(@"[AutoUnlock] turnOffScreen executed");
+        }
+        if ([back respondsToSelector:@selector(setIdleTimerDisabled:forReason:)]) {
+            typedef void (*IdleFn)(id, SEL, BOOL, id);
+            IdleFn fn = (IdleFn)[back methodForSelector:@selector(setIdleTimerDisabled:forReason:)];
+            fn(back, @selector(setIdleTimerDisabled:forReason:), NO, @"iTgDev");
+        }
+        if ([back respondsToSelector:@selector(animateBacklightToFactor:duration:source:completion:)]) {
+            typedef void (*BacklightFn)(id, SEL, float, double, int, id);
+            BacklightFn fn = (BacklightFn)[back methodForSelector:@selector(animateBacklightToFactor:duration:source:completion:)];
+            fn(back, @selector(animateBacklightToFactor:duration:source:completion:), 0.0f, 0.2, 0, nil);
+            NSLog(@"[AutoUnlock] backlight -> 0.0 executed");
+        } else if ([back respondsToSelector:@selector(setBacklightFactor:source:)]) {
+            typedef void (*FactorFn)(id, SEL, float, int);
+            FactorFn fn = (FactorFn)[back methodForSelector:@selector(setBacklightFactor:source:)];
+            fn(back, @selector(setBacklightFactor:source:), 0.0f, 0);
+            NSLog(@"[AutoUnlock] setBacklightFactor:0 executed");
+        }
+    }
+}
+
 static void stop_recording(void) {
     if (s_record_timer) {
         dispatch_source_cancel(s_record_timer);
@@ -205,7 +253,7 @@ static void do_unlock(BOOL launchApp) {
 }
 
 static void on_unlock_notify(CFNotificationCenterRef center, void *observer, CFStringRef name, const void *object, CFDictionaryRef userInfo) {
-    NSString *notif = (__bridge NSString *)name;
+    NSString *notif = (NSString *)name;
     NSLog(@"[AutoUnlock] Darwin notification received: %@", notif);
     if ([notif isEqualToString:@"org.legacy.itg.screenshot"]) {
         dispatch_async(dispatch_get_main_queue(), ^{
@@ -229,6 +277,18 @@ static void on_unlock_notify(CFNotificationCenterRef center, void *observer, CFS
     }
     if ([notif isEqualToString:@"org.legacy.itg.record_stop"]) {
         stop_recording();
+        return;
+    }
+    if ([notif isEqualToString:@"org.legacy.itg.screenoff"]) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            do_screen_off();
+        });
+        return;
+    }
+    if ([notif isEqualToString:@"org.legacy.itg.screenon"]) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            do_unlock(NO);
+        });
         return;
     }
     BOOL launch = [notif isEqualToString:@"org.legacy.itg.launch"];
@@ -279,6 +339,8 @@ static void auto_unlock_init(void) {
     CFNotificationCenterAddObserver(darwin, NULL, on_unlock_notify, CFSTR("org.legacy.itg.screenshot"), NULL, CFNotificationSuspensionBehaviorDeliverImmediately);
     CFNotificationCenterAddObserver(darwin, NULL, on_unlock_notify, CFSTR("org.legacy.itg.record_start"), NULL, CFNotificationSuspensionBehaviorDeliverImmediately);
     CFNotificationCenterAddObserver(darwin, NULL, on_unlock_notify, CFSTR("org.legacy.itg.record_stop"), NULL, CFNotificationSuspensionBehaviorDeliverImmediately);
+    CFNotificationCenterAddObserver(darwin, NULL, on_unlock_notify, CFSTR("org.legacy.itg.screenoff"), NULL, CFNotificationSuspensionBehaviorDeliverImmediately);
+    CFNotificationCenterAddObserver(darwin, NULL, on_unlock_notify, CFSTR("org.legacy.itg.screenon"), NULL, CFNotificationSuspensionBehaviorDeliverImmediately);
     
     // Automatically unlock after SpringBoard finishes bootstrap
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{

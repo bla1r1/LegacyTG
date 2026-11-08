@@ -1,6 +1,7 @@
 #import "TGCustomEmojiStore.h"
 #import "TGNameWithStatus.h"
 #import "TGChatListViewControllerInternal.h"
+#import "TGLocalization.h"
 #import "TGPerf.h"
 #import "TGStatusText.h"
 #import "TGStyle.h"
@@ -89,7 +90,7 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 		keys = @[@"id", @"title", @"date", @"text", @"previewText", @"lastAuthor",
 				@"unread", @"unreadMentions", @"markedUnread", @"isMuted",
 				@"isPinned", @"isOnline", @"isSaved", @"lastId", @"lastOutgoing",
-				@"readOutbox", @"readInbox", @"photoFileId", @"isGroup", @"isForum",
+				@"readOutbox", @"readInbox", @"isGroup", @"isForum",
 				@"isSecret", @"order", @"archiveOrder", @"supergroupId", @"draft",
 				@"emojiStatusId"];
 	});
@@ -120,8 +121,7 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 
 - (void)composeTapped {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:@[@"New Message", @"New Group", @"New Channel",
-								@"Join by Invite Link"]
+	[TGAlertSheet showChoices:@[@"New Message", @"New Group", @"New Channel"]
 						title:nil
 			 destructiveIndex:-1
 					   inView:self.navigationController.view ?: self.view
@@ -131,9 +131,8 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 			// A channel is a supergroup with one voice: TDLib names both with
 			// one request, and the is_channel flag is the whole difference.
 			[TGAlertSheet showInput:@"New Channel"
-							message:@"A channel posts to subscribers. Anyone "
-									@"with the link can read; only admins write."
-						placeholder:@"Channel name"
+							message:nil
+						placeholder:@"Channel Name"
 							   text:nil
 							 action:@"Create"
 							 inView:me.view
@@ -153,7 +152,7 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 			}];
 			return;
 		}
-		if (index != 3){
+		if (index != 2){
 			TGContactsViewController *contacts = [[TGContactsViewController alloc] init];
 			if (index == 1)
 				contacts.picksGroupMembers = YES;
@@ -162,107 +161,6 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 			[me.navigationController pushViewController:contacts animated:YES];
 			return;
 		}
-		// A link is joined from anywhere: the sheet starts from the
-		// pasteboard, which is where a copied link already sits.
-		[TGAlertSheet showInput:@"Join by Invite Link"
-						message:nil
-					placeholder:@"t.me/joinchat/… or t.me/+…"
-						   text:[UIPasteboard generalPasteboard].string
-						 action:@"Check"
-						 inView:me.view
-					   onSubmit:^(NSString *link){
-			[me joinByInviteLink:link];
-		}];
-	}];
-}
-
-/// A pasted t.me link joined: what it is first, then the chat. The account
-/// already in the chat does not join again - it only opens it.
-- (void)joinByInviteLink:(NSString *)rawLink {
-	NSString *link = [rawLink stringByTrimmingCharactersInSet:
-			[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-	if (![link hasPrefix:@"http"])
-		link = [@"https://" stringByAppendingString:link];
-	__weak typeof(self) weakSelf = self;
-
-	// A folder link is a different object behind the same t.me host. It is
-	// checked first and adopted, not joined: addChatFolderByInviteLink is
-	// what turns it into a pill on this screen.
-	if ([link rangeOfString:@"/addlist/"].location != NSNotFound){
-		[[TGClient shared] checkFolderInviteLink:link completion:^(NSDictionary *folder){
-			TGChatListViewController *me = weakSelf;
-			if (!me)
-				return;
-			if (!folder){
-				[TGAlertSheet showMessage:@"That folder link answers nothing."
-									title:@"Folder Link" inView:me.view];
-				return;
-			}
-			NSArray *missing = folder[@"missing"] ?: @[];
-			NSString *say = [NSString stringWithFormat:@"%@ · %lu chats to add",
-					folder[@"name"] ?: @"Shared folder",
-					(unsigned long)missing.count];
-			[TGAlertSheet showConfirm:say title:@"Folder Link" action:@"Add"
-						  destructive:NO inView:me.view onConfirm:^{
-				[[TGClient shared] addFolderByInviteLink:link chatIds:missing
-											 completion:^(BOOL ok){
-					if (!ok)
-						[TGAlertSheet showMessage:@"Telegram refused that folder."
-											title:@"Folder Link" inView:weakSelf.view];
-				}];
-			}];
-		}];
-		return;
-	}
-
-	[[TGClient shared] checkInviteLink:link completion:
-			^(NSString *title, NSInteger members, BOOL alreadyMember){
-		TGChatListViewController *me = weakSelf;
-		if (!me)
-			return;
-		if (!title.length){
-			[TGAlertSheet showMessage:@"That link answers nothing - expired, "
-									  @"revoked, or mistyped."
-								title:@"Invite Link" inView:me.view];
-			return;
-		}
-		NSString *say = [NSString stringWithFormat:@"%@ · %ld members",
-						 title, (long)members];
-		NSString *action = alreadyMember ? @"Open Chat" : @"Join";
-		[TGAlertSheet showConfirm:say
-							title:@"Invite Link"
-						   action:action
-					  destructive:NO
-						   inView:me.view
-						onConfirm:^{
-			TGChatListViewController *inner = weakSelf;
-			[[TGClient shared] joinChatByInviteLink:link completion:^(int64_t chatId, NSString *name){
-				if (!chatId){
-					if (inner)
-						[TGAlertSheet showMessage:@"Telegram refused the join."
-											title:@"Invite Link" inView:inner.view];
-					return;
-				}
-				dispatch_async(dispatch_get_main_queue(), ^{
-					TGChatListViewController *after = weakSelf;
-					if (!after)
-						return;
-					// The chat appears in the list with the update; it is
-					// used straight out of it when it has arrived, forced
-					// into the shape a joined group has when it has not.
-					NSDictionary *found = nil;
-					for (NSDictionary *c in [TGClient shared].chats)
-						if ([c[@"id"] longLongValue] == chatId){
-							found = c;
-							break;
-						}
-					NSDictionary *c = found ?: (@{@"id" : @(chatId),
-												  @"title" : (name ?: title ?: @""),
-												  @"isGroup" : @YES});
-					[after openChatInfo:c];
-				});
-			}];
-		}];
 	}];
 }
 

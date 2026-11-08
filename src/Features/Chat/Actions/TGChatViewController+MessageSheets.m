@@ -69,7 +69,7 @@ static NSString *TGSheetDate(NSTimeInterval unix) {
 				return;
 			if (!forwards.count){
 				[TGAlertSheet showMessage:@"Telegram knows no public copies "
-							@"of this message." title:@"Public Forwards"
+							@"of this message." title:@"Forwarded Messages"
 										inView:me.view];
 				return;
 			}
@@ -83,7 +83,7 @@ static NSString *TGSheetDate(NSTimeInterval unix) {
 						title, copy[@"message_id"] ?: @""]];
 			}
 			[TGAlertSheet showChoices:rows
-								title:@"Public Forwards"
+								title:@"Forwarded Messages"
 					 destructiveIndex:-1
 							   inView:me.view
 							 onChoice:^(NSInteger index){
@@ -114,7 +114,7 @@ static NSString *TGSheetDate(NSTimeInterval unix) {
 - (void)showReactorsOfMessage:(NSDictionary *)m {
 	NSArray *groups = m[@"reactionGroups"];
 	if (![groups isKindOfClass:NSArray.class] || !groups.count){
-		[TGAlertSheet showMessage:@"This message carries no reactions."
+		[TGAlertSheet showMessage:@"No Reactions"
 							title:@"Reactions"
 						   inView:self.view];
 		return;
@@ -242,11 +242,11 @@ static NSString *TGSheetDate(NSTimeInterval unix) {
 		TGChatViewController *me = weakSelf;
 		if (!me)
 			return;
-		[TGAlertSheet showInput:@"Find Quote"
+		[TGAlertSheet showInput:@"Quote"
 						message:@"Telegram returns the character position of the phrase."
 					placeholder:@"Phrase in this message"
 						   text:@""
-						 action:@"Find"
+						 action:@"Search"
 						 inView:me.view
 					 onSubmit:^(NSString *quote){
 			[[TGClient shared] searchQuote:quote inText:text position:0
@@ -256,14 +256,14 @@ static NSString *TGSheetDate(NSTimeInterval unix) {
 					return;
 				if (!found){
 					[TGAlertSheet showMessage:@"That phrase is not in this message."
-									   title:@"Find Quote"
+									   title:@"Quote"
 									   inView:live.view];
 					return;
 				}
 				[TGAlertSheet showMessage:
 						[NSString stringWithFormat:@"“%@” starts at character %ld.",
 								quote, (long)position]
-								   title:@"Find Quote"
+								   title:@"Quote"
 								   inView:live.view];
 			}];
 		}];
@@ -279,7 +279,7 @@ static NSString *TGSheetDate(NSTimeInterval unix) {
 			if (!me) return;
 			if (!messages.count){
 				[TGAlertSheet showMessage:@"No location pins in this chat."
-									 title:@"Recent Locations" inView:me.view];
+									 title:@"Recent" inView:me.view];
 				return;
 			}
 			NSMutableArray *rows = [NSMutableArray array];
@@ -296,7 +296,7 @@ static NSString *TGSheetDate(NSTimeInterval unix) {
 				[rows addObject:[line stringByAppendingString:live]];
 			}
 			[TGAlertSheet showChoices:rows
-								title:@"Recent Locations"
+								title:@"Recent"
 					 destructiveIndex:-1
 							   inView:me.view
 							 onChoice:^(NSInteger index){

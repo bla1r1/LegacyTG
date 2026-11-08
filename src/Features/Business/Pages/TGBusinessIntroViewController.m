@@ -80,7 +80,7 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	self.title = @"Intro";
+	self.title = @"Start Page";
 	__weak typeof(self) weakSelf = self;
 	[[TGClient shared] businessInfoWithCompletion:^(NSDictionary *info, NSString *error){
 		TGBusinessIntroViewController *page = weakSelf;
@@ -97,16 +97,16 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 
 - (void)rebuildSections {
 	self.sections = @[
-		TGBSection(@"CUSTOMIZE YOUR INTRO",
-				@"The message people see before they start a chat with this account.",
+		TGBSection(@"CUSTOMIZE YOUR START PAGE",
+				@"Customize the message people see before they start a chat with you.",
 				@[
 			TGBAction(@"Title", self.introTitle.length ? self.introTitle : @"Set",
 					@"title"),
 			TGBAction(@"Message", self.introMessage.length ? self.introMessage : @"Enter Message",
 					@"message"),
-			TGBAction(@"Sticker", self.stickerPath.length ? @"Chosen" : @"Choose Sticker",
+			TGBAction(@"Sticker", self.stickerPath.length ? @"Set" : @"Choose Sticker",
 					@"sticker"),
-			TGBAction(@"Save Intro", nil, @"save"),
+			TGBAction(@"Save", nil, @"save"),
 		]),
 		TGBSection(nil, nil, @[
 			TGBDestructive(@"Reset to Default", @"reset"),
@@ -118,13 +118,13 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 - (void)didChooseAction:(NSString *)action row:(NSDictionary *)row {
 	__weak typeof(self) weakSelf = self;
 	if ([action isEqualToString:@"title"]){
-		[self askText:@"Intro Title" message:nil placeholder:@"Title"
+		[self askText:@"Title" message:nil placeholder:@"Title"
 				 text:self.introTitle action:@"Save" completion:^(NSString *text){
 			weakSelf.introTitle = text;
 			[weakSelf rebuildSections];
 		}];
 	} else if ([action isEqualToString:@"message"]){
-		[self askText:@"Intro Message" message:nil placeholder:@"Enter Message"
+		[self askText:@"Message" message:nil placeholder:@"Enter Message"
 				 text:self.introMessage action:@"Save" completion:^(NSString *text){
 			weakSelf.introMessage = text;
 			[weakSelf rebuildSections];
@@ -133,21 +133,21 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 		[self pickSticker];
 	} else if ([action isEqualToString:@"save"]){
 		if (!self.introTitle.length || !self.introMessage.length){
-			[self showMessage:@"An intro needs a title and a message." title:@"Intro"];
+			[self showMessage:@"An error occurred." title:@"Start Page"];
 			return;
 		}
 		[[TGClient shared] setBusinessStartPageTitle:self.introTitle
 											 message:self.introMessage
 										 stickerPath:self.stickerPath
 										  completion:^(BOOL ok, NSString *error){
-			[weakSelf showResult:ok error:error title:@"Intro"];
+			[weakSelf showResult:ok error:error title:@"Start Page"];
 		}];
 	} else if ([action isEqualToString:@"reset"]){
 		[[TGClient shared] setBusinessStartPageTitle:nil message:nil stickerPath:nil
 										  completion:^(BOOL ok, NSString *error){
 			TGBusinessIntroViewController *page = weakSelf;
 			if (!ok){
-				[page showResult:NO error:error title:@"Intro"];
+				[page showResult:NO error:error title:@"Start Page"];
 				return;
 			}
 			page.introTitle = @"";
@@ -161,7 +161,7 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 - (void)pickSticker {
 	if (![UIImagePickerController isSourceTypeAvailable:
 			UIImagePickerControllerSourceTypePhotoLibrary]){
-		[self showMessage:@"The photo library is not on this device." title:@"Intro"];
+		[self showMessage:@"An error occurred." title:@"Start Page"];
 		return;
 	}
 	self.pickingSticker = YES;
@@ -184,7 +184,7 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 			stringByAppendingPathComponent:@"business-intro.jpg"];
 	if (![UIImageJPEGRepresentation(image, TGCompressionQualityStandard)
 			writeToFile:path atomically:YES]){
-		[self showMessage:@"Could not prepare the picture." title:@"Intro"];
+		[self showMessage:@"An error occurred." title:@"Start Page"];
 		return;
 	}
 	self.stickerPath = path;

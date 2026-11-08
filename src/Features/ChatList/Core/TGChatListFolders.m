@@ -89,7 +89,7 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 		keys = @[@"id", @"title", @"date", @"text", @"previewText", @"lastAuthor",
 				@"unread", @"unreadMentions", @"markedUnread", @"isMuted",
 				@"isPinned", @"isOnline", @"isSaved", @"lastId", @"lastOutgoing",
-				@"readOutbox", @"readInbox", @"photoFileId", @"isGroup", @"isForum",
+				@"readOutbox", @"readInbox", @"isGroup", @"isForum",
 				@"isSecret", @"order", @"archiveOrder", @"supergroupId", @"draft",
 				@"emojiStatusId"];
 	});
@@ -125,8 +125,8 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 	NSMutableArray *folders = [NSMutableArray arrayWithArray:
 			[TGClient shared].folders];
 	if (!folders.count){
-		self.mergedChats = [TGClient shared].chats;
-		self.mergedSignature = sig;
+		self.mergedChats = nil;
+		self.mergedSignature = nil;
 		return;
 	}
 
@@ -175,12 +175,15 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 		}];
 	}
 	// The completions above all land on the main queue, so merged, seen and
-	// pendings stay single-threaded.
-	dispatch_group_notify(group, dispatch_get_main_queue(), ^{
+	// pendings stay single-threaded. The sort runs on a background thread so
+	// folder merges do not hitch the main thread.
+	dispatch_group_notify(group, dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
 		if (!weakSelf || weakSelf.folderId != 0){
-			weakSelf.mergeInFlight = NO;
-			weakSelf.mergedChats = nil;
-			weakSelf.mergedSignature = nil;
+			dispatch_async(dispatch_get_main_queue(), ^{
+				weakSelf.mergeInFlight = NO;
+				weakSelf.mergedChats = nil;
+				weakSelf.mergedSignature = nil;
+			});
 			return;
 		}
 		// Pinned first, then newest last message first: the merge
@@ -206,22 +209,29 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 				return NSOrderedSame;
 			return da > db ? NSOrderedAscending : NSOrderedDescending;
 		}];
-		weakSelf.mergedChats = combined;
-		[weakSelf saveChatSnapshot:combined];
-		// A folder answer that dropped unseen ids is not the whole
-		// picture: withholding the signature makes the next pass run
-		// again, and a short retry covers a silent cache (no chat
-		// update will fire onChatsChanged meanwhile).
-		weakSelf.mergedSignature = pendings ? nil : signature;
-		weakSelf.mergeInFlight = NO;
-		[weakSelf.tableView reloadData];
-		[weakSelf fetchMissingAvatars];
-		if (pendings){
-			[NSObject cancelPreviousPerformRequestsWithTarget:weakSelf
-					selector:@selector(mergeAllFolderChats) object:nil];
-			[weakSelf performSelector:@selector(mergeAllFolderChats)
-						   withObject:nil afterDelay:1.0];
-		}
+		dispatch_async(dispatch_get_main_queue(), ^{
+			TGChatListViewController *me = weakSelf;
+			if (!me || me.folderId != 0){
+				me.mergeInFlight = NO;
+				return;
+			}
+			me.mergedChats = combined;
+			[me saveChatSnapshot:combined];
+			// A folder answer that dropped unseen ids is not the whole
+			// picture: withholding the signature makes the next pass run
+			// again, and a short retry covers a silent cache (no chat
+			// update will fire onChatsChanged meanwhile).
+			me.mergedSignature = pendings ? nil : signature;
+			me.mergeInFlight = NO;
+			[me reloadTableDebounced];
+			[me fetchMissingAvatars];
+			if (pendings){
+				[NSObject cancelPreviousPerformRequestsWithTarget:me
+						selector:@selector(mergeAllFolderChats) object:nil];
+				[me performSelector:@selector(mergeAllFolderChats)
+							   withObject:nil afterDelay:1.0];
+			}
+		});
 	});
 }
 

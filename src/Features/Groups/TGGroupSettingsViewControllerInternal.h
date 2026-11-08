@@ -21,6 +21,7 @@
 @property (nonatomic, strong) NSMutableArray *disabled;
 @property (nonatomic, copy) NSString *inviteLink;
 @property (nonatomic, assign) NSInteger memberCount;
+@property (nonatomic, assign) NSInteger joinRequestCount;
 @property (nonatomic, assign) BOOL signMessages;
 @property (nonatomic, assign) BOOL joinToSend;
 @property (nonatomic, assign) BOOL allHistory;
@@ -68,6 +69,7 @@
 - (void)toggleEditing;
 - (void)addMembers;
 - (void)findMember;
+- (void)showMembersList;
 - (void)choosePermissions;
 - (void)chooseSlowMode;
 - (void)confirmBroadcast;

@@ -23,7 +23,7 @@ static NSString *TGGameString(id value) {
 static NSString *TGGameErrorText(NSDictionary *result) {
 	NSString *message = result[@"message"];
 	return [message isKindOfClass:NSString.class] && message.length
-			? message : @"Telegram refused that.";
+			? message : @"An error occurred.";
 }
 
 static BOOL TGGameFailed(NSDictionary *result) {

@@ -49,9 +49,11 @@
 
 /// The pin in the strip under the bar, and where its two lines begin after it.
 static const CGFloat kPinnedGlyph = 14.0f;
+static const CGFloat kPinnedThumbSide = TGMetricPinnedThumb;
 static const CGFloat kPinnedTextX = TGMetricPadLarge + kPinnedGlyph + TGMetricPadSmall;
-/// Finds the message line when the strip already exists and only its text changes.
+/// The message line when the strip already exists and only its text changes.
 static const NSInteger kPinnedBodyTag = 0x9010;
+static const NSInteger kPinnedThumbTag = 0x9011;
 /// The bar that stands in for the composer: mute for a channel you follow,
 /// join for one you have not joined yet. One tag per state, so a second answer
 /// replaces the bar instead of stacking another one on top.
@@ -74,12 +76,17 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 	[[TGClient shared] pinnedMessageForChat:self.chatId completion:^(NSDictionary *m){
 		TGChatViewController *me = weakSelf;
 		me.pinnedMessageId = [m[@"id"] longLongValue];
-		NSString *text = m[@"text"];
+		NSString *text = [m[@"text"] isKindOfClass:NSString.class] ? m[@"text"] : nil;
+		if (!text.length && me.pinnedMessageId)
+			text = TGDescribeMessageContent(m);
 		if (!text.length){
 			[me hidePinnedBanner];
 			return;
 		}
 		NSArray *entities = [m[@"entities"] isKindOfClass:NSArray.class] ? m[@"entities"] : nil;
+		NSNumber *thumb = [m[@"photoId"] isKindOfClass:NSNumber.class] ? m[@"photoId"]
+				: ([m[@"thumbFileId"] isKindOfClass:NSNumber.class] ? m[@"thumbFileId"] : nil);
+		me.pinnedThumbnailFileId = thumb.longLongValue;
 		[me showPinnedBanner:text entities:entities];
 	}];
 }
@@ -114,8 +121,15 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 	}];
 }
 
-- (void)showPinnedBanner:(NSString *)text {
-	[self showPinnedBanner:text entities:nil];
+- (void)pinnedCloseTapped {
+	int64_t pinnedId = self.pinnedMessageId;
+	if (pinnedId)
+		[[TGClient shared] unpinMessage:pinnedId inChat:self.chatId];
+	self.pinnedMessageId = 0;
+	[self hidePinnedBanner];
+}
+
+- (void)showPinnedBanner:(NSString *)text {	[self showPinnedBanner:text entities:nil];
 }
 
 - (void)showPinnedBanner:(NSString *)text entities:(NSArray *)entities {
@@ -141,6 +155,23 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 		// This pin may have arrived while the strip was sliding away. A fresh
 		// animation on the same two properties cancels that hide and puts the
 		// strip back, even when the hide had not started yet.
+		UIImageView *thumb = (UIImageView *)[self.pinnedBannerView viewWithTag:kPinnedThumbTag];
+		if (thumb && self.pinnedThumbnailFileId){
+			int64_t fileId = self.pinnedThumbnailFileId;
+			__weak typeof(self) weakSelf = self;
+			[[TGClient shared] downloadFile:fileId completion:^(NSString *path){
+				if (!path.length || !weakSelf.pinnedBannerView)
+					return;
+				UIImage *photo = [UIImage imageWithContentsOfFile:path];
+				if (!photo)
+					return;
+				dispatch_async(dispatch_get_main_queue(), ^{
+					UIImageView *view = (UIImageView *)[weakSelf.pinnedBannerView
+							viewWithTag:kPinnedThumbTag];
+					view.image = photo;
+				});
+			}];
+		}
 		[UIView animateWithDuration:TGAnimationDurationNormal animations:^{
 			self.pinnedBannerView.alpha = TGAlphaOpaque;
 			self.pinnedBannerView.transform = CGAffineTransformIdentity;
@@ -160,29 +191,58 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 	stripe.backgroundColor = [theme accentColour];
 	[banner addSubview:stripe];
 
-	// The pin says what the strip is before the words are read: the mark the
-	// held-message menu uses for Pin. Without it the strip read like a reply
-	// banner that had lost its author.
-	UIImageView *pin = [[UIImageView alloc] initWithFrame:CGRectMake(
-			TGMetricPadLarge, TGCenteredOrigin(kPinnedBanner, kPinnedGlyph),
-			kPinnedGlyph, kPinnedGlyph)];
-	pin.image = [TGIcons glyphNamed:@"pin" colour:[theme accentColour]
-							  side:kPinnedGlyph];
-	pin.contentMode = UIViewContentModeCenter;
-	[banner addSubview:pin];
+	// The pin says what the strip is before the words are read. When the
+	// message has a picture, the picture takes the mark's place, as official
+	// shows a 36 pt thumbnail before the text.
+	BOOL hasThumb = self.pinnedThumbnailFileId != 0;
+	CGFloat textX = hasThumb ? TGMetricPadLarge + kPinnedThumbSide + TGMetricPad
+							 : kPinnedTextX;
+	if (hasThumb){
+		UIImageView *thumb = [[UIImageView alloc] initWithFrame:CGRectMake(
+				TGMetricPadLarge, TGCenteredOrigin(kPinnedBanner, kPinnedThumbSide),
+				kPinnedThumbSide, kPinnedThumbSide)];
+		thumb.tag = kPinnedThumbTag;
+		thumb.contentMode = UIViewContentModeScaleAspectFill;
+		thumb.clipsToBounds = YES;
+		thumb.layer.cornerRadius = TGMetricCornerSmall;
+		[banner addSubview:thumb];
+		int64_t fileId = self.pinnedThumbnailFileId;
+		__weak typeof(self) weakSelf = self;
+		[[TGClient shared] downloadFile:fileId completion:^(NSString *path){
+			if (!path.length || !weakSelf.pinnedBannerView)
+				return;
+			UIImage *photo = [UIImage imageWithContentsOfFile:path];
+			if (!photo)
+				return;
+			dispatch_async(dispatch_get_main_queue(), ^{
+				UIImageView *view = (UIImageView *)[weakSelf.pinnedBannerView
+						viewWithTag:kPinnedThumbTag];
+				view.image = photo;
+			});
+		}];
+	} else {
+		UIImageView *pin = [[UIImageView alloc] initWithFrame:CGRectMake(
+				TGMetricPadLarge, TGCenteredOrigin(kPinnedBanner, kPinnedGlyph),
+				kPinnedGlyph, kPinnedGlyph)];
+		pin.image = [TGIcons glyphNamed:@"pin" colour:[theme accentColour]
+								  side:kPinnedGlyph];
+		pin.contentMode = UIViewContentModeCenter;
+		[banner addSubview:pin];
+	}
 
-	UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(kPinnedTextX, TGMetricPadTiny,
-			b.size.width - kPinnedTextX - TGMetricPad, TGMetricLineMicro)];
-	label.text = @"Pinned message";
-	label.font = TGFontMicroStrong();
+	UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(textX, TGMetricPadSmall,
+			b.size.width - textX - TGMetricPad, TGMetricLineBody)];
+	label.text = @"Pinned Message";
+	label.font = TGFontBodyStrong();
 	label.textColor = [theme accentColour];
 	label.backgroundColor = [UIColor clearColor];
 	[banner addSubview:label];
 
-	UILabel *body = [[UILabel alloc] initWithFrame:CGRectMake(kPinnedTextX, TGMetricPadTiny + TGMetricLineMicro,
-			b.size.width - kPinnedTextX - TGMetricPad, TGMetricLineCaption)];
+	UILabel *body = [[UILabel alloc] initWithFrame:CGRectMake(textX,
+			TGMetricPadSmall + TGMetricLineBody,
+			b.size.width - textX - TGMetricPad, TGMetricLineBody)];
 	body.tag = kPinnedBodyTag;
-	body.font = TGFontCaption();
+	body.font = TGFontBody();
 	body.textColor = [theme primaryTextColour];
 	body.backgroundColor = [UIColor clearColor];
 	body.autoresizingMask = UIViewAutoresizingFlexibleWidth;
@@ -192,6 +252,22 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 		body.text = text;
 	}
 	[banner addSubview:body];
+
+	// The X unpins, as the official strip's close control does.
+	CGFloat closeSide = TGMetricButtonMediumH;
+	UIButton *close = [UIButton buttonWithType:UIButtonTypeCustom];
+	close.frame = CGRectMake(b.size.width - closeSide, TGCenteredOrigin(kPinnedBanner,
+			closeSide), closeSide, closeSide);
+	close.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin;
+	[close setImage:[TGIcons glyphNamed:@"close" colour:[theme secondaryTextColour]
+								   side:TGMetricMenuGlyph] forState:UIControlStateNormal];
+	[close addTarget:self action:@selector(pinnedCloseTapped)
+			forControlEvents:UIControlEventTouchUpInside];
+	[banner addSubview:close];
+	label.frame = CGRectMake(textX, TGMetricPadSmall,
+			b.size.width - textX - closeSide - TGMetricPad, TGMetricLineBody);
+	body.frame = CGRectMake(textX, TGMetricPadSmall + TGMetricLineBody,
+			b.size.width - textX - closeSide - TGMetricPad, TGMetricLineBody);
 
 	UIView *hair = [[UIView alloc] initWithFrame:CGRectMake(0,
 			kPinnedBanner - TGMetricBorderWidth, b.size.width, TGMetricBorderWidth)];

@@ -6,6 +6,7 @@
 #import <QuartzCore/QuartzCore.h>
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
+#import "TGQRCodeLink.h"
 
 /// The four corner brackets Telegram draws around the aiming window. A full
 /// border rectangle reads as a frame; the broken one reads as a target.
@@ -64,8 +65,6 @@ static const CGFloat kQRTextInset = 24.0f;
 	[super viewDidLoad];
 	self.title = @"Scan QR Code";
 	self.view.backgroundColor = [[TGTheme shared] mediaViewerBackdropColour];
-	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
-		self.edgesForExtendedLayout = UIRectEdgeNone;
 
 	self.torchItem = [[UIBarButtonItem alloc] initWithTitle:@"Light"
 			style:UIBarButtonItemStylePlain target:self action:@selector(toggleTorch)];
@@ -79,13 +78,13 @@ static const CGFloat kQRTextInset = 24.0f;
 	AVCaptureDevice *camera = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeVideo];
 	self.camera = camera;
 	if (!camera) {
-		[self showFailure:@"This device has no camera to scan with."];
+		[self showFailure:@"An error occurred."];
 		return;
 	}
 	if ([AVCaptureDevice respondsToSelector:@selector(authorizationStatusForMediaType:)]) {
 		AVAuthorizationStatus status = [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeVideo];
 		if (status == AVAuthorizationStatusDenied || status == AVAuthorizationStatusRestricted) {
-			[self showFailure:@"Camera access is off for LegacyTG. Allow it in Settings, or enter a link below."];
+			[self showFailure:@"Allow Telegram to access your camera and microphone"];
 			return;
 		}
 	}
@@ -93,7 +92,7 @@ static const CGFloat kQRTextInset = 24.0f;
 	AVCaptureDeviceInput *input = camera
 			? [AVCaptureDeviceInput deviceInputWithDevice:camera error:&error] : nil;
 	if (!input){
-		[self showFailure:@"This device has no camera to scan with."];
+		[self showFailure:@"An error occurred."];
 		return;
 	}
 
@@ -105,7 +104,7 @@ static const CGFloat kQRTextInset = 24.0f;
 	// The available types are only populated once the output has a session, so
 	// this order matters: asking earlier says QR is not supported.
 	if (![codes.availableMetadataObjectTypes containsObject:AVMetadataObjectTypeQRCode]){
-		[self showFailure:@"This device cannot recognise QR codes."];
+		[self showFailure:@"An error occurred."];
 		self.session = nil;
 		return;
 	}
@@ -150,7 +149,7 @@ static const CGFloat kQRTextInset = 24.0f;
 
 		self.hint = [[UILabel alloc] initWithFrame:CGRectMake(
 				TGMetricPadWide, CGRectGetMaxY(window) + TGMetricPadWide, b.size.width - TGDoubled(TGMetricPadWide), TGDoubled(TGMetricPadWide))];
-		self.hint.text = @"Point the camera at a QR code";
+		self.hint.text = @"Scan the QR code to connect your account";
 		self.hint.numberOfLines = 2;
 		self.hint.textAlignment = NSTextAlignmentCenter;
 		self.hint.font = TGFontBody();
@@ -163,7 +162,7 @@ static const CGFloat kQRTextInset = 24.0f;
 				TGCenteredOrigin(b.size.width, TGMetricQRManualWidth),
 				CGRectGetMaxY(self.hint.frame) + TGMetricPad,
 				TGMetricQRManualWidth, TGMetricRow);
-		[self.manualButton setTitle:@"Enter a Link" forState:UIControlStateNormal];
+		[self.manualButton setTitle:@"QR Code" forState:UIControlStateNormal];
 		[self.manualButton setTitleColor:[[TGTheme shared] onMediaColour] forState:UIControlStateNormal];
 		self.manualButton.titleLabel.font = TGFontBody();
 		self.manualButton.layer.borderColor = [[TGTheme shared] onMediaColour].CGColor;
@@ -218,7 +217,7 @@ static const CGFloat kQRTextInset = 24.0f;
 		return;
 	NSError *error = nil;
 	if (![self.camera lockForConfiguration:&error]) {
-		[TGAlertSheet showMessage:@"This camera will not change its light."
+		[TGAlertSheet showMessage:@"An error occurred."
 							  title:@"Light" inView:self.view];
 		return;
 	}
@@ -232,8 +231,8 @@ static const CGFloat kQRTextInset = 24.0f;
 /// the link the code stands for: the other direction Telegram offers.
 - (void)manualLinkTapped {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"Enter a Link"
-					message:@"Paste a t.me address or the link a QR code stands for."
+	[TGAlertSheet showInput:@"QR Code"
+					message:nil
 				placeholder:@"t.me/name"
 					   text:nil
 					 action:@"Open"
@@ -248,6 +247,12 @@ static const CGFloat kQRTextInset = 24.0f;
 			return;
 		[me actOn:trimmed];
 	}];
+}
+
+- (void)viewWillAppear:(BOOL)animated {
+	[super viewWillAppear:animated];
+	if (self.session && ![self.session isRunning])
+		[self.session startRunning];
 }
 
 - (void)viewWillDisappear:(BOOL)animated {
@@ -282,26 +287,38 @@ static const CGFloat kQRTextInset = 24.0f;
 	}
 }
 
-/// t.me/name and tg://resolve?domain=name both mean "open this chat".
+/// t.me/name and tg://resolve?domain=name both mean "open this chat". A
+/// tg://login?token=… payload is the other direction: it approves the login
+/// the other device started, and has no username at all.
 - (NSString *)usernameIn:(NSString *)text {
-	NSRange marker = [text rangeOfString:@"t.me/"];
-	if (marker.location != NSNotFound){
-		NSString *rest = [text substringFromIndex:NSMaxRange(marker)];
-		NSRange stop = [rest rangeOfCharacterFromSet:
-				[NSCharacterSet characterSetWithCharactersInString:@"/?#"]];
-		return stop.location == NSNotFound ? rest : [rest substringToIndex:stop.location];
-	}
-	marker = [text rangeOfString:@"domain="];
-	if (marker.location != NSNotFound)
-		return [text substringFromIndex:NSMaxRange(marker)];
-	return nil;
+	return TGQRCodeUsername(text);
+}
+
+- (BOOL)isAuthTransferLink:(NSString *)text {
+	return TGQRCodeIsAuthTransferLink(text);
 }
 
 - (void)actOn:(NSString *)text {
+	if ([self isAuthTransferLink:text]){
+		__weak typeof(self) weakSelf = self;
+		[[TGClient shared] confirmQrCodeAuthenticationLink:text
+											   completion:^(NSString *error){
+			TGQRViewController *me = weakSelf;
+			if (!me)
+				return;
+			if (error.length){
+				me.hint.text = error;
+				[TGAlertSheet showMessage:error title:@"QR Code" inView:me.view];
+			}
+			me.handled = NO;
+			[me.session startRunning];
+		}];
+		return;
+	}
 	NSString *username = [self usernameIn:text];
 	if (!username.length){
 		self.hint.text = text;
-		[TGAlertSheet showMessage:text title:@"QR code" inView:self.view];
+		[TGAlertSheet showMessage:text title:@"QR Code" inView:self.view];
 		self.handled = NO;
 		[self.session startRunning];
 		return;
@@ -314,11 +331,14 @@ static const CGFloat kQRTextInset = 24.0f;
 		if (!me)
 			return;
 		if (!chatId){
-			me.hint.text = [NSString stringWithFormat:@"No such account: @%@", username];
+			me.hint.text = @"Sorry, this username is invalid.";
 			me.handled = NO;
 			[me.session startRunning];
 			return;
 		}
+		// The preview restarts when the chat pops back; leaving it stopped
+		// made the scanner look dead until the screen was reopened.
+		me.handled = NO;
 		TGChatViewController *chat = [[TGChatViewController alloc] init];
 		chat.chatId = chatId;
 		chat.chatTitle = title ?: username;

@@ -1,8 +1,8 @@
 #import "TGChatListRowGeometry.h"
+#import "TGLocalization.h"
 
 NSString *TGChatListArchiveSubtitle(NSUInteger count) {
-	return [NSString stringWithFormat:@"%lu %@", (unsigned long)count,
-			count == 1 ? @"chat" : @"chats"];
+	return TGLocalizedPlural(@"%d chat", @"%d chats", (NSInteger)count);
 }
 
 void TGChatListRowAccessories(CGFloat rightEdge,

@@ -32,6 +32,15 @@
 			 inView:(UIView *)host
 		  onConfirm:(void (^)(void))onConfirm;
 
+/// A text alert with exactly the actions given and no Cancel. Used where
+/// official has two real choices and a Cancel would be a third, e.g. the
+/// support intro's Telegram FAQ / OK.
++ (void)showAlertActions:(NSArray *)titles
+				   title:(NSString *)title
+				 message:(NSString *)message
+				  inView:(UIView *)host
+				onAction:(void (^)(NSInteger index))onAction;
+
 /// A list to pick from. `onChoice` gets the index into `titles`, and is not
 /// called at all if the sheet is cancelled - so there is no cancel index to
 /// compare against. `destructiveIndex` is -1 for none.

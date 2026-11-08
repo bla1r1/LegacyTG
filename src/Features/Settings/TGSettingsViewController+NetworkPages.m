@@ -3,12 +3,24 @@
 // Settings pages for data usage, network stats, power saving, folders, downloads, and proxies.
 //
 #import "TGSettingsViewControllerInternal.h"
+#import "TGLocalization.h"
 #import "TGAlertSheet.h"
 #import "TGForwardPicker.h"
 #import "TGNetworkViewController.h"
 #import "TGStorageViewController.h"
 #import "TGFileInfoViewController.h"
 #import "TGSettingsViewController+Tier2.h"
+#import <objc/runtime.h>
+
+static char TGAutoDownloadBaselineKey;
+
+/// The protocol name official puts in a saved proxy's status line.
+static NSString *TGProxyTypeLabel(NSString *kind) {
+	if ([kind isEqualToString:@"mtproto"]) return @"MTProto";
+	if ([kind isEqualToString:@"http"])    return @"HTTP";
+	if ([kind isEqualToString:@"web"])     return @"Web";
+	return @"SOCKS5";
+}
 
 static NSString *TGChatNameForId(NSNumber *chatId) {
 	for (NSArray *list in @[[TGClient shared].chats ?: @[],
@@ -22,168 +34,313 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 	return [NSString stringWithFormat:@"Chat %@", chatId];
 }
 
+/// One connection's auto-download settings. The official page lists the media
+/// types and their limits; this client has one preset per network, so the
+/// same switches move that preset and say what it currently allows.
+@interface TGAutoDownloadConnectionViewController : UITableViewController
+@property (nonatomic, copy) NSString *network;
+/// Which key in autoDownloadPresets this network maps to.
+@property (nonatomic, copy) NSString *presetKey;
+@property (nonatomic, strong) NSDictionary *preset;
+@property (nonatomic, copy) NSString *photoSizeText;
+@property (nonatomic, copy) NSString *videoSizeText;
+@property (nonatomic, copy) void (^onChanged)(void);
+@end
+
+@implementation TGAutoDownloadConnectionViewController
+
+- (instancetype)init {
+	return [super initWithStyle:UITableViewStyleGrouped];
+}
+
+- (void)viewDidLoad {
+	[super viewDidLoad];
+}
+
+- (void)setPreset:(NSDictionary *)preset {
+	_preset = [preset copy];
+	long long photo = [_preset[@"maxPhotoSize"] longLongValue];
+	long long video = [_preset[@"maxVideoSize"] longLongValue];
+	self.photoSizeText = photo > 0 ? TGBytes(photo) : @"Off";
+	self.videoSizeText = video > 0 ? TGBytes(video) : @"Off";
+}
+
+- (BOOL)enabled {
+	return [self.preset[@"enabled"] boolValue];
+}
+
+- (void)setEnabled:(BOOL)enabled {
+	// A tap before getAutoDownloadSettingsPresets answers has no sizes to
+	// send; the switch stays disabled until the preset arrives.
+	if (![self.preset isKindOfClass:NSDictionary.class])
+		return;
+	NSMutableDictionary *next = [self.preset mutableCopy];
+	next[@"enabled"] = @(enabled);
+	self.preset = next;
+	__weak typeof(self) weakSelf = self;
+	[[TGClient shared] applyAutoDownloadPreset:next forNetwork:self.network
+									completion:^(BOOL ok){
+		if (ok && weakSelf.onChanged)
+			weakSelf.onChanged();
+	}];
+}
+
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
+	return 1;
+}
+
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
+	return 3;
+}
+
+- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
+	return @"Auto-Download";
+}
+
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)path {
+	UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"row"];
+	if (!cell)
+		cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1
+									  reuseIdentifier:@"row"];
+	cell.selectionStyle = UITableViewCellSelectionStyleNone;
+	if (path.row == 0){
+		cell.textLabel.text = @"Auto-Download";
+		UISwitch *toggle = [[UISwitch alloc] init];
+		toggle.on = [self enabled];
+		toggle.enabled = [self.preset isKindOfClass:NSDictionary.class];
+		[toggle addTarget:self action:@selector(toggleChanged:)
+		 forControlEvents:UIControlEventValueChanged];
+		cell.accessoryView = toggle;
+		cell.detailTextLabel.text = nil;
+		return cell;
+	}
+	cell.textLabel.text = path.row == 1 ? @"Photos" : @"Videos";
+	cell.detailTextLabel.text = path.row == 1 ? self.photoSizeText : self.videoSizeText;
+	return cell;
+}
+
+- (void)toggleChanged:(UISwitch *)sender {
+	[self setEnabled:sender.on];
+}
+
+@end
+
+/// Network Usage, without the TDLib diagnostics that used to share its row.
+@interface TGDataUsageViewController : UITableViewController
+@property (nonatomic, assign) long long sent;
+@property (nonatomic, assign) long long received;
+@property (nonatomic, copy) NSString *sentText;
+@property (nonatomic, copy) NSString *receivedText;
+@property (nonatomic, assign) BOOL loaded;
+@end
+
+@implementation TGDataUsageViewController
+
+- (instancetype)init {
+	return [super initWithStyle:UITableViewStyleGrouped];
+}
+
+- (void)viewDidLoad {
+	[super viewDidLoad];
+	self.title = @"Data Usage";
+	__weak typeof(self) weakSelf = self;
+	[[TGClient shared] networkStatsWithCompletion:^(long long sent, long long received){
+		weakSelf.sent = sent;
+		weakSelf.received = received;
+		weakSelf.sentText = TGBytes(sent);
+		weakSelf.receivedText = TGBytes(received);
+		weakSelf.loaded = YES;
+		[weakSelf.tableView reloadData];
+	}];
+}
+
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
+	return 2;
+}
+
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
+	return section == 0 ? 2 : 1;
+}
+
+- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
+	return section == 0 ? @"Data Usage" : nil;
+}
+
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)path {
+	UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"row"];
+	if (!cell)
+		cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1
+									  reuseIdentifier:@"row"];
+	if (path.section == 0){
+		cell.selectionStyle = UITableViewCellSelectionStyleNone;
+		cell.textLabel.text = path.row == 0 ? @"Received" : @"Sent";
+		cell.detailTextLabel.text = self.loaded
+				? (path.row == 0 ? self.receivedText : self.sentText) : @"Loading...";
+		return cell;
+	}
+	cell.textLabel.text = @"Reset Statistics";
+	cell.textLabel.textAlignment = NSTextAlignmentCenter;
+	cell.textLabel.textColor = [[TGTheme shared] destructiveColour];
+	cell.detailTextLabel.text = nil;
+	cell.selectionStyle = UITableViewCellSelectionStyleBlue;
+	return cell;
+}
+
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)path {
+	[tableView deselectRowAtIndexPath:path animated:YES];
+	if (path.section != 1)
+		return;
+	__weak typeof(self) weakSelf = self;
+	[TGAlertSheet showConfirm:@"Do you want to reset your usage statistics?"
+						title:@"Reset Statistics"
+					   action:@"Reset" destructive:YES inView:self.view
+					onConfirm:^{
+		[[TGClient shared] resetNetworkStats];
+		weakSelf.sent = 0;
+		weakSelf.received = 0;
+		weakSelf.sentText = TGBytes(0);
+		weakSelf.receivedText = TGBytes(0);
+		[weakSelf.tableView reloadData];
+	}];
+}
+
+@end
+
 @implementation TGSettingsViewController (NetworkPages)
 
 - (NSArray *)dataSections {
 	__weak typeof(self) weakSelf = self;
-	BOOL mobile = [[TGClient shared] autoDownloadOverMobile];
-	BOOL wifi   = [[TGClient shared] autoDownloadOverWifi];
-	NSDictionary *archiveSettings = [TGClient shared].archiveSettings ?: @{};
 	NSDictionary *autosave = self.autosaveSettings;
-	NSArray *autosaveExceptions = autosave[@"exceptions"];
-	NSString *autosaveDetail = autosave
-			? [NSString stringWithFormat:@"%lu exceptions",
-					(unsigned long)autosaveExceptions.count]
-			: nil;
+	// Keep the first answer apart from the edited copy: Reset needs the
+	// values the page opened with, not the ones it just wrote back.
+	if (self.autoDownloadPresets &&
+		!objc_getAssociatedObject(self, &TGAutoDownloadBaselineKey))
+		objc_setAssociatedObject(self, &TGAutoDownloadBaselineKey,
+				self.autoDownloadPresets, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+	NSDictionary *baseline = objc_getAssociatedObject(self, &TGAutoDownloadBaselineKey);
+
+	NSDictionary *medium = self.autoDownloadPresets[@"medium"];
+	NSDictionary *high = self.autoDownloadPresets[@"high"];
+	NSString *cellularDetail = @"Off";
+	NSString *wifiDetail = @"Off";
+	if ([medium isKindOfClass:NSDictionary.class] &&
+		[medium[@"enabled"] boolValue])
+		cellularDetail = TGBytes([medium[@"maxPhotoSize"] longLongValue]);
+	if ([high isKindOfClass:NSDictionary.class] &&
+		[high[@"enabled"] boolValue])
+		wifiDetail = TGBytes([high[@"maxPhotoSize"] longLongValue]);
+
+	NSMutableArray *autosaveRows = [NSMutableArray array];
+	NSArray *scopes = @[
+		@[@"private", @"Private Chats"],
+		@[@"groups", @"Groups"],
+		@[@"channels", @"Channels"],
+	];
+	for (NSArray *pair in scopes){
+		NSString *scope = pair[0];
+		NSDictionary *scopeSettings = autosave[scope];
+		BOOL on = [scopeSettings[@"photos"] boolValue] ||
+				[scopeSettings[@"videos"] boolValue];
+		[autosaveRows addObject:TGTapRow(pair[1], on ? @"On" : @"Off", ^{
+			weakSelf.autosaveScope = scope;
+			[weakSelf openPage:TGSettingsPageAutosave];
+		})];
+	}
+
+	NSMutableArray *downloadRows = [NSMutableArray array];
+	[downloadRows addObject:TGTapRow(@"Using Cellular", cellularDetail, ^{
+		TGAutoDownloadConnectionViewController *page =
+				[[TGAutoDownloadConnectionViewController alloc] init];
+		page.title = @"Using Cellular";
+		page.network = @"mobile";
+		page.presetKey = @"medium";
+		page.preset = weakSelf.autoDownloadPresets[@"medium"];
+		__weak TGAutoDownloadConnectionViewController *weakPage = page;
+		page.onChanged = ^{
+			// The row above and a reopen read autoDownloadPresets, so the
+			// edited copy has to go back into it.
+			TGAutoDownloadConnectionViewController *me = weakPage;
+			NSMutableDictionary *presets =
+					[weakSelf.autoDownloadPresets mutableCopy] ?:
+					[NSMutableDictionary dictionary];
+			if (me.preset)
+				presets[me.presetKey] = me.preset;
+			weakSelf.autoDownloadPresets = presets;
+			weakSelf.autoDownloadChanged = YES;
+			[weakSelf rebuild];
+		};
+		page.hidesBottomBarWhenPushed = YES;
+		[weakSelf.navigationController pushViewController:page animated:YES];
+	})];
+	[downloadRows addObject:TGTapRow(@"Using Wi-Fi", wifiDetail, ^{
+		TGAutoDownloadConnectionViewController *page =
+				[[TGAutoDownloadConnectionViewController alloc] init];
+		page.title = @"Using Wi-Fi";
+		page.network = @"wifi";
+		page.presetKey = @"high";
+		page.preset = weakSelf.autoDownloadPresets[@"high"];
+		__weak TGAutoDownloadConnectionViewController *weakPage = page;
+		page.onChanged = ^{
+			TGAutoDownloadConnectionViewController *me = weakPage;
+			NSMutableDictionary *presets =
+					[weakSelf.autoDownloadPresets mutableCopy] ?:
+					[NSMutableDictionary dictionary];
+			if (me.preset)
+				presets[me.presetKey] = me.preset;
+			weakSelf.autoDownloadPresets = presets;
+			weakSelf.autoDownloadChanged = YES;
+			[weakSelf rebuild];
+		};
+		page.hidesBottomBarWhenPushed = YES;
+		[weakSelf.navigationController pushViewController:page animated:YES];
+	})];
+	if (weakSelf.autoDownloadChanged)
+		[downloadRows addObject:TGActionRow(@"Reset", ^{
+			NSDictionary *mobile = (baseline ?: weakSelf.autoDownloadPresets)[@"medium"];
+			NSDictionary *wifi = (baseline ?: weakSelf.autoDownloadPresets)[@"high"];
+			[[TGClient shared] applyAutoDownloadPreset:mobile forNetwork:@"mobile"
+											completion:^(BOOL ok){
+				[[TGClient shared] applyAutoDownloadPreset:wifi forNetwork:@"wifi"
+												completion:^(BOOL ok2){
+					if (ok && ok2 && baseline)
+						weakSelf.autoDownloadPresets = baseline;
+					weakSelf.autoDownloadChanged = !(ok && ok2);
+					[weakSelf toast:(ok && ok2 ? @"Done" : @"An error occurred.")];
+					[weakSelf rebuild];
+				}];
+			}];
+		})];
+	else
+		[downloadRows addObject:TGRow(TGKindPlain, @"Reset")];
 
 	return @[
-		TGSection(@"STORAGE", nil, @[
-			TGIconTapOpenRow(@"Storage Usage", nil,
+		TGSection(nil, nil, @[
+			TGIconTapOpenRow(@"Cache", self.rootCacheLoaded
+					? TGBytes(self.rootCacheBytes) : nil,
 					@"data", TGIconTileGreen(), ^{
 				TGStorageViewController *storage = [[TGStorageViewController alloc] init];
 				storage.hidesBottomBarWhenPushed = YES;
 				[weakSelf.navigationController pushViewController:storage animated:YES];
 			}),
-			TGIconTapOpenRow(@"Downloads", nil,
-					@"archive", TGIconTileSky(), ^{
-				[weakSelf openPage:TGSettingsPageDownloads];
-			}),
-			TGIconTapRow(@"My Sent Files", nil,
-					@"folder", TGIconTileCyan(), ^{
-				[weakSelf showSentFilesSheet];
-			}),
-			TGIconTapOpenRow(@"File Tools", @"Generate, upload, read back",
-					@"data", TGIconTileSlate(), ^{
-				TGDevFileToolsViewController *tools = [[TGDevFileToolsViewController alloc] init];
-				tools.hidesBottomBarWhenPushed = YES;
-				[weakSelf.navigationController pushViewController:tools animated:YES];
+			TGIconTapOpenRow(@"Data Usage",
+					TGBytes(weakSelf.networkReceived + weakSelf.networkSent),
+					@"notifications", TGIconTileAzure(), ^{
+				TGDataUsageViewController *usage = [[TGDataUsageViewController alloc] init];
+				usage.hidesBottomBarWhenPushed = YES;
+				[weakSelf.navigationController pushViewController:usage animated:YES];
 			}),
 		]),
 
-		TGSection(@"DATA USAGE",
-				  @"The counters cover this launch. TDLib resets them when it "
-				  @"reopens the connection.", @[
-			TGIconTapOpenRow(@"Network", @"Type, state, usage, graphs",
-					@"data", TGIconTileAzure(), ^{
-				TGNetworkViewController *network = [[TGNetworkViewController alloc] init];
-				network.hidesBottomBarWhenPushed = YES;
-				[weakSelf.navigationController pushViewController:network animated:YES];
-			}),
-			TGIconTapRow(@"Network Usage",
-					[NSString stringWithFormat:@"%@ in, %@ out",
-							TGBytes(weakSelf.networkReceived), TGBytes(weakSelf.networkSent)],
-					@"notifications", TGIconTileAmber(), ^{
-				[TGAlertSheet showConfirm:@"Reset the counters?"
-									title:@"Network Usage"
-								   action:@"Reset"
-							  destructive:NO
-								   inView:weakSelf.view
-								onConfirm:^{
-					[[TGClient shared] resetNetworkStats];
-					weakSelf.networkSent = 0;
-					weakSelf.networkReceived = 0;
-					[weakSelf rebuild];
-				}];
-			}),
-		]),
+		TGSection(nil, nil, downloadRows),
 
-		TGSection(@"AUTOMATIC MEDIA DOWNLOAD",
-				  @"Off over mobile by default: this radio is slow and the "
-				  @"cache lives on a small disk.", @[
-			TGTapRow(@"Presets", [weakSelf autoDownloadPresetSummary], ^{
-				[weakSelf chooseAutoDownloadPreset];
-			}),
-			TGSwitchRow(@"Over Mobile Data", mobile, ^(BOOL on){
-				[[TGClient shared] setAutoDownloadOverMobile:on
-														wifi:[[TGClient shared] autoDownloadOverWifi]];
-				[weakSelf rebuild];
-			}),
-			TGSwitchRow(@"Over Wi-Fi", wifi, ^(BOOL on){
-				[[TGClient shared] setAutoDownloadOverMobile:[[TGClient shared] autoDownloadOverMobile]
-														wifi:on];
-				[weakSelf rebuild];
-			}),
-		]),
+		TGSection(@"Save to Gallery",
+			@"Automatically save all new media from private chats to your Photos app.",
+			autosaveRows),
 
-		TGSection(@"GALLERY AUTOSAVE",
-				  @"Telegram autosaves photos and videos it receives. Documents "
-				  @"are not autosaved by TDLib.", @[
-			TGOpenRow(@"Autosave", autosaveDetail, ^{
-				[weakSelf openPage:TGSettingsPageAutosave];
-			}),
-		]),
-
-		TGSection(@"ARCHIVE", @"New chats from non-contacts can be archived "
-				  @"and muted instead of ringing in. A new message can drag "
-				  @"an archived chat back to the main list - the last two "
-				  @"switches decide whether it does.", @[
-			TGSwitchRow(@"Archive New Chats From Non-Contacts",
-					[archiveSettings[@"archive_and_mute_new_chats_from_unknown_users"] boolValue],
-					^(BOOL on){
-				NSDictionary *old = [TGClient shared].archiveSettings ?: @{};
-				[[TGClient shared] setArchiveSettingsArchiveAndMute:on
-											keepUnmutedArchived:[old[@"keep_unmuted_chats_archived"] boolValue]
-									  keepFolderChatsArchived:[old[@"keep_chats_from_folders_archived"] boolValue]];
-				[weakSelf rebuild];
-			}),
-			TGSwitchRow(@"Keep Unmuted Chats Archived",
-					[archiveSettings[@"keep_unmuted_chats_archived"] boolValue],
-					^(BOOL on){
-				NSDictionary *old = [TGClient shared].archiveSettings ?: @{};
-				[[TGClient shared] setArchiveSettingsArchiveAndMute:[old[@"archive_and_mute_new_chats_from_unknown_users"] boolValue]
-											keepUnmutedArchived:on
-									  keepFolderChatsArchived:[old[@"keep_chats_from_folders_archived"] boolValue]];
-				[weakSelf rebuild];
-			}),
-			TGSwitchRow(@"Keep Folder Chats Archived",
-					[archiveSettings[@"keep_chats_from_folders_archived"] boolValue],
-					^(BOOL on){
-				NSDictionary *old = [TGClient shared].archiveSettings ?: @{};
-				[[TGClient shared] setArchiveSettingsArchiveAndMute:[old[@"archive_and_mute_new_chats_from_unknown_users"] boolValue]
-											keepUnmutedArchived:[old[@"keep_unmuted_chats_archived"] boolValue]
-									  keepFolderChatsArchived:on];
-				[weakSelf rebuild];
-			}),
-		]),
-
-		TGSection(@"OTHER",
-				  @"These rows remove data from this account or this device "
-				  @"only; nothing here touches another session's history.",
-				  @[
-			TGRedRow(@"Clear All Drafts", ^{
-				[TGAlertSheet showConfirm:@"Every chat's draft is dropped, the ones "
-										  @"typed here and the ones typed on other devices."
-									title:@"Clear All Drafts"
-								   action:@"Clear"
-							  destructive:YES
-								   inView:weakSelf.view
-								onConfirm:^{
-					[[TGClient shared] clearAllDraftMessages];
-					[weakSelf toast:@"Drafts cleared."];
-				}];
-			}),
-			TGRedRow(@"Clear Call History", ^{
-				[TGAlertSheet showConfirm:@"Every call in the account's history is "
-										  @"gone, on every device."
-									title:@"Call History"
-								   action:@"Clear"
-							  destructive:YES
-								   inView:weakSelf.view
-								onConfirm:^{
-					[[TGClient shared] clearAllCallMessages];
-					[weakSelf toast:@"Call history cleared."];
-				}];
-			}),
-			TGRedRow(@"Clear Local Database", ^{
-				[TGAlertSheet showConfirm:@"Cached chats and messages are dropped "
-										  @"and fetched again. The session stays."
-									title:@"Clear Local Database"
-								   action:@"Clear"
-							  destructive:YES
-								   inView:weakSelf.view
-								onConfirm:^{
-					[[TGClient shared] clearLocalDatabase];
-				}];
+		TGSection(@"CONNECTION", nil, @[
+			TGIconTapOpenRow(@"Proxy", weakSelf.rootProxyDetail ?: @"Disabled",
+					@"data", TGIconTileGrey(), ^{
+				[weakSelf openPage:TGSettingsPageProxy];
 			}),
 		]),
 	];
@@ -191,55 +348,28 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 
 - (NSArray *)powerSavingSections {
 	__weak typeof(self) weakSelf = self;
-	TGClient *client = [TGClient shared];
-	NSString *footer = @"Each of these redraws the screen while nothing is being touched, "
-			@"which is where an old phone spends its battery. Turning one off leaves "
-			@"the still picture.";
-
 	return @[
-		TGSection(@"Resource-intensive processes", footer, @[
-			TGSwitchInfoRow(@"Sticker Animation",
-					@"Loop animated stickers in chats instead of showing the "
-					@"first frame.",
+		TGSection(@"OPTIONS",
+			@"Turn off Power Saving Mode to change these settings.",
+			@[
+			TGSwitchInfoRow(@"Loop Animated Stickers",
+					@"Animated stickers will play continuously in chats.",
 					@"sticker", TGIconTileGreen(),
 					[TGCapabilities animatedStickersWanted], ^(BOOL on){
 				[TGCapabilities setAnimatedStickersWanted:on];
 				[weakSelf rebuild];
 			}),
-			TGSwitchInfoRow(@"Chat Wallpaper",
-					@"Draw the wallpaper behind messages. A plain background "
-					@"scrolls faster.",
-					@"chat", TGIconTileSky(),
-					[TGCapabilities wallpaperWanted], ^(BOOL on){
-				[TGCapabilities setWallpaperWanted:on];
-				[weakSelf rebuild];
-			}),
 			TGSwitchInfoRow(@"Autoplay GIFs",
-					@"Loop GIFs silently in the chat. Off, a GIF plays when "
-					@"tapped.",
+					@"Autoplay and loop GIFs in chats and in the keyboard.",
 					@"video", TGIconTileOrchid(),
 					[TGCapabilities gifAutoplayWanted], ^(BOOL on){
 				[TGCapabilities setGifAutoplayWanted:on];
 				[weakSelf rebuild];
 			}),
-		]),
-
-		TGSection(@"Media preloading",
-				  @"Downloading nothing until it is asked for is the largest "
-				  @"saving of the three - it costs radio time as well as CPU.", @[
-			TGSwitchInfoRow(@"Over Mobile Data",
-					@"Start downloading photos and files before you open them, "
-					@"on the cellular radio.",
-					@"data", TGIconTileAmber(),
-					[client autoDownloadOverMobile], ^(BOOL on){
-				[client setAutoDownloadOverMobile:on wifi:[client autoDownloadOverWifi]];
-				[weakSelf rebuild];
-			}),
-			TGSwitchInfoRow(@"Over Wi-Fi",
-					@"The same, on Wi-Fi.",
-					@"data", TGIconTileCyan(),
-					[client autoDownloadOverWifi], ^(BOOL on){
-				[client setAutoDownloadOverMobile:[client autoDownloadOverMobile] wifi:on];
+			TGSwitchInfoRow(@"Chat Wallpaper", nil,
+					@"chat", TGIconTileSky(),
+					[TGCapabilities wallpaperWanted], ^(BOOL on){
+				[TGCapabilities setWallpaperWanted:on];
 				[weakSelf rebuild];
 			}),
 		]),
@@ -251,11 +381,33 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 	NSArray *folders = [TGClient shared].folders;
 
 	NSMutableArray *rows = [NSMutableArray array];
+	// Official puts Create New Folder first, under the Folders header.
+	[rows addObject:TGActionRow(@"Create New Folder", ^{
+		[TGAlertSheet showInput:@"New Folder"
+						message:nil
+					placeholder:@"Name"
+						   text:nil
+						 action:@"Create"
+						 inView:weakSelf.view
+					   onSubmit:^(NSString *name){
+			[[TGClient shared] createFolderNamed:name icon:nil withChats:@[]
+									  completion:^(NSInteger folderId){
+				if (!folderId){
+					[weakSelf toast:@"An error occurred."];
+					return;
+				}
+				[weakSelf toast:@"Done"];
+			}];
+		}];
+	})];
 	for (NSDictionary *folder in folders){
 		NSString *title = folder[@"title"];
 		if (!title.length)
 			continue;
-		[rows addObject:TGTapRow(title, nil, ^{
+		NSNumber *count = weakSelf.folderChatCounts[@([folder[@"id"] integerValue])];
+		// Official shows the raw count and leaves a zero folder blank.
+		NSString *detail = count ? (count.integerValue ? count.stringValue : @"") : nil;
+		[rows addObject:TGIconTapOpenRow(title, detail, @"folder", TGIconTileCyan(), ^{
 			[weakSelf runFolderActionFor:folder];
 		})];
 	}
@@ -268,37 +420,12 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 		weakSelf.folderTagsEnabled = on;
 		[[TGClient shared] toggleFolderTags:on];
 	})];
-	[rows addObject:TGActionRow(@"Add Folder by Link", ^{
+	[rows addObject:TGActionRow(@"Add Folder", ^{
 		[weakSelf addFolderByInviteLink];
-	})];
-	[rows addObject:TGActionRow(@"Create New Folder", ^{
-		[TGAlertSheet showInput:@"New Folder"
-						message:@"Folders appear as a strip above the chat list."
-					placeholder:@"Name"
-						   text:nil
-						 action:@"Create"
-						 inView:weakSelf.view
-					   onSubmit:^(NSString *name){
-			[[TGClient shared] createFolderNamed:name icon:nil withChats:@[]
-									  completion:^(NSInteger folderId){
-				if (!folderId){
-					[weakSelf toast:@"Telegram refused that name."];
-					return;
-				}
-				[weakSelf toast:[NSString stringWithFormat:
-						@"%@ created. Tap it to choose its chats.", name]];
-			}];
-		}];
 	})];
 
 	NSMutableArray *sections = [NSMutableArray array];
-	[sections addObject:TGSection(folders.count ? @"Folders" : nil,
-			folders.count
-					? @"Tap a folder to rename it, choose its chats, or delete it."
-					: @"This account has no folders yet. A folder is a filter "
-					  @"over the chat list, not a copy of it: a chat in a "
-					  @"folder is still in All Chats.",
-			rows)];
+	[sections addObject:TGSection(@"Folders", nil, rows)];
 
 	NSMutableArray *suggested = [NSMutableArray array];
 	for (NSDictionary *entry in self.recommendedFolders){
@@ -308,27 +435,25 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 		[suggested addObject:TGTapRow(title, entry[@"description"], ^{
 			[[TGClient shared] createRecommendedFolder:entry[@"folder"]
 											completion:^(NSInteger folderId){
-				[weakSelf toast:folderId ? [NSString stringWithFormat:@"%@ added.", title]
-										 : @"Telegram refused that folder."];
+				(void)title;
+				[weakSelf toast:folderId ? @"Done" : @"An error occurred."];
 			}];
 		})];
 	}
 	if (suggested.count)
-		[sections addObject:TGSection(@"Recommended",
-				@"Telegram's own, ready made. Adding one does not move any chat.",
-				suggested)];
+		[sections addObject:TGSection(@"RECOMMENDED FOLDERS", nil, suggested)];
 
 	return sections;
 }
 
 - (void)runFolderActionFor:(NSDictionary *)folder {
 	NSInteger folderId = [folder[@"id"] integerValue];
-	NSString *title = folder[@"title"] ?: @"Folder";
+	NSString *title = folder[@"title"] ?: @"Folders";
 	if (!folderId)
 		return;
 
-	NSArray *choices = @[@"Rename", @"Add a Chat", @"Remove a Chat",
-						 @"Invite Links...", @"Suggested New Chats",
+	NSArray *choices = @[@"Edit Folder", @"Add to Folder", @"Remove from Folder",
+						 @"Share Folder", @"New Chats",
 						 @"Default Icon", @"Chat Count", @"Delete Folder"];
 	__weak typeof(self) weakSelf = self;
 	[TGAlertSheet showChoices:choices
@@ -338,13 +463,13 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 						 onChoice:^(NSInteger index){
 		TGSettingsViewController *me = weakSelf;
 		if (index == 0){
-			[TGAlertSheet showInput:@"Rename Folder" message:nil
+			[TGAlertSheet showInput:@"Edit Folder" message:nil
 						placeholder:@"Name" text:title action:@"Save"
 							 inView:me.view onSubmit:^(NSString *name){
 				[[TGClient shared] editFolder:folderId name:name chats:nil
 								   completion:^(BOOL ok){
 					if (!ok)
-						[me toast:@"Telegram refused that name."];
+						[me toast:@"An error occurred."];
 				}];
 			}];
 		} else if (index == 1){
@@ -376,26 +501,19 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 			return;
 		void (^remove)(NSArray *) = ^(NSArray *leave){
 			[[TGClient shared] deleteFolder:folderId leavingChats:leave];
-			[me toast:[NSString stringWithFormat:@"%@ deleted.", title]];
+			[me toast:@"Done"];
 		};
 		if (!suggested.count){
-			[TGAlertSheet showConfirm:[NSString stringWithFormat:
-							@"%@ goes away. The chats in it stay where they are.", title]
+			[TGAlertSheet showConfirm:nil
 								title:@"Delete Folder"
 							   action:@"Delete" destructive:YES inView:me.view
 							onConfirm:^{ remove(@[]); }];
 			return;
 		}
-		NSMutableArray *names = [NSMutableArray array];
-		for (NSNumber *chatId in suggested)
-			[names addObject:TGChatNameForId(chatId)];
-		[TGAlertSheet showChoices:@[@"Delete and Keep Chats",
-									[NSString stringWithFormat:@"Delete and Leave %lu",
-											(unsigned long)names.count]]
+		[TGAlertSheet showChoices:@[@"Remove Folder",
+									[NSString stringWithFormat:@"Remove Folder and Chats"]]
 							title:title
-				 message:[NSString stringWithFormat:
-						 @"Also in this folder: %@. They can be left with it.",
-						 [names componentsJoinedByString:@", "]]
+						 message:nil
 		 destructiveIndex:1 inView:me.view onChoice:^(NSInteger index){
 			remove(index == 0 ? @[] : suggested);
 		}];
@@ -407,14 +525,14 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 	[[TGClient shared] folderDetails:[folder[@"id"] integerValue]
 							 completion:^(NSDictionary *current){
 		if (!current){
-			[weakSelf toast:@"That folder is gone."];
+			[weakSelf toast:@"An error occurred."];
 			return;
 		}
 		[[TGClient shared] defaultIconNameForFolder:current
 										 completion:^(NSString *name){
-			[TGAlertSheet showMessage:[NSString stringWithFormat:
-					@"Telegram would draw %@ for this folder.", name]
-								title:@"Default Icon" inView:weakSelf.view];
+			(void)name;
+			[TGAlertSheet showMessage:@"Done"
+								title:@"Default" inView:weakSelf.view];
 		}];
 	}];
 }
@@ -424,13 +542,12 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 	[[TGClient shared] folderDetails:[folder[@"id"] integerValue]
 							 completion:^(NSDictionary *current){
 		if (!current){
-			[weakSelf toast:@"That folder is gone."];
+			[weakSelf toast:@"An error occurred."];
 			return;
 		}
 		[[TGClient shared] chatCountForFolder:current completion:^(NSInteger count){
-			[TGAlertSheet showMessage:[NSString stringWithFormat:
-					@"About %ld chats match this folder right now.", (long)count]
-								title:@"Chat Count" inView:weakSelf.view];
+			[TGAlertSheet showMessage:[NSString stringWithFormat:@"%ld", (long)count]
+								title:@"Chats" inView:weakSelf.view];
 		}];
 	}];
 }
@@ -442,22 +559,16 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 		if (!me)
 			return;
 		if (!chatIds.count){
-			[TGAlertSheet showMessage:@"Its owner has added nothing new."
+			[TGAlertSheet showMessage:@"Empty"
 								title:title inView:me.view];
 			return;
 		}
-		NSMutableArray *names = [NSMutableArray array];
-		for (NSNumber *chatId in chatIds)
-			[names addObject:TGChatNameForId(chatId)];
-		[TGAlertSheet showConfirm:[NSString stringWithFormat:
-						@"%@ added these chats to the shared folder: %@. Add them?",
-						title, [names componentsJoinedByString:@", "]]
-							title:@"Suggested New Chats" action:@"Add"
+		[TGAlertSheet showConfirm:nil
+							title:@"New Chats" action:@"Add"
 					  destructive:NO inView:me.view onConfirm:^{
 			[[TGClient shared] processNewChats:chatIds forFolder:folderId
 									completion:^(BOOL ok){
-				[me toast:(ok ? @"Chats added to the folder."
-							  : @"Telegram refused that change.")];
+				[me toast:(ok ? @"Done" : @"An error occurred.")];
 			}];
 		}];
 	}];
@@ -469,7 +580,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 		TGSettingsViewController *me = weakSelf;
 		if (!me)
 			return;
-		NSMutableArray *rows = [NSMutableArray arrayWithObject:@"Create New Link"];
+		NSMutableArray *rows = [NSMutableArray arrayWithObject:@"Create a New Link"];
 		for (NSDictionary *link in links)
 			[rows addObject:[NSString stringWithFormat:@"%@%@",
 					[link[@"name"] length] ? [link[@"name"] stringByAppendingString:@" · "] : @"",
@@ -493,9 +604,8 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 											chatIds:chatIds
 										 completion:^(NSString *link){
 			[TGAlertSheet showMessage:(link.length ? link
-					: @"Telegram refused a link - a folder link needs only "
-					  @"pinned and included chats.")
-								title:@"Folder Invite Link" inView:weakSelf.view];
+					: @"An error occurred.")
+								title:@"Share Folder" inView:weakSelf.view];
 		}];
 	}];
 }
@@ -511,11 +621,11 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 						 onChoice:^(NSInteger index){
 		if (index == 0){
 			[UIPasteboard generalPasteboard].string = url;
-			[weakSelf toast:@"Copied."];
+			[weakSelf toast:@"Link copied."];
 			return;
 		}
 		if (index == 1){
-			[TGAlertSheet showInput:@"Rename Folder Link" message:nil
+			[TGAlertSheet showInput:@"Link" message:nil
 						placeholder:@"Name" text:link[@"name"] ?: @""
 							 action:@"Save" inView:weakSelf.view
 						 onSubmit:^(NSString *name){
@@ -523,20 +633,20 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 						completion:^(NSArray *chatIds){
 					[[TGClient shared] editInviteLinkForFolder:folderId link:url
 							name:name chatIds:chatIds completion:^(BOOL ok){
-						[weakSelf toast:(ok ? @"Link renamed."
-											: @"Telegram refused the edit.")];
+						[weakSelf toast:(ok ? @"Done"
+											: @"An error occurred.")];
 					}];
 				}];
 			}];
 			return;
 		}
-		[TGAlertSheet showConfirm:@"The link stops working for everyone."
+		[TGAlertSheet showConfirm:nil
 							title:title action:@"Delete" destructive:YES
 						   inView:weakSelf.view onConfirm:^{
 			[[TGClient shared] deleteInviteLinkForFolder:folderId link:url
 					completion:^(BOOL ok){
-				[weakSelf toast:(ok ? @"Link deleted."
-									: @"Telegram refused the delete.")];
+				[weakSelf toast:(ok ? @"Done"
+									: @"An error occurred.")];
 			}];
 		}];
 	}];
@@ -544,7 +654,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 
 - (void)addFolderByInviteLink {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"Add Folder by Link"
+	[TGAlertSheet showInput:@"Add Folder"
 					message:nil placeholder:@"t.me/addlist/…"
 						 text:[UIPasteboard generalPasteboard].string
 					 action:@"Check" inView:self.view
@@ -556,19 +666,16 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 			if (!me)
 				return;
 			if (!folder){
-				[TGAlertSheet showMessage:@"That folder link answers nothing."
+				[TGAlertSheet showMessage:@"An error occurred."
 									title:@"Add Folder" inView:me.view];
 				return;
 			}
 			NSArray *missing = folder[@"missing"] ?: @[];
-			NSString *say = [NSString stringWithFormat:@"%@ · %lu chats to add",
-					folder[@"name"] ?: @"Shared folder",
-					(unsigned long)missing.count];
-			[TGAlertSheet showConfirm:say title:@"Add Folder" action:@"Add"
+			[TGAlertSheet showConfirm:nil title:@"Add Folder" action:@"Add"
 						  destructive:NO inView:me.view onConfirm:^{
 				[[TGClient shared] addFolderByInviteLink:url chatIds:missing
 											 completion:^(BOOL ok){
-					[me toast:(ok ? @"Folder added." : @"Telegram refused the folder.")];
+					[me toast:(ok ? @"Done" : @"An error occurred.")];
 				}];
 			}];
 		}];
@@ -582,20 +689,21 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 		[[TGClient shared] folderDetails:folderId completion:^(NSDictionary *current){
 			TGSettingsViewController *me = weakSelf;
 			if (!current){
-				[me toast:@"That folder is gone."];
+				[me toast:@"An error occurred."];
 				return;
 			}
 			NSArray *included = current[@"included_chat_ids"] ?: @[];
 			if ([included containsObject:@(chatId)]){
-				[me toast:[NSString stringWithFormat:@"Already in %@.", title]];
+				(void)title;
+				[me toast:@"Done"];
 				return;
 			}
 			[[TGClient shared] editFolder:folderId
 									 name:nil
 									chats:[included arrayByAddingObject:@(chatId)]
 							   completion:^(BOOL ok){
-				[me toast:ok ? [NSString stringWithFormat:@"Added to %@.", title]
-							 : @"Telegram refused that change."];
+				(void)title;
+				[me toast:ok ? @"Done" : @"An error occurred."];
 			}];
 		}];
 	};
@@ -609,7 +717,8 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 		TGSettingsViewController *me = weakSelf;
 		NSArray *included = current[@"included_chat_ids"] ?: @[];
 		if (!included.count){
-			[me toast:[NSString stringWithFormat:@"%@ holds no chats yet.", title]];
+			(void)title;
+			[me toast:@"Empty"];
 			return;
 		}
 
@@ -617,7 +726,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 		for (NSNumber *chatId in included)
 			[names addObject:TGChatNameForId(chatId)];
 		[TGAlertSheet showChoices:names
-							title:[NSString stringWithFormat:@"Remove from %@", title]
+							title:title
 				 destructiveIndex:-1
 						   inView:me.view
 						 onChoice:^(NSInteger index){
@@ -625,8 +734,8 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 			[left removeObjectAtIndex:(NSUInteger)index];
 			[[TGClient shared] editFolder:folderId name:nil chats:left
 							   completion:^(BOOL ok){
-				[me toast:ok ? [NSString stringWithFormat:@"Removed from %@.", title]
-							 : @"Telegram refused that change."];
+				(void)title;
+				[me toast:ok ? @"Done" : @"An error occurred."];
 			}];
 		}];
 	}];
@@ -638,8 +747,10 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 	NSMutableArray *rows = [NSMutableArray array];
 	for (NSDictionary *download in self.downloads){
 		long long size = [download[@"size"] longLongValue];
-		NSString *state = [download[@"done"] boolValue] ? @"done"
-				: ([download[@"paused"] boolValue] ? @"paused" : @"downloading");
+		// The pack has no "Paused"; its "Pause" (Пауза) reads as the state.
+		NSString *state = [download[@"done"] boolValue] ? TGLocalized(@"Done")
+				: ([download[@"paused"] boolValue] ? TGLocalized(@"Pause")
+												   : TGLocalized(@"Downloading"));
 		[rows addObject:TGTapRow(download[@"name"],
 				[NSString stringWithFormat:@"%@ - %@", TGBytes(size), state], ^{
 			[weakSelf runDownloadActionFor:download];
@@ -647,13 +758,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 	}
 
 	NSMutableArray *sections = [NSMutableArray array];
-	[sections addObject:TGSection(self.downloads.count ? @"Files" : nil,
-			self.downloads.count
-					? @"Tap one to pause it, take it out of the list, or free "
-					  @"the disk it is using."
-					: @"Nothing has been downloaded yet. A picture or a file "
-					  @"opened in a chat appears here.",
-			rows)];
+	[sections addObject:TGSection(self.downloads.count ? @"Files" : nil, nil, rows)];
 
 	if (self.downloads.count)
 		[sections addObject:TGSection(nil, nil, @[
@@ -662,11 +767,9 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 						weakSelf.activeDownloads > 0];
 				[weakSelf loadForPage];
 			}),
-			TGRedRow(@"Clear List and Free Disk", ^{
-				[TGAlertSheet showConfirm:@"Every downloaded file is removed "
-										  @"from this device. They can be "
-										  @"fetched again from the chat."
-									title:@"Clear Downloads"
+			TGRedRow(@"Clear Download List", ^{
+				[TGAlertSheet showConfirm:nil
+									title:@"Clear Download List"
 								   action:@"Clear"
 							  destructive:YES
 								   inView:weakSelf.view
@@ -690,8 +793,8 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 	if (!done)
 		[choices addObject:paused ? @"Resume" : @"Pause"];
 	[choices addObject:@"File Info"];
-	[choices addObject:@"Take Out of the List"];
-	[choices addObject:@"Delete the File"];
+	[choices addObject:@"Remove"];
+	[choices addObject:@"Delete"];
 
 	[TGAlertSheet showChoices:choices
 						title:download[@"name"]
@@ -709,7 +812,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 			dispatch_async(dispatch_get_main_queue(), ^{
 				[TGFileInfoViewController presentForFile:fileId fromView:weakSelf.view];
 			});
-		} else if ([choice isEqualToString:@"Take Out of the List"]){
+		} else if ([choice isEqualToString:@"Remove"]){
 			[[TGClient shared] removeFileFromDownloads:fileId deleteFromCache:NO];
 			[weakSelf loadForPage];
 		} else {
@@ -724,28 +827,67 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 	BOOL anyEnabled = NO;
 	for (NSDictionary *proxy in self.proxies)
 		anyEnabled = anyEnabled || [proxy[@"enabled"] boolValue];
+	self.navigationItem.rightBarButtonItem = self.proxies.count
+			? self.editButtonItem : nil;
 
-	NSMutableArray *rows = [NSMutableArray array];
-	[rows addObject:TGCheckRow(@"No proxy", nil, !anyEnabled, ^{
-		[[TGClient shared] disableProxy];
-		[weakSelf loadForPage];
-	})];
-	for (NSDictionary *proxy in self.proxies){
-		NSString *name = [NSString stringWithFormat:@"%@:%@",
-				proxy[@"server"] ?: @"?", proxy[@"port"] ?: @0];
-		[rows addObject:TGCheckRow(name, proxy[@"kind"],
-				[proxy[@"enabled"] boolValue], ^{
-			[weakSelf runProxyActionFor:proxy];
-		})];
+	// The ping writes back into the row, so the list needs mutable records.
+	// It is one copy per open, and only the proxy page reaches this method.
+	if (self.proxies.count &&
+			![self.proxies[0] isKindOfClass:NSMutableDictionary.class]){
+		NSMutableArray *mutable = [NSMutableArray arrayWithCapacity:self.proxies.count];
+		for (NSDictionary *proxy in self.proxies)
+			[mutable addObject:[proxy mutableCopy]];
+		self.proxies = mutable;
 	}
 
+	NSMutableArray *rows = [NSMutableArray array];
+	[rows addObject:TGSwitchRow(@"Use Proxy", anyEnabled, ^(BOOL on){
+		if (!on){
+			[[TGClient shared] disableProxy];
+			[weakSelf loadForPage];
+			return;
+		}
+		for (NSDictionary *proxy in weakSelf.proxies){
+			[[TGClient shared] enableProxy:[proxy[@"id"] integerValue]];
+			break;
+		}
+		[weakSelf loadForPage];
+	})];
+	for (NSMutableDictionary *proxy in self.proxies){
+		NSString *typeName = TGProxyTypeLabel(proxy[@"kind"]);
+		// One ping per proxy per open. Official's ProxyServersStatuses polls;
+		// this phone cannot afford that and the page only needs the answer
+		// that is on screen.
+		if (!proxy[@"pingState"]){
+			proxy[@"pingState"] = @"pending";
+			NSString *server = proxy[@"server"];
+			NSInteger port = [proxy[@"port"] integerValue];
+			NSString *kind = proxy[@"kind"];
+			[[TGClient shared] pingProxyAtServer:server port:port kind:kind
+										username:nil password:nil secret:nil
+									  completion:^(double seconds){
+				proxy[@"pingState"] = @"done";
+				proxy[@"ping"] = @(seconds);
+				if (weakSelf.page == TGSettingsPageProxy)
+					[weakSelf rebuild];
+			}];
+		}
+		BOOL enabled = [proxy[@"enabled"] boolValue];
+		BOOL pending = [proxy[@"pingState"] isEqualToString:@"pending"];
+		double ping = [proxy[@"ping"] doubleValue];
+		BOOL connected = [TGClient shared].connectionState == TGConnectionStateReady;
+		NSString *status = TGProxyRowStatusText(enabled,
+				enabled ? (pending || !connected) : pending, ping, typeName);
+		NSString *name = [NSString stringWithFormat:@"%@:%@",
+				proxy[@"server"] ?: @"?", proxy[@"port"] ?: @0];
+		[rows addObject:TGTapRow(name, status, ^{
+			[weakSelf editProxyAddress:proxy named:name];
+		})];
+	}
+	[rows addObject:TGActionRow(@"Add Proxy", ^{ [weakSelf addProxyByAsking]; })];
+
 	return @[
-		TGSection(@"Connection",
-				  @"A proxy is TDLib's own, not the system's: it applies to "
-				  @"this app and to nothing else on the phone.", rows),
-		TGSection(nil, nil, @[
-			TGActionRow(@"Add Proxy", ^{ [weakSelf addProxyByAsking]; }),
-		]),
+		TGSection(@"Saved Proxies", nil, rows),
 #if TG_DEV
 		TGSection(@"WEB PROXY CARRIER",
 				  @"A web proxy runs its page in the client. TDLib asks for "
@@ -757,11 +899,28 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 	];
 }
 
+- (BOOL)canEditProxyRowAtIndexPath:(NSIndexPath *)indexPath {
+	return TGSettingsProxyRowEditable(indexPath.row, (NSInteger)self.proxies.count);
+}
+
+- (void)commitProxyEditingStyle:(UITableViewCellEditingStyle)editingStyle
+			   forRowAtIndexPath:(NSIndexPath *)indexPath
+					 inTableView:(UITableView *)tableView {
+	if (editingStyle != UITableViewCellEditingStyleDelete)
+		return;
+	// Row 0 is the Use Proxy switch and the last row is Add Proxy; only the
+	// saved proxies between them can be deleted.
+	if (!TGSettingsProxyRowEditable(indexPath.row, (NSInteger)self.proxies.count))
+		return;
+	NSInteger index = indexPath.row - 1;
+	[[TGClient shared] removeProxy:[self.proxies[(NSUInteger)index][@"id"] integerValue]];
+	[self loadForPage];
+}
+
 - (void)addProxyByAsking {
 	__weak typeof(self) weakSelf = self;
 	[TGAlertSheet showInput:@"Add Proxy"
-					message:@"A t.me/proxy or tg://proxy link, or host:port "
-							@"for a SOCKS5 server."
+					message:nil
 				placeholder:@"t.me/proxy?... or 1.2.3.4:1080"
 					   text:nil
 					 action:@"Add"
@@ -770,7 +929,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 		TGSettingsViewController *me = weakSelf;
 		void (^added)(NSInteger) = ^(NSInteger proxyId){
 			if (!proxyId){
-				[me toast:@"Telegram could not read that as a proxy."];
+				[me toast:@"An error occurred."];
 				return;
 			}
 			[me loadForPage];
@@ -779,14 +938,14 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 		if ([text rangeOfString:@"proxy"].location != NSNotFound &&
 			[text rangeOfString:@"?"].location != NSNotFound){
 			if (![[TGClient shared] addProxyFromLink:text completion:added])
-				[me toast:@"That link carries no server and port."];
+				[me toast:@"An error occurred."];
 			return;
 		}
 
 		NSArray *parts = [text componentsSeparatedByString:@":"];
 		NSInteger port = parts.count > 1 ? [parts[1] integerValue] : 0;
 		if (parts.count < 2 || port <= 0){
-			[me toast:@"A proxy needs a host and a port."];
+			[me toast:@"An error occurred."];
 			return;
 		}
 		[[TGClient shared] addProxyAtServer:parts[0] port:port kind:@"socks5"
@@ -801,8 +960,8 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 			proxy[@"server"] ?: @"?", proxy[@"port"] ?: @0];
 	__weak typeof(self) weakSelf = self;
 
-	[TGAlertSheet showChoices:@[@"Use This Proxy", @"Check It Works",
-								@"Change Address", @"Remove"]
+	[TGAlertSheet showChoices:@[@"Use Proxy", @"Proxy Details",
+								@"Proxy Details", @"Remove"]
 						title:name
 			 destructiveIndex:3
 					   inView:self.view
@@ -854,8 +1013,8 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 	NSString *kind = proxy[@"kind"];
 	__weak typeof(self) weakSelf = self;
 
-	[TGAlertSheet showInput:@"Change Address"
-					message:@"host:port. The kind of proxy stays as it is."
+	[TGAlertSheet showInput:@"Proxy Details"
+					message:nil
 				placeholder:@"1.2.3.4:1080"
 					   text:name
 					 action:@"Save"
@@ -865,7 +1024,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 		NSArray *parts = [text componentsSeparatedByString:@":"];
 		NSInteger port = parts.count > 1 ? [parts[1] integerValue] : 0;
 		if (parts.count < 2 || port <= 0){
-			[me toast:@"A proxy needs a host and a port."];
+			[me toast:@"An error occurred."];
 			return;
 		}
 		[[TGClient shared] editProxy:proxyId
@@ -876,7 +1035,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 							  enable:wasEnabled
 						  completion:^(BOOL ok){
 			if (!ok){
-				[me toast:@"Telegram refused that address."];
+				[me toast:@"An error occurred."];
 				return;
 			}
 			[me loadForPage];
@@ -893,7 +1052,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 		freed += [[files attributesOfItemAtPath:path error:nil] fileSize];
 		[files removeItemAtPath:path error:nil];
 	}
-	[self toast:[NSString stringWithFormat:@"Freed %@", TGBytes(freed)]];
+	[self toast:@"Done"];
 }
 
 /// Everything this account sent as a file, one sheet: name, size and the
@@ -904,7 +1063,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 		TGSettingsViewController *me = weakSelf;
 		if (!me) return;
 		if (!messages.count){
-			[weakSelf toast:@"No files sent yet."];
+			[weakSelf toast:@"Empty"];
 			return;
 		}
 		NSMutableArray *rows = [NSMutableArray array];
@@ -918,7 +1077,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 			[rows addObject:line];
 		}
 		[TGAlertSheet showChoices:rows
-							title:@"My Sent Files"
+							title:@"Files"
 				 destructiveIndex:-1
 						   inView:me.view
 						 onChoice:^(NSInteger index){
@@ -940,7 +1099,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 - (NSString *)autoDownloadPresetSummary {
 	NSDictionary *medium = self.autoDownloadPresets[@"medium"];
 	if (![medium isKindOfClass:NSDictionary.class])
-		return @"Reading...";
+		return @"Loading...";
 	return [NSString stringWithFormat:@"Medium: photos %@, videos %@",
 			TGBytes([medium[@"maxPhotoSize"] longLongValue]),
 			TGBytes([medium[@"maxVideoSize"] longLongValue])];
@@ -948,14 +1107,14 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 
 - (void)chooseAutoDownloadPreset {
 	if (!self.autoDownloadPresets){
-		[self toast:@"Telegram has not answered with the presets yet."];
+		[self toast:@"An error occurred."];
 		return;
 	}
 	__weak typeof(self) weakSelf = self;
 	NSArray *keys = @[@"low", @"medium", @"high"];
 	NSArray *names = @[@"Low (roaming)", @"Medium (mobile)", @"High (Wi-Fi)"];
 	[TGAlertSheet showChoices:names
-						title:@"Auto-Download Presets"
+						title:@"Auto-Download"
 			 destructiveIndex:-1
 					   inView:self.view
 					 onChoice:^(NSInteger index){
@@ -967,7 +1126,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 		[[TGClient shared] applyAutoDownloadPreset:preset forNetwork:network
 										completion:^(BOOL ok){
 			if (!ok){
-				[me toast:@"Telegram refused that preset."];
+				[me toast:@"An error occurred."];
 				return;
 			}
 			// The two switches read the app's own copy, so move whichever
@@ -980,7 +1139,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 				[[NSUserDefaults standardUserDefaults] setBool:enabled
 													   forKey:@"TGAutoDownloadWifi"];
 			[[NSUserDefaults standardUserDefaults] synchronize];
-			[me toast:[NSString stringWithFormat:@"%@ applied.", names[(NSUInteger)index]]];
+			[me toast:@"Done"];
 			[me rebuild];
 		}];
 	}];
@@ -989,8 +1148,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 - (NSArray *)autosaveSections {
 	__weak typeof(self) weakSelf = self;
 	if (!self.autosaveSettings){
-		return @[TGSection(nil,
-				@"Reading Telegram's autosave settings...", @[])];
+		return @[TGSection(nil, @"Loading...", @[])];
 	}
 
 	NSDictionary *settings = self.autosaveSettings;
@@ -1002,14 +1160,12 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 	];
 	for (NSArray *pair in scopes){
 		NSString *scope = pair[0];
+		if (self.autosaveScope.length && ![self.autosaveScope isEqualToString:scope])
+			continue;
 		NSDictionary *scopeSettings = settings[scope] ?: @{};
 		BOOL photos = [scopeSettings[@"photos"] boolValue];
 		BOOL videos = [scopeSettings[@"videos"] boolValue];
-		long long maxVideo = [scopeSettings[@"maxVideoSize"] longLongValue];
-		[sections addObject:TGSection(pair[1],
-				[NSString stringWithFormat:@"Photos are saved when they arrive. "
-						@"Videos are saved up to %@; TDLib has no document autosave.",
-						TGBytes(maxVideo)], @[
+		[sections addObject:TGSection(pair[1], nil, @[
 			TGSwitchRow(@"Photos", photos, ^(BOOL on){
 				[weakSelf changeAutosaveScope:scope photos:on videos:videos];
 			}),
@@ -1022,29 +1178,21 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 	NSArray *exceptions = settings[@"exceptions"] ?: @[];
 	NSMutableArray *rows = [NSMutableArray array];
 	for (NSDictionary *exception in exceptions){
-		NSString *detail = [NSString stringWithFormat:@"%@ photos - %@ videos",
-				[exception[@"photos"] boolValue] ? @"on" : @"off",
-				[exception[@"videos"] boolValue] ? @"on" : @"off"];
-		[rows addObject:TGTapRow(
-				[NSString stringWithFormat:@"Chat %@", exception[@"chatId"] ?: @0],
-				detail, ^{
-			[TGAlertSheet showMessage:[NSString stringWithFormat:
-					@"This chat overrides its scope defaults: photos %@, videos %@.",
-					[exception[@"photos"] boolValue] ? @"on" : @"off",
-					[exception[@"videos"] boolValue] ? @"on" : @"off"]
-								title:@"Autosave Exception" inView:weakSelf.view];
+		NSString *detail = [NSString stringWithFormat:@"%@ - %@",
+				[exception[@"photos"] boolValue] ? @"On" : @"Off",
+				[exception[@"videos"] boolValue] ? @"On" : @"Off"];
+		int64_t chatId = [exception[@"chatId"] longLongValue];
+		NSString *title = TGChatNameForId(exception[@"chatId"]);
+		[rows addObject:TGTapRow(title, detail, ^{
+			[weakSelf openChat:chatId title:title];
 		})];
 	}
 	if (rows.count)
-		[rows addObject:TGRedRow(@"Clear All Exceptions", ^{
+		[rows addObject:TGRedRow(@"Clear", ^{
 			[weakSelf clearAutosaveExceptions];
 		})];
 	[sections addObject:TGSection(@"Exceptions",
-			rows.count
-					? @"A chat with its own autosave settings keeps them until the "
-					  @"list is cleared here."
-					: @"No chat overrides the defaults above.",
-			rows)];
+			rows.count ? nil : @"Empty", rows)];
 
 	return sections;
 }
@@ -1073,22 +1221,21 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 									   maxVideoSize:maxVideo
 										 completion:^(BOOL ok){
 		if (!ok)
-			[weakSelf toast:@"Telegram refused that autosave setting."];
+			[weakSelf toast:@"An error occurred."];
 	}];
 }
 
 - (void)clearAutosaveExceptions {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:@"Every per-chat autosave override is removed. "
-							  @"The private, group and channel defaults stay."
-						title:@"Clear Exceptions"
+	[TGAlertSheet showConfirm:nil
+						title:@"Clear"
 					   action:@"Clear"
 				  destructive:YES
 					   inView:self.view
 					onConfirm:^{
 		[[TGClient shared] clearAutosaveSettingsExceptionsWithCompletion:^(BOOL ok){
 			if (!ok){
-				[weakSelf toast:@"Telegram refused to clear the exceptions."];
+				[weakSelf toast:@"An error occurred."];
 				return;
 			}
 			[[TGClient shared] autosaveSettingsWithCompletion:^(NSDictionary *settings){

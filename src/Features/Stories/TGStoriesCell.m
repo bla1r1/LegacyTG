@@ -84,7 +84,8 @@
 									 colourId:[row[@"chatId"] longLongValue]];
 		}
 		BOOL unread = [row[@"unread"] boolValue];
-		[self addBubbleAt:x title:title ring:unread ? @YES : @NO image:image tag:i];
+		[self addBubbleAt:x title:title ring:unread ? @YES : @NO image:image
+					userId:[row[@"userId"] longLongValue] tag:i];
 		x += TGMetricStoryBubble + TGMetricStoryBubbleGap;
 	}
 
@@ -168,6 +169,7 @@
 			  title:(NSString *)title
 			   ring:(NSNumber *)unread
 				image:(UIImage *)image
+			   userId:(int64_t)userId
 				 tag:(NSInteger)tag {
 	UIView *bubble = [[UIView alloc] initWithFrame:CGRectMake(
 			x, TGMetricStoryStripTop, TGMetricStoryBubble, TGMetricStoryBubble)];
@@ -201,15 +203,14 @@
 	picture.layer.cornerRadius = TGHalf(TGMetricStoryAvatar);
 	picture.backgroundColor = [[TGTheme shared] fileTileColour];
 	[bubble addSubview:picture];
-	int64_t userId = [self.ownStory[@"userId"] longLongValue];
-	if (!self.ownStory[@"avatarImage"] && userId){
+	if (!image && userId){
 		[[TGMemberAvatarStore shared] loadAvatarForUser:userId
 												   side:TGMetricStoryAvatar
-											 completion:^(UIImage *image){
-			if (!image)
+											 completion:^(UIImage *avatar){
+			if (!avatar)
 				return;
 			dispatch_async(dispatch_get_main_queue(), ^{
-				picture.image = image;
+				picture.image = avatar;
 			});
 		}];
 	}

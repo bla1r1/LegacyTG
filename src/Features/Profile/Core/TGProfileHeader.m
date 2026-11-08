@@ -16,6 +16,7 @@
 #import <AVFoundation/AVFoundation.h>
 #import "TGProfileViewController.h"
 #import "TGProfileDetailCell.h"
+#import "TGLocalization.h"
 
 
 
@@ -297,7 +298,7 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 - (void)musicStripTapped {
 	TGProfileAudioViewController *audio = [[TGProfileAudioViewController alloc] init];
 	audio.userId = self.userId;
-	audio.subjectTitle = self.name.length ? self.name : @"Profile Audio";
+	audio.subjectTitle = self.name.length ? self.name : @"Profile Music";
 	audio.autoplay = YES;
 	audio.hidesBottomBarWhenPushed = YES;
 	[self.navigationController pushViewController:audio animated:YES];
@@ -309,7 +310,10 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 	// Header height is the same stack the constants below lay out: picture,
 	// name, status, then the action plate, then the saved-music strip when
 	// the account has one.
-	CGFloat height = kAvatarTop + side + kActionsTop + kActionTile + TGMetricPadMedium;
+	// My Profile has no action plate (PeerInfoHeaderNode yields no buttons
+	// for isMyProfile), so it reserves none.
+	CGFloat actionsHeight = self.isOwnProfile ? 0 : kActionTile;
+	CGFloat height = kAvatarTop + side + kActionsTop + actionsHeight + TGMetricPadMedium;
 	if (self.firstProfileAudio)
 		height += kMusicStripHeight + TGMetricPad;
 
@@ -387,7 +391,7 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 
 	if (self.firstProfileAudio)
 		[self buildMusicStripIn:header
-						  atY:(kAvatarTop + side + kActionsTop + kActionTile + TGMetricPad)];
+						  atY:(kAvatarTop + side + kActionsTop + actionsHeight + TGMetricPad)];
 
 	// The status line listens to presence too: a status arriving while the
 	// profile is open refreshes the line (B4).
@@ -441,10 +445,16 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 - (void)updateGroupStatus {
 	if (self.userId || self.memberCount <= 0)
 		return;
-	NSString *count = [NSString stringWithFormat:@"%ld %@", (long)self.memberCount,
-			self.isChannel ? @"subscribers" : @"members"];
+	NSString *count = TGLocalizedPlural(
+			self.isChannel ? @"%d subscriber" : @"%d member",
+			self.isChannel ? @"%d subscribers" : @"%d members",
+			self.memberCount);
 	self.restingStatus = self.onlineCount > 0 && !self.isChannel
-			? [NSString stringWithFormat:@"%@, %ld online", count, (long)self.onlineCount] : count;
+			? [NSString stringWithFormat:@"%@, %@",
+					count, TGLocalizedFormat(@"%@ online",
+							[NSString stringWithFormat:@"%ld",
+									(long)self.onlineCount])]
+			: count;
 	[self statusLabelOwnerChanged:nil];
 }
 

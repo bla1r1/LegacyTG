@@ -99,15 +99,15 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 	NSString *coordinates = self.latitude && self.longitude
 			? [NSString stringWithFormat:@"%.4f, %.4f",
 					self.latitude.doubleValue, self.longitude.doubleValue]
-			: @"Not set";
+			: @"None";
 	self.sections = @[
-		TGBSection(@"LOCATION",
-				@"Display the location of the business on this account.",
+		TGBSection(@"Location",
+				@"Display the location of your business on your account.",
 				@[
 			TGBAction(@"Address", self.address.length ? self.address : @"Enter Address",
 					@"address"),
-			TGBAction(@"Coordinates", coordinates, @"coordinates"),
-			TGBAction(@"Save Location", nil, @"save"),
+			TGBAction(@"Location", coordinates, @"coordinates"),
+			TGBAction(@"Save", nil, @"save"),
 		]),
 		TGBSection(nil, nil, @[
 			TGBDestructive(@"Delete Location", @"delete"),
@@ -125,13 +125,13 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 			[weakSelf rebuildSections];
 		}];
 	} else if ([action isEqualToString:@"coordinates"]){
-		[self askText:@"Latitude" message:@"Decimal degrees."
+		[self askText:@"Latitude" message:nil
 		  placeholder:@"50.4501"
 				 text:self.latitude ? [NSString stringWithFormat:@"%.6f",
 						 self.latitude.doubleValue] : nil
 			   action:@"Next" completion:^(NSString *text){
 			NSNumber *latitude = @([text doubleValue]);
-			[weakSelf askText:@"Longitude" message:@"Decimal degrees."
+			[weakSelf askText:@"Longitude" message:nil
 				  placeholder:@"30.5234"
 						 text:weakSelf.longitude ? [NSString stringWithFormat:@"%.6f",
 								 weakSelf.longitude.doubleValue] : nil
@@ -143,7 +143,7 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 		}];
 	} else if ([action isEqualToString:@"save"]){
 		if (!self.latitude || !self.longitude){
-			[self showMessage:@"Set the coordinates before saving; Telegram needs a point on the map."
+			[self showMessage:@"An error occurred."
 						 title:@"Location"];
 			return;
 		}

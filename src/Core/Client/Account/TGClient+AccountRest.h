@@ -38,10 +38,15 @@
 - (void)recentCallsWithCompletion:(void (^)(NSArray *calls))completion;
 /// Queries privacy rule value ("everybody", "contacts", "nobody") for setting:
 /// "ShowStatus", "ShowProfilePhoto", "AllowCalls", "AllowChatInvites",
-/// "ShowLinkInForwardedMessages", "ShowPhoneNumber".
+/// "ShowLinkInForwardedMessages", "ShowPhoneNumber", "ShowBirthdate".
 - (void)privacyRule:(NSString *)setting
          completion:(void (^)(NSString *value))completion;
 - (void)setPrivacyRule:(NSString *)setting to:(NSString *)value;
+/// Writes a rule and answers after the server accepts or refuses it. Existing
+/// user/exception rules are carried over so changing the catch-all does not
+/// erase them.
+- (void)setPrivacyRule:(NSString *)setting to:(NSString *)value
+			completion:(void (^)(BOOL ok, NSString *error))completion;
 /// Everyone you have blocked: "id" and "name".
 - (void)blockedUsersWithCompletion:(void (^)(NSArray *users))completion;
 /// Days of inactivity before the account deletes itself.

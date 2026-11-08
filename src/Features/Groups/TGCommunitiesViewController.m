@@ -9,7 +9,7 @@
 @implementation TGCommunitiesViewController
 
 - (void)viewDidLoad {
-	self.title = @"Communities";
+	self.title = @"Community";
 	[super viewDidLoad];
 	[[NSNotificationCenter defaultCenter] addObserverForName:TGCommunitiesChangedNotification
 			object:nil queue:[NSOperationQueue mainQueue]
@@ -34,7 +34,7 @@
 		int64_t communityId = [community[@"id"] longLongValue];
 		NSString *detail = community[@"status"];
 		if (![community[@"haveAccess"] boolValue])
-			detail = @"No access";
+			detail = @"Unavailable";
 		NSMutableDictionary *row = TGFeatureOpenRow(community[@"name"] ?: @"Community",
 											  detail, ^{
 			TGCommunityViewController *screen =
@@ -46,21 +46,19 @@
 		[rows addObject:row];
 	}
 	if (!rows.count){
-		NSMutableDictionary *empty = TGFeatureRow(@"No communities yet", nil, nil);
+		NSMutableDictionary *empty = TGFeatureRow(@"No Results", nil, nil);
 		empty[TGFeatureRowKind] = TGFeatureKindPlain;
 		[rows addObject:empty];
 	}
 
 	NSMutableArray *createRows = [NSMutableArray array];
-	[createRows addObject:TGFeatureAction(@"New Community", ^{ [weakSelf createCommunity]; })];
+	[createRows addObject:TGFeatureAction(@"Create Community", ^{ [weakSelf createCommunity]; })];
 
 	self.sections = @[
 		TGFeatureSection(nil,
-				@"A community is a set of channels and groups with one name, "
-				@"photo and member list.", rows),
+				nil, rows),
 		TGFeatureSection(nil,
-				@"Telegram creates the community around one chat this account "
-				@"owns. Basic groups are upgraded to supergroups.", createRows),
+				nil, createRows),
 	];
 	[self reloadRows];
 }
@@ -79,30 +77,30 @@
 		[ids addObject:chat[@"id"]];
 	}
 	if (!titles.count){
-		[self toast:@"No group or channel to build a community around."];
+		[self toast:@"An error occurred."];
 		return;
 	}
 
 	__weak typeof(self) weakSelf = self;
 	[TGAlertSheet showChoices:titles
-						title:@"Community Chat"
-					  message:@"The community is created around this chat."
+						title:@"Community"
+					  message:nil
 			 destructiveIndex:-1
 					   inView:self.view
 					 onChoice:^(NSInteger index){
 		if (index < 0 || index >= (NSInteger)ids.count)
 			return;
 		int64_t chatId = [ids[index] longLongValue];
-		[TGAlertSheet showInput:@"New Community"
-						message:@"The name every member sees."
+		[TGAlertSheet showInput:@"Community Name"
+						message:nil
 					placeholder:@"Community name"
 						   text:nil
 						 action:@"Create"
 						 inView:weakSelf.view
 					   onSubmit:^(NSString *name){
-			[TGAlertSheet showChoices:@[@"Visible to members", @"Hidden from members"]
+			[TGAlertSheet showChoices:@[@"Visible", @"Hidden"]
 								title:@"Chat Visibility"
-							  message:@"A hidden chat is visible only to community administrators."
+							  message:nil
 					 destructiveIndex:-1
 							   inView:weakSelf.view
 							 onChoice:^(NSInteger pick){
@@ -110,7 +108,7 @@
 				[[TGClient shared] createCommunity:name chatId:chatId hidden:hidden
 										completion:^(int64_t communityId, NSString *error){
 					if (!communityId){
-						[weakSelf toast:error ?: @"Telegram refused that."];
+						[weakSelf toast:error ?: @"An error occurred."];
 						return;
 					}
 					NSDictionary *row = @{

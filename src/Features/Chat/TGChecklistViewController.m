@@ -61,7 +61,7 @@
 		if (!me)
 			return;
 		if (!checklist){
-			me.loadError = error ?: @"That message has no checklist.";
+			me.loadError = error ?: @"An error occurred.";
 			me.loaded = YES;
 			[me rebuild];
 			return;
@@ -88,7 +88,7 @@
 	[headRows addObject:TGFeatureRow(@"Title", self.checklistTitle, ^{
 		[weakSelf editTitle];
 	})];
-	[headRows addObject:TGFeatureRow(@"Progress",
+	[headRows addObject:TGFeatureRow(@"Done",
 			[NSString stringWithFormat:@"%ld of %lu done", (long)done,
 					(unsigned long)self.tasks.count], nil)];
 
@@ -101,31 +101,27 @@
 		})];
 	}
 	if (!taskRows.count){
-		NSMutableDictionary *empty = TGFeatureRow(@"No tasks yet", nil, nil);
+		NSMutableDictionary *empty = TGFeatureRow(@"None", nil, nil);
 		empty[TGFeatureRowKind] = TGFeatureKindPlain;
 		[taskRows addObject:empty];
 	}
 
 	NSMutableArray *actions = [NSMutableArray array];
-	[actions addObject:TGFeatureAction(@"Add Task", ^{ [weakSelf addTask]; })];
+	[actions addObject:TGFeatureAction(@"Add a Task", ^{ [weakSelf addTask]; })];
 	if (self.messageId){
-		[actions addObject:TGFeatureAction(@"Save Title and Tasks", ^{
+		[actions addObject:TGFeatureAction(@"Save", ^{
 			[weakSelf saveWholeChecklist];
 		})];
 	} else {
-		[actions addObject:TGFeatureAction(@"Send Checklist", ^{
+		[actions addObject:TGFeatureAction(@"Send Message", ^{
 			[weakSelf sendNewChecklist];
 		})];
 	}
 
 	NSMutableArray *sections = [NSMutableArray array];
 	[sections addObject:TGFeatureSection(nil, nil, headRows)];
-	[sections addObject:TGFeatureSection(@"Tasks", nil, taskRows)];
-	[sections addObject:TGFeatureSection(nil,
-			self.loadError ?: (self.messageId
-					? @"Tapping a task marks it done or not done. Its menu can rename it."
-					: @"A checklist can be added to a group or channel; Telegram refuses secret chats."),
-			actions)];
+	[sections addObject:TGFeatureSection(@"Task", nil, taskRows)];
+	[sections addObject:TGFeatureSection(nil, self.loadError, actions)];
 	self.sections = sections;
 	[self reloadRows];
 }
@@ -134,7 +130,7 @@
 
 - (void)editTitle {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"Checklist Title"
+	[TGAlertSheet showInput:@"Title"
 					message:nil
 				placeholder:@"Title"
 					   text:self.checklistTitle
@@ -151,7 +147,7 @@
 
 - (void)addTask {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"Add Task"
+	[TGAlertSheet showInput:@"Add a Task"
 					message:nil
 				placeholder:@"Task"
 					   text:nil
@@ -171,7 +167,7 @@
 									  inChat:weakSelf.chatId
 								  completion:^(BOOL ok, NSString *error){
 			if (!ok){
-				[weakSelf toast:error ?: @"Telegram refused that task."];
+				[weakSelf toast:error ?: @"An error occurred."];
 				return;
 			}
 			[weakSelf loadChecklist];
@@ -182,8 +178,8 @@
 - (void)runTask:(NSDictionary *)task {
 	__weak typeof(self) weakSelf = self;
 	BOOL isDone = [task[@"done"] boolValue];
-	NSString *title = isDone ? @"Mark as Not Done" : @"Mark as Done";
-	[TGAlertSheet showChoices:@[title, @"Rename Task"]
+	NSString *title = isDone ? @"Undo" : @"Done";
+	[TGAlertSheet showChoices:@[title, @"Rename"]
 						title:task[@"text"] ?: @"Task"
 			 destructiveIndex:-1
 					   inView:self.view
@@ -192,7 +188,7 @@
 			[weakSelf toggleTask:task];
 			return;
 		}
-		[TGAlertSheet showInput:@"Rename Task"
+		[TGAlertSheet showInput:@"Rename"
 						message:nil
 					placeholder:@"Task"
 						   text:task[@"text"]
@@ -225,7 +221,7 @@
 		return;
 	}
 	if (!self.canMarkTasks){
-		[self toast:@"Telegram does not let this account mark these tasks."];
+		[self toast:@"An error occurred."];
 		return;
 	}
 	__weak typeof(self) weakSelf = self;
@@ -237,7 +233,7 @@
 										  inChat:self.chatId
 									  completion:^(BOOL ok, NSString *error){
 		if (!ok){
-			[weakSelf toast:error ?: @"Telegram refused that."];
+			[weakSelf toast:error ?: @"An error occurred."];
 			return;
 		}
 		NSMutableDictionary *changed = [task mutableCopy];
@@ -259,7 +255,7 @@
 							 othersCanMark:self.othersCanMarkTasks
 								 completion:^(BOOL ok, NSString *error){
 		if (!ok){
-			[weakSelf toast:error ?: @"Telegram refused that checklist."];
+			[weakSelf toast:error ?: @"An error occurred."];
 			return;
 		}
 		[weakSelf loadChecklist];
@@ -273,7 +269,7 @@
 							  toChat:self.chatId
 						  completion:^(BOOL ok, NSString *error){
 		if (!ok){
-			[weakSelf toast:error ?: @"Telegram refused that checklist."];
+			[weakSelf toast:error ?: @"An error occurred."];
 			return;
 		}
 		if (weakSelf.onSent)

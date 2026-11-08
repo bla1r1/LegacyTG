@@ -323,6 +323,7 @@ static NSArray *TGHashtagsFrom(NSDictionary *result) {
 			@"version" : result[@"version"] ?: @(0),
 			@"rtl" : result[@"is_rtl"] ?: @NO,
 			@"full" : result[@"is_full"] ?: @NO,
+			@"site_name" : result[@"site_name"] ?: @"",
 		});
 	}];
 }

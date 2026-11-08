@@ -2,6 +2,7 @@
 // TGQuickRepliesViewController.m
 //
 #import "TGQuickRepliesViewController.h"
+#import "TGLocalization.h"
 #import "TGQuickReplyMessagesViewController.h"
 #import "TGClient.h"
 #import "TGTheme.h"
@@ -15,7 +16,7 @@
 @implementation TGQuickRepliesViewController
 
 - (void)viewDidLoad {
-	self.title = self.sendChatId ? @"Send Saved Reply" : @"Saved Replies";
+	self.title = @"Quick Replies";
 	[super viewDidLoad];
 	self.navigationItem.rightBarButtonItem = self.editButtonItem;
 	[[NSNotificationCenter defaultCenter] addObserverForName:TGQuickRepliesChangedNotification
@@ -72,8 +73,8 @@
 		NSInteger count = [shortcut[@"messageCount"] integerValue];
 		NSString *preview = shortcut[@"preview"];
 		NSString *detail = count
-				? [NSString stringWithFormat:@"%ld message%@%@",
-						(long)count, count == 1 ? @"" : @"s",
+				? [NSString stringWithFormat:@"%@%@",
+						[NSString stringWithFormat:TGLocalized(@"%@ messages"), @(count)],
 						preview.length ? [@" · " stringByAppendingString:preview] : @""]
 				: @"Empty";
 		if (self.sendChatId){
@@ -92,20 +93,17 @@
 	}
 	if (!rows.count){
 		NSMutableDictionary *empty = TGFeatureRow(self.loaded
-				? @"No saved replies yet" : @"Loading...", nil, nil);
+				? @"No Quick Replies" : @"Loading...", nil, nil);
 		empty[TGFeatureRowKind] = TGFeatureKindPlain;
 		[rows addObject:empty];
 	}
 
 	NSMutableArray *actions = [NSMutableArray array];
 	if (!self.sendChatId){
-		[actions addObject:TGFeatureAction(@"New Shortcut", ^{ [weakSelf createShortcut]; })];
+		[actions addObject:TGFeatureAction(@"New Quick Reply", ^{ [weakSelf createShortcut]; })];
 	}
-	NSString *footer = self.sendChatId
-			? @"The shortcut's messages are sent into this chat in their saved order."
-			: @"Hold Edit to drag the shortcuts into a new order. Telegram keeps that order on every device.";
 	self.sections = @[
-		TGFeatureSection(nil, footer, rows),
+		TGFeatureSection(nil, nil, rows),
 		self.sendChatId ? TGFeatureSection(nil, nil, @[])
 						: TGFeatureSection(nil, nil, actions),
 	];
@@ -114,9 +112,9 @@
 
 - (void)createShortcut {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"New Shortcut"
-					message:@"The name is what the composer's list shows."
-				placeholder:@"Shortcut name"
+	[TGAlertSheet showInput:@"New Quick Reply"
+					message:nil
+				placeholder:@"Shortcut"
 					   text:nil
 					 action:@"Next"
 					 inView:self.view
@@ -124,11 +122,11 @@
 		[[TGClient shared] checkQuickReplyShortcutName:name
 											completion:^(BOOL ok, NSString *error){
 			if (!ok){
-				[weakSelf toast:error ?: @"Telegram refused that name."];
+				[weakSelf toast:error ?: @"An error occurred."];
 				return;
 			}
-			[TGAlertSheet showInput:@"First Message"
-							message:@"A shortcut is created by its first message."
+			[TGAlertSheet showInput:@"Message"
+							message:nil
 						placeholder:@"Message"
 							   text:nil
 							 action:@"Save"
@@ -138,7 +136,7 @@
 													 completion:^(NSDictionary *message,
 																  NSString *error){
 					if (!message){
-						[weakSelf toast:error ?: @"Telegram refused that."];
+						[weakSelf toast:error ?: @"An error occurred."];
 						return;
 					}
 					[weakSelf loadShortcuts];
@@ -193,7 +191,7 @@
 	__weak typeof(self) weakSelf = self;
 	[[TGClient shared] reorderQuickReplyShortcuts:ids completion:^(BOOL ok, NSString *error){
 		if (!ok)
-			[weakSelf toast:error ?: @"Telegram refused that order."];
+			[weakSelf toast:error ?: @"An error occurred."];
 	}];
 	[self rebuild];
 }
@@ -206,11 +204,9 @@
 		return;
 	NSDictionary *shortcut = self.shortcuts[indexPath.row];
 	NSInteger shortcutId = [shortcut[@"id"] integerValue];
-	NSString *name = shortcut[@"name"] ?: @"Shortcut";
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:[NSString stringWithFormat:
-			@"\"%@\" and every message in it are removed.", name]
-						 title:@"Delete Shortcut"
+	[TGAlertSheet showConfirm:nil
+						 title:@"Delete Quick Reply"
 						action:@"Delete"
 				   destructive:YES
 						inView:self.view
@@ -218,7 +214,7 @@
 		[[TGClient shared] deleteQuickReplyShortcut:shortcutId
 										completion:^(BOOL ok, NSString *error){
 			if (!ok){
-				[weakSelf toast:error ?: @"Telegram refused that."];
+				[weakSelf toast:error ?: @"An error occurred."];
 				return;
 			}
 			[weakSelf loadShortcuts];

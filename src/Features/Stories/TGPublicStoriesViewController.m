@@ -17,9 +17,8 @@
 - (instancetype)initWithTag:(NSString *)tag {
 	self = [super init];
 	if (self){
-		self.listTitle = @"Public Stories";
-		self.emptyText = @"Search Telegram's public stories by hashtag, "
-				@"location or venue.";
+		self.listTitle = @"Stories";
+		self.emptyText = @"No Results";
 		_results = [NSMutableArray array];
 		if (tag.length){
 			_mode = @"tag";
@@ -31,8 +30,7 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	self.listFooter = @"Public stories come from Telegram's discovery; a story "
-			@"opens in the same viewer as a chat's.";
+	self.listFooter = nil;
 	[self rebuildRows];
 	if (self.query.length)
 		[self searchMode:self.mode query:self.query offset:@""];
@@ -41,29 +39,25 @@
 - (void)rebuildRows {
 	NSMutableArray *rows = [NSMutableArray array];
 	__weak typeof(self) weakSelf = self;
-	[rows addObject:@{@"title" : @"Search by Hashtag",
-					  @"detail" : @"#tag",
+	[rows addObject:@{@"title" : @"Hashtag search",
 					  @"tap" : ^{ [weakSelf askTag]; }}];
-	[rows addObject:@{@"title" : @"Search by Location",
-					  @"detail" : @"country, state, city, street",
+	[rows addObject:@{@"title" : @"Search",
 					  @"tap" : ^{ [weakSelf askLocation]; }}];
-	[rows addObject:@{@"title" : @"Search by Venue",
-					  @"detail" : @"provider, venue id",
+	[rows addObject:@{@"title" : @"Search",
 					  @"tap" : ^{ [weakSelf askVenue]; }}];
 	for (NSDictionary *story in self.results){
 		NSString *title = story[@"title"];
 		if (!title.length)
-			title = @"Public story";
+			title = @"Story";
 		NSString *detail = story[@"caption"];
 		if (!detail.length)
-			detail = [story[@"isVideo"] boolValue] ? @"Video story" : @"Photo story";
+			detail = @"Story";
 		[rows addObject:@{@"title" : title, @"detail" : detail,
 						  @"opens" : @YES,
 						  @"tap" : ^{ [weakSelf openStory:story]; }}];
 	}
 	if (self.nextOffset.length)
-		[rows addObject:@{@"title" : @"Load More",
-						  @"detail" : @"Next page",
+		[rows addObject:@{@"title" : @"Show More",
 						  @"tap" : ^{ [weakSelf loadMore]; }}];
 	self.rows = rows;
 	[self.tableView reloadData];
@@ -71,8 +65,8 @@
 
 - (void)askTag {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"Public Stories by Hashtag"
-					message:@"The # is optional."
+	[TGAlertSheet showInput:@"Hashtag search"
+					message:nil
 				placeholder:@"tag"
 					   text:self.query
 					 action:@"Search"
@@ -84,8 +78,8 @@
 
 - (void)askLocation {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"Public Stories by Location"
-					message:@"Country, state, city, street - any of them."
+	[TGAlertSheet showInput:@"Search"
+					message:nil
 				placeholder:@"Ukraine, Kyiv"
 					   text:self.query
 					 action:@"Search"
@@ -97,8 +91,8 @@
 
 - (void)askVenue {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"Public Stories by Venue"
-					message:@"Provider and venue id, comma-separated."
+	[TGAlertSheet showInput:@"Search"
+					message:nil
 				placeholder:@"foursquare, 1234"
 					   text:self.query
 					 action:@"Search"
@@ -128,8 +122,8 @@
 		if (!me)
 			return;
 		if (!page){
-			[TGAlertSheet showMessage:error ?: @"Telegram refused the search."
-								title:@"Public Stories" inView:me.view];
+			[TGAlertSheet showMessage:error ?: @"An error occurred."
+								title:@"Stories" inView:me.view];
 			return;
 		}
 		NSArray *found = [page[@"stories"] isKindOfClass:NSArray.class]
@@ -138,8 +132,8 @@
 		me.nextOffset = page[@"nextOffset"] ?: @"";
 		[me rebuildRows];
 		if (!me.results.count)
-			[TGAlertSheet showMessage:@"Telegram returned no public stories."
-								title:@"Public Stories" inView:me.view];
+			[TGAlertSheet showMessage:@"No Results"
+								title:@"Stories" inView:me.view];
 	};
 	if ([mode isEqualToString:@"tag"]){
 		[[TGClient shared] searchPublicStoriesByTag:query offset:offset limit:20
@@ -184,7 +178,7 @@
 - (void)openStory:(NSDictionary *)story {
 	TGStoryViewerViewController *viewer = [[TGStoryViewerViewController alloc]
 			initWithChatId:[story[@"chatId"] longLongValue]
-					 title:story[@"title"] ?: @"Public Story"
+					 title:story[@"title"] ?: @"Story"
 				   stories:@[story]
 				startIndex:0
 				 canManage:NO];

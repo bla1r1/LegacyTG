@@ -24,16 +24,14 @@
 		_chatId = chatId;
 		_chatTitle = [title copy] ?: @"Your Story";
 		self.listTitle = @"Stories";
-		self.emptyText = @"Nothing to show.";
+		self.emptyText = @"No Results";
 	}
 	return self;
 }
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	self.listFooter = @"Stealth mode hides your views for the past and next "
-			@"window Telegram names; it is a Premium feature and a refusal "
-			@"is shown as Telegram sends it.";
+	self.listFooter = nil;
 	[self rebuildRows];
 }
 
@@ -41,35 +39,27 @@
 	NSMutableArray *rows = [NSMutableArray array];
 	__weak typeof(self) weakSelf = self;
 	[rows addObject:@{@"title" : @"Add Story",
-					  @"detail" : @"Photo or video, caption and privacy",
 					  @"opens" : @YES,
 					  @"tap" : ^{ [weakSelf addStory]; }}];
 	[rows addObject:@{@"title" : @"My Story",
-					  @"detail" : @"Open your active stories",
 					  @"opens" : @YES,
 					  @"tap" : ^{ [weakSelf openMyStory]; }}];
-	[rows addObject:@{@"title" : @"Story Albums",
-					  @"detail" : @"Create, rename, order and fill",
+	[rows addObject:@{@"title" : @"Albums",
 					  @"opens" : @YES,
 					  @"tap" : ^{ [weakSelf openAlbums]; }}];
 	[rows addObject:@{@"title" : @"Story Archive",
-					  @"detail" : @"Every story you have posted",
 					  @"opens" : @YES,
 					  @"tap" : ^{ [weakSelf openArchive]; }}];
 	[rows addObject:@{@"title" : @"Story Notifications",
-					  @"detail" : @"Chats with their own story settings",
 					  @"opens" : @YES,
 					  @"tap" : ^{ [weakSelf openNotifications]; }}];
-	[rows addObject:@{@"title" : @"Public Stories",
-					  @"detail" : @"Search by tag, location or venue",
+	[rows addObject:@{@"title" : @"Stories",
 					  @"opens" : @YES,
 					  @"tap" : ^{ [weakSelf openPublic]; }}];
-	[rows addObject:@{@"title" : @"Start Live Story",
-					  @"detail" : @"RTMP stream or group call",
+	[rows addObject:@{@"title" : @"Start Live Story As",
 					  @"opens" : @YES,
 					  @"tap" : ^{ [weakSelf openLive]; }}];
-	[rows addObject:@{@"title" : @"Activate Stealth Mode",
-					  @"detail" : @"Hide your views from story posters",
+	[rows addObject:@{@"title" : @"Enable Stealth Mode",
 					  @"tap" : ^{ [weakSelf activateStealth]; }}];
 	self.rows = rows;
 	[self.tableView reloadData];
@@ -93,7 +83,7 @@
 			return;
 		NSArray *infos = row[@"stories"];
 		if (!infos.count){
-			[TGAlertSheet showMessage:@"You have no active stories right now."
+			[TGAlertSheet showMessage:@"No stories"
 								title:@"My Story" inView:me.view];
 			return;
 		}
@@ -153,15 +143,14 @@
 - (void)activateStealth {
 	// Stealth mode is a Premium feature; asking first would end in a refusal.
 	if (![[TGClient shared].me[@"is_premium"] boolValue]){
-		[TGAlertSheet showMessage:@"Stealth mode needs Telegram Premium."
+		[TGAlertSheet showMessage:@"Premium Needed"
 							title:@"Stealth Mode" inView:self.view];
 		return;
 	}
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:@"Activate stealth mode? Your views of stories "
-			@"will be hidden from their posters for the next window."
+	[TGAlertSheet showConfirm:@"Enable Stealth Mode"
 						title:@"Stealth Mode"
-					   action:@"Activate"
+					   action:@"Enable"
 				  destructive:NO
 					   inView:self.view
 					onConfirm:^{
@@ -170,8 +159,8 @@
 			return;
 		[[TGClient shared] activateStoryStealthModeWithCompletion:^(BOOL ok, NSString *error){
 			[TGAlertSheet showMessage:ok
-					? @"Stealth mode is active. Telegram is hiding your views."
-					: (error ?: @"Telegram refused stealth mode.")
+					? @"Stealth Mode On"
+					: (error ?: @"An error occurred.")
 								title:@"Stealth Mode" inView:me.view];
 		}];
 	}];

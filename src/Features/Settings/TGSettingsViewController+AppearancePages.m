@@ -6,30 +6,18 @@
 #import "TGAlertSheet.h"
 #import "TGBackgroundsViewController.h"
 #import "TGProfileAppearanceViewController.h"
+#import "TGStickerPacksViewController.h"
 #import "TGStyle.h"
-
-/// The background type is a td_api object name; "backgroundTypeFill" reads
-/// better as "Fill" in a sheet, and an absent type is said plainly.
-static NSString *TGBackgroundTypeLabel(id type) {
-	NSString *name = [type isKindOfClass:NSDictionary.class] ? type[@"@type"] : nil;
-	if (![name isKindOfClass:NSString.class] || !name.length)
-		return @"Unknown";
-	NSString *prefix = @"backgroundType";
-	if ([name rangeOfString:prefix].location == 0)
-		return [name substringFromIndex:prefix.length];
-	return name;
-}
 
 static NSString *TGDefaultBackgroundDetail(NSDictionary *state) {
 	if (![state isKindOfClass:NSDictionary.class])
-		return @"Not received";
+		return @"Chat Wallpaper";
 	NSDictionary *background = state[@"background"];
 	NSString *name = [background isKindOfClass:NSDictionary.class]
 			? background[@"name"] : nil;
-	NSString *which = [state[@"for_dark_theme"] boolValue] ? @"Dark" : @"Light";
 	if ([name isKindOfClass:NSString.class] && name.length)
-		return [NSString stringWithFormat:@"%@ - %@", which, name];
-	return [NSString stringWithFormat:@"%@ default", which];
+		return name;
+	return @"Chat Wallpaper";
 }
 
 @implementation TGSettingsViewController (AppearancePages)
@@ -47,80 +35,56 @@ static NSString *TGDefaultBackgroundDetail(NSDictionary *state) {
 				fromFile ? [(NSString *)entry[@"path"] pathExtension] : nil,
 				[current isEqualToString:themeId], ^{
 			if (![[TGTheme shared] selectThemeId:themeId]){
-				[TGAlertSheet showMessage:@"This file could not be read as a "
-										  @"Telegram theme."
-									title:@"Theme" inView:weakSelf.view];
+				[TGAlertSheet showMessage:@"Invalid theme file"
+									title:@"Themes" inView:weakSelf.view];
 			}
 			[weakSelf repaint];
 		})];
 	}
 
-	return @[
-		TGSection(nil, nil, @[TGRow(TGKindPreview, @"")]),
+	NSMutableArray *colourRows = [NSMutableArray array];
+	[colourRows addObject:TGRow(TGKindPreview, @"")];
+	[colourRows addObjectsFromArray:themes];
+	[colourRows addObject:TGTapRow(@"Chat Themes",
+			[TGClient shared].emojiChatThemes.count
+					? [NSString stringWithFormat:@"%lu",
+							(unsigned long)[TGClient shared].emojiChatThemes.count]
+					: @"None",
+			^{ [weakSelf showEmojiChatThemes]; })];
+	[colourRows addObject:TGIconTapOpenRow(@"Chat Wallpaper",
+			[theme wallpaperTitleForType:theme.wallpaperType],
+			@"data", TGIconTileGreen(), ^{
+		TGBackgroundsViewController *backgrounds =
+				[[TGBackgroundsViewController alloc] init];
+		backgrounds.hidesBottomBarWhenPushed = YES;
+		[weakSelf.navigationController pushViewController:backgrounds animated:YES];
+	})];
+	[colourRows addObject:TGIconTapOpenRow(@"Your Color", @"Name and Profile Colors",
+			@"star", TGIconTilePurple(), ^{
+		TGProfileAppearanceViewController *colours =
+				[[TGProfileAppearanceViewController alloc] init];
+		colours.hidesBottomBarWhenPushed = YES;
+		[weakSelf.navigationController pushViewController:colours animated:YES];
+	})];
 
-		TGSection(@"CHAT SETTINGS", nil, @[
-			TGIconTapRow(@"Message Text Size",
-					[NSString stringWithFormat:@"%.0f pt", theme.messageFontSize],
+	return @[
+		TGSection(@"COLOR THEME", nil, colourRows),
+
+		TGSection(nil, nil, @[
+			TGIconTapRow(@"Text Size",
+					[NSString stringWithFormat:@"%.0fpt", theme.messageFontSize],
 					@"chat", TGIconTileSky(),
 					^{ [weakSelf chooseTextSize]; }),
-			TGIconTapOpenRow(@"Chat Background",
-					[theme wallpaperTitleForType:theme.wallpaperType],
-					@"data", TGIconTileGreen(), ^{
-				TGSettingsViewController *wp = [[TGSettingsViewController alloc] init];
-				wp.page = TGSettingsPageWallpaper;
-				[weakSelf.navigationController pushViewController:wp animated:YES];
+			TGIconTapOpenRow(@"Power Saving", nil, @"battery", TGIconTileAmber(), ^{
+				[weakSelf openPage:TGSettingsPagePowerSaving];
+			}),
+			TGIconTapOpenRow(@"Stickers and Emoji", nil, @"star", TGIconTileViolet(), ^{
+				TGStickerPacksViewController *packs =
+						[[TGStickerPacksViewController alloc] init];
+				packs.hidesBottomBarWhenPushed = YES;
+				[weakSelf.navigationController pushViewController:packs animated:YES];
 			}),
 		]),
-
-
-		TGSection(@"TELEGRAM DEFAULTS",
-				  @"What Telegram itself offers for new chats: the default "
-				  @"background and the chat themes built from emoji. Both are "
-				  @"pushed by the server, so the rows fill in while you watch.",
-				  @[
-			TGTapRow(@"Default Background",
-					TGDefaultBackgroundDetail([TGClient shared].defaultBackground), ^{
-				[weakSelf showDefaultBackground];
-			}),
-			TGTapRow(@"Emoji Chat Themes",
-					[TGClient shared].emojiChatThemes.count
-							? [NSString stringWithFormat:@"%lu",
-									(unsigned long)[TGClient shared].emojiChatThemes.count]
-							: @"None",
-					^{ [weakSelf showEmojiChatThemes]; }),
-		]),
-
-		TGSection(@"YOUR COLOR",
-				  @"Telegram draws your name and the background behind your "
-				  @"profile photo with these colours. They are stored on the "
-				  @"account, not in this app's theme.",
-				  @[
-			TGIconTapOpenRow(@"Your Color", @"Name and profile colour",
-					@"star", TGIconTilePurple(), ^{
-				TGProfileAppearanceViewController *colours =
-						[[TGProfileAppearanceViewController alloc] init];
-				colours.hidesBottomBarWhenPushed = YES;
-				[weakSelf.navigationController pushViewController:colours animated:YES];
-			}),
-		]),
-
-		TGSection(@"CHAT BACKGROUNDS",
-				  @"Telegram keeps chat backgrounds on the account. The list "
-				  @"here is the one Telegram installed, and the catalogue is "
-				  @"searched on its server.", @[
-			TGIconTapOpenRow(@"Chat Backgrounds", @"Installed, search, default",
-					@"data", TGIconTileGreen(), ^{
-				TGBackgroundsViewController *backgrounds =
-						[[TGBackgroundsViewController alloc] init];
-				backgrounds.hidesBottomBarWhenPushed = YES;
-				[weakSelf.navigationController pushViewController:backgrounds animated:YES];
-			}),
-		]),
-
-		TGSection(@"THEMES",
-				  @"Theme files made for the official clients - .tgios-theme and "
-				  @".attheme - appear here once they are in the app's Documents "
-				  @"folder, or once one is opened from a chat.", themes),
 	];
 }
 
@@ -138,7 +102,6 @@ static NSString *TGDefaultBackgroundDetail(NSDictionary *state) {
 	};
 
 	NSArray *textures = @[
-		textureRow(@"None (Solid Colour)", TGWallpaperTypeNone),
 		textureRow(@"Paper Grain", TGWallpaperTypePaperGrain),
 		textureRow(@"Pinstripes", TGWallpaperTypePinstripes),
 		textureRow(@"Classic Linen", TGWallpaperTypeLinen),
@@ -147,7 +110,7 @@ static NSString *TGDefaultBackgroundDetail(NSDictionary *state) {
 	];
 
 	NSMutableArray *customRows = [NSMutableArray array];
-	[customRows addObject:TGOpenRow(@"Choose from Photo Library", (current == TGWallpaperTypeCustom ? @"Active" : nil), ^{
+	[customRows addObject:TGOpenRow(@"Choose Wallpaper from Photos", (current == TGWallpaperTypeCustom ? @"Active" : nil), ^{
 		[weakSelf presentWallpaperPicker];
 	})];
 	if (current != TGWallpaperTypeNone) {
@@ -159,10 +122,8 @@ static NSString *TGDefaultBackgroundDetail(NSDictionary *state) {
 
 	return @[
 		TGSection(nil, nil, @[TGRow(TGKindPreview, @"")]),
-		TGSection(@"Physical Textures",
-				  @"Tactile Apple physical textures re-engineered for the chat canvas.",
-				  textures),
-		TGSection(@"Custom Photo", nil, customRows)
+		TGSection(@"Wallpaper", nil, textures),
+		TGSection(@"Background", nil, customRows)
 	];
 }
 
@@ -172,22 +133,12 @@ static NSString *TGDefaultBackgroundDetail(NSDictionary *state) {
 - (void)showDefaultBackground {
 	NSDictionary *state = [TGClient shared].defaultBackground;
 	if (![state isKindOfClass:NSDictionary.class]){
-		[TGAlertSheet showMessage:@"Telegram has not sent a default background yet."
-							title:@"Default Background" inView:self.view];
+		[TGAlertSheet showMessage:@"Empty"
+							title:@"Chat Wallpaper" inView:self.view];
 		return;
 	}
-	NSDictionary *background = state[@"background"];
-	NSString *name = [background isKindOfClass:NSDictionary.class]
-			? background[@"name"] : nil;
-	NSString *details = [NSString stringWithFormat:
-			@"%@\nId: %lld\nName: %@\nDark variant: %@\nDefault: %@\nType: %@",
-			TGDefaultBackgroundDetail(state),
-			(long long)[background[@"id"] longLongValue],
-			([name isKindOfClass:NSString.class] && name.length) ? name : @"unnamed",
-			[background[@"is_dark"] boolValue] ? @"yes" : @"no",
-			[background[@"is_default"] boolValue] ? @"yes" : @"no",
-			TGBackgroundTypeLabel(background[@"type"])];
-	[TGAlertSheet showMessage:details title:@"Default Background" inView:self.view];
+	[TGAlertSheet showMessage:TGDefaultBackgroundDetail(state)
+						title:@"Chat Wallpaper" inView:self.view];
 }
 
 /// Each emoji chat theme carries a light and a dark settings record. The list
@@ -196,19 +147,19 @@ static NSString *TGDefaultBackgroundDetail(NSDictionary *state) {
 - (void)showEmojiChatThemes {
 	NSArray *themes = [TGClient shared].emojiChatThemes;
 	if (!themes.count){
-		[TGAlertSheet showMessage:@"Telegram has not sent any emoji chat themes."
-							title:@"Emoji Chat Themes" inView:self.view];
+		[TGAlertSheet showMessage:@"Empty"
+							title:@"Chat Themes" inView:self.view];
 		return;
 	}
 	NSMutableArray *titles = [NSMutableArray array];
 	for (NSDictionary *theme in themes){
 		NSString *name = [theme isKindOfClass:NSDictionary.class] ? theme[@"name"] : nil;
 		[titles addObject:([name isKindOfClass:NSString.class] && name.length)
-				? name : @"Unnamed theme"];
+				? name : @"—"];
 	}
 	[TGAlertSheet showChoices:titles
-						title:@"Emoji Chat Themes"
-					  message:@"The chat themes Telegram offers, newest list first."
+						title:@"Chat Themes"
+					  message:nil
 			 destructiveIndex:-1
 					   inView:self.view
 					 onChoice:^(NSInteger index){
@@ -217,20 +168,7 @@ static NSString *TGDefaultBackgroundDetail(NSDictionary *state) {
 		id chosen = themes[(NSUInteger)index];
 		if (![chosen isKindOfClass:NSDictionary.class])
 			return;
-		NSDictionary *theme = chosen;
-		NSDictionary *light = theme[@"light_settings"];
-		NSDictionary *dark = theme[@"dark_settings"];
-		NSDictionary *lightBackground = light[@"background"];
-		NSDictionary *darkBackground = dark[@"background"];
-		NSString *details = [NSString stringWithFormat:
-				@"%@\nLight accent: %ld\nLight background: %@\n"
-				@"Dark accent: %ld\nDark background: %@",
-				titles[(NSUInteger)index],
-				(long)[light[@"accent_color"] integerValue],
-				TGBackgroundTypeLabel(lightBackground[@"type"]),
-				(long)[dark[@"accent_color"] integerValue],
-				TGBackgroundTypeLabel(darkBackground[@"type"])];
-		[TGAlertSheet showMessage:details
+		[TGAlertSheet showMessage:nil
 							title:titles[(NSUInteger)index]
 						   inView:self.view];
 	}];

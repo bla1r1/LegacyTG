@@ -10,7 +10,7 @@
 					  message:(int64_t)messageId
 				   completion:(void (^)(BOOL, NSString *))completion {
 	if (!chatId || !messageId){
-		if (completion) completion(NO, @"A chat id and a message id are needed.");
+		if (completion) completion(NO, @"An error occurred.");
 		return;
 	}
 	[self request:@{@"@type" : @"recognizeSpeech",
@@ -27,7 +27,7 @@
 				  isGood:(BOOL)isGood
 			  completion:(void (^)(BOOL, NSString *))completion {
 	if (!chatId || !messageId){
-		if (completion) completion(NO, @"A chat id and a message id are needed.");
+		if (completion) completion(NO, @"An error occurred.");
 		return;
 	}
 	[self request:@{@"@type" : @"rateSpeechRecognition",

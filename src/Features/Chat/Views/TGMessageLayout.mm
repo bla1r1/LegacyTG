@@ -2,6 +2,7 @@
 // TGMessageLayout.mm - Geometry, sizing and C++ LRU layout cache for chat bubbles.
 //
 #import "TGMessageLayout.h"
+#import "TGLocalization.h"
 #import "TGStyle.h"
 #import <CoreText/CoreText.h>
 #import "TGLruCache.hpp"
@@ -742,19 +743,23 @@ NSString *TGDescribeMessageContent(NSDictionary *m) {
 NSString *TGMessageStamp(NSTimeInterval timestamp, BOOL edited) {
 	if (timestamp <= 0)
 		return @"";
-	time_t seconds = (time_t)timestamp;
-	struct tm value;
-	if (!localtime_r(&seconds, &value))
-		return @"";
-	char buffer[40];
+	NSDate *date = [NSDate dateWithTimeIntervalSince1970:timestamp];
+	// The app's own clock: the device's 12/24-hour choice and separator, not
+	// a hand-written %02d:%02d that ignored both.
+	// One formatter for every bubble: building one costs ~1 ms on the A4.
+	// Its only caller is cell layout on the main thread (iOS 6 formatters
+	// are not thread-safe).
+	static NSDateFormatter *clock = nil;
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{
+		clock = [[NSDateFormatter alloc] init];
+		clock.dateStyle = NSDateFormatterNoStyle;
+		clock.timeStyle = NSDateFormatterShortStyle;
+	});
+	NSString *time = [clock stringFromDate:date] ?: @"";
 	if (edited)
-		snprintf(buffer, sizeof(buffer), "%02d:%02d edited",
-				value.tm_hour, value.tm_min);
-	else
-		snprintf(buffer, sizeof(buffer), "%02d:%02d",
-				value.tm_hour, value.tm_min);
-	return [[NSString alloc] initWithBytes:buffer length:strlen(buffer)
-								  encoding:NSUTF8StringEncoding];
+		return [NSString stringWithFormat:@"%@ %@", TGLocalized(@"edited"), time];
+	return time;
 }
 
 void TGVideoNoteLayoutBottomBar(CGRect bubbleFrame,

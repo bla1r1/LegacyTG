@@ -21,7 +21,7 @@
 
 static NSString *TGDiagnosticsError(NSDictionary *result) {
 	NSString *message = result[@"message"];
-	return [message isKindOfClass:NSString.class] ? message : @"Telegram refused that.";
+	return [message isKindOfClass:NSString.class] ? message : @"An error occurred.";
 }
 
 static NSDictionary *TGNetworkTypeObject(NSString *name) {
@@ -401,7 +401,7 @@ static NSArray *TGStatisticalGraphLines(id json, NSString *raw) {
 			NSString *message = result[@"error_message"];
 			if (completion)
 				completion(nil, [message isKindOfClass:NSString.class]
-						? message : @"Telegram refused that graph.");
+						? message : @"An error occurred.");
 			return;
 		}
 		if ([type isEqualToString:@"error"]){

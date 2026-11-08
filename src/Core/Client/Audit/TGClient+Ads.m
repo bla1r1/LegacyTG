@@ -45,7 +45,7 @@
 			  fromFullscreen:(BOOL)fromFullscreen
 				   completion:(void (^)(BOOL, NSString *))completion {
 	if (!chatId || !messageId){
-		if (completion) completion(NO, @"A chat id and a message id are needed.");
+		if (completion) completion(NO, @"An error occurred.");
 		return;
 	}
 	[self request:@{@"@type" : @"clickChatSponsoredMessage",
@@ -64,7 +64,7 @@
 						option:(NSString *)optionId
 					completion:(void (^)(NSDictionary *, NSString *))completion {
 	if (!chatId || !messageId){
-		if (completion) completion(nil, @"A chat id and a message id are needed.");
+		if (completion) completion(nil, @"An error occurred.");
 		return;
 	}
 	[self request:@{@"@type" : @"reportChatSponsoredMessage",
@@ -187,7 +187,7 @@
 						 message:(int64_t)messageId
 					  completion:(void (^)(NSArray *, NSString *))completion {
 	if (!chatId || !messageId){
-		if (completion) completion(nil, @"A chat id and a message id are needed.");
+		if (completion) completion(nil, @"An error occurred.");
 		return;
 	}
 	[self request:@{@"@type" : @"getVideoMessageAdvertisements",

@@ -23,8 +23,8 @@
 		_chatId = chatId;
 		_groupCallId = groupCallId;
 		self.listTitle = @"Video Chat";
-		self.emptyText = @"No video chat settings yet.";
-		_statusLine = @"Create the video chat first, or open this from an active call.";
+		self.emptyText = @"None";
+		_statusLine = nil;
 	}
 	return self;
 }
@@ -95,7 +95,7 @@
 
 - (NSString *)callDetail:(NSString *)key yes:(NSString *)yes no:(NSString *)no {
 	if (!self.call)
-		return @"No call";
+		return @"None";
 	return [self.call[key] boolValue] ? yes : no;
 }
 
@@ -103,79 +103,76 @@
 	__weak typeof(self) weakSelf = self;
 	NSMutableArray *rows = [NSMutableArray array];
 
-	[rows addObject:[self rowWithTitle:@"Create Video Chat"
-			detail:@"Title, start time, video or RTMP"
+	[rows addObject:[self rowWithTitle:@"Start Video Chat"
+			detail:nil
 			tap:^{ [weakSelf createVideoChat]; }]];
-	[rows addObject:[self rowWithTitle:@"Create Standalone Group Call"
-			detail:@"createGroupCall - a call link, not bound to a chat"
+	[rows addObject:[self rowWithTitle:@"Create"
+			detail:nil
 			tap:^{ [weakSelf createStandaloneGroupCall]; }]];
 	if (self.groupCallId){
-		[rows addObject:[self rowWithTitle:@"Join Call"
-				detail:@"Returns the tgcalls join payload"
+		[rows addObject:[self rowWithTitle:@"Join"
+				detail:nil
 				tap:^{ [weakSelf joinCall]; }]];
-		[rows addObject:[self rowWithTitle:@"Start Scheduled Video Chat"
-				detail:@"Only valid before the call starts"
+		[rows addObject:[self rowWithTitle:@"Scheduled Video Chat"
+				detail:nil
 				tap:^{ [weakSelf startScheduled]; }]];
-		[rows addObject:[self rowWithTitle:@"Call Title"
-				detail:self.call[@"title"] ?: @"Not loaded"
+		[rows addObject:[self rowWithTitle:@"Video Chat Title"
+				detail:self.call[@"title"] ?: @"None"
 				tap:^{ [weakSelf editTitle]; }]];
 	}
 
 	if (self.groupCallId){
-		[rows addObject:[self rowWithTitle:@"Default Participant"
-				detail:@"Who this account joins as"
+		[rows addObject:[self rowWithTitle:@"Participants"
+				detail:nil
 				tap:^{ [weakSelf chooseDefaultParticipant]; }]];
-		[rows addObject:[self rowWithTitle:@"Invite Participants"
-				detail:@"inviteVideoChatParticipants, one at a time"
+		[rows addObject:[self rowWithTitle:@"Invite"
+				detail:nil
 				tap:^{ [weakSelf inviteParticipants]; }]];
 		[rows addObject:[self rowWithTitle:@"Invite Link"
-				detail:self.call[@"inviteLink"] ?: @"Ask Telegram, then copy it"
+				detail:self.call[@"inviteLink"] ?: @""
 				tap:^{ [weakSelf fetchInviteLink]; }]];
-		[rows addObject:[self rowWithTitle:@"Revoke Invite Link"
-				detail:@"Keeps the call, changes the link"
+		[rows addObject:[self rowWithTitle:@"Revoke Link"
+				detail:nil
 				tap:^{ [weakSelf revokeInviteLink]; }]];
 		[rows addObject:[self rowWithTitle:@"Get RTMP URL"
-				detail:@"For an RTMP stream video chat"
+				detail:nil
 				tap:^{ [weakSelf fetchRtmpUrl]; }]];
 		[rows addObject:[self rowWithTitle:@"Replace RTMP URL"
-				detail:@"Invalidates the current stream key"
+				detail:nil
 				tap:^{ [weakSelf replaceRtmpUrl]; }]];
 		[rows addObject:[self rowWithTitle:@"Start Recording"
-				detail:[self callDetail:@"recordDuration" yes:@"Recording is on" no:@"Audio or video"]
+				detail:nil
 				tap:^{ [weakSelf startRecording]; }]];
-		[rows addObject:[self rowWithTitle:@"End Recording"
-				detail:@"Stops the running recording"
+		[rows addObject:[self rowWithTitle:@"Stop Recording"
+				detail:nil
 				tap:^{ [weakSelf endRecording]; }]];
-		[rows addObject:[self rowWithTitle:@"Start Screen Sharing"
-				detail:@"Sends the join payload and an audio source"
+		[rows addObject:[self rowWithTitle:@"Share Screen"
+				detail:nil
 				tap:^{ [weakSelf startScreenSharing]; }]];
-		[rows addObject:[self rowWithTitle:@"Pause Screen Sharing"
-				detail:@"Toggle the pause flag"
+		[rows addObject:[self rowWithTitle:@"Pause"
+				detail:nil
 				tap:^{ [weakSelf pauseScreenSharing]; }]];
-		[rows addObject:[self rowWithTitle:@"Resume Screen Sharing"
-				detail:@"Toggle the pause flag back"
+		[rows addObject:[self rowWithTitle:@"Resume"
+				detail:nil
 				tap:^{ [weakSelf resumeScreenSharing]; }]];
-		[rows addObject:[self rowWithTitle:@"Stop Screen Sharing"
-				detail:@"endGroupCallScreenSharing"
+		[rows addObject:[self rowWithTitle:@"Stop"
+				detail:nil
 				tap:^{ [weakSelf stopScreenSharing]; }]];
-		[rows addObject:[self rowWithTitle:@"Messages Allowed"
+		[rows addObject:[self rowWithTitle:@"Messages"
 				detail:[self callDetail:@"areMessagesAllowed" yes:@"On" no:@"Off"]
 				tap:^{ [weakSelf toggleMessagesAllowed]; }]];
-		[rows addObject:[self rowWithTitle:@"Mute New Participants"
+		[rows addObject:[self rowWithTitle:@"Muted"
 				detail:[self callDetail:@"muteNewParticipants" yes:@"On" no:@"Off"]
 				tap:^{ [weakSelf toggleMuteNewParticipants]; }]];
-		[rows addObject:[self rowWithTitle:@"Start Notification"
+		[rows addObject:[self rowWithTitle:@"Notifications"
 				detail:[self callDetail:@"enabledStartNotification" yes:@"On" no:@"Off"]
 				tap:^{ [weakSelf toggleStartNotification]; }]];
-		[rows addObject:[self rowWithTitle:@"Streams and Data"
-				detail:@"Channels, segments, encryption check"
+		[rows addObject:[self rowWithTitle:@"Data"
+				detail:nil
 				opens:YES
 				tap:^{ [weakSelf openStreams]; }]];
-		[rows addObject:[self rowWithTitle:@"Decline an Invitation"
-				detail:@"By the service message id"
-				tap:^{ [weakSelf declineInvitation]; }]];
-		[rows addObject:[self rowWithTitle:@"End Call"
-				detail:@"Ends it for everybody"
+		[rows addObject:[self rowWithTitle:@"End"
+				detail:nil
 				tap:^{ [weakSelf endCall]; }]];
 	}
 
@@ -186,11 +183,11 @@
 
 - (void)createVideoChat {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:@[@"Video chat, start now",
-								@"Video chat, in 1 hour",
+	[TGAlertSheet showChoices:@[@"Start Video Chat",
+								@"Scheduled Video Chat",
 								@"RTMP stream, start now",
 								@"RTMP stream, in 1 hour"]
-						title:@"Create Video Chat"
+						title:@"Start Video Chat"
 			   destructiveIndex:-1 inView:self.view onChoice:^(NSInteger index){
 		TGVideoChatSetupViewController *me = weakSelf;
 		if (!me)
@@ -198,7 +195,7 @@
 		BOOL rtmp = index >= 2;
 		BOOL scheduled = (index == 1 || index == 3);
 		[TGAlertSheet showInput:@"Video Chat Title"
-						message:@"Empty uses the chat title."
+						message:nil
 					placeholder:me.chatTitle ?: @"Video chat"
 						   text:me.chatTitle action:@"Create" inView:me.view
 					   onSubmit:^(NSString *text){
@@ -213,13 +210,11 @@
 				if (!got)
 					return;
 				if (!callId){
-					[got setStatus:error ?: @"Telegram refused that."];
+					[got setStatus:error ?: @"An error occurred."];
 					return;
 				}
 				got.groupCallId = callId;
-				[got setStatus:[NSString stringWithFormat:
-						@"Video chat %d created%@.", callId,
-						scheduled ? @" for one hour from now" : @""]];
+				[got setStatus:@"Done"];
 				[got loadCall];
 				[got pushCallScreen];
 			}];
@@ -235,14 +230,12 @@
 		if (!me)
 			return;
 		if (!info){
-			[me setStatus:error ?: @"Telegram refused that."];
+			[me setStatus:error ?: @"An error occurred."];
 			return;
 		}
 		me.groupCallId = [info[@"groupCallId"] intValue];
 		me.joinPayload = info[@"joinPayload"];
-		[me setStatus:[NSString stringWithFormat:@"Group call %d created. %@",
-				me.groupCallId, [info[@"joinPayload"] length]
-						? @"Telegram sent a join payload." : @"No join payload."]];
+		[me setStatus:@"Done"];
 		[me loadCall];
 	}];
 }
@@ -256,8 +249,8 @@
 		TGVideoChatSetupViewController *me = weakSelf;
 		if (!me)
 			return;
-		[me setStatus:(ok ? @"Joined. The join payload is on the call screen."
-				: (error ?: @"Telegram refused the join."))];
+		[me setStatus:(ok ? @"Done"
+				: (error ?: @"An error occurred."))];
 		[me loadCall];
 	};
 	if ([self.call[@"isVideoChat"] boolValue] || [self.call[@"isLiveStory"] boolValue]){
@@ -285,16 +278,16 @@
 	__weak typeof(self) weakSelf = self;
 	[[TGClient shared] startScheduledVideoChat:self.groupCallId
 									completion:^(BOOL ok, NSString *error){
-		[weakSelf setStatus:(ok ? @"Telegram started the scheduled call."
-				: (error ?: @"Telegram refused that."))];
+		[weakSelf setStatus:(ok ? @"Done"
+				: (error ?: @"An error occurred."))];
 		[weakSelf loadCall];
 	}];
 }
 
 - (void)editTitle {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"Call Title" message:@"1 to 64 characters."
-				placeholder:@"Video chat"
+	[TGAlertSheet showInput:@"Video Chat Title" message:nil
+				placeholder:@"Video Chat"
 					   text:self.call[@"title"] action:@"Save" inView:self.view
 				   onSubmit:^(NSString *text){
 		TGVideoChatSetupViewController *me = weakSelf;
@@ -302,7 +295,7 @@
 			return;
 		[[TGClient shared] setVideoChatTitle:text inCall:me.groupCallId
 								  completion:^(BOOL ok, NSString *error){
-			[me setStatus:(ok ? @"Title saved." : (error ?: @"Telegram refused that."))];
+			[me setStatus:(ok ? @"Done" : (error ?: @"An error occurred."))];
 			[me loadCall];
 		}];
 	}];
@@ -319,7 +312,7 @@
 			return;
 		me.availableSenders = answer[@"senders"] ?: @[];
 		if (!answer)
-			[me setStatus:error ?: @"Telegram did not name a participant."];
+			[me setStatus:error ?: @"An error occurred."];
 		if (done)
 			done();
 	}];
@@ -341,18 +334,18 @@
 		for (NSDictionary *sender in me.availableSenders)
 			[titles addObject:[me labelForSender:sender]];
 		if (!titles.count){
-			[me setStatus:@"Telegram returned no participants this account may join as."];
+			[me setStatus:@"An error occurred."];
 			return;
 		}
-		[TGAlertSheet showChoices:titles title:@"Join Video Chat As"
+		[TGAlertSheet showChoices:titles title:@"Join Video Chat"
 				destructiveIndex:-1 inView:me.view onChoice:^(NSInteger index){
 			if (index < 0 || index >= (NSInteger)me.availableSenders.count)
 				return;
 			NSDictionary *sender = me.availableSenders[(NSUInteger)index];
 			[[TGClient shared] setVideoChatDefaultParticipant:sender forChat:me.chatId
 					completion:^(BOOL ok, NSString *error){
-				[me setStatus:(ok ? @"Default participant saved."
-						: (error ?: @"Telegram refused that."))];
+				[me setStatus:(ok ? @"Done"
+						: (error ?: @"An error occurred."))];
 				[me loadCall];
 			}];
 		}];
@@ -369,7 +362,7 @@
 		for (NSDictionary *sender in me.availableSenders)
 			[titles addObject:[me labelForSender:sender]];
 		if (!titles.count){
-			[TGAlertSheet showInput:@"Invite Participants" message:@"Telegram user id."
+			[TGAlertSheet showInput:@"Invite" message:nil
 					placeholder:@"123456789" text:nil action:@"Invite"
 						   inView:me.view onSubmit:^(NSString *text){
 				int64_t userId = text.longLongValue;
@@ -377,12 +370,12 @@
 					return;
 				[[TGClient shared] inviteVideoChatParticipants:@[@(userId)]
 						toCall:me.groupCallId completion:^(BOOL ok, NSString *error){
-					[me setStatus:(ok ? @"Invited." : (error ?: @"Telegram refused that."))];
+					[me setStatus:(ok ? @"Done" : (error ?: @"An error occurred."))];
 				}];
 			}];
 			return;
 		}
-		[TGAlertSheet showChoices:titles title:@"Invite Participant"
+		[TGAlertSheet showChoices:titles title:@"Invite"
 				destructiveIndex:-1 inView:me.view onChoice:^(NSInteger index){
 			if (index < 0 || index >= (NSInteger)me.availableSenders.count)
 				return;
@@ -391,7 +384,7 @@
 				return;
 			[[TGClient shared] inviteVideoChatParticipants:@[@(userId)]
 					toCall:me.groupCallId completion:^(BOOL ok, NSString *error){
-				[me setStatus:(ok ? @"Invited." : (error ?: @"Telegram refused that."))];
+				[me setStatus:(ok ? @"Done" : (error ?: @"An error occurred."))];
 			}];
 		}];
 	}];
@@ -401,7 +394,7 @@
 
 - (void)fetchInviteLink {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:@[@"Can unmute themselves", @"Join muted"]
+	[TGAlertSheet showChoices:@[@"Unmute", @"Muted"]
 						title:@"Invite Link" destructiveIndex:-1 inView:self.view
 					 onChoice:^(NSInteger index){
 		TGVideoChatSetupViewController *me = weakSelf;
@@ -410,27 +403,27 @@
 		[[TGClient shared] videoChatInviteLink:me.groupCallId canSelfUnmute:index == 0
 									completion:^(NSString *link, NSString *error){
 			if (!link.length){
-				[me setStatus:error ?: @"Telegram refused that."];
+				[me setStatus:error ?: @"An error occurred."];
 				return;
 			}
 			[UIPasteboard generalPasteboard].string = link;
-			[me setStatus:[NSString stringWithFormat:@"Link copied: %@", link]];
+			[me setStatus:@"Link copied."];
 		}];
 	}];
 }
 
 - (void)revokeInviteLink {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:@"The old link stops working for new joins."
-						title:@"Revoke Invite Link" action:@"Revoke" destructive:YES
+	[TGAlertSheet showConfirm:nil
+						title:@"Revoke Link" action:@"Revoke" destructive:YES
 					   inView:self.view onConfirm:^{
 		TGVideoChatSetupViewController *me = weakSelf;
 		if (!me)
 			return;
 		[[TGClient shared] revokeGroupCallInviteLink:me.groupCallId
 										  completion:^(BOOL ok, NSString *error){
-			[me setStatus:(ok ? @"Invite link revoked."
-					: (error ?: @"Telegram refused that."))];
+			[me setStatus:(ok ? @"Done"
+					: (error ?: @"An error occurred."))];
 			[me loadCall];
 		}];
 	}];
@@ -444,20 +437,20 @@
 		if (!me)
 			return;
 		if (!answer){
-			[me setStatus:error ?: @"Telegram refused that."];
+			[me setStatus:error ?: @"An error occurred."];
 			return;
 		}
 		NSString *sentence = [NSString stringWithFormat:@"RTMP: %@  Key: %@",
 				answer[@"url"], answer[@"streamKey"]];
 		[UIPasteboard generalPasteboard].string =
 				[NSString stringWithFormat:@"%@/%@", answer[@"url"], answer[@"streamKey"]];
-		[me setStatus:[sentence stringByAppendingString:@" (copied)"]];
+		[me setStatus:sentence];
 	}];
 }
 
 - (void)replaceRtmpUrl {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:@"The current stream key stops working."
+	[TGAlertSheet showConfirm:nil
 						title:@"Replace RTMP URL" action:@"Replace" destructive:YES
 					   inView:self.view onConfirm:^{
 		TGVideoChatSetupViewController *me = weakSelf;
@@ -466,7 +459,7 @@
 		[[TGClient shared] replaceVideoChatRtmpUrlForChat:me.chatId
 				completion:^(NSDictionary *answer, NSString *error){
 			if (!answer){
-				[me setStatus:error ?: @"Telegram refused that."];
+				[me setStatus:error ?: @"An error occurred."];
 				return;
 			}
 			[me setStatus:[NSString stringWithFormat:@"New RTMP: %@  Key: %@",
@@ -486,14 +479,14 @@
 		TGVideoChatSetupViewController *me = weakSelf;
 		if (!me)
 			return;
-		[TGAlertSheet showInput:@"Recording Title" message:@"A name for the recording."
-					placeholder:@"Recording" text:nil action:@"Start"
+		[TGAlertSheet showInput:@"Title" message:nil
+					placeholder:@"Title" text:nil action:@"Start"
 						   inView:me.view onSubmit:^(NSString *text){
 			[[TGClient shared] startGroupCallRecording:me.groupCallId title:text
 					recordVideo:index > 0 portrait:index == 2
 					completion:^(BOOL ok, NSString *error){
-				[me setStatus:(ok ? @"Recording started."
-						: (error ?: @"Telegram refused that."))];
+				[me setStatus:(ok ? @"Done"
+						: (error ?: @"An error occurred."))];
 				[me loadCall];
 			}];
 		}];
@@ -507,16 +500,16 @@
 		TGVideoChatSetupViewController *me = weakSelf;
 		if (!me)
 			return;
-		[me setStatus:(ok ? @"Recording stopped."
-				: (error ?: @"Telegram refused that."))];
+		[me setStatus:(ok ? @"Done"
+				: (error ?: @"An error occurred."))];
 		[me loadCall];
 	}];
 }
 
 - (void)startScreenSharing {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"Screen Sharing Payload"
-					message:@"The payload tgcalls returned at join time."
+	[TGAlertSheet showInput:@"Share Screen"
+					message:nil
 				placeholder:@"Join payload"
 					   text:self.joinPayload action:@"Start" inView:self.view
 				   onSubmit:^(NSString *text){
@@ -531,7 +524,7 @@
 			}
 			if (answer.length)
 				me.joinPayload = answer;
-			[me setStatus:@"Screen sharing started. Telegram returned a payload."];
+			[me setStatus:@"Done"];
 			[me loadCall];
 		}];
 	}];
@@ -541,8 +534,8 @@
 	__weak typeof(self) weakSelf = self;
 	[[TGClient shared] toggleGroupCallScreenSharingPaused:self.groupCallId paused:YES
 											   completion:^(BOOL ok, NSString *error){
-		[weakSelf setStatus:(ok ? @"Screen sharing paused."
-				: (error ?: @"Telegram refused that."))];
+		[weakSelf setStatus:(ok ? @"Done"
+				: (error ?: @"An error occurred."))];
 	}];
 }
 
@@ -550,8 +543,8 @@
 	__weak typeof(self) weakSelf = self;
 	[[TGClient shared] toggleGroupCallScreenSharingPaused:self.groupCallId paused:NO
 											   completion:^(BOOL ok, NSString *error){
-		[weakSelf setStatus:(ok ? @"Screen sharing resumed."
-				: (error ?: @"Telegram refused that."))];
+		[weakSelf setStatus:(ok ? @"Done"
+				: (error ?: @"An error occurred."))];
 	}];
 }
 
@@ -559,8 +552,8 @@
 	__weak typeof(self) weakSelf = self;
 	[[TGClient shared] endGroupCallScreenSharing:self.groupCallId
 									  completion:^(BOOL ok, NSString *error){
-		[weakSelf setStatus:(ok ? @"Screen sharing stopped."
-				: (error ?: @"Telegram refused that."))];
+		[weakSelf setStatus:(ok ? @"Done"
+				: (error ?: @"An error occurred."))];
 		[weakSelf loadCall];
 	}];
 }
@@ -575,8 +568,8 @@
 		TGVideoChatSetupViewController *me = weakSelf;
 		if (!me)
 			return;
-		[me setStatus:(ok ? @"Messages switch saved."
-				: (error ?: @"Telegram refused that."))];
+		[me setStatus:(ok ? @"Done"
+				: (error ?: @"An error occurred."))];
 		[me loadCall];
 	}];
 }
@@ -589,8 +582,8 @@
 		TGVideoChatSetupViewController *me = weakSelf;
 		if (!me)
 			return;
-		[me setStatus:(ok ? @"New participants switch saved."
-				: (error ?: @"Telegram refused that."))];
+		[me setStatus:(ok ? @"Done"
+				: (error ?: @"An error occurred."))];
 		[me loadCall];
 	}];
 }
@@ -603,39 +596,22 @@
 		TGVideoChatSetupViewController *me = weakSelf;
 		if (!me)
 			return;
-		[me setStatus:(ok ? @"Start notification switch saved."
-				: (error ?: @"Telegram refused that."))];
+		[me setStatus:(ok ? @"Done"
+				: (error ?: @"An error occurred."))];
 		[me loadCall];
-	}];
-}
-
-- (void)declineInvitation {
-	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"Decline Invitation"
-					message:@"The id of the messageGroupCall message."
-				placeholder:@"Message id" text:nil action:@"Decline"
-					 inView:self.view onSubmit:^(NSString *text){
-		TGVideoChatSetupViewController *me = weakSelf;
-		if (!me)
-			return;
-		[[TGClient shared] declineGroupCallInvitationInChat:me.chatId
-				messageId:text.longLongValue completion:^(BOOL ok, NSString *error){
-			[me setStatus:(ok ? @"Invitation declined."
-					: (error ?: @"Telegram refused that."))];
-		}];
 	}];
 }
 
 - (void)endCall {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:@"Everybody is disconnected."
-						title:@"End Call" action:@"End" destructive:YES
+	[TGAlertSheet showConfirm:nil
+						title:@"End" action:@"End" destructive:YES
 					   inView:self.view onConfirm:^{
 		TGVideoChatSetupViewController *me = weakSelf;
 		if (!me)
 			return;
 		[[TGClient shared] endGroupCall:me.groupCallId completion:^(BOOL ok, NSString *error){
-			[me setStatus:(ok ? @"Call ended." : (error ?: @"Telegram refused that."))];
+			[me setStatus:(ok ? @"Call Ended" : (error ?: @"An error occurred."))];
 			[me loadCall];
 		}];
 	}];

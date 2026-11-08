@@ -117,7 +117,7 @@ static TGPopupMenu *sOpenMenu = nil;
        onReaction:(void (^)(NSString *))reactionChoice
          onChoice:(void (^)(NSInteger, NSString *))choice
 {
-	[self showItems:items atPoint:point inView:host reactions:reactions
+	[self showItems:items atPoint:point inView:host headerView:nil reactions:reactions
 		   selectedReaction:selectedReaction onReaction:reactionChoice
 		onDefaultReaction:nil onChoice:choice];
 }
@@ -125,6 +125,7 @@ static TGPopupMenu *sOpenMenu = nil;
 + (void)showItems:(NSArray *)items
           atPoint:(CGPoint)point
            inView:(UIView *)host
+       headerView:(UIView *)headerView
         reactions:(NSArray<NSString *> *)reactions
    selectedReaction:(NSString *)selectedReaction
        onReaction:(void (^)(NSString *))reactionChoice
@@ -136,7 +137,7 @@ onDefaultReaction:(void (^)(NSString *))defaultChoice
 	[self dismiss];
 
 	TGPopupMenu *menu = [[TGPopupMenu alloc] initWithFrame:host.bounds];
-	[menu buildWithItems:items atPoint:point headerView:nil reactions:reactions selectedReaction:selectedReaction];
+	[menu buildWithItems:items atPoint:point headerView:headerView reactions:reactions selectedReaction:selectedReaction];
 	menu->_choice = [choice copy];
 	menu->_reactionChoice = [reactionChoice copy];
 	menu->_defaultReactionChoice = [defaultChoice copy];
@@ -164,6 +165,7 @@ onDefaultReaction:(void (^)(NSString *))defaultChoice
 + (void)showItems:(NSArray *)items
        anchoredAt:(CGRect)anchor
            inView:(UIView *)host
+       headerView:(UIView *)headerView
         reactions:(NSArray<NSString *> *)reactions
    selectedReaction:(NSString *)selectedReaction
        onReaction:(void (^)(NSString *))reactionChoice
@@ -180,7 +182,7 @@ onDefaultReaction:(void (^)(NSString *))defaultChoice
 	menu->_anchorRect = anchor;
 	[menu buildWithItems:items
 				 atPoint:CGPointMake(CGRectGetMidX(anchor), CGRectGetMaxY(anchor))
-			  headerView:nil
+			  headerView:headerView
 			   reactions:reactions
 		selectedReaction:selectedReaction];
 	menu->_choice = [choice copy];
@@ -456,11 +458,13 @@ onDefaultReaction:(void (^)(NSString *))defaultChoice
 
 - (void)rowTapped:(UIButton *)row {
 	NSInteger index = row.tag;
-	NSString *title = _items[(NSUInteger)index][@"title"];
+	NSDictionary *item = _items[(NSUInteger)index];
+	// `action` keeps dispatch stable while `title` is translated.
+	NSString *action = item[@"action"] ?: item[@"title"];
 	void (^choice)(NSInteger, NSString *) = _choice;
 	[TGPopupMenu dismiss];
 	if (choice)
-		choice(index, title);
+		choice(index, action);
 }
 
 - (void)touchesEnded:(NSSet *)touches withEvent:(UIEvent *)event {

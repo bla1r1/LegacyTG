@@ -12,7 +12,7 @@ static NSString *TGDirectMessagesError(NSDictionary *result) {
 	if (![result[@"@type"] isEqualToString:@"error"])
 		return nil;
 	NSString *message = result[@"message"];
-	return message.length ? message : @"Telegram refused that.";
+	return message.length ? message : @"An error occurred.";
 }
 
 /// A messageSender is a user or a chat; the row only needs which and its id.

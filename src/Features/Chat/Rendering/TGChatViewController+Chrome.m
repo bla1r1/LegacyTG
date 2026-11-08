@@ -13,6 +13,9 @@
 #import "TGStyle.h"
 #import "TGContactsViewController.h"
 #import "TGNewContactViewController.h"
+#import "TGLocalization.h"
+#import "TGChatParityModel.h"
+#import "TGListViewController.h"
 
 static const CGFloat kJumpSide = TGMetricJumpSide;
 /// The ticks are drawn a point shorter than the box they sit in, so the two
@@ -28,31 +31,11 @@ static const CGFloat kReplyHintInset   = 24.0f;
 
 #pragma mark - separators
 
-/// "Today", "Yesterday", "5 March", "5 March 2024" - how the day plates and
-/// the floating date read.
+/// "Today", "5 November", "5 November 2026" - how the day plates and the
+/// floating date read. The month word and its order come from the pack, not
+/// the device locale or a hardcoded English order.
 static NSString *TGDayTitle(NSTimeInterval stamp) {
-	NSDate *date = [NSDate dateWithTimeIntervalSince1970:stamp];
-	NSCalendar *calendar = [NSCalendar currentCalendar];
-	NSUInteger units = NSYearCalendarUnit | NSMonthCalendarUnit | NSDayCalendarUnit;
-	NSDateComponents *day = [calendar components:units fromDate:date];
-	NSDateComponents *today = [calendar components:units fromDate:[NSDate date]];
-	NSDate *dayStart = [calendar dateFromComponents:day];
-	NSDate *todayStart = [calendar dateFromComponents:today];
-	NSInteger daysAgo = (NSInteger)lround([todayStart timeIntervalSinceDate:dayStart] / 86400.0);
-	if (daysAgo == 0)
-		return @"Today";
-	if (daysAgo == 1)
-		return @"Yesterday";
-
-	static NSDateFormatter *sameYear = nil, *otherYear = nil;
-	if (!sameYear){
-		NSLocale *locale = [NSLocale currentLocale];
-		sameYear = [[NSDateFormatter alloc] init];
-		sameYear.dateFormat = [NSDateFormatter dateFormatFromTemplate:@"dMMMM" options:0 locale:locale];
-		otherYear = [[NSDateFormatter alloc] init];
-		otherYear.dateFormat = [NSDateFormatter dateFormatFromTemplate:@"dMMMMyyyy" options:0 locale:locale];
-	}
-	return day.year == today.year ? [sameYear stringFromDate:date] : [otherYear stringFromDate:date];
+	return TGChatDateSeparatorTitle(stamp, [[NSDate date] timeIntervalSince1970]);
 }
 
 - (NSArray *)messagesWithSeparators:(NSArray *)grouped {
@@ -72,7 +55,7 @@ static NSString *TGDayTitle(NSTimeInterval stamp) {
 		}
 		if (self.unreadFromId && [m[@"id"] longLongValue] == self.unreadFromId)
 			[out addObject:@{@"service" : @YES, @"separator" : @"unread",
-							 @"text" : @"Unread messages", @"date" : m[@"date"] ?: @0}];
+							 @"text" : @"Unread Messages", @"date" : m[@"date"] ?: @0}];
 		[out addObject:m];
 	}
 	return out;
@@ -188,36 +171,31 @@ static const CGFloat kActionBarCloseSide = TGMetricButtonLargeH;
 	NSString *primary = nil;
 	NSString *secondary = nil;
 	NSString *who = self.chatTitle ?: @"";
+	// Official's bar carries action words only; the explanatory sentences
+	// that used to sit beside them are not in that panel.
 	if ([kind isEqualToString:@"chatActionBarReportAddBlock"]){
-		NSString *name = [self actionBarRow][@"actionBarAccount"][@"name"];
-		say = [name length] ? [NSString stringWithFormat:@"%@ is nobody you know.", name]
-							: @"Report spam and block?";
-		primary = @"Report";
-		secondary = @"Block";
+		primary = TGLocalized(@"Block User");
+		secondary = [who length] ? TGLocalizedFormat(@"Add %@ to Contacts", who)
+								 : TGLocalized(@"Add to Contacts");
 	}
 	else if ([kind isEqualToString:@"chatActionBarReportSpam"]){
-		say = [NSString stringWithFormat:@"Report spam from %@?", who ?: @"this chat"];
-		primary = @"Report";
+		primary = self.isChannel ? TGLocalized(@"Report Spam and Leave")
+								 : TGLocalized(@"Report Spam");
 	}
 	else if ([kind isEqualToString:@"chatActionBarAddContact"]){
-		say = [NSString stringWithFormat:@"%@ is not in your contacts.", who ?: @"This account"];
-		primary = @"Add Contact";
+		primary = [who length] ? TGLocalizedFormat(@"Add %@ to Contacts", who)
+							   : TGLocalized(@"Add to Contacts");
 	}
 	else if ([kind isEqualToString:@"chatActionBarSharePhoneNumber"]){
-		say = @"Share your phone number with them?";
-		primary = @"Share";
+		primary = TGLocalized(@"Share My Phone Number");
 	}
 	else if ([kind isEqualToString:@"chatActionBarInviteMembers"]){
-		say = [NSString stringWithFormat:@"%@ takes people.", who ?: @"This chat"];
-		primary = @"Add";
+		primary = TGLocalized(@"Add Members");
 	}
 	else if ([kind isEqualToString:@"chatActionBarJoinRequest"]){
-		NSString *title = [self actionBarRow][@"actionBarText"];
-		say = [title length] ? title : @"They have asked to join.";
+		say = [self actionBarRow][@"actionBarText"] ?: TGLocalized(@"Join Requests");
 	}
 	else {
-		// A kind this app has no action for still deserves the words it was
-		// handed: the bar lives so long as Telegram sends it.
 		say = kind;
 	}
 
@@ -297,6 +275,10 @@ static const CGFloat kActionBarCloseSide = TGMetricButtonLargeH;
 /// and the spam one is what a bar is for - asked about first, sent after.
 - (void)actionBarPrimaryTapped {
 	NSString *kind = [self actionBarRow][@"actionBarKind"] ?: @"";
+	if ([kind isEqualToString:@"chatActionBarReportAddBlock"]){
+		[self blockActionBarUser];
+		return;
+	}
 	if ([kind isEqualToString:@"chatActionBarAddContact"]){
 		[self pushNewContactFromActionBar];
 		return;
@@ -311,7 +293,7 @@ static const CGFloat kActionBarCloseSide = TGMetricButtonLargeH;
 	if ([kind isEqualToString:@"chatActionBarSharePhoneNumber"]){
 		NSString *who = self.chatTitle ?: @"them";
 		__weak typeof(self) weakSelf = self;
-		[TGAlertSheet showConfirm:[NSString stringWithFormat:@"%@ will see your phone number.", who]
+		[TGAlertSheet showConfirm:TGLocalizedFormat(@"%@ can now see your phone number.", who)
 							title:@"Share" action:@"Share" destructive:NO
 						   inView:self.view
 						onConfirm:^{
@@ -324,7 +306,9 @@ static const CGFloat kActionBarCloseSide = TGMetricButtonLargeH;
 	// report is the spam reason, which Telegram names among the options.
 	NSString *who = self.chatTitle ?: @"this chat";
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:[NSString stringWithFormat:@"Report spam from %@?", who]
+	[TGAlertSheet showConfirm:(self.isGroup
+						? TGLocalized(@"Are you sure you want to report this group for spam?")
+						: TGLocalized(@"Are you sure you want to report spam from this user?"))
 						title:@"Report" action:@"Report" destructive:NO
 					   inView:self.view
 					onConfirm:^{
@@ -336,15 +320,20 @@ static const CGFloat kActionBarCloseSide = TGMetricButtonLargeH;
 			if (!me)
 				return;
 			NSString *spamOption = nil;
-			for (NSDictionary *option in options)
-				if ([[option[@"text"] lowercaseString]
-						rangeOfString:@"spam"].location != NSNotFound){
+			for (NSDictionary *option in options){
+				NSString *optionId = [option[@"id"] isKindOfClass:NSString.class]
+						? option[@"id"] : @"";
+				if ([optionId.lowercaseString rangeOfString:@"spam"].location != NSNotFound){
 					spamOption = option[@"id"];
 					break;
 				}
+			}
+			// The reason text is localised and cannot be matched by the word
+			// "spam"; the first option is Telegram's spam reason.
+			if (!spamOption && options.count)
+				spamOption = options.firstObject[@"id"];
 			if (!spamOption){
-				[TGAlertSheet showMessage:@"This report needs a reason this app "
-										  @"cannot ask for yet."
+				[TGAlertSheet showMessage:@"An error occurred."
 									title:@"Report" inView:me.view];
 				return;
 			}
@@ -358,13 +347,21 @@ static const CGFloat kActionBarCloseSide = TGMetricButtonLargeH;
 }
 
 - (void)actionBarSecondaryTapped {
+	if ([[self actionBarRow][@"actionBarKind"] isEqualToString:@"chatActionBarReportAddBlock"]){
+		[self pushNewContactFromActionBar];
+		return;
+	}
+	[self blockActionBarUser];
+}
+
+- (void)blockActionBarUser {
 	int64_t userId = self.isGroup ? 0 : self.chatId;
 	if (!userId)
 		return;
-	NSString *who = self.chatTitle ?: @"this user";
+	NSString *who = self.chatTitle ?: TGLocalized(@"Someone");
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:[NSString stringWithFormat:@"Block %@?", who]
-						title:@"Block" action:@"Block" destructive:YES
+	[TGAlertSheet showConfirm:TGLocalizedFormat(@"Block %@", who)
+						title:@"Block" action:TGLocalized(@"Block User") destructive:YES
 					   inView:self.view
 					onConfirm:^{
 		[[TGClient shared] blockUserWithUserId:userId];
@@ -492,6 +489,25 @@ static UIImage *TGJumpChevron(UIColor *colour) {
 - (void)layoutChrome {
 	[self updateTitleEmojiStatus];
 	CGRect table = self.table.frame;
+	// The pinned strip lives at the top, the report / add-contact bar below
+	// it, and the table clears both. The pinned code also adjusts the inset
+	// when it appears and leaves; writing the sum here keeps the two from
+	// counting each other twice.
+	BOOL hasPinned = self.pinnedBannerView && !self.pinnedBannerView.hidden;
+	CGFloat pinnedH = hasPinned ? kPinnedBanner : TGMetricZero;
+	if (self.pinnedBannerView)
+		self.pinnedBannerView.frame = CGRectMake(0, 0,
+				self.view.bounds.size.width, kPinnedBanner);
+	BOOL hasActionBar = self.actionBarView && !self.actionBarView.hidden;
+	CGFloat actionH = hasActionBar ? kComposeBannerHeight : TGMetricZero;
+	if (self.actionBarView){
+		self.actionBarView.frame = CGRectMake(0, pinnedH,
+				self.view.bounds.size.width, actionH);
+	}
+	UIEdgeInsets insets = self.table.contentInset;
+	insets.top = pinnedH + actionH;
+	self.table.contentInset = insets;
+	self.table.scrollIndicatorInsets = insets;
 	// Clear of the reply / edit strip when one is showing over the table. The
 	// strip rides directly on the composer, so it has to be placed here rather
 	// than where it was built: the keyboard moves the bar out from under it.
@@ -516,7 +532,7 @@ static UIImage *TGJumpChevron(UIColor *colour) {
 	CGSize date = [self.floatingDate sizeThatFits:CGSizeMake(table.size.width,
 			TGMetricFloatingDateHeight)];
 	CGFloat dw = ceilf(date.width) + TGMetricPadWide;
-	CGFloat top = self.pinnedBannerView.hidden || !self.pinnedBannerView ? TGMetricZero : CGRectGetMaxY(self.pinnedBannerView.frame);
+	CGFloat top = self.table.contentInset.top;
 	self.floatingDate.frame = CGRectMake(TGCenteredOrigin(table.size.width, dw), top + TGMetricFloatingDateTopOffset, dw,
 			TGMetricFloatingDateHeight);
 }
@@ -742,19 +758,30 @@ static const CGFloat kReplyPull = TGMetricReplyPull;   // how far a bubble trave
 /// used to sit at its captured status and never say "Waiting for network".
 - (void)titleSubtitleOwnerChanged:(NSNotification *)note {
 	[self updateTitleEmojiStatus];
-	NSString *network = TGNetworkSubtitleForState(
-			(NSInteger)[TGClient shared].connectionState, nil);
-	if (network.length){
+	if ([TGClient shared].connectionState == TGConnectionStateWaitingForNetwork){
+		NSString *network = TGNetworkSubtitleForState(TGConnectionStateWaitingForNetwork, nil);
 		self.networkSubtitle = network;
 		self.titleSubtitleLabel.text = network;
 		self.titleSubtitleLabel.textColor = [[TGTheme shared] barSubtitleColour];
 		return;
 	}
 
-	NSString *was = self.networkSubtitle;
 	self.networkSubtitle = nil;
-	if (!was.length && note)
-		return;   // nothing of ours to hand back
+	// A status notification asks for a fresh presence line; the old code
+	// returned when no network line was handing back, so "online" froze
+	// until the chat was reopened.
+	if (note && TGChatStatusNotificationRefreshesPresence(note.name,
+			self.isGroup, self.secretChatId != 0)){
+		__weak typeof(self) weakSelf = self;
+		[[TGClient shared] statusForUser:self.chatId completion:^(NSString *status){
+			TGChatViewController *me = weakSelf;
+			if (!me || !status.length)
+				return;
+			me.restingSubtitle = status;
+			[me titleSubtitleOwnerChanged:nil];
+		}];
+		return;
+	}
 	if (!self.typingTimer){
 		NSString *resting = self.restingSubtitle ?: @"";
 		if (resting.length){
@@ -781,43 +808,88 @@ static const CGFloat kReplyPull = TGMetricReplyPull;   // how far a bubble trave
 			return;
 		NSString *resting = nil;
 		if ([state isEqualToString:@"pending"]){
-			// An incoming one waits for its owner to accept; the outgoing
-			// one waits for the phone it was made with to come online.
-			resting = outgoing ? @"Secret chat · waiting for them to come online"
-							   : @"Secret chat · waiting for you to accept";
 			me.inputBar.hidden = YES;
 		} else if ([state isEqualToString:@"ready"]){
-			resting = @"Secret chat · keys exchanged";
 			me.inputBar.hidden = NO;
 		} else if ([state isEqualToString:@"closed"]){
-			resting = @"Secret chat · closed and gone when you leave";
 			me.inputBar.hidden = YES;
 		}
-		me.restingSubtitle = resting ?: @"";
+		// Official keeps the ordinary presence line under a secret chat and
+		// marks the state with a lock; the long sentences were ours.
+		(void)resting;
 		[me titleSubtitleOwnerChanged:nil];
 	}];
 }
 
-/// Holding the header of a secret chat offers ending it. On a plain chat
-/// the hold does nothing, because the profile already has the row.
+- (void)titleHeld:(UILongPressGestureRecognizer *)hold {
+	if (hold.state == UIGestureRecognizerStateBegan)
+		[self toggleChatSearch];
+}
+
+/// Holding the avatar opens the official chat menu: Open Profile,
+/// Statistics for a group or channel, and Search. A secret chat also offers
+/// ending itself, which is what the hold used to do alone.
 - (void)headerHeld:(UILongPressGestureRecognizer *)hold {
-	if (hold.state != UIGestureRecognizerStateBegan || !self.secretChatId)
+	if (hold.state != UIGestureRecognizerStateBegan)
 		return;
+	NSMutableArray *items = [NSMutableArray arrayWithObject:TGLocalized(@"Open Profile")];
+	if (self.isGroup || self.isChannel || self.chatId < 0)
+		[items addObject:TGLocalized(@"Statistics")];
+	[items addObject:TGLocalized(@"Search")];
+	BOOL secret = self.secretChatId != 0;
+	if (secret)
+		[items addObject:TGLocalized(@"Close")];
+	__weak typeof(self) weakSelf = self;
+	[TGAlertSheet showChoices:items title:nil
+			 destructiveIndex:(secret ? (NSInteger)items.count - 1 : -1)
+					   inView:self.navigationController.view ?: self.view
+					 onChoice:^(NSInteger index){
+		TGChatViewController *me = weakSelf;
+		if (!me)
+			return;
+		NSString *chosen = items[(NSUInteger)index];
+		if ([chosen isEqualToString:TGLocalized(@"Open Profile")])
+			[me openProfile];
+		else if ([chosen isEqualToString:TGLocalized(@"Statistics")])
+			[me showChatStatistics];
+		else if ([chosen isEqualToString:TGLocalized(@"Search")])
+			[me toggleChatSearch];
+		else if ([chosen isEqualToString:TGLocalized(@"Close")])
+			[me closeSecretChatFromHeader];
+	}];
+}
+
+- (void)closeSecretChatFromHeader {
 	NSInteger secretId = self.secretChatId;
+	if (!secretId)
+		return;
 	int64_t chatId = self.chatId;
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:@"The keys are destroyed and the chat cannot be "
-							  @"reopened. The messages on your phone stay."
-						 title:@"Close Secret Chat"
+	[TGAlertSheet showConfirm:nil
+						 title:@"Secret Chats"
 						action:@"Close"
 				   destructive:YES
 						inView:self.navigationController.view ?: self.view
 				   onConfirm:^{
 		[[TGClient shared] closeSecretChat:secretId];
-		// The chat turns empty rather than walking off the list, so the
-		// screen does not pretend it is still what it was.
 		[weakSelf.navigationController popViewControllerAnimated:YES];
 		[[TGClient shared] closeChat:chatId];
+	}];
+}
+
+- (void)showChatStatistics {
+	__weak typeof(self) weakSelf = self;
+	[[TGClient shared] chatStatisticsForChat:self.chatId completion:^(NSArray *rows, NSString *kind){
+		TGChatViewController *me = weakSelf;
+		if (!me)
+			return;
+		TGListViewController *list = [[TGListViewController alloc] init];
+		list.listTitle = @"Statistics";
+		list.rows = rows;
+		list.emptyText = @"An error occurred.";
+		list.offersCopy = YES;
+		list.hidesBottomBarWhenPushed = YES;
+		[me.navigationController pushViewController:list animated:YES];
 	}];
 }
 
@@ -861,6 +933,54 @@ static const CGFloat kReplyPull = TGMetricReplyPull;   // how far a bubble trave
 
 #pragma mark - header emoji status
 
+/// A padlock for a secret chat: a rounded body and a shackle, drawn at the
+/// bar's own colour. There is no lock glyph in the icon set, and a system
+/// emoji would bring its own colour into a monochrome bar.
+static UIImage *TGChatLockImageDraw(CGFloat side, UIColor *colour) {
+	UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), NO, 0);
+	CGContextRef ctx = UIGraphicsGetCurrentContext();
+	if (!ctx){
+		UIGraphicsEndImageContext();
+		return nil;
+	}
+	CGContextSetStrokeColorWithColor(ctx, colour.CGColor);
+	CGContextSetFillColorWithColor(ctx, colour.CGColor);
+	CGFloat bodyH = side * 0.52f;
+	CGRect body = CGRectZero;
+	body.origin.x = side * 0.18f;
+	body.origin.y = side - bodyH - side * 0.08f;
+	body.size.width = side * 0.64f;
+	body.size.height = bodyH;
+	UIBezierPath *bodyPath = [UIBezierPath bezierPathWithRoundedRect:body
+			cornerRadius:side * 0.12f];
+	[bodyPath fill];
+	CGFloat shackleW = side * 0.38f;
+	CGRect shackle = CGRectZero;
+	shackle.origin.x = (side - shackleW) * 0.5f;
+	shackle.origin.y = side * 0.12f;
+	shackle.size.width = shackleW;
+	shackle.size.height = side * 0.50f;
+	CGContextSetLineWidth(ctx, MAX(1.0f, side * 0.10f));
+	CGContextStrokeEllipseInRect(ctx, shackle);
+	UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+	UIGraphicsEndImageContext();
+	return image;
+}
+
+/// The title refreshes on every chat update; the lock only changes with the
+/// theme, so keep the last one.
+static UIImage *TGChatLockImage(CGFloat side, UIColor *colour) {
+	static UIImage *cached = nil;
+	static UIColor *cachedColour = nil;
+	static CGFloat cachedSide = 0;
+	if (!cached || side != cachedSide || ![colour isEqual:cachedColour]){
+		cached = TGChatLockImageDraw(side, colour);
+		cachedColour = colour;
+		cachedSide = side;
+	}
+	return cached;
+}
+
 - (void)updateTitleEmojiStatus {
 	if (!self.titleNameLabel || !self.titleNameLabel.superview)
 		return;
@@ -889,11 +1009,38 @@ static const CGFloat kReplyPull = TGMetricReplyPull;   // how far a bubble trave
 		statusId = [[TGClient shared] emojiStatusIdForChat:self.chatId];
 	}
 
-	NSString *rawTitle = self.chatTitle ?: (self.titleNameLabel.text ?: @"");
+	NSString *liveTitle = [[TGClient shared] titleForChat:self.chatId];
+	NSString *rawTitle = liveTitle.length ? liveTitle
+			: (self.chatTitle ?: (self.titleNameLabel.text ?: @""));
+	if (rawTitle.length && ![rawTitle isEqualToString:self.chatTitle])
+		self.chatTitle = rawTitle;
 	self.titleNameLabel.attributedText = TGNameWithStatus(rawTitle, statusId, self.titleNameLabel.font, [[TGTheme shared] barTitleColour]);
 	self.titleNameLabel.frame = CGRectMake(TGMetricZero, TGMetricBorderWidth,
 			kTitleWidth, TGMetricLineRow);
 	self.titleNameLabel.textAlignment = NSTextAlignmentCenter;
+
+	// A secret chat keeps the ordinary presence line and marks itself with a
+	// lock beside the name, which is the one difference official shows in
+	// the title rather than in the subtitle.
+	BOOL secret = self.secretChatId != 0;
+	if (!self.titleStatusIcon && self.titleNameLabel.superview){
+		self.titleStatusIcon = [[UIImageView alloc] init];
+		self.titleStatusIcon.contentMode = UIViewContentModeScaleAspectFit;
+		self.titleStatusIcon.hidden = YES;
+		[self.titleNameLabel.superview addSubview:self.titleStatusIcon];
+	}
+	if (secret){
+		CGFloat side = TGMetricLineSubhead;
+		CGFloat textWidth = [rawTitle sizeWithFont:self.titleNameLabel.font].width;
+		CGFloat x = MAX(TGMetricZero, (kTitleWidth - textWidth) * 0.5f
+				- side - TGMetricPadTiny);
+		self.titleStatusIcon.image = TGChatLockImage(side,
+				[[TGTheme shared] barTitleColour]);
+		self.titleStatusIcon.frame = CGRectMake(x,
+				TGCenteredOrigin(TGMetricLineRow, side) + TGMetricBorderWidth,
+				side, side);
+		self.titleStatusIcon.hidden = NO;
+	}
 }
 
 - (void)chromeCustomEmojiLoaded:(NSNotification *)note {

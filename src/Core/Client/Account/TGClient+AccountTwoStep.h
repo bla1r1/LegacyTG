@@ -19,6 +19,9 @@
 /// TDLib's way of checking a password the user typed.
 - (void)recoveryEmailAddress:(NSString *)password
 				  completion:(void (^)(NSString *email))completion;
+/// The same read, with the server's refusal kept apart from an empty address.
+- (void)recoveryEmailAddress:(NSString *)password
+		  completionWithError:(void (^)(NSString *email, NSString *error))completion;
 /// Point the recovery address somewhere else; TDLib confirms the new one by
 /// letter, so the answer says the request landed, not that it is live.
 - (void)setRecoveryEmailAddress:(NSString *)password

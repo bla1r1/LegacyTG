@@ -34,7 +34,7 @@
 		if ([type isEqualToString:@"startLiveStoryResultFail"]){
 			NSDictionary *reason = result[@"error_type"];
 			NSString *kind = reason[@"@type"] ?: @"";
-			NSString *say = @"Telegram refused the live story.";
+			NSString *say = @"An error occurred.";
 			if ([kind isEqualToString:@"canPostStoryResultPremiumNeeded"])
 				say = @"Telegram Premium is needed to start a live story.";
 			else if ([kind isEqualToString:@"canPostStoryResultBoostNeeded"])

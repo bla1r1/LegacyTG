@@ -1,4 +1,5 @@
 #import "TGGroupSettingsViewController.h"
+#import "TGLocalization.h"
 #import "TGClient.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
@@ -16,6 +17,8 @@
 #import "TGGroupSettingsViewController.h"
 #import "TGGroupSwitch.h"
 #import "TGGroupSettingsViewControllerInternal.h"
+#import "TGGroupLogic.h"
+#import "TGChatViewController.h"
 
 
 
@@ -150,9 +153,8 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 	[[TGClient shared] availableMessageSendersInChat:self.chatId completion:^(NSArray *senders){
 		TGGroupSettingsViewController *me = weakSelf;
 		if (!senders.count){
-			[TGAlertSheet showMessage:@"Only a chat you may post in carries a "
-									  @"Send-as switch."
-								title:@"Send as" inView:me.view];
+			[TGAlertSheet showMessage:@"An error occurred."
+								title:@"Send Message As..." inView:me.view];
 			return;
 		}
 		NSMutableArray *rows = [NSMutableArray array];
@@ -168,62 +170,82 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 			NSString *current = [sender[@"is_current"] boolValue] ? @" — now" : @"";
 			[rows addObject:[line stringByAppendingString:current]];
 		}
-		[TGAlertSheet showChoices:rows title:@"Send as"
-							message:@"What you post here posts under that name."
+		[TGAlertSheet showChoices:rows title:@"Send Message As..."
+							message:nil
 				 destructiveIndex:-1 inView:me.view
 						 onChoice:^(NSInteger index){
 			NSDictionary *sender = senders[(NSUInteger)index];
 			[[TGClient shared] setMessageSender:sender inChat:me.chatId
 									 completion:^(BOOL ok){
 				if (!ok)
-					[TGAlertSheet showMessage:@"Telegram refused that."
-										title:@"Send as" inView:me.view];
+					[TGAlertSheet showMessage:@"An error occurred."
+										title:@"Send Message As..." inView:me.view];
 			}];
 		}];
 	}];
 }
 
+/// The tile opens the direct-messages chat. The price is part of the
+/// monoforum's own setup, not the first thing this row asks.
 - (void)chooseDirectMessages {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:@[@"Off", @"On, free", @"On, 1 star per message"]
-						title:@"Channel Direct Messages"
-			  destructiveIndex:-1
-					   inView:self.view
-					 onChoice:^(NSInteger index){
-		BOOL enabled = index > 0;
-		NSInteger stars = index > 1 ? 1 : 0;
-		[[TGClient shared] setDirectMessagesEnabled:enabled paidStars:stars
-											 inChat:weakSelf.chatId
+	[[TGClient shared] chatProfile:self.chatId completion:^(NSDictionary *info){
+		TGGroupSettingsViewController *me = weakSelf;
+		if (!me)
+			return;
+		int64_t chatId = [info[@"directMessagesChatId"] longLongValue];
+		if (chatId){
+			TGChatViewController *chat = [[TGChatViewController alloc] init];
+			chat.chatId = chatId;
+			chat.chatTitle = me.chatTitle ?: @"Direct Messages";
+			chat.hidesBottomBarWhenPushed = YES;
+			[me.navigationController pushViewController:chat animated:YES];
+			return;
+		}
+		if (![info[@"hasDirectMessages"] boolValue] &&
+				![info[@"canManageDirectMessages"] boolValue]){
+			[TGAlertSheet showMessage:@"An error occurred."
+								title:@"Direct Messages" inView:me.view];
+			return;
+		}
+		[[TGClient shared] setDirectMessagesEnabled:YES paidStars:0
+											 inChat:me.chatId
 										 completion:^(BOOL ok){
-			TGGroupSettingsViewController *me = weakSelf;
-			[TGSnackbar showInView:me.view
-							  text:(ok ? @"Direct messages updated"
-									   : @"Only the channel's owner changes this")
-						   seconds:2 onCommit:nil];
+			TGGroupSettingsViewController *again = weakSelf;
+			if (!again)
+				return;
+			if (!ok){
+				[TGAlertSheet showMessage:@"An error occurred."
+									title:@"Direct Messages" inView:again.view];
+				return;
+			}
+			[again chooseDirectMessages];
 		}];
 	}];
 }
 
 - (void)clearByDate {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:@[@"Older than a week", @"Older than a month",
-								@"Everything older than today"]
-						title:@"Clear by Date"
+	[TGAlertSheet showChoices:@[@"1 week",
+								TGLocalizedPluralValue(@"%@ month", @"%@ months", @"1", 1),
+								@"Today"]
+						title:@"Clear History"
 			 destructiveIndex:-1
 					   inView:self.view
 					 onChoice:^(NSInteger index){
-		NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
-		NSInteger days = index == 0 ? 7 : (index == 1 ? 30 : 1);
-		[TGAlertSheet showConfirm:@"Everything sent before that is deleted for "
-								  @"everyone, if this account may delete it here."
-							title:@"Clear by Date"
+		TGGroupSettingsViewController *me = weakSelf;
+		NSInteger minDate = 0;
+		NSInteger maxDate = 0;
+		TGClearHistoryWindowForChoice(index, [NSDate date], &minDate, &maxDate);
+		[TGAlertSheet showConfirm:@"This will **delete all messages** in this chat."
+							title:@"Clear History"
 						   action:@"Clear"
 					  destructive:YES
-						   inView:weakSelf.view
+						   inView:me.view
 						onConfirm:^{
 			[[TGClient shared] deleteChatMessagesByDate:weakSelf.chatId
-												 minDate:0
-												 maxDate:(NSInteger)(now - days * 86400)
+												 minDate:minDate
+												 maxDate:maxDate
 												  revoke:YES];
 		}];
 	}];
@@ -246,29 +268,27 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 			if (!setId)
 				continue;
 			[titles addObject:[NSString stringWithFormat:@"%@  ·  %lu stickers",
-					set[@"title"] ?: @"Pack",
+					set[@"title"] ?: @"Stickers",
 					(unsigned long)[set[@"count"] unsignedIntegerValue]]];
 			[ids addObject:@(setId)];
 		}
-		NSString *title = customEmoji ? @"Custom Emoji Stickers" : @"Group Stickers";
+		NSString *title = customEmoji ? @"Custom Emoji" : @"Group Stickers";
 		if (titles.count == 1){
 			[TGAlertSheet showMessage:(customEmoji
-					? @"This account owns no custom emoji packs."
-					: @"This account owns no sticker packs.")
+					? @"No Stickers Found"
+					: @"No Stickers Found")
 								  title:title inView:me.view];
 			return;
 		}
 		[TGAlertSheet showChoices:titles title:title
-							message:(customEmoji
-									? @"Used for the group's emoji status and reactions."
-									: @"Shown above the composer for everyone here.")
+							message:nil
 				 destructiveIndex:-1 inView:me.view
 						 onChoice:^(NSInteger index){
 			int64_t setId = [ids[(NSUInteger)index] longLongValue];
 			void (^done)(BOOL) = ^(BOOL ok){
-				[TGAlertSheet showMessage:(ok ? @"The group's shelf is updated."
-											  : @"Telegram refused the shelf; only "
-												@"an administrator can change it.")
+				[TGAlertSheet showMessage:(ok ? (customEmoji
+												? @"Group emoji pack updated." : @"Done")
+											  : @"An error occurred.")
 								  title:title inView:me.view];
 			};
 			if (customEmoji)
@@ -288,8 +308,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 	int64_t chatId = self.chatId;
 	__weak typeof(self) weakSelf = self;
 	[TGAlertSheet showInput:@"Import Messages"
-					message:@"Name a history file in this app's Documents "
-							@"folder. Its media files go in the same folder."
+					message:nil
 				placeholder:@"export.json"
 					   text:nil
 					 action:@"Next"
@@ -311,9 +330,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 		path = [documents stringByAppendingPathComponent:trimmed];
 	}
 	if (![[NSFileManager defaultManager] fileExistsAtPath:path]){
-		[TGAlertSheet showMessage:[NSString stringWithFormat:
-				@"No file at %@. Put the export in the app's Documents folder "
-				@"first; iTunes file sharing shows it.", path]
+		[TGAlertSheet showMessage:@"An error occurred."
 							title:@"Import Messages" inView:self.view];
 		return;
 	}
@@ -325,7 +342,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 		contents = [NSString stringWithContentsOfFile:path
 				encoding:NSUTF8StringEncoding error:nil];
 	if (!contents.length){
-		[TGAlertSheet showMessage:@"The file is not text this app can read."
+		[TGAlertSheet showMessage:@"An error occurred."
 							title:@"Import Messages" inView:self.view];
 		return;
 	}
@@ -336,22 +353,13 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 
 	__weak typeof(self) weakSelf = self;
 	[[TGClient shared] messageFileTypeForHead:head completion:^(NSDictionary *fileType){
+		(void)fileType;
 		TGGroupSettingsViewController *me = weakSelf;
-		NSString *kind = fileType[@"kind"] ?: @"unknown";
-		NSString *who = fileType[@"title"];
 		[[TGClient shared] importConfirmationTextForChat:chatId
 											  completion:^(NSString *text){
 			TGGroupSettingsViewController *again = weakSelf;
-			NSString *title = [kind isEqualToString:@"private"]
-					? [NSString stringWithFormat:@"Import chat with %@",
-							who.length ? who : @"them"]
-					: ([kind isEqualToString:@"group"]
-							? [NSString stringWithFormat:@"Import group %@",
-									who.length ? who : @""]
-							: @"Import messages");
-			NSString *body = text.length ? text
-					: @"This file looks like a history export. Importing adds "
-					  @"its messages to this chat.";
+			NSString *title = @"Import Messages";
+			NSString *body = text.length ? text : @"Import Messages";
 			[TGAlertSheet showConfirm:body title:title action:@"Import"
 						  destructive:YES inView:again.view
 							onConfirm:^{
@@ -360,8 +368,8 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 												 intoChat:chatId
 											   completion:^(BOOL ok){
 					[TGSnackbar showInView:again.view
-									  text:(ok ? @"Import started"
-											   : @"Telegram refused the import")
+									  text:(ok ? @"Importing Chat"
+											   : @"An error occurred.")
 								   seconds:2 onCommit:nil];
 				}];
 			}];

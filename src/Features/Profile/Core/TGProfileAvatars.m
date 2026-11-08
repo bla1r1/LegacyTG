@@ -1,4 +1,5 @@
 #import "TGProfileViewControllerInternal.h"
+#import "TGLocalization.h"
 #import "TGClientInternal.h"
 #import "TGNameWithStatus.h"
 #import "TGCustomEmojiStore.h"
@@ -465,7 +466,7 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 	NSArray *commChats = [fullComm[@"chats"] isKindOfClass:[NSArray class]] ? fullComm[@"chats"] : @[];
 	NSString *commSubtitle = nil;
 	if (commChats.count > 0) {
-		commSubtitle = [NSString stringWithFormat:@"Community with %lu chats", (unsigned long)commChats.count];
+		commSubtitle = TGLocalizedFormat(@"Community with %@ chats", @(commChats.count));
 	} else {
 		commSubtitle = @"Community";
 	}

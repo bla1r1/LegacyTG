@@ -11,7 +11,7 @@
 
 static NSString *TGPaymentError(NSDictionary *result) {
 	NSString *message = result[@"message"];
-	return [message isKindOfClass:NSString.class] ? message : @"Telegram refused that.";
+	return [message isKindOfClass:NSString.class] ? message : @"An error occurred.";
 }
 
 static NSString *TGPaymentString(NSDictionary *dictionary, NSString *key) {

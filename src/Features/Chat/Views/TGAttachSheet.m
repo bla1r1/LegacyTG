@@ -1,4 +1,5 @@
 #import "TGAttachSheet.h"
+#import "TGLocalization.h"
 #import "TGTheme.h"
 #import "TGIcons.h"
 #import "TGTextDraw.h"
@@ -218,7 +219,7 @@ static NSString *const kTileIdentifier = @"tile";
 					style:UIBarButtonItemStylePlain
 				   target:self action:@selector(choiceTapped:)];
 	item.tag = (NSInteger)choice;
-	item.accessibilityLabel = label;
+	item.accessibilityLabel = TGLocalized(label);
 	return item;
 }
 
@@ -240,7 +241,7 @@ static NSString *const kTileIdentifier = @"tile";
 										 side:TGMetricMenuGlyph]
 					style:UIBarButtonItemStylePlain
 				   target:self action:@selector(moreTapped)];
-	more.accessibilityLabel = @"More";
+	more.accessibilityLabel = TGLocalized(@"More");
 	self.choiceItems = @[gap(),
 			[self itemWithGlyph:@"folder" choice:TGAttachChoiceGallery label:@"Gallery"], gap(),
 			[self itemWithGlyph:@"pin" choice:TGAttachChoiceLocation label:@"Location"], gap(),
@@ -260,7 +261,7 @@ static NSString *const kTileIdentifier = @"tile";
 	static const TGAttachChoice rest[] = {TGAttachChoiceChecklist, TGAttachChoiceQuickReply,
 			TGAttachChoiceDice, TGAttachChoiceEphemeral};
 	[self dismiss];
-	[TGAlertSheet showChoices:@[@"Checklist", @"Quick Reply", @"Stake Dice", @"Ephemeral Message"]
+	[TGAlertSheet showChoices:@[@"Checklist", @"Add Quick Reply", @"Stake", @"Ephemeral Message"]
 						title:nil destructiveIndex:-1 inView:host onChoice:^(NSInteger choice){
 		if (onChoice && choice >= 0 && choice < 4)
 			onChoice(rest[choice]);
@@ -270,8 +271,8 @@ static NSString *const kTileIdentifier = @"tile";
 /// What the bars say follows what is ticked: a count for a title, and Send where
 /// the choices were. The toolbar's own animated change crossfades them.
 - (void)refreshBarsWithAdded:(BOOL)added {
-	self.sendItem.title = [NSString stringWithFormat:@"Send %ld", (long)_ticked];
-	self.header.title = _ticked ? [NSString stringWithFormat:@"%ld Selected", (long)_ticked]
+	self.sendItem.title = TGLocalizedFormat(@"Send %@", @(_ticked));
+	self.header.title = _ticked ? TGLocalizedFormat(@"%@ Selected", @(_ticked))
 								: @"Recent";
 	if (added && _ticked == 1){
 		UIBarButtonItem *gapLeft = [[UIBarButtonItem alloc]
@@ -365,7 +366,7 @@ static NSString *const kTileIdentifier = @"tile";
 			finish(NO);
 			return;
 		}
-		[group setAssetsFilter:[ALAssetsFilter allPhotos]];
+		[group setAssetsFilter:[ALAssetsFilter allAssets]];
 		[group enumerateAssetsWithOptions:NSEnumerationReverse usingBlock:^(ALAsset *asset, NSUInteger index, BOOL *stopAssets){
 			if (!asset)
 				return;
@@ -386,9 +387,9 @@ static NSString *const kTileIdentifier = @"tile";
 	self.assets = found;
 	[self.grid reloadData];
 	if (denied)
-		[self showMessage:@"Allow access to Photos in Settings"];
+		[self showMessage:@"Allow Access"];
 	else if (!found.count)
-		[self showMessage:@"No photos yet"];
+		[self showMessage:@"None"];
 }
 
 /// One line under the camera tile, where the photos would have been.

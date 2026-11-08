@@ -64,6 +64,7 @@ NSString *const TGChatsChangedNotification = @"TGChatsChangedNotification";
 NSString *const TGChatReplyMarkupChangedNotification = @"TGChatReplyMarkupChangedNotification";
 NSString *const TGConnectionStateChangedNotification = @"TGConnectionStateChangedNotification";
 NSString *const TGUserStatusChangedNotification = @"TGUserStatusChangedNotification";
+NSString *const TGInAppNotificationReceivedNotification = @"TGInAppNotificationReceivedNotification";
 NSString *const TGUnreadTotalChangedNotification = @"TGUnreadTotalChangedNotification";
 NSString *const TGDownloadsChangedNotification = @"TGDownloadsChangedNotification";
 NSString *const TGFullInfoChangedNotification = @"TGFullInfoChangedNotification";
@@ -619,8 +620,23 @@ NSDictionary *TGFormattedText(NSString *text) {
 	// Live message updates - without these a chat only refreshes when reopened.
 	case TGUpdateNewMessage: {
 		NSDictionary *m = obj[@"message"];
+		if (m[@"chat_id"]){
+			NSNumber *chatId = m[@"chat_id"];
+			NSMutableDictionary *info = self.chatsById[chatId];
+			if (info){
+				info[@"text"] = [self previewForLastMessage:m inChat:info];
+				info[@"date"] = m[@"date"] ?: @(0);
+				info[@"lastId"] = m[@"id"] ?: @(0);
+				info[@"lastOutgoing"] = @([m[@"is_outgoing"] boolValue]);
+				if (self.updateCoalescer) {
+					[self.updateCoalescer markChatDirty:[chatId longLongValue]];
+					[self.updateCoalescer markOrderDirty];
+				}
+			}
+		}
 		if (self.onMessage && m)
 			self.onMessage([m[@"chat_id"] longLongValue], TGFlattenMessage(m), 0);
+		[self handleInAppNotificationForNewMessage:m];
 		return;
 	}
 	case TGUpdateMessageSendSucceeded:
@@ -793,15 +809,15 @@ NSDictionary *TGFormattedText(NSString *text) {
 					[NSMutableDictionary dictionary];
 			row[@"id"] = @(topicId.length ? [topicId longLongValue] : 0);
 			NSString *type = topic[@"type"][@"@type"] ?: @"";
-			NSString *title = @"Forwarded";
+			NSString *title = @"Forwarded from";
 			if ([type isEqualToString:@"savedMessagesTopicTypeMyNotes"])
 				title = @"My Notes";
 			else if ([type isEqualToString:@"savedMessagesTopicTypeAuthorHidden"])
-				title = @"Hidden Author";
+				title = @"Author Hidden";
 			else if ([type isEqualToString:@"savedMessagesTopicTypeSavedFromChat"]){
 				NSString *chatTitle = [[TGClient shared] titleForChat:
 						[topic[@"type"][@"chat_id"] longLongValue]];
-				title = chatTitle.length ? chatTitle : @"Forwarded Chat";
+				title = chatTitle.length ? chatTitle : @"Chat";
 			}
 			row[@"title"] = title;
 			NSString *text = TGFlattenMessage(topic[@"last_message"])[@"text"];
@@ -1364,7 +1380,7 @@ NSDictionary *TGFormattedText(NSString *text) {
 				   [st isEqualToString:@"connectionStateConnectingToProxy"]){
 			state = TGConnectionStateConnecting; text = @"Connecting";
 		} else if ([st isEqualToString:@"connectionStateUpdating"]){
-			state = TGConnectionStateUpdating; text = @"Updating";
+			state = TGConnectionStateUpdating; text = @"Updating...";
 		} else if ([st isEqualToString:@"connectionStateReady"]){
 			state = TGConnectionStateReady; text = nil;
 		}
@@ -1609,7 +1625,7 @@ NSDictionary *TGFormattedText(NSString *text) {
 	}
 
 	if ([type isEqualToString:@"error"]){
-		NSString *msg = obj[@"message"] ?: @"unknown error";
+		NSString *msg = obj[@"message"] ?: @"An error occurred.";
 		NSLog(@"TGClient: <<< ERROR code=%@ msg=%@ details: %@", obj[@"code"], msg, obj);
 		if ([obj[@"code"] intValue] == 404){
 			// loadChats answers 404 when the whole list is loaded
@@ -1680,6 +1696,7 @@ NSDictionary *TGFormattedText(NSString *text) {
 
 	self.authState = s;
 	if (s == TGAuthStateReady){
+		self.readyAt = [NSDate date].timeIntervalSince1970;
 		[self loadChats];
 		[self send:@{@"@type" : @"getMe"}];
 	}
@@ -1723,6 +1740,28 @@ NSDictionary *TGFormattedText(NSString *text) {
 		@"system_version"         : dev.systemVersion ?: @"7.1.2",
 		@"application_version"    : @"1.0",
 	}];
+}
+
+- (void)handleInAppNotificationForNewMessage:(NSDictionary *)m {
+	if (!m || [m[@"is_outgoing"] boolValue])
+		return;
+	if (self.authState != TGAuthStateReady || self.connectionState != TGConnectionStateReady)
+		return;
+	if (self.readyAt <= 0)
+		return;
+	NSTimeInterval msgDate = [m[@"date"] doubleValue];
+	if (msgDate < self.readyAt)
+		return;
+	NSNumber *chatIdNum = m[@"chat_id"];
+	if (!chatIdNum)
+		return;
+	int64_t chatId = [chatIdNum longLongValue];
+	if ([self isChatMuted:chatId])
+		return;
+	[[NSNotificationCenter defaultCenter]
+			postNotificationName:TGInAppNotificationReceivedNotification
+						  object:self
+						userInfo:@{@"message" : m, @"chatId" : chatIdNum}];
 }
 
 @end

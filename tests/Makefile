@@ -77,6 +77,7 @@ OBJC_SRCS := \
     src/Core/Model/TGMessageCard.m \
     src/Core/Style/TGStyle.m \
     src/Core/Support/TGBase64.m \
+    src/Core/Support/TGLocalization.m \
     src/Core/Platform/TGPerf.m \
     src/Core/Platform/TGDevice.m \
     src/Core/Platform/TGCapabilities.m
@@ -86,7 +87,9 @@ OBJC_SRCS := \
 CLIENT_OBJC_SRCS := \
     $(ROOT)/third_party/yyjson/yyjson.c \
     src/Core/Support/TGBase64.m \
+    src/Core/Support/TGLocalization.m \
     src/Core/Style/TGStyle.m \
+    src/Features/Profile/Core/TGProfileLogic.m \
     src/Core/Support/TGUpdateType.c \
     src/Views/Icons/TGSVGPath.c \
     src/Views/Icons/TGIconPaths.m \
@@ -152,6 +155,8 @@ CLIENT_OBJC_SRCS := \
     src/Core/Client/Stories/TGClient+StoriesLive.m \
     src/Core/Platform/TGDevice.m \
     src/Core/Platform/TGCapabilities.m \
+    src/Features/Contacts/TGContactSort.m \
+    src/Features/Groups/Core/TGGroupLogic.m \
     src/Core/Platform/TGGhostMode.m \
     src/Core/Client/TGClient+Business.m \
     src/Core/Client/Features/TGClient+FeatureSupport.m \
@@ -205,6 +210,8 @@ CLIENT_OBJC_SRCS := \
     src/Core/Platform/TGPerf.m \
     src/UI/Format/TGUIFormat.m \
     src/Features/Chat/TGPollPresentation.m \
+    src/Features/Chat/Core/TGChatParityModel.m \
+    src/Features/Chat/Core/TGChatActionMenuModel.m \
     src/Features/Chat/TGChecklistPresentation.m \
     src/Features/ChatList/TGChatListRowGeometry.m \
     src/Features/Media/TGMediaVeilBlur.m \
@@ -273,7 +280,9 @@ CLIENT_TEST_SRCS := \
     $(TESTS)/TGGiftFlattenTests.m \
     $(TESTS)/TGPinnedLineTests.m \
     $(TESTS)/TGPollPresentationTests.m \
+    $(TESTS)/TGParityChatTests.m \
     $(TESTS)/TGChecklistPresentationTests.m \
+    $(TESTS)/TGLocalizationTests.m \
     $(TESTS)/TGMediaVeilBlurTests.m \
     $(TESTS)/TGClientAccountTests.m \
     $(TESTS)/TGClientProfileTests.m \
@@ -304,9 +313,12 @@ CLIENT_TEST_SRCS := \
     $(TESTS)/TGStickerBudgetTests.m \
     $(TESTS)/TGStickerImageTests.m \
     $(TESTS)/TGChatListRowGeometryTests.m \
+    $(TESTS)/TGParitySettingsTests.m \
     $(TESTS)/TGSVGPathTests.m \
     $(TESTS)/TGUIFormatTests.m \
-    $(TESTS)/TGCustomEmojiStoreTests.m
+    $(TESTS)/TGCustomEmojiStoreTests.m \
+    $(TESTS)/TGParityRestTests.m \
+    $(TESTS)/TGParityPeopleTests.m
 
 TEST_BINARY := $(BUILD)/TGCallTests
 CLIENT_BINARY := $(BUILD)/TGClientTests

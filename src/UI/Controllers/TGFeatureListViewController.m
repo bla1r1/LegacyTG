@@ -76,17 +76,7 @@ NSDictionary *TGFeatureSection(NSString *header, NSString *footer, NSArray *rows
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
-		self.edgesForExtendedLayout = UIRectEdgeNone;
 	[self applyTheme];
-	__weak typeof(self) weakSelf = self;
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGThemeChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note){ [weakSelf applyTheme]; }];
-}
-
-- (void)dealloc {
-	[[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 - (void)applyTheme {
@@ -97,11 +87,6 @@ NSDictionary *TGFeatureSection(NSString *header, NSString *footer, NSArray *rows
 
 - (void)reloadRows {
 	[self.tableView reloadData];
-}
-
-- (void)toast:(NSString *)text {
-	UIView *host = self.navigationController.view ?: self.view;
-	[TGSnackbar showInView:host text:text seconds:2 onCommit:nil];
 }
 
 #pragma mark - table
@@ -193,8 +178,6 @@ NSDictionary *TGFeatureSection(NSString *header, NSString *footer, NSArray *rows
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
-		self.edgesForExtendedLayout = UIRectEdgeNone;
 	[[TGTheme shared] styleNavigationBar:self.navigationController.navigationBar];
 	self.view.backgroundColor = [[TGTheme shared] groupedBackgroundColour];
 
@@ -227,7 +210,7 @@ NSDictionary *TGFeatureSection(NSString *header, NSString *footer, NSArray *rows
 - (void)copyText {
 	[UIPasteboard generalPasteboard].string = self.textView.text ?: @"";
 	UIView *host = self.navigationController.view ?: self.view;
-	[TGSnackbar showInView:host text:@"Copied" seconds:2 onCommit:nil];
+	[TGSnackbar showInView:host text:@"Copied to clipboard." seconds:2 onCommit:nil];
 }
 
 - (void)sendText {

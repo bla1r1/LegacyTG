@@ -17,8 +17,8 @@
 	if (self){
 		_chatId = chatId;
 		_groupCallId = groupCallId;
-		self.listTitle = @"Call Messages";
-		self.emptyText = @"No messages in this call yet.";
+		self.listTitle = @"Calls";
+		self.emptyText = @"No messages here yet...";
 	}
 	return self;
 }
@@ -78,31 +78,27 @@
 	if (self.statusText.length)
 		return self.statusText;
 	if (!self.call)
-		return @"Reading the call from Telegram...";
-	if (![self.call[@"areMessagesAllowed"] boolValue])
-		return @"Telegram says messages are off in this call. Only an administrator "
-				@"who can toggle the setting can change that.";
-	if (![self.call[@"canSendMessages"] boolValue])
-		return @"This account cannot send messages in this call.";
+		return @"Loading...";
 	if ([self.call[@"isLiveStory"] boolValue])
-		return @"A live story call. Paid messages use the live story screen; this "
-				@"bar sends plain text with no stars.";
-	return @"Messages go to everybody in the call. Delete removes one message; "
-			@"the sender form removes everything that account wrote.";
+		return nil;
+	return nil;
 }
 
 - (void)rebuildRows {
 	NSMutableArray *rows = [NSMutableArray array];
 	__weak typeof(self) weakSelf = self;
-	[rows addObject:@{@"title" : @"Send Message",
-					  @"detail" : [self.call[@"areMessagesAllowed"] boolValue]
-							  ? @"Type a message for the call" : @"Messages are off",
-					  @"tap" : ^{ [weakSelf compose]; }}];
+	BOOL canSend = [self.call[@"areMessagesAllowed"] boolValue] &&
+			[self.call[@"canSendMessages"] boolValue];
+	if (canSend){
+		[rows addObject:@{@"title" : @"Send Message",
+						  @"detail" : @"Message",
+						  @"tap" : ^{ [weakSelf compose]; }}];
+	}
 	for (NSDictionary *message in [[TGClient shared] groupCallMessageSnapshot:self.groupCallId]){
 		NSString *text = message[@"text"];
 		NSString *sender = message[@"senderName"];
-		[rows addObject:@{@"title" : sender.length ? sender : @"Participant",
-						  @"detail" : text.length ? text : @"Paid reaction",
+		[rows addObject:@{@"title" : sender.length ? sender : @"Participants",
+						  @"detail" : text.length ? text : @"Star Reaction",
 						  @"tap" : ^{ [weakSelf showActionsForMessage:message]; }}];
 	}
 	self.rows = rows;
@@ -114,8 +110,8 @@
 
 - (void)compose {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"Call Message" message:@"Everybody in the call reads it."
-				placeholder:@"Message" text:nil action:@"Send" inView:self.view
+	[TGAlertSheet showInput:@"Message" message:nil
+				placeholder:@"Message" text:nil action:@"Submit" inView:self.view
 				 onSubmit:^(NSString *text){
 		TGCallMessagesViewController *me = weakSelf;
 		if (!me)
@@ -127,11 +123,11 @@
 			if (!again)
 				return;
 			if (!ok){
-				again.statusText = error ?: @"Telegram refused the message.";
-				[TGAlertSheet showMessage:again.statusText title:@"Call Message"
+				again.statusText = error ?: @"An error occurred.";
+				[TGAlertSheet showMessage:again.statusText title:@"Message"
 									inView:again.view];
 			} else {
-				again.statusText = @"Sent. Telegram's update adds the row.";
+				again.statusText = @"Done";
 			}
 			[again rebuildRows];
 		}];
@@ -143,14 +139,14 @@
 - (void)showActionsForMessage:(NSDictionary *)message {
 	NSMutableArray *titles = [NSMutableArray array];
 	NSMutableArray *keys = [NSMutableArray array];
-	[titles addObject:@"Copy Text"];
+	[titles addObject:@"Copy"];
 	[keys addObject:@"copy"];
 	if ([message[@"canBeDeleted"] boolValue] || [self.call[@"canDeleteMessages"] boolValue]){
 		[titles addObject:@"Delete Message"];
 		[keys addObject:@"delete"];
-		[titles addObject:@"Delete and Report Spam"];
+		[titles addObject:@"Report Spam"];
 		[keys addObject:@"deleteReport"];
-		[titles addObject:@"Delete Everything from Sender"];
+		[titles addObject:@"Delete All Messages"];
 		[keys addObject:@"deleteSender"];
 	}
 	__weak typeof(self) weakSelf = self;
@@ -163,7 +159,7 @@
 		NSString *key = keys[(NSUInteger)index];
 		if ([key isEqualToString:@"copy"]){
 			[UIPasteboard generalPasteboard].string = message[@"text"] ?: @"";
-			[TGAlertSheet showMessage:@"Copied." title:nil inView:me.view];
+			[TGAlertSheet showMessage:@"Text copied." title:nil inView:me.view];
 		} else if ([key isEqualToString:@"delete"]){
 			[me deleteMessage:message report:NO];
 		} else if ([key isEqualToString:@"deleteReport"]){
@@ -182,7 +178,7 @@
 		TGCallMessagesViewController *me = weakSelf;
 		if (!me)
 			return;
-		me.statusText = ok ? @"Deleted." : (error ?: @"Telegram refused that.");
+		me.statusText = ok ? @"Done" : (error ?: @"An error occurred.");
 		[me rebuildRows];
 	}];
 }
@@ -197,8 +193,8 @@
 		TGCallMessagesViewController *me = weakSelf;
 		if (!me)
 			return;
-		me.statusText = ok ? @"Every message from that sender is deleted."
-				: (error ?: @"Telegram refused that.");
+		me.statusText = ok ? @"Done"
+				: (error ?: @"An error occurred.");
 		[me rebuildRows];
 	}];
 }

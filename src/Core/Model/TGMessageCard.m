@@ -2,6 +2,7 @@
 // TGMessageCard.m - read flattened message dictionaries into bubble cards.
 //
 #import "TGMessageCard.h"
+#import "TGLocalization.h"
 
 FOUNDATION_EXPORT NSString *TGMessageCardPrice(NSString *currency, int64_t amount);
 
@@ -69,7 +70,7 @@ NSString *TGMessageCardPrice(NSString *currency, int64_t amount) {
 	if ([curr isEqualToString:@"XTR"]) {
 		if (amount == 1)
 			return @"1 Star";
-		return [NSString stringWithFormat:@"%lld Stars", (long long)amount];
+		return TGLocalizedPluralValue(@"%@ Star", @"%@ Stars", [NSString stringWithFormat:@"%lld", (long long)amount], (NSInteger)amount);
 	}
 	if (TGMCIsZeroDecimalCurrency(curr)) {
 		return [NSString stringWithFormat:@"%lld %@", (long long)amount, curr];
@@ -87,13 +88,13 @@ NSString *TGMessageCardPrice(NSString *currency, int64_t amount) {
 
 static NSString *TGMCPrizeLine(int64_t starCount, int64_t premiumMonths, int64_t winnerCount) {
 	if (starCount > 0) {
-		return (starCount == 1) ? @"1 Star" : [NSString stringWithFormat:@"%lld Stars", (long long)starCount];
+		return (starCount == 1) ? @"1 Star" : TGLocalizedPluralValue(@"%@ Star", @"%@ Stars", [NSString stringWithFormat:@"%lld", (long long)starCount], (NSInteger)starCount);
 	}
 	if (premiumMonths > 0) {
 		NSString *subs = (winnerCount == 1) ? @"1 Telegram Premium subscription"
-											: [NSString stringWithFormat:@"%lld Telegram Premium subscriptions", (long long)winnerCount];
+											: TGLocalizedPluralValue(@"%@ Telegram Premium subscription", @"%@ Telegram Premium subscriptions", [NSString stringWithFormat:@"%lld", (long long)winnerCount], (NSInteger)winnerCount);
 		NSString *months = (premiumMonths == 1) ? @"1 month"
-												: [NSString stringWithFormat:@"%lld months", (long long)premiumMonths];
+												: TGLocalizedPluralValue(@"%@ month", @"%@ months", [NSString stringWithFormat:@"%lld", (long long)premiumMonths], (NSInteger)premiumMonths);
 		return [NSString stringWithFormat:@"%@ for %@", subs, months];
 	}
 	return nil;
@@ -248,7 +249,7 @@ TGMessageCard *TGMessageCardForRow(NSDictionary *row) {
 		card.kicker = @"Gift";
 		int64_t starCount = TGMCInt64(gift[@"starCount"]);
 		if (starCount > 0)
-			card.title = (starCount == 1) ? @"1 Star" : [NSString stringWithFormat:@"%lld Stars", (long long)starCount];
+			card.title = (starCount == 1) ? @"1 Star" : TGLocalizedPluralValue(@"%@ Star", @"%@ Stars", [NSString stringWithFormat:@"%lld", (long long)starCount], (NSInteger)starCount);
 		else
 			card.title = @"Gift";
 
@@ -259,7 +260,7 @@ TGMessageCard *TGMessageCardForRow(NSDictionary *row) {
 
 		if (TGMCBool(gift[@"wasConverted"])) {
 			int64_t sellStars = TGMCInt64(gift[@"sellStarCount"]);
-			NSString *starStr = (sellStars == 1) ? @"1 Star" : [NSString stringWithFormat:@"%lld Stars", (long long)sellStars];
+			NSString *starStr = (sellStars == 1) ? @"1 Star" : TGLocalizedPluralValue(@"%@ Star", @"%@ Stars", [NSString stringWithFormat:@"%lld", (long long)sellStars], (NSInteger)sellStars);
 			[lines addObject:[NSString stringWithFormat:@"Converted to %@", starStr]];
 		} else if (TGMCBool(gift[@"wasUpgraded"])) {
 			[lines addObject:@"Upgraded to a collectible"];
@@ -355,7 +356,7 @@ TGMessageCard *TGMessageCardForRow(NSDictionary *row) {
 			card.actionTargetId = TGMCInt64(user[@"userId"]);
 		} else {
 			card.kicker = @"Shared contacts";
-			card.title = [NSString stringWithFormat:@"%lu contacts", (unsigned long)users.count];
+			card.title = TGLocalizedPluralValue(@"%@ contact", @"%@ contacts", [NSString stringWithFormat:@"%lu", (unsigned long)users.count], (NSInteger)users.count);
 			NSMutableArray *lines = [NSMutableArray array];
 			NSUInteger count = MIN((NSUInteger)4, users.count);
 			for (NSUInteger i = 0; i < count; i++) {

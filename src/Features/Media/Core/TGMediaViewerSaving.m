@@ -14,6 +14,7 @@
 #import <QuartzCore/QuartzCore.h>
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
+#import "TGLocalization.h"
 #import "TGDevShowcase.h"
 #import "TGFileInfoViewController.h"
 #import "TGForwardPicker.h"
@@ -96,12 +97,12 @@ static BOOL TGViewerItemLocked(NSDictionary *item) {
 		return;
 	NSDictionary *m = [self currentItem];
 
-	NSMutableArray *choices = [NSMutableArray arrayWithObjects:@"Add to Downloads",
-							   @"File Info", @"Delete from Device", nil];
+	NSMutableArray *choices = [NSMutableArray arrayWithObjects:@"Downloads",
+							   @"File", @"Delete", nil];
 	// Media that other stickers were attached to knows which packs they came
 	// from; TDLib answers that by the media file's own id.
 	if ([m[@"hasStickers"] boolValue])
-		[choices addObject:@"Sticker Packs..."];
+		[choices addObject:@"Stickers"];
 
 	__weak typeof(self) weakSelf = self;
 	[TGAlertSheet showChoices:choices
@@ -112,26 +113,25 @@ static BOOL TGViewerItemLocked(NSDictionary *item) {
 		TGMediaViewer *me = weakSelf;
 		UIView *host = me.backdrop ?: [UIApplication sharedApplication].keyWindow;
 		NSString *what = choices[(NSUInteger)index];
-		if ([what isEqualToString:@"Sticker Packs..."]){
+		if ([what isEqualToString:@"Stickers"]){
 			[me showStickerPacksOfFile:fileId.integerValue];
 			return;
 		}
-		if ([what isEqualToString:@"File Info"]){
+		if ([what isEqualToString:@"File"]){
 			// The action sheet must be gone before the info sheet presents.
 			dispatch_async(dispatch_get_main_queue(), ^{
 				[TGFileInfoViewController presentForFile:fileId.integerValue fromView:host];
 			});
 			return;
 		}
-		if ([what isEqualToString:@"Add to Downloads"]){
+		if ([what isEqualToString:@"Downloads"]){
 			[[TGClient shared] addFileToDownloads:fileId.integerValue
 											inChat:me.chatId
 										   message:[m[@"id"] longLongValue]];
-			[TGSnackbar showInView:host text:@"Added to Downloads" seconds:2 onCommit:nil];
+			[TGSnackbar showInView:host text:@"Saved to Files." seconds:2 onCommit:nil];
 			return;
 		}
-		[[TGClient shared] deleteLocalFile:fileId.integerValue];
-		[TGSnackbar showInView:host text:@"Deleted from this device" seconds:2 onCommit:nil];
+		[me deleteCurrentFromDevice];
 	}];
 }
 
@@ -144,18 +144,18 @@ static BOOL TGViewerItemLocked(NSDictionary *item) {
 		UIView *host = me.backdrop ?: [UIApplication sharedApplication].keyWindow;
 		NSArray *list = [sets isKindOfClass:NSArray.class] ? sets : @[];
 		if (!list.count){
-			[TGAlertSheet showMessage:@"This media carries no sticker packs."
-								  title:@"Sticker Packs" inView:host];
+			[TGAlertSheet showMessage:@"An error occurred."
+								  title:@"Stickers" inView:host];
 			return;
 		}
 		NSMutableArray *rows = [NSMutableArray array];
 		for (NSDictionary *set in list){
-			NSString *title = [set[@"title"] length] ? set[@"title"] : @"Pack";
+			NSString *title = [set[@"title"] length] ? set[@"title"] : @"Stickers";
 			NSString *state = [set[@"installed"] boolValue] ? @"" : @"  ·  tap to add";
 			[rows addObject:[NSString stringWithFormat:@"%@%@", title, state]];
 		}
 		[TGAlertSheet showChoices:rows
-							title:@"Sticker Packs"
+							title:@"Stickers"
 				   destructiveIndex:-1
 						   inView:host
 						 onChoice:^(NSInteger index){
@@ -163,7 +163,7 @@ static BOOL TGViewerItemLocked(NSDictionary *item) {
 			if ([set[@"installed"] boolValue])
 				return;
 			[[TGStickerStore shared] setStickerSet:set[@"id"] installed:YES archived:NO];
-			[TGSnackbar showInView:host text:@"Sticker pack added" seconds:2 onCommit:nil];
+			[TGSnackbar showInView:host text:@"Stickers Added" seconds:2 onCommit:nil];
 		}];
 	}];
 }
@@ -184,12 +184,35 @@ static BOOL TGViewerItemLocked(NSDictionary *item) {
 				if (!me)
 					return;
 				if (!path.length){
-					[TGAlertSheet showMessage:@"The video is not downloaded yet."
+					[TGAlertSheet showMessage:@"An error occurred."
 										  title:@"Save" inView:me.backdrop];
 					return;
 				}
 				UISaveVideoAtPathToSavedPhotosAlbum(path, me,
 						@selector(video:didFinishSavingWithError:contextInfo:), NULL);
+			});
+		}];
+		return;
+	}
+
+	// Save the file on disk, not the screen-fitted decode: the old path wrote
+	// a 320-wide copy of a 1080 photo into the camera roll.
+	NSNumber *fileId = [self currentFileId];
+	if (fileId){
+		__weak typeof(self) weakSelf = self;
+		[[TGMediaStore shared] downloadFile:fileId.integerValue completion:^(NSString *path){
+			dispatch_async(dispatch_get_main_queue(), ^{
+				TGMediaViewer *me = weakSelf;
+				if (!me)
+					return;
+				UIImage *image = path.length ? [UIImage imageWithContentsOfFile:path] : nil;
+				if (!image){
+					[TGAlertSheet showMessage:TGLocalized(@"An error occurred.")
+										title:TGLocalized(@"Save") inView:me.backdrop];
+					return;
+				}
+				UIImageWriteToSavedPhotosAlbum(image, me,
+						@selector(image:didFinishSavingWithError:contextInfo:), NULL);
 			});
 		}];
 		return;
@@ -208,7 +231,7 @@ static BOOL TGViewerItemLocked(NSDictionary *item) {
 
 - (void)video:(NSString *)path didFinishSavingWithError:(NSError *)error
    contextInfo:(void *)contextInfo {
-	[TGAlertSheet showMessage:(error ? @"Could not save" : @"Saved to Camera Roll")
+	[TGAlertSheet showMessage:(error ? @"An error occurred." : @"Saved to Photos.")
 						title:nil
 					   inView:(self.backdrop ?: [UIApplication sharedApplication].keyWindow)];
 }
@@ -218,7 +241,7 @@ static BOOL TGViewerItemLocked(NSDictionary *item) {
 	// The viewer is an NSObject, not a view: passing it here asked a plain
 	// object for its bounds and brought the app down the moment a picture
 	// finished saving. Its backdrop is the view on screen.
-	[TGAlertSheet showMessage:(error ? @"Could not save" : @"Saved to Camera Roll")
+	[TGAlertSheet showMessage:(error ? @"An error occurred." : @"Saved to Photos.")
 						title:nil
 					   inView:(self.backdrop ?: [UIApplication sharedApplication].keyWindow)];
 }

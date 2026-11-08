@@ -16,6 +16,8 @@
 #import "TGGroupSettingsViewController.h"
 #import "TGGroupSwitch.h"
 #import "TGGroupSettingsViewControllerInternal.h"
+#import "TGGroupLogic.h"
+#import "TGLocalization.h"
 
 
 
@@ -139,29 +141,22 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 	__weak typeof(self) weakSelf = self;
 	[[TGClient shared] inviteLinksForChat:chatId completion:^(NSArray *links){
 		TGGroupSettingsViewController *me = weakSelf;
-		NSString *primary = nil;
-		for (NSDictionary *link in links)
-			if ([link[@"primary"] boolValue] && ![link[@"revoked"] boolValue]){
-				primary = link[@"link"];
-				break;
-			}
-		if (!primary.length && links.count)
-			primary = links[0][@"link"];
+		NSDictionary *preferred = TGInviteLinkPreferred(links);
+		NSString *primary = preferred[@"link"];
 		if (!primary.length){
-			[TGAlertSheet showMessage:@"This chat has no invite link, and only "
-									  @"an administrator can make one."
+			[TGAlertSheet showMessage:@"An error occurred."
 								title:@"Invite Link" inView:me.view];
 			return;
 		}
-		[TGAlertSheet showChoices:@[@"Copy Link", @"Create Extra Link",
+		[TGAlertSheet showChoices:@[@"Copy Link", @"Create a New Link",
 									@"Create Subscription Link",
-									@"Manage Links", @"Link Counts"]
+									@"Manage Invite Links", @"Invite Links"]
 							title:primary
 				 destructiveIndex:-1 inView:me.view
 						 onChoice:^(NSInteger index){
 			if (index == 0){
 				[UIPasteboard generalPasteboard].string = primary;
-				[TGAlertSheet showMessage:@"Copied." title:nil inView:me.view];
+				[TGAlertSheet showMessage:@"Link copied." title:nil inView:me.view];
 				return;
 			}
 			if (index == 1){
@@ -169,10 +164,8 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 											   memberLimit:0
 												completion:^(NSString *link){
 					[TGAlertSheet showMessage:(link.length ? link
-							: @"Telegram refused to create a link - only an "
-							  @"administrator of a group with a primary link "
-							  @"makes extras.")
-										title:@"New Invite Link" inView:me.view];
+							: @"An error occurred while creating the invite link")
+										title:@"New Link" inView:me.view];
 				}];
 				return;
 			}
@@ -195,8 +188,8 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 	[[TGClient shared] inviteLinksForChat:chatId completion:^(NSArray *links){
 		TGGroupSettingsViewController *me = weakSelf;
 		if (!links.count){
-			[TGAlertSheet showMessage:@"This chat has no invite links."
-								title:@"All Links" inView:me.view];
+			[TGAlertSheet showMessage:@"An error occurred."
+								title:@"Invite Links" inView:me.view];
 			return;
 		}
 		NSMutableArray *rows = [NSMutableArray array];
@@ -204,10 +197,10 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 			[rows addObject:[NSString stringWithFormat:@"%@%@  ·  %@ joined",
 					[link[@"revoked"] boolValue] ? @"(revoked) " : @"",
 					link[@"link"], link[@"members"] ?: @(0)]];
-		[rows addObject:@"Link Counts"];
+		[rows addObject:@"Invite Links"];
 		[rows addObject:@"Delete All Revoked Links"];
 
-		[TGAlertSheet showChoices:rows title:@"All Links"
+		[TGAlertSheet showChoices:rows title:@"Invite Links"
 				 destructiveIndex:(NSInteger)rows.count - 1 inView:me.view
 						 onChoice:^(NSInteger index){
 			if (index == (NSInteger)links.count){
@@ -248,7 +241,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 			NSString *action = choices[(NSUInteger)index];
 			if ([action isEqualToString:@"Copy Link"]){
 				[UIPasteboard generalPasteboard].string = url;
-				[TGAlertSheet showMessage:@"Copied." title:nil inView:me.view];
+				[TGAlertSheet showMessage:@"Link copied." title:nil inView:me.view];
 				return;
 			}
 			if ([action isEqualToString:@"Members"]){
@@ -256,14 +249,14 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 				return;
 			}
 			if ([action isEqualToString:@"Rename Link"]){
-				[TGAlertSheet showInput:@"Rename Link" message:nil
+				[TGAlertSheet showInput:@"Name This Link" message:nil
 							placeholder:@"Name" text:fresh[@"name"] ?: @""
 								 action:@"Save" inView:me.view
 							 onSubmit:^(NSString *name){
 					[[TGClient shared] editSubscriptionInviteLink:url inChat:chatId
 							name:name completion:^(BOOL ok){
-						[TGAlertSheet showMessage:(ok ? @"Link renamed."
-											   : @"Telegram refused the edit.")
+						[TGAlertSheet showMessage:(ok ? @"Link updated"
+											   : @"An error occurred while updating the link")
 											title:@"Invite Link" inView:me.view];
 					}];
 				}];
@@ -271,7 +264,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 			}
 			if ([action isEqualToString:@"Edit Name & Limit"]){
 				[TGAlertSheet showInput:@"Edit Link"
-								message:@"Leave the limit empty for no limit."
+								message:nil
 							placeholder:@"Name" text:fresh[@"name"] ?: @""
 								 action:@"Next" inView:me.view
 							 onSubmit:^(NSString *name){
@@ -282,15 +275,15 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 									   inView:me.view
 									onConfirm:^{
 						[TGAlertSheet showInput:@"Member Limit" message:nil
-									placeholder:@"0 for no limit" text:@"0"
+									placeholder:@"No Limit" text:@"0"
 										 action:@"Save" inView:me.view
 									 onSubmit:^(NSString *limitText){
 							[[TGClient shared] editInviteLink:url inChat:chatId
 									name:name expiration:0
 									memberLimit:limitText.integerValue
 									joinRequest:NO completion:^(BOOL ok){
-								[TGAlertSheet showMessage:(ok ? @"Link updated."
-															   : @"Telegram refused the edit.")
+								[TGAlertSheet showMessage:(ok ? @"Link updated"
+															   : @"An error occurred while updating the link")
 														title:@"Invite Link" inView:me.view];
 							}];
 						}];
@@ -301,8 +294,8 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 			if ([action isEqualToString:@"Delete Link"]){
 				[[TGClient shared] deleteRevokedInviteLink:url inChat:chatId
 											 completion:^(BOOL ok){
-					[TGAlertSheet showMessage:(ok ? @"The revoked link is gone."
-												   : @"Telegram refused the delete.")
+					[TGAlertSheet showMessage:(ok ? @"The invite link has been revoked."
+												   : @"An error occurred.")
 											title:@"Invite Link" inView:me.view];
 					[me showAllInviteLinks];
 				}];
@@ -318,7 +311,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 					[[TGClient shared] replacePrimaryInviteLinkForChat:chatId
 														 completion:^(NSString *made){
 						[TGAlertSheet showMessage:(made.length ? made
-								: @"Telegram refused to replace the link.")
+								: @"An error occurred.")
 												title:@"Invite Link" inView:me.view];
 					}];
 					return;
@@ -326,7 +319,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 				[[TGClient shared] revokeInviteLink:url inChat:chatId
 										 completion:^(BOOL ok){
 					if (!ok)
-						[TGAlertSheet showMessage:@"Telegram refused to revoke that link."
+						[TGAlertSheet showMessage:@"An error occurred."
 											title:@"Revoke" inView:me.view];
 					else
 						[me showAllInviteLinks];
@@ -336,29 +329,47 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 	}];
 }
 
+/// The joined date follows the app language, not the device locale: a Russian
+/// UI should not print an English month.
+static NSString *TGInviteLinkDateText(NSDate *date) {
+	static NSDateFormatter *formatter = nil;
+	if (!formatter){
+		formatter = [[NSDateFormatter alloc] init];
+		formatter.dateStyle = NSDateFormatterMediumStyle;
+		formatter.timeStyle = NSDateFormatterNoStyle;
+	}
+	NSString *language = TGAppLanguage();
+	formatter.locale = language.length
+			? [NSLocale localeWithLocaleIdentifier:language]
+			: [NSLocale currentLocale];
+	return [formatter stringFromDate:date];
+}
+
 - (void)showMembersOfInviteLink:(NSString *)url inChat:(int64_t)chatId {
 	__weak typeof(self) weakSelf = self;
 	[[TGClient shared] membersOfInviteLink:url inChat:chatId
 								completion:^(NSArray *members){
 		TGGroupSettingsViewController *me = weakSelf;
 		if (!members.count){
-			[TGAlertSheet showMessage:@"Nobody has joined through this link yet."
-								title:@"Link Members" inView:me.view];
+			[TGAlertSheet showMessage:@"No one joined yet"
+								title:@"Members" inView:me.view];
 			return;
 		}
 		NSMutableArray *rows = [NSMutableArray array];
 		for (NSDictionary *member in members){
 			NSDate *date = [NSDate dateWithTimeIntervalSince1970:
 					[member[@"date"] doubleValue]];
-			NSString *when = [NSDateFormatter localizedStringFromDate:date
-					dateStyle:NSDateFormatterMediumStyle
-					timeStyle:NSDateFormatterNoStyle];
-			[rows addObject:[NSString stringWithFormat:@"%@ · joined %@",
-					member[@"name"] ?: @"Member", when]];
+			NSString *when = TGInviteLinkDateText(date);
+			[rows addObject:[NSString stringWithFormat:@"%@ · %@",
+					member[@"name"] ?: @"Member",
+					TGLocalizedFormat(@"joined %@", when)]];
 		}
-		[TGAlertSheet showChoices:rows title:@"Link Members"
+		[TGAlertSheet showChoices:rows title:@"Members"
 				 destructiveIndex:-1 inView:me.view onChoice:^(NSInteger index){
-			(void)index;
+			if (index < 0 || index >= (NSInteger)members.count)
+				return;
+			[TGGroupMemberActions openProfileForMember:members[(NSUInteger)index]
+												  from:me];
 		}];
 	}];
 }
@@ -368,16 +379,16 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 	[[TGClient shared] inviteLinkCountsForChat:self.chatId completion:^(NSArray *counts){
 		TGGroupSettingsViewController *me = weakSelf;
 		if (!counts.count){
-			[TGAlertSheet showMessage:@"Telegram returned no link counts."
-								title:@"Link Counts" inView:me.view];
+			[TGAlertSheet showMessage:@"An error occurred."
+								title:@"Invite Links" inView:me.view];
 			return;
 		}
 		NSMutableArray *rows = [NSMutableArray array];
 		for (NSDictionary *count in counts)
 			[rows addObject:[NSString stringWithFormat:@"%@: %@ active, %@ revoked",
-					count[@"name"] ?: @"Administrator",
+					count[@"name"] ?: @"Admin",
 					count[@"active"] ?: @(0), count[@"revoked"] ?: @(0)]];
-		[TGAlertSheet showChoices:rows title:@"Link Counts"
+		[TGAlertSheet showChoices:rows title:@"Invite Links"
 				 destructiveIndex:-1 inView:me.view onChoice:^(NSInteger index){
 			(void)index;
 		}];
@@ -389,20 +400,19 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 - (void)createSubscriptionLink {
 	int64_t chatId = self.chatId;
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"Subscription Link"
-					message:@"A monthly Star subscription in this channel."
-				placeholder:@"Name (optional)" text:nil action:@"Create"
+	[TGAlertSheet showInput:@"Subscription"
+					message:nil
+				placeholder:@"Link Name (Optional)" text:nil action:@"Create"
 					 inView:self.view onSubmit:^(NSString *name){
-		[TGAlertSheet showInput:@"Stars Per Month" message:nil
+		[TGAlertSheet showInput:@"Subscription Fee" message:nil
 					placeholder:@"1" text:@"1" action:@"Create"
 					 inView:weakSelf.view onSubmit:^(NSString *stars){
 			[[TGClient shared] createSubscriptionInviteLink:chatId name:name
 					stars:MAX(stars.integerValue, 1) period:2592000
 					completion:^(NSString *link){
 				[TGAlertSheet showMessage:(link.length ? link
-						: @"Telegram refused a subscription link - the chat must be "
-						  @"a channel and this account its admin.")
-									title:@"Subscription Link" inView:weakSelf.view];
+						: @"An error occurred.")
+									title:@"Subscription" inView:weakSelf.view];
 			}];
 		}];
 	}];
@@ -411,15 +421,14 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 - (void)deleteAllRevokedLinks {
 	int64_t myId = [[TGClient shared].me[@"id"] longLongValue];
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:@"Every revoked link this account made in this "
-							  @"chat is deleted permanently."
+	[TGAlertSheet showConfirm:@"This will delete all revoked links."
 						title:@"Delete All Revoked Links"
 					   action:@"Delete" destructive:YES inView:self.view
 					onConfirm:^{
 		[[TGClient shared] deleteAllRevokedInviteLinks:weakSelf.chatId creator:myId
 				completion:^(BOOL ok){
-			[TGAlertSheet showMessage:(ok ? @"Revoked links deleted."
-										   : @"Telegram refused the delete.")
+			[TGAlertSheet showMessage:(ok ? @"The invite link has been revoked."
+										   : @"An error occurred.")
 								title:@"Invite Links" inView:weakSelf.view];
 		}];
 	}];

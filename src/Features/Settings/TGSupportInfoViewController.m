@@ -48,9 +48,7 @@
 		[answers addObject:TGBInfo(line, nil)];
 
 	self.sections = @[
-		TGBSection(@"SUPPORT", @"The name is Telegram's own label for the "
-				@"support account. The note is per user and may be refused for "
-				@"an account without support rights.", identity),
+		TGBSection(@"SUPPORT", nil, identity),
 		TGBSection(@"READ", nil, reads),
 		TGBSection(@"WRITE", nil, write),
 		TGBSection(@"ANSWER", nil, answers),
@@ -59,14 +57,14 @@
 }
 
 - (void)showAnswer:(NSString *)text title:(NSString *)title {
-	self.answerLines = @[text.length ? text : @"Telegram answered with an empty value."];
+	self.answerLines = @[text.length ? text : @"Empty"];
 	[self rebuildSections];
 	[self showMessage:self.answerLines.firstObject title:title];
 }
 
 - (void)finish:(BOOL)ok error:(NSString *)error title:(NSString *)title {
-	self.answerLines = @[ok ? @"Telegram accepted the request."
-			: (error.length ? error : @"Telegram refused that.")];
+	self.answerLines = @[ok ? @"Done"
+			: (error.length ? error : @"An error occurred.")];
 	[self rebuildSections];
 	if (!ok)
 		[self showMessage:self.answerLines.firstObject title:title];

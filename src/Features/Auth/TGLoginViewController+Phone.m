@@ -1,6 +1,7 @@
 #import "TGLoginViewControllerInternal.h"
 #import "TGAlertSheet.h"
 #import "TGClient.h"
+#import "TGPhoneNumberRules.h"
 
 @implementation TGLoginViewController (Phone)
 
@@ -16,15 +17,15 @@
         if (!me || me.currentStep != TGLoginStepPhone)
             return;
         if (!countries.count){
-            [TGAlertSheet showMessage:@"Telegram sent no country list."
+            [TGAlertSheet showMessage:@"An error occurred."
                                   title:@"Country" inView:me.view];
             return;
         }
         [TGAlertSheet showInput:@"Country"
-                        message:@"Type part of a name, or a calling code."
-                    placeholder:@"Ukraine or +380"
+                        message:nil
+                    placeholder:@"Country"
                            text:nil
-                         action:@"Find"
+                         action:@"Search"
                          inView:me.view
                      onSubmit:^(NSString *query){
             NSString *needle = [query lowercaseString];
@@ -40,7 +41,7 @@
                 }
             }
             if (!matches.count){
-                [TGAlertSheet showMessage:@"No country answers to that."
+                [TGAlertSheet showMessage:@"An error occurred."
                                       title:@"Country" inView:me.view];
                 return;
             }
@@ -56,6 +57,9 @@
                              onChoice:^(NSInteger index){
                 NSDictionary *country = matches[(NSUInteger)index];
                 me.phonePrefixField.text = country[@"prefix"];
+                me.savedCountryName = country[@"name"];
+                [me.countryButton setTitle:me.savedCountryName
+                                  forState:UIControlStateNormal];
                 me.prefixEdited = YES;
                 [me updateActionEnabled];
                 [me refreshPhoneNumberInfo];
@@ -70,6 +74,9 @@
     if (self.currentStep == TGLoginStepCode ||
             self.currentStep == TGLoginStepEmailCode ||
             self.currentStep == TGLoginStepRecoveryCode) {
+        // The boxes paint the field's text; nothing else repaints them while
+        // keys arrive, so typed digits stayed invisible.
+        [self updateCodeBoxes];
         [self updateActionEnabled];
         NSString *digits = [sender.text stringByReplacingOccurrencesOfString:@"\\D"
                 withString:@"" options:NSRegularExpressionSearch
@@ -88,11 +95,19 @@
     }
     [self updateActionEnabled];
     NSString *text = sender.text;
-    if ([text rangeOfString:@"+"].location != NSNotFound || (text.length >= 4 && [self containsKnownCountryPrefix:text])) {
+    if ([self looksLikeInternationalNumber:text]) {
         [self processPastedPhoneNumber:text];
         return;
     }
     [self refreshPhoneNumberInfo];
+}
+
+/// A pasted number answers its own prefix, but a national number that merely
+/// begins with 1 or 7 (Germany's 171…, Russia's 7…) is not international.
+/// Only a plus/00 prefix, or a 2-3 digit calling code with a plausible rest,
+/// may split the field.
+- (BOOL)looksLikeInternationalNumber:(NSString *)text {
+    return TGPhoneNumberLooksInternational(text);
 }
 
 /// What country the prefix belongs to, and how Telegram would write the
@@ -128,13 +143,15 @@
         now = [now stringByAppendingString:me.inputField.text ?: @""];
         if (![now isEqualToString:full])
             return;
-        NSString *formatted = info[@"formatted"];
-        if (!formatted.length)
-            return;
-        me.countryLabel.text = [NSString stringWithFormat:@"%@  %@  ·  %@",
-                info[@"flag"] ?: @"", info[@"name"] ?: @"", formatted];
-        me.countryLabel.hidden = NO;
-        [me layoutActiveStep];
+        // The country row is the one line: official does not repeat the
+        // country and the formatted number under the field.
+        NSString *name = info[@"name"];
+        if (name.length) {
+            me.savedCountryName = name;
+            [me.countryButton setTitle:name forState:UIControlStateNormal];
+        }
+        me.countryLabel.text = nil;
+        me.countryLabel.hidden = YES;
     }];
 }
 
@@ -244,9 +261,6 @@
     } else if (digits.length >= 2 && [twoDigitCodes containsObject:[digits substringToIndex:2]]) {
         prefix = [digits substringToIndex:2];
         rest = [digits substringFromIndex:2];
-    } else if ([digits hasPrefix:@"1"] || [digits hasPrefix:@"7"]) {
-        prefix = [digits substringToIndex:1];
-        rest = [digits substringFromIndex:1];
     } else if (hadPlus) {
         NSUInteger pLen = MIN((NSUInteger)3, digits.length);
         prefix = [digits substringToIndex:pLen];

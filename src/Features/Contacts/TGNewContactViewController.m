@@ -12,6 +12,8 @@
 #import <QuartzCore/QuartzCore.h>
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
+#import "TGLocalization.h"
+#import "TGIcons.h"
 
 @interface TGNewContactFieldCell : UITableViewCell
 @property (nonatomic, strong) UITextField *field;
@@ -80,18 +82,31 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	self.title = @"New Contact";
+	// A caller that names the screen (Edit, or a form opened from a profile)
+	// keeps that title; only an unnamed form is a New Contact.
+	if (!self.title.length)
+		self.title = @"New Contact";
 	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
 		self.edgesForExtendedLayout = UIRectEdgeNone;
 
 	self.doneItem = [[UIBarButtonItem alloc]
-			initWithTitle:@"Done" style:UIBarButtonItemStyleDone
-				   target:self action:@selector(save)];
+			initWithImage:[TGIcons glyphNamed:@"checkboxSelected"
+									   colour:[[TGTheme shared] accentColour]
+										 side:TGMetricMenuGlyph]
+			style:UIBarButtonItemStylePlain
+		   target:self action:@selector(save)];
 	self.navigationItem.rightBarButtonItem = self.doneItem;
+	// The form is modal, as official presents it: Close on the left, the
+	// Done check on the right, and no back chevron from a stack.
+	if (self.navigationController.viewControllers.firstObject == self){
+		self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc]
+				initWithTitle:@"Close" style:UIBarButtonItemStylePlain
+					   target:self action:@selector(closeTapped)];
+	}
 
-	self.firstField = [self fieldWithPlaceholder:@"First name" text:self.first];
-	self.lastField  = [self fieldWithPlaceholder:@"Last name"  text:self.last];
-	self.phoneField = [self fieldWithPlaceholder:@"Phone number" text:self.phone];
+	self.firstField = [self fieldWithPlaceholder:TGLocalized(@"First Name") text:self.first];
+	self.lastField  = [self fieldWithPlaceholder:TGLocalized(@"Last Name")  text:self.last];
+	self.phoneField = [self fieldWithPlaceholder:TGLocalized(@"Phone number") text:self.phone];
 	self.phoneField.keyboardType = UIKeyboardTypePhonePad;
 	for (UITextField *field in @[self.firstField, self.lastField, self.phoneField])
 		[field addTarget:self action:@selector(fieldChanged:)
@@ -116,6 +131,10 @@
 
 - (void)dealloc {
 	[[NSNotificationCenter defaultCenter] removeObserver:self];
+}
+
+- (void)closeTapped {
+	[self dismissViewControllerAnimated:YES completion:nil];
 }
 
 - (void)applyTheme {
@@ -189,18 +208,17 @@
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-	return section == 0 ? @"Name" : @"Phone";
+	return nil;
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
 	if (section == 0)
 		return nil;
-	return @"Telegram matches this number. If no account has it, the contact "
-		   @"appears once they join.";
+	return nil;
 }
 
 - (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section {
-	return TGMetricRow - TGMetricPadLarge;
+	return TGMetricPadMedium;
 }
 
 - (void)tableView:(UITableView *)tableView willDisplayHeaderView:(UIView *)view forSection:(NSInteger)section {
@@ -228,12 +246,13 @@
 			: self.phoneField;
 	cell.field = field;
 	if (indexPath.section == 0)
-		[cell configureWithPlaceholder:(indexPath.row == 0 ? @"First name" : @"Last name")
+		[cell configureWithPlaceholder:(indexPath.row == 0
+					? TGLocalized(@"First Name") : TGLocalized(@"Last Name"))
 								  text:field.text
 							  delegate:self
 							  keyboard:UIKeyboardTypeDefault];
 	else
-		[cell configureWithPlaceholder:@"Phone number"
+		[cell configureWithPlaceholder:TGLocalized(@"Phone number")
 								  text:field.text
 							  delegate:self
 							  keyboard:UIKeyboardTypePhonePad];
@@ -280,14 +299,49 @@
 	NSString *phone = self.phoneField.text ?: @"";
 
 	if (!first.length || [self phoneDigits].length < 5){
-		[TGAlertSheet showMessage:@"A name for you to read and a full phone "
-								  @"number for Telegram to match on - both are wanted."
+		[TGAlertSheet showMessage:@"An error occurred."
 							title:@"New Contact" inView:self.view];
 		return;
 	}
 
 	[self beginSaving];
 	__weak typeof(self) weakSelf = self;
+	NSString *screenTitle = self.title.length ? self.title : @"New Contact";
+	void (^finish)(BOOL, int64_t) = ^(BOOL ok, int64_t userId){
+		TGNewContactViewController *me = weakSelf;
+		if (!me)
+			return;
+		[me endSaving];
+		if (!ok){
+			[TGAlertSheet showMessage:@"An error occurred."
+								title:screenTitle inView:me.view];
+			return;
+		}
+		[TGAlertSheet showMessage:@"Done" title:screenTitle inView:me.view];
+		// The form is presented modally from the contacts list and from a
+		// profile; a pop on that navigation root does nothing. A pushed form
+		// still goes back the way it came.
+		if (me.presentingViewController &&
+				me.navigationController.viewControllers.firstObject == me)
+			[me dismissViewControllerAnimated:YES completion:nil];
+		else
+			[me.navigationController popViewControllerAnimated:YES];
+	};
+
+	// Editing an existing contact: addContact updates the name and number for
+	// the user id the profile already knows. Importing by phone would create a
+	// second contact instead.
+	if (self.userId){
+		[[TGClient shared] addContactWithUserId:self.userId
+									  firstName:first
+									   lastName:last
+										  phone:phone
+									 completion:^(BOOL ok){
+			finish(ok, self.userId);
+		}];
+		return;
+	}
+
 	[[TGClient shared] importContactNamed:first lastName:last phone:phone
 							   completion:^(int64_t userId){
 		TGNewContactViewController *me = weakSelf;
@@ -298,9 +352,8 @@
 		// person behind it.
 		if (userId == 0) {
 			[me endSaving];
-			[TGAlertSheet showMessage:@"Telegram could not match that number to "
-									  @"an account. Check the country code and try again."
-								title:@"New Contact" inView:me.view];
+			[TGAlertSheet showMessage:@"An error occurred."
+								title:screenTitle inView:me.view];
 			return;
 		}
 		[[TGClient shared] addContactWithUserId:userId
@@ -308,18 +361,7 @@
 									   lastName:last
 										  phone:phone
 									 completion:^(BOOL ok){
-			TGNewContactViewController *again = weakSelf;
-			if (!again)
-				return;
-			[again endSaving];
-			if (!ok){
-				[TGAlertSheet showMessage:@"Telegram refused that contact."
-									  title:@"New Contact" inView:again.view];
-				return;
-			}
-			[TGAlertSheet showMessage:[NSString stringWithFormat:@"%@ saved.", first]
-								  title:@"New Contact" inView:again.view];
-			[again.navigationController popViewControllerAnimated:YES];
+			finish(ok, userId);
 		}];
 	}];
 }

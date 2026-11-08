@@ -11,10 +11,13 @@ Telegram client for iOS 6.0–12.5.7 on old hardware. Objective-C UI over TDLib 
 - `TGTheme+Colours` — all colours
 - `src/App/` — app entry: main, AppDelegate, URL routing, dev bench
 - `src/Media/` — decoders (WebP, WebM sticker video)
+- `scripts/i18n_match.py` — check a UI string or a file against the downloaded official Telegram pack (`--coverage` for the whole tree)
 - `scripts/lint_tokens.sh` — fails on any hardcoded point size or colour in a screen
+- `src/Core/Support/TGLocalization.h` — `TGLocalized(@"English")` for UI copy; official Telegram language packs supply the translations, English is the fallback. Counts use `TGLocalizedPlural(@"%d chat", @"%d chats", count)` so the pack's one/few/many forms apply. UIKit chrome and alerts are localised centrally; message bodies are not.
 - `scripts/split_source.py` — mechanical `classes` / `sections` split; dry run by default, `--apply` updates Makefiles, docs line references
 - `make -j8 -f tests/Makefile test` — host test suite (currently 1950 client and 229 call tests); one object per source, so a change rebuilds only what it touches
-- `scripts/devrun.sh` — build, install, launch, log, screenshot on device
+- `scripts/devrun.sh` — build, install, launch, log, screenshot on device; `--screenoff` / `--screenon` dark or wake the panel
+- `scripts/screen.sh` — `off` / `on` / `status` for the bench phone's backlight and lock screen. `itglegacy://stand/on` also remembers the choice in `TGStandScreenOff`, so the panel goes dark again after every launch; `stand/off` clears it
 - `make -j8 DEV=1` — dev build (`-j` is safe: every IPA stages in its own folder): dev mode (three taps on Chats), fixture chats, bench, automation URLs, ghost mode. All under `#if TG_DEV`; `devrun.sh` builds this into `build/armv7/app-dev`. `scripts/check_release.sh` fails if any of it reaches a build without the flag
 - `scripts/build_ffmpeg.sh` — FFmpeg for the Vintage software video player, into `build/armv7/ffmpeg`
 
@@ -35,6 +38,13 @@ Telegram client for iOS 6.0–12.5.7 on old hardware. Objective-C UI over TDLib 
   main type stays in its feature folder; its parts go to a thematic subfolder
   (`Chat/Actions`, `Chat/Composer`, `Core/Client/Chats`, …). `scripts/lint_size.sh`
   fails on any file over the limit; there is no baseline.
+
+## Matching the official client
+- A new screen, row or action is built where official Telegram has it, so it is never moved twice: the same entry point (which screen, which row, which bar button or context menu), the same presentation (push, modal sheet, context menu, action sheet), the same section and row order, the same navigation bar buttons, the same confirmation alert. Read the official source for that screen before writing ours; `docs/ui-parity/` names the official file for each area.
+- Text uses the official English from the language pack, word for word, so it translates: `scripts/i18n_match.py "text"` before inventing wording. Counts go through `TGLocalizedPlural`; no sentences glued from pieces.
+- No "tools" screens or extra menus that collect actions official places elsewhere. A developer tool goes behind `TG_DEV`.
+- Look, not layout, is ours: iOS 6 skeuomorphic chrome, `TGStyle` and `TGTheme` tokens, no live blur, masks or shadows on scrolling layers. Where an official effect cannot run on the A4, keep its position and drop the effect.
+- Existing screens change only from the fix lists in `docs/ui-parity/` the user has approved, not on a general "make it like Telegram". The call screen keeps its current design on purpose.
 
 ## Testing — mandatory
 - **Compile ≠ done.** A feature is done when it works on a real device, matches official Telegram behaviour, and has a passing regression test.

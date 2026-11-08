@@ -272,7 +272,7 @@
 
 - (void)finish:(BOOL)ok error:(NSString *)error title:(NSString *)title {
 	self.answerLines = @[ok ? @"Telegram accepted the request."
-						   : (error.length ? error : @"Telegram refused that.")];
+						   : (error.length ? error : @"An error occurred.")];
 	[self rebuildSections];
 	if (!ok)
 		[self showMessage:self.answerLines.firstObject title:title];
@@ -1017,7 +1017,7 @@
 									   completion:^(BOOL can, NSString *error){
 				[weakSelf finish:error == nil error:error title:@"Bot Messaging"];
 				if (!error) [weakSelf showText:(can ? @"This bot may message you."
-						: @"Telegram refused; the allow row can grant it.")
+						: @"An error occurred.")
 										   title:@"Bot Messaging"];
 			}];
 		}];

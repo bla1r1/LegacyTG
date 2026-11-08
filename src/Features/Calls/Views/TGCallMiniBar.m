@@ -1,4 +1,5 @@
 #import "TGCallViewController.h"
+#import "TGLocalization.h"
 #import "TGCall.h"
 #import "TGClient.h"
 #import "TGTheme.h"
@@ -212,7 +213,7 @@ static UIImage *TGCallCircleImage(CGFloat side, UIColor *colour, TGCallCircleSty
 	NSString *name = self.peerName.length ? self.peerName : @"Call";
 	TGCallState state = [TGCall shared].state;
 	if (state == TGCallStatePending) {
-		[self.button setTitle:[NSString stringWithFormat:@"%@  ·  Ringing", name]
+		[self.button setTitle:[NSString stringWithFormat:@"%@  ·  %@", name, TGLocalized(@"Ringing")]
 					 forState:UIControlStateNormal];
 		return;
 	}
@@ -222,7 +223,7 @@ static UIImage *TGCallCircleImage(CGFloat side, UIColor *colour, TGCallCircleSty
 					 forState:UIControlStateNormal];
 		return;
 	}
-	[self.button setTitle:[NSString stringWithFormat:@"%@  ·  Connecting", name]
+	[self.button setTitle:[NSString stringWithFormat:@"%@  ·  %@", name, TGLocalized(@"Connecting...")]
 				 forState:UIControlStateNormal];
 }
 

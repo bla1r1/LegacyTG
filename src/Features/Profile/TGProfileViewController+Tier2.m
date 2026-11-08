@@ -9,12 +9,9 @@
 
 - (NSArray *)tier2MoreItems {
 	NSMutableArray *items = [NSMutableArray array];
-	BOOL own = self.userId &&
-			self.userId == [[TGClient shared].me[@"id"] longLongValue];
 	if (self.userId){
-		[items addObject:@{@"title" : @"Emoji Status", @"icon" : @"star"}];
-		[items addObject:@{@"title" : own ? @"Profile Audio" : @"Their Profile Audio",
-						   @"icon" : @"music"}];
+		// Emoji Status and Music have their own entries: the profile header
+		// and the Music pane, so the More menu does not repeat them.
 	} else {
 		if (self.canManage || self.directMessagesChatId != 0 || self.hasDirectMessages || self.canManageDirectMessages) {
 			[items addObject:@{@"title" : @"Direct Messages", @"icon" : @"chat"}];
@@ -24,7 +21,8 @@
 }
 
 - (BOOL)runTier2Action:(NSString *)title {
-	if ([title isEqualToString:@"Emoji Status"]){
+	if ([title isEqualToString:@"Emoji Status"] ||
+			[title isEqualToString:@"Set Emoji Status"]){
 		BOOL own = self.userId == [[TGClient shared].me[@"id"] longLongValue];
 		TGEmojiStatusViewController *status =
 				[[TGEmojiStatusViewController alloc] init];
@@ -35,12 +33,12 @@
 		[self.navigationController pushViewController:status animated:YES];
 		return YES;
 	}
-	if ([title isEqualToString:@"Profile Audio"] ||
-		[title isEqualToString:@"Their Profile Audio"]){
+	if ([title isEqualToString:@"Profile Music"] ||
+		[title isEqualToString:@"Music"]){
 		TGProfileAudioViewController *audio =
 				[[TGProfileAudioViewController alloc] init];
 		audio.userId = self.userId;
-		audio.subjectTitle = self.name.length ? self.name : @"Profile Audio";
+		audio.subjectTitle = self.name.length ? self.name : @"Profile Music";
 		audio.hidesBottomBarWhenPushed = YES;
 		[self.navigationController pushViewController:audio animated:YES];
 		return YES;
@@ -49,7 +47,7 @@
 		[self openDirectMessages];
 		return YES;
 	}
-	if ([title isEqualToString:@"Stake Dice"]){
+	if ([title isEqualToString:@"Stake"]){
 		TGDiceViewController *dice = [[TGDiceViewController alloc] init];
 		dice.chatId = self.chatId;
 		dice.chatTitle = self.name;

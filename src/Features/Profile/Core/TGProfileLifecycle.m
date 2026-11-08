@@ -16,6 +16,10 @@
 #import <AVFoundation/AVFoundation.h>
 #import "TGProfileViewController.h"
 #import "TGProfileDetailCell.h"
+#import "TGNewContactViewController.h"
+#import "TGLocalization.h"
+#import "TGGroupSettingsViewController.h"
+#import "TGProfileLogic.h"
 
 
 
@@ -248,9 +252,9 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	// Your own profile carries no title, as in Telegram: the name under the
-	// picture already says whose it is.
-	self.title = self.isOwnProfile ? @"" : @"Info";
+	// A profile carries no title in the bar: the name in the header already
+	// says whose it is.
+	self.title = @"";
 	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
 		self.edgesForExtendedLayout = UIRectEdgeNone;
 	[self applyTheme];
@@ -330,18 +334,70 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 }
 
 - (void)updateNavigationItem {
+	NSMutableArray *items = [NSMutableArray array];
+	// My Profile posts a story from the bar; every profile you may edit gets
+	// the Edit word on the right.
 	if (self.isOwnProfile){
-		self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
-				initWithTitle:@"Edit"
+		UIBarButtonItem *story = [[UIBarButtonItem alloc]
+				initWithImage:[TGIcons glyphNamed:@"plus"
+										   colour:nil
+											 side:TGMetricMenuGlyph]
+				style:UIBarButtonItemStylePlain
+			   target:self action:@selector(addStoryTapped)];
+		[items addObject:story];
+	}
+	// A creator or administrator can edit a group/channel profile too; the
+	// role arrives after the first answer, so updateNavigationItem is called
+	// again when it does.
+	BOOL canEdit = self.isOwnProfile || self.isContact ||
+			(self.chatId && self.canManage);
+	if (canEdit){
+		[items addObject:[[UIBarButtonItem alloc]
+				initWithTitle:TGLocalized(@"Edit")
 						style:UIBarButtonItemStylePlain
 					   target:self
-					   action:@selector(editProfileTapped)];
-	} else {
-		self.navigationItem.rightBarButtonItem = nil;
+					   action:@selector(editProfileTapped)]];
 	}
+	// Files, Music and Links search from the bar while their pane is open.
+	NSString *kind = [self selectedMediaKind];
+	if (!self.mediaSearchActive && TGProfileMediaKindSupportsSearch(kind)){
+		[items addObject:[[UIBarButtonItem alloc]
+				initWithBarButtonSystemItem:UIBarButtonSystemItemSearch
+									 target:self action:@selector(mediaSearchTapped)]];
+	}
+	self.navigationItem.rightBarButtonItems = items.count ? items : nil;
 }
 
+/// A contact's Edit fills the contact form with the name and number the
+/// profile already knows; the form writes only on Done.
 - (void)editProfileTapped {
+	// A group or channel's Edit is its settings screen (official opens the
+	// peer's edit mode there); the account editor would rename the user.
+	// A user's profile carries its private chat id too; userId is 0 only
+	// for a group or channel.
+	if (self.chatId && !self.userId){
+		TGGroupSettingsViewController *settings = [[TGGroupSettingsViewController alloc] init];
+		settings.chatId = self.chatId;
+		settings.chatTitle = self.name;
+		settings.hidesBottomBarWhenPushed = YES;
+		TGPresentControllerFrom(settings, self);
+		return;
+	}
+	if (!self.isOwnProfile && self.isContact){
+		TGNewContactViewController *edit = [[TGNewContactViewController alloc] init];
+		edit.title = TGLocalized(@"Edit");
+		edit.userId = self.userId;
+		NSArray *words = [self.name componentsSeparatedByString:@" "];
+		edit.first = words.firstObject ?: @"";
+		edit.last = words.count > 1
+				? [[words subarrayWithRange:NSMakeRange(1, words.count - 1)]
+						componentsJoinedByString:@" "] : @"";
+		edit.phone = self.phoneNumber ?: @"";
+		UINavigationController *nav = [[UINavigationController alloc]
+				initWithRootViewController:edit];
+		[self presentViewController:nav animated:YES completion:nil];
+		return;
+	}
 	TGEditProfileViewController *edit = [[TGEditProfileViewController alloc] init];
 	edit.hidesBottomBarWhenPushed = YES;
 	[self.navigationController pushViewController:edit animated:YES];

@@ -22,13 +22,14 @@ typedef NS_ENUM(NSInteger, TGPollMark) {
 /// object, so every reader goes through here.
 NSString *TGPollOptionText(NSDictionary *option);
 
-/// "Final results", "Anonymous Quiz", "Quiz", "Anonymous Poll" or "Public Poll".
+/// "Final results", "Anonymous Quiz", "Quiz", "Anonymous Poll" or "Poll".
 NSString *TGPollKindLine(NSDictionary *poll);
 
-/// "No answers" / "1 answer" / "N answers" for a quiz, votes for a poll.
+/// "Nobody answered yet" / "N answered" for a quiz, votes for a poll.
 NSString *TGPollVotesLine(NSDictionary *poll);
 
-/// "Ends in M:SS" or "Ends in H:MM:SS"; nil when closed, unscheduled or past.
+/// "ends in M:SS" / "ends in H:MM:SS" / "ends in N days"; nil when closed,
+/// unscheduled or past.
 NSString *TGPollClosesLine(NSDictionary *poll, NSTimeInterval now);
 
 /// Closed polls show their tally, and so does any poll this account voted in.

@@ -23,8 +23,6 @@
 - (void)viewDidLoad {
 	[super viewDidLoad];
 
-	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
-		self.edgesForExtendedLayout = UIRectEdgeNone;
 
 	if (!self.title.length)
 		self.title = @"Stickers";
@@ -45,10 +43,6 @@
 			selector:@selector(applyTheme)
 				name:TGThemeChangedNotification object:nil];
 	[self rebuildGrid];
-}
-
-- (void)dealloc {
-	[[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -85,7 +79,7 @@
 
 	if (!self.stickers.count){
 		self.emptyLabel = [[UILabel alloc] initWithFrame:CGRectZero];
-		self.emptyLabel.text = self.emptyText ?: @"Nothing here yet.";
+		self.emptyLabel.text = self.emptyText ?: @"No Results";
 		self.emptyLabel.font = TGFontBody();
 		self.emptyLabel.textAlignment = NSTextAlignmentCenter;
 		self.emptyLabel.numberOfLines = 2;
@@ -210,14 +204,10 @@
 		return;
 	NSDictionary *sticker = self.stickers[(NSUInteger)index];
 	NSString *emoji = [sticker[@"emoji"] length] ? sticker[@"emoji"] : @"Sticker";
-	NSString *message = [NSString stringWithFormat:
-			@"Emoji: %@\nFile: %@\nSet: %@\nCustom emoji id: %@",
-			emoji, sticker[@"fileId"] ?: @"-", sticker[@"setId"] ?: @"-",
-			sticker[@"customEmojiId"] ?: @"-"];
-	NSArray *choices = @[@"Add to Favourites", @"Remove from Favourites",
-						 @"Copy File ID", @"Done"];
+	NSArray *choices = @[@"Add to Favorites", @"Remove from Favorites",
+						 @"Copy", @"Done"];
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:choices title:emoji message:message
+	[TGAlertSheet showChoices:choices title:emoji message:nil
 			 destructiveIndex:-1 inView:self.view
 					 onChoice:^(NSInteger choice){
 		TGStickerGalleryViewController *me = weakSelf;
@@ -226,11 +216,11 @@
 		NSNumber *fileId = sticker[@"fileId"];
 		if (choice == 0 && [fileId isKindOfClass:NSNumber.class]){
 			[[TGStickerStore shared] setSticker:fileId.integerValue favourite:YES];
-			[TGAlertSheet showMessage:@"The sticker is in Favourites."
+			[TGAlertSheet showMessage:@"Sticker added to Favorites."
 								  title:@"Sticker" inView:me.view];
 		} else if (choice == 1 && [fileId isKindOfClass:NSNumber.class]){
 			[[TGStickerStore shared] setSticker:fileId.integerValue favourite:NO];
-			[TGAlertSheet showMessage:@"The sticker is out of Favourites."
+			[TGAlertSheet showMessage:@"Sticker was removed from Favorites."
 								  title:@"Sticker" inView:me.view];
 		} else if (choice == 2 && [fileId isKindOfClass:NSNumber.class]){
 			[UIPasteboard generalPasteboard].string = [fileId stringValue];

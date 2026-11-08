@@ -2,6 +2,7 @@
 // TGChatToolsViewController.m
 //
 #import "TGChatToolsViewController.h"
+#import "TGLocalization.h"
 #import "TGClient.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
@@ -24,6 +25,14 @@ static NSMutableDictionary *TGOpenRow(NSString *title, NSString *detail,
 									  void (^tap)(void)) {
 	NSMutableDictionary *row = TGRow(title, detail, tap);
 	row[@"opens"] = @YES;
+	return row;
+}
+
+static NSMutableDictionary *TGSwitchRow(NSString *title, BOOL on,
+									   void (^toggle)(void)) {
+	NSMutableDictionary *row = TGRow(title, nil, toggle);
+	row[@"switch"] = @YES;
+	row[@"on"] = @(on);
 	return row;
 }
 
@@ -85,23 +94,10 @@ static NSString *TGWriteBackground(UIColor *colour) {
 - (void)viewDidLoad {
 	[super viewDidLoad];
 	self.title = @"Chat Tools";
-	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
-		self.edgesForExtendedLayout = UIRectEdgeNone;
 	[self applyTheme];
 	[self rebuild];
 	[self loadChat];
 
-	__weak typeof(self) weakSelf = self;
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGThemeChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note) {
-		[weakSelf applyTheme];
-		[weakSelf.tableView reloadData];
-	}];
-}
-
-- (void)dealloc {
-	[[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -153,40 +149,33 @@ static NSString *TGWriteBackground(UIColor *colour) {
 	__weak typeof(self) weakSelf = self;
 
 	NSMutableArray *insights = [NSMutableArray array];
-	[insights addObject:TGOpenRow(@"Event Log", self.isGroup ? nil : @"Groups only",
-			^{ [weakSelf showEventLog]; })];
-	[insights addObject:TGOpenRow(@"Statistics", self.isGroup ? nil : @"Groups only",
-			^{ [weakSelf showStatistics]; })];
-	[insights addObject:TGOpenRow(@"Similar Chats", nil, ^{ [weakSelf showSimilarChats]; })];
-	[insights addObject:TGOpenRow(@"Recommended Chats", nil,
+	[insights addObject:TGOpenRow(@"Suggested Chats", nil,
 			^{ [weakSelf showRecommendedChats]; })];
 
 	NSMutableArray *moderation = [NSMutableArray array];
 	[moderation addObject:TGRow(@"Slow Mode",
-			self.slowMode ? [NSString stringWithFormat:@"%ld s", (long)self.slowMode]
+			self.slowMode ? TGLocalizedFormat(@"%@s", @(self.slowMode))
 						  : @"Off", ^{ [weakSelf chooseSlowMode]; })];
 	[moderation addObject:TGRow(@"Available Reactions",
-			self.reactionsAll ? @"All" : @"Three emoji", ^{ [weakSelf chooseReactions]; })];
-	[moderation addObject:TGRow(@"Protected Content",
-			self.protectedContent ? @"On" : @"Off", ^{ [weakSelf toggleProtected]; })];
-	[moderation addObject:TGRow(@"Translatable",
-			self.translatable ? @"On" : @"Off", ^{ [weakSelf toggleTranslatable]; })];
-	[moderation addObject:TGRow(@"Send Silently By Default",
-			self.defaultSilent ? @"On" : @"Off", ^{ [weakSelf toggleDefaultSilent]; })];
-	[moderation addObject:TGRow(@"Answer Protected-Content Request", nil,
-			^{ [weakSelf answerProtectedRequest]; })];
+			self.reactionsAll ? @"All" : @"Some Reactions", ^{ [weakSelf chooseReactions]; })];
+	[moderation addObject:TGSwitchRow(@"Restrict Saving Content",
+			self.protectedContent, ^{ [weakSelf toggleProtected]; })];
+	[moderation addObject:TGSwitchRow(@"Translate",
+			self.translatable, ^{ [weakSelf toggleTranslatable]; })];
+	[moderation addObject:TGSwitchRow(@"Send Without Sound",
+			self.defaultSilent, ^{ [weakSelf toggleDefaultSilent]; })];
 
 	NSMutableArray *appearance = [NSMutableArray array];
-	[appearance addObject:TGRow(@"Accent Colour",
+	[appearance addObject:TGRow(@"Accent Color",
 			[NSString stringWithFormat:@"%ld", (long)self.accentId],
 			^{ [weakSelf chooseAccent:NO]; })];
-	[appearance addObject:TGRow(@"Profile Accent",
+	[appearance addObject:TGRow(@"Change Profile Color",
 			[NSString stringWithFormat:@"%ld", (long)self.profileAccentId],
 			^{ [weakSelf chooseAccent:YES]; })];
-	[appearance addObject:TGRow(@"Chat Theme", self.themeName ?: @"Default",
+	[appearance addObject:TGRow(@"Color Theme", self.themeName ?: @"Default",
 			^{ [weakSelf chooseTheme]; })];
-	[appearance addObject:TGRow(@"Chat Background", @"Set", ^{ [weakSelf chooseBackground]; })];
-	[appearance addObject:TGRow(@"Reset Background", nil, ^{ [weakSelf resetBackground]; })];
+	[appearance addObject:TGRow(@"Wallpaper", @"Set", ^{ [weakSelf chooseBackground]; })];
+	[appearance addObject:TGRow(@"Reset Chat Wallpapers", nil, ^{ [weakSelf resetBackground]; })];
 
 	NSMutableArray *group = [NSMutableArray array];
 	[group addObject:TGRow(@"Discussion Group",
@@ -198,35 +187,30 @@ static NSString *TGWriteBackground(UIColor *colour) {
 	[group addObject:TGRow(@"Owner After Leaving", nil,
 			^{ [weakSelf showOwnerAfterLeaving]; })];
 
-	NSMutableArray *media = [NSMutableArray array];
-	[media addObject:TGRow(@"Message Positions", @"Jump by media kind",
-			^{ [weakSelf choosePositions]; })];
-
 	NSMutableArray *photo = [NSMutableArray array];
-	[photo addObject:TGRow(@"Emoji Photo", nil, ^{ [weakSelf chooseEmojiPhoto]; })];
-	[photo addObject:TGRow(@"Report Photo", nil, ^{ [weakSelf reportPhoto]; })];
+	[photo addObject:TGRow(@"Emoji", nil, ^{ [weakSelf chooseEmojiPhoto]; })];
+	[photo addObject:TGRow(@"Report Profile Photo", nil, ^{ [weakSelf reportPhoto]; })];
 
 	NSMutableArray *admin = [NSMutableArray array];
-	[admin addObject:TGRow(@"Approve All Join Requests", nil,
+	[admin addObject:TGRow(@"Approve", nil,
 			^{ [weakSelf processJoinRequests:YES]; })];
-	[admin addObject:TGRow(@"Decline All Join Requests", nil,
+	[admin addObject:TGRow(@"Decline All", nil,
 			^{ [weakSelf processJoinRequests:NO]; })];
-	[admin addObject:TGRow(@"Answer Join Request Query", nil,
+	[admin addObject:TGRow(@"Join Requests", nil,
 			^{ [weakSelf answerJoinRequestQuery]; })];
 
 	NSMutableArray *folders = [NSMutableArray array];
-	[folders addObject:TGRow(@"Add to Chat List / Folder", nil,
+	[folders addObject:TGRow(@"Add to Folder", nil,
 			^{ [weakSelf addToChatList]; })];
 
 	self.sections = @[
-		TGSection(@"Insights", @"The event log covers the last 48 hours.", insights),
+		TGSection(@"Channels", nil, insights),
 		TGSection(@"Moderation", nil, moderation),
 		TGSection(@"Appearance", nil, appearance),
 		TGSection(@"This Chat", nil, group),
-		TGSection(@"Media", nil, media),
 		TGSection(@"Photo", nil, photo),
 		TGSection(@"Join Requests", nil, admin),
-		TGSection(@"Chat Lists", nil, folders),
+		TGSection(@"Chat Folders", nil, folders),
 	];
 	[self.tableView reloadData];
 }
@@ -262,12 +246,37 @@ static NSString *TGWriteBackground(UIColor *colour) {
 	cell.detailTextLabel.text = row[@"detail"];
 	cell.detailTextLabel.font = TGFontSubhead();
 	cell.detailTextLabel.textColor = [[TGTheme shared] secondaryTextColour];
+	cell.accessoryView = nil;
+	cell.accessoryType = UITableViewCellAccessoryNone;
+	if ([row[@"switch"] boolValue]){
+		UISwitch *toggle = [[UISwitch alloc] init];
+		toggle.on = [row[@"on"] boolValue];
+		toggle.tag = indexPath.section * 1000 + indexPath.row;
+		[toggle addTarget:self action:@selector(switchChanged:)
+		 forControlEvents:UIControlEventValueChanged];
+		cell.accessoryView = toggle;
+		cell.selectionStyle = UITableViewCellSelectionStyleNone;
+		return cell;
+	}
 	cell.accessoryType = (row[@"tap"] && [row[@"opens"] boolValue])
 			? UITableViewCellAccessoryDisclosureIndicator
 			: UITableViewCellAccessoryNone;
 	cell.selectionStyle = row[@"tap"] ? UITableViewCellSelectionStyleBlue
 									  : UITableViewCellSelectionStyleNone;
 	return cell;
+}
+
+- (void)switchChanged:(UISwitch *)toggle {
+	NSInteger section = toggle.tag / 1000;
+	NSInteger rowIndex = toggle.tag % 1000;
+	if (section >= (NSInteger)self.sections.count)
+		return;
+	NSArray *rows = self.sections[(NSUInteger)section][@"rows"];
+	if (rowIndex >= (NSInteger)rows.count)
+		return;
+	void (^tap)(void) = rows[(NSUInteger)rowIndex][@"tap"];
+	if (tap)
+		tap();
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -277,6 +286,10 @@ static NSString *TGWriteBackground(UIColor *colour) {
 	if (indexPath.row >= (NSInteger)rows.count)
 		return;
 	NSDictionary *row = rows[indexPath.row];
+	if ([row[@"switch"] boolValue]){
+		[tableView deselectRowAtIndexPath:indexPath animated:NO];
+		return;
+	}
 	void (^tap)(void) = row[@"tap"];
 	if (!tap)
 		return;
@@ -286,85 +299,6 @@ static NSString *TGWriteBackground(UIColor *colour) {
 
 #pragma mark - insights
 
-- (void)showEventLog {
-	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] eventLogForChat:self.chatId completion:^(NSArray *events){
-		TGChatToolsViewController *me = weakSelf;
-		if (!me)
-			return;
-		NSMutableArray *rows = [NSMutableArray array];
-		for (NSDictionary *event in events){
-			NSDate *date = [NSDate dateWithTimeIntervalSince1970:
-					[event[@"date"] doubleValue]];
-			NSString *when = [NSDateFormatter localizedStringFromDate:date
-					dateStyle:NSDateFormatterShortStyle
-					timeStyle:NSDateFormatterShortStyle];
-			[rows addObject:@{@"title" : event[@"actor"] ?: @"Someone",
-							  @"detail" : [NSString stringWithFormat:@"%@ · %@",
-									  event[@"text"] ?: @"", when]}];
-		}
-		TGListViewController *list = [[TGListViewController alloc] init];
-		list.listTitle = @"Event Log";
-		list.rows = rows;
-		list.emptyText = @"No events in the last 48 hours, or this account is "
-						 @"not an administrator.";
-		list.offersCopy = YES;
-		list.hidesBottomBarWhenPushed = YES;
-		[me.navigationController pushViewController:list animated:YES];
-	}];
-}
-
-- (void)showStatistics {
-	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] chatStatisticsForChat:self.chatId completion:^(NSArray *rows, NSString *kind){
-		TGChatToolsViewController *me = weakSelf;
-		if (!me)
-			return;
-		TGListViewController *list = [[TGListViewController alloc] init];
-		list.listTitle = @"Statistics";
-		list.rows = rows;
-		list.emptyText = kind.length
-				? @"Telegram did not return a statistic for this chat."
-				: @"Statistics are available only to administrators of a "
-				  @"supergroup or channel.";
-		list.listFooter = @"Figures are Telegram's; growth is measured against "
-						  @"the previous day.";
-		list.offersCopy = YES;
-		list.hidesBottomBarWhenPushed = YES;
-		[me.navigationController pushViewController:list animated:YES];
-	}];
-}
-
-- (void)showSimilarChats {
-	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] similarChatsForChat:self.chatId completion:^(NSArray *chats, NSInteger total){
-		TGChatToolsViewController *me = weakSelf;
-		if (!me)
-			return;
-		if (!chats.count){
-			[TGAlertSheet showMessage:@"Telegram knows no similar channels."
-								title:@"Similar Chats" inView:me.view];
-			return;
-		}
-		NSMutableArray *rows = [NSMutableArray array];
-		for (NSDictionary *chat in chats){
-			[rows addObject:@{@"title" : chat[@"title"] ?: @"Channel",
-							  @"detail" : @"Open",
-							  @"opens" : @YES,
-							  @"tap" : ^{
-				[me openChat:chat];
-			}}];
-		}
-		TGListViewController *list = [[TGListViewController alloc] init];
-		list.listTitle = @"Similar Chats";
-		list.rows = rows;
-		list.listFooter = [NSString stringWithFormat:@"About %ld similar channels.",
-						   (long)total];
-		list.hidesBottomBarWhenPushed = YES;
-		[me.navigationController pushViewController:list animated:YES];
-	}];
-}
-
 - (void)showRecommendedChats {
 	__weak typeof(self) weakSelf = self;
 	[[TGClient shared] recommendedChatsWithCompletion:^(NSArray *chats){
@@ -372,8 +306,8 @@ static NSString *TGWriteBackground(UIColor *colour) {
 		if (!me)
 			return;
 		if (!chats.count){
-			[TGAlertSheet showMessage:@"Telegram has no recommendations right now."
-								title:@"Recommended Chats" inView:me.view];
+			[TGAlertSheet showMessage:@"An error occurred."
+								title:@"Suggested Chats" inView:me.view];
 			return;
 		}
 		NSMutableArray *rows = [NSMutableArray array];
@@ -391,98 +325,22 @@ static NSString *TGWriteBackground(UIColor *colour) {
 			}}];
 		}
 		TGListViewController *list = [[TGListViewController alloc] init];
-		list.listTitle = @"Recommended Chats";
+		list.listTitle = @"Suggested Chats";
 		list.rows = rows;
-		list.listFooter = @"Channels Telegram suggests to this account.";
 		list.hidesBottomBarWhenPushed = YES;
 		[me.navigationController pushViewController:list animated:YES];
 	}];
 }
-
-- (void)openChat:(NSDictionary *)chat {
-	int64_t chatId = [chat[@"id"] longLongValue];
-	if (!chatId)
-		return;
-	[[TGClient shared] openSimilarChat:chatId fromChat:self.chatId];
-	TGChatViewController *vc = [[TGChatViewController alloc] init];
-	vc.chatId = chatId;
-	vc.chatTitle = chat[@"title"];
-	vc.isGroup = YES;
-	vc.hidesBottomBarWhenPushed = YES;
-	[self.navigationController pushViewController:vc animated:YES];
-}
-
-- (void)choosePositions {
-	__weak typeof(self) weakSelf = self;
-	NSArray *kinds = @[@"Photos", @"Videos", @"Files", @"Links"];
-	[TGAlertSheet showChoices:kinds title:@"Message Positions"
-			destructiveIndex:-1 inView:self.view onChoice:^(NSInteger index){
-		static NSString *filters[] = {@"photo", @"video", @"file", @"link"};
-		[weakSelf loadPositions: filters[index]];
-	}];
-}
-
-- (void)loadPositions:(NSString *)filter {
-	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] sparsePositionsInChat:self.chatId filter:filter fromMessage:0
-			completion:^(NSInteger total, NSArray *positions){
-		TGChatToolsViewController *me = weakSelf;
-		if (!me)
-			return;
-		NSMutableArray *rows = [NSMutableArray array];
-		for (NSDictionary *entry in positions){
-			NSDate *date = [NSDate dateWithTimeIntervalSince1970:
-					[entry[@"date"] doubleValue]];
-			NSString *when = [NSDateFormatter localizedStringFromDate:date
-					dateStyle:NSDateFormatterShortStyle
-					timeStyle:NSDateFormatterShortStyle];
-			[rows addObject:@{
-				@"title" : [NSString stringWithFormat:@"Position %@",
-						entry[@"position"] ?: @(0)],
-				@"detail" : when,
-				@"tap" : ^{ [me openPosition:entry filter:filter]; },
-			}];
-		}
-		TGListViewController *list = [[TGListViewController alloc] init];
-		list.listTitle = @"Message Positions";
-		list.rows = rows;
-		list.emptyText = @"There is nothing of that kind in this chat yet.";
-		list.listFooter = [NSString stringWithFormat:@"%ld messages of this kind.",
-						   (long)total];
-		list.hidesBottomBarWhenPushed = YES;
-		[me.navigationController pushViewController:list animated:YES];
-	}];
-}
-
-- (void)openPosition:(NSDictionary *)entry filter:(NSString *)filter {
-	int64_t messageId = [entry[@"messageId"] longLongValue];
-	if (!messageId)
-		return;
-	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] messagePosition:messageId inChat:self.chatId filter:filter
-			completion:^(NSInteger position, NSInteger total){
-		TGChatToolsViewController *me = weakSelf;
-		if (!me)
-			return;
-		(void)total;
-		NSString *say = [NSString stringWithFormat:@"Position %ld in this "
-				@"chat. Opening it now.", (long)position];
-		[TGAlertSheet showMessage:say title:@"Message Position" inView:me.view];
-		TGChatViewController *vc = [[TGChatViewController alloc] init];
-		vc.chatId = me.chatId;
-		vc.chatTitle = me.chatTitle;
-		vc.isGroup = me.isGroup;
-		vc.initialMessageId = messageId;
-		vc.hidesBottomBarWhenPushed = YES;
-		[me.navigationController pushViewController:vc animated:YES];
-	}];
-}
-
-#pragma mark - moderation
 
 - (void)chooseSlowMode {
-	NSArray *titles = @[@"Off", @"5 seconds", @"10 seconds", @"30 seconds",
-						@"1 minute", @"5 minutes", @"15 minutes", @"1 hour"];
+	NSArray *titles = @[@"Off",
+						TGLocalizedPluralValue(@"%@ second", @"%@ seconds", @"5", 5),
+						TGLocalizedPluralValue(@"%@ second", @"%@ seconds", @"10", 10),
+						TGLocalizedPluralValue(@"%@ second", @"%@ seconds", @"30", 30),
+						TGLocalizedPluralValue(@"%@ minute", @"%@ minutes", @"1", 1),
+						TGLocalizedPluralValue(@"%@ minute", @"%@ minutes", @"5", 5),
+						TGLocalizedPluralValue(@"%@ minute", @"%@ minutes", @"15", 15),
+						TGLocalizedPluralValue(@"%@ hour", @"%@ hours", @"1", 1)];
 	static const NSInteger seconds[] = {0, 5, 10, 30, 60, 300, 900, 3600};
 	__weak typeof(self) weakSelf = self;
 	[TGAlertSheet showChoices:titles title:@"Slow Mode" destructiveIndex:-1
@@ -491,7 +349,7 @@ static NSString *TGWriteBackground(UIColor *colour) {
 				seconds:seconds[index] completion:^(BOOL ok){
 			TGChatToolsViewController *me = weakSelf;
 			if (!ok){
-				[TGAlertSheet showMessage:@"Telegram refused that delay."
+				[TGAlertSheet showMessage:@"An error occurred."
 									title:@"Slow Mode" inView:me.view];
 				return;
 			}
@@ -511,7 +369,7 @@ static NSString *TGWriteBackground(UIColor *colour) {
 				mode:mode completion:^(BOOL ok){
 			TGChatToolsViewController *me = weakSelf;
 			if (!ok){
-				[TGAlertSheet showMessage:@"Telegram refused that reaction set."
+				[TGAlertSheet showMessage:@"An error occurred."
 									title:@"Reactions" inView:me.view];
 				return;
 			}
@@ -528,9 +386,8 @@ static NSString *TGWriteBackground(UIColor *colour) {
 			completion:^(BOOL ok){
 		TGChatToolsViewController *me = weakSelf;
 		if (!ok){
-			[TGAlertSheet showMessage:@"Only the owner can change this, and "
-									  @"Telegram Premium is needed in a private chat."
-								title:@"Protected Content" inView:me.view];
+			[TGAlertSheet showMessage:@"An error occurred."
+								title:@"Restrict Saving Content" inView:me.view];
 			return;
 		}
 		me.protectedContent = next;
@@ -550,35 +407,13 @@ static NSString *TGWriteBackground(UIColor *colour) {
 	[self rebuild];
 }
 
-- (void)answerProtectedRequest {
-	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"Protected-Content Request"
-					message:@"The message id is on the request in the chat."
-				placeholder:@"Request message id" text:nil action:@"Next"
-					 inView:self.view onSubmit:^(NSString *text){
-		int64_t messageId = text.longLongValue;
-		if (!messageId)
-			return;
-		[TGAlertSheet showChoices:@[@"Approve", @"Reject"]
-							title:@"Protected-Content Request"
-				 destructiveIndex:1 inView:weakSelf.view onChoice:^(NSInteger index){
-			[[TGClient shared] processProtectedContentDisableRequestInChat:weakSelf.chatId
-					messageId:messageId approve:(index == 0) completion:^(BOOL ok){
-				[TGAlertSheet showMessage:(ok ? @"The request was answered."
-											   : @"Telegram refused that request.")
-									title:@"Protected Content" inView:weakSelf.view];
-			}];
-		}];
-	}];
-}
-
 #pragma mark - appearance
 
 - (void)chooseAccent:(BOOL)profile {
 	NSArray *titles = @[@"0", @"1", @"2", @"3", @"4", @"5", @"6"];
 	__weak typeof(self) weakSelf = self;
 	[TGAlertSheet showChoices:titles
-						title:(profile ? @"Profile Accent" : @"Accent Colour")
+						title:(profile ? @"Change Profile Color" : @"Accent Color")
 			 destructiveIndex:-1 inView:self.view onChoice:^(NSInteger index){
 		if (profile){
 			[[TGClient shared] setChatProfileAccentColour:weakSelf.chatId colourId:index];
@@ -594,14 +429,14 @@ static NSString *TGWriteBackground(UIColor *colour) {
 - (void)chooseTheme {
 	NSArray *themes = @[@"Default", @"❤️", @"🔥", @"🎉", @"🌊", @"🍀", @"🌙"];
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:themes title:@"Chat Theme" destructiveIndex:-1
+	[TGAlertSheet showChoices:themes title:@"Color Theme" destructiveIndex:-1
 			inView:self.view onChoice:^(NSInteger index){
 		NSString *name = index == 0 ? @"" : themes[index];
 		[[TGClient shared] setChatTheme:weakSelf.chatId name:name completion:^(BOOL ok){
 			TGChatToolsViewController *me = weakSelf;
 			if (!ok){
-				[TGAlertSheet showMessage:@"Telegram does not know that theme."
-									title:@"Chat Theme" inView:me.view];
+				[TGAlertSheet showMessage:@"An error occurred."
+									title:@"Color Theme" inView:me.view];
 				return;
 			}
 			me.themeName = index == 0 ? @"Default" : themes[index];
@@ -613,7 +448,7 @@ static NSString *TGWriteBackground(UIColor *colour) {
 - (void)chooseBackground {
 	NSArray *titles = @[@"Accent", @"Secondary", @"Destructive", @"Grouped"];
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:titles title:@"Chat Background" destructiveIndex:-1
+	[TGAlertSheet showChoices:titles title:@"Wallpaper" destructiveIndex:-1
 			inView:self.view onChoice:^(NSInteger index){
 		UIColor *colour = [[TGTheme shared] accentColour];
 		if (index == 1)
@@ -624,24 +459,24 @@ static NSString *TGWriteBackground(UIColor *colour) {
 			colour = [[TGTheme shared] groupedBackgroundColour];
 		NSString *path = TGWriteBackground(colour);
 		if (!path){
-			[TGAlertSheet showMessage:@"The background image could not be written."
-								title:@"Chat Background" inView:weakSelf.view];
+			[TGAlertSheet showMessage:@"An error occurred."
+								title:@"Wallpaper" inView:weakSelf.view];
 			return;
 		}
 		[[TGClient shared] setChatBackground:weakSelf.chatId imagePath:path
 				colour:TGRGB(colour) onlyForSelf:!weakSelf.isGroup
 				completion:^(BOOL ok){
-			[TGAlertSheet showMessage:(ok ? @"Background set for this chat."
-										   : @"Telegram refused the background.")
-								title:@"Chat Background" inView:weakSelf.view];
+			[TGAlertSheet showMessage:(ok ? @"Done"
+										   : @"An error occurred.")
+								title:@"Wallpaper" inView:weakSelf.view];
 		}];
 	}];
 }
 
 - (void)resetBackground {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:@"The chat goes back to the default background."
-						title:@"Reset Background" action:@"Reset"
+	[TGAlertSheet showConfirm:nil
+						title:@"Reset Chat Wallpapers" action:@"Reset"
 				  destructive:YES inView:self.view onConfirm:^{
 		[[TGClient shared] deleteChatBackground:weakSelf.chatId restorePrevious:YES];
 	}];
@@ -671,8 +506,8 @@ static NSString *TGWriteBackground(UIColor *colour) {
 					weakSelf.discussionChatId = discussionId;
 					[weakSelf rebuild];
 				}
-				[TGAlertSheet showMessage:(ok ? @"Discussion group updated."
-											   : @"Telegram refused that group.")
+				[TGAlertSheet showMessage:(ok ? @"Done"
+											   : @"An error occurred.")
 									title:@"Discussion Group" inView:weakSelf.view];
 			}];
 		}];
@@ -686,9 +521,8 @@ static NSString *TGWriteBackground(UIColor *colour) {
 				   onSubmit:^(NSString *address){
 		[[TGClient shared] setLocationAddress:address forChat:weakSelf.chatId
 				completion:^(BOOL ok){
-			[TGAlertSheet showMessage:(ok ? @"Location saved."
-										   : @"Only a location-based supergroup "
-											 @"takes one, and only an administrator.")
+			[TGAlertSheet showMessage:(ok ? @"Done"
+										   : @"An error occurred.")
 								title:@"Location" inView:weakSelf.view];
 		}];
 	}];
@@ -697,8 +531,8 @@ static NSString *TGWriteBackground(UIColor *colour) {
 - (void)editNote {
 	__weak typeof(self) weakSelf = self;
 	[TGAlertSheet showInput:@"Local Note"
-					message:@"Kept in this chat's application data, on Telegram's side."
-				placeholder:@"A note only this app sees"
+					message:nil
+				placeholder:@"Note"
 					   text:self.note action:@"Save" inView:self.view
 				 onSubmit:^(NSString *note){
 		[[TGClient shared] setClientNote:note forChat:weakSelf.chatId
@@ -717,10 +551,7 @@ static NSString *TGWriteBackground(UIColor *colour) {
 		TGChatToolsViewController *me = weakSelf;
 		if (!me)
 			return;
-		NSString *say = user[@"name"]
-				? [NSString stringWithFormat:@"%@ becomes owner if this account "
-						@"stays away for seven days.", user[@"name"]]
-				: @"Only the owner can see who takes over after they leave.";
+		NSString *say = user[@"name"] ?: @"An error occurred.";
 		[TGAlertSheet showMessage:say title:@"Owner After Leaving" inView:me.view];
 	}];
 }
@@ -734,23 +565,23 @@ static NSString *TGWriteBackground(UIColor *colour) {
 		if (!me)
 			return;
 		if (!stickers.count){
-			[TGAlertSheet showMessage:@"Telegram returned no emoji photos."
-								title:@"Emoji Photo" inView:me.view];
+			[TGAlertSheet showMessage:@"An error occurred."
+								title:@"Emoji" inView:me.view];
 			return;
 		}
 		NSMutableArray *titles = [NSMutableArray array];
 		for (NSDictionary *sticker in stickers)
 			[titles addObject:sticker[@"emoji"] ?: @"🙂"];
-		[TGAlertSheet showChoices:titles title:@"Emoji Photo"
+		[TGAlertSheet showChoices:titles title:@"Emoji"
 				destructiveIndex:-1 inView:me.view onChoice:^(NSInteger index){
 			NSDictionary *sticker = stickers[index];
 			UIColor *colour = [[TGTheme shared] accentColour];
 			[[TGClient shared] setEmojiPhotoForChat:weakSelf.chatId
 					customEmojiId:[sticker[@"customEmojiId"] longLongValue]
 					colour:TGRGB(colour) completion:^(BOOL ok){
-				[TGAlertSheet showMessage:(ok ? @"The emoji photo is set."
-											   : @"Telegram refused that photo.")
-									title:@"Emoji Photo" inView:weakSelf.view];
+				[TGAlertSheet showMessage:(ok ? @"Done"
+											   : @"An error occurred.")
+									title:@"Emoji" inView:weakSelf.view];
 			}];
 		}];
 	}];
@@ -762,19 +593,18 @@ static NSString *TGWriteBackground(UIColor *colour) {
 	NSArray *reasons = @[@"spam", @"violence", @"pornography", @"childAbuse",
 						 @"copyright", @"location", @"fake", @"custom"];
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:titles title:@"Report Photo" destructiveIndex:0
+	[TGAlertSheet showChoices:titles title:@"Report Profile Photo" destructiveIndex:0
 			inView:self.view onChoice:^(NSInteger index){
-		[TGAlertSheet showConfirm:[NSString stringWithFormat:
-						@"Report this chat's photo as %@?", titles[index]]
-							title:@"Report Photo" action:@"Report"
+		[TGAlertSheet showConfirm:nil
+							title:@"Report Profile Photo" action:@"Report"
 					  destructive:YES inView:weakSelf.view onConfirm:^{
 			[[TGClient shared] reportChatPhotoInChat:weakSelf.chatId
 					reason:reasons[index] detail:@""
 					completion:^(BOOL ok){
-				[TGAlertSheet showMessage:(ok ? @"Reported. Thank you."
-											   : @"Telegram refused the report, "
-												 @"or this chat has no photo.")
-									title:@"Report Photo" inView:weakSelf.view];
+				[TGAlertSheet showMessage:(ok
+								? @"Telegram moderators will review your report. Thank you!"
+								: @"An error occurred.")
+									title:@"Report Profile Photo" inView:weakSelf.view];
 			}];
 		}];
 	}];
@@ -784,15 +614,14 @@ static NSString *TGWriteBackground(UIColor *colour) {
 
 - (void)processJoinRequests:(BOOL)approve {
 	__weak typeof(self) weakSelf = self;
-	NSString *action = approve ? @"Approve All" : @"Decline All";
-	[TGAlertSheet showConfirm:[NSString stringWithFormat:
-					@"%@ pending requests at every link of this chat.", action]
+	NSString *action = approve ? @"Approve" : @"Decline All";
+	[TGAlertSheet showConfirm:nil
 						title:@"Join Requests" action:action
 				  destructive:!approve inView:self.view onConfirm:^{
 		[[TGClient shared] processAllJoinRequests:weakSelf.chatId link:@""
 				approve:approve completion:^(BOOL ok){
-			[TGAlertSheet showMessage:(ok ? @"The requests were answered."
-										   : @"Telegram refused the batch.")
+			[TGAlertSheet showMessage:(ok ? @"Done"
+										   : @"An error occurred.")
 								title:@"Join Requests" inView:weakSelf.view];
 		}];
 	}];
@@ -800,27 +629,34 @@ static NSString *TGWriteBackground(UIColor *colour) {
 
 - (void)answerJoinRequestQuery {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"Join Request Query"
-					message:@"Query ids arrive with a guard bot's request."
-				placeholder:@"Query id" text:nil action:@"Next"
-					 inView:self.view onSubmit:^(NSString *text){
-		int64_t queryId = text.longLongValue;
-		if (!queryId)
+	[[TGClient shared] joinRequestsForChat:self.chatId completion:^(NSArray *requests){
+		TGChatToolsViewController *me = weakSelf;
+		if (!me)
 			return;
-		[TGAlertSheet showChoices:@[@"Approve", @"Decline", @"Queue"]
-							title:@"Answer Query" destructiveIndex:1
-						   inView:weakSelf.view onChoice:^(NSInteger index){
-			if (index == 2){
-				[TGAlertSheet showMessage:@"A queue answer is sent by the guard "
-										  @"bot, not by this client."
-									title:@"Join Request" inView:weakSelf.view];
-				return;
-			}
-			[[TGClient shared] answerJoinRequestQuery:queryId approve:(index == 0)
-					completion:^(BOOL ok){
-				[TGAlertSheet showMessage:(ok ? @"The query was answered."
-											   : @"Telegram refused the answer.")
-									title:@"Join Request" inView:weakSelf.view];
+		if (!requests.count){
+			[TGAlertSheet showMessage:@"None"
+								title:@"Join Requests" inView:me.view];
+			return;
+		}
+		NSMutableArray *titles = [NSMutableArray array];
+		for (NSDictionary *request in requests){
+			NSString *name = request[@"name"];
+			[titles addObject:name.length ? name : @"Someone"];
+		}
+		[TGAlertSheet showChoices:titles
+							title:@"Join Requests"
+				 destructiveIndex:-1
+						   inView:me.view
+						 onChoice:^(NSInteger index){
+			NSDictionary *request = requests[(NSUInteger)index];
+			int64_t userId = [request[@"id"] longLongValue];
+			[TGAlertSheet showChoices:@[@"Approve", @"Decline"]
+								title:request[@"name"] ?: @"Join Requests"
+					 destructiveIndex:1
+							   inView:weakSelf.view
+							 onChoice:^(NSInteger answer){
+				[[TGClient shared] processJoinRequest:userId inChat:weakSelf.chatId
+											 approve:(answer == 0)];
 			}];
 		}];
 	}];
@@ -833,7 +669,7 @@ static NSString *TGWriteBackground(UIColor *colour) {
 		if (!me)
 			return;
 		if (!lists.count){
-			[TGAlertSheet showMessage:@"Telegram named no lists for this chat."
+			[TGAlertSheet showMessage:@"An error occurred."
 								title:@"Add to Folder" inView:me.view];
 			return;
 		}
@@ -856,12 +692,12 @@ static NSString *TGWriteBackground(UIColor *colour) {
 				[titles addObject:@"List"];
 			}
 		}
-		[TGAlertSheet showChoices:titles title:@"Add to Chat List"
+		[TGAlertSheet showChoices:titles title:@"Add to Folder"
 				destructiveIndex:-1 inView:me.view onChoice:^(NSInteger index){
 			[[TGClient shared] addChat:weakSelf.chatId toList:lists[index]
 					completion:^(BOOL ok){
-				[TGAlertSheet showMessage:(ok ? @"Added."
-											   : @"Telegram refused that list.")
+				[TGAlertSheet showMessage:(ok ? @"Done"
+											   : @"An error occurred.")
 									title:@"Add to Folder" inView:weakSelf.view];
 			}];
 		}];

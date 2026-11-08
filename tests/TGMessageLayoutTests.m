@@ -469,7 +469,14 @@ static BOOL TGTestOldFonts(UTF32Char c) {
 	value.tm_min = 5;
 	value.tm_isdst = -1;
 	NSTimeInterval stamp = (NSTimeInterval)mktime(&value);
-	XCTAssertEqualObjects(TGMessageStamp(stamp, NO), @"09:05");
+	NSDateFormatter *clock = [[NSDateFormatter alloc] init];
+	clock.dateStyle = NSDateFormatterNoStyle;
+	clock.timeStyle = NSDateFormatterShortStyle;
+	NSString *expected = [clock stringFromDate:
+			[NSDate dateWithTimeIntervalSince1970:stamp]];
+	XCTAssertEqualObjects(TGMessageStamp(stamp, NO), expected);
+	XCTAssertTrue([TGMessageStamp(stamp, NO) rangeOfString:@":"].location != NSNotFound,
+			@"a short clock still has the time separator");
 }
 
 - (void)testMessageStamp_EditedComesAfterTheClock {
@@ -483,9 +490,15 @@ static BOOL TGTestOldFonts(UTF32Char c) {
 	value.tm_isdst = -1;
 	NSTimeInterval stamp = (NSTimeInterval)mktime(&value);
 	NSString *line = TGMessageStamp(stamp, YES);
-	XCTAssertEqualObjects(line, @"23:40 edited");
-	XCTAssertFalse([line hasPrefix:@"edited"],
-			@"Telegram appends the mark; a prefix reads as a different clock");
+	NSDateFormatter *clock = [[NSDateFormatter alloc] init];
+	clock.dateStyle = NSDateFormatterNoStyle;
+	clock.timeStyle = NSDateFormatterShortStyle;
+	NSString *time = [clock stringFromDate:
+			[NSDate dateWithTimeIntervalSince1970:stamp]];
+	NSString *expected = [NSString stringWithFormat:@"edited %@", time];
+	XCTAssertEqualObjects(line, expected);
+	XCTAssertTrue([line hasPrefix:@"edited"],
+			@"Telegram puts the edited mark before the time, as the pack does");
 }
 
 /// The emoji check is warmed on a background queue while the main thread

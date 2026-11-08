@@ -30,7 +30,7 @@
 		_limit = 20;
 		_commission = 50;
 		_months = 12;
-		_answerLines = @[@"Choose a kind and load the catalogue or a connection."];
+		_answerLines = @[@"None"];
 	}
 	return self;
 }
@@ -44,7 +44,7 @@
 - (NSString *)kindTitle {
 	if ([self.kind isEqualToString:@"bot"]) return @"Bot";
 	if ([self.kind isEqualToString:@"channel"]) return @"Channel";
-	return @"This Account";
+	return @"My Profile";
 }
 
 - (void)rebuildSections {
@@ -64,44 +64,39 @@
 			(int)self.limit], @"limit")];
 
 	NSMutableArray *catalogue = [NSMutableArray array];
-	[catalogue addObject:TGBAction(@"Search Programs", nil, @"search")];
-	[catalogue addObject:TGBAction(@"Connected Programs", nil, @"connected")];
-	[catalogue addObject:TGBAction(@"Get One Connection", nil, @"one")];
-	[catalogue addObject:TGBAction(@"Connect Program", nil, @"connect")];
+	[catalogue addObject:TGBAction(@"Search", nil, @"search")];
+	[catalogue addObject:TGBAction(@"Connected", nil, @"connected")];
+	[catalogue addObject:TGBAction(@"Connection", nil, @"one")];
+	[catalogue addObject:TGBAction(@"Connect", nil, @"connect")];
 	[catalogue addObject:TGBAction(@"Disconnect URL",
 			self.connectionURL.length ? self.connectionURL : @"Set", @"url")];
-	[catalogue addObject:TGBDestructive(@"Disconnect Program", @"disconnect")];
+	[catalogue addObject:TGBDestructive(@"Disconnect", @"disconnect")];
 
 	NSMutableArray *channel = [NSMutableArray array];
-	[channel addObject:TGBAction(@"Channel Program Page", nil, @"channelPage")];
-	[channel addObject:TGBAction(@"Commission Per Mille", [NSString stringWithFormat:
+	[channel addObject:TGBAction(@"Affiliate Program", nil, @"channelPage")];
+	[channel addObject:TGBAction(@"Commission", [NSString stringWithFormat:
 			@"%d", (int)self.commission], @"commission")];
 	[channel addObject:TGBAction(@"Month Count", [NSString stringWithFormat:
 			@"%d", (int)self.months], @"months")];
-	[channel addObject:TGBAction(@"Search Channel Program", nil, @"searchChannel")];
-	[channel addObject:TGBAction(@"Set Channel Program", nil, @"setChannel")];
+	[channel addObject:TGBAction(@"Search", nil, @"searchChannel")];
+	[channel addObject:TGBAction(@"Set", nil, @"setChannel")];
 
 	NSMutableArray *answers = [NSMutableArray array];
 	for (NSString *line in self.answerLines)
 		[answers addObject:TGBInfo(line, nil)];
 
 	self.sections = @[
-		TGBSection(@"AFFILIATE", @"A bot or channel affiliate uses that record's "
-				@"own id. This Account is the signed-in user.", identity),
-		TGBSection(@"PROGRAMS", @"The catalogue is a search; connections carry "
-				@"the URL Fragment pays through, not a wallet this build holds.",
-				catalogue),
-		TGBSection(@"CHANNEL", @"The channel page opens Telegram's parameters "
-				@"and lets the owner set the commission and duration.",
-				channel),
-		TGBSection(@"ANSWER", nil, answers),
+		TGBSection(@"Affiliate", nil, identity),
+		TGBSection(@"PROGRAMS", nil, catalogue),
+		TGBSection(@"CHANNEL", nil, channel),
+		TGBSection(@"Replies", nil, answers),
 	];
 	[self rebuild];
 }
 
 - (void)finish:(BOOL)ok error:(NSString *)error title:(NSString *)title {
-	self.answerLines = @[ok ? @"Telegram accepted the request."
-			: (error.length ? error : @"Telegram refused that.")];
+	self.answerLines = @[ok ? @"Done"
+			: (error.length ? error : @"An error occurred.")];
 	[self rebuildSections];
 	if (!ok)
 		[self showMessage:self.answerLines.firstObject title:title];
@@ -137,7 +132,7 @@
 
 - (void)showProgram:(NSDictionary *)program title:(NSString *)title {
 	if (!program){
-		[self finish:NO error:@"Telegram has no such connection." title:title];
+		[self finish:NO error:@"An error occurred." title:title];
 		return;
 	}
 	NSString *body = [NSString stringWithFormat:
@@ -184,7 +179,7 @@
 - (void)didChooseAction:(NSString *)action row:(NSDictionary *)row {
 	__weak typeof(self) weakSelf = self;
 	if ([action isEqualToString:@"kind"]){
-		[TGAlertSheet showChoices:@[@"This Account", @"Bot", @"Channel"]
+		[TGAlertSheet showChoices:@[@"My Profile", @"Bot", @"Channel"]
 						   title:@"Affiliate" destructiveIndex:-1 inView:self.view
 						 onChoice:^(NSInteger index){
 			weakSelf.kind = @[@"user", @"bot", @"channel"][(NSUInteger)index];
@@ -193,7 +188,7 @@
 		return;
 	}
 	if ([action isEqualToString:@"sort"]){
-		[TGAlertSheet showChoices:@[@"Profitability", @"Creation Date", @"Revenue"]
+		[TGAlertSheet showChoices:@[@"Profitability", @"Date", @"Revenue"]
 						   title:@"Sort" destructiveIndex:-1 inView:self.view
 						 onChoice:^(NSInteger index){
 			weakSelf.sort = @[@"profitability", @"creationDate", @"revenue"][
@@ -216,7 +211,7 @@
 		if ([action isEqualToString:@"offset"]){ current = self.offset; title = @"Offset"; }
 		if ([action isEqualToString:@"limit"]){ current = [NSString stringWithFormat:@"%d", (int)self.limit]; title = @"Limit"; }
 		if ([action isEqualToString:@"url"]){ current = self.connectionURL; title = @"Disconnect URL"; }
-		if ([action isEqualToString:@"commission"]){ current = [NSString stringWithFormat:@"%d", (int)self.commission]; title = @"Commission Per Mille"; }
+		if ([action isEqualToString:@"commission"]){ current = [NSString stringWithFormat:@"%d", (int)self.commission]; title = @"Commission"; }
 		if ([action isEqualToString:@"months"]){ current = [NSString stringWithFormat:@"%d", (int)self.months]; title = @"Month Count"; }
 		[self askField:action title:title current:current];
 		return;
@@ -232,10 +227,10 @@
 											   completion:^(NSDictionary *page,
 															 NSString *error){
 			if (error){
-				[weakSelf finish:NO error:error title:@"Affiliate Catalogue"];
+				[weakSelf finish:NO error:error title:@"Affiliate Programs"];
 				return;
 			}
-			[weakSelf showPage:page title:@"Affiliate Catalogue"];
+			[weakSelf showPage:page title:@"Affiliate Programs"];
 		}];
 	} else if ([action isEqualToString:@"connected"]){
 		[[TGClient shared] connectedAffiliateProgramsForKind:self.kind
@@ -246,10 +241,10 @@
 												  completion:^(NSDictionary *page,
 																NSString *error){
 			if (error){
-				[weakSelf finish:NO error:error title:@"Connected Programs"];
+				[weakSelf finish:NO error:error title:@"Connected"];
 				return;
 			}
-			[weakSelf showPage:page title:@"Connected Programs"];
+			[weakSelf showPage:page title:@"Connected"];
 		}];
 	} else if ([action isEqualToString:@"one"]){
 		[[TGClient shared] connectedAffiliateProgramForKind:self.kind
@@ -272,15 +267,15 @@
 											   completion:^(NSDictionary *program,
 															 NSString *error){
 			if (error){
-				[weakSelf finish:NO error:error title:@"Connect Program"];
+				[weakSelf finish:NO error:error title:@"Connect"];
 				return;
 			}
-			[weakSelf showProgram:program title:@"Connect Program"];
+			[weakSelf showProgram:program title:@"Connect"];
 		}];
 	} else if ([action isEqualToString:@"disconnect"]){
 		if (!self.connectionURL.length){
-			[self showMessage:@"Set the connection URL first."
-						title:@"Disconnect Program"];
+			[self showMessage:@"An error occurred."
+						title:@"Disconnect"];
 			return;
 		}
 		[[TGClient shared] disconnectAffiliateProgramForKind:self.kind
@@ -290,10 +285,10 @@
 												  completion:^(NSDictionary *program,
 																NSString *error){
 			if (error){
-				[weakSelf finish:NO error:error title:@"Disconnect Program"];
+				[weakSelf finish:NO error:error title:@"Disconnect"];
 				return;
 			}
-			[weakSelf showProgram:program title:@"Disconnect Program"];
+			[weakSelf showProgram:program title:@"Disconnect"];
 		}];
 	} else if ([action isEqualToString:@"channelPage"]){
 		TGChannelAffiliateViewController *screen =
@@ -312,7 +307,7 @@
 							   commissionPerMille:self.commission
 									   monthCount:self.months
 									   completion:^(BOOL ok, NSString *error){
-			[weakSelf finish:ok error:error title:@"Channel Program"];
+			[weakSelf finish:ok error:error title:@"Affiliate Program"];
 		}];
 	}
 }
@@ -334,14 +329,14 @@
 	if ((self = [super init])){
 		_commission = 50;
 		_months = 12;
-		_answerLines = @[@"Look up a channel's affiliate link or set its parameters."];
+		_answerLines = @[@"None"];
 	}
 	return self;
 }
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	self.title = @"Channel Affiliate";
+	self.title = @"Affiliate Program";
 	[self rebuildSections];
 }
 
@@ -349,28 +344,27 @@
 	NSMutableArray *identity = [NSMutableArray array];
 	[identity addObject:TGBAction(@"Chat ID", self.chatId
 			? [NSString stringWithFormat:@"%lld", self.chatId] : @"Set", @"chatId")];
-	[identity addObject:TGBAction(@"Channel Username",
+	[identity addObject:TGBAction(@"Username",
 			self.username.length ? self.username : @"Set", @"username")];
 	[identity addObject:TGBAction(@"Referrer",
 			self.referrer.length ? self.referrer : @"(none)", @"referrer")];
-	[identity addObject:TGBAction(@"Commission Per Mille",
+	[identity addObject:TGBAction(@"Commission",
 			[NSString stringWithFormat:@"%d", (int)self.commission], @"commission")];
 	[identity addObject:TGBAction(@"Month Count",
 			[NSString stringWithFormat:@"%d", (int)self.months], @"months")];
 
 	NSMutableArray *actions = [NSMutableArray array];
-	[actions addObject:TGBAction(@"Search Channel Program", nil, @"search")];
-	[actions addObject:TGBAction(@"Set Channel Program", nil, @"set")];
+	[actions addObject:TGBAction(@"Search", nil, @"search")];
+	[actions addObject:TGBAction(@"Set", nil, @"set")];
 
 	NSMutableArray *answers = [NSMutableArray array];
 	for (NSString *line in self.answerLines)
 		[answers addObject:TGBInfo(line, nil)];
 
 	self.sections = @[
-		TGBSection(@"CHANNEL", @"The username is the one t.me resolves. The chat "
-				@"id is what setChatAffiliateProgram writes.", identity),
-		TGBSection(@"PROGRAM", nil, actions),
-		TGBSection(@"ANSWER", nil, answers),
+		TGBSection(@"CHANNEL", nil, identity),
+		TGBSection(@"PROGRAMS", nil, actions),
+		TGBSection(@"Replies", nil, answers),
 	];
 	[self rebuild];
 }
@@ -384,9 +378,9 @@
 		NSString *current = @"";
 		NSString *title = action;
 		if ([action isEqualToString:@"chatId"]){ current = [NSString stringWithFormat:@"%lld", self.chatId]; title = @"Chat ID"; }
-		if ([action isEqualToString:@"username"]){ current = self.username; title = @"Channel Username"; }
+		if ([action isEqualToString:@"username"]){ current = self.username; title = @"Username"; }
 		if ([action isEqualToString:@"referrer"]){ current = self.referrer; title = @"Referrer"; }
-		if ([action isEqualToString:@"commission"]){ current = [NSString stringWithFormat:@"%d", (int)self.commission]; title = @"Commission Per Mille"; }
+		if ([action isEqualToString:@"commission"]){ current = [NSString stringWithFormat:@"%d", (int)self.commission]; title = @"Commission"; }
 		if ([action isEqualToString:@"months"]){ current = [NSString stringWithFormat:@"%d", (int)self.months]; title = @"Month Count"; }
 		[self askText:title message:nil placeholder:current text:current
 			   action:@"Save" completion:^(NSString *text){
@@ -407,26 +401,26 @@
 			if (error){
 				weakSelf.answerLines = @[error];
 				[weakSelf rebuildSections];
-				[weakSelf showMessage:error title:@"Search Channel Program"];
+				[weakSelf showMessage:error title:@"Search"];
 				return;
 			}
 			NSString *line = [NSString stringWithFormat:@"%@  #%@",
 					chat[@"title"] ?: @"?", chat[@"id"] ?: @0];
 			weakSelf.answerLines = @[line];
 			[weakSelf rebuildSections];
-			[weakSelf showMessage:line title:@"Search Channel Program"];
+			[weakSelf showMessage:line title:@"Search"];
 		}];
 	} else if ([action isEqualToString:@"set"]){
 		[[TGClient shared] setChatAffiliateProgram:self.chatId
 							   commissionPerMille:self.commission
 									   monthCount:self.months
 									   completion:^(BOOL ok, NSString *error){
-			weakSelf.answerLines = @[ok ? @"Telegram accepted the request."
-					: (error.length ? error : @"Telegram refused that.")];
+			weakSelf.answerLines = @[ok ? @"Done"
+					: (error.length ? error : @"An error occurred.")];
 			[weakSelf rebuildSections];
 			if (!ok)
 				[weakSelf showMessage:weakSelf.answerLines.firstObject
-								title:@"Set Channel Program"];
+								title:@"Set"];
 		}];
 	}
 }

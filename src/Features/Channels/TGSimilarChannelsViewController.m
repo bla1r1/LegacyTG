@@ -2,6 +2,7 @@
 // TGSimilarChannelsViewController.m - List of recommended similar channels.
 //
 #import "TGSimilarChannelsViewController.h"
+#import "TGLocalization.h"
 #import "TGClient.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
@@ -20,8 +21,6 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
-		self.edgesForExtendedLayout = UIRectEdgeNone;
 	self.title = @"Similar Channels";
 	self.chatDetails = [NSMutableDictionary dictionary];
 	self.tableView.rowHeight = TGMetricPersonRow;
@@ -32,10 +31,6 @@
 				name:TGThemeChangedNotification object:nil];
 
 	[self loadAllChannels];
-}
-
-- (void)dealloc {
-	[[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 - (void)applyTheme {
@@ -86,7 +81,7 @@
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-	return self.channelChatIds.count ? [NSString stringWithFormat:@"%lu channels", (unsigned long)self.channelChatIds.count] : nil;
+	return self.channelChatIds.count ? [NSString stringWithFormat:TGLocalized(@"%@ channels"), @(self.channelChatIds.count)] : nil;
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -110,14 +105,14 @@
 	NSString *title = chat[@"title"] ?: itemDict[@"title"];
 	if (!title.length)
 		title = [[TGClient shared] titleForChat:chatId];
-	cell.textLabel.text = title.length ? title : [NSString stringWithFormat:@"Channel %lld", chatId];
+	cell.textLabel.text = title.length ? title : @"Channel";
 
 	NSInteger members = [itemDict[@"members"] integerValue];
 	if (members <= 0 && chat[@"member_count"]) {
 		members = [chat[@"member_count"] integerValue];
 	}
 	if (members > 0) {
-		cell.detailTextLabel.text = [NSString stringWithFormat:@"%ld subscribers", (long)members];
+		cell.detailTextLabel.text = [NSString stringWithFormat:TGLocalized(@"%@ subscribers"), @(members)];
 	} else {
 		cell.detailTextLabel.text = @"Channel";
 	}

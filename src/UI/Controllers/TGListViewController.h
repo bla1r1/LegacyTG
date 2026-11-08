@@ -7,8 +7,9 @@
 // them from growing seven copies of the same data-source boilerplate.
 //
 #import <UIKit/UIKit.h>
+#import "TGTableViewController.h"
 
-@interface TGListViewController : UITableViewController
+@interface TGListViewController : TGTableViewController
 
 /// Shown in the navigation bar.
 @property (nonatomic, copy) NSString *listTitle;

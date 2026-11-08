@@ -1,4 +1,5 @@
 #import "TGChatViewControllerInternal.h"
+#import "TGLocalization.h"
 #import "TGForwardPicker.h"
 #import "TGPopupMenu.h"
 #import "TGStyle.h"
@@ -16,65 +17,6 @@
 #import <CoreImage/CoreImage.h>
 #import <QuartzCore/QuartzCore.h>
 
-
-/// The room left above a lifted bubble for its reaction bar: the capsule plus
-/// the gap that separates it from the bubble's top edge.
-static const CGFloat kHoldReactionRoom = TGMetricRow;
-/// The gap between the lifted bubble and the action card hanging under it.
-static const CGFloat kHoldLiftGap = TGMetricPadSmall;
-/// The lift never takes more than this share of the screen: the card below it
-/// has to stay the bigger half of the presentation.
-static const CGFloat kHoldLiftMaxPart = 0.40f;
-/// The room the card is guaranteed before the lift is scaled down for it; a
-/// card taller than this scrolls inside itself (see TGPopupMenu).
-static const CGFloat kHoldMenuRoomMin = 4.0f * TGMetricRow;
-/// The backdrop is captured at 1x and stretched. It is about to be blurred
-/// and dimmed, so a 320-point-wide capture is indistinguishable from a 640
-/// one and costs the A4 a quarter of the pixels and time.
-static const CGFloat kHoldBackdropScale = 1.0f;
-/// Small on purpose: enough to lose the text under it, not enough to make the
-/// chat's shapes unreadable behind the lifted bubble.
-static const CGFloat kHoldBlurRadius = 10.0f;
-
-/// A view's current pixels. renderInContext is the only path this OS offers;
-/// snapshotViewAfterScreenUpdates is iOS 7 and later.
-static UIImage *TGHoldSnapshotOfView(UIView *view, CGFloat scale) {
-	if (!view || CGRectIsEmpty(view.bounds))
-		return nil;
-	UIGraphicsBeginImageContextWithOptions(view.bounds.size, NO, scale);
-	CGContextRef ctx = UIGraphicsGetCurrentContext();
-	if (!ctx) {
-		UIGraphicsEndImageContext();
-		return nil;
-	}
-	[view.layer renderInContext:ctx];
-	UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
-	UIGraphicsEndImageContext();
-	return image;
-}
-
-/// The bubble alone, clipped to its own rounded shape. Rendering the whole
-/// cell would lift the sender's name and avatar as well; rendering the row
-/// would lift the empty space around the bubble.
-static UIImage *TGHoldSnapshotOfBubble(UIView *bubble) {
-	if (!bubble || CGRectIsEmpty(bubble.bounds))
-		return nil;
-	UIGraphicsBeginImageContextWithOptions(bubble.bounds.size, NO, 0.0f);
-	CGContextRef ctx = UIGraphicsGetCurrentContext();
-	if (!ctx) {
-		UIGraphicsEndImageContext();
-		return nil;
-	}
-	CGFloat radius = bubble.layer.cornerRadius;
-	UIBezierPath *clip = radius > TGMetricCornerNone
-			? [UIBezierPath bezierPathWithRoundedRect:bubble.bounds cornerRadius:radius]
-			: [UIBezierPath bezierPathWithRect:bubble.bounds];
-	[clip addClip];
-	[bubble.layer renderInContext:ctx];
-	UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
-	UIGraphicsEndImageContext();
-	return image;
-}
 
 /// What the reply strip shows on its second line. The rows here are already
 /// flattened, so TGMessagePreview - which reads a raw TDLib content - cannot
@@ -221,6 +163,9 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 
 	NSArray *items = [self commonActionItemsForMessage:m mine:mine heldId:heldId];
 	NSArray *reactions = [self reactionsWithDefaultFirst:[TGReactionPicker defaultReactions]];
+	// The read/reaction row is part of the same card, above the verbs. It is
+	// built from the held message, not from the cell that is about to go away.
+	UIView *summary = [self readSummaryHeaderForMessage:m];
 	__weak typeof(self) weakSelf = self;
 
 	// The same card for both presentations: the actions, the reaction bar and
@@ -230,7 +175,6 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 		TGChatViewController *me = weakSelf;
 		if (!me)
 			return;
-		me.actionMenuPoint = where;
 		void (^onReaction)(NSString *) = ^(NSString *emoji) {
 			TGChatViewController *strong = weakSelf;
 			if (!strong) return;
@@ -251,7 +195,7 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 					return;
 				TGChatViewController *strong = weakSelf;
 				if (strong)
-					[TGAlertSheet showMessage:@"Telegram refused that default reaction."
+					[TGAlertSheet showMessage:@"An error occurred."
 										 title:@"Reaction"
 										inView:strong.view];
 			}];
@@ -263,6 +207,7 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 			[TGPopupMenu showItems:items
 						anchoredAt:anchor
 							inView:me.view
+						headerView:summary
 						 reactions:reactions
 				  selectedReaction:myReaction
 						onReaction:onReaction
@@ -276,6 +221,7 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 			[TGPopupMenu showItems:items
 						   atPoint:where
 							inView:me.view
+						headerView:summary
 						 reactions:reactions
 				  selectedReaction:myReaction
 						onReaction:onReaction

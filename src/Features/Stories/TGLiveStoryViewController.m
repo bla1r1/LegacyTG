@@ -19,18 +19,15 @@
 	if (self){
 		_chatId = chatId;
 		_groupCallId = groupCallId;
-		self.listTitle = @"Live Story";
-		self.emptyText = @"No live story data yet.";
+		self.listTitle = @"Live Stream";
+		self.emptyText = @"No Results";
 	}
 	return self;
 }
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	self.listFooter = @"This client has no camera encoder. Starting asks Telegram "
-			@"for a live story and, for an RTMP stream, shows the address and "
-			@"key a broadcast app would use. Joining returns Telegram's join "
-			@"payload as text.";
+	self.listFooter = nil;
 	[self rebuildRows];
 }
 
@@ -43,12 +40,11 @@
 							  ? [NSString stringWithFormat:@"LIVE · story %d · call %d",
 									  self.storyId, self.groupCallId]
 							  : @"Not started"}];
-	[rows addObject:@{@"title" : self.groupCallId ? @"Start Another Live Story"
-												  : @"Start Live Story",
+	[rows addObject:@{@"title" : @"Start Live Story As",
 					  @"detail" : @"Telegram creates the live story",
 					  @"tap" : ^{ [weakSelf startLiveStory]; }}];
 	if (self.groupCallId){
-		[rows addObject:@{@"title" : @"Join Live Story",
+		[rows addObject:@{@"title" : @"Join",
 						  @"detail" : @"Returns the tgcalls join payload",
 						  @"tap" : ^{ [weakSelf joinLiveStory]; }}];
 		[rows addObject:@{@"title" : @"Streamer",
@@ -57,7 +53,7 @@
 		[rows addObject:@{@"title" : @"Load Message Senders",
 						  @"detail" : @"Who messages may be sent as",
 						  @"tap" : ^{ [weakSelf loadMessageSenders]; }}];
-		[rows addObject:@{@"title" : @"Top Donors",
+		[rows addObject:@{@"title" : @"Top Members",
 						  @"detail" : @"Stars spent on the live story",
 						  @"tap" : ^{ [weakSelf loadTopDonors]; }}];
 		[rows addObject:@{@"title" : @"Add 1★ Pending Reaction",
@@ -95,7 +91,7 @@
 - (void)startLiveStory {
 	NSArray *choices = @[@"RTMP stream", @"Group call"];
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:choices title:@"Start Live Story"
+	[TGAlertSheet showChoices:choices title:@"Start Live Story As"
 				destructiveIndex:-1 inView:self.view onChoice:^(NSInteger choice){
 		TGLiveStoryViewController *me = weakSelf;
 		if (!me)
@@ -110,10 +106,10 @@
 								paidMessageStars:0
 									completion:^(NSDictionary *answer){
 			if (![answer[@"ok"] boolValue]){
-				[TGAlertSheet showMessage:answer[@"error"] ?: @"Telegram refused that."
-									title:@"Live Story" inView:me.view];
-				[me appendTitle:@"Start Failed"
-						 detail:answer[@"error"] ?: @"Telegram refused that."];
+				[TGAlertSheet showMessage:answer[@"error"] ?: @"An error occurred."
+									title:@"Live Stream" inView:me.view];
+				[me appendTitle:@"An error occurred"
+						 detail:answer[@"error"] ?: @"An error occurred."];
 				return;
 			}
 			NSDictionary *story = answer[@"story"] ?: @{};
@@ -137,9 +133,9 @@
 		if (!me)
 			return;
 		if (!payload.length){
-			[TGAlertSheet showMessage:error ?: @"Telegram refused the join."
-								title:@"Join Live Story" inView:me.view];
-			[me appendTitle:@"Join Failed" detail:error ?: @"Refused."];
+			[TGAlertSheet showMessage:error ?: @"An error occurred."
+								title:@"Join" inView:me.view];
+			[me appendTitle:@"An error occurred" detail:error ?: @"An error occurred."];
 			return;
 		}
 		[me appendTitle:@"Join Payload"
@@ -159,7 +155,7 @@
 		if (!me)
 			return;
 		if (!streamer){
-			[TGAlertSheet showMessage:error ?: @"Telegram refused that."
+			[TGAlertSheet showMessage:error ?: @"An error occurred."
 								title:@"Streamer" inView:me.view];
 			return;
 		}
@@ -179,7 +175,7 @@
 		if (!me)
 			return;
 		if (!url){
-			[TGAlertSheet showMessage:error ?: @"Telegram refused that."
+			[TGAlertSheet showMessage:error ?: @"An error occurred."
 								title:@"RTMP URL" inView:me.view];
 			return;
 		}
@@ -202,7 +198,7 @@
 		[[TGClient shared] replaceLiveStoryRtmpUrlForChat:me.chatId
 											   completion:^(NSDictionary *url, NSString *error){
 			if (!url){
-				[TGAlertSheet showMessage:error ?: @"Telegram refused that."
+				[TGAlertSheet showMessage:error ?: @"An error occurred."
 									title:@"RTMP URL" inView:me.view];
 				return;
 			}
@@ -212,7 +208,7 @@
 			[me rebuildRows];
 		}];
 	};
-	[TGAlertSheet showConfirm:@"The current stream key stops working."
+	[TGAlertSheet showConfirm:@"Do you want to revoke the stream key?"
 						title:@"Replace RTMP URL"
 					   action:@"Replace"
 				  destructive:YES
@@ -228,8 +224,8 @@
 		if (!me)
 			return;
 		if (!senders.count){
-			[TGAlertSheet showMessage:error ?: @"Telegram returned no senders."
-								title:@"Message Senders" inView:me.view];
+			[TGAlertSheet showMessage:error ?: @"An error occurred."
+								title:@"Send Message As..." inView:me.view];
 			return;
 		}
 		NSMutableArray *titles = [NSMutableArray array];
@@ -237,7 +233,7 @@
 			[titles addObject:[NSString stringWithFormat:@"%@%@",
 					sender[@"name"] ?: @"Sender",
 					[sender[@"needsPremium"] boolValue] ? @" · Premium" : @""]];
-		[TGAlertSheet showChoices:titles title:@"Message Senders"
+		[TGAlertSheet showChoices:titles title:@"Send Message As..."
 					destructiveIndex:-1 inView:me.view onChoice:^(NSInteger choice){
 			if (choice < 0 || choice >= (NSInteger)senders.count)
 				return;
@@ -246,9 +242,9 @@
 												 forCall:me.groupCallId
 											  completion:^(BOOL ok, NSString *why){
 				[TGAlertSheet showMessage:ok
-						? @"Messages will be sent as that sender."
-						: (why ?: @"Telegram refused that.")
-									title:@"Message Sender" inView:me.view];
+						? @"Saved"
+						: (why ?: @"An error occurred.")
+									title:@"Send Message As..." inView:me.view];
 			}];
 		}];
 	}];
@@ -262,15 +258,15 @@
 		if (!me)
 			return;
 		if (!donors){
-			[TGAlertSheet showMessage:error ?: @"Telegram refused that."
-								title:@"Top Donors" inView:me.view];
+			[TGAlertSheet showMessage:error ?: @"An error occurred."
+								title:@"Top Members" inView:me.view];
 			return;
 		}
-		[me appendTitle:@"Top Donors"
+		[me appendTitle:@"Top Members"
 				 detail:[NSString stringWithFormat:@"%@ stars",
 						 donors[@"totalStarCount"] ?: @(0)]];
 		for (NSDictionary *donor in donors[@"donors"] ?: @[])
-			[me appendTitle:donor[@"name"] ?: @"Donor"
+			[me appendTitle:donor[@"name"] ?: @"Member"
 					 detail:[NSString stringWithFormat:@"%@ stars%@%@%@",
 							 donor[@"stars"] ?: @(0),
 							 [donor[@"isTop"] boolValue] ? @" · top" : @"",
@@ -288,11 +284,11 @@
 											  completion:^(BOOL ok, NSString *error){
 		TGLiveStoryViewController *me = weakSelf;
 		if (!ok){
-			[TGAlertSheet showMessage:error ?: @"Telegram refused that."
-								title:@"Live Reaction" inView:me.view];
+			[TGAlertSheet showMessage:error ?: @"An error occurred."
+								title:@"Live Stream Reaction" inView:me.view];
 			return;
 		}
-		[me appendTitle:@"Pending Reaction" detail:@"1 star added; commit or cancel."];
+		[me appendTitle:@"Pending" detail:nil];
 	}];
 }
 
@@ -302,11 +298,11 @@
 												  completion:^(BOOL ok, NSString *error){
 		TGLiveStoryViewController *me = weakSelf;
 		if (!ok){
-			[TGAlertSheet showMessage:error ?: @"Telegram refused that."
-								title:@"Live Reaction" inView:me.view];
+			[TGAlertSheet showMessage:error ?: @"An error occurred."
+								title:@"Live Stream Reaction" inView:me.view];
 			return;
 		}
-		[me appendTitle:@"Committed" detail:@"Pending reactions were sent."];
+		[me appendTitle:@"Saved" detail:nil];
 	}];
 }
 
@@ -316,11 +312,11 @@
 												  completion:^(BOOL ok, NSString *error){
 		TGLiveStoryViewController *me = weakSelf;
 		if (!ok){
-			[TGAlertSheet showMessage:error ?: @"Telegram refused that."
-								title:@"Live Reaction" inView:me.view];
+			[TGAlertSheet showMessage:error ?: @"An error occurred."
+								title:@"Live Stream Reaction" inView:me.view];
 			return;
 		}
-		[me appendTitle:@"Cancelled" detail:@"Pending reactions were dropped."];
+		[me appendTitle:@"Canceled" detail:nil];
 	}];
 }
 

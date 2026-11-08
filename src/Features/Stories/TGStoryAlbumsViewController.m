@@ -6,6 +6,26 @@
 #import "TGListViewController.h"
 #import "TGStoryViewerViewController.h"
 #import "TGIcons.h"
+#import "TGLocalization.h"
+
+/// Album story dates use the app language, not the device locale.
+static NSString *TGStoryAlbumDateText(NSNumber *unixTime) {
+	static NSDateFormatter *formatter = nil;
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{
+		formatter = [[NSDateFormatter alloc] init];
+		[formatter setDateStyle:NSDateFormatterMediumStyle];
+		[formatter setTimeStyle:NSDateFormatterShortStyle];
+	});
+	if (![unixTime isKindOfClass:NSNumber.class] || unixTime.doubleValue <= 0)
+		return @"-";
+	NSString *language = TGAppLanguage();
+	formatter.locale = language.length
+			? [NSLocale localeWithLocaleIdentifier:language]
+			: [NSLocale currentLocale];
+	return [formatter stringFromDate:
+			[NSDate dateWithTimeIntervalSince1970:unixTime.doubleValue]];
+}
 
 /// The album list draws the album record (id and name); its stories are read
 /// only when the album opens, which is one request instead of N.
@@ -37,21 +57,13 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
-		self.edgesForExtendedLayout = UIRectEdgeNone;
-	self.title = @"Story Albums";
+	self.title = @"Albums";
 	[[TGTheme shared] styleGroupedTable:self.tableView];
 	self.navigationItem.rightBarButtonItems = @[
 		[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemAdd
 				target:self action:@selector(createAlbum)],
 		self.editButtonItem,
 	];
-	__weak typeof(self) weakSelf = self;
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGThemeChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note){
-		[weakSelf.tableView reloadData];
-	}];
 	[self reloadAlbums];
 }
 
@@ -69,8 +81,8 @@
 - (void)createAlbum {
 	__weak typeof(self) weakSelf = self;
 	[TGAlertSheet showInput:@"New Album"
-					message:@"1 to 12 characters."
-				placeholder:@"Album name"
+					message:nil
+				placeholder:@"Album"
 					   text:nil
 					 action:@"Create"
 					 inView:self.view
@@ -83,7 +95,7 @@
 										storyIds:@[]
 									  completion:^(NSDictionary *album, NSString *error){
 			if (!album){
-				[TGAlertSheet showMessage:error ?: @"Telegram refused the album."
+				[TGAlertSheet showMessage:error ?: @"An error occurred."
 									title:@"New Album" inView:me.view];
 				return;
 			}
@@ -101,8 +113,7 @@
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-	return self.albums.count ? @"Drag an album to change its order. Swipe to delete."
-							 : @"No story albums yet. Add one with +.";
+	return nil;
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -112,7 +123,7 @@
 									  reuseIdentifier:@"album"];
 	[[TGTheme shared] styleCell:cell];
 	if (!self.albums.count){
-		cell.textLabel.text = @"No Albums";
+		cell.textLabel.text = @"No Results";
 		cell.detailTextLabel.text = nil;
 		cell.selectionStyle = UITableViewCellSelectionStyleNone;
 		cell.accessoryType = UITableViewCellAccessoryNone;
@@ -120,8 +131,7 @@
 	}
 	NSDictionary *album = self.albums[indexPath.row];
 	cell.textLabel.text = album[@"name"] ?: @"Album";
-	cell.detailTextLabel.text = self.storyToAdd
-			? @"Tap to add the story here" : @"Tap to open";
+	cell.detailTextLabel.text = nil;
 	cell.textLabel.font = TGFontBody();
 	cell.detailTextLabel.font = TGFontSubhead();
 	cell.accessoryType = self.storyToAdd ? UITableViewCellAccessoryNone
@@ -153,9 +163,8 @@
 	int32_t albumId = [album[@"albumId"] intValue];
 	if (self.storyToAdd){
 		__weak typeof(self) weakSelf = self;
-		[TGAlertSheet showConfirm:[NSString stringWithFormat:@"Add the story to %@?",
-				album[@"name"] ?: @"this album"]
-							title:@"Story Album"
+		[TGAlertSheet showConfirm:@"Add to Album"
+							title:@"Album"
 						   action:@"Add"
 					  destructive:NO
 						   inView:self.view
@@ -168,8 +177,8 @@
 								 inChat:me.chatId
 							 completion:^(NSDictionary *changed, NSString *error){
 				if (!changed){
-					[TGAlertSheet showMessage:error ?: @"Telegram refused that."
-										title:@"Story Album" inView:me.view];
+					[TGAlertSheet showMessage:error ?: @"An error occurred."
+										title:@"Album" inView:me.view];
 					return;
 				}
 				[me.navigationController popViewControllerAnimated:YES];
@@ -205,8 +214,8 @@
 							   completion:^(BOOL ok, NSString *error){
 		if (!ok){
 			TGStoryAlbumsViewController *me = weakSelf;
-			[TGAlertSheet showMessage:error ?: @"Telegram refused the order."
-								title:@"Story Albums" inView:me.view];
+			[TGAlertSheet showMessage:error ?: @"An error occurred."
+								title:@"Albums" inView:me.view];
 			[me reloadAlbums];
 		}
 	}];
@@ -225,8 +234,8 @@
 							 completion:^(BOOL ok, NSString *error){
 		TGStoryAlbumsViewController *me = weakSelf;
 		if (!ok){
-			[TGAlertSheet showMessage:error ?: @"Telegram refused the delete."
-								title:@"Story Albums" inView:me.view];
+			[TGAlertSheet showMessage:error ?: @"An error occurred."
+								title:@"Albums" inView:me.view];
 			return;
 		}
 		[me reloadAlbums];
@@ -261,8 +270,6 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
-		self.edgesForExtendedLayout = UIRectEdgeNone;
 	self.title = self.albumName;
 	[[TGTheme shared] styleGroupedTable:self.tableView];
 	self.navigationItem.rightBarButtonItems = @[
@@ -272,12 +279,6 @@
 				target:self action:@selector(albumMenu)],
 		self.editButtonItem,
 	];
-	__weak typeof(self) weakSelf = self;
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGThemeChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note){
-		[weakSelf.tableView reloadData];
-	}];
 	[self reloadStories];
 }
 
@@ -292,7 +293,7 @@
 		me.stories = [stories mutableCopy] ?: [NSMutableArray array];
 		[me.tableView reloadData];
 		if (error.length)
-			[TGAlertSheet showMessage:error title:@"Story Album" inView:me.view];
+			[TGAlertSheet showMessage:error title:@"Album" inView:me.view];
 	}];
 }
 
@@ -308,7 +309,7 @@
 			[me renameAlbum];
 			return;
 		}
-		[TGAlertSheet showConfirm:@"Delete this album? The stories stay."
+		[TGAlertSheet showConfirm:@"Delete Album"
 							title:@"Delete Album"
 						   action:@"Delete"
 					  destructive:YES
@@ -318,8 +319,8 @@
 										 inChat:me.chatId
 									 completion:^(BOOL ok, NSString *error){
 				if (!ok){
-					[TGAlertSheet showMessage:error ?: @"Telegram refused the delete."
-										title:@"Story Album" inView:me.view];
+					[TGAlertSheet showMessage:error ?: @"An error occurred."
+										title:@"Album" inView:me.view];
 					return;
 				}
 				[me.navigationController popViewControllerAnimated:YES];
@@ -331,8 +332,8 @@
 - (void)renameAlbum {
 	__weak typeof(self) weakSelf = self;
 	[TGAlertSheet showInput:@"Rename Album"
-					message:@"1 to 12 characters."
-				placeholder:@"Album name"
+					message:nil
+				placeholder:@"Album"
 					   text:self.albumName
 					 action:@"Save"
 					 inView:self.view
@@ -345,8 +346,8 @@
 									  inChat:me.chatId
 								  completion:^(NSDictionary *album, NSString *error){
 			if (!album){
-				[TGAlertSheet showMessage:error ?: @"Telegram refused the rename."
-									title:@"Story Album" inView:me.view];
+				[TGAlertSheet showMessage:error ?: @"An error occurred."
+									title:@"Album" inView:me.view];
 				return;
 			}
 			me.albumName = album[@"name"] ?: name;
@@ -364,8 +365,8 @@
 		if (!me)
 			return;
 		if (!storyIds.count){
-			[TGAlertSheet showMessage:error ?: @"Telegram returned no stories to add."
-								title:@"Album Stories" inView:me.view];
+			[TGAlertSheet showMessage:error ?: @"An error occurred."
+								title:@"Album" inView:me.view];
 			return;
 		}
 		NSMutableArray *wanted = [NSMutableArray array];
@@ -380,8 +381,8 @@
 				[wanted addObject:storyId];
 		}
 		if (!wanted.count){
-			[TGAlertSheet showMessage:@"Every available story is already in this album."
-								title:@"Album Stories" inView:me.view];
+			[TGAlertSheet showMessage:@"An error occurred."
+								title:@"Album" inView:me.view];
 			return;
 		}
 		NSMutableArray *titles = [NSMutableArray array];
@@ -396,8 +397,8 @@
 								 inChat:me.chatId
 							 completion:^(NSDictionary *album, NSString *error){
 				if (!album){
-					[TGAlertSheet showMessage:error ?: @"Telegram refused that."
-										title:@"Album Stories" inView:me.view];
+					[TGAlertSheet showMessage:error ?: @"An error occurred."
+										title:@"Album" inView:me.view];
 					return;
 				}
 				[me reloadStories];
@@ -415,9 +416,7 @@
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-	return self.stories.count
-			? @"Swipe a story to remove it. Drag to change the album order."
-			: @"This album has no stories yet.";
+	return nil;
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -435,18 +434,14 @@
 	NSDictionary *story = self.stories[indexPath.row];
 	cell.textLabel.text = story[@"caption"];
 	if (!cell.textLabel.text.length)
-		cell.textLabel.text = [story[@"isVideo"] boolValue] ? @"Video story" : @"Photo story";
+		cell.textLabel.text = @"Story";
 	cell.textLabel.font = TGFontBody();
 	cell.detailTextLabel.font = TGFontSubhead();
-	cell.detailTextLabel.text = [NSString stringWithFormat:@"%ld views · %@",
-			(long)[story[@"viewers"] integerValue],
-			[story[@"date"] isKindOfClass:NSNumber.class]
-					? [NSDateFormatter localizedStringFromDate:
-							[NSDate dateWithTimeIntervalSince1970:
-									[story[@"date"] doubleValue]]
-							dateStyle:NSDateFormatterShortStyle
-							timeStyle:NSDateFormatterShortStyle]
-					: @"-"];
+	NSInteger viewers = (NSInteger)[story[@"viewers"] integerValue];
+	NSString *views = TGLocalizedPluralValue(@"%@ view", @"%@ views",
+			[NSString stringWithFormat:@"%ld", (long)viewers], viewers);
+	cell.detailTextLabel.text = [NSString stringWithFormat:@"%@ · %@", views,
+			TGStoryAlbumDateText(story[@"date"])];
 	cell.accessoryType = UITableViewCellAccessoryNone;
 	cell.selectionStyle = UITableViewCellSelectionStyleBlue;
 	NSNumber *photoId = story[@"thumbPhotoId"] ?: story[@"photoId"];
@@ -500,8 +495,8 @@
 						   completion:^(NSDictionary *album, NSString *error){
 		TGStoryAlbumDetailViewController *me = weakSelf;
 		if (!album){
-			[TGAlertSheet showMessage:error ?: @"Telegram refused the order."
-								title:@"Album Stories" inView:me.view];
+			[TGAlertSheet showMessage:error ?: @"An error occurred."
+								title:@"Album" inView:me.view];
 			[me reloadStories];
 		}
 	}];
@@ -521,8 +516,8 @@
 						  completion:^(NSDictionary *album, NSString *error){
 		TGStoryAlbumDetailViewController *me = weakSelf;
 		if (!album){
-			[TGAlertSheet showMessage:error ?: @"Telegram refused that."
-								title:@"Album Stories" inView:me.view];
+			[TGAlertSheet showMessage:error ?: @"An error occurred."
+								title:@"Album" inView:me.view];
 			return;
 		}
 		[me reloadStories];

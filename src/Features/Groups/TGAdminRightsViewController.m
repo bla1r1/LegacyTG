@@ -29,22 +29,9 @@ static NSString *const kChannelPresetKey = @"TGDefaultChannelAdminRights";
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	self.title = @"Default Admin Rights";
-	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
-		self.edgesForExtendedLayout = UIRectEdgeNone;
+	self.title = @"Admin Rights";
 	[self applyTheme];
 
-	__weak typeof(self) weakSelf = self;
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGThemeChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note) {
-		[weakSelf applyTheme];
-		[weakSelf.tableView reloadData];
-	}];
-}
-
-- (void)dealloc {
-	[[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -63,11 +50,11 @@ static NSString *const kChannelPresetKey = @"TGDefaultChannelAdminRights";
 }
 
 - (NSString *)labelForPreset:(NSString *)preset {
-	if ([preset isEqualToString:@"readonly"]) return @"Read-only";
-	if ([preset isEqualToString:@"posting"])  return @"Posting";
-	if ([preset isEqualToString:@"full"])     return @"Full";
-	if ([preset isEqualToString:@"standard"]) return @"Standard";
-	return @"Not set";
+	if ([preset isEqualToString:@"readonly"]) return @"Read-Only Mode";
+	if ([preset isEqualToString:@"posting"])  return @"Posting Members";
+	if ([preset isEqualToString:@"full"])     return @"Admin";
+	if ([preset isEqualToString:@"standard"]) return @"Default";
+	return @"Default";
 }
 
 #pragma mark - table
@@ -77,16 +64,11 @@ static NSString *const kChannelPresetKey = @"TGDefaultChannelAdminRights";
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-	return section == 0 ? @"When added to a group"
-						: @"When added to a channel";
+	return section == 0 ? @"Group"
+						: @"Channel";
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-	if (section == 0)
-		return @"Telegram applies these rights automatically when this bot is "
-			   @"added as a group administrator. The page is also where a "
-			   @"bot account changes them; a user account gets the server's "
-			   @"refusal and the row keeps only what Telegram accepted.";
 	return nil;
 }
 
@@ -103,7 +85,7 @@ static NSString *const kChannelPresetKey = @"TGDefaultChannelAdminRights";
 	cell.textLabel.font = TGFontRow();
 	cell.detailTextLabel.font = TGFontBody();
 	cell.detailTextLabel.textColor = [[TGTheme shared] cellDetailColour];
-	cell.textLabel.text = path.section == 0 ? @"Group Preset" : @"Channel Preset";
+	cell.textLabel.text = @"Admin Rights";
 	NSString *key = path.section == 0 ? kGroupPresetKey : kChannelPresetKey;
 	cell.detailTextLabel.text = [self labelForPreset:[self savedPresetForKey:key]];
 	cell.accessoryType = UITableViewCellAccessoryNone;
@@ -118,13 +100,11 @@ static NSString *const kChannelPresetKey = @"TGDefaultChannelAdminRights";
 	[tableView deselectRowAtIndexPath:path animated:YES];
 	BOOL channel = path.section == 1;
 	NSArray *presets = @[@"readonly", @"standard", @"posting", @"full"];
-	NSArray *titles = @[@"Read-only", @"Standard", @"Posting", @"Full"];
+	NSArray *titles = @[@"Read-Only Mode", @"Default", @"Posting Members", @"Admin"];
 	__weak typeof(self) weakSelf = self;
 	[TGAlertSheet showChoices:titles
-						title:(channel ? @"Channel Administrator Rights"
-									   : @"Group Administrator Rights")
-						message:@"The rights this account's bot gets when it is "
-								@"added as an administrator."
+						title:@"Admin Rights"
+						message:nil
 			 destructiveIndex:-1
 						 inView:self.view
 					   onChoice:^(NSInteger index){
@@ -137,8 +117,8 @@ static NSString *const kChannelPresetKey = @"TGDefaultChannelAdminRights";
 				return;
 			me.busy = NO;
 			if (!ok){
-				[TGAlertSheet showMessage:(error ?: @"Telegram refused those rights.")
-									title:@"Default Admin Rights" inView:me.view];
+				[TGAlertSheet showMessage:(error ?: @"An error occurred.")
+									title:@"Admin Rights" inView:me.view];
 				[me.tableView reloadData];
 				return;
 			}

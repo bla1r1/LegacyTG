@@ -88,7 +88,7 @@ NSString *const TGMusicPlayerChangedNotification = @"TGMusicPlayerChanged";
 	__weak typeof(self) weakSelf = self;
 	NSInteger wanted = index;
 	CFAbsoluteTime asked = CFAbsoluteTimeGetCurrent();
-	[[TGClient shared] downloadFile:docId.integerValue priority:TGDownloadPriorityAvatar
+	[[TGClient shared] downloadFile:docId.integerValue priority:TGDownloadPriorityOnScreen
 						 completion:^(NSString *path){
 		TGMusicPlayer *me = weakSelf;
 		// The user may have skipped on while this was downloading.

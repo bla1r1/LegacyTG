@@ -39,7 +39,7 @@ static NSDictionary *TGProfileTabObject(NSString *name) {
 
 static NSString *TGRequestError(NSDictionary *result) {
 	NSString *message = result[@"message"];
-	return [message isKindOfClass:NSString.class] ? message : @"Telegram refused that.";
+	return [message isKindOfClass:NSString.class] ? message : @"An error occurred.";
 }
 
 /// Every rights boolean TDLib expects. A missing one is not a default; it is

@@ -29,7 +29,7 @@
 /// long line; otherwise show it as the lines TDLib sent.
 static NSArray *TGCustomResultRows(NSString *result) {
 	NSMutableArray *rows = [NSMutableArray array];
-	NSString *text = result.length ? result : @"(empty result)";
+	NSString *text = result.length ? result : @"None";
 	NSData *raw = [text dataUsingEncoding:NSUTF8StringEncoding];
 	id parsed = raw.length
 			? [NSJSONSerialization JSONObjectWithData:raw options:0 error:nil] : nil;
@@ -86,27 +86,25 @@ static NSString *TGOrderLines(NSDictionary *order) {
 	__weak typeof(self) weakSelf = self;
 	NSString *orderDetail;
 	if (!self.savedOrderLoaded)
-		orderDetail = @"Reading...";
+		orderDetail = @"Loading...";
 	else if (self.savedOrder)
-		orderDetail = self.savedOrder[@"name"] ?: @"Saved";
+		orderDetail = self.savedOrder[@"name"] ?: @"Payment Info";
 	else
-		orderDetail = @"None saved";
+		orderDetail = @"None";
 
 	NSMutableArray *orderRows = [NSMutableArray array];
-	[orderRows addObject:TGTapRow(@"Saved Order Info", orderDetail, ^{
+	[orderRows addObject:TGTapRow(@"Payment Info", orderDetail, ^{
 		NSString *body = weakSelf.savedOrder
 				? TGOrderLines(weakSelf.savedOrder)
-				: (weakSelf.savedOrderError ?: @"Telegram has no order saved.");
-		[TGAlertSheet showMessage:body.length ? body : @"The saved order is empty."
-							title:@"Saved Order Info"
+				: (weakSelf.savedOrderError ?: @"None");
+		[TGAlertSheet showMessage:body.length ? body : @"Empty"
+							title:@"Payment Info"
 						   inView:weakSelf.view];
 	})];
 	if (self.savedOrder){
-		[orderRows addObject:TGRedRow(@"Delete Saved Order Info", ^{
-			[TGAlertSheet showConfirm:@"The address and phone Telegram kept "
-									  @"from the last checkout are forgotten. "
-									  @"The next checkout asks for them again."
-								title:@"Delete Saved Order Info"
+		[orderRows addObject:TGRedRow(@"Clear Payment and Shipping Info", ^{
+			[TGAlertSheet showConfirm:nil
+								title:@"Clear Payment and Shipping Info"
 							   action:@"Delete"
 						  destructive:YES
 							   inView:weakSelf.view
@@ -114,8 +112,8 @@ static NSString *TGOrderLines(NSDictionary *order) {
 				[[TGClient shared] deleteSavedOrderInfoWithCompletion:^(BOOL ok,
 																		NSString *error){
 					if (!ok){
-						[TGAlertSheet showMessage:(error ?: @"Telegram refused that.")
-											title:@"Delete Saved Order Info"
+						[TGAlertSheet showMessage:(error ?: @"An error occurred.")
+											title:@"Clear Payment and Shipping Info"
 										   inView:weakSelf.view];
 						return;
 					}
@@ -129,30 +127,27 @@ static NSString *TGOrderLines(NSDictionary *order) {
 	}
 
 	return @[
-		TGSection(@"Saved order",
-				  @"The checkout Telegram remembers: name, phone, email and "
-				  @"shipping address from the last payment.", orderRows),
+		TGSection(@"Payment Info", nil, orderRows),
 	];
 }
 
 #if TG_DEV
 - (void)showBankCardLookup {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"Look Up a Card"
-					message:@"The card number. It is sent to Telegram's provider "
-							@"for this lookup only."
+	[TGAlertSheet showInput:@"Look Up"
+					message:nil
 				placeholder:@"4111 1111 1111 1111"
 					 text:nil action:@"Look Up" inView:self.view
 				 onSubmit:^(NSString *number){
 		[[TGClient shared] bankCardInfoForNumber:number
 									  completion:^(NSDictionary *info, NSString *error){
 			if (!info){
-				[TGAlertSheet showMessage:(error ?: @"The provider did not answer.")
-									title:@"Bank Card"
+				[TGAlertSheet showMessage:(error ?: @"An error occurred.")
+									title:@"Payment Method"
 								   inView:weakSelf.view];
 				return;
 			}
-			NSString *title = info[@"title"] ?: @"Card";
+			NSString *title = info[@"title"] ?: @"Payment Method";
 			NSArray *actions = [info[@"actions"] isKindOfClass:NSArray.class]
 					? info[@"actions"] : @[];
 			NSMutableArray *titles = [NSMutableArray array];
@@ -162,12 +157,12 @@ static NSString *TGOrderLines(NSDictionary *order) {
 					[titles addObject:text];
 			}
 			if (!titles.count){
-				[TGAlertSheet showMessage:title title:@"Bank Card" inView:weakSelf.view];
+				[TGAlertSheet showMessage:title title:@"Payment Method" inView:weakSelf.view];
 				return;
 			}
 			[TGAlertSheet showChoices:titles
 								title:title
-							  message:@"The provider's own page."
+							  message:nil
 					   destructiveIndex:-1
 							   inView:weakSelf.view
 							 onChoice:^(NSInteger index){
@@ -181,20 +176,20 @@ static NSString *TGOrderLines(NSDictionary *order) {
 
 - (void)addOfferFlow {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"Add an Offer"
-					message:@"The channel direct-messages chat id."
+	[TGAlertSheet showInput:@"Offer"
+					message:nil
 				placeholder:@"-100..."
 					 text:nil action:@"Next" inView:self.view
 				 onSubmit:^(NSString *chat){
 		int64_t chatId = chat.longLongValue;
-		[TGAlertSheet showInput:@"Add an Offer"
-						message:@"The suggested post's message id."
+		[TGAlertSheet showInput:@"Offer"
+						message:nil
 					placeholder:@"123"
 						 text:nil action:@"Next" inView:weakSelf.view
 					 onSubmit:^(NSString *message){
 			int64_t messageId = message.longLongValue;
-			[TGAlertSheet showInput:@"Add an Offer"
-							message:@"The price in Telegram Stars."
+			[TGAlertSheet showInput:@"Offer"
+							message:@"Stars"
 						placeholder:@"100"
 							 text:nil action:@"Send" inView:weakSelf.view
 						 onSubmit:^(NSString *stars){
@@ -206,16 +201,16 @@ static NSString *TGOrderLines(NSDictionary *order) {
 													   NSString *error){
 					if (error){
 						[TGAlertSheet showMessage:error
-											title:@"Add an Offer"
+											title:@"Offer"
 										   inView:weakSelf.view];
 						return;
 					}
 					NSString *body = sent[@"id"]
 							? [NSString stringWithFormat:@"Offer sent. Message id %@.",
 									sent[@"id"]]
-							: @"Telegram accepted the offer.";
+							: @"Done";
 					[TGAlertSheet showMessage:body
-										title:@"Add an Offer"
+										title:@"Offer"
 									   inView:weakSelf.view];
 				}];
 			}];
@@ -226,16 +221,15 @@ static NSString *TGOrderLines(NSDictionary *order) {
 - (void)validateOrderFlow {
 	__weak typeof(self) weakSelf = self;
 	[TGAlertSheet showInput:@"Validate an Order"
-					message:@"The invoice name the order is checked against."
+					message:nil
 				placeholder:@"invoice-name"
 					 text:nil action:@"Next" inView:self.view
 				 onSubmit:^(NSString *invoice){
 		NSMutableDictionary *values = [NSMutableDictionary dictionary];
 		values[@"invoice"] = invoice;
-		[TGAlertSheet showChoices:@[@"Check Only", @"Check and Save"]
+		[TGAlertSheet showChoices:@[@"Check", @"Save"]
 							title:@"Validate an Order"
-						  message:@"Saving keeps the fields for the invoice's next "
-								  @"checkout."
+						  message:nil
 				 destructiveIndex:-1
 						   inView:weakSelf.view
 						 onChoice:^(NSInteger index){
@@ -243,9 +237,9 @@ static NSString *TGOrderLines(NSDictionary *order) {
 			NSArray *keys = @[@"name", @"phone_number", @"email_address",
 							  @"street_line1", @"city", @"postal_code",
 							  @"country_code"];
-			NSArray *prompts = @[@"Full name", @"Phone number", @"Email",
-								 @"Street address", @"City", @"Postal code",
-								 @"Country code"];
+			NSArray *prompts = @[@"Name", @"Phone Number", @"Email",
+								 @"Street", @"City", @"Postal code",
+								 @"Country Code"];
 			[weakSelf askOrderFieldAtIndex:0 keys:keys prompts:prompts
 									values:values allowSave:save];
 		}];
@@ -267,12 +261,10 @@ static NSString *TGOrderLines(NSDictionary *order) {
 	__weak typeof(self) weakSelf = self;
 	NSString *key = keys[index];
 	[TGAlertSheet showInput:@"Validate an Order"
-					message:(index == 0
-							? @"Fill what the invoice asks for; the rest is sent empty."
-							: nil)
+					message:nil
 				placeholder:prompts[index]
 					 text:nil
-				   action:(index + 1 == keys.count ? @"Validate" : @"Next")
+				   action:(index + 1 == keys.count ? @"Done" : @"Next")
 				   inView:self.view
 				 onSubmit:^(NSString *text){
 		values[key] = text;
@@ -300,7 +292,7 @@ static NSString *TGOrderLines(NSDictionary *order) {
 		NSArray *options = [validated[@"shipping_options"] isKindOfClass:NSArray.class]
 				? validated[@"shipping_options"] : @[];
 		if (options.count){
-			[lines addObject:@"Shipping options:"];
+			[lines addObject:@"Shipping Info"];
 			for (NSDictionary *option in options){
 				NSMutableArray *prices = [NSMutableArray array];
 				NSArray *parts = [option[@"price_parts"] isKindOfClass:NSArray.class]
@@ -318,8 +310,7 @@ static NSString *TGOrderLines(NSDictionary *order) {
 								[prices componentsJoinedByString:@", "]] : @""]];
 			}
 		} else {
-			[lines addObject:@"Telegram accepted the order and offered no "
-							  @"shipping options."];
+			[lines addObject:@"Done"];
 		}
 		[TGAlertSheet showMessage:([lines componentsJoinedByString:@"\n"])
 							title:@"Validate an Order"
@@ -359,7 +350,7 @@ static NSString *TGOrderLines(NSDictionary *order) {
 	UIFont *emoji = TGFontEmojiMeta();
 
 	NSMutableArray *facts = [NSMutableArray array];
-	[facts addObject:TGTapRow(@"App Version", [NSString stringWithFormat:@"%@ (%@)",
+	[facts addObject:TGTapRow(@"Application", [NSString stringWithFormat:@"%@ (%@)",
 			info[@"CFBundleShortVersionString"] ?: @"?",
 			info[@"CFBundleVersion"] ?: @"?"], nil)];
 	[facts addObject:TGTapRow(@"TDLib", self.tdlibVersion ?: @"...", nil)];
@@ -372,14 +363,12 @@ static NSString *TGOrderLines(NSDictionary *order) {
 			(unsigned long)[TGCapabilities memoryMB]], nil)];
 	[facts addObject:TGTapRow(@"Architecture",
 			[TGCapabilities is64Bit] ? @"arm64" : @"armv7", nil)];
-	[facts addObject:TGTapRow(@"Emoji Font",
+	[facts addObject:TGTapRow(@"Emoji",
 			emoji ? emoji.fontName : @"NOT REGISTERED", nil)];
-	[facts addObject:TGTapRow(@"Theme", [[TGTheme shared] currentThemeId], nil)];
+	[facts addObject:TGTapRow(@"Color Theme", [[TGTheme shared] currentThemeId], nil)];
 
 	return @[
-		TGSection(@"Test Account",
-				  @"Ghost mode keeps this client offline and marks nothing read, for "
-				  @"checks on a real account. It applies from the next launch too.", @[
+		TGSection(@"Test Account", nil, @[
 			TGSwitchRow(@"Ghost Mode", TGGhostModeOn(), ^(BOOL on){
 				[[NSUserDefaults standardUserDefaults] setBool:on forKey:@"TGGhostMode"];
 				[[NSUserDefaults standardUserDefaults] synchronize];
@@ -387,15 +376,14 @@ static NSString *TGOrderLines(NSDictionary *order) {
 			}),
 		]),
 
-		TGSection(@"Consoles",
-				  @"Screens that send one request and show the answer.", @[
-			TGOpenRow(@"Language Packs", @"Read and write strings, custom packs", ^{
+		TGSection(@"Consoles", nil, @[
+			TGOpenRow(@"Languages", nil, ^{
 				[weakSelf openPage:TGSettingsPageLanguageDev];
 			}),
-			TGOpenRow(@"Invoice Tools", @"Card lookup, offers, order validation", ^{
+			TGOpenRow(@"Invoice Tools", nil, ^{
 				[weakSelf openPage:TGSettingsPagePaymentDev];
 			}),
-			TGOpenRow(@"Stories Menu", @"Stealth, public stories, live, exceptions", ^{
+			TGOpenRow(@"Stories Menu", nil, ^{
 				TGStoriesMenuViewController *stories = [[TGStoriesMenuViewController alloc]
 						initWithChatId:[[TGClient shared] savedMessagesChatId] title:@"Your Story"];
 				stories.hidesBottomBarWhenPushed = YES;
@@ -409,7 +397,7 @@ static NSString *TGOrderLines(NSDictionary *order) {
 			// The component gallery is a development surface, not a setting.
 			// It sat in Appearance next to the theme picker, where a user had
 			// no reason to open it.
-			TGOpenRow(@"UI Component Gallery", @"Every control and state", ^{
+			TGOpenRow(@"UI Component Gallery", nil, ^{
 				TGDevGalleryViewController *gallery = [[TGDevGalleryViewController alloc] init];
 				gallery.hidesBottomBarWhenPushed = YES;
 				[weakSelf.navigationController pushViewController:gallery animated:YES];
@@ -418,9 +406,7 @@ static NSString *TGOrderLines(NSDictionary *order) {
 
 		TGSection(@"Build", nil, facts),
 
-		TGSection(@"Capabilities",
-				  @"What this device is allowed to do, and what it is waiting "
-				  @"for when it is not.", @[
+		TGSection(@"Capabilities", nil, @[
 			TGOpenRow(@"Device Capabilities", nil, ^{
 				TGDeviceViewController *device = [[TGDeviceViewController alloc] init];
 				device.hidesBottomBarWhenPushed = YES;
@@ -432,46 +418,43 @@ static NSString *TGOrderLines(NSDictionary *order) {
 		// still send. Each screen names its request and shows Telegram's
 		// answer; the ones that stay impossible are documented in
 		// docs/status/bots-payments.md.
-		TGSection(@"Tier 3 Audit",
-				  @"Surfaces for the calls a user account really can make: "
-				  @"advertisements, TDLib's environment, owned bots and the "
-				  @"read-only Premium and gift records.", @[
-			TGOpenRow(@"Support Info", @"Staff tools and user diagnostic dump", ^{
+		TGSection(@"Tier 3 Audit", nil, @[
+			TGOpenRow(@"Support", nil, ^{
 				TGSupportInfoViewController *support =
 						[[TGSupportInfoViewController alloc] init];
 				support.hidesBottomBarWhenPushed = YES;
 				[weakSelf.navigationController pushViewController:support animated:YES];
 			}),
-			TGOpenRow(@"Sponsored Messages", @"Channel, search and video ads", ^{
+			TGOpenRow(@"Telegram Ads", nil, ^{
 				TGSponsoredMessagesViewController *ads =
 						[[TGSponsoredMessagesViewController alloc] init];
 				ads.hidesBottomBarWhenPushed = YES;
 				[weakSelf.navigationController pushViewController:ads animated:YES];
 			}),
-			TGOpenRow(@"TDLib Environment", @"JSON, log, weather and time zones", ^{
+			TGOpenRow(@"TDLib Environment", nil, ^{
 				TGDevEnvironmentViewController *environment =
 						[[TGDevEnvironmentViewController alloc] init];
 				environment.hidesBottomBarWhenPushed = YES;
 				[weakSelf.navigationController pushViewController:environment animated:YES];
 			}),
-			TGOpenRow(@"Bot Console", @"Bots this account owns and its inline bots", ^{
+			TGOpenRow(@"Bot Console", nil, ^{
 				TGDevBotConsoleViewController *bots = [[TGDevBotConsoleViewController alloc] init];
 				bots.hidesBottomBarWhenPushed = YES;
 				[weakSelf.navigationController pushViewController:bots animated:YES];
 			}),
-			TGOpenRow(@"TDLib Test Harness", @"The twelve td_api test calls", ^{
+			TGOpenRow(@"TDLib Test Harness", nil, ^{
 				TGDevTestHarnessViewController *harness =
 						[[TGDevTestHarnessViewController alloc] init];
 				harness.hidesBottomBarWhenPushed = YES;
 				[weakSelf.navigationController pushViewController:harness animated:YES];
 			}),
-			TGOpenRow(@"Affiliate Programs", @"Catalogue, connections and channel links", ^{
+			TGOpenRow(@"Affiliate Programs", nil, ^{
 				TGAffiliateProgramsViewController *affiliate =
 						[[TGAffiliateProgramsViewController alloc] init];
 				affiliate.hidesBottomBarWhenPushed = YES;
 				[weakSelf.navigationController pushViewController:affiliate animated:YES];
 			}),
-			TGOpenRow(@"Premium, Stars and Gifts", @"Read-only", ^{
+			TGOpenRow(@"Premium, Stars and Gifts", nil, ^{
 				TGStarsGiftsViewController *stars = [[TGStarsGiftsViewController alloc] init];
 				stars.hidesBottomBarWhenPushed = YES;
 				[weakSelf.navigationController pushViewController:stars animated:YES];
@@ -481,9 +464,7 @@ static NSString *TGOrderLines(NSDictionary *order) {
 		// The calls TDLib reserves for bot accounts. A user account still
 		// sends them; the server's refusal is the honest answer, and the row
 		// exists so the request and its result have a real surface.
-		TGSection(@"Bot Tools",
-				  @"Requests a bot account owns. A user account will usually get "
-				  @"Telegram's refusal back, shown as the answer.", @[
+		TGSection(@"Bot Tools", nil, @[
 			TGTapRow(@"Prepared Keyboard Button", nil, ^{
 				[TGAlertSheet showInput:@"Prepared Keyboard Button"
 								message:@"Bot user id" placeholder:@"123"
@@ -493,14 +474,14 @@ static NSString *TGOrderLines(NSDictionary *order) {
 					[TGAlertSheet showInput:@"Prepared Keyboard Button"
 									message:@"Prepared button id"
 								placeholder:@"prepared"
-									 text:nil action:@"Fetch" inView:weakSelf.view
+									 text:nil action:@"Show" inView:weakSelf.view
 							   onSubmit:^(NSString *prepared){
 						[[TGClient shared] preparedKeyboardButtonFromBot:botId
 													   preparedButtonId:prepared
 															completion:^(NSDictionary *button,
 																		 NSString *error){
 							if (!button){
-								[TGAlertSheet showMessage:(error ?: @"Telegram has no such button.")
+								[TGAlertSheet showMessage:(error ?: @"An error occurred.")
 													title:@"Prepared Keyboard Button"
 												   inView:weakSelf.view];
 								return;
@@ -526,7 +507,7 @@ static NSString *TGOrderLines(NSDictionary *order) {
 							   onSubmit:^(NSString *user){
 					int64_t userId = user.longLongValue;
 					[TGAlertSheet showInput:@"Save Prepared Keyboard Button"
-									message:@"Button text"
+									message:@"Text"
 								placeholder:@"Send me the file"
 									 text:nil action:@"Save" inView:weakSelf.view
 							   onSubmit:^(NSString *text){
@@ -535,12 +516,12 @@ static NSString *TGOrderLines(NSDictionary *order) {
 															   completion:^(NSString *preparedId,
 																			NSString *error){
 							if (!preparedId.length){
-								[TGAlertSheet showMessage:(error ?: @"Telegram refused that.")
+								[TGAlertSheet showMessage:(error ?: @"An error occurred.")
 													title:@"Save Prepared Keyboard Button"
 												   inView:weakSelf.view];
 								return;
 							}
-							[TGAlertSheet showChoices:@[@"Fetch It Back"]
+							[TGAlertSheet showChoices:@[@"Show"]
 												title:@"Prepared Button Saved"
 											  message:[NSString stringWithFormat:
 													  @"Prepared id: %@", preparedId]
@@ -553,7 +534,7 @@ static NSString *TGOrderLines(NSDictionary *order) {
 																					 NSString *fetchError){
 									if (!button){
 										[TGAlertSheet showMessage:(fetchError
-												?: @"Telegram did not return it.")
+												?: @"An error occurred.")
 															title:@"Prepared Keyboard Button"
 														   inView:weakSelf.view];
 										return;
@@ -577,21 +558,21 @@ static NSString *TGOrderLines(NSDictionary *order) {
 							   onSubmit:^(NSString *chat){
 					int64_t chatId = [chat longLongValue];
 					[TGAlertSheet showInput:@"Callback Query Message"
-									message:@"Message id" placeholder:@"123"
+									message:@"Message" placeholder:@"123"
 										 text:nil action:@"Next" inView:weakSelf.view
 								   onSubmit:^(NSString *message){
 						int64_t messageId = [message longLongValue];
 						[TGAlertSheet showInput:@"Callback Query Message"
 										message:@"Callback query id"
 									placeholder:@"0"
-										 text:nil action:@"Fetch"
+										 text:nil action:@"Show"
 									   inView:weakSelf.view
 								   onSubmit:^(NSString *query){
 							[[TGClient shared] callbackQueryMessage:messageId
 															 inChat:chatId
 													callbackQueryId:[query longLongValue]
 														 completion:^(NSDictionary *found){
-								[TGAlertSheet showMessage:(found[@"text"] ?: @"Telegram refused or has no such callback.")
+								[TGAlertSheet showMessage:(found[@"text"] ?: @"An error occurred.")
 													title:@"Callback Query Message"
 												   inView:weakSelf.view];
 							}];
@@ -602,7 +583,7 @@ static NSString *TGOrderLines(NSDictionary *order) {
 			TGTapRow(@"Personal Chat History", nil, ^{
 				[TGAlertSheet showInput:@"Personal Chat History"
 								message:@"User id" placeholder:@"123"
-									 text:nil action:@"Fetch" inView:weakSelf.view
+									 text:nil action:@"Show" inView:weakSelf.view
 							   onSubmit:^(NSString *user){
 					[[TGClient shared] personalChatHistoryForUser:[user longLongValue]
 														   limit:20
@@ -610,9 +591,9 @@ static NSString *TGOrderLines(NSDictionary *order) {
 						NSMutableString *body = [NSMutableString string];
 						for (NSDictionary *message in messages)
 							[body appendFormat:@"%@\n",
-									message[@"text"] ?: @"(no text)"];
+									message[@"text"] ?: @"None"];
 						if (!body.length)
-							body = [@"Telegram refused or the chat is empty."
+							body = [@"An error occurred."
 									mutableCopy];
 						[TGAlertSheet showMessage:body
 											title:@"Personal Chat History"
@@ -627,12 +608,12 @@ static NSString *TGOrderLines(NSDictionary *order) {
 							   onSubmit:^(NSString *chat){
 					int64_t chatId = [chat longLongValue];
 					[TGAlertSheet showInput:@"Set Reactions"
-									message:@"Message id" placeholder:@"123"
+									message:@"Message" placeholder:@"123"
 										 text:nil action:@"Next" inView:weakSelf.view
 								   onSubmit:^(NSString *message){
 						int64_t messageId = [message longLongValue];
 						[TGAlertSheet showInput:@"Set Reactions"
-										message:@"Emoji (empty clears)"
+										message:@"Emoji"
 									placeholder:@"👍"
 										 text:nil action:@"Set"
 									   inView:weakSelf.view
@@ -641,8 +622,8 @@ static NSString *TGOrderLines(NSDictionary *order) {
 												  onMessage:messageId
 													 inChat:chatId
 												 completion:^(BOOL ok){
-								[TGAlertSheet showMessage:(ok ? @"Reactions set."
-															: @"Telegram refused that.")
+								[TGAlertSheet showMessage:(ok ? @"Done"
+															: @"An error occurred.")
 													title:@"Set Reactions"
 												   inView:weakSelf.view];
 							}];
@@ -657,7 +638,7 @@ static NSString *TGOrderLines(NSDictionary *order) {
 							   onSubmit:^(NSString *chat){
 					int64_t chatId = [chat longLongValue];
 					[TGAlertSheet showInput:@"Send Text Draft"
-									message:@"Draft text" placeholder:@"Thinking..."
+									message:@"Message" placeholder:@"Thinking..."
 										 text:nil action:@"Send" inView:weakSelf.view
 								   onSubmit:^(NSString *text){
 						int64_t draftId = (int64_t)([[NSDate date]
@@ -673,7 +654,7 @@ static NSString *TGOrderLines(NSDictionary *order) {
 									? [NSString stringWithFormat:
 											@"Draft sent. Its id is %lld.",
 											(long long)draftId]
-									: @"Telegram refused that.";
+									: @"An error occurred.";
 							[TGAlertSheet showMessage:body
 												title:@"Send Text Draft"
 											   inView:weakSelf.view];
@@ -695,8 +676,8 @@ static NSString *TGOrderLines(NSDictionary *order) {
 												  inChat:chatId
 												   topic:0
 											  completion:^(BOOL ok){
-							[TGAlertSheet showMessage:(ok ? @"Draft stopped."
-														: @"Telegram refused that.")
+							[TGAlertSheet showMessage:(ok ? @"Done"
+														: @"An error occurred.")
 												title:@"Stop Text Draft"
 											   inView:weakSelf.view];
 						}];
@@ -712,7 +693,7 @@ static NSString *TGOrderLines(NSDictionary *order) {
 					[TGAlertSheet showInput:@"Prepared Inline Message"
 									message:@"Prepared message id"
 								placeholder:@"prepared"
-									 text:nil action:@"Fetch"
+									 text:nil action:@"Show"
 								   inView:weakSelf.view
 							   onSubmit:^(NSString *prepared){
 						[[TGClient shared] preparedInlineMessageFromBot:botId
@@ -722,7 +703,7 @@ static NSString *TGOrderLines(NSDictionary *order) {
 									? [NSString stringWithFormat:@"Id: %@\nResult: %@",
 											found[@"id"] ?: @"",
 											found[@"result"] ?: @{}]
-									: @"Telegram refused or has no such message.";
+									: @"An error occurred.";
 							[TGAlertSheet showMessage:body
 												title:@"Prepared Inline Message"
 											   inView:weakSelf.view];
@@ -737,7 +718,7 @@ static NSString *TGOrderLines(NSDictionary *order) {
 							   onSubmit:^(NSString *user){
 					int64_t userId = [user longLongValue];
 					[TGAlertSheet showInput:@"Save Inline Message"
-									message:@"Message text"
+									message:@"Message"
 								placeholder:@"Hello"
 									 text:nil action:@"Save"
 								   inView:weakSelf.view
@@ -748,7 +729,7 @@ static NSString *TGOrderLines(NSDictionary *order) {
 															   completion:^(NSString *preparedId){
 							[TGAlertSheet showMessage:(preparedId.length
 									? [NSString stringWithFormat:@"Saved as %@", preparedId]
-									: @"Telegram refused that.")
+									: @"An error occurred.")
 												title:@"Save Inline Message"
 											   inView:weakSelf.view];
 						}];
@@ -763,7 +744,7 @@ static NSString *TGOrderLines(NSDictionary *order) {
 								   inView:weakSelf.view
 							   onSubmit:^(NSString *inlineId){
 					[TGAlertSheet showChoices:@[@"Text", @"Caption",
-												@"Remove Buttons", @"Photo",
+												@"Remove", @"Photo",
 												@"Live Location"]
 										title:@"Edit Inline Message"
 							  destructiveIndex:-1
@@ -771,30 +752,30 @@ static NSString *TGOrderLines(NSDictionary *order) {
 									 onChoice:^(NSInteger index){
 						if (index == 0){
 							[TGAlertSheet showInput:@"Edit Inline Message"
-											message:@"New text" placeholder:@"Hello"
+											message:@"Text" placeholder:@"Hello"
 												 text:nil action:@"Save"
 											   inView:weakSelf.view
 										   onSubmit:^(NSString *text){
 								[[TGClient shared] editInlineMessageText:inlineId
 																	text:text
 															  completion:^(BOOL ok){
-									[TGAlertSheet showMessage:(ok ? @"Edited."
-																: @"Telegram refused that.")
+									[TGAlertSheet showMessage:(ok ? @"Done"
+																: @"An error occurred.")
 														title:@"Edit Inline Message"
 													   inView:weakSelf.view];
 								}];
 							}];
 						} else if (index == 1){
 							[TGAlertSheet showInput:@"Edit Inline Message"
-											message:@"New caption" placeholder:@"Caption"
+											message:@"Caption" placeholder:@"Caption"
 												 text:nil action:@"Save"
 											   inView:weakSelf.view
 										   onSubmit:^(NSString *caption){
 								[[TGClient shared] editInlineMessageCaption:inlineId
 																   caption:caption
 																completion:^(BOOL ok){
-									[TGAlertSheet showMessage:(ok ? @"Caption saved."
-																: @"Telegram refused that.")
+									[TGAlertSheet showMessage:(ok ? @"Done"
+																: @"An error occurred.")
 														title:@"Edit Inline Message"
 													   inView:weakSelf.view];
 								}];
@@ -802,14 +783,14 @@ static NSString *TGOrderLines(NSDictionary *order) {
 						} else if (index == 2){
 							[[TGClient shared] clearInlineMessageReplyMarkup:inlineId
 																 completion:^(BOOL ok){
-								[TGAlertSheet showMessage:(ok ? @"Buttons removed."
-															: @"Telegram refused that.")
+								[TGAlertSheet showMessage:(ok ? @"Done"
+															: @"An error occurred.")
 													title:@"Edit Inline Message"
 												   inView:weakSelf.view];
 							}];
 						} else if (index == 3){
 							[TGAlertSheet showInput:@"Edit Inline Message"
-											message:@"Photo id" placeholder:@"123"
+											message:@"Photo" placeholder:@"123"
 												 text:nil action:@"Next"
 											   inView:weakSelf.view
 										   onSubmit:^(NSString *photo){
@@ -823,8 +804,8 @@ static NSString *TGOrderLines(NSDictionary *order) {
 																	photoId:photoId
 																	caption:caption
 																 completion:^(BOOL ok){
-										[TGAlertSheet showMessage:(ok ? @"Photo saved."
-																	: @"Telegram refused that.")
+										[TGAlertSheet showMessage:(ok ? @"Done"
+																	: @"An error occurred.")
 															title:@"Edit Inline Message"
 														   inView:weakSelf.view];
 									}];
@@ -832,13 +813,13 @@ static NSString *TGOrderLines(NSDictionary *order) {
 							}];
 						} else {
 							[TGAlertSheet showInput:@"Edit Inline Message"
-											message:@"Latitude" placeholder:@"0.0"
+											message:@"Location" placeholder:@"0.0"
 												 text:nil action:@"Next"
 											   inView:weakSelf.view
 										   onSubmit:^(NSString *lat){
 								double latitude = [lat doubleValue];
 								[TGAlertSheet showInput:@"Edit Inline Message"
-												message:@"Longitude" placeholder:@"0.0"
+												message:@"Location" placeholder:@"0.0"
 													 text:nil action:@"Save"
 												   inView:weakSelf.view
 											   onSubmit:^(NSString *lon){
@@ -846,8 +827,8 @@ static NSString *TGOrderLines(NSDictionary *order) {
 																			latitude:latitude
 																		   longitude:[lon doubleValue]
 																		  completion:^(BOOL ok){
-										[TGAlertSheet showMessage:(ok ? @"Location moved."
-																	: @"Telegram refused that.")
+										[TGAlertSheet showMessage:(ok ? @"Done"
+																	: @"An error occurred.")
 															title:@"Edit Inline Message"
 														   inView:weakSelf.view];
 									}];
@@ -859,14 +840,10 @@ static NSString *TGOrderLines(NSDictionary *order) {
 			}),
 		]),
 
-		TGSection(@"Chat Resolvers",
-				  @"A chat id is what every screen carries. These turn the "
-				  @"internal basic-group, supergroup or secret-chat id back "
-				  @"into one, which is the compatibility path TDLib keeps for "
-				  @"an account that only ever saw the inner id.", @[
+		TGSection(@"Chat Resolvers", nil, @[
 			TGTapRow(@"Open Basic Group by ID", nil, ^{
 				[TGAlertSheet showInput:@"Basic Group ID" message:nil
-							placeholder:@"Group id" text:nil action:@"Read"
+							placeholder:@"Group" text:nil action:@"Read"
 								 inView:weakSelf.view onSubmit:^(NSString *text){
 					int64_t basicGroupId = text.longLongValue;
 					// The record first, so the resolver shows what Telegram
@@ -875,8 +852,7 @@ static NSString *TGOrderLines(NSDictionary *order) {
 					[[TGClient shared] basicGroupInfo:basicGroupId
 							completion:^(NSDictionary *info){
 						if (!info){
-							[TGAlertSheet showMessage:@"TDLib has no basic group "
-													  @"with that id."
+							[TGAlertSheet showMessage:@"An error occurred."
 												title:@"Basic Group"
 											   inView:weakSelf.view];
 							return;
@@ -908,8 +884,8 @@ static NSString *TGOrderLines(NSDictionary *order) {
 				}];
 			}),
 			TGTapRow(@"Open Supergroup by ID", nil, ^{
-				[TGAlertSheet showInput:@"Supergroup ID" message:nil
-							placeholder:@"Supergroup id" text:nil action:@"Open"
+				[TGAlertSheet showInput:@"Supergroup" message:nil
+							placeholder:nil text:nil action:@"Open"
 								 inView:weakSelf.view onSubmit:^(NSString *text){
 					[[TGClient shared] chatForSupergroup:text.longLongValue
 											completion:^(int64_t chatId){
@@ -918,8 +894,8 @@ static NSString *TGOrderLines(NSDictionary *order) {
 				}];
 			}),
 			TGTapRow(@"Open Secret Chat by ID", nil, ^{
-				[TGAlertSheet showInput:@"Secret Chat ID" message:nil
-							placeholder:@"Secret chat id" text:nil action:@"Open"
+				[TGAlertSheet showInput:@"Secret Chat" message:nil
+							placeholder:nil text:nil action:@"Open"
 								 inView:weakSelf.view onSubmit:^(NSString *text){
 					[[TGClient shared] chatForSecretChat:(int32_t)text.intValue
 											completion:^(int64_t chatId){
@@ -929,19 +905,15 @@ static NSString *TGOrderLines(NSDictionary *order) {
 			}),
 		]),
 
-		TGSection(@"Diagnostics",
-				  @"Raw access to TDLib for a support session. A custom method "
-				  @"answers with its own result string; the database key is the "
-				  @"one setting that can make this device's chats unreadable.",
-				  @[
-			TGTapRow(@"Send Custom Request", @"Method and JSON parameters", ^{
+		TGSection(@"Diagnostics", nil, @[
+			TGTapRow(@"Send Custom Request", nil, ^{
 				[TGAlertSheet showInput:@"Send Custom Request"
 								message:@"TDLib method"
 							placeholder:@"getOption"
 								   text:nil action:@"Next" inView:weakSelf.view
 							   onSubmit:^(NSString *method){
 					[TGAlertSheet showInput:@"Send Custom Request"
-									message:@"Parameters as JSON"
+									message:nil
 								placeholder:@"{}"
 									   text:@"{}" action:@"Send"
 								   inView:weakSelf.view
@@ -959,7 +931,7 @@ static NSString *TGOrderLines(NSDictionary *order) {
 							TGListViewController *viewer = [[TGListViewController alloc] init];
 							viewer.listTitle = method;
 							viewer.rows = TGCustomResultRows(result);
-							viewer.listFooter = @"sendCustomRequest result";
+							viewer.listFooter = nil;
 							viewer.offersCopy = YES;
 							viewer.hidesBottomBarWhenPushed = YES;
 							[weakSelf.navigationController pushViewController:viewer
@@ -968,34 +940,27 @@ static NSString *TGOrderLines(NSDictionary *order) {
 					}];
 				}];
 			}),
-			TGTapRow(@"Database Encryption Key",
+			TGTapRow(@"Encryption Key",
 					[[TGClient shared] databaseEncryptionKeyIsKnown]
 							? ([[TGClient shared] databaseEncryptionKeyIsSet]
-								? @"Set" : @"Not set")
-							: @"Unknown",
+								? @"Set" : @"None")
+							: @"None",
 					^{
 				if (![[TGClient shared] databaseEncryptionKeyIsKnown]){
-					[TGAlertSheet showMessage:@"The current database key could not "
-											  @"be read from the keychain. Changing "
-											  @"it now could lock the database."
-										title:@"Database Encryption Key"
+					[TGAlertSheet showMessage:@"An error occurred."
+										title:@"Encryption Key"
 									   inView:weakSelf.view];
 					return;
 				}
-				[TGAlertSheet showConfirm:@"Changing the key re-encrypts the local "
-										  @"database. If the new key is lost, the "
-										  @"chats cached on this device cannot be "
-										  @"opened again. The key is saved in the "
-										  @"keychain and used on the next launch. "
-										  @"Continue?"
-									title:@"Database Encryption Key"
+				[TGAlertSheet showConfirm:nil
+									title:@"Encryption Key"
 								   action:@"Continue"
 							  destructive:YES
 								   inView:weakSelf.view
 								onConfirm:^{
-					[TGAlertSheet showSecureInput:@"Database Encryption Key"
-										  message:@"New key"
-									  placeholder:@"at least 8 characters"
+					[TGAlertSheet showSecureInput:@"Encryption Key"
+										  message:@"Encryption Key"
+									  placeholder:nil
 										   action:@"Set"
 										   inView:weakSelf.view
 									   onSubmit:^(NSString *key){
@@ -1003,15 +968,13 @@ static NSString *TGOrderLines(NSDictionary *order) {
 						[[TGClient shared] setDatabaseEncryptionKey:bytes
 								completion:^(BOOL ok, NSString *error){
 							if (!ok){
-								[TGAlertSheet showMessage:(error ?: @"Telegram refused that key.")
-													title:@"Database Encryption Key"
+								[TGAlertSheet showMessage:(error ?: @"An error occurred.")
+													title:@"Encryption Key"
 												   inView:weakSelf.view];
 								return;
 							}
-							[TGAlertSheet showMessage:@"The key is set and saved. "
-													  @"TDLib will open the database "
-													  @"with it from the next launch."
-												title:@"Database Encryption Key"
+							[TGAlertSheet showMessage:@"Done"
+												title:@"Encryption Key"
 											   inView:weakSelf.view];
 							[weakSelf rebuild];
 						}];
@@ -1020,25 +983,20 @@ static NSString *TGOrderLines(NSDictionary *order) {
 			}),
 		]),
 
-		TGSection(@"Logging",
-				  @"Verbose puts TDLib's own chatter into the system log, which "
-				  @"is where a connection problem shows up. It is noisy and it "
-				  @"costs speed, so it does not survive a restart.", @[
+		TGSection(@"Logging", nil, @[
 			TGTapRow(@"TDLib Log Verbosity: Errors", nil, ^{
 				[[TGClient shared] send:@{@"@type" : @"setLogVerbosityLevel",
 										  @"new_verbosity_level" : @(1)}];
-				[weakSelf toast:@"Verbosity set to 1"];
+				[weakSelf toast:@"Done"];
 			}),
 			TGTapRow(@"TDLib Log Verbosity: Verbose", nil, ^{
 				[[TGClient shared] send:@{@"@type" : @"setLogVerbosityLevel",
 										  @"new_verbosity_level" : @(5)}];
-				[weakSelf toast:@"Verbosity set to 5"];
+				[weakSelf toast:@"Done"];
 			}),
 		]),
 
-		TGSection(@"Storage",
-				  @"Documents is shared over iTunes file sharing, so anything "
-				  @"written there can be pulled off the device.", @[
+		TGSection(@"Data and Storage", nil, @[
 			TGTapRow(@"Clear Temporary Files", nil, ^{
 				[weakSelf clearTemporaryFiles];
 			}),
@@ -1049,12 +1007,9 @@ static NSString *TGOrderLines(NSDictionary *order) {
 			}),
 		]),
 
-		TGSection(nil,
-				  @"Resets this app's own preferences - theme, text size, power "
-				  @"saving, auto-download. The session and the messages stay.", @[
+		TGSection(nil, nil, @[
 			TGRedRow(@"Reset Local Preferences", ^{
-				[TGAlertSheet showConfirm:@"Theme, text size and every switch in "
-										  @"Settings go back to their defaults."
+				[TGAlertSheet showConfirm:nil
 									title:@"Reset Local Preferences"
 								   action:@"Reset"
 							  destructive:YES
@@ -1065,7 +1020,7 @@ static NSString *TGOrderLines(NSDictionary *order) {
 							removePersistentDomainForName:domain];
 					[NSUserDefaults.standardUserDefaults synchronize];
 					[weakSelf repaint];
-					[weakSelf toast:@"Preferences reset."];
+					[weakSelf toast:@"Done"];
 				}];
 			}),
 		]),
@@ -1076,23 +1031,15 @@ static NSString *TGOrderLines(NSDictionary *order) {
 - (NSArray *)paymentDevSections {
 	__weak typeof(self) weakSelf = self;
 	return @[
-		TGSection(@"Bank card",
-				  @"The number is looked up, not stored. Telegram's provider "
-				  @"answers with the card's title and the links its own page "
-				  @"opens.", @[
-			TGActionRow(@"Look Up a Card", ^{ [weakSelf showBankCardLookup]; }),
+		TGSection(@"Payment Method", nil, @[
+			TGActionRow(@"Look Up", ^{ [weakSelf showBankCardLookup]; }),
 		]),
 
-		TGSection(@"Suggested post offer",
-				  @"An offer puts a Stars price on a suggested post in a channel "
-				  @"direct-messages chat. The message has to allow it; otherwise "
-				  @"Telegram's refusal is shown.", @[
-			TGActionRow(@"Add an Offer", ^{ [weakSelf addOfferFlow]; }),
+		TGSection(@"Offer", nil, @[
+			TGActionRow(@"Offer", ^{ [weakSelf addOfferFlow]; }),
 		]),
 
-		TGSection(@"Order validation",
-				  @"Checks an order against a named invoice and reads back the "
-				  @"shipping options Telegram offers. Nothing is charged.", @[
+		TGSection(@"Payment Info", nil, @[
 			TGActionRow(@"Validate an Order", ^{ [weakSelf validateOrderFlow]; }),
 		]),
 	];
@@ -1101,7 +1048,7 @@ static NSString *TGOrderLines(NSDictionary *order) {
 
 - (void)openResolvedChat:(int64_t)chatId title:(NSString *)title {
 	if (!chatId){
-		[TGAlertSheet showMessage:@"TDLib did not resolve that id to a chat."
+		[TGAlertSheet showMessage:@"An error occurred."
 							title:title inView:self.view];
 		return;
 	}

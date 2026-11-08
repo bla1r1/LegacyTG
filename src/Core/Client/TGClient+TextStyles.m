@@ -13,7 +13,7 @@ static NSString *TGTextStyleError(NSDictionary *result) {
 	if (![result[@"@type"] isEqualToString:@"error"])
 		return nil;
 	NSString *message = result[@"message"];
-	return message.length ? message : @"Telegram refused that.";
+	return message.length ? message : @"An error occurred.";
 }
 
 /// One textCompositionStyle, with the example made optional because the

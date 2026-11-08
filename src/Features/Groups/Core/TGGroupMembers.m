@@ -16,6 +16,7 @@
 #import "TGGroupSettingsViewController.h"
 #import "TGGroupSwitch.h"
 #import "TGGroupSettingsViewControllerInternal.h"
+#import "TGMemberListViewController.h"
 
 
 
@@ -141,27 +142,42 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 	[self.navigationController pushViewController:contacts animated:YES];
 }
 
+/// The Members row in Group Info: the official screen's member pane, not a
+/// sheet of names. The pane is the same list Group Settings already loaded,
+/// so opening it costs no request and a name opens the person's profile.
+- (void)showMembersList {
+	TGMemberListViewController *list = [[TGMemberListViewController alloc] init];
+	list.chatId = self.chatId;
+	list.members = self.members;
+	// The people section this row lives beside is group-only; a channel's
+	// subscribers are added through invite links, not this list.
+	list.canAddMembers = self.canInvite && !self.isChannelChat;
+	list.listTitle = self.isChannelChat ? @"Subscribers" : @"Members";
+	list.hidesBottomBarWhenPushed = YES;
+	TGPresentControllerFrom(list, self);
+}
+
 /// getChatMembers is a page, not a search; searchChatMembers answers the
 /// query server-side, which is the only way a group of a few thousand is
 /// usable from a phone at all.
 - (void)findMember {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"Find Member" message:nil
-				placeholder:@"Name or @username" text:nil action:@"Find"
+	[TGAlertSheet showInput:@"Search Members" message:nil
+				placeholder:@"Username" text:nil action:@"Search"
 					 inView:self.view onSubmit:^(NSString *query){
 		[[TGClient shared] searchMembersInChat:weakSelf.chatId query:query
 									completion:^(NSArray *members){
 			TGGroupSettingsViewController *me = weakSelf;
 			if (!members.count){
-				[TGAlertSheet showMessage:@"Nobody here answers to that."
-									  title:@"Find Member" inView:me.view];
+				[TGAlertSheet showMessage:@"No Results"
+									  title:@"Search Members" inView:me.view];
 				return;
 			}
 			NSMutableArray *names = [NSMutableArray array];
 			for (NSDictionary *member in members)
 				[names addObject:[member[@"name"] length]
 						? member[@"name"] : @"Member"];
-			[TGAlertSheet showChoices:names title:@"Find Member"
+			[TGAlertSheet showChoices:names title:@"Search Members"
 					 destructiveIndex:-1 inView:me.view
 							 onChoice:^(NSInteger index){
 				NSDictionary *member = members[(NSUInteger)index];

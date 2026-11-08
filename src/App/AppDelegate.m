@@ -8,6 +8,8 @@
 #import "RootViewController.h"
 #import "TGNavController.h"
 #import "TGClient.h"
+#import "TGLocalization.h"
+#import "TGLocalizationUIKit.h"
 #import "TGTheme.h"
 #import "TGCall.h"
 #import "TGMemberAvatarStore.h"
@@ -19,6 +21,9 @@
 #import "TGVideoNoteRecorder.h"
 #import "TGCallViewController.h"
 #import "TGLoginViewController.h"
+#import "TGChatViewController.h"
+#import "TGInAppNotificationBanner.h"
+#import "TGClientInternal.h"
 #import "TGTermsViewController.h"
 #import "TGPasscode.h"
 #import "TGPasscodeViewController.h"
@@ -27,12 +32,34 @@
 #import "TGAlertSheet.h"
 #import "TGPerf.h"
 #import "TGTextDraw.h"
+#import "TGDevFeedback.h"
 #include <stdio.h>
 
 @implementation AppDelegate
 
 + (AppDelegate *)sharedDelegate {
 	return (AppDelegate *)[UIApplication sharedApplication].delegate;
+}
+
++ (void)openChatWithId:(int64_t)chatId {
+	AppDelegate *app = [AppDelegate sharedDelegate];
+	if (!app || !app.rootViewController || ![app.rootViewController isKindOfClass:[RootViewController class]])
+		return;
+	RootViewController *tabs = (RootViewController *)app.rootViewController;
+	UINavigationController *nc = [tabs chatsNavigationController];
+	if (!nc) return;
+	[tabs switchToTab:[tabs chatsTabIndex] popToRoot:NO];
+	if ([nc.topViewController isKindOfClass:[TGChatViewController class]]) {
+		TGChatViewController *current = (TGChatViewController *)nc.topViewController;
+		if (current.chatId == chatId) return;
+	}
+	NSDictionary *c = [[TGClient shared].chatsById objectForKey:@(chatId)];
+	TGChatViewController *vc = [[TGChatViewController alloc] init];
+	vc.chatId = chatId;
+	vc.chatTitle = c[@"title"] ?: @"";
+	vc.isGroup = [c[@"isGroup"] boolValue];
+	vc.hidesBottomBarWhenPushed = YES;
+	[nc pushViewController:vc animated:YES];
 }
 
 /// An incoming call is the one thing that takes over the screen on its own.
@@ -98,7 +125,29 @@ static UIImage *TGCustomEmojiFromStore(int64_t emojiId, CGFloat side) {
 
 	NSLog(@"[LegacyTG] Starting application...");
 	double launchStart = TGPerfNow();
+	TGWarmEmojiFont([TGTheme shared].messageFontSize);
 	TGWatchForIncomingCalls();
+
+	// The pack arrives after the first screen exists. When it does, repaint
+	// the chrome that was built while the lookup was still empty.
+	[[NSNotificationCenter defaultCenter]
+			addObserverForName:TGAppLanguageChangedNotification
+						object:nil
+						 queue:[NSOperationQueue mainQueue]
+					usingBlock:^(NSNotification *note) {
+		TGLocalizeInterface();
+	}];
+
+	// A bench phone can stay dark: the flag is set with itglegacy://stand/on
+	// and cleared with stand/off. The SpringBoard tweak owns the panel.
+	if ([[NSUserDefaults standardUserDefaults] boolForKey:@"TGStandScreenOff"]){
+		dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)),
+				dispatch_get_main_queue(), ^{
+			CFNotificationCenterPostNotification(
+					CFNotificationCenterGetDarwinNotifyCenter(),
+					CFSTR("org.legacy.itg.screenoff"), NULL, NULL, true);
+		});
+	}
 
 #if TG_DEV
 	// Listen for developer automation commands via Darwin notification
@@ -123,6 +172,29 @@ static UIImage *TGCustomEmojiFromStore(int64_t emojiId, CGFloat side) {
 	// Service notifications belong to no chat: TDLib asks for a popup, and
 	// the window is the only surface that is not somebody's conversation.
 	__weak AppDelegate *weakSelf = self;
+	[[NSNotificationCenter defaultCenter]
+			addObserverForName:TGInAppNotificationReceivedNotification
+						object:nil
+						 queue:[NSOperationQueue mainQueue]
+					usingBlock:^(NSNotification *n){
+		NSNumber *chatIdNum = n.userInfo[@"chatId"];
+		if (!chatIdNum) return;
+		int64_t chatId = [chatIdNum longLongValue];
+		if (chatId == [TGChatViewController activeChatId])
+			return;
+		NSDictionary *m = n.userInfo[@"message"];
+		NSDictionary *chat = [[TGClient shared].chatsById objectForKey:chatIdNum];
+		NSString *title = chat[@"title"] ?: @"Telegram";
+		NSString *text = TGMessagePreview(m) ?: @"";
+		[TGInAppNotificationBanner showForChatId:chatId
+										  title:title
+										   text:text
+										 avatar:nil
+									   onTapped:^(int64_t targetChatId){
+			[AppDelegate openChatWithId:targetChatId];
+		}];
+	}];
+
 	[[NSNotificationCenter defaultCenter]
 			addObserverForName:TGServiceNotificationReceivedNotification
 						object:nil queue:nil
@@ -176,6 +248,9 @@ static UIImage *TGCustomEmojiFromStore(int64_t emojiId, CGFloat side) {
 	self.window = [[UIWindow alloc] initWithFrame:[[UIScreen mainScreen] bounds]];
 	[self showMainUI];
 	[self.window makeKeyAndVisible];
+#if TG_DEV
+	[TGDevFeedback installInWindow:self.window];
+#endif
 
 	if ([TGPasscode hasPasscode]) {
 		[TGPasscode setLocked:YES];
@@ -275,6 +350,7 @@ static UIImage *TGCustomEmojiFromStore(int64_t emojiId, CGFloat side) {
 				case TGAuthStateReady:
 					// Telegram only takes a token for a signed-in account, so
 					// the ask waits until there is one.
+					[[TGClient shared] loadAppLanguagePack:TGAppLanguage() completion:nil];
 					[me askForPushToken];
 					TGSetAuthorizedSession(YES);
 					[me.loginVC setBusy:NO];

@@ -50,9 +50,9 @@
 - (void)rebuildSections {
 	NSMutableArray *rows = [NSMutableArray array];
 	[rows addObject:TGBAction(@"Connection ID",
-			self.connectionId.length ? self.connectionId : @"Not set", @"connectionId")];
+			self.connectionId.length ? self.connectionId : @"None", @"connectionId")];
 	[rows addObject:TGBAction(@"Read Connection", nil, @"read")];
-	[rows addObject:TGBAction(@"Business Messages", @"Send and edit as the business",
+	[rows addObject:TGBAction(@"Messages", nil,
 			@"messages")];
 	if (self.connection){
 		[rows addObject:TGBInfo(@"User", [NSString stringWithFormat:@"%@",
@@ -64,10 +64,7 @@
 		[rows addObject:TGBInfo(@"Last Answer", self.answer)];
 
 	self.sections = @[
-		TGBSection(@"CONNECTION",
-				@"A business connection id belongs to a bot that manages the "
-				@"business account. A user account has none; getBusinessConnection "
-				@"answers with Telegram's refusal.", rows),
+		TGBSection(@"CONNECTION", nil, rows),
 	];
 	[self rebuild];
 }
@@ -76,7 +73,7 @@
 	__weak typeof(self) weakSelf = self;
 	if ([action isEqualToString:@"connectionId"]){
 		[self askText:@"Connection ID"
-			  message:@"The id from a business bot's updateBusinessConnection."
+			  message:nil
 		  placeholder:@"connection id" text:self.connectionId action:@"Save"
 		   completion:^(NSString *text){
 			weakSelf.connectionId = text;
@@ -115,9 +112,9 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	self.title = @"Business Messages";
+	self.title = @"Messages";
 	self.connectionId = TGBusinessStoredConnectionId();
-	self.answerLines = @[@"No request yet."];
+	self.answerLines = @[@"None"];
 	[self rebuildSections];
 }
 
@@ -127,12 +124,9 @@
 		[answers addObject:TGBInfo(line, nil)];
 
 	self.sections = @[
-		TGBSection(@"CONNECTION",
-				@"Every call below carries this id. Empty is still sent, so "
-				@"Telegram's own refusal is what appears in Answer.",
-				@[
+		TGBSection(@"CONNECTION", nil, @[
 			TGBInfo(@"Connection ID",
-					self.connectionId.length ? self.connectionId : @"Not set"),
+					self.connectionId.length ? self.connectionId : @"None"),
 			TGBAction(@"Change Connection ID", nil, @"connection"),
 		]),
 		TGBSection(@"TARGET", nil, @[
@@ -140,47 +134,45 @@
 					(long long)self.chatId], @"chat"),
 			TGBAction(@"Message ID", [NSString stringWithFormat:@"%lld",
 					(long long)self.messageId], @"message"),
-			TGBAction(@"Message Text", self.text.length ? self.text : @"Set", @"text"),
+			TGBAction(@"Message", self.text.length ? self.text : @"Set", @"text"),
 		]),
-		TGBSection(@"SEND", @"The first message is a text. An album takes two to ten local photos.",
-				@[
+		TGBSection(@"SEND", nil, @[
 			TGBSwitch(@"Disable Notification", nil, @"silent",
 					self.disableNotification, YES),
 			TGBSwitch(@"Protect Content", nil, @"protect", self.protectContent, YES),
 			TGBAction(@"Send Message", nil, @"send"),
-			TGBAction(@"Album Paths", self.albumPaths.length
-					? self.albumPaths : @"Comma-separated local paths", @"albumPaths"),
-			TGBAction(@"Send Album", nil, @"sendAlbum"),
+			TGBAction(@"Media", self.albumPaths.length
+					? self.albumPaths : @"Set", @"albumPaths"),
+			TGBAction(@"Send Message", nil, @"sendAlbum"),
 		]),
 		TGBSection(@"EDIT", nil, @[
-			TGBAction(@"Edit Text", nil, @"editText"),
+			TGBAction(@"Edit", nil, @"editText"),
 			TGBAction(@"Edit Caption", nil, @"editCaption"),
-			TGBAction(@"Media Path", self.mediaPath.length ? self.mediaPath : @"Set",
+			TGBAction(@"Media", self.mediaPath.length ? self.mediaPath : @"Set",
 					@"mediaPath"),
 			TGBSwitch(@"Media Is Video", nil, @"video", self.isVideo, YES),
-			TGBAction(@"Edit Media", nil, @"editMedia"),
+			TGBAction(@"Edit", nil, @"editMedia"),
 			TGBAction(@"Edit Checklist", nil, @"editChecklist"),
-			TGBAction(@"Edit Live Location", nil, @"liveLocation"),
-			TGBAction(@"Clear Reply Markup", nil, @"clearMarkup"),
+			TGBAction(@"Edit Location", nil, @"liveLocation"),
+			TGBAction(@"Clear", nil, @"clearMarkup"),
 			TGBAction(@"Stop Poll", nil, @"stopPoll"),
 		]),
 		TGBSection(@"MESSAGE", nil, @[
-			TGBAction(@"Read Message", nil, @"read"),
+			TGBAction(@"Message", nil, @"read"),
 			TGBAction(@"Pin Message", nil, @"pin"),
-			TGBAction(@"Unpin Message", nil, @"unpin"),
-			TGBAction(@"Delete Messages", @"Uses Message ID", @"delete"),
+			TGBAction(@"Unpin", nil, @"unpin"),
+			TGBAction(@"Delete Messages", nil, @"delete"),
 		]),
-		TGBSection(@"ANSWER", @"Telegram's reply to the last request.",
-				answers),
+		TGBSection(@"ANSWER", nil, answers),
 	];
 	[self rebuild];
 }
 
 - (void)finishOK:(BOOL)ok error:(NSString *)error title:(NSString *)title {
 	if (ok)
-		self.answerLines = @[@"Telegram accepted the request."];
+		self.answerLines = @[@"Done"];
 	else
-		self.answerLines = @[error.length ? error : @"Telegram refused that."];
+		self.answerLines = @[error.length ? error : @"An error occurred."];
 	[self rebuildSections];
 	if (!ok)
 		[self showResult:NO error:error title:title];
@@ -193,8 +185,7 @@
 		return;
 	}
 	NSNumber *messageId = message[@"message"][@"id"] ?: message[@"id"];
-	self.answerLines = @[[NSString stringWithFormat:@"Message %@ answered.",
-			messageId ?: @"?"]];
+	self.answerLines = @[@"Done"];
 	if (messageId)
 		self.messageId = [messageId longLongValue];
 	[self rebuildSections];
@@ -228,28 +219,28 @@
 			[weakSelf rebuildSections];
 		}];
 	} else if ([action isEqualToString:@"message"]){
-		[self askText:@"Message ID" message:nil placeholder:@"123"
+		[self askText:@"Message" message:nil placeholder:@"123"
 				 text:[NSString stringWithFormat:@"%lld", (long long)self.messageId]
 			   action:@"Save" completion:^(NSString *text){
 			weakSelf.messageId = [text longLongValue];
 			[weakSelf rebuildSections];
 		}];
 	} else if ([action isEqualToString:@"text"]){
-		[self askText:@"Message Text" message:nil placeholder:@"Text"
+		[self askText:@"Message" message:nil placeholder:@"Text"
 				 text:self.text action:@"Save" completion:^(NSString *text){
 			weakSelf.text = text;
 			[weakSelf rebuildSections];
 		}];
 	} else if ([action isEqualToString:@"albumPaths"]){
-		[self askText:@"Album Paths"
-			  message:@"Two to ten local photo paths, separated by commas."
-		  placeholder:@"/tmp/a.jpg, /tmp/b.jpg" text:self.albumPaths action:@"Save"
+		[self askText:@"Media"
+			  message:nil
+		  placeholder:nil text:self.albumPaths action:@"Save"
 		   completion:^(NSString *text){
 			weakSelf.albumPaths = text;
 			[weakSelf rebuildSections];
 		}];
 	} else if ([action isEqualToString:@"mediaPath"]){
-		[self askText:@"Media Path" message:nil placeholder:@"/tmp/photo.jpg"
+		[self askText:@"Media" message:nil placeholder:@"/tmp/photo.jpg"
 				 text:self.mediaPath action:@"Save" completion:^(NSString *text){
 			weakSelf.mediaPath = text;
 			[weakSelf rebuildSections];
@@ -261,7 +252,7 @@
 										  disableNotification:self.disableNotification
 											 protectContent:self.protectContent
 												  completion:^(NSDictionary *message, NSString *error){
-			[weakSelf finishMessage:message error:error title:@"Send Business Message"];
+			[weakSelf finishMessage:message error:error title:@"Send Message"];
 		}];
 	} else if ([action isEqualToString:@"sendAlbum"]){
 		[[TGClient shared] sendBusinessMessageAlbumWithConnectionId:self.connectionId
@@ -272,11 +263,10 @@
 												 protectContent:self.protectContent
 													  completion:^(NSArray *messages, NSString *error){
 			if (error.length || !messages.count){
-				[weakSelf finishOK:NO error:error title:@"Send Business Album"];
+				[weakSelf finishOK:NO error:error title:@"Send Message"];
 				return;
 			}
-			weakSelf.answerLines = @[[NSString stringWithFormat:@"%lu messages answered.",
-					(unsigned long)messages.count]];
+			weakSelf.answerLines = @[@"Done"];
 			[weakSelf rebuildSections];
 		}];
 	} else if ([action isEqualToString:@"editText"]){
@@ -285,7 +275,7 @@
 														messageId:self.messageId
 															 text:self.text
 													   completion:^(NSDictionary *message, NSString *error){
-			[weakSelf finishMessage:message error:error title:@"Edit Business Text"];
+			[weakSelf finishMessage:message error:error title:@"Edit"];
 		}];
 	} else if ([action isEqualToString:@"editCaption"]){
 		[[TGClient shared] editBusinessMessageCaptionWithConnectionId:self.connectionId
@@ -293,11 +283,11 @@
 														   messageId:self.messageId
 															 caption:self.text
 														  completion:^(NSDictionary *message, NSString *error){
-			[weakSelf finishMessage:message error:error title:@"Edit Business Caption"];
+			[weakSelf finishMessage:message error:error title:@"Edit Caption"];
 		}];
 	} else if ([action isEqualToString:@"editMedia"]){
 		if (!self.mediaPath.length){
-			[self showMessage:@"Set the media path first." title:@"Edit Business Media"];
+			[self showMessage:@"An error occurred." title:@"Edit"];
 			return;
 		}
 		[[TGClient shared] editBusinessMessageMediaWithConnectionId:self.connectionId
@@ -307,14 +297,14 @@
 														   isVideo:self.isVideo
 														   caption:self.text
 														completion:^(NSDictionary *message, NSString *error){
-			[weakSelf finishMessage:message error:error title:@"Edit Business Media"];
+			[weakSelf finishMessage:message error:error title:@"Edit"];
 		}];
 	} else if ([action isEqualToString:@"editChecklist"]){
-		[self askText:@"Checklist Title" message:nil placeholder:@"Checklist"
+		[self askText:@"Title" message:nil placeholder:@"Checklist"
 				 text:nil action:@"Next" completion:^(NSString *title){
-			[weakSelf askText:@"Checklist Tasks"
-					  message:@"Task texts, separated by commas."
-				  placeholder:@"First, Second, Third" text:nil action:@"Save"
+			[weakSelf askText:@"Checklist"
+					  message:nil
+				  placeholder:nil text:nil action:@"Save"
 				   completion:^(NSString *tasks){
 				NSArray *parts = [tasks componentsSeparatedByString:@","];
 				[[TGClient shared] editBusinessMessageChecklistWithConnectionId:weakSelf.connectionId
@@ -323,7 +313,7 @@
 																	   title:title
 																	   tasks:parts
 																	completion:^(NSDictionary *message, NSString *error){
-					[weakSelf finishMessage:message error:error title:@"Business Checklist"];
+					[weakSelf finishMessage:message error:error title:@"Checklist"];
 				}];
 			}];
 		}];
@@ -334,7 +324,7 @@
 			[weakSelf askText:@"Longitude" message:nil placeholder:@"30.5234" text:nil
 				   action:@"Next" completion:^(NSString *lon){
 				double longitude = [lon doubleValue];
-				[weakSelf askText:@"Live Period" message:@"Seconds; 0 stops sharing."
+				[weakSelf askText:@"Live Location" message:nil
 					  placeholder:@"900" text:@"900" action:@"Save"
 					   completion:^(NSString *seconds){
 					[[TGClient shared] editBusinessMessageLiveLocationWithConnectionId:weakSelf.connectionId
@@ -344,7 +334,7 @@
 																		   longitude:longitude
 																		  livePeriod:[seconds integerValue]
 																		  completion:^(NSDictionary *message, NSString *error){
-						[weakSelf finishMessage:message error:error title:@"Business Live Location"];
+						[weakSelf finishMessage:message error:error title:@"Live Location"];
 					}];
 				}];
 			}];
@@ -361,14 +351,14 @@
 													chatId:self.chatId
 												 messageId:self.messageId
 												completion:^(NSDictionary *message, NSString *error){
-			[weakSelf finishMessage:message error:error title:@"Stop Business Poll"];
+			[weakSelf finishMessage:message error:error title:@"Stop Poll"];
 		}];
 	} else if ([action isEqualToString:@"read"]){
 		[[TGClient shared] readBusinessMessageWithConnectionId:self.connectionId
 													   chatId:self.chatId
 													messageId:self.messageId
 												   completion:^(BOOL ok, NSString *error){
-			[weakSelf finishOK:ok error:error title:@"Read Business Message"];
+			[weakSelf finishOK:ok error:error title:@"Message"];
 		}];
 	} else if ([action isEqualToString:@"pin"] || [action isEqualToString:@"unpin"]){
 		BOOL pinned = [action isEqualToString:@"pin"];
@@ -377,11 +367,11 @@
 														  messageId:self.messageId
 															 pinned:pinned
 														 completion:^(BOOL ok, NSString *error){
-			[weakSelf finishOK:ok error:error title:pinned ? @"Pin Business Message" : @"Unpin Business Message"];
+			[weakSelf finishOK:ok error:error title:pinned ? @"Pin Message" : @"Unpin"];
 		}];
 	} else if ([action isEqualToString:@"delete"]){
 		[self askText:@"Delete Messages"
-			  message:@"Message ids separated by commas. Empty uses the Message ID above."
+			  message:nil
 		  placeholder:@"123, 124"
 				 text:nil action:@"Delete" completion:^(NSString *text){
 			NSMutableArray *ids = [NSMutableArray array];
@@ -396,7 +386,7 @@
 			[[TGClient shared] deleteBusinessMessagesWithConnectionId:weakSelf.connectionId
 														   messageIds:ids
 														   completion:^(BOOL ok, NSString *error){
-				[weakSelf finishOK:ok error:error title:@"Delete Business Messages"];
+				[weakSelf finishOK:ok error:error title:@"Delete Messages"];
 			}];
 		}];
 	}

@@ -231,7 +231,7 @@ static NSDictionary *TGProxyObject(NSString *server, NSInteger port, NSString *k
 		NSString *message = result[@"message"];
 		if (completion)
 			completion(ok, ok ? nil : ([message isKindOfClass:NSString.class]
-					? message : @"TDLib refused that carrier message."));
+					? message : @"An error occurred."));
 	}];
 }
 
@@ -248,7 +248,7 @@ static NSDictionary *TGProxyObject(NSString *server, NSInteger port, NSString *k
 		NSString *message = result[@"message"];
 		if (completion)
 			completion(ok, ok ? nil : ([message isKindOfClass:NSString.class]
-					? message : @"TDLib refused that carrier message."));
+					? message : @"An error occurred."));
 	}];
 }
 
@@ -265,7 +265,7 @@ static NSDictionary *TGProxyObject(NSString *server, NSInteger port, NSString *k
 		error = @{@"@type" : @"webProxyCarrierErrorRefused"};
 	else if ([kind isEqualToString:@"loadFailed"])
 		error = @{@"@type" : @"webProxyCarrierErrorLoadFailed",
-				  @"message" : message ?: @"The carrier page did not load."};
+				  @"message" : message ?: @"An error occurred."};
 	else
 		error = @{@"@type" : @"webProxyCarrierErrorUnsupported"};
 	[self request:@{

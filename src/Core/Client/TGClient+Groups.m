@@ -174,7 +174,7 @@ static NSDictionary *TGFlattenInviteLink(NSDictionary *link) {
 			if (completion)
 				completion(@{
 					@"id"         : group[@"id"] ?: @(basicGroupId),
-					@"title"      : chat[@"title"] ?: @"Basic Group",
+					@"title"      : chat[@"title"] ?: @"Group",
 					@"members"    : group[@"member_count"] ?: @(0),
 					@"status"     : TGMemberStatusName(group[@"status"]),
 					@"active"     : group[@"is_active"] ?: @NO,
@@ -854,7 +854,7 @@ static NSDictionary *TGFlattenInviteLink(NSDictionary *link) {
 			NSString *message = result[@"message"];
 			if (completion)
 				completion(ok, ok ? nil : ([message isKindOfClass:NSString.class]
-						? message : @"Telegram refused that switch."));
+						? message : @"An error occurred."));
 		}];
 	}];
 }
@@ -910,7 +910,7 @@ static NSDictionary *TGFlattenInviteLink(NSDictionary *link) {
 			if (![text isKindOfClass:NSString.class] || !text.length)
 				text = flat[@"docName"];
 			if (![text isKindOfClass:NSString.class] || !text.length)
-				text = @"Deleted message";
+				text = @"Message Deleted.";
 			[rows addObject:@{
 				@"messageId" : message[@"id"] ?: @(0),
 				@"date" : event[@"date"] ?: @(0),
@@ -941,7 +941,7 @@ static NSDictionary *TGFlattenInviteLink(NSDictionary *link) {
 			NSString *message = result[@"message"];
 			if (completion)
 				completion(ok, ok ? nil : ([message isKindOfClass:NSString.class]
-						? message : @"Telegram refused that report."));
+						? message : @"An error occurred."));
 		}];
 	}];
 }

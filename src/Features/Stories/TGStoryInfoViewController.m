@@ -3,6 +3,9 @@
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
+#import "TGIcons.h"
+#import "TGLocalization.h"
+#import "TGStoryText.h"
 
 static NSString *TGStoryDateText(NSNumber *unixTime) {
 	static NSDateFormatter *formatter = nil;
@@ -14,9 +17,16 @@ static NSString *TGStoryDateText(NSNumber *unixTime) {
 	});
 	if (![unixTime isKindOfClass:NSNumber.class] || unixTime.doubleValue <= 0)
 		return @"-";
+	NSString *language = TGAppLanguage();
+	formatter.locale = language.length
+			? [NSLocale localeWithLocaleIdentifier:language]
+			: [NSLocale currentLocale];
 	return [formatter stringFromDate:
 			[NSDate dateWithTimeIntervalSince1970:unixTime.doubleValue]];
 }
+
+/// The mappings live in TGStoryText.h so the host tests exercise the same
+/// function the screen calls.
 
 @interface TGStoryInfoViewController ()
 @property (nonatomic, assign) int64_t chatId;
@@ -25,6 +35,8 @@ static NSString *TGStoryDateText(NSNumber *unixTime) {
 @property (nonatomic, assign) TGStoryInfoMode mode;
 @property (nonatomic, strong) NSMutableArray *rows;
 @property (nonatomic, assign) BOOL reportStarted;
+/// The sheet has no navigation bar, so closing is this control over the table.
+@property (nonatomic, strong) UIButton *closeButton;
 @end
 
 @implementation TGStoryInfoViewController
@@ -46,16 +58,17 @@ static NSString *TGStoryDateText(NSNumber *unixTime) {
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
-		self.edgesForExtendedLayout = UIRectEdgeNone;
-	self.title = self.mode == TGStoryInfoModeReport ? @"Report Story" : @"Story Info";
+	self.title = self.mode == TGStoryInfoModeReport ? @"Report Story" : @"Story";
 	[[TGTheme shared] styleGroupedTable:self.tableView];
-	__weak typeof(self) weakSelf = self;
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGThemeChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note){
-		[weakSelf.tableView reloadData];
-	}];
+
+	self.closeButton = [UIButton buttonWithType:UIButtonTypeCustom];
+	[self.closeButton setImage:[TGIcons glyphNamed:@"close"
+			colour:[[TGTheme shared] primaryTextColour]
+			side:TGMetricStoryCloseSide - TGMetricPadSmall]
+			forState:UIControlStateNormal];
+	[self.closeButton addTarget:self action:@selector(doneTapped)
+			forControlEvents:UIControlEventTouchUpInside];
+	[self.view addSubview:self.closeButton];
 	[self buildRows];
 }
 
@@ -70,38 +83,33 @@ static NSString *TGStoryDateText(NSNumber *unixTime) {
 - (void)buildRows {
 	[self.rows removeAllObjects];
 	NSDictionary *story = self.story;
-	[self.rows addObject:@{@"title" : @"Posted",
+	[self.rows addObject:@{@"title" : @"Posted Stories",
 						   @"detail" : TGStoryDateText(story[@"date"])}];
 	[self.rows addObject:@{@"title" : @"Views",
 						   @"detail" : [NSString stringWithFormat:@"%@",
 								   story[@"viewers"] ?: @(0)]}];
-	[self.rows addObject:@{@"title" : @"Forwards",
+	[self.rows addObject:@{@"title" : @"Forwarded Messages",
 						   @"detail" : [NSString stringWithFormat:@"%@",
 								   story[@"forwards"] ?: @(0)]}];
 	[self.rows addObject:@{@"title" : @"Reactions",
 						   @"detail" : [NSString stringWithFormat:@"%@",
 								   story[@"reactions"] ?: @(0)]}];
 	NSString *privacy = story[@"privacy"];
-	if (![privacy isKindOfClass:NSString.class] || !privacy.length)
-		privacy = @"unknown";
-	[self.rows addObject:@{@"title" : @"Privacy", @"detail" : privacy}];
-	[self.rows addObject:@{@"title" : @"On Chat Page",
+	[self.rows addObject:@{@"title" : @"Privacy",
+						   @"detail" : TGStoryPrivacyNoun(privacy)}];
+	[self.rows addObject:@{@"title" : @"Chat",
 						   @"detail" : [story[@"isPostedToChatPage"] boolValue]
 								   ? @"Yes" : @"No"}];
 
 	__weak typeof(self) weakSelf = self;
-	[self.rows addObject:@{@"title" : @"Load Interactions",
-						   @"detail" : @"Viewers, reactions and forwards",
+	[self.rows addObject:@{@"title" : @"Interactions",
 						   @"tap" : ^{ [weakSelf loadInteractions]; }}];
-	[self.rows addObject:@{@"title" : @"Load Public Forwards",
-						   @"detail" : @"Messages and reposts",
+	[self.rows addObject:@{@"title" : @"Forwarded Messages",
 						   @"tap" : ^{ [weakSelf loadPublicForwards]; }}];
-	[self.rows addObject:@{@"title" : @"Load Statistics",
-						   @"detail" : @"Interaction and reaction graphs",
+	[self.rows addObject:@{@"title" : @"Statistics",
 						   @"tap" : ^{ [weakSelf loadStatistics]; }}];
 	if (self.mode == TGStoryInfoModeInfo)
 		[self.rows addObject:@{@"title" : @"Report Story",
-							   @"detail" : @"Send it to Telegram's moderators",
 							   @"tap" : ^{ [weakSelf startReport]; }}];
 	[self.tableView reloadData];
 }
@@ -114,7 +122,7 @@ static NSString *TGStoryDateText(NSNumber *unixTime) {
 		if (!me)
 			return;
 		if (!page){
-			[TGAlertSheet showMessage:error ?: @"Telegram refused that."
+			[TGAlertSheet showMessage:error ?: @"An error occurred."
 								title:@"Interactions" inView:me.view];
 			return;
 		}
@@ -148,7 +156,7 @@ static NSString *TGStoryDateText(NSNumber *unixTime) {
 							   page[@"totalForwardCount"] ?: @(0),
 							   page[@"totalReactionCount"] ?: @(0)]}];
 	for (NSDictionary *row in interactions){
-		NSString *kind = row[@"kind"] ?: @"view";
+		NSString *kind = TGStoryInteractionNoun(row[@"kind"]);
 		NSString *reaction = row[@"reaction"] ?: @"";
 		NSString *detail = [NSString stringWithFormat:@"%@ · %@%@",
 				TGStoryDateText(row[@"date"]), kind,
@@ -156,11 +164,10 @@ static NSString *TGStoryDateText(NSNumber *unixTime) {
 		[added addObject:@{@"title" : row[@"name"] ?: @"Someone",
 						   @"detail" : detail}];
 	}
+	if (!interactions.count)
+		[added addObject:@{@"title" : TGLocalized(@"No views")}];
 	[self.rows addObjectsFromArray:added];
 	[self.tableView reloadData];
-	if (!interactions.count)
-		[TGAlertSheet showMessage:@"Telegram returned no interactions."
-							title:@"Interactions" inView:self.view];
 }
 
 - (void)loadPublicForwards {
@@ -174,19 +181,19 @@ static NSString *TGStoryDateText(NSNumber *unixTime) {
 		if (!me)
 			return;
 		if (!page){
-			[TGAlertSheet showMessage:error ?: @"Telegram refused that."
-								title:@"Public Forwards" inView:me.view];
+			[TGAlertSheet showMessage:error ?: @"An error occurred."
+								title:@"Forwarded Messages" inView:me.view];
 			return;
 		}
 		NSMutableArray *added = [NSMutableArray array];
-		[added addObject:@{@"title" : @"Public Forwards",
+		[added addObject:@{@"title" : @"Forwarded Messages",
 						   @"detail" : [NSString stringWithFormat:@"%@ total",
 								   page[@"totalCount"] ?: @(0)]}];
 		for (NSDictionary *row in page[@"forwards"]){
 			NSString *title = row[@"title"];
 			if (!title.length)
 				title = [row[@"kind"] isEqualToString:@"story"]
-						? @"Reposted story" : @"Forwarded message";
+						? @"Story" : @"Forwarded Messages";
 			NSString *detail = row[@"text"];
 			if (!detail.length)
 				detail = TGStoryDateText(row[@"date"]);
@@ -209,18 +216,18 @@ static NSString *TGStoryDateText(NSNumber *unixTime) {
 		if (!me)
 			return;
 		if (!statistics){
-			[TGAlertSheet showMessage:error ?: @"Telegram refused that."
+			[TGAlertSheet showMessage:error ?: @"An error occurred."
 								title:@"Story Statistics" inView:me.view];
 			return;
 		}
 		NSMutableArray *added = [NSMutableArray array];
 		NSDictionary *interaction = statistics[@"interaction"] ?: @{};
 		NSDictionary *reaction = statistics[@"reaction"] ?: @{};
-		[added addObject:@{@"title" : @"Interaction Graph",
+		[added addObject:@{@"title" : @"Interactions",
 						   @"detail" : interaction[@"kind"] ?: @"none"}];
 		for (NSString *line in interaction[@"lines"] ?: @[])
 			[added addObject:@{@"title" : line}];
-		[added addObject:@{@"title" : @"Reaction Graph",
+		[added addObject:@{@"title" : @"Reactions",
 						   @"detail" : reaction[@"kind"] ?: @"none"}];
 		for (NSString *line in reaction[@"lines"] ?: @[])
 			[added addObject:@{@"title" : line}];
@@ -244,13 +251,13 @@ static NSString *TGStoryDateText(NSNumber *unixTime) {
 
 - (void)handleReport:(NSDictionary *)result error:(NSString *)error {
 	if (!result){
-		[TGAlertSheet showMessage:error ?: @"Telegram refused the report."
+		[TGAlertSheet showMessage:error ?: @"An error occurred."
 							title:@"Report Story" inView:self.view];
 		return;
 	}
 	NSString *state = result[@"state"];
 	if ([state isEqualToString:@"ok"]){
-		[TGAlertSheet showMessage:@"The story was reported to Telegram."
+		[TGAlertSheet showMessage:@"Telegram moderators will review your report. Thank you!"
 							title:@"Report Story" inView:self.view];
 		return;
 	}
@@ -281,8 +288,8 @@ static NSString *TGStoryDateText(NSNumber *unixTime) {
 		BOOL optional = [result[@"optional"] boolValue];
 		__weak typeof(self) weakSelf = self;
 		[TGAlertSheet showInput:@"Report Story"
-						message:optional ? @"Add a note, or leave it empty." : @"Add a note."
-					placeholder:@"Details"
+						message:optional ? nil : @"Additional details..."
+					placeholder:@"Additional details..."
 						   text:nil
 						 action:@"Send"
 						 inView:self.view
@@ -300,11 +307,31 @@ static NSString *TGStoryDateText(NSNumber *unixTime) {
 		}];
 		return;
 	}
-	[TGAlertSheet showMessage:@"Telegram answered the report in a way this app "
-			@"does not understand." title:@"Report Story" inView:self.view];
+	[TGAlertSheet showMessage:@"An error occurred." title:@"Report Story" inView:self.view];
 }
 
 #pragma mark - table
+
+- (void)viewDidLayoutSubviews {
+	[super viewDidLayoutSubviews];
+	CGFloat side = TGMetricStoryCloseSide;
+	self.closeButton.frame = CGRectMake(self.view.bounds.size.width - side - TGMetricPadMedium,
+			TGMetricPadMedium, side, side);
+}
+
+- (void)doneTapped {
+	// Added as the viewer's overlay panel: take it off, leave the story.
+	if (self.overlayPanel && self.parentViewController){
+		[self willMoveToParentViewController:nil];
+		[self.view removeFromSuperview];
+		[self removeFromParentViewController];
+		return;
+	}
+	if (self.presentingViewController)
+		[self dismissViewControllerAnimated:YES completion:nil];
+	else
+		[self.navigationController popViewControllerAnimated:YES];
+}
 
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
 	return 1;

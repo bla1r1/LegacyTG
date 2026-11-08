@@ -32,7 +32,9 @@
 #import "TGGiftFlattenTests.m"
 #import "TGPinnedLineTests.m"
 #import "TGPollPresentationTests.m"
+#import "TGParityChatTests.m"
 #import "TGChecklistPresentationTests.m"
+#import "TGLocalizationTests.m"
 #import "TGMediaVeilBlurTests.m"
 #import "TGClientAccountTests.m"
 #import "TGClientProfileTests.m"
@@ -67,10 +69,13 @@
 #import "TGStickerBudgetTests.m"
 #import "TGStickerImageTests.m"
 #import "TGChatListRowGeometryTests.m"
+#import "TGParitySettingsTests.m"
 #import "TGUIFormatTests.m"
+#import "TGParityRestTests.m"
 #import "TGClientMessagesFunctionsTests.m"
 #import "TGClientRecordOnceTests.m"
 #import "TGCustomEmojiStoreTests.m"
+#import "TGParityPeopleTests.m"
 
 int main(int argc, char *argv[]) {
 	@autoreleasepool {

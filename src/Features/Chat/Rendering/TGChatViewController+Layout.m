@@ -1,4 +1,5 @@
 #import "TGPerf.h"
+#import "TGLocalization.h"
 #import "TGChatViewControllerInternal.h"
 #import "TGNameWithStatus.h"
 #import "TGCapabilities.h"
@@ -88,7 +89,7 @@ UIColor *TGSenderColour(int64_t userId) {
 	if (!original)
 		return nil;
 	if ([original[@"outgoing"] boolValue])
-		return @"You";
+		return TGLocalized(@"You");
 	return [[TGClient shared] nameForUserId:[original[@"senderId"] longLongValue]];
 }
 
@@ -212,20 +213,24 @@ UIColor *TGSenderColour(int64_t userId) {
 			forwardStatusId = [[TGClient shared] emojiStatusIdForChat:[forwardCid longLongValue]];
 		}
 	}
-
 	if ([cell.forwardLabel respondsToSelector:@selector(setAttributedText:)]){
+		NSString *line = TGLocalizedFormat(@"Forwarded from: %@", from);
 		NSMutableAttributedString *styled =
-				[[NSMutableAttributedString alloc] initWithString:@"Forwarded from "
+				[[NSMutableAttributedString alloc] initWithString:line
 													   attributes:@{
 					NSForegroundColorAttributeName: [theme secondaryTextColour],
 					NSFontAttributeName: cell.forwardLabel.font ?: TGFontMeta()
 				}];
-		NSAttributedString *fromWithStatus = TGNameWithStatus(from, forwardStatusId, TGFontMetaStrong(), [theme accentColour]);
-		[styled appendAttributedString:fromWithStatus];
+		NSRange nameRange = [line rangeOfString:from options:NSBackwardsSearch];
+		if (nameRange.location != NSNotFound){
+			NSAttributedString *name = TGNameWithStatus(from, forwardStatusId,
+					TGFontMetaStrong(), [theme accentColour]);
+			[styled replaceCharactersInRange:nameRange withAttributedString:name];
+		}
 		cell.forwardLabel.attributedText = styled;
 	} else {
 		cell.forwardLabel.textColor = [theme accentColour];
-		cell.forwardLabel.text = [NSString stringWithFormat:@"Forwarded from %@", from];
+		cell.forwardLabel.text = TGLocalizedFormat(@"Forwarded from: %@", from);
 	}
 	return TGMetricQuoteForwardLine;
 }

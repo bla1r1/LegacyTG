@@ -132,7 +132,7 @@
 		if (!completion)
 			return;
 		NSString *url = result[@"url"];
-		completion(url.length ? url : nil, url.length ? nil : (result[@"message"] ?: @"Telegram refused that."));
+		completion(url.length ? url : nil, url.length ? nil : (result[@"message"] ?: @"An error occurred."));
 	}];
 }
 

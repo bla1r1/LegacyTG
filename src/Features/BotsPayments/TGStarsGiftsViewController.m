@@ -11,6 +11,91 @@
 #import "TGClient.h"
 #import "TGAlertSheet.h"
 #import "TGStyle.h"
+#import "TGTheme.h"
+#import "TGLocalization.h"
+
+/// A transaction timestamp in the app's date format; the audit screen used to
+/// print the raw Unix number.
+static NSString *TGStarsTransactionDate(NSNumber *unix) {
+	static NSDateFormatter *fmt = nil;
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{
+		fmt = [[NSDateFormatter alloc] init];
+		fmt.dateStyle = NSDateFormatterMediumStyle;
+		fmt.timeStyle = NSDateFormatterShortStyle;
+	});
+	if (![unix isKindOfClass:[NSNumber class]] || unix.doubleValue <= 0)
+		return @"-";
+	NSString *language = TGAppLanguage();
+	fmt.locale = language.length
+			? [NSLocale localeWithLocaleIdentifier:language]
+			: [NSLocale currentLocale];
+	return [fmt stringFromDate:[NSDate dateWithTimeIntervalSince1970:unix.doubleValue]];
+}
+
+#import "TGStarsTransactionText.h"
+
+/// The ledger as rows: localized type and date on the left, the signed Stars
+/// amount in a value label on the right. An alert cannot lay that out.
+@interface TGStarsTransactionsViewController : UITableViewController
+@property (nonatomic, strong) NSArray *rows;
+@end
+
+@implementation TGStarsTransactionsViewController
+
+- (void)viewDidLoad {
+	[super viewDidLoad];
+	self.title = @"Stars Transactions";
+	[[TGTheme shared] styleGroupedTable:self.tableView];
+}
+
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
+	return 1;
+}
+
+- (NSInteger)tableView:(UITableView *)tableView
+		numberOfRowsInSection:(NSInteger)section {
+	return (NSInteger)self.rows.count;
+}
+
+- (UITableViewCell *)tableView:(UITableView *)tableView
+		 cellForRowAtIndexPath:(NSIndexPath *)indexPath {
+	static NSString *const cellId = @"TGStarsTransactionCell";
+	UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:cellId];
+	if (!cell){
+		cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle
+									  reuseIdentifier:cellId];
+		[[TGTheme shared] styleCell:cell];
+		cell.selectionStyle = UITableViewCellSelectionStyleNone;
+	}
+	NSDictionary *row = self.rows[(NSUInteger)indexPath.row];
+	cell.textLabel.text = row[@"title"];
+	cell.textLabel.textColor = [[TGTheme shared] primaryTextColour];
+	cell.detailTextLabel.text = row[@"subtitle"];
+	cell.detailTextLabel.textColor = [[TGTheme shared] secondaryTextColour];
+	// A trailing value label, as the official ledger has, instead of gluing
+	// the amount onto the title.
+	UILabel *amount = (UILabel *)[cell.contentView viewWithTag:0x5701];
+	if (!amount){
+		amount = [[UILabel alloc] initWithFrame:CGRectZero];
+		amount.tag = 0x5701;
+		amount.textAlignment = NSTextAlignmentRight;
+		amount.font = TGFontSubheadStrong();
+		[cell.contentView addSubview:amount];
+	}
+	amount.text = row[@"amount"];
+	amount.textColor = [row[@"isOutgoing"] boolValue]
+			? [[TGTheme shared] secondaryTextColour]
+			: [[TGTheme shared] accentColour];
+	CGFloat amountWidth = TGMetricRow * 3;
+	amount.frame = CGRectMake(cell.contentView.bounds.size.width - amountWidth -
+			TGMetricPadSmall, TGMetricPadSmall, amountWidth,
+			TGMetricRow - TGDoubled(TGMetricPadSmall));
+	amount.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin;
+	return cell;
+}
+
+@end
 
 @interface TGStarsGiftsViewController ()
 @property (nonatomic, copy) NSString *ownerKind;
@@ -24,7 +109,7 @@
 - (instancetype)init {
 	if ((self = [super init])){
 		_ownerKind = @"user";
-		_answerLines = @[@"Nothing read yet."];
+		_answerLines = @[@"None"];
 	}
 	return self;
 }
@@ -41,7 +126,7 @@
 	[premium addObject:TGBAction(@"View A Premium Feature", nil, @"viewFeature")];
 	[premium addObject:TGBAction(@"Load A Premium Limit", nil, @"limit")];
 	[premium addObject:TGBAction(@"Premium Stickers", nil, @"premiumStickers")];
-	[premium addObject:TGBAction(@"Premium Sticker Examples", nil, @"premiumExamples")];
+	[premium addObject:TGBAction(@"Examples", nil, @"premiumExamples")];
 	[premium addObject:TGBAction(@"Premium Info Sticker", nil, @"premiumInfo")];
 	[premium addObject:TGBAction(@"Check Gift Code", nil, @"checkCode")];
 	[premium addObject:TGBAction(@"Apply Gift Code", nil, @"applyCode")];
@@ -49,9 +134,9 @@
 	NSMutableArray *stars = [NSMutableArray array];
 	[stars addObject:TGBAction(@"Owner",
 			[NSString stringWithFormat:@"%@ %lld", self.ownerKind, self.ownerId], @"owner")];
-	[stars addObject:TGBAction(@"Star Transactions", nil, @"transactions")];
-	[stars addObject:TGBAction(@"Star Subscriptions", nil, @"subscriptions")];
-	[stars addObject:TGBAction(@"Cancel A Subscription", nil, @"cancelSubscription")];
+	[stars addObject:TGBAction(@"Stars Transactions", nil, @"transactions")];
+	[stars addObject:TGBAction(@"My Subscriptions", nil, @"subscriptions")];
+	[stars addObject:TGBAction(@"Cancel Subscription", nil, @"cancelSubscription")];
 	[stars addObject:TGBAction(@"Reuse A Subscription", nil, @"reuseSubscription")];
 
 	NSMutableArray *boosts = [NSMutableArray array];
@@ -59,14 +144,14 @@
 	[boosts addObject:TGBAction(@"Boost Status For Owner", nil, @"boostStatus")];
 	[boosts addObject:TGBAction(@"Boost Features For Channels", nil, @"boostFeatures")];
 	[boosts addObject:TGBAction(@"Boost Level Features", nil, @"boostLevelFeatures")];
-	[boosts addObject:TGBAction(@"Boost Link", nil, @"boostLink")];
+	[boosts addObject:TGBAction(@"Link", nil, @"boostLink")];
 	[boosts addObject:TGBAction(@"Read A Boost Link", nil, @"boostLinkInfo")];
 	[boosts addObject:TGBAction(@"Boosts On A Chat", nil, @"boostList")];
 	[boosts addObject:TGBAction(@"Boost The Owner Chat", nil, @"boostSend")];
 
 	NSMutableArray *revenue = [NSMutableArray array];
 	[revenue addObject:TGBAction(@"Chat Revenue Statistics", nil, @"chatRevenue")];
-	[revenue addObject:TGBAction(@"Chat Revenue Transactions", nil, @"chatRevenueList")];
+	[revenue addObject:TGBAction(@"Transactions", nil, @"chatRevenueList")];
 	[revenue addObject:TGBAction(@"Star Revenue Statistics", nil, @"starRevenue")];
 	[revenue addObject:TGBAction(@"Gram Revenue Statistics", nil, @"gramRevenue")];
 	[revenue addObject:TGBAction(@"Paid Message Revenue", nil, @"paidRevenue")];
@@ -79,19 +164,19 @@
 	[paid addObject:TGBAction(@"Chat Paid Message Price", nil, @"chatPaidPrice")];
 	[paid addObject:TGBAction(@"Call Paid Message Price", nil, @"callPaidPrice")];
 	[paid addObject:TGBAction(@"Topic Unpaid Messages", nil, @"topicUnpaid")];
-	[paid addObject:TGBAction(@"Payment Receipt", nil, @"receipt")];
+	[paid addObject:TGBAction(@"Receipt", nil, @"receipt")];
 	[paid addObject:TGBAction(@"Star Ads Account URL", nil, @"adAccount")];
 	[paid addObject:TGBAction(@"Unrestrict Boost Count", nil, @"unrestrict")];
 
 	NSMutableArray *discovery = [NSMutableArray array];
-	[discovery addObject:TGBAction(@"Giveaway Info", nil, @"giveaway")];
-	[discovery addObject:TGBAction(@"Collectible Info", nil, @"collectible")];
-	[discovery addObject:TGBAction(@"Premium Subscribe Button", nil, @"subscribe")];
+	[discovery addObject:TGBAction(@"Giveaway", nil, @"giveaway")];
+	[discovery addObject:TGBAction(@"Collectible", nil, @"collectible")];
+	[discovery addObject:TGBAction(@"Premium", nil, @"subscribe")];
 
 	NSMutableArray *gifts = [NSMutableArray array];
 	[gifts addObject:TGBAction(@"Gift ID", self.giftId
 			? [NSString stringWithFormat:@"%lld", self.giftId] : @"Set", @"giftId")];
-	[gifts addObject:TGBAction(@"Available Gifts", nil, @"available")];
+	[gifts addObject:TGBAction(@"Gifts", nil, @"available")];
 	[gifts addObject:TGBAction(@"Can This Gift Be Sent?", nil, @"canSend")];
 	[gifts addObject:TGBAction(@"Read A Received Gift", nil, @"received")];
 	[gifts addObject:TGBAction(@"Read An Upgraded Gift", nil, @"upgraded")];
@@ -101,8 +186,8 @@
 	[gifts addObject:TGBAction(@"Gift Collections", nil, @"collections")];
 	[gifts addObject:TGBAction(@"Gifts For Crafting", nil, @"crafting")];
 	[gifts addObject:TGBAction(@"Gifts For Resale", nil, @"resale")];
-	[gifts addObject:TGBAction(@"Gift Emoji Statuses", nil, @"emojiStatuses")];
-	[gifts addObject:TGBAction(@"Gift Chat Themes", nil, @"themes")];
+	[gifts addObject:TGBAction(@"Emoji Status", nil, @"emojiStatuses")];
+	[gifts addObject:TGBAction(@"Themes", nil, @"themes")];
 	[gifts addObject:TGBAction(@"Gift Auction State", nil, @"auctionState")];
 	[gifts addObject:TGBAction(@"Acquired Auction Gifts", nil, @"auctionGifts")];
 	[gifts addObject:TGBAction(@"Open Gift Auction", nil, @"auctionOpen")];
@@ -114,34 +199,20 @@
 		[answers addObject:TGBInfo(line, nil)];
 
 	self.sections = @[
-		TGBSection(@"PREMIUM", @"Feature and limit records, the sticker set "
-				@"Telegram uses on the Premium page, and gift-code redemption. "
-				@"A purchase itself needs the App Store flow this build has not.",
-				premium),
-		TGBSection(@"STARS", @"The Star wallet's transactions and subscriptions. "
-				@"Cancelling or reusing one is a normal user action; buying Stars "
-				@"is not offered here.", stars),
-		TGBSection(@"BOOSTS", @"A Premium account's boost allowance and the "
-				@"records around one chat. Spending a slot is not a payment: the "
-				@"slot is already owned.", boosts),
-		TGBSection(@"REVENUE", @"What an owned channel or this account earned. "
-				@"Withdrawing it needs a wallet this build does not carry, so the "
-				@"rows stop at the figure.", revenue),
-		TGBSection(@"PAID MESSAGES", @"The free half of paid messages: the "
-				@"privacy rule that lets one person write without paying, the "
-				@"admin price settings, and a receipt read.", paid),
-		TGBSection(@"DISCOVERY", @"Giveaways, collectible usernames and the "
-				@"Premium subscribe signal.", discovery),
-		TGBSection(@"GIFTS", @"The gift catalogue and the records behind one gift. "
-				@"Sending, upgrading, transferring and withdrawing need a funded "
-				@"Stars or TON balance and are absent on purpose.", gifts),
-		TGBSection(@"ANSWER", nil, answers),
+		TGBSection(@"Premium", nil, premium),
+		TGBSection(@"Stars", nil, stars),
+		TGBSection(@"BOOSTS", nil, boosts),
+		TGBSection(@"REVENUE", nil, revenue),
+		TGBSection(@"Paid Messages", nil, paid),
+		TGBSection(@"DISCOVERY", nil, discovery),
+		TGBSection(@"GIFTS", nil, gifts),
+		TGBSection(@"Replies", nil, answers),
 	];
 	[self rebuild];
 }
 - (void)finish:(BOOL)ok error:(NSString *)error title:(NSString *)title {
-	self.answerLines = @[ok ? @"Telegram accepted the request."
-						   : (error.length ? error : @"Telegram refused that.")];
+	self.answerLines = @[ok ? @"Done"
+						   : (error.length ? error : @"An error occurred.")];
 	[self rebuildSections];
 	if (!ok)
 		[self showMessage:self.answerLines.firstObject title:title];
@@ -155,7 +226,7 @@
 
 - (void)askGift:(NSString *)title action:(void (^)(int64_t giftId))action {
 	__weak typeof(self) weakSelf = self;
-	[self askText:title message:@"Regular gift id" placeholder:@"123"
+	[self askText:title message:@"Gift" placeholder:@"123"
 			 text:(self.giftId ? [NSString stringWithFormat:@"%lld", self.giftId] : nil)
 		   action:@"Next" completion:^(NSString *text){
 		int64_t giftId = text.longLongValue;
@@ -181,11 +252,11 @@
 				[lines addObject:[NSString stringWithFormat:@"%@  %@ / %@",
 						limit[@"type"], limit[@"defaultValue"], limit[@"premiumValue"]]];
 			[weakSelf showText:(lines.count ? [lines componentsJoinedByString:@"\n"]
-					: @"Telegram returned no Premium features.")
+					: @"None")
 					   title:@"Premium"];
 		}];
 	} else if ([action isEqualToString:@"viewFeature"]){
-		[self askText:@"Premium Feature" message:@"Example: disabledAds"
+		[self askText:@"Premium Feature" message:nil
 				 placeholder:@"disabledAds" text:nil action:@"Open"
 		   completion:^(NSString *text){
 			[[TGClient shared] viewPremiumFeature:text
@@ -194,7 +265,7 @@
 			}];
 		}];
 	} else if ([action isEqualToString:@"limit"]){
-		[self askText:@"Premium Limit" message:@"Example: pinnedChatCount"
+		[self askText:@"Premium Limit" message:nil
 				 placeholder:@"pinnedChatCount" text:nil action:@"Read"
 		   completion:^(NSString *text){
 			[[TGClient shared] premiumLimitOfType:text
@@ -220,16 +291,16 @@
 				[lines addObject:[NSString stringWithFormat:@"%@  file %@",
 						sticker[@"emoji"], sticker[@"fileId"]]];
 			[weakSelf showText:(lines.count ? [lines componentsJoinedByString:@"\n"]
-					: @"Telegram returned no Premium stickers.")
+					: @"None")
 					   title:@"Premium Stickers"];
 		}];
 	} else if ([action isEqualToString:@"premiumExamples"]){
 		[[TGClient shared] premiumStickerExamplesWithCompletion:^(NSArray *stickers,
 																  NSString *error){
-			[weakSelf finish:error == nil error:error title:@"Premium Examples"];
+			[weakSelf finish:error == nil error:error title:@"Premium Stickers"];
 			if (!error)
 				[weakSelf showText:[NSString stringWithFormat:@"%lu example(s).",
-						(unsigned long)stickers.count] title:@"Premium Examples"];
+						(unsigned long)stickers.count] title:@"Examples"];
 		}];
 	} else if ([action isEqualToString:@"premiumInfo"]){
 		[self askText:@"Premium Months" message:nil placeholder:@"12" text:@"12"
@@ -237,10 +308,10 @@
 			[[TGClient shared] premiumInfoStickerForMonths:text.intValue
 												completion:^(NSDictionary *sticker,
 															 NSString *error){
-				[weakSelf finish:error == nil error:error title:@"Premium Sticker"];
+				[weakSelf finish:error == nil error:error title:@"Premium Stickers"];
 				if (!error) [weakSelf showText:[NSString stringWithFormat:
 						@"Sticker %@ in set %@", sticker[@"id"], sticker[@"setId"]]
-									   title:@"Premium Sticker"];
+									   title:@"Premium Stickers"];
 			}];
 		}];
 	} else if ([action isEqualToString:@"checkCode"]){
@@ -268,11 +339,11 @@
 			}];
 		}];
 	} else if ([action isEqualToString:@"owner"]){
-		[TGAlertSheet showChoices:@[@"My account", @"A chat"]
-							title:@"Star Owner" destructiveIndex:-1 inView:self.view
+		[TGAlertSheet showChoices:@[@"My Profile", @"A chat"]
+							title:@"Owner" destructiveIndex:-1 inView:self.view
 						 onChoice:^(NSInteger index){
 			NSString *kind = index == 0 ? @"user" : @"chat";
-			[weakSelf askText:@"Owner ID" message:nil placeholder:@"123" text:nil
+			[weakSelf askText:@"Owner" message:nil placeholder:@"123" text:nil
 					   action:@"Save" completion:^(NSString *text){
 				weakSelf.ownerKind = kind;
 				weakSelf.ownerId = text.longLongValue;
@@ -281,7 +352,7 @@
 		}];
 	} else if ([action isEqualToString:@"transactions"]){
 		[TGAlertSheet showChoices:@[@"Incoming", @"Outgoing", @"Both"]
-							title:@"Star Transactions" destructiveIndex:-1
+							title:@"Stars Transactions" destructiveIndex:-1
 						   inView:self.view onChoice:^(NSInteger index){
 			NSString *direction = index == 0 ? @"incoming"
 					: index == 1 ? @"outgoing" : @"";
@@ -295,16 +366,28 @@
 												  limit:20
 											 completion:^(NSDictionary *page, NSString *error){
 				if (error){
-					[weakSelf finish:NO error:error title:@"Star Transactions"];
+					[weakSelf finish:NO error:error title:@"Stars Transactions"];
 					return;
 				}
-				NSMutableArray *lines = [NSMutableArray array];
-				for (NSDictionary *transaction in page[@"transactions"])
-					[lines addObject:[NSString stringWithFormat:@"%@  %@  %@ stars",
-							transaction[@"date"], transaction[@"type"],
-							transaction[@"starCount"]]];
-				[weakSelf showText:(lines.count ? [lines componentsJoinedByString:@"\n"]
-						: @"No Star transactions.") title:@"Star Transactions"];
+				NSMutableArray *rows = [NSMutableArray array];
+				for (NSDictionary *transaction in page[@"transactions"]){
+					if (![transaction isKindOfClass:NSDictionary.class])
+						continue;
+					NSMutableDictionary *withDate = [transaction mutableCopy];
+					withDate[@"dateText"] =
+							TGStarsTransactionDate(transaction[@"date"]);
+					[rows addObject:TGStarsTransactionRow(withDate)];
+				}
+				if (!rows.count){
+					[weakSelf showText:@"None" title:@"Stars Transactions"];
+					return;
+				}
+				TGStarsTransactionsViewController *list =
+						[[TGStarsTransactionsViewController alloc] initWithStyle:
+								UITableViewStyleGrouped];
+				list.rows = rows;
+				list.hidesBottomBarWhenPushed = YES;
+				[weakSelf.navigationController pushViewController:list animated:YES];
 			}];
 		}];
 	} else if ([action isEqualToString:@"subscriptions"]){
@@ -312,7 +395,7 @@
 											  completion:^(NSDictionary *page,
 														   NSString *error){
 			if (error){
-				[weakSelf finish:NO error:error title:@"Star Subscriptions"];
+				[weakSelf finish:NO error:error title:@"My Subscriptions"];
 				return;
 			}
 			NSMutableArray *lines = [NSMutableArray array];
@@ -322,23 +405,23 @@
 						subscription[@"starCount"],
 						[subscription[@"isExpiring"] boolValue] ? @"expiring" : @"active"]];
 			[weakSelf showText:(lines.count ? [lines componentsJoinedByString:@"\n"]
-					: @"No Star subscriptions.") title:@"Star Subscriptions"];
+					: @"None") title:@"My Subscriptions"];
 		}];
 	} else if ([action isEqualToString:@"cancelSubscription"] ||
 			   [action isEqualToString:@"reuseSubscription"]){
 		BOOL reuse = [action isEqualToString:@"reuseSubscription"];
-		[self askText:(reuse ? @"Reuse Subscription" : @"Cancel Subscription")
-				 message:@"Subscription id" placeholder:@"sub-1" text:nil
+		[self askText:(reuse ? @"My Subscriptions" : @"Cancel Subscription")
+				 message:nil placeholder:@"sub-1" text:nil
 				 action:@"Send" completion:^(NSString *text){
 			if (reuse){
 				[[TGClient shared] reuseStarSubscription:text
 											  completion:^(BOOL ok, NSString *error){
-					[weakSelf finish:ok error:error title:@"Star Subscription"];
+					[weakSelf finish:ok error:error title:@"My Subscriptions"];
 				}];
 			} else {
 				[[TGClient shared] setStarSubscription:text canceled:YES
 											completion:^(BOOL ok, NSString *error){
-					[weakSelf finish:ok error:error title:@"Star Subscription"];
+					[weakSelf finish:ok error:error title:@"My Subscriptions"];
 				}];
 			}
 		}];
@@ -354,7 +437,7 @@
 						slot[@"slotId"], slot[@"currentlyBoostedChatId"],
 						slot[@"cooldownUntilDate"]]];
 			[weakSelf showText:(lines.count ? [lines componentsJoinedByString:@"\n"]
-					: @"No boost slots are available.") title:@"Boost Slots"];
+					: @"None") title:@"Boost Slots"];
 		}];
 	} else if ([action isEqualToString:@"boostStatus"]){
 		[self askText:@"Boost Status" message:@"Chat ID" placeholder:@"123" text:nil
@@ -387,7 +470,7 @@
 						   title:@"Boost Features"];
 		}];
 	} else if ([action isEqualToString:@"boostLevelFeatures"]){
-		[self askText:@"Boost Level" message:@"0 to 100" placeholder:@"1" text:@"1"
+		[self askText:@"Boost Level" message:nil placeholder:@"1" text:@"1"
 			   action:@"Read" completion:^(NSString *text){
 			[[TGClient shared] chatBoostLevelFeaturesForChannel:YES level:text.intValue
 													 completion:^(NSDictionary *features,
@@ -405,39 +488,39 @@
 			}];
 		}];
 	} else if ([action isEqualToString:@"boostLink"]){
-		[self askText:@"Boost Link" message:@"Chat ID" placeholder:@"123" text:nil
+		[self askText:@"Link" message:@"Chat ID" placeholder:@"123" text:nil
 			   action:@"Read" completion:^(NSString *chat){
 			[[TGClient shared] chatBoostLinkForChat:chat.longLongValue
 										 completion:^(NSString *link, NSString *error){
-				[weakSelf finish:error == nil error:error title:@"Boost Link"];
+				[weakSelf finish:error == nil error:error title:@"Link"];
 				if (link.length){
 					[UIPasteboard generalPasteboard].string = link;
-					[weakSelf showText:link title:@"Boost Link"];
+					[weakSelf showText:link title:@"Link"];
 				}
 			}];
 		}];
 	} else if ([action isEqualToString:@"boostLinkInfo"]){
-		[self askText:@"Boost Link Info" message:@"https://t.me/boost/..." placeholder:@"https://t.me/boost/x"
+		[self askText:@"Link" message:@"https://t.me/boost/..." placeholder:@"https://t.me/boost/x"
 			 text:nil action:@"Read"
 		   completion:^(NSString *text){
 			[[TGClient shared] chatBoostLinkInfo:text
 									  completion:^(NSDictionary *info, NSString *error){
 				if (error){
-					[weakSelf finish:NO error:error title:@"Boost Link"];
+					[weakSelf finish:NO error:error title:@"Link"];
 					return;
 				}
 				[weakSelf showText:[NSString stringWithFormat:@"Chat %@\nPublic: %@",
 						info[@"chatId"], [info[@"isPublic"] boolValue] ? @"yes" : @"no"]
-							   title:@"Boost Link"];
+							   title:@"Link"];
 			}];
 		}];
 	} else if ([action isEqualToString:@"boostList"]){
-		[self askText:@"Chat Boosts" message:@"Chat ID" placeholder:@"123" text:nil
+		[self askText:@"Boosts" message:@"Chat ID" placeholder:@"123" text:nil
 			   action:@"Read" completion:^(NSString *chat){
 			[[TGClient shared] chatBoostsForChat:chat.longLongValue offset:@"" limit:20
 									  completion:^(NSDictionary *page, NSString *error){
 				if (error){
-					[weakSelf finish:NO error:error title:@"Chat Boosts"];
+					[weakSelf finish:NO error:error title:@"Boosts"];
 					return;
 				}
 				NSMutableArray *lines = [NSMutableArray array];
@@ -445,13 +528,13 @@
 					[lines addObject:[NSString stringWithFormat:@"%@  %@x  %@",
 							boost[@"id"], boost[@"count"], boost[@"source"]]];
 				[weakSelf showText:(lines.count ? [lines componentsJoinedByString:@"\n"]
-						: @"This chat has no boosts.") title:@"Chat Boosts"];
+						: @"None") title:@"Boosts"];
 			}];
 		}];
 	} else if ([action isEqualToString:@"boostSend"]){
 		[self askText:@"Boost A Chat" message:@"Chat ID" placeholder:@"123" text:nil
 			   action:@"Next" completion:^(NSString *chat){
-			[weakSelf askText:@"Boost A Chat" message:@"Slot ids, comma separated"
+			[weakSelf askText:@"Boost A Chat" message:nil
 						 placeholder:@"0" text:nil action:@"Boost"
 				   completion:^(NSString *slots){
 				NSMutableArray *ids = [NSMutableArray array];
@@ -469,13 +552,13 @@
 			}];
 		}];
 	} else if ([action isEqualToString:@"chatRevenue"]){
-		[self askText:@"Chat Revenue" message:@"Chat ID" placeholder:@"123" text:nil
+		[self askText:@"Revenue" message:@"Chat ID" placeholder:@"123" text:nil
 			   action:@"Read" completion:^(NSString *chat){
 			[[TGClient shared] chatRevenueStatisticsForChat:chat.longLongValue dark:NO
 												 completion:^(NSDictionary *statistics,
 															  NSString *error){
 				if (error){
-					[weakSelf finish:NO error:error title:@"Chat Revenue"];
+					[weakSelf finish:NO error:error title:@"Revenue"];
 					return;
 				}
 				[weakSelf showText:[NSString stringWithFormat:
@@ -483,18 +566,18 @@
 						statistics[@"totalAmount"], statistics[@"balanceAmount"],
 						statistics[@"availableAmount"],
 						[statistics[@"withdrawalEnabled"] boolValue] ? @"yes" : @"no",
-						statistics[@"graph"]] title:@"Chat Revenue"];
+						statistics[@"graph"]] title:@"Revenue"];
 			}];
 		}];
 	} else if ([action isEqualToString:@"chatRevenueList"]){
-		[self askText:@"Revenue Transactions" message:@"Chat ID" placeholder:@"123"
+		[self askText:@"Transactions" message:@"Chat ID" placeholder:@"123"
 			 text:nil action:@"Read" completion:^(NSString *chat){
 			[[TGClient shared] chatRevenueTransactionsForChat:chat.longLongValue
 														 offset:@"" limit:20
 													 completion:^(NSDictionary *page,
 																  NSString *error){
 				if (error){
-					[weakSelf finish:NO error:error title:@"Revenue Transactions"];
+					[weakSelf finish:NO error:error title:@"Transactions"];
 					return;
 				}
 				NSMutableArray *lines = [NSMutableArray array];
@@ -502,7 +585,7 @@
 					[lines addObject:[NSString stringWithFormat:@"%@ %@",
 							transaction[@"amount"], transaction[@"currency"]]];
 				[weakSelf showText:(lines.count ? [lines componentsJoinedByString:@"\n"]
-						: @"No revenue transactions.") title:@"Revenue Transactions"];
+						: @"None") title:@"Transactions"];
 			}];
 		}];
 	} else if ([action isEqualToString:@"starRevenue"]){
@@ -513,51 +596,52 @@
 											  completion:^(NSDictionary *statistics,
 														   NSString *error){
 			if (error){
-				[weakSelf finish:NO error:error title:@"Star Revenue"];
+				[weakSelf finish:NO error:error title:@"Revenue"];
 				return;
 			}
 			[weakSelf showText:[NSString stringWithFormat:
 					@"Total %@\nAvailable %@\nNext withdrawal in %@ s\nGraph: %@",
 					statistics[@"total"], statistics[@"available"],
 					statistics[@"nextWithdrawalIn"], statistics[@"graph"]]
-						   title:@"Star Revenue"];
+						   title:@"Revenue"];
 		}];
 	} else if ([action isEqualToString:@"gramRevenue"]){
 		[[TGClient shared] gramRevenueStatisticsWithDark:NO
 											  completion:^(NSDictionary *statistics,
 														   NSString *error){
 			if (error){
-				[weakSelf finish:NO error:error title:@"Gram Revenue"];
+				[weakSelf finish:NO error:error title:@"Revenue"];
 				return;
 			}
 			[weakSelf showText:[NSString stringWithFormat:
 					@"Total %@\nBalance %@\nAvailable %@\nGraph: %@",
 					statistics[@"total"], statistics[@"balance"],
 					statistics[@"available"], statistics[@"graph"]]
-						   title:@"Gram Revenue"];
+						   title:@"Revenue"];
 		}];
 	} else if ([action isEqualToString:@"paidRevenue"]){
 		[self askText:@"Paid Message Revenue" message:@"User ID" placeholder:@"123"
 			 text:nil action:@"Read" completion:^(NSString *text){
 			[[TGClient shared] paidMessageRevenueForUser:text.longLongValue
 											  completion:^(int64_t stars, NSString *error){
-				[weakSelf finish:error == nil error:error title:@"Paid Revenue"];
-				if (!error) [weakSelf showText:[NSString stringWithFormat:
-						@"%lld Star(s).", (long long)stars] title:@"Paid Revenue"];
+				[weakSelf finish:error == nil error:error title:@"Revenue"];
+				if (!error) [weakSelf showText:
+						TGLocalizedFormat(@"%@ Stars", @(stars)) title:@"Revenue"];
 			}];
 		}];
 	} else if ([action isEqualToString:@"topicRevenue"]){
-		[self askText:@"Topic Revenue" message:@"Chat ID" placeholder:@"123" text:nil
+		[self askText:@"Revenue" message:@"Chat ID" placeholder:@"123" text:nil
 			   action:@"Next" completion:^(NSString *chat){
-			[weakSelf askText:@"Topic Revenue" message:@"Topic ID" placeholder:@"1"
+			[weakSelf askText:@"Revenue" message:@"Topic ID" placeholder:@"1"
 				 text:nil action:@"Read" completion:^(NSString *topic){
 				[[TGClient shared] directMessagesChatTopicRevenueForChat:chat.longLongValue
 																   topic:topic.longLongValue
 															  completion:^(int64_t stars,
 																		   NSString *error){
-					[weakSelf finish:error == nil error:error title:@"Topic Revenue"];
-					if (!error) [weakSelf showText:[NSString stringWithFormat:
-							@"%lld Star(s).", (long long)stars] title:@"Topic Revenue"];
+					[weakSelf finish:error == nil error:error title:@"Revenue"];
+					if (!error) [weakSelf showText:
+							TGLocalizedFormat(@"%@ Stars", @(stars))
+											   title:@"Revenue"];
 				}];
 			}];
 		}];
@@ -577,7 +661,7 @@
 	} else if ([action isEqualToString:@"unpaidToken"]){
 		[self askText:@"Apply Unpaid Token" message:@"User ID" placeholder:@"123"
 				 text:nil action:@"Next" completion:^(NSString *user){
-			[weakSelf askText:@"Apply Unpaid Token" message:@"From the link"
+			[weakSelf askText:@"Apply Unpaid Token" message:nil
 					 placeholder:@"token" text:nil action:@"Apply"
 				   completion:^(NSString *token){
 				[[TGClient shared] applyUnpaidMessagesToken:token
@@ -593,7 +677,7 @@
 			[[TGClient shared] paidReactionSendersForChat:chat.longLongValue
 												completion:^(NSArray *senders, NSString *error){
 				if (error){
-					[weakSelf finish:NO error:error title:@"Paid Reactions"];
+					[weakSelf finish:NO error:error title:@"Reactions"];
 					return;
 				}
 				NSMutableArray *lines = [NSMutableArray array];
@@ -601,13 +685,13 @@
 					[lines addObject:[NSString stringWithFormat:@"%@  %@",
 							sender[@"kind"], sender[@"id"]]];
 				[weakSelf showText:(lines.count ? [lines componentsJoinedByString:@"\n"]
-						: @"No sender may carry a paid reaction.") title:@"Paid Reactions"];
+						: @"None") title:@"Reactions"];
 			}];
 		}];
 	} else if ([action isEqualToString:@"chatPaidPrice"]){
 		[self askText:@"Chat Paid Message Price" message:@"Chat ID" placeholder:@"123"
 				 text:nil action:@"Next" completion:^(NSString *chat){
-			[weakSelf askText:@"Chat Paid Message Price" message:@"Stars per message"
+			[weakSelf askText:@"Chat Paid Message Price" message:@"Stars"
 					 placeholder:@"0" text:nil action:@"Save"
 				   completion:^(NSString *price){
 				[[TGClient shared] setChatPaidMessageStarCount:chat.longLongValue
@@ -618,10 +702,10 @@
 			}];
 		}];
 	} else if ([action isEqualToString:@"callPaidPrice"]){
-		[self askText:@"Call Paid Message Price" message:@"Group call ID"
+		[self askText:@"Call Paid Message Price" message:@"Group Call"
 			 placeholder:@"123" text:nil action:@"Next"
 		   completion:^(NSString *call){
-			[weakSelf askText:@"Call Paid Message Price" message:@"Stars per message"
+			[weakSelf askText:@"Call Paid Message Price" message:@"Stars"
 					 placeholder:@"0" text:nil action:@"Save"
 				   completion:^(NSString *price){
 				[[TGClient shared] setGroupCallPaidMessageStarCount:call.intValue
@@ -652,9 +736,9 @@
 			}];
 		}];
 	} else if ([action isEqualToString:@"receipt"]){
-		[self askText:@"Payment Receipt" message:@"Chat ID" placeholder:@"123"
+		[self askText:@"Receipt" message:@"Chat ID" placeholder:@"123"
 				 text:nil action:@"Next" completion:^(NSString *chat){
-			[weakSelf askText:@"Payment Receipt" message:@"Message ID" placeholder:@"456"
+			[weakSelf askText:@"Receipt" message:@"Message" placeholder:@"456"
 					 text:nil action:@"Read" completion:^(NSString *message){
 				[[TGClient shared] paymentReceiptForChat:chat.longLongValue
 												 message:message.longLongValue
@@ -676,17 +760,17 @@
 		if (!ownerId) ownerId = [[TGClient shared].me[@"id"] longLongValue];
 		[[TGClient shared] starAdAccountURLForOwner:self.ownerKind ownerId:ownerId
 										 completion:^(NSString *link, NSString *error){
-			[weakSelf finish:error == nil error:error title:@"Ads Account"];
+			[weakSelf finish:error == nil error:error title:@"Telegram Ads"];
 			if (link.length){
 				[UIPasteboard generalPasteboard].string = link;
-				[weakSelf showText:link title:@"Ads Account"];
+				[weakSelf showText:link title:@"Telegram Ads"];
 			}
 		}];
 	} else if ([action isEqualToString:@"unrestrict"]){
-		[self askText:@"Unrestrict Boost Count" message:@"Supergroup ID"
+		[self askText:@"Unrestrict Boost Count" message:@"Supergroup"
 			 placeholder:@"123" text:nil action:@"Next"
 		   completion:^(NSString *group){
-			[weakSelf askText:@"Unrestrict Boost Count" message:@"0 to 8"
+			[weakSelf askText:@"Unrestrict Boost Count" message:nil
 					 placeholder:@"1" text:nil action:@"Save"
 				   completion:^(NSString *count){
 				[[TGClient shared] setSupergroupUnrestrictBoostCount:count.intValue
@@ -699,7 +783,7 @@
 	} else if ([action isEqualToString:@"giveaway"]){
 		[self askText:@"Giveaway" message:@"Chat ID" placeholder:@"123" text:nil
 			   action:@"Next" completion:^(NSString *chat){
-			[weakSelf askText:@"Giveaway" message:@"Message ID" placeholder:@"456"
+			[weakSelf askText:@"Giveaway" message:@"Message" placeholder:@"456"
 				 text:nil action:@"Read" completion:^(NSString *message){
 				[[TGClient shared] giveawayInfoForChat:chat.longLongValue
 											   message:message.longLongValue
@@ -717,11 +801,11 @@
 			}];
 		}];
 	} else if ([action isEqualToString:@"collectible"]){
-		[TGAlertSheet showChoices:@[@"A username", @"A phone number"]
+		[TGAlertSheet showChoices:@[@"Username", @"Phone Number"]
 							title:@"Collectible" destructiveIndex:-1 inView:self.view
 						 onChoice:^(NSInteger index){
 			NSString *kind = index == 0 ? @"username" : @"phoneNumber";
-			[weakSelf askText:@"Collectible" message:@"The value" placeholder:(index == 0 ? @"name" : @"+380...")
+			[weakSelf askText:@"Collectible" message:@"Value" placeholder:(index == 0 ? @"name" : @"+380...")
 				 text:nil action:@"Read"
 				   completion:^(NSString *value){
 				[[TGClient shared] collectibleItemInfoForKind:kind value:value
@@ -757,7 +841,7 @@
 				[lines addObject:[NSString stringWithFormat:@"%@  #%@  %@ stars",
 						gift[@"title"], gift[@"id"], gift[@"starCount"]]];
 			[weakSelf showText:(lines.count ? [lines componentsJoinedByString:@"\n"]
-					: @"Telegram returned no gifts.") title:@"Gifts"];
+					: @"None") title:@"Gifts"];
 		}];
 	} else if ([action isEqualToString:@"canSend"]){
 		[self askGift:@"Can Send Gift" action:^(int64_t giftId){
@@ -794,7 +878,7 @@
 	} else if ([action isEqualToString:@"upgraded"] || [action isEqualToString:@"value"]){
 		BOOL value = [action isEqualToString:@"value"];
 		[self askText:(value ? @"Upgraded Gift Value" : @"Upgraded Gift")
-				 message:@"Unique name" placeholder:@"gift-1" text:nil
+				 message:@"Name" placeholder:@"gift-1" text:nil
 				 action:@"Read" completion:^(NSString *text){
 			if (value){
 				[[TGClient shared] upgradedGiftValueInfoNamed:text
@@ -807,7 +891,8 @@
 					[weakSelf showText:[NSString stringWithFormat:
 							@"%@ %@\nAverage: %@\nMinimum: %@\n%@",
 							info[@"value"], info[@"currency"],
-							info[@"isValueAverage"], info[@"minimumPrice"],
+							info[@"averageSalePrice"] ?: @(0),
+							info[@"minimumPrice"],
 							info[@"fragmentUrl"]] title:@"Gift Value"];
 				}];
 			} else {
@@ -867,7 +952,7 @@
 				[lines addObject:[NSString stringWithFormat:@"%@  %@ gifts",
 						collection[@"name"], collection[@"giftCount"]]];
 			[weakSelf showText:(lines.count ? [lines componentsJoinedByString:@"\n"]
-					: @"No gift collections.") title:@"Gift Collections"];
+					: @"None") title:@"Gift Collections"];
 		}];
 	} else if ([action isEqualToString:@"crafting"]){
 		[self askGift:@"Gifts For Crafting" action:^(int64_t giftId){
@@ -895,7 +980,7 @@
 					[lines addObject:[NSString stringWithFormat:@"%@  #%@",
 							gift[@"title"] ?: gift[@"name"], gift[@"number"]]];
 				[weakSelf showText:(lines.count ? [lines componentsJoinedByString:@"\n"]
-						: @"No resale gifts.") title:@"Resale"];
+						: @"None") title:@"Resale"];
 			}];
 		}];
 	} else if ([action isEqualToString:@"emojiStatuses"]){
@@ -909,7 +994,7 @@
 			for (NSDictionary *status in statuses)
 				[lines addObject:status[@"giftTitle"] ?: status[@"type"]];
 			[weakSelf showText:(lines.count ? [lines componentsJoinedByString:@"\n"]
-					: @"No gift emoji statuses.") title:@"Gift Statuses"];
+					: @"None") title:@"Gift Statuses"];
 		}];
 	} else if ([action isEqualToString:@"themes"]){
 		[[TGClient shared] giftChatThemesWithOffset:@"" limit:20
@@ -922,10 +1007,10 @@
 			for (NSDictionary *theme in themes)
 				[lines addObject:theme[@"giftTitle"] ?: theme[@"giftName"]];
 			[weakSelf showText:(lines.count ? [lines componentsJoinedByString:@"\n"]
-					: @"No gift chat themes.") title:@"Gift Themes"];
+					: @"None") title:@"Gift Themes"];
 		}];
 	} else if ([action isEqualToString:@"auctionState"]){
-		[self askText:@"Gift Auction" message:@"Auction id" placeholder:@"auction-1"
+		[self askText:@"Gift Auction" message:nil placeholder:@"auction-1"
 				 text:nil action:@"Read" completion:^(NSString *auction){
 			[[TGClient shared] giftAuctionStateForAuction:auction
 											   completion:^(NSDictionary *state,
@@ -955,7 +1040,7 @@
 							@"#%@  %@ stars  round %@", gift[@"uniqueGiftNumber"],
 							gift[@"starCount"], gift[@"roundNumber"]]];
 				[weakSelf showText:(lines.count ? [lines componentsJoinedByString:@"\n"]
-						: @"No acquired auction gifts.") title:@"Auction Gifts"];
+						: @"None") title:@"Auction Gifts"];
 			}];
 		}];
 	} else if ([action isEqualToString:@"auctionOpen"] ||

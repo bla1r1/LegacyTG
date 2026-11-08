@@ -38,6 +38,7 @@
 #import "TGBubbleCell.h"
 #import "TGChatViewControllerInternal.h"
 #import "TGMessageStreamStore.h"
+#import "TGLocalization.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
 #import "TGDMTopicsViewController.h"
@@ -149,7 +150,7 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 			[me presentAddContactForMessage:m];
 		} else {
 			[UIPasteboard generalPasteboard].string = phone ?: @"";
-			[TGSnackbar showInView:me.view text:@"Phone number copied"
+			[TGSnackbar showInView:me.view text:@"Phone number copied to clipboard."
 						   seconds:2 onCommit:^{}];
 		}
 	}];
@@ -348,7 +349,7 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 }
 
 - (void)showPlaybackFailure {
-	[TGAlertSheet showMessage:@"Cannot play this audio" title:nil inView:self.view];
+	[TGAlertSheet showMessage:@"An error occurred." title:nil inView:self.view];
 }
 
 - (void)openDocumentMessage:(NSDictionary *)m fromCell:(UITableViewCell *)cell {
@@ -361,7 +362,7 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 		}
 		__weak typeof(self) weakSelf = self;
 		[TGAlertSheet showChoices:buttons
-							title:@"Open Document"
+							title:@"Open File"
 				 destructiveIndex:-1
 						   inView:self.view
 						 onChoice:^(NSInteger index){

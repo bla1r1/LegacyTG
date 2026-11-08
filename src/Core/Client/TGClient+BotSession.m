@@ -30,7 +30,7 @@ static NSNumber *TGBSNumber(id value) {
 static NSString *TGBSErrorText(NSDictionary *result) {
 	NSString *message = result[@"message"];
 	return [message isKindOfClass:NSString.class] && message.length
-			? message : @"Telegram refused that.";
+			? message : @"An error occurred.";
 }
 
 static BOOL TGBSFailed(NSDictionary *result) {

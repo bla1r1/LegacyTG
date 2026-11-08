@@ -10,6 +10,9 @@
      ABUnknownPersonViewControllerDelegate,
      UIGestureRecognizerDelegate>
 
+/// Returns the chatId of the chat controller currently active on screen, or 0.
++ (int64_t)activeChatId;
+
 @property (nonatomic, assign) int64_t chatId;
 @property (nonatomic, copy)   NSString *chatTitle;
 @property (nonatomic, assign) BOOL isGroup;

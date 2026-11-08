@@ -3,15 +3,18 @@
 //
 // The text can run to pages, so it is a scroll view and not an alert: an
 // alert would cut it at a few lines and the acceptance would be for a
-// document nobody could read. One button, because accepting is the only way
-// past it.
+// document nobody could read. Decline and Accept sit on the bottom bar, as
+// official draws them.
 #import "TGTermsViewController.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
+#import "TGButton.h"
 
 @interface TGTermsViewController ()
 @property (nonatomic, strong) UITextView *body;
-@property (nonatomic, strong) UILabel *intro;
+@property (nonatomic, strong) UIView *bar;
+@property (nonatomic, strong) TGButton *declineButton;
+@property (nonatomic, strong) TGButton *acceptButton;
 @end
 
 @implementation TGTermsViewController
@@ -21,24 +24,20 @@
 
 	self.title = @"Terms of Service";
 
-	// Telegram puts one sentence above the document so the buttons have a
-	// reason. The body keeps its own scroll, because the text can run to
-	// pages and the acceptance is only meaningful if it can be read.
 	CGFloat width = self.view.bounds.size.width;
-	UILabel *intro = [[UILabel alloc] initWithFrame:
-			CGRectMake(TGMetricPad, TGMetricPad,
-					width - TGDoubled(TGMetricPad), TGDoubled(TGMetricLineTitle))];
-	intro.text = @"Please read and accept Telegram's Terms of Service to continue.";
-	intro.font = TGFontCaption();
-	intro.numberOfLines = 2;
-	intro.textAlignment = NSTextAlignmentCenter;
-	intro.backgroundColor = [UIColor clearColor];
-	intro.autoresizingMask = UIViewAutoresizingFlexibleWidth;
-	[self.view addSubview:intro];
+	CGFloat height = self.view.bounds.size.height;
+	CGFloat barHeight = TGMetricRow + TGMetricPadMedium;
 
-	CGFloat top = CGRectGetMaxY(intro.frame) + TGMetricPadSmall;
+	self.bar = [[UIView alloc] initWithFrame:
+			CGRectMake(0, height - barHeight, width, barHeight)];
+	self.bar.autoresizingMask = UIViewAutoresizingFlexibleWidth |
+								UIViewAutoresizingFlexibleTopMargin;
+	[self.view addSubview:self.bar];
+
+	// The body keeps its own scroll, because the text can run to pages and
+	// the acceptance is only meaningful if it can be read.
 	UITextView *body = [[UITextView alloc] initWithFrame:
-			CGRectMake(0, top, width, self.view.bounds.size.height - top)];
+			CGRectMake(0, 0, width, height - barHeight)];
 	body.autoresizingMask = UIViewAutoresizingFlexibleWidth |
 							UIViewAutoresizingFlexibleHeight;
 	body.editable = NO;
@@ -47,26 +46,35 @@
 	body.textContainerInset = UIEdgeInsetsMake(TGMetricPad, TGMetricPad,
 											   TGMetricPad, TGMetricPad);
 	self.body = body;
-	self.intro = intro;
 	[self.view addSubview:body];
 
-	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
-			initWithTitle:@"Accept"
-					style:UIBarButtonItemStyleDone
-				   target:self
-				   action:@selector(acceptTapped)];
+	CGFloat buttonWidth = TGHalf(width - TGDoubled(TGMetricGutter) - TGMetricPadSmall);
+	self.declineButton = [TGButton buttonWithTitle:@"Decline"
+										  variant:TGButtonVariantSecondary
+											 size:TGButtonSizeLarge];
+	self.declineButton.frame = CGRectMake(TGMetricGutter, TGMetricPadSmall,
+										  buttonWidth, TGMetricRow);
+	[self.declineButton addTarget:self action:@selector(declineTapped)
+				 forControlEvents:UIControlEventTouchUpInside];
+	[self.bar addSubview:self.declineButton];
+
+	self.acceptButton = [TGButton buttonWithTitle:@"Accept"
+										 variant:TGButtonVariantPrimary
+											size:TGButtonSizeLarge];
+	self.acceptButton.frame = CGRectMake(TGMetricGutter + buttonWidth + TGMetricPadSmall,
+										 TGMetricPadSmall, buttonWidth, TGMetricRow);
+	[self.acceptButton addTarget:self action:@selector(acceptTapped)
+				forControlEvents:UIControlEventTouchUpInside];
+	[self.bar addSubview:self.acceptButton];
+
 	[self applyTheme];
 	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(applyTheme) name:TGThemeChangedNotification object:nil];
-}
-
-- (void)dealloc {
-	[[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 - (void)applyTheme {
 	TGTheme *theme = [TGTheme shared];
 	self.view.backgroundColor = [theme listBackgroundColour];
-	self.intro.textColor = [theme secondaryTextColour];
+	self.bar.backgroundColor = [theme barColour];
 	self.body.backgroundColor = [theme listBackgroundColour];
 	self.body.textColor = [theme primaryTextColour];
 	[theme styleNavigationBar:self.navigationController.navigationBar];
@@ -75,6 +83,16 @@
 - (void)acceptTapped {
 	if (self.onAccept)
 		self.onAccept();
+	[self dismissSelf];
+}
+
+- (void)declineTapped {
+	if (self.onDecline)
+		self.onDecline();
+	[self dismissSelf];
+}
+
+- (void)dismissSelf {
 	if (self.navigationController.presentingViewController)
 		[self.navigationController dismissViewControllerAnimated:YES completion:nil];
 	else

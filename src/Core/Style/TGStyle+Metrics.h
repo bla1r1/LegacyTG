@@ -38,6 +38,9 @@ static const CGFloat TGMetricRow        = 44.0f;
 static const CGFloat TGMetricPersonRow  = 56.0f;
 /// Settings profile row height.
 static const CGFloat TGMetricSettingsProfileRow = 168.0f;
+/// A Telegram Business feature row: a 29 pt icon tile, the feature name and
+/// its one-line description, as the official business presentation draws it.
+static const CGFloat TGMetricBusinessRow = 60.0f;
 /// Settings theme preview row height.
 static const CGFloat TGMetricSettingsPreviewRow = 108.0f;
 /// Profile avatar photos row height.
@@ -115,6 +118,13 @@ static const CGFloat TGMetricTopicIcon           = 44.0f;
 
 static const CGFloat TGMetricMenuWidth      = 188.0f;
 static const CGFloat TGMetricMenuRow        = 44.0f;
+/// The read/reaction line at the top of a message menu: its row height and
+/// the glyph that opens the existing viewers screen.
+static const CGFloat TGMetricMenuReadHeaderHeight = 44.0f;
+static const CGFloat TGMetricMenuReadGlyphSide    = 18.0f;
+/// The forward/share sheet: its two-line title box and its destination row.
+static const CGFloat TGMetricShareTitleWidth = 160.0f;
+static const CGFloat TGMetricShareRow        = 60.0f;
 static const CGFloat TGMetricActionRow      = 50.0f;
 static const CGFloat TGMetricButtonHeight   = 48.0f;
 static const CGFloat TGMetricChatRow        = 76.0f;
@@ -142,6 +152,8 @@ static const CGFloat TGMetricPickerHeight       = 216.0f;
 static const CGFloat TGMetricJumpSide           = 40.0f;
 static const CGFloat TGMetricReplyPull          = 56.0f;
 static const CGFloat TGMetricFolderTabRow       = 40.0f;
+/// The row a search field takes above the pane it filters (Files, Music, Links).
+static const CGFloat TGMetricSearchBarHeight    = TGMetricRow;
 static const CGFloat TGMetricActionTile         = 52.0f;
 static const CGFloat TGMetricProfileAvatar      = 80.0f;
 
@@ -228,6 +240,8 @@ static const CGFloat TGMetricAlertTextGap       = TGMetricPad;
 static const CGFloat TGMetricAlertFieldTop      = TGMetricPad;
 static const CGFloat TGMetricAttachStrip        = 100.0f;
 static const CGFloat TGMetricAttachThumb        = 86.0f;
+/// The pinned-message strip's media thumbnail (ChatPinnedMessageTitlePanelNode).
+static const CGFloat TGMetricPinnedThumb        = 36.0f;
 static const CGFloat TGMetricCloseSide          = 30.0f;
 static const CGFloat TGMetricGiftAvatar         = 22.0f;
 static const CGFloat TGMetricGiftStar           = 15.0f;
@@ -247,6 +261,9 @@ static const CGFloat TGMetricCollageQuadHeight  = 104.0f;
 static const CGFloat TGMetricQuoteForwardLine   = TGMetricLineBody;
 static const CGFloat TGMetricSenderLineHeight   = TGMetricLineCaption;
 static const CGFloat TGMetricSelectionShift     = 34.0f;
+/// The selection bar's icon-only action disc, and the glyph inside it.
+static const CGFloat TGMetricSelectionActionSide     = 40.0f;
+static const CGFloat TGMetricSelectionActionGlyphSide = 20.0f;
 static const CGFloat TGMetricLoginQRSize        = 180.0f;
 /// The paper plane and the wordmark above the phone step. 56 is the size
 /// Telegram's splash logo settles at on a 320 pt screen.

@@ -7,8 +7,9 @@
 // one tap away.
 //
 #import <UIKit/UIKit.h>
+#import "TGViewController.h"
 
-@interface TGStickerGalleryViewController : UIViewController
+@interface TGStickerGalleryViewController : TGViewController
 
 /// Each sticker is a dictionary with "fileId", "emoji", and optionally
 /// "setId" and "customEmojiId".

@@ -1,18 +1,52 @@
 #import "TGForwardPicker.h"
+#import "TGLocalization.h"
 #import "TGClient.h"
 #import "TGIcons.h"
 #import "TGTheme.h"
 #import "TGUIFormat.h"
-#import <QuartzCore/QuartzCore.h>
 #import "TGStyle.h"
+#import "TGChatParityModel.h"
+
+/// The sheet's title view: "Share" over "Select Chats", as official has it.
+static const CGFloat kPickerTitleWidth  = TGMetricShareTitleWidth;
+static const CGFloat kPickerTitleHeight = TGMetricRow;
+static const CGFloat kPickerRowHeight   = TGMetricShareRow;
+static const CGFloat kPickerBadgeSide   = TGMetricMenuGlyph;
+static const CGFloat kPickerPanelHeight = TGMetricRow;
+
+@interface TGForwardCell : UITableViewCell
+@property (nonatomic, strong) UIImageView *checkBadge;
+@end
+
+@implementation TGForwardCell
+- (instancetype)initWithStyle:(UITableViewCellStyle)style reuseIdentifier:(NSString *)reuseIdentifier {
+	if ((self = [super initWithStyle:style reuseIdentifier:reuseIdentifier])){
+		_checkBadge = [[UIImageView alloc] initWithFrame:CGRectZero];
+		_checkBadge.image = [TGIcons selectionCheckboxSelected:YES];
+		_checkBadge.hidden = YES;
+		[self.contentView addSubview:_checkBadge];
+	}
+	return self;
+}
+
+- (void)layoutSubviews {
+	[super layoutSubviews];
+	CGRect avatar = self.imageView.frame;
+	self.checkBadge.frame = CGRectMake(CGRectGetMaxX(avatar) - kPickerBadgeSide,
+			CGRectGetMaxY(avatar) - kPickerBadgeSide, kPickerBadgeSide, kPickerBadgeSide);
+	[self.contentView bringSubviewToFront:self.checkBadge];
+}
+@end
 
 @interface TGForwardPicker () <UISearchBarDelegate>
 @property (nonatomic, strong) NSArray *chats;
+@property (nonatomic, strong) NSArray *recentChats;
 @property (nonatomic, strong) NSMutableDictionary *avatars;   // fileId -> UIImage
 @property (nonatomic, strong) NSMutableSet *avatarsRequested;
 @property (nonatomic, strong) NSMutableSet *selectedChatIds;
 @property (nonatomic, strong) UISearchBar *searchBar;
-@property (nonatomic, strong) UIBarButtonItem *sendItem;
+@property (nonatomic, strong) UIButton *sendButton;
+@property (nonatomic, strong) UILabel *sendCountLabel;
 @property (nonatomic, copy) NSString *query;
 @end
 
@@ -24,8 +58,8 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	self.title = @"Forward to";
 	self.chats = [TGClient shared].chats ?: @[];
+	self.recentChats = @[];
 	self.avatars = [NSMutableDictionary dictionary];
 	self.avatarsRequested = [NSMutableSet set];
 	self.selectedChatIds = [NSMutableSet set];
@@ -34,18 +68,24 @@
 	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
 		self.edgesForExtendedLayout = UIRectEdgeNone;
 
-	self.tableView.rowHeight = TGMetricPersonRow;
+	self.tableView.rowHeight = kPickerRowHeight;
 	self.tableView.backgroundColor = [[TGTheme shared] listBackgroundColour];
 	self.tableView.separatorColor = [[TGTheme shared] separatorColour];
 	[[TGTheme shared] styleNavigationBar:self.navigationController.navigationBar];
 
-	self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc]
-			initWithBarButtonSystemItem:UIBarButtonSystemItemCancel
-								 target:self action:@selector(cancel)];
-	self.sendItem = [[UIBarButtonItem alloc] initWithTitle:@"Send"
-			style:UIBarButtonItemStyleDone target:self action:@selector(send)];
-	self.navigationItem.rightBarButtonItem = self.sendItem;
-	[self updateSendItem];
+	// The sheet's bar: X on the left, a two-line Share / Select Chats title,
+	// no right item. The count lives on the Send button at the bottom.
+	UIButton *close = [UIButton buttonWithType:UIButtonTypeCustom];
+	close.frame = CGRectMake(0, 0, TGMetricRow, TGMetricRow);
+	[close setImage:[TGIcons glyphNamed:@"close"
+								 colour:[[TGTheme shared] barButtonColour]
+								   side:TGMetricMenuGlyph]
+		   forState:UIControlStateNormal];
+	[close addTarget:self action:@selector(cancel) forControlEvents:UIControlEventTouchUpInside];
+	self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc] initWithCustomView:close];
+	self.navigationItem.rightBarButtonItem = nil;
+
+	[self buildTitleView];
 
 	self.searchBar = [[UISearchBar alloc] initWithFrame:
 			CGRectMake(0, 0, self.tableView.bounds.size.width, TGMetricRow)];
@@ -54,6 +94,8 @@
 	self.searchBar.autoresizingMask = UIViewAutoresizingFlexibleWidth;
 	[[TGTheme shared] styleSearchBar:self.searchBar];
 	self.tableView.tableHeaderView = self.searchBar;
+
+	[self buildSendPanel];
 
 	__weak typeof(self) weakSelf = self;
 	[[NSNotificationCenter defaultCenter] addObserverForName:TGThemeChangedNotification
@@ -70,6 +112,85 @@
 	}];
 
 	[self fetchMissingAvatars];
+	[self updateSendItem];
+
+	[[TGClient shared] topChatsWithCompletion:^(NSArray *chats){
+		TGForwardPicker *me = weakSelf;
+		if (!me)
+			return;
+		me.recentChats = chats ?: @[];
+		[me fetchMissingAvatars];
+		[me.tableView reloadData];
+		[me updateEmptyState];
+	}];
+}
+
+- (void)buildTitleView {
+	UIView *box = [[UIView alloc] initWithFrame:CGRectMake(0, 0, kPickerTitleWidth,
+			kPickerTitleHeight)];
+	UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(0, TGMetricBorderWidth,
+			kPickerTitleWidth, TGMetricLineRow)];
+	title.text = @"Share";
+	title.font = TGFontHeader();
+	title.textColor = [[TGTheme shared] barTitleColour];
+	title.textAlignment = NSTextAlignmentCenter;
+	title.backgroundColor = [UIColor clearColor];
+	title.shadowColor = [[TGTheme shared] navBarTextShadowColour];
+	title.shadowOffset = TGMetricShadowOffsetNav;
+	[box addSubview:title];
+
+	UILabel *subtitle = [[UILabel alloc] initWithFrame:CGRectMake(0,
+			TGMetricBorderWidth + TGMetricLineRow, kPickerTitleWidth, TGMetricLineMicro)];
+	subtitle.text = @"Select Chats";
+	subtitle.font = TGFontMeta();
+	subtitle.textColor = [[TGTheme shared] barSubtitleColour];
+	subtitle.textAlignment = NSTextAlignmentCenter;
+	subtitle.backgroundColor = [UIColor clearColor];
+	[box addSubview:subtitle];
+	self.navigationItem.titleView = box;
+}
+
+- (void)buildSendPanel {
+	UIView *panel = [[UIView alloc] initWithFrame:CGRectMake(0,
+			self.view.bounds.size.height - kPickerPanelHeight,
+			self.view.bounds.size.width, kPickerPanelHeight)];
+	panel.tag = 0x71A1;
+	panel.backgroundColor = [[TGTheme shared] inputBarColour];
+	panel.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleTopMargin;
+
+	UIView *hair = [[UIView alloc] initWithFrame:CGRectMake(0, 0,
+			panel.bounds.size.width, TGMetricHairline)];
+	hair.backgroundColor = [[TGTheme shared] separatorColour];
+	hair.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+	[panel addSubview:hair];
+
+	self.sendButton = [UIButton buttonWithType:UIButtonTypeCustom];
+	self.sendButton.frame = CGRectMake(TGMetricPadLarge, TGMetricPadSmall,
+			panel.bounds.size.width - TGDoubled(TGMetricPadLarge),
+			kPickerPanelHeight - TGDoubled(TGMetricPadSmall));
+	self.sendButton.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+	self.sendButton.titleLabel.font = TGFontBodyStrong();
+	[self.sendButton setTitle:TGLocalized(@"Send") forState:UIControlStateNormal];
+	[self.sendButton setTitleColor:[[TGTheme shared] onAccentColour] forState:UIControlStateNormal];
+	self.sendButton.backgroundColor = [[TGTheme shared] accentColour];
+	self.sendButton.layer.cornerRadius = TGMetricCornerControl;
+	[self.sendButton addTarget:self action:@selector(send) forControlEvents:UIControlEventTouchUpInside];
+	[panel addSubview:self.sendButton];
+
+	self.sendCountLabel = [[UILabel alloc] initWithFrame:CGRectMake(CGRectGetMaxX(self.sendButton.frame) - TGMetricRow,
+			CGRectGetMinY(self.sendButton.frame), TGMetricPadLarge, self.sendButton.bounds.size.height)];
+	self.sendCountLabel.font = TGFontCaptionStrong();
+	self.sendCountLabel.textColor = [[TGTheme shared] onAccentColour];
+	self.sendCountLabel.textAlignment = NSTextAlignmentCenter;
+	self.sendCountLabel.backgroundColor = [UIColor clearColor];
+	self.sendCountLabel.hidden = YES;
+	[panel addSubview:self.sendCountLabel];
+
+	[self.view addSubview:panel];
+	UIEdgeInsets insets = self.tableView.contentInset;
+	insets.bottom = kPickerPanelHeight;
+	self.tableView.contentInset = insets;
+	self.tableView.scrollIndicatorInsets = insets;
 }
 
 - (void)dealloc {
@@ -88,8 +209,17 @@
 #pragma mark - what the table shows
 
 - (NSArray *)matchingChats {
+	// With no query the sheet shows the people this account talks to most,
+	// which is official's recent list; typing searches the whole chat list.
+	NSArray *base = self.query.length
+			? self.chats
+			: (self.recentChats.count ? self.recentChats : self.chats);
+	int64_t saved = [[TGClient shared] savedMessagesChatId];
 	NSMutableArray *matches = [NSMutableArray array];
-	for (NSDictionary *chat in self.chats) {
+	for (NSDictionary *chat in base) {
+		int64_t chatId = [chat[@"id"] longLongValue];
+		if (chatId == self.sourceChatId || chatId == saved)
+			continue;
 		NSString *title = chat[@"title"] ?: @"";
 		NSString *username = chat[@"username"] ?: @"";
 		if (TGUIFormatChatMatches(title, self.query) ||
@@ -99,64 +229,39 @@
 	return matches;
 }
 
-- (NSArray *)recentChats {
-	NSArray *matches = [self matchingChats];
-	if (self.query.length)
-		return @[];
-	NSUInteger count = MIN((NSUInteger)5, matches.count);
-	return [matches subarrayWithRange:NSMakeRange(0, count)];
-}
-
-- (NSArray *)otherChats {
-	NSArray *matches = [self matchingChats];
-	if (self.query.length)
-		return matches;
-	NSArray *recent = [self recentChats];
-	if (recent.count >= matches.count)
-		return @[];
-	return [matches subarrayWithRange:NSMakeRange(recent.count,
-			matches.count - recent.count)];
-}
-
-- (NSArray *)chatsInSection:(NSInteger)section {
-	if (self.query.length)
-		return [self matchingChats];
-	return section == 0 ? [self recentChats] : [self otherChats];
-}
-
-- (NSDictionary *)chatAtIndexPath:(NSIndexPath *)indexPath {
-	NSArray *rows = [self chatsInSection:indexPath.section];
-	if (indexPath.row >= (NSInteger)rows.count)
-		return nil;
-	return rows[(NSUInteger)indexPath.row];
-}
-
 - (void)updateSendItem {
 	NSUInteger count = self.selectedChatIds.count;
-	self.sendItem.title = count > 0
-			? [NSString stringWithFormat:@"Send (%lu)", (unsigned long)count]
-			: @"Send";
-	self.sendItem.enabled = count > 0;
+	self.sendButton.enabled = count > 0;
+	self.sendButton.alpha = count > 0 ? TGAlphaOpaque : TGAlphaDisabled;
+	self.sendCountLabel.text = count > 0 ? [NSString stringWithFormat:@"%lu",
+			(unsigned long)count] : @"";
+	self.sendCountLabel.hidden = count == 0;
+	[self updateEmptyState];
+}
+
+- (void)updateEmptyState {
+	BOOL empty = [self matchingChats].count == 0;
+	if (!empty){
+		if (self.tableView.backgroundView)
+			self.tableView.backgroundView = nil;
+		return;
+	}
+	UILabel *label = [[UILabel alloc] initWithFrame:CGRectZero];
+	label.font = TGFontBody();
+	label.textColor = [[TGTheme shared] secondaryTextColour];
+	label.textAlignment = NSTextAlignmentCenter;
+	label.text = TGLocalized(@"No Results");
+	self.tableView.backgroundView = label;
 }
 
 - (NSArray *)selectedChatIdsInOrder {
-	NSMutableArray *ids = [NSMutableArray array];
-	NSArray *all = [self matchingChats];
-	for (NSDictionary *chat in all) {
-		NSNumber *chatId = chat[@"id"];
-		if ([chatId isKindOfClass:NSNumber.class] &&
-				[self.selectedChatIds containsObject:chatId])
-			[ids addObject:chatId];
-	}
-	return ids;
+	return TGSelectedChatIdsInOrder(self.chats, self.selectedChatIds);
 }
 
 - (void)send {
 	NSArray *ids = [self selectedChatIdsInOrder];
 	if (!ids.count)
 		return;
-	// One pick per chat keeps every existing caller working: each one already
-	// knows how to forward one message set into one chat.
 	if (self.onPicked)
 		for (NSNumber *chatId in ids)
 			self.onPicked(chatId.longLongValue);
@@ -170,6 +275,7 @@
 
 - (void)fetchMissingAvatars {
 	__weak typeof(self) weakSelf = self;
+	CGFloat side = TGMetricListAvatar;
 	for (NSDictionary *c in self.chats){
 		NSNumber *fileId = c[@"photoFileId"];
 		if (![fileId isKindOfClass:NSNumber.class] || self.avatars[fileId] || [self.avatarsRequested containsObject:fileId])
@@ -181,16 +287,16 @@
 			dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_BACKGROUND, 0), ^{
 				UIImage *photo = [UIImage imageWithContentsOfFile:path];
 				if (!photo) return;
-
-				UIGraphicsBeginImageContextWithOptions(CGSizeMake(TGMetricListAvatar, TGMetricListAvatar), NO, 0);
-				[photo drawInRect:CGRectMake(0, 0, TGMetricListAvatar, TGMetricListAvatar)];
-				UIImage *scaled = UIGraphicsGetImageFromCurrentImageContext();
-				UIGraphicsEndImageContext();
-
+				// Bake the circle into the bitmap: a corner radius on a
+				// recycled scrolling layer is the mask the design rules ban.
+				UIImage *rounded = [TGIcons roundedImage:photo
+													size:CGSizeMake(side, side)
+											  radius:TGHalf(side)
+											 corners:UIRectCornerAllCorners];
 				dispatch_async(dispatch_get_main_queue(), ^{
 					TGForwardPicker *me = weakSelf;
-					if (!me) return;
-					me.avatars[fileId] = scaled;
+					if (!me || !rounded) return;
+					me.avatars[fileId] = rounded;
 					[me reloadTableDebounced];
 				});
 			});
@@ -203,6 +309,7 @@
 - (void)searchBar:(UISearchBar *)searchBar textDidChange:(NSString *)searchText {
 	self.query = [searchText stringByTrimmingCharactersInSet:
 			[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+	[self updateEmptyState];
 	[self.tableView reloadData];
 }
 
@@ -213,30 +320,24 @@
 #pragma mark - table
 
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-	if (self.query.length)
-		return 1;
-	// "All Chats" is only a second heading when there is something below it.
-	return [self otherChats].count ? 2 : 1;
+	return 1;
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-	NSArray *rows = [self chatsInSection:section];
-	if (rows.count)
-		return (NSInteger)rows.count;
-	// One sentence in place of an empty list; a second, empty group (all
-	// chats already shown under Recent) gets no row at all.
-	if (self.query.length || section == 0)
-		return 1;
-	return 0;
+	return (NSInteger)[self matchingChats].count;
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-	if (self.query.length)
-		return @"Results";
-	return section == 0 ? @"Recent Chats" : @"All Chats";
+	// One "Recent chats" heading; the flat list below has no second heading
+	// and a live query - or an empty result - has none at all.
+	if (self.query.length || [self matchingChats].count == 0)
+		return nil;
+	return TGLocalized(@"Recent chats");
 }
 
 - (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section {
+	if (self.query.length || [self matchingChats].count == 0)
+		return TGMetricZero;
 	return TGMetricRow - TGMetricPadLarge;
 }
 
@@ -251,29 +352,22 @@
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
 	static NSString *reuse = @"TGForwardCell";
-	UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:reuse];
+	TGForwardCell *cell = [tableView dequeueReusableCellWithIdentifier:reuse];
 	if (!cell)
-		cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle
+		cell = [[TGForwardCell alloc] initWithStyle:UITableViewCellStyleSubtitle
 									  reuseIdentifier:reuse];
 
-	NSDictionary *c = [self chatAtIndexPath:indexPath];
+	NSArray *rows = [self matchingChats];
+	NSDictionary *c = indexPath.row < (NSInteger)rows.count ? rows[(NSUInteger)indexPath.row] : nil;
 	UIColor *bg = [[TGTheme shared] listBackgroundColour];
 	cell.backgroundColor = bg;
 	cell.contentView.backgroundColor = bg;
 	cell.accessoryType = UITableViewCellAccessoryNone;
 	cell.imageView.image = nil;
+	cell.checkBadge.hidden = YES;
 
-	if (!c) {
-		cell.textLabel.text = self.query.length
-				? @"No chats match that search."
-				: @"No chats yet.";
-		cell.textLabel.font = TGFontBody();
-		cell.textLabel.textColor = [[TGTheme shared] secondaryTextColour];
-		cell.textLabel.backgroundColor = bg;
-		cell.detailTextLabel.text = nil;
-		cell.selectionStyle = UITableViewCellSelectionStyleNone;
+	if (!c)
 		return cell;
-	}
 
 	NSString *title = c[@"title"] ?: @"";
 	cell.textLabel.text = title;
@@ -301,26 +395,22 @@
 	}
 
 	cell.imageView.image = photo;
-	cell.imageView.layer.cornerRadius = TGHalf(TGMetricListAvatar);
-	cell.imageView.clipsToBounds = YES;
-	cell.imageView.layer.shouldRasterize = YES;
-	cell.imageView.layer.rasterizationScale = [UIScreen mainScreen].scale;
-	cell.imageView.layer.borderColor = [[TGTheme shared] separatorColour].CGColor;
-	cell.imageView.layer.borderWidth = 1.0f;
 	cell.imageView.contentMode = UIViewContentModeScaleAspectFill;
 
 	NSNumber *chatId = c[@"id"];
 	BOOL selected = [chatId isKindOfClass:NSNumber.class] &&
 			[self.selectedChatIds containsObject:chatId];
-	cell.accessoryType = selected ? UITableViewCellAccessoryCheckmark
-								  : UITableViewCellAccessoryNone;
+	cell.checkBadge.hidden = !selected;
 	cell.selectionStyle = UITableViewCellSelectionStyleBlue;
 	return cell;
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
 	[tableView deselectRowAtIndexPath:indexPath animated:YES];
-	NSDictionary *c = [self chatAtIndexPath:indexPath];
+	NSArray *rows = [self matchingChats];
+	if (indexPath.row >= (NSInteger)rows.count)
+		return;
+	NSDictionary *c = rows[(NSUInteger)indexPath.row];
 	NSNumber *chatId = c[@"id"];
 	if (![chatId isKindOfClass:NSNumber.class])
 		return;

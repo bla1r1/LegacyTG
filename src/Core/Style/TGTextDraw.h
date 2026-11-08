@@ -31,6 +31,10 @@ void TGDrawText(NSString *text, CGRect rect, UIFont *font, UIColor *colour,
 
 /// Loads the message fonts off the main thread once the app is up. Call on
 /// the main thread with the body size.
+/// Loads the emoji font on a background thread, right at launch. The chat
+/// list's first preview with an emoji otherwise paid for it on the main
+/// thread: 1.9 s of CGFreetype inside -[UILabel sizeThatFits:] on the 4S.
+void TGWarmEmojiFont(CGFloat bodySize);
 void TGWarmFonts(CGFloat bodySize);
 
 #ifdef __cplusplus

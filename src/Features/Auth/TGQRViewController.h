@@ -2,6 +2,7 @@
 // TGQRViewController - QR code scanner using AVCaptureMetadataOutput.
 //
 #import <UIKit/UIKit.h>
+#import "TGViewController.h"
 
-@interface TGQRViewController : UIViewController
+@interface TGQRViewController : TGViewController
 @end

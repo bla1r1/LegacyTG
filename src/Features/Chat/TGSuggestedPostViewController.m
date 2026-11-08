@@ -24,7 +24,7 @@
 }
 
 - (void)viewDidLoad {
-	self.title = @"Suggested Post";
+	self.title = @"Suggest Post";
 	[super viewDidLoad];
 	[self loadPost];
 }
@@ -42,7 +42,7 @@
 		if (!me)
 			return;
 		me.post = post;
-		me.loadError = post ? nil : (error ?: @"That message is not a suggested post.");
+		me.loadError = post ? nil : (error ?: @"An error occurred.");
 		[me rebuild];
 	}];
 }
@@ -58,13 +58,13 @@
 		NSString *dateText = [sendDate longLongValue] > 0
 				? [formatter stringFromDate:[NSDate dateWithTimeIntervalSince1970:
 						[sendDate doubleValue]]]
-				: @"Not set";
+				: @"None";
 		[detailRows addObject:TGFeatureRow(@"Price", self.post[@"price"], nil)];
-		[detailRows addObject:TGFeatureRow(@"Send Date", dateText, nil)];
-		[detailRows addObject:TGFeatureRow(@"State", self.post[@"state"], nil)];
-		[detailRows addObject:TGFeatureRow(@"Can Approve",
+		[detailRows addObject:TGFeatureRow(@"Date", dateText, nil)];
+		[detailRows addObject:TGFeatureRow(@"Status", self.post[@"state"], nil)];
+		[detailRows addObject:TGFeatureRow(@"Approve",
 				[self.post[@"canBeApproved"] boolValue] ? @"Yes" : @"No", nil)];
-		[detailRows addObject:TGFeatureRow(@"Can Decline",
+		[detailRows addObject:TGFeatureRow(@"Decline",
 				[self.post[@"canBeDeclined"] boolValue] ? @"Yes" : @"No", nil)];
 	} else {
 		NSMutableDictionary *row = TGFeatureRow(self.loadError ?: @"Loading...", nil, nil);
@@ -73,15 +73,12 @@
 	}
 
 	NSMutableArray *actions = [NSMutableArray array];
-	[actions addObject:TGFeatureAction(@"Approve Post", ^{ [weakSelf approve]; })];
-	[actions addObject:TGFeatureAction(@"Decline Post", ^{ [weakSelf decline]; })];
+	[actions addObject:TGFeatureAction(@"Approve", ^{ [weakSelf approve]; })];
+	[actions addObject:TGFeatureAction(@"Decline", ^{ [weakSelf decline]; })];
 	[actions addObject:TGFeatureAction(@"Reload", ^{ [weakSelf loadPost]; })];
 
 	self.sections = @[
-		TGFeatureSection(nil,
-				@"A suggested post is published only after the channel "
-				@"administrator approves it. Telegram names the answer.",
-				detailRows),
+		TGFeatureSection(nil, nil, detailRows),
 		TGFeatureSection(nil, nil, actions),
 	];
 	[self reloadRows];
@@ -89,15 +86,15 @@
 
 - (void)approve {
 	if (![self.post[@"canBeApproved"] boolValue]){
-		[self toast:@"Telegram does not let this account approve the post."];
+		[self toast:@"An error occurred."];
 		return;
 	}
 	NSInteger sendDate = [self.post[@"sendDate"] integerValue];
 	if (sendDate <= 0)
 		sendDate = (NSInteger)[[NSDate date] timeIntervalSince1970];
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:@"The post is approved and queued for its send date."
-						 title:@"Approve Post"
+	[TGAlertSheet showConfirm:nil
+						 title:@"Approve"
 						action:@"Approve"
 				   destructive:NO
 						inView:self.view
@@ -107,7 +104,7 @@
 									   sendDate:sendDate
 									 completion:^(BOOL ok, NSString *error){
 			if (!ok){
-				[weakSelf toast:error ?: @"Telegram refused that."];
+				[weakSelf toast:error ?: @"An error occurred."];
 				return;
 			}
 			[weakSelf loadPost];
@@ -117,12 +114,12 @@
 
 - (void)decline {
 	if (![self.post[@"canBeDeclined"] boolValue]){
-		[self toast:@"Telegram does not let this account decline the post."];
+		[self toast:@"An error occurred."];
 		return;
 	}
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:@[@"Decline without a comment", @"Write a comment"]
-						title:@"Decline Post"
+	[TGAlertSheet showChoices:@[@"Decline", @"Write a comment..."]
+						title:@"Decline"
 			 destructiveIndex:0
 					   inView:self.view
 					 onChoice:^(NSInteger index){
@@ -130,8 +127,8 @@
 			[weakSelf sendDecline:@""];
 			return;
 		}
-		[TGAlertSheet showInput:@"Decline Post"
-						message:@"The comment goes to the sender."
+		[TGAlertSheet showInput:@"Decline"
+						message:nil
 					placeholder:@"Comment"
 						   text:nil
 						 action:@"Decline"
@@ -149,7 +146,7 @@
 									comment:comment
 								 completion:^(BOOL ok, NSString *error){
 		if (!ok){
-			[weakSelf toast:error ?: @"Telegram refused that."];
+			[weakSelf toast:error ?: @"An error occurred."];
 			return;
 		}
 		[weakSelf loadPost];

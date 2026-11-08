@@ -1,4 +1,5 @@
 #import "TGPerf.h"
+#import "TGLocalization.h"
 #import "TGChatViewControllerInternal.h"
 #import "TGNameWithStatus.h"
 #import <QuartzCore/QuartzCore.h>
@@ -136,7 +137,7 @@ static char kTGReactionChipInfoKey;
 		cell.quoteAuthor.hidden = NO;
 		cell.quoteAuthor.font = TGFontCaptionStrong();
 		cell.quoteAuthor.textColor = [theme accentColour];
-		NSString *qAuthor = layout.quoteAuthor ?: @"Reply";
+		NSString *qAuthor = layout.quoteAuthor ?: TGLocalized(@"Reply");
 		int64_t authorStatusId = [self quoteAuthorStatusIdFor:m];
 		cell.quoteAuthor.attributedText = TGNameWithStatus(qAuthor, authorStatusId, cell.quoteAuthor.font, [theme accentColour]);
 		cell.quoteAuthor.frame = layout.quoteAuthorFrame;
@@ -231,18 +232,43 @@ static char kTGReactionChipInfoKey;
 			comments.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeft;
 			[comments addTarget:self action:@selector(commentsTapped:)
 			   forControlEvents:UIControlEventTouchUpInside];
+			// The arrow sits at the bubble's right edge, apart from the
+			// count (ChatMessageCommentFooterContentNode).
+			UILabel *arrow = [[UILabel alloc] init];
+			arrow.tag = 0x9005;
+			arrow.text = @"\u203A";
+			arrow.font = TGFontCaptionStrong();
+			arrow.textAlignment = NSTextAlignmentRight;
+			arrow.backgroundColor = [UIColor clearColor];
+			arrow.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin |
+					UIViewAutoresizingFlexibleHeight;
+			[comments addSubview:arrow];
 			[cell.bubble addSubview:comments];
 		}
 		NSInteger count = [m[@"replyCount"] integerValue];
-		NSString *label = count == 0 ? @"Leave a comment"
-				: count == 1 ? @"1 Comment"
-				: [NSString stringWithFormat:@"%ld Comments", (long)count];
+		NSString *label = nil;
+		if (count <= 0)
+			label = TGLocalized(@"Leave a Comment");
+		else {
+			label = TGLocalizedFormat(@"[%@]Comments", @(count));
+			label = [label stringByReplacingOccurrencesOfString:@"[" withString:@""];
+			label = [label stringByReplacingOccurrencesOfString:@"]" withString:@""];
+		}
 		comments.hidden = NO;
 		[comments setTitle:label forState:UIControlStateNormal];
+		[comments setImage:[TGIcons glyphNamed:@"chat"
+									   colour:[theme accentColour]
+										 side:TGMetricLineCaption]
+				  forState:UIControlStateNormal];
+		comments.titleEdgeInsets = UIEdgeInsetsMake(0, TGMetricPadSmall, 0, 0);
 		[comments setTitleColor:[theme accentColour] forState:UIControlStateNormal];
 		CGFloat below = layout.bodyFrame.origin.y + layout.bodySize.height + TGMetricPadTiny;
 		comments.frame = CGRectMake(kPadH, below,
 				layout.bubbleFrame.size.width - TGDoubled(kPadH), TGMetricLineCaption);
+		UILabel *arrow = (UILabel *)[comments viewWithTag:0x9005];
+		arrow.textColor = [theme accentColour];
+		arrow.frame = CGRectMake(comments.bounds.size.width - TGMetricLineCaption, 0,
+				TGMetricLineCaption, comments.bounds.size.height);
 	} else {
 		comments.hidden = YES;
 	}

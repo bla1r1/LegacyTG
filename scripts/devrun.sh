@@ -50,6 +50,8 @@ while [ $# -gt 0 ]; do
 		--udid)     DEV_UDID="$2"; shift 2 ;;
 		--check)    CHECK_ONLY=1; shift ;;
 		--shot)     SHOT_ONLY=1; shift ;;
+		--screenoff) "$ROOT/scripts/screen.sh" off; exit $? ;;
+		--screenon)  "$ROOT/scripts/screen.sh" on;  exit $? ;;
 		--video)    VIDEO_DURATION="${2:-5}"; shift 2 ;;
 		*) echo "unknown option: $1"; exit 2 ;;
 	esac

@@ -1,5 +1,6 @@
 #import "TGClientInternal.h"
 #import "TGStatusText.h"
+#import "TGLocalization.h"
 #import "TGGiftFlatten.h"
 #import "TGClient+AccountRest.h"
 #import "TGClient+AccountSupport.h"
@@ -36,6 +37,19 @@ static NSArray *TGPacksFrom(NSDictionary *target) {
 
 
 
+
+/// The row title for a blocked user or chat answer; a deleted account has
+/// no name at all and says so, as official does.
+NSString *TGBlockedSenderName(NSDictionary *answer) {
+	if ([answer[@"@type"] isEqualToString:@"chat"])
+		return [answer[@"title"] length] ? answer[@"title"] : TGLocalized(@"Deleted Account");
+	NSString *name = [[NSString stringWithFormat:@"%@ %@",
+			answer[@"first_name"] ?: @"", answer[@"last_name"] ?: @""]
+			stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+	if (!name.length && [answer[@"usernames"][@"active_usernames"] count])
+		name = answer[@"usernames"][@"active_usernames"][0];
+	return name.length ? name : TGLocalized(@"Deleted Account");
+}
 
 @implementation TGClient (AccountRest)
 
@@ -138,22 +152,42 @@ static NSArray *TGPacksFrom(NSDictionary *target) {
 		else if ([first isEqualToString:@"userPrivacySettingRuleAllowContacts"])
 			value = @"contacts";
 
-		NSInteger allowUsersCount = 0;
-		NSInteger restrictUsersCount = 0;
+		NSInteger allowCount = 0;
+		NSInteger restrictCount = 0;
 		for (NSDictionary *r in rules[@"rules"]) {
+			if (![r isKindOfClass:NSDictionary.class])
+				continue;
 			NSString *type = r[@"@type"];
-			if ([type isEqualToString:@"userPrivacySettingRuleAllowUsers"]) {
-				allowUsersCount += [r[@"user_ids"] count];
-			} else if ([type isEqualToString:@"userPrivacySettingRuleRestrictUsers"]) {
-				restrictUsersCount += [r[@"user_ids"] count];
+			if (!type.length)
+				continue;
+			// The catch-all is the setting itself, not an exception.
+			if ([type isEqualToString:@"userPrivacySettingRuleAllowAll"] ||
+					[type isEqualToString:@"userPrivacySettingRuleAllowContacts"] ||
+					[type isEqualToString:@"userPrivacySettingRuleRestrictAll"] ||
+					[type isEqualToString:@"userPrivacySettingRuleRestrictContacts"])
+				continue;
+			BOOL allow = [type hasPrefix:@"userPrivacySettingRuleAllow"];
+			NSInteger amount = 1;
+			if ([type rangeOfString:@"Premium"].location != NSNotFound ||
+					[type rangeOfString:@"Bots"].location != NSNotFound ||
+					[type rangeOfString:@"CloseFriends"].location != NSNotFound){
+				amount = 1;
+			} else if ([type rangeOfString:@"Chat"].location != NSNotFound){
+				amount = (NSInteger)[r[@"chat_ids"] count];
+			} else if ([type hasSuffix:@"Users"]){
+				amount = (NSInteger)[r[@"user_ids"] count];
 			}
+			if (allow)
+				allowCount += amount;
+			else
+				restrictCount += amount;
 		}
-		if (allowUsersCount > 0 && [value isEqualToString:@"nobody"]) {
-			value = [NSString stringWithFormat:@"nobody (+%ld)", (long)allowUsersCount];
-		} else if (restrictUsersCount > 0) {
-			value = [NSString stringWithFormat:@"%@ (-%ld)", value, (long)restrictUsersCount];
-		} else if (allowUsersCount > 0 && [value isEqualToString:@"contacts"]) {
-			value = [NSString stringWithFormat:@"contacts (+%ld)", (long)allowUsersCount];
+		if (allowCount > 0 && [value isEqualToString:@"nobody"]) {
+			value = [NSString stringWithFormat:@"nobody (+%ld)", (long)allowCount];
+		} else if (restrictCount > 0) {
+			value = [NSString stringWithFormat:@"%@ (-%ld)", value, (long)restrictCount];
+		} else if (allowCount > 0 && [value isEqualToString:@"contacts"]) {
+			value = [NSString stringWithFormat:@"contacts (+%ld)", (long)allowCount];
 		}
 
 		if (completion) completion(value);
@@ -161,17 +195,64 @@ static NSArray *TGPacksFrom(NSDictionary *target) {
 }
 
 - (void)setPrivacyRule:(NSString *)setting to:(NSString *)value {
+	// The same read-then-write as the Settings screen: a bare catch-all
+	// would replace the list and drop every exception.
+	[self setPrivacyRule:setting to:value completion:nil];
+}
+
+- (void)setPrivacyRule:(NSString *)setting to:(NSString *)value
+			completion:(void (^)(BOOL, NSString *))completion {
 	NSString *rule = @"userPrivacySettingRuleRestrictAll";
 	if ([value isEqualToString:@"everybody"])
 		rule = @"userPrivacySettingRuleAllowAll";
 	else if ([value isEqualToString:@"contacts"])
 		rule = @"userPrivacySettingRuleAllowContacts";
 
-	[self send:@{
-		@"@type"   : @"setUserPrivacySettingRules",
+	void (^write)(NSArray *) = ^(NSArray *exceptions){
+		NSMutableArray *rules = [exceptions mutableCopy] ?: [NSMutableArray array];
+		[rules addObject:@{@"@type" : rule}];
+		[self request:@{
+			@"@type"   : @"setUserPrivacySettingRules",
+			@"setting" : @{@"@type" : [@"userPrivacySetting" stringByAppendingString:setting]},
+			@"rules"   : @{@"@type" : @"userPrivacySettingRules",
+						   @"rules" : rules},
+		} completion:^(NSDictionary *result){
+			BOOL ok = ![result[@"@type"] isEqualToString:@"error"];
+			NSString *error = ok ? nil : (result[@"message"] ?: @"An error occurred.");
+			if (completion)
+				completion(ok, error);
+		}];
+	};
+
+	// Read the existing exceptions first: setUserPrivacySettingRules replaces
+	// the whole list, so writing the catch-all alone deleted every allow /
+	// restrict user exception the account had.
+	[self request:@{
+		@"@type"   : @"getUserPrivacySettingRules",
 		@"setting" : @{@"@type" : [@"userPrivacySetting" stringByAppendingString:setting]},
-		@"rules"   : @{@"@type" : @"userPrivacySettingRules",
-					   @"rules" : @[@{@"@type" : rule}]},
+	} completion:^(NSDictionary *result){
+		// Without the current list there is nothing safe to write.
+		if (![result[@"@type"] isEqualToString:@"userPrivacySettingRules"]){
+			if (completion)
+				completion(NO, result[@"message"] ?: @"An error occurred.");
+			return;
+		}
+		// Every exception kind stays (users, chat members, contacts, close
+		// friends, bots, Premium); only the catch-all is replaced.
+		static NSSet *catchAll = nil;
+		static dispatch_once_t once;
+		dispatch_once(&once, ^{
+			catchAll = [NSSet setWithObjects:@"userPrivacySettingRuleAllowAll",
+					@"userPrivacySettingRuleAllowContacts",
+					@"userPrivacySettingRuleRestrictAll", nil];
+		});
+		NSMutableArray *exceptions = [NSMutableArray array];
+		for (NSDictionary *entry in result[@"rules"]){
+			if ([entry isKindOfClass:NSDictionary.class] &&
+					![catchAll containsObject:entry[@"@type"]])
+				[exceptions addObject:entry];
+		}
+		write(exceptions);
 	}];
 }
 
@@ -183,19 +264,49 @@ static NSArray *TGPacksFrom(NSDictionary *target) {
 		@"offset"      : @(0),
 		@"limit"       : @(100),
 	} completion:^(NSDictionary *result){
+		TGClient *me = weakSelf;
 		NSMutableArray *out = [NSMutableArray array];
+		NSMutableArray *missing = [NSMutableArray array];
 		for (NSDictionary *sender in result[@"senders"]){
 			// A blocked MessageSender is either a user or a chat/channel;
 			// keeping only user_id dropped every blocked channel.
-			NSNumber *userId = sender[@"user_id"] ?: sender[@"chat_id"];
-			if (!userId)
+			NSNumber *userId = sender[@"user_id"];
+			NSNumber *chatId = sender[@"chat_id"];
+			NSNumber *senderId = userId ?: chatId;
+			if (!senderId)
 				continue;
-			[out addObject:@{
-				@"id"   : userId,
-				@"name" : [weakSelf nameForUserId:userId.longLongValue] ?: @"",
+			NSString *name = userId ? [me nameForUserId:userId.longLongValue]
+					: me.chatsById[chatId][@"title"];
+			NSMutableDictionary *row = [@{@"id" : senderId,
+					@"name" : name ?: @""} mutableCopy];
+			[out addObject:row];
+			if (!name.length)
+				[missing addObject:row];
+		}
+		// Users this session has not seen came back as blank rows; ask for
+		// each before answering, so the list never shows an empty line.
+		__block NSInteger pending = (NSInteger)missing.count;
+		void (^finish)(void) = ^{
+			if (--pending <= 0 && completion)
+				completion(out);
+		};
+		if (!missing.count){
+			pending = 1;
+			finish();
+			return;
+		}
+		for (NSMutableDictionary *row in missing){
+			int64_t senderId = [row[@"id"] longLongValue];
+			NSDictionary *ask = senderId < 0
+					? @{@"@type" : @"getChat", @"chat_id" : @(senderId)}
+					: @{@"@type" : @"getUser", @"user_id" : @(senderId)};
+			[me request:ask completion:^(NSDictionary *answer){
+				row[@"name"] = TGBlockedSenderName(answer);
+				if ([answer[@"@type"] isEqualToString:@"user"])
+					[weakSelf cacheProfilePhoto:answer];
+				finish();
 			}];
 		}
-		if (completion) completion(out);
 	}];
 }
 

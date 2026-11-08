@@ -1,4 +1,5 @@
 #import "TGDMTopicsViewController.h"
+#import "TGLocalization.h"
 #import "TGAlertSheet.h"
 #import "TGClient.h"
 #import "TGDMTopicViewController.h"
@@ -18,10 +19,8 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
-		self.edgesForExtendedLayout = UIRectEdgeNone;
 	self.title = self.chatTitle.length
-			? [NSString stringWithFormat:@"%@ · Direct", self.chatTitle]
+			? [NSString stringWithFormat:@"%@ · %@", self.chatTitle, TGLocalized(@"Direct")]
 			: @"Direct Messages";
 	self.topics = [[TGClient shared] directMessagesChatTopicsForChat:self.chatId]
 			?: @[];
@@ -47,10 +46,6 @@
 		}];
 	}
 	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(applyTheme) name:TGThemeChangedNotification object:nil];
-}
-
-- (void)dealloc {
-	[[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 - (void)applyTheme {
@@ -114,13 +109,8 @@
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
 	if (self.topics.count)
-		return @"One topic per person writing to the channel. Only a channel "
-			   @"that turned on direct messages, administered by this account, "
-			   @"answers the list.";
-	return (self.loaded
-			? @"No topics yet. Telegram sends them through "
-			  @"updateDirectMessagesChatTopic after loadDirectMessagesChatTopics."
-			: @"Loading topics…");
+		return nil;
+	return (self.loaded ? @"No topics here yet" : @"Loading...");
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -138,11 +128,13 @@
 	NSString *preview = [last isKindOfClass:NSDictionary.class]
 			? last[@"text"] : nil;
 	NSInteger unread = [topic[@"unread"] integerValue];
-	NSString *detail = preview.length ? preview : @"No messages yet";
+	NSString *detail = preview.length ? preview : @"No messages here yet...";
 	if (unread > 0)
-		detail = [NSString stringWithFormat:@"%ld new · %@", (long)unread, detail];
+		detail = [NSString stringWithFormat:@"%@ · %@",
+				[NSString stringWithFormat:TGLocalized(@"%@ unread messages"), @(unread)],
+				detail];
 	else if ([topic[@"isMarkedUnread"] boolValue])
-		detail = [NSString stringWithFormat:@"Unread · %@", detail];
+		detail = [NSString stringWithFormat:@"%@ · %@", TGLocalized(@"Unread"), detail];
 	cell.detailTextLabel.text = detail;
 	cell.detailTextLabel.font = TGFontSubhead();
 	cell.detailTextLabel.textColor = [[TGTheme shared] secondaryTextColour];

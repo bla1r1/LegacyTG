@@ -89,7 +89,7 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 		keys = @[@"id", @"title", @"date", @"text", @"previewText", @"lastAuthor",
 				@"unread", @"unreadMentions", @"markedUnread", @"isMuted",
 				@"isPinned", @"isOnline", @"isSaved", @"lastId", @"lastOutgoing",
-				@"readOutbox", @"readInbox", @"photoFileId", @"isGroup", @"isForum",
+				@"readOutbox", @"readInbox", @"isGroup", @"isForum",
 				@"isSecret", @"order", @"archiveOrder", @"supergroupId", @"draft",
 				@"emojiStatusId"];
 	});
@@ -109,13 +109,10 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 #pragma mark - selection
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
 	if (self.editingChats){
-		UITableViewCell *cell = [tableView cellForRowAtIndexPath:indexPath];
-		if ([cell isKindOfClass:TGChatCell.class]){
-			TGChatCell *chatCell = (TGChatCell *)cell;
-			chatCell.editCheck.hidden = NO;
-			[chatCell.contentView bringSubviewToFront:chatCell.editCheck];
-		}
+		// The table draws the left selection control; a second blue tick on
+		// the right was ours, not official.
 		[self refreshEditToolbar];
+		[self refreshListTitleView];
 		return;
 	}
 	[tableView deselectRowAtIndexPath:indexPath animated:YES];
