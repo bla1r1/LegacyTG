@@ -10,7 +10,7 @@
 #
 # Usage: scripts/repack_arm64_libs.sh
 #   Needs build/tdlib/lib/lib*.a (from scripts/build_tdlib.sh) plus
-#   tdlib/native-build/tdtl/libtdtl.a, and libs/WebP.framework.
+#   tdlib/native-build/tdtl/libtdtl.a, and vendor/libs/WebP.framework.
 #   Writes build/arm64/tdlib64/lib*.a and build/arm64/libs/libwebp.a.
 set -e
 
@@ -89,9 +89,9 @@ if [ -f "${ROOT_DIR}/tdlib/native-build/tdtl/libtdtl.a" ]; then
 fi
 
 echo "[+] repacking WebP's arm64 slice"
-if [ -f "${ROOT_DIR}/libs/WebP.framework/WebP" ]; then
+if [ -f "${ROOT_DIR}/vendor/libs/WebP.framework/WebP" ]; then
   rm -rf webp && mkdir webp
-  "$LIPO" -thin arm64 "${ROOT_DIR}/libs/WebP.framework/WebP" -output webp/thin.a
+  "$LIPO" -thin arm64 "${ROOT_DIR}/vendor/libs/WebP.framework/WebP" -output webp/thin.a
   extract_occurrences webp/thin.a webp/objs
   (cd webp/objs && libtool -static -o "$WOUT/libwebp.a" *.o)
 fi

@@ -1,0 +1,327 @@
+#import "TGGroupSettingsViewController.h"
+#import "TGClient.h"
+#import "TGTheme.h"
+#import "TGStyle.h"
+#import "TGAlertSheet.h"
+#import "TGSnackbar.h"
+#import "TGContactsViewController.h"
+#import "TGChatToolsViewController.h"
+#import "TGGroupMemberActions.h"
+#import "TGMemberCell.h"
+#import "TGProfileViewController.h"
+#import "TGIcons.h"
+#import "TGGroupCallViewController.h"
+#import "TGVideoChatSetupViewController.h"
+#import "TGAntiSpamViewController.h"
+#import "TGGroupSettingsViewController.h"
+#import "TGGroupSwitch.h"
+#import "TGGroupSettingsViewControllerInternal.h"
+
+
+
+//
+// TGGroupSettingsViewController.m - one screen for everything a group is.
+//
+// The group profile's More menu used to grow one row per setting: Photo,
+// Name, Description, Invite Link, Permissions, Sign Messages, Join to Send,
+// All History, Welcome Messages, Direct Messages, Import, Send as, Clear by
+// Date, Chat Tools. Each row asked the server what it sat on and answered
+// with a sheet. A settings screen can show the value, group the rows by what
+// they change, and leave the profile menu for the things a profile does.
+//
+// The chat id is the only thing the caller passes. Every action here names
+// that id directly, so nothing is routed through the profile controller
+// behind this screen.
+//
+
+/// The rows a section can hold. A switch draws a UISwitch, a member row a
+/// face, and everything else a value with a chevron.
+typedef NS_ENUM(NSInteger, TGGroupRowKind) {
+	TGGroupRowInfo = 0,
+	TGGroupRowAction,
+	TGGroupRowSwitch,
+	TGGroupRowUsername,
+	TGGroupRowMember,
+};
+
+/// A switch that names the setting it changes, so a reload can rebuild rows
+/// without an index pointing at the wrong one.
+
+
+static NSMutableDictionary *TGRow(NSString *title, NSString *detail,
+								  NSString *action, TGGroupRowKind kind) {
+	NSMutableDictionary *row = [@{@"kind" : @(kind), @"title" : title ?: @""}
+			mutableCopy];
+	if (detail)
+		row[@"detail"] = detail;
+	if (action)
+		row[@"action"] = action;
+	return row;
+}
+
+static NSMutableDictionary *TGInfoRow(NSString *title, NSString *detail,
+									  NSString *action) {
+	return TGRow(title, detail, action, TGGroupRowInfo);
+}
+
+static NSMutableDictionary *TGOpenRow(NSString *title, NSString *detail,
+									  NSString *action) {
+	NSMutableDictionary *row = TGInfoRow(title, detail, action);
+	row[@"opens"] = @YES;
+	return row;
+}
+
+static NSMutableDictionary *TGActionRow(NSString *title, NSString *detail,
+										NSString *action, BOOL destructive) {
+	NSMutableDictionary *row = TGRow(title, detail, action, TGGroupRowAction);
+	if (destructive)
+		row[@"destructive"] = @YES;
+	return row;
+}
+
+static NSMutableDictionary *TGOpenActionRow(NSString *title, NSString *detail,
+											NSString *action, BOOL destructive) {
+	NSMutableDictionary *row = TGActionRow(title, detail, action, destructive);
+	row[@"opens"] = @YES;
+	return row;
+}
+
+/// The same row when the account has no right for it: the title and the
+/// reason stay on screen, the chevron and the tap do not. That is what
+/// Telegram does for a switch an administrator may see but not move.
+static NSMutableDictionary *TGDisabledRow(NSString *title, NSString *reason,
+										  NSString *action) {
+	NSMutableDictionary *row = TGActionRow(title, reason, nil, NO);
+	if (action)
+		row[@"refusedAction"] = action;
+	row[@"disabled"] = @YES;
+	return row;
+}
+
+static NSMutableDictionary *TGSwitchRow(NSString *title, NSString *detail,
+										NSString *key, BOOL on, BOOL enabled) {
+	NSMutableDictionary *row = TGRow(title, detail, nil, TGGroupRowSwitch);
+	row[@"switch"] = key;
+	row[@"on"] = @(on);
+	row[@"enabled"] = @(enabled);
+	return row;
+}
+
+static NSMutableDictionary *TGUsernameRow(NSString *username, BOOL active) {
+	NSMutableDictionary *row = TGRow([@"@" stringByAppendingString:username],
+									 active ? @"Active" : @"Disabled",
+									 nil, TGGroupRowUsername);
+	row[@"switch"] = [@"@" stringByAppendingString:username];
+	row[@"username"] = username;
+	row[@"active"] = @(active);
+	row[@"on"] = @(active);
+	row[@"enabled"] = @YES;
+	return row;
+}
+
+static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows) {
+	NSMutableDictionary *section = [NSMutableDictionary dictionary];
+	if (header) section[@"header"] = header;
+	if (footer) section[@"footer"] = footer;
+	section[@"rows"] = rows ?: @[];
+	return section;
+}
+
+
+
+
+@implementation TGGroupSettingsViewController (TGGroupSwitches)
+
+#pragma mark - switches
+
+- (void)switchChanged:(TGGroupSwitch *)sender {
+	if (self.busy){
+		sender.on = !sender.on;
+		return;
+	}
+	NSString *key = sender.key;
+	BOOL on = sender.on;
+	if ([key hasPrefix:@"@"])
+		[self setUsername:key active:on sender:sender];
+	else
+		[self setBehaviour:key on:on sender:sender];
+}
+
+- (void)setUsername:(NSString *)key active:(BOOL)on sender:(TGGroupSwitch *)sender {
+	NSString *username = [key substringFromIndex:1];
+	self.busy = YES;
+	sender.enabled = NO;
+	__weak typeof(self) weakSelf = self;
+	[[TGClient shared] toggleSupergroupUsernameIsActive:username
+												 inChat:self.chatId
+											   isActive:on
+											 completion:^(BOOL ok, NSString *error){
+		TGGroupSettingsViewController *me = weakSelf;
+		if (!me)
+			return;
+		me.busy = NO;
+		if (!ok){
+			sender.on = !on;
+			sender.enabled = YES;
+			[me showRefusal:error title:@"Username"];
+			return;
+		}
+		[me load];
+	}];
+}
+
+- (void)setBehaviour:(NSString *)key on:(BOOL)on sender:(TGGroupSwitch *)sender {
+	self.busy = YES;
+	sender.enabled = NO;
+	__weak typeof(self) weakSelf = self;
+	void (^done)(BOOL, NSString *) = ^(BOOL ok, NSString *error){
+		TGGroupSettingsViewController *me = weakSelf;
+		if (!me)
+			return;
+		me.busy = NO;
+		if (!ok){
+			sender.on = !on;
+			sender.enabled = YES;
+			[me showRefusal:error title:@"Group Settings"];
+			return;
+		}
+		if ([key isEqualToString:@"sign"])
+			me.signMessages = on;
+		else if ([key isEqualToString:@"join"])
+			me.joinToSend = on;
+		else if ([key isEqualToString:@"history"])
+			me.allHistory = on;
+		else if ([key isEqualToString:@"antispam"])
+			me.aggressiveAntiSpam = on;
+		else if ([key isEqualToString:@"hidden"] || [key isEqualToString:@"forum"] ||
+				 [key isEqualToString:@"joinRequests"] ||
+				 [key isEqualToString:@"translation"]){
+			NSMutableDictionary *changed = [me.settings mutableCopy];
+			if ([key isEqualToString:@"hidden"])
+				changed[@"hiddenMembers"] = @(on);
+			else if ([key isEqualToString:@"forum"])
+				changed[@"isForum"] = @(on);
+			else if ([key isEqualToString:@"joinRequests"])
+				changed[@"joinByRequest"] = @(on);
+			else
+				changed[@"automaticTranslation"] = @(on);
+			me.settings = changed;
+		}
+		[me rebuild];
+	};
+
+	if ([key isEqualToString:@"sign"]){
+		[[TGClient shared] setChatSignMessages:self.chatId on:on completion:^(BOOL ok){
+			done(ok, ok ? nil : @"Only an administrator of a supergroup or a "
+								@"channel carries this switch.");
+		}];
+	} else if ([key isEqualToString:@"join"]){
+		[[TGClient shared] setChatJoinToSendMessages:self.chatId on:on
+										  completion:^(BOOL ok){
+			done(ok, ok ? nil : @"Only an administrator of a supergroup or a "
+								@"channel carries this switch.");
+		}];
+	} else if ([key isEqualToString:@"history"]){
+		[[TGClient shared] setSupergroupAllHistoryAvailable:self.chatId on:on
+												completion:^(BOOL ok){
+			done(ok, ok ? nil : @"Only an administrator of a supergroup or a "
+								@"channel carries this switch.");
+		}];
+	} else if ([key isEqualToString:@"antispam"]){
+		[[TGClient shared] setChat:self.chatId aggressiveAntiSpam:on
+						completion:done];
+	} else if ([key isEqualToString:@"hidden"]){
+		[[TGClient shared] setSupergroupHiddenMembersInChat:self.chatId on:on
+												completion:done];
+	} else if ([key isEqualToString:@"forum"]){
+		[[TGClient shared] setSupergroupForumInChat:self.chatId on:on
+										 completion:done];
+	} else if ([key isEqualToString:@"joinRequests"]){
+		[[TGClient shared] setSupergroupJoinByRequestInChat:self.chatId on:on
+											 guardBotUserId:[self.settings[@"guardBotUserId"] longLongValue]
+												 completion:done];
+	} else {
+		[[TGClient shared] setSupergroupAutomaticTranslationInChat:self.chatId on:on
+														completion:done];
+	}
+}
+
+/// Group Type / Channel Type. Telegram treats "private" and "public" as the
+/// presence of a username, so the row edits that one name rather than
+/// inventing a second switch that could disagree with the Usernames section.
+- (void)chooseGroupType {
+	BOOL isPublic = self.editable.length > 0 || self.active.count > 0;
+	NSString *what = [self isChannelChat] ? @"Channel" : @"Group";
+	if (!isPublic){
+		[self editUsername];
+		return;
+	}
+	__weak typeof(self) weakSelf = self;
+	[TGAlertSheet showChoices:@[@"Edit Username", @"Make Private"]
+						title:[NSString stringWithFormat:@"%@ Type", what]
+						message:@"A public group is reachable by its @name; a "
+								@"private one only by its invite link."
+			 destructiveIndex:1
+						 inView:self.view
+					   onChoice:^(NSInteger index){
+		if (index == 0){
+			[weakSelf editUsername];
+			return;
+		}
+		[weakSelf removeUsername];
+	}];
+}
+
+/// Leaving is the member's row; the owner gets Delete instead because a
+/// group cannot be left without an owner to hand it to.
+- (void)leaveChat {
+	NSString *what = [self isChannelChat] ? @"channel" : @"group";
+	__weak typeof(self) weakSelf = self;
+	[TGAlertSheet showConfirm:[NSString stringWithFormat:
+					@"You will stop receiving messages from this %@.", what]
+							title:([self isChannelChat] ? @"Leave Channel"
+														: @"Leave Group")
+						   action:@"Leave"
+					  destructive:YES
+						   inView:self.view
+						onConfirm:^{
+		TGGroupSettingsViewController *me = weakSelf;
+		if (!me)
+			return;
+		// deleteChat removes the row and leaves in the same request pair.
+		[[TGClient shared] deleteChat:me.chatId];
+		[me.navigationController popToRootViewControllerAnimated:YES];
+	}];
+}
+
+- (void)deleteChatForEveryone {
+	NSString *what = [self isChannelChat] ? @"Channel" : @"Group";
+	__weak typeof(self) weakSelf = self;
+	[TGAlertSheet showConfirm:[NSString stringWithFormat:
+					@"%@ and every message in it are deleted for all members. "
+					@"This cannot be undone.", what]
+							title:[NSString stringWithFormat:@"Delete %@", what]
+						   action:@"Delete"
+					  destructive:YES
+						   inView:self.view
+						onConfirm:^{
+		TGGroupSettingsViewController *me = weakSelf;
+		if (!me)
+			return;
+		[[TGClient shared] deleteChatForEveryone:me.chatId completion:^(NSString *error){
+			TGGroupSettingsViewController *again = weakSelf;
+			if (!again)
+				return;
+			if (error.length){
+				[TGAlertSheet showMessage:error
+									title:[NSString stringWithFormat:@"Delete %@", what]
+								   inView:again.view];
+				return;
+			}
+			[again.navigationController popToRootViewControllerAnimated:YES];
+		}];
+	}];
+}
+
+
+@end

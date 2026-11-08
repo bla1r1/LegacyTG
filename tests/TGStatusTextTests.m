@@ -5,7 +5,7 @@
 // pinned before they ever reach a device.
 #import "TGTestRunner.h"
 #import "TGStatusText.h"
-#import "TGFastDate.h"
+#import "TGDateFormat.h"
 #import "TGClient.h"
 
 @interface TGStatusTextTests : XCTestCase

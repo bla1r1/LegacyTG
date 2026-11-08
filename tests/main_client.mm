@@ -2,7 +2,7 @@
 //
 // A second executable, because the main TGCallTests binary links a test
 // stub for TGClient (the call tests record signalling by watching it),
-// while these suites compile the real src/Core/TGClient.m. One cannot
+// while these suites compile the real src/Core/Client/TGClient.m. One cannot
 // carry both the stub and the real class.
 //
 //   make -f tests/Makefile test

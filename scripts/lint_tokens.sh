@@ -11,6 +11,8 @@ set -u
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT" || exit 1
+
+SCREEN_DIRS="src/Features src/App src/Views"
 status=0
 
 report() {
@@ -22,10 +24,10 @@ report() {
 # ── 1. a point size spelled out in a screen ──────────────────────────────────
 # Every role is a function in TGStyle.h. TGStyle.m is where the numbers live.
 hits=$(grep -rn 'UIFont [a-zA-Z]*[sS]ystemFontOfSize:[0-9]' src \
-        --include='*.m' --include='*.mm' --include='*.h' | grep -v '^src/Core/TGStyle')
+        --include='*.m' --include='*.mm' --include='*.h' | grep -v '^src/Core/Style/TGStyle')
 if [ -n "$hits" ]; then
     report "A point size is written out instead of asking TGStyle for a role:" \
-            "use TGFontBody(), TGFontRow(), TGFontCaption()... see src/Core/TGStyle.h"
+            "use TGFontBody(), TGFontRow(), TGFontCaption()... see src/Core/Style/TGStyle.h"
     echo "$hits"
 fi
 
@@ -37,7 +39,7 @@ hits=$(grep -rnE 'TGFont(Bold|Italic|Medium)?AtSize\([0-9]' src \
         --include='*.m' --include='*.mm' --include='*.h')
 if [ -n "$hits" ]; then
     report "A literal passed to TGFont...AtSize, which is only for computed sizes:" \
-            "pick the role from the scale in src/Core/TGStyle.h instead"
+            "pick the role from the scale in src/Core/Style/TGStyle.h instead"
     echo "$hits"
 fi
 
@@ -47,7 +49,7 @@ fi
 # one exception is TGBackgroundColour, which draws what the server sent.
 hits=$(grep -rnE '\[UIColor colorWith(Red|Hue|White):' src \
         --include='*.m' --include='*.mm' --include='*.h' | grep -v '^src/Core/' \
-        | grep -v '^src/Controllers/TGBackgroundsViewController.m')
+        | grep -v '^src/Features/Settings/TGBackgroundsViewController.m')
 if [ -n "$hits" ]; then
     report "A colour is mixed in a screen instead of coming from the palette:" \
             "add a name to TGTheme+Colours.m and ask the theme for it"
@@ -79,7 +81,7 @@ fi
 # ── 6. a section caption styled by hand ─────────────────────────────────────
 # Seven screens did this themselves and five left the system's, which over a
 # dark list is grey on grey.
-hits=$(grep -rn 'header\.textLabel\.textColor' src --include='*.m' --include='*.mm' | grep -v 'src/Core/TGTheme')
+hits=$(grep -rn 'header\.textLabel\.textColor' src --include='*.m' --include='*.mm' | grep -v 'src/Core/Style/TGTheme')
 if [ -n "$hits" ]; then
     report "A section caption is styled in a screen:" \
             "[[TGTheme shared] styleSectionHeader:view] in willDisplayHeaderView:"
@@ -100,8 +102,8 @@ fi
 # The set was drawn at ten widths between 1.3 and 5.0, and send sat beside
 # attach in one bar at 2.4 and 2.0. Two named weights now: the family's, and
 # a finer one for marks under about sixteen points.
-hits=$(grep -rnE 'CGContextSetLineWidth\(ctx, [0-9]' src/Views/TGIcons.m \
-        src/Views/TGIcons+Menu.m src/Views/TGEmojiPanel.m)
+hits=$(grep -rnE 'CGContextSetLineWidth\(ctx, [0-9]' src/Views/Icons/TGIcons.m \
+        src/Views/Icons/TGIcons+Menu.m src/Features/Chat/Views/TGEmojiPanel.m)
 if [ -n "$hits" ]; then
     report "An icon sets its own stroke weight:" \
             "TGIconStroke, or TGIconStrokeFine for a mark under ~16 points"
@@ -120,7 +122,7 @@ fi
 hits=$(grep -rnE '\.cornerRadius\s*=\s*([^;]+);' src --include='*.m' --include='*.mm' \
         | grep -vE '\.cornerRadius\s*=\s*TGMetricCornerNone;' \
         | grep -vE '\.cornerRadius\s*=\s*.*(\[|TGMetricCorner|TGHalf\(|kCorner|radius;)' \
-        | grep -v '^src/Core/TGStyle')
+        | grep -v '^src/Core/Style/TGStyle')
 if [ -n "$hits" ]; then
     report "A corner radius is neither a scale value nor half its own side:" \
             "TGMetricCorner* for a rounded rectangle, TGHalf(side) for a circle or capsule"
@@ -130,10 +132,10 @@ fi
 # ── 10. a font name and size requested directly in a screen ─────────────────
 # All fonts come through TGStyle roles. A custom face belongs in TGStyle.m.
 hits=$(grep -rnE '\[UIFont fontWithName:.* size:[0-9]' src --include='*.m' --include='*.mm' \
-        | grep -v '^src/Core/TGStyle.m')
+        | grep -v '^src/Core/Style/TGStyle.m')
 if [ -n "$hits" ]; then
     report "A font is created with fontWithName: and a literal size:" \
-            "add a role function in src/Core/TGStyle.h and TGStyle.m"
+            "add a role function in src/Core/Style/TGStyle.h and TGStyle.m"
     echo "$hits"
 fi
 
@@ -142,7 +144,7 @@ fi
 hits=$(grep -rnE 'animateWithDuration:\s*[0-9]' src --include='*.m' --include='*.mm')
 if [ -n "$hits" ]; then
     report "An animation duration is written out as a literal instead of a motion token:" \
-            "use TGAnimationDurationFast, Normal, Medium, or Slow from src/Core/TGStyle.h"
+            "use TGAnimationDurationFast, Normal, Medium, or Slow from src/Core/Style/TGStyle.h"
     echo "$hits"
 fi
 
@@ -150,21 +152,21 @@ fi
 # Manual `/ 2` or `/ 2.0f` introduces inconsistent rounding and magic calculations.
 # Use TGCenteredOrigin(container, item), TGHalf(dimension), or a semantic token.
 hits=$(grep -rnE '(\([a-zA-Z0-9_.]+\s*-\s*[a-zA-Z0-9_.]+\)\s*/\s*2(\.0f)?|\.width\s*/\s*2(\.0f)?|\.height\s*/\s*2(\.0f)?)\b' \
-        src/Controllers src/Views --include='*.m' --include='*.mm' \
-        | grep -v '^src/Core/' | grep -v '^src/Views/TGIcons' | grep -v '^src/Views/TGLottieView')
+        $SCREEN_DIRS --include='*.m' --include='*.mm' \
+        | grep -v '^src/Core/' | grep -v '^src/Views/Icons/TGIcons' | grep -v '^src/Features/Media/TGLottieView')
 if [ -n "$hits" ]; then
     report "A manual division by 2 is used for layout/centering:" \
-            "use TGCenteredOrigin(container, item) or TGHalf(dimension) from src/Core/TGStyle.h"
+            "use TGCenteredOrigin(container, item) or TGHalf(dimension) from src/Core/Style/TGStyle.h"
     echo "$hits"
 fi
 
 # ── 13. a table row height returned as a literal number ──────────────────────
 # Row heights must use TGMetric* tokens (e.g. TGMetricRow, TGMetricPersonRow, TGMetricSettingsProfileRow).
-hits=$(grep -rnE 'heightForRowAtIndexPath' src/Controllers -A 20 --include='*.m' --include='*.mm' \
+hits=$(grep -rnE 'heightForRowAtIndexPath' $SCREEN_DIRS -A 20 --include='*.m' --include='*.mm' \
         | grep -E 'return\s+[0-9]+(\.[0-9]+)?f?;')
 if [ -n "$hits" ]; then
     report "A table row height is returned as a literal number instead of a metric token:" \
-            "use TGMetric* tokens from src/Core/TGStyle.h"
+            "use TGMetric* tokens from src/Core/Style/TGStyle.h"
     echo "$hits"
 fi
 
@@ -196,7 +198,7 @@ fi
 # is handed, and a path's control points are the shape itself.
 geom() {
     for f in $(find src -name '*.m' \
-            | grep -vE 'src/Views/TGIcons|src/Views/TGLottieView'); do
+            | grep -vE 'src/Views/Icons/TGIcons|src/Features/Media/TGLottieView'); do
         # One statement per line first: a frame is often spread over three of
         # them, and the literal is rarely on the one naming CGRectMake. Then
         # only what is inside the brackets is read, so a colour mixed in the
@@ -238,7 +240,7 @@ geom() {
 hits=$(geom)
 if [ -n "$hits" ]; then
     report "A size is written out inside a frame instead of being named:" \
-            "take it from a scale in src/Core/TGStyle.h, or name it in this file"
+            "take it from a scale in src/Core/Style/TGStyle.h, or name it in this file"
     echo "$hits"
 fi
 
@@ -259,7 +261,7 @@ fi
 # Rule 15 lets 0 and 1 through, so CGSizeMake(0, 1) passed everywhere as a
 # private copy of the etched offset.
 hits=$(grep -rnE 'shadowOffset\s*=\s*CGSizeMake|shadow(Opacity|Radius)\s*=\s*[0-9]' \
-        src/Controllers src/Views --include='*.m' --include='*.mm')
+        $SCREEN_DIRS --include='*.m' --include='*.mm')
 if [ -n "$hits" ]; then
     report "A shadow is written out instead of named:" \
             "TGMetricShadowOffset*, TGMetricShadow*Radius, TGMetricShadow*Opacity"
@@ -268,7 +270,7 @@ fi
 
 # ── 17. a translucency spelled out ──────────────────────────────────────────
 hits=$(grep -rnE '\.alpha\s*=[^;]*[^0-9A-Za-z_]0?\.[0-9]*[1-9]|k[A-Za-z]*Alpha\s*=\s*0?\.[0-9]' \
-        src/Controllers src/Views --include='*.m' --include='*.mm')
+        $SCREEN_DIRS --include='*.m' --include='*.mm')
 if [ -n "$hits" ]; then
     report "An alpha is written out instead of named:" \
             "TGAlphaDimmed, TGAlphaHighlight... see TGStyle+Decorations.h"
@@ -277,7 +279,7 @@ fi
 
 # ── 18. a step of the spacing scale under a private name ────────────────────
 hits=$(grep -rnE 'static const CGFloat k[A-Za-z]*(Gap|Pad|Inset|Margin)\s*=\s*(2|4|8|10|16|20)(\.0)?f?;' \
-        src/Controllers src/Views --include='*.m' --include='*.mm')
+        $SCREEN_DIRS --include='*.m' --include='*.mm')
 if [ -n "$hits" ]; then
     report "A step of the spacing scale has been copied into a constant:" \
             "TGMetricPadTiny, PadSmall, Pad, PadMedium, PadLarge or PadWide"
@@ -288,7 +290,7 @@ fi
 # Each of these drifted or could: the video note's record dot was 10 beside the
 # voice note's 9, and the theme preview set its text at 9 beside the bubble's 10.
 hits=$(grep -rnE 'static const CGFloat k(DotSide|PreviewTextLeft|TailWidth|TailHeight|ChoiceGlyph|OnceSide|ActionBarCloseSide|MiniCloseSide|BarEditHeight|BarControlSide)\s*=\s*[0-9]' \
-        src/Controllers src/Views --include='*.m' --include='*.mm')
+        $SCREEN_DIRS --include='*.m' --include='*.mm')
 if [ -n "$hits" ]; then
     report "A shared size has been copied as a number:" \
             "point the constant at its TGMetric token"
@@ -299,8 +301,8 @@ fi
 # White on a filled control is onAccentColour and white over a picture is
 # onMediaColour. What may name it: the QR plate a scanner needs, the screen used
 # as a lamp, and the icon and avatar drawing that bakes it into a bitmap.
-hits=$(grep -rnF '[UIColor whiteColor]' src/Controllers src/Views --include='*.m' --include='*.mm' \
-        | grep -vE '^src/Controllers/TGLoginViewController\+Steps.m|^src/Controllers/TGVideoNoteViewController.m|^src/Views/TGIcons\+(Menu|Avatars).m')
+hits=$(grep -rnF '[UIColor whiteColor]' $SCREEN_DIRS --include='*.m' --include='*.mm' \
+        | grep -vE '^src/Features/Auth/TGLoginViewController\+Steps.m|^src/Features/Media/TGVideoNoteViewController.m|^src/Views/Icons/TGIcons\+(Menu|Avatars).m')
 if [ -n "$hits" ]; then
     report "White is named directly:" \
             "[[TGTheme shared] onAccentColour] on a filled control, onMediaColour over a picture"
@@ -309,8 +311,8 @@ fi
 
 # ── 21. a badge in its own type ─────────────────────────────────────────────
 # The chat row's badge was 13 bold, the jump button's 12 and TGBadge's 11.
-hits=$(grep -rnE '(_label|[bB]adge)\.font\s*=\s*TGFont' src/UI/TGBadge.m src/Views/TGChatCell.m \
-        src/Controllers/TGChatViewController+Chrome.m | grep -v 'TGFontCaptionStrong()')
+hits=$(grep -rnE '(_label|[bB]adge)\.font\s*=\s*TGFont' src/UI/Controls/TGBadge.m src/Features/Chat/Views/TGChatCell.m \
+        src/Features/Chat/Rendering/TGChatViewController+Chrome.m | grep -v 'TGFontCaptionStrong()')
 if [ -n "$hits" ]; then
     report "A badge has its own type:" "TGFontCaptionStrong()"
     echo "$hits"
@@ -323,7 +325,7 @@ fi
 # full-screen and modal over dark media, where nothing can change the theme
 # underneath them; the call screen comes back from its bar, and is the one left
 # to do.
-for f in src/Controllers/*ViewController.m; do
+for f in $(find src/Features src/App src/UI -name '*ViewController.m'); do
     b=$(basename "$f" .m)
     grep -q 'Colour\]' "$f" || continue
     grep -q 'TGThemeChangedNotification' "$f" && continue
@@ -333,7 +335,7 @@ for f in src/Controllers/*ViewController.m; do
     esac
     sup=$(sed -n "s/^@interface $b *: *\([A-Za-z0-9_]*\).*/\1/p" "${f%.m}.h" "$f" 2>/dev/null | head -1)
     case "$sup" in
-        TGListViewController|TGTier2ListViewController|TGBusinessBaseViewController) continue ;;
+        TGListViewController|TGFeatureListViewController|TGBusinessBaseViewController) continue ;;
     esac
     report "A screen paints theme colours but never hears the theme change:" "$f"
 done
@@ -342,7 +344,7 @@ done
 # The round video once drew its own: 58 pt to the composer's 48, floating 14 pt
 # off the bottom, a 54 pt send disc to the voice note's 34. TGRecordBar is the
 # strip; a recording that wants one asks for it.
-hits=$(grep -rln 'skeuomorphicInputBarImageWithHeight' src/Controllers src/Views \
+hits=$(grep -rln 'skeuomorphicInputBarImageWithHeight' $SCREEN_DIRS \
         | grep -vE 'TGChatViewController\+Input.m|TGRecordBar.m')
 if [ -n "$hits" ]; then
     report "A recording draws its own strip:" "use TGRecordBar"

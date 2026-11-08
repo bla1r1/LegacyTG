@@ -23,23 +23,17 @@ SDK     := $(shell xcrun --sdk macosx --show-sdk-path 2>/dev/null)
 
 ARCH    := $(shell uname -m)
 
+SRC_INCLUDES := $(addprefix -I,$(shell find $(SRC) -type d))
+
 CFLAGS  := \
     -arch $(ARCH) \
     $(if $(SDK),-isysroot $(SDK),) \
     -I$(TESTS)/shim \
-    -I$(ROOT)/include \
-    -I$(ROOT)/compat \
-    -I$(SRC) \
-    -I$(SRC)/App \
-    -I$(SRC)/Core \
-    -I$(SRC)/Controllers \
-    -I$(SRC)/Views \
-    -I$(SRC)/UI \
-    -I$(SRC)/Media \
-    -I$(SRC)/Calls \
-    -I$(SRC)/Audio \
+    -I$(ROOT)/vendor/include \
+    -I$(SRC)/Compat \
+    $(SRC_INCLUDES) \
     -I$(ROOT)/third_party \
-    -I$(ROOT)/libs \
+    -I$(ROOT)/vendor/libs \
     -I$(ROOT)/third_party/libtgvoip \
     -I$(TESTS) \
     -I$(OPENSSL)/include \
@@ -64,111 +58,159 @@ LDFLAGS := \
 # ─── sources ──────────────────────────────────────────────────────────────────
 
 # Pure C (no ARC)
-C_SRCS := $(SRC)/Calls/TGCallCrypto.c $(SRC)/Calls/TGCallSrtp.c $(SRC)/Media/TGSoftVideoClock.c
+C_SRCS := src/CallEngine/Crypto/TGCallCrypto.c src/CallEngine/Crypto/TGCallSrtp.c $(SRC)/Media/TGSoftVideoClock.c
 
 # ObjC sources under test
 OBJC_SRCS := \
-    $(SRC)/Calls/TGCallStun.m \
-    $(SRC)/Calls/TGCallMessages.m \
-    $(SRC)/Calls/TGCallIce.m \
-    $(SRC)/Calls/TGCallReflector.m \
-    $(SRC)/Calls/TGCallV2Signaling.m \
-    $(SRC)/Calls/TGCallV2Session.m \
-    $(SRC)/Calls/TGCallDtls.m \
-    $(SRC)/Calls/TGCallVideoRtp.m \
-    $(SRC)/Calls/TGCallVideoEngine.mm \
-    $(SRC)/Calls/TGCall.mm \
-    $(SRC)/Views/TGMessageLayout.mm \
-    $(SRC)/Views/TGMessageCardLayout.m \
-    $(SRC)/Core/TGMessageCard.m \
-    $(SRC)/Core/TGStyle.m \
-    $(SRC)/Core/TGBase64.m \
-    $(SRC)/Core/TGPerf.m \
-    $(SRC)/Core/TGDevice.m \
-    $(SRC)/Core/TGCapabilities.m
+    src/CallEngine/Network/TGCallStun.m \
+    src/CallEngine/Signaling/TGCallMessages.m \
+    src/CallEngine/Network/TGCallIce.m \
+    src/CallEngine/Network/TGCallReflector.m \
+    src/CallEngine/Signaling/TGCallV2Signaling.m \
+    src/CallEngine/Signaling/TGCallV2Session.m \
+    src/CallEngine/Signaling/TGCallDtls.m \
+    src/CallEngine/Media/TGCallVideoRtp.m \
+    src/CallEngine/Media/TGCallVideoEngine.mm \
+    src/CallEngine/TGCall.mm \
+    src/Features/Chat/Views/TGMessageLayout.mm \
+    src/Features/Chat/Views/TGMessageCardLayout.m \
+    src/Core/Model/TGMessageCard.m \
+    src/Core/Style/TGStyle.m \
+    src/Core/Support/TGBase64.m \
+    src/Core/Platform/TGPerf.m \
+    src/Core/Platform/TGDevice.m \
+    src/Core/Platform/TGCapabilities.m
 
 # Real TGClient sources, compiled only into the second binary: the main
 # binary links a test stub of TGClient instead, which the call tests need.
 CLIENT_OBJC_SRCS := \
     $(ROOT)/third_party/yyjson/yyjson.c \
-    $(SRC)/Core/TGBase64.m \
-    $(SRC)/Core/TGStyle.m \
-    $(SRC)/Core/TGUpdateType.c \
-    $(SRC)/Views/TGSVGPath.c \
-    $(SRC)/Views/TGIconPaths.m \
-    $(SRC)/Core/TGOptions.mm \
-    $(SRC)/Core/TGJson.mm \
-    $(SRC)/Core/TGClient.m \
-    $(SRC)/Core/TGClient+Chats.mm \
-    $(SRC)/Core/TGClient+ChatTools.m \
-    $(SRC)/Core/TGMessageStreamStore.mm \
-    $(SRC)/Core/TGUpdateBatcher.mm \
-    $(SRC)/Core/TGClient+Messages.m \
-    $(SRC)/Core/TGMessageFlatten.m \
-    $(SRC)/Core/TGServiceMessageText.m \
-    $(SRC)/Core/TGMessageContentCommerce.m \
-    $(SRC)/Core/TGMessageContentInteractive.m \
-    $(SRC)/Core/TGMessageCard.m \
-    $(SRC)/Core/TGLiveLocation.m \
-    $(SRC)/Core/TGComposerText.m \
-    $(SRC)/Core/TGGiftFlatten.m \
-    $(SRC)/Core/TGPinnedLine.m \
-    $(SRC)/Core/TGClient+MessageMeta.m \
-    $(SRC)/Core/TGClient+SavedMessages.m \
-    $(SRC)/Core/TGClient+Notifications.m \
-    $(SRC)/Core/TGClient+Stickers.m \
-    $(SRC)/Core/TGClient+Files.mm \
-    $(SRC)/Core/TGStickerPack.mm \
+    src/Core/Support/TGBase64.m \
+    src/Core/Style/TGStyle.m \
+    src/Core/Support/TGUpdateType.c \
+    src/Views/Icons/TGSVGPath.c \
+    src/Views/Icons/TGIconPaths.m \
+    src/Core/Stores/TGOptions.mm \
+    src/Core/Support/TGJson.mm \
+    src/Core/Client/TGClient.m \
+    src/Core/Client/Chats/TGClient+ChatsSupport.mm \
+    src/Core/Client/Chats/TGClient+Chats.mm \
+    src/Core/Client/Chats/TGClient+ChatMembers.mm \
+    src/Core/Client/Chats/TGClient+ChatContacts.mm \
+    src/Core/Client/Chats/TGClient+ChatReporting.mm \
+    src/Core/Client/Chats/TGClient+Recents.mm \
+    src/Core/Client/Chats/TGClient+ChatSearch.mm \
+    src/Core/Client/Chats/TGClient+ChatFolders.mm \
+    src/Core/Client/TGClient+ChatTools.m \
+    src/Core/Stores/TGMessageStreamStore.mm \
+    src/Core/Support/TGUpdateBatcher.mm \
+    src/Core/Client/Messages/TGClient+MessagesUpload.m \
+    src/Core/Client/Messages/TGClient+Messages.m \
+    src/Core/Client/Messages/TGClient+MessageRecord.m \
+    src/Core/Client/Messages/TGClient+InlineMessages.m \
+    src/Core/Model/TGMessageFlatten.m \
+    src/Core/Model/TGServiceMessageText.m \
+    src/Core/Model/TGMessageContentCommerce.m \
+    src/Core/Model/TGMessageContentInteractive.m \
+    src/Core/Model/TGMessageCard.m \
+    src/Core/Model/TGLiveLocation.m \
+    src/Core/Model/TGComposerText.m \
+    src/Core/Model/TGGiftFlatten.m \
+    src/Core/Model/TGPinnedLine.m \
+    src/Core/Client/TGClient+MessageMeta.m \
+    src/Core/Client/TGClient+SavedMessages.m \
+    src/Core/Client/TGClient+Notifications.m \
+    src/Core/Client/TGClient+Stickers.m \
+    src/Core/Client/TGClient+Files.mm \
+    src/Core/Stores/TGStickerPack.mm \
     $(SRC)/Media/TGStickerImage.m \
-    $(SRC)/Core/TGStatusText.m \
-    $(SRC)/Core/TGClient+Proxy.m \
-    $(SRC)/Core/TGClient+Groups.m \
-    $(SRC)/Core/TGClient+GroupCalls.m \
-    $(SRC)/Core/TGClient+Usernames.m \
-    $(SRC)/Core/TGClient+Payments.m \
-    $(SRC)/Core/TGClient+Calls.m \
-    $(SRC)/Core/TGClient+Websites.m \
-    $(SRC)/Core/TGClient+BotTools.m \
-    $(SRC)/Core/TGClient+BotSession.m \
-    $(SRC)/Core/TGClient+Affiliate.m \
-    $(SRC)/Core/TGClient+GameScores.m \
-    $(SRC)/Core/TGClient+Support.m \
-    $(SRC)/Core/TGClient+TestHarness.m \
-    $(SRC)/Core/TGClient+Language.m \
-    $(SRC)/Core/TGClient+Search.m \
-    $(SRC)/Core/TGClient+Stories.m \
-    $(SRC)/Core/TGDevice.m \
-    $(SRC)/Core/TGCapabilities.m \
-    $(SRC)/Core/TGGhostMode.m \
-    $(SRC)/Core/TGClient+Business.m \
-    $(SRC)/Core/TGClient+Tier2.m \
-    $(SRC)/Core/TGClient+Tier3.m \
-    $(SRC)/Core/TGClient+Downloads.m \
-    $(SRC)/Core/TGClient+Secret.m \
-    $(SRC)/Core/TGClient+Account.m \
-    $(SRC)/Core/TGClient+Accounts.m \
-    $(SRC)/Core/TGClient+Appearance.m \
-    $(SRC)/Core/TGClient+Diagnostics.m \
-    $(SRC)/Core/TGDatabaseKey.m \
-    $(SRC)/Core/TGClient+Profile.m \
-    $(SRC)/Core/TGClient+ProfileAudio.m \
-    $(SRC)/Core/TGClient+EmojiStatus.m \
-    $(SRC)/Core/TGClient+TextStyles.m \
-    $(SRC)/Core/TGClient+DirectMessages.m \
-    $(SRC)/Core/TGClient+Dice.m \
-    $(SRC)/Core/TGClient+Auth.m \
-    $(SRC)/Core/TGThemeFile.m \
-    $(SRC)/Core/TGImageLruCache.mm \
-    $(SRC)/Core/TGStickerBudget.m \
-    $(SRC)/Core/TGPerf.m \
-    $(SRC)/Controllers/TGUIFormat.m \
-    $(SRC)/Controllers/TGPollPresentation.m \
-    $(SRC)/Controllers/TGChecklistPresentation.m \
-    $(SRC)/Views/TGChatListRowGeometry.m \
-    $(SRC)/Views/TGMediaVeilBlur.m \
-    $(SRC)/Core/TGPlaybackQueue.m \
-    $(SRC)/Core/TGProfileTabs.m \
-    $(SRC)/Core/TGPasscode.m
+    src/Core/Model/TGStatusText.m \
+    src/Core/Client/TGClient+Proxy.m \
+    src/Core/Client/TGClient+Groups.m \
+    src/Core/Client/TGClient+GroupCalls.m \
+    src/Core/Client/TGClient+Usernames.m \
+    src/Core/Client/TGClient+Payments.m \
+    src/Core/Client/TGClient+Calls.m \
+    src/Core/Client/TGClient+Websites.m \
+    src/Core/Client/TGClient+BotTools.m \
+    src/Core/Client/TGClient+BotSession.m \
+    src/Core/Client/TGClient+Affiliate.m \
+    src/Core/Client/TGClient+GameScores.m \
+    src/Core/Client/TGClient+Support.m \
+    src/Core/Client/TGClient+TestHarness.m \
+    src/Core/Client/TGClient+Language.m \
+    src/Core/Client/TGClient+Search.m \
+    src/Core/Client/Stories/TGClient+StoriesSupport.m \
+    src/Core/Client/Stories/TGClient+StoriesFeed.m \
+    src/Core/Client/Stories/TGClient+StoriesViewer.m \
+    src/Core/Client/Stories/TGClient+StoriesPosting.m \
+    src/Core/Client/Stories/TGClient+StoriesAlbums.m \
+    src/Core/Client/Stories/TGClient+StoriesInteractions.m \
+    src/Core/Client/Stories/TGClient+StoriesNotifications.m \
+    src/Core/Client/Stories/TGClient+StoriesDiscovery.m \
+    src/Core/Client/Stories/TGClient+StoriesStealth.m \
+    src/Core/Client/Stories/TGClient+StoriesLive.m \
+    src/Core/Platform/TGDevice.m \
+    src/Core/Platform/TGCapabilities.m \
+    src/Core/Platform/TGGhostMode.m \
+    src/Core/Client/TGClient+Business.m \
+    src/Core/Client/Features/TGClient+FeatureSupport.m \
+    src/Core/Client/Features/TGClient+Communities.m \
+    src/Core/Client/Features/TGClient+QuickReplies.m \
+    src/Core/Client/Features/TGClient+Checklists.m \
+    src/Core/Client/Features/TGClient+SuggestedPosts.m \
+    src/Core/Client/Features/TGClient+AITools.m \
+    src/Core/Client/Audit/TGClient+AuditSupport.m \
+    src/Core/Client/Audit/TGClient+Ads.m \
+    src/Core/Client/Audit/TGClient+Speech.m \
+    src/Core/Client/Audit/TGClient+Environment.m \
+    src/Core/Client/Audit/TGClient+OwnedBots.m \
+    src/Core/Client/Audit/TGClient+WebApps.m \
+    src/Core/Client/Audit/TGClient+OAuth.m \
+    src/Core/Client/Audit/TGClient+BusinessBot.m \
+    src/Core/Client/Audit/TGClient+Premium.m \
+    src/Core/Client/Audit/TGClient+Boosts.m \
+    src/Core/Client/Audit/TGClient+Revenue.m \
+    src/Core/Client/Audit/TGClient+Discovery.m \
+    src/Core/Client/Audit/TGClient+Stars.m \
+    src/Core/Client/Audit/TGClient+Gifts.m \
+    src/Core/Client/TGClient+Downloads.m \
+    src/Core/Client/TGClient+Secret.m \
+    src/Core/Client/Account/TGClient+AccountContacts.m \
+    src/Core/Client/Account/TGClient+AccountPeople.m \
+    src/Core/Client/Account/TGClient+AccountCore.m \
+    src/Core/Client/Account/TGClient+AccountLocalNotifications.m \
+    src/Core/Client/Account/TGClient+AccountSettings.m \
+    src/Core/Client/Account/TGClient+AccountReactions.m \
+    src/Core/Client/Account/TGClient+AccountOptions.m \
+    src/Core/Client/Account/TGClient+AccountAutosave.m \
+    src/Core/Client/Account/TGClient+AccountProfileMedia.m \
+    src/Core/Client/Account/TGClient+AccountTwoStep.m \
+    src/Core/Client/Account/TGClient+AccountRest.m \
+    src/Core/Client/Account/TGClient+AccountSupport.m \
+    src/Core/Client/TGClient+Accounts.m \
+    src/Core/Client/TGClient+Appearance.m \
+    src/Core/Client/TGClient+Diagnostics.m \
+    src/Core/Support/TGDatabaseKey.m \
+    src/Core/Client/TGClient+Profile.m \
+    src/Core/Client/TGClient+ProfileAudio.m \
+    src/Core/Client/TGClient+EmojiStatus.m \
+    src/Core/Client/TGClient+TextStyles.m \
+    src/Core/Client/TGClient+DirectMessages.m \
+    src/Core/Client/TGClient+Dice.m \
+    src/Core/Client/TGClient+Auth.m \
+    src/Core/Style/TGThemeFile.m \
+    src/Core/Stores/TGImageLruCache.mm \
+    src/Core/Stores/TGStickerBudget.m \
+    src/Core/Platform/TGPerf.m \
+    src/UI/Format/TGUIFormat.m \
+    src/Features/Chat/TGPollPresentation.m \
+    src/Features/Chat/TGChecklistPresentation.m \
+    src/Features/ChatList/TGChatListRowGeometry.m \
+    src/Features/Media/TGMediaVeilBlur.m \
+    src/Core/Stores/TGPlaybackQueue.m \
+    src/Core/Model/TGProfileTabs.m \
+    src/Core/Platform/TGPasscode.m
 
 # Test helper ObjC sources. TGClientStub and TGCallAudioEngineStub stand in
 # for the iOS-only production classes that TGCall.mm would otherwise need.
@@ -301,13 +343,17 @@ LIBTGVOIP_SRCS := \
 
 # ─── targets ──────────────────────────────────────────────────────────────────
 
-.PHONY: test build clean tokens sim official_sim
+.PHONY: test build clean tokens sizes sim official_sim
 
 # The design-token lint. Cheap, so it runs first: a literal size or colour
 # fails the suite the same way a broken assertion does.
 tokens:
 	@echo "\n════════ Design token lint ════════"
 	@sh $(ROOT)/scripts/lint_tokens.sh
+
+sizes:
+	@echo "\n════════ File size lint ════════"
+	@sh $(ROOT)/scripts/lint_size.sh
 
 TEST_BINARY_DEPS := $(TESTS)/main.m $(C_SRCS) $(OBJC_SRCS) $(TEST_HELPER_SRCS) $(TEST_SRCS) \
                 $(TESTS)/TGTestRunner.h $(TESTS)/TGCallTestHelpers.h
@@ -317,7 +363,7 @@ SIM_BINARY_DEPS := $(TESTS)/call_sim.mm $(C_SRCS) $(OBJC_SRCS) $(TEST_HELPER_SRC
                 $(TESTS)/TGCallTestHelpers.h
 OFFICIAL_SIM_DEPS := $(TESTS)/official_tgvoip_sim.mm $(LIBTGVOIP_SRCS)
 
-test: tokens $(TEST_BINARY) $(CLIENT_BINARY)
+test: tokens sizes $(TEST_BINARY) $(CLIENT_BINARY)
 	@echo "\n════════ Running call stack tests ════════"
 	$(TEST_BINARY)
 	@echo "\n════════ Running TGClient regression tests ════════"

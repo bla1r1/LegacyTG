@@ -23,7 +23,7 @@
 #import "TGStatusBanner.h"
 #import "TGEmptyView.h"
 
-// TGGalleryViewController is a controller, not a control: import
-// "TGGalleryViewController.h" where it is pushed.
+// TGDevGalleryViewController is a controller, not a control: import
+// "TGDevGalleryViewController.h" where it is pushed.
 
 #endif /* TGUI_h */

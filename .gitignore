@@ -11,7 +11,7 @@ INSTALL
 # Certificates and local configs
 certificates
 configure_ios.sh
-include/tg_config.h
+vendor/include/tg_config.h
 .vim*
 *~
 
@@ -42,7 +42,7 @@ state/
 .dirstamp
 stamp-h1
 libtool
-libs/libtgvoip
+vendor/libs/libtgvoip
 *.ips
 *.log
 /Baseband
@@ -57,3 +57,8 @@ libs/libtgvoip
 /WiFi
 /Retired
 /home
+/.vscode
+
+# Python cache
+__pycache__/
+*.pyc

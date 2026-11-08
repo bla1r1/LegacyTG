@@ -22,14 +22,14 @@ static const CGFloat kIconDumpSide = 52.0f;
 #import "TGDevShowcase.h"
 #import "TGDevModeViewController.h"
 #import "TGTopicsViewController.h"
-#import "TGGalleryViewController.h"
+#import "TGDevGalleryViewController.h"
 #import "TGVideoNoteRecorder.h"
 #import "TGStoryCameraViewController.h"
 #import "TGStoryComposerViewController.h"
 #import "TGPlayerView.h"
 #import "TGVideoNoteViewController.h"
 #import "TGIcons.h"
-#import "TGBench.h"
+#import "TGDevBench.h"
 #import "TGLoginViewController.h"
 #import <QuartzCore/QuartzCore.h>
 #include <dlfcn.h>
@@ -814,7 +814,7 @@ static NSUInteger TGChatsIndex(UITabBarController *tabs) {
 			UINavigationController *nc = tabs.viewControllers[TGChatsIndex(tabs)];
 			[nc popToRootViewControllerAnimated:NO];
 
-			TGGalleryViewController *gallery = [[TGGalleryViewController alloc] init];
+			TGDevGalleryViewController *gallery = [[TGDevGalleryViewController alloc] init];
 			gallery.hidesBottomBarWhenPushed = YES;
 			[nc pushViewController:gallery animated:NO];
 			NSLog(@"open gallery directly on main nc");
@@ -1259,12 +1259,12 @@ static NSUInteger TGChatsIndex(UITabBarController *tabs) {
 		return YES;
 	}
 
-	// itglegacy://bench/... - see TGBench.h.
+	// itglegacy://bench/... - see TGDevBench.h.
 	if ([host isEqualToString:@"bench"]){
 		NSMutableArray *args = [url.pathComponents mutableCopy];
 		[args removeObject:@"/"];
 		dispatch_async(dispatch_get_main_queue(), ^{
-			[TGBench runWithArguments:args window:self.window];
+			[TGDevBench runWithArguments:args window:self.window];
 		});
 		return YES;
 	}

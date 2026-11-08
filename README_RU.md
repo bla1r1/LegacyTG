@@ -17,17 +17,17 @@
 Перед сборкой настройте ключи API:
 
 ```bash
-cp include/tg_config.h.example include/tg_config.h
+cp vendor/include/tg_config.h.example vendor/include/tg_config.h
 ```
 
-Зарегистрируйтесь на https://my.telegram.org → API development tools, затем заполните `include/tg_config.h`:
+Зарегистрируйтесь на https://my.telegram.org → API development tools, затем заполните `vendor/include/tg_config.h`:
 
 ```c
 #define TG_API_ID   ВАШ_API_ID
 #define TG_API_HASH "ВАШ_API_HASH"
 ```
 
-`include/tg_config.h` добавлен в `.gitignore`.
+`vendor/include/tg_config.h` добавлен в `.gitignore`.
 
 ## Структура репозитория
 
@@ -36,20 +36,26 @@ LegacyTG/
 ├── Makefile
 ├── src/
 │   ├── App/         # вход приложения: main, AppDelegate, URL-роутинг
-│   ├── Core/        # клиент, TDLib bridge, тема, стиль, логика устройства
-│   ├── Controllers/ # ViewControllers
-│   ├── Views/       # UIKit-компоненты, ячейки, иконки
-│   ├── UI/          # переиспользуемые контролы (кнопки, поля, аватары, шиты)
+│   ├── Features/    # экраны по зонам; части в Actions/, Composer/, Views/, …
+│   ├── Core/
+│   │   ├── Client/   # TGClient + категории в Chats/, Messages/, Stories/, Features/, Audit/
+│   │   ├── Model/    # flatten, карточки, текст сообщений
+│   │   ├── Stores/   # кэши, опции, стикеры, медиа
+│   │   ├── Style/    # TGStyle, TGTheme, отрисовка текста
+│   │   ├── Platform/ # устройство, capabilities, perf, passcode
+│   │   └── Support/  # JSON, base64, updates, даты
+│   ├── Views/Icons/ # общий движок иконок и SVG
+│   ├── UI/          # общие контролы: Controls/, Overlays/, Controllers/, Format/
 │   ├── Media/       # декодеры (WebP-картинки, WebM-стикеры)
-│   ├── Calls/       # VoIP и E2EE-звонки
-│   └── Audio/       # голосовые сообщения
-├── resources/       # Info.plist, шрифты, entitlements
-├── images/          # иконки и ресурсы
+│   ├── CallEngine/  # сигналинг tgcalls, крипто, сеть, медиа
+│   ├── Audio/       # голосовые сообщения
+│   └── Compat/      # полифиллы (dyld TLV, шимы iOS 7)
+├── resources/       # Info.plist, картинки, шрифты, звуки, entitlements
 ├── third_party/     # libtgvoip, opus, ogg, …
 ├── tdlib/           # TDLib (git submodule)
-├── libs/            # готовые библиотеки и WebP.framework
-├── include/         # заголовки C, tg_config.h.example
-├── compat/          # полифиллы (dyld TLV, шимы iOS 7)
+├── vendor/
+│   ├── include/     # заголовки C, tg_config.h.example
+│   └── libs/        # готовые библиотеки и WebP.framework
 ├── tools/           # утилиты для хоста/устройства
 ├── scripts/         # скрипты сборки и деплоя
 ├── tests/           # юнит- и интеграционные тесты
