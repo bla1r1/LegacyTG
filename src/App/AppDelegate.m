@@ -246,6 +246,7 @@ static UIImage *TGCustomEmojiFromStore(int64_t emojiId, CGFloat side) {
 	[fm changeCurrentDirectoryPath:[[NSBundle mainBundle] bundlePath]];
 
 	self.window = [[UIWindow alloc] initWithFrame:[[UIScreen mainScreen] bounds]];
+	self.window.backgroundColor = [[TGTheme shared] listBackgroundColour];
 	[self showMainUI];
 	[self.window makeKeyAndVisible];
 #if TG_DEV

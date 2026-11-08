@@ -10,6 +10,7 @@
 /// settings screens expose ("disable_top_chats", "disable_animated_emoji", ...).
 - (void)optionValue:(NSString *)name completion:(void (^)(id value))completion;
 - (void)setOption:(NSString *)name boolValue:(BOOL)value;
+- (void)setOption:(NSString *)name integerValue:(int64_t)value;
 /// Drop the phone contacts this account uploaded to Telegram.
 - (void)clearImportedContacts;
 /// How many contacts this account has uploaded from a device's address book.

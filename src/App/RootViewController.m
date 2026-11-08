@@ -43,6 +43,17 @@ static NSString *const TGCallsTabChangedNotification = @"TGCallsTabChangedNotifi
 														object:nil];
 }
 
+- (UIViewController *)childViewControllerForStatusBarStyle {
+	return self.selectedViewController;
+}
+
+- (UIStatusBarStyle)preferredStatusBarStyle {
+	if ([[TGTheme shared] isDark]) {
+		return UIStatusBarStyleLightContent;
+	}
+	return UIStatusBarStyleDefault;
+}
+
 - (UINavigationController *)chatsNavigationController {
 	return self.chatsNC;
 }
@@ -136,7 +147,12 @@ static NSString *const TGCallsTabChangedNotification = @"TGCallsTabChangedNotifi
 	[self applyTabs];
 	self.selectedViewController = chatsNC;
 
+	self.view.backgroundColor = [[TGTheme shared] listBackgroundColour];
 	[[TGTheme shared] styleTabBar:self.tabBar];
+	[[TGTheme shared] styleNavigationBar:contactsNC.navigationBar];
+	[[TGTheme shared] styleNavigationBar:chatsNC.navigationBar];
+	[[TGTheme shared] styleNavigationBar:settingsNC.navigationBar];
+	if (self.callsNC) [[TGTheme shared] styleNavigationBar:self.callsNC.navigationBar];
 
 	CGFloat barH = TGMetricPlayerBarHeight;
 	CGFloat barY = self.view.bounds.size.height - self.tabBar.bounds.size.height - barH;
@@ -156,7 +172,15 @@ static NSString *const TGCallsTabChangedNotification = @"TGCallsTabChangedNotifi
 													  object:nil
 													   queue:[NSOperationQueue mainQueue]
 												  usingBlock:^(NSNotification *note) {
+		weakSelf.view.backgroundColor = [[TGTheme shared] listBackgroundColour];
 		[[TGTheme shared] styleTabBar:weakSelf.tabBar];
+		[[TGTheme shared] styleNavigationBar:weakSelf.contactsNC.navigationBar];
+		[[TGTheme shared] styleNavigationBar:weakSelf.callsNC.navigationBar];
+		[[TGTheme shared] styleNavigationBar:weakSelf.chatsNC.navigationBar];
+		[[TGTheme shared] styleNavigationBar:weakSelf.settingsNC.navigationBar];
+		if ([weakSelf respondsToSelector:@selector(setNeedsStatusBarAppearanceUpdate)]) {
+			[weakSelf setNeedsStatusBarAppearanceUpdate];
+		}
 	}];
 
 	[[NSNotificationCenter defaultCenter] addObserverForName:TGMusicPlayerChangedNotification

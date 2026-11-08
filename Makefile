@@ -551,6 +551,9 @@ APP_SRC_M := \
 	src/Features/Auth/TGTermsViewController.m \
 	src/Features/Profile/TGProfilePhotosViewController.m \
 	src/Features/Settings/TGBackgroundsViewController.m \
+	src/Features/Settings/TGBackgroundEditorViewController.m \
+	src/Features/Settings/TGPrivacyRuleViewController.m \
+	src/Features/Settings/TGUserPickerViewController.m \
 	src/Features/Settings/TGSettingsViewController.m \
 	src/Features/Settings/Pages/TGSettingsPagesCore.m \
 	src/Features/Settings/Pages/TGSettingsPagesPayments.m \
@@ -762,6 +765,7 @@ ipa-armv7: $(MACHOFIX) $(ARMV7_ALL_OBJS)
 	@$(call ADD_DEV_SCHEMES,$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/Info.plist)
 	@cp -f "$(ROOT_DIR)/resources/fonts/"*.ttf "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
 	@cp -f "$(ROOT_DIR)/resources/sounds/"*.mp3 "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
+	@cp -f "$(ROOT_DIR)/resources/"*.tgios-theme "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
 	@cp -rf "$(ROOT_DIR)/resources/images/"* "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
 	@# TDLib rides along as its own image: statically linked it pushes __TEXT
 	@# past the 16MB armv7 thumb branch limit. Built by scripts/build_tdlib_dylib.sh.
@@ -787,6 +791,7 @@ ipa-arm64: $(ARM64_ALL_OBJS)
 	@$(call ADD_DEV_SCHEMES,$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app/Info.plist)
 	@cp -f "$(ROOT_DIR)/resources/fonts/"*.ttf "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
 	@cp -f "$(ROOT_DIR)/resources/sounds/"*.mp3 "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
+	@cp -f "$(ROOT_DIR)/resources/"*.tgios-theme "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
 	@cp -rf "$(ROOT_DIR)/resources/images/"* "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
 	@codesign -s - --force "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app" 2>/dev/null || true
 	@# Each package stages in its own folder: under -j the three used to share

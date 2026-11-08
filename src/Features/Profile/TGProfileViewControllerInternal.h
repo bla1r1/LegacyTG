@@ -53,12 +53,12 @@ static const CGFloat kToastHeight   = 34.0f;
 
 static const NSInteger kSectionPersonalChannel = 0;
 static const NSInteger kSectionDetails        = 1;
-static const NSInteger kSectionDirectMessages = 2;
-static const NSInteger kSectionStories        = 3;
-static const NSInteger kSectionGifts          = 4;
-static const NSInteger kSectionMembers        = 5;
-static const NSInteger kSectionMedia          = 6;
-static const NSInteger kSectionDanger         = 7;
+static const NSInteger kSectionDanger         = 2;
+static const NSInteger kSectionDirectMessages = 3;
+static const NSInteger kSectionStories        = 4;
+static const NSInteger kSectionGifts          = 5;
+static const NSInteger kSectionMembers        = 6;
+static const NSInteger kSectionMedia          = 7;
 
 static const NSInteger kStoryGridCols  = 3;
 static const CGFloat   kStoryGridGap   = TGMetricCollageGap;

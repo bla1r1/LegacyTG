@@ -256,6 +256,81 @@ NSString *TGBlockedSenderName(NSDictionary *answer) {
 	}];
 }
 
+- (void)privacyRuleDetails:(NSString *)setting
+                completion:(void (^)(NSString *ruleType, NSArray *allowUserIds, NSArray *restrictUserIds))completion {
+	[self request:@{
+		@"@type"   : @"getUserPrivacySettingRules",
+		@"setting" : @{@"@type" : [@"userPrivacySetting" stringByAppendingString:setting]},
+	} completion:^(NSDictionary *result){
+		if (![result[@"@type"] isEqualToString:@"userPrivacySettingRules"]){
+			if (completion) completion(@"everybody", @[], @[]);
+			return;
+		}
+		NSString *ruleType = @"nobody";
+		NSMutableArray *allowUsers = [NSMutableArray array];
+		NSMutableArray *restrictUsers = [NSMutableArray array];
+
+		for (NSDictionary *entry in result[@"rules"]){
+			if (![entry isKindOfClass:NSDictionary.class]) continue;
+			NSString *type = entry[@"@type"];
+			if ([type isEqualToString:@"userPrivacySettingRuleAllowAll"]) {
+				ruleType = @"everybody";
+			} else if ([type isEqualToString:@"userPrivacySettingRuleAllowContacts"]) {
+				ruleType = @"contacts";
+			} else if ([type isEqualToString:@"userPrivacySettingRuleRestrictAll"]) {
+				ruleType = @"nobody";
+			} else if ([type isEqualToString:@"userPrivacySettingRuleAllowUsers"]) {
+				if ([entry[@"user_ids"] isKindOfClass:[NSArray class]]) {
+					[allowUsers addObjectsFromArray:entry[@"user_ids"]];
+				}
+			} else if ([type isEqualToString:@"userPrivacySettingRuleRestrictUsers"]) {
+				if ([entry[@"user_ids"] isKindOfClass:[NSArray class]]) {
+					[restrictUsers addObjectsFromArray:entry[@"user_ids"]];
+				}
+			}
+		}
+		if (completion) completion(ruleType, allowUsers, restrictUsers);
+	}];
+}
+
+- (void)setPrivacyRule:(NSString *)setting
+                  type:(NSString *)ruleType
+          allowUserIds:(NSArray *)allowUserIds
+       restrictUserIds:(NSArray *)restrictUserIds
+            completion:(void (^)(BOOL ok, NSString *error))completion {
+	NSMutableArray *rules = [NSMutableArray array];
+	if (allowUserIds.count > 0) {
+		[rules addObject:@{
+			@"@type" : @"userPrivacySettingRuleAllowUsers",
+			@"user_ids" : allowUserIds,
+		}];
+	}
+	if (restrictUserIds.count > 0) {
+		[rules addObject:@{
+			@"@type" : @"userPrivacySettingRuleRestrictUsers",
+			@"user_ids" : restrictUserIds,
+		}];
+	}
+	NSString *base = @"userPrivacySettingRuleRestrictAll";
+	if ([ruleType isEqualToString:@"everybody"]) {
+		base = @"userPrivacySettingRuleAllowAll";
+	} else if ([ruleType isEqualToString:@"contacts"]) {
+		base = @"userPrivacySettingRuleAllowContacts";
+	}
+	[rules addObject:@{@"@type" : base}];
+
+	[self request:@{
+		@"@type"   : @"setUserPrivacySettingRules",
+		@"setting" : @{@"@type" : [@"userPrivacySetting" stringByAppendingString:setting]},
+		@"rules"   : @{@"@type" : @"userPrivacySettingRules",
+					   @"rules" : rules},
+	} completion:^(NSDictionary *result){
+		BOOL ok = ![result[@"@type"] isEqualToString:@"error"];
+		NSString *error = ok ? nil : (result[@"message"] ?: @"An error occurred.");
+		if (completion) completion(ok, error);
+	}];
+}
+
 - (void)blockedUsersWithCompletion:(void (^)(NSArray *))completion {
 	__weak typeof(self) weakSelf = self;
 	[self request:@{

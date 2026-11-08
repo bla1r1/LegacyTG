@@ -5,6 +5,7 @@
 #import "TGSettingsViewControllerInternal.h"
 #import "TGAlertSheet.h"
 #import "TGBackgroundsViewController.h"
+#import "TGBackgroundEditorViewController.h"
 #import "TGProfileAppearanceViewController.h"
 #import "TGStickerPacksViewController.h"
 #import "TGStyle.h"
@@ -110,6 +111,11 @@ static NSString *TGDefaultBackgroundDetail(NSDictionary *state) {
 	];
 
 	NSMutableArray *customRows = [NSMutableArray array];
+	[customRows addObject:TGOpenRow(@"Set a Color", @"Colors & Gradients", ^{
+		TGBackgroundEditorViewController *editor = [[TGBackgroundEditorViewController alloc] init];
+		editor.hidesBottomBarWhenPushed = YES;
+		[weakSelf.navigationController pushViewController:editor animated:YES];
+	})];
 	[customRows addObject:TGOpenRow(@"Choose Wallpaper from Photos", (current == TGWallpaperTypeCustom ? @"Active" : nil), ^{
 		[weakSelf presentWallpaperPicker];
 	})];

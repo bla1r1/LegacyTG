@@ -42,8 +42,8 @@
 
 - (void)applyTheme {
 	TGTheme *theme = [TGTheme shared];
-	self.backgroundColor = [theme listBackgroundColour];
-	self.contentView.backgroundColor = [theme listBackgroundColour];
+	self.backgroundColor = [theme cardBackgroundColour];
+	self.contentView.backgroundColor = [theme cardBackgroundColour];
 
 	self.textLabel.font = TGFontRowStrong();
 	self.textLabel.textColor = self.destructive ? [theme destructiveColour] : [theme primaryTextColour];

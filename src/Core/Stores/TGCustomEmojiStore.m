@@ -37,6 +37,24 @@ static NSString *TGCustomEmojiPathsFile(void) {
 	return [caches stringByAppendingPathComponent:@"custom-emoji-paths.plist"];
 }
 
+static NSString *TGCustomEmojiDiskCacheDir(void) {
+	static NSString *dir = nil;
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{
+		NSString *caches = [NSSearchPathForDirectoriesInDomains(NSCachesDirectory,
+				NSUserDomainMask, YES) firstObject];
+		dir = [caches stringByAppendingPathComponent:@"custom_emoji"];
+		[[NSFileManager defaultManager] createDirectoryAtPath:dir
+				withIntermediateDirectories:YES attributes:nil error:nil];
+	});
+	return dir;
+}
+
+static NSString *TGCustomEmojiThumbnailPath(int64_t emojiId, CGFloat side) {
+	return [TGCustomEmojiDiskCacheDir() stringByAppendingPathComponent:
+			[NSString stringWithFormat:@"%lld_%.0f.png", (long long)emojiId, side]];
+}
+
 @implementation TGCustomEmojiStore
 
 + (instancetype)shared {
@@ -120,9 +138,24 @@ static NSString *TGPictureKey(int64_t emojiId, CGFloat side) {
 - (UIImage *)imageForId:(int64_t)emojiId side:(CGFloat)side {
 	if (emojiId == 0 || side <= 0)
 		return nil;
-	UIImage *picture = self.pictures[TGPictureKey(emojiId, side)];
+	NSString *picKey = TGPictureKey(emojiId, side);
+	UIImage *picture = self.pictures[picKey];
 	if (picture)
 		return picture;
+
+	NSString *thumbFile = TGCustomEmojiThumbnailPath(emojiId, side);
+	if ([[NSFileManager defaultManager] fileExistsAtPath:thumbFile]) {
+#if TARGET_OS_IPHONE
+		picture = [UIImage imageWithContentsOfFile:thumbFile];
+#else
+		picture = [[NSImage alloc] initWithContentsOfFile:thumbFile];
+#endif
+		if (picture) {
+			self.pictures[picKey] = picture;
+			return picture;
+		}
+	}
+
 	NSNumber *key = @(emojiId);
 	if ([self.failed containsObject:key])
 		return nil;
@@ -153,7 +186,7 @@ static NSString *TGPictureKey(int64_t emojiId, CGFloat side) {
 		[NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(sendBatch) object:nil];
 		[self sendBatch];
 	} else if (self.queued.count == 1) {
-		[self performSelector:@selector(sendBatch) withObject:nil afterDelay:0.02];
+		[self performSelector:@selector(sendBatch) withObject:nil afterDelay:0.15];
 	}
 	return nil;
 }
@@ -164,7 +197,7 @@ static NSString *TGPictureKey(int64_t emojiId, CGFloat side) {
 			NSMakeRange(0, MIN(self.queued.count, kBatchLimit))];
 	[self.queued minusSet:[NSSet setWithArray:ids]];
 	if (self.queued.count)
-		[self performSelector:@selector(sendBatch) withObject:nil afterDelay:0.02];
+		[self performSelector:@selector(sendBatch) withObject:nil afterDelay:0.15];
 
 #if TG_DEV
 	NSLog(@"custom emoji: asking for %lu", (unsigned long)ids.count);
@@ -262,7 +295,7 @@ static NSString *TGPictureKey(int64_t emojiId, CGFloat side) {
 #if TARGET_OS_IPHONE
 	CGFloat scale = [UIScreen mainScreen].scale;
 	__weak typeof(self) weakSelf = self;
-	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_BACKGROUND, 0), ^{
 		UIImage *raw = nil;
 		if ([path.pathExtension.lowercaseString isEqualToString:@"webp"]) {
 			raw = [UIImage convertFromWebP:path compressedData:nil error:nil];
@@ -272,6 +305,10 @@ static NSString *TGPictureKey(int64_t emojiId, CGFloat side) {
 		}
 		UIImage *picture = raw ? [TGIcons decodedImage:raw fittingSize:CGSizeMake(side, side)
 												   fill:NO scale:scale] : nil;
+		if (picture) {
+			NSData *png = UIImagePNGRepresentation(picture);
+			[png writeToFile:TGCustomEmojiThumbnailPath(emojiId, side) atomically:YES];
+		}
 		dispatch_async(dispatch_get_main_queue(), ^{
 			TGCustomEmojiStore *me = weakSelf;
 			if (!me)
@@ -292,7 +329,7 @@ static NSString *TGPictureKey(int64_t emojiId, CGFloat side) {
 #else
 	CGFloat scale = 2.0f;
 	__weak typeof(self) weakSelf = self;
-	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_BACKGROUND, 0), ^{
 		UIImage *raw = [[NSImage alloc] initWithContentsOfFile:path];
 		UIImage *picture = raw;
 		dispatch_async(dispatch_get_main_queue(), ^{

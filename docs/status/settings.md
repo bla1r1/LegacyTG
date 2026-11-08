@@ -5,8 +5,9 @@ Counts: 11 done, 47 partial, 25 missing, 1 dev-only.
 Built: M14 (tree and pages: account, sessions, folders, proxy, notifications,
 privacy, data and storage, appearance, power saving, language, stickers,
 Premium state, Business, Help, This Device, log out), M9 (appearance controls
-and tokens), M15 (notification switches). Open: M30 search, M33 localisation,
-M34 harness pages and TDLib footers, M37 appearance/privacy detail.
+and tokens), M15 (notification switches), M37 (appearance/privacy detail,
+exception lists, storage limits, background editor). Open: M30 search, M33 localisation,
+M34 harness pages and TDLib footers.
 
 | Feature | State | Where | Note |
 |---|---|---|---|
@@ -33,7 +34,7 @@ M34 harness pages and TDLib footers, M37 appearance/privacy detail.
 | Notification warning badge | missing | `Features/Settings/TGSettingsViewController.m:161` | No badge or warning. |
 | Privacy and Security | done | `Features/Settings/TGSettingsViewController+PrivacyPages.m:500` | Security, six rules, messages, close friends, contacts, account status, payments, link. |
 | Data and Storage | partial | `Features/Settings/TGSettingsViewController+NetworkPages.m:27` | All pages exist; File Tools and the network state page are still on the user's path. |
-| Appearance | partial | `Features/Settings/TGSettingsViewController+AppearancePages.m:37` | Themes, text size, wallpaper, defaults, emoji themes and Your Color; no Night, bubbles or icons. |
+| Appearance | partial | `Features/Settings/TGSettingsViewController+AppearancePages.m:37` | Themes (light and dark official files), text size, wallpaper, defaults, emoji themes and Your Color; no Auto-Night, bubbles or icons. |
 | Power Saving | partial | `Features/Settings/TGSettingsViewController+NetworkPages.m:192` | Sticker animation, wallpaper, GIF autoplay and media preloading; no master or threshold. |
 | Language | partial | `src/Features/Settings/Pages/TGSettingsPagesCore.m:258` | Pack picker changes TDLib's language; the app's own ~2200 strings stay English. |
 | Language row value | partial | `Features/Settings/TGSettingsViewController.m:95` | Uses the pack's `name`, never `native_name`. |
@@ -54,11 +55,11 @@ M34 harness pages and TDLib footers, M37 appearance/privacy detail.
 | Theme list | partial | `Features/Settings/TGSettingsViewController+AppearancePages.m:41` | Check rows: Classic plus `.tgios-theme` files; no thumbnails or built-in cards. |
 | Chat theme picker | partial | `Features/Settings/TGSettingsViewController+AppearancePages.m:75` | Lists emoji themes and opens a read-only detail alert; no way to apply one. |
 | Accent colour chooser | partial | `Features/Profile/TGProfileAppearanceViewController.m:156` | Swatch screen exists for profile/name colour; no background/accent/messages preview. |
-| Chat background page | partial | `Features/Settings/TGSettingsViewController+AppearancePages.m:100` | Local texture list plus a server list; no colour/gradient controls. |
-| Background colour, gradient and pattern | partial | `Features/Settings/TGSettingsViewController+AppearancePages.m:127` | Six fixed textures and a photo; no colour, gradient or pattern controls. |
+| Chat background page | done | `Features/Settings/TGBackgroundsViewController.m:1` | Local texture list, server list, and custom color/gradient editor. |
+| Background colour, gradient and pattern | done | `Features/Settings/TGBackgroundEditorViewController.m:1` | Full color and linear gradient wallpaper editor with live bubble preview and palette presets. |
 | Photo wallpaper crop, blur and motion | partial | `Features/Settings/TGSettingsViewController+AppearancePages.m:127` | One image picker scaled to 640 px and saved as JPEG; no crop, blur or motion. |
 | Your Color row | done | `Features/Settings/TGSettingsViewController+AppearancePages.m:88` | One "Your Color" row opens the profile appearance screen. |
-| Night Theme and Auto-Night | missing | `Core/Style/TGTheme.m:43` | Night was removed deliberately; the app is light-only. |
+| Night Theme and Auto-Night | partial | `Core/Style/TGTheme.h:248` | A dark official theme file applies (`isDark`, `9c93e8f`) and Night Blue is built in; no Auto-Night. |
 | Bubble corners editor | missing | `Core/Style/TGTheme+Effects.m:95` | Fixed radius; `TGMetricCornerBubbleFlat` is never used. |
 | Folder editor | partial | `Features/Settings/TGSettingsViewController+NetworkPages.m:249` | Eight-item action sheet plus add/remove chats; no excluded-read/muted/archived or tag colour. |
 | Sticker and emoji settings | missing | `Features/Media/TGStickerPacksViewController.m:21` | Sticker page is packs, archive and custom emoji only. |
@@ -69,7 +70,7 @@ M34 harness pages and TDLib footers, M37 appearance/privacy detail.
 | Sticker pack rows | partial | `Features/Media/TGStickerPacksViewController.m:21` | Subtitle row with short name, count and type; no sticker artwork. |
 | Root wording | partial | `src/Features/Settings/Pages/TGSettingsPagesCore.m:195` | Root has "Stickers and Emoji"; the sticker page is titled "Stickers". |
 | Settings navigation bar | partial | `Features/Settings/TGSettingsViewController.m:947` | Hides on scroll down and is not restored in `viewWillAppear:`. |
-| Dark background editing | partial | `Features/Settings/TGBackgroundsViewController.m:1` | A "Dark Theme Backgrounds" switch exists in a light-only app. |
+| Dark background editing | partial | `Features/Settings/TGBackgroundsViewController.m:1` | A "Dark Theme Backgrounds" switch picks the dark list by hand instead of following the active theme. |
 | Telegram Defaults presentation | partial | `Features/Settings/TGSettingsViewController+AppearancePages.m:183` | Alerts print raw ids and type names. |
 | Design: iOS 7+ navigation bar | missing | `Core/Style/TGTheme.m:338` | Blue `#517DA2` bar with white title on every OS. |
 | Design: iOS 7+ tab bar | missing | `Core/Style/TGTheme.m:238` | `barTintColor` and `tintColor` are both `#517DA2`. |

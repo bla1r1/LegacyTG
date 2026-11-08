@@ -134,5 +134,53 @@ UIFont *TGFontMediumAtSize(CGFloat size) {
 		   ?: [UIFont boldSystemFontOfSize:size];
 }
 
+@implementation TGWallpaperPreset
++ (instancetype)presetWithName:(NSString *)name color:(UIColor *)color {
+	TGWallpaperPreset *p = [[TGWallpaperPreset alloc] init];
+	p.name = name;
+	p.topColor = color;
+	p.bottomColor = color;
+	p.isGradient = NO;
+	return p;
+}
++ (instancetype)presetWithName:(NSString *)name top:(UIColor *)top bottom:(UIColor *)bottom {
+	TGWallpaperPreset *p = [[TGWallpaperPreset alloc] init];
+	p.name = name;
+	p.topColor = top;
+	p.bottomColor = bottom;
+	p.isGradient = YES;
+	return p;
+}
+@end
+
+static UIColor *TGWallpaperHex(uint32_t hex) {
+	return [UIColor colorWithRed:((hex >> 16) & 0xFF) / 255.0f
+						   green:((hex >> 8) & 0xFF) / 255.0f
+							blue:(hex & 0xFF) / 255.0f
+						   alpha:1.0f];
+}
+
+NSArray *TGWallpaperPalettePresets(void) {
+	static NSArray *presets = nil;
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{
+		presets = @[
+			[TGWallpaperPreset presetWithName:@"Classic Blue" color:TGWallpaperHex(0x517DA2)],
+			[TGWallpaperPreset presetWithName:@"Dark Slate" color:TGWallpaperHex(0x17212B)],
+			[TGWallpaperPreset presetWithName:@"Day Sky" top:TGWallpaperHex(0x5C9ECE) bottom:TGWallpaperHex(0xE4F1FA)],
+			[TGWallpaperPreset presetWithName:@"Nightfall" top:TGWallpaperHex(0x141E30) bottom:TGWallpaperHex(0x243B55)],
+			[TGWallpaperPreset presetWithName:@"Ocean Deep" top:TGWallpaperHex(0x1B3B6F) bottom:TGWallpaperHex(0x212F45)],
+			[TGWallpaperPreset presetWithName:@"Sunset Coral" top:TGWallpaperHex(0xFA709A) bottom:TGWallpaperHex(0xFEE140)],
+			[TGWallpaperPreset presetWithName:@"Royal Lavender" top:TGWallpaperHex(0x6A11CB) bottom:TGWallpaperHex(0x2575FC)],
+			[TGWallpaperPreset presetWithName:@"Emerald Mint" top:TGWallpaperHex(0x0BA360) bottom:TGWallpaperHex(0x3CBA92)],
+			[TGWallpaperPreset presetWithName:@"Peach Sunrise" top:TGWallpaperHex(0xED4264) bottom:TGWallpaperHex(0xFFEDBC)],
+			[TGWallpaperPreset presetWithName:@"Solid Mint" color:TGWallpaperHex(0x70C1B3)],
+			[TGWallpaperPreset presetWithName:@"Solid Charcoal" color:TGWallpaperHex(0x264653)],
+			[TGWallpaperPreset presetWithName:@"Solid Amber" color:TGWallpaperHex(0xE76F51)],
+		];
+	});
+	return presets;
+}
+
 
 // vim:ft=objc

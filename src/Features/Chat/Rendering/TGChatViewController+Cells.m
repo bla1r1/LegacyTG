@@ -113,7 +113,8 @@ static char kTGReactionChipInfoKey;
 	cell.bubble.layer.borderWidth = TGMetricBorderNone;
 	cell.bubble.layer.borderColor = [UIColor clearColor].CGColor;
 	cell.bubble.layer.cornerRadius = [theme bubbleCornerRadius];
-	cell.body.textColor = [theme primaryTextColour];
+	UIColor *bodyColor = mine ? [theme bubbleMineTextColour] : [theme bubbleTheirsTextColour];
+	cell.body.textColor = bodyColor;
 
 	// 4. Round video notes or animated stickers
 	if ([self configureRoundOrStickerCell:cell message:m layout:layout isMine:mine]) {
@@ -145,7 +146,7 @@ static char kTGReactionChipInfoKey;
 		cell.quote.hidden = NO;
 		cell.quote.numberOfLines = 1;
 		cell.quote.font = TGFontCaption();
-		cell.quote.textColor = [theme primaryTextColour];
+		cell.quote.textColor = bodyColor;
 		if (layout.quoteEntities.count) {
 			cell.quote.attributedText = TGAttributedMessageText(layout.quoteText, layout.quoteEntities, cell.quote.font, cell.quote.textColor);
 		} else {
@@ -173,9 +174,9 @@ static char kTGReactionChipInfoKey;
 	cell.body.font = TGFontAtSize([TGTheme shared].messageFontSize);
 	NSArray *entities = m[@"entities"];
 	if (entities.count) {
-		cell.body.attributedText = TGAttributedMessageTextRevealing(m[@"text"], entities, TGFontAtSize([TGTheme shared].messageFontSize), [theme primaryTextColour], [self.revealedSpoilers containsObject:m[@"id"] ?: @0]);
+		cell.body.attributedText = TGAttributedMessageTextRevealing(m[@"text"], entities, TGFontAtSize([TGTheme shared].messageFontSize), bodyColor, [self.revealedSpoilers containsObject:m[@"id"] ?: @0]);
 	} else {
-		TGSetBodyText(cell.body, m[@"text"], [theme primaryTextColour]);
+		TGSetBodyText(cell.body, m[@"text"], bodyColor);
 	}
 	cell.body.frame = layout.bodyFrame;
 	[self configureCustomEmojiInCell:cell message:m layout:layout];
@@ -378,7 +379,8 @@ static char kTGReactionChipInfoKey;
 	if (!layout.isService && !layout.isSticker && !layout.isRound) {
 		cell.shineBar.hidden = YES;
 		cell.shineGradientLayer.hidden = YES;
-		cell.body.textColor = [theme primaryTextColour];
+		UIColor *bodyColor = mine ? [theme bubbleMineTextColour] : [theme bubbleTheirsTextColour];
+		cell.body.textColor = bodyColor;
 		cell.body.shadowColor = [theme etchedTextShadowColour];
 		cell.body.shadowOffset = TGMetricShadowOffsetEtched;
 		cell.time.textColor = mine ? [theme timeMineColour] : [theme timeColour];
@@ -636,13 +638,26 @@ static void TGBubbleCorners(TGTheme *theme, BOOL mine, BOOL first, BOOL last,
 	*bl = mine ? big : (last ? 0 : small);
 }
 
+static UIImage *sBubbleCache[8];
+static __weak TGTheme *sCachedTheme = nil;
+
+void TGBubbleFlushCache(void) {
+	for (int i = 0; i < 8; i++)
+		sBubbleCache[i] = nil;
+	sCachedTheme = nil;
+}
+
 /// Every bubble background there is - mine or theirs, first of a run or not,
 /// tailed or not - is one of eight pictures, drawn once.
 UIImage *TGBubbleBackImage(TGTheme *theme, BOOL mine, BOOL first, BOOL last) {
-	static UIImage *cache[8];
+	if (sCachedTheme != theme) {
+		for (int i = 0; i < 8; i++)
+			sBubbleCache[i] = nil;
+		sCachedTheme = theme;
+	}
 	unsigned slot = (mine ? 1u : 0u) | (first ? 2u : 0u) | (last ? 4u : 0u);
-	if (cache[slot])
-		return cache[slot];
+	if (sBubbleCache[slot])
+		return sBubbleCache[slot];
 
 	CGFloat tl, tr, br, bl;
 	TGBubbleCorners(theme, mine, first, last, &tl, &tr, &br, &bl);
@@ -677,9 +692,9 @@ UIImage *TGBubbleBackImage(TGTheme *theme, BOOL mine, BOOL first, BOOL last) {
 	UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
 	UIGraphicsEndImageContext();
 
-	cache[slot] = [image resizableImageWithCapInsets:UIEdgeInsetsMake(top, left, bottom, right)
+	sBubbleCache[slot] = [image resizableImageWithCapInsets:UIEdgeInsetsMake(top, left, bottom, right)
 										resizingMode:UIImageResizingModeStretch];
-	return cache[slot];
+	return sBubbleCache[slot];
 }
 
 - (void)tableView:(UITableView *)tableView willDisplayCell:(UITableViewCell *)tableCell forRowAtIndexPath:(NSIndexPath *)indexPath {

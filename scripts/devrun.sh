@@ -171,7 +171,9 @@ ssh_ready() {
 	if ! ssh $SSH_OPTS "$SSH_HOST" true 2>/dev/null; then
 		# not up yet - usbmuxd forwarding may simply not be running
 		pkill -f "iproxy $SSH_PORT" 2>/dev/null
-		iproxy "$SSH_PORT" 22 >/dev/null 2>&1 &
+		local uopt=""
+		[ -n "$DEV_UDID" ] && uopt="-u $DEV_UDID"
+		iproxy "$SSH_PORT" 22 $uopt >/dev/null 2>&1 &
 		echo $! > "$LOGDIR/.iproxypid"
 		sleep 2
 		ssh $SSH_OPTS "$SSH_HOST" true 2>/dev/null || return 1
@@ -186,11 +188,10 @@ launch_via_ssh() {
 	# to the foreground and none of the launch path is exercised.
 	ssh $SSH_OPTS "$SSH_HOST" "killall LegacyTG 2>/dev/null || killall iTgLegacy 2>/dev/null; true"
 	sleep 2
-	# uiopen (Cydia: UIKit Tools) takes a URL, and the app registers
-	# legacytg:// and itglegacy:// for exactly this.
+	# openapp / uiopen launches the app
 	ssh $SSH_OPTS "$SSH_HOST" \
-		"uiopen legacytg:// 2>/dev/null || uiopen itglegacy:// 2>/dev/null || uiopen telegram:// 2>/dev/null || \
-		 open $BUNDLE_ID 2>/dev/null || exit 7" && return 0
+		"openapp $BUNDLE_ID 2>/dev/null || uiopen tg:// 2>/dev/null || uiopen telegram:// 2>/dev/null || \
+		 uiopen legacytg:// 2>/dev/null || open $BUNDLE_ID 2>/dev/null || exit 7" && return 0
 	echo "SSH works but no launcher binary found on the device." >&2
 	echo "Install from Cydia: 'UIKit Tools' (com.saurik.uikittools) gives 'uiopen'." >&2
 	return 1

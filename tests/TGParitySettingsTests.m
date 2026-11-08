@@ -302,4 +302,58 @@ static void TPSAnswer(TGClient *c, NSDictionary *answer) {
 	XCTAssertTrue(ok);
 }
 
+- (void)testPrivacyRuleDetails_ExtractsRuleTypeAndExceptionLists {
+	TGClient *c = TPSSettingsClient();
+	__block NSString *type = nil;
+	__block NSArray *allows = nil;
+	__block NSArray *restricts = nil;
+	[c privacyRuleDetails:@"ShowStatus" completion:^(NSString *ruleType, NSArray *allowUserIds, NSArray *restrictUserIds){
+		type = ruleType;
+		allows = allowUserIds;
+		restricts = restrictUserIds;
+	}];
+	NSDictionary *read = TPSLastRequest(c, @"getUserPrivacySettingRules");
+	XCTAssertEqualObjects(read[@"setting"][@"@type"], @"userPrivacySettingShowStatus");
+	TPSAnswer(c, @{@"@type" : @"userPrivacySettingRules",
+				   @"rules" : @[
+					   @{@"@type" : @"userPrivacySettingRuleAllowUsers", @"user_ids" : @[@(101), @(102)]},
+					   @{@"@type" : @"userPrivacySettingRuleRestrictUsers", @"user_ids" : @[@(201)]},
+					   @{@"@type" : @"userPrivacySettingRuleAllowContacts"}]});
+	XCTAssertEqualObjects(type, @"contacts");
+	XCTAssertEqual(allows.count, (NSUInteger)2);
+	XCTAssertEqual(restricts.count, (NSUInteger)1);
+	XCTAssertEqualObjects(allows[0], @(101));
+	XCTAssertEqualObjects(restricts[0], @(201));
+}
+
+- (void)testSetPrivacyRule_WithExplicitAllowAndRestrictUsers {
+	TGClient *c = TPSSettingsClient();
+	__block BOOL done = NO;
+	[c setPrivacyRule:@"ShowProfilePhoto"
+				 type:@"nobody"
+		 allowUserIds:@[@(501)]
+	  restrictUserIds:@[@(601), @(602)]
+		   completion:^(BOOL ok, NSString *error){
+		done = ok;
+	}];
+	NSDictionary *req = TPSLastRequest(c, @"setUserPrivacySettingRules");
+	XCTAssertEqualObjects(req[@"setting"][@"@type"], @"userPrivacySettingShowProfilePhoto");
+	NSArray *rules = req[@"rules"][@"rules"];
+	XCTAssertEqual(rules.count, (NSUInteger)3);
+	XCTAssertEqualObjects(rules[0][@"@type"], @"userPrivacySettingRuleAllowUsers");
+	XCTAssertEqualObjects(rules[1][@"@type"], @"userPrivacySettingRuleRestrictUsers");
+	XCTAssertEqualObjects(rules[2][@"@type"], @"userPrivacySettingRuleRestrictAll");
+	TPSAnswer(c, @{@"@type" : @"ok"});
+	XCTAssertTrue(done);
+}
+
+- (void)testSetOption_IntegerStorageOptions {
+	TGClient *c = TPSSettingsClient();
+	[c setOption:@"storage_max_files_size" integerValue:5368709120LL];
+	NSDictionary *req = TPSLastRequest(c, @"setOption");
+	XCTAssertEqualObjects(req[@"name"], @"storage_max_files_size");
+	XCTAssertEqualObjects(req[@"value"][@"@type"], @"optionValueInteger");
+	XCTAssertEqualObjects(req[@"value"][@"value"], @(5368709120LL));
+}
+
 @end

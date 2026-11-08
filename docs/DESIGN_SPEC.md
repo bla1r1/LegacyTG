@@ -35,8 +35,10 @@ All colours from `TGTheme+Colours`. All sizes and metrics from
 
 ### Colour roles
 
-Light only: Night and Auto-Night were removed in `8e86854`, and a chat theme
-file that declares a dark palette is refused. Roles live in `TGTheme+Colours`;
+Light by default. Night was removed in `8e86854` while the only palettes were
+home-made; since `9c93e8f` an official theme file that declares a dark
+palette is accepted, and Night Blue ships built in. There is no Auto-Night.
+Roles live in `TGTheme+Colours`;
 the app draws no hue the running OS does not also know:
 
 | Token | Role |

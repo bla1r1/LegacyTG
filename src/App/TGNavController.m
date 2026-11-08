@@ -3,8 +3,20 @@
 // "Back" instead of whatever the previous screen happened to be titled.
 //
 #import "TGNavController.h"
+#import "TGTheme.h"
 
 @implementation TGNavController
+
+- (UIViewController *)childViewControllerForStatusBarStyle {
+	return self.topViewController;
+}
+
+- (UIStatusBarStyle)preferredStatusBarStyle {
+	if ([[TGTheme shared] isDark]) {
+		return UIStatusBarStyleLightContent;
+	}
+	return UIStatusBarStyleDefault;
+}
 
 - (void)pushViewController:(UIViewController *)vc animated:(BOOL)animated {
 	// The back button belongs to the screen below the one being pushed, so

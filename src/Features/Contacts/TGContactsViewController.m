@@ -187,8 +187,8 @@ static NSArray *TGContactSections(NSArray *users) {
 	self.tableView.tableHeaderView = self.searchBar;
 	// No separators drawn under the last contact, across the empty screen.
 	self.tableView.tableFooterView = [[UIView alloc] initWithFrame:CGRectZero];
-	self.tableView.backgroundColor = [[TGTheme shared] listBackgroundColour];
-	self.tableView.separatorColor = [[TGTheme shared] separatorColour];
+	self.view.backgroundColor = [[TGTheme shared] listBackgroundColour];
+	[[TGTheme shared] stylePlainTable:self.tableView];
 
 	__weak typeof(self) weakContacts = self;
 	[[NSNotificationCenter defaultCenter] addObserverForName:TGThemeChangedNotification
@@ -196,9 +196,10 @@ static NSArray *TGContactSections(NSArray *users) {
 		 usingBlock:^(NSNotification *note){
 		TGContactsViewController *me = weakContacts;
 		[TGIcons flush];
-		me.tableView.backgroundColor = [[TGTheme shared] listBackgroundColour];
-		me.tableView.separatorColor = [[TGTheme shared] separatorColour];
+		me.view.backgroundColor = [[TGTheme shared] listBackgroundColour];
+		[[TGTheme shared] stylePlainTable:me.tableView];
 		[[TGTheme shared] styleNavigationBar:me.navigationController.navigationBar];
+		[[TGTheme shared] styleSearchBar:me.searchBar];
 		[me.tableView reloadData];
 	}];
 
@@ -418,6 +419,10 @@ static NSString *TGContactName(NSDictionary *u) {
 	return self.sections[(NSUInteger)section][@"title"];
 }
 
+- (void)tableView:(UITableView *)tableView willDisplayHeaderView:(UIView *)view forSection:(NSInteger)section {
+	[[TGTheme shared] styleHeaderFooterView:view];
+}
+
 - (NSArray *)sectionIndexTitlesForTableView:(UITableView *)tableView {
 	if (self.isSearching || self.sortByLastSeen)
 		return nil;
@@ -465,6 +470,7 @@ static NSString *TGContactName(NSDictionary *u) {
 	int64_t statusEmojiId = [[TGClient shared] emojiStatusIdForUser:uid];
 	UIColor *bg = [[TGTheme shared] listBackgroundColour];
 	cell.backgroundColor = bg;
+	cell.contentView.backgroundColor = bg;
 	cell.textLabel.backgroundColor = bg;
 	cell.textLabel.opaque = YES;
 	cell.textLabel.attributedText = TGNameWithStatus(name ?: @"", statusEmojiId, TGFontBody(), [[TGTheme shared] primaryTextColour]);

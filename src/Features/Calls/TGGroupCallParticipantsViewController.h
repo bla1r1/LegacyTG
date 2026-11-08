@@ -7,8 +7,9 @@
 // account's own. Rows come from TDLib updates, not from a request per row.
 //
 #import <UIKit/UIKit.h>
+#import "TGTableViewController.h"
 
-@interface TGGroupCallParticipantsViewController : UITableViewController
+@interface TGGroupCallParticipantsViewController : TGTableViewController
 
 - (instancetype)initWithChatId:(int64_t)chatId groupCallId:(int32_t)groupCallId;
 

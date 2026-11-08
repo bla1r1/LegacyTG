@@ -4,9 +4,9 @@ Counts: 34 done, 29 partial, 19 missing, 0 dev-only.
 
 Built: M14 (passcode and auto-lock, two-step, login email, change phone,
 sessions and websites, blocked users, six visibility rules, read receipts,
-close friends, data controls, payment records; storage and network pages).
-Open: M37 (exception lists, storage maximum, per-chat rules), M31
-(notification half), M34 (TDLib text in security alerts).
+close friends, data controls, payment records; storage and network pages),
+M37 (exception lists, storage maximum, custom wallpaper colors/gradients).
+Open: M31 (notification half), M34 (TDLib text in security alerts).
 
 | Feature | State | Where | Note |
 |---|---|---|---|
@@ -46,7 +46,7 @@ Open: M37 (exception lists, storage maximum, per-chat rules), M31
 | Gifts privacy | missing | `Features/Settings/TGSettingsViewController+PrivacyPages.m:500` | No who-may-send, gift button or accepted-types rows. |
 | Voice message privacy | missing | `Features/Settings/TGSettingsViewController+PrivacyPages.m:500` | No row for who may send voice messages. |
 | Added-by-phone privacy | missing | `Features/Settings/TGSettingsViewController+PrivacyPages.m:500` | No row for finding the account by phone. |
-| Privacy exception lists | missing | `Features/Settings/TGSettingsViewController+Actions.m:447` | The rule sheet is only Everybody/Contacts/Nobody. |
+| Privacy exception lists | done | `Features/Settings/TGPrivacyRuleViewController.m:1` | Dedicated privacy rule screen with Always Allow / Never Allow contact pickers and live TDLib sync. |
 | Privacy row order and wording | partial | `Features/Settings/TGSettingsViewController.m:639` | Six rows: Last Seen, Photo, Phone, Calls, Invites, Forwards. |
 | Read receipts | partial | `Features/Settings/TGSettingsViewController+PrivacyPages.m:623` | A top-level Read Receipts switch in the Messages card. |
 | Delete messages by default | partial | `Features/Settings/TGSettingsViewController+PrivacyPages.m:588` | Four fixed choices; any other server value prints plain days, no custom picker. |

@@ -552,14 +552,16 @@ static void TGDrawVertical(CGContextRef ctx, UIColor *top, UIColor *bottom,
 	UIGraphicsBeginImageContextWithOptions(CGSizeMake(width, height), NO, scale);
 	CGContextRef ctx = UIGraphicsGetCurrentContext();
 
-	if (![TGTheme drawsSkeuomorphicChrome]) {
-		// An iOS 7 field is a white plate with a hairline, not a recess.
+	TGTheme *theme = [TGTheme shared];
+	if (![TGTheme drawsSkeuomorphicChrome] || [theme isDark]) {
+		// An iOS 7 or dark field is a flat plate with a hairline, not a recess.
 		CGFloat inset = TGHalf(TGMetricHairline);
 		UIBezierPath *shape = [UIBezierPath bezierPathWithRoundedRect:
 				CGRectInset(CGRectMake(0, 0, width, height), inset, inset) cornerRadius:radius];
-		[[[TGTheme shared] cardBackgroundColour] setFill];
+		UIColor *fill = [theme isDark] ? [theme inputFieldColour] : [theme cardBackgroundColour];
+		[fill setFill];
 		[shape fill];
-		[TGScaledColour([[TGTheme shared] separatorColour], kFlatWellRim) setStroke];
+		[TGScaledColour([theme separatorColour], kFlatWellRim) setStroke];
 		shape.lineWidth = TGMetricHairline;
 		[shape stroke];
 		UIImage *flat = UIGraphicsGetImageFromCurrentImageContext();
@@ -961,8 +963,8 @@ static void TGDrawVertical(CGContextRef ctx, UIColor *top, UIColor *bottom,
 	CGContextRef ctx = UIGraphicsGetCurrentContext();
 
 	TGTheme *theme = [TGTheme shared];
-	if (![TGTheme drawsSkeuomorphicChrome]) {
-		// The composer on iOS 7 on: the theme's strip colour and a hairline
+	if (![TGTheme drawsSkeuomorphicChrome] || [theme isDark]) {
+		// The composer on iOS 7 or dark: the theme's strip colour and a hairline
 		// along its top edge, nothing brushed.
 		[[theme inputBarColour] setFill];
 		UIRectFill(CGRectMake(0, 0, width, height));

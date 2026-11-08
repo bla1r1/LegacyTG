@@ -404,9 +404,9 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 }
 
 - (void)applyTheme {
+	[super applyTheme];
 	TGTheme *theme = [TGTheme shared];
-	self.tableView.backgroundColor = [theme groupedBackgroundColour];
-	self.tableView.separatorColor = [theme separatorColour];
+	[theme styleGroupedTable:self.tableView];
 	[theme styleNavigationBar:self.navigationController.navigationBar];
 	if (self.similarChannelsCompositeImage) {
 		self.similarChannelsCompositeImage = nil;

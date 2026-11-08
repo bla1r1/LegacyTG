@@ -356,17 +356,20 @@ static int64_t sActiveChatId = 0;
 		subtitle.hidden = YES;
 }
 
+FOUNDATION_EXPORT void TGBubbleFlushCache(void);
+
 - (void)themeChanged:(NSNotification *)note {
+	TGBubbleFlushCache();
 	[TGIcons flush];
 	TGTheme *theme = [TGTheme shared];
 	[self.layoutCache removeAllObjects];
 	self.view.backgroundColor = [theme chatBackgroundColour];
 	self.table.backgroundColor = [UIColor clearColor];
 	self.inputBar.backgroundColor = [theme inputBarColour];
-	self.input.backgroundColor = [theme listBackgroundColour];
+	self.input.backgroundColor = [theme inputFieldColour];
 	self.input.textColor = [theme primaryTextColour];
 	self.input.layer.borderColor = [theme separatorColour].CGColor;
-	self.input.keyboardAppearance = UIKeyboardAppearanceLight;
+	self.input.keyboardAppearance = [theme isDark] ? UIKeyboardAppearanceDark : UIKeyboardAppearanceLight;
 	self.sendButton.backgroundColor = [theme accentColour];
 	self.wallpaperView.image = [theme wallpaper];
 	self.titleNameLabel.textColor = [theme barTitleColour];

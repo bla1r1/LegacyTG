@@ -41,12 +41,19 @@
 /// "ShowLinkInForwardedMessages", "ShowPhoneNumber", "ShowBirthdate".
 - (void)privacyRule:(NSString *)setting
          completion:(void (^)(NSString *value))completion;
+- (void)privacyRuleDetails:(NSString *)setting
+                completion:(void (^)(NSString *ruleType, NSArray *allowUserIds, NSArray *restrictUserIds))completion;
 - (void)setPrivacyRule:(NSString *)setting to:(NSString *)value;
 /// Writes a rule and answers after the server accepts or refuses it. Existing
 /// user/exception rules are carried over so changing the catch-all does not
 /// erase them.
 - (void)setPrivacyRule:(NSString *)setting to:(NSString *)value
 			completion:(void (^)(BOOL ok, NSString *error))completion;
+- (void)setPrivacyRule:(NSString *)setting
+                  type:(NSString *)ruleType
+          allowUserIds:(NSArray *)allowUserIds
+       restrictUserIds:(NSArray *)restrictUserIds
+            completion:(void (^)(BOOL ok, NSString *error))completion;
 /// Everyone you have blocked: "id" and "name".
 - (void)blockedUsersWithCompletion:(void (^)(NSArray *users))completion;
 /// Days of inactivity before the account deletes itself.

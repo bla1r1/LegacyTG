@@ -36,6 +36,10 @@
 
 /// Vertical celestial blue for your own skeuomorphic bubble, with deep blue in Night.
 - (NSArray *)skeuoBubbleMineGradientColours {
+	if ([self isDark]) {
+		CGColorRef c = [self bubbleMineColour].CGColor;
+		return @[ (__bridge id)c, (__bridge id)c ];
+	}
 	return @[
 		(id)rgb(0xE6, 0xF2, 0xFD).CGColor,
 		(id)rgb(0xD6, 0xEB, 0xFA).CGColor,
@@ -47,6 +51,10 @@
 /// Vertical whites in light, vertical charcoals in dark. Gradients run
 /// top to bottom, so the first stop is always the lightest.
 - (NSArray *)skeuoBubbleTheirsGradientColours {
+	if ([self isDark]) {
+		CGColorRef c = [self bubbleTheirsColour].CGColor;
+		return @[ (__bridge id)c, (__bridge id)c ];
+	}
 	return @[
 		(id)rgb(0xFF, 0xFF, 0xFF).CGColor,
 		(id)rgb(0xF2, 0xF2, 0xF5).CGColor,

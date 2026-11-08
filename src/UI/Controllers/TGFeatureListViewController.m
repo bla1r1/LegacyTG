@@ -109,8 +109,12 @@ NSDictionary *TGFeatureSection(NSString *header, NSString *footer, NSArray *rows
 
 - (void)tableView:(UITableView *)tableView willDisplayHeaderView:(UIView *)view
 	   forSection:(NSInteger)section {
-	// The system's grouped header is left as it is: it follows the table's
-	// style, and a hand-painted one was what the token lint exists to stop.
+	[[TGTheme shared] styleHeaderFooterView:view];
+}
+
+- (void)tableView:(UITableView *)tableView willDisplayFooterView:(UIView *)view
+	   forSection:(NSInteger)section {
+	[[TGTheme shared] styleHeaderFooterView:view];
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView
@@ -125,6 +129,7 @@ NSDictionary *TGFeatureSection(NSString *header, NSString *footer, NSArray *rows
 				? UITableViewCellStyleSubtitle : UITableViewCellStyleValue1)
 									  reuseIdentifier:ident];
 	}
+	[[TGTheme shared] styleGroupedCell:cell forRow:indexPath.row totalRows:[self.sections[indexPath.section][@"rows"] count]];
 	cell.textLabel.text = row[TGFeatureRowTitle];
 	cell.detailTextLabel.text = row[TGFeatureRowDetail];
 	cell.detailTextLabel.numberOfLines = subtitle ? 2 : 1;

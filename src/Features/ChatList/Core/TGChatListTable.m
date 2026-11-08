@@ -117,6 +117,25 @@ static dispatch_semaphore_t TGAvtDecodeGate(NSInteger cap) {
 @implementation TGChatListViewController (TGChatListTable)
 
 #pragma mark - table data
+static NSString *TGAvatarDiskCacheDir(void) {
+	static NSString *dir = nil;
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{
+		NSString *caches = [NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES) firstObject];
+		dir = [caches stringByAppendingPathComponent:@"avatars"];
+		[[NSFileManager defaultManager] createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
+	});
+	return dir;
+}
+
+static NSString *TGAvatarDiskPath(int64_t chatId, NSInteger fileId) {
+	if (fileId > 0)
+		return [TGAvatarDiskCacheDir() stringByAppendingPathComponent:[NSString stringWithFormat:@"av_%ld.png", (long)fileId]];
+	if (chatId != 0)
+		return [TGAvatarDiskCacheDir() stringByAppendingPathComponent:[NSString stringWithFormat:@"chat_%lld.png", (long long)chatId]];
+	return nil;
+}
+
 - (void)fetchMissingAvatars {
 	// Wait until live chats from TDLib arrive: snapshot rows must not query
 	// file IDs from a prior session.
@@ -144,6 +163,15 @@ static dispatch_semaphore_t TGAvtDecodeGate(NSInteger cap) {
 		NSNumber *fileId = c[@"photoFileId"];
 		if (!fileId || fileId.longLongValue < 0 || self.avatars[fileId] || [self.avatarsRequested containsObject:fileId])
 			continue;
+		int64_t cid = [c[@"id"] longLongValue];
+		NSString *diskPath = TGAvatarDiskPath(cid, [fileId integerValue]);
+		if (diskPath && [[NSFileManager defaultManager] fileExistsAtPath:diskPath]) {
+			UIImage *cached = [UIImage imageWithContentsOfFile:diskPath];
+			if (cached) {
+				self.avatars[fileId] = cached;
+				continue;
+			}
+		}
 		// The mark follows the request from start to finish: set here, and
 		// lifted on a nil callback, so a watchdog timeout or a lost download
 		// reads as "ask me again on the next pass" instead of leaving the
@@ -173,10 +201,16 @@ static dispatch_semaphore_t TGAvtDecodeGate(NSInteger cap) {
 														    size:CGSizeMake(kAvatar, kAvatar)
 														  radius:TGHalf(kAvatar)
 														 corners:UIRectCornerAllCorners];
+						UIImage *finalImg = rounded ?: img;
+						NSString *saveDisk = TGAvatarDiskPath(cid, [fileId integerValue]);
+						if (saveDisk) {
+							NSData *png = UIImagePNGRepresentation(finalImg);
+							[png writeToFile:saveDisk atomically:YES];
+						}
 						dispatch_async(dispatch_get_main_queue(), ^{
 							TGChatListViewController *me = weakSelf;
 							if (!me) { dispatch_semaphore_signal(gate); return; }
-							me.avatars[fileId] = rounded ?: img;
+							me.avatars[fileId] = finalImg;
 							[me.avatarsRequested removeObject:fileId];
 							[me refreshListTitleView];
 							[me reloadTableDebounced];
@@ -314,6 +348,13 @@ static NSString *TGChatDate(NSTimeInterval unix) {
 	cell.pin.hidden = YES;
 	cell.onlineDot.layer.borderColor = bg.CGColor;
 	cell.separator.backgroundColor = [theme separatorColour];
+	if ([theme isDark]) {
+		UIView *sel = [[UIView alloc] init];
+		sel.backgroundColor = [theme inputBarColour];
+		cell.selectedBackgroundView = sel;
+	} else {
+		cell.selectedBackgroundView = nil;
+	}
 
 
 	NSArray *header = [self headerRows];
@@ -403,6 +444,15 @@ static NSString *TGChatDate(NSTimeInterval unix) {
 	NSNumber *fileId = c[@"photoFileId"];
 	UIImage *photo = fileId ? self.avatars[fileId] : nil;
 	int64_t cid = [c[@"id"] longLongValue];
+	if (!photo && (fileId.integerValue > 0 || cid != 0)) {
+		NSString *diskPath = TGAvatarDiskPath(cid, [fileId integerValue]);
+		if (diskPath && [[NSFileManager defaultManager] fileExistsAtPath:diskPath]) {
+			photo = [UIImage imageWithContentsOfFile:diskPath];
+			if (photo && fileId) {
+				self.avatars[fileId] = photo;
+			}
+		}
+	}
 	if ([c[@"isSaved"] boolValue])
 		photo = [TGIcons savedMessagesAvatarOfSide:kAvatar];
 	if (!photo){

@@ -1,0 +1,91 @@
+{
+  "name": "Night Blue",
+  "dark": true,
+  "root": {
+    "statusBar": "white",
+    "tabBar": {
+      "background": "#17212b",
+      "separator": "#0e1621",
+      "icon": "#708499",
+      "selectedIcon": "#5288c1",
+      "text": "#708499",
+      "selectedText": "#5288c1"
+    },
+    "navBar": {
+      "buttonText": "#5288c1",
+      "primaryText": "#ffffff",
+      "secondaryText": "#708499",
+      "accentText": "#5288c1",
+      "background": "#17212b",
+      "separator": "#0e1621"
+    }
+  },
+  "chatList": {
+    "bg": "#17212b",
+    "itemBg": "#17212b",
+    "itemSeparator": "#0e1621",
+    "title": "#ffffff",
+    "dateText": "#708499",
+    "messageText": "#708499",
+    "unreadBadgeActiveBg": "#5288c1",
+    "unreadBadgeActiveText": "#ffffff",
+    "unreadBadgeMutedBg": "#232e3c"
+  },
+  "chat": {
+    "defaultWallpaper": {
+      "color": "#0e1621"
+    },
+    "message": {
+      "incoming": {
+        "bubble": {
+          "withWp": {
+            "bg": "#182533"
+          },
+          "withoutWp": {
+            "bg": "#182533"
+          }
+        },
+        "primaryText": "#ffffff",
+        "secondaryText": "#708499"
+      },
+      "outgoing": {
+        "bubble": {
+          "withWp": {
+            "bg": "#2b5278"
+          },
+          "withoutWp": {
+            "bg": "#2b5278"
+          }
+        },
+        "primaryText": "#ffffff",
+        "secondaryText": "#8fa2b5"
+      },
+      "freeform": {
+        "withoutWp": {
+          "bg": "#0e1621"
+        }
+      }
+    },
+    "serviceMessage": {
+      "components": {
+        "fill": "#22303c",
+        "primaryText": "#ffffff"
+      }
+    },
+    "inputPanel": {
+      "panelBg": "#17212b",
+      "inputBg": "#232e3c",
+      "inputText": "#ffffff",
+      "inputStroke": "#0e1621"
+    }
+  },
+  "list": {
+    "blocksBg": "#0e1621",
+    "plainBg": "#17212b",
+    "itemBlocksBg": "#17212b",
+    "itemSeparator": "#0e1621",
+    "primaryText": "#ffffff",
+    "secondaryText": "#708499",
+    "accent": "#5288c1"
+  }
+}

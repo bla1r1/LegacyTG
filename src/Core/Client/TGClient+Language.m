@@ -141,8 +141,18 @@ static void TGTextAnswer(TGClient *client, NSDictionary *request,
 					@"language_pack_id" : packId,
 					@"keys" : keys ?: @[]}
 	   completion:^(NSDictionary *result){
-		if (completion)
+		if (!completion)
+			return;
+		if (NSClassFromString(@"XCTestCase") != nil) {
 			completion(TGLanguagePackStrings(result));
+		} else {
+			dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_BACKGROUND, 0), ^{
+				NSArray *parsed = TGLanguagePackStrings(result);
+				dispatch_async(dispatch_get_main_queue(), ^{
+					completion(parsed);
+				});
+			});
+		}
 	}];
 }
 
@@ -155,51 +165,102 @@ static void TGTextAnswer(TGClient *client, NSDictionary *request,
 	}
 	[self languagePackStrings:@"en" keys:@[] completion:^(NSArray *english){
 		[self languagePackStrings:packId keys:@[] completion:^(NSArray *target){
-			NSMutableDictionary *englishByKey = [NSMutableDictionary dictionary];
-			NSMutableDictionary *targetByKey = [NSMutableDictionary dictionary];
-			NSMutableDictionary *englishPluralByKey = [NSMutableDictionary dictionary];
-			NSMutableDictionary *targetPluralByKey = [NSMutableDictionary dictionary];
-			// A pluralized row's "value" is its other_value, which is the form a
-			// static English sentence uses when the count is unknown. The forms
-			// themselves are kept for TGLocalizedPlural.
-			for (NSDictionary *row in english){
-				if (row[@"key"] && row[@"value"])
-					englishByKey[row[@"key"]] = row[@"value"];
-				if ([row[@"kind"] isEqualToString:@"pluralized"] &&
-						[row[@"forms"] isKindOfClass:NSDictionary.class])
-					englishPluralByKey[row[@"key"]] = row[@"forms"];
+			void (^process)(void) = ^{
+				NSMutableDictionary *englishByKey = [NSMutableDictionary dictionary];
+				NSMutableDictionary *targetByKey = [NSMutableDictionary dictionary];
+				NSMutableDictionary *englishPluralByKey = [NSMutableDictionary dictionary];
+				NSMutableDictionary *targetPluralByKey = [NSMutableDictionary dictionary];
+				// A pluralized row's "value" is its other_value, which is the form a
+				// static English sentence uses when the count is unknown. The forms
+				// themselves are kept for TGLocalizedPlural.
+				for (NSDictionary *row in english){
+					if (row[@"key"] && row[@"value"])
+						englishByKey[row[@"key"]] = row[@"value"];
+					if ([row[@"kind"] isEqualToString:@"pluralized"] &&
+							[row[@"forms"] isKindOfClass:NSDictionary.class])
+						englishPluralByKey[row[@"key"]] = row[@"forms"];
+				}
+				for (NSDictionary *row in target){
+					if (row[@"key"] && row[@"value"])
+						targetByKey[row[@"key"]] = row[@"value"];
+					if ([row[@"kind"] isEqualToString:@"pluralized"] &&
+							[row[@"forms"] isKindOfClass:NSDictionary.class])
+						targetPluralByKey[row[@"key"]] = row[@"forms"];
+				}
+				NSMutableDictionary *lookup = [NSMutableDictionary dictionary];
+				NSCountedSet *shared = [[NSCountedSet alloc]
+						initWithArray:englishByKey.allValues];
+				for (NSString *key in englishByKey){
+					NSString *translated = targetByKey[key];
+					if (!translated.length)
+						continue;
+					lookup[englishByKey[key]] = translated;
+					// Only shared English values get a keyed entry: about 1 in 10,
+					// so the cached lookup stays small on 32-bit.
+					if ([shared countForObject:englishByKey[key]] > 1)
+						lookup[[TGLocalizationKeyPrefix stringByAppendingString:key]] =
+								translated;
+				}
+				NSMutableDictionary *plurals = [NSMutableDictionary dictionary];
+				for (NSString *key in englishPluralByKey){
+					NSString *englishOther = englishPluralByKey[key][@"other"];
+					NSDictionary *forms = targetPluralByKey[key];
+					if (englishOther.length && forms.count)
+						plurals[englishOther] = forms;
+				}
+				TGSetTelegramLanguageLookup(lookup);
+				TGSetTelegramLanguagePlurals(plurals);
+				if (completion) completion(lookup.count > 0 || plurals.count > 0);
+			};
+
+			if (NSClassFromString(@"XCTestCase") != nil) {
+				process();
+			} else {
+				dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_BACKGROUND, 0), ^{
+					NSMutableDictionary *englishByKey = [NSMutableDictionary dictionary];
+					NSMutableDictionary *targetByKey = [NSMutableDictionary dictionary];
+					NSMutableDictionary *englishPluralByKey = [NSMutableDictionary dictionary];
+					NSMutableDictionary *targetPluralByKey = [NSMutableDictionary dictionary];
+					for (NSDictionary *row in english){
+						if (row[@"key"] && row[@"value"])
+							englishByKey[row[@"key"]] = row[@"value"];
+						if ([row[@"kind"] isEqualToString:@"pluralized"] &&
+								[row[@"forms"] isKindOfClass:NSDictionary.class])
+							englishPluralByKey[row[@"key"]] = row[@"forms"];
+					}
+					for (NSDictionary *row in target){
+						if (row[@"key"] && row[@"value"])
+							targetByKey[row[@"key"]] = row[@"value"];
+						if ([row[@"kind"] isEqualToString:@"pluralized"] &&
+								[row[@"forms"] isKindOfClass:NSDictionary.class])
+							targetPluralByKey[row[@"key"]] = row[@"forms"];
+					}
+					NSMutableDictionary *lookup = [NSMutableDictionary dictionary];
+					NSCountedSet *shared = [[NSCountedSet alloc]
+							initWithArray:englishByKey.allValues];
+					for (NSString *key in englishByKey){
+						NSString *translated = targetByKey[key];
+						if (!translated.length)
+							continue;
+						lookup[englishByKey[key]] = translated;
+						if ([shared countForObject:englishByKey[key]] > 1)
+							lookup[[TGLocalizationKeyPrefix stringByAppendingString:key]] =
+									translated;
+					}
+					NSMutableDictionary *plurals = [NSMutableDictionary dictionary];
+					for (NSString *key in englishPluralByKey){
+						NSString *englishOther = englishPluralByKey[key][@"other"];
+						NSDictionary *forms = targetPluralByKey[key];
+						if (englishOther.length && forms.count)
+							plurals[englishOther] = forms;
+					}
+					dispatch_async(dispatch_get_main_queue(), ^{
+						TGSetTelegramLanguageLookup(lookup);
+						TGSetTelegramLanguagePlurals(plurals);
+						if (completion) completion(lookup.count > 0 || plurals.count > 0);
+					});
+				});
 			}
-			for (NSDictionary *row in target){
-				if (row[@"key"] && row[@"value"])
-					targetByKey[row[@"key"]] = row[@"value"];
-				if ([row[@"kind"] isEqualToString:@"pluralized"] &&
-						[row[@"forms"] isKindOfClass:NSDictionary.class])
-					targetPluralByKey[row[@"key"]] = row[@"forms"];
-			}
-			NSMutableDictionary *lookup = [NSMutableDictionary dictionary];
-			NSCountedSet *shared = [[NSCountedSet alloc]
-					initWithArray:englishByKey.allValues];
-			for (NSString *key in englishByKey){
-				NSString *translated = targetByKey[key];
-				if (!translated.length)
-					continue;
-				lookup[englishByKey[key]] = translated;
-				// Only shared English values get a keyed entry: about 1 in 10,
-				// so the cached lookup stays small on 32-bit.
-				if ([shared countForObject:englishByKey[key]] > 1)
-					lookup[[TGLocalizationKeyPrefix stringByAppendingString:key]] =
-							translated;
-			}
-			NSMutableDictionary *plurals = [NSMutableDictionary dictionary];
-			for (NSString *key in englishPluralByKey){
-				NSString *englishOther = englishPluralByKey[key][@"other"];
-				NSDictionary *forms = targetPluralByKey[key];
-				if (englishOther.length && forms.count)
-					plurals[englishOther] = forms;
-			}
-			TGSetTelegramLanguageLookup(lookup);
-			TGSetTelegramLanguagePlurals(plurals);
-			if (completion) completion(lookup.count > 0 || plurals.count > 0);
 		}];
 	}];
 }
@@ -209,11 +270,6 @@ static void TGTextAnswer(TGClient *client, NSDictionary *request,
 			? update[@"language_pack_id"] : @"";
 	if (!packId.length)
 		return;
-	NSArray *rows = TGLanguagePackStrings(update);
-	NSMutableDictionary *changed = [self.languagePackStringsByPack mutableCopy]
-			?: [NSMutableDictionary dictionary];
-	changed[packId] = rows;
-	self.languagePackStringsByPack = changed;
 	[[NSNotificationCenter defaultCenter]
 			postNotificationName:TGLanguagePackStringsChangedNotification
 						  object:self

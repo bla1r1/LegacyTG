@@ -42,6 +42,7 @@
 }
 
 - (void)applyTheme {
+	self.view.backgroundColor = [[TGTheme shared] listBackgroundColour];
 	[[TGTheme shared] styleNavigationBar:self.navigationController.navigationBar];
 }
 
