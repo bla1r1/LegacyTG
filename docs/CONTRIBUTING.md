@@ -1,43 +1,41 @@
 # Contributing to LegacyTG
 
-LegacyTG is a Telegram client for iOS 6.0–12.5.7, built on TDLib (`libtdjson` loaded at runtime) with an Objective-C UI.
+Telegram client for iOS 6.0–12.5.7: TDLib (`libtdjson` at runtime), Objective-C UI.
 
-## What "done" means
+## Done
 
-A feature is **done** when its behaviour matches the official Telegram clients, verified by the checks in [docs/acceptance_checklist.md](docs/acceptance_checklist.md). If a zone has no checklist yet, write it before marking done.
+Done = matches the official client, with a row in [status/checks.md](status/checks.md) and, where possible, a host test. Each check names the tap, the screen, the wait and the log line (`scripts/devrun.sh`). Forbidden: "works", "looks fine", "doesn't crash for me". Calls and read receipts need a second device or account.
 
-Every check must say: what action is performed, what is on screen afterwards, how long to wait, and what's in the log (`scripts/devrun.sh`). Forbidden: "works", "looks fine", "doesn't crash for me".
+## Tests
 
-Where a check needs a second party — calls, read receipts — it needs a second device or account.
+`make -j8 -f tests/Makefile test` compiles real `src/` against stubs. Every fix ships with the regression test that failed before it; a silent re-fix needs the check row that would have caught it. UIKit lifecycle: record why next to the check and use `devrun.sh`.
 
-## A fix ships with a failing test
+## Style
 
-The host suite (`make -f tests/Makefile test`) compiles real `src/` files against stubs in `tests/`. No Xcode needed.
+Colours from `TGTheme+Colours`, sizes from `src/Core/Style/TGStyle.h`; screens ask for a role, never a number. `scripts/lint_tokens.sh` fails on a hardcoded point size or colour. `UIAlertView`/`UIActionSheet` use only falls.
 
-- Every fix ships with the regression test that **failed before the fix**.
-- A silent re-fix of something already done requires adding the checklist item that would have caught it.
-- Components welded to UIKit lifecycle can't be host-tested — record that next to the zone checklist and use `scripts/devrun.sh` as the fallback. Don't just skip.
+No mastodons: a source file over 1800 lines is split by responsibility. The main type stays in its feature folder; its parts go to a thematic subfolder (`Chat/Actions`, `Chat/Composer`, `Core/Client/Chats`, …). `scripts/lint_size.sh` fails on any file over the limit; there is no baseline.
 
-## Style tokens
+`scripts/split_source.py` does the mechanical part. It is a dry run unless `--apply` is passed, and it updates both Makefiles and docs line references:
 
-Colours come from `TGTheme+Colours`. Sizes and metrics come from `src/Core/TGStyle.h`. Screens ask for a role (`TGFontRow()`, `TGMetricListAvatar`, etc.) and never write out a number.
+```sh
+scripts/split_source.py plan src/Features/Business/TGBusinessViewController.m
+scripts/split_source.py classes src/Features/Business/TGBusinessViewController.m --out src/Features/Business --apply
+scripts/split_source.py sections src/Core/Client/TGClient+Account.m \
+    --base TGClient+Account --out src/Core/Client/Account \
+    --headers src/Core/Client/TGClient+Account.h --umbrella src/Core/Client/TGClient.h --apply
+```
 
-`scripts/lint_tokens.sh` runs first in `make -f tests/Makefile test` and fails on any hardcoded point size or colour. New roles go into `TGStyle.h`, new colours into the palette.
+`classes` splits a file with several `@implementation` blocks. `sections` splits one implementation by `#pragma mark -`; pass `--map "account settings=Settings"` to name a section, otherwise it derives `Base+PascalCase(title)`. Unassigned header declarations go to a `<Base>Misc.h` so nothing is lost. Static helpers are copied into the sections that use them; non-static functions go to `<File>Support.m`.
 
-The lint also tracks files still using `UIAlertView`/`UIActionSheet` instead of `TGSheet` — lower the ceiling as they migrate, never raise it.
+## Bugs and commits
 
-## Bug queue
+Every bug is a row in [status/bugs.md](status/bugs.md) until the closing fix names its regression test; long root causes are in git at `cf71bc9`. Commit as `fix(chat): …`, zone first, with `B1`–`Bn` in the body when one closes.
 
-Every reported bug is a row in [docs/bug_registry.md](docs/bug_registry.md): the symptom verbatim, and where to look in code. It stays there until the closing fix names its regression test. The registry file is the source of truth; mirroring to GitHub Issues is fine.
+## PR
 
-## Commit style
-
-Use conventional subjects: `fix(chat): …`, `feat(capabilities): …`. Include the bug ID (`B1`–`Bn`) in the message body when a bug closes.
-
-## PR checklist
-
-- [ ] `make -f tests/Makefile test` is green (currently 1174 client and 167 call tests, 0 failed — raise the bar, never lower it)
-- [ ] `sh scripts/lint_tokens.sh` is clean
-- [ ] fix lands with the regression test that failed before it
-- [ ] every behaviour claim is backed by a checklist line or a device log
-- [ ] changed UI exercised on at least one Vintage/Legacy device if it touches a gated capability
+- [ ] host suite green
+- [ ] `sh scripts/lint_tokens.sh` clean
+- [ ] fix lands with its failing test
+- [ ] every claim backed by a check row or a device log
+- [ ] gated UI exercised on a Vintage/Legacy device

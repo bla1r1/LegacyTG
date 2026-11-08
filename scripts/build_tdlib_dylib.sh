@@ -86,7 +86,7 @@ mkdir -p "${BUILD_DIR}" "${OUT_DIR}"
 # linker binds them here instead.
 COMPAT_O="${BUILD_DIR}/ios7_compat.o"
 "${TOOLCHAIN}/clang" -arch armv7 -mthumb -Os -isysroot "${SDK_PATH}" \
-	-miphoneos-version-min=6.0 -c "${ROOT_DIR}/compat/ios7_compat.c" -o "${COMPAT_O}"
+	-miphoneos-version-min=6.0 -c "${ROOT_DIR}/src/Compat/ios7_compat.c" -o "${COMPAT_O}"
 echo "[+] ios7 compat shims: ${COMPAT_O}"
 
 # scripts/build_openssl.sh gives AES and SHA-256 their assembly: on the iPod touch

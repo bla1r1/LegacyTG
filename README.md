@@ -17,17 +17,17 @@ Telegram client for iOS 6.0–12.5.7 on old hardware. Dual-engine: `libtg` (ligh
 Before building, configure your API credentials:
 
 ```bash
-cp include/tg_config.h.example include/tg_config.h
+cp vendor/include/tg_config.h.example vendor/include/tg_config.h
 ```
 
-Register at https://my.telegram.org → API development tools, then fill in `include/tg_config.h`:
+Register at https://my.telegram.org → API development tools, then fill in `vendor/include/tg_config.h`:
 
 ```c
 #define TG_API_ID   YOUR_API_ID
 #define TG_API_HASH "YOUR_API_HASH"
 ```
 
-`include/tg_config.h` is git-ignored.
+`vendor/include/tg_config.h` is git-ignored.
 
 ## Repository layout
 
@@ -36,20 +36,26 @@ LegacyTG/
 ├── Makefile
 ├── src/
 │   ├── App/         # app entry: main, AppDelegate, URL routing, dev bench
-│   ├── Core/        # client, TDLib bridge, theme, style, device logic
-│   ├── Controllers/ # ViewControllers
-│   ├── Views/       # UIKit components, cells, icons
-│   ├── UI/          # reusable controls (buttons, fields, avatars, sheets)
+│   ├── Features/    # screens by area; parts in Actions/, Composer/, Views/, …
+│   ├── Core/
+│   │   ├── Client/   # TGClient + categories in Chats/, Messages/, Stories/, Features/, Audit/
+│   │   ├── Model/    # flatten, cards, message text
+│   │   ├── Stores/   # caches, options, stickers, media
+│   │   ├── Style/    # TGStyle, TGTheme, text drawing
+│   │   ├── Platform/ # device, capabilities, perf, passcode
+│   │   └── Support/  # JSON, base64, updates, dates
+│   ├── Views/Icons/ # shared procedural icon and SVG engine
+│   ├── UI/          # shared controls: Controls/, Overlays/, Controllers/, Format/
 │   ├── Media/       # decoders (WebP images, WebM sticker video)
-│   ├── Calls/       # VoIP & E2EE calls
-│   └── Audio/       # voice notes
-├── resources/       # Info.plist, fonts, entitlements
-├── images/          # icons and assets
+│   ├── CallEngine/  # tgcalls signalling, crypto, network, media
+│   ├── Audio/       # voice notes
+│   └── Compat/      # polyfills (dyld TLV, iOS 7 shims)
+├── resources/       # Info.plist, images, fonts, sounds, entitlements
 ├── third_party/     # libtgvoip, opus, ogg, …
 ├── tdlib/           # TDLib (git submodule)
-├── libs/            # prebuilt libs & WebP.framework
-├── include/         # C headers, tg_config.h.example
-├── compat/          # polyfills (dyld TLV, iOS 7 shims)
+├── vendor/
+│   ├── include/     # C headers, tg_config.h.example
+│   └── libs/        # prebuilt libs & WebP.framework
 ├── tools/           # host/device utilities
 ├── scripts/         # build & deploy scripts
 ├── tests/           # unit and integration tests
@@ -89,7 +95,7 @@ make
 - **[bla1r1](https://github.com/bla1r1)** — author and maintainer
 - **GPLv3** — see [LICENSE](LICENSE)
 
-Icons come from [Material Design Icons](https://pictogrammers.com/library/mdi/) (Apache 2.0) and [Font Awesome Free](https://fontawesome.com) 6.5.1 (CC BY 4.0), kept as SVG paths in `src/Views/TGIconPaths.m`. Which icon comes from which set is listed in `scripts/icon_picks.txt`; `scripts/gen_icon_paths.py <@mdi/js dir> <@fortawesome/fontawesome-free dir>` regenerates the file.
+Icons come from [Material Design Icons](https://pictogrammers.com/library/mdi/) (Apache 2.0) and [Font Awesome Free](https://fontawesome.com) 6.5.1 (CC BY 4.0), kept as SVG paths in `src/Views/Icons/TGIconPaths.m`. Which icon comes from which set is listed in `scripts/icon_picks.txt`; `scripts/gen_icon_paths.py <@mdi/js dir> <@fortawesome/fontawesome-free dir>` regenerates the file.
 
 The project started from an early prototype by [@igkuzm](https://github.com/igkuzm) and was later rewritten from scratch — new engine (TDLib instead of `libtg`), new UIKit architecture, multimedia pipeline, E2EE calls.
 

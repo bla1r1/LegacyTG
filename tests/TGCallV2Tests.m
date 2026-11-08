@@ -1,6 +1,6 @@
 // TGCallV2Tests.m — tgcalls 9.0.0 signalling JSON, V2 framing and SRTP.
 //
-// The shapes here are the ones in docs/calls_v9_spec.md section 2 and 3; the
+// The shapes here are the ones in docs/status/calls.md "Protocol notes"; the
 // bench is the other half of the proof.
 #import "TGTestRunner.h"
 #import "TGCallSrtp.h"

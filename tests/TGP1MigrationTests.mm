@@ -7,7 +7,7 @@
 // packet slices, and the stream store's flat index.
 //
 #import "TGTestRunner.h"
-#import "TGFastDate.h"
+#import "TGDateFormat.h"
 #import "TGJsonWriter.hpp"
 #import "TGFlattenedMessage.hpp"
 #import "TGStickerPack.h"
@@ -21,7 +21,7 @@
 
 @implementation TGP1MigrationTests
 
-#pragma mark - TGFastChatDate
+#pragma mark - TGChatDateFormat
 
 /// Midnight-safe: builds a timestamp a whole number of days back, four hours
 /// into that day, so a run near midnight still grades the same bucket.
@@ -31,8 +31,8 @@ static time_t daysBack(time_t now, int days) {
 
 - (void)testFastChatDate_WithinTheDayIsAClock {
 	time_t now = time(NULL);
-	char buf[TGFastDateBufferSize];
-	size_t len = TGFastChatDate(now - 3600, now, buf, sizeof(buf));
+	char buf[TGDateFormatBufferSize];
+	size_t len = TGChatDateFormat(now - 3600, now, buf, sizeof(buf));
 	XCTAssertEqual((int)len, 5, @"HH:MM is five characters");
 	XCTAssertTrue(buf[2] == ':', @"the clock separator belongs in the middle");
 
@@ -49,8 +49,8 @@ static time_t daysBack(time_t now, int days) {
 - (void)testFastChatDate_WithinTheWeekIsAWeekday {
 	time_t now = time(NULL);
 	time_t when = daysBack(now, 3);
-	char buf[TGFastDateBufferSize];
-	size_t len = TGFastChatDate(when, now, buf, sizeof(buf));
+	char buf[TGDateFormatBufferSize];
+	size_t len = TGChatDateFormat(when, now, buf, sizeof(buf));
 	XCTAssertEqual((int)len, 3, @"a weekday abbreviation is three characters");
 
 	struct tm parts;
@@ -65,8 +65,8 @@ static time_t daysBack(time_t now, int days) {
 - (void)testFastChatDate_BeyondTheWeekIsADate {
 	time_t now = time(NULL);
 	time_t when = daysBack(now, 30);
-	char buf[TGFastDateBufferSize];
-	size_t len = TGFastChatDate(when, now, buf, sizeof(buf));
+	char buf[TGDateFormatBufferSize];
+	size_t len = TGChatDateFormat(when, now, buf, sizeof(buf));
 	XCTAssertEqual((int)len, 8, @"dd.MM.yy is eight characters");
 
 	struct tm parts;
@@ -80,13 +80,13 @@ static time_t daysBack(time_t now, int days) {
 
 - (void)testFastChatDate_NoTimestampIsEmptyAndFuturesReadAsNow {
 	time_t now = time(NULL);
-	char buf[TGFastDateBufferSize];
-	XCTAssertEqual((int)TGFastChatDate(0, now, buf, sizeof(buf)), 0);
+	char buf[TGDateFormatBufferSize];
+	XCTAssertEqual((int)TGChatDateFormat(0, now, buf, sizeof(buf)), 0);
 	XCTAssertTrue(buf[0] == '\0', @"nothing is written for no timestamp");
-	XCTAssertEqual((int)TGFastChatDate(-5, now, buf, sizeof(buf)), 0);
+	XCTAssertEqual((int)TGChatDateFormat(-5, now, buf, sizeof(buf)), 0);
 
 	// A clock ahead of ours must not fall through to the date branch.
-	XCTAssertEqual((int)TGFastChatDate(now + 600, now, buf, sizeof(buf)), 5);
+	XCTAssertEqual((int)TGChatDateFormat(now + 600, now, buf, sizeof(buf)), 5);
 }
 
 #pragma mark - TGJsonWriter

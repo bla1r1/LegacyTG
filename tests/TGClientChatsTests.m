@@ -4,7 +4,7 @@
 // turns TDLib's updateNewChat / updateChatPosition / updateLastMessage
 // stream into the ordered chat lists, then keeps them in step.
 //
-// Compiles against the real src/Core/TGClient.m and its +Chats/+Messages
+// Compiles against the real src/Core/Client/TGClient.m and its +Chats/+Messages
 // categories: requests only land in the outbox (tdjson is never loaded on
 // the host), and answers are pushed in through the same parsing entry
 // points the receive loop uses.

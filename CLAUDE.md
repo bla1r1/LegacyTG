@@ -4,13 +4,15 @@
 Telegram client for iOS 6.0–12.5.7 on old hardware. Objective-C UI over TDLib (`libtdjson.dylib`), armv7 and arm64.
 
 ## Key files
-- `src/Core/TGClient*.m` — TDLib bridge and all request logic
-- `src/Core/TGClient.h` — umbrella: imports TGClientTypes.h, TGClientNotifications.h and one header per duty (TGClient+Messages.h, TGClient+Stickers.h, ...)
-- `src/Core/TGStyle.h` — all sizes and metrics (no magic numbers anywhere else)
+- `src/Features/<Area>/` — screens by area: Chat, ChatList, Profile, Groups, Stories, Settings, Calls, Auth, Dev, …
+- `src/Core/Client/TGClient*.m` — TDLib bridge and all request logic
+- `src/Core/Client/TGClient.h` — umbrella: imports TGClientTypes.h, TGClientNotifications.h and one header per duty (TGClient+Messages.h, TGClient+Stickers.h, ...)
+- `src/Core/Style/TGStyle.h` — all sizes and metrics (no magic numbers anywhere else)
 - `TGTheme+Colours` — all colours
 - `src/App/` — app entry: main, AppDelegate, URL routing, dev bench
 - `src/Media/` — decoders (WebP, WebM sticker video)
 - `scripts/lint_tokens.sh` — fails on any hardcoded point size or colour in a screen
+- `scripts/split_source.py` — mechanical `classes` / `sections` split; dry run by default, `--apply` updates Makefiles, docs line references
 - `make -j8 -f tests/Makefile test` — host test suite (currently 1950 client and 229 call tests); one object per source, so a change rebuilds only what it touches
 - `scripts/devrun.sh` — build, install, launch, log, screenshot on device
 - `make -j8 DEV=1` — dev build (`-j` is safe: every IPA stages in its own folder): dev mode (three taps on Chats), fixture chats, bench, automation URLs, ghost mode. All under `#if TG_DEV`; `devrun.sh` builds this into `build/armv7/app-dev`. `scripts/check_release.sh` fails if any of it reaches a build without the flag
@@ -29,6 +31,10 @@ Telegram client for iOS 6.0–12.5.7 on old hardware. Objective-C UI over TDLib 
 - No `NSNumber`/`NSDictionary` allocation inside TDLib update loops or cell layout.
 - TDLib receive loop never calls `dispatch_async(main_queue)` per raw event — batch and coalesce.
 - Internal cache ceiling on 32-bit: 16 MB. LRU eviction only.
+- No mastodons: a source file over 1800 lines is split by responsibility. The
+  main type stays in its feature folder; its parts go to a thematic subfolder
+  (`Chat/Actions`, `Chat/Composer`, `Core/Client/Chats`, …). `scripts/lint_size.sh`
+  fails on any file over the limit; there is no baseline.
 
 ## Testing — mandatory
 - **Compile ≠ done.** A feature is done when it works on a real device, matches official Telegram behaviour, and has a passing regression test.

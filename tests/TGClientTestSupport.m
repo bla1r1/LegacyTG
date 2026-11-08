@@ -1,6 +1,6 @@
 // TGClientTestSupport.m — host-mode stand-ins around the real TGClient.
 //
-// The regression binary compiles the real src/Core/TGClient.m plus the
+// The regression binary compiles the real src/Core/Client/TGClient.m plus the
 // +Chats, +Messages and +Stickers categories. What it deliberately does not
 // compile is TGClient+Account.m (contacts, privacy, sessions — nothing the
 // dialog-loading tests touch). The few internal methods that category

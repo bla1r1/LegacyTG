@@ -44,22 +44,21 @@ SDK="$(xcrun --sdk macosx --show-sdk-path)"
 	echo "this SDK has no iOSSupport, so it cannot build Catalyst"; exit 1; }
 
 # The files whose third-party libraries have no macabi build.
-SKIP="src/Media/UIImage+WebP.m src/Media/TGWebMDecoder.m src/Audio/TGVoiceDecoder.m src/Audio/TGStreamingVoicePlayer.m src/Audio/TGVoiceRecorder.mm src/Views/TGLottieView.mm src/Calls/TGCall.mm src/Calls/TGCallAudioEngine.mm src/Calls/TGCallIce.m src/Calls/TGCallStun.m src/Calls/TGCallMessages.m src/Calls/TGCallReflector.m"
+SKIP="src/Media/UIImage+WebP.m src/Media/TGWebMDecoder.m src/Audio/TGVoiceDecoder.m src/Audio/TGStreamingVoicePlayer.m src/Audio/TGVoiceRecorder.mm src/Features/Media/TGLottieView.mm src/CallEngine/TGCall.mm src/CallEngine/Media/TGCallAudioEngine.mm src/CallEngine/Network/TGCallIce.m src/CallEngine/Network/TGCallStun.m src/CallEngine/Signaling/TGCallMessages.m src/CallEngine/Network/TGCallReflector.m"
 
 FLAGS="-target arm64-apple-ios${DEPLOY_TARGET}-macabi
 	-isysroot ${SDK}
 	-iframework ${SDK}/System/iOSSupport/System/Library/Frameworks
 	-isystem ${SDK}/System/iOSSupport/usr/include
-	-I${ROOT}/include -I${ROOT}/compat -I${ROOT}/libs -I${ROOT}/src
-	-I${ROOT}/src/Core -I${ROOT}/src/Controllers -I${ROOT}/src/Views
-	-I${ROOT}/src/App -I${ROOT}/src/UI -I${ROOT}/src/Media
-	-I${ROOT}/src/Calls -I${ROOT}/src/Audio
+	-I${ROOT}/vendor/include -I${ROOT}/src/Compat -I${ROOT}/vendor/libs -I${ROOT}/src
 	-I${ROOT}/third_party -I${ROOT}/third_party/libvpx/include
 	-I${ROOT}/third_party/nestegg/include -I${ROOT}/third_party/ogg
 	-I${ROOT}/third_party/ogg/ogg -I${ROOT}/third_party/opus/include
 	-I${ROOT}/third_party/opus/include/opus -I${ROOT}/third_party/opusenc
 	-I${ROOT}/third_party/opusfile -I${ROOT}/tdlib/td -I${ROOT}/tdlib/include
-	-F${ROOT}/libs -fobjc-arc -O1 -w"
+	-F${ROOT}/vendor/libs -fobjc-arc -O1 -w"
+# Every src subdirectory is on the include path: headers are imported by basename.
+for d in $(find "${ROOT}/src" -type d); do FLAGS="$FLAGS -I$d"; done
 # One line, because the command list below is fed to xargs line by line.
 FLAGS=$(echo $FLAGS)
 
@@ -67,14 +66,14 @@ cd "$ROOT"
 mkdir -p "$OBJ" "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
 sources() {
-	ls src/*/*.m src/*/*.mm src/*.m 2>/dev/null
+	find src -type f \( -name '*.m' -o -name '*.mm' \) | sort
 	# The C core the on-device build links as well: icon SVG paths and the
-	# perf sampler TGBench reads.
-	echo "src/Views/TGSVGPath.c"
-	echo "src/Core/TGSampler.c"
-	echo "src/Core/TGUpdateType.c"
+	# perf sampler TGDevBench reads.
+	echo "src/Views/Icons/TGSVGPath.c"
+	echo "src/Core/Platform/TGSampler.c"
+	echo "src/Core/Support/TGUpdateType.c"
 	echo "third_party/yyjson/yyjson.c"
-	echo "compat/tlv_polyfill.c"
+	echo "src/Compat/tlv_polyfill.c"
 	echo "tools/catalyst/catalyst_stubs.m"
 }
 

@@ -7,7 +7,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 make -C "$ROOT" DEV=0 ipa-armv7 > /dev/null
 APP="$ROOT/build/armv7/app/LegacyTG.app"
 FOUND=0
-for word in TGDevShowcase TGBench TGDevModeViewController TGTestHarnessViewController \
+for word in TGDevShowcase TGDevBench TGDevModeViewController TGDevTestHarnessViewController \
 		TGMessageToolsViewController delete_selected itg_cmd handleOpenURL: \
 		"Dev Showcase" "Dev Settings" "Read a String" "Look Up a Card" \
 		"Web Proxy Carrier" "Message Tools" TGGhostMode "dev builds only"; do

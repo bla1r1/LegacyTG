@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Write src/Views/TGIconPaths.m from scripts/icon_picks.txt.
+"""Write src/Views/Icons/TGIconPaths.m from scripts/icon_picks.txt.
 
   scripts/gen_icon_paths.py <@mdi/js package dir> <@fortawesome/fontawesome-free package dir>
 
@@ -57,5 +57,5 @@ out += ['};', '',
         'size_t TGIconPathCount(void) {', '\treturn sizeof(kPaths) / sizeof(kPaths[0]);', '}', '',
         'const TGIconPath *TGIconPathAt(size_t index) {',
         '\treturn index < TGIconPathCount() ? &kPaths[index] : NULL;', '}', '']
-open(os.path.join(root, 'src', 'Views', 'TGIconPaths.m'), 'w').write('\n'.join(out))
+open(os.path.join(root, 'src', 'Views', 'Icons', 'TGIconPaths.m'), 'w').write('\n'.join(out))
 print(len(rows), 'icons')
