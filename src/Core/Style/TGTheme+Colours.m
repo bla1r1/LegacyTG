@@ -37,6 +37,9 @@
 
 - (UIColor *)barButtonColour {
 	///< buttons/items in navigation bar
+	UIColor *imported = [self importedColour:@"barButton"];
+	if (imported) return imported;
+	if ([self isDark]) return [self accentColour];
 	return [UIColor whiteColor];
 }
 
@@ -105,6 +108,26 @@
 	return TGRole(@"bubbleTheirs", [UIColor whiteColor]);
 }
 
+static inline BOOL TGColourIsDark(UIColor *colour) {
+	if (!colour) return NO;
+	CGFloat r = -1, g = -1, b = -1, a = -1;
+	[colour getRed:&r green:&g blue:&b alpha:&a];
+	if (r < 0) return NO;
+	return (0.299f * r + 0.587f * g + 0.114f * b) < 0.5f;
+}
+
+- (UIColor *)bubbleMineTextColour {
+	UIColor *custom = [self importedColour:@"bubbleMineText"];
+	if (custom) return custom;
+	return TGColourIsDark([self bubbleMineColour]) ? [UIColor whiteColor] : [self primaryTextColour];
+}
+
+- (UIColor *)bubbleTheirsTextColour {
+	UIColor *custom = [self importedColour:@"bubbleTheirsText"];
+	if (custom) return custom;
+	return TGColourIsDark([self bubbleTheirsColour]) ? [UIColor whiteColor] : [self primaryTextColour];
+}
+
 - (UIColor *)bubbleBorderColour {
 	///< clear when flat. Depth is drawn half in Effects, half right here.
 	return [UIColor colorWithWhite:0.0f alpha:0.12f];
@@ -134,8 +157,8 @@
 
 - (UIColor *)groupedBackgroundColour {
 	///< the page behind a settings list
-	// The pinstripe is iOS 6's page. iOS 7 on has the plain grey one, the
-	// colour its own grouped tables are drawn on.
+	UIColor *custom = [self importedColour:@"groupedBackground"];
+	if (custom) return custom;
 	if (![TGTheme drawsSkeuomorphicChrome])
 		return rgb(0xEF, 0xEF, 0xF4);
 	return [UIColor colorWithPatternImage:[TGTheme skeuomorphicPinstripePattern]];
@@ -146,7 +169,7 @@
 }
 
 - (UIColor *)placeholderColour {
-	return [UIColor colorWithWhite:0.0f alpha:0.35f];
+	return [self isDark] ? [UIColor colorWithWhite:1.0f alpha:0.35f] : [UIColor colorWithWhite:0.0f alpha:0.35f];
 }
 
 #pragma mark - text roles
@@ -194,11 +217,18 @@
 }
 
 - (UIColor *)inputBarColour {
-	return TG_GRAY_LIGHT3;
+	return TGRole(@"inputBar", TG_GRAY_LIGHT3);
+}
+
+- (UIColor *)inputFieldColour {
+	return TGRole(@"inputField", [self listBackgroundColour]);
 }
 
 - (UIColor *)searchBarBackgroundColour {
-	return TGRole(@"searchBarBackground", rgb(0xCD, 0xD3, 0xDC));
+	UIColor *imported = [self importedColour:@"searchBarBackground"];
+	if (imported) return imported;
+	if ([self isDark]) return [self inputBarColour];
+	return rgb(0xCD, 0xD3, 0xDC);
 }
 
 #pragma mark - media and file blocks
@@ -272,7 +302,7 @@
 
 - (UIColor *)separatorColour {
 	///< hairlines between rows and around bars
-	return TG_STEEL_LIGHT3;
+	return TGRole(@"separator", TG_STEEL_LIGHT3);
 }
 
 #pragma mark - service messages

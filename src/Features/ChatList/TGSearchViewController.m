@@ -238,8 +238,8 @@ static NSString *TGPublicPostText(NSDictionary *message) {
 
 - (void)applyTheme {
 	TGTheme *theme = [TGTheme shared];
-	self.tableView.backgroundColor = [theme listBackgroundColour];
-	self.tableView.separatorColor = [theme separatorColour];
+	self.view.backgroundColor = [theme listBackgroundColour];
+	[theme stylePlainTable:self.tableView];
 	[theme styleSearchBar:self.bar];
 	[theme styleNavigationBar:self.navigationController.navigationBar];
 	if (self.scopeHost){
@@ -891,6 +891,14 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 	return nil;
 }
 
+- (void)tableView:(UITableView *)tableView willDisplayHeaderView:(UIView *)view forSection:(NSInteger)section {
+	[[TGTheme shared] styleHeaderFooterView:view];
+}
+
+- (void)tableView:(UITableView *)tableView willDisplayFooterView:(UIView *)view forSection:(NSInteger)section {
+	[[TGTheme shared] styleHeaderFooterView:view];
+}
+
 - (UIImage *)avatarForChat:(int64_t)chatId
 					 title:(NSString *)title
 					fileId:(NSNumber *)fileId
@@ -974,6 +982,7 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 	TGTheme *theme = [TGTheme shared];
 	UIColor *bg = [theme listBackgroundColour];
 	cell.backgroundColor = bg;
+	cell.contentView.backgroundColor = bg;
 	cell.textLabel.font = TGFontBodyStrong();
 	cell.textLabel.textColor = [theme primaryTextColour];
 	cell.textLabel.backgroundColor = bg;

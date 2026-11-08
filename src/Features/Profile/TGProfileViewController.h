@@ -2,10 +2,11 @@
 // TGProfileViewController - user/chat profile, media overview, and actions.
 //
 #import <UIKit/UIKit.h>
+#import "TGTableViewController.h"
 
 @class TGProfileDetailCell;
 
-@interface TGProfileViewController : UITableViewController
+@interface TGProfileViewController : TGTableViewController
 
 /// Search lives here rather than in the navigation bar, where the avatar is -
 /// the same place Telegram keeps it.

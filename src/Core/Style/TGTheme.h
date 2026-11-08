@@ -84,6 +84,10 @@ typedef NS_ENUM(NSInteger, TGWallpaperType) {
 + (UITableViewCell *)systemCellOfStyle:(UITableViewCellStyle)style;
 /// A grouped table the way the running OS draws one.
 - (void)styleGroupedTable:(UITableView *)table;
+/// A plain table view (lists, contacts, search).
+- (void)stylePlainTable:(UITableView *)table;
+/// A section header or footer view.
+- (void)styleHeaderFooterView:(UIView *)view;
 
 /// Apply the bar styling to a navigation bar.
 - (void)styleNavigationBar:(UINavigationBar *)bar;
@@ -223,6 +227,8 @@ typedef NS_ENUM(NSInteger, TGButtonStyle) {
 - (UIColor *)chatBackgroundColour;
 - (UIColor *)bubbleMineColour;
 - (UIColor *)bubbleTheirsColour;
+- (UIColor *)bubbleMineTextColour;
+- (UIColor *)bubbleTheirsTextColour;
 - (UIColor *)bubbleBorderColour;    ///< clear when flat
 /// A reaction pill under a bubble. The chosen one takes the accent border,
 /// which is how Telegram marks a reaction you put there yourself.
@@ -239,7 +245,9 @@ typedef NS_ENUM(NSInteger, TGButtonStyle) {
 - (UIColor *)placeholderColour;
 - (UIColor *)primaryTextColour;
 - (UIColor *)secondaryTextColour;
+- (BOOL)isDark;
 - (UIColor *)inputBarColour;
+- (UIColor *)inputFieldColour;
 - (UIColor *)searchBarBackgroundColour;
 - (UIColor *)timeColour;            ///< the stamp in the corner of a bubble
 - (UIColor *)timeMineColour;        ///< the same stamp in your own bubble

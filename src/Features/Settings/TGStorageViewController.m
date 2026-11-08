@@ -28,12 +28,33 @@ static const CGFloat kRingTotalLine  = TGMetricVoicePillWidth;
 @property (nonatomic, assign) long long selectedBytes;
 @property (nonatomic, copy) NSString *totalText;
 @property (nonatomic, copy) NSString *selectedText;
+@property (nonatomic, assign) NSInteger keepMediaIndex;
+@property (nonatomic, assign) NSInteger maxCacheIndex;
 @end
 
 @implementation TGStorageViewController
 
 - (instancetype)init {
-	return [super initWithStyle:UITableViewStyleGrouped];
+	self = [super initWithStyle:UITableViewStyleGrouped];
+	if (self) {
+		_keepMediaIndex = [[NSUserDefaults standardUserDefaults] integerForKey:@"TGStorageKeepMedia"];
+		if (_keepMediaIndex < 0 || _keepMediaIndex > 3) _keepMediaIndex = 3; // Forever default
+		_maxCacheIndex = [[NSUserDefaults standardUserDefaults] integerForKey:@"TGStorageMaxCache"];
+		if (_maxCacheIndex < 0 || _maxCacheIndex > 3) _maxCacheIndex = 3;  // No Limit default
+	}
+	return self;
+}
+
+- (BOOL)hasClearSection {
+	return self.selectedKinds.count > 0;
+}
+
+- (NSInteger)keepMediaSectionIndex {
+	return [self hasClearSection] ? 2 : 1;
+}
+
+- (NSInteger)maxCacheSectionIndex {
+	return [self hasClearSection] ? 3 : 2;
 }
 
 - (void)viewDidLoad {
@@ -43,7 +64,37 @@ static const CGFloat kRingTotalLine  = TGMetricVoicePillWidth;
 	self.selectedKinds = [NSMutableSet set];
 	[self applyTheme];
 	[self refresh];
+	[self loadStorageOptions];
+}
 
+- (void)loadStorageOptions {
+	__weak typeof(self) weakSelf = self;
+	[[TGClient shared] optionValue:@"storage_max_time_from_last_access" completion:^(id val){
+		if ([val isKindOfClass:[NSNumber class]]) {
+			int64_t sec = [val longLongValue];
+			NSInteger idx = 3; // Forever
+			if (sec == 259200) idx = 0;       // 3 days
+			else if (sec == 604800) idx = 1;  // 1 week
+			else if (sec == 2592000) idx = 2; // 1 month
+			dispatch_async(dispatch_get_main_queue(), ^{
+				weakSelf.keepMediaIndex = idx;
+				[weakSelf.tableView reloadData];
+			});
+		}
+	}];
+	[[TGClient shared] optionValue:@"storage_max_files_size" completion:^(id val){
+		if ([val isKindOfClass:[NSNumber class]]) {
+			int64_t bytes = [val longLongValue];
+			NSInteger idx = 3; // No limit
+			if (bytes == 5LL * 1024 * 1024 * 1024) idx = 0;       // 5 GB
+			else if (bytes == 20LL * 1024 * 1024 * 1024) idx = 1; // 20 GB
+			else if (bytes == 50LL * 1024 * 1024 * 1024) idx = 2; // 50 GB
+			dispatch_async(dispatch_get_main_queue(), ^{
+				weakSelf.maxCacheIndex = idx;
+				[weakSelf.tableView reloadData];
+			});
+		}
+	}];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -197,7 +248,7 @@ static UIColor *TGSliceColour(NSUInteger index) {
 #pragma mark - table
 
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-	return self.selectedKinds.count ? 2 : 1;
+	return [self hasClearSection] ? 4 : 3;
 }
 
 - (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
@@ -209,17 +260,29 @@ static UIColor *TGSliceColour(NSUInteger index) {
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
+	if (section == [self keepMediaSectionIndex]) {
+		return @"KEEP MEDIA";
+	}
+	if (section == [self maxCacheSectionIndex]) {
+		return @"MAXIMUM CACHE SIZE";
+	}
 	return nil;
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
+	if (section == [self keepMediaSectionIndex]) {
+		return @"Photos, videos and other files from cloud chats that have not been accessed during this period will be removed from this device to save disk space.";
+	}
+	if (section == [self maxCacheSectionIndex]) {
+		return @"If your cache size exceeds this limit, the oldest unused media will be removed from the device.";
+	}
 	return nil;
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
 	if (section == 0)
 		return self.loaded ? MAX((NSUInteger)1, self.categoryRows.count) : 1;
-	return 1;    // clear the current selection
+	return 1;
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView
@@ -236,10 +299,11 @@ static UIColor *TGSliceColour(NSUInteger index) {
 	cell.textLabel.textColor = [theme primaryTextColour];
 	cell.textLabel.textAlignment = NSTextAlignmentLeft;
 	cell.detailTextLabel.font = TGFontBody();
-	cell.detailTextLabel.textColor = [theme secondaryTextColour];
+	cell.detailTextLabel.textColor = [theme cellDetailColour];
 	cell.selectionStyle = UITableViewCellSelectionStyleDefault;
+	cell.accessoryType = UITableViewCellAccessoryNone;
 
-	if (path.section == 1){
+	if ([self hasClearSection] && path.section == 1){
 		cell.textLabel.text = self.working
 				? @"Clearing the Cache"
 				: [NSString stringWithFormat:@"%@  %@",
@@ -248,6 +312,24 @@ static UIColor *TGSliceColour(NSUInteger index) {
 		cell.textLabel.textColor = self.working
 				? [theme secondaryTextColour] : [theme destructiveColour];
 		cell.detailTextLabel.text = @"";
+		return cell;
+	}
+
+	if (path.section == [self keepMediaSectionIndex]) {
+		cell.textLabel.text = @"Keep Media";
+		static NSArray *keepLabels = nil;
+		if (!keepLabels) keepLabels = @[@"3 days", @"1 week", @"1 month", @"Forever"];
+		cell.detailTextLabel.text = keepLabels[self.keepMediaIndex];
+		cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+		return cell;
+	}
+
+	if (path.section == [self maxCacheSectionIndex]) {
+		cell.textLabel.text = @"Maximum Cache Size";
+		static NSArray *maxLabels = nil;
+		if (!maxLabels) maxLabels = @[@"5 GB", @"20 GB", @"50 GB", @"No Limit"];
+		cell.detailTextLabel.text = maxLabels[self.maxCacheIndex];
+		cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
 		return cell;
 	}
 
@@ -288,7 +370,7 @@ static UIColor *TGSliceColour(NSUInteger index) {
 	if (self.working || !self.loaded)
 		return;
 
-	if (path.section == 1){
+	if ([self hasClearSection] && path.section == 1){
 		__weak typeof(self) weakSelf = self;
 		NSArray *kinds = self.selectedKinds.allObjects;
 		if (!kinds.count)
@@ -299,6 +381,44 @@ static UIColor *TGSliceColour(NSUInteger index) {
 					  destructive:YES
 						   inView:self.view
 						onConfirm:^{ [weakSelf clearKinds:kinds]; }];
+		return;
+	}
+
+	if (path.section == [self keepMediaSectionIndex]) {
+		static NSArray *keepLabels = nil;
+		if (!keepLabels) keepLabels = @[@"3 days", @"1 week", @"1 month", @"Forever"];
+		__weak typeof(self) weakSelf = self;
+		[TGAlertSheet showChoices:keepLabels
+							title:@"Keep Media"
+				 destructiveIndex:-1
+						   inView:self.view
+						 onChoice:^(NSInteger index){
+			weakSelf.keepMediaIndex = index;
+			static const int64_t seconds[4] = {259200, 604800, 2592000, 0};
+			[[TGClient shared] setOption:@"storage_max_time_from_last_access" integerValue:seconds[index]];
+			[[NSUserDefaults standardUserDefaults] setInteger:index forKey:@"TGStorageKeepMedia"];
+			[weakSelf.tableView reloadSections:[NSIndexSet indexSetWithIndex:[weakSelf keepMediaSectionIndex]]
+							  withRowAnimation:UITableViewRowAnimationNone];
+		}];
+		return;
+	}
+
+	if (path.section == [self maxCacheSectionIndex]) {
+		static NSArray *maxLabels = nil;
+		if (!maxLabels) maxLabels = @[@"5 GB", @"20 GB", @"50 GB", @"No Limit"];
+		__weak typeof(self) weakSelf = self;
+		[TGAlertSheet showChoices:maxLabels
+							title:@"Maximum Cache Size"
+				 destructiveIndex:-1
+						   inView:self.view
+						 onChoice:^(NSInteger index){
+			weakSelf.maxCacheIndex = index;
+			static const int64_t bytes[4] = {5LL * 1024 * 1024 * 1024, 20LL * 1024 * 1024 * 1024, 50LL * 1024 * 1024 * 1024, 0};
+			[[TGClient shared] setOption:@"storage_max_files_size" integerValue:bytes[index]];
+			[[NSUserDefaults standardUserDefaults] setInteger:index forKey:@"TGStorageMaxCache"];
+			[weakSelf.tableView reloadSections:[NSIndexSet indexSetWithIndex:[weakSelf maxCacheSectionIndex]]
+							  withRowAnimation:UITableViewRowAnimationNone];
+		}];
 		return;
 	}
 

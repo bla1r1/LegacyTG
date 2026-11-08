@@ -36,6 +36,19 @@ UIColor *TGIconTileRed(void);
 UIColor *TGIconTileGrey(void);
 UIColor *TGIconTileSlate(void);
 
+#pragma mark - wallpaper preset hues
+
+@interface TGWallpaperPreset : NSObject
+@property (nonatomic, copy) NSString *name;
+@property (nonatomic, strong) UIColor *topColor;
+@property (nonatomic, strong) UIColor *bottomColor;
+@property (nonatomic, assign) BOOL isGradient;
++ (instancetype)presetWithName:(NSString *)name color:(UIColor *)color;
++ (instancetype)presetWithName:(NSString *)name top:(UIColor *)top bottom:(UIColor *)bottom;
+@end
+
+NSArray *TGWallpaperPalettePresets(void);
+
 #ifdef __cplusplus
 }
 #endif

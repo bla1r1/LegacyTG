@@ -1,6 +1,7 @@
 # LegacyTG status
 
-Audit of 7 November 2026 against `src/` at `1450576`. One row per feature: state
+Audit of 7 November 2026 against `src/` at `1450576`; milestone states
+updated 8 November after `ec1284a` and `9c93e8f`. One row per feature: state
 here (`done`, `partial`, `missing`, `dev-only`), the `file:line` that was checked
 and a note on what works or what is absent. A missing feature has `—` in the
 Where column.
@@ -61,23 +62,23 @@ area are in each file's header.
 | M25 Story rings | planned | Ring on every row and profile avatar, own-story tile | No shared ring view |
 | M26 Chat search filters | planned | Sender/media/date chips, result opens the hit, search tokens, global scopes | `TGSearchViewController` has no result-to-message route |
 | M27 Failed-send mark | planned | Failed icon in bubble and row, retry without the hold menu | Cell reads only sent/read state |
-| M28 Profile cover, QR, Premium | planned | Accent gradient, background emoji, QR screen, star badge, rating, verifier note | Header layout; no QR generator |
-| M29 Profile media tabs | planned | GIF/Polls panes, photo/video split, month sections, calendar, multi-select | `TGProfileTabs` has no kind for either filter; flat grid |
+| M28 Profile cover, QR, Premium | partial | Accent gradient, background emoji, star badge, rating, verifier note; the account QR screen is done | Header layout |
+| M29 Profile media tabs | partial | GIF/Polls panes, photo/video split, month sections, calendar, multi-select; search inside a pane is done | `TGProfileTabs` has no kind for either filter; flat grid |
 | M30 Settings search | planned | Page index and search field over every Settings row | None; tree is built in code with no registry |
-| M31 Notification pages | planned | Category pages, in-app banner, permission warning, badge settings | Notification screen has no model beyond switches |
+| M31 Notification pages | partial | Permission warning, badge settings, exception editing; category pages and the in-app banner are done | Muting rewrites the record with two fields |
 | M32 Contacts invite and import | planned | Invite Friends, contacts permission, phone-book import, formatted add | App never asks for contacts permission |
-| M33 Localisation | planned | About 2200 hard-coded English strings, plural and gender forms | Literal English everywhere; no key table |
+| M33 Localisation | partial | `TGLocalized` over the official language packs covers 2937 of 3316 UI strings (88.6%); 170 unique strings left, gender forms, `native_name` | Strings with no official counterpart |
 | M34 Developer talk on the user's path | partial | Error table for 157 alerts, harness pages behind `TG_DEV`, footers | Harness screens are the only route to their TDLib calls |
 | M35 Message actions still missing | planned | Poll creation, copy in multi-select, forward with caption, share to topic, reply quote | Core wrappers do not expose the request shapes |
-| M36 Group admin and channel tools | partial | Admin rights editor, invite-link detail, removed users, statistics graphs, boosts | Flat 100-event list; TDLib returns the data |
-| M37 Settings and appearance detail | partial | Privacy exceptions, storage maximum, theme thumbnails, background colour/gradient | One light palette; no background editor |
+| M36 Group admin and channel tools | partial | Admin rights editor, invite-link detail, removed users, statistics graphs, boosts; the member list screen is done | Flat 100-event list; TDLib returns the data |
+| M37 Settings and appearance detail | done | Privacy exceptions, storage maximum, theme thumbnails, background colour/gradient | Detailed privacy rule screens with Always/Never Allow exception pickers, Keep Media & Maximum Cache controls in Storage, custom Color & Gradient wallpaper editor |
 | M38 Media polish | partial | Live photos, scrub preview, music streaming, Lottie mattes, keyword search, link preview | Decoder and layout work; no new TDLib call |
 | M39 Stories after the strip | partial | Camera video, reply/share/repost, live playback and hosting, comments | Same media stack as M21; camera movie output |
 | M40 Bots and mini apps | planned | Inline mode, Web App host, commands, guest bots, game scores, web-app buttons | Web Apps need a browser view this target does not carry |
-| M41 Dark theme | deferred | Night and Auto-Night removed; the app is light-only by decision | Design decision |
+| M41 Dark theme | partial | Official dark theme files recolour chat, bars, lists and status bar; Night Blue ships built in. Left: Auto-Night and a screen-by-screen device pass | — |
 | M42 Landscape and iPad | deferred | Portrait iPhone layout only | No design for either size class |
-| M43 Platform delivery | partial | iOS 6 run, 4-inch check, background fetch, crash reporting, arm64 TDLib | Bench hardware; second architecture in TDLib |
-| M44 Message detail and unread fields | partial | Rich-message blocks, signature, view/forward counts, gift counts, action buttons | Flatten model drops fields or bubble has no slot |
+| M43 Platform delivery | partial | iOS 6 run, 4-inch check, background fetch, crash reporting, arm64 TDLib; `scripts/build_all.sh` builds release IPAs | Bench hardware; second architecture in TDLib |
+| M44 Message detail and unread fields | partial | Rich-message blocks, signature, view/forward counts, gift counts, action buttons; read summary in the message menu is done | Flatten model drops fields or bubble has no slot |
 
 ## Top gaps
 
@@ -91,11 +92,11 @@ profile, media, then settings. Each line names the status area that holds the ro
 5. **No story ring on chat rows or profile avatars** — only the strip bubble has a ring. `chat-list`, `stories`, `profile`.
 6. **Chat search cannot filter or jump** — text-only query, results replace the feed and do not open the hit. `chat`.
 7. **A failed send has no failed mark** — the bubble keeps ticks; Retry is in the hold menu only. `chat`.
-8. **Profile has no cover, QR code or Premium badge.** `profile`.
+8. **Profile has no cover or Premium badge.** `profile`.
 9. **Profile media has no GIF or Polls tab, sections or calendar** — one flat grid. `profile`, `media`.
 10. **No search in Settings.** `settings`.
-11. **No Night theme or Auto-Night** — light-only by decision. `settings`.
-12. **Notifications have no category pages, banner or badge settings.** `notifications`.
+11. **No Auto-Night** — dark comes only from choosing a dark theme. `settings`.
+12. **Notifications have no badge settings or permission warning.** `notifications`.
 13. **No payment path** — invoice Pay, paid media, Premium, Stars, gifts, TON absent. `bots-payments`.
 14. **Group calls have no audio; video calls are dev-only.** `calls`, `groups`.
 15. **No Invite Friends and no phone-book import.** `contacts`.

@@ -32,13 +32,46 @@
 
 - (void)applyTheme {
 	TGTheme *theme = [TGTheme shared];
+	self.view.backgroundColor = (self.tableView.style == UITableViewStyleGrouped)
+			? [theme groupedBackgroundColour]
+			: [theme listBackgroundColour];
 	[theme styleNavigationBar:self.navigationController.navigationBar];
 	if (self.tableView.style == UITableViewStyleGrouped) {
 		[theme styleGroupedTable:self.tableView];
 	} else {
-		self.tableView.backgroundColor = [theme listBackgroundColour];
-		self.tableView.separatorColor = [theme separatorColour];
+		[theme stylePlainTable:self.tableView];
 	}
+}
+
+- (void)tableView:(UITableView *)tableView willDisplayCell:(UITableViewCell *)cell forRowAtIndexPath:(NSIndexPath *)indexPath {
+	TGTheme *theme = [TGTheme shared];
+	if ([theme isDark]) {
+		UIColor *bg = (tableView.style == UITableViewStyleGrouped)
+				? [theme cardBackgroundColour]
+				: [theme listBackgroundColour];
+		if (!cell.backgroundColor || [cell.backgroundColor isEqual:[UIColor whiteColor]]) {
+			cell.backgroundColor = bg;
+		}
+		if (!cell.contentView.backgroundColor || [cell.contentView.backgroundColor isEqual:[UIColor whiteColor]]) {
+			cell.contentView.backgroundColor = bg;
+		}
+		if (cell.backgroundView && (!cell.backgroundView.backgroundColor || [cell.backgroundView.backgroundColor isEqual:[UIColor whiteColor]])) {
+			cell.backgroundView.backgroundColor = bg;
+		}
+		if (!cell.selectedBackgroundView) {
+			UIView *sel = [[UIView alloc] init];
+			sel.backgroundColor = [theme inputBarColour];
+			cell.selectedBackgroundView = sel;
+		}
+	}
+}
+
+- (void)tableView:(UITableView *)tableView willDisplayHeaderView:(UIView *)view forSection:(NSInteger)section {
+	[[TGTheme shared] styleHeaderFooterView:view];
+}
+
+- (void)tableView:(UITableView *)tableView willDisplayFooterView:(UIView *)view forSection:(NSInteger)section {
+	[[TGTheme shared] styleHeaderFooterView:view];
 }
 
 - (void)showEmptyWithImage:(UIImage *)image title:(NSString *)title subtitle:(NSString *)subtitle {

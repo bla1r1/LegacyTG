@@ -5,6 +5,7 @@ The docs are the area status files, plus three specs and two process notes.
 | Where | What is in it |
 |---|---|
 | [status/README.md](status/README.md) | Totals, milestones M1–M44, top gaps, TDLib coverage |
+| [ROADMAP.md](ROADMAP.md) | Open milestones M20–M44 as checklists, with the status rows each one closes |
 | [status/](status/) | One row per feature: `done` / `partial` / `missing` / `dev-only`, `file:line`, note |
 | [status/checks.md](status/checks.md) | Device checks: tap, see, wait, log. Host test where one exists |
 | [status/bugs.md](status/bugs.md) | Closed bug queue, B1 onwards, with the fix and the check |
@@ -22,7 +23,8 @@ Area files:
 - [settings](status/settings.md), [privacy-security](status/privacy-security.md), [notifications](status/notifications.md)
 - [login-accounts](status/login-accounts.md), [bots-payments](status/bots-payments.md)
 
-Old planning files (`ROADMAP.md`, `gaps.md`, `feature_backlog.md`,
-`acceptance_checklist.md`, `bug_registry.md`, `calls_notes.md`,
-`calls_v9_spec.md`) were folded into `status/` and removed on 7 November 2026.
-Their full text is in git history at `cf71bc9`.
+Old planning files (`gaps.md`, `feature_backlog.md`, `acceptance_checklist.md`,
+`bug_registry.md`, `calls_notes.md`, `calls_v9_spec.md`) were folded into
+`status/` and removed on 7 November 2026; their full text is in git history at
+`cf71bc9`. `ROADMAP.md` was removed with them by mistake and restored in
+`8f4eb3c`.

@@ -86,6 +86,25 @@ static void TGAssertColour(NSString *key, NSDictionary *palette,
 	XCTAssertNil([TGThemeFile paletteFromFile:brokenPath name:&ignored]);
 }
 
+- (void)testNightBlueOfficialThemeMapsAllRoles {
+	NSString *path = @"resources/NightBlue.tgios-theme";
+	NSString *name = nil;
+	NSDictionary *palette = [TGThemeFile paletteFromFile:path name:&name];
+	XCTAssertNotNil(palette);
+	XCTAssertEqualObjects(name, @"Night Blue");
+	XCTAssertTrue([palette[@"isDark"] boolValue]);
+	TGAssertColour(@"bar", palette, 0x17, 0x21, 0x2B);
+	TGAssertColour(@"barTitle", palette, 0xFF, 0xFF, 0xFF);
+	TGAssertColour(@"chatBackground", palette, 0x0E, 0x16, 0x21);
+	TGAssertColour(@"bubbleMine", palette, 0x2B, 0x52, 0x78);
+	TGAssertColour(@"bubbleTheirs", palette, 0x18, 0x25, 0x33);
+	TGAssertColour(@"bubbleMineText", palette, 0xFF, 0xFF, 0xFF);
+	TGAssertColour(@"bubbleTheirsText", palette, 0xFF, 0xFF, 0xFF);
+	TGAssertColour(@"accent", palette, 0x52, 0x88, 0xC1);
+	TGAssertColour(@"barButton", palette, 0x52, 0x88, 0xC1);
+	TGAssertColour(@"tabBar", palette, 0x17, 0x21, 0x2B);
+}
+
 - (void)testAndroidThemeMapsRolesAndGuessesDark {
 	NSString *light = [NSString stringWithFormat:
 		@"actionBarDefault=%d\n"
@@ -178,9 +197,8 @@ static void TGAssertColour(NSString *key, NSDictionary *palette,
 	XCTAssertLessThan(sa, 0.9f, "too opaque: the alpha byte was lost");
 	TGAssertColour(@"service", palette, 0x22, 0x30, 0x3c);
 }
-/// iOS 6-12 never had dark chrome, so a dark file is refused outright and a
-/// light one reaches only the chat: bars and lists stay the system's.
-- (void)testChatPaletteRefusesDarkAndKeepsOnlyChatRoles {
+/// Dark themes are allowed for chat and keep chat roles.
+- (void)testChatPaletteAllowsDarkAndKeepsChatRoles {
 	NSString *light = [NSString stringWithFormat:
 		@"actionBarDefault=%d\n"
 		"windowBackgroundWhite=%d\n"
@@ -199,9 +217,13 @@ static void TGAssertColour(NSString *key, NSDictionary *palette,
 	XCTAssertNil(chat[@"bar"], "%@", chat);
 	XCTAssertNil(chat[@"listBackground"], "%@", chat);
 
-	NSString *dark = [NSString stringWithFormat:@"windowBackgroundWhite=%d\n",
-		TGAtThemeARGB(0x26, 0x2E, 0x26)];
-	XCTAssertNil([TGThemeFile chatPaletteFromFile:TGThemeWriteTemp(@"night.attheme", dark) name:NULL]);
+	NSString *dark = [NSString stringWithFormat:@"windowBackgroundWhite=%d\nchat_outBubble=%d\n",
+		TGAtThemeARGB(0x26, 0x2E, 0x26),
+		TGAtThemeARGB(0x2B, 0x5D, 0x7F)];
+	NSDictionary *darkChat = [TGThemeFile chatPaletteFromFile:TGThemeWriteTemp(@"night.attheme", dark) name:NULL];
+	XCTAssertNotNil(darkChat);
+	XCTAssertTrue([darkChat[@"isDark"] boolValue]);
+	TGAssertColour(@"bubbleMine", darkChat, 0x2B, 0x5D, 0x7F);
 }
 
 @end

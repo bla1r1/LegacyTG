@@ -27,10 +27,11 @@
 
 + (NSDictionary *)chatPaletteFromFile:(NSString *)path name:(NSString **)name {
 	NSDictionary *palette = [self paletteFromFile:path name:name];
-	if (!palette || [palette[@"isDark"] boolValue])
+	if (!palette)
 		return nil;
 	NSArray *roles = @[@"chatBackground", @"bubbleMine", @"bubbleTheirs",
-					   @"service", @"serviceText", @"ticks"];
+					   @"bubbleMineText", @"bubbleTheirsText",
+					   @"service", @"serviceText", @"ticks", @"isDark"];
 	NSMutableDictionary *chat = [NSMutableDictionary dictionary];
 	for (NSString *role in roles)
 		if (palette[role])
@@ -121,17 +122,30 @@ static id TGDig(NSDictionary *root, NSString *path) {
 		{@"bar",           @"root.navBar.background"},
 		{@"barTitle",      @"root.navBar.primaryText"},
 		{@"barSubtitle",   @"root.navBar.secondaryText"},
+		{@"barButton",     @"root.navBar.buttonText|root.navBar.accentText"},
+		{@"tabBar",        @"root.tabBar.background|root.navBar.background"},
 		{@"accent",        @"root.navBar.accentText|list.accent|chatList.unreadBadgeActiveBg"},
 		{@"destructive",   @"list.destructiveText"},
-		{@"chatBackground",@"chat.message.freeform.withoutWp.bg|list.plainBg"},
+		{@"chatBackground",@"chat.message.freeform.withoutWp.bg|chat.defaultWallpaper.color|list.plainBg"},
 		{@"bubbleMine",    @"chat.message.outgoing.bubble.withoutWp.bg|chat.message.outgoing.bubble.withWp.bg"},
 		{@"bubbleTheirs",  @"chat.message.incoming.bubble.withoutWp.bg|chat.message.incoming.bubble.withWp.bg"},
+		{@"bubbleMineText",@"chat.message.outgoing.primaryText"},
+		{@"bubbleTheirsText",@"chat.message.incoming.primaryText"},
 		{@"listBackground",@"chatList.bg|list.plainBg"},
+		{@"groupedBackground", @"list.blocksBg|chatList.bg"},
+		{@"cardBackground",@"list.itemBlocksBg|list.plainBg|chatList.itemBg"},
+		{@"inputBar",      @"chat.inputPanel.panelBg|root.navBar.background"},
+		{@"inputField",    @"chat.inputPanel.inputBg"},
+		{@"searchBarBackground", @"chatList.searchBarBg|root.searchBar.background|chat.inputPanel.panelBg|list.blocksBg"},
 		{@"primaryText",   @"chatList.title|list.primaryText"},
 		{@"secondaryText", @"chatList.messageText|list.secondaryText"},
+		{@"separator",     @"list.itemSeparator|chatList.itemSeparator|root.navBar.separator"},
 		{@"badge",         @"chatList.unreadBadgeActiveBg"},
 		{@"badgeText",     @"chatList.unreadBadgeActiveText"},
 		{@"mutedBadge",    @"chatList.unreadBadgeMutedBg"},
+		{@"service",       @"chat.serviceMessage.components.fill"},
+		{@"serviceText",   @"chat.serviceMessage.components.primaryText"},
+		{@"ticks",         @"chatList.checkmark|chat.message.outgoing.secondaryText"},
 	};
 
 	for (unsigned i = 0; i < sizeof(map) / sizeof(map[0]); i++){

@@ -56,6 +56,14 @@ static NSArray *TGPacksFrom(NSDictionary *target) {
 	}];
 }
 
+- (void)setOption:(NSString *)name integerValue:(int64_t)value {
+	[self send:@{
+		@"@type" : @"setOption",
+		@"name"  : name,
+		@"value" : @{@"@type" : @"optionValueInteger", @"value" : @(value)},
+	}];
+}
+
 /// Fetches profile stories (pinned profile stories falling back to active 24h stories).
 - (void)storiesForChat:(int64_t)chatId completion:(void (^)(NSArray *))completion {
 	__weak typeof(self) weakSelf = self;

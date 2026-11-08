@@ -143,8 +143,8 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 		self.edgesForExtendedLayout = UIRectEdgeNone;
 
 	__weak typeof(self) weakSelf = self;
-	self.tableView.backgroundColor = [[TGTheme shared] listBackgroundColour];
-	self.tableView.separatorColor = [[TGTheme shared] separatorColour];
+	self.view.backgroundColor = [[TGTheme shared] listBackgroundColour];
+	[[TGTheme shared] stylePlainTable:self.tableView];
 	[[TGTheme shared] styleNavigationBar:self.navigationController.navigationBar];
 	[[TGTheme shared] styleTabBar:self.tabBarController.tabBar];
 
@@ -152,9 +152,9 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 			object:nil queue:[NSOperationQueue mainQueue]
 		usingBlock:^(NSNotification *note){
 		[TGIcons flush];
+		weakSelf.view.backgroundColor = [[TGTheme shared] listBackgroundColour];
 		[[TGTheme shared] styleNavigationBar:weakSelf.navigationController.navigationBar];
-		weakSelf.tableView.backgroundColor = [[TGTheme shared] listBackgroundColour];
-		weakSelf.tableView.separatorColor = [[TGTheme shared] separatorColour];
+		[[TGTheme shared] stylePlainTable:weakSelf.tableView];
 		[[TGTheme shared] styleTabBar:weakSelf.tabBarController.tabBar];
 		[weakSelf styleSearchBar];
 		[weakSelf refreshListTitleView];

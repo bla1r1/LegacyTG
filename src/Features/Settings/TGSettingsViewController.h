@@ -2,6 +2,7 @@
 // TGSettingsViewController - account, settings pages, and maintenance UI.
 //
 #import <UIKit/UIKit.h>
+#import "TGTableViewController.h"
 
 typedef NS_ENUM(NSInteger, TGSettingsPage) {
 	TGSettingsPageRoot = 0,
@@ -33,7 +34,7 @@ typedef NS_ENUM(NSInteger, TGSettingsPage) {
 	TGSettingsPagePaymentDev
 };
 
-@interface TGSettingsViewController : UITableViewController
+@interface TGSettingsViewController : TGTableViewController
 
 /// Root unless set before the view loads.
 @property (nonatomic, assign) TGSettingsPage page;

@@ -13,24 +13,38 @@ static NSDictionary *TGTelegramLookupFolded = nil;
 static NSDictionary *TGTelegramPlurals = nil;
 
 static NSString *TGLocalizationFoldKey(NSString *text) {
+	if (!text.length)
+		return @"";
 	NSString *folded = [text stringByTrimmingCharactersInSet:
 			[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 	folded = [folded lowercaseString];
-	folded = [folded stringByReplacingOccurrencesOfString:@"\u2019" withString:@"'"];
-	folded = [folded stringByReplacingOccurrencesOfString:@"\u2018" withString:@"'"];
-	folded = [folded stringByReplacingOccurrencesOfString:@"\u201c" withString:@"\""];
-	folded = [folded stringByReplacingOccurrencesOfString:@"\u201d" withString:@"\""];
-	folded = [folded stringByReplacingOccurrencesOfString:@"\u2013" withString:@"-"];
-	folded = [folded stringByReplacingOccurrencesOfString:@"\u2014" withString:@"-"];
-	folded = [folded stringByReplacingOccurrencesOfString:@"\u2026" withString:@"..."];
-	NSArray *words = [folded componentsSeparatedByCharactersInSet:
-			[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-	NSMutableArray *kept = [NSMutableArray arrayWithCapacity:words.count];
-	for (NSString *word in words){
-		if (word.length)
-			[kept addObject:word];
+	if ([folded rangeOfString:@"\u2019"].location != NSNotFound)
+		folded = [folded stringByReplacingOccurrencesOfString:@"\u2019" withString:@"'"];
+	if ([folded rangeOfString:@"\u2018"].location != NSNotFound)
+		folded = [folded stringByReplacingOccurrencesOfString:@"\u2018" withString:@"'"];
+	if ([folded rangeOfString:@"\u201c"].location != NSNotFound)
+		folded = [folded stringByReplacingOccurrencesOfString:@"\u201c" withString:@"\""];
+	if ([folded rangeOfString:@"\u201d"].location != NSNotFound)
+		folded = [folded stringByReplacingOccurrencesOfString:@"\u201d" withString:@"\""];
+	if ([folded rangeOfString:@"\u2013"].location != NSNotFound)
+		folded = [folded stringByReplacingOccurrencesOfString:@"\u2013" withString:@"-"];
+	if ([folded rangeOfString:@"\u2014"].location != NSNotFound)
+		folded = [folded stringByReplacingOccurrencesOfString:@"\u2014" withString:@"-"];
+	if ([folded rangeOfString:@"\u2026"].location != NSNotFound)
+		folded = [folded stringByReplacingOccurrencesOfString:@"\u2026" withString:@"..."];
+	if ([folded rangeOfString:@"  "].location != NSNotFound ||
+			[folded rangeOfString:@"\t"].location != NSNotFound ||
+			[folded rangeOfString:@"\n"].location != NSNotFound){
+		NSArray *words = [folded componentsSeparatedByCharactersInSet:
+				[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+		NSMutableArray *kept = [NSMutableArray arrayWithCapacity:words.count];
+		for (NSString *word in words){
+			if (word.length)
+				[kept addObject:word];
+		}
+		return [kept componentsJoinedByString:@" "];
 	}
-	return [kept componentsJoinedByString:@" "];
+	return folded;
 }
 
 static void TGBuildFoldedLookup(void) {
@@ -133,9 +147,16 @@ void TGSetAppLanguage(NSString *packId) {
 void TGSetTelegramLanguageLookup(NSDictionary *englishToTranslated) {
 	TGTelegramLookup = [englishToTranslated isKindOfClass:NSDictionary.class]
 			? [englishToTranslated copy] : nil;
-	if (!TGTelegramLookup)
+	if (!TGTelegramLookup) {
 		TGTelegramPlurals = nil;
-	TGBuildFoldedLookup();
+		TGTelegramLookupFolded = nil;
+	} else if (NSClassFromString(@"XCTestCase") != nil) {
+		TGBuildFoldedLookup();
+	} else {
+		dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_BACKGROUND, 0), ^{
+			TGBuildFoldedLookup();
+		});
+	}
 	NSString *packId = TGAppLanguage();
 	NSString *path = TGLocalizationCachePath(packId);
 	if (path.length && TGTelegramLookup) {

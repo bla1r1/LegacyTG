@@ -8,6 +8,7 @@
 // when Telegram stores it as a colour, a swatch of that colour.
 //
 #import "TGBackgroundsViewController.h"
+#import "TGBackgroundEditorViewController.h"
 #import "TGClient.h"
 #import "TGAlertSheet.h"
 #import "TGStyle.h"
@@ -134,7 +135,10 @@ static UIImage *TGBackgroundPreview(UIImage *source, NSInteger fillColour) {
 
 	NSMutableDictionary *themeRow = TGBRow(@"switch", @"Night Mode");
 	themeRow[@"on"] = @(self.darkTheme);
-	[sections addObject:TGBSection(nil, nil, @[themeRow])];
+	[sections addObject:TGBSection(nil, nil, @[
+		themeRow,
+		TGBCellRow(@"Set a Color", @"Colors & Gradients", @"editor")
+	])];
 
 	NSMutableArray *installedRows = [NSMutableArray array];
 	if (self.loadError.length)
@@ -352,6 +356,12 @@ static UIImage *TGBackgroundPreview(UIImage *source, NSInteger fillColour) {
 
 - (void)runAction:(NSString *)action {
 	__weak typeof(self) weakSelf = self;
+	if ([action isEqualToString:@"editor"]){
+		TGBackgroundEditorViewController *editor = [[TGBackgroundEditorViewController alloc] init];
+		editor.hidesBottomBarWhenPushed = YES;
+		[self.navigationController pushViewController:editor animated:YES];
+		return;
+	}
 	if ([action isEqualToString:@"search"]){
 		[TGAlertSheet showInput:@"Search"
 						message:nil

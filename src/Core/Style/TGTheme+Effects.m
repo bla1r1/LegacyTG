@@ -84,11 +84,13 @@
 
 - (UIColor *)skeuoBubbleMineBorderColour {
 	///< soft celestial blue stroke in light, hairline blue-white in dark
+	if ([self isDark]) return [self bubbleBorderColour];
 	return rgb(0x99, 0xC4, 0xE8);
 }
 
 - (UIColor *)skeuoBubbleTheirsBorderColour {
 	///< tactile outer border on theirs
+	if ([self isDark]) return [self bubbleBorderColour];
 	return rgb(0xB0, 0xB0, 0xB6);
 }
 

@@ -37,7 +37,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 /// One connection's auto-download settings. The official page lists the media
 /// types and their limits; this client has one preset per network, so the
 /// same switches move that preset and say what it currently allows.
-@interface TGAutoDownloadConnectionViewController : UITableViewController
+@interface TGAutoDownloadConnectionViewController : TGTableViewController
 @property (nonatomic, copy) NSString *network;
 /// Which key in autoDownloadPresets this network maps to.
 @property (nonatomic, copy) NSString *presetKey;
@@ -126,7 +126,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 @end
 
 /// Network Usage, without the TDLib diagnostics that used to share its row.
-@interface TGDataUsageViewController : UITableViewController
+@interface TGDataUsageViewController : TGTableViewController
 @property (nonatomic, assign) long long sent;
 @property (nonatomic, assign) long long received;
 @property (nonatomic, copy) NSString *sentText;

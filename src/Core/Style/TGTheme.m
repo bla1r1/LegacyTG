@@ -56,11 +56,15 @@ static NSString *const kWallpaperTypeKey = @"themeWallpaperType";
 	] mutableCopy];
 
 	for (NSString *path in [self availableThemeFiles]){
-		NSString *name = [path.lastPathComponent stringByDeletingPathExtension];
+		NSString *name = nil;
+		NSDictionary *p = [TGThemeFile paletteFromFile:path name:&name];
+		if (!name.length)
+			name = [path.lastPathComponent stringByDeletingPathExtension];
+		BOOL dark = [p[@"isDark"] boolValue];
 		[themes addObject:@{
 			@"id"   : [@"file:" stringByAppendingString:path.lastPathComponent],
 			@"name" : name,
-			@"dark" : @NO,          // only known once the file has been read
+			@"dark" : @(dark),
 			@"path" : path,
 		}];
 	}
@@ -125,12 +129,21 @@ static NSString *const kWallpaperTypeKey = @"themeWallpaperType";
 + (NSString *)pathInDocuments:(NSString *)name {
 	NSString *documents = [NSSearchPathForDirectoriesInDomains(
 			NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
-	return [documents stringByAppendingPathComponent:name.lastPathComponent];
+	NSString *docPath = [documents stringByAppendingPathComponent:name.lastPathComponent];
+	if ([[NSFileManager defaultManager] fileExistsAtPath:docPath])
+		return docPath;
+	NSString *bundle = [[NSBundle mainBundle] bundlePath];
+	NSString *bundlePath = [bundle stringByAppendingPathComponent:name.lastPathComponent];
+	if ([[NSFileManager defaultManager] fileExistsAtPath:bundlePath])
+		return bundlePath;
+	return docPath;
 }
 
 - (BOOL)loadImportedTheme:(NSString *)path {
 	NSString *name = nil;
-	NSDictionary *palette = [TGThemeFile chatPaletteFromFile:path name:&name];
+	NSDictionary *palette = [TGThemeFile paletteFromFile:path name:&name];
+	if (!palette)
+		palette = [TGThemeFile chatPaletteFromFile:path name:&name];
 	if (!palette)
 		return NO;
 	_imported = palette;
@@ -143,13 +156,20 @@ static NSString *const kWallpaperTypeKey = @"themeWallpaperType";
 }
 
 + (NSArray *)availableThemeFiles {
+	NSMutableArray *found = [NSMutableArray array];
 	NSString *documents = [NSSearchPathForDirectoriesInDomains(
 			NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
-	NSMutableArray *found = [NSMutableArray array];
 	for (NSString *entry in [[NSFileManager defaultManager]
 			contentsOfDirectoryAtPath:documents error:nil]){
 		NSString *path = [documents stringByAppendingPathComponent:entry];
 		if ([TGThemeFile handlesFile:path])
+			[found addObject:path];
+	}
+	NSString *bundle = [[NSBundle mainBundle] bundlePath];
+	for (NSString *entry in [[NSFileManager defaultManager]
+			contentsOfDirectoryAtPath:bundle error:nil]){
+		NSString *path = [bundle stringByAppendingPathComponent:entry];
+		if ([TGThemeFile handlesFile:path] && ![found containsObject:path])
 			[found addObject:path];
 	}
 	return found;
@@ -157,6 +177,10 @@ static NSString *const kWallpaperTypeKey = @"themeWallpaperType";
 
 - (UIColor *)importedColour:(NSString *)key {
 	return _imported[key];
+}
+
+- (BOOL)isDark {
+	return [_imported[@"isDark"] boolValue];
 }
 
 + (UITableViewCell *)systemCellOfStyle:(UITableViewCellStyle)style {
@@ -173,43 +197,121 @@ static NSString *const kWallpaperTypeKey = @"themeWallpaperType";
 	// opaque white ones showed as boxes on the blue selection.
 	UITableViewCell *system = [TGTheme systemCellOfStyle:UITableViewCellStyleValue1];
 	cell.textLabel.font = system.textLabel.font;
-	cell.textLabel.textColor = system.textLabel.textColor;
 	cell.detailTextLabel.font = system.detailTextLabel.font;
-	cell.detailTextLabel.textColor = system.detailTextLabel.textColor;
 	cell.textLabel.backgroundColor = [UIColor clearColor];
 	cell.detailTextLabel.backgroundColor = [UIColor clearColor];
 	cell.textLabel.opaque = NO;
 	cell.detailTextLabel.opaque = NO;
 	cell.selectedBackgroundView = nil;
+
+	if ([self isDark]) {
+		cell.backgroundColor = [self cardBackgroundColour];
+		cell.contentView.backgroundColor = [self cardBackgroundColour];
+		cell.textLabel.textColor = [self primaryTextColour];
+		cell.detailTextLabel.textColor = [self cellDetailColour];
+		UIView *sel = [[UIView alloc] init];
+		sel.backgroundColor = [self inputBarColour];
+		cell.selectedBackgroundView = sel;
+		if (cell.backgroundView)
+			cell.backgroundView.backgroundColor = [self cardBackgroundColour];
+	} else {
+		cell.backgroundColor = nil;
+		cell.contentView.backgroundColor = nil;
+		cell.textLabel.textColor = system.textLabel.textColor;
+		cell.detailTextLabel.textColor = system.detailTextLabel.textColor;
+		cell.selectedBackgroundView = nil;
+	}
 }
 
 /// A search bar as the OS draws one: grey on iOS 6, light on 7, nothing of
 /// ours painted on it. A dark or imported theme gets the black style and
 /// its own colours.
 - (void)styleSearchBar:(UISearchBar *)bar {
+	if (!bar)
+		return;
 	if ([bar respondsToSelector:@selector(setBackgroundImage:)])
 		[bar setBackgroundImage:nil];
-	bar.barStyle = UIBarStyleDefault;
-	bar.tintColor = nil;
-	if ([bar respondsToSelector:@selector(setBarTintColor:)])
-		bar.barTintColor = nil;
+	if ([self isDark]) {
+		bar.barStyle = UIBarStyleBlack;
+		bar.tintColor = [self accentColour];
+		if ([bar respondsToSelector:@selector(setBarTintColor:)])
+			bar.barTintColor = [self searchBarBackgroundColour];
+		bar.backgroundColor = [self listBackgroundColour];
+	} else {
+		bar.barStyle = UIBarStyleDefault;
+		bar.tintColor = nil;
+		if ([bar respondsToSelector:@selector(setBarTintColor:)])
+			bar.barTintColor = nil;
+		bar.backgroundColor = nil;
+	}
 }
 
 /// A grouped table as UIKit draws it on the OS it runs on - iOS 6's
 /// pinstripes and rounded cards, iOS 7's grey sheet - with only the colours
 /// changed on a dark or imported theme.
 - (void)styleGroupedTable:(UITableView *)table {
-	// The system's own background view draws iOS 6's pinstripes; a pattern
-	// colour on a view of ours came out black.
 	table.separatorStyle = UITableViewCellSeparatorStyleSingleLine;
+	if ([self isDark]) {
+		table.backgroundColor = [self groupedBackgroundColour];
+		UIView *bg = [[UIView alloc] initWithFrame:table.bounds];
+		bg.backgroundColor = [self groupedBackgroundColour];
+		table.backgroundView = bg;
+		table.separatorColor = [self separatorColour];
+	} else {
+		table.backgroundColor = [self groupedBackgroundColour];
+		table.backgroundView = nil;
+		table.separatorColor = nil;
+	}
+}
+
+- (void)stylePlainTable:(UITableView *)table {
+	if ([self isDark]) {
+		table.backgroundColor = [self listBackgroundColour];
+		UIView *bg = [[UIView alloc] initWithFrame:table.bounds];
+		bg.backgroundColor = [self listBackgroundColour];
+		table.backgroundView = bg;
+		table.separatorColor = [self separatorColour];
+		if ([table respondsToSelector:@selector(setSectionIndexColor:)]) {
+			table.sectionIndexColor = [self accentColour];
+			table.sectionIndexBackgroundColor = [UIColor clearColor];
+			if ([table respondsToSelector:@selector(setSectionIndexTrackingBackgroundColor:)])
+				table.sectionIndexTrackingBackgroundColor = [self listBackgroundColour];
+		}
+	} else {
+		table.backgroundColor = [self listBackgroundColour];
+		table.backgroundView = nil;
+		table.separatorColor = [self separatorColour];
+	}
+}
+
+- (void)styleHeaderFooterView:(UIView *)view {
+	if (!view)
+		return;
+	if ([self isDark]) {
+		UIColor *bg = [self groupedBackgroundColour];
+		if ([view respondsToSelector:@selector(contentView)]) {
+			UIView *cv = [(id)view contentView];
+			cv.backgroundColor = bg;
+		}
+		if ([view respondsToSelector:@selector(backgroundView)]) {
+			UIView *bv = [(id)view backgroundView];
+			bv.backgroundColor = bg;
+		}
+		view.backgroundColor = bg;
+		if ([view respondsToSelector:@selector(textLabel)]) {
+			UILabel *label = [(id)view textLabel];
+			label.textColor = [self sectionHeaderColour];
+			label.backgroundColor = [UIColor clearColor];
+		}
+	}
 }
 
 - (void)styleTabBar:(UITabBar *)bar {
 	if (!bar)
 		return;
 
-	UIColor *barBg = [self barColour];
-	UIColor *on = [UIColor whiteColor];
+	UIColor *barBg = [self importedColour:@"tabBar"] ?: [self barColour];
+	UIColor *on = [self isDark] ? [self accentColour] : [UIColor whiteColor];
 	UIColor *off = [UIColor colorWithWhite:1.0f alpha:TGAlphaSecondary];
 
 	// iOS 6 tints the system bar slate blue; iOS 7+ sets barTintColor.
@@ -364,10 +466,10 @@ static NSString *const kWallpaperTypeKey = @"themeWallpaperType";
 			[bar setBackgroundImage:nil forBarMetrics:UIBarMetricsDefault];
 		if ([bar respondsToSelector:@selector(setShadowImage:)])
 			[bar setShadowImage:nil];
-		// No tint at all: iOS 6's own slate-blue bar and white title. A pale
-		// theme tint made it read as not quite iOS.
-		bar.tintColor = nil;
-		bar.titleTextAttributes = nil;
+		bar.tintColor = [self importedColour:@"bar"] ?: nil;
+		bar.titleTextAttributes = [self importedColour:@"barTitle"]
+				? @{ UITextAttributeTextColor : [self barTitleColour] }
+				: nil;
 		return;
 	}
 

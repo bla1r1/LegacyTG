@@ -489,9 +489,12 @@ static UIImage *TGSolidImage(UIColor *colour) {
 		}
 	}
 	// A non-contact gets Block User in the card; a contact keeps it in More.
-	if (self.userId && !isMe && !self.isBot && self.isContact)
+	if (self.userId && !isMe && !self.isBot && self.isContact) {
+		[items addObject:@{@"title" : @"Delete Contact",
+						   @"icon" : @"delete", @"destructive" : @YES}];
 		[items addObject:@{@"title" : (self.blocked ? @"Unblock" : @"Block"),
 						   @"icon" : @"privacy", @"destructive" : @YES}];
+	}
 
 	CGPoint where = [tile convertPoint:CGPointMake(TGHalf(tile.bounds.size.width),
 												   tile.bounds.size.height)

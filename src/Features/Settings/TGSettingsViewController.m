@@ -238,6 +238,7 @@ static const CGFloat kSettingsSearchHeight = 44.0f;
 }
 
 - (void)applyTheme {
+	[super applyTheme];
 	[[TGTheme shared] styleGroupedTable:self.tableView];
 }
 
@@ -781,6 +782,14 @@ static const CGFloat kSettingsSearchHeight = 44.0f;
 	return text.length ? TGLocalized(text) : nil;
 }
 
+- (void)tableView:(UITableView *)tableView willDisplayHeaderView:(UIView *)view forSection:(NSInteger)section {
+	[[TGTheme shared] styleHeaderFooterView:view];
+}
+
+- (void)tableView:(UITableView *)tableView willDisplayFooterView:(UIView *)view forSection:(NSInteger)section {
+	[[TGTheme shared] styleHeaderFooterView:view];
+}
+
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
 	return self.sections.count;
 }
@@ -893,13 +902,17 @@ static const CGFloat kMeTextInset  = TGMetricPadMedium;
 
 		UIView *bubble = [[UIView alloc] initWithFrame:CGRectMake(bubbleX, bubbleY, bubbleW, bubbleH)];
 
-		CAGradientLayer *grad = [CAGradientLayer layer];
-		grad.frame = bubble.bounds;
-		grad.colors = mine ? [theme skeuoBubbleMineGradientColours] : [theme skeuoBubbleTheirsGradientColours];
-		grad.cornerRadius = [theme bubbleCornerRadius];
-		[bubble.layer insertSublayer:grad atIndex:0];
+		if ([theme isDark] || [theme importedName]) {
+			bubble.backgroundColor = mine ? [theme bubbleMineColour] : [theme bubbleTheirsColour];
+		} else {
+			CAGradientLayer *grad = [CAGradientLayer layer];
+			grad.frame = bubble.bounds;
+			grad.colors = mine ? [theme skeuoBubbleMineGradientColours] : [theme skeuoBubbleTheirsGradientColours];
+			grad.cornerRadius = [theme bubbleCornerRadius];
+			[bubble.layer insertSublayer:grad atIndex:0];
+			bubble.backgroundColor = [UIColor clearColor];
+		}
 
-		bubble.backgroundColor = [UIColor clearColor];
 		bubble.layer.cornerRadius = [theme bubbleCornerRadius];
 		bubble.layer.borderWidth = 1.0f;
 		bubble.layer.borderColor = (mine ? [theme skeuoBubbleMineBorderColour] : [theme skeuoBubbleTheirsBorderColour]).CGColor;
@@ -913,11 +926,11 @@ static const CGFloat kMeTextInset  = TGMetricPadMedium;
 				CGRectMake(kPreviewTextLeft, textTop, bubbleW - kPreviewStampRoom, tFit.height)];
 		text.text = lines[i];
 		text.font = font;
-		text.textColor = [theme primaryTextColour];
+		text.textColor = mine ? [theme bubbleMineTextColour] : [theme bubbleTheirsTextColour];
 		text.backgroundColor = [UIColor clearColor];
 		text.adjustsFontSizeToFitWidth = NO;
 		text.numberOfLines = 0;
-		text.shadowColor = [theme etchedTextShadowColour];
+		text.shadowColor = [theme isDark] ? nil : [theme etchedTextShadowColour];
 		text.shadowOffset = TGMetricShadowOffsetEtched;
 		[bubble addSubview:text];
 
@@ -981,9 +994,14 @@ static const CGFloat kMeTextInset  = TGMetricPadMedium;
 	UITableViewCell *system = [TGTheme systemCellOfStyle:(subtitle
 			? UITableViewCellStyleSubtitle : UITableViewCellStyleValue1)];
 	cell.textLabel.font = system.textLabel.font;
-	cell.textLabel.textColor = system.textLabel.textColor;
 	cell.detailTextLabel.font = system.detailTextLabel.font;
-	cell.detailTextLabel.textColor = system.detailTextLabel.textColor;
+	if ([theme isDark]) {
+		cell.textLabel.textColor = [theme primaryTextColour];
+		cell.detailTextLabel.textColor = [theme cellDetailColour];
+	} else {
+		cell.textLabel.textColor = system.textLabel.textColor;
+		cell.detailTextLabel.textColor = system.detailTextLabel.textColor;
+	}
 	if ([kind isEqualToString:TGKindDestructive])
 		cell.textLabel.textColor = [theme destructiveColour];
 

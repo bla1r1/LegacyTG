@@ -1,5 +1,6 @@
 #import "TGProfileViewController.h"
 #import "TGSettingsViewControllerInternal.h"
+#import "TGPrivacyRuleViewController.h"
 #import "TGAlertSheet.h"
 #import "TGStyle.h"
 #import "TGInstantViewController.h"
@@ -573,25 +574,16 @@ static UIImage *TGSettingsQRIcon(void) {
 
 - (void)askPrivacyRuleAtIndex:(NSUInteger)index {
 	NSString *setting = [TGSettingsViewController privacySettings][index];
+	NSString *title = [TGSettingsViewController privacyTitles][index];
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:@[@"Everybody", @"My Contacts", @"Nobody"]
-						title:[TGSettingsViewController privacyTitles][index]
-			 destructiveIndex:-1
-					   inView:self.view
-					 onChoice:^(NSInteger choice){
-		NSString *value = @[@"everybody", @"contacts", @"nobody"][choice];
-		[[TGClient shared] setPrivacyRule:setting to:value
-							   completion:^(BOOL ok, NSString *error){
-			if (!ok){
-				[TGAlertSheet showMessage:(error ?: @"An error occurred.")
-									title:[TGSettingsViewController privacyTitles][index]
-								   inView:weakSelf.view];
-				return;
-			}
-			weakSelf.privacy[setting] = value;
-			[weakSelf rebuild];
-		}];
-	}];
+	TGPrivacyRuleViewController *vc =
+			[[TGPrivacyRuleViewController alloc] initWithSetting:setting title:title];
+	vc.onChanged = ^(NSString *changedSetting, NSString *newRuleType){
+		weakSelf.privacy[changedSetting] = newRuleType;
+		[weakSelf rebuild];
+	};
+	vc.hidesBottomBarWhenPushed = YES;
+	[self.navigationController pushViewController:vc animated:YES];
 }
 
 /// Four sizes is enough on a 3.5-inch screen; a slider would be finer than
