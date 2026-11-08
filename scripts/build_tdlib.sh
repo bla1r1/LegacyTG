@@ -93,7 +93,7 @@ cmake "${TDLIB_SRC}" \
   -DCMAKE_CXX_FLAGS="-Wno-error" \
   -DCMAKE_C_FLAGS="-Wno-error" \
   -DOPENSSL_ROOT_DIR="${OPENSSL_ROOT}" \
-  -DOPENSSL_INCLUDE_DIR="${ROOT_DIR}/include" \
+  -DOPENSSL_INCLUDE_DIR="${ROOT_DIR}/vendor/include" \
   -DOPENSSL_CRYPTO_LIBRARY="${ROOT_DIR}/build/libs/libcrypto.a" \
   -DOPENSSL_SSL_LIBRARY="${ROOT_DIR}/build/libs/libssl.a" \
   -DBUILD_SHARED_LIBS=OFF \
