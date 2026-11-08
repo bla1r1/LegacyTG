@@ -4,6 +4,7 @@
 // opens its examples through getTextCompositionStyleExample.
 //
 #import <UIKit/UIKit.h>
+#import "TGTableViewController.h"
 
-@interface TGTextStylesViewController : UITableViewController
+@interface TGTextStylesViewController : TGTableViewController
 @end

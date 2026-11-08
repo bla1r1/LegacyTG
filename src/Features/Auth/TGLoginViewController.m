@@ -4,31 +4,21 @@
 #import "TGClient.h"
 #import "TGIcons.h"
 #import "TGUIFormat.h"
-
-/// The field is what was wrong, so it is the thing that moves: one sideways
-/// nudge, no frame change, run by the render server.
-static void TGShakeRejectedInput(UIView *view) {
-    CAKeyframeAnimation *shake =
-            [CAKeyframeAnimation animationWithKeyPath:@"transform.translation.x"];
-    shake.values = @[@0.0f, @-8.0f, @8.0f, @-5.0f, @5.0f, @0.0f];
-    shake.duration = TGAnimationDurationSlow;
-    shake.timingFunction = [CAMediaTimingFunction
-            functionWithName:kCAMediaTimingFunctionEaseInEaseOut];
-    [view.layer addAnimation:shake forKey:@"tg.errorShake"];
-}
+#import "TGLocalization.h"
 
 @implementation TGLoginViewController
 
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    self.title = @"Your Phone";
+    // Official has no title in the bar on any auth screen: the heading lives
+    // in the content, where it can be the 28 pt line the node draws.
+    self.title = nil;
 
     self.nextItem = [[UIBarButtonItem alloc] initWithTitle:@"Next"
                                                      style:UIBarButtonItemStyleDone
                                                     target:self
                                                     action:@selector(actionButtonTapped)];
-    self.navigationItem.rightBarButtonItem = self.nextItem;
 
     [self setupUI];
     [self applyTheme];
@@ -90,49 +80,47 @@ static void TGShakeRejectedInput(UIView *view) {
     }
     [self.view addSubview:self.scrollView];
 
-    // The stack, added up rather than written out. Every y below is the one
-    // before it plus a step, which is what makes the rhythm one value.
     CGFloat inner = width - TGDoubled(TGMetricGutter);
-    CGFloat wide  = width - TGDoubled(TGMetricPadWide);
     CGFloat y = TGMetricStackTop;
 
-    // The sign-in screen is the app's first screen, so it says whose it is:
-    // the same paper plane and wordmark Telegram opens with, drawn from the
-    // icon set rather than shipped as bitmap art.
-    self.brandLogoView = [[UIImageView alloc] initWithFrame:
-            CGRectMake(TGCenteredOrigin(width, TGMetricLoginBrandLogo), y,
-                       TGMetricLoginBrandLogo, TGMetricLoginBrandLogo)];
-    self.brandLogoView.contentMode = UIViewContentModeScaleAspectFit;
-    self.brandLogoView.backgroundColor = [UIColor clearColor];
-    [self.scrollView addSubview:self.brandLogoView];
+    // The heading is the screen's title, in the content rather than the bar,
+    // as the official phone entry node draws it.
+    self.headingLabel = [[UILabel alloc] initWithFrame:
+            CGRectMake(TGMetricGutter, y, inner, TGMetricLoginBrandLabel)];
+    self.headingLabel.text = @"Your Phone";
+    self.headingLabel.font = TGFontTitle();
+    self.headingLabel.textAlignment = NSTextAlignmentLeft;
+    self.headingLabel.backgroundColor = [UIColor clearColor];
+    [self.scrollView addSubview:self.headingLabel];
 
-    y += TGMetricLoginBrandLogo + TGMetricPad;
-    self.brandLabel = [[UILabel alloc] initWithFrame:
-            CGRectMake(TGMetricPadWide, y, wide, TGMetricLoginBrandLabel)];
-    self.brandLabel.text = @"LegacyTG";
-    self.brandLabel.font = TGFontTitle();
-    self.brandLabel.textAlignment = NSTextAlignmentCenter;
-    self.brandLabel.backgroundColor = [UIColor clearColor];
-    [self.scrollView addSubview:self.brandLabel];
-
-    y += TGMetricLoginBrandLabel + TGMetricStackGroup;
-    // Clean native iOS 7 subtitle / instructions
+    y += TGMetricLoginBrandLabel + TGMetricPadMedium;
     self.subtitleLabel = [[UILabel alloc] initWithFrame:
-            CGRectMake(TGMetricPadWide, y, wide, TGMetricLoginSubtitleHeight)];
+            CGRectMake(TGMetricGutter, y, inner, TGMetricLoginSubtitleHeight)];
     self.subtitleLabel.text = @"Please confirm your country code\nand enter your phone number.";
     self.subtitleLabel.backgroundColor = [UIColor clearColor];
     self.subtitleLabel.font = TGFontSubhead();
-    self.subtitleLabel.textAlignment = NSTextAlignmentCenter;
-    self.subtitleLabel.numberOfLines = 2;
+    self.subtitleLabel.textAlignment = NSTextAlignmentLeft;
+    self.subtitleLabel.numberOfLines = 0;
     [self.scrollView addSubview:self.subtitleLabel];
 
-    // The country and formatting line: Telegram puts the country's name and
-    // the number as it would dial it directly under the instructions.
-    y += TGMetricLoginSubtitleHeight + TGMetricStackStep;
+    // Country is a row above the number, not an editable prefix and not a
+    // ghost link under the form.
+    y += TGMetricLoginSubtitleHeight + TGMetricStackGroup;
+    self.countryButton = [UIButton buttonWithType:UIButtonTypeCustom];
+    self.countryButton.frame = CGRectMake(TGMetricGutter, y, inner,
+                                          TGMetricLoginLinkHeight);
+    self.countryButton.contentHorizontalAlignment =
+            UIControlContentHorizontalAlignmentLeft;
+    self.countryButton.titleLabel.font = TGFontSubheadStrong();
+    self.countryButton.backgroundColor = [UIColor clearColor];
+    [self.countryButton addTarget:self action:@selector(countryPickerTapped)
+                forControlEvents:UIControlEventTouchUpInside];
+    [self.scrollView addSubview:self.countryButton];
+
     self.countryLabel = [[UILabel alloc] initWithFrame:
-            CGRectMake(TGMetricPadWide, y, wide, TGMetricLoginCountryLine)];
+            CGRectMake(TGMetricGutter, y, inner, TGMetricLoginCountryLine)];
     self.countryLabel.font = TGFontSubhead();
-    self.countryLabel.textAlignment = NSTextAlignmentCenter;
+    self.countryLabel.textAlignment = NSTextAlignmentLeft;
     self.countryLabel.backgroundColor = [UIColor clearColor];
     self.countryLabel.numberOfLines = 1;
     self.countryLabel.hidden = YES;
@@ -147,8 +135,9 @@ static void TGShakeRejectedInput(UIView *view) {
     self.errorLabel.hidden = YES;
     [self.scrollView addSubview:self.errorLabel];
 
-    // Grouped input container
-    y += TGMetricLoginCountryLine + TGMetricStackStep;
+    // Grouped input container: the calling code is read-only, the country is
+    // chosen from the row above it.
+    y += TGMetricLoginLinkHeight + TGMetricStackStep;
     self.inputContainer = [[UIView alloc] initWithFrame:
             CGRectMake(TGMetricGutter, y, inner, TGMetricRow)];
     self.inputContainer.layer.cornerRadius = TGMetricCornerControl;
@@ -156,26 +145,21 @@ static void TGShakeRejectedInput(UIView *view) {
     self.inputContainer.clipsToBounds = YES;
     [self.scrollView addSubview:self.inputContainer];
 
-    // Country code prefix
     self.phonePrefixField = [[UITextField alloc] initWithFrame:
             CGRectMake(TGMetricPadMedium, 0, TGMetricLoginPrefixWidth, TGMetricRow)];
-    self.phonePrefixField.text = @"+380";
+    self.phonePrefixField.text = @"";
     self.phonePrefixField.font = TGFontHeader();
-    self.phonePrefixField.keyboardType = UIKeyboardTypePhonePad;
-    self.phonePrefixField.returnKeyType = UIReturnKeyNext;
     self.phonePrefixField.textAlignment = NSTextAlignmentCenter;
-    self.phonePrefixField.delegate = self;
-    [self.phonePrefixField addTarget:self action:@selector(prefixFieldChanged:) forControlEvents:UIControlEventEditingChanged];
+    self.phonePrefixField.userInteractionEnabled = NO;
     [self.inputContainer addSubview:self.phonePrefixField];
 
-    // Hairline vertical separator between prefix and phone number
+    // Hairline vertical separator between prefix and phone number.
     self.prefixSeparator = [[UIView alloc] initWithFrame:CGRectMake(
             TGMetricPadMedium + TGMetricLoginPrefixWidth + TGMetricPadTiny,
             TGMetricBubblePadV, TGMetricHairline,
             TGMetricRow - TGDoubled(TGMetricBubblePadV))];
     [self.inputContainer addSubview:self.prefixSeparator];
 
-    // Phone number input field
     CGFloat fieldX = TGMetricPadMedium + TGMetricLoginPrefixWidth + TGMetricPadMedium;
     self.inputField = [[UITextField alloc] initWithFrame:
             CGRectMake(fieldX, 0, inner - fieldX - TGMetricPadMedium, TGMetricRow)];
@@ -189,70 +173,57 @@ static void TGShakeRejectedInput(UIView *view) {
     self.inputField.returnKeyType = UIReturnKeyGo;
     self.inputField.clearButtonMode = UITextFieldViewModeWhileEditing;
     self.inputField.delegate = self;
-    [self.inputField addTarget:self action:@selector(inputFieldChanged:) forControlEvents:UIControlEventEditingChanged];
+    [self.inputField addTarget:self action:@selector(inputFieldChanged:)
+              forControlEvents:UIControlEventEditingChanged];
     [self.inputContainer addSubview:self.inputField];
 
-    // Action button ("Next")
-    self.actionButton = [TGButton buttonWithTitle:@"Next" variant:TGButtonVariantPrimary size:TGButtonSizeLarge];
+    self.actionButton = [TGButton buttonWithTitle:@"Continue"
+                                          variant:TGButtonVariantPrimary
+                                             size:TGButtonSizeLarge];
     y += TGMetricRow + TGMetricStackStep;
     // One control height, not 44 for the field and 42 for the button under it.
     self.actionButton.frame = CGRectMake(TGMetricGutter, y, inner, TGMetricRow);
-    [self.actionButton addTarget:self action:@selector(actionButtonTapped) forControlEvents:UIControlEventTouchUpInside];
+    [self.actionButton addTarget:self action:@selector(actionButtonTapped)
+                forControlEvents:UIControlEventTouchUpInside];
     [self.scrollView addSubview:self.actionButton];
 
-    // Activity spinner inside action button
-    self.spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleWhite];
-    self.spinner.center = CGPointMake(TGHalf(inner), TGHalf(TGMetricRow));
+    // Activity spinner beside the title rather than replacing it.
+    self.spinner = [[UIActivityIndicatorView alloc]
+            initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleWhite];
+    self.spinner.center = CGPointMake(TGHalf(inner) - TGMetricPadWide, TGHalf(TGMetricRow));
     self.spinner.hidesWhenStopped = YES;
     [self.actionButton addSubview:self.spinner];
 
-    // Log in with QR Code button
-    self.qrCodeButton = [TGButton buttonWithTitle:@"Log in with QR Code" variant:TGButtonVariantGhost size:TGButtonSizeMedium];
-    y += TGMetricRow + TGMetricStackStep;
-    self.qrCodeButton.frame = CGRectMake(TGMetricGutter, y, inner,
-                                         TGMetricLoginLinkHeight);
-    [self.qrCodeButton addTarget:self action:@selector(qrCodeButtonTapped) forControlEvents:UIControlEventTouchUpInside];
-    [self.scrollView addSubview:self.qrCodeButton];
-
-    y += TGMetricLoginLinkHeight + TGMetricPadLarge;
+    y += TGMetricRow + TGMetricStackGroup;
     self.scrollView.contentSize = CGSizeMake(width, y);
     self.currentStep = TGLoginStepPhone;
     [self updateActionEnabled];
-
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [self.inputField becomeFirstResponder];
-    });
 }
 
 - (void)applyTheme {
     TGTheme *theme = [TGTheme shared];
 
-    // Navigation bar
     if (self.navigationController) {
         [theme styleNavigationBar:self.navigationController.navigationBar];
     }
     // iOS 7 reads an item's tint as its text colour; iOS 6 as the colour of
     // the button itself, so white there made white text on a white button.
-    // On 6 the items keep the bar's own tint.
     if (NSFoundationVersionNumber > NSFoundationVersionNumber_iOS_6_1) {
         self.nextItem.tintColor = [theme barButtonColour];
-        self.navigationItem.leftBarButtonItem.tintColor = [theme barButtonColour];
     }
 
-    // View background
     self.view.backgroundColor = [theme groupedBackgroundColour];
 
-    // Labels
+    self.headingLabel.textColor = [theme primaryTextColour];
     self.subtitleLabel.textColor = [theme secondaryTextColour];
     self.subtitleLabel.shadowColor = [theme etchedTextShadowColour];
     self.subtitleLabel.shadowOffset = TGMetricShadowOffsetEtched;
 
-    self.brandLabel.textColor = [theme primaryTextColour];
-    self.brandLogoView.image = [TGIcons telegramAirplaneOfSide:TGMetricLoginBrandLogo];
+    [self.countryButton setTitleColor:[theme accentColour]
+                             forState:UIControlStateNormal];
     self.countryLabel.textColor = [theme secondaryTextColour];
     self.errorLabel.textColor = [theme destructiveColour];
 
-    // Input container & fields
     self.inputContainer.backgroundColor = [theme cardBackgroundColour];
     self.inputContainer.layer.borderColor = [theme separatorColour].CGColor;
     self.prefixSeparator.backgroundColor = [theme separatorColour];
@@ -269,15 +240,12 @@ static void TGShakeRejectedInput(UIView *view) {
             attributes:@{ NSForegroundColorAttributeName : [theme placeholderColour] }];
     }
 
-    // Action button
     [self.actionButton setBackgroundImage:[TGTheme buttonImageForStyle:TGButtonStyleAction highlighted:NO height:TGMetricRow] forState:UIControlStateNormal];
     [self.actionButton setBackgroundImage:[TGTheme buttonImageForStyle:TGButtonStyleAction highlighted:YES height:TGMetricRow] forState:UIControlStateHighlighted];
     self.actionButton.backgroundColor = [UIColor clearColor];
     self.actionButton.layer.borderWidth = 0.0f;
     [self.actionButton setTitleColor:[[TGTheme shared] onAccentColour] forState:UIControlStateNormal];
 
-    // Secondary buttons
-    [self.qrCodeButton setTitleColor:[theme accentColour] forState:UIControlStateNormal];
     if (self.resendButton) {
         [self.resendButton setTitleColor:[theme accentColour] forState:UIControlStateNormal];
     }
@@ -291,6 +259,7 @@ static void TGShakeRejectedInput(UIView *view) {
 }
 
 - (void)setBusy:(BOOL)busy {
+    BOOL wasBusy = _busy;
     _busy = busy;
     if (busy) {
         self.errorLabel.text = nil;
@@ -298,19 +267,25 @@ static void TGShakeRejectedInput(UIView *view) {
     }
     self.actionButton.enabled = !busy;
     self.nextItem.enabled = !busy;
+    // The title stays while the spinner runs beside it, as on the official
+    // node; hiding it made the button look empty on a slow network.
     if (busy) {
-        self.actionButton.titleLabel.alpha = TGAlphaTransparent;
         [self.spinner startAnimating];
     } else {
-        self.actionButton.titleLabel.alpha = TGAlphaOpaque;
         [self.spinner stopAnimating];
     }
     [self updateActionEnabled];
+    // A code check that fails leaves the auth state on the same step; the
+    // client reports the error by releasing busy. Success changes the step,
+    // so anything still pending here was rejected.
+    if (!busy && wasBusy && self.codeSubmitPending &&
+            self.currentStep == TGLoginStepCode)
+        [self showCodeError];
 }
 
 /// Whether the current field holds enough to be sent. Telegram keeps the
-/// button inactive until it does; a disabled Next is the only error a number
-/// that is still being typed needs.
+/// button inactive until it does; a disabled Continue is the only error a
+/// number that is still being typed needs.
 - (BOOL)canSubmitCurrentStep {
     NSString *text = [self.inputField.text
             stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
@@ -337,8 +312,7 @@ static void TGShakeRejectedInput(UIView *view) {
     self.actionButton.enabled = ready;
     self.nextItem.enabled = ready;
     self.inputField.enabled = !self.busy;
-    self.phonePrefixField.enabled = !self.busy;
-    self.qrCodeButton.enabled = !self.busy;
+    self.countryButton.enabled = !self.busy;
     self.resendButton.enabled = !self.busy && self.resendCountdown <= 0;
     self.codeStepQrButton.enabled = !self.busy;
     for (UIView *link in self.stepLinks) {
@@ -347,88 +321,48 @@ static void TGShakeRejectedInput(UIView *view) {
     }
 }
 
-/// The auth requests for phone, code, password and email answer through the
-/// authorization state, not a completion. A wrong code changes nothing, so
-/// the spinner is released after a few seconds and the field is usable
-/// again; a correct one changes step first and this does nothing.
-- (void)releaseBusyIfStepIsStill:(TGLoginStep)step {
-    __weak typeof(self) weakSelf = self;
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(6.0 * NSEC_PER_SEC)),
-            dispatch_get_main_queue(), ^{
-        TGLoginViewController *me = weakSelf;
-        if (!me || !me.busy || me.currentStep != step)
-            return;
-        [me setBusy:NO];
-        NSString *sentence = nil;
-        switch (step) {
-            case TGLoginStepCode:
-            case TGLoginStepEmailCode:
-            case TGLoginStepRecoveryCode:
-                sentence = @"That code was not accepted. Check it and try again.";
-                break;
-            case TGLoginStepPassword:
-                sentence = @"That password was not accepted. Try again.";
-                break;
-            case TGLoginStepPhone:
-                sentence = @"Telegram did not accept that number. Check the country code.";
-                break;
-            default:
-                break;
-        }
-        if (sentence.length) {
-            me.errorLabel.text = sentence;
-            me.errorLabel.hidden = NO;
-            me.errorLabel.alpha = TGAlphaTransparent;
-            __weak typeof(me) weakMe = me;
-            [UIView animateWithDuration:TGAnimationDurationFast animations:^{
-                weakMe.errorLabel.alpha = TGAlphaOpaque;
-            }];
-            [me layoutActiveStep];
-            TGShakeRejectedInput(me.inputContainer);
-            [me.inputField becomeFirstResponder];
-        }
-    });
-}
-
 - (void)actionButtonTapped {
     if (![self canSubmitCurrentStep])
         return;
     NSString *text = [self.inputField.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 
-    [self setBusy:YES];
-
     if (self.currentStep == TGLoginStepPhone) {
         NSString *fullPhone = TGUIFormatFullPhone(self.phonePrefixField.text, text);
         self.savedPhoneNumber = fullPhone;
         self.savedNationalNumber = text;
-        if (self.onPhoneSubmitted) {
-            self.onPhoneSubmitted(fullPhone);
-        }
-        [self releaseBusyIfStepIsStill:TGLoginStepPhone];
-    } else if (self.currentStep == TGLoginStepCode) {
+        // Official confirms the number before it is sent: a sheet above 320 pt,
+        // an alert below it. Busy starts only on Continue, so closing either
+        // one leaves the form usable.
+        if (self.view.bounds.size.width > 320.0f)
+            [self presentPhoneConfirmationForNumber:fullPhone];
+        else
+            [self presentPhoneConfirmationAlertForNumber:fullPhone];
+        return;
+    }
+
+    [self setBusy:YES];
+
+    if (self.currentStep == TGLoginStepCode) {
         NSString *cleanCode = [text stringByReplacingOccurrencesOfString:@"\\D" withString:@"" options:NSRegularExpressionSearch range:NSMakeRange(0, text.length)];
+        self.codeSubmitPending = YES;
         if (self.onCodeSubmitted) {
             self.onCodeSubmitted(cleanCode.length ? cleanCode : text);
         }
-        [self releaseBusyIfStepIsStill:TGLoginStepCode];
     } else if (self.currentStep == TGLoginStepPassword) {
         if (self.onPasswordSubmitted) {
             self.onPasswordSubmitted(text);
         }
-        [self releaseBusyIfStepIsStill:TGLoginStepPassword];
     } else if (self.currentStep == TGLoginStepEmail) {
         [[TGClient shared] sendEmailAddress:text];
-        [self releaseBusyIfStepIsStill:TGLoginStepEmail];
     } else if (self.currentStep == TGLoginStepEmailCode) {
         [[TGClient shared] sendEmailCode:text];
-        [self releaseBusyIfStepIsStill:TGLoginStepEmailCode];
     } else if (self.currentStep == TGLoginStepRecoveryCode) {
         __weak typeof(self) weakSelf = self;
         [[TGClient shared] recoverPasswordWithCode:text completion:^(NSString *error){
             TGLoginViewController *me = weakSelf;
             [me setBusy:NO];
             if (error)    // success moves on by the authorization state
-                [TGAlertSheet showMessage:error title:@"Recovery Code" inView:me.view];
+                [TGAlertSheet showMessage:error title:@"Code" inView:me.view];
         }];
     } else if (self.currentStep == TGLoginStepRegister) {
         __weak typeof(self) weakSelf = self;
@@ -437,12 +371,145 @@ static void TGShakeRejectedInput(UIView *view) {
                                       completion:^(BOOL ok, NSString *error){
             TGLoginViewController *me = weakSelf;
             [me setBusy:NO];
-            if (ok)
-                return;   // the authorization state carries the screen on
-            [TGAlertSheet showMessage:(error ?: @"Telegram refused that name.")
-                                title:@"Your Name" inView:me.view];
+            if (ok) {
+                // The avatar chosen on the form is uploaded now that the
+                // account exists; the authorization state carries the screen
+                // on, and a failed upload is not worth blocking it.
+                if (me.registrationPhotoPath.length)
+                    [[TGClient shared] setProfilePhotoAtPath:me.registrationPhotoPath
+                                                  completion:nil];
+                return;
+            }
+            [TGAlertSheet showMessage:(error ?: @"An error occurred.")
+                                title:@"Registration" inView:me.view];
         }];
     }
+}
+
+#pragma mark - phone number confirmation
+
+/// Above 320 pt official slides up a confirmation sheet with the number and
+/// Edit/Continue. A bottom card is that sheet on this OS; the form stays
+/// behind it and nothing is disabled until Continue.
+- (void)presentPhoneConfirmationForNumber:(NSString *)fullPhone {
+    [self dismissPhoneConfirmation];
+    // The card sits at the bottom edge, so the keypad has to be gone first.
+    [self.view endEditing:YES];
+
+    CGFloat width = self.view.bounds.size.width;
+    CGFloat height = self.view.bounds.size.height;
+    CGFloat cardH = TGMetricPadLarge + TGMetricLineTitle + TGMetricPadSmall +
+            TGDoubled(TGMetricLineCaption) + TGMetricPadLarge + TGMetricRow +
+            TGMetricPadLarge;
+
+    UIView *overlay = [[UIView alloc] initWithFrame:self.view.bounds];
+    overlay.backgroundColor = [[TGTheme shared] scrimColour];
+    overlay.autoresizingMask = UIViewAutoresizingFlexibleWidth |
+            UIViewAutoresizingFlexibleHeight;
+
+    // The wash is a separate view under the card: a recognizer on the overlay
+    // itself also caught taps on Edit/Continue, cancelling the button and
+    // turning Continue into Edit.
+    UIView *wash = [[UIView alloc] initWithFrame:self.view.bounds];
+    wash.backgroundColor = [UIColor clearColor];
+    wash.autoresizingMask = UIViewAutoresizingFlexibleWidth |
+            UIViewAutoresizingFlexibleHeight;
+    UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc]
+            initWithTarget:self action:@selector(phoneConfirmationEditTapped)];
+    [wash addGestureRecognizer:tap];
+    [overlay addSubview:wash];
+
+    UIView *card = [[UIView alloc] initWithFrame:
+            CGRectMake(0, height - cardH, width, cardH)];
+    card.backgroundColor = [[TGTheme shared] groupedBackgroundColour];
+    card.layer.borderWidth = TGMetricHairline;
+    card.layer.borderColor = [[TGTheme shared] separatorColour].CGColor;
+    card.autoresizingMask = UIViewAutoresizingFlexibleTopMargin |
+            UIViewAutoresizingFlexibleWidth;
+    [overlay addSubview:card];
+
+    UILabel *number = [[UILabel alloc] initWithFrame:CGRectMake(TGMetricGutter,
+            TGMetricPadLarge, width - TGDoubled(TGMetricGutter), TGMetricLineTitle)];
+    number.text = fullPhone;
+    number.font = TGFontTitle();
+    number.textAlignment = NSTextAlignmentCenter;
+    number.textColor = [[TGTheme shared] primaryTextColour];
+    number.backgroundColor = [UIColor clearColor];
+    [card addSubview:number];
+
+    UILabel *question = [[UILabel alloc] initWithFrame:CGRectMake(TGMetricGutter,
+            CGRectGetMaxY(number.frame) + TGMetricPadSmall,
+            width - TGDoubled(TGMetricGutter), TGDoubled(TGMetricLineCaption))];
+    question.text = TGLocalized(@"Is this the correct number?");
+    question.font = TGFontSubhead();
+    question.numberOfLines = 2;
+    question.textAlignment = NSTextAlignmentCenter;
+    question.textColor = [[TGTheme shared] secondaryTextColour];
+    question.backgroundColor = [UIColor clearColor];
+    [card addSubview:question];
+
+    CGFloat buttonY = cardH - TGMetricPadLarge - TGMetricRow;
+    CGFloat buttonW = TGHalf(width - TGDoubled(TGMetricGutter) - TGMetricPadSmall);
+    TGButton *edit = [TGButton buttonWithTitle:TGLocalized(@"Edit")
+            variant:TGButtonVariantGhost size:TGButtonSizeLarge];
+    edit.frame = CGRectMake(TGMetricGutter, buttonY, buttonW, TGMetricRow);
+    [edit addTarget:self action:@selector(phoneConfirmationEditTapped)
+            forControlEvents:UIControlEventTouchUpInside];
+    [card addSubview:edit];
+
+    TGButton *cont = [TGButton buttonWithTitle:TGLocalized(@"Continue")
+            variant:TGButtonVariantPrimary size:TGButtonSizeLarge];
+    cont.frame = CGRectMake(width - TGMetricGutter - buttonW, buttonY,
+            buttonW, TGMetricRow);
+    [cont addTarget:self action:@selector(phoneConfirmationContinueTapped)
+            forControlEvents:UIControlEventTouchUpInside];
+    [card addSubview:cont];
+
+    self.phoneConfirmationView = overlay;
+    [self.view addSubview:overlay];
+}
+
+- (void)presentPhoneConfirmationAlertForNumber:(NSString *)fullPhone {
+    __weak typeof(self) weakSelf = self;
+    [TGAlertSheet showChoices:@[TGLocalized(@"Edit"), TGLocalized(@"Continue")]
+                        title:fullPhone
+                        message:TGLocalized(@"Is this the correct number?")
+                        destructiveIndex:-1
+                         inView:self.view
+                       onChoice:^(NSInteger index){
+        TGLoginViewController *me = weakSelf;
+        if (!me)
+            return;
+        if (index != 1) {
+            [me setBusy:NO];
+            [me.inputField becomeFirstResponder];
+            return;
+        }
+        [me submitConfirmedPhoneNumber:fullPhone];
+    }];
+}
+
+- (void)phoneConfirmationEditTapped {
+    [self dismissPhoneConfirmation];
+    [self.inputField becomeFirstResponder];
+}
+
+- (void)phoneConfirmationContinueTapped {
+    NSString *number = self.savedPhoneNumber;
+    [self dismissPhoneConfirmation];
+    if (number.length)
+        [self submitConfirmedPhoneNumber:number];
+}
+
+- (void)submitConfirmedPhoneNumber:(NSString *)fullPhone {
+    [self setBusy:YES];
+    if (self.onPhoneSubmitted)
+        self.onPhoneSubmitted(fullPhone);
+}
+
+- (void)dismissPhoneConfirmation {
+    [self.phoneConfirmationView removeFromSuperview];
+    self.phoneConfirmationView = nil;
 }
 
 - (void)keyboardWillShow:(NSNotification *)notification {
@@ -454,8 +521,6 @@ static void TGShakeRejectedInput(UIView *view) {
     self.scrollView.contentInset = contentInsets;
     self.scrollView.scrollIndicatorInsets = contentInsets;
 
-    // The keyboard covers the button on a 3.5" screen once the brand block is
-    // above the field. Keep the field, not the top of the form, on screen.
     CGRect field = [self.inputField convertRect:self.inputField.bounds
                                          toView:self.scrollView];
     [self.scrollView scrollRectToVisible:CGRectInset(field, 0, -TGMetricPad)

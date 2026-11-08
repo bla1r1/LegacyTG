@@ -3,7 +3,7 @@
 
 NSString *TGAuditError(NSDictionary *result) {
 	NSString *message = result[@"message"];
-	return [message isKindOfClass:NSString.class] ? message : @"Telegram refused that.";
+	return [message isKindOfClass:NSString.class] ? message : @"An error occurred.";
 }
 
 BOOL TGAuditFailed(NSDictionary *result) {

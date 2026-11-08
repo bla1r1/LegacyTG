@@ -882,6 +882,9 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 
 - (void)testBlockedUsers_KeepChatsAsWellAsPeople {
 	TGClient *c = A();
+	// Both names already known: the list answers at once.
+	c.usersById[@(7)] = @"Ann";
+	c.chatsById[@(-500)] = [@{@"id" : @(-500), @"title" : @"News"} mutableCopy];
 	__block NSArray *blocked = nil;
 	[c blockedUsersWithCompletion:^(NSArray *users){ blocked = users; }];
 	answerA(c, @{@"@type" : @"messageSenders",
@@ -891,6 +894,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 				 @"total_count" : @(2)});
 	XCTAssertEqual(blocked.count, (NSUInteger)2);
 	XCTAssertEqualObjects(blocked[1][@"id"], @(-500));
+	XCTAssertEqualObjects(blocked[1][@"name"], @"News");
 
 	[c setUser:-500 blocked:NO];
 	NSDictionary *request = lastA(c, @"setMessageSenderBlockList");

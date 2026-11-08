@@ -61,10 +61,16 @@ static const NSInteger kChatJoinChannelBarTag = 0x9022;
 static const NSInteger kChatDiscussBarTag = 0x9023;
 static const NSInteger kChatChannelBottomBarTag = 0x9024;
 
+static int64_t sActiveChatId = 0;
+
 #pragma mark - controller
 
 
 @implementation TGChatViewController (TGChatViewLayout)
+
++ (int64_t)activeChatId {
+	return sActiveChatId;
+}
 
 #pragma mark - layout
 
@@ -91,7 +97,7 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 	self.layoutCache = [[TGMessageLayoutCache alloc] initWithCapacity:500];
 	self.gifPaths = [NSMutableDictionary dictionary];
 	self.gifsRequested = [NSMutableSet set];
-	self.senderAvatars = [[TGImageLruCache alloc] initWithCapacity:50];
+	self.senderAvatars = [[TGImageLruCache alloc] initWithCapacity:120];
 	self.senderAvatarsRequested = [NSMutableSet set];
 	// About 1.1 MB a photo (a 400 px decode plus its rounded copy): forty of
 	// them were 45 MB, past where jetsam kills the app on a 256 MB phone. Rows
@@ -155,6 +161,11 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 	TGPerfReport("chat vc", "input bar", vcStart, 100.0);
 	[self buildChrome];
 	[self refreshReplyKeyboard];
+	// After the input bar exists: the kind decides what replaces it. Called
+	// from the title build before, it framed the channel bar on a nil input
+	// bar (zero size), and the composer stayed up until TDLib answered.
+	if (self.chatId != [[TGClient shared] savedMessagesChatId])
+		[self loadChatKindAndChrome];
 	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(replyMarkupChanged:)
 			name:TGChatReplyMarkupChangedNotification object:nil];
 	// Server-side composer facts: a bot's draft was stopped, or a scheduled
@@ -292,10 +303,10 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 	header.userInteractionEnabled = YES;
 	[header addGestureRecognizer:[[UITapGestureRecognizer alloc]
 			initWithTarget:self action:@selector(openProfile)]];
-	// The tap opens the profile; the hold offers what a secret chat needs
-	// that no menu row reaches: ending it.
+	// The tap opens the profile; the hold starts message search, as
+	// ChatController's title long-press does. The avatar's hold owns the menu.
 	UILongPressGestureRecognizer *headerHold = [[UILongPressGestureRecognizer alloc]
-			initWithTarget:self action:@selector(headerHeld:)];
+			initWithTarget:self action:@selector(titleHeld:)];
 	headerHold.minimumPressDuration = 0.6;
 	[header addGestureRecognizer:headerHold];
 	self.navigationItem.titleView = header;
@@ -341,15 +352,8 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 
 	[self loadPinnedMessage];
 
-	if (self.chatId == [[TGClient shared] savedMessagesChatId]){
+	if (self.chatId == [[TGClient shared] savedMessagesChatId])
 		subtitle.hidden = YES;
-		return;
-	}
-
-	// The caller only knows isGroup when the chat came from the list. A chat
-	// opened from a profile has no row to read, so ask getChat before drawing
-	// presence or replacing the composer with the wrong control.
-	[self loadChatKindAndChrome];
 }
 
 - (void)themeChanged:(NSNotification *)note {
@@ -385,10 +389,17 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 	[self.table reloadData];
 }
 
+- (void)viewWillAppear:(BOOL)animated {
+	[super viewWillAppear:animated];
+	sActiveChatId = self.chatId;
+}
+
 /// A voice note going on playing after you have left the chat is the one thing
 /// nobody expects, and the timer would outlive the screen it repaints.
 - (void)viewWillDisappear:(BOOL)animated {
 	[super viewWillDisappear:animated];
+	if (sActiveChatId == self.chatId)
+		sActiveChatId = 0;
 	if (self.voicePlayer)
 		[self stopPlayback];
 	[self stopVideoNote];

@@ -1,4 +1,5 @@
 #import "TGDMTopicViewController.h"
+#import "TGLocalization.h"
 #import "TGAlertSheet.h"
 #import "TGClient.h"
 #import "TGTheme.h"
@@ -21,8 +22,6 @@ static const NSInteger kSectionHistory = 2;
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
-		self.edgesForExtendedLayout = UIRectEdgeNone;
 	NSString *name = self.topic[@"senderName"];
 	self.title = name.length ? name : @"Topic";
 	self.history = @[];
@@ -35,10 +34,6 @@ static const NSInteger kSectionHistory = 2;
 	[self loadTopic];
 	[self loadHistory];
 	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(applyTheme) name:TGThemeChangedNotification object:nil];
-}
-
-- (void)dealloc {
-	[[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 - (void)applyTheme {
@@ -55,9 +50,9 @@ static const NSInteger kSectionHistory = 2;
 
 - (void)rebuildActions {
 	NSMutableArray *actions = [NSMutableArray arrayWithObjects:
-			@"Send Direct Message",
+			@"Send Message",
 			(@"Jump to Date"), @"Read All Reactions", @"Unpin All Messages",
-			@"Delete Messages by Date", @"Delete All Messages", nil];
+			@"Delete Messages", @"Delete All Messages", nil];
 	if ([self.topic[@"isMarkedUnread"] boolValue])
 		[actions insertObject:@"Mark as Read" atIndex:0];
 	else
@@ -67,11 +62,11 @@ static const NSInteger kSectionHistory = 2;
 
 - (void)replyTapped {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"Direct Message"
-					message:@"Reply to subscriber:"
-				placeholder:@"Type a message…"
+	[TGAlertSheet showInput:@"Direct Messages"
+					message:nil
+				placeholder:@"Message"
 					   text:nil
-					 action:@"Send"
+					 action:@"Send Message"
 					 inView:self.view
 				   onSubmit:^(NSString *text){
 		[weakSelf sendDirectMessage:text];
@@ -150,15 +145,10 @@ static const NSInteger kSectionHistory = 2;
 		return @"Topic";
 	if (section == kSectionActions)
 		return @"Actions";
-	return self.history.count ? @"Recent Messages" : nil;
+	return self.history.count ? @"Messages" : nil;
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-	if (section == kSectionActions)
-		return @"These are the channel-direct-messages calls. A topic id from a "
-			   @"chat this account does not administer is refused by Telegram.";
-	if (section == kSectionHistory && !self.history.count)
-		return @"No messages were returned for this topic.";
 	return nil;
 }
 
@@ -176,10 +166,13 @@ static const NSInteger kSectionHistory = 2;
 		last = text.length ? text : @"(media)";
 	}
 	return @[
-		@[@"From", sender],
-		@[@"Unread", [NSString stringWithFormat:@"%@ messages, %@ reactions",
-				topic[@"unread"] ?: @(0), topic[@"unreadReactions"] ?: @(0)]],
-		@[@"Marked unread", marked],
+		@[@"Sender", sender],
+		@[@"Unread", [NSString stringWithFormat:@"%@, %@",
+				[NSString stringWithFormat:TGLocalized(@"%@ messages"),
+						topic[@"unread"] ?: @(0)],
+				[NSString stringWithFormat:TGLocalized(@"%@ reactions"),
+						topic[@"unreadReactions"] ?: @(0)]]],
+		@[@"Mark as Unread", marked],
 		@[@"Paid messages", [topic[@"canSendUnpaid"] boolValue]
 				? @"Unpaid allowed" : @"Paid only"],
 		@[@"Last message", [last isKindOfClass:NSString.class] ? last : @"—"],
@@ -226,7 +219,7 @@ static const NSInteger kSectionHistory = 2;
 					timeStyle:NSDateFormatterShortStyle]
 			: @"";
 	cell.detailTextLabel.text = [message[@"outgoing"] boolValue]
-			? [NSString stringWithFormat:@"You · %@", when]
+			? [NSString stringWithFormat:@"%@ · %@", TGLocalized(@"You"), when]
 			: when;
 	return cell;
 }
@@ -236,7 +229,7 @@ static const NSInteger kSectionHistory = 2;
 	if ([kind isEqualToString:@"messagePhoto"]) return @"Photo";
 	if ([kind isEqualToString:@"messageVideo"]) return @"Video";
 	if ([kind isEqualToString:@"messageAudio"]) return @"Audio";
-	if ([kind isEqualToString:@"messageVoiceNote"]) return @"Voice note";
+	if ([kind isEqualToString:@"messageVoiceNote"]) return @"Voice Message";
 	if ([kind isEqualToString:@"messageDocument"]) return @"File";
 	if ([kind isEqualToString:@"messageSticker"]) return @"Sticker";
 	return @"Message";
@@ -247,7 +240,7 @@ static const NSInteger kSectionHistory = 2;
 	if (indexPath.section != kSectionActions)
 		return;
 	NSString *title = self.actionTitles[indexPath.row];
-	if ([title isEqualToString:@"Send Direct Message"]){
+	if ([title isEqualToString:@"Send Message"]){
 		[self replyTapped];
 		return;
 	}
@@ -260,8 +253,8 @@ static const NSInteger kSectionHistory = 2;
 										  completion:^(BOOL ok, NSString *error){
 			TGDMTopicViewController *me = weakSelf;
 			if (!ok){
-				[TGAlertSheet showMessage:(error ?: @"Telegram refused that.")
-									title:@"Topic" inView:me.view];
+				[TGAlertSheet showMessage:(error ?: @"An error occurred.")
+									title:@"Topics" inView:me.view];
 				return;
 			}
 			NSMutableDictionary *patched = [me.topic mutableCopy];
@@ -286,13 +279,13 @@ static const NSInteger kSectionHistory = 2;
 				  title:@"Unpin All Messages"];
 		return;
 	}
-	if ([title isEqualToString:@"Delete Messages by Date"]){
+	if ([title isEqualToString:@"Delete Messages"]){
 		[self deleteByDate];
 		return;
 	}
 	if ([title isEqualToString:@"Delete All Messages"]){
 		__weak typeof(self) weakSelf = self;
-		[TGAlertSheet showConfirm:@"Delete every message in this topic?"
+		[TGAlertSheet showConfirm:nil
 							title:@"Delete All Messages" action:@"Delete"
 					  destructive:YES inView:self.view onConfirm:^{
 			[[TGClient shared] deleteDirectMessagesChatTopicHistory:weakSelf.topicId
@@ -327,7 +320,7 @@ static const NSInteger kSectionHistory = 2;
 }
 
 - (void)finish:(BOOL)ok error:(NSString *)error title:(NSString *)title {
-	[TGAlertSheet showMessage:(ok ? @"Done." : (error ?: @"Telegram refused that."))
+	[TGAlertSheet showMessage:(ok ? @"Done" : (error ?: @"An error occurred."))
 						title:title inView:self.view];
 	[self loadTopic];
 	[self loadHistory];
@@ -372,7 +365,7 @@ static const NSInteger kSectionHistory = 2;
 				return;
 			}
 			if (!message){
-				[TGAlertSheet showMessage:@"No message on or before that date."
+				[TGAlertSheet showMessage:@"An error occurred."
 									title:@"Jump to Date" inView:me.view];
 				return;
 			}
@@ -388,7 +381,7 @@ static const NSInteger kSectionHistory = 2;
 	__weak typeof(self) weakSelf = self;
 	NSArray *choices = @[@"Last Hour", @"Last 24 Hours", @"Last 7 Days",
 						 @"All Time"];
-	[TGAlertSheet showChoices:choices title:@"Delete Messages by Date"
+	[TGAlertSheet showChoices:choices title:@"Delete Messages"
 			destructiveIndex:3 inView:self.view onChoice:^(NSInteger index){
 		NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
 		NSTimeInterval minDate = 0;
@@ -398,9 +391,8 @@ static const NSInteger kSectionHistory = 2;
 			minDate = now - 86400;
 		else if (index == 2)
 			minDate = now - 7 * 86400;
-		[TGAlertSheet showConfirm:[NSString stringWithFormat:
-						@"Delete messages from %@?", choices[index]]
-							title:@"Delete Messages by Date" action:@"Delete"
+		[TGAlertSheet showConfirm:nil
+							title:@"Delete Messages" action:@"Delete"
 					  destructive:YES inView:weakSelf.view onConfirm:^{
 			[[TGClient shared] deleteDirectMessagesChatTopicMessages:weakSelf.topicId
 															inChat:weakSelf.chatId
@@ -408,7 +400,7 @@ static const NSInteger kSectionHistory = 2;
 														   maxDate:(NSInteger)now
 														completion:^(BOOL ok,
 																	 NSString *error){
-				[weakSelf finish:ok error:error title:@"Delete Messages by Date"];
+				[weakSelf finish:ok error:error title:@"Delete Messages"];
 			}];
 		}];
 	}];

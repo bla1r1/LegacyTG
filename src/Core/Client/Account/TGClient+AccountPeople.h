@@ -8,6 +8,8 @@
 
 /// Block or unblock a user.
 - (void)setUser:(int64_t)userId blocked:(BOOL)blocked;
+/// Block or unblock a user; `completion` is told only when TDLib answers.
+- (void)setUser:(int64_t)userId blocked:(BOOL)blocked completion:(void (^)(BOOL ok))completion;
 /// Whether a user is blocked right now.
 - (void)isUserBlocked:(int64_t)userId completion:(void (^)(BOOL blocked))completion;
 /// Gifts a user has received and kept on their profile: "title", "starCount".

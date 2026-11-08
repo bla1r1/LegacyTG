@@ -72,11 +72,14 @@ static NSString *TGHashPIN(NSString *pin) {
 }
 
 + (NSString *)autoLockTitleForSeconds:(NSInteger)seconds {
-	if (seconds == 0) return @"Immediately";
+	// Zero is what older builds stored for "Immediately"; the official option
+	// set has no such choice, and 0 now means Disabled. A negative value is
+	// the value the current page writes for Disabled.
+	if (seconds <= 0) return @"Disabled";
 	if (seconds == 60) return @"If away for 1 min";
 	if (seconds == 300) return @"If away for 5 min";
 	if (seconds == 3600) return @"If away for 1 hour";
-	if (seconds < 0) return @"Disabled";
+	if (seconds == 18000) return @"If away for 5 hours";
 	return [NSString stringWithFormat:@"If away for %ld min", (long)(seconds / 60)];
 }
 
@@ -100,9 +103,7 @@ static NSString *TGHashPIN(NSString *pin) {
 + (void)noteAppBackgrounded {
 	if (![self hasPasscode]) return;
 	NSInteger timeout = [self autoLockTimeout];
-	if (timeout == 0) {
-		s_isLocked = YES;
-	}
+	if (timeout < 0) return; // disabled
 	s_backgroundTime = [NSDate timeIntervalSinceReferenceDate];
 }
 
@@ -110,11 +111,10 @@ static NSString *TGHashPIN(NSString *pin) {
 	if (![self hasPasscode]) return NO;
 	if (s_isLocked) return YES;
 	NSInteger timeout = [self autoLockTimeout];
-	if (timeout < 0) return NO; // disabled
-	if (timeout == 0) {
-		s_isLocked = YES;
-		return YES;
-	}
+	// Zero is a legacy "lock immediately" value; it now means Disabled like
+	// every negative value, so an existing installation does not surprise
+	// the user with a lock the page calls Disabled.
+	if (timeout <= 0) return NO;
 	NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
 	if (s_backgroundTime > 0 && (now - s_backgroundTime) >= (NSTimeInterval)timeout) {
 		s_isLocked = YES;

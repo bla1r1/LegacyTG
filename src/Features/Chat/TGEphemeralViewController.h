@@ -6,8 +6,9 @@
 // receiver, the reply id and the five follow-up calls are all real requests.
 //
 #import <UIKit/UIKit.h>
+#import "TGTableViewController.h"
 
-@interface TGEphemeralViewController : UITableViewController
+@interface TGEphemeralViewController : TGTableViewController
 
 @property (nonatomic, assign) int64_t chatId;
 @property (nonatomic, copy)   NSString *chatTitle;

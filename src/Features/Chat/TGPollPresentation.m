@@ -5,6 +5,7 @@
 // never trust the class they are handed.
 //
 #import "TGPollPresentation.h"
+#import "TGLocalization.h"
 
 static long long TGPollLongLong(id value) {
 	if ([value isKindOfClass:NSNumber.class] || [value isKindOfClass:NSString.class])
@@ -57,13 +58,13 @@ NSString *TGPollOptionText(NSDictionary *option) {
 
 NSString *TGPollKindLine(NSDictionary *poll) {
 	if (![poll isKindOfClass:NSDictionary.class])
-		return @"Public Poll";
+		return @"Poll";
 	if (TGPollBool(poll[@"isClosed"]))
 		return @"Final results";
 	BOOL anonymous = TGPollBool(poll[@"isAnonymous"]);
 	if (TGPollBool(poll[@"isQuiz"]))
 		return anonymous ? @"Anonymous Quiz" : @"Quiz";
-	return anonymous ? @"Anonymous Poll" : @"Public Poll";
+	return anonymous ? @"Anonymous Poll" : @"Poll";
 }
 
 NSString *TGPollVotesLine(NSDictionary *poll) {
@@ -72,18 +73,15 @@ NSString *TGPollVotesLine(NSDictionary *poll) {
 	if (count < 0)
 		count = 0;
 	BOOL quiz = [poll isKindOfClass:NSDictionary.class] && TGPollBool(poll[@"isQuiz"]);
+	NSString *value = [NSString stringWithFormat:@"%lld", count];
 	if (quiz) {
 		if (count == 0)
-			return @"No answers";
-		if (count == 1)
-			return @"1 answer";
-		return [NSString stringWithFormat:@"%lld answers", count];
+			return @"Nobody answered yet";
+		return TGLocalizedFormat(@"%@ answered", value);
 	}
 	if (count == 0)
 		return @"No votes";
-	if (count == 1)
-		return @"1 vote";
-	return [NSString stringWithFormat:@"%lld votes", count];
+	return TGLocalizedPluralValue(@"%@ vote", @"%@ votes", value, (NSInteger)count);
 }
 
 NSString *TGPollClosesLine(NSDictionary *poll, NSTimeInterval now) {
@@ -98,13 +96,18 @@ NSString *TGPollClosesLine(NSDictionary *poll, NSTimeInterval now) {
 	long long left = (long long)(closeDate - now);
 	if (left < 0)
 		left = 0;
+	if (left >= 86400) {
+		long long days = left / 86400;
+		return TGLocalizedPluralValue(@"ends in %@ day", @"ends in %@ days",
+				[NSString stringWithFormat:@"%lld", days], (NSInteger)days);
+	}
 	long long hours = left / 3600;
 	long long minutes = (left % 3600) / 60;
 	long long seconds = left % 60;
-	if (hours > 0)
-		return [NSString stringWithFormat:@"Ends in %lld:%02lld:%02lld",
-				hours, minutes, seconds];
-	return [NSString stringWithFormat:@"Ends in %lld:%02lld", minutes, seconds];
+	NSString *clock = hours > 0
+			? [NSString stringWithFormat:@"%lld:%02lld:%02lld", hours, minutes, seconds]
+			: [NSString stringWithFormat:@"%lld:%02lld", minutes, seconds];
+	return TGLocalizedFormat(@"ends in %@", clock);
 }
 
 BOOL TGPollShowsResults(NSDictionary *poll) {

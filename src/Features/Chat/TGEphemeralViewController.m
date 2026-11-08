@@ -1,4 +1,5 @@
 #import "TGEphemeralViewController.h"
+#import "TGLocalization.h"
 #import "TGAlertSheet.h"
 #import "TGClient.h"
 #import "TGTheme.h"
@@ -27,14 +28,12 @@ static const NSInteger kEphemeralSectionResult = 2;
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
-		self.edgesForExtendedLayout = UIRectEdgeNone;
 	self.title = @"Ephemeral";
 	self.receiverUserId = self.chatId > 0 ? self.chatId : 0;
 	self.replyId = 0;
 	self.lastEphemeralId = 0;
 	self.lastMessageId = 0;
-	self.resultText = @"No request sent yet.";
+	self.resultText = @"None";
 	self.tableView.rowHeight = TGMetricRow;
 	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
 			initWithTitle:@"Receiver" style:UIBarButtonItemStylePlain
@@ -59,7 +58,7 @@ static const NSInteger kEphemeralSectionResult = 2;
 			CGRectMake(TGMetricPadLarge, TGMetricPad,
 					   self.composer.bounds.size.width - TGDoubled(TGMetricPadLarge),
 					   TGMetricLineBody)];
-	self.placeholder.text = @"Ephemeral message text";
+	self.placeholder.text = @"Message";
 	self.placeholder.font = TGFontBody();
 	self.placeholder.backgroundColor = [UIColor clearColor];
 	self.placeholder.userInteractionEnabled = NO;
@@ -67,10 +66,6 @@ static const NSInteger kEphemeralSectionResult = 2;
 	self.tableView.tableHeaderView = header;
 	[self applyTheme];
 	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(applyTheme) name:TGThemeChangedNotification object:nil];
-}
-
-- (void)dealloc {
-	[[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 - (void)applyTheme {
@@ -131,12 +126,6 @@ static const NSInteger kEphemeralSectionResult = 2;
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-	if (section == kEphemeralSectionTarget)
-		return @"sendEphemeralMessage is for bots. A user account sees Telegram's "
-			   @"refusal in the result below, which is the honest answer.";
-	if (section == kEphemeralSectionActions)
-		return @"Edit and delete name the ephemeral message id Telegram returned; "
-			   @"the last one is kept from the send.";
 	return nil;
 }
 
@@ -158,9 +147,9 @@ static const NSInteger kEphemeralSectionResult = 2;
 			cell.textLabel.text = @"Receiver";
 			cell.detailTextLabel.text = self.receiverUserId
 					? [NSString stringWithFormat:@"%lld", self.receiverUserId]
-					: @"Tap to name the bot";
+					: @"Choose a Bot";
 		} else {
-			cell.textLabel.text = @"Reply to ephemeral";
+			cell.textLabel.text = @"Reply";
 			cell.detailTextLabel.text = self.replyId
 					? [NSString stringWithFormat:@"%ld", (long)self.replyId] : @"None";
 		}
@@ -168,12 +157,12 @@ static const NSInteger kEphemeralSectionResult = 2;
 	}
 	if (indexPath.section == kEphemeralSectionActions){
 		NSArray *titles = @[
-			@"Send Ephemeral Message",
-			@"Edit Last Message",
-			@"Edit Last Caption",
-			@"Delete Last Message",
-			@"Strip Message Ephemeral Content",
-			@"Clear Composer",
+			@"Send Message",
+			@"Edit Message",
+			@"Edit Caption",
+			@"Delete Message",
+			@"Remove",
+			@"Clear",
 		];
 		cell.textLabel.text = titles[indexPath.row];
 		cell.textLabel.textColor = [titles[indexPath.row] hasPrefix:@"Delete"]
@@ -182,13 +171,14 @@ static const NSInteger kEphemeralSectionResult = 2;
 		cell.detailTextLabel.text = nil;
 		return cell;
 	}
-	cell.textLabel.text = self.resultText ?: @"No request sent yet.";
+	cell.textLabel.text = self.resultText ?: @"None";
 	cell.textLabel.font = TGFontMeta();
 	cell.textLabel.textColor = [[TGTheme shared] secondaryTextColour];
 	cell.textLabel.numberOfLines = 0;
 	// The viewer half: what the bot's answer carried, beside the id it named.
 	cell.detailTextLabel.text = self.lastSentText.length
-			? [NSString stringWithFormat:@"Sent: %@", self.lastSentText] : nil;
+			? [NSString stringWithFormat:@"%@: %@",
+					TGLocalized(@"Sent"), self.lastSentText] : nil;
 	cell.selectionStyle = UITableViewCellSelectionStyleNone;
 	return cell;
 }
@@ -233,11 +223,11 @@ static const NSInteger kEphemeralSectionResult = 2;
 - (void)send {
 	NSString *text = self.composer.text;
 	if (!text.length){
-		[self setResult:@"Type something first."];
+		[self setResult:@"An error occurred."];
 		return;
 	}
 	if (!self.receiverUserId){
-		[self setResult:@"Name the bot that receives the ephemeral message."];
+		[self setResult:@"An error occurred."];
 		return;
 	}
 	__weak typeof(self) weakSelf = self;
@@ -250,7 +240,7 @@ static const NSInteger kEphemeralSectionResult = 2;
 		if (!me)
 			return;
 		if (error.length || !message){
-			[me setResult:(error ?: @"Telegram refused the ephemeral message.")];
+			[me setResult:(error ?: @"An error occurred.")];
 			return;
 		}
 		me.lastSentText = text;
@@ -259,61 +249,62 @@ static const NSInteger kEphemeralSectionResult = 2;
 		if (!me.lastEphemeralId)
 			me.lastEphemeralId = (NSInteger)me.lastMessageId;
 		[me setResult:[NSString stringWithFormat:
-				@"Sent message %lld, ephemeral %ld.",
-				me.lastMessageId, (long)me.lastEphemeralId]];
+				@"%@ %lld, %ld",
+				TGLocalized(@"Sent"), me.lastMessageId,
+				(long)me.lastEphemeralId]];
 	}];
 }
 
 - (void)editLast {
-	NSInteger messageId = [self askMessageId:@"Edit Last Message"];
+	NSInteger messageId = [self askMessageId:@"Edit Message"];
 	if (!messageId)
 		return;
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"Edit Last Message" message:nil
-				placeholder:@"New text" text:self.composer.text action:@"Save"
+	[TGAlertSheet showInput:@"Edit Message" message:nil
+				placeholder:@"Message" text:self.composer.text action:@"Save"
 					 inView:self.view onSubmit:^(NSString *text){
 		[[TGClient shared] editEphemeralMessage:messageId text:text
 									   receiver:weakSelf.receiverUserId
 										 inChat:weakSelf.chatId
 									 completion:^(BOOL ok, NSString *error){
-			[weakSelf setResult:(ok ? @"The ephemeral message was edited."
-									: (error ?: @"Telegram refused the edit."))];
+			[weakSelf setResult:(ok ? @"Edited"
+									: (error ?: @"An error occurred."))];
 		}];
 	}];
 }
 
 - (void)editCaption {
-	NSInteger messageId = [self askMessageId:@"Edit Last Caption"];
+	NSInteger messageId = [self askMessageId:@"Edit Caption"];
 	if (!messageId)
 		return;
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"Edit Last Caption" message:nil
-				placeholder:@"New caption" text:nil action:@"Save"
+	[TGAlertSheet showInput:@"Edit Caption" message:nil
+				placeholder:@"Caption" text:nil action:@"Save"
 					 inView:self.view onSubmit:^(NSString *caption){
 		[[TGClient shared] editEphemeralMessageCaption:messageId caption:caption
 											  receiver:weakSelf.receiverUserId
 												inChat:weakSelf.chatId
 											completion:^(BOOL ok, NSString *error){
-			[weakSelf setResult:(ok ? @"The caption was edited."
-									: (error ?: @"Telegram refused the caption."))];
+			[weakSelf setResult:(ok ? @"Edited"
+									: (error ?: @"An error occurred."))];
 		}];
 	}];
 }
 
 - (void)deleteLast {
-	NSInteger messageId = [self askMessageId:@"Delete Last Message"];
+	NSInteger messageId = [self askMessageId:@"Delete Message"];
 	if (!messageId)
 		return;
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:@"Delete this ephemeral message?"
-						title:@"Delete Last Message" action:@"Delete"
+	[TGAlertSheet showConfirm:@"Delete Message"
+						title:@"Delete Message" action:@"Delete"
 				  destructive:YES inView:self.view onConfirm:^{
 		[[TGClient shared] deleteEphemeralMessage:messageId
 										 receiver:weakSelf.receiverUserId
 										   inChat:weakSelf.chatId
 									   completion:^(BOOL ok, NSString *error){
-			[weakSelf setResult:(ok ? @"The ephemeral message was deleted."
-									: (error ?: @"Telegram refused the delete."))];
+			[weakSelf setResult:(ok ? @"Message Deleted"
+									: (error ?: @"An error occurred."))];
 		}];
 	}];
 }
@@ -321,8 +312,8 @@ static const NSInteger kEphemeralSectionResult = 2;
 - (void)stripContent {
 	if (!self.lastMessageId){
 		__weak typeof(self) weakSelf = self;
-		[TGAlertSheet showInput:@"Strip Message Ephemeral Content" message:nil
-					placeholder:@"Message id" text:nil action:@"Strip"
+		[TGAlertSheet showInput:@"Clear" message:nil
+					placeholder:@"Message" text:nil action:@"Clear"
 						 inView:self.view onSubmit:^(NSString *text){
 			[weakSelf stripMessageId:(int64_t)[text longLongValue]];
 		}];
@@ -333,14 +324,14 @@ static const NSInteger kEphemeralSectionResult = 2;
 
 - (void)stripMessageId:(int64_t)messageId {
 	if (!messageId){
-		[self setResult:@"Name a regular message id first."];
+		[self setResult:@"An error occurred."];
 		return;
 	}
 	__weak typeof(self) weakSelf = self;
 	[[TGClient shared] deleteMessageEphemeralContent:messageId inChat:self.chatId
 										  completion:^(BOOL ok, NSString *error){
-		[weakSelf setResult:(ok ? @"The ephemeral content was removed."
-								: (error ?: @"Telegram refused the removal."))];
+		[weakSelf setResult:(ok ? @"Message Deleted"
+								: (error ?: @"An error occurred."))];
 	}];
 }
 
@@ -351,13 +342,13 @@ static const NSInteger kEphemeralSectionResult = 2;
 - (NSInteger)askMessageId:(NSString *)title {
 	NSInteger value = self.lastEphemeralId ?: (NSInteger)self.lastMessageId;
 	if (!value)
-		[self setResult:@"Send an ephemeral message first; the id comes from its answer."];
+		[self setResult:@"An error occurred."];
 	return value;
 }
 
 - (void)changeReceiver {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"Receiver" message:@"The bot's user id."
+	[TGAlertSheet showInput:@"Receiver" message:nil
 				placeholder:@"user id"
 					   text:(self.receiverUserId
 							   ? [NSString stringWithFormat:@"%lld", self.receiverUserId]
@@ -370,7 +361,7 @@ static const NSInteger kEphemeralSectionResult = 2;
 
 - (void)changeReply {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"Reply to Ephemeral" message:@"0 for no reply."
+	[TGAlertSheet showInput:@"Reply" message:nil
 				placeholder:@"ephemeral id"
 					   text:(self.replyId ? [NSString stringWithFormat:@"%ld",
 							   (long)self.replyId] : nil)

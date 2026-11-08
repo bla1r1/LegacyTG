@@ -82,7 +82,7 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	self.title = @"Business Profile";
+	self.title = @"Business";
 	NSDictionary *me = [TGClient shared].me;
 	self.firstName = me[@"first_name"] ?: @"";
 	self.lastName = me[@"last_name"] ?: @"";
@@ -108,20 +108,15 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 			self.firstName ?: @"", self.lastName ?: @""]
 			stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
 	self.sections = @[
-		TGBSection(@"PROFILE",
-				@"These fields name the business account. TDLib declares them "
-				@"for a business bot's connection; Telegram's refusal is shown "
-				@"as it comes.",
+		TGBSection(@"PROFILE", nil,
 				@[
 			TGBAction(@"Name", name.length ? name : @"Set", @"firstName"),
 			TGBAction(@"Last Name", self.lastName.length ? self.lastName : @"Set", @"lastName"),
-			TGBAction(@"Bio", self.bio.length ? self.bio : @"Add a bio", @"bio"),
+			TGBAction(@"Bio", self.bio.length ? self.bio : @"Add Bio", @"bio"),
 			TGBAction(@"Username", self.username.length
 					? [@"@" stringByAppendingString:self.username] : @"Set", @"username"),
-			TGBAction(@"Profile Photo", @"Change or remove", @"photo"),
-			TGBSwitch(@"Public Photo",
-					@"Visible even when the main photo is hidden by privacy.",
-					@"public", self.isPublic, YES),
+			TGBAction(@"Edit Profile Photo", nil, @"photo"),
+			TGBSwitch(@"Public Photo", nil, @"public", self.isPublic, YES),
 		]),
 		TGBSection(nil, nil, @[
 			TGBDestructive(@"Remove Photo", @"removePhoto"),
@@ -147,19 +142,19 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 			[weakSelf saveName];
 		}];
 	} else if ([action isEqualToString:@"bio"]){
-		[self askText:@"Bio" message:nil placeholder:@"A few words about the business"
+		[self askText:@"Bio" message:nil placeholder:@"Add Bio"
 				 text:self.bio action:@"Save"
 		   completion:^(NSString *text){
 			[[TGClient shared] setBusinessAccountBio:text
 										connectionId:TGBusinessStoredConnectionId()
 										  completion:^(BOOL ok, NSString *error){
-				[weakSelf finishProfileChange:ok error:error title:@"Business Bio"];
+				[weakSelf finishProfileChange:ok error:error title:@"Bio"];
 			}];
 		}];
 	} else if ([action isEqualToString:@"username"]){
 		NSString *current = self.username.length
 				? [@"@" stringByAppendingString:self.username] : @"";
-		[self askText:@"Username" message:@"The editable username of the business account."
+		[self askText:@"Username" message:nil
 			placeholder:@"username" text:current action:@"Save"
 		   completion:^(NSString *text){
 			NSString *username = [text stringByReplacingOccurrencesOfString:@"@" withString:@""];
@@ -168,7 +163,7 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 											   completion:^(BOOL ok, NSString *error){
 				if (ok)
 					weakSelf.username = username;
-				[weakSelf finishProfileChange:ok error:error title:@"Business Username"];
+				[weakSelf finishProfileChange:ok error:error title:@"Username"];
 			}];
 		}];
 	} else if ([action isEqualToString:@"photo"]){
@@ -178,7 +173,7 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 													   public:self.isPublic
 												   connectionId:TGBusinessStoredConnectionId()
 													 completion:^(BOOL ok, NSString *error){
-			[weakSelf finishProfileChange:ok error:error title:@"Business Photo"];
+			[weakSelf finishProfileChange:ok error:error title:@"Edit Profile Photo"];
 		}];
 	}
 }
@@ -189,7 +184,7 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 										 last:self.lastName
 								 connectionId:TGBusinessStoredConnectionId()
 								   completion:^(BOOL ok, NSString *error){
-		[weakSelf finishProfileChange:ok error:error title:@"Business Name"];
+		[weakSelf finishProfileChange:ok error:error title:@"Save"];
 	}];
 }
 
@@ -209,8 +204,8 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 - (void)pickPhoto {
 	if (![UIImagePickerController isSourceTypeAvailable:
 			UIImagePickerControllerSourceTypePhotoLibrary]){
-		[self showMessage:@"The photo library is not on this device."
-					 title:@"Business Photo"];
+		[self showMessage:@"An error occurred."
+					 title:@"Edit Profile Photo"];
 		return;
 	}
 	self.pickingPhoto = YES;
@@ -237,7 +232,7 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 			stringByAppendingPathComponent:@"business-photo.jpg"];
 	if (![UIImageJPEGRepresentation(scaled, TGCompressionQualityStandard)
 			writeToFile:path atomically:YES]){
-		[self showMessage:@"Could not prepare the picture." title:@"Business Photo"];
+		[self showMessage:@"An error occurred." title:@"Edit Profile Photo"];
 		return;
 	}
 	__weak typeof(self) weakSelf = self;
@@ -245,7 +240,7 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 													 public:self.isPublic
 												 connectionId:TGBusinessStoredConnectionId()
 												   completion:^(BOOL ok, NSString *error){
-		[weakSelf finishProfileChange:ok error:error title:@"Business Photo"];
+		[weakSelf finishProfileChange:ok error:error title:@"Edit Profile Photo"];
 	}];
 }
 

@@ -3,8 +3,9 @@
 // friends, with a check beside the ones already in the list.
 //
 #import <UIKit/UIKit.h>
+#import "TGTableViewController.h"
 
-@interface TGCloseFriendsViewController : UITableViewController
+@interface TGCloseFriendsViewController : TGTableViewController
 
 /// How many ids the server holds after a successful write; the privacy row
 /// behind this screen shows the same number.

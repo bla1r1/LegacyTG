@@ -98,9 +98,9 @@ static NSString *TGSavedTopicDateText(NSNumber *stamp) {
 - (void)applyTopic:(NSDictionary *)topic {
 	TGTheme *theme = [TGTheme shared];
 	_iconView.image = [TGIcons savedMessagesAvatarOfSide:TGMetricTopicIcon];
-	_titleLabel.text = topic[@"title"] ?: @"Saved";
+	_titleLabel.text = topic[@"title"] ?: @"Saved Messages";
 	_titleLabel.textColor = [theme primaryTextColour];
-	_previewLabel.text = [topic[@"text"] length] ? topic[@"text"] : @"No messages yet";
+	_previewLabel.text = [topic[@"text"] length] ? topic[@"text"] : @"No messages here yet...";
 	_previewLabel.textColor = [theme secondaryTextColour];
 	_dateLabel.text = TGSavedTopicDateText(topic[@"date"]);
 	_dateLabel.textColor = [theme listDateColour];
@@ -126,10 +126,8 @@ static NSString *TGSavedTopicDateText(NSNumber *stamp) {
 - (void)viewDidLoad {
 	[super viewDidLoad];
 
-	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
-		self.edgesForExtendedLayout = UIRectEdgeNone;
 
-	self.title = @"Saved Topics";
+	self.title = @"Saved Messages";
 	self.tableView.rowHeight = TGMetricTopicRow;
 	[self applyTheme];
 
@@ -216,8 +214,8 @@ static NSString *TGSavedTopicDateText(NSNumber *stamp) {
 	if (!self.emptyView) {
 		self.emptyView = [TGEmptyView emptyViewWithFrame:self.tableView.bounds
 				image:[TGIcons emptySearchIllustration]
-				title:@"No saved topics"
-				subtitle:@"Messages you forward to Saved Messages are grouped here."
+				title:@"No topics here yet"
+				subtitle:nil
 				buttonTitle:nil
 				target:nil
 				action:nil];
@@ -254,14 +252,14 @@ static NSString *TGSavedTopicDateText(NSNumber *stamp) {
 
 	BOOL pinned = [t[@"pinned"] boolValue];
 	NSMutableArray *items = [@[pinned ? @"Unpin" : @"Pin", @"Jump to Date",
-							   @"Tags...", @"Unpin All"] mutableCopy];
+							   @"Tags for Messages", @"Unpin All Messages"] mutableCopy];
 	[items addObjectsFromArray:@[@"Clear Before Today", @"Clear Before Week",
-								 @"Clear Before Month", @"Clear Everything"]];
+								 @"Clear Before Month", @"Clear All"]];
 
 	__weak typeof(self) weakSelf = self;
 	[TGAlertSheet showChoices:items
 						title:name
-			 destructiveIndex:(NSInteger)[items indexOfObject:@"Clear Everything"]
+			 destructiveIndex:(NSInteger)[items indexOfObject:@"Clear All"]
 					   inView:self.view
 					 onChoice:^(NSInteger index){
 		NSString *what = items[(NSUInteger)index];
@@ -274,15 +272,15 @@ static NSString *TGSavedTopicDateText(NSNumber *stamp) {
 			[weakSelf jumpToDateInTopic:topicId named:name];
 			return;
 		}
-		if ([what isEqualToString:@"Tags..."]){
+		if ([what isEqualToString:@"Tags for Messages"]){
 			[weakSelf showTagsOfTopic:topicId named:name];
 			return;
 		}
-		if ([what isEqualToString:@"Unpin All"]){
+		if ([what isEqualToString:@"Unpin All Messages"]){
 			// One request takes the whole list down at once; toggling each
 			// row would leave a half-pinned list if the screen closed.
-			[TGAlertSheet showConfirm:@"Every topic leaves the top of the list."
-								title:@"Unpin All"
+			[TGAlertSheet showConfirm:nil
+								title:@"Unpin All Messages"
 							   action:@"Unpin"
 						  destructive:NO
 							   inView:weakSelf.view
@@ -294,12 +292,9 @@ static NSString *TGSavedTopicDateText(NSNumber *stamp) {
 		}
 		// Clearing "before when" is a whole date range - days ago - and
 		// every deletion keeps what came after it.
-		if ([what isEqualToString:@"Clear Everything"]){
-			[TGAlertSheet showConfirm:[NSString stringWithFormat:
-					@"Every message in %@ is deleted, on every device. The topic "
-					@"itself stays.",
-					(name.length ? name : @"this topic")]
-								title:@"Clear Everything"
+		if ([what isEqualToString:@"Clear All"]){
+			[TGAlertSheet showConfirm:nil
+								title:@"Clear All"
 							   action:@"Clear"
 						  destructive:YES
 							   inView:weakSelf.view
@@ -309,11 +304,8 @@ static NSString *TGSavedTopicDateText(NSNumber *stamp) {
 			}];
 			return;
 		}
-		NSString *say = [NSString stringWithFormat:
-				@"Everything in %@ before that is deleted, on every device.",
-				(name.length ? name : @"this topic")];
-		[TGAlertSheet showConfirm:say
-							title:@"Clear Saved Messages"
+		[TGAlertSheet showConfirm:nil
+							title:@"Clear"
 						   action:what
 					  destructive:YES
 						   inView:weakSelf.view
@@ -338,7 +330,7 @@ static NSString *TGSavedTopicDateText(NSNumber *stamp) {
 	__weak typeof(self) weakSelf = self;
 	[TGAlertSheet showChoices:days
 						title:(name.length ? name : @"Topic")
-					  message:@"The last message saved on or before that day."
+					  message:nil
 			 destructiveIndex:-1
 					   inView:self.view
 					 onChoice:^(NSInteger index){
@@ -353,8 +345,7 @@ static NSString *TGSavedTopicDateText(NSNumber *stamp) {
 				return;
 			int64_t messageId = [message[@"id"] longLongValue];
 			if (!messageId){
-				[TGAlertSheet showMessage:@"Nothing was saved on or before "
-										  @"that day."
+				[TGAlertSheet showMessage:@"An error occurred."
 									  title:(name.length ? name : @"Topic")
 									 inView:me.view];
 				return;
@@ -381,7 +372,7 @@ static NSString *TGSavedTopicDateText(NSNumber *stamp) {
 			return;
 		NSArray *list = [tags isKindOfClass:NSArray.class] ? tags : @[];
 		if (!list.count){
-			[TGAlertSheet showMessage:@"Nothing in here is tagged yet."
+			[TGAlertSheet showMessage:@"None"
 								  title:(name.length ? name : @"Topic")
 								 inView:me.view];
 			return;
@@ -394,12 +385,12 @@ static NSString *TGSavedTopicDateText(NSNumber *stamp) {
 		}
 		[TGAlertSheet showChoices:rows
 							title:(name.length ? name : @"Topic")
-						  message:@"Pick a tag to give it a label of its own."
+						  message:nil
 				   destructiveIndex:-1
 						   inView:me.view
 						 onChoice:^(NSInteger index){
 			NSDictionary *tag = list[(NSUInteger)index];
-			[TGAlertSheet showInput:@"Tag Label"
+			[TGAlertSheet showInput:@"Tag"
 							message:nil
 						placeholder:[me labelForSavedTag:tag]
 							   text:tag[@"label"]

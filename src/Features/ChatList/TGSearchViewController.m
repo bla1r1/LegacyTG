@@ -2,6 +2,7 @@
 // TGSearchViewController - search controller for chats and messages.
 //
 #import "TGSearchViewController.h"
+#import "TGLocalization.h"
 #import "TGChatViewController.h"
 #import "TGClient.h"
 #import "TGNameWithStatus.h"
@@ -12,6 +13,7 @@
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
 #import "TGPublicStoriesViewController.h"
+#import "TGChatParityModel.h"
 
 
 @interface TGSearchViewController () <UISearchBarDelegate>
@@ -226,11 +228,10 @@ static NSString *TGPublicPostText(NSDictionary *message) {
 		self.noResultsView.numberOfLines = 0;
 		self.noResultsView.backgroundColor = [UIColor clearColor];
 	}
-	NSString *what = self.scope == TGSearchScopeAll
-			? @"results"
-			: [TGSearchScopeTitles()[(NSUInteger)self.scope] lowercaseString];
-	self.noResultsView.text = [NSString stringWithFormat:@"No %@ for \"%@\"", what,
-			self.bar.text];
+	NSString *query = self.bar.text ?: @"";
+	self.noResultsView.text = [NSString stringWithFormat:@"%@\n%@",
+			TGLocalized(@"No Results"),
+			TGLocalizedFormat(@"There were no results for \"%@\".\nTry a new search.", query)];
 	if (self.tableView.backgroundView != self.noResultsView)
 		self.tableView.backgroundView = self.noResultsView;
 }
@@ -486,7 +487,7 @@ static NSString *TGPublicPostText(NSDictionary *message) {
 			return;
 		NSString *tag = self.recentTags[path.row];
 		__weak typeof(self) weakSelf = self;
-		[TGAlertSheet showChoices:@[@"Remove from Recent", @"Remove from Searched"]
+		[TGAlertSheet showChoices:@[@"Remove from Recent", @"Remove"]
 							title:[NSString stringWithFormat:@"#%@", tag]
 				 destructiveIndex:-1
 						   inView:self.view
@@ -514,9 +515,9 @@ static NSString *TGPublicPostText(NSDictionary *message) {
 
 	NSDictionary *chat = path.section == 0 ? self.frequent[path.row]
 										   : self.recentlyFound[path.row];
-	NSString *name = chat[@"title"] ?: @"That chat";
+	NSString *name = chat[@"title"] ?: @"Chats";
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:[NSString stringWithFormat:@"%@ goes out of this list.", name]
+	[TGAlertSheet showConfirm:nil
 						title:name
 					   action:@"Remove"
 				  destructive:NO
@@ -844,12 +845,12 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 	if ([self showsFrequent]){
 		if (section == 0) return self.frequent.count ? @"People" : nil;
 		if (section == 1) return self.recent.count ? @"Recent" : nil;
-		if (section == 2) return self.recentlyFound.count ? @"Recently Found" : nil;
-		if (section == 3) return self.recentTags.count ? @"Recent Hashtags" : nil;
-		return self.recentLinks.count ? @"Recently Visited Links" : nil;
+		if (section == 2) return self.recentlyFound.count ? @"Recent" : nil;
+		if (section == 3) return self.recentTags.count ? @"Hashtag search" : nil;
+		return self.recentLinks.count ? @"RECENTLY VISITED" : nil;
 	}
 	if (section == 0) return (self.scope == TGSearchScopeAll && self.suggestions.count)
-			? @"Suggestions" : nil;
+			? @"Suggested Chats" : nil;
 	if (section == 1) return self.chatHits.count ? @"Chats" : nil;
 	if (section == 2) return self.contactHits.count ? @"Contacts" : nil;
 	if (section == 3){
@@ -862,8 +863,8 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 	}
 	if (section == 4)
 		return (self.scope == TGSearchScopeAll && self.hashtagHits.count)
-				? @"Hashtags" : nil;
-	if (section == 6) return self.scope == TGSearchScopeAll ? @"Public Stories" : nil;
+				? @"Hashtag search" : nil;
+	if (section == 6) return self.scope == TGSearchScopeAll ? @"Stories" : nil;
 	return (self.scope == TGSearchScopeAll && self.publicHits.count)
 			? @"Public Posts" : nil;
 }
@@ -875,17 +876,19 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 		return nil;
 	if (self.publicLimitExceeded){
 		NSInteger wait = [self.publicLimits[@"nextFreeIn"] integerValue];
-		return wait > 0
-				? [NSString stringWithFormat:@"Public post search needs Telegram Stars. Next free search in %ld s.",
-						(long)wait]
-				: @"Public post search needs Telegram Stars right now.";
+		if (wait > 0){
+			NSInteger minutes = MAX(1, (wait + 59) / 60);
+			// The pack's own sentence already contains "in"; appending the
+			// "in %@ minutes" phrase produced "in in 15 minutes".
+			NSString *duration = TGLocalizedFormat(@"%@ minutes", @(minutes));
+			return TGLocalizedFormat(@"free search unlocks in %@", duration);
+		}
+		return TGLocalized(@"No Results");
 	}
 	NSInteger left = [self.publicLimits[@"remainingFree"] integerValue];
 	if (self.publicLimits && left > 0)
-		return left == 1 ? @"1 free public post search left today."
-						 : [NSString stringWithFormat:@"%ld free public post searches left today.",
-								(long)left];
-	return self.publicHits.count ? nil : @"Telegram answers public posts here.";
+		return TGLocalizedFormat(@"%@ free searches remaining today.", @(left));
+	return nil;
 }
 
 - (UIImage *)avatarForChat:(int64_t)chatId
@@ -988,7 +991,7 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 	if ([self showsFrequent]) {
 		if (indexPath.section == 5){
 			if (indexPath.row >= (NSInteger)self.recentQueries.count){
-				cell.textLabel.text = @"Clear Recent Searches";
+				cell.textLabel.text = @"Clear";
 				cell.textLabel.textColor = [theme destructiveColour];
 				cell.detailTextLabel.text = nil;
 				cell.accessoryType = UITableViewCellAccessoryNone;
@@ -996,7 +999,7 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 			}
 			cell.textLabel.text = self.recentQueries[(NSUInteger)indexPath.row];
 			cell.textLabel.textColor = [theme primaryTextColour];
-			cell.detailTextLabel.text = @"Recent search";
+			cell.detailTextLabel.text = @"Recent";
 			cell.imageView.image = [TGIcons glyphNamed:@"search"
 												colour:[theme secondaryTextColour]
 												  side:TGMetricListAvatar - TGMetricPadLarge];
@@ -1006,7 +1009,7 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 		// The last row of a log is the clear action.
 		if (indexPath.section == 2 &&
 			indexPath.row >= (NSInteger)self.recentlyFound.count){
-			cell.textLabel.text = @"Clear Recently Found";
+			cell.textLabel.text = @"Clear";
 			cell.textLabel.textColor = [theme destructiveColour];
 			cell.detailTextLabel.text = nil;
 			cell.accessoryType = UITableViewCellAccessoryNone;
@@ -1014,7 +1017,7 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 		}
 		if (indexPath.section == 3 &&
 			indexPath.row >= (NSInteger)self.recentTags.count){
-			cell.textLabel.text = @"Clear Recent Hashtags";
+			cell.textLabel.text = @"Clear";
 			cell.textLabel.textColor = [theme destructiveColour];
 			cell.detailTextLabel.text = nil;
 			cell.accessoryType = UITableViewCellAccessoryNone;
@@ -1022,14 +1025,14 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 		}
 		if (indexPath.section == 3){
 			cell.textLabel.text = [NSString stringWithFormat:@"#%@", self.recentTags[indexPath.row]];
-			cell.detailTextLabel.text = @"Recent hashtag";
+			cell.detailTextLabel.text = @"Recent";
 			cell.accessoryType = UITableViewCellAccessoryNone;
 			return cell;
 		}
 		if (indexPath.section == 4){
 			NSDictionary *link = self.recentLinks[indexPath.row];
 			cell.textLabel.text = link[@"url"] ?: @"";
-			cell.detailTextLabel.text = @"Recently visited";
+			cell.detailTextLabel.text = nil;
 			return cell;
 		}
 		NSDictionary *c = [self emptyStateRowAt:indexPath];
@@ -1051,7 +1054,7 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 	} else if (indexPath.section == 0) {
 		cell.textLabel.text = self.suggestions[indexPath.row];
 		cell.textLabel.textColor = [theme primaryTextColour];
-		cell.detailTextLabel.text = @"Suggestion";
+		cell.detailTextLabel.text = @"Suggest";
 		cell.accessoryType = UITableViewCellAccessoryNone;
 	} else if (indexPath.section == 1) {
 		NSDictionary *c = self.chatHits[indexPath.row];
@@ -1099,11 +1102,11 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 	} else if (indexPath.section == 4) {
 		cell.textLabel.text = [NSString stringWithFormat:@"#%@", self.hashtagHits[indexPath.row]];
 		cell.textLabel.textColor = [theme primaryTextColour];
-		cell.detailTextLabel.text = @"Search public posts";
+		cell.detailTextLabel.text = @"Public Post Search";
 		cell.accessoryType = UITableViewCellAccessoryNone;
 	} else if (indexPath.section == 5) {
 		if (indexPath.row >= (NSInteger)self.publicHits.count){
-			cell.textLabel.text = @"Load More Public Posts";
+			cell.textLabel.text = @"Public Posts";
 			cell.textLabel.textColor = [theme accentColour];
 			cell.detailTextLabel.text = nil;
 			cell.accessoryType = UITableViewCellAccessoryNone;
@@ -1111,16 +1114,15 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 		}
 		NSDictionary *m = self.publicHits[indexPath.row];
 		int64_t chatId = [m[@"chat_id"] longLongValue];
-		NSString *title = [[TGClient shared] titleForChat:chatId] ?: @"Public Post";
+		NSString *title = [[TGClient shared] titleForChat:chatId] ?: @"Post";
 		cell.textLabel.text = title;
 		cell.textLabel.textColor = [theme primaryTextColour];
 		cell.detailTextLabel.text = TGPublicPostText(m);
 		cell.imageView.image = [self avatarForChat:chatId title:title fileId:nil];
 	} else {
-		cell.textLabel.text = @"Search Public Stories";
+		cell.textLabel.text = @"Stories";
 		cell.textLabel.textColor = [theme accentColour];
-		cell.detailTextLabel.text = [NSString stringWithFormat:@"By tag, location or venue for %@",
-				self.bar.text ?: @""];
+		cell.detailTextLabel.text = nil;
 		cell.imageView.image = [TGIcons avatarWithInitials:@"S"
 													 size:TGMetricListAvatar
 												 colourId:0];
@@ -1194,8 +1196,8 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 	if (fromFrequent && indexPath.section == 5){
 		if (indexPath.row >= (NSInteger)self.recentQueries.count){
 			__weak typeof(self) weakSelf = self;
-			[TGAlertSheet showConfirm:@"Every remembered search is forgotten. Nothing else changes."
-								title:@"Clear Recent Searches"
+			[TGAlertSheet showConfirm:@"Do you want to clear your search history?"
+								title:@"Clear"
 							   action:@"Clear" destructive:YES inView:self.view
 							onConfirm:^{ [weakSelf clearRecentQueries]; }];
 			return;
@@ -1209,8 +1211,8 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 	if (fromFrequent && indexPath.section == 3){
 		if (indexPath.row >= (NSInteger)self.recentTags.count){
 			__weak typeof(self) weakSelf = self;
-			[TGAlertSheet showConfirm:@"Every searched-for hashtag is forgotten. The tags themselves stay on Telegram."
-								title:@"Clear Recent Hashtags"
+			[TGAlertSheet showConfirm:@"Do you want to clear your search history?"
+								title:@"Clear"
 							   action:@"Clear" destructive:YES inView:self.view
 							onConfirm:^{
 				[[TGClient shared] clearSearchedForTags];
@@ -1285,7 +1287,7 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 		[[TGClient shared] rememberFoundChat:chatId];
 		TGChatViewController *chat = [[TGChatViewController alloc] init];
 		chat.chatId = chatId;
-		chat.chatTitle = [[TGClient shared] titleForChat:chatId] ?: @"Public Post";
+		chat.chatTitle = [[TGClient shared] titleForChat:chatId] ?: @"Post";
 		chat.initialMessageId = [m[@"id"] longLongValue];
 		chat.hidesBottomBarWhenPushed = YES;
 		[self.navigationController pushViewController:chat animated:YES];
@@ -1295,9 +1297,8 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 	if (fromFrequent && indexPath.section == 2 &&
 		indexPath.row >= (NSInteger)self.recentlyFound.count){
 		__weak typeof(self) weakSelf = self;
-		[TGAlertSheet showConfirm:@"Every chat in the recently-found list is "
-								  @"forgotten. The chats themselves stay."
-							title:@"Clear Recently Found"
+		[TGAlertSheet showConfirm:nil
+							title:@"Clear"
 						   action:@"Clear" destructive:YES inView:self.view
 						onConfirm:^{
 			[[TGClient shared] clearRecentlyFoundChats];
@@ -1325,6 +1326,9 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 	chat.chatTitle = (fromFrequent || indexPath.section == 1)
 			? row[@"title"] : row[@"chatTitle"];
 	chat.isGroup = [row[@"isGroup"] boolValue];
+	// A message result must open at the hit, not at the latest message.
+	if (!fromFrequent && indexPath.section != 1 && TGChatSearchHitOpensMessage(row))
+		chat.initialMessageId = [row[@"id"] longLongValue];
 	chat.hidesBottomBarWhenPushed = YES;
 	[self.navigationController pushViewController:chat animated:YES];
 }

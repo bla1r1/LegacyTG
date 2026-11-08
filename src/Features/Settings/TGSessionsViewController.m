@@ -1,4 +1,5 @@
 #import "TGSessionsViewController.h"
+#import "TGLocalization.h"
 #import "TGClient.h"
 #import "TGTheme.h"
 #import "TGAlertSheet.h"
@@ -22,18 +23,10 @@
 - (void)viewDidLoad {
 	[super viewDidLoad];
 	self.title = @"Devices";
-	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
-		self.edgesForExtendedLayout = UIRectEdgeNone;
 	[self applyTheme];
 	[self refresh];
 
 	__weak typeof(self) weakSelf = self;
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGThemeChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note) {
-		[weakSelf applyTheme];
-		[weakSelf.tableView reloadData];
-	}];
 	// A new login waiting to be confirmed arrives as updateUnconfirmedSession
 	// while this list is open; re-reading is how the row gets its Confirm.
 	[[NSNotificationCenter defaultCenter] addObserverForName:TGSessionsChangedNotification
@@ -41,10 +34,6 @@
 		 usingBlock:^(NSNotification *note) {
 		[weakSelf refresh];
 	}];
-}
-
-- (void)dealloc {
-	[[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 - (void)applyTheme {
@@ -55,6 +44,8 @@
 - (void)viewWillAppear:(BOOL)animated {
 	[super viewWillAppear:animated];
 	[self applyTheme];
+	self.navigationItem.rightBarButtonItem = [self otherSessions].count
+			? self.editButtonItem : nil;
 }
 
 - (void)refresh {
@@ -63,6 +54,8 @@
 		weakSelf.sessions = sessions;
 		weakSelf.inactiveTtl = ttlDays;
 		weakSelf.ttlLoaded = YES;
+		weakSelf.navigationItem.rightBarButtonItem = [weakSelf otherSessions].count
+				? weakSelf.editButtonItem : nil;
 		[weakSelf.tableView reloadData];
 	}];
 }
@@ -76,6 +69,24 @@
 	return others;
 }
 
+- (NSArray *)unconfirmedSessions {
+	NSMutableArray *out = [NSMutableArray array];
+	for (NSDictionary *session in self.sessions)
+		if (![session[@"isCurrent"] boolValue] &&
+			[session[@"isUnconfirmed"] boolValue])
+			[out addObject:session];
+	return out;
+}
+
+- (NSArray *)otherSessions {
+	NSMutableArray *out = [NSMutableArray array];
+	for (NSDictionary *session in self.sessions)
+		if (![session[@"isCurrent"] boolValue] &&
+			![session[@"isUnconfirmed"] boolValue])
+			[out addObject:session];
+	return out;
+}
+
 - (NSDictionary *)currentSession {
 	for (NSDictionary *session in self.sessions)
 		if ([session[@"isCurrent"] boolValue])
@@ -83,58 +94,100 @@
 	return nil;
 }
 
+- (BOOL)tableView:(UITableView *)tableView canEditRowAtIndexPath:(NSIndexPath *)indexPath {
+	NSArray *kinds = [self sectionKinds];
+	if (indexPath.section >= (NSInteger)kinds.count)
+		return NO;
+	return [kinds[(NSUInteger)indexPath.section] isEqualToString:@"other"] &&
+			[self otherSessions].count > 0;
+}
+
+- (void)tableView:(UITableView *)tableView
+		commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
+		 forRowAtIndexPath:(NSIndexPath *)indexPath {
+	NSArray *kinds = [self sectionKinds];
+	if (editingStyle != UITableViewCellEditingStyleDelete ||
+		indexPath.section >= (NSInteger)kinds.count ||
+		![kinds[(NSUInteger)indexPath.section] isEqualToString:@"other"])
+		return;
+	NSArray *others = [self otherSessions];
+	if (indexPath.row >= (NSInteger)others.count)
+		return;
+	int64_t sessionId = [others[(NSUInteger)indexPath.row][@"id"] longLongValue];
+	[[TGClient shared] terminateSession:sessionId];
+	[self performSelector:@selector(refresh) withObject:nil afterDelay:1.0];
+}
+
+/// The TTL is a span, not a number of days; the official row says "6 months"
+/// rather than "180".
+- (NSString *)ttlDetail {
+	NSInteger days = self.inactiveTtl;
+	if (days <= 0)
+		return @"Disabled";
+	if (days == 7)
+		return TGLocalizedPluralValue(@"%@ week", @"%@ weeks", @"1", 1);
+	if (days == 180)
+		return TGLocalizedPluralValue(@"%@ month", @"%@ months", @"6", 6);
+	if (days == 365 || days == 366)
+		return TGLocalizedPluralValue(@"%@ year", @"%@ years", @"1", 1);
+	if (days == 30)
+		return TGLocalizedPluralValue(@"%@ month", @"%@ months", @"1", 1);
+	if (days == 90)
+		return TGLocalizedPluralValue(@"%@ month", @"%@ months", @"3", 3);
+	return TGLocalizedPluralValue(@"%@ day", @"%@ days",
+			[NSString stringWithFormat:@"%ld", (long)days], days);
+}
+
+/// The official order: this device with its terminate action, incomplete
+/// attempts when there are any, the other sessions, websites, then the TTL.
+- (NSArray *)sectionKinds {
+	NSMutableArray *kinds = [NSMutableArray arrayWithObject:@"this"];
+	if ([self unconfirmedSessions].count)
+		[kinds addObject:@"unconfirmed"];
+	[kinds addObject:@"other"];
+	[kinds addObject:@"websites"];
+	[kinds addObject:@"ttl"];
+	return kinds;
+}
+
 
 
 #pragma mark - table
 
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-	// Fixed sections, the way their page reads: this device, the others,
-	// the two settings that apply to every session, and the sign-out. An
-	// account with no other sessions keeps the section and says so, rather
-	// than dropping it and leaving nothing where the explanation belongs.
-	return 5;
+	return (NSInteger)[self sectionKinds].count;
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-	switch (section){
-		case 0: return @"CURRENT SESSION";
-		case 1: return @"ACTIVE SESSIONS";
-		case 2: return @"SESSION SETTINGS";
-		case 3: return @"CONNECTED WEBSITES";
-		default: return nil;
-	}
+	NSArray *kinds = [self sectionKinds];
+	if (section >= (NSInteger)kinds.count)
+		return nil;
+	NSString *kind = kinds[(NSUInteger)section];
+	if ([kind isEqualToString:@"this"])        return @"THIS DEVICE";
+	if ([kind isEqualToString:@"unconfirmed"]) return @"INCOMPLETE LOGIN ATTEMPTS";
+	if ([kind isEqualToString:@"other"])       return TGLocalized(@"ACTIVE SESSIONS");
+	if ([kind isEqualToString:@"websites"])    return @"Websites";
+	return TGLocalized(@"IF AWAY FOR");
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-	switch (section){
-		case 0:
-			return @"This device is the one you are using. A session's secret "
-				   @"chats and calls are settings about it, not about this account.";
-		case 1:
-			return [self othersOnly].count
-					? @"Tap a session to change whether it accepts calls or secret "
-					  @"chats, or to sign it out."
-					: @"You can log in on other phones, tablets and computers with "
-					  @"this phone number. Everything stays in sync.";
-		case 2:
-			return @"A session idle for this long is signed out automatically. "
-				   @"The choice applies to every device, including this one. "
-				   @"Scan QR Code opens the t.me link the camera finds.";
-		case 3:
-			return @"Sites that signed in through a bot. Each one can be signed out "
-				   @"on its own, or all at once.";
-		default:
-			return @"Signs out every device but this one, including any this list "
-				   @"has not shown yet.";
-	}
+	return nil;
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-	if (section == 1)
-		return MAX((NSInteger)[self othersOnly].count, (NSInteger)1);
-	if (section == 2)
-		return 2;   // timeout, QR scanner
-	return 1;
+	NSArray *kinds = [self sectionKinds];
+	if (section >= (NSInteger)kinds.count)
+		return 0;
+	NSString *kind = kinds[(NSUInteger)section];
+	if ([kind isEqualToString:@"this"])
+		return 1 + ([self othersOnly].count > 0 ? 1 : 0);
+	if ([kind isEqualToString:@"unconfirmed"])
+		return (NSInteger)[self unconfirmedSessions].count;
+	if ([kind isEqualToString:@"other"])
+		return MAX((NSInteger)[self otherSessions].count, (NSInteger)1);
+	if ([kind isEqualToString:@"websites"])
+		return 2;
+	return 1;   // terminate if away
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -147,31 +200,13 @@
 	cell.detailTextLabel.textColor = [[TGTheme shared] secondaryTextColour];
 	cell.textLabel.textAlignment = NSTextAlignmentLeft;
 
-	if (indexPath.section == 2){
-		if (indexPath.row == 1){
-			cell.textLabel.text = @"Scan QR Code";
-			cell.detailTextLabel.text = @"Open a t.me link with the camera";
-			cell.selectionStyle = UITableViewCellSelectionStyleBlue;
-			return cell;
-		}
-		NSString *detail = self.ttlLoaded
-				? [NSString stringWithFormat:@"%ld days", (long)self.inactiveTtl]
-				: @"...";
-		cell.textLabel.text = @"Inactive Session Timeout";
-		cell.detailTextLabel.text = detail;
-		cell.selectionStyle = UITableViewCellSelectionStyleBlue;
+	NSArray *kinds = [self sectionKinds];
+	if (indexPath.section >= (NSInteger)kinds.count)
 		return cell;
-	}
+	NSString *kind = kinds[(NSUInteger)indexPath.section];
 
-	if (indexPath.section == 3){
-		cell.textLabel.text = @"Connected Websites";
-		cell.detailTextLabel.text = @"Sites signed in through a bot";
-		cell.selectionStyle = UITableViewCellSelectionStyleBlue;
-		return cell;
-	}
-
-	if (indexPath.section == 4){
-		cell.textLabel.text = @"Terminate All Other Sessions";
+	if ([kind isEqualToString:@"this"] && indexPath.row == 1){
+		cell.textLabel.text = @"Terminate all other sessions";
 		cell.textLabel.textColor = [[TGTheme shared] destructiveColour];
 		cell.detailTextLabel.text = nil;
 		cell.textLabel.textAlignment = NSTextAlignmentCenter;
@@ -179,18 +214,43 @@
 		return cell;
 	}
 
-	if (indexPath.section == 1 && ![self othersOnly].count){
+	if ([kind isEqualToString:@"websites"]){
+		cell.textLabel.text = indexPath.row == 1 ? @"Scan QR Code" : @"Active Websites";
+		cell.detailTextLabel.text = nil;
+		cell.selectionStyle = UITableViewCellSelectionStyleBlue;
+		return cell;
+	}
+
+	if ([kind isEqualToString:@"ttl"]){
+		NSString *detail = self.ttlLoaded ? [self ttlDetail] : @"...";
+		cell.textLabel.text = TGLocalized(@"If Away For");
+		cell.detailTextLabel.text = detail;
+		cell.selectionStyle = UITableViewCellSelectionStyleBlue;
+		return cell;
+	}
+
+	if ([kind isEqualToString:@"other"] && ![self otherSessions].count){
 		cell.textLabel.text = @"No other sessions";
-		cell.detailTextLabel.text = @"Only this device is signed in";
+		cell.detailTextLabel.text = nil;
 		cell.textLabel.textColor = [[TGTheme shared] secondaryTextColour];
 		cell.selectionStyle = UITableViewCellSelectionStyleNone;
 		return cell;
 	}
 
-	NSDictionary *session = indexPath.section == 0
-			? [self currentSession] : [self othersOnly][indexPath.row];
+	NSDictionary *session = nil;
+	if ([kind isEqualToString:@"this"]){
+		session = [self currentSession];
+	} else if ([kind isEqualToString:@"unconfirmed"]){
+		NSArray *rows = [self unconfirmedSessions];
+		if (indexPath.row < (NSInteger)rows.count)
+			session = rows[(NSUInteger)indexPath.row];
+	} else {
+		NSArray *rows = [self otherSessions];
+		if (indexPath.row < (NSInteger)rows.count)
+			session = rows[(NSUInteger)indexPath.row];
+	}
 	if (!session){
-		cell.textLabel.text = @"Reading sessions...";
+		cell.textLabel.text = @"Loading...";
 		cell.detailTextLabel.text = nil;
 		cell.textLabel.textColor = [[TGTheme shared] secondaryTextColour];
 		cell.selectionStyle = UITableViewCellSelectionStyleNone;
@@ -202,10 +262,10 @@
 		[parts addObject:session[@"platform"]];
 	if ([session[@"ip"] length])
 		[parts addObject:session[@"ip"]];
-	if (indexPath.section == 0)
-		[parts addObject:@"This device"];
+	if ([kind isEqualToString:@"this"])
+		[parts addObject:@"online"];
 	if ([session[@"isUnconfirmed"] boolValue])
-		[parts addObject:@"confirmation needed"];
+		[parts addObject:@"Confirm"];
 	cell.detailTextLabel.text = [parts componentsJoinedByString:@" · "];
 	// This device's own row opens the same switches, because a phone that
 	// should not ring is a setting about the session, not about the others.
@@ -216,31 +276,41 @@
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
 	[tableView deselectRowAtIndexPath:indexPath animated:YES];
 
-	if (indexPath.section == 2 && indexPath.row == 1){
+	NSArray *kinds = [self sectionKinds];
+	if (indexPath.section >= (NSInteger)kinds.count)
+		return;
+	NSString *kind = kinds[(NSUInteger)indexPath.section];
+
+	if ([kind isEqualToString:@"websites"] && indexPath.row == 1){
 		TGQRViewController *scanner = [[TGQRViewController alloc] init];
 		scanner.hidesBottomBarWhenPushed = YES;
 		[self.navigationController pushViewController:scanner animated:YES];
 		return;
 	}
 
-	if (indexPath.section == 2){
+	if ([kind isEqualToString:@"ttl"]){
 		// 1-366 days is TDLib's own range. The presets are the spans their
 		// page offers; anything finer would be a number nobody means.
-		NSArray *titles = @[@"1 week", @"1 month", @"3 months", @"6 months", @"1 year"];
+		NSArray *titles = @[
+			TGLocalizedPluralValue(@"%@ week", @"%@ weeks", @"1", 1),
+			TGLocalizedPluralValue(@"%@ month", @"%@ months", @"1", 1),
+			TGLocalizedPluralValue(@"%@ month", @"%@ months", @"3", 3),
+			TGLocalizedPluralValue(@"%@ month", @"%@ months", @"6", 6),
+			TGLocalizedPluralValue(@"%@ year", @"%@ years", @"1", 1),
+		];
 		NSArray *days = @[@7, @30, @90, @180, @365];
 		__weak typeof(self) weakSelf = self;
 		[TGAlertSheet showChoices:titles
-							title:@"Inactive Session Timeout"
-						  message:@"How long a device may sit idle before Telegram "
-								  @"signs it out."
+							title:@"Automatically Terminate Old Sessions"
+						  message:nil
 				 destructiveIndex:-1
 						   inView:self.view
 						 onChoice:^(NSInteger index){
 			[[TGClient shared] setInactiveSessionTtlDays:[days[(NSUInteger)index] integerValue]
 											 completion:^(BOOL ok, NSString *error){
 				if (!ok){
-					[TGAlertSheet showMessage:(error ?: @"Telegram refused that.")
-										title:@"Inactive Session Timeout"
+					[TGAlertSheet showMessage:(error ?: @"An error occurred.")
+										title:@"Automatically Terminate Old Sessions"
 									   inView:weakSelf.view];
 					return;
 				}
@@ -251,18 +321,17 @@
 		return;
 	}
 
-	if (indexPath.section == 3){
+	if ([kind isEqualToString:@"websites"]){
 		TGWebsitesViewController *sites = [[TGWebsitesViewController alloc] init];
 		sites.hidesBottomBarWhenPushed = YES;
 		[self.navigationController pushViewController:sites animated:YES];
 		return;
 	}
 
-	if (indexPath.section == 4){
+	if ([kind isEqualToString:@"this"] && indexPath.row == 1){
 		__weak typeof(self) weakSelf = self;
-		[TGAlertSheet showConfirm:@"Every device but this one is signed out, "
-								  @"including any this list has not shown yet."
-							title:@"Terminate All Other Sessions"
+		[TGAlertSheet showConfirm:nil
+							title:@"Terminate all other sessions"
 						   action:@"Terminate"
 					  destructive:YES
 						   inView:self.view
@@ -270,7 +339,7 @@
 			[[TGClient shared] terminateAllOtherSessions:^(BOOL ok){
 				TGSessionsViewController *me = weakSelf;
 				if (!ok){
-					[TGAlertSheet showMessage:@"Telegram refused that."
+					[TGAlertSheet showMessage:@"An error occurred."
 										title:@"Active Sessions" inView:me.view];
 					return;
 				}
@@ -281,14 +350,19 @@
 		return;
 	}
 
-	if (indexPath.section != 0 && indexPath.section != 1)
-		return;
-	BOOL isCurrent = indexPath.section == 0;
-	if (!isCurrent && ![self othersOnly].count)
-		return;
-
-	NSDictionary *session = isCurrent
-			? [self currentSession] : [self othersOnly][indexPath.row];
+	BOOL isCurrent = [kind isEqualToString:@"this"];
+	NSDictionary *session = nil;
+	if (isCurrent){
+		session = [self currentSession];
+	} else if ([kind isEqualToString:@"unconfirmed"]){
+		NSArray *rows = [self unconfirmedSessions];
+		if (indexPath.row < (NSInteger)rows.count)
+			session = rows[(NSUInteger)indexPath.row];
+	} else if ([kind isEqualToString:@"other"]){
+		NSArray *rows = [self otherSessions];
+		if (indexPath.row < (NSInteger)rows.count)
+			session = rows[(NSUInteger)indexPath.row];
+	}
 	if (!session)
 		return;
 	int64_t sessionId = [session[@"id"] longLongValue];
@@ -297,10 +371,9 @@
 
 	__weak typeof(self) weakSelf = self;
 	void (^signOut)(void) = ^{
-		[TGAlertSheet showConfirm:[NSString stringWithFormat:
-						@"Sign %@ out of this account?", session[@"name"]]
-							title:@"Sign out"
-						   action:@"Sign out"
+		[TGAlertSheet showConfirm:nil
+							title:@"Log Out"
+						   action:@"Log Out"
 					  destructive:YES
 						   inView:weakSelf.view
 						onConfirm:^{
@@ -315,18 +388,20 @@
 	// out, and a login Telegram has not seen confirmed gets its Confirm beside
 	// them.
 	BOOL canAccept = [session[@"canAcceptSecretChats"] boolValue];
-	NSString *secretTitle = canAccept ? @"Stop Accepting Secret Chats"
-									  : @"Accept Secret Chats";
+	NSString *secretTitle = [NSString stringWithFormat:@"%@ %@",
+			TGLocalized(canAccept ? @"Disable" : @"Enable"),
+			TGLocalized(@"New Secret Chats")];
 	BOOL canAcceptCalls = [session[@"canAcceptCalls"] boolValue];
-	NSString *callsTitle = canAcceptCalls ? @"Stop Accepting Calls"
-										  : @"Allow Accepting Calls";
+	NSString *callsTitle = [NSString stringWithFormat:@"%@ %@",
+			TGLocalized(canAcceptCalls ? @"Disable" : @"Enable"),
+			TGLocalized(@"Calls")];
 	NSMutableArray *choices = [NSMutableArray array];
 	if ([session[@"isUnconfirmed"] boolValue])
-		[choices addObject:@"Confirm This Device"];
+		[choices addObject:@"Confirm"];
 	[choices addObject:secretTitle];
 	[choices addObject:callsTitle];
 	if (!isCurrent)
-		[choices addObject:@"Sign Out"];
+		[choices addObject:@"Log Out"];
 
 	[TGAlertSheet showChoices:choices
 						title:session[@"name"]
@@ -334,7 +409,7 @@
 					   inView:self.view
 					 onChoice:^(NSInteger index){
 		NSString *choice = choices[(NSUInteger)index];
-		if ([choice isEqualToString:@"Confirm This Device"]){
+		if ([choice isEqualToString:@"Confirm"]){
 			[[TGClient shared] confirmSession:sessionId];
 			[weakSelf performSelector:@selector(refresh) withObject:nil afterDelay:1.0];
 			return;
@@ -349,7 +424,7 @@
 							   canAcceptCalls:!canAcceptCalls
 								   completion:^(BOOL ok, NSString *error){
 				if (!ok){
-					[TGAlertSheet showMessage:(error ?: @"Telegram refused that.")
+					[TGAlertSheet showMessage:(error ?: @"An error occurred.")
 										title:session[@"name"]
 									   inView:weakSelf.view];
 					return;

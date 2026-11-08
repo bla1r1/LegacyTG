@@ -7,13 +7,14 @@
 // control is what closes it.
 //
 #import <UIKit/UIKit.h>
+#import "TGTableViewController.h"
 
 typedef NS_ENUM(NSInteger, TGMessageAudienceKind) {
 	TGMessageAudienceKindReactions = 0,
 	TGMessageAudienceKindViewers,
 };
 
-@interface TGMessageAudienceViewController : UITableViewController
+@interface TGMessageAudienceViewController : TGTableViewController
 
 /// `emoji` is the reaction group's glyph; `customEmojiId` is set instead when
 /// the group is a custom emoji and there is no character to send.

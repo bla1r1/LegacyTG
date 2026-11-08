@@ -132,7 +132,7 @@ static NSDictionary *svcSenderUser(int64_t userId) {
 	XCTAssertEqualObjects(svcSentence(@{
 		@"@type" : @"messageChatUpgradeTo",
 		@"supergroup_id" : @(3001),
-	}), @"Alice upgraded the group to a supergroup");
+	}), @"This group was upgraded to a supergroup");
 }
 
 - (void)testChatUpgradeFrom {
@@ -183,7 +183,7 @@ static NSDictionary *svcSenderUser(int64_t userId) {
 		@"@type" : @"messageChatSetMessageAutoDeleteTime",
 		@"message_auto_delete_time" : @(86400),
 		@"from_user_id" : @(0),
-	}), @"Alice set messages to auto-delete after 1 day");
+	}), @"Alice set messages to auto-delete in 1 day");
 }
 
 - (void)testAutoDeleteWeek {
@@ -191,7 +191,7 @@ static NSDictionary *svcSenderUser(int64_t userId) {
 		@"@type" : @"messageChatSetMessageAutoDeleteTime",
 		@"message_auto_delete_time" : @(604800),
 		@"from_user_id" : @(0),
-	}), @"Alice set messages to auto-delete after 1 week");
+	}), @"Alice set messages to auto-delete in 1 week");
 }
 
 - (void)testAutoDeleteMonth {
@@ -199,7 +199,7 @@ static NSDictionary *svcSenderUser(int64_t userId) {
 		@"@type" : @"messageChatSetMessageAutoDeleteTime",
 		@"message_auto_delete_time" : @(2592000),
 		@"from_user_id" : @(0),
-	}), @"Alice set messages to auto-delete after 1 month");
+	}), @"Alice set messages to auto-delete in 1 month");
 }
 
 - (void)testAutoDeleteOff {
@@ -499,7 +499,7 @@ static NSDictionary *svcSenderUser(int64_t userId) {
 		@"@type" : @"messageBotWriteAccessAllowed",
 		@"reason" : @{@"@type" : @"botWriteAccessAllowReasonConnectedWebsite",
 					 @"domain_name" : @"example.com"},
-	}), @"Alice allowed the bot to send messages on example.com");
+	}), @"You allowed this bot to message you when you logged in on example.com.");
 }
 
 - (void)testWebAppDataSent {
@@ -588,12 +588,12 @@ static NSDictionary *svcSenderUser(int64_t userId) {
 
 - (void)testExpiredVideoNote {
 	XCTAssertEqualObjects(svcSentence(@{@"@type" : @"messageExpiredVideoNote"}),
-			@"Video message has expired");
+			@"Expired video message");
 }
 
 - (void)testExpiredVoiceNote {
 	XCTAssertEqualObjects(svcSentence(@{@"@type" : @"messageExpiredVoiceNote"}),
-			@"Voice message has expired");
+			@"Expired voice message");
 }
 
 #pragma mark - ownership and communities
@@ -692,7 +692,7 @@ static NSDictionary *svcSenderUser(int64_t userId) {
 	XCTAssertEqualObjects(svcSentence(@{
 		@"@type" : @"messagePaidMessagePriceChanged",
 		@"paid_message_star_count" : @(5),
-	}), @"Alice set the price for paid messages to 5 Stars");
+	}), @"Alice changed price to 5 Stars per message");
 }
 
 - (void)testPaidMessagesMadeFree {
@@ -886,7 +886,7 @@ static NSDictionary *svcSenderUser(int64_t userId) {
 
 - (void)testUnsupported {
 	XCTAssertEqualObjects(svcSentence(@{@"@type" : @"messageUnsupported"}),
-			@"This message is not supported by your version of Telegram");
+			@"This message is not supported by your version of Telegram. Please update to the latest version.");
 }
 
 #pragma mark - actor and channel rules

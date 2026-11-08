@@ -1,3 +1,8 @@
+#import "TGGeometry.h"
+#import "TGViewController.h"
+#import "TGTableViewController.h"
+#import "TGTableViewCell.h"
+#import "TGFormViewController.h"
 #ifndef TGUI_h
 #define TGUI_h
 
@@ -21,6 +26,7 @@
 #import "TGAlertSheet.h"
 #import "TGSnackbar.h"
 #import "TGStatusBanner.h"
+#import "TGInAppNotificationBanner.h"
 #import "TGEmptyView.h"
 
 // TGDevGalleryViewController is a controller, not a control: import

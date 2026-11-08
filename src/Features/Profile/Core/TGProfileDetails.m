@@ -238,10 +238,10 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 - (NSArray *)basicDetailsRows {
 	NSMutableArray *rows = [NSMutableArray array];
 	if (self.phoneNumber.length)
-		[rows addObject:@{@"kind" : @"phone", @"label" : @"mobile",
+		[rows addObject:@{@"kind" : @"phone", @"label" : @"Mobile",
 				@"value" : [@"+" stringByAppendingString:self.phoneNumber]}];
 	if (self.username.length)
-		[rows addObject:@{@"kind" : @"username", @"label" : @"username",
+		[rows addObject:@{@"kind" : @"username", @"label" : @"Username",
 				@"value" : [@"@" stringByAppendingString:self.username]}];
 	return rows;
 }
@@ -251,47 +251,48 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 /// add-to-contacts row for a stranger.
 - (NSArray *)fullDetailsRowsWithBio:(NSString *)bio birthday:(NSString *)birthday {
 	NSMutableArray *rows = [NSMutableArray array];
-	// On your own profile the bio leads, and an empty one is an invitation to
-	// write it rather than a missing row.
-	BOOL own = self.isOwnProfile;
-	if (own)
-		[rows addObject:bio.length
-				? @{@"kind" : @"bio", @"label" : @"bio", @"value" : bio}
-				: @{@"kind" : @"addBio", @"label" : @"", @"value" : @"Add a bio"}];
 	if (self.phoneNumber.length)
-		[rows addObject:@{@"kind" : @"phone", @"label" : @"mobile",
+		[rows addObject:@{@"kind" : @"phone", @"label" : @"Mobile",
 				@"value" : [@"+" stringByAppendingString:self.phoneNumber]}];
 	if (self.activeUsernames.count > 0){
 		for (NSUInteger i = 0; i < self.activeUsernames.count; i++){
 			NSString *u = self.activeUsernames[i];
 			if (!u.length) continue;
 			[rows addObject:@{@"kind" : @"username",
-					@"label" : (i == 0 ? @"username" : @"link"),
+					@"label" : (i == 0 ? @"Username" : @"Link"),
 					@"value" : [@"@" stringByAppendingString:u]}];
 		}
 	} else if (self.username.length){
-		[rows addObject:@{@"kind" : @"username", @"label" : @"username",
+		[rows addObject:@{@"kind" : @"username", @"label" : @"Username",
 				@"value" : [@"@" stringByAppendingString:self.username]}];
 	}
 	if (self.isScam || self.isFake){
 		[rows addObject:@{@"kind" : @"warning", @"label" : @"",
-				@"value" : (self.isScam ? @"This account is marked as a scam."
-									   : @"This account is marked as fake.")}];
-	} else if (bio.length && !own){
-		[rows addObject:@{@"kind" : @"bio", @"label" : @"about", @"value" : bio}];
+				@"value" : (self.isScam ? @"Scam" : @"Fake")}];
 	}
 	if (birthday.length)
-		[rows addObject:@{@"kind" : @"birthday", @"label" : @"birthday",
+		[rows addObject:@{@"kind" : @"birthday", @"label" : @"Birthday",
 				@"value" : birthday}];
-	if (self.businessLocation.length)
-		[rows addObject:@{@"kind" : @"businessLocation", @"label" : @"location",
-				@"value" : self.businessLocation}];
+	// The date of birth reads before the long text; the note and the address
+	// follow it, as in the official card.
+	if (bio.length)
+		// Kind "bio" for every user ("about" is the group description); My
+		// Profile labels it About (Profile_About), others Bio.
+		[rows addObject:@{@"kind" : @"bio",
+				@"label" : (self.isOwnProfile ? @"About" : @"Bio"), @"value" : bio}];
 	if (self.personalNote.length)
-		[rows addObject:@{@"kind" : @"note", @"label" : @"note",
+		[rows addObject:@{@"kind" : @"note", @"label" : @"Note",
 				@"value" : self.personalNote}];
+	if (self.businessLocation.length)
+		[rows addObject:@{@"kind" : @"businessLocation", @"label" : @"Location",
+				@"value" : self.businessLocation}];
 	if (!self.isContact && !self.isOwnProfile && !self.isBot)
 		[rows addObject:@{@"kind" : @"addContact", @"label" : @"",
 				@"value" : @"Add to Contacts"}];
+	// A stranger's card ends with Block User; a contact keeps it in More.
+	if (!self.isContact && !self.isOwnProfile && !self.isBot)
+		[rows addObject:@{@"kind" : @"block", @"label" : @"",
+				@"value" : (self.blocked ? @"Unblock" : @"Block User")}];
 	return rows;
 }
 
@@ -340,10 +341,15 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 		if ([photoId isKindOfClass:[NSNumber class]] && photoId.integerValue > 0 && !me.chatAvatars[@(chatId)]) {
 			[me downloadAvatarWithFileId:photoId.integerValue chatId:chatId kind:@"channel" cell:nil];
 		}
-		NSMutableArray *rows = [me.details mutableCopy];
-		[rows insertObject:@{@"kind" : @"channel", @"label" : @"personal channel",
-				@"value" : title} atIndex:0];
-		me.details = rows;
+		// The personal channel is its own section above the card, not a row
+		// inside it.
+		[[TGClient shared] memberCountForChat:chatId completion:^(NSInteger count){
+			TGProfileViewController *again = weakSelf;
+			if (!again)
+				return;
+			again.personalChannelMemberCount = count;
+			[again reloadTableDebounced];
+		}];
 		[me reloadTableDebounced];
 	}];
 }

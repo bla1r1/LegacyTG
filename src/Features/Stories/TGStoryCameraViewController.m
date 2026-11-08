@@ -711,7 +711,7 @@ static void TGStoryCrossFade(UINavigationController *navigation) {
 			UIImage *image = jpeg.length ? [UIImage imageWithData:jpeg] : nil;
 			if (!image){
 				[me hideSpinner];
-				[TGAlertSheet showMessage:@"The camera did not give a picture. Try again."
+				[TGAlertSheet showMessage:@"An error occurred."
 									title:@"New Story" inView:me.view];
 				return;
 			}
@@ -1092,7 +1092,7 @@ static void TGStoryCrossFade(UINavigationController *navigation) {
 			me.nextButton.enabled = YES;
 			me.nextButton.alpha = TGAlphaOpaque;
 			if (!path){
-				[TGAlertSheet showMessage:@"The picture could not be prepared. Try another."
+				[TGAlertSheet showMessage:@"An error occurred."
 									title:@"New Story" inView:me.view];
 				return;
 			}

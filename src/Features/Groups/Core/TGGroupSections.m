@@ -1,4 +1,5 @@
 #import "TGGroupSettingsViewController.h"
+#import "TGLocalization.h"
 #import "TGClient.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
@@ -144,8 +145,8 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 				 [p[@"can_send_videos"] boolValue] ||
 				 [p[@"can_send_documents"] boolValue];
 	if (!send)
-		return @"Read only";
-	return media ? @"Everything allowed" : @"Messages only";
+		return @"Read-Only Mode";
+	return media ? @"All" : @"Messages";
 }
 
 - (NSString *)slowModeDetail {
@@ -153,10 +154,11 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 	if (seconds <= 0)
 		return @"Off";
 	if (seconds < 60)
-		return [NSString stringWithFormat:@"%ld s", (long)seconds];
+		return TGLocalizedFormat(@"%@ seconds",
+				[NSString stringWithFormat:@"%ld", (long)seconds]);
 	if (seconds < 3600)
-		return [NSString stringWithFormat:@"%ld min", (long)(seconds / 60)];
-	return [NSString stringWithFormat:@"%ld h", (long)(seconds / 3600)];
+		return TGLocalizedFormat(@"%@ min", @(seconds / 60));
+	return TGLocalizedFormat(@"%@ h", @(seconds / 3600));
 }
 
 - (NSString *)labelForTab:(NSString *)tab {
@@ -191,6 +193,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 - (void)rebuild {
 	if (!self.loaded || !self.chat)
 		return;
+	self.tableView.backgroundView = nil;
 	BOOL supergroup = [self isSupergroupChat];
 	BOOL channel = [self isChannelChat];
 	BOOL basic = [self isBasicGroupChat];
@@ -202,34 +205,36 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 	BOOL editInfo = manager && self.canChangeInfo;
 	NSString *photoDetail = self.hasPhoto ? @"Change" : @"Set";
 	NSString *nameDetail = self.chatTitle ?: @"";
-	NSString *noInfoRight = @"An administrator with the change-info right does this";
+	NSString *photoTitle = channel ? @"Set Channel Photo" : @"Set Group Photo";
+	NSString *nameTitle = channel ? @"Channel Name" : @"Group Name";
+	NSString *noInfoRight = nil;
 	if (manager && !self.canChangeInfo){
-		[info addObject:TGDisabledRow(@"Group Photo", noInfoRight, @"photo")];
-		[info addObject:TGDisabledRow(@"Group Name", nameDetail, @"name")];
+		[info addObject:TGDisabledRow(photoTitle, noInfoRight, @"photo")];
+		[info addObject:TGDisabledRow(nameTitle, nameDetail, @"name")];
 	} else {
-		[info addObject:TGOpenRow(@"Group Photo",
+		[info addObject:TGOpenRow(photoTitle,
 				manager ? photoDetail : (self.hasPhoto ? @"Set" : @"None"),
 				manager ? @"photo" : nil)];
-		[info addObject:TGInfoRow(@"Group Name", nameDetail, manager ? @"name" : nil)];
+		[info addObject:TGOpenRow(nameTitle, nameDetail, manager ? @"name" : nil)];
 	}
 	if (supergroup){
 		if (manager && !self.canChangeInfo){
 			[info addObject:TGDisabledRow(@"Description",
 					self.descriptionText.length ? self.descriptionText
-							: @"No description", @"description")];
+							: @"None", @"description")];
 		} else {
-			[info addObject:TGInfoRow(@"Description",
+			[info addObject:TGOpenRow(@"Description",
 					self.descriptionText.length ? self.descriptionText
-							: (manager ? @"Add a description" : @"None"),
+							: (manager ? @"Description" : @"None"),
 					manager ? @"description" : nil)];
 		}
 		if (manager && !self.canInvite){
 			[info addObject:TGDisabledRow(@"Invite Link",
 					self.inviteLink.length ? self.inviteLink
-							: @"An administrator with the invite right manages links",
+							: @"Manage",
 					@"invite")];
 		} else if (manager || self.inviteLink.length){
-			[info addObject:TGInfoRow(@"Invite Link",
+			[info addObject:TGOpenRow(@"Invite Link",
 					self.inviteLink.length ? self.inviteLink
 							: (manager ? @"Manage" : @"None"),
 					manager ? @"invite" : nil)];
@@ -238,35 +243,30 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 		// above the link. Private here means no active username.
 		BOOL isPublic = self.editable.length > 0 || self.active.count > 0;
 		NSString *typeTitle = channel ? @"Channel Type" : @"Group Type";
-		NSString *typeDetail = isPublic
-				? (self.editable.length
-						? [@"@" stringByAppendingString:self.editable] : @"Public")
-				: @"Private";
+		// The official row names the visibility (Group.Setup.TypePublic).
+		// By key: the English "Public" is shared and maps to the pack's
+		// "sociality" word.
+		NSString *typeKey = [NSString stringWithFormat:@"%@.Setup.Type%@",
+				channel ? @"Channel" : @"Group", isPublic ? @"Public" : @"Private"];
+		NSString *typeDetail = TGLocalizedKey(typeKey, isPublic ? @"Public" : @"Private");
 		if (editInfo)
-			[info addObject:TGInfoRow(typeTitle, typeDetail, @"groupType")];
+			[info addObject:TGOpenRow(typeTitle, typeDetail, @"groupType")];
 		else if (manager)
 			[info addObject:TGDisabledRow(typeTitle, typeDetail, @"groupType")];
 		else
 			[info addObject:TGInfoRow(typeTitle, typeDetail, nil)];
-		[info addObject:TGInfoRow(@"Main Profile Tab",
-				[self labelForTab:self.settings[@"mainTab"]],
-				editInfo ? @"tab" : nil)];
 	}
 	if (basic)
 		[info addObject:TGInfoRow(@"Group Type", @"Private", nil)];
 	if (self.memberCount > 0)
-		[info addObject:TGInfoRow(channel ? @"Subscribers" : @"Members",
-				[NSString stringWithFormat:@"%ld", (long)self.memberCount], nil)];
+		[info addObject:TGOpenRow(channel ? @"Subscribers" : @"Members",
+				[NSString stringWithFormat:@"%ld", (long)self.memberCount],
+				@"members")];
 	if (basic && manager)
 		[info addObject:TGActionRow(@"Upgrade to Supergroup",
-				@"Basic groups stop at 200 members", @"upgrade", NO)];
-	[sections addObject:TGSection(@"Group Info",
-			manager ? (basic ? @"A basic group has no username, invite link or supergroup "
-					@"permissions. Upgrading gives it those and a new chat id."
-				  : @"The public identity of this group. Telegram applies each "
-					@"change or says why not.")
-					: @"Anyone in the group can read this. Changing it needs an "
-					  @"administrator.",
+				nil, @"upgrade", NO)];
+	[sections addObject:TGSection(channel ? @"Channel Info" : @"Group Info",
+			nil,
 			info)];
 
 	// ── people ──────────────────────────────────────────────────────────
@@ -274,81 +274,68 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 		NSMutableArray *people = [NSMutableArray array];
 		if (manager && !self.canInvite)
 			[people addObject:TGDisabledRow(@"Add Members",
-					@"An administrator with the invite right adds people",
+					nil,
 					@"addMembers")];
 		else if (self.canInvite)
 			[people addObject:TGOpenActionRow(@"Add Members", nil, @"addMembers", NO)];
-		[people addObject:TGActionRow(@"Find Member", @"Search by name or @username",
-									  @"findMember", NO)];
-		for (NSDictionary *member in self.members)
-			[people addObject:@{@"kind" : @(TGGroupRowMember), @"member" : member}];
+		[people addObject:TGOpenActionRow(@"Search Members", nil,
+										 @"findMember", NO)];
 		NSString *header = self.memberCount > 0
-				? [NSString stringWithFormat:@"%ld members", (long)self.memberCount]
+				? TGLocalizedPluralValue(@"%@ member", @"%@ members", [NSString stringWithFormat:@"%ld", (long)self.memberCount], (NSInteger)self.memberCount)
 				: @"Members";
 		[sections addObject:TGSection(header,
-				@"Tap a member for their profile; hold for their actions. The "
-				@"list shows the members Telegram returned first.", people)];
+				nil, people)];
 	}
 
 	// ── calls ───────────────────────────────────────────────────────────
 	NSMutableArray *calls = [NSMutableArray array];
 	[calls addObject:TGOpenActionRow(@"Group Call",
-			@"Join, leave or manage the active call", @"groupCall", NO)];
+			nil, @"groupCall", NO)];
 	[calls addObject:TGOpenActionRow(@"Video Chat",
-			@"Create, schedule and record", @"videoChat", NO)];
+			nil, @"videoChat", NO)];
 	[sections addObject:TGSection(@"Calls",
-			@"A video chat is a group call bound to this chat. The call screen "
-			@"shows Telegram's participant list, messages and stream metadata; "
-			@"this client has no group-call audio engine.", calls)];
+			nil, calls)];
 
 	// ── what the group does ─────────────────────────────────────────────
 	if (supergroup && manager){
 		BOOL canBehaviour = self.canChangeInfo;
 		NSMutableArray *behaviour = [NSMutableArray array];
 		if (self.canRestrict)
-			[behaviour addObject:TGActionRow(@"Permissions",
+			[behaviour addObject:TGOpenActionRow(@"Permissions",
 					[self permissionsDetail], @"permissions", NO)];
 		else
 			[behaviour addObject:TGDisabledRow(@"Permissions",
 					[self permissionsDetail], @"permissions")];
 		if (canBehaviour)
-			[behaviour addObject:TGActionRow(@"Slow Mode", [self slowModeDetail],
+			[behaviour addObject:TGOpenActionRow(@"Slow Mode", [self slowModeDetail],
 											 @"slow", NO)];
 		else
 			[behaviour addObject:TGDisabledRow(@"Slow Mode", [self slowModeDetail],
 											   @"slow")];
 		[behaviour addObject:TGSwitchRow(@"Sign Messages", nil, @"sign",
 										 self.signMessages, canBehaviour)];
-		[behaviour addObject:TGSwitchRow(@"Join to Send", nil, @"join",
+		[behaviour addObject:TGSwitchRow(@"Send Messages", nil, @"join",
 										 self.joinToSend, canBehaviour)];
-		[behaviour addObject:TGSwitchRow(@"All History", nil, @"history",
+		[behaviour addObject:TGSwitchRow(@"History", nil, @"history",
 										 self.allHistory, canBehaviour)];
 		[behaviour addObject:TGSwitchRow(@"Aggressive Anti-Spam",
-				self.canToggleAntiSpam
-						? (self.aggressiveAntiSpam
-								? @"Deletes suspicious messages automatically"
-								: @"Off")
-						: @"Telegram does not allow this group to turn it on",
+				nil,
 				@"antispam", self.aggressiveAntiSpam, self.canToggleAntiSpam)];
-		[behaviour addObject:TGOpenActionRow(@"Anti-Spam False Positives",
-				@"Report a message deleted by mistake", @"antispamFalsePositive",
+		[behaviour addObject:TGOpenActionRow(@"Report False Positive",
+				nil, @"antispamFalsePositive",
 				NO)];
-		[behaviour addObject:TGSwitchRow(@"Join by Request",
-				[self.settings[@"joinByRequest"] boolValue]
-						? @"Administrators approve each join"
-						: @"Anyone with the link joins",
+		[behaviour addObject:TGSwitchRow(@"Approve New Members",
+				nil,
 				@"joinRequests",
 				[self.settings[@"joinByRequest"] boolValue], canBehaviour)];
 		BOOL canHide = [self.settings[@"canHideMembers"] boolValue];
-		[behaviour addObject:TGSwitchRow(@"Hidden Members",
-				canHide ? (self.settings[@"hiddenMembers"]
-						? @"Members are hidden" : @"Members are listed")
-						: @"Telegram does not allow this group to hide members",
+		[behaviour addObject:TGSwitchRow(@"Hide Members",
+				nil,
 				@"hidden", [self.settings[@"hiddenMembers"] boolValue],
 				canBehaviour && canHide)];
 		if (!channel){
-			[behaviour addObject:TGSwitchRow(@"Forum Mode",
-					self.settings[@"isForum"] ? @"Topics are on" : @"One message stream",
+			[behaviour addObject:TGSwitchRow(@"Topics",
+					self.settings[@"isForum"] ? @"On" : @"Off",
 					@"forum", [self.settings[@"isForum"] boolValue], canBehaviour)];
 			BOOL broadcast = [self.settings[@"isBroadcast"] boolValue];
 			if (canBehaviour)
@@ -359,28 +346,29 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 				[behaviour addObject:TGDisabledRow(@"Broadcast Group",
 						broadcast ? @"On" : @"Convert", @"broadcast")];
 			if (canBehaviour)
-				[behaviour addObject:TGActionRow(@"Welcome Messages",
-						@"Greet someone when they join", @"welcome", NO)];
+				[behaviour addObject:TGActionRow(@"Manage Welcome Messages",
+						nil, @"welcome", NO)];
 			else
-				[behaviour addObject:TGDisabledRow(@"Welcome Messages",
-						@"Greet someone when they join", @"welcome")];
+				[behaviour addObject:TGDisabledRow(@"Manage Welcome Messages",
+						nil, @"welcome")];
 		}
-		[behaviour addObject:TGSwitchRow(@"Automatic Translation",
-				self.settings[@"automaticTranslation"]
-						? @"The chat suggests a translation"
-						: @"No automatic translation",
+		[behaviour addObject:TGSwitchRow(@"Auto-Translate Messages",
+				self.settings[@"automaticTranslation"] ? @"On" : @"Off",
 				@"translation",
 				[self.settings[@"automaticTranslation"] boolValue], canBehaviour)];
-		if (self.canInvite)
-			[behaviour addObject:TGActionRow(@"Join Requests", nil,
-											 @"joinRequests", NO)];
-		else
-			[behaviour addObject:TGDisabledRow(@"Join Requests",
-					@"An administrator with the invite right answers requests",
-					@"joinRequests")];
-		[sections addObject:TGSection(@"Permissions and Behaviour",
-				@"Telegram applies the switch that moved or refuses it with a "
-				@"reason. A row this account cannot change says who can.",
+		// No requests means no row; a count on the right is the badge.
+		if (self.joinRequestCount > 0){
+			NSString *count = [NSString stringWithFormat:@"%ld",
+					(long)self.joinRequestCount];
+			if (self.canInvite)
+				[behaviour addObject:TGOpenActionRow(@"Join Requests", count,
+												 @"joinRequests", NO)];
+			else
+				[behaviour addObject:TGDisabledRow(@"Join Requests",
+						count, @"joinRequests")];
+		}
+		[sections addObject:TGSection(@"Permissions",
+				nil,
 				behaviour)];
 	}
 
@@ -389,24 +377,19 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 	if (supergroup && self.settings && manager){
 		NSMutableArray *names = [NSMutableArray array];
 		if (self.canChangeInfo){
-			[names addObject:TGInfoRow(@"Editable Username",
+			[names addObject:TGOpenRow(@"Username",
 					self.editable.length ? [@"@" stringByAppendingString:self.editable]
 										 : @"None", @"username")];
 			if (self.editable.length)
-				[names addObject:TGActionRow(@"Remove Username",
-						@"Keeps every active name below", @"removeUsername", YES)];
-			if (self.active.count > 1)
-				[names addObject:TGActionRow(@"Disable All Usernames",
-						@"Every name except the editable one",
-						@"disableUsernames", YES)];
+				[names addObject:TGActionRow(@"Deactivate Username",
+						nil, @"removeUsername", YES)];
 		} else {
-			[names addObject:TGDisabledRow(@"Editable Username",
+			[names addObject:TGDisabledRow(@"Username",
 					self.editable.length ? [@"@" stringByAppendingString:self.editable]
 										 : @"None", @"username")];
 		}
-		[sections addObject:TGSection(@"Usernames",
-				@"The public names in front of this group's links. The editable "
-				@"name is the one Telegram shows first.", names)];
+		[sections addObject:TGSection(@"Username",
+				nil, names)];
 
 		if (self.active.count){
 			NSMutableArray *rows = [NSMutableArray array];
@@ -415,11 +398,8 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 				row[@"enabled"] = @(self.canChangeInfo);
 				[rows addObject:row];
 			}
-			[sections addObject:TGSection(@"Active usernames",
-					self.active.count > 1
-							? @"Tap Edit and drag a row to change the order of the names "
-							  @"on the group's profile."
-							: nil, rows)];
+			[sections addObject:TGSection(@"USERNAME ORDER",
+					nil, rows)];
 		}
 		if (self.disabled.count){
 			NSMutableArray *rows = [NSMutableArray array];
@@ -428,48 +408,47 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 				row[@"enabled"] = @(self.canChangeInfo);
 				[rows addObject:row];
 			}
-			[sections addObject:TGSection(@"Disabled usernames",
-					@"Every name here can be switched back on. Telegram keeps "
-					@"them on the group while they are off.", rows)];
+			[sections addObject:TGSection(@"Disabled",
+					nil, rows)];
 		}
 	}
 
 	// ── tools ───────────────────────────────────────────────────────────
 	if (manager){
 		NSMutableArray *tools = [NSMutableArray array];
-		[tools addObject:TGOpenActionRow(@"Chat Tools", @"Log, statistics, theme",
+		[tools addObject:TGOpenActionRow(@"Manage", nil,
 									 @"chatTools", NO)];
 		if (channel)
-			[tools addObject:TGActionRow(@"Direct Messages", @"Reader replies",
+			[tools addObject:TGOpenActionRow(@"Direct Messages", nil,
 										 @"directMessages", NO)];
-		[tools addObject:TGActionRow(@"Import Messages", @"From an export file",
+		[tools addObject:TGOpenActionRow(@"Import Messages", nil,
 									 @"import", NO)];
 		if (supergroup)
-			[tools addObject:TGActionRow(@"Send as", @"Who a post is from",
+			[tools addObject:TGOpenActionRow(@"Send Message As...", nil,
 										 @"sendAs", NO)];
 		if (self.canDeleteMessages)
-			[tools addObject:TGActionRow(@"Clear by Date", @"Delete older messages",
+			[tools addObject:TGOpenActionRow(@"Clear History", nil,
 										 @"clearByDate", YES)];
 		else
-			[tools addObject:TGDisabledRow(@"Clear by Date",
-					@"An administrator with the delete-messages right clears",
+			[tools addObject:TGDisabledRow(@"Clear History",
+					nil,
 					@"clearByDate")];
 		if (supergroup){
 			if (self.canChangeInfo){
-				[tools addObject:TGActionRow(@"Group Stickers", nil,
+				[tools addObject:TGOpenActionRow(@"Group Stickers", nil,
 											 @"groupStickers", NO)];
-				[tools addObject:TGActionRow(@"Custom Emoji Stickers", nil,
+				[tools addObject:TGOpenActionRow(@"Custom Emoji", nil,
 											 @"customEmojiStickers", NO)];
 			} else {
 				[tools addObject:TGDisabledRow(@"Group Stickers",
-						@"An administrator with the change-info right sets it",
+						nil,
 						@"groupStickers")];
-				[tools addObject:TGDisabledRow(@"Custom Emoji Stickers",
-						@"An administrator with the change-info right sets it",
+				[tools addObject:TGDisabledRow(@"Custom Emoji",
+						nil,
 						@"customEmojiStickers")];
 			}
 		}
-		[sections addObject:TGSection(@"Tools", nil, tools)];
+		[sections addObject:TGSection(@"Manage", nil, tools)];
 	}
 
 	// ── leaving and deleting ────────────────────────────────────────────
@@ -481,12 +460,9 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 							  nil, @"deleteChat", YES)
 				: TGActionRow([NSString stringWithFormat:@"Leave %@", what],
 							  nil, @"leave", YES);
-		dangerRow[@"centered"] = @YES;
 		[danger addObject:dangerRow];
 		[sections addObject:TGSection(nil,
-				(self.isOwner
-						? @"Deleting removes this chat and every message in it for all members."
-						: @"Leaving removes this chat from your list. The group stays for everyone else."),
+				nil,
 				danger)];
 	}
 

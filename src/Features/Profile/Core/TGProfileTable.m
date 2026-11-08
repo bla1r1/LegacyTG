@@ -16,6 +16,7 @@
 #import <AVFoundation/AVFoundation.h>
 #import "TGProfileViewController.h"
 #import "TGProfileDetailCell.h"
+#import "TGLocalization.h"
 
 
 
@@ -42,6 +43,15 @@ static NSString *TGProfileDurationText(NSNumber *seconds) {
 	return [NSString stringWithFormat:@"%ld:%02ld", (long)(value / 60), (long)(value % 60)];
 }
 
+/// Dates follow the app language, not the device locale: a Russian UI must
+/// not print "Mar 5, 1990" in a media list.
+static void TGProfileApplyAppLocale(NSDateFormatter *formatter) {
+	NSString *language = TGAppLanguage();
+	formatter.locale = language.length
+			? [NSLocale localeWithLocaleIdentifier:language]
+			: [NSLocale currentLocale];
+}
+
 static NSString *TGProfileShortDate(NSNumber *date) {
 	if (![date isKindOfClass:NSNumber.class] || !date.doubleValue)
 		return nil;
@@ -51,6 +61,7 @@ static NSString *TGProfileShortDate(NSNumber *date) {
 		formatter.dateStyle = NSDateFormatterMediumStyle;
 		formatter.timeStyle = NSDateFormatterNoStyle;
 	}
+	TGProfileApplyAppLocale(formatter);
 	return [formatter stringFromDate:[NSDate dateWithTimeIntervalSince1970:date.doubleValue]];
 }
 
@@ -237,10 +248,11 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 #pragma mark - table
 
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-	return 6;
+	return 8;
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
+	if (section == kSectionPersonalChannel) return self.personalChannel ? 1 : 0;
 	if (section == kSectionDetails) return self.details.count;
 	if (section == kSectionDirectMessages) return 0;
 	// Stories and Gifts live in the bar above the shared section now, so the
@@ -248,6 +260,9 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 	if (section == kSectionStories) return 0;
 	if (section == kSectionGifts)   return 0;
 	if (section == kSectionMembers) return self.members.count;
+	if (section == kSectionDanger)
+		return (self.userId && self.isContact && !self.isBot &&
+				!self.isOwnProfile) ? 1 : 0;
 
 	if (section == kSectionMedia) {
 		if (![self currentMediaTabs].count)
@@ -263,6 +278,13 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
+	if (section == kSectionPersonalChannel){
+		if (!self.personalChannel)
+			return nil;
+		// The pack has no "Personal Channel" label; Channel is the official
+		// noun for the section and the count sits under the name.
+		return @"Channel";
+	}
 	if (section == kSectionMembers){
 		if (self.members.count == 0)
 			return nil;
@@ -272,17 +294,65 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 			return nil;
 		// Telegram counts the whole group here, even when the list below is
 		// only the first page it returned.
-		return [NSString stringWithFormat:@"%ld %@", (long)count,
-				self.isChannel ? @"subscribers" : @"members"];
+		return TGLocalizedPlural(
+				self.isChannel ? @"%d subscriber" : @"%d member",
+				self.isChannel ? @"%d subscribers" : @"%d members", count);
 	}
 	return nil;
 }
 
 - (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
+	if (section == kSectionPersonalChannel && self.personalChannel)
+		return [self personalChannelHeaderOfWidth:tableView.bounds.size.width];
 	if (section == kSectionMedia && [self currentMediaTabs].count) {
-		return [self mediaTabBarOfWidth:tableView.bounds.size.width];
+		CGFloat width = tableView.bounds.size.width;
+		if (!self.mediaSearchActive)
+			return [self mediaTabBarOfWidth:width];
+		// The search field sits at the top of the pane, above its tabs.
+		TGTheme *theme = [TGTheme shared];
+		UIView *header = [[UIView alloc] initWithFrame:CGRectMake(TGMetricZero,
+				TGMetricZero, width,
+				TGMetricSearchBarHeight + kMediaTabsRow)];
+		header.backgroundColor = [theme groupedBackgroundColour];
+		UISearchBar *bar = [self ensureMediaSearchBar];
+		bar.frame = CGRectMake(TGMetricZero, TGMetricZero, width,
+							  TGMetricSearchBarHeight);
+		bar.showsCancelButton = YES;
+		[header addSubview:bar];
+		UIView *tabs = [self mediaTabBarOfWidth:width];
+		tabs.frame = CGRectMake(TGMetricZero, TGMetricSearchBarHeight, width,
+							   kMediaTabsRow);
+		[header addSubview:tabs];
+		return header;
 	}
 	return nil;
+}
+
+/// Official puts the subscriber count on the section header's right, beside
+/// the "Channel" title, rather than under the peer's name in the row.
+- (UIView *)personalChannelHeaderOfWidth:(CGFloat)width {
+	UIView *header = [[UIView alloc] initWithFrame:
+			CGRectMake(0, 0, width, TGMetricMediaStripHeader)];
+	TGTheme *theme = [TGTheme shared];
+	UILabel *title = [[UILabel alloc] initWithFrame:
+			CGRectMake(TGMetricPadLarge, 0, width - TGDoubled(TGMetricPadLarge),
+					TGMetricMediaStripHeader)];
+	title.font = TGFontCaption();
+	title.textColor = [theme sectionHeaderColour];
+	title.backgroundColor = [UIColor clearColor];
+	title.text = TGLocalized(@"Channel");
+	[header addSubview:title];
+	if (self.personalChannelMemberCount > 0){
+		UILabel *count = [[UILabel alloc] initWithFrame:title.frame];
+		count.font = TGFontCaption();
+		count.textColor = [theme secondaryTextColour];
+		count.textAlignment = NSTextAlignmentRight;
+		count.backgroundColor = [UIColor clearColor];
+		count.text = TGLocalizedPlural(@"%d subscriber", @"%d subscribers",
+				self.personalChannelMemberCount);
+		[header addSubview:count];
+	}
+	return header;
 }
 
 /// More tabs than a phone's width holds, so they scroll. The offset is kept by
@@ -301,10 +371,11 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 	for (NSUInteger i = 0; i < tabs.count; i++){
 		NSString *kind = tabs[i][@"kind"];
 		BOOL isSelected = [kind isEqualToString:selected];
-		NSInteger count = [self.mediaCounts[kind] integerValue];
-		NSString *title = count > 0
-				? [NSString stringWithFormat:@"%@ %ld", tabs[i][@"title"], (long)count]
-				: tabs[i][@"title"];
+		// No raw number after a tab title: official shows the count in the
+		// pane header, with its plural form.
+		// Measure the word the button will show: setTitle: translates, so
+		// sizing the English "Voice" cut "Голосовые" to "Го…вые".
+		NSString *title = TGLocalized(tabs[i][@"title"] ?: @"");
 		UIFont *font = TGFontCaptionStrong();
 		CGFloat w = ceilf([title sizeWithFont:font].width) + TGDoubled(TGMetricPadMedium);
 		UIButton *tab = [UIButton buttonWithType:UIButtonTypeCustom];
@@ -315,6 +386,14 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 		[tab setTitleColor:isSelected ? [theme accentColour] : [theme secondaryTextColour]
 				  forState:UIControlStateNormal];
 		[tab addTarget:self action:@selector(mediaTabTapped:) forControlEvents:UIControlEventTouchUpInside];
+		// A group's or channel's main tab is chosen by holding the tab, as
+		// the official pane's context menu does.
+		if (self.chatId && self.canManage){
+			UILongPressGestureRecognizer *hold = [[UILongPressGestureRecognizer alloc]
+					initWithTarget:self action:@selector(mediaTabHeld:)];
+			hold.minimumPressDuration = 0.5;
+			[tab addGestureRecognizer:hold];
+		}
 		[bar addSubview:tab];
 		if (isSelected){
 			UIView *line = [[UIView alloc] initWithFrame:CGRectMake(x + TGMetricPadSmall,
@@ -336,6 +415,35 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 		[self mediaTabSelected:tabs[(NSUInteger)tab.tag][@"kind"]];
 }
 
+- (void)mediaTabHeld:(UILongPressGestureRecognizer *)hold {
+	if (hold.state != UIGestureRecognizerStateBegan)
+		return;
+	UIButton *tab = (UIButton *)hold.view;
+	NSArray *tabs = [self currentMediaTabs];
+	if (tab.tag >= (NSInteger)tabs.count)
+		return;
+	NSString *kind = tabs[(NSUInteger)tab.tag][@"kind"];
+	__weak typeof(self) weakSelf = self;
+	[TGAlertSheet showConfirm:nil
+						title:nil
+					   action:@"Set as Main Tab"
+				  destructive:NO
+					   inView:self.view
+					onConfirm:^{
+		[[TGClient shared] setSupergroupMainProfileTab:kind inChat:weakSelf.chatId
+				completion:^(BOOL ok, NSString *error){
+			TGProfileViewController *me = weakSelf;
+			if (!ok){
+				[TGAlertSheet showMessage:(error ?: @"An error occurred.")
+									title:@"Set as Main Tab" inView:me.view];
+				return;
+			}
+			me.mainMediaKind = kind;
+			[me.tableView reloadData];
+		}];
+	}];
+}
+
 
 
 - (void)tableView:(UITableView *)tableView willDisplayFooterView:(UIView *)view forSection:(NSInteger)section {
@@ -346,8 +454,14 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 }
 
 - (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section {
-	if (section == kSectionMedia)
-		return [self currentMediaTabs].count ? TGMetricMediaStripHeader : CGFLOAT_MIN;
+	if (section == kSectionMedia){
+		if (![self currentMediaTabs].count)
+			return CGFLOAT_MIN;
+		return kMediaTabsRow +
+				(self.mediaSearchActive ? TGMetricSearchBarHeight : TGMetricZero);
+	}
+	if (section == kSectionPersonalChannel)
+		return self.personalChannel ? TGMetricMediaStripHeader : CGFLOAT_MIN;
 	// Stories and Gifts are categories in the bar now and have no rows left.
 	// A grouped table still pads an empty section at both ends, and two of
 	// them in a row opened a gap the size of a screen above the bar.
@@ -365,10 +479,27 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 /// that is still loading stays blank rather than claiming there is nothing.
 - (BOOL)showsEmptyStories {
 	NSString *kind = [self selectedMediaKind];
-	if (!self.isOwnProfile ||
-			!([kind isEqualToString:@"stories"] || [kind isEqualToString:@"archive"]))
+	if (!([kind isEqualToString:@"stories"] || [kind isEqualToString:@"archive"]))
 		return NO;
 	return [self.loadedMediaKinds containsObject:kind] && ![self selectedMediaRows].count;
+}
+
+- (BOOL)emptyStoriesHasSentence {
+	return YES;
+}
+
+- (BOOL)emptyStoriesHasAction {
+	return ![[self selectedMediaKind] isEqualToString:@"archive"] &&
+			self.isOwnProfile;
+}
+
+- (CGFloat)emptyStoriesHeight {
+	CGFloat height = TGMetricPadWide + TGMetricLineTitle + TGMetricPadSmall;
+	if ([self emptyStoriesHasSentence])
+		height += TGDoubled(TGMetricLineBody) + TGMetricPadSmall;
+	if ([self emptyStoriesHasAction])
+		height += TGMetricLineBody + TGMetricPadSmall;
+	return height + TGMetricPadWide;
 }
 
 - (UIView *)tableView:(UITableView *)tableView viewForFooterInSection:(NSInteger)section {
@@ -378,25 +509,45 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 	CGFloat width = tableView.bounds.size.width;
 	BOOL archive = [[self selectedMediaKind] isEqualToString:@"archive"];
 	UIView *empty = [[UIView alloc] initWithFrame:CGRectMake(0, 0, width,
-			[self tableView:tableView heightForFooterInSection:section])];
+			[self emptyStoriesHeight])];
 
+	CGFloat y = TGMetricPadWide;
 	UILabel *line = [[UILabel alloc] initWithFrame:
-			CGRectMake(0, TGMetricPadWide, width, TGMetricLineBody)];
+			CGRectMake(TGMetricPadLarge, y, width - TGDoubled(TGMetricPadLarge),
+					TGMetricLineTitle)];
 	line.autoresizingMask = UIViewAutoresizingFlexibleWidth;
-	line.text = archive ? @"No archived stories" : @"No stories yet";
-	line.font = TGFontBody();
-	line.textColor = [theme secondaryTextColour];
+	line.text = archive ? @"No Archived Stories" : @"No posted stories";
+	line.font = TGFontBodyStrong();
+	line.textColor = [theme primaryTextColour];
 	line.textAlignment = NSTextAlignmentCenter;
 	line.backgroundColor = [UIColor clearColor];
 	[empty addSubview:line];
+	y += TGMetricLineTitle + TGMetricPadSmall;
 
-	// The archive only fills from stories that expire, so it offers nothing.
-	if (!archive){
+	// The archive only fills from stories that expire, so it offers nothing;
+	// the posted pane explains that a new story will appear here instead.
+	if ([self emptyStoriesHasSentence]){
+		UILabel *sentence = [[UILabel alloc] initWithFrame:
+				CGRectMake(TGMetricPadLarge, y, width - TGDoubled(TGMetricPadLarge),
+						TGDoubled(TGMetricLineBody))];
+		sentence.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+		sentence.numberOfLines = 2;
+		sentence.text = archive
+				? @"Only you can see archived stories unless you choose to post them to your profile."
+				: @"Upload a new story to view it here";
+		sentence.font = TGFontBody();
+		sentence.textColor = [theme secondaryTextColour];
+		sentence.textAlignment = NSTextAlignmentCenter;
+		sentence.backgroundColor = [UIColor clearColor];
+		[empty addSubview:sentence];
+		y += TGDoubled(TGMetricLineBody) + TGMetricPadSmall;
+	}
+	if ([self emptyStoriesHasAction]){
 		UIButton *add = [UIButton buttonWithType:UIButtonTypeCustom];
-		add.frame = CGRectMake(0, TGMetricPadWide + TGMetricLineBody, width, TGMetricLineBody);
+		add.frame = CGRectMake(0, y, width, TGMetricLineBody);
 		add.autoresizingMask = UIViewAutoresizingFlexibleWidth;
 		add.titleLabel.font = TGFontBody();
-		[add setTitle:@"Add a story" forState:UIControlStateNormal];
+		[add setTitle:@"Add Story" forState:UIControlStateNormal];
 		[add setTitleColor:[theme accentColour] forState:UIControlStateNormal];
 		[add addTarget:self action:@selector(addStoryTapped)
 				forControlEvents:UIControlEventTouchUpInside];
@@ -407,7 +558,7 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 
 - (CGFloat)tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section {
 	if (section == kSectionMedia && [self showsEmptyStories])
-		return TGDoubled(TGMetricPadWide) + TGDoubled(TGMetricLineBody);
+		return [self emptyStoriesHeight];
 	if ([self tableView:tableView numberOfRowsInSection:section] == 0)
 		return CGFLOAT_MIN;
 	if (section == kSectionMedia)
@@ -426,6 +577,7 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 	if (indexPath.section == kSectionDirectMessages) return TGMetricPersonRow;
 	if (indexPath.section == kSectionStories) return TGMetricPersonRow;
 	if (indexPath.section == kSectionMembers) return TGMetricPersonRow;
+	if (indexPath.section == kSectionPersonalChannel) return TGMetricPersonRow;
 	if (indexPath.section == kSectionMedia) return TGMetricPersonRow;
 	if (indexPath.section == kSectionDetails && indexPath.row < (NSInteger)self.details.count){
 		NSDictionary *row = self.details[indexPath.row];
@@ -438,7 +590,8 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 		CGFloat left = TGMetricPadLarge + iconW + TGMetricPadMedium;
 		BOOL hasAccessory = [kind isEqualToString:@"channel"] ||
 				[kind isEqualToString:@"linkedChat"] || [kind isEqualToString:@"community"] ||
-				[kind isEqualToString:@"similarChannels"];
+				[kind isEqualToString:@"similarChannels"] ||
+				[kind isEqualToString:@"settings"];
 		CGFloat rightMargin = hasAccessory ? (TGMetricMenuGlyph + TGMetricPadMedium) : TGMetricPadLarge;
 		if ([kind isEqualToString:@"invite"] || [kind isEqualToString:@"username"]) {
 			rightMargin = TGMetricPadLarge + TGMetricMenuGlyph + TGMetricPadMedium;
@@ -446,16 +599,16 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 		CGFloat textWidth = tableView.bounds.size.width - left - rightMargin - TGDoubled(TGMetricPad);
 		if (textWidth < kMinDetailTextWidth) textWidth = kMinDetailTextWidth;
 		NSString *val = row[@"value"] ?: @"";
-		CGFloat textH = [val sizeWithFont:TGFontBody()
+		// Only our own wording in the card grows when translated; a username,
+		// link, bio or birthday is the account's text and keeps its height.
+		BOOL ownText = [kind isEqualToString:@"warning"] ||
+				[kind isEqualToString:@"addContact"] || [kind isEqualToString:@"block"];
+		NSString *measured = ownText ? TGLocalized(val) : val;
+		CGFloat textH = [measured sizeWithFont:TGFontBody()
 				constrainedToSize:CGSizeMake(textWidth, CGFLOAT_MAX)
 					lineBreakMode:NSLineBreakByWordWrapping].height;
 		if ([kind isEqualToString:@"about"] && !self.descriptionExpanded) {
-			CGFloat threeLinesH = [@"A\nB\nC" sizeWithFont:TGFontBody()
-										constrainedToSize:CGSizeMake(textWidth, CGFLOAT_MAX)
-											lineBreakMode:NSLineBreakByWordWrapping].height;
-			if (textH > threeLinesH + 1.0f) {
-				textH = threeLinesH;
-			}
+			// The full description is drawn; there is no "... more" expander.
 		}
 		CGFloat labelH = [row[@"label"] length] ? (TGMetricLineCaption + TGMetricPadTiny) : 0;
 		if ([kind isEqualToString:@"community"]) {
@@ -524,7 +677,8 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 		TGTheme *theme = [TGTheme shared];
 		detailCell.accessoryType = ([kind isEqualToString:@"channel"] ||
 				[kind isEqualToString:@"linkedChat"] || [kind isEqualToString:@"community"] ||
-				[kind isEqualToString:@"similarChannels"])
+				[kind isEqualToString:@"similarChannels"] ||
+				[kind isEqualToString:@"settings"])
 				? UITableViewCellAccessoryDisclosureIndicator : UITableViewCellAccessoryNone;
 
 		detailCell.rowKind = kind;
@@ -591,20 +745,33 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 			detailCell.titleLabel.font = TGFontMeta();
 			detailCell.subtitleLabel.font = TGFontBody();
 			detailCell.rowChatId = 0;
-			NSString *glyphName = TGProfileRowGlyphName(kind);
+			// Only the birthday keeps a leading glyph (its gift), as the
+			// official card does; the rest are a label over a value.
+			NSString *glyphName = ([kind isEqualToString:@"birthday"] &&
+					self.birthdayToday) ? @"star" : nil;
 			if (glyphName.length) {
 				icon = [TGIcons glyphNamed:glyphName colour:glyphColour side:iconSide];
 			}
 		}
 		detailCell.iconView.image = icon;
 
-		if ([kind isEqualToString:@"invite"] || [kind isEqualToString:@"username"]) {
+		if ([kind isEqualToString:@"invite"]) {
 			detailCell.rightButton.hidden = NO;
-			[detailCell.rightButton setImage:[TGIcons glyphNamed:@"copy" colour:[theme accentColour] side:TGMetricMenuGlyph] forState:UIControlStateNormal];
+			[detailCell.rightButton setImage:[TGIcons glyphNamed:@"qr" colour:[theme accentColour] side:TGMetricMenuGlyph] forState:UIControlStateNormal];
 			__weak typeof(self) weakSelf = self;
-			NSString *valToCopy = row[@"value"];
+			NSString *link = row[@"value"];
 			detailCell.onRightButtonTapped = ^{
-				[weakSelf copyDetailValue:valToCopy];
+				[weakSelf showQRCodeForValue:link];
+			};
+		} else if ([kind isEqualToString:@"username"]) {
+			// A username has a QR code, not a copy button, as the official
+			// card does.
+			detailCell.rightButton.hidden = NO;
+			[detailCell.rightButton setImage:[TGIcons glyphNamed:@"qr" colour:[theme accentColour] side:TGMetricMenuGlyph] forState:UIControlStateNormal];
+			__weak typeof(self) weakSelf = self;
+			NSString *username = row[@"value"];
+			detailCell.onRightButtonTapped = ^{
+				[weakSelf showQRCodeForValue:username];
 			};
 		} else {
 			detailCell.rightButton.hidden = YES;
@@ -618,31 +785,9 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 
 		if ([kind isEqualToString:@"about"]) {
 			NSString *val = row[@"value"] ?: @"";
-			CGFloat textWidth = detailCell.contentView.bounds.size.width - (TGMetricPadLarge + iconSide + TGMetricPadMedium) - TGMetricPadLarge;
-			if (textWidth < kMinDetailTextWidth) textWidth = kMinDetailTextWidth;
-			CGFloat threeLinesH = [@"A\nB\nC" sizeWithFont:TGFontBody()
-										constrainedToSize:CGSizeMake(textWidth, CGFLOAT_MAX)
-											lineBreakMode:NSLineBreakByWordWrapping].height;
-			CGSize fullSize = [val sizeWithFont:TGFontBody()
-							  constrainedToSize:CGSizeMake(textWidth, CGFLOAT_MAX)
-								  lineBreakMode:NSLineBreakByWordWrapping];
-			if (!self.descriptionExpanded && fullSize.height > threeLinesH + 1.0f) {
-				NSString *truncated = TGProfileTruncateToThreeLines(val, TGFontBody(), textWidth, threeLinesH);
-				NSMutableAttributedString *attr = [[NSMutableAttributedString alloc] initWithString:truncated
-					attributes:@{
-						NSFontAttributeName : TGFontBody(),
-						NSForegroundColorAttributeName : [theme primaryTextColour]
-					}];
-				NSRange moreRange = [truncated rangeOfString:@"more" options:NSBackwardsSearch];
-				if (moreRange.location != NSNotFound) {
-					[attr addAttribute:NSForegroundColorAttributeName value:[theme accentColour] range:moreRange];
-				}
-				detailCell.subtitleLabel.attributedText = attr;
-			} else {
-				detailCell.subtitleLabel.attributedText = nil;
-				detailCell.subtitleLabel.text = val;
-				detailCell.subtitleLabel.textColor = [theme primaryTextColour];
-			}
+			detailCell.subtitleLabel.attributedText = nil;
+			detailCell.subtitleLabel.text = val;
+			detailCell.subtitleLabel.textColor = [theme primaryTextColour];
 		} else if ([kind isEqualToString:@"community"]) {
 			detailCell.subtitleLabel.attributedText = nil;
 			detailCell.subtitleLabel.text = row[@"value"];
@@ -652,12 +797,59 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 			detailCell.subtitleLabel.text = row[@"value"];
 			BOOL plain = [kind isEqualToString:@"bio"] || [kind isEqualToString:@"note"];
 			BOOL today = [kind isEqualToString:@"birthday"] && self.birthdayToday;
-			detailCell.subtitleLabel.textColor = [kind isEqualToString:@"warning"] ? [theme destructiveColour]
+			detailCell.subtitleLabel.textColor = ([kind isEqualToString:@"warning"] ||
+					[kind isEqualToString:@"block"]) ? [theme destructiveColour]
 					: (today ? [theme onlineColour]
 					: (plain ? [theme primaryTextColour] : [theme accentColour]));
 		}
 		[detailCell setNeedsLayout];
 		return detailCell;
+	}
+
+	if (indexPath.section == kSectionPersonalChannel){
+		static NSString *channelReuse = @"profile-personal-channel";
+		TGProfileDetailCell *channelCell = [tableView dequeueReusableCellWithIdentifier:channelReuse];
+		if (!channelCell)
+			channelCell = [[TGProfileDetailCell alloc] initWithStyle:UITableViewCellStyleDefault
+													reuseIdentifier:channelReuse];
+		[[TGTheme shared] styleCell:channelCell];
+		channelCell.selectionStyle = UITableViewCellSelectionStyleDefault;
+		int64_t targetChatId = [self.personalChannel[@"chatId"] longLongValue];
+		channelCell.rowChatId = targetChatId;
+		channelCell.titleLabel.font = TGFontBody();
+		channelCell.titleLabel.textColor = [[TGTheme shared] primaryTextColour];
+		channelCell.subtitleLabel.font = TGFontCaption();
+		channelCell.subtitleLabel.textColor = [[TGTheme shared] secondaryTextColour];
+		channelCell.titleLabel.text = self.personalChannel[@"title"] ?: @"Channel";
+		channelCell.subtitleLabel.text = nil;
+		UIImage *avatar = targetChatId ? self.chatAvatars[@(targetChatId)] : nil;
+		if (!avatar){
+			avatar = [TGIcons glyphNamed:@"chat"
+								   colour:[[TGTheme shared] accentColour]
+									 side:TGMetricMenuGlyph];
+			if (targetChatId)
+				[self loadAvatarForChatId:targetChatId kind:@"channel" cell:channelCell];
+		}
+		channelCell.iconView.image = avatar;
+		channelCell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+		[channelCell setNeedsLayout];
+		return channelCell;
+	}
+
+	if (indexPath.section == kSectionDanger){
+		static NSString *dangerReuse = @"profile-danger";
+		UITableViewCell *danger = [tableView dequeueReusableCellWithIdentifier:dangerReuse];
+		if (!danger)
+			danger = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
+											reuseIdentifier:dangerReuse];
+		[[TGTheme shared] styleCell:danger];
+		danger.textLabel.text = @"Delete Contact";
+		danger.textLabel.font = TGFontBody();
+		danger.textLabel.textColor = [[TGTheme shared] destructiveColour];
+		danger.textLabel.textAlignment = NSTextAlignmentLeft;
+		danger.accessoryType = UITableViewCellAccessoryNone;
+		danger.selectionStyle = UITableViewCellSelectionStyleDefault;
+		return danger;
 	}
 
 	if (indexPath.section == kSectionDirectMessages){
@@ -671,9 +863,9 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 		TGTheme *theme = [TGTheme shared];
 		dmCell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
 		dmCell.iconView.image = [TGIcons glyphNamed:@"chat" colour:[theme accentColour] side:TGMetricMenuGlyph];
-		dmCell.titleLabel.text = @"direct messages";
+		dmCell.titleLabel.text = @"Direct Messages";
 		dmCell.titleLabel.textColor = [theme secondaryTextColour];
-		dmCell.subtitleLabel.text = (self.canManageDirectMessages || self.canManage) ? @"Manage Topics" : @"Open Direct Chat";
+		dmCell.subtitleLabel.text = (self.canManageDirectMessages || self.canManage) ? @"Manage Topics" : @"Direct Messages";
 		dmCell.subtitleLabel.textColor = [theme accentColour];
 		[dmCell setNeedsLayout];
 		return dmCell;
@@ -684,7 +876,7 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 	if (indexPath.section == kSectionStories){
 		NSDictionary *story = self.stories[indexPath.row];
 		NSString *caption = [story[@"caption"] length] ? story[@"caption"]
-				: ([story[@"isVideo"] boolValue] ? @"Video story" : @"Photo story");
+				: @"Story";
 		cell.textLabel.text = caption;
 		cell.textLabel.font = TGFontBody();
 		cell.textLabel.textColor = [[TGTheme shared] primaryTextColour];
@@ -695,6 +887,7 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 			when.dateStyle = NSDateFormatterShortStyle;
 			when.timeStyle = NSDateFormatterShortStyle;
 		}
+		TGProfileApplyAppLocale(when);
 		NSString *seen = [story[@"viewers"] integerValue] > 0
 				? [NSString stringWithFormat:@" - %@ views", story[@"viewers"]] : @"";
 		cell.detailTextLabel.text = [NSString stringWithFormat:@"%@%@",
@@ -746,8 +939,11 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 			cell.textLabel.text = (message.length && emoji.length)
 					? [NSString stringWithFormat:@"%@ %@", emoji, message]
 					: (emoji.length ? emoji : @"Gift");
-			NSString *stars = [NSString stringWithFormat:@"%lu stars",
-					(unsigned long)[gift[@"starCount"] integerValue]];
+			NSString *stars = TGLocalizedPluralValue(
+					@"%@ Stars", @"%@ Stars",
+					[NSString stringWithFormat:@"%ld",
+							(long)[gift[@"starCount"] integerValue]],
+					[gift[@"starCount"] integerValue]);
 			cell.detailTextLabel.text = [NSString stringWithFormat:@"%@ · %@",
 					TGProfileShortDate(gift[@"date"]) ?: @"", stars];
 		}
@@ -862,8 +1058,11 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 					cell.textLabel.text = (message.length && emoji.length)
 							? [NSString stringWithFormat:@"%@ %@", emoji, message]
 							: (emoji.length ? emoji : @"Gift");
-					NSString *stars = [NSString stringWithFormat:@"%lu stars",
-							(unsigned long)[m[@"starCount"] integerValue]];
+					NSString *stars = TGLocalizedPluralValue(
+							@"%@ Stars", @"%@ Stars",
+							[NSString stringWithFormat:@"%ld",
+									(long)[m[@"starCount"] integerValue]],
+							[m[@"starCount"] integerValue]);
 					cell.detailTextLabel.text = [NSString stringWithFormat:@"%@ · %@",
 							TGProfileShortDate(m[@"date"]) ?: @"", stars];
 				}
@@ -916,6 +1115,12 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
 	[tableView deselectRowAtIndexPath:indexPath animated:YES];
 
+	if (indexPath.section == kSectionPersonalChannel){
+		[self openChat:[self.personalChannel[@"chatId"] longLongValue]
+				 title:self.personalChannel[@"title"] message:0];
+		return;
+	}
+
 	if (indexPath.section == kSectionMembers &&
 		indexPath.row < (NSInteger)self.members.count){
 		// A member row is a person, not a chat: open their profile. The
@@ -933,6 +1138,11 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 
 	if (indexPath.section == kSectionDirectMessages){
 		[self openDirectMessages];
+		return;
+	}
+
+	if (indexPath.section == kSectionDanger){
+		[self runMoreAction:@"Delete Contact"];
 		return;
 	}
 
@@ -954,6 +1164,8 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 									 inView:self.view];
 	} else if ([kind isEqualToString:@"directMessages"]){
 		[self openDirectMessages];
+	} else if ([kind isEqualToString:@"settings"]){
+		[self runMoreAction:(self.isChannel ? @"Channel Settings" : @"Group Settings")];
 	} else if ([kind isEqualToString:@"similarChannels"]){
 		TGSimilarChannelsViewController *similarVC = [[TGSimilarChannelsViewController alloc] init];
 		similarVC.originalChatId = self.chatId;
@@ -966,6 +1178,8 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 		[[UIApplication sharedApplication] openURL:[NSURL URLWithString:mapsUrl]];
 	} else if ([kind isEqualToString:@"addContact"]){
 		[self addToContactsTapped];
+	} else if ([kind isEqualToString:@"block"]){
+		[self runMoreAction:(self.blocked ? @"Unblock" : @"Block")];
 	} else if ([kind isEqualToString:@"addBio"]){
 		[self editProfileTapped];
 	} else if ([kind isEqualToString:@"bio"]){
@@ -1002,7 +1216,7 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 				me.directMessagesChatId = me.chatId;
 				[me openDirectMessages];
 			} else {
-				[TGAlertSheet showMessage:@"Direct messages are not available for this channel."
+				[TGAlertSheet showMessage:@"An error occurred."
 									title:@"Direct Messages"
 								   inView:me.view];
 			}
@@ -1018,7 +1232,7 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 		[self.navigationController pushViewController:topics animated:YES];
 	} else {
 		[self openChat:targetId
-				 title:[NSString stringWithFormat:@"%@ · Direct", self.name.length ? self.name : @"Channel"]
+				 title:(self.name.length ? self.name : TGLocalized(@"Direct Messages"))
 			   message:0];
 	}
 }
@@ -1084,7 +1298,7 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 			me.voicePlayer = [[TGStreamingVoicePlayer alloc] initWithPath:path error:&err];
 			if (!me.voicePlayer){
 				NSLog(@"voice playback: %@", err);
-				[TGAlertSheet showMessage:@"This voice message cannot be played on this device."
+				[TGAlertSheet showMessage:@"An error occurred."
 									title:@"Voice Message" inView:me.view];
 				return;
 			}
@@ -1123,7 +1337,7 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 			CGRectMake(0, 0, kToastWidth, kToastHeight)];
 	toast.center = CGPointMake(TGHalf(self.view.bounds.size.width),
 							   self.view.bounds.size.height - TGMetricToastBottomOffset);
-	toast.text = @"Copied";
+	toast.text = @"Copied to clipboard.";
 	toast.textAlignment = NSTextAlignmentCenter;
 	toast.font = TGFontSubhead();
 	toast.textColor = [[TGTheme shared] hudTextColour];

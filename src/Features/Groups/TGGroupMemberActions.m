@@ -10,6 +10,7 @@
 #import "TGAlertSheet.h"
 #import "TGChatViewController.h"
 #import "TGProfileViewController.h"
+#import "TGLocalization.h"
 
 /// Pushes `controller` when the host is on a navigation stack; otherwise
 /// wraps it in one and presents that. A profile opened from a popover or a
@@ -98,7 +99,7 @@ void TGPresentControllerFrom(UIViewController *controller, UIViewController *hos
 	int64_t userId = [member[@"id"] longLongValue];
 	NSString *name = [member[@"name"] length] ? member[@"name"]
 			: [[TGClient shared] nameForUserId:userId];
-	if (!userId || userId == [[TGClient shared].me[@"id"] longLongValue])
+	if (!userId)
 		return;
 
 	__weak UIViewController *weakHost = host;
@@ -120,28 +121,17 @@ void TGPresentControllerFrom(UIViewController *controller, UIViewController *hos
 				theyAreAdmin = YES;
 		}
 
-		NSMutableArray *choices = [NSMutableArray arrayWithObject:@"Member Info"];
-		// The profile is a person's page; the record is the group's own
-		// note about them - their tag and any restriction. Both stay here,
-		// and neither is a chat.
-		[choices addObject:@"Member Details"];
-		[choices addObject:@"Send Message"];
+		NSMutableArray *choices = [NSMutableArray arrayWithObject:@"Send Message"];
 		if (iCanEdit){
-			[choices addObject:theyAreAdmin ? @"Dismiss as Admin"
-											: @"Promote to Admin"];
-			[choices addObject:@"Set Member Tag"];
-			[choices addObject:@"Clear Their Reactions"];
-			[choices addObject:@"Clear Their Messages"];
-			[choices addObject:@"Remove from Group"];
-			[choices addObject:@"Ban"];
-			if (iAmOwner)
-				[choices addObject:@"Hand Over Ownership"];
+			[choices addObject:@"Add Member Tag"];
+			[choices addObject:theyAreAdmin ? @"Dismiss Admin" : @"Promote"];
+			[choices addObject:@"Remove"];
 		}
 
 		[TGAlertSheet showChoices:choices
 							title:name.length ? name : @"Member"
 				 destructiveIndex:(iCanEdit
-						 ? (NSInteger)[choices indexOfObject:@"Ban"] : -1)
+						 ? (NSInteger)[choices indexOfObject:@"Remove"] : -1)
 						   inView:me.view
 						 onChoice:^(NSInteger index){
 			[self runAction:choices[(NSUInteger)index]
@@ -161,7 +151,7 @@ void TGPresentControllerFrom(UIViewController *controller, UIViewController *hos
 	void (^report)(BOOL) = ^(BOOL ok){
 		UIViewController *me = weakHost;
 		if (!ok){
-			[TGAlertSheet showMessage:@"Telegram refused that change."
+			[TGAlertSheet showMessage:@"An error occurred."
 								title:action inView:me.view];
 			return;
 		}
@@ -201,46 +191,46 @@ void TGPresentControllerFrom(UIViewController *controller, UIViewController *hos
 				return;
 			}
 			NSString *say = [result isEqualToString:@"paidMessages"]
-					? @"They charge for incoming messages, and this account "
-					   @"carries no wallet for that."
+					? @"An error occurred."
 					: ([result isEqualToString:@"userRestrictsNewChats"]
-					   ? @"They set their profile to messages from contacts only."
-					   : @"That profile is gone.");
+					   ? @"An error occurred."
+					   : @"An error occurred.");
 			[TGAlertSheet showMessage:say
 								title:name.length ? name : @"Message"
 							   inView:me.view];
 		}];
 		return;
 
-	} else if ([action isEqualToString:@"Promote to Admin"]){
+	} else if ([action isEqualToString:@"Make Admin"] ||
+			   [action isEqualToString:@"Promote"]){
 		[[TGClient shared] setMember:userId inChat:chatId status:@"administrator"
 						  completion:report];
 
-	} else if ([action isEqualToString:@"Dismiss as Admin"]){
+	} else if ([action isEqualToString:@"Dismiss Admin"]){
 		[[TGClient shared] setMember:userId inChat:chatId status:@"member"
 						  completion:report];
 
-	} else if ([action isEqualToString:@"Set Member Tag"]){
+	} else if ([action isEqualToString:@"Add Member Tag"] ||
+			   [action isEqualToString:@"Add Rank"]){
 		[TGAlertSheet showInput:@"Member Tag"
-						message:@"A short title shown beside their name in this chat."
+						message:nil
 					placeholder:@"Tag" text:nil action:@"Save" inView:host.view
 					 onSubmit:^(NSString *tag){
 			[[TGClient shared] setMemberTag:tag forUser:userId inChat:chatId
 					completion:^(BOOL ok){
 				UIViewController *me = weakHost;
-				[TGAlertSheet showMessage:(ok ? @"Tag saved."
-											   : @"Telegram refused that tag.")
+				[TGAlertSheet showMessage:(ok ? @"Tag edited"
+											   : @"An error occurred.")
 									title:@"Member Tag" inView:me.view];
 				if (ok && onChanged)
 					onChanged();
 			}];
 		}];
 
-	} else if ([action isEqualToString:@"Clear Their Reactions"]){
+	} else if ([action isEqualToString:@"Delete All Reactions"]){
 		NSDictionary *sender = @{@"@type" : @"messageSenderUser", @"user_id" : @(userId)};
 		[TGAlertSheet showConfirm:
-				@"Every reaction they added in this chat is removed, here "
-				@"and across its messages."
+				@"Delete All Reactions"
 					title:(name.length ? name : @"Member")
 						   action:@"Clear"
 					  destructive:YES
@@ -249,11 +239,10 @@ void TGPresentControllerFrom(UIViewController *controller, UIViewController *hos
 			[[TGClient shared] deleteAllReactionsOfSender:sender inChat:chatId];
 		}];
 
-	} else if ([action isEqualToString:@"Clear Their Messages"]){
+	} else if ([action isEqualToString:@"Delete All Messages"]){
 		NSDictionary *sender = @{@"@type" : @"messageSenderUser", @"user_id" : @(userId)};
 		[TGAlertSheet showConfirm:
-				@"Every message they sent in this chat is deleted for everyone, "
-				@"including the copies already delivered."
+				@"Delete All Messages"
 					title:(name.length ? name : @"Member")
 						   action:@"Clear"
 					  destructive:YES
@@ -264,13 +253,13 @@ void TGPresentControllerFrom(UIViewController *controller, UIViewController *hos
 												   revoke:YES];
 		}];
 
-	} else if ([action isEqualToString:@"Remove from Group"]){
+	} else if ([action isEqualToString:@"Remove"]){
 		[[TGClient shared] setMember:userId inChat:chatId status:@"left"
 						  completion:report];
 
 	} else if ([action isEqualToString:@"Ban"]){
 		[TGAlertSheet showConfirm:[NSString stringWithFormat:
-						@"%@ is removed and cannot come back on an invite link.",
+						@"Ban %@",
 						name.length ? name : @"They"]
 							title:@"Ban"
 						   action:@"Ban"
@@ -281,16 +270,12 @@ void TGPresentControllerFrom(UIViewController *controller, UIViewController *hos
 						  revokeMessages:NO completion:report];
 		}];
 
-	} else if ([action isEqualToString:@"Hand Over Ownership"]){
+	} else if ([action isEqualToString:@"Transfer Group Ownership"]){
 		// Ownership leaves this account entirely, and TDLib demands the 2FA
 		// password for it.
-		NSString *who = name.length ? name : @"them";
-		[TGAlertSheet showConfirm:[NSString stringWithFormat:
-						@"%@ becomes this chat's owner. This account turns "
-						@"into an ordinary member of it, and only Telegram "
-						@"support can turn it back.", who]
-							title:@"Hand Over Ownership"
-						   action:@"Hand Over"
+		[TGAlertSheet showConfirm:@"Transfer Group Ownership"
+							title:@"Transfer Group Ownership"
+						   action:@"Transfer Group Ownership"
 					  destructive:NO
 						   inView:host.view
 						onConfirm:^{
@@ -299,22 +284,20 @@ void TGPresentControllerFrom(UIViewController *controller, UIViewController *hos
 			// because a session that is too new cannot proceed either way.
 			[[TGClient shared] canTransferOwnershipWithCompletion:
 					^(NSString *result, NSInteger retryAfter, NSString *error){
+				(void)retryAfter;
 				UIViewController *me = weakHost;
 				if (!me)
 					return;
 				if (error){
 					[TGAlertSheet showMessage:error
-										title:@"Hand Over Ownership"
+										title:@"Transfer Group Ownership"
 									   inView:me.view];
 					return;
 				}
 				if ([result isEqualToString:@"passwordTooFresh"] ||
 						[result isEqualToString:@"sessionTooFresh"]){
-					[TGAlertSheet showMessage:[NSString stringWithFormat:
-							@"Telegram will not move this chat yet. Try again in "
-							@"about %ld minutes.",
-							(long)MAX(1, (retryAfter + 59) / 60)]
-										title:@"Hand Over Ownership"
+					[TGAlertSheet showMessage:@"An error occurred."
+										title:@"Transfer Group Ownership"
 									   inView:me.view];
 					return;
 				}
@@ -332,10 +315,9 @@ void TGPresentControllerFrom(UIViewController *controller, UIViewController *hos
 					}
 					UIViewController *again = weakHost;
 					[TGAlertSheet showSecureInput:@"Your Password"
-										  message:@"Telegram answers a handover "
-												  @"only when this is right."
-									  placeholder:@"2FA password"
-										   action:@"Hand Over"
+										  message:nil
+									  placeholder:@"Password"
+										   action:@"Transfer Group Ownership"
 										   inView:again.view
 									 onSubmit:hand];
 				}];
@@ -359,7 +341,7 @@ void TGPresentControllerFrom(UIViewController *controller, UIViewController *hos
 			return;
 		NSString *sheetTitle = name.length ? name : @"Member";
 		if (!member){
-			[TGAlertSheet showMessage:@"Telegram keeps no record of them here."
+			[TGAlertSheet showMessage:@"An error occurred."
 								  title:sheetTitle inView:me.view];
 			return;
 		}
@@ -367,18 +349,19 @@ void TGPresentControllerFrom(UIViewController *controller, UIViewController *hos
 		NSDictionary *status = [member[@"status"] isKindOfClass:NSDictionary.class]
 				? member[@"status"] : @{};
 		NSMutableArray *lines = [NSMutableArray array];
-		[lines addObject:[NSString stringWithFormat:@"Status: %@",
+		[lines addObject:[NSString stringWithFormat:@"%@: %@",
+						  TGLocalized(@"Status"),
 						  TGMemberStatusName(status)]];
 		if ([member[@"tag"] length])
-			[lines addObject:[NSString stringWithFormat:@"Title: %@", member[@"tag"]]];
+			[lines addObject:TGLocalizedFormat(@"Title: %@", member[@"tag"])];
 
 		double until = [status[@"restricted_until_date"] doubleValue];
 		if (until > 0)
-			[lines addObject:[NSString stringWithFormat:@"Restricted until %@",
+			[lines addObject:TGLocalizedFormat(@"until %@",
 					[NSDateFormatter localizedStringFromDate:
 							[NSDate dateWithTimeIntervalSince1970:until]
 							dateStyle:NSDateFormatterMediumStyle
-							timeStyle:NSDateFormatterNoStyle]]];
+							timeStyle:NSDateFormatterNoStyle])];
 
 		NSDictionary *permissions =
 				[status[@"permissions"] isKindOfClass:NSDictionary.class]
@@ -386,8 +369,10 @@ void TGPresentControllerFrom(UIViewController *controller, UIViewController *hos
 		id send = permissions[@"can_send_basic_messages"]
 				?: permissions[@"can_send_messages"];
 		if (send)
-			[lines addObject:[NSString stringWithFormat:@"Can send messages: %@",
-							  [send boolValue] ? @"yes" : @"no"]];
+			[lines addObject:[NSString stringWithFormat:@"%@: %@",
+							  TGLocalized(@"Send Messages"),
+							  [send boolValue] ? TGLocalized(@"Yes")
+											   : TGLocalized(@"No")]];
 
 		[TGAlertSheet showMessage:[lines componentsJoinedByString:@"\n"]
 							 title:sheetTitle inView:me.view];

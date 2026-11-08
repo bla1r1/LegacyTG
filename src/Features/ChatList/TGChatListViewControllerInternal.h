@@ -30,7 +30,7 @@
 // grabbed it, and the frame it lifted from.
 @property (nonatomic, assign) CGFloat folderDragOffset;
 @property (nonatomic, assign) CGRect folderDragFrame;
-@property (nonatomic, strong) TGImageLruCache *avatars;   // fileId -> UIImage (cap 50)
+@property (nonatomic, strong) TGImageLruCache *avatars;   // fileId -> UIImage (cap 120)
 @property (nonatomic, strong) NSMutableSet *avatarsRequested;
 @property (nonatomic, strong) UISearchBar *searchBar;
 /// The navigation bar's two lines: the list's name, and - only while TDLib is
@@ -38,7 +38,7 @@
 /// name, so a chosen folder was forgotten by the next reconnect.
 @property (nonatomic, strong) UIView *listTitleView;
 @property (nonatomic, strong) UILabel *listTitleLabel;
-@property (nonatomic, strong) UILabel *listChevron;
+@property (nonatomic, strong) UIButton *listLockButton;
 @property (nonatomic, strong) UIButton *listStoryAvatar;
 /// The story strip is a pull-down sheet: collapsed into the title avatar,
 /// expanded above the search field only while somebody else has a story.
@@ -48,6 +48,8 @@
 @property (nonatomic, copy) NSString *connectionLine;
 - (void)buildListTitleView;
 - (void)refreshListTitleView;
+/// The title-view padlock used when a passcode is set.
+UIImage *TGChatListLockIcon(CGFloat side, UIColor *colour);
 @property (nonatomic, strong) NSArray *searchResults;   // nil = not searching
 @property (nonatomic, strong) NSDictionary *actionChat; // long-pressed row
 /// On iOS below 8 the table cannot draw row actions, so this screen swipes
@@ -73,6 +75,9 @@
 /// The last list written to disk, drawn on the first frame before TDLib's
 /// loadChats has answered. Cleared as soon as the live list arrives.
 @property (nonatomic, strong) NSArray *cachedChats;
+/// YES once TDLib has answered with a list (even an empty one) or the
+/// connection reached ready; before that the empty state is a false claim.
+@property (nonatomic, assign) BOOL listAnswered;
 @property (nonatomic, assign) NSTimeInterval snapshotWrittenAt;
 /// The stories strip's rows, newest first. Loaded from -activeStoryRowsForList:
 /// and only re-read when the last read is a few seconds old, because the
@@ -104,7 +109,6 @@
 
 @interface TGChatListViewController (Actions)
 
-- (void)foldersTapped;
 - (void)runFolderChoice:(NSInteger)choice;
 - (NSString *)titleForCurrentList;
 - (void)rowHeld:(UILongPressGestureRecognizer *)hold;

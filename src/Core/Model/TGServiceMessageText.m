@@ -1,4 +1,5 @@
 #import "TGServiceMessageText.h"
+#import "TGLocalization.h"
 
 static NSString *TGServiceString(NSDictionary *dict, NSString *key) {
 	id value = dict[key];
@@ -12,8 +13,9 @@ static NSString *TGServiceFormattedText(NSDictionary *formatted) {
 }
 
 static NSString *TGServiceCount(int64_t count, NSString *singular, NSString *plural) {
-	return [NSString stringWithFormat:@"%lld %@", (long long)count,
-			count == 1 ? singular : plural];
+	NSString *value = [NSString stringWithFormat:@"%lld", (long long)count];
+	return TGLocalizedPluralValue([@"%@ " stringByAppendingString:singular],
+			[@"%@ " stringByAppendingString:plural], value, (NSInteger)count);
 }
 
 static NSString *TGServiceStars(int64_t stars) {
@@ -58,9 +60,9 @@ static NSString *TGServiceDuration(int64_t seconds) {
 
 static NSString *TGServicePremiumPeriod(int64_t months, int64_t days) {
 	if (months > 0 && days > 0)
-		return [NSString stringWithFormat:@"%@ and %@",
+		return TGLocalizedFormat(@"%@ and %@",
 				TGServiceCount(months, @"month", @"months"),
-				TGServiceCount(days, @"day", @"days")];
+				TGServiceCount(days, @"day", @"days"));
 	if (months > 0)
 		return TGServiceCount(months, @"month", @"months");
 	if (days > 0)
@@ -136,7 +138,7 @@ static NSString *TGServiceActor(NSDictionary *message,
 	if ([message[@"is_outgoing"] boolValue])
 		return @"You";
 	NSString *name = TGServiceSenderName(message[@"sender_id"], userName, chatTitle);
-	return name ?: @"Someone";
+	return name ?: TGLocalized(@"Someone");
 }
 
 static NSString *TGServicePossessive(NSString *actor) {
@@ -156,15 +158,15 @@ static NSString *TGServiceJoinUsers(NSArray *userIds, TGServiceUserName userName
 	for (id value in userIds) {
 		int64_t userId = [value longLongValue];
 		NSString *name = userName ? userName(userId) : nil;
-		[names addObject:name.length ? name : @"Someone"];
+		[names addObject:name.length ? name : TGLocalized(@"Someone")];
 	}
 	if (names.count == 1)
 		return names[0];
 	if (names.count == 2)
-		return [NSString stringWithFormat:@"%@ and %@", names[0], names[1]];
+		return TGLocalizedFormat(@"%@ and %@", names[0], names[1]);
 	NSArray *head = [names subarrayWithRange:NSMakeRange(0, names.count - 1)];
-	return [NSString stringWithFormat:@"%@ and %@",
-			[head componentsJoinedByString:@", "], names.lastObject];
+	return TGLocalizedFormat(@"%@ and %@",
+			[head componentsJoinedByString:@", "], names.lastObject);
 }
 
 static NSString *TGServiceGiftGiver(NSDictionary *content, NSString *actor,
@@ -173,7 +175,7 @@ static NSString *TGServiceGiftGiver(NSDictionary *content, NSString *actor,
 	if (userId == 0)
 		return actor;
 	NSString *name = userName ? userName(userId) : nil;
-	return name.length ? name : @"Someone";
+	return name.length ? name : TGLocalized(@"Someone");
 }
 
 static NSString *TGServiceGiftReceiver(NSDictionary *content, NSDictionary *message,
@@ -181,7 +183,7 @@ static NSString *TGServiceGiftReceiver(NSDictionary *content, NSDictionary *mess
 	int64_t userId = [content[@"receiver_user_id"] longLongValue];
 	if (userId != 0) {
 		NSString *name = userName ? userName(userId) : nil;
-		return name.length ? name : @"Someone";
+		return name.length ? name : TGLocalized(@"Someone");
 	}
 	return [message[@"is_outgoing"] boolValue] ? @"someone" : @"you";
 }
@@ -205,19 +207,31 @@ NSString *TGServiceMessageText(NSDictionary *message,
 
 	if ([type isEqualToString:@"messageBasicGroupChatCreate"] ||
 			[type isEqualToString:@"messageSupergroupChatCreate"]) {
+		if ([group isEqualToString:@"group"]) {
+			return title.length
+					? TGLocalizedFormat(@"%@ created the group \"%@\"", actor, title)
+					: TGLocalizedFormat(@"%@ created a group", actor);
+		}
 		return title.length
-				? [NSString stringWithFormat:@"%@ created the %@ \"%@\"",
-						actor, group, title]
-				: [NSString stringWithFormat:@"%@ created a %@", actor, group];
+				? [NSString stringWithFormat:@"%@ created the channel \"%@\"", actor, title]
+				: [NSString stringWithFormat:@"%@ created a channel", actor];
 	}
 	if ([type isEqualToString:@"messageChatChangeTitle"]) {
+		if ([group isEqualToString:@"group"]) {
+			return title.length
+					? TGLocalizedFormat(@"%@ changed the group name to \"%@\"", actor, title)
+					: [NSString stringWithFormat:@"%@ changed the %@ name", actor, group];
+		}
 		return title.length
 				? [NSString stringWithFormat:@"%@ changed the %@ name to \"%@\"",
 						actor, group, title]
 				: [NSString stringWithFormat:@"%@ changed the %@ name", actor, group];
 	}
-	if ([type isEqualToString:@"messageChatChangePhoto"])
-		return [NSString stringWithFormat:@"%@ changed the %@ photo", actor, group];
+	if ([type isEqualToString:@"messageChatChangePhoto"]) {
+		return [group isEqualToString:@"group"]
+				? TGLocalizedFormat(@"%@ changed the group photo", actor)
+				: [NSString stringWithFormat:@"%@ changed the %@ photo", actor, group];
+	}
 	if ([type isEqualToString:@"messageChatDeletePhoto"])
 		return [NSString stringWithFormat:@"%@ removed the %@ photo", actor, group];
 	if ([type isEqualToString:@"messageChatAddMembers"]) {
@@ -226,10 +240,16 @@ NSString *TGServiceMessageText(NSDictionary *message,
 				? [NSString stringWithFormat:@"%@ added %@", actor, names]
 				: [NSString stringWithFormat:@"%@ added members", actor];
 	}
-	if ([type isEqualToString:@"messageChatJoinByLink"])
-		return [NSString stringWithFormat:@"%@ joined the %@ via invite link", actor, group];
-	if ([type isEqualToString:@"messageChatJoinByRequest"])
-		return [NSString stringWithFormat:@"%@ was accepted to the %@", actor, group];
+	if ([type isEqualToString:@"messageChatJoinByLink"]) {
+		return [group isEqualToString:@"group"]
+				? TGLocalizedFormat(@"%@ joined the group via invite link", actor)
+				: [NSString stringWithFormat:@"%@ joined the %@ via invite link", actor, group];
+	}
+	if ([type isEqualToString:@"messageChatJoinByRequest"]) {
+		return [group isEqualToString:@"group"]
+				? TGLocalizedFormat(@"%@ was accepted to the group", actor)
+				: [NSString stringWithFormat:@"%@ was accepted to the %@", actor, group];
+	}
 	if ([type isEqualToString:@"messageChatJoinFromCommunity"])
 		return [NSString stringWithFormat:@"%@ joined the %@ from a community", actor, group];
 	if ([type isEqualToString:@"messageChatDeleteMember"]) {
@@ -241,23 +261,33 @@ NSString *TGServiceMessageText(NSDictionary *message,
 				[sender isKindOfClass:[NSDictionary class]] &&
 				[TGServiceString(sender, @"@type") isEqualToString:@"messageSenderUser"] &&
 				[sender[@"user_id"] longLongValue] == userId && userId != 0;
-		if (left)
-			return [NSString stringWithFormat:@"%@ left the %@", actor, group];
+		if (left) {
+			return [group isEqualToString:@"group"]
+					? TGLocalizedFormat(@"%@ left the group", actor)
+					: TGLocalizedFormat(@"%@ left the channel", actor);
+		}
 		NSString *who = userName ? userName(userId) : nil;
 		return who.length
-				? [NSString stringWithFormat:@"%@ removed %@", actor, who]
+				? TGLocalizedFormat(@"%@ removed %@", actor, who)
 				: [NSString stringWithFormat:@"%@ removed a member", actor];
 	}
 	if ([type isEqualToString:@"messageChatUpgradeTo"])
-		return [NSString stringWithFormat:@"%@ upgraded the %@ to a supergroup", actor, group];
+		return TGLocalized(@"This group was upgraded to a supergroup");
 	if ([type isEqualToString:@"messageChatUpgradeFrom"]) {
 		NSString *created = [message[@"is_channel_post"] boolValue] ? @"channel" : @"supergroup";
 		return title.length
 				? [NSString stringWithFormat:@"%@ created the %@ \"%@\"", actor, created, title]
 				: [NSString stringWithFormat:@"%@ created a %@", actor, created];
 	}
-	if ([type isEqualToString:@"messagePinMessage"])
-		return [NSString stringWithFormat:@"%@ pinned a message", actor];
+	if ([type isEqualToString:@"messagePinMessage"]) {
+		// The zero-width marker tells TGPinnedLine that this is a pinned line
+		// even when the sentence is translated and no longer ends in "a message".
+		NSString *english = @"%@ pinned a message";
+		NSString *line = TGLocalizedFormat(english, actor);
+		if ([TGLocalized(english) isEqualToString:english])
+			return line;
+		return [line stringByAppendingString:@"\u200B"];
+	}
 	if ([type isEqualToString:@"messageScreenshotTaken"])
 		return [NSString stringWithFormat:@"%@ took a screenshot", actor];
 	if ([type isEqualToString:@"messageChatSetBackground"])
@@ -273,8 +303,8 @@ NSString *TGServiceMessageText(NSDictionary *message,
 	if ([type isEqualToString:@"messageChatSetMessageAutoDeleteTime"]) {
 		int64_t seconds = [content[@"message_auto_delete_time"] longLongValue];
 		return seconds > 0
-				? [NSString stringWithFormat:@"%@ set messages to auto-delete after %@",
-						actor, TGServiceDuration(seconds)]
+				? TGLocalizedFormat(@"%1$@ set messages to auto-delete in %2$@",
+						actor, TGServiceDuration(seconds))
 				: [NSString stringWithFormat:@"%@ turned off auto-delete", actor];
 	}
 	if ([type isEqualToString:@"messageChatBoost"]) {
@@ -293,13 +323,13 @@ NSString *TGServiceMessageText(NSDictionary *message,
 		if (name.length)
 			return [NSString stringWithFormat:@"%@ renamed the topic to \"%@\"", actor, name];
 		if ([content[@"edit_icon_custom_emoji_id"] boolValue])
-			return [NSString stringWithFormat:@"%@ changed the topic icon", actor];
+			return TGLocalizedFormat(@"%1$@ changed the topic icon", actor);
 		return [NSString stringWithFormat:@"%@ edited the topic", actor];
 	}
 	if ([type isEqualToString:@"messageForumTopicIsClosedToggled"]) {
 		return [content[@"is_closed"] boolValue]
-				? [NSString stringWithFormat:@"%@ closed the topic", actor]
-				: [NSString stringWithFormat:@"%@ reopened the topic", actor];
+				? TGLocalizedFormat(@"%1$@ closed the topic", actor)
+				: TGLocalizedFormat(@"%1$@ reopened the topic", actor);
 	}
 	if ([type isEqualToString:@"messageForumTopicIsHiddenToggled"]) {
 		return [content[@"is_hidden"] boolValue]
@@ -380,7 +410,7 @@ NSString *TGServiceMessageText(NSDictionary *message,
 		return stars > 0
 				? [NSString stringWithFormat:@"%@ started a giveaway of %@",
 						actor, TGServiceStars(stars)]
-				: [NSString stringWithFormat:@"%@ started a giveaway", actor];
+				: TGLocalizedFormat(@"%@ started a giveaway", actor);
 	}
 	if ([type isEqualToString:@"messageGiveawayCompleted"]) {
 		int64_t winners = [content[@"winner_count"] longLongValue];
@@ -389,7 +419,7 @@ NSString *TGServiceMessageText(NSDictionary *message,
 				TGServiceCount(winners, @"winner", @"winners")];
 	}
 	if ([type isEqualToString:@"messageContactRegistered"])
-		return [NSString stringWithFormat:@"%@ joined Telegram", actor];
+		return TGLocalizedFormat(@"%@ joined Telegram", actor);
 	if ([type isEqualToString:@"messageBotWriteAccessAllowed"]) {
 		NSDictionary *reason = content[@"reason"];
 		NSString *reasonType = [reason isKindOfClass:[NSDictionary class]]
@@ -397,11 +427,12 @@ NSString *TGServiceMessageText(NSDictionary *message,
 		if ([reasonType isEqualToString:@"botWriteAccessAllowReasonConnectedWebsite"]) {
 			NSString *domain = TGServiceString(reason, @"domain_name");
 			if (domain.length)
-				return [NSString stringWithFormat:
-						@"%@ allowed the bot to send messages on %@", actor, domain];
+				return TGLocalizedFormat(
+						@"You allowed this bot to message you when you logged in on %@.",
+						domain);
 		}
 		if ([reasonType isEqualToString:@"botWriteAccessAllowReasonAddedToAttachmentMenu"])
-			return [NSString stringWithFormat:@"%@ added the bot to the attachment menu", actor];
+			return TGLocalized(@"You allowed this bot to message you when you added it to your attachment menu.");
 		return [NSString stringWithFormat:@"%@ allowed the bot to send messages", actor];
 	}
 	if ([type isEqualToString:@"messageWebAppDataSent"])
@@ -414,9 +445,9 @@ NSString *TGServiceMessageText(NSDictionary *message,
 		return [NSString stringWithFormat:@"%@ received passport data", actor];
 	if ([type isEqualToString:@"messageProximityAlertTriggered"]) {
 		NSString *traveler = TGServiceSenderName(content[@"traveler_id"],
-				userName, chatTitle) ?: @"Someone";
+				userName, chatTitle) ?: TGLocalized(@"Someone");
 		NSString *watcher = TGServiceSenderName(content[@"watcher_id"],
-				userName, chatTitle) ?: @"Someone";
+				userName, chatTitle) ?: TGLocalized(@"Someone");
 		int64_t distance = [content[@"distance"] longLongValue];
 		return [NSString stringWithFormat:@"%@ is within %lld m of %@",
 				traveler, (long long)distance, watcher];
@@ -427,8 +458,8 @@ NSString *TGServiceMessageText(NSDictionary *message,
 		return [NSString stringWithFormat:@"%@ started a video chat", actor];
 	if ([type isEqualToString:@"messageVideoChatEnded"]) {
 		int64_t duration = [content[@"duration"] longLongValue];
-		return [NSString stringWithFormat:@"Video chat ended (%@)",
-				TGServiceDuration(duration)];
+		return TGLocalizedFormat(@"Video chat ended (%@)",
+				TGServiceDuration(duration));
 	}
 	if ([type isEqualToString:@"messageInviteVideoChatParticipants"]) {
 		NSString *names = TGServiceJoinUsers(content[@"user_ids"], userName);
@@ -442,9 +473,9 @@ NSString *TGServiceMessageText(NSDictionary *message,
 	if ([type isEqualToString:@"messageExpiredVideo"])
 		return @"Video has expired";
 	if ([type isEqualToString:@"messageExpiredVideoNote"])
-		return @"Video message has expired";
+		return @"Expired video message";
 	if ([type isEqualToString:@"messageExpiredVoiceNote"])
-		return @"Voice message has expired";
+		return @"Expired voice message";
 	if ([type isEqualToString:@"messageChatOwnerChanged"]) {
 		int64_t userId = [content[@"new_owner_user_id"] longLongValue];
 		NSString *owner = userName ? userName(userId) : nil;
@@ -494,9 +525,9 @@ NSString *TGServiceMessageText(NSDictionary *message,
 	if ([type isEqualToString:@"messagePaidMessagePriceChanged"]) {
 		int64_t stars = [content[@"paid_message_star_count"] longLongValue];
 		return stars > 0
-				? [NSString stringWithFormat:
-						@"%@ set the price for paid messages to %@",
-						actor, TGServiceStars(stars)]
+				? TGLocalizedFormat(
+						@"%1$@ changed price to %2$@ per message",
+						actor, TGServiceStars(stars))
 				: [NSString stringWithFormat:@"%@ made messages free", actor];
 	}
 	if ([type isEqualToString:@"messagePaidMessagesRefunded"]) {
@@ -603,7 +634,7 @@ NSString *TGServiceMessageText(NSDictionary *message,
 						TGServicePossessive(actor)];
 	}
 	if ([type isEqualToString:@"messageUnsupported"])
-		return @"This message is not supported by your version of Telegram";
+		return @"This message is not supported by your version of Telegram. Please update to the latest version.";
 
 	return nil;
 }

@@ -1,8 +1,61 @@
 #import "TGTextDraw.h"
+#import "TGLocalization.h"
 #import "TGLoginViewControllerInternal.h"
 #import "TGClient.h"
 #import "TGStyle.h"
 #import "TGUIFormat.h"
+#import "TGIcons.h"
+#import "TGPhoneNumberRules.h"
+#import "TGQRCode.h"
+
+/// The code step is a row of digit boxes, as official draws it. The real text
+/// field stays behind them so the number pad and the paste menu keep working;
+/// the boxes only paint what it holds.
+@interface TGCodeBoxesView : UIView
+@property (nonatomic, copy) NSString *code;
+@property (nonatomic, assign) NSInteger boxCount;
+@property (nonatomic, assign) BOOL errorState;
+@property (nonatomic, strong) UIColor *boxBorderColour;
+@property (nonatomic, strong) UIColor *boxTextColour;
+@end
+
+@implementation TGCodeBoxesView
+
+- (void)drawRect:(CGRect)rect {
+    NSInteger count = MAX(self.boxCount, 1);
+    CGFloat gap = TGMetricPadSmall;
+    CGFloat boxWidth = (CGRectGetWidth(self.bounds) - gap * (count - 1)) / count;
+    boxWidth = MIN(boxWidth, TGMetricRow);
+    CGFloat total = boxWidth * count + gap * (count - 1);
+    CGFloat x = TGHalf(CGRectGetWidth(self.bounds) - total);
+    UIFont *font = TGFontHeader();
+    NSDictionary *attributes = @{
+        NSFontAttributeName : font,
+        NSForegroundColorAttributeName : self.boxTextColour
+                ?: [[TGTheme shared] primaryTextColour]
+    };
+    for (NSInteger i = 0; i < count; i++) {
+        CGRect box = CGRectMake(x, 0, boxWidth, TGMetricRow);
+        UIBezierPath *path = [UIBezierPath bezierPathWithRoundedRect:box
+                cornerRadius:TGMetricCornerControl];
+        UIColor *border = self.errorState
+                ? [[TGTheme shared] destructiveColour]
+                : (self.boxBorderColour ?: [[TGTheme shared] separatorColour]);
+        [border setStroke];
+        path.lineWidth = self.errorState ? TGMetricBorderThick : TGMetricHairline;
+        [path stroke];
+        if ((NSUInteger)i < self.code.length) {
+            NSString *digit = [self.code substringWithRange:NSMakeRange((NSUInteger)i, 1)];
+            CGSize size = [digit sizeWithAttributes:attributes];
+            [digit drawAtPoint:CGPointMake(CGRectGetMidX(box) - TGHalf(size.width),
+                                           CGRectGetMidY(box) - TGHalf(size.height))
+                    withAttributes:attributes];
+        }
+        x += boxWidth + gap;
+    }
+}
+
+@end
 
 /// Every step is the same vertical stack: instructions, a field, a button,
 /// and maybe a link or two. Each one used to carry its own column of
@@ -59,9 +112,13 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
     // email steps are about the one thing they ask for and start at the top.
     BOOL showsBrand = (self.currentStep == TGLoginStepPhone) &&
             (!self.qrImageView || self.qrImageView.hidden);
-    self.brandLogoView.hidden = !showsBrand;
-    self.brandLabel.hidden = !showsBrand;
-    if (!showsBrand || !self.countryLabel.text.length)
+    // Each step names its own heading in the content; only the phone step is
+    // the app's front door.
+    self.headingLabel.hidden = (self.headingLabel.text.length == 0);
+    self.brandLogoView.hidden = YES;
+    self.brandLabel.hidden = YES;
+    self.countryButton.hidden = !showsBrand;
+    if (!showsBrand)
         self.countryLabel.hidden = YES;
 
     if (self.qrImageView && !self.qrImageView.hidden) {
@@ -87,28 +144,20 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
 
 - (void)layoutPhoneStepInWidth:(CGFloat)width {
     CGFloat y = TGMetricStackTop;
-    if (!self.brandLogoView.hidden) {
-        self.brandLogoView.frame = CGRectMake(
-                TGCenteredOrigin(width, TGMetricLoginBrandLogo), y,
-                TGMetricLoginBrandLogo, TGMetricLoginBrandLogo);
-        y += TGMetricLoginBrandLogo + TGMetricPad;
-        self.brandLabel.frame = CGRectMake(TGMetricPadWide, y,
-                width - TGDoubled(TGMetricPadWide), TGMetricLoginBrandLabel);
-        y += TGMetricLoginBrandLabel + TGMetricStackGroup;
-    }
+    CGFloat inner = width - TGDoubled(TGMetricGutter);
+
+    self.headingLabel.frame = CGRectMake(TGMetricGutter, y, inner,
+            TGMetricLoginBrandLabel);
+    y += TGMetricLoginBrandLabel + TGMetricPadMedium;
     y = [self placeSubtitleAtY:y] + TGMetricStackGroup;
 
-    if (!self.countryLabel.hidden) {
-        self.countryLabel.frame = CGRectMake(TGMetricPadWide, y,
-                width - TGDoubled(TGMetricPadWide), TGMetricLoginCountryLine);
-        y += TGMetricLoginCountryLine + TGMetricStackStep;
-    }
+    self.countryButton.frame = CGRectMake(TGMetricGutter, y, inner,
+            TGMetricLoginLinkHeight);
+    y += TGMetricLoginLinkHeight + TGMetricStackStep;
 
     y = TGStackPlace(self.inputContainer, y, TGMetricRow, width, TGMetricGutter);
     y = [self placeErrorAtY:y width:width];
     y = TGStackPlace(self.actionButton, y, TGMetricRow, width, TGMetricGutter);
-    y = TGStackPlace(self.qrCodeButton, y, TGMetricLoginLinkHeight,
-                     width, TGMetricGutter);
 
     CGFloat fieldX = TGMetricPadMedium + TGMetricLoginPrefixWidth + TGMetricPadMedium;
     self.inputField.frame = CGRectMake(fieldX, 0,
@@ -116,6 +165,7 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
             TGMetricRow);
 
     y = [self placeStepLinksFromY:y width:width];
+    [self updatePrimaryActionForWidth:width];
 
     y += TGMetricStackGroup;
     self.scrollView.contentSize = CGSizeMake(width,
@@ -125,38 +175,123 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
 - (void)layoutCodeStepInWidth:(CGFloat)width {
     CGFloat y = [self placeSubtitle] + TGMetricStackGroup;
     y = TGStackPlace(self.inputContainer, y, TGMetricRow, width, TGMetricGutter);
+    if (self.codeBoxesView) {
+        self.codeBoxesView.frame = self.inputContainer.frame;
+    }
     y = [self placeErrorAtY:y width:width];
-    self.inputField.frame = CGRectMake(TGMetricPadMedium, 0,
-            width - TGDoubled(TGMetricGutter) - TGDoubled(TGMetricPadMedium),
-            TGMetricRow);
-    y = TGStackPlace(self.actionButton, y, TGMetricRow, width, TGMetricGutter);
+    // No Submit: the field sends itself at the server's code length, and the
+    // only other control is the one next-option link under the boxes.
+    self.actionButton.hidden = YES;
+    self.inputField.frame = CGRectMake(0, 0,
+            width - TGDoubled(TGMetricGutter), TGMetricRow);
+    // The code has no bottom button, but official still shows a nav Next on
+    // widths under 360, where the boxes are the only control on screen.
+    [self updatePrimaryActionForWidth:width];
 
     y = [self placeGhostRow:self.resendButton atY:y width:width];
-    y = [self placeGhostRow:self.codeStepQrButton atY:y width:width];
     y = [self placeStepLinksFromY:y width:width];
+    [self updateCodeBoxes];
 
     y += TGMetricStackGroup;
     self.scrollView.contentSize = CGSizeMake(width,
             y - TGMetricStackStep + TGMetricPadLarge);
 }
 
+/// One primary action per screen: the bottom Continue on a wide layout, the
+/// navigation-bar Next below 360 pt, where the keyboard leaves no room for a
+/// pinned button.
+- (void)updatePrimaryActionForWidth:(CGFloat)width {
+    BOOL narrow = width < 360.0f;
+    BOOL codeStep = (self.currentStep == TGLoginStepCode);
+    BOOL fieldStep = (self.currentStep == TGLoginStepPhone ||
+                      self.currentStep == TGLoginStepPassword ||
+                      self.currentStep == TGLoginStepRegister ||
+                      self.currentStep == TGLoginStepEmail ||
+                      self.currentStep == TGLoginStepEmailCode ||
+                      self.currentStep == TGLoginStepRecoveryCode);
+    self.actionButton.hidden = narrow || !fieldStep || codeStep;
+    self.navigationItem.rightBarButtonItem = narrow ? self.nextItem : nil;
+}
+
+- (void)updateCodeBoxes {
+    if (![self.codeBoxesView isKindOfClass:[TGCodeBoxesView class]])
+        return;
+    TGCodeBoxesView *boxes = (TGCodeBoxesView *)self.codeBoxesView;
+    NSInteger count = self.expectedCodeLength > 0 ? self.expectedCodeLength : 5;
+    boxes.boxCount = count;
+    boxes.errorState = self.codeErrorShown;
+    boxes.code = self.inputField.text ?: @"";
+    boxes.boxBorderColour = [[TGTheme shared] separatorColour];
+    boxes.boxTextColour = [[TGTheme shared] primaryTextColour];
+    [boxes setNeedsDisplay];
+}
+
+/// A rejected code: the boxes go red, the digits are dropped and the reason
+/// sits under them, as the official node does. Called when the client reports
+/// the failed check (the auth state stays on the code step, so there is no
+/// step change to tell us).
+- (void)showCodeError {
+    if (self.currentStep != TGLoginStepCode)
+        return;
+    self.codeErrorShown = YES;
+    self.codeSubmitPending = NO;
+    self.inputField.text = @"";
+    self.errorLabel.text = TGLocalized(@"Invalid code, please try again.");
+    self.errorLabel.hidden = NO;
+    [self layoutActiveStep];
+    [self updateCodeBoxes];
+    [self.inputField becomeFirstResponder];
+}
+
 /// The password, email, register and recovery steps are one field, one
 /// button, and whatever links the caller asked for under that button.
 - (void)layoutFieldStepInWidth:(CGFloat)width {
-    CGFloat y = [self placeSubtitle] + TGMetricStackGroup;
+    CGFloat y = TGMetricStackTop;
+    // The sign-up avatar is the first control on the official form, above the
+    // heading and the name fields, not a picture wedged under the first field.
+    if (self.currentStep == TGLoginStepRegister && !self.avatarButton.hidden) {
+        CGFloat side = TGMetricProfilePhotoSide;
+        self.avatarButton.frame = CGRectMake(TGCenteredOrigin(width, side), y,
+                side, side);
+        self.avatarImageView.frame = self.avatarButton.bounds;
+        y += side + TGMetricPadMedium;
+    }
+    if (!self.headingLabel.hidden) {
+        self.headingLabel.frame = CGRectMake(TGMetricGutter, y,
+                width - TGDoubled(TGMetricGutter), TGMetricLoginBrandLabel);
+        y += TGMetricLoginBrandLabel + TGMetricPadMedium;
+    }
+    y = [self placeSubtitleAtY:y] + TGMetricStackGroup;
     y = TGStackPlace(self.inputContainer, y, TGMetricRow, width, TGMetricGutter);
-    y = [self placeErrorAtY:y width:width];
     self.inputField.frame = CGRectMake(TGMetricPadMedium, 0,
             width - TGDoubled(TGMetricGutter) - TGDoubled(TGMetricPadMedium),
             TGMetricRow);
+    if (self.currentStep == TGLoginStepRegister) {
+        y = TGStackPlace(self.lastNameContainer, y, TGMetricRow, width,
+                         TGMetricGutter);
+        self.lastNameField.frame = CGRectMake(TGMetricPadMedium, 0,
+                width - TGDoubled(TGMetricGutter) - TGDoubled(TGMetricPadMedium),
+                TGMetricRow);
+    }
+    y = [self placeErrorAtY:y width:width];
 
-    CGFloat buttonMaxY = y;
+    // The consent label sits above the bottom Continue, as the official node
+    // stacks it: form, terms, button.
+    if (self.currentStep == TGLoginStepRegister && !self.termsButton.hidden) {
+        CGFloat termsHeight = TGDoubled(TGMetricLineCaption) + TGMetricPadSmall;
+        self.termsButton.frame = CGRectMake(TGMetricGutter, y,
+                width - TGDoubled(TGMetricGutter), termsHeight);
+        y += termsHeight + TGMetricPadSmall;
+    }
+
     y = TGStackPlace(self.actionButton, y, TGMetricRow, width, TGMetricGutter);
-    CGFloat bottom = MAX(
-            y - TGMetricStackStep + TGMetricPadLarge,
-            [self placeStepLinksFromY:buttonMaxY + TGMetricPadSmall width:width]
-                    + TGMetricPadLarge);
-    self.scrollView.contentSize = CGSizeMake(width, bottom);
+
+    y = [self placeStepLinksFromY:y width:width];
+    [self updatePrimaryActionForWidth:width];
+
+    y += TGMetricStackGroup;
+    self.scrollView.contentSize = CGSizeMake(width,
+            y - TGMetricStackStep + TGMetricPadLarge);
 }
 
 - (void)layoutQRStepInWidth:(CGFloat)width {
@@ -200,29 +335,35 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
     self.errorLabel.text = nil;
     self.errorLabel.hidden = YES;
     self.currentStep = TGLoginStepPhone;
-    self.title = @"Your Phone";
+    self.title = nil;
+    self.headingLabel.text = @"Your Phone";
     self.subtitleLabel.text = @"Please confirm your country code\nand enter your phone number.";
 
-    if (self.onResetSession) {
-        self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc]
-            initWithTitle:@"Reset"
-            style:UIBarButtonItemStylePlain
-            target:self
-            action:@selector(resetSessionTapped)];
-    } else {
-        self.navigationItem.leftBarButtonItem = nil;
-    }
+    // Official has no Reset: a screen button must never destroy the TDLib
+    // session. The root phone screen has no left item; Close belongs to the
+    // add-another-account flow, which is not wired here.
+    self.navigationItem.leftBarButtonItem = nil;
 
     self.inputContainer.hidden = NO;
+    self.inputContainer.backgroundColor = [[TGTheme shared] cardBackgroundColour];
+    self.inputContainer.layer.borderWidth = TGMetricHairline;
+    self.inputContainer.layer.borderColor = [[TGTheme shared] separatorColour].CGColor;
     self.actionButton.hidden = NO;
     self.inputField.hidden = NO;
-    self.qrCodeButton.hidden = NO;
+    self.headingLabel.hidden = NO;
+    self.countryButton.hidden = NO;
     if (self.qrImageView) {
         self.qrImageView.hidden = YES;
     }
-    // A field that is already first responder ignores a new secure flag and
-    // keyboard type; the password screen's Cancel used to return to a phone
-    // field still wearing its dots.
+    if (self.codeBoxesView) {
+        self.codeBoxesView.hidden = YES;
+    }
+    if (self.lastNameContainer)
+        self.lastNameContainer.hidden = YES;
+    if (self.termsButton)
+        self.termsButton.hidden = YES;
+    if (self.avatarButton)
+        self.avatarButton.hidden = YES;
     [self.inputField resignFirstResponder];
     self.phonePrefixField.hidden = NO;
     self.prefixSeparator.hidden = NO;
@@ -234,11 +375,14 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
     self.inputField.placeholder = @"Phone number";
     self.inputField.text = self.savedNationalNumber ?: @"";
     self.inputField.secureTextEntry = NO;
+    self.inputField.textColor = [[TGTheme shared] primaryTextColour];
     self.inputField.keyboardType = UIKeyboardTypePhonePad;
     self.inputField.returnKeyType = UIReturnKeyGo;
-    [self.actionButton setTitle:@"Next" forState:UIControlStateNormal];
+    [self.actionButton setTitle:@"Continue" forState:UIControlStateNormal];
     self.nextItem.title = @"Next";
-    self.navigationItem.rightBarButtonItem = self.nextItem;
+    self.countryButton.userInteractionEnabled = YES;
+    [self.countryButton setTitle:self.savedCountryName.length
+            ? self.savedCountryName : @"Country" forState:UIControlStateNormal];
 
     if (self.resendButton) {
         [self.resendButton removeFromSuperview];
@@ -249,24 +393,14 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
         self.codeStepQrButton = nil;
     }
 
-    // A pasted number answers its own prefix; a typed one needs the country
-    // this phone is in, which Telegram guesses from the network. The picker
-    // is there for when the guess is wrong or the number is not local.
+    // Start from the device's own country, then let Telegram's network guess
+    // replace it. The old hardcoded +380 was wrong for everyone outside
+    // Ukraine until the answer arrived.
+    self.countryGuessGeneration++;
+    self.countryGuessResolvedByNetwork = NO;
     if (!self.prefixEdited) {
-        __weak typeof(self) weakSelf = self;
-        [[TGClient shared] countryCodeWithCompletion:^(NSString *code){
-            TGLoginViewController *me = weakSelf;
-            if (!me || me.currentStep != TGLoginStepPhone || !code.length)
-                return;
-            if (me.prefixEdited)
-                return;
-            me.phonePrefixField.text = [@"+" stringByAppendingString:code];
-        }];
+        [self selectDeviceCountryPrefix];
     }
-    [self addStepLink:@"Choose a Country" action:@selector(countryPickerTapped) atY:0];
-    // A web login hands over a token instead of a code; the phone step is
-    // where the official client offers that choice too.
-    [self addStepLink:@"Web Login Token" action:@selector(webTokenTapped) atY:0];
 
     [self layoutActiveStep];
     [self applyTheme];
@@ -274,19 +408,79 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
     [self.inputField becomeFirstResponder];
 }
 
+/// The calling code of the device's region, before any network answer. The
+/// network guess in selectNetworkCountryPrefix then wins if it differs.
+- (void)selectDeviceCountryPrefix {
+    NSString *iso = [[NSLocale currentLocale] objectForKey:NSLocaleCountryCode];
+    if (!iso.length)
+        return;
+    NSInteger generation = self.countryGuessGeneration;
+    __weak typeof(self) weakSelf = self;
+    [[TGClient shared] countryInfoForCode:iso completion:^(NSDictionary *country){
+        TGLoginViewController *me = weakSelf;
+        if (!me || me.currentStep != TGLoginStepPhone ||
+            !TGCountryGuessCanApply(generation, me.countryGuessGeneration,
+                    me.prefixEdited, me.countryGuessResolvedByNetwork, NO))
+            return;
+        NSString *prefix = [country[@"callingCodes"] firstObject];
+        if (![prefix isKindOfClass:[NSString class]] || !prefix.length)
+            return;
+        me.phonePrefixField.text = [@"+" stringByAppendingString:prefix];
+        me.savedCountryName = country[@"name"];
+        [me.countryButton setTitle:me.savedCountryName
+                          forState:UIControlStateNormal];
+        [me refreshPhoneNumberInfo];
+    }];
+    [[TGClient shared] countryCodeWithCompletion:^(NSString *code){
+        TGLoginViewController *me = weakSelf;
+        if (!me || me.currentStep != TGLoginStepPhone ||
+            !code.length ||
+            !TGCountryGuessCanApply(generation, me.countryGuessGeneration,
+                    me.prefixEdited, me.countryGuessResolvedByNetwork, YES))
+            return;
+        [[TGClient shared] countryInfoForCode:code completion:^(NSDictionary *country){
+            if (!me || me.currentStep != TGLoginStepPhone ||
+                !TGCountryGuessCanApply(generation, me.countryGuessGeneration,
+                        me.prefixEdited, me.countryGuessResolvedByNetwork, YES))
+                return;
+            NSString *prefix = [country[@"callingCodes"] firstObject];
+            if (![prefix isKindOfClass:[NSString class]] || !prefix.length)
+                return;
+            me.countryGuessResolvedByNetwork = YES;
+            me.phonePrefixField.text = [@"+" stringByAppendingString:prefix];
+            me.savedCountryName = country[@"name"];
+            [me.countryButton setTitle:me.savedCountryName
+                              forState:UIControlStateNormal];
+            [me refreshPhoneNumberInfo];
+        }];
+    }];
+}
+
 - (void)useSingleFieldLayout {
     self.inputContainer.hidden = NO;
+    self.inputContainer.backgroundColor = [[TGTheme shared] cardBackgroundColour];
+    self.inputContainer.layer.borderWidth = TGMetricHairline;
+    self.inputContainer.layer.borderColor = [[TGTheme shared] separatorColour].CGColor;
     self.actionButton.hidden = NO;
     self.inputField.hidden = NO;
+    self.inputField.textColor = [[TGTheme shared] primaryTextColour];
     self.phonePrefixField.hidden = YES;
     self.prefixSeparator.hidden = YES;
-    self.qrCodeButton.hidden = YES;
     if (self.qrImageView) {
         self.qrImageView.hidden = YES;
     }
+    if (self.codeBoxesView) {
+        self.codeBoxesView.hidden = YES;
+    }
+    if (self.lastNameContainer)
+        self.lastNameContainer.hidden = YES;
+    if (self.termsButton)
+        self.termsButton.hidden = YES;
+    if (self.avatarButton)
+        self.avatarButton.hidden = YES;
+    self.countryButton.hidden = YES;
+    self.countryLabel.hidden = YES;
     self.inputField.textAlignment = NSTextAlignmentCenter;
-    // The phone field's size. 22 pt bold was larger than the bar's own title
-    // and filled the row from edge to edge.
     self.inputField.font = TGFontInput();
     self.inputField.text = @"";
     self.inputField.returnKeyType = UIReturnKeyGo;
@@ -306,7 +500,7 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
     self.errorLabel.text = nil;
     self.errorLabel.hidden = YES;
     self.title = @"Scan QR Code";
-    self.subtitleLabel.text = @"Open Telegram on another device:\nSettings > Devices > Link Desktop Device";
+    self.subtitleLabel.text = @"Scan the QR code to connect your account";
 
     self.inputContainer.hidden = YES;
     self.actionButton.hidden = YES;
@@ -365,50 +559,14 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
     // The other direction: the other device shows the code and this one
     // confirms the link, which is what their "scan a QR" does with a camera
     // this OS may not have.
-    [self addStepLink:@"Enter a QR Link" action:@selector(qrLinkTapped) atY:0];
+    [self addStepLink:@"QR Code" action:@selector(qrLinkTapped) atY:0];
 
     [self layoutActiveStep];
     [self applyTheme];
 }
 
 - (UIImage *)generateQRCodeForString:(NSString *)string size:(CGFloat)size {
-    if (!string.length) return nil;
-    NSData *stringData = [string dataUsingEncoding:NSUTF8StringEncoding];
-    CIFilter *qrFilter = [CIFilter filterWithName:@"CIQRCodeGenerator"];
-    // iOS 6 ships this filter unannounced and without a correction-level
-    // input: setting the key raised NSUnknownKeyException and the QR login
-    // took the app down. Only keys the filter lists are set.
-    NSArray *keys = qrFilter.inputKeys;
-    if (![keys containsObject:@"inputMessage"])
-        return nil;
-    [qrFilter setValue:stringData forKey:@"inputMessage"];
-    if ([keys containsObject:@"inputCorrectionLevel"])
-        [qrFilter setValue:@"M" forKey:@"inputCorrectionLevel"];
-
-    CIImage *ciImage = qrFilter.outputImage;
-    if (!ciImage) return nil;
-
-    CGRect extent = CGRectIntegral(ciImage.extent);
-    CGFloat scale = MIN(size / CGRectGetWidth(extent), size / CGRectGetHeight(extent));
-    size_t width = (size_t)(CGRectGetWidth(extent) * scale);
-    size_t height = (size_t)(CGRectGetHeight(extent) * scale);
-    CGColorSpaceRef cs = CGColorSpaceCreateDeviceGray();
-    CGContextRef bitmapRef = CGBitmapContextCreate(nil, width, height, 8, 0, cs, (CGBitmapInfo)kCGImageAlphaNone);
-    // The software renderer: a GPU-backed CIContext is what faulted in the hold
-    // blur on the A4, and a QR code is a few hundred black squares.
-    CIContext *context = [CIContext contextWithOptions:
-            @{kCIContextUseSoftwareRenderer : @YES}];
-    CGImageRef bitmapImage = [context createCGImage:ciImage fromRect:extent];
-    CGContextSetInterpolationQuality(bitmapRef, kCGInterpolationNone);
-    CGContextScaleCTM(bitmapRef, scale, scale);
-    CGContextDrawImage(bitmapRef, extent, bitmapImage);
-    CGImageRef scaledImage = CGBitmapContextCreateImage(bitmapRef);
-    CGContextRelease(bitmapRef);
-    CGImageRelease(bitmapImage);
-    CGColorSpaceRelease(cs);
-    UIImage *img = [UIImage imageWithCGImage:scaledImage];
-    CGImageRelease(scaledImage);
-    return img;
+    return TGQRCodeImage(string, size);
 }
 
 - (void)showCodeStepWithPhoneNumber:(NSString *)phoneNumber {
@@ -418,7 +576,11 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
     self.errorLabel.text = nil;
     self.errorLabel.hidden = YES;
     self.currentStep = TGLoginStepCode;
-    self.title = @"Enter Code";
+    self.codeSubmitPending = NO;
+    self.codeErrorShown = NO;
+    self.title = nil;
+    self.headingLabel.text = nil;
+    self.headingLabel.hidden = YES;
     if (phoneNumber.length > 0) {
         self.savedPhoneNumber = phoneNumber;
     }
@@ -426,50 +588,63 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
 
     NSDictionary *info = [TGClient shared].codeInfo;
     NSString *codeType = info[@"type"][@"@type"];
-    if ([codeType isEqualToString:@"authenticationCodeTypeTelegramMessage"]) {
-        self.subtitleLabel.text = [NSString stringWithFormat:@"We've sent the code to your Telegram app\non another device for\n%@", displayNumber];
-    } else if ([codeType isEqualToString:@"authenticationCodeTypeSms"]) {
-        self.subtitleLabel.text = [NSString stringWithFormat:@"We've sent an SMS with the code to\n%@", displayNumber];
+    NSString *sentence = nil;
+    if ([codeType isEqualToString:@"authenticationCodeTypeSms"]) {
+        sentence = TGLocalizedFormat(
+                @"We've sent an SMS with an activation code to your phone **%@**.",
+                displayNumber);
     } else if ([codeType isEqualToString:@"authenticationCodeTypeCall"]) {
-        self.subtitleLabel.text = [NSString stringWithFormat:@"Telegram is calling %@\nwith the code.", displayNumber];
+        sentence = TGLocalized(@"Calling your phone to dictate the code.");
     } else {
-        self.subtitleLabel.text = [NSString stringWithFormat:@"We've sent a code to your other Telegram device or by SMS to\n%@", displayNumber];
+        sentence = TGLocalizedFormat(
+                @"We've sent the code to the **Telegram app** for %@ on your other device.",
+                displayNumber);
     }
+    // The pack keys carry markdown bold markers; a UILabel does not parse
+    // them, so the sentence keeps the official words without the asterisks.
+    self.subtitleLabel.text = [sentence stringByReplacingOccurrencesOfString:@"**"
+                                                                 withString:@""];
 
     self.countryLabel.hidden = YES;
     self.expectedCodeLength = [info[@"length"] integerValue];
     [self useSingleFieldLayout];
     [self.inputField resignFirstResponder];   // or the number pad never shows
-    self.inputField.placeholder = @"Code";
+    // The boxes paint the code; the field behind them stays the responder.
+    self.inputField.placeholder = nil;
+    self.inputField.textColor = [UIColor clearColor];
     self.inputField.keyboardType = UIKeyboardTypeNumberPad;
-    [self.actionButton setTitle:@"Submit Code" forState:UIControlStateNormal];
-    self.nextItem.title = @"Done";
-    self.navigationItem.rightBarButtonItem = self.nextItem;
+    self.inputField.returnKeyType = UIReturnKeyDone;
+    self.inputContainer.backgroundColor = [UIColor clearColor];
+    self.inputContainer.layer.borderWidth = 0.0f;
+    self.actionButton.hidden = YES;
+    self.navigationItem.rightBarButtonItem = nil;
 
-    self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc]
-        initWithTitle:@"Edit"
-        style:UIBarButtonItemStylePlain
-        target:self
-        action:@selector(showPhoneStep)];
+    if (!self.codeBoxesView) {
+        self.codeBoxesView = [[TGCodeBoxesView alloc] initWithFrame:CGRectZero];
+        self.codeBoxesView.backgroundColor = [UIColor clearColor];
+        self.codeBoxesView.userInteractionEnabled = NO;
+        [self.scrollView addSubview:self.codeBoxesView];
+    }
+    self.codeBoxesView.hidden = NO;
 
-    // The frames land in layoutActiveStep: resend under the button, the QR
-    // link under it, this link under both.
+    // Back chevron, with the official stop-verification question.
+    self.navigationItem.leftBarButtonItem = [self backItemWithAction:
+            @selector(confirmStopVerification)];
+
+    // One dynamic next-option line: a countdown while the server waits, then
+    // the action that asks for the code by the other channel.
     if (!self.resendButton) {
-        self.resendButton = [TGButton buttonWithTitle:@"Send code via SMS / Resend" variant:TGButtonVariantGhost size:TGButtonSizeSmall];
-        [self.resendButton addTarget:self action:@selector(resendButtonTapped) forControlEvents:UIControlEventTouchUpInside];
+        self.resendButton = [TGButton buttonWithTitle:@"Resend Code"
+                                             variant:TGButtonVariantGhost
+                                                size:TGButtonSizeSmall];
+        [self.resendButton addTarget:self action:@selector(resendButtonTapped)
+                    forControlEvents:UIControlEventTouchUpInside];
         [self.scrollView addSubview:self.resendButton];
     }
-    if (!self.codeStepQrButton) {
-        self.codeStepQrButton = [TGButton buttonWithTitle:@"Log in with QR Code instead" variant:TGButtonVariantGhost size:TGButtonSizeSmall];
-        [self.codeStepQrButton addTarget:self action:@selector(qrCodeButtonTapped) forControlEvents:UIControlEventTouchUpInside];
-        [self.scrollView addSubview:self.codeStepQrButton];
+    if (self.codeStepQrButton) {
+        [self.codeStepQrButton removeFromSuperview];
+        self.codeStepQrButton = nil;
     }
-    [self addStepLink:@"Didn't get the code?" action:@selector(codeMissingTapped) atY:0];
-    // The Firebase code is not an SMS: it is a secret handed to the app by a
-    // push, and the server only accepts it through its own request. Offered
-    // only when Telegram actually sent that kind of code.
-    if ([codeType hasPrefix:@"authenticationCodeTypeFirebase"])
-        [self addStepLink:@"Code Came By Push?" action:@selector(firebaseCodeTapped) atY:0];
 
     [self layoutActiveStep];
 
@@ -484,7 +659,8 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
         self.resendTimer = [NSTimer scheduledTimerWithTimeInterval:1.0 target:self selector:@selector(resendTick:) userInfo:nil repeats:YES];
     } else {
         self.resendCountdown = 0;
-        [self.resendButton setTitle:@"Resend code" forState:UIControlStateNormal];
+        [self.resendButton setTitle:TGLocalized(@"Send the code as an SMS")
+                          forState:UIControlStateNormal];
     }
 
     [self applyTheme];
@@ -492,9 +668,38 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
     [self.inputField becomeFirstResponder];
 }
 
+/// A back chevron, the only left control official gives the code, password
+/// and email steps.
+- (UIBarButtonItem *)backItemWithAction:(SEL)action {
+    UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
+    UIImage *chevron = [TGIcons backChevronWithColour:[[TGTheme shared] accentColour]];
+    [button setImage:chevron forState:UIControlStateNormal];
+    CGFloat side = TGMetricRow;
+    button.frame = CGRectMake(0, 0, side, side);
+    [button addTarget:self action:action forControlEvents:UIControlEventTouchUpInside];
+    return [[UIBarButtonItem alloc] initWithCustomView:button];
+}
+
+- (void)confirmStopVerification {
+    __weak typeof(self) weakSelf = self;
+    [TGAlertSheet showConfirm:TGLocalized(@"Do you want to stop the verification process?")
+                        title:nil
+                       action:TGLocalized(@"OK")
+                  destructive:NO
+                       inView:self.view
+                    onConfirm:^{
+        TGLoginViewController *me = weakSelf;
+        [me clearError];
+        [me showPhoneStep];
+    }];
+}
+
 - (NSString *)resendTitleForCountdown:(NSInteger)seconds {
-    NSString *clock = TGUIFormatCallDuration(MAX(0, seconds));
-    return [NSString stringWithFormat:@"Resend code in %@", clock];
+    NSInteger clamped = MAX(0, seconds);
+    NSInteger minutes = clamped / 60;
+    NSInteger rest = clamped % 60;
+    return TGLocalizedFormat(@"Sending you an SMS in %d:%.2d",
+            (int)minutes, (int)rest);
 }
 
 - (void)resendTick:(NSTimer *)timer {
@@ -503,7 +708,8 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
         [self.resendTimer invalidate];
         self.resendTimer = nil;
         self.resendCountdown = 0;
-        [self.resendButton setTitle:@"Resend code" forState:UIControlStateNormal];
+        [self.resendButton setTitle:TGLocalized(@"Send the code as an SMS")
+                          forState:UIControlStateNormal];
     } else {
         [self.resendButton setTitle:[self resendTitleForCountdown:self.resendCountdown]
                           forState:UIControlStateDisabled];
@@ -523,31 +729,17 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
     [self updateActionEnabled];
 }
 
-- (void)resetSessionTapped {
-    if (self.onResetSession) {
-        self.onResetSession();
-    }
-    self.savedNationalNumber = nil;
-    self.savedPhoneNumber = nil;
-    self.inputField.text = @"";
-    [self showPhoneStep];
-}
-
-/// Their sign-up screen, as far as this app needs it: a first name, and the
-/// terms Telegram sent with the state. A last name is optional and Telegram
-/// does not require one, so the single field this screen has asks for the
-/// first and the rest is left for Edit Profile.
+/// Their sign-up screen: the add-photo control above the heading, both name
+/// fields, the consent label and one primary Continue.
 - (void)showRegisterStep {
     TGCrossFadeStepChange(self.scrollView);
     [self clearStepLinks];
     [self setBusy:NO];
     self.currentStep = TGLoginStepRegister;
-    self.title = @"Your Name";
-
-    NSString *terms = [[TGClient shared] registrationTerms];
-    self.subtitleLabel.text = terms.length
-            ? [NSString stringWithFormat:@"This number is new to Telegram.\n\n%@", terms]
-            : @"This number is new to Telegram.\nEnter your name to finish.";
+    self.title = nil;
+    self.headingLabel.text = @"Registration";
+    self.headingLabel.hidden = NO;
+    self.subtitleLabel.text = @"First and Last Name";
 
     self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc]
         initWithTitle:@"Cancel"
@@ -566,15 +758,60 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
     [self.resendTimer invalidate];
     self.resendTimer = nil;
 
-    // The terms can run long, so the field sits under whatever they took.
     [self useSingleFieldLayout];
-    self.inputField.placeholder = @"First name";
+    [self setupAvatarButtonIfNeeded];
+    self.avatarButton.hidden = NO;
+    self.registrationLastName = nil;
+    self.inputField.placeholder = @"First Name";
     self.inputField.secureTextEntry = NO;
     self.inputField.keyboardType = UIKeyboardTypeDefault;
     self.inputField.autocapitalizationType = UITextAutocapitalizationTypeWords;
-    [self.actionButton setTitle:@"Create Account" forState:UIControlStateNormal];
-    self.nextItem.title = @"Done";
-    self.navigationItem.rightBarButtonItem = self.nextItem;
+    self.inputContainer.hidden = NO;
+
+    // The second field, drawn lazily for this step only.
+    if (!self.lastNameContainer) {
+        self.lastNameContainer = [[UIView alloc] initWithFrame:CGRectZero];
+        self.lastNameContainer.layer.cornerRadius = TGMetricCornerControl;
+        self.lastNameContainer.layer.borderWidth = TGMetricHairline;
+        self.lastNameContainer.clipsToBounds = YES;
+        self.lastNameField = [[UITextField alloc] initWithFrame:CGRectZero];
+        self.lastNameField.font = TGFontInput();
+        self.lastNameField.contentVerticalAlignment =
+                UIControlContentVerticalAlignmentCenter;
+        self.lastNameField.placeholder = @"Last Name";
+        self.lastNameField.autocapitalizationType = UITextAutocapitalizationTypeWords;
+        self.lastNameField.delegate = self;
+        [self.lastNameField addTarget:self action:@selector(lastNameChanged:)
+                     forControlEvents:UIControlEventEditingChanged];
+        [self.lastNameContainer addSubview:self.lastNameField];
+        [self.scrollView addSubview:self.lastNameContainer];
+    }
+    self.lastNameContainer.hidden = NO;
+    self.lastNameContainer.backgroundColor = [[TGTheme shared] cardBackgroundColour];
+    self.lastNameContainer.layer.borderColor = [[TGTheme shared] separatorColour].CGColor;
+    self.lastNameField.textColor = [[TGTheme shared] primaryTextColour];
+    self.lastNameField.text = @"";
+
+    // The terms belong in a small label at the bottom, not in the form's
+    // subtitle; the alert carries the Agree/Decline decision.
+    if (!self.termsButton) {
+        self.termsButton = [UIButton buttonWithType:UIButtonTypeCustom];
+        self.termsButton.titleLabel.font = TGFontCaption();
+        self.termsButton.titleLabel.numberOfLines = 0;
+        self.termsButton.titleLabel.textAlignment = NSTextAlignmentCenter;
+        self.termsButton.backgroundColor = [UIColor clearColor];
+        [self.termsButton addTarget:self action:@selector(signUpTermsTapped)
+                   forControlEvents:UIControlEventTouchUpInside];
+        [self.scrollView addSubview:self.termsButton];
+    }
+    self.termsButton.hidden = NO;
+    [self.termsButton setTitle:@"By signing up,\nyou agree to the [Terms of Service]."
+                      forState:UIControlStateNormal];
+    [self.termsButton setTitleColor:[[TGTheme shared] secondaryTextColour]
+                           forState:UIControlStateNormal];
+
+    [self.actionButton setTitle:@"Continue" forState:UIControlStateNormal];
+    self.nextItem.title = @"Next";
 
     [self layoutActiveStep];
 
@@ -583,17 +820,104 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
     [self.inputField becomeFirstResponder];
 }
 
+/// The 110 pt (this size's 100 pt token) add-photo control at the top of the
+/// official sign-up form. The image is uploaded once the account exists.
+- (void)setupAvatarButtonIfNeeded {
+    if (self.avatarButton)
+        return;
+    CGFloat side = TGMetricProfilePhotoSide;
+    self.avatarButton = [UIButton buttonWithType:UIButtonTypeCustom];
+    self.avatarButton.layer.cornerRadius = TGHalf(side);
+    self.avatarButton.clipsToBounds = YES;
+    self.avatarButton.backgroundColor = [[TGTheme shared] cardBackgroundColour];
+    self.avatarButton.layer.borderWidth = TGMetricHairline;
+    self.avatarButton.layer.borderColor = [[TGTheme shared] separatorColour].CGColor;
+    [self.avatarButton addTarget:self action:@selector(avatarTapped)
+                forControlEvents:UIControlEventTouchUpInside];
+
+    UIImageView *imageView = [[UIImageView alloc] initWithFrame:
+            CGRectMake(0, 0, side, side)];
+    imageView.contentMode = UIViewContentModeScaleAspectFill;
+    imageView.clipsToBounds = YES;
+    imageView.userInteractionEnabled = NO;
+    [self.avatarButton addSubview:imageView];
+    self.avatarImageView = imageView;
+
+    [self.avatarButton setImage:[TGIcons glyphNamed:@"plus"
+            colour:[[TGTheme shared] secondaryTextColour]
+            side:TGMetricRow] forState:UIControlStateNormal];
+    [self.scrollView addSubview:self.avatarButton];
+}
+
+- (void)avatarTapped {
+    UIImagePickerController *picker = [[UIImagePickerController alloc] init];
+    picker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;
+    picker.delegate = self;
+    [self presentViewController:picker animated:YES completion:nil];
+}
+
+- (void)imagePickerController:(UIImagePickerController *)picker
+        didFinishPickingMediaWithInfo:(NSDictionary *)info {
+    UIImage *image = info[UIImagePickerControllerOriginalImage];
+    [self dismissViewControllerAnimated:YES completion:nil];
+    if (!image)
+        return;
+    NSData *data = UIImageJPEGRepresentation(image, 0.9f);
+    NSString *path = [NSTemporaryDirectory()
+            stringByAppendingPathComponent:@"tg_signup_avatar.jpg"];
+    if (data && [data writeToFile:path atomically:YES]) {
+        self.registrationPhotoPath = path;
+        self.avatarImageView.image = image;
+        [self.avatarButton setImage:nil forState:UIControlStateNormal];
+    }
+}
+
+- (void)imagePickerControllerDidCancel:(UIImagePickerController *)picker {
+    [self dismissViewControllerAnimated:YES completion:nil];
+}
+
+- (void)lastNameChanged:(UITextField *)sender {
+    self.registrationLastName = sender.text;
+    [self updateActionEnabled];
+}
+
+- (void)signUpTermsTapped {
+    NSString *terms = [[TGClient shared] registrationTerms];
+    __weak typeof(self) weakSelf = self;
+    [TGAlertSheet showChoices:@[TGLocalized(@"Agree"), TGLocalized(@"Decline")]
+                        title:TGLocalized(@"Terms of Service")
+                      message:(terms.length ? terms : nil)
+             destructiveIndex:1
+                       inView:self.view
+                     onChoice:^(NSInteger index){
+        if (index != 1)
+            return;
+        TGLoginViewController *me = weakSelf;
+        [TGAlertSheet showConfirm:TGLocalized(@"Do you want to stop the registration process?")
+                            title:nil
+                           action:TGLocalized(@"OK")
+                      destructive:YES
+                           inView:me.view
+                        onConfirm:^{
+            [me clearError];
+            [me showPhoneStep];
+        }];
+    }];
+}
+
 - (void)showPasswordStep {
     NSDictionary *info = [TGClient shared].loginPasswordInfo;
     NSString *hint = info[@"password_hint"];
-    NSString *subtitle = hint.length
-            ? [NSString stringWithFormat:@"Your account is protected with a password.\nHint: %@", hint]
-            : @"Your account is protected with a password.\nEnter your password below.";
-    [self showFieldStep:TGLoginStepPassword title:@"Password" subtitle:subtitle
-            placeholder:@"Password" secure:YES keyboard:UIKeyboardTypeDefault
-                 button:@"Submit Password"];
-    [self addStepLink:@"Forgot password?" action:@selector(forgotPasswordTapped)
-                  atY:CGRectGetMaxY(self.actionButton.frame) + TGMetricPadSmall];
+    // The hint is the field's placeholder, as official uses it; it used to be
+    // a second paragraph under the instructions.
+    NSString *placeholder = hint.length ? hint : @"Password";
+    [self showFieldStep:TGLoginStepPassword title:nil
+               subtitle:TGLocalized(@"Enter your Telegram 2-Step Verification password to continue.")
+            placeholder:placeholder secure:YES keyboard:UIKeyboardTypeDefault
+                 button:@"Continue"];
+    self.headingLabel.text = nil;
+    [self addStepLink:@"Forgot password?" action:@selector(forgotPasswordTapped) atY:0];
+    [self layoutActiveStep];
 }
 
 /// Asks Telegram to mail a recovery code. An account without a recovery
@@ -606,9 +930,7 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
         TGLoginViewController *me = weakSelf;
         [me setBusy:NO];
         if (error) {
-            [TGAlertSheet showMessage:[NSString stringWithFormat:
-                    @"%@\n\nWithout a recovery email the password cannot be reset from here.", error]
-                                title:@"Forgot Password" inView:me.view];
+            [TGAlertSheet showMessage:error title:@"Forgot Password?" inView:me.view];
             return;
         }
         [me showRecoveryCodeStep];
@@ -618,46 +940,51 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
 - (void)showRecoveryCodeStep {
     NSString *pattern = [TGClient shared].loginPasswordInfo[@"recovery_email_address_pattern"];
     NSString *subtitle = pattern.length
-            ? [NSString stringWithFormat:@"We've emailed a recovery code to\n%@\nEntering it removes the password.", pattern]
-            : @"We've emailed a recovery code to your recovery address.\nEntering it removes the password.";
-    [self showFieldStep:TGLoginStepRecoveryCode title:@"Recovery Code" subtitle:subtitle
+            ? TGLocalizedFormat(@"Please enter the code we just emailed to %@", pattern)
+            : TGLocalized(@"The code has been sent. Please check your email. Be sure to check the spam folder as well.");
+    [self showFieldStep:TGLoginStepRecoveryCode title:nil subtitle:subtitle
             placeholder:@"Code" secure:NO keyboard:UIKeyboardTypeNumberPad
-                 button:@"Submit Code"];
+                 button:@"Continue"];
 }
 
 - (void)showEmailStep {
-    [self showFieldStep:TGLoginStepEmail title:@"Your Email"
-               subtitle:@"Telegram needs an email address for this account\nbefore it sends a login code."
-            placeholder:@"Email address" secure:NO keyboard:UIKeyboardTypeEmailAddress
+    [self showFieldStep:TGLoginStepEmail title:nil
+               subtitle:TGLocalized(@"Setup your email address for Telegram login codes.")
+            placeholder:@"Email Address" secure:NO keyboard:UIKeyboardTypeEmailAddress
                  button:@"Continue"];
+    // The heading belongs in the content, not in the bar.
+    self.headingLabel.hidden = NO;
+    self.headingLabel.text = @"Login Email";
+    [self layoutActiveStep];
 }
 
 - (void)showEmailCodeStep {
     NSDictionary *info = [TGClient shared].emailCodeInfo;
     NSString *pattern = info[@"code_info"][@"email_address_pattern"];
     NSString *subtitle = pattern.length
-            ? [NSString stringWithFormat:@"We've sent a code to\n%@", pattern]
-            : @"We've sent a code to your email.";
-    [self showFieldStep:TGLoginStepEmailCode title:@"Check Your Email" subtitle:subtitle
+            ? TGLocalizedFormat(@"Please enter the code we have sent to your email %@.", pattern)
+            : TGLocalized(@"The code has been sent. Please check your email. Be sure to check the spam folder as well.");
+    [self showFieldStep:TGLoginStepEmailCode title:nil subtitle:subtitle
             placeholder:@"Code" secure:NO keyboard:UIKeyboardTypeNumberPad
-                 button:@"Submit Code"];
+                 button:@"Continue"];
     self.expectedCodeLength = [info[@"code_info"][@"length"] integerValue];
     [self updateActionEnabled];
     if ([info[@"can_reset_email_address"] boolValue])
-        [self addStepLink:@"Can't access this email?" action:@selector(resetEmailTapped)
-                      atY:CGRectGetMaxY(self.actionButton.frame) + TGMetricPadSmall];
+        [self addStepLink:@"Can't access this email?" action:@selector(resetEmailTapped) atY:0];
+    [self layoutActiveStep];
 }
 
 - (void)resetEmailTapped {
-    [self setBusy:YES];
+    // The reset has no completion; the next authorization state replaces this
+    // step. Releasing here keeps the button usable if the answer never comes.
     [[TGClient shared] resetAuthenticationEmailAddress];
-    [self releaseBusyIfStepIsStill:self.currentStep];
+    [self setBusy:NO];
 }
 
 - (void)codeMissingTapped {
     [[TGClient shared] reportAuthenticationCodeMissing];
-    [TGAlertSheet showMessage:@"Telegram has been told the code did not arrive.\n\nTry \"Send code via SMS\" once the timer runs out, or log in with a QR code from another device."
-                        title:@"No Code" inView:self.view];
+    [TGAlertSheet showMessage:@"Done"
+                        title:@"Code" inView:self.view];
 }
 
 /// A token from a web login: the desktop page shows one when it waits for a
@@ -666,14 +993,14 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
 - (void)webTokenTapped {
     __weak typeof(self) weakSelf = self;
     [TGAlertSheet showInput:@"Web Login Token"
-                    message:@"Paste the token from the web login, then choose what to do with it."
+                    message:nil
                 placeholder:@"Token"
                        text:nil
                      action:@"Continue"
                      inView:self.view
                    onSubmit:^(NSString *token){
         TGLoginViewController *me = weakSelf;
-        [TGAlertSheet showChoices:@[@"Log In", @"Dismiss It"]
+        [TGAlertSheet showChoices:@[@"Log In", @"Dismiss"]
                             title:@"Web Login Token"
                      destructiveIndex:1
                            inView:me.view
@@ -681,13 +1008,13 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
             if (index == 1){
                 [[TGClient shared] dismissWebToken:token completion:^(NSString *error){
                     [TGAlertSheet showMessage:(error
-                            ?: @"The token was dropped. The web login stops waiting.")
+                            ?: @"Done")
                                         title:@"Web Login Token" inView:me.view];
                 }];
                 return;
             }
             [TGAlertSheet showInput:@"Datacenter"
-                            message:@"The dc_id the web login names, usually 2."
+                            message:nil
                         placeholder:@"dc_id"
                                text:@"2"
                              action:@"Log In"
@@ -699,7 +1026,7 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
                 [[TGClient shared] checkAuthenticationWebToken:token dcId:dcId
                                                     completion:^(NSString *error){
                     [TGAlertSheet showMessage:(error
-                            ?: @"Signed in. Telegram is opening the account.")
+                            ?: @"Done")
                                         title:@"Web Login Token" inView:me.view];
                 }];
             }];
@@ -712,8 +1039,8 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
 /// follows; a refusal is said here instead.
 - (void)qrLinkTapped {
     __weak typeof(self) weakSelf = self;
-    [TGAlertSheet showInput:@"QR Link"
-                    message:@"Paste the tg:// link the other screen's QR code stands for."
+    [TGAlertSheet showInput:@"QR Code"
+                    message:nil
                 placeholder:@"tg://login?token=..."
                        text:nil
                      action:@"Confirm"
@@ -722,8 +1049,8 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
         TGLoginViewController *me = weakSelf;
         [[TGClient shared] confirmQrCodeAuthenticationLink:link completion:^(NSString *error){
             [TGAlertSheet showMessage:(error
-                    ?: @"Confirmed. Telegram is signing this device in.")
-                                title:@"QR Link" inView:me.view];
+                    ?: @"Done")
+                                title:@"QR Code" inView:me.view];
         }];
     }];
 }
@@ -733,18 +1060,18 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
 /// answer still comes from the server.
 - (void)firebaseCodeTapped {
     __weak typeof(self) weakSelf = self;
-    [TGAlertSheet showInput:@"Push Verification"
-                    message:@"Paste the secret from the verification push notification."
+    [TGAlertSheet showInput:@"Verify"
+                    message:nil
                 placeholder:@"Secret"
                        text:nil
-                     action:@"Send"
+                     action:@"Submit"
                      inView:self.view
                    onSubmit:^(NSString *token){
         TGLoginViewController *me = weakSelf;
         [[TGClient shared] sendAuthenticationFirebaseSms:token completion:^(NSString *error){
             [TGAlertSheet showMessage:(error
-                    ?: @"Telegram accepted the verification. The code is on its way.")
-                                title:@"Push Verification" inView:me.view];
+                    ?: @"Done")
+                                title:@"Verify" inView:me.view];
         }];
     }];
 }
@@ -775,6 +1102,7 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
 }
 
 - (void)clearError {
+    self.codeErrorShown = NO;
     if (self.errorLabel.hidden && !self.errorLabel.text.length)
         return;
     self.errorLabel.text = nil;
@@ -816,14 +1144,15 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
     self.errorLabel.hidden = YES;
     [self clearStepLinks];
     self.currentStep = step;
-    self.title = title;
+    self.title = nil;
+    self.headingLabel.text = nil;
+    self.headingLabel.hidden = YES;
     self.subtitleLabel.text = subtitle;
 
-    self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc]
-        initWithTitle:@"Cancel"
-        style:UIBarButtonItemStylePlain
-        target:self
-        action:@selector(showPhoneStep)];
+    // Back chevron, not a text Cancel: official only ever goes back from
+    // these steps.
+    self.navigationItem.leftBarButtonItem = [self backItemWithAction:
+            @selector(showPhoneStep)];
 
     if (self.resendButton) {
         [self.resendButton removeFromSuperview];
@@ -847,8 +1176,7 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
     self.inputField.autocapitalizationType = UITextAutocapitalizationTypeNone;
     self.inputField.autocorrectionType = UITextAutocorrectionTypeNo;
     [self.actionButton setTitle:button forState:UIControlStateNormal];
-    self.nextItem.title = @"Done";
-    self.navigationItem.rightBarButtonItem = self.nextItem;
+    self.nextItem.title = @"Next";
     self.countryLabel.hidden = YES;
     self.expectedCodeLength = 0;
 

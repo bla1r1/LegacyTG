@@ -143,6 +143,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 	if ([action isEqualToString:@"upgrade"])      { [self confirmUpgrade]; return; }
 	if ([action isEqualToString:@"addMembers"])   { [self addMembers]; return; }
 	if ([action isEqualToString:@"findMember"])   { [self findMember]; return; }
+	if ([action isEqualToString:@"members"])      { [self showMembersList]; return; }
 	if ([action isEqualToString:@"permissions"])  { [self choosePermissions]; return; }
 	if ([action isEqualToString:@"slow"])         { [self chooseSlowMode]; return; }
 	if ([action isEqualToString:@"broadcast"])    { [self confirmBroadcast]; return; }

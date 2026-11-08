@@ -89,7 +89,7 @@ static const NSTimeInterval kRecordHintSeconds = 1.6;
 		self.recordCancelSlideLabel = [[UILabel alloc] initWithFrame:
 				CGRectMake(kRecordSlideX, TGCenteredOrigin(kInputHeight, TGMetricLineRow),
 						bar.size.width - kRecordSlideRoom, TGMetricLineRow)];
-		self.recordCancelSlideLabel.text = @"‹ Slide to cancel";
+		self.recordCancelSlideLabel.text = @"Slide to cancel";
 		self.recordCancelSlideLabel.font = TGFontBody();
 		self.recordCancelSlideLabel.textColor = [theme secondaryTextColour];
 		self.recordCancelSlideLabel.backgroundColor = [UIColor clearColor];
@@ -267,7 +267,7 @@ static const NSTimeInterval kRecordHintSeconds = 1.6;
 /// A tap that changed nothing a person could read would look like a dead button.
 - (void)showRecordModeHint {
 	UILabel *hint = [[UILabel alloc] init];
-	hint.text = self.videoNoteMode ? @"Hold to record video. Tap for voice."
+	hint.text = self.videoNoteMode ? @"Hold to record video"
 								   : @"Hold to record voice. Tap for video.";
 	hint.font = TGFontCaption();
 	hint.textColor = [[TGTheme shared] onMediaColour];
@@ -627,7 +627,7 @@ static const NSTimeInterval kRecordHintSeconds = 1.6;
 				self.pendingNoteProgress = 0;
 			}
 			[self refreshSendRings];
-			[TGAlertSheet showMessage:@"The video message was not sent."
+			[TGAlertSheet showMessage:@"Your message was not sent. Tap \"Resend\" to send this message."
 								 title:nil inView:self.view];
 			return;
 		}
@@ -683,7 +683,7 @@ static const NSTimeInterval kRecordHintSeconds = 1.6;
 				self.pendingNoteProgress = 0;
 			[self refreshSendRings];
 			if (!sent && !cancelled)
-				[TGAlertSheet showMessage:@"The video message was not sent."
+				[TGAlertSheet showMessage:@"Your message was not sent. Tap \"Resend\" to send this message."
 									 title:nil inView:self.view];
 		}];
 	}];

@@ -6,7 +6,9 @@
 #import <QuartzCore/QuartzCore.h>
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
+#import "TGLocalization.h"
 #import "TGUsernameSettingsViewController.h"
+#import "TGEmojiStatusViewController.h"
 
 // Profile editing: avatar photo, names, bio, birthday, phone, username and the
 // profile's default tab.
@@ -66,18 +68,19 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	self.title = @"Edit Profile";
-	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
-		self.edgesForExtendedLayout = UIRectEdgeNone;
+	self.title = @"";
 	[self applyTheme];
 
+	self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc]
+			initWithTitle:@"Cancel" style:UIBarButtonItemStylePlain
+				   target:self action:@selector(cancel)];
 	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
-			initWithTitle:@"Save" style:UIBarButtonItemStyleDone
+			initWithTitle:@"Done" style:UIBarButtonItemStyleDone
 				   target:self action:@selector(save)];
 
 	NSDictionary *me = [TGClient shared].me;
-	self.firstField = [self fieldWithPlaceholder:@"First name" text:me[@"first_name"]];
-	self.lastField = [self fieldWithPlaceholder:@"Last name (optional)" text:me[@"last_name"]];
+	self.firstField = [self fieldWithPlaceholder:TGLocalized(@"First Name") text:me[@"first_name"]];
+	self.lastField = [self fieldWithPlaceholder:TGLocalized(@"Last Name") text:me[@"last_name"]];
 	self.originalFirst = self.firstField.text ?: @"";
 	self.originalLast = self.lastField.text ?: @"";
 	self.originalBio = @"";
@@ -143,17 +146,6 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 		[weakSelf.tableView reloadData];
 	}];
 
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGThemeChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note) {
-		[weakSelf applyTheme];
-		[weakSelf updateFieldAppearances];
-		[weakSelf.tableView reloadData];
-	}];
-}
-
-- (void)dealloc {
-	[[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 - (void)applyTheme {
@@ -174,7 +166,7 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 	self.bioCountLabel.textColor = [[TGTheme shared] secondaryTextColour];
 	self.bioCountLabel.font = TGFontMicro();
 	[self setPlaceholder:@"First name" on:self.firstField];
-	[self setPlaceholder:@"Last name (optional)" on:self.lastField];
+	[self setPlaceholder:@"Last Name" on:self.lastField];
 }
 
 - (UITextField *)fieldWithPlaceholder:(NSString *)placeholder text:(NSString *)text {
@@ -230,8 +222,7 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 		controller.waitingForProfile = NO;
 		if (!user){
 			if (waiting)
-				[TGAlertSheet showMessage:@"Your profile could not be read. "
-										  @"Check the connection and try again."
+				[TGAlertSheet showMessage:@"An error occurred."
 									title:@"Edit Profile" inView:controller.view];
 			return;
 		}
@@ -258,7 +249,11 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 - (void)updateSavingState:(BOOL)saving {
 	self.saving = saving;
 	self.navigationItem.rightBarButtonItem.enabled = !saving;
-	self.navigationItem.rightBarButtonItem.title = saving ? @"Saving..." : @"Save";
+	self.navigationItem.rightBarButtonItem.title = saving ? @"Saving" : @"Done";
+}
+
+- (void)cancel {
+	[self.navigationController popViewControllerAnimated:YES];
 }
 
 - (void)save {
@@ -274,7 +269,7 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 	NSString *last = [(self.lastField.text ?: @"")
 			stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 	if (!first.length){
-		[TGAlertSheet showMessage:@"A first name is required."
+		[TGAlertSheet showMessage:@"Enter a Name"
 							title:@"Edit Profile" inView:self.view];
 		return;
 	}
@@ -316,7 +311,7 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 	for (TGEditRequest request in operations){
 		request(^(BOOL ok, NSString *error){
 			if (!ok && !failure)
-				failure = error ?: @"Telegram refused that change.";
+				failure = error ?: @"An error occurred.";
 			if (--pending > 0)
 				return;
 			[weakSelf updateSavingState:NO];
@@ -389,10 +384,15 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 			@"November", @"December"];
 	NSString *month = (self.birthMonth > 0 && self.birthMonth < 13)
 			? months[self.birthMonth] : @"";
-	return self.birthYear > 0
-			? [NSString stringWithFormat:@"%@ %ld, %ld", month,
-					(long)self.birthDay, (long)self.birthYear]
-			: [NSString stringWithFormat:@"%@ %ld", month, (long)self.birthDay];
+	if (self.birthYear > 0){
+		NSString *key = [month stringByAppendingString:@" %1$@, %2$@"];
+		return TGLocalizedFormat(key,
+				[NSString stringWithFormat:@"%ld", (long)self.birthDay],
+				[NSString stringWithFormat:@"%ld", (long)self.birthYear]);
+	}
+	NSString *key = [month stringByAppendingString:@" %@"];
+	return TGLocalizedFormat(key,
+			[NSString stringWithFormat:@"%ld", (long)self.birthDay]);
 }
 
 /// A date picker in a sheet: iOS 7 has no way to put one in a row, and a
@@ -407,7 +407,7 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 							 edgeToEdge:YES];
 
 	UISegmentedControl *year = [[UISegmentedControl alloc]
-			initWithItems:@[@"Year", @"No Year"]];
+			initWithItems:@[@"Year", @"No"]];
 	year.selectedSegmentIndex = (self.birthDay > 0 && self.birthYear <= 0) ? 1 : 0;
 	year.frame = CGRectMake(TGMetricGutter, kBar,
 			card.bounds.size.width - TGDoubled(TGMetricGutter),
@@ -476,7 +476,7 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 - (void)askBirthdayPrivacy {
 	__weak typeof(self) weakSelf = self;
 	[TGAlertSheet showChoices:@[@"Everybody", @"My Contacts", @"Nobody"]
-						title:@"Birthday Privacy"
+						title:@"Birthday"
 			 destructiveIndex:-1
 					   inView:self.view
 					 onChoice:^(NSInteger index){
@@ -520,8 +520,8 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 	[[TGClient shared] setProfilePhotoAtPath:path completion:^(BOOL ok){
 		if (ok)
 			return;
-		[TGAlertSheet showMessage:@"Telegram refused the picture."
-							title:@"Profile Photo" inView:weakSelf.view];
+		[TGAlertSheet showMessage:@"An error occurred."
+							title:@"Set Profile Photo" inView:weakSelf.view];
 	}];
 }
 
@@ -531,27 +531,19 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 
 #pragma mark - table
 
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return 6; }
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return 7; }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
 	if (section == 1) return @"Name";
 	if (section == 2) return @"Bio";
 	if (section == 3) return @"Birthday";
-	if (section == 4) return @"Account";
+	if (section == 4) return @"Edit Account";
 	if (section == 5) return @"Profile";
+	if (section == 6) return nil;
 	return nil;
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-	if (section == 1)
-		return @"Enter your name and, if you like, add a profile photo.";
-	if (section == 2)
-		return @"Any details such as age, occupation or city.";
-	if (section == 4)
-		return @"The number you signed in with, and the public name people "
-			   @"can find you by.";
-	if (section == 5)
-		return @"The tab your profile opens on, for everyone who looks at it.";
 	return nil;
 }
 
@@ -560,7 +552,8 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 	if (section == 1) return 2;    // first, last
 	if (section == 2) return 1;    // bio
 	if (section == 3) return self.birthDay > 0 ? 2 : 1;    // birthday, (privacy only when set)
-	if (section == 4) return 2;    // phone, username
+	if (section == 4) return 4;    // phone, username, emoji status, channel
+	if (section == 6) return 1;    // log out
 	return 1;                      // main profile tab
 }
 
@@ -603,7 +596,7 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 		cell.textLabel.font = TGFontRow();
 		cell.detailTextLabel.font = TGFontBody();
 		cell.detailTextLabel.textColor = [theme cellDetailColour];
-		cell.textLabel.text = @"Main Profile Tab";
+		cell.textLabel.text = @"Set as Main Tab";
 		static NSArray *names = nil;
 		if (!names)
 			names = @[@"posts", @"gifts", @"media", @"files",
@@ -629,7 +622,7 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 			cell.detailTextLabel.text = [self birthdayText];
 			cell.accessoryType = UITableViewCellAccessoryNone;
 		} else {
-			cell.textLabel.text = @"Birthday Privacy";
+			cell.textLabel.text = @"Birthday";
 			cell.detailTextLabel.text = self.birthdayPrivacy.length
 					? TGBirthdayPrivacyLabel(self.birthdayPrivacy) : nil;
 			cell.accessoryType = UITableViewCellAccessoryNone;
@@ -653,7 +646,7 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 					? [NSString stringWithFormat:@"+%@", self.phoneNumber] : nil;
 			// Changing a number is a whole login flow; this shows it.
 			cell.selectionStyle = UITableViewCellSelectionStyleNone;
-		} else {
+		} else if (path.row == 1) {
 			// Telegram puts the public name first: it is the row people
 			// come here to change, and its own screen owns the switches.
 			cell.textLabel.text = @"Username";
@@ -661,7 +654,33 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 					? [NSString stringWithFormat:@"@%@", self.username] : nil;
 			cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
 			cell.selectionStyle = UITableViewCellSelectionStyleBlue;
+		} else if (path.row == 2) {
+			// The own-profile emoji status is an edit row, not a row in a
+			// menu that no longer has a trigger.
+			BOOL hasStatus = [[TGClient shared] emojiStatusIdForUser:
+					[[TGClient shared].me[@"id"] longLongValue]] != 0;
+			cell.textLabel.text = hasStatus ? @"Change Emoji Status"
+											: @"Set Emoji Status";
+			cell.detailTextLabel.text = nil;
+			cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+			cell.selectionStyle = UITableViewCellSelectionStyleBlue;
+		} else {
+			cell.textLabel.text = @"Channel";
+			cell.detailTextLabel.text = nil;
+			cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+			cell.selectionStyle = UITableViewCellSelectionStyleBlue;
 		}
+		return cell;
+	}
+
+	if (path.section == 6){
+		UITableViewCell *cell = [[UITableViewCell alloc]
+				initWithStyle:UITableViewCellStyleDefault reuseIdentifier:nil];
+		[theme styleCell:cell];
+		cell.textLabel.text = @"Log out";
+		cell.textLabel.textColor = [theme destructiveColour];
+		cell.textLabel.textAlignment = NSTextAlignmentLeft;
+		cell.accessoryType = UITableViewCellAccessoryNone;
 		return cell;
 	}
 
@@ -745,8 +764,57 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 		[self.navigationController pushViewController:usernames animated:YES];
 		return;
 	}
+	if (path.section == 4 && path.row == 2){
+		TGEmojiStatusViewController *status =
+				[[TGEmojiStatusViewController alloc] init];
+		status.target = TGEmojiStatusTargetSelf;
+		status.userId = [[TGClient shared].me[@"id"] longLongValue];
+		status.subjectTitle = @"Emoji Status";
+		status.hidesBottomBarWhenPushed = YES;
+		[self.navigationController pushViewController:status animated:YES];
+		return;
+	}
+	if (path.section == 4 && path.row == 3){
+		[self choosePersonalChannel];
+		return;
+	}
 	if (path.section == 5)
 		[self chooseMainProfileTab];
+	if (path.section == 6)
+		[self confirmLogOut];
+}
+
+- (void)choosePersonalChannel {
+	__weak typeof(self) weakSelf = self;
+	[[TGClient shared] suitablePersonalChatsWithCompletion:^(NSArray *chats){
+		NSMutableArray *titles = [NSMutableArray arrayWithObject:@"None"];
+		NSMutableArray *ids = [NSMutableArray arrayWithObject:@0];
+		for (NSDictionary *chat in chats){
+			NSString *title = chat[@"title"] ?: [[TGClient shared]
+					titleForChat:[chat[@"id"] longLongValue]];
+			[titles addObject:title.length ? title : @"Channel"];
+			[ids addObject:chat[@"id"] ?: @0];
+		}
+		[TGAlertSheet showChoices:titles title:@"Channel"
+				 destructiveIndex:-1 inView:weakSelf.view
+						 onChoice:^(NSInteger index){
+			[[TGClient shared] setPersonalChat:[ids[(NSUInteger)index] longLongValue]
+									completion:^(BOOL ok){
+				if (!ok)
+					[TGAlertSheet showMessage:@"An error occurred."
+										title:@"Channel"
+									   inView:weakSelf.view];
+			}];
+		}];
+	}];
+}
+
+- (void)confirmLogOut {
+	[TGAlertSheet showConfirm:@"Are you sure you want to log out from this device?"
+						title:@"Log out" action:@"Log Out"
+				  destructive:YES inView:self.view onConfirm:^{
+		[[TGClient shared] logOut];
+	}];
 }
 
 - (void)chooseMainProfileTab {
@@ -757,7 +825,7 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 	NSString *current = self.mainProfileTab.length ? self.mainProfileTab : @"posts";
 	__weak typeof(self) weakSelf = self;
 	[TGAlertSheet showChoices:titles
-						title:@"Main Profile Tab"
+						title:@"Set as Main Tab"
 			 destructiveIndex:-1
 					   inView:self.view
 					 onChoice:^(NSInteger index){
@@ -766,8 +834,8 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 		NSString *tab = tabs[(NSUInteger)index];
 		[[TGClient shared] setMainProfileTab:tab completion:^(BOOL ok, NSString *error){
 			if (!ok){
-				[TGAlertSheet showMessage:(error ?: @"Telegram refused that.")
-									title:@"Main Profile Tab" inView:weakSelf.view];
+				[TGAlertSheet showMessage:(error ?: @"An error occurred.")
+									title:@"Set as Main Tab" inView:weakSelf.view];
 				return;
 			}
 			weakSelf.mainProfileTab = tab;

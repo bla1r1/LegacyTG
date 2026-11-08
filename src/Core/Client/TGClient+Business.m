@@ -13,7 +13,7 @@
 
 static NSString *TGBusinessError(NSDictionary *result) {
 	NSString *message = result[@"message"];
-	return [message isKindOfClass:NSString.class] ? message : @"Telegram refused that.";
+	return [message isKindOfClass:NSString.class] ? message : @"An error occurred.";
 }
 
 static BOOL TGBusinessSucceeded(NSDictionary *result) {

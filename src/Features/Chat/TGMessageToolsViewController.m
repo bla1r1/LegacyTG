@@ -24,9 +24,9 @@
 - (void)rebuild {
 	__weak typeof(self) weakSelf = self;
 	NSMutableArray *aiRows = [NSMutableArray array];
-	[aiRows addObject:TGFeatureAction(@"Summarize Message", ^{ [weakSelf summarize]; })];
-	[aiRows addObject:TGFeatureAction(@"Fix Text with AI", ^{ [weakSelf fixText]; })];
-	[aiRows addObject:TGFeatureAction(@"Translate Rich Message", ^{
+	[aiRows addObject:TGFeatureAction(@"AI Summary", ^{ [weakSelf summarize]; })];
+	[aiRows addObject:TGFeatureAction(@"AI Editor", ^{ [weakSelf fixText]; })];
+	[aiRows addObject:TGFeatureAction(@"Translate", ^{
 		[weakSelf translateRichMessage];
 	})];
 	[aiRows addObject:TGFeatureAction(@"Get Full Rich Message", ^{
@@ -35,7 +35,7 @@
 
 	NSMutableArray *messageRows = [NSMutableArray array];
 	if (self.isChecklist){
-		[messageRows addObject:TGFeatureOpenRow(@"Checklist", @"Open the task editor", ^{
+		[messageRows addObject:TGFeatureOpenRow(@"Checklist", nil, ^{
 			TGChecklistViewController *screen = [[TGChecklistViewController alloc]
 					initWithChatId:weakSelf.chatId
 						 messageId:weakSelf.messageId
@@ -45,7 +45,7 @@
 		})];
 	}
 	if (self.hasSuggestedPost){
-		[messageRows addObject:TGFeatureOpenRow(@"Suggested Post", @"Approve or decline", ^{
+		[messageRows addObject:TGFeatureOpenRow(@"Suggest Post", nil, ^{
 			TGSuggestedPostViewController *screen =
 					[[TGSuggestedPostViewController alloc]
 							initWithChatId:weakSelf.chatId
@@ -59,14 +59,14 @@
 		[weakSelf editFactCheck];
 	})];
 	if (self.factCheck.length){
-		[messageRows addObject:TGFeatureAction(@"Clear Fact Check", ^{
+		[messageRows addObject:TGFeatureAction(@"Clear", ^{
 			[weakSelf clearFactCheck];
 		})];
 	}
 
 	NSMutableArray *richRows = [NSMutableArray array];
 	[richRows addObject:TGFeatureAction(@"Send as Rich Draft", ^{ [weakSelf sendDraft]; })];
-	[richRows addObject:TGFeatureOpenRow(@"AI Compose", nil, ^{
+	[richRows addObject:TGFeatureOpenRow(@"Create with AI", nil, ^{
 		TGAiComposeViewController *screen = [[TGAiComposeViewController alloc] init];
 		screen.chatId = weakSelf.chatId;
 		screen.chatTitle = weakSelf.chatTitle;
@@ -75,8 +75,8 @@
 	})];
 
 	self.sections = @[
-		TGFeatureSection(@"AI", nil, aiRows),
-		TGFeatureSection(@"This Message", nil, messageRows),
+		TGFeatureSection(@"AI Tools", nil, aiRows),
+		TGFeatureSection(@"Message", nil, messageRows),
 		TGFeatureSection(@"Rich Messages", nil, richRows),
 	];
 	[self reloadRows];
@@ -92,26 +92,26 @@
 								   tone:@""
 							 completion:^(NSString *text, NSString *error){
 		if (!text.length){
-			[weakSelf toast:error ?: @"Telegram refused that."];
+			[weakSelf toast:error ?: @"An error occurred."];
 			return;
 		}
-		[weakSelf show:text title:@"Summary"];
+		[weakSelf show:text title:@"AI Summary"];
 	}];
 }
 
 - (void)fixText {
 	if (!self.messageText.length){
-		[self toast:@"This message has no text to fix."];
+		[self toast:@"An error occurred."];
 		return;
 	}
 	__weak typeof(self) weakSelf = self;
 	[[TGClient shared] fixTextWithAi:self.messageText
 						  completion:^(NSString *text, NSString *diff, NSString *error){
 		if (!text.length){
-			[weakSelf toast:error ?: @"Telegram refused that."];
+			[weakSelf toast:error ?: @"An error occurred."];
 			return;
 		}
-		[weakSelf show:text title:@"Fixed Text"];
+		[weakSelf show:text title:@"Fix"];
 	}];
 }
 
@@ -124,7 +124,7 @@
 											  tone:@""
 										completion:^(NSString *text, NSString *error){
 		if (!text.length){
-			[weakSelf toast:error ?: @"Telegram refused that."];
+			[weakSelf toast:error ?: @"An error occurred."];
 			return;
 		}
 		[weakSelf show:text title:@"Translation"];
@@ -138,7 +138,7 @@
 							   completion:^(NSString *text, NSDictionary *message,
 											NSString *error){
 		if (!text.length){
-			[weakSelf toast:error ?: @"Telegram refused that."];
+			[weakSelf toast:error ?: @"An error occurred."];
 			return;
 		}
 		[weakSelf show:text title:@"Full Rich Message"];
@@ -147,7 +147,7 @@
 
 - (void)sendDraft {
 	if (!self.messageText.length){
-		[self toast:@"This message has no text to draft."];
+		[self toast:@"An error occurred."];
 		return;
 	}
 	__weak typeof(self) weakSelf = self;
@@ -159,17 +159,17 @@
 								 keepOnStop:YES
 								 completion:^(BOOL ok, NSString *error){
 		if (!ok){
-			[weakSelf toast:error ?: @"Telegram refused that draft."];
+			[weakSelf toast:error ?: @"An error occurred."];
 			return;
 		}
-		[weakSelf toast:@"Draft sent"];
+		[weakSelf toast:@"Draft Saved"];
 	}];
 }
 
 - (void)editFactCheck {
 	__weak typeof(self) weakSelf = self;
 	[TGAlertSheet showInput:@"Fact Check"
-					message:@"Shown under the post. Empty removes it."
+					message:nil
 				placeholder:@"Fact check"
 					   text:self.factCheck
 					 action:@"Save"
@@ -180,7 +180,7 @@
 										  text:text
 									completion:^(BOOL ok, NSString *error){
 			if (!ok){
-				[weakSelf toast:error ?: @"Telegram refused that."];
+				[weakSelf toast:error ?: @"An error occurred."];
 				return;
 			}
 			weakSelf.factCheck = text;
@@ -196,7 +196,7 @@
 									  text:nil
 								completion:^(BOOL ok, NSString *error){
 		if (!ok){
-			[weakSelf toast:error ?: @"Telegram refused that."];
+			[weakSelf toast:error ?: @"An error occurred."];
 			return;
 		}
 		weakSelf.factCheck = @"";

@@ -3,6 +3,7 @@
 // list screen every Business sub-page inherits from.
 //
 #import <UIKit/UIKit.h>
+#import "TGTableViewController.h"
 #import "TGBusinessRows.h"
 
 /// The row list, theme and switch plumbing the Business pages share. A
@@ -19,7 +20,7 @@ FOUNDATION_EXPORT void TGBusinessStoreConnectionId(NSString *connectionId);
 // vim:ft=objc
 @class TGBusinessViewController, TGBusinessProfileViewController, TGBusinessChatLinksViewController, TGBusinessGreetingViewController, TGBusinessAwayViewController, TGBusinessHoursViewController, TGBusinessLocationViewController, TGBusinessIntroViewController;
 
-@interface TGBusinessBaseViewController : UITableViewController
+@interface TGBusinessBaseViewController : TGTableViewController
 
 @property (nonatomic, strong) NSArray *sections;
 

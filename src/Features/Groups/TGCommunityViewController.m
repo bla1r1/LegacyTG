@@ -168,18 +168,18 @@ static const CGFloat kCommunityPhotoBar  = 92.0f;
 			}
 		}
 		NSString *detail = [chat[@"hidden"] boolValue] ? @"Hidden" : nil;
-		NSString *displayTitle = title.length ? title : [NSString stringWithFormat:@"Chat %lld", (long long)chatId];
+		NSString *displayTitle = title.length ? title : @"Chat";
 		[chatRows addObject:TGFeatureOpenRow(displayTitle, detail, ^{
 			if (weakSelf.navigationController)
 				[weakSelf openChat:chatId title:displayTitle];
 		})];
 	}
 	if (!chatRows.count){
-		NSMutableDictionary *empty = TGFeatureRow(@"No chats in this community", nil, nil);
+		NSMutableDictionary *empty = TGFeatureRow(@"No Results", nil, nil);
 		empty[TGFeatureRowKind] = TGFeatureKindPlain;
 		[chatRows addObject:empty];
 	}
-	[sections addObject:TGFeatureSection(@"Chats in pool", nil, chatRows)];
+	[sections addObject:TGFeatureSection(@"Chats", nil, chatRows)];
 
 	self.sections = sections;
 	[self reloadRows];
@@ -199,7 +199,7 @@ static const CGFloat kCommunityPhotoBar  = 92.0f;
 		[[TGClient shared] setCommunityName:weakSelf.communityId name:name
 								 completion:^(BOOL ok, NSString *error){
 			if (!ok){
-				[weakSelf toast:error ?: @"Telegram refused that name."];
+				[weakSelf toast:error ?: @"An error occurred."];
 				return;
 			}
 			weakSelf.community[@"name"] = name;
@@ -212,12 +212,11 @@ static const CGFloat kCommunityPhotoBar  = 92.0f;
 - (void)choosePermissions {
 	__weak typeof(self) weakSelf = self;
 	BOOL current = [self.community[@"canEditChatList"] boolValue];
-	NSArray *titles = @[@"Members can edit the chat list",
-						@"Only administrators edit the chat list"];
+	NSArray *titles = @[@"Edit Chat List",
+						@"Only Admins"];
 	[TGAlertSheet showChoices:titles
-						title:@"Community Permissions"
-					  message:@"This is the only permission Telegram exposes for "
-							  @"regular members of a community."
+						title:@"Permissions"
+					  message:nil
 			 destructiveIndex:-1
 					   inView:self.view
 					 onChoice:^(NSInteger index){
@@ -228,7 +227,7 @@ static const CGFloat kCommunityPhotoBar  = 92.0f;
 									 canEditChatList:allowed
 										 completion:^(BOOL ok, NSString *error){
 			if (!ok){
-				[weakSelf toast:error ?: @"Telegram refused that."];
+				[weakSelf toast:error ?: @"An error occurred."];
 				return;
 			}
 			weakSelf.community[@"canEditChatList"] = @(allowed);
@@ -259,7 +258,7 @@ static const CGFloat kCommunityPhotoBar  = 92.0f;
 			stringByAppendingPathComponent:@"community-photo.jpg"];
 	if (![UIImageJPEGRepresentation(scaled, TGCompressionQualityStandard)
 			writeToFile:path atomically:YES]){
-		[self toast:@"Could not prepare the picture."];
+		[self toast:@"An error occurred."];
 		return;
 	}
 	self.pickedPhoto = scaled;
@@ -268,7 +267,7 @@ static const CGFloat kCommunityPhotoBar  = 92.0f;
 	[[TGClient shared] setCommunityPhoto:self.communityId path:path
 							  completion:^(BOOL ok, NSString *error){
 		if (!ok){
-			[weakSelf toast:error ?: @"Telegram refused the picture."];
+			[weakSelf toast:error ?: @"An error occurred."];
 			return;
 		}
 		[weakSelf loadFullInfo];
@@ -281,9 +280,8 @@ static const CGFloat kCommunityPhotoBar  = 92.0f;
 
 - (void)confirmDelete {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:@"The community and its member list are removed. "
-							  @"Its chats stay where they are."
-						 title:@"Delete Community"
+	[TGAlertSheet showConfirm:@"Delete Community"
+							  title:@"Delete Community"
 						action:@"Delete"
 				   destructive:YES
 						inView:self.view
@@ -291,7 +289,7 @@ static const CGFloat kCommunityPhotoBar  = 92.0f;
 		[[TGClient shared] deleteCommunity:weakSelf.communityId
 								completion:^(BOOL ok, NSString *error){
 			if (!ok){
-				[weakSelf toast:error ?: @"Telegram refused that."];
+				[weakSelf toast:error ?: @"An error occurred."];
 				return;
 			}
 			[weakSelf.navigationController popViewControllerAnimated:YES];

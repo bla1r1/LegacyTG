@@ -19,6 +19,12 @@
 					   keys:(NSArray *)keys
 				 completion:(void (^)(NSArray *strings))completion;
 
+/// Load the app's own UI language. Builds an English-value → translated-value
+/// map from the official English and target packs, so all official Telegram
+/// languages work without a bundled .lproj per language.
+- (void)loadAppLanguagePack:(NSString *)packId
+				 completion:(void (^)(BOOL ok))completion;
+
 /// The strings the last updateLanguagePackStrings carried for each pack,
 /// keyed by pack id. A change, not the whole pack - the page re-reads the
 /// list it was showing rather than pretending a partial answer is complete.

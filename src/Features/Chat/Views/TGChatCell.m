@@ -1,5 +1,6 @@
 #import "TGTextDraw.h"
 #import "TGChatCell.h"
+#import "TGLocalization.h"
 #import "TGChatListRowGeometry.h"
 #import "TGTheme.h"
 #import "TGCustomEmojiStore.h"
@@ -97,16 +98,6 @@ static UIFont *TGChatCellTitleFont(void) {
 	self.badge.layer.cornerRadius = TGHalf(TGMetricChatBadgeHeight);
 	self.badge.clipsToBounds = YES;
 
-	self.editCheck = [[UILabel alloc] init];
-	self.editCheck.text = @"\u2713";
-	self.editCheck.font = TGFontCaptionStrong();
-	self.editCheck.textColor = [[TGTheme shared] onAccentColour];
-	self.editCheck.backgroundColor = [theme accentColour];
-	self.editCheck.textAlignment = NSTextAlignmentCenter;
-	self.editCheck.layer.cornerRadius = TGHalf(TGMetricChatBadgeHeight);
-	self.editCheck.clipsToBounds = YES;
-	self.editCheck.hidden = YES;
-	[self.contentView addSubview:self.editCheck];
 	self.badge.hidden = YES;
 	[self.contentView addSubview:self.badge];
 
@@ -266,7 +257,7 @@ static UIFont *TGChatCellTitleFont(void) {
 - (void)setDraftPreview:(NSString *)draftText {
 	TGTheme *theme = [TGTheme shared];
 	draftText = draftText ?: @"";
-	NSString *prefix = @"Draft: ";
+	NSString *prefix = [TGLocalized(@"Draft") stringByAppendingString:@": "];
 	if (![self.previewLabel respondsToSelector:@selector(setAttributedText:)]) {
 		self.previewLabel.text = [prefix stringByAppendingString:draftText];
 		self.previewLabel.textColor = [theme destructiveColour];
@@ -362,10 +353,6 @@ static UIFont *TGChatCellTitleFont(void) {
 	CGSize fit = [self.previewLabel sizeThatFits:CGSizeMake(previewW, kPreviewMax)];
 	self.previewLabel.frame = CGRectMake(kTextLeft, kSecondLineTop, previewW,
 			MIN(ceilf(fit.height), kPreviewMax - TGMetricPadTiny));
-
-	CGFloat checkSide = TGMetricChatBadgeHeight;
-	self.editCheck.frame = CGRectMake(w - checkSide - TGMetricPad,
-			TGCenteredOrigin(h, checkSide), checkSide, checkSide);
 
 	CGFloat hair = TGMetricHairline;
 	self.separator.frame = CGRectMake(kTextLeft, h - hair, w - kTextLeft, hair);
@@ -571,26 +558,17 @@ static UIFont *TGChatCellTitleFont(void) {
 	[super setEditing:editing animated:animated];
 	if (editing)
 		[self closeSwipeActionsAnimated:NO];
-	[self updateEditCheck];
 }
 
 - (void)setSelected:(BOOL)selected animated:(BOOL)animated {
 	[super setSelected:selected animated:animated];
 	if (selected)
 		[self closeSwipeActionsAnimated:NO];
-	[self updateEditCheck];
-}
-
-- (void)updateEditCheck {
-	self.editCheck.hidden = !(self.editing && self.selected);
-	self.dateLabel.hidden = self.editing;
-	[self setNeedsLayout];
 }
 
 - (void)prepareForReuse {
 	[super prepareForReuse];
 	[self closeSwipeActionsAnimated:NO];
-	self.editCheck.hidden = YES;
 	self.dateLabel.hidden = NO;
 }
 

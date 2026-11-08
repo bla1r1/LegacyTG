@@ -2,6 +2,7 @@
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
+#import "TGLocalization.h"
 
 @implementation TGListViewController
 
@@ -12,25 +13,12 @@
 - (void)viewDidLoad {
 	[super viewDidLoad];
 	self.rows = self.rows ?: @[];
-	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
-		self.edgesForExtendedLayout = UIRectEdgeNone;
 	[self applyTheme];
 	if (self.offersCopy)
 		self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
 				initWithTitle:@"Copy" style:UIBarButtonItemStylePlain
 					   target:self action:@selector(copyAll)];
 
-	__weak typeof(self) weakSelf = self;
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGThemeChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note) {
-		[weakSelf applyTheme];
-		[weakSelf.tableView reloadData];
-	}];
-}
-
-- (void)dealloc {
-	[[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -69,7 +57,7 @@
 	}
 	[UIPasteboard generalPasteboard].string =
 			[lines componentsJoinedByString:@"\n"];
-	[TGAlertSheet showMessage:@"Copied." title:nil inView:self.view];
+	[TGAlertSheet showMessage:@"Copied to clipboard." title:nil inView:self.view];
 }
 
 #pragma mark - table
@@ -95,7 +83,7 @@
 			cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
 										  reuseIdentifier:@"empty"];
 		[[TGTheme shared] styleCell:cell];
-		cell.textLabel.text = self.emptyText ?: @"Nothing here yet.";
+		cell.textLabel.text = self.emptyText ?: @"None";
 		cell.textLabel.textColor = [[TGTheme shared] secondaryTextColour];
 		cell.textLabel.font = TGFontBody();
 		cell.selectionStyle = UITableViewCellSelectionStyleNone;

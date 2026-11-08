@@ -90,26 +90,13 @@ static UIImage *TGBackgroundPreview(UIImage *source, NSInteger fillColour) {
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	self.title = @"Chat Backgrounds";
-	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
-		self.edgesForExtendedLayout = UIRectEdgeNone;
+	self.title = @"Chat Wallpaper";
 	self.installed = @[];
 	self.previews = [NSMutableDictionary dictionary];
 	self.requested = [NSMutableSet set];
 	[self applyTheme];
 	[self loadInstalled];
 
-	__weak typeof(self) weakSelf = self;
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGThemeChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note){
-		[weakSelf applyTheme];
-		[weakSelf.tableView reloadData];
-	}];
-}
-
-- (void)dealloc {
-	[[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -145,18 +132,15 @@ static UIImage *TGBackgroundPreview(UIImage *source, NSInteger fillColour) {
 - (NSArray *)buildSections {
 	NSMutableArray *sections = [NSMutableArray array];
 
-	NSMutableDictionary *themeRow = TGBRow(@"switch", @"Dark Theme Backgrounds");
+	NSMutableDictionary *themeRow = TGBRow(@"switch", @"Night Mode");
 	themeRow[@"on"] = @(self.darkTheme);
-	[sections addObject:TGBSection(@"THEME",
-			@"Telegram keeps a separate installed list and default for the dark "
-			@"theme. This switch chooses which one this page edits.",
-			@[themeRow])];
+	[sections addObject:TGBSection(nil, nil, @[themeRow])];
 
 	NSMutableArray *installedRows = [NSMutableArray array];
 	if (self.loadError.length)
 		[installedRows addObject:TGBRow(@"plain", self.loadError)];
 	else if (!self.installed.count)
-		[installedRows addObject:TGBRow(@"plain", @"No backgrounds installed.")];
+		[installedRows addObject:TGBRow(@"plain", @"None")];
 	else {
 		for (NSDictionary *background in self.installed){
 			NSMutableDictionary *row = TGBRow(@"background", background[@"title"] ?: background[@"name"]);
@@ -165,13 +149,10 @@ static UIImage *TGBackgroundPreview(UIImage *source, NSInteger fillColour) {
 			[installedRows addObject:row];
 		}
 	}
-	[sections addObject:TGBSection(@"INSTALLED",
-			@"Tap a background to make it the default, read its address, or "
-			@"remove it from this list.", installedRows)];
+	[sections addObject:TGBSection(nil, nil, installedRows)];
 
 	NSMutableArray *searchRows = [NSMutableArray array];
-	[searchRows addObject:TGBCellRow(@"Search Telegram's Backgrounds",
-			@"By name", @"search")];
+	[searchRows addObject:TGBCellRow(@"Search", nil, @"search")];
 	if (self.searchError.length)
 		[searchRows addObject:TGBRow(@"plain", self.searchError)];
 	if (self.found){
@@ -180,22 +161,17 @@ static UIImage *TGBackgroundPreview(UIImage *source, NSInteger fillColour) {
 		row[@"installed"] = @NO;
 		[searchRows addObject:row];
 	}
-	[sections addObject:TGBSection(@"CATALOGUE",
-			@"Searches Telegram's public background catalogue. A result can be "
-			@"installed or its persistent address copied.", searchRows)];
+	[sections addObject:TGBSection(nil, nil, searchRows)];
 
 	NSMutableArray *defaultRows = [NSMutableArray array];
-	[defaultRows addObject:TGBCellRow(@"Delete Default Background", nil,
+	[defaultRows addObject:TGBCellRow(@"Remove Wallpaper", nil,
 			@"deleteDefault")];
-	[defaultRows addObject:TGBCellRow(@"Reset Installed Backgrounds", nil,
+	[defaultRows addObject:TGBCellRow(@"Reset Chat Wallpapers", nil,
 			@"reset")];
-	[sections addObject:TGBSection(@"DEFAULT",
-			@"Deleting the default puts chats back on Telegram's own background. "
-			@"Reset restores the installed list without touching the default.",
-			defaultRows)];
+	[sections addObject:TGBSection(nil, nil, defaultRows)];
 
 	if (self.status.length)
-		[sections addObject:TGBSection(@"LAST ANSWER", nil,
+		[sections addObject:TGBSection(nil, nil,
 				@[TGBRow(@"plain", self.status)])];
 
 	return sections;
@@ -377,8 +353,8 @@ static UIImage *TGBackgroundPreview(UIImage *source, NSInteger fillColour) {
 - (void)runAction:(NSString *)action {
 	__weak typeof(self) weakSelf = self;
 	if ([action isEqualToString:@"search"]){
-		[TGAlertSheet showInput:@"Search Backgrounds"
-						message:@"Telegram's catalogue is searched by name."
+		[TGAlertSheet showInput:@"Search"
+						message:nil
 					placeholder:@"cat"
 						   text:nil action:@"Search" inView:self.view
 					   onSubmit:^(NSString *name){
@@ -387,36 +363,34 @@ static UIImage *TGBackgroundPreview(UIImage *source, NSInteger fillColour) {
 		return;
 	}
 	if ([action isEqualToString:@"reset"]){
-		[TGAlertSheet showConfirm:@"Every installed background except Telegram's "
-								  @"defaults is dropped from the list."
-							title:@"Reset Installed Backgrounds"
+		[TGAlertSheet showConfirm:nil
+							title:@"Reset Chat Wallpapers"
 						   action:@"Reset" destructive:YES inView:self.view
 						onConfirm:^{
 			[[TGClient shared] resetInstalledBackgroundsWithCompletion:
 					^(BOOL ok, NSString *error){
 				if (!ok){
-					[weakSelf showError:error title:@"Reset Backgrounds"];
+					[weakSelf showError:error title:@"Reset Chat Wallpapers"];
 					return;
 				}
-				weakSelf.status = @"Installed backgrounds reset to Telegram's defaults.";
+				weakSelf.status = @"Done";
 				[weakSelf loadInstalled];
 			}];
 		}];
 		return;
 	}
 	if ([action isEqualToString:@"deleteDefault"]){
-		[TGAlertSheet showConfirm:@"Chats go back to Telegram's own background for "
-								  @"this theme. Installed backgrounds stay."
-							title:@"Delete Default Background"
+		[TGAlertSheet showConfirm:nil
+							title:@"Remove Wallpaper"
 						   action:@"Delete" destructive:YES inView:self.view
 						onConfirm:^{
 			[[TGClient shared] deleteDefaultBackgroundForDarkTheme:weakSelf.darkTheme
 					completion:^(BOOL ok, NSString *error){
 				if (!ok){
-					[weakSelf showError:error title:@"Default Background"];
+					[weakSelf showError:error title:@"Wallpaper"];
 					return;
 				}
-				weakSelf.status = @"The default background was deleted.";
+				weakSelf.status = @"Done";
 				[weakSelf loadInstalled];
 			}];
 		}];
@@ -430,11 +404,10 @@ static UIImage *TGBackgroundPreview(UIImage *source, NSInteger fillColour) {
 		weakSelf.found = background;
 		weakSelf.searchError = error;
 		if (error){
-			[TGAlertSheet showMessage:error title:@"Search Backgrounds"
+			[TGAlertSheet showMessage:error title:@"Search"
 							   inView:weakSelf.view];
 		} else if (background){
-			weakSelf.status = [NSString stringWithFormat:@"Found \"%@\".",
-					background[@"title"] ?: background[@"name"]];
+			weakSelf.status = background[@"title"] ?: background[@"name"];
 		}
 		[weakSelf rebuild];
 	}];
@@ -443,8 +416,8 @@ static UIImage *TGBackgroundPreview(UIImage *source, NSInteger fillColour) {
 - (void)showActionsForBackground:(NSDictionary *)background installed:(BOOL)installed {
 	__weak typeof(self) weakSelf = self;
 	NSArray *titles = installed
-			? @[@"Set as Default", @"Show Remote URL", @"Remove from Installed"]
-			: @[@"Install as Default", @"Show Remote URL"];
+			? @[@"Apply Wallpaper", @"Link", @"Remove Wallpaper"]
+			: @[@"Apply Wallpaper", @"Link"];
 	[TGAlertSheet showChoices:titles
 						title:(background[@"title"] ?: background[@"name"] ?: @"Background")
 					  message:[self detailForBackground:background]
@@ -464,9 +437,7 @@ static UIImage *TGBackgroundPreview(UIImage *source, NSInteger fillColour) {
 	NSMutableArray *parts = [NSMutableArray array];
 	[parts addObject:[background[@"typeName"] capitalizedString] ?: @"Background"];
 	if ([background[@"isDark"] boolValue])
-		[parts addObject:@"Dark theme"];
-	if ([background[@"fileId"] longLongValue] > 0)
-		[parts addObject:[NSString stringWithFormat:@"file %@", background[@"fileId"]]];
+		[parts addObject:@"Night Mode"];
 	return [parts componentsJoinedByString:@" · "];
 }
 
@@ -476,12 +447,11 @@ static UIImage *TGBackgroundPreview(UIImage *source, NSInteger fillColour) {
 							   forDarkTheme:self.darkTheme
 								 completion:^(NSDictionary *installed, NSString *error){
 		if (!installed){
-			[weakSelf showError:(error ?: @"Telegram refused that background.")
-						  title:@"Set Background"];
+			[weakSelf showError:(error ?: @"An error occurred.")
+						  title:@"Chat Wallpaper"];
 			return;
 		}
-		weakSelf.status = [NSString stringWithFormat:@"\"%@\" is now the default.",
-				installed[@"title"] ?: background[@"title"] ?: background[@"name"]];
+		weakSelf.status = @"Done";
 		[weakSelf loadInstalled];
 	}];
 }
@@ -491,12 +461,12 @@ static UIImage *TGBackgroundPreview(UIImage *source, NSInteger fillColour) {
 	[[TGClient shared] backgroundUrlForBackground:background
 			completion:^(NSString *url, NSString *error){
 		if (!url.length){
-			[weakSelf showError:(error ?: @"Telegram did not answer with an address.")
-						  title:@"Background Address"];
+			[weakSelf showError:(error ?: @"An error occurred.")
+						  title:@"Link"];
 			return;
 		}
-		[TGAlertSheet showChoices:@[@"Copy Address", @"Open Address"]
-							title:@"Background Address"
+		[TGAlertSheet showChoices:@[@"Copy Address", @"Open Link"]
+							title:@"Link"
 						  message:url
 				 destructiveIndex:-1
 						   inView:weakSelf.view
@@ -512,19 +482,17 @@ static UIImage *TGBackgroundPreview(UIImage *source, NSInteger fillColour) {
 
 - (void)removeBackground:(NSDictionary *)background {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:@"It leaves the installed list. Telegram's catalogue "
-							  @"still has it, so a search can bring it back."
-						title:@"Remove Background"
+	[TGAlertSheet showConfirm:nil
+						title:@"Remove Wallpaper"
 					   action:@"Remove" destructive:YES inView:self.view
 					onConfirm:^{
 		[[TGClient shared] removeInstalledBackground:[background[@"id"] longLongValue]
 				completion:^(BOOL ok, NSString *error){
 			if (!ok){
-				[weakSelf showError:error title:@"Remove Background"];
+				[weakSelf showError:error title:@"Remove Wallpaper"];
 				return;
 			}
-			weakSelf.status = [NSString stringWithFormat:@"\"%@\" was removed.",
-					background[@"title"] ?: background[@"name"]];
+			weakSelf.status = @"Done";
 			[weakSelf loadInstalled];
 		}];
 	}];
@@ -532,7 +500,7 @@ static UIImage *TGBackgroundPreview(UIImage *source, NSInteger fillColour) {
 
 - (void)showError:(NSString *)message title:(NSString *)title {
 	if (!message.length)
-		message = @"Telegram refused that.";
+		message = @"An error occurred.";
 	self.status = message;
 	[TGAlertSheet showMessage:message title:title inView:self.view];
 	[self rebuild];

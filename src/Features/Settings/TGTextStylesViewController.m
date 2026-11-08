@@ -18,8 +18,6 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
-		self.edgesForExtendedLayout = UIRectEdgeNone;
 	self.title = @"Text Styles";
 	self.styles = [TGClient shared].textCompositionStyles ?: @[];
 	self.tableView.rowHeight = TGMetricRow;
@@ -28,17 +26,13 @@
 			initWithBarButtonSystemItem:UIBarButtonSystemItemAdd
 								 target:self action:@selector(createTapped)];
 	self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc]
-			initWithTitle:@"Find" style:UIBarButtonItemStylePlain
+			initWithTitle:@"Search" style:UIBarButtonItemStylePlain
 				   target:self action:@selector(searchTapped)];
 
 	[[NSNotificationCenter defaultCenter] addObserver:self
 			selector:@selector(stylesChanged:)
 				name:TGTextCompositionStylesChangedNotification object:nil];
 	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(applyTheme) name:TGThemeChangedNotification object:nil];
-}
-
-- (void)dealloc {
-	[[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 - (void)applyTheme {
@@ -71,13 +65,7 @@
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-	if (self.styles.count)
-		return @"These are the styles Telegram offers the composer. Tap one for "
-			   @"its examples; the verbs that change it are in the same sheet. "
-			   @"Custom styles are a Premium feature and the refusal is shown "
-			   @"as Telegram words it.";
-	return @"No text composition styles have arrived. The list comes from "
-		   @"updateTextCompositionStyles; Find searches one by name.";
+	return nil;
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -110,7 +98,7 @@
 
 - (void)showActionsForStyle:(NSDictionary *)style {
 	NSMutableArray *choices = [NSMutableArray arrayWithObjects:
-			@"Preview Examples", @"Edit", @"Add to Composer", nil];
+			@"Preview", @"Edit", @"Add to Composer", nil];
 	if ([style[@"isCreator"] boolValue])
 		[choices addObject:@"Delete Style"];
 	else
@@ -122,7 +110,7 @@
 					   inView:self.view
 					 onChoice:^(NSInteger index){
 		NSString *choice = choices[index];
-		if ([choice isEqualToString:@"Preview Examples"]){
+		if ([choice isEqualToString:@"Preview"]){
 			[weakSelf previewStyle:style];
 		} else if ([choice isEqualToString:@"Edit"]){
 			[weakSelf editStyle:style];
@@ -154,7 +142,7 @@
 
 - (void)deleteStyle:(NSDictionary *)style {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:@"Delete this style for good?"
+	[TGAlertSheet showConfirm:nil
 						title:(style[@"title"] ?: @"Delete Style")
 					   action:@"Delete"
 				  destructive:YES
@@ -168,7 +156,7 @@
 }
 
 - (void)report:(BOOL)ok error:(NSString *)error title:(NSString *)title {
-	[TGAlertSheet showMessage:(ok ? @"Done." : (error ?: @"Telegram refused that."))
+	[TGAlertSheet showMessage:(ok ? @"Done" : (error ?: @"An error occurred."))
 						title:title inView:self.view];
 }
 
@@ -177,11 +165,11 @@
 - (void)createTapped {
 	__weak typeof(self) weakSelf = self;
 	[TGAlertSheet showInput:@"New Text Style"
-					message:@"A title Telegram shows in the style picker."
+					message:nil
 				placeholder:@"Title" text:nil action:@"Next"
 					 inView:self.view onSubmit:^(NSString *title){
 		[TGAlertSheet showInput:@"New Text Style"
-						message:@"The prompt the model composes with."
+						message:nil
 					placeholder:@"Prompt" text:nil action:@"Create"
 						 inView:weakSelf.view onSubmit:^(NSString *prompt){
 			[[TGClient shared] createTextCompositionStyle:title emojiId:0
@@ -197,14 +185,14 @@
 - (void)editStyle:(NSDictionary *)style {
 	__weak typeof(self) weakSelf = self;
 	[TGAlertSheet showInput:@"Edit Text Style"
-					message:@"The title shown in the picker."
+					message:nil
 				placeholder:@"Title"
 					   text:style[@"title"] ?: style[@"name"]
 					 action:@"Next"
 					 inView:self.view
 				   onSubmit:^(NSString *title){
 		[TGAlertSheet showInput:@"Edit Text Style"
-						message:@"The prompt the model composes with."
+						message:nil
 					placeholder:@"Prompt"
 						   text:style[@"prompt"]
 						 action:@"Save"
@@ -235,20 +223,17 @@
 			return;
 		TGListViewController *list = [[TGListViewController alloc] init];
 		list.listTitle = style[@"title"] ?: style[@"name"] ?: @"Examples";
-		list.emptyText = @"Telegram has no examples for this style.";
+		list.emptyText = @"Empty";
 		NSMutableArray *rows = [NSMutableArray array];
 		for (NSDictionary *example in examples){
 			NSString *source = example[@"sourceText"] ?: @"";
 			NSString *result = example[@"resultText"] ?: @"";
 			[rows addObject:@{@"title" : result,
-							  @"detail" : source.length
-									  ? [NSString stringWithFormat:@"From: %@", source]
-									  : @"Example"}];
+							  @"detail" : source.length ? source : @"Example"}];
 		}
 		NSString *firstResult = examples.count ? examples[0][@"resultText"] : nil;
 		if (firstResult.length){
-			[rows addObject:@{@"title" : @"Send Example to Chat",
-							  @"detail" : @"Opens a chat picker",
+			[rows addObject:@{@"title" : @"Send",
 							  @"tap" : ^{
 				TGForwardPicker *picker = [[TGForwardPicker alloc] init];
 				picker.onPicked = ^(int64_t targetChatId){
@@ -258,8 +243,7 @@
 			}}];
 		}
 		list.rows = rows;
-		list.listFooter = @"Examples come from getTextCompositionStyleExample, "
-				@"one per example number Telegram answers.";
+		list.listFooter = nil;
 		[me.navigationController pushViewController:list animated:YES];
 	}];
 }
@@ -297,14 +281,14 @@
 
 - (void)searchTapped {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"Find a Text Style"
-					message:@"Telegram searches by the style's name."
-				placeholder:@"name" text:nil action:@"Find"
+	[TGAlertSheet showInput:@"Search"
+					message:nil
+				placeholder:@"name" text:nil action:@"Search"
 					 inView:self.view onSubmit:^(NSString *name){
 		[[TGClient shared] searchTextCompositionStyleNamed:name
 												completion:^(NSDictionary *style,
 															 NSString *error){
-			[weakSelf report:(style != nil) error:error title:@"Find a Text Style"];
+			[weakSelf report:(style != nil) error:error title:@"Search"];
 		}];
 	}];
 }

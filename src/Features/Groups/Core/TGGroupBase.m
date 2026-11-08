@@ -145,9 +145,11 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 	self.disabled = [NSMutableArray array];
 	// The screen is real before the first answer: a pushed blank table and a
 	// nav bar still saying the group's name read as "the tap did nothing".
-	self.sections = @[TGSection(@"Group Settings",
-			@"Reading the group from Telegram.", @[TGInfoRow(@"Loading",
-					@"Waiting for the group record", nil)])];
+	self.sections = @[];
+	UIActivityIndicatorView *spinner = [[UIActivityIndicatorView alloc]
+			initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleGray];
+	[spinner startAnimating];
+	self.tableView.backgroundView = spinner;
 	self.loaded = YES;
 	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
 		self.edgesForExtendedLayout = UIRectEdgeNone;

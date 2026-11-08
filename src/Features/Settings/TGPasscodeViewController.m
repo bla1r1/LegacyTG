@@ -85,6 +85,7 @@ static const CGFloat kBorderWidth = 1.5f;
 	self.view.backgroundColor = [[TGTheme shared] listBackgroundColour];
 
 	if (self.mode != TGPasscodeModeUnlock && self.navigationController) {
+		self.title = @"Passcode Lock";
 		self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc]
 				initWithBarButtonSystemItem:UIBarButtonSystemItemCancel
 									 target:self
@@ -153,7 +154,10 @@ static const CGFloat kBorderWidth = 1.5f;
 
 - (void)cancelTapped {
 	[self.hiddenInput resignFirstResponder];
-	if (self.onCancel) self.onCancel();
+	if (self.onCancel) {
+		self.onCancel();
+		return;
+	}
 	if (self.navigationController) {
 		[self.navigationController popViewControllerAnimated:YES];
 	} else {
@@ -165,25 +169,25 @@ static const CGFloat kBorderWidth = 1.5f;
 	self.subtitleLabel.text = @"";
 	switch (self.mode) {
 		case TGPasscodeModeUnlock:
-			self.titleLabel.text = @"Enter Passcode";
+			self.titleLabel.text = @"Enter a passcode";
 			break;
 		case TGPasscodeModeTurnOff:
-			self.titleLabel.text = @"Enter Passcode";
+			self.titleLabel.text = @"Enter a passcode";
 			break;
 		case TGPasscodeModeSetup:
 			if (self.step == 0) {
-				self.titleLabel.text = @"Enter a Passcode";
+				self.titleLabel.text = @"Enter a passcode";
 			} else {
-				self.titleLabel.text = @"Re-enter your Passcode";
+				self.titleLabel.text = @"Re-enter your new passcode";
 			}
 			break;
 		case TGPasscodeModeChange:
 			if (self.step == 0) {
-				self.titleLabel.text = @"Enter Old Passcode";
+				self.titleLabel.text = @"Enter your current passcode";
 			} else if (self.step == 1) {
-				self.titleLabel.text = @"Enter New Passcode";
+				self.titleLabel.text = @"Enter your new passcode";
 			} else {
-				self.titleLabel.text = @"Re-enter New Passcode";
+				self.titleLabel.text = @"Re-enter your new passcode";
 			}
 			break;
 	}
@@ -237,7 +241,7 @@ static const CGFloat kBorderWidth = 1.5f;
 			} else {
 				[self shakeDots];
 				self.subtitleLabel.textColor = [[TGTheme shared] destructiveColour];
-				self.subtitleLabel.text = @"Incorrect passcode";
+				self.subtitleLabel.text = @"Wrong code, please try again.";
 			}
 			break;
 		}
@@ -245,12 +249,15 @@ static const CGFloat kBorderWidth = 1.5f;
 			if ([TGPasscode verifyPasscode:pin]) {
 				[TGPasscode clearPasscode];
 				[self.hiddenInput resignFirstResponder];
-				if (self.onSuccess) self.onSuccess();
-				if (self.navigationController) [self.navigationController popViewControllerAnimated:YES];
+				if (self.onSuccess) {
+					self.onSuccess();
+				} else if (self.navigationController) {
+					[self.navigationController popViewControllerAnimated:YES];
+				}
 			} else {
 				[self shakeDots];
 				self.subtitleLabel.textColor = [[TGTheme shared] destructiveColour];
-				self.subtitleLabel.text = @"Incorrect passcode";
+				self.subtitleLabel.text = @"Wrong code, please try again.";
 			}
 			break;
 		}
@@ -265,12 +272,15 @@ static const CGFloat kBorderWidth = 1.5f;
 				if ([pin isEqualToString:self.firstEntry]) {
 					[TGPasscode setPasscode:pin];
 					[self.hiddenInput resignFirstResponder];
-					if (self.onSuccess) self.onSuccess();
-					if (self.navigationController) [self.navigationController popViewControllerAnimated:YES];
+					if (self.onSuccess) {
+						self.onSuccess();
+					} else if (self.navigationController) {
+						[self.navigationController popViewControllerAnimated:YES];
+					}
 				} else {
 					[self shakeDots];
 					self.subtitleLabel.textColor = [[TGTheme shared] destructiveColour];
-					self.subtitleLabel.text = @"Passcodes didn't match. Try again.";
+					self.subtitleLabel.text = @"Passcodes don't match. Please try again.";
 					self.step = 0;
 					self.firstEntry = nil;
 					[self updateStepTitle];
@@ -288,7 +298,7 @@ static const CGFloat kBorderWidth = 1.5f;
 				} else {
 					[self shakeDots];
 					self.subtitleLabel.textColor = [[TGTheme shared] destructiveColour];
-					self.subtitleLabel.text = @"Incorrect old passcode";
+					self.subtitleLabel.text = @"Wrong code, please try again.";
 				}
 			} else if (self.step == 1) {
 				self.pendingPasscode = pin;
@@ -300,12 +310,15 @@ static const CGFloat kBorderWidth = 1.5f;
 				if ([pin isEqualToString:self.pendingPasscode]) {
 					[TGPasscode setPasscode:pin];
 					[self.hiddenInput resignFirstResponder];
-					if (self.onSuccess) self.onSuccess();
-					if (self.navigationController) [self.navigationController popViewControllerAnimated:YES];
+					if (self.onSuccess) {
+						self.onSuccess();
+					} else if (self.navigationController) {
+						[self.navigationController popViewControllerAnimated:YES];
+					}
 				} else {
 					[self shakeDots];
 					self.subtitleLabel.textColor = [[TGTheme shared] destructiveColour];
-					self.subtitleLabel.text = @"Passcodes didn't match. Try again.";
+					self.subtitleLabel.text = @"Passcodes don't match. Please try again.";
 					self.step = 1;
 					self.pendingPasscode = nil;
 					[self updateStepTitle];

@@ -6,7 +6,7 @@
 
 static NSString *TGBotToolError(NSDictionary *result) {
 	NSString *message = result[@"message"];
-	return [message isKindOfClass:NSString.class] ? message : @"Telegram refused that.";
+	return [message isKindOfClass:NSString.class] ? message : @"An error occurred.";
 }
 
 /// "keyboardButtonTypeRequestPoll" reads as "requestPoll" in the card, the

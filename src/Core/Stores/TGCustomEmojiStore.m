@@ -25,7 +25,17 @@ static const NSUInteger kBatchLimit = 200;
 @property (nonatomic, strong) NSMutableSet *queued;          // ids waiting for the batch
 @property (nonatomic, strong) NSMutableSet *failed;          // ids TDLib gave no picture for
 @property (nonatomic, strong) NSMutableDictionary *animations; // id -> @{@"fileId": @(fileId), @"format": fmt}
+/// id -> still picture's path from earlier runs. getCustomEmojiStickers
+/// waits seconds behind the chat load at launch; a picture already on disk
+/// does not have to.
+@property (nonatomic, strong) NSMutableDictionary *knownPaths;
 @end
+
+static NSString *TGCustomEmojiPathsFile(void) {
+	NSString *caches = [NSSearchPathForDirectoriesInDomains(NSCachesDirectory,
+			NSUserDomainMask, YES) firstObject];
+	return [caches stringByAppendingPathComponent:@"custom-emoji-paths.plist"];
+}
 
 @implementation TGCustomEmojiStore
 
@@ -49,6 +59,19 @@ static const NSUInteger kBatchLimit = 200;
 	self.queued = [NSMutableSet set];
 	self.failed = [NSMutableSet set];
 	self.animations = [NSMutableDictionary dictionary];
+	// Keyed by emoji id, which is global, but the files belong to this
+	// account's TDLib directory: an account switch (reset) starts empty.
+	NSDictionary *saved = self.knownPaths ? nil
+			: [NSDictionary dictionaryWithContentsOfFile:TGCustomEmojiPathsFile()];
+	self.knownPaths = [saved isKindOfClass:NSDictionary.class]
+			? [saved mutableCopy] : [NSMutableDictionary dictionary];
+}
+
+- (void)saveKnownPaths {
+	NSDictionary *copy = [self.knownPaths copy];
+	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_BACKGROUND, 0), ^{
+		[copy writeToFile:TGCustomEmojiPathsFile() atomically:YES];
+	});
 }
 
 static NSString *TGNormalizeStickerFormat(id formatObj) {
@@ -114,6 +137,11 @@ static NSString *TGPictureKey(int64_t emojiId, CGFloat side) {
 
 	// The file is already here for another size: only the decode is new.
 	NSString *path = self.paths[key];
+	if (!path){
+		NSString *known = self.knownPaths[[key stringValue]];
+		if (known.length && [[NSFileManager defaultManager] fileExistsAtPath:known])
+			self.paths[key] = path = known;
+	}
 	if (path){
 		[self decodePath:path forId:emojiId side:side];
 		return nil;
@@ -121,17 +149,22 @@ static NSString *TGPictureKey(int64_t emojiId, CGFloat side) {
 	if (asked)
 		return nil;
 	[self.queued addObject:key];
-	if (self.queued.count == 1)
-		[self performSelector:@selector(sendBatch) withObject:nil afterDelay:0.05];
+	if (self.queued.count >= 20) {
+		[NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(sendBatch) object:nil];
+		[self sendBatch];
+	} else if (self.queued.count == 1) {
+		[self performSelector:@selector(sendBatch) withObject:nil afterDelay:0.02];
+	}
 	return nil;
 }
 
 - (void)sendBatch {
+	[NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(sendBatch) object:nil];
 	NSArray *ids = [[self.queued allObjects] subarrayWithRange:
 			NSMakeRange(0, MIN(self.queued.count, kBatchLimit))];
 	[self.queued minusSet:[NSSet setWithArray:ids]];
 	if (self.queued.count)
-		[self performSelector:@selector(sendBatch) withObject:nil afterDelay:0.05];
+		[self performSelector:@selector(sendBatch) withObject:nil afterDelay:0.02];
 
 #if TG_DEV
 	NSLog(@"custom emoji: asking for %lu", (unsigned long)ids.count);
@@ -192,7 +225,7 @@ static NSString *TGPictureKey(int64_t emojiId, CGFloat side) {
 
 		__weak typeof(self) weakSelf = self;
 		[[TGClient shared] downloadFile:thumb.integerValue
-							   priority:TGDownloadPriorityAvatar
+							   priority:TGDownloadPriorityOnScreen
 							 completion:^(NSString *path){
 			dispatch_async(dispatch_get_main_queue(), ^{
 				[weakSelf receivePath:path forId:key.longLongValue];
@@ -215,6 +248,12 @@ static NSString *TGPictureKey(int64_t emojiId, CGFloat side) {
 		return;
 	}
 	self.paths[key] = path;
+	if (![self.knownPaths[[key stringValue]] isEqualToString:path]){
+		self.knownPaths[[key stringValue]] = path;
+		[NSObject cancelPreviousPerformRequestsWithTarget:self
+				selector:@selector(saveKnownPaths) object:nil];
+		[self performSelector:@selector(saveKnownPaths) withObject:nil afterDelay:2.0];
+	}
 	for (NSNumber *side in [self.wanted[key] copy])
 		[self decodePath:path forId:emojiId side:side.floatValue];
 }
@@ -224,16 +263,27 @@ static NSString *TGPictureKey(int64_t emojiId, CGFloat side) {
 	CGFloat scale = [UIScreen mainScreen].scale;
 	__weak typeof(self) weakSelf = self;
 	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-		UIImage *raw = [UIImage imageWithContentsOfFile:path]
-				?: [UIImage convertFromWebP:path compressedData:nil error:nil];
+		UIImage *raw = nil;
+		if ([path.pathExtension.lowercaseString isEqualToString:@"webp"]) {
+			raw = [UIImage convertFromWebP:path compressedData:nil error:nil];
+		} else {
+			raw = [UIImage imageWithContentsOfFile:path]
+					?: [UIImage convertFromWebP:path compressedData:nil error:nil];
+		}
 		UIImage *picture = raw ? [TGIcons decodedImage:raw fittingSize:CGSizeMake(side, side)
 												   fill:NO scale:scale] : nil;
 		dispatch_async(dispatch_get_main_queue(), ^{
 			TGCustomEmojiStore *me = weakSelf;
-			if (!me || !picture)
+			if (!me)
 				return;
-			me.pictures[TGPictureKey(emojiId, side)] = picture;
 			[me.wanted[@(emojiId)] removeObject:@(side)];
+			if (![me.wanted[@(emojiId)] count])
+				[me.wanted removeObjectForKey:@(emojiId)];
+			if (!picture) {
+				[me.failed addObject:@(emojiId)];
+				return;
+			}
+			me.pictures[TGPictureKey(emojiId, side)] = picture;
 			[[NSNotificationCenter defaultCenter]
 					postNotificationName:TGCustomEmojiLoadedNotification object:me
 								userInfo:@{@"id" : @(emojiId)}];
@@ -247,10 +297,16 @@ static NSString *TGPictureKey(int64_t emojiId, CGFloat side) {
 		UIImage *picture = raw;
 		dispatch_async(dispatch_get_main_queue(), ^{
 			TGCustomEmojiStore *me = weakSelf;
-			if (!me || !picture)
+			if (!me)
 				return;
-			me.pictures[TGPictureKey(emojiId, side)] = picture;
 			[me.wanted[@(emojiId)] removeObject:@(side)];
+			if (![me.wanted[@(emojiId)] count])
+				[me.wanted removeObjectForKey:@(emojiId)];
+			if (!picture) {
+				[me.failed addObject:@(emojiId)];
+				return;
+			}
+			me.pictures[TGPictureKey(emojiId, side)] = picture;
 			[[NSNotificationCenter defaultCenter]
 					postNotificationName:TGCustomEmojiLoadedNotification object:me
 								userInfo:@{@"id" : @(emojiId)}];

@@ -6,7 +6,7 @@
 
 static NSString *TGCallRequestError(NSDictionary *result) {
 	NSString *message = result[@"message"];
-	return [message isKindOfClass:NSString.class] ? message : @"Telegram refused that.";
+	return [message isKindOfClass:NSString.class] ? message : @"An error occurred.";
 }
 
 @implementation TGClient (Calls)
@@ -16,11 +16,11 @@ static NSString *TGCallRequestError(NSDictionary *result) {
 			 inChat:(int64_t)chatId
 		 completion:(void (^)(BOOL, NSString *))completion {
 	if (!chatId || !messageId){
-		if (completion) completion(NO, @"Name the call's chat and message.");
+		if (completion) completion(NO, @"An error occurred.");
 		return;
 	}
 	if (!log.length){
-		if (completion) completion(NO, @"The call log is empty.");
+		if (completion) completion(NO, @"An error occurred.");
 		return;
 	}
 
@@ -60,7 +60,7 @@ static NSString *TGCallRequestError(NSDictionary *result) {
 						  inChat:(int64_t)chatId
 					  completion:(void (^)(BOOL, NSString *))completion {
 	if (!chatId || !messageId){
-		if (completion) completion(NO, @"Name the call's chat and message.");
+		if (completion) completion(NO, @"An error occurred.");
 		return;
 	}
 	information = [information stringByTrimmingCharactersInSet:

@@ -128,6 +128,28 @@ static NSUInteger TGChatsIndex(UITabBarController *tabs) {
 		return YES;
 	}
 
+	// itglegacy://screenoff and screenon: dark or wake the panel through the
+	// SpringBoard tweak. itglegacy://stand/on also remembers the choice, so a
+	// bench phone goes dark again after every launch until stand/off.
+	if ([host isEqualToString:@"screenoff"] || [host isEqualToString:@"screenon"]){
+		NSString *name = [host isEqualToString:@"screenoff"]
+				? @"org.legacy.itg.screenoff" : @"org.legacy.itg.screenon";
+		CFNotificationCenterPostNotification(
+				CFNotificationCenterGetDarwinNotifyCenter(),
+				(__bridge CFStringRef)name, NULL, NULL, true);
+		return YES;
+	}
+	if ([host isEqualToString:@"stand"]){
+		BOOL on = [arg isEqualToString:@"on"];
+		[[NSUserDefaults standardUserDefaults] setBool:on forKey:@"TGStandScreenOff"];
+		[[NSUserDefaults standardUserDefaults] synchronize];
+		NSString *name = on ? @"org.legacy.itg.screenoff" : @"org.legacy.itg.screenon";
+		CFNotificationCenterPostNotification(
+				CFNotificationCenterGetDarwinNotifyCenter(),
+				(__bridge CFStringRef)name, NULL, NULL, true);
+		return YES;
+	}
+
 	// itglegacy://devmode[/close] - what three taps on Chats opens.
 	if ([host isEqualToString:@"devmode"]){
 		dispatch_async(dispatch_get_main_queue(), ^{

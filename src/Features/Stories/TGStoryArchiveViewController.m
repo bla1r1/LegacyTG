@@ -5,6 +5,26 @@
 #import "TGAlertSheet.h"
 #import "TGStoryViewerViewController.h"
 #import "TGIcons.h"
+#import "TGLocalization.h"
+
+/// The archive list's date uses the app language, not the device locale.
+static NSString *TGStoryArchiveDateText(NSNumber *unixTime) {
+	static NSDateFormatter *formatter = nil;
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{
+		formatter = [[NSDateFormatter alloc] init];
+		[formatter setDateStyle:NSDateFormatterMediumStyle];
+		[formatter setTimeStyle:NSDateFormatterShortStyle];
+	});
+	if (![unixTime isKindOfClass:NSNumber.class] || unixTime.doubleValue <= 0)
+		return nil;
+	NSString *language = TGAppLanguage();
+	formatter.locale = language.length
+			? [NSLocale localeWithLocaleIdentifier:language]
+			: [NSLocale currentLocale];
+	return [formatter stringFromDate:
+			[NSDate dateWithTimeIntervalSince1970:unixTime.doubleValue]];
+}
 
 @interface TGStoryArchiveViewController ()
 @property (nonatomic, assign) int64_t chatId;
@@ -28,16 +48,8 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
-		self.edgesForExtendedLayout = UIRectEdgeNone;
-	self.title = [NSString stringWithFormat:@"%@ Archive", self.chatTitle];
+	self.title = @"Archived Stories";
 	[[TGTheme shared] styleGroupedTable:self.tableView];
-	__weak typeof(self) weakSelf = self;
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGThemeChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note){
-		[weakSelf.tableView reloadData];
-	}];
 	[self loadMore];
 }
 
@@ -95,7 +107,7 @@
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-	return @"The archive is every story the chat has posted.";
+	return nil;
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -107,13 +119,13 @@
 	cell.imageView.image = nil;
 	if (indexPath.row >= (NSInteger)self.stories.count){
 		if (!self.stories.count && !self.loading){
-			cell.textLabel.text = @"No archived stories";
-			cell.detailTextLabel.text = @"Stories that expire and are archived appear here.";
+			cell.textLabel.text = @"No Archived Stories";
+			cell.detailTextLabel.text = nil;
 			cell.accessoryType = UITableViewCellAccessoryNone;
 			cell.selectionStyle = UITableViewCellSelectionStyleNone;
 			return cell;
 		}
-		cell.textLabel.text = self.loading ? @"Loading…" : @"Load More";
+		cell.textLabel.text = self.loading ? @"Loading..." : @"Show More";
 		cell.detailTextLabel.text = nil;
 		cell.accessoryType = UITableViewCellAccessoryNone;
 		cell.selectionStyle = self.loading
@@ -123,17 +135,14 @@
 	NSDictionary *story = self.stories[indexPath.row];
 	cell.textLabel.text = story[@"caption"];
 	if (!cell.textLabel.text.length)
-		cell.textLabel.text = [story[@"isVideo"] boolValue]
-				? @"Video story" : @"Photo story";
+		cell.textLabel.text = @"Story";
 	cell.textLabel.font = TGFontBody();
 	cell.detailTextLabel.font = TGFontSubhead();
-	cell.detailTextLabel.text = [NSString stringWithFormat:@"%ld views · %@",
-			(long)[story[@"viewers"] integerValue],
-			[NSDateFormatter localizedStringFromDate:
-					[NSDate dateWithTimeIntervalSince1970:
-							[story[@"date"] doubleValue]]
-					dateStyle:NSDateFormatterMediumStyle
-					timeStyle:NSDateFormatterShortStyle]];
+	NSInteger viewers = (NSInteger)[story[@"viewers"] integerValue];
+	NSString *views = TGLocalizedPluralValue(@"%@ view", @"%@ views",
+			[NSString stringWithFormat:@"%ld", (long)viewers], viewers);
+	cell.detailTextLabel.text = [NSString stringWithFormat:@"%@ · %@", views,
+			TGStoryArchiveDateText(story[@"date"]) ?: @""];
 	cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
 	cell.selectionStyle = UITableViewCellSelectionStyleBlue;
 	NSNumber *photoId = story[@"thumbPhotoId"] ?: story[@"photoId"];

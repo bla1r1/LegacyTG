@@ -17,6 +17,10 @@ extern NSString *const TGConnectionStateChangedNotification;
 // labels re-render their line instead of freezing at the fetched one.
 extern NSString *const TGUserStatusChangedNotification;
 
+/// A new incoming message arrived from another user in an unmuted chat.
+/// userInfo carries "chatId" and "message".
+extern NSString *const TGInAppNotificationReceivedNotification;
+
 /// The main chat list's unread total moved server-side. userInfo carries
 /// "count" - the unmuted unread count the app-icon badge shows. A folder's
 /// own count is not sent here: shrinking the badge for it would be a lie.

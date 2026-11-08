@@ -3,8 +3,9 @@
 // the topic record, its history, and the actions Telegram allows on it.
 //
 #import <UIKit/UIKit.h>
+#import "TGTableViewController.h"
 
-@interface TGDMTopicViewController : UITableViewController
+@interface TGDMTopicViewController : TGTableViewController
 
 @property (nonatomic, assign) int64_t chatId;
 @property (nonatomic, assign) int64_t topicId;

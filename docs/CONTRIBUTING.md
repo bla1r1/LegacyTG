@@ -28,6 +28,35 @@ scripts/split_source.py sections src/Core/Client/TGClient+Account.m \
 
 `classes` splits a file with several `@implementation` blocks. `sections` splits one implementation by `#pragma mark -`; pass `--map "account settings=Settings"` to name a section, otherwise it derives `Base+PascalCase(title)`. Unassigned header declarations go to a `<Base>Misc.h` so nothing is lost. Static helpers are copied into the sections that use them; non-static functions go to `<File>Support.m`.
 
+## Localisation
+
+UI copy goes through `TGLocalized(@"English")`; English is the key and the
+fallback. `TGClient loadAppLanguagePack:` loads the official Telegram pack,
+builds an English-value → translated-value map and caches it, so all official
+Telegram languages work without one `.lproj` per language. A case-only
+difference (`Slow Mode` vs the pack's `SLOW MODE`) is resolved through a folded
+map; ambiguous folds are not guessed. The language is chosen in Settings →
+Interface Language; `AppDelegate` refreshes it after sign-in and repaints the
+chrome that was built while the pack was still loading.
+
+Use the official English wording rather than inventing a label. That is what
+makes the string translate without an app-specific dictionary: official
+features keep official text, and a purely explanatory custom footer is removed
+rather than left in English. `scripts/i18n_match.py "Some string"` checks one
+label against the pack; `--file path` lists the uncovered strings in a file.
+Custom text that is not in the pack stays English.
+
+UIKit chrome is translated centrally: `TGLocalizationUIKit.m` swizzles
+`UILabel`, `UIButton`, `UITextField`, `UISearchBar`, view/navigation titles,
+tab-bar and bar buttons, and it walks the live windows once the pack arrives.
+`TGAlertSheet` localises titles, messages, buttons and placeholders. Message
+bodies are drawn by CoreGraphics and are deliberately not touched, so user
+content is never translated. A count sentence uses
+`TGLocalizedPlural(@"%d chat", @"%d chats", count)`: the pack's one/few/many
+forms are cached separately, so Russian gets `1 чат`, `2 чата`, `5 чатов`
+instead of one English-shaped plural. For the pack's `%@ hours` / `%@ months`
+templates, pass the count as text to `TGLocalizedPluralValue`.
+
 ## Bugs and commits
 
 Every bug is a row in [status/bugs.md](status/bugs.md) until the closing fix names its regression test; long root causes are in git at `cf71bc9`. Commit as `fix(chat): …`, zone first, with `B1`–`Bn` in the body when one closes.

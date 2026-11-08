@@ -89,7 +89,7 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 		keys = @[@"id", @"title", @"date", @"text", @"previewText", @"lastAuthor",
 				@"unread", @"unreadMentions", @"markedUnread", @"isMuted",
 				@"isPinned", @"isOnline", @"isSaved", @"lastId", @"lastOutgoing",
-				@"readOutbox", @"readInbox", @"photoFileId", @"isGroup", @"isForum",
+				@"readOutbox", @"readInbox", @"isGroup", @"isForum",
 				@"isSecret", @"order", @"archiveOrder", @"supergroupId", @"draft",
 				@"emojiStatusId"];
 	});
@@ -112,9 +112,13 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 	if (![rows isKindOfClass:NSArray.class])
 		return @[];
 	NSMutableArray *chats = [NSMutableArray arrayWithCapacity:rows.count];
-	for (NSDictionary *row in rows)
-		if ([row isKindOfClass:NSDictionary.class] && row[@"id"])
-			[chats addObject:row];
+	for (NSDictionary *row in rows) {
+		if ([row isKindOfClass:NSDictionary.class] && row[@"id"]) {
+			NSMutableDictionary *clean = [row mutableCopy];
+			[clean removeObjectForKey:@"photoFileId"];
+			[chats addObject:clean];
+		}
+	}
 	return chats;
 }
 

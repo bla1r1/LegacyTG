@@ -15,15 +15,14 @@
 	self = [super init];
 	if (self){
 		self.listTitle = @"Story Notifications";
-		self.emptyText = @"No chat has its own story notification settings.";
+		self.emptyText = @"No Results";
 	}
 	return self;
 }
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	self.listFooter = @"These are the chats whose story notifications Telegram "
-			@"reports as different from the account default.";
+	self.listFooter = nil;
 	[self reloadExceptions];
 }
 
@@ -41,15 +40,13 @@
 - (void)rebuildRows {
 	NSMutableArray *rows = [NSMutableArray array];
 	__weak typeof(self) weakSelf = self;
-	[rows addObject:@{@"title" : @"Refresh",
-					  @"detail" : @"Ask Telegram again",
+	[rows addObject:@{@"title" : @"Update",
 					  @"tap" : ^{ [weakSelf reloadExceptions]; }}];
 	for (NSDictionary *chat in self.exceptions){
 		BOOL muted = [chat[@"muteStories"] boolValue];
 		[rows addObject:@{
 			@"title" : chat[@"title"] ?: @"Chat",
-			@"detail" : muted ? @"Story notifications are off"
-							  : @"Story notifications follow the default",
+			@"detail" : muted ? @"Notifications are muted." : nil,
 			@"opens" : @YES,
 			@"tap" : ^{ [weakSelf openChat:chat]; },
 		}];

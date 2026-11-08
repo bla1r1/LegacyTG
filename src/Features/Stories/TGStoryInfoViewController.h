@@ -3,13 +3,18 @@
 // statistics, and the two-step report flow.
 //
 #import <UIKit/UIKit.h>
+#import "TGTableViewController.h"
 
 typedef NS_ENUM(NSInteger, TGStoryInfoMode) {
 	TGStoryInfoModeInfo = 0,
 	TGStoryInfoModeReport
 };
 
-@interface TGStoryInfoViewController : UITableViewController
+@interface TGStoryInfoViewController : TGTableViewController
+
+/// YES when the viewer adds this controller as a bottom panel over the story
+/// instead of presenting it full screen.
+@property (nonatomic, assign) BOOL overlayPanel;
 
 - (instancetype)initWithChatId:(int64_t)chatId
 					   storyId:(int32_t)storyId

@@ -1,4 +1,5 @@
 #import "TGCloseFriendsViewController.h"
+#import "TGLocalization.h"
 #import "TGClient.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
@@ -106,20 +107,10 @@
 - (void)viewDidLoad {
 	[super viewDidLoad];
 	self.title = @"Close Friends";
-	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
-		self.edgesForExtendedLayout = UIRectEdgeNone;
 	self.tableView.rowHeight = TGMetricPersonRow;
 	[self applyTheme];
 
 	__weak typeof(self) weakSelf = self;
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGThemeChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note){
-		[TGIcons flush];
-		[weakSelf applyTheme];
-		[weakSelf.tableView reloadData];
-	}];
-
 	[[TGClient shared] closeFriendsWithCompletion:^(NSArray *ids){
 		TGCloseFriendsViewController *me = weakSelf;
 		if (!me)
@@ -135,10 +126,6 @@
 			[again loadAvatars];
 		}];
 	}];
-}
-
-- (void)dealloc {
-	[[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 - (void)applyTheme {
@@ -202,12 +189,11 @@
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
 	if (!self.loaded)
-		return @"Reading the list from Telegram…";
+		return @"Loading...";
 	if (!self.contacts.count)
-		return @"No contacts to pick from. Add someone in Contacts first.";
-	return [NSString stringWithFormat:
-			@"%lu selected · every change is sent to Telegram at once.",
-			(unsigned long)self.selected.count];
+		return @"None";
+	return [NSString stringWithFormat:TGLocalized(@"%@ Selected"),
+			@(self.selected.count)];
 }
 
 - (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section {
@@ -232,7 +218,7 @@
 		if (!cell)
 			cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
 										  reuseIdentifier:empty];
-		cell.textLabel.text = self.loaded ? @"No contacts to pick from." : @"Loading…";
+		cell.textLabel.text = self.loaded ? @"None" : @"Loading...";
 		cell.textLabel.font = TGFontBody();
 		cell.textLabel.textColor = [theme secondaryTextColour];
 		cell.selectionStyle = UITableViewCellSelectionStyleNone;
@@ -294,7 +280,7 @@
 			// The check goes back where it was; the server's sentence is why.
 			[me.selected setSet:before];
 			[me.tableView reloadData];
-			[TGAlertSheet showMessage:(error ?: @"Telegram refused that.")
+			[TGAlertSheet showMessage:(error ?: @"An error occurred.")
 								title:@"Close Friends" inView:me.view];
 			return;
 		}

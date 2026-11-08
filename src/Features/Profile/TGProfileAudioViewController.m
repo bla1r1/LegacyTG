@@ -33,9 +33,7 @@ static const NSInteger kProfileAudioPage = 100;
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
-		self.edgesForExtendedLayout = UIRectEdgeNone;
-	self.title = self.subjectTitle.length ? self.subjectTitle : @"Profile Audio";
+	self.title = self.subjectTitle.length ? self.subjectTitle : @"Profile Music";
 	self.audios = @[];
 	self.covers = [NSMutableDictionary dictionary];
 	self.coversRequested = [NSMutableSet set];
@@ -54,10 +52,6 @@ static const NSInteger kProfileAudioPage = 100;
 	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(applyTheme) name:TGThemeChangedNotification object:nil];
 	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(playerChanged)
 												 name:TGMusicPlayerChangedNotification object:nil];
-}
-
-- (void)dealloc {
-	[[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 - (void)applyTheme {
@@ -85,7 +79,7 @@ static const NSInteger kProfileAudioPage = 100;
 			return;
 		me.loading = NO;
 		if (error.length){
-			[TGAlertSheet showMessage:error title:@"Profile Audio" inView:me.view];
+			[TGAlertSheet showMessage:error title:@"Profile Music" inView:me.view];
 			return;
 		}
 		me.audios = audios;
@@ -161,12 +155,8 @@ static const NSInteger kProfileAudioPage = 100;
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
 	// Only the owner can reorder; a visitor's hold offers nothing of the kind.
 	if (self.audios.count)
-		return [self isOwnProfile]
-				? @"Tap to play through the music player. Hold a row to reorder it "
-				  @"or take it off the profile."
-				: @"Tap to play through the music player.";
-	return @"No audio on this profile. Telegram keeps the list empty until "
-		   @"the owner adds a track.";
+		return nil;
+	return @"No music";
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -274,12 +264,12 @@ static const NSInteger kProfileAudioPage = 100;
 		return;
 	NSDictionary *audio = self.audios[path.row];
 	NSMutableArray *choices = [NSMutableArray arrayWithObjects:
-			@"Play", @"Check in Profile", nil];
+			@"Play", @"View in Profile", nil];
 	BOOL own = [self isOwnProfile];
 	if (own){
-		[choices addObject:@"Move to Beginning"];
+		[choices addObject:@"Move Up"];
 		if (path.row > 0)
-			[choices addObject:@"Move After Previous"];
+			[choices addObject:@"Move Down"];
 		[choices addObject:@"Remove from Profile"];
 	}
 	__weak typeof(self) weakSelf = self;
@@ -293,15 +283,15 @@ static const NSInteger kProfileAudioPage = 100;
 			[weakSelf playAtIndex:path.row];
 			return;
 		}
-		if ([choice isEqualToString:@"Check in Profile"]){
+		if ([choice isEqualToString:@"View in Profile"]){
 			[weakSelf checkAudio:audio];
 			return;
 		}
-		if ([choice isEqualToString:@"Move to Beginning"]){
+		if ([choice isEqualToString:@"Move Up"]){
 			[weakSelf moveAudio:audio after:0];
 			return;
 		}
-		if ([choice isEqualToString:@"Move After Previous"]){
+		if ([choice isEqualToString:@"Move Down"]){
 			NSDictionary *previous = weakSelf.audios[path.row - 1];
 			[weakSelf moveAudio:audio after:[previous[@"fileId"] integerValue]];
 			return;
@@ -317,9 +307,9 @@ static const NSInteger kProfileAudioPage = 100;
 	[[TGClient shared] isProfileAudioFileId:[audio[@"fileId"] integerValue]
 								 completion:^(BOOL isAudio, NSString *error){
 		NSString *text = isAudio
-				? @"This file is in the profile audio list."
-				: ([error length] ? error : @"Telegram does not have it there.");
-		[TGAlertSheet showMessage:text title:@"Profile Audio"
+				? @"An error occurred."
+				: ([error length] ? error : @"An error occurred.");
+		[TGAlertSheet showMessage:text title:@"Profile Music"
 						   inView:weakSelf.view];
 	}];
 }
@@ -330,8 +320,8 @@ static const NSInteger kProfileAudioPage = 100;
 								 afterFileId:afterFileId
 								  completion:^(BOOL ok, NSString *error){
 		if (!ok){
-			[TGAlertSheet showMessage:(error ?: @"Telegram refused the move.")
-								title:@"Profile Audio" inView:weakSelf.view];
+			[TGAlertSheet showMessage:(error ?: @"An error occurred.")
+								title:@"Profile Music" inView:weakSelf.view];
 			return;
 		}
 		[weakSelf load];
@@ -340,8 +330,8 @@ static const NSInteger kProfileAudioPage = 100;
 
 - (void)removeAudio:(NSDictionary *)audio {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:@"Take this track off the profile?"
-						title:(audio[@"title"] ?: @"Profile Audio")
+	[TGAlertSheet showConfirm:@"Remove from Profile"
+						title:(audio[@"title"] ?: @"Profile Music")
 					   action:@"Remove"
 				  destructive:YES
 					   inView:self.view
@@ -349,8 +339,8 @@ static const NSInteger kProfileAudioPage = 100;
 		[[TGClient shared] removeProfileAudioFileId:[audio[@"fileId"] integerValue]
 										 completion:^(BOOL ok, NSString *error){
 			if (!ok){
-				[TGAlertSheet showMessage:(error ?: @"Telegram refused the removal.")
-									title:@"Profile Audio" inView:weakSelf.view];
+				[TGAlertSheet showMessage:(error ?: @"An error occurred.")
+									title:@"Profile Music" inView:weakSelf.view];
 				return;
 			}
 			[weakSelf load];
@@ -377,9 +367,8 @@ static const NSInteger kProfileAudioPage = 100;
 			if ([message[@"kind"] isEqualToString:@"messageAudio"])
 				[tracks addObject:message];
 		if (!tracks.count){
-			[TGAlertSheet showMessage:@"Send an audio file to Saved Messages "
-									  @"first; this screen adds from there."
-								title:@"Add Profile Audio" inView:me.view];
+			[TGAlertSheet showMessage:@"An error occurred."
+								title:@"Add to Profile" inView:me.view];
 			return;
 		}
 		NSMutableArray *titles = [NSMutableArray array];
@@ -387,7 +376,7 @@ static const NSInteger kProfileAudioPage = 100;
 			[titles addObject:[NSString stringWithFormat:@"%@ — %@",
 					track[@"audioTitle"] ?: track[@"docName"] ?: @"Audio",
 					track[@"audioPerformer"] ?: @"Unknown artist"]];
-		[TGAlertSheet showChoices:titles title:@"Add Profile Audio"
+		[TGAlertSheet showChoices:titles title:@"Add to Profile"
 				destructiveIndex:-1 inView:me.view onChoice:^(NSInteger index){
 			[me addTrack:tracks[index]];
 		}];
@@ -397,8 +386,8 @@ static const NSInteger kProfileAudioPage = 100;
 - (void)addTrack:(NSDictionary *)track {
 	NSNumber *fileId = track[@"docId"];
 	if ([fileId longLongValue] <= 0){
-		[TGAlertSheet showMessage:@"That message carries no downloadable audio."
-							title:@"Add Profile Audio" inView:self.view];
+		[TGAlertSheet showMessage:@"An error occurred."
+							title:@"Add to Profile" inView:self.view];
 		return;
 	}
 	__weak typeof(self) weakSelf = self;
@@ -406,8 +395,8 @@ static const NSInteger kProfileAudioPage = 100;
 						 completion:^(NSString *path){
 		TGProfileAudioViewController *me = weakSelf;
 		if (!me || !path.length){
-			[TGAlertSheet showMessage:@"The audio file could not be downloaded."
-								title:@"Add Profile Audio" inView:me.view];
+			[TGAlertSheet showMessage:@"An error occurred."
+								title:@"Add to Profile" inView:me.view];
 			return;
 		}
 		[[TGClient shared] addProfileAudioAtPath:path
@@ -416,8 +405,8 @@ static const NSInteger kProfileAudioPage = 100;
 										duration:[track[@"duration"] integerValue]
 									  completion:^(BOOL ok, NSString *error){
 			if (!ok){
-				[TGAlertSheet showMessage:(error ?: @"Telegram refused that audio.")
-									title:@"Add Profile Audio" inView:me.view];
+				[TGAlertSheet showMessage:(error ?: @"An error occurred.")
+									title:@"Add to Profile" inView:me.view];
 				return;
 			}
 			[me load];

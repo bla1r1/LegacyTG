@@ -78,20 +78,6 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 - (void)viewDidLoad {
 	[super viewDidLoad];
 	self.sections = @[];
-	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
-		self.edgesForExtendedLayout = UIRectEdgeNone;
-	[self applyTheme];
-	[[NSNotificationCenter defaultCenter] addObserver:self
-			selector:@selector(themeChanged:)
-				name:TGThemeChangedNotification object:nil];
-}
-
-- (void)dealloc {
-	[[NSNotificationCenter defaultCenter] removeObserver:self];
-}
-
-- (void)themeChanged:(NSNotification *)note {
-	[self applyTheme];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -117,13 +103,9 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 }
 
 - (void)showResult:(BOOL)ok error:(NSString *)error title:(NSString *)title {
-	NSString *text = ok ? @"Telegram accepted the request."
-			: (error.length ? error : @"Telegram refused that.");
+	NSString *text = ok ? @"Done"
+			: (error.length ? error : @"An error occurred.");
 	[self showMessage:text title:title];
-}
-
-- (void)showMessage:(NSString *)message title:(NSString *)title {
-	[TGAlertSheet showMessage:message title:title inView:self.view];
 }
 
 - (void)askText:(NSString *)title

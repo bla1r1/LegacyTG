@@ -57,7 +57,7 @@
 			}
 			if (!domain.length)
 				return;
-			[TGAlertSheet showConfirm:[NSString stringWithFormat:@"Log in to %@ with your Telegram account?", domain]
+			[TGAlertSheet showConfirm:nil
 								title:@"Log In"
 							   action:@"Log In"
 						  destructive:NO
@@ -85,14 +85,14 @@
 		}];
 	} else if ([kind isEqualToString:@"copy"]) {
 		[UIPasteboard generalPasteboard].string = button[@"copy"] ?: @"";
-		[TGSnackbar showInView:self.view text:@"Copied" seconds:1 onCommit:nil];
+		[TGSnackbar showInView:self.view text:@"Text copied." seconds:1 onCommit:nil];
 	} else if ([kind isEqualToString:@"user"]) {
 		int64_t userId = [button[@"userId"] longLongValue];
 		TGProfileViewController *profile = [[TGProfileViewController alloc]
 				initWithChatId:userId userId:userId title:button[@"text"]];
 		[self.navigationController pushViewController:profile animated:YES];
 	} else {
-		[TGSnackbar showInView:self.view text:@"This button needs a newer Telegram" seconds:2 onCommit:nil];
+		[TGSnackbar showInView:self.view text:@"Update Telegram" seconds:2 onCommit:nil];
 	}
 }
 

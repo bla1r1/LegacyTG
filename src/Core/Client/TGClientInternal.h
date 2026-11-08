@@ -59,6 +59,7 @@ NSArray *TGMediaPageAppending(NSArray *existing, NSArray *more);
 /// that has to show them before an account is made.
 @property (nonatomic, copy) NSString *registrationTermsText;
 @property (nonatomic, assign) TGAuthState authState;
+@property (nonatomic, assign) NSTimeInterval readyAt;
 @property (nonatomic, assign) BOOL available;
 @property (nonatomic, assign) BOOL running;
 /// The background close: asked for, finished, and a return that came first.
@@ -313,6 +314,7 @@ extern double TGFileWaiterTimeoutSeconds;
 /// at once - go through here instead of rebuilding per event.
 - (void)markChatRowDirty:(int64_t)chatId;
 - (NSString *)previewForLastMessage:(NSDictionary *)last inChat:(NSMutableDictionary *)info;
+- (void)handleInAppNotificationForNewMessage:(NSDictionary *)m;
 
 @end
 

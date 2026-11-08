@@ -4,6 +4,7 @@
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
+#import "TGLocalization.h"
 
 /// Telegram accepts a 1080x1920 photo and a 720x1280 video. This client only
 /// re-sizes the photo; a picked video is sent as recorded.
@@ -12,7 +13,10 @@ static const CGFloat kStoryPhotoHeight = 1920.0f;
 static const NSInteger kStorySectionChoices = 0;
 static const NSInteger kStorySectionOptions = 1;
 static const NSInteger kStorySectionPublish = 2;
-static const NSInteger kStoryChoiceRows = 4;
+/// POST STORY AS carries only the poster; WHO CAN VIEW THIS STORY carries the
+/// privacy controls: privacy, expiry, profile, saving and albums.
+static const NSInteger kStoryChoiceRows = 1;
+static const NSInteger kStoryViewRows = 5;
 /// Only 24 hours is free; the other three periods are Premium.
 static const NSInteger kStoryFreePeriod = 86400;
 
@@ -21,9 +25,9 @@ static const NSInteger kStoryFreePeriod = 86400;
 /// account that has never had Premium needs to hear.
 static NSString *TGStoryRefusalText(NSDictionary *answer) {
 	if ([answer[@"type"] isEqualToString:@"canPostStoryResultPremiumNeeded"])
-		return @"Posting stories needs Telegram Premium.";
+		return @"Premium Needed";
 	NSString *reason = answer[@"reason"];
-	return reason.length ? reason : @"Telegram refused that.";
+	return reason.length ? reason : @"An error occurred.";
 }
 
 static BOOL TGStoryAccountHasPremium(void) {
@@ -59,7 +63,7 @@ static BOOL sStoryFlowOpening = NO;
 	self = [super initWithStyle:UITableViewStyleGrouped];
 	if (self){
 		_chatId = chatId;
-		_posterTitle = [title copy] ?: @"Your Story";
+		_posterTitle = [title copy] ?: @"Your story";
 		_targetChatId = chatId;
 		_targetTitle = [_posterTitle copy];
 		_privacy = @"everyone";
@@ -102,16 +106,10 @@ static BOOL sStoryFlowOpening = NO;
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
-		self.edgesForExtendedLayout = UIRectEdgeNone;
-	self.title = @"Story Settings";
+	self.title = @"Story";
 	[[TGTheme shared] styleGroupedTable:self.tableView];
+
 	__weak typeof(self) weakSelf = self;
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGThemeChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note){
-		[weakSelf.tableView reloadData];
-	}];
 	// postStory returns while the upload is still running, so the server's
 	// final word arrives here. Only the post this screen started matters;
 	// once the request has already answered the completion below has said it.
@@ -131,7 +129,7 @@ static BOOL sStoryFlowOpening = NO;
 			[me closeFlow];
 		} else {
 			[TGAlertSheet showMessage:note.userInfo[@"error"]
-								?: @"Telegram could not post the story."
+								?: @"An error occurred."
 								title:@"New Story" inView:me.view];
 		}
 	}];
@@ -142,7 +140,9 @@ static BOOL sStoryFlowOpening = NO;
 	[super viewWillAppear:animated];
 	// The camera and editor before this hide both the bar and the status bar.
 	TGStoryFlowSetStatusBarHidden(NO);
-	[self.navigationController setNavigationBarHidden:NO animated:animated];
+	// Official keeps Done/Next inside the editor and has no bar of its own on
+	// the publish sheet; Cancel is one of the rows below.
+	[self.navigationController setNavigationBarHidden:YES animated:NO];
 }
 
 /// Chats this account may post on behalf of. The own story is always first:
@@ -165,14 +165,16 @@ static BOOL sStoryFlowOpening = NO;
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
 	if (section == kStorySectionChoices)
 		return kStoryChoiceRows;
+	if (section == kStorySectionOptions)
+		return kStoryViewRows;
 	return 2;
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
+	if (section == kStorySectionChoices)
+		return @"POST STORY AS";
 	if (section == kStorySectionOptions)
-		return @"Options";
-	if (section == kStorySectionPublish)
-		return @"Publish";
+		return @"WHO CAN VIEW THIS STORY";
 	return nil;
 }
 
@@ -198,7 +200,7 @@ static BOOL sStoryFlowOpening = NO;
 
 	if (indexPath.section == kStorySectionPublish){
 		if (indexPath.row == 0){
-			cell.textLabel.text = self.posting ? @"Posting…" : @"Post Story";
+			cell.textLabel.text = self.posting ? @"Uploading..." : @"Post Story";
 			cell.textLabel.textColor = [[TGTheme shared] accentColour];
 			cell.detailTextLabel.text = @"";
 			cell.selectionStyle = self.mediaPath && !self.posting
@@ -212,46 +214,46 @@ static BOOL sStoryFlowOpening = NO;
 	}
 
 	if (indexPath.section == kStorySectionOptions){
-		UISwitch *toggle = [[UISwitch alloc] init];
-		toggle.on = indexPath.row == 0 ? self.postedToChatPage : self.protectContent;
-		toggle.tag = indexPath.row;
-		[toggle addTarget:self action:@selector(toggleChanged:)
-		 forControlEvents:UIControlEventValueChanged];
-		cell.textLabel.text = indexPath.row == 0
-				? @"Keep on Profile" : @"Protect Content";
-		cell.accessoryView = toggle;
-		cell.selectionStyle = UITableViewCellSelectionStyleNone;
+		if (indexPath.row == 2 || indexPath.row == 3){
+			UISwitch *toggle = [[UISwitch alloc] init];
+			toggle.on = indexPath.row == 2 ? self.postedToChatPage : self.protectContent;
+			toggle.tag = indexPath.row;
+			[toggle addTarget:self action:@selector(toggleChanged:)
+			 forControlEvents:UIControlEventValueChanged];
+			cell.textLabel.text = indexPath.row == 2
+					? @"Add to Profile" : @"Restrict Saving Content";
+			cell.accessoryView = toggle;
+			cell.selectionStyle = UITableViewCellSelectionStyleNone;
+			return cell;
+		}
+		if (indexPath.row == 0){
+			cell.textLabel.text = @"Privacy";
+			cell.detailTextLabel.text = [self privacyTitle];
+			cell.accessoryType = UITableViewCellAccessoryNone;
+			return cell;
+		}
+		if (indexPath.row == 1){
+			cell.textLabel.text = TGLocalizedFormat(@"Expires in %@",
+					[self activePeriodTitle]);
+			cell.detailTextLabel.text = @"";
+			cell.accessoryType = UITableViewCellAccessoryNone;
+			return cell;
+		}
+		cell.textLabel.text = @"Albums";
+		cell.detailTextLabel.text = self.albumIds.count
+				? [self.albumIds componentsJoinedByString:@", "] : @"None";
+		cell.accessoryType = UITableViewCellAccessoryNone;
 		return cell;
 	}
 
-	if (indexPath.row == 0){
-		cell.textLabel.text = @"Privacy";
-		cell.detailTextLabel.text = [self privacyTitle];
-		cell.accessoryType = UITableViewCellAccessoryNone;
-		return cell;
-	}
-	if (indexPath.row == 1){
-		cell.textLabel.text = @"Active For";
-		cell.detailTextLabel.text = [self activePeriodTitle];
-		cell.accessoryType = UITableViewCellAccessoryNone;
-		return cell;
-	}
-	if (indexPath.row == 2){
-		cell.textLabel.text = @"Post As";
-		cell.detailTextLabel.text = self.targetTitle ?: @"My Story";
-		cell.accessoryType = UITableViewCellAccessoryNone;
-		return cell;
-	}
-	cell.textLabel.text = @"Album IDs";
-	cell.detailTextLabel.text = self.albumIds.count
-			? [self.albumIds componentsJoinedByString:@", "] : @"None";
+	// POST STORY AS: the account the story is posted as.
+	cell.textLabel.text = @"Post Story As";
+	cell.detailTextLabel.text = self.targetTitle ?: @"My Story";
 	cell.accessoryType = UITableViewCellAccessoryNone;
 	return cell;
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	if (indexPath.section == kStorySectionOptions)
-		return;
 	[tableView deselectRowAtIndexPath:indexPath animated:YES];
 	if (indexPath.section == kStorySectionPublish){
 		if (indexPath.row == 0)
@@ -260,6 +262,11 @@ static BOOL sStoryFlowOpening = NO;
 			[self closeFlow];
 		return;
 	}
+	if (indexPath.section == kStorySectionChoices){
+		[self chooseTargetChat];
+		return;
+	}
+	// Index 2 and 3 are the switches; the table does not select them.
 	if (indexPath.row == 0){
 		[self choosePrivacy];
 		return;
@@ -268,13 +275,11 @@ static BOOL sStoryFlowOpening = NO;
 		[self chooseActivePeriod];
 		return;
 	}
-	if (indexPath.row == 2){
-		[self chooseTargetChat];
+	if (indexPath.row != 4)
 		return;
-	}
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"Album IDs"
-					message:@"Comma-separated album ids, or empty for none."
+	[TGAlertSheet showInput:@"Albums"
+					message:nil
 				placeholder:@"12, 15"
 					   text:[self.albumIds componentsJoinedByString:@", "]
 					 action:@"Save"
@@ -300,7 +305,7 @@ static BOOL sStoryFlowOpening = NO;
 - (void)choosePrivacy {
 	NSArray *choices = @[@"Everybody", @"My Contacts", @"Close Friends", @"Selected Users"];
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:choices title:@"Who Can See This Story"
+	[TGAlertSheet showChoices:choices title:@"Who Can See"
 				destructiveIndex:-1 inView:self.view onChoice:^(NSInteger choice){
 		TGStoryComposerViewController *me = weakSelf;
 		if (!me)
@@ -316,7 +321,7 @@ static BOOL sStoryFlowOpening = NO;
 			me.privacyUserIds = @[];
 		} else {
 			[TGAlertSheet showInput:@"Selected Users"
-							message:@"Comma-separated user ids."
+							message:nil
 						placeholder:@"123, 456"
 							   text:nil
 							 action:@"Save"
@@ -340,25 +345,24 @@ static BOOL sStoryFlowOpening = NO;
 }
 
 - (void)chooseActivePeriod {
-	BOOL premium = TGStoryAccountHasPremium();
-	// Telegram shows the paid periods and explains the lock when one is
-	// tapped; hiding them would leave no hint that Premium changes anything.
-	NSArray *choices = @[premium ? @"6 hours" : @"6 hours (Premium)",
-						 premium ? @"12 hours" : @"12 hours (Premium)",
-						 @"24 hours",
-						 premium ? @"48 hours" : @"48 hours (Premium)"];
+	// The four periods are pack strings, not literal English hours.
+	NSArray *choices = @[
+		TGLocalizedFormat(@"%d Hours", (int)6),
+		TGLocalizedFormat(@"%d Hours", (int)12),
+		TGLocalizedFormat(@"%d Hours", (int)24),
+		TGLocalizedFormat(@"%d Hours", (int)48)
+	];
 	NSArray *values = @[@21600, @43200, @86400, @172800];
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:choices title:@"Active Period" destructiveIndex:-1
+	[TGAlertSheet showChoices:choices title:@"Duration" destructiveIndex:-1
 					   inView:self.view onChoice:^(NSInteger choice){
 		TGStoryComposerViewController *me = weakSelf;
 		if (!me || choice < 0 || choice >= (NSInteger)values.count)
 			return;
 		NSInteger period = [values[choice] integerValue];
 		if (period != kStoryFreePeriod && !TGStoryAccountHasPremium()){
-			[TGAlertSheet showMessage:@"That period needs Telegram Premium. "
-					@"Without it a story stays up for 24 hours."
-								title:@"Active For" inView:me.view];
+			[TGAlertSheet showMessage:@"Premium Needed"
+								title:@"Duration" inView:me.view];
 			return;
 		}
 		me.activePeriod = period;
@@ -392,16 +396,16 @@ static BOOL sStoryFlowOpening = NO;
 	if ([self.privacy isEqualToString:@"contacts"]) return @"My Contacts";
 	if ([self.privacy isEqualToString:@"closeFriends"]) return @"Close Friends";
 	if ([self.privacy isEqualToString:@"selected"])
-		return [NSString stringWithFormat:@"Selected (%lu)",
-				(unsigned long)self.privacyUserIds.count];
+		return TGLocalizedFormat(@"%d Selected",
+				(int)self.privacyUserIds.count);
 	return @"Everybody";
 }
 
 - (NSString *)activePeriodTitle {
-	if (self.activePeriod == 21600) return @"6 hours";
-	if (self.activePeriod == 43200) return @"12 hours";
-	if (self.activePeriod == 172800) return @"48 hours";
-	return @"24 hours";
+	if (self.activePeriod == 21600) return TGLocalizedFormat(@"%d Hours", (int)6);
+	if (self.activePeriod == 43200) return TGLocalizedFormat(@"%d Hours", (int)12);
+	if (self.activePeriod == 172800) return TGLocalizedFormat(@"%d Hours", (int)48);
+	return TGLocalizedFormat(@"%d Hours", (int)24);
 }
 
 #pragma mark - what the earlier steps hand over
@@ -417,9 +421,10 @@ static BOOL sStoryFlowOpening = NO;
 }
 
 - (void)toggleChanged:(UISwitch *)toggle {
-	if (toggle.tag == 0)
+	// The switches sit at rows 2 and 3 of the WHO CAN VIEW section.
+	if (toggle.tag == 2)
 		self.postedToChatPage = toggle.on;
-	else
+	else if (toggle.tag == 3)
 		self.protectContent = toggle.on;
 }
 
@@ -454,7 +459,7 @@ static BOOL sStoryFlowOpening = NO;
 	if (self.posting)
 		return;
 	if (!self.mediaPath.length){
-		[TGAlertSheet showMessage:@"There is no photo or video to post."
+		[TGAlertSheet showMessage:@"An error occurred."
 							title:@"New Story" inView:self.view];
 		return;
 	}
@@ -490,7 +495,7 @@ static BOOL sStoryFlowOpening = NO;
 			me.posting = NO;
 			[me.tableView reloadData];
 			if (!story){
-				[TGAlertSheet showMessage:error ?: @"Telegram refused the story."
+				[TGAlertSheet showMessage:error ?: @"An error occurred."
 									title:@"New Story" inView:me.view];
 				return;
 			}

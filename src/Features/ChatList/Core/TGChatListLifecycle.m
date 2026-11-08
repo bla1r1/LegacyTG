@@ -1,4 +1,5 @@
 #import "TGCustomEmojiStore.h"
+#import "TGLocalization.h"
 #import "TGNameWithStatus.h"
 #import "TGChatListViewControllerInternal.h"
 #import "TGPerf.h"
@@ -89,7 +90,7 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 		keys = @[@"id", @"title", @"date", @"text", @"previewText", @"lastAuthor",
 				@"unread", @"unreadMentions", @"markedUnread", @"isMuted",
 				@"isPinned", @"isOnline", @"isSaved", @"lastId", @"lastOutgoing",
-				@"readOutbox", @"readInbox", @"photoFileId", @"isGroup", @"isForum",
+				@"readOutbox", @"readInbox", @"isGroup", @"isForum",
 				@"isSecret", @"order", @"archiveOrder", @"supergroupId", @"draft",
 				@"emojiStatusId"];
 	});
@@ -110,7 +111,7 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 - (void)viewDidLoad {
 	[super viewDidLoad];
 
-	self.title = self.showsArchive ? @"Archived" : @"Chats";
+	self.title = self.showsArchive ? TGLocalized(@"Archived Chats") : TGLocalized(@"Chats");
 	[self buildListTitleView];
 	[self refreshListTitleView];
 	// The last list is drawn before TDLib answers, so a cold start is the
@@ -118,7 +119,7 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 	self.cachedChats = (self.showsArchive || self.folderId != 0)
 			? @[] : [self loadChatSnapshot];
 	self.chats = self.cachedChats;
-	self.avatars = [[TGImageLruCache alloc] initWithCapacity:50];
+	self.avatars = [[TGImageLruCache alloc] initWithCapacity:120];
 	self.avatarsRequested = [NSMutableSet set];
 
 	self.navigationItem.rightBarButtonItem = nil;
@@ -162,6 +163,8 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 	}];
 
 	[TGClient shared].onChatsChanged = ^{
+		// Reset signature so folder-merged chats refresh on new messages or new chats
+		weakSelf.mergedSignature = nil;
 		// While the cache fills, updates arrive in floods - one per chat.
 		// A reload for each means the table re-lays out dozens of times and
 		// the old 4S crawls; coalescing the floods to a few ticks keeps the
@@ -223,6 +226,15 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 		// title view. Replacing the title took a chosen folder away on every
 		// reconnect (B4), and the state is not what the screen is.
 		weakSelf.connectionLine = TGNetworkSubtitleForState((NSInteger)state, text);
+		if (state == TGConnectionStateReady){
+			BOOL wasAnswered = weakSelf.listAnswered;
+			weakSelf.listAnswered = YES;
+			// A fresh account's list is empty; ready is the first moment that
+			// is a fact rather than a guess. Reload so the empty state (or
+			// the first chats) replaces the placeholder.
+			if (!wasAnswered)
+				[weakSelf reload];
+		}
 		[weakSelf refreshListTitleView];
 	};
 	[self reload];
@@ -262,18 +274,22 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 	name.shadowOffset = TGMetricShadowOffsetNav;
 	[box addSubview:name];
 
-	// Telegram puts the folder switcher on the title itself, not on a second
-	// row of pills: a chevron after the name opens the list of folders.
-	UILabel *chevron = [[UILabel alloc] initWithFrame:CGRectZero];
-	chevron.font = TGFontCaptionStrong();
-	chevron.text = @"\u25BE";
-	chevron.textColor = [[TGTheme shared] barTitleColour];
-	chevron.backgroundColor = [UIColor clearColor];
-	chevron.userInteractionEnabled = YES;
-	[chevron addGestureRecognizer:[[UITapGestureRecognizer alloc]
-			initWithTarget:self action:@selector(foldersTapped)]];
-	[box addSubview:chevron];
-	self.listChevron = chevron;
+	// The passcode lock used to be a left bar item. Official keeps it beside
+	// the title, so it lives here and the bar keeps only Edit.
+	UIButton *lock = [UIButton buttonWithType:UIButtonTypeCustom];
+	CGFloat lockSide = TGMetricLineSubhead;
+	lock.frame = CGRectMake(TGMetricPadTiny, TGCenteredOrigin(kListTitleHeight,
+			lockSide), lockSide, lockSide);
+	[lock setImage:TGChatListLockIcon(lockSide, [[TGTheme shared] barTitleColour])
+		  forState:UIControlStateNormal];
+	[lock addTarget:self action:@selector(lockAppTapped)
+   forControlEvents:UIControlEventTouchUpInside];
+	lock.hidden = ![TGPasscode hasPasscode];
+	[box addSubview:lock];
+	self.listLockButton = lock;
+
+	// The folder strip on the table header is the only folder switcher;
+	// official keeps no chevron on the title.
 
 	// The collapsed story: an active peer's face appears beside the title
 	// once the strip is scrolled away, and tapping it opens that story.
@@ -310,8 +326,13 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 		[self buildListTitleView];
 
 	NSString *name = [self titleForCurrentList];
+	if (self.editingChats){
+		NSUInteger chosen = self.tableView.indexPathsForSelectedRows.count;
+		name = chosen ? TGLocalizedFormat(@"%d Selected", (int)chosen)
+					  : TGLocalized(@"Chats");
+	}
 	if (![name isKindOfClass:NSString.class])
-		name = @"Chats";
+		name = TGLocalized(@"Chats");
 	BOOL hasLine = self.connectionLine.length > 0;
 	self.title = name;
 	self.listTitleLabel.text = name;
@@ -339,19 +360,30 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 	self.listTitleLabel.textColor = [[TGTheme shared] barTitleColour];
 	self.listTitleLabel.shadowColor = [[TGTheme shared] navBarTextShadowColour];
 	self.listSubtitleLabel.textColor = [[TGTheme shared] barSubtitleColour];
+	if (self.listLockButton){
+		BOOL showLock = [TGPasscode hasPasscode] && !self.editingChats;
+		self.listLockButton.hidden = !showLock;
+		if (showLock){
+			CGFloat lockSide = TGMetricLineSubhead;
+			CGFloat textWidth = [name sizeWithFont:self.listTitleLabel.font].width;
+			CGFloat x = MAX(TGMetricPadTiny,
+					(kListTitleWidth - textWidth) * 0.5f - lockSide - TGMetricPadTiny);
+			self.listLockButton.frame = CGRectMake(x,
+					hasLine ? TGCenteredOrigin(TGMetricLineRow, lockSide)
+							: TGCenteredOrigin(kListTitleHeight, lockSide),
+					lockSide, lockSide);
+		}
+	}
 
-	BOOL hasFolders = [TGClient shared].folders.count > 0 && !self.showsArchive;
+	BOOL hasFolders = NO;
 	NSDictionary *story = [self collapsedStoryRow];
 	BOOL showStory = story != nil && !hasLine && !self.storiesExpanded;
 	self.listStoryAvatar.hidden = !showStory;
-	self.listChevron.hidden = !hasFolders;
 
 	CGSize text = [name sizeWithFont:self.listTitleLabel.font];
 	CGFloat total = text.width;
 	if (showStory)
 		total += kListStorySide + kListStoryGap;
-	if (hasFolders)
-		total += kListChevronGap + kListChevronWidth;
 	CGFloat x = TGHalf(kListTitleWidth) - TGHalf(total);
 	CGFloat top = CGRectGetMinY(self.listTitleLabel.frame);
 
@@ -387,10 +419,6 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 		x += kListStorySide + kListStoryGap;
 	}
 	self.listTitleLabel.frame = CGRectMake(x, top, text.width, TGMetricLineRow);
-	if (hasFolders){
-		self.listChevron.frame = CGRectMake(x + text.width + kListChevronGap,
-				top, kListChevronWidth, TGMetricLineRow);
-	}
 }
 
 /// The peer whose story collapses into the title when the strip is off

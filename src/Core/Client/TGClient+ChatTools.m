@@ -268,7 +268,7 @@ static NSDictionary *TGFilterFromName(NSString *name) {
 		}
 		NSDictionary *out = @{
 			@"id"      : info[@"id"] ?: @(0),
-			@"name"    : TGPlainTitle(info[@"name"]) ?: @"Shared folder",
+			@"name"    : TGPlainTitle(info[@"name"]) ?: @"Chat Folders",
 			@"added"   : result[@"added_chat_ids"] ?: @[],
 			@"missing" : result[@"missing_chat_ids"] ?: @[],
 		};
@@ -661,7 +661,7 @@ static NSDictionary *TGFilterFromName(NSString *name) {
 	   completion:^(NSDictionary *result){
 		if ([result[@"@type"] isEqualToString:@"error"]){
 			if (completion)
-				completion(NO, result[@"message"] ?: @"The public-chat limit is reached.");
+				completion(NO, result[@"message"] ?: @"An error occurred.");
 			return;
 		}
 		if (completion)

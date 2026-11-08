@@ -19,6 +19,7 @@
 @property (nonatomic, assign) FILE *log;
 
 + (AppDelegate *)sharedDelegate;
++ (void)openChatWithId:(int64_t)chatId;
 
 - (void)showMainUI;
 - (void)showLoginUI;

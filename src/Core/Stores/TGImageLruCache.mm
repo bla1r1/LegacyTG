@@ -9,6 +9,35 @@ static inline int64_t TGKeyToInt64(id key) {
 	if ([key isKindOfClass:[NSNumber class]]) {
 		return [(NSNumber *)key longLongValue];
 	}
+	if ([key isKindOfClass:[NSString class]]) {
+		NSString *str = (NSString *)key;
+		NSUInteger len = str.length;
+		if (len > 0) {
+			BOOL isPureInt = YES;
+			for (NSUInteger i = 0; i < len; i++) {
+				unichar c = [str characterAtIndex:i];
+				if (i == 0 && (c == '-' || c == '+')) continue;
+				if (c < '0' || c > '9') {
+					isPureInt = NO;
+					break;
+				}
+			}
+			if (isPureInt) {
+				return [str longLongValue];
+			}
+		}
+		// 64-bit FNV-1a hash so formatted string keys like "123:20" and "123:40"
+		// or non-numeric keys never collide.
+		uint64_t hash = 14695981039346656037ULL;
+		const char *bytes = [str UTF8String];
+		if (bytes) {
+			while (*bytes) {
+				hash ^= (uint64_t)(unsigned char)(*bytes++);
+				hash *= 1099511628211ULL;
+			}
+		}
+		return (int64_t)hash;
+	}
 	if ([key respondsToSelector:@selector(longLongValue)]) {
 		return [key longLongValue];
 	}

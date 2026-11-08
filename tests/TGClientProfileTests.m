@@ -404,11 +404,62 @@ static void P_assertColour(UIColor *colour, int rgb) {
 	XCTAssertEqualObjects(rule, @"contacts");
 
 	[c setPrivacyRule:@"ShowBirthdate" to:@"everybody"];
+	// The write reads the list first, so the exceptions survive it.
+	XCTAssertNotNil(lastP(c, @"getUserPrivacySettingRules"));
+	answerP(c, plainP(@{@"@type" : @"userPrivacySettingRules",
+						@"rules" : @[@{@"@type" : @"userPrivacySettingRuleRestrictChatMembers",
+									   @"chat_ids" : @[@(-100)]},
+									 @{@"@type" : @"userPrivacySettingRuleAllowCloseFriends"},
+									 @{@"@type" : @"userPrivacySettingRuleAllowContacts"}]}));
 	NSDictionary *written = lastP(c, @"setUserPrivacySettingRules");
 	XCTAssertEqualObjects(written[@"setting"][@"@type"],
 						  @"userPrivacySettingShowBirthdate");
-	XCTAssertEqualObjects(written[@"rules"][@"rules"][0][@"@type"],
-						  @"userPrivacySettingRuleAllowAll");
+	NSArray *rules = written[@"rules"][@"rules"];
+	XCTAssertEqual(rules.count, (NSUInteger)3);
+	XCTAssertEqualObjects(rules[0][@"@type"], @"userPrivacySettingRuleRestrictChatMembers");
+	XCTAssertEqualObjects(rules[1][@"@type"], @"userPrivacySettingRuleAllowCloseFriends");
+	XCTAssertEqualObjects(rules[2][@"@type"], @"userPrivacySettingRuleAllowAll");
+}
+
+/// A failed read must not go on to write a catch-all over the real list.
+- (void)testPrivacyWrite_FailedReadWritesNothing {
+	TGClient *c = P();
+	__block BOOL ok = YES;
+	[c setPrivacyRule:@"ShowStatus" to:@"nobody" completion:^(BOOL written, NSString *error){
+		ok = written;
+	}];
+	XCTAssertNotNil(lastP(c, @"getUserPrivacySettingRules"));
+	answerP(c, plainP(@{@"@type" : @"error", @"code" : @(500), @"message" : @"TIMEOUT"}));
+	XCTAssertFalse(ok);
+	XCTAssertNil(lastP(c, @"setUserPrivacySettingRules"));
+}
+
+/// A blocked user this session never loaded used to come back with an empty
+/// name, a blank row on the screen; the list now asks for the user first.
+- (void)testBlockedUsers_AskForUnknownNamesBeforeAnswering {
+	TGClient *c = P();
+	__block NSArray *rows = nil;
+	[c blockedUsersWithCompletion:^(NSArray *users){ rows = users; }];
+	answerP(c, plainP(@{@"@type" : @"messageSenders", @"total_count" : @(2),
+						@"senders" : @[@{@"@type" : @"messageSenderUser", @"user_id" : @(77)},
+									   @{@"@type" : @"messageSenderUser", @"user_id" : @(78)}]}));
+	XCTAssertNil(rows, @"no answer while a name is still unknown");
+	answerP(c, plainP(@{@"@type" : @"user", @"id" : @(78), @"first_name" : @"Ann",
+						@"last_name" : @""}));
+	XCTAssertNil(rows);
+	NSDictionary *first = nil;
+	for (NSData *d in c.outbox)
+		if ([decodeP(d)[@"@type"] isEqualToString:@"getUser"] &&
+				[decodeP(d)[@"user_id"] longLongValue] == 77)
+			first = decodeP(d);
+	XCTAssertNotNil(first);
+	NSMutableDictionary *reply = [plainP(@{@"@type" : @"user", @"id" : @(77),
+			@"first_name" : @"", @"last_name" : @""}) mutableCopy];
+	reply[@"@extra"] = first[@"@extra"];
+	[c handleUpdate:reply];
+	XCTAssertEqual(rows.count, (NSUInteger)2);
+	XCTAssertEqualObjects(rows[0][@"name"], @"Deleted Account");
+	XCTAssertEqualObjects(rows[1][@"name"], @"Ann");
 }
 
 #pragma mark - the sharing theme

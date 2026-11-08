@@ -56,22 +56,10 @@
 - (void)viewDidLoad {
 	[super viewDidLoad];
 	self.title = @"File Tools";
-	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
-		self.edgesForExtendedLayout = UIRectEdgeNone;
 	self.stage = @"Ready";
 	self.tableView.tableFooterView = [[UIView alloc] initWithFrame:CGRectZero];
 	[self applyTheme];
 
-	__weak typeof(self) weakSelf = self;
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGThemeChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note){
-		[weakSelf applyTheme];
-	}];
-}
-
-- (void)dealloc {
-	[[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 - (void)viewWillAppear:(BOOL)animated {

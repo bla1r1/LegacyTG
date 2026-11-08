@@ -16,25 +16,19 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
-		self.edgesForExtendedLayout = UIRectEdgeNone;
 	self.title = self.chatTitle.length
 			? [NSString stringWithFormat:@"%@ · Dice", self.chatTitle]
-			: @"Stake Dice";
+			: @"Stake";
 	self.tableView.rowHeight = TGMetricRow;
 	[self applyTheme];
 	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
-			initWithTitle:@"Refresh" style:UIBarButtonItemStylePlain
+			initWithTitle:@"Update" style:UIBarButtonItemStylePlain
 				   target:self action:@selector(refreshTapped)];
 	[[NSNotificationCenter defaultCenter] addObserver:self
 			selector:@selector(stateChanged:)
 				name:TGStakeDiceStateChangedNotification object:nil];
 	[self refresh];
 	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(applyTheme) name:TGThemeChangedNotification object:nil];
-}
-
-- (void)dealloc {
-	[[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 - (void)applyTheme {
@@ -62,7 +56,7 @@
 		if (!me)
 			return;
 		if (error.length){
-			[TGAlertSheet showMessage:error title:@"Stake Dice" inView:me.view];
+			[TGAlertSheet showMessage:error title:@"Stake" inView:me.view];
 			return;
 		}
 		me.state = state;
@@ -103,7 +97,7 @@
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
 	if (section == 0)
-		return @"State";
+		return @"Status";
 	if (section == 1)
 		return @"Suggested Stakes";
 	if (section == 2)
@@ -112,14 +106,6 @@
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-	if (section == 0)
-		return @"getStakeDiceState answers the hash a roll has to quote and "
-			   @"the last amount staked. The hash expires; Refresh asks again.";
-	if (section == 1)
-		return @"Amounts Telegram suggests for the next roll.";
-	if (section == 2)
-		return @"Faces 1 to 6, in order. The streak row pays only when 6 lands "
-			   @"three times in a row at the same stake.";
 	return nil;
 }
 
@@ -136,13 +122,13 @@
 	cell.selectionStyle = UITableViewCellSelectionStyleNone;
 
 	if (!self.state){
-		cell.textLabel.text = @"Reading the stake dice state…";
+		cell.textLabel.text = @"Loading...";
 		cell.textLabel.textColor = [[TGTheme shared] secondaryTextColour];
 		return cell;
 	}
 	if (indexPath.section == 0){
 		NSArray *pairs = @[
-			@[@"State hash", self.state[@"stateHash"] ?: @"empty — this account cannot roll"],
+			@[@"State hash", self.state[@"stateHash"] ?: @"None"],
 			@[@"Last stake", [self ton:self.state[@"stakeGramAmount"] ?: @(0)]],
 			@[@"Current streak", [NSString stringWithFormat:@"%@ of 3",
 					self.state[@"currentStreak"] ?: @(0)]],
@@ -158,7 +144,7 @@
 	}
 	if (indexPath.section == 1){
 		cell.textLabel.text = [self ton:[self suggestedStakes][indexPath.row]];
-		cell.detailTextLabel.text = @"Suggested for the next roll";
+		cell.detailTextLabel.text = nil;
 		return cell;
 	}
 	cell.textLabel.text = [NSString stringWithFormat:@"Face %ld", (long)indexPath.row + 1];

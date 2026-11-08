@@ -120,10 +120,6 @@ static const CGFloat kAvatarLargeSide = TGMetricChatAvatar;
 	[self buildSections];
 }
 
-- (void)dealloc {
-	[[NSNotificationCenter defaultCenter] removeObserver:self];
-}
-
 - (void)themeChanged {
 	[_scrollView removeFromSuperview];
 	[self buildScreen];

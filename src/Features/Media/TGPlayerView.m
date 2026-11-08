@@ -323,7 +323,7 @@ static NSString *TGPlayerFormatTime(NSTimeInterval seconds) {
 	_navTitleLabel.font = TGFontRowStrong();
 	_navTitleLabel.textColor = [theme barTitleColour];
 	_navTitleLabel.textAlignment = NSTextAlignmentCenter;
-	_navTitleLabel.text = @"Now Playing";
+	_navTitleLabel.text = @"Music";
 	_navTitleLabel.backgroundColor = [UIColor clearColor];
 	_navTitleLabel.autoresizingMask = UIViewAutoresizingFlexibleWidth;
 	[_navBarView addSubview:_navTitleLabel];
@@ -615,7 +615,7 @@ static NSString *TGPlayerFormatTime(NSTimeInterval seconds) {
 	BOOL show = _queueContainer.hidden;
 	_queueContainer.hidden = !show;
 	_deckView.hidden = show;
-	_navTitleLabel.text = show ? @"Queue" : @"Now Playing";
+	_navTitleLabel.text = show ? @"Your Playlist" : @"Music";
 	if (show) [_queueTable reloadData];
 }
 

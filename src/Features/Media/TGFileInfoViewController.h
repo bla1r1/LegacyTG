@@ -2,8 +2,9 @@
 // TGFileInfoViewController - the file record behind a picture or document.
 //
 #import <UIKit/UIKit.h>
+#import "TGTableViewController.h"
 
-@interface TGFileInfoViewController : UITableViewController
+@interface TGFileInfoViewController : TGTableViewController
 
 /// Set before the view loads. A file id of 0 shows the "unavailable" state.
 @property (nonatomic, assign) NSInteger fileId;

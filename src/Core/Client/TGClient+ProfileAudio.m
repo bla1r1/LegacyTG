@@ -8,7 +8,7 @@ static NSString *TGProfileAudioError(NSDictionary *result) {
 	if (![result[@"@type"] isEqualToString:@"error"])
 		return nil;
 	NSString *message = result[@"message"];
-	return message.length ? message : @"Telegram refused that.";
+	return message.length ? message : @"An error occurred.";
 }
 
 /// One audio object flattened for a row. The player needs the file id and a

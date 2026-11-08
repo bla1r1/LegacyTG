@@ -1,5 +1,6 @@
 #import <UIKit/UIKit.h>
+#import "TGViewController.h"
 
-@interface TGPlaceholderViewController : UIViewController
+@interface TGPlaceholderViewController : TGViewController
 @property (nonatomic, strong) NSString *featureName;
 @end

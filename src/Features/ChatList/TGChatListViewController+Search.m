@@ -9,6 +9,10 @@
 }
 
 - (BOOL)searchBarShouldBeginEditing:(UISearchBar *)searchBar {
+	// The full search screen owns recent peers, results sections and public
+	// posts. Expanding the list in place left all of that unreachable; keep
+	// the push the screen was built for until the in-place version is whole.
+	self.userRevealed = YES;
 	TGSearchViewController *search = [[TGSearchViewController alloc] init];
 	search.hidesBottomBarWhenPushed = YES;
 	[self.navigationController pushViewController:search animated:YES];

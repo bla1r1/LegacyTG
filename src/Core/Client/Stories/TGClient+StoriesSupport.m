@@ -12,7 +12,7 @@ NSArray *TGStoryArray(id value) {
 NSString *TGStoryErrorText(NSDictionary *result) {
 	NSString *message = result[@"message"];
 	return [message isKindOfClass:NSString.class]
-			? message : @"Telegram refused that.";
+			? message : @"An error occurred.";
 }
 
 /// TDLib answers every request with @"@type" : @"ok" on success. A few answer

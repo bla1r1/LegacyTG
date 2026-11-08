@@ -1,7 +1,9 @@
 #import "TGChatListViewControllerInternal.h"
+#import "TGLocalization.h"
 #import "TGCapabilities.h"
 #import "TGAlertSheet.h"
 #import "TGStyle.h"
+#import "TGChatParityModel.h"
 
 /// A flick that never reached half the buttons' width still opens the row.
 /// Below this the pan reads as a slow drag and the half-way rule decides.
@@ -14,63 +16,11 @@ static const CGFloat kSwipeFlickVelocity = 500.0f;
 /// showing the archive, the folder's own title when a folder is selected.
 - (NSString *)titleForCurrentList {
 	if (self.showsArchive)
-		return @"Archived";
+		return TGLocalized(@"Archived Chats");
 	for (NSDictionary *f in [TGClient shared].folders)
 		if ([f[@"id"] integerValue] == self.folderId)
-			return f[@"title"] ?: @"Chats";
-	return @"Chats";
-}
-
-- (void)foldersTapped {
-	NSArray *folders = [TGClient shared].folders;
-	// Tapping and getting nothing back reads as a broken button; an account
-	// with no folders has to say so.
-	if (!folders.count){
-		[TGAlertSheet showMessage:@"This account has no chat folders yet. They "
-								  @"are made in Settings, under Chat Folders, "
-								  @"and appear here as a strip."
-							title:@"Folders" inView:self.view];
-		return;
-	}
-
-	// The folder list opens through TGPopupMenu, which routes plain lists to
-	// a system action sheet (8e0d1b4). This spot once hit B3 on the 4S - the
-	// sheet threw inside addButtonWithTitle: - which is why every parsed
-	// folder title is type-checked and stays non-nil. The defensive parsing
-	// remains although the parse bug itself is fixed.
-	NSMutableArray *items = [NSMutableArray array];
-	[items addObject:@{@"title" : @"All chats"}];
-	for (NSDictionary *f in folders){
-		NSString *title = [f isKindOfClass:NSDictionary.class] ? f[@"title"] : nil;
-		NSLog(@"TGClient: B3 folder id=%@ title=%@ class=%@",
-				[f isKindOfClass:NSDictionary.class] ? f[@"id"] : nil,
-				title, [title class]);
-		if ([title isKindOfClass:NSString.class] && title.length)
-			[items addObject:@{@"title" : title}];
-	}
-	// A trailing row that does not choose a folder: it reads the list that
-	// is open, whoever it is, badge and all. Chosen last so the folder
-	// indexes above stay untouched. On the main screen with no folder open
-	// it reads "Mark All Read", elsewhere it becomes plain "Mark Read".
-	NSString *markTitle = self.showsArchive || self.folderId
-			? @"Mark Read" : @"Mark All Read";
-	[items addObject:@{@"title" : markTitle}];
-	NSInteger markItem = (NSInteger)items.count - 1;
-
-	__weak typeof(self) weakSelf = self;
-	CGPoint where = CGPointMake(TGHalf(self.view.bounds.size.width),
-								TGHalf(self.view.bounds.size.height));
-	[TGPopupMenu showItems:items
-				   atPoint:where
-					inView:self.navigationController.view
-				  onChoice:^(NSInteger choice, NSString *title){
-		if (choice == markItem){
-			[[TGClient shared] readChatListOfFolder:weakSelf.folderId
-										   archived:weakSelf.showsArchive];
-			return;
-		}
-		[weakSelf runFolderChoice:choice];
-	}];
+			return f[@"title"] ?: TGLocalized(@"Chats");
+	return TGLocalized(@"Chats");
 }
 
 - (void)runFolderChoice:(NSInteger)choice {
@@ -79,12 +29,12 @@ static const CGFloat kSwipeFlickVelocity = 500.0f;
 	NSArray *folders = [TGClient shared].folders;
 	if (choice == 0){
 		self.folderId = 0;
-		self.title = self.showsArchive ? @"Archived" : @"Chats";
+		self.title = self.showsArchive ? TGLocalized(@"Archived Chats") : TGLocalized(@"Chats");
 	} else if (choice - 1 < (NSInteger)folders.count){
 		NSDictionary *f = folders[choice - 1];
 		self.folderId = [f isKindOfClass:NSDictionary.class] ? [f[@"id"] integerValue] : 0;
 		NSString *t = [f isKindOfClass:NSDictionary.class] ? f[@"title"] : nil;
-		self.title = [t isKindOfClass:NSString.class] && t.length ? t : @"Chats";
+		self.title = [t isKindOfClass:NSString.class] && t.length ? t : TGLocalized(@"Chats");
 	}
 	NSLog(@"TGClient: B3 folder choice=%ld -> id=%lld title=%@", (long)choice,
 			(long long)self.folderId, self.title);
@@ -201,8 +151,15 @@ static const CGFloat kSwipeFlickVelocity = 500.0f;
 		[[TGClient shared] setChat:chatId archived:!self.showsArchive];
 	else if ([action isEqualToString:@"Mark as Unread"])
 		[[TGClient shared] setChat:chatId markedUnread:YES];
-	else if ([action isEqualToString:@"Mark as Read"])
-		[[TGClient shared] setChat:chatId markedUnread:NO];
+	else if ([action isEqualToString:@"Mark as Read"]) {
+		// Clearing the marked-unread flag alone left the count and the
+		// messages unread; the server wants the last message read.
+		NSNumber *lastId = self.actionChat[@"lastId"];
+		if ([lastId longLongValue])
+			[[TGClient shared] markRead:@[lastId] inChat:chatId];
+		else
+			[[TGClient shared] setChat:chatId markedUnread:NO];
+	}
 	else
 		[self confirmDeleteChat:chatId];
 	self.actionChat = nil;
@@ -212,9 +169,6 @@ static const CGFloat kSwipeFlickVelocity = 500.0f;
 /// once: the row goes, and the count on the plate is the window to change your
 /// mind. Their design answers this with a snackbar rather than a dialog.
 - (void)confirmDeleteChat:(int64_t)chatId {
-	// Read before the row goes: visibleChats drops whatever is waiting on the
-	// undo plate, and the snackbar is the only place left that can say a group
-	// was also left.
 	BOOL isGroup = NO;
 	for (NSDictionary *chat in self.chats)
 		if ([chat[@"id"] longLongValue] == chatId){
@@ -222,21 +176,50 @@ static const CGFloat kSwipeFlickVelocity = 500.0f;
 			break;
 		}
 
+	BOOL isPrivate = !isGroup;
+	NSArray *choices = TGChatDeleteChoices(isPrivate, 1);
+	__weak typeof(self) weakSelf = self;
+	[TGAlertSheet showChoices:choices
+						title:nil
+			 destructiveIndex:0
+					   inView:self.navigationController.view ?: self.view
+					 onChoice:^(NSInteger index){
+		TGChatListViewController *me = weakSelf;
+		if (!me)
+			return;
+		if (isPrivate){
+			// Delete for All removes the chat for both sides; Delete for me
+			// only takes it off this account. They are different requests.
+			[me commitDeleteChat:chatId globally:(index == 0)];
+		} else {
+			// A group has only one choice: remove it here and leave it.
+			[me commitDeleteChat:chatId globally:NO];
+		}
+	}];
+}
+
+/// The row goes at once, with the official five-second window to take it back.
+/// Delete for All waits for the same window: ChatListController schedules
+/// both scopes behind one undo overlay.
+- (void)commitDeleteChat:(int64_t)chatId globally:(BOOL)globally {
 	self.chatPendingDeletion = chatId;
 	[self.tableView reloadData];
 
 	__weak typeof(self) weakSelf = self;
 	[TGSnackbar showInView:self.navigationController.view
-					  text:(isGroup ? @"Left and deleted" : @"Chat deleted")
+					  text:TGLocalized(@"Chat deleted.")
 				   seconds:5
 				  onCommit:^{
-		[[TGClient shared] deleteChat:chatId];
+		if (globally)
+			[[TGClient shared] deleteChatForEveryone:chatId completion:nil];
+		else
+			[[TGClient shared] deleteChat:chatId];
 		TGChatListViewController *me = weakSelf;
 		me.chatPendingDeletion = 0;
 		[me reload];
 	}];
 
-	// UNDO simply never commits; the row has to come back when it does not.
+	// UNDO simply never commits; the row has to come back when it does.
 	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(6.0 * NSEC_PER_SEC)),
 			dispatch_get_main_queue(), ^{
 		TGChatListViewController *me = weakSelf;
@@ -253,10 +236,12 @@ static const CGFloat kSwipeFlickVelocity = 500.0f;
 /// does. The API for more than a single Delete arrived in iOS 8; this is the
 /// system path, and the older one lives in the section below.
 - (BOOL)tableView:(UITableView *)tableView canEditRowAtIndexPath:(NSIndexPath *)indexPath {
-	if (![TGCapabilities canSwipeRowActions] || self.searchResults)
+	if (self.searchResults)
 		return NO;
 	NSInteger index = indexPath.row - (NSInteger)[self headerRows].count;
-	return index >= 0 && index < (NSInteger)[self visibleChats].count;
+	BOOL valid = index >= 0 && index < (NSInteger)[self visibleChats].count;
+	return TGChatRowIsSelectable(self.editingChats || self.tableView.editing,
+			[TGCapabilities canSwipeRowActions], valid);
 }
 
 - (void)tableView:(UITableView *)tableView commitEditingStyle:(UITableViewCellEditingStyle)style

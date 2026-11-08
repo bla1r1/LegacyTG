@@ -3,6 +3,7 @@
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
+#import "TGLocalization.h"
 #import "TGSnackbar.h"
 #import "TGContactsViewController.h"
 #import "TGChatToolsViewController.h"
@@ -16,6 +17,7 @@
 #import "TGGroupSettingsViewController.h"
 #import "TGGroupSwitch.h"
 #import "TGGroupSettingsViewControllerInternal.h"
+#import "TGGroupLogic.h"
 
 
 
@@ -212,20 +214,17 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 
 	if ([key isEqualToString:@"sign"]){
 		[[TGClient shared] setChatSignMessages:self.chatId on:on completion:^(BOOL ok){
-			done(ok, ok ? nil : @"Only an administrator of a supergroup or a "
-								@"channel carries this switch.");
+			done(ok, ok ? nil : @"An error occurred.");
 		}];
 	} else if ([key isEqualToString:@"join"]){
 		[[TGClient shared] setChatJoinToSendMessages:self.chatId on:on
 										  completion:^(BOOL ok){
-			done(ok, ok ? nil : @"Only an administrator of a supergroup or a "
-								@"channel carries this switch.");
+			done(ok, ok ? nil : @"An error occurred.");
 		}];
 	} else if ([key isEqualToString:@"history"]){
 		[[TGClient shared] setSupergroupAllHistoryAvailable:self.chatId on:on
 												completion:^(BOOL ok){
-			done(ok, ok ? nil : @"Only an administrator of a supergroup or a "
-								@"channel carries this switch.");
+			done(ok, ok ? nil : @"An error occurred.");
 		}];
 	} else if ([key isEqualToString:@"antispam"]){
 		[[TGClient shared] setChat:self.chatId aggressiveAntiSpam:on
@@ -251,16 +250,14 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 /// inventing a second switch that could disagree with the Usernames section.
 - (void)chooseGroupType {
 	BOOL isPublic = self.editable.length > 0 || self.active.count > 0;
-	NSString *what = [self isChannelChat] ? @"Channel" : @"Group";
 	if (!isPublic){
 		[self editUsername];
 		return;
 	}
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:@[@"Edit Username", @"Make Private"]
-						title:[NSString stringWithFormat:@"%@ Type", what]
-						message:@"A public group is reachable by its @name; a "
-								@"private one only by its invite link."
+	[TGAlertSheet showChoices:@[@"Edit Username", @"Deactivate Username"]
+						title:([self isChannelChat] ? @"Channel Type" : @"Group Type")
+						message:nil
 			 destructiveIndex:1
 						 inView:self.view
 					   onChoice:^(NSInteger index){
@@ -275,10 +272,12 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 /// Leaving is the member's row; the owner gets Delete instead because a
 /// group cannot be left without an owner to hand it to.
 - (void)leaveChat {
-	NSString *what = [self isChannelChat] ? @"channel" : @"group";
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:[NSString stringWithFormat:
-					@"You will stop receiving messages from this %@.", what]
+	NSString *name = self.chatTitle ?: @"";
+	NSString *message = [self isChannelChat]
+			? TGLocalizedFormat(@"Are you sure you want to leave the channel **%@**?", name)
+			: TGLocalizedFormat(@"Do you want to leave the group **%@**?", name);
+	[TGAlertSheet showConfirm:TGStripBoldMarkers(message)
 							title:([self isChannelChat] ? @"Leave Channel"
 														: @"Leave Group")
 						   action:@"Leave"
@@ -296,10 +295,12 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 
 - (void)deleteChatForEveryone {
 	NSString *what = [self isChannelChat] ? @"Channel" : @"Group";
+	NSString *name = self.chatTitle ?: @"";
+	NSString *message = [self isChannelChat]
+			? TGLocalizedFormat(@"Do you want to delete the channel **%@** and all of its messages for all subscribers?", name)
+			: TGLocalizedFormat(@"Do you want to delete the group **%@** and all of its messages for all members?", name);
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:[NSString stringWithFormat:
-					@"%@ and every message in it are deleted for all members. "
-					@"This cannot be undone.", what]
+	[TGAlertSheet showConfirm:TGStripBoldMarkers(message)
 							title:[NSString stringWithFormat:@"Delete %@", what]
 						   action:@"Delete"
 					  destructive:YES

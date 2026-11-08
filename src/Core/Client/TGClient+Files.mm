@@ -793,7 +793,7 @@ static void TGGenerationProgress(NSMutableDictionary *pending, NSInteger fileId,
 				void (^done)(NSInteger, NSString *, NSError *) = pending[@"completion"];
 				if (done)
 					done(0, @"", TGGenerationError(
-							result[@"message"] ?: @"Telegram refused the upload."));
+							result[@"message"] ?: @"An error occurred."));
 			}
 			return;
 		}

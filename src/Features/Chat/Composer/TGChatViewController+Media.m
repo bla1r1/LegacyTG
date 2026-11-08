@@ -345,22 +345,35 @@
 		if (!fileId)
 			return;
 		CGFloat screenScale = [UIScreen mainScreen].scale;
-		[[TGClient shared] downloadFile:fileId.integerValue completion:^(NSString *path){
-			if (!path.length) return;
+		[[TGClient shared] downloadFile:fileId.integerValue
+							   priority:TGDownloadPriorityAvatar
+							 completion:^(NSString *path){
+			if (!path.length) {
+				dispatch_async(dispatch_get_main_queue(), ^{
+					[weakSelf.senderAvatarsRequested removeObject:key];
+				});
+				return;
+			}
 			dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
 				// Same pooled-gated decode as every other avatar path: a busy
 				// group's flood used to ride this block pool-free (B15).
 				dispatch_semaphore_wait(TGIconsDecodeGate(), DISPATCH_TIME_FOREVER);
 				__block UIImage *photo = nil;
 				@autoreleasepool {
-					photo = [TGIcons decodedImage:[UIImage imageWithContentsOfFile:path]
-										  fittingSize:CGSizeMake(kAvatarSide, kAvatarSide)
-												 fill:YES scale:screenScale];
+					photo = [TGIcons decodedImageAtPath:path
+											fittingSize:CGSizeMake(kAvatarSide, kAvatarSide)
+												   fill:YES scale:screenScale];
 				}
 				dispatch_semaphore_signal(TGIconsDecodeGate());
-				if (!photo) return;
+				if (!photo) {
+					dispatch_async(dispatch_get_main_queue(), ^{
+						[weakSelf.senderAvatarsRequested removeObject:key];
+					});
+					return;
+				}
 				dispatch_async(dispatch_get_main_queue(), ^{
 					weakSelf.senderAvatars[key] = photo;
+					[weakSelf.senderAvatarsRequested removeObject:key];
 					// One reload per arriving avatar loaded the whole table once
 					// per participant in a busy group.
 					[weakSelf reloadTableDebounced];
@@ -459,7 +472,6 @@
 		return;
 	[self endDownloadHUD];
 	[[TGClient shared] cancelDownloadOfFile:fileId onlyIfPending:NO];
-	[TGSnackbar showInView:self.view text:@"Download cancelled" seconds:2 onCommit:nil];
 }
 
 /// Copy the received file into Documents first: TDLib owns its cache and can
@@ -490,7 +502,7 @@
 						? [NSString stringWithFormat:@"%@ applied.",
 								[TGTheme shared].importedName ?: name]
 						: @"This file could not be read as a Telegram theme.")
-							title:@"Theme" inView:self.view];
+							title:@"Themes" inView:self.view];
 	}];
 }
 

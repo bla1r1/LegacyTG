@@ -44,24 +44,12 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	self.title = @"File Info";
-	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
-		self.edgesForExtendedLayout = UIRectEdgeNone;
+	self.title = @"File";
 	[[TGTheme shared] styleGroupedTable:self.tableView];
 	[[TGTheme shared] styleNavigationBar:self.navigationController.navigationBar];
 	self.tableView.tableFooterView = [[UIView alloc] initWithFrame:CGRectZero];
 
-	__weak typeof(self) weakSelf = self;
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGThemeChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note){
-		[weakSelf applyTheme];
-	}];
 	[self load];
-}
-
-- (void)dealloc {
-	[[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 - (void)applyTheme {
@@ -120,7 +108,7 @@ static NSString *TGFileInfoBytes(long long bytes) {
 	if (!name.length)
 		name = [info[@"localPath"] lastPathComponent];
 	if (!name.length)
-		name = self.loaded ? @"Unavailable" : @"Reading...";
+		name = self.loaded ? @"Unavailable" : @"Loading...";
 
 	NSString *extension = names[@"extension"] ?: @"";
 	NSString *mime = names[@"mime"] ?: @"";
@@ -165,15 +153,15 @@ static NSString *TGFileInfoBytes(long long bytes) {
 	NSString *path = [info[@"localPath"] isKindOfClass:NSString.class]
 			? info[@"localPath"] : @"";
 	if (path.length && [[NSFileManager defaultManager] fileExistsAtPath:path]){
-		[rows addObject:@"Share File"];
+		[rows addObject:@"Share"];
 		NSString *extension = path.pathExtension.lowercaseString;
 		if ([@[@"jpg", @"jpeg", @"png", @"webp"] containsObject:extension] ||
 			[@[@"mp4", @"mov", @"m4v"] containsObject:extension])
 			[rows addObject:@"Save to Photos"];
 	}
-	[rows addObject:@"Copy File Info"];
+	[rows addObject:@"Copy"];
 	if (path.length && [[NSFileManager defaultManager] fileExistsAtPath:path])
-		[rows addObject:@"Delete from Device"];
+		[rows addObject:@"Delete"];
 	return rows;
 }
 
@@ -182,7 +170,7 @@ static NSString *TGFileInfoBytes(long long bytes) {
 	NSString *name = self.suggestedName;
 	if (!name.length)
 		name = [info[@"localPath"] lastPathComponent];
-	return name.length ? name : (self.loaded ? @"Unavailable" : @"Reading...");
+	return name.length ? name : (self.loaded ? @"Unavailable" : @"Loading...");
 }
 
 - (long long)heroSize {
@@ -204,9 +192,6 @@ static NSString *TGFileInfoBytes(long long bytes) {
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-	if (section == 0)
-		return @"Values come from TDLib's own file record. The remote entry is "
-			   @"resolved again, so a stale id is shown as unavailable.";
 	return nil;
 }
 
@@ -302,7 +287,7 @@ static NSString *TGFileInfoBytes(long long bytes) {
 		NSString *action = actions[(NSUInteger)indexPath.row];
 		cell.textLabel.text = action;
 		cell.textLabel.textAlignment = NSTextAlignmentCenter;
-		cell.textLabel.textColor = [action isEqualToString:@"Delete from Device"]
+		cell.textLabel.textColor = [action isEqualToString:@"Delete"]
 				? [theme destructiveColour] : [theme accentColour];
 		cell.selectionStyle = UITableViewCellSelectionStyleDefault;
 		return cell;
@@ -326,7 +311,7 @@ static NSString *TGFileInfoBytes(long long bytes) {
 		return;
 	NSString *action = actions[(NSUInteger)indexPath.row];
 
-	if ([action isEqualToString:@"Share File"]){
+	if ([action isEqualToString:@"Share"]){
 		[self shareFile];
 		return;
 	}
@@ -334,11 +319,10 @@ static NSString *TGFileInfoBytes(long long bytes) {
 		[self saveFile];
 		return;
 	}
-	if ([action isEqualToString:@"Delete from Device"]){
+	if ([action isEqualToString:@"Delete"]){
 		__weak typeof(self) weakSelf = self;
-		[TGAlertSheet showConfirm:@"The downloaded copy comes off this device. "
-				@"Telegram can download it again."
-							title:@"Delete from Device"
+		[TGAlertSheet showConfirm:@"Delete"
+							title:@"Delete"
 						   action:@"Delete" destructive:YES
 						   inView:self.view
 						onConfirm:^{
@@ -346,7 +330,7 @@ static NSString *TGFileInfoBytes(long long bytes) {
 			if (!me)
 				return;
 			[[TGClient shared] deleteLocalFile:me.fileId];
-			[TGAlertSheet showMessage:@"The copy was deleted."
+			[TGAlertSheet showMessage:@"Done"
 								  title:@"File" inView:me.view];
 			[me load];
 		}];
@@ -357,8 +341,8 @@ static NSString *TGFileInfoBytes(long long bytes) {
 	for (NSArray *row in [self detailRows])
 		[lines addObject:[NSString stringWithFormat:@"%@: %@", row[0], row[1]]];
 	[UIPasteboard generalPasteboard].string = [lines componentsJoinedByString:@"\n"];
-	[TGAlertSheet showMessage:@"The file details are on the clipboard."
-						 title:@"File Info" inView:self.view];
+	[TGAlertSheet showMessage:@"Copied to clipboard."
+						 title:@"File" inView:self.view];
 }
 
 /// The record's own path, not a fresh download: the action is only offered
@@ -400,7 +384,7 @@ static NSString *TGFileInfoBytes(long long bytes) {
 	if (!image && [extension isEqualToString:@"webp"])
 		image = [UIImage convertFromWebP:path compressedData:nil error:nil];
 	if (!image){
-		[TGAlertSheet showMessage:@"This file is not a picture or a video."
+		[TGAlertSheet showMessage:@"An error occurred."
 							  title:@"Save" inView:self.view];
 		return;
 	}
@@ -410,13 +394,13 @@ static NSString *TGFileInfoBytes(long long bytes) {
 
 - (void)image:(UIImage *)image didFinishSavingWithError:(NSError *)error
   contextInfo:(void *)contextInfo {
-	[TGAlertSheet showMessage:(error ? @"Could not save" : @"Saved to Camera Roll")
+	[TGAlertSheet showMessage:(error ? @"An error occurred." : @"Saved to Photos.")
 						 title:nil inView:self.view];
 }
 
 - (void)video:(NSString *)path didFinishSavingWithError:(NSError *)error
    contextInfo:(void *)contextInfo {
-	[TGAlertSheet showMessage:(error ? @"Could not save" : @"Saved to Camera Roll")
+	[TGAlertSheet showMessage:(error ? @"An error occurred." : @"Saved to Photos.")
 						 title:nil inView:self.view];
 }
 

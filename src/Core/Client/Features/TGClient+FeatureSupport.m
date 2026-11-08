@@ -18,7 +18,7 @@ NSString *TGFeatureString(id value) {
 NSString *TGFeatureErrorText(NSDictionary *result) {
 	NSString *message = result[@"message"];
 	return [message isKindOfClass:NSString.class] && message.length
-			? message : @"Telegram refused that.";
+			? message : @"An error occurred.";
 }
 
 BOOL TGFeatureOK(NSDictionary *result) {

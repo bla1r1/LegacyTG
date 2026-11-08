@@ -1,6 +1,7 @@
 #import "TGChatViewControllerInternal.h"
 #import "TGAlertSheet.h"
 #import "TGClientInternal.h"
+#import "TGLocalization.h"
 
 @implementation TGChatViewController (Search)
 
@@ -20,19 +21,26 @@
 	self.chatSearchBar.delegate = self;
 	self.chatSearchBar.placeholder = @"Search in chat";
 	self.chatSearchBar.autoresizingMask = UIViewAutoresizingFlexibleWidth;
-	self.chatSearchBar.alpha = TGAlphaTransparent;
-	[self.view addSubview:self.chatSearchBar];
-	[self.chatSearchBar setShowsCancelButton:YES animated:NO];
+	// The field replaces the title in the navigation bar; a bar added over
+	// the table covered the first rows.
+	self.searchSavedTitleView = self.navigationItem.titleView;
+	// The bar takes the whole navigation bar, as official's search does:
+	// using a dedicated right bar button item gives Cancel its full natural width
+	// so Russian "Отмена" is never squeezed into "О...на".
+	self.searchSavedRightItems = self.navigationItem.rightBarButtonItems
+			?: (self.navigationItem.rightBarButtonItem ? @[self.navigationItem.rightBarButtonItem] : nil);
+	self.navigationItem.rightBarButtonItems = nil;
+	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
+			initWithTitle:TGLocalized(@"Cancel")
+					style:UIBarButtonItemStylePlain
+				   target:self
+				   action:@selector(endChatSearch)];
+	[self.navigationItem setHidesBackButton:YES animated:NO];
+	self.navigationItem.titleView = self.chatSearchBar;
+	[self.chatSearchBar setShowsCancelButton:NO animated:NO];
 	[self.chatSearchBar becomeFirstResponder];
 
 	self.messagesBeforeSearch = self.messages;
-
-	// The bar fades over the header. The table stays put: the keyboard is moving
-	// its frame at this moment, and a frame set under a transform comes out wrong.
-	__weak typeof(self) weakSelf = self;
-	[UIView animateWithDuration:TGAnimationDurationNormal animations:^{
-		weakSelf.chatSearchBar.alpha = TGAlphaOpaque;
-	}];
 }
 
 - (void)endChatSearch {
@@ -49,16 +57,15 @@
 		self.messages = self.messagesBeforeSearch;
 		self.messagesBeforeSearch = nil;
 		[self.table reloadData];
-		[self scrollToBottomAnimated:NO];
+		// The reading position is where the user left it, not the bottom.
 	}
 
-	// The old bar is removed by its own pointer, so a new search opened during
-	// the fade keeps its bar.
-	[UIView animateWithDuration:TGAnimationDurationNormal animations:^{
-		bar.alpha = TGAlphaTransparent;
-	} completion:^(BOOL finished){
-		[bar removeFromSuperview];
-	}];
+	self.navigationItem.titleView = self.searchSavedTitleView;
+	self.searchSavedTitleView = nil;
+	self.navigationItem.rightBarButtonItem = nil;
+	self.navigationItem.rightBarButtonItems = self.searchSavedRightItems;
+	self.searchSavedRightItems = nil;
+	[self.navigationItem setHidesBackButton:NO animated:NO];
 }
 
 - (void)searchBarCancelButtonClicked:(id)searchBar {

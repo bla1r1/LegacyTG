@@ -2,6 +2,7 @@
 // TGStickerPacksViewController.m - see the header.
 //
 #import "TGMessageLayout.h"
+#import "TGLocalization.h"
 #import "TGStickerPacksViewController.h"
 #import "TGAlertSheet.h"
 #import "TGClient.h"
@@ -21,11 +22,11 @@
 - (void)viewDidLoad {
 	[super viewDidLoad];
 
-	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
-		self.edgesForExtendedLayout = UIRectEdgeNone;
 
 	self.title = @"Stickers";
 	self.tableView.rowHeight = TGMetricPersonRow;
+	// Edit reorders and archives the installed packs, as the official list.
+	self.navigationItem.rightBarButtonItem = self.editButtonItem;
 	_ownedSets = @[];
 	_trendingSets = @[];
 	_archivedSets = @[];
@@ -131,32 +132,16 @@
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
 	switch (section){
-		case 1: return @"My Packs";
+		case 1: return @"My Stickers";
 		case 2: return @"Trending";
 		case 3: return @"Custom Emoji";
-		case 5: return @"Recent & Favourites";
+		case 5: return @"Favorites";
 		case 6: return @"Archived";
-		default: return section == 4 ? @"Greetings" : nil;
+		default: return section == 4 ? @"Stickers" : nil;
 	}
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-	if (section == 1)
-		return _ownedSets.count ? @"Tap a pack to edit its stickers, its title and "
-				@"its thumbnail." : @"Make one from the row above and it appears here.";
-	if (section == 2)
-		return _trendingSets.count ? @"Showing these marks them viewed, so they stop "
-				@"being recommended." : nil;
-	if (section == 3)
-		return @"The default custom emoji Telegram allows on photos, chats and "
-				@"backgrounds, plus a lookup by id.";
-	if (section == 5)
-		return @"Recently used and favourited stickers, as Telegram keeps them "
-				@"across devices.";
-	if (section == 6)
-		return _archivedSets.count
-				? @"Restore a pack to put it back on the sticker shelf."
-				: @"A pack you archive lands here instead of being deleted.";
 	return nil;
 }
 
@@ -186,15 +171,15 @@
 
 	if (indexPath.section == 0){
 		if (indexPath.row == 0){
-			cell.textLabel.text = @"New Sticker Pack";
-			cell.detailTextLabel.text = @"Title, short name and a first sticker";
+			cell.textLabel.text = @"New Sticker Set";
+			cell.detailTextLabel.text = nil;
 			cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
 		} else if (indexPath.row == 1){
-			cell.textLabel.text = @"Search by Short Name";
-			cell.detailTextLabel.text = @"Look up a pack by its t.me name";
+			cell.textLabel.text = @"Search Stickers";
+			cell.detailTextLabel.text = nil;
 		} else {
 			cell.textLabel.text = @"Clear Recent Stickers";
-			cell.detailTextLabel.text = @"Empty the Recently Used shelf";
+			cell.detailTextLabel.text = nil;
 			cell.textLabel.textColor = [TGTheme shared].destructiveColour;
 		}
 		return cell;
@@ -202,18 +187,21 @@
 
 	if (indexPath.section == 1){
 		if (!_ownedSets.count){
-			cell.textLabel.text = @"No packs yet";
-			cell.detailTextLabel.text = @"New Sticker Pack makes the first one";
+			cell.textLabel.text = @"No Stickers Found";
+			cell.detailTextLabel.text = nil;
 			cell.accessoryType = UITableViewCellAccessoryNone;
 			cell.selectionStyle = UITableViewCellSelectionStyleNone;
 			return cell;
 		}
 		NSDictionary *set = _ownedSets[(NSUInteger)indexPath.row];
-		cell.textLabel.text = [set[@"title"] length] ? TGStripUndrawableScalars(set[@"title"]) : @"Pack";
+		cell.textLabel.text = [set[@"title"] length] ? TGStripUndrawableScalars(set[@"title"]) : @"Stickers";
 		NSString *type = [self typeWord:set[@"stickerType"]];
-		cell.detailTextLabel.text = [NSString stringWithFormat:@"%@  ·  %lu stickers  ·  %@",
-				set[@"shortName"] ?: @"-",
-				(unsigned long)[set[@"count"] unsignedIntegerValue], type];
+		NSUInteger ownedCount = (NSUInteger)[set[@"count"] unsignedIntegerValue];
+		NSString *ownedCountText = TGLocalizedPluralValue(@"%@ sticker", @"%@ stickers",
+				[NSString stringWithFormat:@"%lu", (unsigned long)ownedCount],
+				(NSInteger)ownedCount);
+		cell.detailTextLabel.text = [NSString stringWithFormat:@"%@  ·  %@  ·  %@",
+				set[@"shortName"] ?: @"-", ownedCountText, type];
 		UIButton *archive = [UIButton buttonWithType:UIButtonTypeCustom];
 		archive.frame = CGRectMake(0, 0, TGMetricStoryBubble, TGMetricSearchScopeHeight);
 		archive.titleLabel.font = TGFontCaption();
@@ -230,16 +218,20 @@
 
 	if (indexPath.section == 2){
 		if (!_trendingSets.count){
-			cell.textLabel.text = @"Telegram has nothing to recommend";
+			cell.textLabel.text = @"No Results";
 			cell.detailTextLabel.text = nil;
 			cell.accessoryType = UITableViewCellAccessoryNone;
 			cell.selectionStyle = UITableViewCellSelectionStyleNone;
 			return cell;
 		}
 		NSDictionary *set = _trendingSets[(NSUInteger)indexPath.row];
-		cell.textLabel.text = [set[@"title"] length] ? TGStripUndrawableScalars(set[@"title"]) : @"Trending pack";
-		cell.detailTextLabel.text = [NSString stringWithFormat:@"%lu stickers%@",
-				(unsigned long)[set[@"count"] unsignedIntegerValue],
+		cell.textLabel.text = [set[@"title"] length] ? TGStripUndrawableScalars(set[@"title"]) : @"Trending Stickers";
+		NSUInteger trendingCount = (NSUInteger)[set[@"count"] unsignedIntegerValue];
+		NSString *trendingCountText = TGLocalizedPluralValue(@"%@ sticker", @"%@ stickers",
+				[NSString stringWithFormat:@"%lu", (unsigned long)trendingCount],
+				(NSInteger)trendingCount);
+		cell.detailTextLabel.text = [NSString stringWithFormat:@"%@%@",
+				trendingCountText,
 				[set[@"installed"] boolValue] ? @"  ·  installed" : @""];
 		return cell;
 	}
@@ -247,10 +239,10 @@
 	if (indexPath.section == 5){
 		BOOL recent = indexPath.row == 0;
 		NSArray *list = recent ? _recentStickers : _favoriteStickers;
-		cell.textLabel.text = recent ? @"Recently Used" : @"Favourites";
+		cell.textLabel.text = recent ? @"Recently Used" : @"Favorites";
 		cell.detailTextLabel.text = list.count
-				? [NSString stringWithFormat:@"%lu stickers", (unsigned long)list.count]
-				: @"Nothing here yet";
+				? TGLocalizedPluralValue(@"%@ sticker", @"%@ stickers", [NSString stringWithFormat:@"%lu", (unsigned long)list.count], (NSInteger)list.count)
+				: @"No Results";
 		cell.accessoryType = list.count ? UITableViewCellAccessoryDisclosureIndicator
 										: UITableViewCellAccessoryNone;
 		cell.selectionStyle = list.count ? UITableViewCellSelectionStyleDefault
@@ -259,18 +251,21 @@
 	}
 
 	if (indexPath.section == 6){
-		cell.selectionStyle = UITableViewCellSelectionStyleNone;
+		cell.selectionStyle = UITableViewCellSelectionStyleDefault;
 		if (!_archivedSets.count){
-			cell.textLabel.text = @"No archived packs";
-			cell.detailTextLabel.text = @"Archive a pack to move it here";
+			cell.textLabel.text = @"No Results";
+			cell.detailTextLabel.text = nil;
 			cell.accessoryType = UITableViewCellAccessoryNone;
 			return cell;
 		}
 		NSDictionary *set = _archivedSets[(NSUInteger)indexPath.row];
-		cell.textLabel.text = [set[@"title"] length] ? TGStripUndrawableScalars(set[@"title"]) : @"Archived pack";
-		cell.detailTextLabel.text = [NSString stringWithFormat:@"%@  ·  %lu stickers",
-				set[@"shortName"] ?: @"-",
-				(unsigned long)[set[@"count"] unsignedIntegerValue]];
+		cell.textLabel.text = [set[@"title"] length] ? TGStripUndrawableScalars(set[@"title"]) : @"Archived Stickers";
+		NSUInteger archivedCount = (NSUInteger)[set[@"count"] unsignedIntegerValue];
+		NSString *archivedCountText = TGLocalizedPluralValue(@"%@ sticker", @"%@ stickers",
+				[NSString stringWithFormat:@"%lu", (unsigned long)archivedCount],
+				(NSInteger)archivedCount);
+		cell.detailTextLabel.text = [NSString stringWithFormat:@"%@  ·  %@",
+				set[@"shortName"] ?: @"-", archivedCountText];
 		UIButton *restore = [UIButton buttonWithType:UIButtonTypeCustom];
 		restore.frame = CGRectMake(0, 0, TGMetricStoryBubble, TGMetricSearchScopeHeight);
 		restore.titleLabel.font = TGFontCaption();
@@ -286,20 +281,17 @@
 	}
 
 	if (indexPath.section == 3){
-		NSArray *titles = @[@"Profile Photo Emoji", @"Chat Photo Emoji",
-							@"Background Emoji", @"Look Up Custom Emoji IDs..."];
-		NSArray *notes = @[@"The default shelf for a profile picture",
-						   @"The default shelf for a chat picture",
-						   @"The default shelf for a wallpaper",
-						   @"Paste ids from a message that carries them"];
+		NSArray *titles = @[@"Add Icons To Profile", @"Add Icons To Replies",
+							@"Background Emoji", @"Search Emoji"];
+		NSArray *notes = @[@"", @"", @"", @""];
 		cell.textLabel.text = titles[(NSUInteger)indexPath.row];
 		cell.detailTextLabel.text = notes[(NSUInteger)indexPath.row];
 		cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
 		return cell;
 	}
 
-	cell.textLabel.text = @"Greeting Stickers";
-	cell.detailTextLabel.text = @"What Telegram suggests for a greeting";
+	cell.textLabel.text = @"Stickers";
+	cell.detailTextLabel.text = nil;
 	cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
 	return cell;
 }
@@ -315,9 +307,61 @@
 
 #pragma mark - choosing
 
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	if (indexPath.section == 6)
+- (BOOL)tableView:(UITableView *)tableView canEditRowAtIndexPath:(NSIndexPath *)indexPath {
+	return indexPath.section == 1 && _ownedSets.count > 0;
+}
+
+- (BOOL)tableView:(UITableView *)tableView canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
+	return indexPath.section == 1 && _ownedSets.count > 0;
+}
+
+- (void)tableView:(UITableView *)tableView
+		moveRowAtIndexPath:(NSIndexPath *)sourceIndexPath
+			  toIndexPath:(NSIndexPath *)destinationIndexPath {
+	if (sourceIndexPath.section != 1 || destinationIndexPath.section != 1)
 		return;
+	NSMutableArray *sets = [_ownedSets mutableCopy];
+	NSDictionary *set = sets[(NSUInteger)sourceIndexPath.row];
+	[sets removeObjectAtIndex:(NSUInteger)sourceIndexPath.row];
+	[sets insertObject:set atIndex:MIN((NSUInteger)destinationIndexPath.row,
+			sets.count)];
+	_ownedSets = sets;
+	NSMutableArray *ids = [NSMutableArray array];
+	for (NSDictionary *item in _ownedSets)
+		if (item[@"id"])
+			[ids addObject:item[@"id"]];
+	[[TGClient shared] reorderInstalledStickerSets:ids];
+}
+
+- (void)tableView:(UITableView *)tableView
+		commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
+		 forRowAtIndexPath:(NSIndexPath *)indexPath {
+	if (editingStyle != UITableViewCellEditingStyleDelete ||
+			indexPath.section != 1 ||
+			indexPath.row >= (NSInteger)_ownedSets.count)
+		return;
+	NSDictionary *set = _ownedSets[(NSUInteger)indexPath.row];
+	[[TGClient shared] setStickerSet:set[@"id"] installed:NO archived:YES];
+	[self reloadOwnedPacks];
+	[self reloadArchived];
+}
+
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
+	if (indexPath.section == 6){
+		// An archived pack opens like any other; Restore is the button beside it.
+		if (indexPath.row >= (NSInteger)_archivedSets.count)
+			return;
+		NSDictionary *set = _archivedSets[(NSUInteger)indexPath.row];
+		TGStickerEditorViewController *editor =
+				[[TGStickerEditorViewController alloc] init];
+		editor.setId = [set[@"id"] longLongValue];
+		editor.setName = set[@"shortName"];
+		editor.setTitle = set[@"title"];
+		editor.stickerType = set[@"stickerType"];
+		editor.hidesBottomBarWhenPushed = YES;
+		[self.navigationController pushViewController:editor animated:YES];
+		return;
+	}
 	if (indexPath.section == 1 && !_ownedSets.count)
 		return;
 	if (indexPath.section == 2 && !_trendingSets.count)
@@ -367,8 +411,8 @@
 		NSArray *list = recent ? _recentStickers : _favoriteStickers;
 		if (!list.count)
 			return;
-		[self showGallery:list title:recent ? @"Recently Used" : @"Favourites"
-				empty:@"Nothing here yet."];
+		[self showGallery:list title:recent ? @"Recently Used" : @"Favorites"
+				empty:@"No Results"];
 		return;
 	}
 
@@ -377,9 +421,9 @@
 
 	if (indexPath.section == 3){
 		if (indexPath.row == 0)
-			[self loadDefaultEmojiShelf:@"Profile Photo Emoji" kind:0];
+			[self loadDefaultEmojiShelf:@"Add Icons To Profile" kind:0];
 		else if (indexPath.row == 1)
-			[self loadDefaultEmojiShelf:@"Chat Photo Emoji" kind:1];
+			[self loadDefaultEmojiShelf:@"Add Icons To Replies" kind:1];
 		else if (indexPath.row == 2)
 			[self loadDefaultEmojiShelf:@"Background Emoji" kind:2];
 		else
@@ -406,16 +450,16 @@
 /// the server's and not a local echo.
 - (void)askForShortName {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"Search by Short Name"
-					message:@"The name in a t.me/addstickers link."
+	[TGAlertSheet showInput:@"Search Stickers"
+					message:nil
 				placeholder:@"animals" text:@"" action:@"Search"
 					 inView:self.view onSubmit:^(NSString *text){
 		TGStickerPacksViewController *me = weakSelf;
 		[[TGClient shared] searchStickerSetNamed:text ignoreCache:YES
 				completion:^(NSDictionary *set){
 			if (!set){
-				[TGAlertSheet showMessage:@"Telegram does not know a pack by that name."
-									  title:@"Search by Short Name" inView:me.view];
+				[TGAlertSheet showMessage:@"An error occurred."
+									  title:@"Search Stickers" inView:me.view];
 				return;
 			}
 			int64_t setId = [set[@"id"] longLongValue];
@@ -423,15 +467,19 @@
 				TGStickerPacksViewController *panel = weakSelf;
 				if (!panel)
 					return;
+				NSUInteger packCount = (NSUInteger)[set[@"count"] unsignedIntegerValue];
+				NSString *packCountText = TGLocalizedPluralValue(@"%@ sticker", @"%@ stickers",
+						[NSString stringWithFormat:@"%lu", (unsigned long)packCount],
+						(NSInteger)packCount);
 				NSString *message = [NSString stringWithFormat:
-						@"%@\n%@\n%lu stickers%@",
-						set[@"title"] ?: @"Pack",
+						@"%@\n%@\n%@%@",
+						set[@"title"] ?: @"Stickers",
 						name.length ? name : (set[@"name"] ?: text),
-						(unsigned long)[set[@"count"] unsignedIntegerValue],
+						packCountText,
 						[set[@"installed"] boolValue] ? @"\nAlready installed." : @""];
 				NSArray *choices = [set[@"installed"] boolValue]
 						? @[@"Open", @"Cancel"] : @[@"Install", @"Cancel"];
-				[TGAlertSheet showChoices:choices title:@"Pack Found"
+				[TGAlertSheet showChoices:choices title:@"View Sticker Set"
 						message:message destructiveIndex:-1 inView:panel.view
 						onChoice:^(NSInteger index){
 					if (index != 0)
@@ -449,8 +497,8 @@
 						return;
 					}
 					[[TGClient shared] setStickerSet:set[@"id"] installed:YES archived:NO];
-					[TGAlertSheet showMessage:@"The pack is now on the sticker shelf."
-										  title:@"Installed" inView:panel.view];
+					[TGAlertSheet showMessage:@"Stickers Added"
+										  title:@"Stickers Added" inView:panel.view];
 				}];
 			}];
 		}];
@@ -459,12 +507,12 @@
 
 - (void)confirmClearRecent {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:@"The Recently Used shelf is emptied on every device."
+	[TGAlertSheet showConfirm:@"Clear Recent Stickers"
 						title:@"Clear Recent Stickers" action:@"Clear" destructive:YES
 					   inView:self.view onConfirm:^{
 		TGStickerPacksViewController *me = weakSelf;
 		[[TGClient shared] clearRecentStickersAttached:NO];
-		[TGAlertSheet showMessage:@"Recently Used is empty."
+		[TGAlertSheet showMessage:@"No Results"
 							  title:@"Clear Recent Stickers" inView:me.view];
 	}];
 }
@@ -475,9 +523,8 @@
 		return;
 	NSDictionary *set = _ownedSets[(NSUInteger)row];
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:@"The pack leaves the sticker shelf. It stays "
-			@"installed on Telegram and can be restored from Archived."
-						title:set[@"title"] ?: @"Archive Pack"
+	[TGAlertSheet showConfirm:@"Archive"
+						title:set[@"title"] ?: @"Archive"
 					   action:@"Archive"
 				  destructive:NO
 					   inView:self.view
@@ -499,13 +546,15 @@
 	[[TGClient shared] setStickerSet:set[@"id"] installed:YES archived:NO];
 	[self reloadOwnedPacks];
 	[self reloadArchived];
-	[TGAlertSheet showMessage:@"The pack is back on the sticker shelf."
-						  title:set[@"title"] ?: @"Restored" inView:self.view];
+	[TGAlertSheet showMessage:@"Stickers Added"
+						  title:set[@"title"] ?: @"Archived Stickers" inView:self.view];
 }
 
 - (void)offerPack:(NSDictionary *)set {
-	NSString *message = [NSString stringWithFormat:@"%lu stickers",
-			(unsigned long)[set[@"count"] unsignedIntegerValue]];
+	NSUInteger offeredCount = (NSUInteger)[set[@"count"] unsignedIntegerValue];
+	NSString *message = TGLocalizedPluralValue(@"%@ sticker", @"%@ stickers",
+			[NSString stringWithFormat:@"%lu", (unsigned long)offeredCount],
+			(NSInteger)offeredCount);
 	if ([set[@"installed"] boolValue]){
 		[TGAlertSheet showMessage:message title:set[@"title"] inView:self.view];
 		return;
@@ -519,8 +568,8 @@
 			return;
 		TGStickerPacksViewController *me = weakSelf;
 		[[TGClient shared] setStickerSet:@(setId) installed:YES archived:NO];
-		[TGAlertSheet showMessage:@"The pack is now on the sticker shelf."
-							  title:@"Installed" inView:me.view];
+		[TGAlertSheet showMessage:@"Stickers Added"
+							  title:@"Stickers Added" inView:me.view];
 	}];
 }
 
@@ -531,7 +580,7 @@
 		if (!me)
 			return;
 		[me showGallery:stickers title:title
-				empty:@"Telegram sent no default emoji for this shelf."];
+				empty:@"No Results"];
 	};
 	if (kind == 0)
 		[[TGClient shared] defaultProfilePhotoCustomEmojiStickersWithCompletion:show];
@@ -543,8 +592,8 @@
 
 - (void)askForCustomEmojiIds {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"Custom Emoji IDs"
-					message:@"Comma separated ids, as a message carries them."
+	[TGAlertSheet showInput:@"Custom Emoji"
+					message:nil
 				placeholder:@"5368324170671202286" text:@"" action:@"Look Up"
 					 inView:self.view onSubmit:^(NSString *text){
 		TGStickerPacksViewController *me = weakSelf;
@@ -557,7 +606,7 @@
 				[ids addObject:@(value)];
 		}
 		if (!ids.count){
-			[TGAlertSheet showMessage:@"None of those looked like an id."
+			[TGAlertSheet showMessage:@"An error occurred."
 								  title:@"Custom Emoji" inView:me.view];
 			return;
 		}
@@ -566,7 +615,7 @@
 			if (!panel)
 				return;
 			[panel showGallery:stickers title:@"Custom Emoji"
-					empty:@"Telegram knows none of those ids."];
+					empty:@"No Results"];
 		}];
 	}];
 }
@@ -577,8 +626,8 @@
 		TGStickerPacksViewController *me = weakSelf;
 		if (!me)
 			return;
-		[me showGallery:stickers title:@"Greeting Stickers"
-				empty:@"Telegram sent no greeting stickers."];
+		[me showGallery:stickers title:@"Stickers"
+				empty:@"No Results"];
 	}];
 }
 

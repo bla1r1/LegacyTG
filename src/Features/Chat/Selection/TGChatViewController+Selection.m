@@ -1,7 +1,9 @@
 #import "TGChatViewControllerInternal.h"
+#import "TGLocalization.h"
 #import "TGForwardPicker.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
+#import "TGChatParityModel.h"
 #import <QuartzCore/QuartzCore.h>
 
 /// finalizeCell runs for every row that scrolls past, so the entrance pop is
@@ -64,18 +66,49 @@ static void TGAnimateSelectionCheckbox(TGChatViewController *chat, int64_t messa
 		hair.autoresizingMask = UIViewAutoresizingFlexibleWidth;
 		[self.editToolbar addSubview:hair];
 
-		self.editDeleteButton = [TGButton buttonWithTitle:@"Delete" variant:TGButtonVariantDestructive size:TGButtonSizeSmall];
+		// Official's selection panel is icon-only circles, not two text
+		// buttons: Delete, then Forward, with the count living in the title.
+		TGTheme *theme = [TGTheme shared];
+		CGFloat side = TGMetricSelectionActionSide;
+		CGFloat glyph = TGMetricSelectionActionGlyphSide;
+
+		self.editDeleteButton = [UIButton buttonWithType:UIButtonTypeCustom];
 		self.editDeleteButton.frame = CGRectMake(TGMetricPadLarge,
-			TGCenteredOrigin(kInputHeight, TGMetricButtonHeightSmall),
-			TGMetricEditToolbarButtonWidth, TGMetricButtonHeightSmall);
+				TGCenteredOrigin(kInputHeight, side), side, side);
+		self.editDeleteButton.autoresizingMask = UIViewAutoresizingFlexibleRightMargin;
+		[self.editDeleteButton setBackgroundImage:[TGTheme
+				skeuomorphicButtonImageWithColor:[theme destructiveColour]
+				height:side highlighted:NO cornerRadius:TGHalf(side)]
+				forState:UIControlStateNormal];
+		[self.editDeleteButton setBackgroundImage:[TGTheme
+				skeuomorphicButtonImageWithColor:[theme destructiveColour]
+				height:side highlighted:YES cornerRadius:TGHalf(side)]
+				forState:UIControlStateHighlighted];
+		[self.editDeleteButton setImage:[TGIcons glyphNamed:@"delete"
+				colour:[theme onAccentColour] side:glyph]
+				forState:UIControlStateNormal];
+		self.editDeleteButton.adjustsImageWhenHighlighted = NO;
+		self.editDeleteButton.accessibilityLabel = TGLocalized(@"Delete");
 		[self.editDeleteButton addTarget:self action:@selector(deleteSelectedMessages) forControlEvents:UIControlEventTouchUpInside];
 		[self.editToolbar addSubview:self.editDeleteButton];
 
-		self.editForwardButton = [TGButton buttonWithTitle:@"Forward" variant:TGButtonVariantPrimary size:TGButtonSizeSmall];
-		self.editForwardButton.frame =
-				CGRectMake(b.size.width - TGMetricEditToolbarButtonWidth - TGMetricPadLarge,
-						TGCenteredOrigin(kInputHeight, TGMetricButtonHeightSmall),
-						TGMetricEditToolbarButtonWidth, TGMetricButtonHeightSmall);
+		self.editForwardButton = [UIButton buttonWithType:UIButtonTypeCustom];
+		self.editForwardButton.frame = CGRectMake(b.size.width - side - TGMetricPadLarge,
+				TGCenteredOrigin(kInputHeight, side), side, side);
+		self.editForwardButton.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin;
+		[self.editForwardButton setBackgroundImage:[TGTheme
+				skeuomorphicButtonImageWithColor:[theme accentColour]
+				height:side highlighted:NO cornerRadius:TGHalf(side)]
+				forState:UIControlStateNormal];
+		[self.editForwardButton setBackgroundImage:[TGTheme
+				skeuomorphicButtonImageWithColor:[theme accentColour]
+				height:side highlighted:YES cornerRadius:TGHalf(side)]
+				forState:UIControlStateHighlighted];
+		[self.editForwardButton setImage:[TGIcons glyphNamed:@"forward"
+				colour:[theme onAccentColour] side:glyph]
+				forState:UIControlStateNormal];
+		self.editForwardButton.adjustsImageWhenHighlighted = NO;
+		self.editForwardButton.accessibilityLabel = TGLocalized(@"Forward");
 		[self.editForwardButton addTarget:self action:@selector(forwardSelectedMessages) forControlEvents:UIControlEventTouchUpInside];
 		[self.editToolbar addSubview:self.editForwardButton];
 
@@ -89,11 +122,14 @@ static void TGAnimateSelectionCheckbox(TGChatViewController *chat, int64_t messa
 	self.savedRightBarButtonItem = self.navigationItem.rightBarButtonItem;
 
 	self.navigationItem.titleView = nil;
-	self.navigationItem.rightBarButtonItem = nil;
-	self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Cancel"
-																			 style:UIBarButtonItemStylePlain
-																			target:self
-																			action:@selector(exitEditMode)];
+	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:TGLocalized(@"Cancel")
+																		 style:UIBarButtonItemStylePlain
+																		target:self
+																		action:@selector(exitEditMode)];
+	self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:TGLocalized(@"Clear All")
+																		 style:UIBarButtonItemStylePlain
+																		target:self
+																		action:@selector(clearHistoryFromSelection)];
 
 	[self updateEditToolbar];
 	[self.table reloadData];
@@ -125,7 +161,6 @@ static void TGAnimateSelectionCheckbox(TGChatViewController *chat, int64_t messa
 	self.navigationItem.titleView = self.savedTitleView;
 	self.navigationItem.rightBarButtonItem = self.savedRightBarButtonItem;
 	self.title = nil;
-
 	[self.table reloadData];
 
 	// The reverse: the toolbar drops away while the composer fades back in.
@@ -145,17 +180,42 @@ static void TGAnimateSelectionCheckbox(TGChatViewController *chat, int64_t messa
 	}];
 }
 
+- (void)clearSelectedMessages {
+	[self.selectedMessageIds removeAllObjects];
+	[self updateEditToolbar];
+	[self.table reloadData];
+}
+
+/// Clear All is the clear-history action, not a deselect. Only a private
+/// chat may clear for both sides (TDLib ignores revoke elsewhere); groups,
+/// channels and Saved Messages clear for this account only.
+- (void)clearHistoryFromSelection {
+	BOOL isSaved = (self.chatId == [[TGClient shared] savedMessagesChatId]);
+	BOOL canRevoke = !isSaved && !self.isGroup && !self.isChannel;
+	NSArray *choices = canRevoke
+			? @[TGLocalized(@"Delete for Everyone"), TGLocalized(@"Delete for me")]
+			: @[TGLocalized(@"Clear History")];
+	__weak typeof(self) weakSelf = self;
+	[TGAlertSheet showChoices:choices
+						title:TGLocalized(@"Clear History")
+			 destructiveIndex:0
+					   inView:self.view
+					 onChoice:^(NSInteger index){
+		TGChatViewController *me = weakSelf;
+		if (!me)
+			return;
+		[me exitEditMode];
+		[[TGClient shared] clearHistoryInChat:me.chatId revoke:(canRevoke && index == 0)];
+		[me reload];
+	}];
+}
+
 - (void)updateEditToolbar {
 	NSUInteger count = self.selectedMessageIds.count;
 	BOOL enabled = (count > 0);
 
 	self.editDeleteButton.enabled = enabled;
 	self.editDeleteButton.alpha = enabled ? TGAlphaOpaque : TGAlphaDisabled;
-	if (count > 0) {
-		[self.editDeleteButton setTitle:[NSString stringWithFormat:@"Delete (%lu)", (unsigned long)count] forState:UIControlStateNormal];
-	} else {
-		[self.editDeleteButton setTitle:@"Delete" forState:UIControlStateNormal];
-	}
 
 	// One protected message in the selection keeps the whole batch home.
 	BOOL forwardable = enabled;
@@ -167,18 +227,11 @@ static void TGAnimateSelectionCheckbox(TGChatViewController *chat, int64_t messa
 	}
 	self.editForwardButton.enabled = forwardable;
 	self.editForwardButton.alpha = forwardable ? TGAlphaOpaque : TGAlphaDisabled;
-	if (count > 0) {
-		[self.editForwardButton setTitle:[NSString stringWithFormat:@"Forward (%lu)", (unsigned long)count] forState:UIControlStateNormal];
-	} else {
-		[self.editForwardButton setTitle:@"Forward" forState:UIControlStateNormal];
-	}
 
 	if (count == 0) {
-		self.title = @"Select Messages";
-	} else if (count == 1) {
-		self.title = @"1 selected";
+		self.title = TGLocalized(@"Select Messages");
 	} else {
-		self.title = [NSString stringWithFormat:@"%lu selected", (unsigned long)count];
+		self.title = TGLocalizedFormat(@"%d Selected", (int)count);
 	}
 }
 
@@ -222,11 +275,10 @@ static void TGAnimateSelectionCheckbox(TGChatViewController *chat, int64_t messa
 	// Saved Messages has nobody else to revoke from, so there is one choice
 	// there and two everywhere else. Either way the first one revokes.
 	BOOL isSaved = (self.chatId == [[TGClient shared] savedMessagesChatId]);
-	NSString *forBoth = self.isGroup
-			? @"Delete for Everyone"
-			: [NSString stringWithFormat:@"Delete for me and %@",
-					self.chatTitle.length ? self.chatTitle : @"them"];
-	NSArray *choices = isSaved ? @[@"Delete"] : @[forBoth, @"Delete for Me"];
+	NSString *forBoth = self.isGroup ? TGLocalized(@"Delete for All")
+									 : TGLocalized(@"Delete for Everyone");
+	NSArray *choices = isSaved ? @[TGLocalized(@"Delete")]
+			: @[forBoth, TGLocalized(@"Delete for me")];
 
 	__weak typeof(self) weakSelf = self;
 	[TGAlertSheet showChoices:choices
@@ -263,14 +315,27 @@ static void TGAnimateSelectionCheckbox(TGChatViewController *chat, int64_t messa
 		[self.table reloadData];
 	}
 
-	[[TGClient shared] deleteMessages:ids inChat:chatId revoke:revoke];
-
-	NSString *text = (count == 1) ? @"Message deleted" : [NSString stringWithFormat:@"%lu messages deleted", (unsigned long)count];
-	[TGSnackbar showInView:self.view text:text seconds:3 onCommit:^{}];
-
-	__weak typeof(self) weakSelf = self;
-	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.0 * NSEC_PER_SEC)),
-			dispatch_get_main_queue(), ^{ [weakSelf reload]; });
+	NSString *text = TGLocalizedPlural(@"Message Deleted",
+			@"%d Messages Deleted", (NSInteger)count);
+	if (TGChatDeleteDefersToCommit(revoke)){
+		// Delete-for-me waits behind the undo plate: the rows are out of the
+		// list, and nothing is sent until the plate commits. UNDO removes
+		// the plate without a request and a reload brings the rows back.
+		[TGSnackbar showInView:self.view text:text seconds:3 onCommit:^{
+			[[TGClient shared] deleteMessages:ids inChat:chatId revoke:NO];
+		}];
+		__weak typeof(self) weakSelf = self;
+		dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.0 * NSEC_PER_SEC)),
+				dispatch_get_main_queue(), ^{ [weakSelf reload]; });
+	} else {
+		// Delete for everyone cannot be undone once it has left, so it is
+		// sent at once and the plate is only a notice.
+		[[TGClient shared] deleteMessages:ids inChat:chatId revoke:YES];
+		[TGSnackbar showInView:self.view text:text seconds:3 onCommit:nil];
+		__weak typeof(self) weakSelf = self;
+		dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.0 * NSEC_PER_SEC)),
+				dispatch_get_main_queue(), ^{ [weakSelf reload]; });
+	}
 }
 
 - (void)forwardSelectedMessages {
@@ -279,18 +344,22 @@ static void TGAnimateSelectionCheckbox(TGChatViewController *chat, int64_t messa
 	int64_t chatId = self.chatId;
 
 	TGForwardPicker *picker = [[TGForwardPicker alloc] init];
+	picker.sourceChatId = chatId;
 	__weak typeof(self) weakSelf = self;
 	picker.onPicked = ^(int64_t targetChatId){
 		[[TGClient shared] forwardMessages:ids
 								  fromChat:chatId
 									toChat:targetChatId];
 		[weakSelf exitEditMode];
-		[TGSnackbar showInView:weakSelf.view
-						  text:[NSString stringWithFormat:@"%lu forwarded", (unsigned long)ids.count]
-					   seconds:3
-					  onCommit:^{}];
+		NSString *title = [[TGClient shared] titleForChat:targetChatId] ?: @"";
+		NSString *text = TGLocalizedPluralValue(@"Message forwarded to **%@**.",
+				@"Messages forwarded to **%@**.", title, (NSInteger)ids.count);
+		text = [text stringByReplacingOccurrencesOfString:@"**" withString:@""];
+		[TGSnackbar showInView:weakSelf.view text:text seconds:3 onCommit:^{}];
 	};
-	[self.navigationController pushViewController:picker animated:YES];
+	UINavigationController *nav = [[UINavigationController alloc]
+			initWithRootViewController:picker];
+	[self presentViewController:nav animated:YES completion:nil];
 }
 
 - (TGBubbleCell *)finalizeCell:(TGBubbleCell *)cell message:(NSDictionary *)m layout:(TGMessageLayout *)layout isMine:(BOOL)mine {

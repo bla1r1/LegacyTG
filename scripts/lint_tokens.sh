@@ -335,7 +335,7 @@ for f in $(find src/Features src/App src/UI -name '*ViewController.m'); do
     esac
     sup=$(sed -n "s/^@interface $b *: *\([A-Za-z0-9_]*\).*/\1/p" "${f%.m}.h" "$f" 2>/dev/null | head -1)
     case "$sup" in
-        TGListViewController|TGFeatureListViewController|TGBusinessBaseViewController) continue ;;
+        TGViewController|TGTableViewController|TGListViewController|TGFeatureListViewController|TGBusinessBaseViewController) continue ;;
     esac
     report "A screen paints theme colours but never hears the theme change:" "$f"
 done

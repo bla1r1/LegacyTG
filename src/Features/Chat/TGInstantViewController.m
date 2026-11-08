@@ -1,5 +1,7 @@
 #import "TGInstantViewController.h"
 #import "TGAlertSheet.h"
+#import "TGLocalization.h"
+#import "TGIcons.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
 
@@ -204,24 +206,25 @@ static void TGInstantAppendBlock(NSMutableAttributedString *out,
 	}
 	if ([type isEqualToString:@"pageBlockAuthorDate"]) {
 		NSMutableAttributedString *line = [[NSMutableAttributedString alloc] init];
-		[line appendAttributedString:TGInstantRichText(block[@"author"],
-				TGFontCaption(), secondary, accent)];
+		NSString *author = TGInstantRichText(block[@"author"],
+				TGFontCaption(), secondary, accent).string;
 		NSNumber *date = [block[@"publish_date"] isKindOfClass:NSNumber.class]
 				? block[@"publish_date"] : nil;
+		NSString *when = nil;
 		if (date.integerValue > 0) {
 			NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
 			formatter.dateStyle = NSDateFormatterMediumStyle;
 			formatter.timeStyle = NSDateFormatterNoStyle;
-			NSString *when = [formatter stringFromDate:
+			when = [formatter stringFromDate:
 					[NSDate dateWithTimeIntervalSince1970:date.doubleValue]];
-			if (when.length) {
-				if (line.length)
-					[line appendAttributedString:TGInstantPlain(@" · ",
-							TGFontCaption(), secondary)];
-				[line appendAttributedString:TGInstantPlain(when,
-						TGFontCaption(), secondary)];
-			}
 		}
+		NSString *joined = nil;
+		if (author.length && when.length)
+			joined = TGLocalizedFormat(@"%1$@, %2$@", author, when);
+		else
+			joined = author.length ? author : when;
+		if (joined.length)
+			[line appendAttributedString:TGInstantPlain(joined, TGFontCaption(), secondary)];
 		TGInstantAppend(out, line, indent, TGMetricPadSmall, TGMetricPadLarge);
 		return;
 	}
@@ -288,17 +291,17 @@ static void TGInstantAppendBlock(NSMutableAttributedString *out,
 			[type isEqualToString:@"pageBlockAudio"] ||
 			[type isEqualToString:@"pageBlockVoiceNote"] ||
 			[type isEqualToString:@"pageBlockDocument"]) {
-		NSString *name = @"Photo";
+		NSString *name = TGLocalized(@"Photo");
 		if ([type isEqualToString:@"pageBlockVideo"])
-			name = @"Video";
+			name = TGLocalized(@"Video");
 		else if ([type isEqualToString:@"pageBlockAnimation"])
-			name = @"Animation";
+			name = TGLocalized(@"GIF");
 		else if ([type isEqualToString:@"pageBlockAudio"])
-			name = @"Audio";
+			name = TGLocalized(@"Audio");
 		else if ([type isEqualToString:@"pageBlockVoiceNote"])
-			name = @"Voice message";
+			name = TGLocalized(@"Voice message");
 		else if ([type isEqualToString:@"pageBlockDocument"])
-			name = @"Document";
+			name = TGLocalized(@"File");
 		NSAttributedString *caption = TGInstantCaption(block[@"caption"], secondary);
 		NSMutableAttributedString *line = [[NSMutableAttributedString alloc] init];
 		[line appendAttributedString:TGInstantPlain(name, TGFontCaption(), secondary)];
@@ -370,8 +373,10 @@ static void TGInstantAppendBlocks(NSMutableAttributedString *out,
 		TGInstantAppendBlock(out, block, indent, theme);
 }
 
-@interface TGInstantViewController ()
+@interface TGInstantViewController () <UITextViewDelegate>
 @property (nonatomic, weak) UITextView *reader;
+@property (nonatomic, strong) UIView *progressTrack;
+@property (nonatomic, strong) UIView *progressFill;
 @end
 
 @implementation TGInstantViewController
@@ -381,18 +386,29 @@ static void TGInstantAppendBlocks(NSMutableAttributedString *out,
 
 	TGTheme *theme = [TGTheme shared];
 	self.view.backgroundColor = [theme listBackgroundColour];
-	self.title = self.pageTitle.length ? self.pageTitle : @"Instant View";
+	self.title = self.pageSiteName.length ? self.pageSiteName
+			: (self.pageTitle.length ? self.pageTitle : @"Instant View");
 
-	// Telegram's reader keeps its actions in the bar: open the original,
-	// copy the address, or pass it on.
-	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
-			initWithTitle:@"Action" style:UIBarButtonItemStylePlain
-				   target:self action:@selector(showActions)];
+	// Site name in the bar with two icon actions; no text "Action".
+	UIBarButtonItem *more = [[UIBarButtonItem alloc]
+			initWithImage:[TGIcons glyphNamed:@"more"
+										 colour:[theme barButtonColour]
+										   side:TGMetricMenuGlyph]
+				   style:UIBarButtonItemStylePlain
+				  target:self action:@selector(showActions)];
+	UIBarButtonItem *share = [[UIBarButtonItem alloc]
+			initWithImage:[TGIcons glyphNamed:@"forward"
+										 colour:[theme barButtonColour]
+										   side:TGMetricMenuGlyph]
+				   style:UIBarButtonItemStylePlain
+				  target:self action:@selector(sharePage)];
+	self.navigationItem.rightBarButtonItems = @[more, share];
 
 	UITextView *reader = [[UITextView alloc] initWithFrame:self.view.bounds];
 	reader.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
 	reader.editable = NO;
 	reader.selectable = YES;
+	reader.delegate = self;
 	reader.backgroundColor = [theme listBackgroundColour];
 	reader.textColor = [theme primaryTextColour];
 	reader.font = TGFontBody();
@@ -404,8 +420,29 @@ static void TGInstantAppendBlocks(NSMutableAttributedString *out,
 	reader.attributedText = [self readerText];
 	[self.view addSubview:reader];
 	self.reader = reader;
+
+	// A 2 pt reading-progress line under the bar.
+	CGFloat line = TGMetricBorderThick;
+	self.progressTrack = [[UIView alloc] initWithFrame:CGRectMake(0, 0,
+			self.view.bounds.size.width, line)];
+	self.progressTrack.backgroundColor = [theme separatorColour];
+	self.progressTrack.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+	self.progressFill = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 0, line)];
+	self.progressFill.backgroundColor = [theme accentColour];
+	[self.progressTrack addSubview:self.progressFill];
+	[self.view addSubview:self.progressTrack];
+
 	[self applyThemeToReader:reader];
 	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(applyTheme) name:TGThemeChangedNotification object:nil];
+}
+
+- (void)scrollViewDidScroll:(UIScrollView *)scrollView {
+	CGFloat room = scrollView.contentSize.height - scrollView.bounds.size.height;
+	CGFloat part = room > 0 ? (scrollView.contentOffset.y + scrollView.contentInset.top) / room : 1;
+	part = MAX(0, MIN(1, part));
+	CGRect f = self.progressFill.frame;
+	f.size.width = self.view.bounds.size.width * part;
+	self.progressFill.frame = f;
 }
 
 - (void)dealloc {
@@ -431,12 +468,6 @@ static void TGInstantAppendBlocks(NSMutableAttributedString *out,
 				@"Telegram returned an empty page.", TGFontBody(),
 				[theme secondaryTextColour])];
 	}
-	if (self.sourceURL.length) {
-		[text appendAttributedString:TGInstantPlain(@"\n", TGFontBody(),
-				[theme secondaryTextColour])];
-		[text appendAttributedString:TGInstantPlain(self.sourceURL,
-				TGFontCaption(), [theme accentColour])];
-	}
 	return text;
 }
 
@@ -449,8 +480,6 @@ static void TGInstantAppendBlocks(NSMutableAttributedString *out,
 	NSMutableArray *choices = [NSMutableArray arrayWithObject:@"Open in Browser"];
 	if (self.sourceURL.length)
 		[choices addObject:@"Copy Link"];
-	if (self.sourceURL.length)
-		[choices addObject:@"Share"];
 	__weak typeof(self) weakSelf = self;
 	[TGAlertSheet showChoices:choices
 						title:self.pageTitle ?: @"Instant View"
@@ -470,23 +499,23 @@ static void TGInstantAppendBlocks(NSMutableAttributedString *out,
 			[[UIApplication sharedApplication] openURL:url];
 			return;
 		}
-		if (index == 1) {
-			[UIPasteboard generalPasteboard].string = me.sourceURL;
-			[TGAlertSheet showMessage:@"The address is on the clipboard."
-								  title:@"Link Copied" inView:me.view];
-			return;
-		}
-		NSURL *url = [NSURL URLWithString:me.sourceURL ?: @""];
-		if (!url)
-			return;
-		UIActivityViewController *share = [[UIActivityViewController alloc]
-				initWithActivityItems:@[url] applicationActivities:nil];
-		if ([share respondsToSelector:@selector(popoverPresentationController)]) {
-			share.popoverPresentationController.sourceView = me.view;
-			share.popoverPresentationController.sourceRect = me.view.bounds;
-		}
-		[me presentViewController:share animated:YES completion:nil];
+		[UIPasteboard generalPasteboard].string = me.sourceURL;
+		[TGAlertSheet showMessage:@"The address is on the clipboard."
+							  title:@"Link copied." inView:me.view];
 	}];
+}
+
+- (void)sharePage {
+	NSURL *url = [NSURL URLWithString:self.sourceURL ?: @""];
+	if (!url)
+		return;
+	UIActivityViewController *share = [[UIActivityViewController alloc]
+			initWithActivityItems:@[url] applicationActivities:nil];
+	if ([share respondsToSelector:@selector(popoverPresentationController)]) {
+		share.popoverPresentationController.sourceView = self.view;
+		share.popoverPresentationController.sourceRect = self.view.bounds;
+	}
+	[self presentViewController:share animated:YES completion:nil];
 }
 
 @end

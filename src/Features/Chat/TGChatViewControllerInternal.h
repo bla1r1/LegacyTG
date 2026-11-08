@@ -59,31 +59,29 @@ FOUNDATION_EXPORT CGFloat TGPollOptionRowHeight(NSDictionary *option, CGFloat ro
 @property (nonatomic, assign) BOOL anchorToBottom;
 @property (nonatomic, assign) BOOL isChannel;
 @property (nonatomic, assign) BOOL isChannelMember;
+/// The composer's placeholder follows what the next send would do. Silent
+/// posting and anonymous admin posting are both allowed states; the field
+/// says which one the message will use.
+@property (nonatomic, assign) BOOL silentPosting;
+@property (nonatomic, assign) BOOL canBeAnonymous;
 @property (nonatomic, strong) NSMutableDictionary *lottiePaths;   // fileId -> path
 @property (nonatomic, strong) TGImageLruCache *maps;             // messageId -> UIImage (cap 20)
 @property (nonatomic, strong) NSMutableSet *mapsRequested;
 @property (nonatomic, strong) NSMutableDictionary *quotes;       // messageId -> flattened
 @property (nonatomic, strong) NSMutableSet *quotesRequested;
 @property (nonatomic, strong) NSDictionary *actionMessage;   // long-pressed
-/// Where the hold opened the menu, so the More card can appear beside the
-/// same bubble after the first card is dismissed.
-@property (nonatomic, assign) CGPoint actionMenuPoint;
-/// The held message's presentation: the dimmed, blurred chat behind it and
-/// its own snapshot lifted clear of the table. The cell itself never moves;
-/// these are the two views the hold owns and takes down when the menu closes.
+/// The held message's presentation: the dimmed chat behind it. Official keeps
+/// the bubble in place; the cell never moves and the dim is the only view the
+/// hold owns.
 @property (nonatomic, strong) UIView *holdBackdropView;
-@property (nonatomic, strong) UIImageView *holdBackdropImageView;
-@property (nonatomic, strong) UIImageView *holdLiftView;
-/// Where the lift started, so dismissing can put it back before removing it.
-@property (nonatomic, assign) CGRect holdLiftOriginRect;
-/// Bumped for every lift and every dismissal; a late blur or animation
-/// completion that no longer matches this belongs to a hold that is gone.
+/// Bumped for every hold and every dismissal; a late animation completion
+/// that no longer matches this belongs to a hold that is gone.
 @property (nonatomic, assign) NSInteger holdGeneration;
 /// Whether the table was scrolling before the hold pinned it, so a dismiss
 /// gives the chat back exactly as it was.
 @property (nonatomic, assign) BOOL holdTableWasScrollable;
-/// True while the lifted picture is animating back into the list. A second
-/// dismiss in that window is the same dismissal, not a new one.
+/// True while the dim is animating away. A second dismiss in that window is
+/// the same dismissal, not a new one.
 @property (nonatomic, assign) BOOL holdReturning;
 @property (nonatomic, assign) int64_t replyToId;             // composing a reply
 @property (nonatomic, assign) int64_t editingId;             // editing instead
@@ -122,7 +120,13 @@ FOUNDATION_EXPORT CGFloat TGPollOptionRowHeight(NSDictionary *option, CGFloat ro
 /// Following a reply: the quote header is the button; this is where it lands.
 - (void)jumpToReplyById:(int64_t)replyId;
 - (void)refreshActionBar;
+- (void)blockActionBarUser;
+- (void)openProfile;
+- (void)headerHeld:(UILongPressGestureRecognizer *)hold;
+- (void)titleHeld:(UILongPressGestureRecognizer *)hold;
 @property (nonatomic, strong) UISearchBar *chatSearchBar;
+@property (nonatomic, strong) UIView *searchSavedTitleView;
+@property (nonatomic, strong) NSArray *searchSavedRightItems;
 @property (nonatomic, strong) NSArray *messagesBeforeSearch;
 @property (nonatomic, strong) NSTimer *recordTimer;
 @property (nonatomic, strong) TGRecordBar *recordPanel;      // shown while holding
@@ -157,7 +161,7 @@ FOUNDATION_EXPORT CGFloat TGPollOptionRowHeight(NSDictionary *option, CGFloat ro
 @property (nonatomic, strong) UIButton *musicPrevious;
 @property (nonatomic, strong) UIButton *musicNext;
 @property (nonatomic, strong) UILabel *playerLabel;
-@property (nonatomic, strong) TGImageLruCache *senderAvatars;   // userId -> UIImage (cap 50)
+@property (nonatomic, strong) TGImageLruCache *senderAvatars;   // userId -> UIImage (cap 120)
 @property (nonatomic, strong) NSMutableSet *senderAvatarsRequested;
 @property (nonatomic, strong) UIView *downloadHUD;
 @property (nonatomic, assign) NSInteger downloadingFileId;
@@ -213,6 +217,7 @@ FOUNDATION_EXPORT CGFloat TGPollOptionRowHeight(NSDictionary *option, CGFloat ro
 /// The message the chat has pinned, so the menu offers Unpin on that one and
 /// Pin on every other. Zero when nothing is pinned.
 @property (nonatomic, assign) int64_t pinnedMessageId;
+@property (nonatomic, assign) int64_t pinnedThumbnailFileId;
 /// Scroll to a message, fetching history around it when it is not loaded.
 - (void)showMessageId:(int64_t)messageId gone:(NSString *)gone;
 - (void)showJumpToDateSheet;
@@ -268,11 +273,18 @@ FOUNDATION_EXPORT CGFloat TGPollOptionRowHeight(NSDictionary *option, CGFloat ro
 /// The scheduled queue's size, known when the send was last held, and the
 /// picker sheet the hold's "Send At a Time..." opens.
 @property (nonatomic, assign) NSInteger scheduledCount;
+@property (nonatomic, copy) NSString *suppressedPreviewLink;
 @property (nonatomic, strong) UIDatePicker *pickPicker;
+@property (nonatomic, strong) UIButton *schedulePrimaryButton;
 @property (nonatomic, strong) TGSheet *pickSheet;
 /// Jump-to-date sheet: the "N messages" line, filled when the count lands.
 @property (nonatomic, strong) UILabel *pickCountLabel;
 - (void)holdScheduledSheet;
+- (void)openScheduledMessages;
+- (void)updateComposerPlaceholder;
+- (void)dismissPreviewOrCompose;
+- (void)schedulePickerChanged:(UIDatePicker *)picker;
+- (void)scheduleWhenOnline:(UIButton *)sender;
 - (void)sendHeldText:(NSDictionary *)state;
 
 - (void)reload;
@@ -290,6 +302,9 @@ FOUNDATION_EXPORT CGFloat TGPollOptionRowHeight(NSDictionary *option, CGFloat ro
 - (void)presentExternalLink:(NSString *)link;
 - (void)showExternalLink:(NSString *)link browser:(NSString *)browser info:(NSDictionary *)info;
 - (void)openInstantViewForLink:(NSString *)link;
+- (void)openInstantViewForLink:(NSString *)link view:(NSDictionary *)view;
+- (void)showLinkChoices:(NSString *)link host:(NSString *)host
+				message:(NSMutableString *)message write:(BOOL)write;
 - (void)resolveInternalLinkKind:(NSString *)kind value:(NSString *)value
 					   original:(NSString *)original
 				 isTelegramHost:(BOOL)isTelegramHost
@@ -308,6 +323,7 @@ FOUNDATION_EXPORT CGFloat TGPollOptionRowHeight(NSDictionary *option, CGFloat ro
 - (void)showPinnedBanner:(NSString *)text;
 - (void)showPinnedBanner:(NSString *)text entities:(NSArray *)entities;
 - (void)hidePinnedBanner;
+- (void)pinnedCloseTapped;
 - (void)pinnedBannerTapped;
 - (void)stopPlayback;
 - (void)stopVideoNote;
@@ -393,7 +409,10 @@ FOUNDATION_EXPORT CGFloat TGPollOptionRowHeight(NSDictionary *option, CGFloat ro
 /// into the next capture.
 - (void)discardHoldPresentation;
 - (void)runMessageAction:(NSString *)action;
-- (void)showMoreActions;
+/// The read/reaction line at the top of the hold card, or nil when official
+/// does not put one on this message. Built from the message and the existing
+/// getMessageViewers call, never from a cell.
+- (UIView *)readSummaryHeaderForMessage:(NSDictionary *)m;
 - (void)showReactorsOfMessage:(NSDictionary *)m;
 - (void)showReactorsOfMessage:(NSDictionary *)m
 						emoji:(NSString *)emoji
@@ -475,6 +494,7 @@ FOUNDATION_EXPORT CGFloat TGPollOptionRowHeight(NSDictionary *option, CGFloat ro
 - (void)pollOptionTapped:(UIButton *)option;
 - (void)checklistTaskTapped:(UIButton *)taskRow;
 - (void)pollVoteTapped:(UIButton *)button;
+- (void)pollFooterTapped:(UIButton *)button;
 /// The card button of a message row: open the person, chat, gift, story, game or giveaway.
 - (void)openCard:(TGMessageCard *)card ofMessage:(int64_t)messageId;
 /// Puts a custom emoji at the cursor: the field shows its fallback (or its
@@ -498,6 +518,8 @@ FOUNDATION_EXPORT CGFloat TGPollOptionRowHeight(NSDictionary *option, CGFloat ro
 - (void)buildChrome;
 - (void)applyChromeTheme:(TGTheme *)theme;
 - (void)layoutChrome;
+- (void)showChatStatistics;
+- (void)speakActionMessage;
 - (void)updateTitleEmojiStatus;
 - (int64_t)quoteAuthorStatusIdFor:(NSDictionary *)m;
 - (BOOL)isNearBottom;

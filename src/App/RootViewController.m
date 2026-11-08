@@ -4,6 +4,7 @@
 // Licensed under GNU General Public License v3.0
 //
 #import "RootViewController.h"
+#import "TGLocalization.h"
 #import "TGChatListViewController.h"
 #import "TGContactsViewController.h"
 #import "TGSettingsViewController.h"
@@ -60,7 +61,7 @@ static NSString *const TGCallsTabChangedNotification = @"TGCallsTabChangedNotifi
 		list.page = TGSettingsPageRecentCalls;
 		self.callsNC = [[TGNavController alloc] initWithRootViewController:list];
 		self.callsNC.delegate = self;
-		self.callsNC.tabBarItem = [[UITabBarItem alloc] initWithTitle:@"Calls"
+		self.callsNC.tabBarItem = [[UITabBarItem alloc] initWithTitle:TGLocalized(@"Calls")
 																 image:[TGIcons calls] tag:3];
 	}
 	UIViewController *selected = self.selectedViewController ?: self.chatsNC;
@@ -98,13 +99,13 @@ static NSString *const TGCallsTabChangedNotification = @"TGCallsTabChangedNotifi
 	UINavigationController *chatsNC =
 		[[TGNavController alloc] initWithRootViewController:chats];
 	self.chatsNC = chatsNC;
-	chatsNC.tabBarItem = [[UITabBarItem alloc] initWithTitle:@"Chats"
+	chatsNC.tabBarItem = [[UITabBarItem alloc] initWithTitle:TGLocalized(@"Chats")
 														image:[TGIcons chats] tag:0];
 
 	TGContactsViewController *contacts = [[TGContactsViewController alloc] init];
 	UINavigationController *contactsNC =
 		[[TGNavController alloc] initWithRootViewController:contacts];
-	contactsNC.tabBarItem = [[UITabBarItem alloc] initWithTitle:@"Contacts"
+	contactsNC.tabBarItem = [[UITabBarItem alloc] initWithTitle:TGLocalized(@"Contacts")
 														   image:[TGIcons contacts] tag:1];
 
 	// The standard 44 pt bar, like the other two tabs. A 32 pt one here, to win
@@ -116,7 +117,7 @@ static NSString *const TGCallsTabChangedNotification = @"TGCallsTabChangedNotifi
 	chatsNC.delegate = self;
 	contactsNC.delegate = self;
 	self.delegate = self;
-	settingsNC.tabBarItem = [[UITabBarItem alloc] initWithTitle:@"Settings"
+	settingsNC.tabBarItem = [[UITabBarItem alloc] initWithTitle:TGLocalized(@"Settings")
 														   image:[TGIcons settings] tag:2];
 
 	// From iOS 7 their tab bar draws the other tabs as outlines and only the

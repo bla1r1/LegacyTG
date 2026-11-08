@@ -92,7 +92,7 @@
 	__weak typeof(self) weakSelf = self;
 	[[TGClient shared] hideSuggestedAction:action completion:^(BOOL ok, NSString *error){
 		if (!ok){
-			[weakSelf toast:error ?: @"Telegram refused that."];
+			[weakSelf toast:error ?: @"An error occurred."];
 			return;
 		}
 		[weakSelf rebuild];

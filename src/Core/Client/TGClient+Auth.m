@@ -98,7 +98,7 @@ static NSString *TGAuthError(NSDictionary *result) {
 	if ([result[@"@type"] isEqualToString:@"ok"])
 		return nil;
 	NSString *message = result[@"message"];
-	return message.length ? message : @"Telegram refused that.";
+	return message.length ? message : @"An error occurred.";
 }
 
 - (void)requestPasswordRecoveryWithCompletion:(void (^)(NSString *))completion {
@@ -170,7 +170,7 @@ static NSString *TGAuthError(NSDictionary *result) {
 		if (!completion)
 			return;
 		BOOL ok = [result[@"@type"] isEqualToString:@"ok"];
-		completion(ok, ok ? nil : (result[@"message"] ?: @"Telegram refused that."));
+		completion(ok, ok ? nil : (result[@"message"] ?: @"An error occurred."));
 	}];
 }
 

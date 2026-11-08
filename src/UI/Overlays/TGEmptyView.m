@@ -56,7 +56,12 @@ static const CGFloat kEmptyBtnW     = 160.0f;
 	CGFloat width = self.bounds.size.width;
 	CGFloat height = self.bounds.size.height;
 
-	CGFloat contentHeight = kEmptyIconSide + TGMetricPadLarge + TGMetricLineTitle + TGMetricPad + TGMetricLineBody * 2;
+	CGFloat titleH = TGMetricLineTitle;
+	BOOL multilineTitle = [title rangeOfString:@"\n"].location != NSNotFound;
+	if (multilineTitle)
+		titleH = TGDoubled(TGMetricLineTitle);
+
+	CGFloat contentHeight = kEmptyIconSide + TGMetricPadLarge + titleH + TGMetricPad + TGMetricLineBody * 2;
 	if (buttonTitle.length) {
 		contentHeight += TGMetricPadLarge + kEmptyBtnH;
 	}
@@ -76,16 +81,18 @@ static const CGFloat kEmptyBtnW     = 160.0f;
 	CGFloat y = startY + kEmptyIconSide + TGMetricPadLarge;
 
 	// Title
-	_titleLabel = [[UILabel alloc] initWithFrame:CGRectMake(TGMetricPadWide, y, width - TGDoubled(TGMetricPadWide), TGMetricLineTitle)];
+	_titleLabel = [[UILabel alloc] initWithFrame:CGRectMake(TGMetricPadWide,
+			y, width - TGDoubled(TGMetricPadWide), titleH)];
 	_titleLabel.font = TGFontTitle();
 	_titleLabel.textColor = [theme primaryTextColour];
 	_titleLabel.textAlignment = NSTextAlignmentCenter;
+	_titleLabel.numberOfLines = multilineTitle ? 0 : 1;
 	_titleLabel.text = title;
 	_titleLabel.backgroundColor = [UIColor clearColor];
 	_titleLabel.autoresizingMask = UIViewAutoresizingFlexibleWidth;
 	[self addSubview:_titleLabel];
 
-	y += TGMetricLineTitle + TGMetricPad;
+	y += titleH + TGMetricPad;
 
 	// Subtitle
 	CGFloat subH = TGMetricLineBody * 2;

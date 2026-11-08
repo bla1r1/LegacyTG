@@ -30,11 +30,9 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 - (void)viewDidLoad {
 	[super viewDidLoad];
 
-	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
-		self.edgesForExtendedLayout = UIRectEdgeNone;
 
-	self.title = self.creating ? @"New Sticker Pack"
-			: (self.setTitle.length ? self.setTitle : @"Sticker Pack");
+	self.title = self.creating ? @"New Sticker Set"
+			: (self.setTitle.length ? self.setTitle : @"Sticker");
 	self.tableView.rowHeight = TGMetricRow;
 	self.stickers = [NSMutableArray array];
 	[self applyTheme];
@@ -100,20 +98,15 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
 	if (self.creating)
-		return @"A New Pack";
+		return @"New Sticker Set";
 	if (section == 0)
-		return @"Pack";
+		return @"Stickers";
 	if (section == 1)
 		return @"Stickers";
 	return nil;
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-	if (self.creating)
-		return @"Telegram checks the short name, then the pack is made with "
-				@"one bundled sample sticker so it is never empty.";
-	if (section == 1)
-		return @"Tap a sticker to tag it, reorder it, replace it or remove it.";
 	return nil;
 }
 
@@ -140,23 +133,23 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 	if (self.creating){
 		switch (indexPath.row){
 			case 0:
-				cell.textLabel.text = @"Pack Title";
+				cell.textLabel.text = @"Title";
 				cell.detailTextLabel.text = self.setTitle.length ? self.setTitle
-						: @"What the pack is called";
+						: @"";
 				break;
 			case 1:
-				cell.textLabel.text = @"Short Name";
+				cell.textLabel.text = @"Name";
 				cell.detailTextLabel.text = self.setName.length ? self.setName
-						: @"The name a t.me/addstickers link carries";
+						: @"";
 				break;
 			case 2:
-				cell.textLabel.text = @"Pack Type";
+				cell.textLabel.text = @"Stickers";
 				cell.detailTextLabel.text = [self.stickerType isEqualToString:@"mask"]
-						? @"Masks" : @"Regular stickers";
+						? @"Masks" : @"Stickers";
 				break;
 			default:
-				cell.textLabel.text = self.busy ? @"Creating..." : @"Create Pack";
-				cell.detailTextLabel.text = @"Checked with Telegram before it exists";
+				cell.textLabel.text = self.busy ? @"Uploading..." : @"Create Sticker Set";
+				cell.detailTextLabel.text = nil;
 				cell.accessoryType = UITableViewCellAccessoryNone;
 				break;
 		}
@@ -166,7 +159,7 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 	if (indexPath.section == 0){
 		switch (indexPath.row){
 			case 0:
-				cell.textLabel.text = @"Short Name";
+				cell.textLabel.text = @"Name";
 				cell.detailTextLabel.text = self.setName.length ? self.setName
 						: (self.loadedName.length ? self.loadedName : @"-");
 				cell.accessoryType = UITableViewCellAccessoryNone;
@@ -177,14 +170,14 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 				cell.detailTextLabel.text = self.setTitle.length ? self.setTitle : @"-";
 				break;
 			case 2:
-				cell.textLabel.text = @"Type";
+				cell.textLabel.text = @"Stickers";
 				cell.detailTextLabel.text =
 						[self.stickerType isEqualToString:@"stickerTypeCustomEmoji"] ||
 						[self.stickerType isEqualToString:@"customEmoji"]
 						? @"Custom emoji" :
 						([self.stickerType isEqualToString:@"stickerTypeMask"] ||
 						 [self.stickerType isEqualToString:@"mask"]
-						 ? @"Masks" : @"Regular stickers");
+					 ? @"Masks" : @"Stickers");
 				cell.accessoryType = UITableViewCellAccessoryNone;
 				cell.selectionStyle = UITableViewCellSelectionStyleNone;
 				break;
@@ -196,16 +189,12 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 				cell.selectionStyle = UITableViewCellSelectionStyleNone;
 				break;
 			case 4:
-				cell.textLabel.text = @"Rename Pack";
-				cell.detailTextLabel.text = @"Change the title everywhere";
+				cell.textLabel.text = @"Edit Sticker Set";
+				cell.detailTextLabel.text = nil;
 				break;
 			default:
-				cell.textLabel.text = @"Set Pack Thumbnail";
-				cell.detailTextLabel.text =
-						([self.stickerType isEqualToString:@"stickerTypeCustomEmoji"] ||
-						 [self.stickerType isEqualToString:@"customEmoji"])
-						? @"One of Telegram's default emoji"
-						: @"From the photo library";
+				cell.textLabel.text = @"Set Cover Icon";
+				cell.detailTextLabel.text = nil;
 				break;
 		}
 		return cell;
@@ -213,8 +202,8 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 
 	if (indexPath.section == 1){
 		if (indexPath.row == 0){
-			cell.textLabel.text = @"Add Stickers...";
-			cell.detailTextLabel.text = @"From Photos, or a bundled animated sample";
+			cell.textLabel.text = @"Add Stickers";
+			cell.detailTextLabel.text = nil;
 			return cell;
 		}
 		NSDictionary *sticker = self.stickers[(NSUInteger)(indexPath.row - 1)];
@@ -227,9 +216,9 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 		return cell;
 	}
 
-	cell.textLabel.text = @"Delete Pack";
+	cell.textLabel.text = @"Delete Sticker Set";
 	cell.textLabel.textColor = [TGTheme shared].destructiveColour;
-	cell.detailTextLabel.text = @"Removed for everyone who has it";
+	cell.detailTextLabel.text = nil;
 	cell.accessoryType = UITableViewCellAccessoryNone;
 	return cell;
 }
@@ -285,7 +274,7 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 
 - (void)askForTitle {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"Pack Title" message:@"What the pack is called."
+	[TGAlertSheet showInput:@"Title" message:nil
 				placeholder:@"My Stickers" text:self.setTitle action:@"Save"
 					 inView:self.view onSubmit:^(NSString *text){
 		TGStickerEditorViewController *me = weakSelf;
@@ -296,8 +285,8 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 
 - (void)askForName {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"Short Name"
-					message:@"Letters, numbers and underscores. Telegram checks it."
+	[TGAlertSheet showInput:@"Name"
+					message:@"Only a–z, 0–9, and underscores allowed."
 				placeholder:@"my_stickers" text:self.setName action:@"Check"
 					 inView:self.view onSubmit:^(NSString *text){
 		TGStickerEditorViewController *me = weakSelf;
@@ -309,7 +298,7 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 			if ([status isEqualToString:@"ok"]){
 				panel.setName = text;
 				[panel.tableView reloadData];
-				[TGAlertSheet showMessage:message title:@"Short Name" inView:panel.view];
+				[TGAlertSheet showMessage:message title:@"Name" inView:panel.view];
 				return;
 			}
 			[panel offerSuggestionForTitle:panel.setTitle typed:text reason:message];
@@ -319,8 +308,8 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 
 - (void)askForType {
 	__weak typeof(self) weakSelf = self;
-	NSArray *titles = @[@"Regular stickers", @"Masks"];
-	[TGAlertSheet showChoices:titles title:@"Pack Type"
+	NSArray *titles = @[@"Stickers", @"Masks"];
+	[TGAlertSheet showChoices:titles title:@"Stickers"
 			 destructiveIndex:-1 inView:self.view onChoice:^(NSInteger index){
 		TGStickerEditorViewController *me = weakSelf;
 		me.stickerType = index == 1 ? @"mask" : @"regular";
@@ -335,15 +324,15 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 			completion:^(NSString *suggestion){
 		TGStickerEditorViewController *me = self;
 		if (!suggestion.length || [suggestion isEqualToString:typed]){
-			[TGAlertSheet showMessage:reason ?: @"Telegram refused that name."
-								  title:@"Short Name" inView:me.view];
+			[TGAlertSheet showMessage:reason ?: @"An error occurred."
+								  title:@"Name" inView:me.view];
 			return;
 		}
 		NSString *message = [NSString stringWithFormat:@"%@\n\nTelegram suggests %@.",
-				reason ?: @"That name cannot be used.", suggestion];
+				reason ?: @"An error occurred.", suggestion];
 		[TGAlertSheet showChoices:@[[NSString stringWithFormat:@"Use %@", suggestion],
-									@"Keep Typing"]
-							title:@"Short Name"
+									@"Cancel"]
+							title:@"Name"
 							message:message
 				 destructiveIndex:-1
 						   inView:me.view
@@ -360,8 +349,8 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 	if (self.busy)
 		return;
 	if (!self.setTitle.length || !self.setName.length){
-		[TGAlertSheet showMessage:@"A title and a short name are both required."
-							  title:@"New Sticker Pack" inView:self.view];
+		[TGAlertSheet showMessage:@"An error occurred."
+							  title:@"New Sticker Set" inView:self.view];
 		return;
 	}
 	self.busy = YES;
@@ -413,9 +402,8 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 			panel.busy = NO;
 			if (!set){
 				[panel.tableView reloadData];
-				[TGAlertSheet showMessage:@"Telegram did not make the pack. "
-										  @"The short name may have just been taken."
-									  title:@"New Sticker Pack" inView:panel.view];
+				[TGAlertSheet showMessage:@"An error occurred."
+									  title:@"New Sticker Set" inView:panel.view];
 				return;
 			}
 			panel.creating = NO;
@@ -425,8 +413,8 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 			panel.stickerType = set[@"stickerType"] ?: @"stickerTypeRegular";
 			panel.title = panel.setTitle;
 			[panel reloadStickers];
-			[TGAlertSheet showMessage:@"The pack is made and can be found in My Packs."
-								  title:@"New Sticker Pack" inView:panel.view];
+			[TGAlertSheet showMessage:@"Stickers Added"
+								  title:@"New Sticker Set" inView:panel.view];
 		}];
 	}];
 }
@@ -435,7 +423,7 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 
 - (void)askForTitleAndSave {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"Rename Pack" message:@"The name every client shows."
+	[TGAlertSheet showInput:@"Edit Sticker Set" message:nil
 				placeholder:@"Title" text:self.setTitle action:@"Save"
 					 inView:self.view onSubmit:^(NSString *text){
 		TGStickerEditorViewController *me = weakSelf;
@@ -447,8 +435,8 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 			if (!panel)
 				return;
 			if (!ok){
-				[TGAlertSheet showMessage:@"Telegram refused the new title."
-									  title:@"Rename Pack" inView:panel.view];
+				[TGAlertSheet showMessage:@"An error occurred."
+									  title:@"Edit Sticker Set" inView:panel.view];
 				return;
 			}
 			panel.setTitle = text;
@@ -460,7 +448,7 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 
 - (void)askHowToAdd {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:@[@"From Photos", @"Bundled Animated Sample"]
+	[TGAlertSheet showChoices:@[@"Photos", @"Stickers"]
 						 title:@"Add Stickers"
 				 destructiveIndex:-1
 						   inView:self.view
@@ -483,7 +471,7 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 	[[TGClient shared] uploadStickerAtPath:path format:@"webm" completion:^(NSInteger fileId){
 		TGStickerEditorViewController *me = weakSelf;
 		if (!me || fileId <= 0){
-			[TGAlertSheet showMessage:@"The sample could not be uploaded."
+			[TGAlertSheet showMessage:@"An error occurred."
 								  title:@"Add Sticker" inView:me.view];
 			return;
 		}
@@ -496,7 +484,7 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 			if (!panel)
 				return;
 			if (!ok)
-				[TGAlertSheet showMessage:@"Telegram refused the sticker."
+				[TGAlertSheet showMessage:@"An error occurred."
 									  title:@"Add Sticker" inView:panel.view];
 			[panel reloadStickers];
 		}];
@@ -520,9 +508,9 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 		[titles addObject:@"Move Up"];
 	if (!last)
 		[titles addObject:@"Move Down"];
-	[titles addObjectsFromArray:@[@"Replace Sticker...", @"Remove Sticker"]];
+	[titles addObjectsFromArray:@[@"Replace", @"Remove"]];
 
-	NSUInteger removeIndex = [titles indexOfObject:@"Remove Sticker"];
+	NSUInteger removeIndex = [titles indexOfObject:@"Remove"];
 	__weak typeof(self) weakSelf = self;
 	[TGAlertSheet showChoices:titles title:[sticker[@"emoji"] length]
 			? sticker[@"emoji"] : @"Sticker"
@@ -547,11 +535,11 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 			[me moveFileId:fileId toPosition:index - 1];
 		else if ([what isEqualToString:@"Move Down"])
 			[me moveFileId:fileId toPosition:index + 1];
-		else if ([what isEqualToString:@"Replace Sticker..."]){
+		else if ([what isEqualToString:@"Replace"]){
 			me.replacingFileId = fileId;
 			[me pickImageFor:TGStickerPickReplace];
 		}
-		else if ([what isEqualToString:@"Remove Sticker"])
+		else if ([what isEqualToString:@"Remove"])
 			[me removeFileId:fileId];
 	}];
 }
@@ -573,28 +561,28 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 					own.count ? [own componentsJoinedByString:@" "] : @"none",
 					query.length ? query : @"this sticker",
 					all.count ? [all componentsJoinedByString:@" "] : @"none"];
-			[TGAlertSheet showMessage:message title:@"Emoji Tags" inView:panel.view];
+			[TGAlertSheet showMessage:message title:@"Emoji" inView:panel.view];
 		}];
 	}];
 }
 
 - (void)askEmojiTagsForFileId:(NSInteger)fileId current:(NSString *)current {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"Edit Emoji Tags"
-					message:@"One or more emoji. These are how the sticker is found."
+	[TGAlertSheet showInput:@"Emoji"
+					message:nil
 				placeholder:@"\U0001F600" text:current action:@"Save"
 					 inView:self.view onSubmit:^(NSString *text){
 		TGStickerEditorViewController *me = weakSelf;
 		[[TGClient shared] setStickerFileId:fileId emojis:text completion:^(BOOL ok){
-			[me reportSaved:ok title:@"Emoji Tags"];
+			[me reportSaved:ok title:@"Emoji"];
 		}];
 	}];
 }
 
 - (void)askKeywordsForFileId:(NSInteger)fileId {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"Edit Keywords"
-					message:@"Comma separated, for searching outside Telegram."
+	[TGAlertSheet showInput:@"Edit"
+					message:nil
 				placeholder:@"cat, sleeping" text:@"" action:@"Save"
 					 inView:self.view onSubmit:^(NSString *text){
 		TGStickerEditorViewController *me = weakSelf;
@@ -606,7 +594,7 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 				[words addObject:trimmed];
 		}
 		[[TGClient shared] setStickerFileId:fileId keywords:words completion:^(BOOL ok){
-			[me reportSaved:ok title:@"Edit Keywords"];
+			[me reportSaved:ok title:@"Edit"];
 		}];
 	}];
 }
@@ -616,7 +604,7 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 	NSArray *types = @[@"maskPointForehead", @"maskPointEyes",
 					   @"maskPointMouth", @"maskPointChin"];
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:points title:@"Mask Position"
+	[TGAlertSheet showChoices:points title:@"Masks"
 			 destructiveIndex:-1 inView:self.view onChoice:^(NSInteger index){
 		TGStickerEditorViewController *me = weakSelf;
 		NSDictionary *mask = @{
@@ -628,7 +616,7 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 		};
 		[[TGClient shared] setStickerFileId:fileId maskPosition:mask
 				completion:^(BOOL ok){
-			[me reportSaved:ok title:@"Mask Position"];
+			[me reportSaved:ok title:@"Masks"];
 		}];
 	}];
 }
@@ -640,7 +628,7 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 	[[TGClient shared] setStickerFileId:fileId maskPosition:nil
 			completion:^(BOOL ok){
 		TGStickerEditorViewController *me = weakSelf;
-		[me reportSaved:ok title:@"Remove Mask Position"];
+		[me reportSaved:ok title:@"Masks"];
 	}];
 }
 
@@ -652,7 +640,7 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 			completion:^(BOOL ok){
 		TGStickerEditorViewController *me = weakSelf;
 		if (!ok)
-			[TGAlertSheet showMessage:@"Telegram refused the new position."
+			[TGAlertSheet showMessage:@"An error occurred."
 								  title:@"Reorder" inView:me.view];
 		[me reloadStickers];
 	}];
@@ -660,15 +648,15 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 
 - (void)removeFileId:(NSInteger)fileId {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:@"The sticker leaves this pack for everyone."
-						title:@"Remove Sticker" action:@"Remove" destructive:YES
+	[TGAlertSheet showConfirm:@"Remove"
+						title:@"Remove" action:@"Remove" destructive:YES
 					   inView:self.view onConfirm:^{
 		TGStickerEditorViewController *me = weakSelf;
 		[[TGClient shared] removeStickerFileId:fileId completion:^(BOOL ok){
 			TGStickerEditorViewController *panel = weakSelf;
 			if (!ok)
-				[TGAlertSheet showMessage:@"Telegram refused to remove it."
-									  title:@"Remove Sticker" inView:panel.view];
+				[TGAlertSheet showMessage:@"An error occurred."
+									  title:@"Remove" inView:panel.view];
 			[panel reloadStickers];
 		}];
 		(void)me;
@@ -676,7 +664,7 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 }
 
 - (void)reportSaved:(BOOL)ok title:(NSString *)title {
-	[TGAlertSheet showMessage:(ok ? @"Saved." : @"Telegram refused the change.")
+	[TGAlertSheet showMessage:(ok ? @"Saved" : @"An error occurred.")
 						  title:title inView:self.view];
 	if (ok)
 		[self reloadStickers];
@@ -687,7 +675,7 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 - (void)pickImageFor:(TGStickerPick)what {
 	if (![UIImagePickerController isSourceTypeAvailable:
 			UIImagePickerControllerSourceTypePhotoLibrary]){
-		[TGAlertSheet showMessage:@"This device has no photo library."
+		[TGAlertSheet showMessage:@"An error occurred."
 							  title:@"Photos" inView:self.view];
 		return;
 	}
@@ -724,7 +712,7 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 
 	NSString *path = [self writeWebPImage:image named:@"sticker-edit.webp"];
 	if (!path){
-		[TGAlertSheet showMessage:@"Could not encode the picture as WebP."
+		[TGAlertSheet showMessage:@"An error occurred."
 							  title:@"Photos" inView:self.view];
 		return;
 	}
@@ -740,7 +728,7 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 		if (!me)
 			return;
 		if (fileId <= 0){
-			[TGAlertSheet showMessage:@"Telegram did not upload the picture as a sticker."
+			[TGAlertSheet showMessage:@"An error occurred."
 								  title:@"Add Sticker" inView:me.view];
 			return;
 		}
@@ -753,8 +741,8 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 					completion:^(BOOL ok){
 				TGStickerEditorViewController *panel = weakSelf;
 				if (!ok)
-					[TGAlertSheet showMessage:@"Telegram refused the replacement."
-										  title:@"Replace Sticker" inView:panel.view];
+					[TGAlertSheet showMessage:@"An error occurred."
+										  title:@"Replace" inView:panel.view];
 				[panel reloadStickers];
 			}];
 			return;
@@ -763,7 +751,7 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 				completion:^(BOOL ok){
 			TGStickerEditorViewController *panel = weakSelf;
 			if (!ok)
-				[TGAlertSheet showMessage:@"Telegram refused the sticker."
+				[TGAlertSheet showMessage:@"An error occurred."
 									  title:@"Add Sticker" inView:panel.view];
 			[panel reloadStickers];
 		}];
@@ -781,9 +769,9 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 	[[TGClient shared] setStickerSetNamed:self.setName thumbnailAtPath:path
 			format:@"webp" completion:^(BOOL ok){
 		TGStickerEditorViewController *me = weakSelf;
-		[TGAlertSheet showMessage:(ok ? @"The pack has a new thumbnail."
-									  : @"Telegram refused the thumbnail.")
-							  title:@"Set Thumbnail" inView:me.view];
+		[TGAlertSheet showMessage:(ok ? @"Saved"
+									  : @"An error occurred.")
+							  title:@"Sticker" inView:me.view];
 	}];
 }
 
@@ -798,7 +786,7 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 			return;
 		// Zero is the request's own "remove the thumbnail", so it leads the
 		// list even when Telegram sends no default emoji to pick from.
-		NSMutableArray *titles = [NSMutableArray arrayWithObject:@"None (remove)"];
+		NSMutableArray *titles = [NSMutableArray arrayWithObject:@"Remove"];
 		NSMutableArray *ids = [NSMutableArray arrayWithObject:@(0)];
 		for (NSDictionary *sticker in stickers){
 			int64_t emojiId = [sticker[@"customEmojiId"] longLongValue];
@@ -809,14 +797,14 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 					(long long)emojiId]];
 			[ids addObject:@(emojiId)];
 		}
-		[TGAlertSheet showChoices:titles title:@"Set Thumbnail"
+		[TGAlertSheet showChoices:titles title:@"Sticker"
 				 destructiveIndex:-1 inView:me.view onChoice:^(NSInteger index){
 			int64_t emojiId = [ids[(NSUInteger)index] longLongValue];
 			[[TGClient shared] setCustomEmojiStickerSetNamed:me.setName
 					thumbnailCustomEmojiId:emojiId completion:^(BOOL ok){
-				[TGAlertSheet showMessage:(ok ? @"The pack has a new thumbnail."
-											  : @"Telegram refused the thumbnail.")
-									  title:@"Set Thumbnail" inView:me.view];
+				[TGAlertSheet showMessage:(ok ? @"Saved"
+											  : @"An error occurred.")
+									  title:@"Sticker" inView:me.view];
 			}];
 		}];
 	}];
@@ -831,16 +819,15 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 
 - (void)confirmDeletePack {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:@"The pack is deleted for everyone who has it. "
-							  @"This cannot be undone."
-						title:@"Delete Pack" action:@"Delete" destructive:YES
+	[TGAlertSheet showConfirm:@"Delete Sticker Set"
+						title:@"Delete Sticker Set" action:@"Delete" destructive:YES
 					   inView:self.view onConfirm:^{
 		TGStickerEditorViewController *me = weakSelf;
 		[[TGClient shared] deleteStickerSetNamed:me.setName completion:^(BOOL ok){
 			TGStickerEditorViewController *panel = weakSelf;
 			if (!ok){
-				[TGAlertSheet showMessage:@"Telegram refused to delete the pack."
-									  title:@"Delete Pack" inView:panel.view];
+				[TGAlertSheet showMessage:@"An error occurred."
+									  title:@"Delete Sticker Set" inView:panel.view];
 				return;
 			}
 			[panel.navigationController popViewControllerAnimated:YES];

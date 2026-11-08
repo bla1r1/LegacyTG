@@ -9,6 +9,7 @@
 #import "TGBadge.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
+#import "TGLocalization.h"
 
 /// A topic row is a chat row in miniature: a coloured icon made from the
 /// topic's own id, the name, the last message, the time and the unread count.
@@ -145,7 +146,7 @@ static NSString *TGTopicDateText(NSNumber *stamp) {
 		preview = preview.length
 				? [NSString stringWithFormat:@"%@ · %@", line, preview] : line;
 	}
-	_previewLabel.text = preview.length ? preview : @"No messages yet";
+	_previewLabel.text = preview.length ? preview : @"No messages here yet...";
 	_previewLabel.textColor = [theme secondaryTextColour];
 
 	_pinView.hidden = ![topic[@"pinned"] boolValue];
@@ -203,8 +204,6 @@ static NSString *TGTopicDateText(NSNumber *stamp) {
 
 	// iOS 7 lays content out under the bars; these screens position their own
 	// frames and expect the old behaviour.
-	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
-		self.edgesForExtendedLayout = UIRectEdgeNone;
 
 	self.title = self.chatTitle ?: @"Topics";
 	self.topics = @[];
@@ -250,15 +249,6 @@ static NSString *TGTopicDateText(NSNumber *stamp) {
 			selector:@selector(topicsChanged:)
 				name:TGForumTopicsChangedNotification object:nil];
 
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGThemeChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note) {
-		[weakSelf applyTheme];
-		weakSelf.emptyView = nil;
-		weakSelf.tableView.backgroundView = nil;
-		[weakSelf updateEmptyView];
-		[weakSelf.tableView reloadData];
-	}];
 }
 
 - (void)dealloc {
@@ -312,8 +302,8 @@ static NSString *TGTopicDateText(NSNumber *stamp) {
 	if (!self.emptyView) {
 		self.emptyView = [TGEmptyView emptyViewWithFrame:self.tableView.bounds
 				image:[TGIcons emptyChatsIllustration]
-				title:@"No topics yet"
-				subtitle:@"Create a topic to keep this group's discussions apart."
+				title:@"No topics here yet"
+				subtitle:nil
 				buttonTitle:@"New Topic"
 				target:self
 				action:@selector(createTopicTapped)];
@@ -364,8 +354,8 @@ static NSString *TGTopicDateText(NSNumber *stamp) {
 											  inChat:self.chatId
 										  completion:^(BOOL ok, NSString *error){
 		if (!ok){
-			[weakSelf showRefusal:(error ?: @"Telegram refused that.")
-							title:@"General Topic"];
+			[weakSelf showRefusal:(error ?: @"An error occurred.")
+							title:@"Topics"];
 			return;
 		}
 		[weakSelf reloadTopics];
@@ -373,7 +363,7 @@ static NSString *TGTopicDateText(NSNumber *stamp) {
 }
 
 - (void)showRefusal:(NSString *)error title:(NSString *)title {
-	[TGAlertSheet showMessage:(error ?: @"Telegram refused that.")
+	[TGAlertSheet showMessage:(error ?: @"An error occurred.")
 						title:title inView:self.view];
 }
 
@@ -384,7 +374,7 @@ static NSString *TGTopicDateText(NSNumber *stamp) {
 	__weak typeof(self) weakSelf = self;
 	[TGAlertSheet showInput:@"New Topic"
 					message:nil
-				placeholder:@"Topic name"
+				placeholder:@"ENTER TOPIC NAME"
 					   text:nil
 					 action:@"Next"
 					 inView:self.view
@@ -395,9 +385,9 @@ static NSString *TGTopicDateText(NSNumber *stamp) {
 			return;
 		// The order matches TGForumTopicColour in the client; the server
 		// accepts these six values and nothing else.
-		[TGAlertSheet showChoices:@[@"Blue", @"Orange", @"Violet", @"Green",
+		[TGAlertSheet showChoices:@[@"Blue", @"Orange", @"Purple", @"Green",
 									@"Pink", @"Red"]
-							title:@"Icon colour"
+							title:@"SELECT TOPIC ICON"
 				  destructiveIndex:-1
 						   inView:weakSelf.view
 						 onChoice:^(NSInteger colour){
@@ -408,9 +398,7 @@ static NSString *TGTopicDateText(NSNumber *stamp) {
 											  iconEmojiId:emojiId
 											   completion:^(int64_t threadId, NSString *made){
 					if (!threadId){
-						[TGAlertSheet showMessage:@"Only a forum supergroup holds "
-												  @"topics, and only an "
-												  @"administrator makes one."
+						[TGAlertSheet showMessage:@"The group must have topics turned on."
 											title:@"New Topic" inView:weakSelf.view];
 						return;
 					}
@@ -430,11 +418,11 @@ static NSString *TGTopicDateText(NSNumber *stamp) {
 		TGTopicsViewController *me = weakSelf;
 		if (!me)
 			return;
-		NSMutableArray *titles = [NSMutableArray arrayWithObject:@"No icon"];
+		NSMutableArray *titles = [NSMutableArray arrayWithObject:@"REMOVE ICON"];
 		for (NSDictionary *icon in icons)
 			[titles addObject:icon[@"emoji"] ?: @"?"];
 		[TGAlertSheet showChoices:titles
-							title:@"Topic icon"
+							title:@"SELECT TOPIC ICON"
 				  destructiveIndex:-1
 						   inView:me.view
 						 onChoice:^(NSInteger index){
@@ -463,8 +451,8 @@ static NSString *TGTopicDateText(NSNumber *stamp) {
 		return;
 
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:@[@"Topic Info", @"Rename", @"Icon", @"Pin", @"Close",
-								@"Manage Pinned Topics", @"Delete"]
+	[TGAlertSheet showChoices:@[@"Edit Topic", @"Rename", @"Set Cover Icon", @"Pin", @"Close",
+								@"Manage Topics", @"Delete"]
 						title:name
 			  destructiveIndex:6
 					   inView:self.view
@@ -493,8 +481,7 @@ static NSString *TGTopicDateText(NSNumber *stamp) {
 		else if (index == 5)
 			[weakSelf showPinnedTopicsManager];
 		else
-			[TGAlertSheet showConfirm:@"The topic and every message in it is "
-									  @"removed, for everyone."
+			[TGAlertSheet showConfirm:@"Delete Topic"
 								title:name
 							   action:@"Delete"
 						  destructive:YES
@@ -521,11 +508,8 @@ static NSString *TGTopicDateText(NSNumber *stamp) {
 			if (ok)
 				[me reloadTopics];
 			else
-				[TGAlertSheet showMessage:@"Telegram refused the icon. Only "
-										  @"an administrator or the topic's "
-										  @"maker changes one, and the "
-										  @"General topic keeps its own."
-									title:@"Topic icon" inView:me.view];
+				[TGAlertSheet showMessage:@"An error occurred."
+									title:@"SELECT TOPIC ICON" inView:me.view];
 		}];
 	}];
 }
@@ -533,9 +517,9 @@ static NSString *TGTopicDateText(NSNumber *stamp) {
 /// The rename asked for; the sheet is where a topic gets the words.
 - (void)renameTopic:(int64_t)threadId name:(NSString *)old {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"Rename Topic"
+	[TGAlertSheet showInput:@"Edit Topic"
 					message:nil
-				placeholder:old ?: @"Topic name"
+				placeholder:old ?: @"ENTER TOPIC NAME"
 					   text:old
 					 action:@"Save"
 					 inView:self.view
@@ -553,10 +537,8 @@ static NSString *TGTopicDateText(NSNumber *stamp) {
 			if (ok)
 				[me reloadTopics];
 			else
-				[TGAlertSheet showMessage:@"Telegram refused the rename. Only "
-										  @"an administrator or the topic's "
-										  @"maker renames one."
-									title:@"Rename" inView:me.view];
+				[TGAlertSheet showMessage:@"An error occurred."
+									  title:@"Rename" inView:me.view];
 		}];
 	}];
 }
@@ -615,15 +597,15 @@ static NSString *TGTopicDateText(NSNumber *stamp) {
 												 topic:threadId
 											completion:^(BOOL ok, NSString *error){
 		if (!ok)
-			[weakSelf showRefusal:(error ?: @"Telegram refused to clear mentions.")
-							title:@"Mentions"];
+			[weakSelf showRefusal:(error ?: @"An error occurred.")
+							title:@"Mention"];
 	}];
 	[[TGClient shared] readAllForumTopicPollVotesInChat:self.chatId
 												  topic:threadId
 											 completion:^(BOOL ok, NSString *error){
 		if (!ok)
-			[weakSelf showRefusal:(error ?: @"Telegram refused to clear poll votes.")
-							title:@"Poll Votes"];
+			[weakSelf showRefusal:(error ?: @"An error occurred.")
+							title:@"Poll Stats"];
 	}];
 	[[TGClient shared] readAllForumTopicReactionsInChat:self.chatId
 												  topic:threadId
@@ -684,8 +666,8 @@ static NSString *TGTopicStateLine(NSDictionary *info) {
 		return;
 
 	TGListViewController *list = [[TGListViewController alloc] init];
-	list.listTitle = [topic[@"name"] length] ? topic[@"name"] : @"Topic Info";
-	list.emptyText = @"Telegram did not return this topic.";
+	list.listTitle = [topic[@"name"] length] ? topic[@"name"] : @"Topics";
+	list.emptyText = @"An error occurred.";
 	list.hidesBottomBarWhenPushed = YES;
 	[self loadTopicInfoForList:list thread:threadId];
 	[self.navigationController pushViewController:list animated:YES];
@@ -706,19 +688,19 @@ static NSString *TGTopicStateLine(NSDictionary *info) {
 			return;
 		if (!info){
 			screen.rows = @[];
-			screen.emptyText = @"Telegram refused that topic.";
+			screen.emptyText = @"An error occurred.";
 			return;
 		}
 		NSDictionary *settings = info[@"notificationSettings"];
 		BOOL followMute = [settings[@"use_default_mute_for"] boolValue];
 		NSInteger muteFor = [settings[@"mute_for"] integerValue];
-		NSString *muteText = followMute ? @"Chat default"
+		NSString *muteText = followMute ? @"Default"
 				: (muteFor > 0
 					? [NSString stringWithFormat:@"Muted %ld h", (long)(muteFor / 3600)]
 					: @"Off");
 		BOOL followPreview = [settings[@"use_default_show_preview"] boolValue];
 		BOOL preview = [settings[@"show_preview"] boolValue];
-		NSString *previewText = followPreview ? @"Chat default"
+		NSString *previewText = followPreview ? @"Default"
 				: (preview ? @"On" : @"Off");
 		NSString *unread = [NSString stringWithFormat:
 				@"%ld messages · %ld mentions · %ld poll votes · %ld reactions",
@@ -732,12 +714,12 @@ static NSString *TGTopicStateLine(NSDictionary *info) {
 
 		screen.rows = @[
 			@{@"title" : @"Name", @"detail" : info[@"name"] ?: @""},
-			@{@"title" : @"Icon", @"detail" : TGTopicIconLine(info)},
+			@{@"title" : @"Set Cover Icon", @"detail" : TGTopicIconLine(info)},
 			@{@"title" : @"State", @"detail" : TGTopicStateLine(info)},
 			@{@"title" : @"Unread", @"detail" : unread},
-			@{@"title" : @"Created",
+			@{@"title" : @"Topic created",
 			  @"detail" : TGTopicWhen(info[@"created"]) ?: @""},
-			@{@"title" : @"Open Topic", @"detail" : @"Read and reply",
+			@{@"title" : @"Select topic",
 			  @"opens" : @YES,
 			  @"tap" : ^{ [me openTopic:info]; }},
 			@{@"title" : @"Copy Link", @"detail" : @"t.me",
@@ -746,12 +728,12 @@ static NSString *TGTopicStateLine(NSDictionary *info) {
 												   inChat:me.chatId
 											   completion:^(NSString *link){
 					if (!link.length){
-						[me showRefusal:@"Telegram did not return a link."
+						[me showRefusal:@"An error occurred."
 								  title:@"Copy Link"];
 						return;
 					}
 					[UIPasteboard generalPasteboard].string = link;
-					[TGAlertSheet showMessage:link title:@"Link Copied"
+					[TGAlertSheet showMessage:link title:@"Link copied."
 									   inView:me.view];
 				}];
 			}},
@@ -761,7 +743,7 @@ static NSString *TGTopicStateLine(NSDictionary *info) {
 			  @"tap" : ^{
 				[me showTopicNotificationSettingsForTopic:info reload:reload];
 			}},
-			@{@"title" : @"Mark Mentions Read", @"detail" :
+			@{@"title" : @"Mark as Read", @"detail" :
 					[NSString stringWithFormat:@"%ld unread",
 							(long)[info[@"unreadMentions"] integerValue]],
 			  @"tap" : ^{
@@ -769,15 +751,15 @@ static NSString *TGTopicStateLine(NSDictionary *info) {
 															 topic:threadId
 														completion:^(BOOL ok, NSString *error){
 					if (!ok){
-						[me showRefusal:(error ?: @"Telegram refused.")
-								  title:@"Mentions"];
+						[me showRefusal:(error ?: @"An error occurred.")
+								  title:@"Mention"];
 						return;
 					}
 					[me markTopicBadgeRead:threadId key:@"unreadMentions"];
 					[me loadTopicInfoForList:screen thread:threadId];
 				}];
 			}},
-			@{@"title" : @"Mark Poll Votes Read", @"detail" :
+			@{@"title" : @"Mark as Read", @"detail" :
 					[NSString stringWithFormat:@"%ld unread",
 							(long)[info[@"unreadPollVotes"] integerValue]],
 			  @"tap" : ^{
@@ -785,8 +767,8 @@ static NSString *TGTopicStateLine(NSDictionary *info) {
 															  topic:threadId
 														 completion:^(BOOL ok, NSString *error){
 					if (!ok){
-						[me showRefusal:(error ?: @"Telegram refused.")
-								  title:@"Poll Votes"];
+						[me showRefusal:(error ?: @"An error occurred.")
+								  title:@"Poll Stats"];
 						return;
 					}
 					[me markTopicBadgeRead:threadId key:@"unreadPollVotes"];
@@ -822,10 +804,16 @@ static NSString *TGTopicStateLine(NSDictionary *info) {
 	if (![current isKindOfClass:NSDictionary.class])
 		current = @{};
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:@[@"Mute for 1 hour", @"Mute for 8 hours",
-								@"Mute for 2 days", @"Unmute",
-								@"Show Previews", @"Hide Previews"]
-						title:@"Topic Notifications"
+	[TGAlertSheet showChoices:@[
+								TGLocalizedPluralValue(@"Mute for %@ hour",
+										@"Mute for %@ hours", @"1", 1),
+								TGLocalizedPluralValue(@"Mute for %@ hour",
+										@"Mute for %@ hours", @"8", 8),
+								TGLocalizedPluralValue(@"Mute for %@ day",
+										@"Mute for %@ days", @"2", 2),
+								@"Unmute",
+								@"Show Preview", @"Hide Preview"]
+						title:@"Notifications"
 			 destructiveIndex:-1
 					   inView:self.view
 					 onChoice:^(NSInteger index){
@@ -868,8 +856,8 @@ static NSString *TGTopicStateLine(NSDictionary *info) {
 													  inChat:weakSelf.chatId
 												  completion:^(BOOL ok, NSString *error){
 			if (!ok){
-				[weakSelf showRefusal:(error ?: @"Telegram refused that setting.")
-								title:@"Topic Notifications"];
+				[weakSelf showRefusal:(error ?: @"An error occurred.")
+								title:@"Notifications"];
 				return;
 			}
 			if (reload)
@@ -882,10 +870,9 @@ static NSString *TGTopicStateLine(NSDictionary *info) {
 /// move are all the same request with a different id list.
 - (void)showPinnedTopicsManager {
 	TGListViewController *list = [[TGListViewController alloc] init];
-	list.listTitle = @"Pinned Topics";
-	list.emptyText = @"Telegram returned no topics.";
-	list.listFooter = @"Pinned topics are written in this order. Moving one "
-					  @"rewrites the list for everyone.";
+	list.listTitle = @"Topics";
+	list.emptyText = @"An error occurred.";
+	list.listFooter = nil;
 	list.hidesBottomBarWhenPushed = YES;
 	[self loadPinnedTopicsIntoList:list];
 	[self.navigationController pushViewController:list animated:YES];
@@ -904,13 +891,13 @@ static NSString *TGTopicStateLine(NSDictionary *info) {
 		NSMutableArray *rows = [NSMutableArray array];
 		for (NSDictionary *topic in topics){
 			BOOL pinned = [topic[@"pinned"] boolValue];
-			NSString *title = topic[@"name"] ?: @"Topic";
+			NSString *title = topic[@"name"] ?: @"Topics";
 			[rows addObject:@{
 				@"title" : title,
 				@"detail" : pinned ? @"Pinned" : @"Not pinned",
 				@"tap" : ^{
 					NSMutableArray *choices = [NSMutableArray arrayWithObject:
-							pinned ? @"Unpin" : @"Pin to Top"];
+							pinned ? @"Unpin" : @"Pin"];
 					if (pinned){
 						[choices addObject:@"Move Up"];
 						[choices addObject:@"Move Down"];
@@ -955,8 +942,8 @@ static NSString *TGTopicStateLine(NSDictionary *info) {
 	} else {
 		NSUInteger at = [pinnedIds indexOfObject:idNumber];
 		if (at == NSNotFound){
-			[TGAlertSheet showMessage:@"That topic is not pinned any more."
-								title:@"Pinned Topics" inView:self.view];
+			[TGAlertSheet showMessage:@"An error occurred."
+								title:@"Topics" inView:self.view];
 			return;
 		}
 		if (choice == 1 && at > 0){
@@ -964,9 +951,8 @@ static NSString *TGTopicStateLine(NSDictionary *info) {
 		} else if (choice == 2 && at + 1 < pinnedIds.count){
 			[pinnedIds exchangeObjectAtIndex:at withObjectAtIndex:at + 1];
 		} else {
-			[TGAlertSheet showMessage:@"That topic is already at the edge of "
-									  @"the pinned list."
-								title:@"Pinned Topics" inView:self.view];
+			[TGAlertSheet showMessage:@"An error occurred."
+								title:@"Topics" inView:self.view];
 			return;
 		}
 	}
@@ -976,8 +962,8 @@ static NSString *TGTopicStateLine(NSDictionary *info) {
 									 inChat:self.chatId
 								 completion:^(BOOL ok, NSString *error){
 		if (!ok){
-			[weakSelf showRefusal:(error ?: @"Telegram refused that order.")
-							title:@"Pinned Topics"];
+			[weakSelf showRefusal:(error ?: @"An error occurred.")
+							title:@"Topics"];
 			return;
 		}
 		[weakSelf reloadTopics];

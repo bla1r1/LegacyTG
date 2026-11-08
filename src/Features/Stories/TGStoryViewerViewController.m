@@ -1,4 +1,5 @@
 #import "TGStoryViewerViewController.h"
+#import "TGLocalization.h"
 #import "TGClient.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
@@ -7,8 +8,10 @@
 #import "TGStoryInfoViewController.h"
 #import "TGStoryAlbumsViewController.h"
 #import "TGStoryComposerViewController.h"
+#import "TGStorySave.h"
 #import "TGLiveStoryViewController.h"
 #import "TGMessageLayout.h"
+#import "TGPopupMenu.h"
 #import <AVFoundation/AVFoundation.h>
 #import <QuartzCore/QuartzCore.h>
 
@@ -20,19 +23,19 @@ static const NSTimeInterval kStoryStillSeconds = 5.0;
 static const NSTimeInterval kStoryTick = 0.05;
 static const NSInteger kStoryReactionChoices = 6;
 
-/// A story's timestamp as the header says it: seconds, minutes or hours ago.
-/// Telegram uses the short form because the header has one line for it.
+/// A story's timestamp as the header says it. The old "%@m" read as metres
+/// once the pack translated it; these are the pack's time templates.
 static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 	if (timestamp <= 0)
 		return @"";
 	NSTimeInterval age = [[NSDate date] timeIntervalSince1970] - timestamp;
 	if (age < 60)
-		return @"now";
+		return TGLocalized(@"now");
 	if (age < 3600)
-		return [NSString stringWithFormat:@"%ldm", (long)(age / 60)];
+		return TGLocalizedFormat(@"%@ minutes ago", @(age / 60));
 	if (age < 86400)
-		return [NSString stringWithFormat:@"%ldh", (long)(age / 3600)];
-	return [NSString stringWithFormat:@"%ldd", (long)(age / 86400)];
+		return TGLocalizedFormat(@"%@ hours ago", @(age / 3600));
+	return TGLocalizedFormat(@"%@ days ago", @(age / 86400));
 }
 
 @interface TGStoryViewerViewController () <UIGestureRecognizerDelegate>
@@ -54,6 +57,10 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 @property (nonatomic, strong) UIButton *infoButton;
 @property (nonatomic, strong) UILabel *captionLabel;
 @property (nonatomic, strong) UILabel *infoLabel;
+@property (nonatomic, strong) UIActivityIndicatorView *loadingView;
+/// The still gradient the official loading effect draws behind a story while
+/// its picture downloads; no blur or animation on the A4.
+@property (nonatomic, strong) UIView *loadingEffect;
 @property (nonatomic, strong) UIView *reactionRail;
 @property (nonatomic, strong) NSTimer *timer;
 @property (nonatomic, assign) NSTimeInterval elapsed;
@@ -62,6 +69,9 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 @property (nonatomic, assign) CGPoint dragStart;
 @property (nonatomic, strong) NSArray *reactionEmojis;
 @property (nonatomic, assign) BOOL closed;
+/// The peer's public address, needed to gate Copy Link: only a public story
+/// on a peer with an address has a link to copy.
+@property (nonatomic, copy) NSString *peerAddress;
 @end
 
 @implementation TGStoryViewerViewController
@@ -135,6 +145,26 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 	_infoLabel.textColor = [[TGTheme shared] secondaryTextColour];
 	_infoLabel.backgroundColor = [UIColor clearColor];
 	[self.view addSubview:_infoLabel];
+
+	// The thumbnail takes a moment; the empty black frame read as a failed
+	// story, so a spinner fills it until the picture arrives.
+	_loadingEffect = [[UIView alloc] initWithFrame:self.view.bounds];
+	_loadingEffect.autoresizingMask = UIViewAutoresizingFlexibleWidth |
+			UIViewAutoresizingFlexibleHeight;
+	CAGradientLayer *loadingGradient = [CAGradientLayer layer];
+	loadingGradient.colors = @[
+		(id)[[TGTheme shared] fileTileColour].CGColor,
+		(id)[[TGTheme shared] mediaViewerBackdropColour].CGColor];
+	loadingGradient.startPoint = CGPointMake(0.5, TGMetricZero);
+	loadingGradient.endPoint = CGPointMake(0.5, TGMetricScaleFull);
+	[_loadingEffect.layer addSublayer:loadingGradient];
+	[self.view addSubview:_loadingEffect];
+
+	_loadingView = [[UIActivityIndicatorView alloc]
+			initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleWhiteLarge];
+	_loadingView.hidesWhenStopped = YES;
+	_loadingView.backgroundColor = [UIColor clearColor];
+	[self.view addSubview:_loadingView];
 
 	UIButton *close = [UIButton buttonWithType:UIButtonTypeCustom];
 	close.frame = CGRectMake(0, 0, TGMetricStoryCloseSide, TGMetricStoryCloseSide);
@@ -225,6 +255,24 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 		[me showCurrentStory];
 	}];
 
+	__weak typeof(self) weakViewer = self;
+	[[TGClient shared] chatRecordForChat:self.chatId completion:^(NSDictionary *chat){
+		NSDictionary *type = [chat[@"type"] isKindOfClass:NSDictionary.class]
+				? chat[@"type"] : nil;
+		NSArray *names = type[@"supergroup"][@"usernames"][@"active_usernames"];
+		if (![names isKindOfClass:NSArray.class] || !names.count)
+			names = type[@"private"][@"usernames"][@"active_usernames"];
+		if (![names isKindOfClass:NSArray.class] || !names.count){
+			NSString *single = type[@"private"][@"username"];
+			if ([single isKindOfClass:NSString.class] && single.length)
+				names = @[single];
+		}
+		NSString *address = [names isKindOfClass:NSArray.class]
+				? names.firstObject : nil;
+		if ([address isKindOfClass:NSString.class] && address.length)
+			weakViewer.peerAddress = address;
+	}];
+
 	[self loadReactions];
 	[self showCurrentStory];
 }
@@ -267,6 +315,12 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 	CGFloat width = self.view.bounds.size.width;
 	CGFloat height = self.view.bounds.size.height;
 	_picture.frame = self.view.bounds;
+	_loadingEffect.frame = self.view.bounds;
+	for (CALayer *layer in _loadingEffect.layer.sublayers)
+		if ([layer isKindOfClass:CAGradientLayer.class])
+			layer.frame = _loadingEffect.bounds;
+	_loadingView.center = CGPointMake(CGRectGetMidX(self.view.bounds),
+			CGRectGetMidY(self.view.bounds));
 	self.topShade.frame = CGRectMake(0, 0, width, TGMetricStoryShadeTop);
 	self.bottomShade.frame = CGRectMake(0, height - TGMetricStoryShadeBottom,
 										width, TGMetricStoryShadeBottom);
@@ -403,17 +457,19 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 	}];
 }
 
-/// "2 of 5 · 3h" under the name: the segment row is the count, this says it
-/// in words and adds when the story was posted.
+/// The name and "2/5" on one line, the relative time on the next; official
+/// puts the counter beside the name rather than in the time line.
 - (void)updateHeaderCounterForStory:(NSDictionary *)story {
-	NSMutableArray *bits = [NSMutableArray array];
-	if (self.stories.count > 1)
-		[bits addObject:[NSString stringWithFormat:@"%ld of %lu",
-				(long)(self.index + 1), (unsigned long)self.stories.count]];
-	NSString *when = TGStoryRelativeTime([story[@"date"] doubleValue]);
-	if (when.length)
-		[bits addObject:when];
-	self.timeLabel.text = [bits componentsJoinedByString:@" · "];
+	NSString *name = [story[@"title"] isKindOfClass:NSString.class]
+			? story[@"title"] : self.storyTitle;
+	if (!name.length)
+		name = TGLocalized(@"Story");
+	if (self.stories.count > 1) {
+		name = [name stringByAppendingFormat:@"  %ld/%ld",
+				(long)(self.index + 1), (long)self.stories.count];
+	}
+	self.senderLabel.text = name;
+	self.timeLabel.text = TGStoryRelativeTime([story[@"date"] doubleValue]);
 }
 
 - (void)loadStoryId:(int32_t)storyId {
@@ -433,6 +489,8 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 
 - (void)showStory:(NSDictionary *)story {
 	_picture.image = nil;
+	self.loadingEffect.hidden = NO;
+	[self.loadingView startAnimating];
 	self.senderLabel.text = story[@"title"] ?: self.storyTitle;
 	[self refreshAuthorAvatar];
 	[self updateHeaderCounterForStory:story];
@@ -446,17 +504,18 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 	NSInteger viewers = [story[@"viewers"] integerValue];
 	NSInteger reactions = [story[@"reactions"] integerValue];
 	NSMutableArray *bits = [NSMutableArray array];
-	if ([story[@"isLive"] boolValue])
-		[bits addObject:@"LIVE"];
-	if ([story[@"isLive"] boolValue])
-		[bits addObject:@"tap More to open the live story"];
-	else {
-		[bits addObject:[NSString stringWithFormat:@"%ld views", (long)viewers]];
-		if (reactions > 0)
-			[bits addObject:[NSString stringWithFormat:@"%ld reactions", (long)reactions]];
+	if ([story[@"isLive"] boolValue]) {
+		[bits addObject:TGLocalized(@"LIVE")];
+	} else if (viewers > 0) {
+		[bits addObject:TGLocalizedPluralValue(@"%@ view", @"%@ views",
+				[NSString stringWithFormat:@"%ld", (long)viewers], (NSInteger)viewers)];
+	} else {
+		[bits addObject:TGLocalized(@"No views")];
 	}
+	if (reactions > 0)
+		[bits addObject:TGLocalizedPlural(@"%d reaction", @"%d reactions", (NSInteger)reactions)];
 	if ([story[@"isPostedToChatPage"] boolValue])
-		[bits addObject:@"on profile"];
+		[bits addObject:TGLocalized(@"Story posted to your profile")];
 	self.infoLabel.text = [bits componentsJoinedByString:@" · "];
 
 	[self loadReactionsForStory:story];
@@ -475,7 +534,12 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 			if (!me || !path.length)
 				return;
 			[me.picture setImage:[UIImage imageWithContentsOfFile:path]];
+			me.loadingEffect.hidden = YES;
+			[me.loadingView stopAnimating];
 		}];
+	} else {
+		self.loadingEffect.hidden = YES;
+		[self.loadingView stopAnimating];
 	}
 
 	NSNumber *videoId = story[@"videoId"];
@@ -489,6 +553,8 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 		TGStoryViewerViewController *me = weakSelf;
 		if (!me || !path.length || me.closed)
 			return;
+		me.loadingEffect.hidden = YES;
+		[me.loadingView stopAnimating];
 		NSError *sessionError = nil;
 		[[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayback
 											   error:&sessionError];
@@ -645,7 +711,7 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 	if (!shown){
 		UILabel *hint = [[UILabel alloc] initWithFrame:CGRectMake(0, 0,
 				TGMetricScreenWidth, TGMetricStoryReactionButton)];
-		hint.text = @"No reaction available";
+		hint.text = @"No Results";
 		hint.font = TGFontMeta();
 		hint.textColor = [[TGTheme shared] secondaryTextColour];
 		hint.backgroundColor = [UIColor clearColor];
@@ -669,8 +735,8 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 			if (!me)
 				return;
 			if (!ok){
-				[TGAlertSheet showMessage:error ?: @"Telegram refused the reaction."
-									title:@"Live Reaction" inView:me.view];
+				[TGAlertSheet showMessage:error ?: @"An error occurred."
+									title:@"Live Stream Reaction" inView:me.view];
 				return;
 			}
 			// The undo window is two seconds; committing after it is what
@@ -691,8 +757,8 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 		if (!me)
 			return;
 		if (!ok){
-			[TGAlertSheet showMessage:error ?: @"Telegram refused the reaction."
-								title:@"Story Reaction" inView:me.view];
+			[TGAlertSheet showMessage:error ?: @"An error occurred."
+								title:@"Reaction" inView:me.view];
 			return;
 		}
 		NSMutableDictionary *changed = [me.currentStory mutableCopy];
@@ -717,9 +783,9 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 		if (!me)
 			return;
 		[TGAlertSheet showMessage:ok
-				? @"Pending live reactions were cancelled."
-				: (error ?: @"Telegram refused that.")
-				title:@"Live Reaction" inView:me.view];
+				? @"Saved"
+				: (error ?: @"An error occurred.")
+				title:@"Live Stream Reaction" inView:me.view];
 	}];
 }
 
@@ -730,8 +796,8 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 		TGStoryViewerViewController *me = weakSelf;
 		if (!me || !ok)
 			return;
-		[TGAlertSheet showMessage:@"The reaction was sent."
-							title:@"Live Reaction" inView:me.view];
+		[TGAlertSheet showMessage:@"Saved"
+							title:@"Live Stream Reaction" inView:me.view];
 	}];
 }
 
@@ -895,62 +961,157 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 	NSDictionary *story = self.currentStory;
 	if (!story[@"storyId"])
 		return;
-	NSMutableArray *titles = [NSMutableArray arrayWithObjects:
-			@"Story Info", @"Report Story", nil];
-	if (self.canManage || [story[@"canBeEdited"] boolValue] ||
-		[story[@"canBeDeleted"] boolValue]){
-		[titles addObject:@"Edit Caption"];
-		[titles addObject:@"Change Cover Frame"];
-		[titles addObject:@"Delete Story"];
-		[titles addObject:[story[@"isPostedToChatPage"] boolValue]
-				? @"Remove from Profile" : @"Keep on Profile"];
-		[titles addObject:@"Pin to Chat Page"];
-		[titles addObject:@"Story Privacy"];
-		[titles addObject:@"Add to Album"];
-		[titles addObject:@"Albums"];
-		[titles addObject:@"Edit as Business Story"];
-		[titles addObject:@"Delete as Business Story"];
-	}
-	if ([story[@"isLive"] boolValue])
-		[titles addObject:@"Open Live Story"];
-	[titles addObject:@"Add Story"];
+	BOOL own = self.canManage || [story[@"canBeEdited"] boolValue] ||
+			[story[@"canBeDeleted"] boolValue];
+	BOOL publicStory = [story[@"privacy"] isEqualToString:@"everyone"] &&
+			self.peerAddress.length > 0;
+	NSMutableArray *choices = [NSMutableArray array];
+	void (^add)(NSString *, BOOL) = ^(NSString *title, BOOL destructive){
+		[choices addObject:destructive
+				? @{@"title" : title, @"destructive" : @YES}
+				: @{@"title" : title}];
+	};
 
+	add(@"Story", NO);
+	if ([story[@"isLive"] boolValue] && !own)
+		add(@"View Story", NO);
+	if (!own)
+		add(@"Report Story", NO);
+	if (!own && publicStory)
+		add(@"Copy Link", NO);
+	add(@"Save to Gallery", NO);
+
+	if (own) {
+		add(@"Edit Caption", NO);
+		add(@"Story Cover", NO);
+		add([story[@"isPostedToChatPage"] boolValue]
+				? @"Remove from Profile" : @"Add to Profile", NO);
+		add(@"Pin", NO);
+		add(@"Privacy", NO);
+		add(@"Add to Album", NO);
+		add(@"Albums", NO);
+		add(@"Edit Story", NO);
+		// Add Story is not a story context action in official; the own menu
+		// ends with Delete Story.
+		add(@"Delete Story", YES);
+	}
+
+	// An anchored context menu, not a titled bottom sheet. iOS 6 has no
+	// UIContextMenu, so TGPopupMenu draws the card under the More button.
+	UIView *menuButton = [self.view viewWithTag:9002];
+	CGPoint anchor = menuButton
+			? CGPointMake(CGRectGetMidX(menuButton.frame),
+					CGRectGetMaxY(menuButton.frame))
+			: CGPointMake(self.view.bounds.size.width - TGMetricPadLarge,
+					TGMetricPadLarge);
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:titles title:@"Story" destructiveIndex:-1
-					   inView:self.view onChoice:^(NSInteger choice){
+	[TGPopupMenu showItems:choices atPoint:anchor inView:self.view
+				headerView:nil onChoice:^(NSInteger choice, NSString *title){
 		TGStoryViewerViewController *me = weakSelf;
-		if (!me)
+		if (!me || choice < 0 || choice >= (NSInteger)choices.count)
 			return;
-		NSString *title = titles[choice];
-		if ([title isEqualToString:@"Story Info"])
+		if ([title isEqualToString:@"Story"])
 			[me openInfo];
 		else if ([title isEqualToString:@"Report Story"])
 			[me openReport];
+		else if ([title isEqualToString:@"Save to Gallery"])
+			[me saveToGallery];
+		else if ([title isEqualToString:@"Copy Link"])
+			[me copyLink];
 		else if ([title isEqualToString:@"Edit Caption"])
 			[me editCaption];
-		else if ([title isEqualToString:@"Change Cover Frame"])
+		else if ([title isEqualToString:@"Story Cover"])
 			[me changeCover];
 		else if ([title isEqualToString:@"Delete Story"])
 			[me confirmDelete];
-		else if ([title isEqualToString:@"Keep on Profile"] ||
+		else if ([title isEqualToString:@"Add to Profile"] ||
 				 [title isEqualToString:@"Remove from Profile"])
 			[me toggleProfile:![story[@"isPostedToChatPage"] boolValue]];
-		else if ([title isEqualToString:@"Pin to Chat Page"])
+		else if ([title isEqualToString:@"Pin"])
 			[me pinToChatPage];
-		else if ([title isEqualToString:@"Story Privacy"])
+		else if ([title isEqualToString:@"Privacy"])
 			[me choosePrivacy];
 		else if ([title isEqualToString:@"Add to Album"])
 			[me addToAlbum];
 		else if ([title isEqualToString:@"Albums"])
 			[me openAlbums];
-		else if ([title isEqualToString:@"Edit as Business Story"])
+		else if ([title isEqualToString:@"Edit Story"])
 			[me editBusiness];
-		else if ([title isEqualToString:@"Delete as Business Story"])
-			[me deleteBusiness];
-		else if ([title isEqualToString:@"Open Live Story"])
+		else if ([title isEqualToString:@"View Story"])
 			[me openLive];
-		else if ([title isEqualToString:@"Add Story"])
-			[me addStory];
+	}];
+}
+
+- (void)saveToGallery {
+	NSDictionary *story = self.currentStory;
+	NSNumber *fileId = nil;
+	TGStorySaveKind kind = TGStorySaveKindForStory(story, &fileId);
+	if (kind == TGStorySaveKindNone || !fileId)
+		return;
+	__weak typeof(self) weakSelf = self;
+	[[TGClient shared] downloadFile:fileId.integerValue
+						   completion:^(NSString *path){
+		TGStoryViewerViewController *me = weakSelf;
+		if (!me)
+			return;
+		if (!path.length) {
+			[TGAlertSheet showMessage:TGLocalized(@"An error occurred.")
+								title:TGLocalized(@"Save to Gallery") inView:me.view];
+			return;
+		}
+		BOOL saved = NO;
+		if (kind == TGStorySaveKindVideo) {
+			// A video story saves the video file, not its poster frame.
+			UISaveVideoAtPathToSavedPhotosAlbum(path, nil, nil, NULL);
+			saved = YES;
+		} else {
+			UIImage *image = [UIImage imageWithContentsOfFile:path];
+			if (image) {
+				UIImageWriteToSavedPhotosAlbum(image, nil, nil, NULL);
+				saved = YES;
+			}
+		}
+		// "Saved" alone is the Saved Messages folder in the pack.
+		NSString *done = kind == TGStorySaveKindVideo
+				? @"Video saved to Photos." : @"Image saved to Photos.";
+		[TGAlertSheet showMessage:TGLocalized(saved ? done : @"An error occurred.")
+							title:TGLocalized(@"Save to Gallery") inView:me.view];
+	}];
+}
+
+- (void)copyLink {
+	NSDictionary *story = self.currentStory;
+	NSString *link = [story[@"link"] isKindOfClass:NSString.class]
+			? story[@"link"] : nil;
+	void (^finish)(NSString *) = ^(NSString *result){
+		if (!result.length)
+			return;
+		[UIPasteboard generalPasteboard].string = result;
+		[TGAlertSheet showMessage:TGLocalized(@"Link copied to clipboard.")
+							title:TGLocalized(@"Copy Link") inView:self.view];
+	};
+	if (link.length){
+		finish(link);
+		return;
+	}
+	// Ask the client for the exported link rather than inventing t.me/c/....
+	// The peer address is only the fallback for a public story, which is the
+	// only case the menu offers this action.
+	__weak typeof(self) weakSelf = self;
+	[[TGClient shared] request:@{@"@type" : @"getStoryLink",
+			@"chat_id" : @(self.chatId),
+			@"story_id" : story[@"storyId"] ?: @(0)}
+				   completion:^(NSDictionary *result){
+		NSString *exported = result[@"link"] ?: result[@"url"];
+		if ([exported isKindOfClass:NSString.class] && exported.length){
+			finish(exported);
+			return;
+		}
+		TGStoryViewerViewController *me = weakSelf;
+		if (!me.peerAddress.length)
+			return;
+		finish([NSString stringWithFormat:@"https://t.me/%@/%d",
+				me.peerAddress, [story[@"storyId"] intValue]]);
 	}];
 }
 
@@ -961,8 +1122,7 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 				   storyId:[story[@"storyId"] intValue]
 					  story:story
 					  mode:TGStoryInfoModeInfo];
-	info.hidesBottomBarWhenPushed = YES;
-	[self.navigationController pushViewController:info animated:YES];
+	[self presentStoryInfo:info];
 }
 
 - (void)openReport {
@@ -972,15 +1132,33 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 				   storyId:[story[@"storyId"] intValue]
 					  story:story
 					  mode:TGStoryInfoModeReport];
-	info.hidesBottomBarWhenPushed = YES;
-	[self.navigationController pushViewController:info animated:YES];
+	[self presentStoryInfo:info];
+}
+
+/// An in-story panel, not a full-screen modal: the panel rises from the
+/// bottom and the story stays visible above it, as StoryItemSetViewList does
+/// inside the official container.
+- (void)presentStoryInfo:(TGStoryInfoViewController *)info {
+	CGFloat height = floor(self.view.bounds.size.height * 0.72f);
+	[self addChildViewController:info];
+	info.view.frame = CGRectMake(0, self.view.bounds.size.height - height,
+			self.view.bounds.size.width, height);
+	info.view.autoresizingMask = UIViewAutoresizingFlexibleWidth |
+			UIViewAutoresizingFlexibleTopMargin;
+	info.view.backgroundColor = [[TGTheme shared] groupedBackgroundColour];
+	info.view.layer.cornerRadius = TGMetricCornerCard;
+	info.view.clipsToBounds = YES;
+	info.view.tag = 9010;
+	info.overlayPanel = YES;
+	[self.view addSubview:info.view];
+	[info didMoveToParentViewController:self];
 }
 
 - (void)editCaption {
 	NSDictionary *story = self.currentStory;
 	__weak typeof(self) weakSelf = self;
 	[TGAlertSheet showInput:@"Edit Caption"
-					message:@"Leave it empty to remove the caption."
+					message:nil
 				placeholder:@"Caption"
 					   text:story[@"caption"]
 					 action:@"Save"
@@ -997,7 +1175,7 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 							 caption:text
 						  completion:^(BOOL ok, NSString *error){
 			if (!ok)
-				[TGAlertSheet showMessage:error ?: @"Telegram refused the edit."
+				[TGAlertSheet showMessage:error ?: @"An error occurred."
 									title:@"Edit Story" inView:me.view];
 			else
 				[me reloadCurrent];
@@ -1008,8 +1186,8 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 - (void)changeCover {
 	NSDictionary *story = self.currentStory;
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"Change Cover Frame"
-					message:@"The frame is a number of seconds from the start."
+	[TGAlertSheet showInput:@"Story Cover"
+					message:nil
 				placeholder:@"0.0"
 					   text:@"0"
 					 action:@"Save"
@@ -1023,8 +1201,8 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 								 fromChat:me.chatId
 						  coverTimestamp:stamp
 							  completion:^(BOOL ok, NSString *error){
-			[TGAlertSheet showMessage:ok ? @"The cover frame was changed."
-					: (error ?: @"Telegram refused that.")
+			[TGAlertSheet showMessage:ok ? @"Saved"
+					: (error ?: @"An error occurred.")
 								title:@"Story Cover" inView:me.view];
 		}];
 	}];
@@ -1033,7 +1211,7 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 - (void)confirmDelete {
 	NSDictionary *story = self.currentStory;
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:@"Delete this story?"
+	[TGAlertSheet showConfirm:@"Delete Story"
 						title:@"Delete Story"
 					   action:@"Delete"
 				  destructive:YES
@@ -1042,18 +1220,24 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 		TGStoryViewerViewController *me = weakSelf;
 		if (!me)
 			return;
-		[[TGClient shared] deleteStory:[story[@"storyId"] intValue]
-							  fromChat:me.chatId
-							completion:^(BOOL ok, NSString *error){
+		void (^done)(BOOL, NSString *) = ^(BOOL ok, NSString *error){
 			if (!ok){
-				[TGAlertSheet showMessage:error ?: @"Telegram refused the delete."
+				[TGAlertSheet showMessage:error ?: @"An error occurred."
 									title:@"Delete Story" inView:me.view];
 				return;
 			}
 			if (me.onStoriesChanged)
 				me.onStoriesChanged();
 			[me advance:1];
-		}];
+		};
+		// A business story goes through the peer-aware delete; a user story
+		// goes through the ordinary one.
+		if ([story[@"isBusiness"] boolValue])
+			[[TGClient shared] deleteBusinessStory:[story[@"storyId"] intValue]
+									  fromChat:me.chatId completion:done];
+		else
+			[[TGClient shared] deleteStory:[story[@"storyId"] intValue]
+								  fromChat:me.chatId completion:done];
 	}];
 }
 
@@ -1068,8 +1252,8 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 		if (!me)
 			return;
 		if (!ok){
-			[TGAlertSheet showMessage:error ?: @"Telegram refused that."
-								title:@"Story Profile" inView:me.view];
+			[TGAlertSheet showMessage:error ?: @"An error occurred."
+								title:@"Story" inView:me.view];
 			return;
 		}
 		NSMutableDictionary *changed = [me.currentStory mutableCopy];
@@ -1089,9 +1273,9 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 		TGStoryViewerViewController *me = weakSelf;
 		if (!me)
 			return;
-		[TGAlertSheet showMessage:ok ? @"The story is pinned to the chat page."
-				: (error ?: @"Telegram refused the pin.")
-							title:@"Pinned Story" inView:me.view];
+		[TGAlertSheet showMessage:ok ? @"Saved"
+				: (error ?: @"An error occurred.")
+							title:@"Story" inView:me.view];
 	}];
 }
 
@@ -1099,7 +1283,7 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 	NSDictionary *story = self.currentStory;
 	NSArray *choices = @[@"Everybody", @"My Contacts", @"Close Friends", @"Selected Users"];
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:choices title:@"Story Privacy" destructiveIndex:-1
+	[TGAlertSheet showChoices:choices title:@"Privacy" destructiveIndex:-1
 					   inView:self.view onChoice:^(NSInteger choice){
 		TGStoryViewerViewController *me = weakSelf;
 		if (!me)
@@ -1109,7 +1293,7 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 				: (choice == 3 ? @"selected" : @"everyone"));
 		if (choice == 3){
 			[TGAlertSheet showInput:@"Selected Users"
-							message:@"Comma-separated user ids."
+							message:nil
 						placeholder:@"123, 456"
 							   text:nil
 							 action:@"Save"
@@ -1140,32 +1324,110 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 		TGStoryViewerViewController *me = weakSelf;
 		if (!me)
 			return;
-		[TGAlertSheet showMessage:ok ? @"The privacy settings were changed."
-				: (error ?: @"Telegram refused that.")
-							title:@"Story Privacy" inView:me.view];
+		[TGAlertSheet showMessage:ok ? @"Saved"
+				: (error ?: @"An error occurred.")
+							title:@"Privacy" inView:me.view];
+	}];
+}
+
+/// Albums are a nested menu on the story action, not a screen with its own
+/// Add/Edit/More bar. The same menu adds one story or opens an album.
+- (void)showAlbumMenuAddingCurrentStory:(BOOL)adding {
+	NSDictionary *story = self.currentStory;
+	NSInteger storyId = [story[@"storyId"] intValue];
+	__weak typeof(self) weakSelf = self;
+	[[TGClient shared] storyAlbumsForChat:self.chatId completion:^(NSArray *albums){
+		TGStoryViewerViewController *me = weakSelf;
+		if (!me)
+			return;
+		NSMutableArray *choices = [NSMutableArray array];
+		for (NSDictionary *album in albums)
+			[choices addObject:@{@"title" : album[@"name"] ?: @"Album",
+					@"album" : album}];
+		[choices addObject:@{@"title" : @"New Album"}];
+		UIView *menuButton = [me.view viewWithTag:9002];
+		CGPoint anchor = menuButton
+				? CGPointMake(CGRectGetMidX(menuButton.frame),
+						CGRectGetMaxY(menuButton.frame))
+				: CGPointMake(me.view.bounds.size.width - TGMetricPadLarge,
+						TGMetricPadLarge);
+		[TGPopupMenu showItems:choices atPoint:anchor inView:me.view
+					headerView:nil onChoice:^(NSInteger choice, NSString *title){
+			TGStoryViewerViewController *viewer = weakSelf;
+			if (!viewer || choice < 0 ||
+				choice >= (NSInteger)choices.count)
+				return;
+			NSDictionary *album = choices[(NSUInteger)choice][@"album"];
+			if (!album){
+				[viewer createAlbumAddingStory:adding ? storyId : 0];
+				return;
+			}
+			int32_t albumId = [album[@"albumId"] intValue];
+			if (adding){
+				[[TGClient shared] addStories:@[@(storyId)]
+									  toAlbum:albumId
+									   inChat:viewer.chatId
+								   completion:^(NSDictionary *changed,
+												NSString *error){
+					[TGAlertSheet showMessage:changed ? @"Saved"
+							: (error ?: @"An error occurred.")
+											title:@"Add to Album" inView:viewer.view];
+				}];
+				return;
+			}
+			[[TGClient shared] storiesInAlbum:albumId inChat:viewer.chatId
+										 offset:0 limit:60
+								   completion:^(NSArray *stories, NSString *error){
+				NSMutableArray *ids = [NSMutableArray array];
+				for (NSDictionary *item in stories)
+					if ([item[@"storyId"] isKindOfClass:NSNumber.class])
+						[ids addObject:item[@"storyId"]];
+				if (!ids.count){
+					[TGAlertSheet showMessage:error ?: @"No stories"
+										title:@"Albums" inView:viewer.view];
+					return;
+				}
+				[viewer.stories setArray:ids];
+				viewer.index = 0;
+				[viewer showCurrentStory];
+			}];
+		}];
+	}];
+}
+
+- (void)createAlbumAddingStory:(NSInteger)storyId {
+	__weak typeof(self) weakSelf = self;
+	[TGAlertSheet showInput:@"New Album" message:nil placeholder:@"Album"
+					   text:nil action:@"Create" inView:self.view
+				 onSubmit:^(NSString *name){
+		TGStoryViewerViewController *me = weakSelf;
+		if (!me)
+			return;
+		NSArray *ids = storyId > 0 ? @[@(storyId)] : @[];
+		[[TGClient shared] createStoryAlbumNamed:name inChat:me.chatId
+										storyIds:ids
+									  completion:^(NSDictionary *album,
+												   NSString *error){
+			[TGAlertSheet showMessage:album ? @"Saved"
+					: (error ?: @"An error occurred.")
+								title:@"New Album" inView:me.view];
+		}];
 	}];
 }
 
 - (void)addToAlbum {
-	NSDictionary *story = self.currentStory;
-	TGStoryAlbumsViewController *albums = [[TGStoryAlbumsViewController alloc]
-			initWithChatId:self.chatId storyToAdd:[story[@"storyId"] intValue]];
-	albums.hidesBottomBarWhenPushed = YES;
-	[self.navigationController pushViewController:albums animated:YES];
+	[self showAlbumMenuAddingCurrentStory:YES];
 }
 
 - (void)openAlbums {
-	TGStoryAlbumsViewController *albums = [[TGStoryAlbumsViewController alloc]
-			initWithChatId:self.chatId storyToAdd:0];
-	albums.hidesBottomBarWhenPushed = YES;
-	[self.navigationController pushViewController:albums animated:YES];
+	[self showAlbumMenuAddingCurrentStory:NO];
 }
 
 - (void)editBusiness {
 	NSDictionary *story = self.currentStory;
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"Edit as Business Story"
-					message:@"New caption. Telegram decides whether this account may."
+	[TGAlertSheet showInput:@"Edit Story"
+					message:nil
 				placeholder:@"Caption"
 					   text:story[@"caption"]
 					 action:@"Save"
@@ -1181,9 +1443,9 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 									duration:0
 									 caption:text
 								  completion:^(BOOL ok, NSString *error){
-			[TGAlertSheet showMessage:ok ? @"Telegram accepted the business edit."
-					: (error ?: @"Telegram refused the business edit.")
-								title:@"Business Story" inView:me.view];
+			[TGAlertSheet showMessage:ok ? @"Saved"
+					: (error ?: @"An error occurred.")
+								title:@"Story" inView:me.view];
 		}];
 	}];
 }
@@ -1191,8 +1453,8 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 - (void)deleteBusiness {
 	NSDictionary *story = self.currentStory;
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:@"Delete as a business story?"
-						title:@"Business Story"
+	[TGAlertSheet showConfirm:@"Delete Story"
+						title:@"Story"
 					   action:@"Delete"
 				  destructive:YES
 					   inView:self.view
@@ -1203,9 +1465,9 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 		[[TGClient shared] deleteBusinessStory:[story[@"storyId"] intValue]
 									  fromChat:me.chatId
 									completion:^(BOOL ok, NSString *error){
-			[TGAlertSheet showMessage:ok ? @"Telegram deleted the business story."
-					: (error ?: @"Telegram refused the business delete.")
-								title:@"Business Story" inView:me.view];
+			[TGAlertSheet showMessage:ok ? @"Saved"
+					: (error ?: @"An error occurred.")
+								title:@"Story" inView:me.view];
 		}];
 	}];
 }
@@ -1222,7 +1484,7 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 - (void)addStory {
 	__weak typeof(self) weakSelf = self;
 	[TGStoryComposerViewController openFromController:self chatId:self.chatId
-												title:@"Your Story" onPosted:^{
+												title:@"Your story" onPosted:^{
 		TGStoryViewerViewController *me = weakSelf;
 		if (me.onStoriesChanged)
 			me.onStoriesChanged();

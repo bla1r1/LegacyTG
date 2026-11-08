@@ -19,22 +19,9 @@
 - (void)viewDidLoad {
 	[super viewDidLoad];
 	self.title = @"This Device";
-	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
-		self.edgesForExtendedLayout = UIRectEdgeNone;
 	[self applyTheme];
 	self.capabilities = [TGCapabilities all];
 
-	__weak typeof(self) weakSelf = self;
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGThemeChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note) {
-		[weakSelf applyTheme];
-		[weakSelf.tableView reloadData];
-	}];
-}
-
-- (void)dealloc {
-	[[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 - (void)applyTheme {
@@ -63,13 +50,6 @@
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-	if (section == 1)
-		return @"Vintage: iPhone 3GS and 4. Legacy: 4S, 5 and 5c. "
-			   @"Modern: 5s and 6. Full: 6s and later.";
-	if (section == 2)
-		return @"A feature that is off here is not missing from the app - this "
-			   @"device cannot run it. The reason beside each row is the same "
-			   @"one the rest of the app checks before it draws the button.";
 	return nil;
 }
 
@@ -155,7 +135,7 @@
 		return;
 	[tableView deselectRowAtIndexPath:indexPath animated:YES];
 	// Log out — confirm before doing anything irreversible
-	[TGAlertSheet showConfirm:@"Are you sure you want to log out?"
+	[TGAlertSheet showConfirm:@"Are you sure you want to log out from this device?"
 						title:@"Log out"
 					   action:@"Log out"
 				  destructive:YES

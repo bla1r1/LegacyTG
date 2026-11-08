@@ -1,4 +1,5 @@
 #import "TGEmojiStatusViewController.h"
+#import "TGLocalization.h"
 #import "TGAlertSheet.h"
 #import "TGClient.h"
 #import "TGStickerStore.h"
@@ -145,8 +146,6 @@ static UIImage *TGStatusImageAtPath(NSString *path) {
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
-		self.edgesForExtendedLayout = UIRectEdgeNone;
 	self.title = self.subjectTitle.length ? self.subjectTitle : @"Emoji Status";
 	self.sections = @[];
 	self.stickerByEmojiId = [NSMutableDictionary dictionary];
@@ -161,10 +160,6 @@ static UIImage *TGStatusImageAtPath(NSString *path) {
 
 	[self loadLists];
 	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(applyTheme) name:TGThemeChangedNotification object:nil];
-}
-
-- (void)dealloc {
-	[[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 - (void)applyTheme {
@@ -264,7 +259,7 @@ static UIImage *TGStatusImageAtPath(NSString *path) {
 	[used addObjectsFromArray:recentIds];
 
 	if (themedIds.count)
-		[sections addObject:@{@"header" : @"Themed",
+		[sections addObject:@{@"header" : @"Emoji Statuses",
 							  @"ids" : themedIds}];
 	if (defaultIds.count)
 		[sections addObject:@{@"header" : @"Default",
@@ -274,7 +269,7 @@ static UIImage *TGStatusImageAtPath(NSString *path) {
 							  @"ids" : recentIds}];
 	if (refusedSet.count){
 		NSArray *refusedIds = [self uniqueIds:refused excluding:nil];
-		[sections addObject:@{@"header" : @"Not Allowed in This Chat",
+		[sections addObject:@{@"header" : @"Emoji Status",
 							  @"ids" : refusedIds}];
 	}
 	self.sections = sections;
@@ -358,11 +353,6 @@ static UIImage *TGStatusImageAtPath(NSString *path) {
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-	if (section == (NSInteger)self.sections.count &&
-			self.target != TGEmojiStatusTargetChat)
-		return @"A status is worn beside your name until it expires. "
-			   @"The lists come from Telegram; a non-Premium account is refused "
-			   @"with the server's own sentence.";
 	return nil;
 }
 
@@ -373,7 +363,7 @@ static UIImage *TGStatusImageAtPath(NSString *path) {
 			cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
 										  reuseIdentifier:@"clear"];
 		[[TGTheme shared] styleCell:cell];
-		cell.textLabel.text = @"Clear Recently Used";
+		cell.textLabel.text = @"Clear Recent Emoji";
 		cell.textLabel.font = TGFontBody();
 		cell.textLabel.textColor = [[TGTheme shared] accentColour];
 		cell.selectionStyle = UITableViewCellSelectionStyleBlue;
@@ -427,11 +417,17 @@ static UIImage *TGStatusImageAtPath(NSString *path) {
 
 - (void)chooseEmojiId:(int64_t)emojiId {
 	__weak typeof(self) weakSelf = self;
-	NSArray *titles = @[@"1 hour", @"2 hours", @"8 hours", @"2 days", @"Forever"];
+	NSArray *titles = @[
+		TGLocalizedPluralValue(@"%@ hour", @"%@ hours", @"1", 1),
+		TGLocalizedPluralValue(@"%@ hour", @"%@ hours", @"2", 2),
+		TGLocalizedPluralValue(@"%@ hour", @"%@ hours", @"8", 8),
+		TGLocalizedPluralValue(@"%@ day", @"%@ days", @"2", 2),
+		@"Forever",
+	];
 	NSArray *durations = @[@(kStatusHour), @(kStatusTwoHours),
 						   @(kStatusEightHours), @(kStatusTwoDays), @(0)];
 	[TGAlertSheet showChoices:titles
-						title:@"Keep This Status For"
+						title:@"Set Emoji Status"
 			 destructiveIndex:-1
 					   inView:self.view
 					 onChoice:^(NSInteger index){
@@ -486,8 +482,8 @@ static UIImage *TGStatusImageAtPath(NSString *path) {
 }
 
 - (void)showResult:(BOOL)ok error:(NSString *)error title:(NSString *)title {
-	[TGAlertSheet showMessage:(ok ? @"The emoji status is set."
-								   : (error ?: @"Telegram refused that status."))
+	[TGAlertSheet showMessage:(ok ? @"Saved"
+								   : (error ?: @"An error occurred."))
 						title:title inView:self.view];
 }
 

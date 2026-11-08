@@ -118,26 +118,21 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 
 - (void)rebuildSections {
 	self.sections = @[
-		TGBSection(@"GREETING MESSAGE",
-				@"Sent when someone messages this account for the first time "
-				@"or after the period below.",
-				@[
+		TGBSection(@"GREETING MESSAGE", nil, @[
 			TGBSwitch(@"Send Greeting Message", nil, @"enabled", self.enabled, YES),
-			TGBAction(@"Shortcut ID",
+			TGBAction(@"Shortcut",
 					[NSString stringWithFormat:@"%ld", (long)self.shortcutId],
 					@"shortcut"),
-			TGBAction(@"Inactivity Days",
+			TGBAction(@"If Inactive For",
 					[NSString stringWithFormat:@"%ld", (long)self.inactivityDays],
 					@"days"),
 		]),
-		TGBSection(@"RECIPIENTS",
-				@"Telegram applies the greeting to one-to-one chats only.",
-				@[
+		TGBSection(@"RECIPIENTS", nil, @[
 			TGBSwitch(@"Existing Chats", nil, @"existing", self.existing, self.enabled),
 			TGBSwitch(@"New Chats", nil, @"new", self.newChats, self.enabled),
 			TGBSwitch(@"Contacts", nil, @"contacts", self.contacts, self.enabled),
 			TGBSwitch(@"Non-Contacts", nil, @"nonContacts", self.nonContacts, self.enabled),
-			TGBSwitch(@"Exclude Selected", nil, @"exclude", self.excludeSelected, self.enabled),
+			TGBSwitch(@"Excluded Chats", nil, @"exclude", self.excludeSelected, self.enabled),
 		]),
 	];
 	[self rebuild];
@@ -170,16 +165,16 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 - (void)didChooseAction:(NSString *)action row:(NSDictionary *)row {
 	__weak typeof(self) weakSelf = self;
 	if ([action isEqualToString:@"shortcut"]){
-		[self askText:@"Shortcut ID"
-			  message:@"The quick reply shortcut that holds the greeting text."
+		[self askText:@"Shortcut"
+			  message:nil
 		  placeholder:@"1" text:[NSString stringWithFormat:@"%ld", (long)self.shortcutId]
 			   action:@"Save" completion:^(NSString *text){
 			weakSelf.shortcutId = [text integerValue];
 			[weakSelf save];
 		}];
 	} else if ([action isEqualToString:@"days"]){
-		[self askText:@"Inactivity Days"
-			  message:@"Days without an interaction before the greeting is sent."
+		[self askText:@"If Inactive For"
+			  message:nil
 		  placeholder:@"7" text:[NSString stringWithFormat:@"%ld", (long)self.inactivityDays]
 			   action:@"Save" completion:^(NSString *text){
 			weakSelf.inactivityDays = MAX(0, [text integerValue]);

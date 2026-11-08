@@ -139,7 +139,7 @@ NSDictionary *TGMemberRowForMember(NSDictionary *member, NSString *name) {
 			[self rebuildChats];
 		}
 		if (completion)
-			completion(ok ? nil : (result[@"message"] ?: @"Telegram refused that."));
+			completion(ok ? nil : (result[@"message"] ?: @"An error occurred."));
 	}];
 }
 
@@ -329,7 +329,7 @@ static NSDictionary *TGForumTopicRow(NSDictionary *topic) {
 					@"forum_topic_id" : @(threadId)}
 	   completion:^(NSDictionary *result){
 		BOOL ok = ![result[@"@type"] isEqualToString:@"error"];
-		NSString *error = ok ? nil : (result[@"message"] ?: @"Telegram refused.");
+		NSString *error = ok ? nil : (result[@"message"] ?: @"An error occurred.");
 		if (!ok)
 			NSLog(@"readAllForumTopicMentions %lld/%lld: %@",
 				  (long long)chatId, (long long)threadId, error);
@@ -349,7 +349,7 @@ static NSDictionary *TGForumTopicRow(NSDictionary *topic) {
 					@"forum_topic_id" : @(threadId)}
 	   completion:^(NSDictionary *result){
 		BOOL ok = ![result[@"@type"] isEqualToString:@"error"];
-		NSString *error = ok ? nil : (result[@"message"] ?: @"Telegram refused.");
+		NSString *error = ok ? nil : (result[@"message"] ?: @"An error occurred.");
 		if (!ok)
 			NSLog(@"readAllForumTopicPollVotes %lld/%lld: %@",
 				  (long long)chatId, (long long)threadId, error);
@@ -373,7 +373,7 @@ static NSDictionary *TGForumTopicRow(NSDictionary *topic) {
 					@"notification_settings" : record}
 	   completion:^(NSDictionary *result){
 		BOOL ok = ![result[@"@type"] isEqualToString:@"error"];
-		NSString *error = ok ? nil : (result[@"message"] ?: @"Telegram refused.");
+		NSString *error = ok ? nil : (result[@"message"] ?: @"An error occurred.");
 		if (!ok)
 			NSLog(@"setForumTopicNotificationSettings %lld/%lld: %@",
 				  (long long)chatId, (long long)threadId, error);
@@ -397,7 +397,7 @@ static NSDictionary *TGForumTopicRow(NSDictionary *topic) {
 					@"forum_topic_ids" : ids}
 	   completion:^(NSDictionary *result){
 		BOOL ok = ![result[@"@type"] isEqualToString:@"error"];
-		NSString *error = ok ? nil : (result[@"message"] ?: @"Telegram refused.");
+		NSString *error = ok ? nil : (result[@"message"] ?: @"An error occurred.");
 		if (!ok)
 			NSLog(@"setPinnedForumTopics %lld: %@", (long long)chatId, error);
 		if (completion) completion(ok, error);
@@ -416,7 +416,7 @@ static NSDictionary *TGForumTopicRow(NSDictionary *topic) {
 					@"is_hidden" : @(hidden)}
 	   completion:^(NSDictionary *result){
 		BOOL ok = ![result[@"@type"] isEqualToString:@"error"];
-		NSString *error = ok ? nil : (result[@"message"] ?: @"Telegram refused.");
+		NSString *error = ok ? nil : (result[@"message"] ?: @"An error occurred.");
 		if (!ok)
 			NSLog(@"toggleGeneralForumTopicIsHidden %lld: %@",
 				  (long long)chatId, error);
@@ -676,13 +676,17 @@ static NSInteger TGForumTopicColour(NSInteger index) {
 }
 
 - (void)clearHistoryInChat:(int64_t)chatId {
+	[self clearHistoryInChat:chatId revoke:NO];
+}
+
+- (void)clearHistoryInChat:(int64_t)chatId revoke:(BOOL)revoke {
 	// Without remove_from_chat_list this empties the chat and leaves it there,
 	// which is what "clear history" means as opposed to "delete chat".
 	[self send:@{
 		@"@type"                 : @"deleteChatHistory",
 		@"chat_id"               : @(chatId),
 		@"remove_from_chat_list" : @NO,
-		@"revoke"                : @NO,
+		@"revoke"                : @(revoke),
 	}];
 }
 

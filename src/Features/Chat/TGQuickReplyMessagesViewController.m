@@ -72,39 +72,33 @@
 		})];
 	}
 	if (!messageRows.count){
-		NSMutableDictionary *empty = TGFeatureRow(@"No messages in this shortcut", nil, nil);
+		NSMutableDictionary *empty = TGFeatureRow(@"No messages here yet...", nil, nil);
 		empty[TGFeatureRowKind] = TGFeatureKindPlain;
 		[messageRows addObject:empty];
 	}
 
 	NSMutableArray *actions = [NSMutableArray array];
 	[actions addObject:TGFeatureAction(@"Add Message", ^{ [weakSelf addMessage]; })];
-	[actions addObject:TGFeatureAction(@"Add Album", ^{ [weakSelf addAlbum]; })];
-	[actions addObject:TGFeatureAction(@"Edit Selected Message", ^{
+	[actions addObject:TGFeatureAction(@"Add to Album", ^{ [weakSelf addAlbum]; })];
+	[actions addObject:TGFeatureAction(@"Edit Message", ^{
 		[weakSelf editSelectedMessage];
 	})];
-	[actions addObject:TGFeatureAction(@"Delete Selected Messages", ^{
+	[actions addObject:TGFeatureAction(@"Delete Messages", ^{
 		[weakSelf deleteSelectedMessages];
 	})];
 	if (self.removedIds.count){
-		[actions addObject:TGFeatureAction(
-				[NSString stringWithFormat:@"Re-add %lu Removed Message%@",
-						(unsigned long)self.removedIds.count,
-						self.removedIds.count == 1 ? @"" : @"s"],
+		[actions addObject:TGFeatureAction(@"Restore",
 				^{ [weakSelf readdRemovedMessages]; })];
 	}
-	[actions addObject:TGFeatureAction(@"Rename Shortcut", ^{ [weakSelf renameShortcut]; })];
+	[actions addObject:TGFeatureAction(@"Rename", ^{ [weakSelf renameShortcut]; })];
 
-	NSMutableDictionary *delete = TGFeatureRow(@"Delete Shortcut", nil, ^{
+	NSMutableDictionary *delete = TGFeatureRow(@"Delete Quick Reply", nil, ^{
 		[weakSelf deleteShortcut];
 	});
 	delete[TGFeatureRowKind] = TGFeatureKindDestructive;
 
 	self.sections = @[
-		TGFeatureSection(nil,
-				@"Tap a message to mark it for editing or deletion. "
-				@"A shortcut sends its messages in this order.",
-				messageRows),
+		TGFeatureSection(nil, nil, messageRows),
 		TGFeatureSection(nil, nil, actions),
 		TGFeatureSection(nil, nil, @[delete]),
 	];
@@ -116,7 +110,7 @@
 - (void)addMessage {
 	__weak typeof(self) weakSelf = self;
 	[TGAlertSheet showInput:@"Add Message"
-					message:[NSString stringWithFormat:@"Added to \"%@\".", self.shortcutName]
+					message:nil
 				placeholder:@"Message"
 					   text:nil
 					 action:@"Add"
@@ -127,7 +121,7 @@
 											 completion:^(NSDictionary *message,
 														  NSString *error){
 			if (!message){
-				[weakSelf toast:error ?: @"Telegram refused that message."];
+				[weakSelf toast:error ?: @"An error occurred."];
 				return;
 			}
 			[weakSelf loadMessages];
@@ -137,16 +131,16 @@
 
 - (void)addAlbum {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"Album · First Message"
-					message:@"Telegram sends the album as one group."
-				placeholder:@"First message"
+	[TGAlertSheet showInput:@"Message"
+					message:nil
+				placeholder:@"Message"
 					   text:nil
 					 action:@"Next"
 					 inView:self.view
 				   onSubmit:^(NSString *first){
-		[TGAlertSheet showInput:@"Album · Second Message"
-						message:@"At least two messages make an album."
-					placeholder:@"Second message"
+		[TGAlertSheet showInput:@"Message"
+						message:nil
+					placeholder:@"Message"
 						   text:nil
 						 action:@"Add"
 						 inView:weakSelf.view
@@ -156,7 +150,7 @@
 													  completion:^(NSArray *messages,
 																   NSString *error){
 				if (!messages.count){
-					[weakSelf toast:error ?: @"Telegram refused that album."];
+					[weakSelf toast:error ?: @"An error occurred."];
 					return;
 				}
 				[weakSelf loadMessages];
@@ -167,7 +161,7 @@
 
 - (void)editSelectedMessage {
 	if (self.selectedIds.count != 1){
-		[self toast:@"Mark exactly one message to edit."];
+		[self toast:@"An error occurred."];
 		return;
 	}
 	NSNumber *ident = self.selectedIds.anyObject;
@@ -193,7 +187,7 @@
 											text:text
 									  completion:^(BOOL ok, NSString *error){
 			if (!ok){
-				[weakSelf toast:error ?: @"Telegram refused that edit."];
+				[weakSelf toast:error ?: @"An error occurred."];
 				return;
 			}
 			[weakSelf loadMessages];
@@ -203,15 +197,12 @@
 
 - (void)deleteSelectedMessages {
 	if (!self.selectedIds.count){
-		[self toast:@"No message is marked."];
+		[self toast:@"An error occurred."];
 		return;
 	}
 	NSArray *ids = self.selectedIds.allObjects;
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:[NSString stringWithFormat:
-			@"%lu message%@ removed from \"%@\". They can be re-added until "
-			@"Telegram forgets them.", (unsigned long)ids.count,
-			ids.count == 1 ? @"" : @"s", self.shortcutName]
+	[TGAlertSheet showConfirm:nil
 						 title:@"Delete Messages"
 						action:@"Delete"
 				   destructive:YES
@@ -221,7 +212,7 @@
 												shortcutId:weakSelf.shortcutId
 												completion:^(BOOL ok, NSString *error){
 			if (!ok){
-				[weakSelf toast:error ?: @"Telegram refused that."];
+				[weakSelf toast:error ?: @"An error occurred."];
 				return;
 			}
 			[weakSelf.removedIds addObjectsFromArray:ids];
@@ -246,9 +237,9 @@
 
 - (void)renameShortcut {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"Rename Shortcut"
+	[TGAlertSheet showInput:@"Rename"
 					message:nil
-				placeholder:@"Shortcut name"
+				placeholder:@"Shortcut"
 					   text:self.shortcutName
 					 action:@"Save"
 					 inView:self.view
@@ -256,14 +247,14 @@
 		[[TGClient shared] checkQuickReplyShortcutName:name
 											completion:^(BOOL ok, NSString *error){
 			if (!ok){
-				[weakSelf toast:error ?: @"Telegram refused that name."];
+				[weakSelf toast:error ?: @"An error occurred."];
 				return;
 			}
 			[[TGClient shared] setQuickReplyShortcutName:weakSelf.shortcutId
 												   name:name
 											 completion:^(BOOL saved, NSString *why){
 				if (!saved){
-					[weakSelf toast:why ?: @"Telegram refused that name."];
+					[weakSelf toast:why ?: @"An error occurred."];
 					return;
 				}
 				weakSelf.shortcutName = name;
@@ -276,9 +267,8 @@
 
 - (void)deleteShortcut {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:[NSString stringWithFormat:
-			@"\"%@\" and every message in it are removed.", self.shortcutName]
-						 title:@"Delete Shortcut"
+	[TGAlertSheet showConfirm:nil
+						 title:@"Delete Quick Reply"
 						action:@"Delete"
 				   destructive:YES
 						inView:self.view
@@ -286,7 +276,7 @@
 		[[TGClient shared] deleteQuickReplyShortcut:weakSelf.shortcutId
 										completion:^(BOOL ok, NSString *error){
 			if (!ok){
-				[weakSelf toast:error ?: @"Telegram refused that."];
+				[weakSelf toast:error ?: @"An error occurred."];
 				return;
 			}
 			[weakSelf.navigationController popViewControllerAnimated:YES];

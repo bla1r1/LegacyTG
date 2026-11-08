@@ -8,6 +8,7 @@
 // why there are none - never an empty table that looks broken.
 //
 #import "TGMessageAudienceViewController.h"
+#import "TGLocalization.h"
 #import "TGAlertSheet.h"
 #import "TGClient.h"
 #import "TGNameWithStatus.h"
@@ -136,19 +137,17 @@ static NSString *TGAudienceDate(NSTimeInterval unix) {
 - (void)viewDidLoad {
 	[super viewDidLoad];
 
-	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
-		self.edgesForExtendedLayout = UIRectEdgeNone;
 
 	self.photos = [NSMutableDictionary dictionary];
 	self.photosRequested = [NSMutableSet set];
 	self.rows = @[];
-	self.emptyText = @"Loading…";
+	self.emptyText = @"Loading...";
 
 	if (self.kind == TGMessageAudienceKindReactions){
 		NSString *glyph = self.emoji.length ? self.emoji : @"★";
 		self.title = [NSString stringWithFormat:@"%@ Reactions", glyph];
 	} else {
-		self.title = @"Viewed by";
+		self.title = @"Viewers";
 	}
 
 	// An explicit back item, not only the system chevron: the list is also
@@ -192,10 +191,6 @@ static NSString *TGAudienceDate(NSTimeInterval unix) {
 	}
 }
 
-- (void)dealloc {
-	[[NSNotificationCenter defaultCenter] removeObserver:self];
-}
-
 - (void)viewWillAppear:(BOOL)animated {
 	[super viewWillAppear:animated];
 	[self applyTheme];
@@ -233,7 +228,7 @@ static NSString *TGAudienceDate(NSTimeInterval unix) {
 			if (!me)
 				return;
 			if (!rows.count){
-				me.emptyText = @"Telegram keeps that list closed here.";
+				me.emptyText = @"An error occurred.";
 				[me.tableView reloadData];
 				return;
 			}
@@ -262,7 +257,7 @@ static NSString *TGAudienceDate(NSTimeInterval unix) {
 				return;
 			again.emptyText = date > 0
 					? [NSString stringWithFormat:@"Read %@.", TGAudienceDate(date)]
-					: (reason ?: @"Telegram cannot say.");
+					: (reason ?: @"An error occurred.");
 			[again.tableView reloadData];
 		}];
 	}];
@@ -315,8 +310,8 @@ static NSString *TGAudienceDate(NSTimeInterval unix) {
 	}
 	self.rows = rows;
 	self.emptyText = nil;
-	self.title = viewers.count == 1 ? @"Viewed by 1" :
-			[NSString stringWithFormat:@"Viewed by %lu", (unsigned long)viewers.count];
+	self.title = [NSString stringWithFormat:TGLocalized(@"%@ viewers"),
+			@(viewers.count)];
 	[self loadAvatars];
 	[self.tableView reloadData];
 	[self resolveMissingNames];
@@ -420,10 +415,8 @@ static NSString *TGAudienceDate(NSTimeInterval unix) {
 		return;
 
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:
-			@"This removes everything that account reacted with on this "
-			@"message and, in a group, across the chat."
-							title:@"Clear Reactions"
+	[TGAlertSheet showConfirm:nil
+							title:@"Remove"
 						   action:@"Remove"
 					  destructive:YES
 						   inView:self.view
@@ -458,7 +451,7 @@ static NSString *TGAudienceDate(NSTimeInterval unix) {
 		TGTheme *theme = [TGTheme shared];
 		cell.backgroundColor = [theme listBackgroundColour];
 		cell.contentView.backgroundColor = [theme listBackgroundColour];
-		cell.textLabel.text = self.emptyText ?: @"Nobody here yet.";
+		cell.textLabel.text = self.emptyText ?: @"Nobody";
 		cell.textLabel.textColor = [theme secondaryTextColour];
 		return cell;
 	}

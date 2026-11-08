@@ -38,7 +38,9 @@ void TGIconsClearSettingsIconCache(void) {
 				// the dismiss cross and the record lock's arrow, which were
 				// drawn with characters in four places and came out as four
 				// different shapes
-				@"close", @"chevronUp", @"mention", nil];
+				@"close", @"chevronUp", @"mention",
+				// a username's QR code on the profile card, as official
+				@"qr", nil];
 	// An unknown name has to answer nil, not a blank square: a row with no
 	// glyph is better than a row with a hole where one should be.
 	if (![known containsObject:name])
@@ -358,6 +360,22 @@ void TGIconsClearSettingsIconCache(void) {
 			CGContextMoveToPoint(ctx, s / 2, s / 2);
 			CGContextAddLineToPoint(ctx, s - m, s / 2);
 			CGContextStrokePath(ctx);
+
+		} else if ([name isEqualToString:@"qr"]){
+			// three finder squares and a scatter of modules: reads as a QR
+			// code at 22 pt, where a real one would be noise
+			CGFloat f = s * 0.26f;
+			CGRect finders[3] = {
+				CGRectMake(m, m, f, f),
+				CGRectMake(s - m - f, m, f, f),
+				CGRectMake(m, s - m - f, f, f),
+			};
+			for (int i = 0; i < 3; i++)
+				CGContextStrokeRect(ctx, finders[i]);
+			CGFloat d = s * 0.10f;
+			CGContextFillRect(ctx, CGRectMake(s / 2 - d / 2, s / 2 - d / 2, d, d));
+			CGContextFillRect(ctx, CGRectMake(s - m - d, s - m - d, d, d));
+			CGContextFillRect(ctx, CGRectMake(s * 0.62f, s * 0.62f, d, d));
 
 		} else if ([name isEqualToString:@"chat"]){
 			// a speech bubble with a tail

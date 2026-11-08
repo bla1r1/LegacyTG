@@ -1,4 +1,5 @@
 #import "TGGroupCallViewController.h"
+#import "TGLocalization.h"
 #import "TGClient.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
@@ -224,7 +225,7 @@ static const CGFloat kGCCallNoteHeight = TGMetricLineCaption;
 		if (!me)
 			return;
 		me.call = call;
-		me.loadError = call ? nil : (error ?: @"Telegram did not return this call.");
+		me.loadError = call ? nil : (error ?: @"An error occurred.");
 		if (!call){
 			[TGAlertSheet showMessage:me.loadError title:@"Group Call" inView:me.view];
 			[me reload];
@@ -259,12 +260,30 @@ static NSString *TGGroupCallClock(NSTimeInterval seconds) {
 	return [NSString stringWithFormat:@"%02ld:%02ld", (long)(total / 60), (long)(total % 60)];
 }
 
-static NSString *TGGroupCallWhen(int32_t stamp) {
+/// "Starts in 5 minutes" rather than a device-locale date: the official line
+/// is relative, and "Scheduled for %@" in the pack means message sending.
+static NSString *TGGroupCallStartsText(int32_t stamp) {
 	if (!stamp)
 		return @"";
-	NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
-	formatter.dateFormat = @"d MMM HH:mm";
-	return [formatter stringFromDate:[NSDate dateWithTimeIntervalSince1970:stamp]];
+	NSInteger gap = MAX(0, stamp - (int32_t)[[NSDate date] timeIntervalSince1970]);
+	NSInteger count;
+	NSString *one, *other;
+	if (gap < 3600){
+		count = MAX(1, gap / 60);
+		one = @"%@ minute";
+		other = @"%@ minutes";
+	} else if (gap < 86400){
+		count = gap / 3600;
+		one = @"%@ hour";
+		other = @"%@ hours";
+	} else {
+		count = gap / 86400;
+		one = @"%@ day";
+		other = @"%@ days";
+	}
+	NSString *value = [NSString stringWithFormat:@"%ld", (long)count];
+	NSString *unit = TGLocalizedPluralValue(one, other, value, count);
+	return TGLocalizedFormat(@"Starts in %@", unit);
 }
 
 - (NSString *)speakingLine {
@@ -276,11 +295,11 @@ static NSString *TGGroupCallWhen(int32_t stamp) {
 				[names addObject:name];
 		}
 	if (names.count)
-		return [NSString stringWithFormat:@"Speaking: %@",
-				[names componentsJoinedByString:@", "]];
+		return TGLocalizedFormat(@"%@ speaking",
+				[names componentsJoinedByString:@", "]);
 	for (NSDictionary *speaker in self.call[@"recentSpeakers"])
 		if ([speaker[@"isSpeaking"] boolValue])
-			return @"Someone is speaking";
+			return @"Speaking";
 	return @"";
 }
 
@@ -298,47 +317,52 @@ static NSString *TGGroupCallWhen(int32_t stamp) {
 	self.noteLabel.textColor = [[TGTheme shared] secondaryTextColour];
 
 	if (!self.call){
-		self.statusLabel.text = self.groupCallId
-				? (self.loadError.length ? self.loadError : @"Reading the call from Telegram...")
-				: @"No video chat in this chat yet.";
-		self.noteLabel.text = self.groupCallId
-				? @"" : @"Open Setup to create one or to schedule it.";
+		// The connecting state belongs to the title, as the official header's
+		// title-status line does; the subtitle stays empty until a call loads.
+		self.titleLabel.text = self.groupCallId
+				? (self.loadError.length ? self.loadError : @"Connecting")
+				: @"Video Chat";
+		self.statusLabel.text = nil;
+		self.noteLabel.text = nil;
 		return;
 	}
 
 	NSInteger count = [self.call[@"participantCount"] integerValue];
 	NSMutableArray *line = [NSMutableArray array];
 	if ([self.call[@"isActive"] boolValue]){
-		[line addObject:@"Live"];
-		[line addObject:[NSString stringWithFormat:@"%ld %@", (long)count,
-				count == 1 ? @"participant" : @"participants"]];
-		if ([self.call[@"isJoined"] boolValue] && self.openedAt)
-			[line addObject:TGGroupCallClock(-[self.openedAt timeIntervalSinceNow])];
-		else
-			[line addObject:@"not joined"];
+		[line addObject:TGLocalizedPluralValue(@"%@ participant", @"%@ participants",
+				[NSString stringWithFormat:@"%ld", (long)count], count)];
+		if ([self.call[@"isJoined"] boolValue]){
+			NSInteger duration = [self.call[@"duration"] intValue];
+			if (duration <= 0 && self.openedAt)
+				duration = (NSInteger)MAX(0, -[self.openedAt timeIntervalSinceNow]);
+			if (duration > 0)
+				[line addObject:TGGroupCallClock(duration)];
+		}
 	} else if ([self.call[@"scheduledStartDate"] intValue] > 0){
-		[line addObject:[NSString stringWithFormat:@"Scheduled for %@",
-				TGGroupCallWhen([self.call[@"scheduledStartDate"] intValue])]];
+		[line addObject:TGGroupCallStartsText(
+				[self.call[@"scheduledStartDate"] intValue])];
 	} else {
-		[line addObject:@"Ended"];
+		[line addObject:@"Call Ended"];
 		NSInteger duration = [self.call[@"duration"] intValue];
 		if (duration > 0)
-			[line addObject:[NSString stringWithFormat:@"lasted %@",
-					TGGroupCallClock(duration)]];
+			[line addObject:TGLocalizedFormat(@"Duration: %@",
+					TGGroupCallClock(duration))];
 	}
-	if ([self.call[@"recordDuration"] intValue] > 0)
-		[line addObject:[NSString stringWithFormat:@"recording %@",
-				TGGroupCallClock([self.call[@"recordDuration"] intValue])]];
+	if ([self.call[@"recordDuration"] intValue] > 0){
+		[line addObject:TGLocalized([self.call[@"isLiveStory"] boolValue]
+				? @"Live stream is being recorded"
+				: @"Video chat is being recorded")];
+	}
 	self.statusLabel.text = [line componentsJoinedByString:@" · "];
 
 	NSString *speaking = [self speakingLine];
 	if (speaking.length){
 		self.noteLabel.text = speaking;
 	} else if ([self.call[@"isJoined"] boolValue]) {
-		self.noteLabel.text = @"Joined. This client has no group-call audio engine.";
+		self.noteLabel.text = nil;
 	} else {
-		self.noteLabel.text = @"Join asks Telegram for the tgcalls payload; "
-				@"there is no media engine here to play it.";
+		self.noteLabel.text = nil;
 	}
 }
 
@@ -372,19 +396,23 @@ static NSString *TGGroupCallWhen(int32_t stamp) {
 	__weak typeof(self) weakSelf = self;
 
 	if (!self.call && !self.groupCallId){
+#if TG_DEV
+		// Creating a call from setup is a bench tool; Telegram creates it and
+		// drops straight into the call.
 		[sections addObject:@{@"header" : @"Video Chat",
-			@"rows" : @[[self row:@"Create a Video Chat"
-						   detail:@"Title, schedule and participant"
+			@"rows" : @[[self row:@"Start Video Chat"
+						   detail:nil
 							opens:YES
 								  tap:^{ [weakSelf openSetup]; }]]}];
+#endif
 		return sections;
 	}
 	if (!self.call){
-		NSString *detail = self.loadError.length ? self.loadError
-				: @"Reading the call from Telegram";
-		[sections addObject:@{@"header" : @"Call",
-			@"rows" : @[[self row:(self.loadError.length ? @"Unavailable" : @"Loading")
-						   detail:detail tap:nil]]}];
+		if (self.loadError.length){
+			[sections addObject:@{@"header" : @"Call",
+				@"rows" : @[[self row:@"Unavailable"
+							   detail:self.loadError tap:nil]]}];
+		}
 		return sections;
 	}
 
@@ -392,39 +420,30 @@ static NSString *TGGroupCallWhen(int32_t stamp) {
 	BOOL joined = [self.call[@"isJoined"] boolValue];
 	BOOL active = [self.call[@"isActive"] boolValue];
 	if (active){
-		[callRows addObject:[self row:(joined ? @"Leave Call" : @"Join Call")
-				detail:(joined ? @"Stops listening in this client"
-						: @"Asks Telegram for the join payload")
+		[callRows addObject:[self row:(joined ? @"Leave" : @"Join")
+				detail:nil
 				tap:^{ joined ? [weakSelf leaveCall] : [weakSelf joinCall]; }]];
 	}
 	if (!active && [self.call[@"scheduledStartDate"] intValue] > 0){
-		[callRows addObject:[self row:@"Start Scheduled Call"
-				detail:@"Telegram starts it now" tap:^{ [weakSelf startScheduled]; }]];
+		[callRows addObject:[self row:@"Start"
+				detail:nil tap:^{ [weakSelf startScheduled]; }]];
 	}
 	if (joined){
 		NSDictionary *me = [[TGClient shared] currentGroupCallParticipant:self.groupCallId];
 		BOOL muted = [me[@"isMutedForAllUsers"] boolValue] ||
 					 [me[@"isMutedForCurrentUser"] boolValue];
-		[callRows addObject:[self row:(muted ? @"Unmute Myself" : @"Mute Myself")
-				detail:(muted ? @"Speak in the call" : @"Stop sending audio")
+		[callRows addObject:[self row:(muted ? @"Unmute" : @"Mute Yourself")
+				detail:nil
 				tap:^{ [weakSelf toggleSelfMuted]; }]];
-		BOOL hand = [me[@"isHandRaised"] boolValue];
-		[callRows addObject:[self row:(hand ? @"Lower My Hand" : @"Raise My Hand")
-				detail:(hand ? @"Take the hand down" : @"Ask to speak")
-				tap:^{ [weakSelf toggleSelfHand]; }]];
-		BOOL speaking = [me[@"isSpeaking"] boolValue];
-		[callRows addObject:[self row:(speaking ? @"Stop Speaking" : @"Mark Myself Speaking")
-				detail:@"setGroupCallParticipantIsSpeaking"
-				tap:^{ [weakSelf toggleSelfSpeaking]; }]];
+		BOOL videoOn = [self.call[@"isMyVideoEnabled"] boolValue];
+		[callRows addObject:[self row:@"Camera"
+				detail:(videoOn ? @"On" : @"Off")
+				tap:^{ [weakSelf toggleMyVideo]; }]];
+		BOOL paused = [self.call[@"isMyVideoPaused"] boolValue];
+		[callRows addObject:[self row:(paused ? @"Resume" : @"Pause Video")
+				detail:nil
+				tap:^{ [weakSelf toggleMyVideoPaused]; }]];
 	}
-	BOOL videoOn = [self.call[@"isMyVideoEnabled"] boolValue];
-	[callRows addObject:[self row:(videoOn ? @"Turn My Video Off" : @"Turn My Video On")
-			detail:@"Needs a camera pipeline this client does not have"
-			tap:^{ [weakSelf toggleMyVideo]; }]];
-	BOOL paused = [self.call[@"isMyVideoPaused"] boolValue];
-	[callRows addObject:[self row:(paused ? @"Resume My Video" : @"Pause My Video")
-			detail:@"TDLib records the flag; there is no frame to pause"
-			tap:^{ [weakSelf toggleMyVideoPaused]; }]];
 	[sections addObject:@{@"header" : @"Call", @"rows" : callRows}];
 
 	NSMutableArray *people = [NSMutableArray array];
@@ -439,8 +458,8 @@ static NSString *TGGroupCallWhen(int32_t stamp) {
 	NSInteger count = [self.call[@"participantCount"] integerValue];
 	if (self.participants.count || count > shown){
 		[people addObject:[self row:(self.participants.count
-						? @"All Participants" : @"Load Participants")
-				detail:[NSString stringWithFormat:@"%ld in the call", (long)count]
+						? @"Participants" : @"Participants")
+				detail:[NSString stringWithFormat:@"%ld", (long)count]
 				opens:YES
 				tap:^{ [weakSelf openParticipants]; }]];
 	}
@@ -451,44 +470,43 @@ static NSString *TGGroupCallWhen(int32_t stamp) {
 	NSInteger first = MAX(0, (NSInteger)callMessages.count - 3);
 	for (NSInteger i = first; i < (NSInteger)callMessages.count; i++){
 		NSDictionary *message = callMessages[(NSUInteger)i];
-		[messages addObject:[self row:(message[@"senderName"] ?: @"Participant")
-				detail:(message[@"text"] ?: @"Paid reaction")
+		[messages addObject:[self row:(message[@"senderName"] ?: @"Participants")
+				detail:(message[@"text"] ?: @"Star Reaction")
 				opens:YES
 				tap:^{ [weakSelf openMessages]; }]];
 	}
-	[messages addObject:[self row:(callMessages.count ? @"All Call Messages" : @"Send a Call Message")
-			detail:@"Open the message bar" opens:YES tap:^{ [weakSelf openMessages]; }]];
+	[messages addObject:[self row:(callMessages.count ? @"Messages" : @"Send Message")
+			detail:nil opens:YES tap:^{ [weakSelf openMessages]; }]];
 	[sections addObject:@{@"header" : @"Messages", @"rows" : messages}];
 
+#if TG_DEV
 	NSMutableArray *tools = [NSMutableArray array];
-	[tools addObject:[self row:@"Setup and Management"
-						detail:@"Title, recording, invite link, RTMP, switches"
+	[tools addObject:[self row:@"Manage"
+						detail:nil
 						 opens:YES
 						   tap:^{ [weakSelf openSetup]; }]];
-	[tools addObject:[self row:@"Streams and Data"
-						detail:@"Channels, segments, encryption check"
+	[tools addObject:[self row:@"Data"
+						detail:nil
 						 opens:YES
 						   tap:^{ [weakSelf openStreams]; }]];
-	[sections addObject:@{@"header" : @"Tools", @"rows" : tools}];
+	[sections addObject:@{@"header" : @"Settings", @"rows" : tools}];
+#endif
 
 	NSMutableArray *invite = [NSMutableArray array];
-	[invite addObject:[self row:@"Invite a Member"
-						 detail:@"Video chat or group call, by user id"
+	[invite addObject:[self row:@"Invite"
+						 detail:nil
 							tap:^{ [weakSelf inviteMember]; }]];
 	[invite addObject:[self row:@"Copy Invite Link"
-						 detail:self.call[@"inviteLink"] ?: @"Ask Telegram for the link"
+						 detail:self.call[@"inviteLink"] ?: @""
 							tap:^{ [weakSelf copyInviteLink]; }]];
-	[invite addObject:[self row:@"Decline an Invitation"
-						 detail:@"By the service message id"
-							tap:^{ [weakSelf declineInvitation]; }]];
-	[sections addObject:@{@"header" : @"Invitation", @"rows" : invite}];
+	[sections addObject:@{@"header" : @"Invite", @"rows" : invite}];
 
 	NSMutableArray *end = [NSMutableArray array];
 	if (active){
-		[end addObject:[self destructiveRow:@"End Call"
-				detail:@"For everybody in the call" tap:^{ [weakSelf endCall]; }]];
+		[end addObject:[self destructiveRow:@"End"
+				detail:nil tap:^{ [weakSelf endCall]; }]];
+		[sections addObject:@{@"header" : @"End", @"rows" : end}];
 	}
-	[sections addObject:@{@"header" : @"End", @"rows" : end}];
 	return sections;
 }
 
@@ -507,10 +525,6 @@ static NSString *TGGroupCallWhen(int32_t stamp) {
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-	NSString *header = self.sections[(NSUInteger)section][@"header"];
-	if ([header isEqualToString:@"Call"])
-		return @"The clock counts from when this screen opened: Telegram's active "
-				@"groupCall record carries no start timestamp.";
 	return nil;
 }
 
@@ -561,7 +575,9 @@ static NSString *TGGroupCallWhen(int32_t stamp) {
 
 - (void)joinCall {
 	if (!self.groupCallId){
+#if TG_DEV
 		[self openSetup];
+#endif
 		return;
 	}
 	if (self.busy)
@@ -574,7 +590,7 @@ static NSString *TGGroupCallWhen(int32_t stamp) {
 			return;
 		me.busy = NO;
 		if (!ok){
-			[TGAlertSheet showMessage:error ?: @"Telegram refused the join."
+			[TGAlertSheet showMessage:error ?: @"An error occurred."
 								title:@"Join" inView:me.view];
 			return;
 		}
@@ -612,7 +628,7 @@ static NSString *TGGroupCallWhen(int32_t stamp) {
 			return;
 		me.busy = NO;
 		if (!ok)
-			[TGAlertSheet showMessage:error ?: @"Telegram refused that."
+			[TGAlertSheet showMessage:error ?: @"An error occurred."
 								title:@"Leave" inView:me.view];
 		[me loadCall];
 	}];
@@ -620,16 +636,23 @@ static NSString *TGGroupCallWhen(int32_t stamp) {
 
 - (void)endCall {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:@"Everybody in the call is disconnected."
-						title:@"End Call" action:@"End" destructive:YES
+	// A broadcast channel is a live stream; a group's voice chat is not,
+	// even when the call carries video.
+	BOOL live = [self.call[@"isLiveStory"] boolValue];
+	NSString *title = live ? @"End Live Stream" : @"End Video Chat";
+	NSString *message = live
+			? @"Are you sure you want to end this live stream?"
+			: @"Are you sure you want to end this video chat?";
+	[TGAlertSheet showConfirm:message
+						title:title action:title destructive:YES
 					   inView:self.view onConfirm:^{
 		TGGroupCallViewController *me = weakSelf;
 		if (!me)
 			return;
 		[[TGClient shared] endGroupCall:me.groupCallId completion:^(BOOL ok, NSString *error){
 			if (!ok)
-				[TGAlertSheet showMessage:error ?: @"Telegram refused that."
-									title:@"End Call" inView:me.view];
+				[TGAlertSheet showMessage:error ?: @"An error occurred."
+									title:title inView:me.view];
 			[me loadCall];
 		}];
 	}];
@@ -658,7 +681,7 @@ static NSString *TGGroupCallWhen(int32_t stamp) {
 				return;
 			me.busy = NO;
 			if (!ok)
-				[TGAlertSheet showMessage:error ?: @"Telegram refused that."
+				[TGAlertSheet showMessage:error ?: @"An error occurred."
 									title:@"Mute" inView:me.view];
 			[me loadCall];
 		}];
@@ -677,8 +700,8 @@ static NSString *TGGroupCallWhen(int32_t stamp) {
 		if (!me)
 			return;
 		if (!ok)
-			[TGAlertSheet showMessage:error ?: @"Telegram refused that."
-								title:@"Hand" inView:me.view];
+			[TGAlertSheet showMessage:error ?: @"An error occurred."
+								title:nil inView:me.view];
 		[me loadCall];
 	}];
 }
@@ -709,7 +732,7 @@ static NSString *TGGroupCallWhen(int32_t stamp) {
 		if (!me)
 			return;
 		if (!ok)
-			[TGAlertSheet showMessage:error ?: @"Telegram refused that."
+			[TGAlertSheet showMessage:error ?: @"An error occurred."
 								title:@"Video" inView:me.view];
 		[me loadCall];
 	}];
@@ -724,7 +747,7 @@ static NSString *TGGroupCallWhen(int32_t stamp) {
 		if (!me)
 			return;
 		if (!ok)
-			[TGAlertSheet showMessage:error ?: @"Telegram refused that."
+			[TGAlertSheet showMessage:error ?: @"An error occurred."
 								title:@"Video" inView:me.view];
 		[me loadCall];
 	}];
@@ -738,8 +761,8 @@ static NSString *TGGroupCallWhen(int32_t stamp) {
 		if (!me)
 			return;
 		if (!ok)
-			[TGAlertSheet showMessage:error ?: @"Telegram refused that."
-								title:@"Scheduled Call" inView:me.view];
+			[TGAlertSheet showMessage:error ?: @"An error occurred."
+								title:@"Scheduled Video Chat" inView:me.view];
 		[me loadCall];
 	}];
 }
@@ -748,7 +771,7 @@ static NSString *TGGroupCallWhen(int32_t stamp) {
 
 - (void)inviteMember {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"Invite a Member" message:@"Telegram user id."
+	[TGAlertSheet showInput:@"Invite" message:nil
 				placeholder:@"123456789" text:nil action:@"Invite"
 					 inView:self.view onSubmit:^(NSString *text){
 		TGGroupCallViewController *me = weakSelf;
@@ -782,55 +805,29 @@ static NSString *TGGroupCallWhen(int32_t stamp) {
 
 - (void)reportInvite:(BOOL)ok error:(NSString *)error {
 	if (!ok)
-		[TGAlertSheet showMessage:error ?: @"Telegram refused that."
+		[TGAlertSheet showMessage:error ?: @"An error occurred."
 							title:@"Invite" inView:self.view];
 	else
-		[TGAlertSheet showMessage:@"Invited." title:@"Invite" inView:self.view];
+		[TGAlertSheet showMessage:@"Done" title:@"Invite" inView:self.view];
 	[self loadCall];
 }
 
 - (void)copyInviteLink {
 	NSString *link = self.call[@"inviteLink"];
-	if (link.length){
-		[UIPasteboard generalPasteboard].string = link;
-		[TGAlertSheet showMessage:link title:@"Invite Link Copied" inView:self.view];
-		return;
-	}
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:@[@"Can unmute themselves", @"Join muted"]
-						title:@"Invite Link" destructiveIndex:-1 inView:self.view
-					 onChoice:^(NSInteger index){
+	[[TGClient shared] videoChatInviteLink:self.groupCallId canSelfUnmute:YES
+								completion:^(NSString *url, NSString *error){
 		TGGroupCallViewController *me = weakSelf;
 		if (!me)
 			return;
-		[[TGClient shared] videoChatInviteLink:me.groupCallId canSelfUnmute:index == 0
-									completion:^(NSString *url, NSString *error){
-			if (!url.length){
-				[TGAlertSheet showMessage:error ?: @"Telegram refused that."
-									title:@"Invite Link" inView:me.view];
-				return;
-			}
-			[UIPasteboard generalPasteboard].string = url;
-			[TGAlertSheet showMessage:url title:@"Invite Link Copied" inView:me.view];
-		}];
-	}];
-}
-
-- (void)declineInvitation {
-	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"Decline Invitation"
-					message:@"The id of the messageGroupCall message."
-				placeholder:@"Message id" text:nil action:@"Decline"
-					 inView:self.view onSubmit:^(NSString *text){
-		TGGroupCallViewController *me = weakSelf;
-		if (!me)
+		NSString *copy = url.length ? url : link;
+		if (!copy.length){
+			[TGAlertSheet showMessage:error ?: @"An error occurred."
+								title:@"Invite Link" inView:me.view];
 			return;
-		[[TGClient shared] declineGroupCallInvitationInChat:me.chatId
-				messageId:text.longLongValue completion:^(BOOL ok, NSString *error){
-			[TGAlertSheet showMessage:(ok ? @"Invitation declined."
-					: (error ?: @"Telegram refused that."))
-								title:@"Invitation" inView:me.view];
-		}];
+		}
+		[UIPasteboard generalPasteboard].string = copy;
+		[TGAlertSheet showMessage:copy title:@"Link copied." inView:me.view];
 	}];
 }
 

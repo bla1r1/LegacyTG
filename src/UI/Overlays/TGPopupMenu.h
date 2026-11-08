@@ -23,6 +23,7 @@ NS_ASSUME_NONNULL_BEGIN
 + (void)showItems:(NSArray *)items
           atPoint:(CGPoint)point
            inView:(UIView *)host
+       headerView:(nullable UIView *)headerView
         reactions:(nullable NSArray<NSString *> *)reactions
    selectedReaction:(nullable NSString *)selectedReaction
        onReaction:(nullable void (^)(NSString *emoji))reactionChoice
@@ -41,6 +42,7 @@ onDefaultReaction:(nullable void (^)(NSString *emoji))defaultChoice
 + (void)showItems:(NSArray *)items
        anchoredAt:(CGRect)anchor
            inView:(UIView *)host
+       headerView:(nullable UIView *)headerView
         reactions:(nullable NSArray<NSString *> *)reactions
    selectedReaction:(nullable NSString *)selectedReaction
        onReaction:(nullable void (^)(NSString *emoji))reactionChoice

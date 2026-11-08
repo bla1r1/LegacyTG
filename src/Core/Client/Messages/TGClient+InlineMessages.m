@@ -468,7 +468,7 @@
 	} completion:^(NSDictionary *result){
 		if ([result[@"@type"] isEqualToString:@"error"]){
 			NSString *message = [result[@"message"] isKindOfClass:NSString.class]
-					? result[@"message"] : @"Telegram refused that lookup.";
+					? result[@"message"] : @"An error occurred.";
 			if (completion) completion(nil, message);
 			return;
 		}

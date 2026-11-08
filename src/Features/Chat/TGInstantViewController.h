@@ -9,6 +9,7 @@
 @interface TGInstantViewController : UIViewController
 
 @property (nonatomic, copy) NSString *pageTitle;
+@property (nonatomic, copy) NSString *pageSiteName;
 @property (nonatomic, copy) NSString *sourceURL;
 /// PageBlock dictionaries straight from getWebPageInstantView.
 @property (nonatomic, copy) NSArray *blocks;

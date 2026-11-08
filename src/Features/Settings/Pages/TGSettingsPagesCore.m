@@ -1,4 +1,7 @@
 #import "TGSettingsViewControllerInternal.h"
+#import "TGLocalization.h"
+#import "TGUIFormat.h"
+#import "TGDateFormat.h"
 #import "RootViewController.h"
 #import "TGAlertSheet.h"
 #import "TGForwardPicker.h"
@@ -29,7 +32,7 @@
 /// long line; otherwise show it as the lines TDLib sent.
 static NSArray *TGCustomResultRows(NSString *result) {
 	NSMutableArray *rows = [NSMutableArray array];
-	NSString *text = result.length ? result : @"(empty result)";
+	NSString *text = result.length ? result : @"Empty";
 	NSData *raw = [text dataUsingEncoding:NSUTF8StringEncoding];
 	id parsed = raw.length
 			? [NSJSONSerialization JSONObjectWithData:raw options:0 error:nil] : nil;
@@ -45,6 +48,25 @@ static NSArray *TGCustomResultRows(NSString *result) {
 		[rows addObject:row];
 	}
 	return rows;
+}
+
+
+/// Undenied? iOS 8+ answers with the settings the user granted, iOS 6/7 with
+/// the enabled remote types. No permission at all is the warning state.
+static BOOL TGNotificationsWarning(void) {
+	UIApplication *app = [UIApplication sharedApplication];
+	if ([app respondsToSelector:@selector(currentUserNotificationSettings)]){
+		UIUserNotificationSettings *settings = [app currentUserNotificationSettings];
+		UIUserNotificationType wanted = UIUserNotificationTypeAlert |
+				UIUserNotificationTypeSound | UIUserNotificationTypeBadge;
+		return (settings.types & wanted) == 0;
+	}
+	if ([app respondsToSelector:@selector(enabledRemoteNotificationTypes)]){
+		UIRemoteNotificationType wanted = UIRemoteNotificationTypeAlert |
+				UIRemoteNotificationTypeSound | UIRemoteNotificationTypeBadge;
+		return ([app enabledRemoteNotificationTypes] & wanted) == 0;
+	}
+	return NO;
 }
 
 
@@ -90,200 +112,192 @@ static NSArray *TGCustomResultRows(NSString *result) {
 	// it was instead of a dash that never fills in.
 	NSString *username = [me[@"username"] length]
 			? [NSString stringWithFormat:@"@%@", me[@"username"]] : nil;
-	NSString *devicesDetail = self.rootDeviceName.length
-			? (self.rootSessionCount > 0
-					? [NSString stringWithFormat:@"%ld active", (long)self.rootSessionCount]
-					: self.rootDeviceName)
-			: nil;
-	NSString *foldersDetail = [TGClient shared].folders.count
-			? [NSString stringWithFormat:@"%lu",
-					(unsigned long)[TGClient shared].folders.count]
-			: nil;
-	NSString *cacheDetail = self.rootCacheLoaded
-			? TGBytes(self.rootCacheBytes) : nil;
+	NSString *foldersDetail = nil;
+	NSString *cacheDetail = nil;
 	NSString *languageDetail = self.rootLanguageName.length
 			? self.rootLanguageName : self.currentLanguage;
 	NSString *proxyDetail = self.rootProxyDetail.length
-			? self.rootProxyDetail : @"Off";
+			? self.rootProxyDetail : nil;
 
-	return @[
-		// Profile header card. The account's name and phone are the first
-		// thing on the official page, and the rows under it act on that
-		// account rather than on any one setting.
-		TGSection(nil, nil, @[
-			TGRow(TGKindProfile, @""),
-		]),
+	NSMutableArray *sections = [NSMutableArray array];
+	[sections addObject:TGSection(nil, nil, @[
+		TGRow(TGKindProfile, @""),
+	])];
+	NSMutableArray *accountRows = [NSMutableArray array];
+	// Logged out or still connecting there is no account to show or edit;
+	// the one useful row is the way back in.
+	if ([TGClient shared].authState != TGAuthStateReady){
+		[accountRows addObject:TGIconRow(@"Log in to Telegram", @"privacy", TGIconTileAzure(), ^{
+			[[AppDelegate sharedDelegate] showLoginUI];
+		})];
+		[sections addObject:TGSection(nil, nil, accountRows)];
+	} else {
+		// One row opens the account sheet, as before the parity pass: the
+		// inline list of accounts read worse on the device.
+		[accountRows addObject:TGIconRow(@"Switch Account", @"select", TGIconTileAzure(), ^{
+			[weakSelf showAccountChoices];
+		})];
+		[accountRows addObject:TGIconOpenRow(@"My Profile", @"contacts", TGIconTileSky(), ^{
+			[weakSelf openMyProfile];
+		})];
+		if (!username.length)
+			[accountRows addObject:TGIconOpenRow(@"Set Username", @"contacts", TGIconTileAzure(), ^{
+				[weakSelf openUsername];
+			})];
+		[accountRows addObject:TGIconOpenRow(TGLocalized(@"Emoji Status"), @"star", TGIconTileGold(), ^{
+			TGEmojiStatusViewController *status =
+					[[TGEmojiStatusViewController alloc] init];
+			status.target = TGEmojiStatusTargetSelf;
+			status.userId = [[TGClient shared].me[@"id"] longLongValue];
+			status.subjectTitle = TGLocalized(@"Emoji Status");
+			status.hidesBottomBarWhenPushed = YES;
+			[weakSelf.navigationController pushViewController:status animated:YES];
+		})];
+		[sections addObject:TGSection(nil, nil, accountRows)];
+	}
 
-		TGSection(nil, nil, @[
-			// Rows like every other in Settings: a glyph on a tile, dark text,
-			// a chevron. Two bare blue lines above an icon row read as a
-			// different list that had lost its margin.
-			([TGClient shared].authState != TGAuthStateReady) ? TGIconRow(@"Log in to Telegram", @"privacy", TGIconTileAzure(), ^{
-				[[AppDelegate sharedDelegate] showLoginUI];
-			}) : TGIconRow(@"Accounts", @"select", TGIconTileAzure(), ^{ [weakSelf showAccountChoices]; }),
-			TGIconOpenRow(@"My Profile", @"contacts", TGIconTileSky(), ^{
-				[weakSelf openMyProfile];
-			}),
-			// Official keeps this in the top edit block, not in dev: it is a
-			// profile action for a Premium account, and Telegram answers the
-			// refusal itself for an account that is not Premium.
-			TGIconOpenRow(@"Emoji Status", @"star", TGIconTileGold(), ^{
-				TGEmojiStatusViewController *status =
-						[[TGEmojiStatusViewController alloc] init];
-				status.target = TGEmojiStatusTargetSelf;
-				status.userId = [[TGClient shared].me[@"id"] longLongValue];
-				status.subjectTitle = @"Emoji Status";
-				status.hidesBottomBarWhenPushed = YES;
-				[weakSelf.navigationController pushViewController:status animated:YES];
-			}),
-		]),
-
-		// The chats and the devices they live on. Telegram keeps these above
-		// the settings that change how the app looks and sounds.
-		TGSection(nil, nil, @[
-			TGIconOpenRow(@"Saved Messages", @"folder", TGIconTileSky(), ^{
-				[weakSelf openSavedMessages];
-			}),
-			TGIconOpenRow(@"Recent Calls", @"call", TGIconTileGreen(), ^{
-				[weakSelf openPage:TGSettingsPageRecentCalls];
-			}),
-			TGIconTapOpenRow(@"Devices", devicesDetail, @"devices", TGIconTileAmber(), ^{
-				TGSessionsViewController *sessions = [[TGSessionsViewController alloc] init];
-				sessions.hidesBottomBarWhenPushed = YES;
-				[weakSelf.navigationController pushViewController:sessions animated:YES];
-			}),
-			TGIconTapOpenRow(@"Chat Folders", foldersDetail, @"folder", TGIconTileCyan(), ^{
-				[weakSelf openPage:TGSettingsPageFolders];
-			}),
-			// The official manager is the profile: Stories and Archive tabs on one
-			// screen, instead of a menu of screens.
-			TGIconOpenRow(@"My Stories", @"notifications", TGIconTileRed(), ^{
-				[weakSelf openMyProfileOnTab:@"stories"];
-			}),
-		]),
-
-		// Official keeps Proxy in its own section above the app settings, not
-		// mixed into the chat and device rows.
-		TGSection(nil, nil, @[
-			TGIconTapOpenRow(@"Proxy", proxyDetail, @"data", TGIconTileGrey(), ^{
+	if (proxyDetail.length)
+		[sections addObject:TGSection(nil, nil, @[
+			TGIconTapOpenRow(TGLocalized(@"Proxy"), proxyDetail, @"data", TGIconTileGrey(), ^{
 				[weakSelf openPage:TGSettingsPageProxy];
 			}),
-		]),
+		])];
 
-		TGSection(nil, nil, @[
-			TGIconOpenRow(@"Notifications and Sounds", @"notifications", TGIconTileRed(), ^{
-				[weakSelf openPage:TGSettingsPageNotifications];
-			}),
-			TGIconOpenRow(@"Privacy and Security", @"privacy", TGIconTileGrey(), ^{
-				[weakSelf openPage:TGSettingsPagePrivacy];
-			}),
-			TGIconTapOpenRow(@"Data and Storage", cacheDetail, @"data", TGIconTileGreen(), ^{
-				[weakSelf openPage:TGSettingsPageData];
-			}),
-			TGIconOpenRow(@"Appearance", @"chat", TGIconTileSky(), ^{
-				[weakSelf openPage:TGSettingsPageAppearance];
-			}),
-			TGIconOpenRow(@"Power Saving", @"battery", TGIconTileAmber(), ^{
-				[weakSelf openPage:TGSettingsPagePowerSaving];
-			}),
-			TGIconTapOpenRow(@"Language", languageDetail, @"language", TGIconTileViolet(), ^{
-				[weakSelf openPage:TGSettingsPageLanguage];
-			}),
-		]),
+	[sections addObject:TGSection(nil, nil, @[
+		TGIconOpenRow(TGLocalized(@"Saved Messages"), @"folder", TGIconTileSky(), ^{
+			[weakSelf openSavedMessages];
+		}),
+		TGIconOpenRow(TGLocalized(@"Recent Calls"), @"call", TGIconTileGreen(), ^{
+			[weakSelf openPage:TGSettingsPageRecentCalls];
+		}),
+		TGIconTapOpenRow(TGLocalized(@"Devices"),
+				self.rootDeviceName.length
+						? TGSettingsDevicesValue(self.rootSessionCount) : nil,
+				@"devices", TGIconTileAmber(), ^{
+			TGSessionsViewController *sessions = [[TGSessionsViewController alloc] init];
+			sessions.hidesBottomBarWhenPushed = YES;
+			[weakSelf.navigationController pushViewController:sessions animated:YES];
+		}),
+		TGIconTapOpenRow(TGLocalized(@"Chat Folders"), foldersDetail, @"folder", TGIconTileCyan(), ^{
+			[weakSelf openPage:TGSettingsPageFolders];
+		}),
+	])];
+	[sections addObject:TGSection(nil, nil, @[
+		({ NSMutableDictionary *row = [TGIconOpenRow(TGLocalized(@"Notifications and Sounds"), @"notifications", TGIconTileRed(), ^{
+			[weakSelf openPage:TGSettingsPageNotifications];
+		}) mutableCopy];
+		   if (TGNotificationsWarning()) row[TGRowBadge] = @YES;
+		   row; }),
+		TGIconOpenRow(TGLocalized(@"Privacy and Security"), @"privacy", TGIconTileGrey(), ^{
+			[weakSelf openPage:TGSettingsPagePrivacy];
+		}),
+		TGIconTapOpenRow(TGLocalized(@"Data and Storage"), cacheDetail, @"data", TGIconTileGreen(), ^{
+			[weakSelf openPage:TGSettingsPageData];
+		}),
+		TGIconOpenRow(TGLocalized(@"Appearance"), @"chat", TGIconTileSky(), ^{
+			[weakSelf openPage:TGSettingsPageAppearance];
+		}),
+		TGIconTapOpenRow(TGLocalized(@"Power Saving"),
+				(![TGCapabilities animatedStickersWanted] ||
+				 ![TGCapabilities wallpaperWanted] ||
+				 ![TGCapabilities gifAutoplayWanted]) ? @"On" : @"Off",
+				@"battery", TGIconTileAmber(), ^{
+			[weakSelf openPage:TGSettingsPagePowerSaving];
+		}),
+		TGIconTapOpenRow(TGLocalized(@"Language"), languageDetail, @"language", TGIconTileViolet(), ^{
+			[weakSelf openPage:TGSettingsPageLanguage];
+		}),
+	])];
+	[sections addObject:TGSection(nil, nil, @[
+		TGIconRow(TGLocalized(@"Telegram Premium"), @"star", TGIconTilePurple(), ^{
+			[weakSelf showPremiumState];
+		}),
+		TGIconTapOpenRow(TGLocalized(@"Telegram Stars"), [NSString stringWithFormat:@"%lld",
+				(long long)[TGClient shared].ownedStarCount], @"star", TGIconTileGold(), ^{
+			TGStarsGiftsViewController *stars = [[TGStarsGiftsViewController alloc] init];
+			stars.hidesBottomBarWhenPushed = YES;
+			[weakSelf.navigationController pushViewController:stars animated:YES];
+		}),
+		[weakSelf tier2BusinessRow],
+	])];
+	[sections addObject:TGSection(nil, nil, @[
+		TGIconOpenRow(TGLocalized(@"Ask a Question"), @"chat", TGIconTileAmber(), ^{
+			[weakSelf openSupport];
+		}),
+		TGIconRow(TGLocalized(@"Telegram FAQ"), @"faq", TGIconTileCyan(), ^{
+			[weakSelf openFAQ];
+		}),
+		TGIconRow(TGLocalized(@"Telegram Features"), @"star", TGIconTileGold(), ^{
+			[weakSelf openTelegramTips];
+		}),
+	])];
+	[sections addObject:TGSection(nil, nil, @[
+		TGIconTapOpenRow(TGLocalized(@"This Device"), [TGDevice tierName], @"devices", TGIconTileSlate(), ^{
+			TGDeviceViewController *device = [[TGDeviceViewController alloc] init];
+			device.hidesBottomBarWhenPushed = YES;
+			[weakSelf.navigationController pushViewController:device animated:YES];
+		}),
+		TGRedRow(TGLocalized(@"Log out"), ^{
+			[TGAlertSheet showConfirm:@"Are you sure you want to log out from this device?"
+								title:@"Log out?"
+							   action:TGLocalized(@"Log out")
+						  destructive:YES
+							   inView:weakSelf.view
+							onConfirm:^{ [[TGClient shared] logOut]; }];
+		}),
+	])];
+	return sections;
+}
 
-		// Stickers and the chat look are a pair in Telegram's list, so they
-		// are one card here rather than one row in a card of settings.
-		TGSection(nil, nil, @[
-			TGIconOpenRow(@"Stickers and Emoji", @"star", TGIconTileViolet(), ^{
-				TGStickerPacksViewController *packs =
-						[[TGStickerPacksViewController alloc] init];
-				packs.hidesBottomBarWhenPushed = YES;
-				[weakSelf.navigationController pushViewController:packs animated:YES];
-			}),
-		]),
-
-		TGSection(nil, nil, @[
-			TGIconRow(@"Telegram Premium", @"star", TGIconTilePurple(), ^{
-				[weakSelf showPremiumState];
-			}),
-			[weakSelf tier2BusinessRow],
-		]),
-
-		// Help last, the way the official client ends the list before Log
-		// Out. Every row here existed before; they were mixed in with the
-		// account rows and read as settings rather than support.
-		TGSection(@"Help", nil, @[
-			TGIconOpenRow(@"Ask a Question", @"chat", TGIconTileAmber(), ^{
-				[weakSelf openSupport];
-			}),
-			TGIconRow(@"Telegram FAQ", @"faq", TGIconTileCyan(), ^{
-				[weakSelf openURL:@"https://telegram.org/faq"];
-			}),
-			TGIconRow(@"Telegram Features", @"star", TGIconTileGold(), ^{
-				[weakSelf openURL:@"https://telegram.org/blog"];
-			}),
-			TGIconRow(@"Privacy Policy", @"policy", TGIconTileGold(), ^{
-				[weakSelf openURL:@"https://telegram.org/privacy"];
-			}),
-			TGIconRow(@"Get the App", @"data", TGIconTileSky(), ^{
-				[[TGClient shared] applicationDownloadLinkWithCompletion:^(NSString *url){
-					if (!url.length){
-						[weakSelf toast:@"Telegram did not answer with a download link."];
-						return;
-					}
-					[weakSelf openURL:url];
-				}];
-			}),
-		]),
-
-		TGSection(nil, nil, @[
-			// This Device is the one row official has no equivalent for: it
-			// explains every button this hardware cannot show. Keep it at the
-			// end, with Log out, rather than among the account settings.
-			TGIconTapOpenRow(@"This Device", [TGDevice tierName], @"devices", TGIconTileSlate(), ^{
-				TGDeviceViewController *device = [[TGDeviceViewController alloc] init];
-				device.hidesBottomBarWhenPushed = YES;
-				[weakSelf.navigationController pushViewController:device animated:YES];
-			}),
-			TGRedRow(@"Log out", ^{
-				[TGAlertSheet showConfirm:@"Are you sure you want to log out?"
-									title:@"Log out"
-								   action:@"Log out"
-							  destructive:YES
-								   inView:weakSelf.view
-								onConfirm:^{ [[TGClient shared] logOut]; }];
-			}),
-		]),
-	];
+- (void)searchBar:(UISearchBar *)searchBar textDidChange:(NSString *)searchText {
+	self.languageSearchText = searchText;
+	[self rebuild];
 }
 
 - (NSArray *)languageSections {
 	__weak typeof(self) weakSelf = self;
+	NSString *appLanguage = TGAppLanguage();
+	NSString *query = [self.languageSearchText stringByTrimmingCharactersInSet:
+			[NSCharacterSet whitespaceAndNewlineCharacterSet]].lowercaseString;
 	NSMutableArray *rows = [NSMutableArray array];
+	if (!query.length)
+		[rows addObject:TGCheckRow(@"System", nil, TGAppLanguageIsSystem(), ^{
+			TGSetAppLanguage(nil);
+			TGSetTelegramLanguageLookup(nil);
+			[[TGClient shared] loadAppLanguagePack:TGAppLanguage() completion:^(BOOL ok){
+				[TGAlertSheet showMessage:@"Restart"
+									title:@"Interface Language" inView:weakSelf.view];
+			}];
+		})];
 	for (NSDictionary *language in self.languages){
 		NSString *packId = language[@"id"];
-		[rows addObject:TGCheckRow(language[@"name"], nil,
-				[packId isEqualToString:self.currentLanguage], ^{
+		if (!packId.length)
+			continue;
+		NSString *name = language[@"name"];
+		if (query.length &&
+			[name.lowercaseString rangeOfString:query].location == NSNotFound &&
+			[packId.lowercaseString rangeOfString:query].location == NSNotFound)
+			continue;
+		[rows addObject:TGCheckRow(name, packId,
+				[packId isEqualToString:appLanguage], ^{
+			TGSetAppLanguage(packId);
+			TGSetTelegramLanguageLookup(nil);
+			// One choice sets both the UI pack and TDLib's language, as the
+			// official list does.
 			[[TGClient shared] setLanguage:packId];
 			weakSelf.currentLanguage = packId;
-			weakSelf.languagePackStrings = nil;
-			// The record follows the choice: pack actions edit what is on.
-			[[TGClient shared] languagePackInfo:packId completion:^(NSDictionary *info){
-				weakSelf.languageInfo = info;
-				[weakSelf rebuild];
+			[[TGClient shared] loadAppLanguagePack:packId completion:^(BOOL ok){
+				[TGAlertSheet showMessage:@"Restart"
+									title:@"Interface Language" inView:weakSelf.view];
 			}];
 			[weakSelf rebuild];
 		})];
 	}
-	if (!rows.count)
-		[rows addObject:TGRow(TGKindPlain, @"Loading...")];
+	if (!rows.count && !query.length)
+		for (NSUInteger i = 0; i < 8; i++)
+			[rows addObject:TGRow(TGKindPlain, @"Loading...")];
 
-	return @[
-		TGSection(nil,
-			@"This app's own text is English throughout. The language is what "
-			@"Telegram itself writes in, and it follows the account onto your "
-			@"other devices.", rows),
-	];
+	return @[TGSection(@"Interface Language", nil, rows)];
 }
 
 #if TG_DEV
@@ -497,7 +511,7 @@ static NSArray *TGCustomResultRows(NSString *result) {
 						[weakSelf rebuild];
 					}];
 				}
-				[weakSelf toast:ok ? @"Custom pack created" : @"Telegram refused the pack"];
+				[weakSelf toast:ok ? @"Custom pack created" : @"An error occurred."];
 				[weakSelf refreshLanguagePage];
 			}];
 		}];
@@ -529,7 +543,7 @@ static NSArray *TGCustomResultRows(NSString *result) {
 			[[TGClient shared] editCustomLanguagePackInfo:changed completion:^(BOOL ok){
 				if (!weakSelf)
 					return;
-				[weakSelf toast:ok ? @"Pack renamed" : @"Telegram refused the edit"];
+				[weakSelf toast:ok ? @"Pack renamed" : @"An error occurred."];
 				[weakSelf refreshLanguagePage];
 			}];
 		}];
@@ -564,7 +578,7 @@ static NSArray *TGCustomResultRows(NSString *result) {
 											   completion:^(BOOL ok){
 				if (!weakSelf)
 					return;
-				[weakSelf toast:ok ? @"String saved" : @"Telegram refused the string"];
+				[weakSelf toast:ok ? @"String saved" : @"An error occurred."];
 				[weakSelf refreshLanguagePage];
 			}];
 		}];
@@ -586,7 +600,7 @@ static NSArray *TGCustomResultRows(NSString *result) {
 										   completion:^(BOOL ok){
 			if (!weakSelf)
 				return;
-			[weakSelf toast:ok ? @"String deleted" : @"Telegram refused the delete"];
+			[weakSelf toast:ok ? @"String deleted" : @"An error occurred."];
 			[weakSelf refreshLanguagePage];
 		}];
 	}];
@@ -604,7 +618,7 @@ static NSArray *TGCustomResultRows(NSString *result) {
 		[[TGClient shared] addCustomServerLanguagePack:packId completion:^(BOOL ok){
 			if (!weakSelf)
 				return;
-			[weakSelf toast:ok ? @"Pack installed" : @"Telegram refused the pack"];
+			[weakSelf toast:ok ? @"Pack installed" : @"An error occurred."];
 			[weakSelf refreshLanguagePage];
 		}];
 	}];
@@ -616,7 +630,7 @@ static NSArray *TGCustomResultRows(NSString *result) {
 	[[TGClient shared] synchronizeLanguagePack:packId completion:^(BOOL ok){
 		if (!weakSelf)
 			return;
-		[weakSelf toast:ok ? @"Strings synchronized" : @"Telegram refused the sync"];
+		[weakSelf toast:ok ? @"Strings synchronized" : @"An error occurred."];
 		[weakSelf refreshLanguagePage];
 	}];
 }
@@ -633,7 +647,7 @@ static NSArray *TGCustomResultRows(NSString *result) {
 		[[TGClient shared] deleteLanguagePack:packId completion:^(BOOL ok){
 			if (!weakSelf)
 				return;
-			[weakSelf toast:ok ? @"Pack deleted" : @"Telegram refused: a pack in use cannot be deleted"];
+			[weakSelf toast:ok ? @"Pack deleted" : @"An error occurred."];
 			weakSelf.languageInfo = nil;
 			[weakSelf refreshLanguagePage];
 		}];
@@ -749,29 +763,26 @@ static NSString *TGCallDebugText(NSDictionary *call) {
 			})]);
 
 	if (!displayCalls.count)
-		return @[tabSection, TGSection(nil, nil, @[TGRow(TGKindPlain, self.recentCallsFilter == 1 ? @"No missed calls" : @"No recent calls")])];
-
-	static NSDateFormatter *when = nil;
-	if (!when){
-		when = [[NSDateFormatter alloc] init];
-		when.dateStyle = NSDateFormatterShortStyle;
-		when.timeStyle = NSDateFormatterShortStyle;
-	}
+		return @[tabSection, TGSection(nil, nil, @[TGRow(TGKindPlain, self.recentCallsFilter == 1 ? @"You have no missed calls" : @"Empty")])];
 
 	NSMutableArray *rows = [NSMutableArray array];
 	for (NSDictionary *call in displayCalls){
 		BOOL missed = [call[@"missed"] boolValue];
 		BOOL outgoing = [call[@"outgoing"] boolValue];
 		NSInteger duration = [call[@"duration"] integerValue];
-		NSString *typeLabel = missed ? @"Missed" : (outgoing ? @"Outgoing" : @"Incoming");
-		NSString *detail = [NSString stringWithFormat:@"%@ %@%@",
-				typeLabel,
-				[when stringFromDate:[NSDate dateWithTimeIntervalSince1970:
-						[call[@"date"] doubleValue]]],
-				(!missed && duration > 0)
-						? [NSString stringWithFormat:@" - %ld:%02ld",
-								(long)(duration / 60), (long)(duration % 60)]
-						: @""];
+		// Pack words and the chat list's date shapes (time today, weekday
+		// this week, date beyond), not English and the locale's 06/11/26.
+		NSString *typeLabel = TGLocalized(missed ? @"Missed Call"
+				: (outgoing ? @"Outgoing Call" : @"Incoming Call"));
+		char buf[TGDateFormatBufferSize];
+		size_t len = TGChatDateFormat((time_t)[call[@"date"] doubleValue],
+				(time_t)[[NSDate date] timeIntervalSince1970], buf, sizeof(buf));
+		NSString *when = len ? TGLocalized([[NSString alloc] initWithBytes:buf
+				length:len encoding:NSASCIIStringEncoding]) : @"";
+		NSString *detail = (!missed && duration > 0)
+				? [NSString stringWithFormat:@"%@, %@ (%@)", typeLabel, when,
+						TGUIFormatCallDuration(duration)]
+				: [NSString stringWithFormat:@"%@, %@", typeLabel, when];
 		NSString *key = [NSString stringWithFormat:@"%lld:%lld",
 				(long long)[call[@"chatId"] longLongValue],
 				(long long)[call[@"messageId"] longLongValue]];
@@ -829,7 +840,7 @@ static NSString *TGCallDebugText(NSDictionary *call) {
 				if (ok)
 					[weakSelf noteCallDiagnostic:@"log" forCall:call];
 				[TGAlertSheet showMessage:(ok ? @"Telegram accepted the call log."
-						: (error ?: @"Telegram refused the call log."))
+						: (error ?: @"An error occurred."))
 									title:@"Send Call Log" inView:weakSelf.view];
 			}];
 			return;
@@ -847,7 +858,7 @@ static NSString *TGCallDebugText(NSDictionary *call) {
 			if (ok)
 				[weakSelf noteCallDiagnostic:@"debug" forCall:call];
 			[TGAlertSheet showMessage:(ok ? @"Telegram accepted the debug information."
-					: (error ?: @"Telegram refused the debug information."))
+					: (error ?: @"An error occurred."))
 								title:@"Send Debug Information" inView:weakSelf.view];
 		}];
 	}];

@@ -101,20 +101,17 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 			title = link[@"link"] ?: @"Link";
 		NSString *text = link[@"text"][@"text"];
 		if (!text.length)
-			text = @"No preset message";
+			text = @"Add a preset message...";
 		NSMutableDictionary *row = [TGBAction(title, text, @"link") mutableCopy];
 		row[@"link"] = link;
 		[rows addObject:row];
 	}
 	if (!rows.count){
-		[rows addObject:TGBInfo(@"No links",
-				self.loadError.length ? self.loadError
-						: @"Create one to suggest a first message.")];
+		[rows addObject:TGBInfo(@"Create a Link to Chat",
+				self.loadError.length ? self.loadError : nil)];
 	}
 	self.sections = @[
-		TGBSection(@"LINKS TO CHAT",
-				@"Each link starts a chat with this account and puts the text "
-				@"in the other person's input field.", rows),
+		TGBSection(@"LINKS TO CHAT", nil, rows),
 		TGBSection(nil, nil, @[
 			TGBAction(@"Create a Link to Chat", nil, @"create"),
 		]),
@@ -135,12 +132,12 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 - (void)createLink {
 	__weak typeof(self) weakSelf = self;
 	[self askText:@"Create a Link to Chat"
-		  message:@"A name only you see first."
+		  message:@"Add a name for this link that only you will see."
 	  placeholder:@"Link name" text:nil action:@"Next"
 	   completion:^(NSString *title){
 		[weakSelf askText:@"Create a Link to Chat"
-				  message:@"The message that will be suggested to the other person."
-			  placeholder:@"Preset message" text:nil action:@"Create"
+				  message:@"Add a message that will be entered in the message input field for anyone who starts a chat with you using this link:"
+			  placeholder:@"Add a preset message..." text:nil action:@"Create"
 			   completion:^(NSString *text){
 			[[TGClient shared] createBusinessChatLinkWithText:text title:title
 					completion:^(NSDictionary *link, NSString *error){
@@ -178,11 +175,11 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 	__weak typeof(self) weakSelf = self;
 	NSString *title = link[@"title"] ?: @"";
 	NSString *text = link[@"text"][@"text"] ?: @"";
-	[self askText:@"Edit Link" message:@"The name only you see."
+	[self askText:@"Edit Link" message:@"Add a name for this link that only you will see."
 	  placeholder:@"Link name" text:title action:@"Next"
 	   completion:^(NSString *newTitle){
-		[weakSelf askText:@"Edit Link" message:@"The suggested first message."
-			  placeholder:@"Preset message" text:text action:@"Save"
+		[weakSelf askText:@"Edit Link" message:nil
+			  placeholder:@"Add a preset message..." text:text action:@"Save"
 			   completion:^(NSString *newText){
 			[[TGClient shared] editBusinessChatLink:link[@"link"]
 											   text:newText title:newTitle
@@ -206,19 +203,17 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 		if (!page)
 			return;
 		if (error.length){
-			[page showResult:NO error:error title:@"Link Info"];
+			[page showResult:NO error:error title:@"Info"];
 			return;
 		}
-		NSString *text = info[@"text"][@"text"] ?: @"No preset message";
-		[page showMessage:[NSString stringWithFormat:
-				@"Chat %@\n\n%@", info[@"chat_id"] ?: @0, text]
-					 title:@"Link Info"];
+		NSString *text = info[@"text"][@"text"] ?: @"Add a preset message...";
+		[page showMessage:text title:@"Info"];
 	}];
 }
 
 - (void)deleteLink:(NSDictionary *)link {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:@"Anyone using this link will not start a chat with it."
+	[TGAlertSheet showConfirm:@"Are you sure you want to delete this link? It will be completely gone."
 						title:@"Delete Link"
 					   action:@"Delete"
 				  destructive:YES

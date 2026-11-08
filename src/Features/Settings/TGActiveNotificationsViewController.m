@@ -25,9 +25,7 @@ static NSString *TGNotificationDateText(NSNumber *timestamp) {
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
-		self.edgesForExtendedLayout = UIRectEdgeNone;
-	self.title = @"Active Notifications";
+	self.title = @"Notifications";
 	[self applyTheme];
 
 	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
@@ -41,17 +39,7 @@ static NSString *TGNotificationDateText(NSNumber *timestamp) {
 		 usingBlock:^(NSNotification *note){
 		[weakSelf reloadList];
 	}];
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGThemeChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note){
-		[weakSelf applyTheme];
-		[weakSelf.tableView reloadData];
-	}];
 
-}
-
-- (void)dealloc {
-	[[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -106,7 +94,7 @@ titleForHeaderInSection:(NSInteger)section {
 		return nil;
 	NSInteger index = [self groupIndexForSection:section];
 	if (index < 0 || index >= (NSInteger)self.groups.count)
-		return @"ACTIVE NOTIFICATIONS";
+		return @"NOTIFICATIONS";
 	NSDictionary *group = self.groups[(NSUInteger)index];
 	NSString *title = [[TGClient shared] titleForChat:
 			[group[@"chatId"] longLongValue]] ?: @"Notifications";
@@ -116,14 +104,9 @@ titleForHeaderInSection:(NSInteger)section {
 
 - (NSString *)tableView:(UITableView *)tableView
 titleForFooterInSection:(NSInteger)section {
-	if (self.pending && section == 0)
-		return @"TDLib still has delayed or unreceived notifications.";
 	if (section != (NSInteger)[self numberOfSectionsInTableView:tableView] - 1)
 		return nil;
-	if (!self.groups.count)
-		return @"Nothing arrived while the app was in the background.";
-	return @"Removing a row here removes it on this device only. "
-		   @"The conversation stays in its chat.";
+	return nil;
 }
 
 - (UITableViewCell *)pendingCellForTableView:(UITableView *)tableView {
@@ -137,7 +120,7 @@ titleForFooterInSection:(NSInteger)section {
 		cell.accessoryView = spinner;
 	}
 	[[TGTheme shared] styleCell:cell];
-	cell.textLabel.text = @"Updating notifications...";
+	cell.textLabel.text = @"Updating...";
 	cell.textLabel.font = TGFontBody();
 	cell.textLabel.textColor = [[TGTheme shared] secondaryTextColour];
 	cell.selectionStyle = UITableViewCellSelectionStyleNone;
@@ -150,7 +133,7 @@ titleForFooterInSection:(NSInteger)section {
 		cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
 									  reuseIdentifier:@"empty"];
 	[[TGTheme shared] styleCell:cell];
-	cell.textLabel.text = @"No active notifications";
+	cell.textLabel.text = @"None";
 	cell.textLabel.font = TGFontBody();
 	cell.textLabel.textColor = [[TGTheme shared] secondaryTextColour];
 	cell.selectionStyle = UITableViewCellSelectionStyleNone;
@@ -175,11 +158,11 @@ titleForFooterInSection:(NSInteger)section {
 		cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle
 									  reuseIdentifier:@"row"];
 	[[TGTheme shared] styleCell:cell];
-	cell.textLabel.text = row[@"text"] ?: @"Notification";
+	cell.textLabel.text = row[@"text"] ?: @"Notifications";
 	cell.textLabel.font = TGFontBody();
 	cell.textLabel.textColor = [[TGTheme shared] primaryTextColour];
 	cell.detailTextLabel.text = [NSString stringWithFormat:@"%@ · %@%@",
-			row[@"kind"] ?: @"Notification",
+			row[@"kind"] ?: @"Notifications",
 			TGNotificationDateText(row[@"date"]),
 			[row[@"silent"] boolValue] ? @" · silent" : @""];
 	cell.detailTextLabel.font = TGFontSubhead();
@@ -206,16 +189,16 @@ didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
 	int32_t notificationId = (int32_t)[row[@"id"] intValue];
 	__weak typeof(self) weakSelf = self;
 
-	[TGAlertSheet showChoices:@[@"Remove Notification"]
-						title:row[@"text"] ?: @"Notification"
+	[TGAlertSheet showChoices:@[@"Delete"]
+						title:row[@"text"] ?: @"Notifications"
 			 destructiveIndex:0
 					   inView:self.view
 					 onChoice:^(NSInteger choice){
 		[[TGClient shared] removeNotification:notificationId inGroup:groupId
 								   completion:^(BOOL ok, NSString *error){
 			if (!ok)
-				[TGAlertSheet showMessage:(error ?: @"Telegram refused to remove that notification.")
-									title:@"Active Notifications"
+				[TGAlertSheet showMessage:(error ?: @"An error occurred.")
+									title:@"Notifications"
 								   inView:weakSelf.view];
 			[weakSelf reloadList];
 		}];
@@ -226,9 +209,8 @@ didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
 	if (!self.groups.count)
 		return;
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:@"Every active notification is removed from this "
-							  @"device. The messages stay in their chats."
-						title:@"Clear All Notifications"
+	[TGAlertSheet showConfirm:nil
+						title:@"Clear All"
 					   action:@"Clear"
 				  destructive:YES
 					   inView:self.view

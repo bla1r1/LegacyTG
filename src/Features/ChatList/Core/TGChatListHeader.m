@@ -1,4 +1,5 @@
 #import "TGCustomEmojiStore.h"
+#import "TGLocalization.h"
 #import "TGNameWithStatus.h"
 #import "TGChatListViewControllerInternal.h"
 #import "TGPerf.h"
@@ -66,6 +67,68 @@ static void TGPaintFolderPill(UIButton *pill, BOOL active) {
 }
 
 
+/// The add-story control: a dashed circle with a plus, which is what the
+/// official bar shows where the system Add button used to be. Drawn once per
+/// bar build, not per frame.
+static UIImage *TGAddStoryIcon(CGFloat side, UIColor *colour) {
+	UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), NO, 0);
+	CGContextRef ctx = UIGraphicsGetCurrentContext();
+	if (!ctx){
+		UIGraphicsEndImageContext();
+		return nil;
+	}
+	CGFloat inset = side * 0.16f;
+	CGRect circle = CGRectInset(CGRectMake(0, 0, side, side), inset, inset);
+	CGContextSetStrokeColorWithColor(ctx, colour.CGColor);
+	CGContextSetLineWidth(ctx, MAX(1.0f, side * 0.07f));
+	CGContextSetLineDash(ctx, 0, (CGFloat[]){ side * 0.16f, side * 0.12f }, 2);
+	CGContextStrokeEllipseInRect(ctx, circle);
+	CGContextSetLineDash(ctx, 0, NULL, 0);
+	CGFloat arm = side * 0.17f;
+	CGPoint centre = CGPointMake(CGRectGetMidX(circle), CGRectGetMidY(circle));
+	CGContextMoveToPoint(ctx, centre.x - arm, centre.y);
+	CGContextAddLineToPoint(ctx, centre.x + arm, centre.y);
+	CGContextMoveToPoint(ctx, centre.x, centre.y - arm);
+	CGContextAddLineToPoint(ctx, centre.x, centre.y + arm);
+	CGContextStrokePath(ctx);
+	UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+	UIGraphicsEndImageContext();
+	return image;
+}
+
+/// The lock in the title view: passcode users could lock the app from the
+/// list before the bar item was removed. There is no lock glyph in the icon
+/// set, so this draws a small padlock.
+UIImage *TGChatListLockIcon(CGFloat side, UIColor *colour) {
+	UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), NO, 0);
+	CGContextRef ctx = UIGraphicsGetCurrentContext();
+	if (!ctx){
+		UIGraphicsEndImageContext();
+		return nil;
+	}
+	CGContextSetStrokeColorWithColor(ctx, colour.CGColor);
+	CGContextSetFillColorWithColor(ctx, colour.CGColor);
+	CGFloat bodyH = side * 0.52f;
+	CGRect body = CGRectZero;
+	body.origin.x = side * 0.18f;
+	body.origin.y = side - bodyH - side * 0.08f;
+	body.size.width = side * 0.64f;
+	body.size.height = bodyH;
+	[[UIBezierPath bezierPathWithRoundedRect:body cornerRadius:side * 0.12f] fill];
+	CGFloat shackleW = side * 0.38f;
+	CGRect shackle = CGRectZero;
+	shackle.origin.x = (side - shackleW) * 0.5f;
+	shackle.origin.y = side * 0.12f;
+	shackle.size.width = shackleW;
+	shackle.size.height = side * 0.50f;
+	CGContextSetLineWidth(ctx, MAX(1.0f, side * 0.10f));
+	CGContextStrokeEllipseInRect(ctx, shackle);
+	UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+	UIGraphicsEndImageContext();
+	return image;
+}
+
+
 static NSString *TGChatSnapshotPath(void) {
 	NSString *dir = [NSSearchPathForDirectoriesInDomains(
 			NSCachesDirectory, NSUserDomainMask, YES) objectAtIndex:0];
@@ -89,7 +152,7 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 		keys = @[@"id", @"title", @"date", @"text", @"previewText", @"lastAuthor",
 				@"unread", @"unreadMentions", @"markedUnread", @"isMuted",
 				@"isPinned", @"isOnline", @"isSaved", @"lastId", @"lastOutgoing",
-				@"readOutbox", @"readInbox", @"photoFileId", @"isGroup", @"isForum",
+				@"readOutbox", @"readInbox", @"isGroup", @"isForum",
 				@"isSecret", @"order", @"archiveOrder", @"supergroupId", @"draft",
 				@"emojiStatusId"];
 	});
@@ -134,23 +197,12 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 		return;
 
 	UIBarButtonItem *edit = [[UIBarButtonItem alloc]
-			initWithTitle:(self.editingChats ? @"Done" : @"Edit")
+			initWithTitle:(self.editingChats ? TGLocalized(@"Done") : TGLocalized(@"Edit"))
 					style:(self.editingChats ? UIBarButtonItemStyleDone : UIBarButtonItemStylePlain)
 				   target:self
 				   action:@selector(toggleChatListEditing)];
-
-	if ([TGPasscode hasPasscode] && !self.editingChats) {
-		UIBarButtonItem *lock = [[UIBarButtonItem alloc]
-				initWithImage:[TGIcons glyphNamed:@"privacy" colour:[[TGTheme shared] barButtonColour] side:TGMetricMenuGlyph]
-						style:UIBarButtonItemStylePlain
-					   target:self
-					   action:@selector(lockAppTapped)];
-		self.navigationItem.leftBarButtonItems = @[edit, lock];
-		self.navigationItem.leftItemsSupplementBackButton = YES;
-	} else {
-		self.navigationItem.leftBarButtonItems = @[edit];
-		self.navigationItem.leftBarButtonItem = edit;
-	}
+	self.navigationItem.leftBarButtonItems = @[edit];
+	self.navigationItem.leftBarButtonItem = edit;
 
 	if (self.editingChats) {
 		self.navigationItem.rightBarButtonItems = nil;
@@ -160,11 +212,17 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 				initWithBarButtonSystemItem:UIBarButtonSystemItemCompose
 									 target:self
 									 action:@selector(composeTapped)];
-		UIBarButtonItem *camera = [[UIBarButtonItem alloc]
-				initWithBarButtonSystemItem:UIBarButtonSystemItemCamera
-									 target:self
-									 action:@selector(openStoryComposer)];
-		self.navigationItem.rightBarButtonItems = @[compose, camera];
+		UIButton *storyButton = [UIButton buttonWithType:UIButtonTypeCustom];
+		CGFloat side = TGMetricButtonMediumH;
+		storyButton.frame = CGRectMake(0, 0, side, side);
+		[storyButton setImage:TGAddStoryIcon(side, [[TGTheme shared] accentColour])
+					 forState:UIControlStateNormal];
+		[storyButton addTarget:self action:@selector(openStoryComposer)
+			 forControlEvents:UIControlEventTouchUpInside];
+		UIBarButtonItem *story = [[UIBarButtonItem alloc]
+				initWithCustomView:storyButton];
+		// The first right item sits at the edge; compose is the outermost.
+		self.navigationItem.rightBarButtonItems = @[compose, story];
 	}
 }
 
@@ -181,6 +239,9 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 	self.tableView.allowsMultipleSelectionDuringEditing = YES;
 	[self.tableView setEditing:self.editingChats animated:YES];
 	[self buildHeaderButtons];
+	// Done restores the list name (or the folder's); the count only belongs
+	// while the edits are open, so the title is refreshed on both edges.
+	[self refreshListTitleView];
 
 	if (!self.editingChats){
 		[self hideEditBarAnimated];
@@ -229,105 +290,44 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 	}];
 }
 
-/// The toolbar follows the selection: Mute reads Unmute when every selected
-/// chat is already silent, Pin reads Unpin, and Read flips the same way.
+/// The toolbar follows the selection: a selection reads Read, no selection
+/// reads Read All. It never flips to Unread.
 - (void)refreshEditToolbar {
 	NSArray *selected = [self selectedChatIndexes];
-	BOOL allMuted = selected.count > 0;
-	BOOL allPinned = selected.count > 0;
-	BOOL allUnread = selected.count > 0;
-	for (NSDictionary *chat in selected){
-		allMuted = allMuted && [chat[@"isMuted"] boolValue];
-		allPinned = allPinned && [chat[@"isPinned"] boolValue];
-		BOOL unread = [chat[@"unread"] integerValue] > 0 ||
-				[chat[@"markedUnread"] boolValue];
-		allUnread = allUnread && unread;
-	}
-	UIBarButtonItem *all = [[UIBarButtonItem alloc]
-			initWithTitle:(selected.count == (NSInteger)[self visibleChats].count
-					? @"None" : @"All")
-					style:UIBarButtonItemStyleBordered target:self
-				   action:@selector(selectAllChats)];
-	UIBarButtonItem *delete = [[UIBarButtonItem alloc]
-			initWithBarButtonSystemItem:UIBarButtonSystemItemTrash
-								 target:self action:@selector(deleteSelectedChats)];
-	UIBarButtonItem *mute = [[UIBarButtonItem alloc]
-			initWithTitle:(allMuted ? @"Unmute" : @"Mute")
-					style:UIBarButtonItemStyleBordered target:self
-				   action:@selector(muteSelectedChats)];
-	UIBarButtonItem *pin = [[UIBarButtonItem alloc]
-			initWithTitle:(allPinned ? @"Unpin" : @"Pin")
-					style:UIBarButtonItemStyleBordered target:self
-				   action:@selector(pinSelectedChats)];
+	// Official's bar carries the three list-wide verbs; selecting a row is a
+	// tap, not a mode, so All/None, Mute and Pin do not belong here. Read is
+	// Read All or Read, never Unread: the toolbar has no mark-as-unread verb.
+	NSString *readTitle = selected.count ? TGLocalized(@"Read")
+			: TGLocalized(@"Read All");
 	UIBarButtonItem *read = [[UIBarButtonItem alloc]
-			initWithTitle:(allUnread ? @"Read" : @"Unread")
+			initWithTitle:readTitle
 					style:UIBarButtonItemStyleBordered target:self
 				   action:@selector(readSelectedChats)];
 	UIBarButtonItem *archive = [[UIBarButtonItem alloc]
-			initWithTitle:@"Archive" style:UIBarButtonItemStyleBordered
+			initWithTitle:TGLocalized(@"Archive")
+					style:UIBarButtonItemStyleBordered
 				   target:self action:@selector(archiveSelectedChats)];
+	UIBarButtonItem *delete = [[UIBarButtonItem alloc]
+			initWithTitle:TGLocalized(@"Delete")
+					style:UIBarButtonItemStyleBordered
+				   target:self action:@selector(deleteSelectedChats)];
 	if (self.editBar)
-		[self.editBar setItems:@[all, delete, mute, pin, read, archive] animated:NO];
-}
-
-- (void)selectAllChats {
-	NSInteger header = [self headerRows].count;
-	NSInteger total = (NSInteger)[self visibleChats].count;
-	BOOL all = [self.tableView.indexPathsForSelectedRows count] == (NSUInteger)total;
-	for (NSInteger i = 0; i < total; i++){
-		NSIndexPath *path = [NSIndexPath indexPathForRow:i + header inSection:0];
-		if (all)
-			[self.tableView deselectRowAtIndexPath:path animated:NO];
-		else
-			[self.tableView selectRowAtIndexPath:path animated:NO
-								   scrollPosition:UITableViewScrollPositionNone];
-	}
-	[self refreshEditToolbar];
-}
-
-- (void)pinSelectedChats {
-	NSArray *selected = [self selectedChatIndexes];
-	if (!selected.count)
-		return;
-	NSMutableSet *chosen = [NSMutableSet set];
-	for (NSDictionary *chat in selected)
-		[chosen addObject:chat[@"id"]];
-	BOOL allPinned = YES;
-	for (NSDictionary *chat in selected)
-		allPinned = allPinned && [chat[@"isPinned"] boolValue];
-
-	NSMutableArray *order = [NSMutableArray array];
-	for (NSDictionary *chat in [self visibleChats])
-		if ([chat[@"isPinned"] boolValue] && ![chosen containsObject:chat[@"id"]])
-			[order addObject:chat[@"id"]];
-	if (!allPinned){
-		for (NSDictionary *chat in selected)
-			if (![order containsObject:chat[@"id"]])
-				[order insertObject:chat[@"id"] atIndex:0];
-	}
-	[[TGClient shared] setPinnedChatIds:order];
-	[self finishChatEditingAction];
+		[self.editBar setItems:@[read, archive, delete] animated:NO];
 }
 
 - (void)readSelectedChats {
 	NSArray *selected = [self selectedChatIndexes];
 	if (!selected.count)
+		selected = [self visibleChats];
+	if (!selected.count)
 		return;
-	BOOL allUnread = YES;
-	for (NSDictionary *chat in selected)
-		allUnread = allUnread && ([chat[@"unread"] integerValue] > 0 ||
-				[chat[@"markedUnread"] boolValue]);
 	for (NSDictionary *chat in selected){
 		int64_t chatId = [chat[@"id"] longLongValue];
-		if (allUnread){
-			NSNumber *lastId = chat[@"lastId"];
-			if ([lastId longLongValue])
-				[[TGClient shared] markRead:@[lastId] inChat:chatId];
-			else
-				[[TGClient shared] setChat:chatId markedUnread:NO];
-		} else {
-			[[TGClient shared] setChat:chatId markedUnread:YES];
-		}
+		NSNumber *lastId = chat[@"lastId"];
+		if ([lastId longLongValue])
+			[[TGClient shared] markRead:@[lastId] inChat:chatId];
+		else
+			[[TGClient shared] setChat:chatId markedUnread:NO];
 	}
 	[self finishChatEditingAction];
 }
@@ -359,9 +359,11 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 	if (!selected.count)
 		return;
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:[NSString stringWithFormat:@"Delete %lu chats?",
-			(unsigned long)selected.count]
-						title:@"Delete Chats" action:@"Delete" destructive:YES
+	NSString *countText = [NSString stringWithFormat:@"%ld", (long)selected.count];
+	NSString *confirm = TGLocalizedPluralValue(@"Delete %d Chat",
+			@"Delete %@ Chats", countText, selected.count);
+	[TGAlertSheet showConfirm:confirm
+						title:@"Delete" action:@"Delete" destructive:YES
 					   inView:self.view onConfirm:^{
 		for (NSDictionary *chat in selected)
 			[[TGClient shared] deleteChat:[chat[@"id"] longLongValue]];
@@ -372,12 +374,6 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 - (void)archiveSelectedChats {
 	for (NSDictionary *chat in [self selectedChatIndexes])
 		[[TGClient shared] setChat:[chat[@"id"] longLongValue] archived:YES];
-	[self finishChatEditingAction];
-}
-
-- (void)muteSelectedChats {
-	for (NSDictionary *chat in [self selectedChatIndexes])
-		[[TGClient shared] setChat:[chat[@"id"] longLongValue] muted:YES];
 	[self finishChatEditingAction];
 }
 /// them: "All chats" first, then every folder, the active one filled with
@@ -400,7 +396,7 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 		NSString *label = (i == 0) ? @"All" : nil;
 		if (!label)
 			label = [title isKindOfClass:NSString.class] && title.length
-					? title : @"Folder";
+					? title : @"Folders";
 		BOOL active = (i == 0 && self.folderId == 0) ||
 				(i > 0 && [folders[i - 1] isKindOfClass:NSDictionary.class] &&
 				 [folders[i - 1][@"id"] integerValue] == self.folderId);
@@ -415,14 +411,19 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 					 [folders[i - 1][@"id"] integerValue] ==
 							self.folderHighlightPreviousId);
 		}
-		CGFloat w = MIN([label sizeWithFont:font].width + kFolderPillPad, kFolderPillMax);
+		// Size the pill from the word it will show: setTitle: translates the
+		// built-in names, so measuring the English "All" cut the Russian pill.
+		// A folder's own title is the account's text, not ours, and stays raw.
+		BOOL builtIn = (i == 0) || !title.length;
+		NSString *shown = builtIn ? TGLocalized(label) : label;
+		CGFloat w = MIN([shown sizeWithFont:font].width + kFolderPillPad, kFolderPillMax);
 		UIButton *pill = [UIButton buttonWithType:UIButtonTypeCustom];
 		// One expression for the height, used again for the radius below: a
 		// capsule is half of whatever this comes to.
 		CGFloat pillHeight = kFolderTabRow - TGDoubled(TGMetricFolderPillInset);
 		pill.frame = CGRectMake(x, TGMetricFolderPillInset, w, pillHeight);
 		pill.tag = 100 + i;
-		[pill setTitle:label forState:UIControlStateNormal];
+		[pill setTitle:shown forState:UIControlStateNormal];
 		pill.titleLabel.font = font;
 		pill.titleLabel.lineBreakMode = NSLineBreakByTruncatingTail;
 		pill.layer.cornerRadius = TGHalf(pillHeight);
@@ -448,7 +449,7 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 	// switched; leaving it out meant a small account had no archive at all
 	// until the list grew past the point that used to reveal the strip.
 	if ([TGClient shared].archivedChats.count > 0){
-		NSString *label = @"Archived";
+		NSString *label = TGLocalized(@"Archived");
 		CGFloat w = MIN([label sizeWithFont:font].width + kFolderPillPad, kFolderPillMax);
 		UIButton *pill = [UIButton buttonWithType:UIButtonTypeCustom];
 		CGFloat pillHeight = kFolderTabRow - TGDoubled(TGMetricFolderPillInset);

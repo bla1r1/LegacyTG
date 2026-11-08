@@ -1,4 +1,5 @@
 #import "TGProfileViewControllerInternal.h"
+#import "TGLocalization.h"
 #import "TGClientInternal.h"
 #import "TGNameWithStatus.h"
 #import "TGCustomEmojiStore.h"
@@ -16,6 +17,8 @@
 #import <AVFoundation/AVFoundation.h>
 #import "TGProfileViewController.h"
 #import "TGProfileDetailCell.h"
+#import "TGGroupLogic.h"
+#import "TGProfileLogic.h"
 
 
 
@@ -251,6 +254,7 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 		if (!me)
 			return;
 		NSString *kind = chat[@"type"][@"@type"];
+		BOOL wasChannel = me.isChannel;
 		me.isGroup = [kind isEqualToString:@"chatTypeBasicGroup"] ||
 					 [kind isEqualToString:@"chatTypeSupergroup"];
 		me.isChannel = [kind isEqualToString:@"chatTypeSupergroup"] &&
@@ -259,6 +263,11 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 				? chat[@"permissions"] : @{};
 		[me updateGroupStatus];
 		[me buildHeader];
+		// A channel label built before this answer used the group words;
+		// rebuild the card once the type is known.
+		if (TGProfileTypeChangeNeedsDetailsReload(wasChannel, me.isChannel,
+				me.details.count))
+			[me loadDetails];
 
 		[[TGClient shared] chatMember:meId inChat:me.chatId
 							completion:^(NSDictionary *member){
@@ -275,6 +284,7 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 					? status[@"rights"] : @{};
 			BOOL owner = [again isOwner];
 			BOOL hadInvite = again.canInvite;
+			BOOL hadManage = again.canManage;
 			again.canManage = owner || [again.myStatus isEqualToString:@"admin"];
 			// A basic group has no administrator rights object; its
 			// permissions are the chat's, and any unrestricted member may
@@ -291,6 +301,10 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 			// the header for every role read would re-download the avatar.
 			if (hadInvite != again.canInvite)
 				[again buildHeader];
+			[again updateNavigationItem];
+			// The card gained or lost its Settings row with this answer.
+			if (hadManage != again.canManage && again.details.count)
+				[again loadDetails];
 			[again reloadTableDebounced];
 		}];
 	}];
@@ -322,6 +336,27 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 
 	if (!self.userId){
 		__weak typeof(self) weakSelf = self;
+		// A public group's link is its @name, not the invite link, and the
+		// name lives on the supergroup record only. Ask once per profile.
+		if (self.groupUsername == nil && self.chatId){
+			[[TGClient shared] supergroupSettingsForChat:self.chatId
+					completion:^(NSDictionary *settings){
+				TGProfileViewController *again = weakSelf;
+				if (!again)
+					return;
+				NSArray *active = [settings[@"active"] isKindOfClass:NSArray.class]
+						? settings[@"active"] : @[];
+				NSString *name = active.count ? active[0] : @"";
+				if (![name isKindOfClass:NSString.class])
+					name = @"";
+				BOOL gained = !again.groupUsername.length && name.length > 0;
+				again.groupUsername = name;
+				// The card was already built with the invite link; rebuild it
+				// once the public name makes the official t.me link possible.
+				if (gained && again.details.count)
+					[again loadDetails];
+			}];
+		}
 		[self loadOwnRole];
 		[[TGClient shared] membersOfChat:self.chatId completion:^(NSArray *members){
 			weakSelf.members = members;
@@ -342,8 +377,8 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 			me.canManageDirectMessages = [info[@"canManageDirectMessages"] boolValue];
 			[me updateGroupStatus];
 			me.communityId = [info[@"communityId"] longLongValue];
-			NSMutableArray *rows = [NSMutableArray array];
-
+			NSString *commName = nil;
+			NSString *commSubtitle = nil;
 			if (me.communityId != 0) {
 				NSDictionary *commRecord = nil;
 				for (NSDictionary *c in [TGClient shared].communities) {
@@ -353,7 +388,7 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 					}
 				}
 				NSDictionary *fullComm = [[TGClient shared] cachedCommunityFullInfo:me.communityId];
-				NSString *commName = commRecord[@"name"];
+				commName = commRecord[@"name"];
 				if (!commName.length && [fullComm[@"name"] isKindOfClass:[NSString class]]) {
 					commName = fullComm[@"name"];
 				}
@@ -361,49 +396,35 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 					commName = @"Community";
 				}
 				NSArray *commChats = [fullComm[@"chats"] isKindOfClass:[NSArray class]] ? fullComm[@"chats"] : @[];
-				NSString *commSubtitle = nil;
 				if (commChats.count > 0) {
-					commSubtitle = [NSString stringWithFormat:@"Community with %lu chats", (unsigned long)commChats.count];
+					commSubtitle = TGLocalizedFormat(@"Community with %@ chats", @(commChats.count));
 				} else {
 					commSubtitle = @"Community";
 				}
-				[rows addObject:@{
-					@"kind" : @"community",
-					@"label" : commName,
-					@"value" : commSubtitle,
-					@"communityId" : @(me.communityId)
-				}];
 			}
 
-			if (me.inviteLink.length)
-				[rows addObject:@{
-					@"kind" : @"invite",
-					@"label" : (me.isChannel ? @"share link" : @"invite link"),
-					@"value" : me.inviteLink
-				}];
-
-			if ([info[@"description"] length])
-				[rows addObject:@{
-					@"kind" : @"about",
-					@"label" : (me.isChannel ? @"description" : @"about"),
-					@"value" : info[@"description"]
-				}];
-
-			if (me.linkedChatTitle.length)
-				[rows addObject:@{
-					@"kind" : @"linkedChat",
-					@"label" : (me.isChannel ? @"discussion" : @"linked channel"),
-					@"value" : me.linkedChatTitle
-				}];
-
+			NSString *similarValue = nil;
 			if (me.isChannel && me.similarChatIds.count) {
-				[rows addObject:@{
-					@"kind" : @"similarChannels",
-					@"label" : @"similar channels",
-					@"value" : [NSString stringWithFormat:@"%lu channels", (unsigned long)me.similarChatIds.count]}];
+				similarValue = TGLocalizedPluralValue(@"%@ channel", @"%@ channels",
+						[NSString stringWithFormat:@"%lu", (unsigned long)me.similarChatIds.count],
+						(NSInteger)me.similarChatIds.count);
 				[me loadSimilarChannelsAvatars];
 			}
-			me.details = rows;
+			// PeerInfoProfileItems order: community, link, description,
+			// Settings, then the rows this client still keeps on the card.
+			me.details = TGProfileGroupInfoRows(@{
+				@"communityId"          : @(me.communityId),
+				@"communityName"        : commName ?: @"",
+				@"communitySubtitle"    : commSubtitle ?: @"",
+				@"inviteLink"           : me.inviteLink ?: @"",
+				@"username"             : me.groupUsername ?: @"",
+				@"description"          : info[@"description"] ?: @"",
+				@"canManage"            : @(me.canManage),
+				@"isChannel"            : @(me.isChannel),
+				@"linkedChatTitle"      : me.linkedChatTitle ?: @"",
+				@"similarChannelsCount" : @(me.similarChatIds.count),
+				@"similarChannelsValue" : similarValue ?: @"",
+			});
 			[me buildHeader];
 			[me reloadTableDebounced];
 
@@ -434,8 +455,8 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 					}
 					if (!exists){
 						[updated addObject:@{@"kind" : @"similarChannels",
-								@"label" : @"similar channels",
-								@"value" : [NSString stringWithFormat:@"%lu channels", (unsigned long)(total > 0 ? total : chats.count)]}];
+								@"label" : @"Similar Channels",
+								@"value" : TGLocalizedPluralValue(@"%@ channel", @"%@ channels", [NSString stringWithFormat:@"%lu", (unsigned long)(total > 0 ? total : chats.count)], (NSInteger)(total > 0 ? total : chats.count))}];
 						again.details = updated;
 						[again reloadTableDebounced];
 					}
@@ -463,7 +484,7 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 					}
 					if (!exists){
 						[updated addObject:@{@"kind" : @"linkedChat",
-								@"label" : (again.isChannel ? @"discussion" : @"linked channel"),
+								@"label" : (again.isChannel ? @"Discussion Group" : @"Linked Channel"),
 								@"value" : again.linkedChatTitle}];
 						again.details = updated;
 						[again reloadTableDebounced];
@@ -500,6 +521,9 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 			weakSelf.restingStatus = @"bot";
 			[weakSelf statusLabelOwnerChanged:nil];
 		}
+		// The contact flag arrives with this answer and decides the Edit
+		// button, so the bar is rebuilt after it lands.
+		[weakSelf updateNavigationItem];
 		NSDictionary *statusType = user[@"emoji_status"][@"type"];
 		int64_t statusId = [statusType[@"custom_emoji_id"] longLongValue]
 				?: [statusType[@"model_custom_emoji_id"] longLongValue];

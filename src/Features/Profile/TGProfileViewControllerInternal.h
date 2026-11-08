@@ -51,12 +51,14 @@ static const CGFloat kLinkGlyph     = 24.0f;
 static const CGFloat kToastWidth    = 120.0f;
 static const CGFloat kToastHeight   = 34.0f;
 
-static const NSInteger kSectionDetails        = 0;
-static const NSInteger kSectionDirectMessages = 1;
-static const NSInteger kSectionStories        = 2;
-static const NSInteger kSectionGifts          = 3;
-static const NSInteger kSectionMembers        = 4;
-static const NSInteger kSectionMedia          = 5;
+static const NSInteger kSectionPersonalChannel = 0;
+static const NSInteger kSectionDetails        = 1;
+static const NSInteger kSectionDirectMessages = 2;
+static const NSInteger kSectionStories        = 3;
+static const NSInteger kSectionGifts          = 4;
+static const NSInteger kSectionMembers        = 5;
+static const NSInteger kSectionMedia          = 6;
+static const NSInteger kSectionDanger         = 7;
 
 static const NSInteger kStoryGridCols  = 3;
 static const CGFloat   kStoryGridGap   = TGMetricCollageGap;
@@ -64,7 +66,7 @@ static const CGFloat   kStoryGridGap   = TGMetricCollageGap;
 /// The address a piece of text links to; nil when it has none.
 NSURL *TGProfileFirstURL(NSString *text, NSArray *entities);
 
-@interface TGProfileViewController () <TGStreamingVoicePlayerDelegate>
+@interface TGProfileViewController () <TGStreamingVoicePlayerDelegate, UISearchBarDelegate>
 
 @property (nonatomic, strong) NSMutableSet *thumbnailsRequested;
 @property (nonatomic, assign) int64_t chatId;
@@ -82,6 +84,12 @@ NSURL *TGProfileFirstURL(NSString *text, NSArray *entities);
 /// The categories the bar is showing, in order: each is @{"title", "kind"}.
 /// Built fresh on every render by currentMediaTabs.
 @property (nonatomic, copy)   NSString *mainMediaKind;
+/// The bar search for the Files, Music and Links panes; nil shows everything.
+@property (nonatomic, copy)   NSString *mediaSearchQuery;
+/// The pane's search field is open. Cancel hides the field and returns the
+/// unfiltered list; a tab switch does the same.
+@property (nonatomic, assign) BOOL mediaSearchActive;
+@property (nonatomic, strong) UISearchBar *mediaSearchBar;
 /// Kinds whose page has already been asked for, so a re-selected tab does not
 /// re-request its list on every switch (item 8: fetch when opened).
 @property (nonatomic, strong) NSMutableSet *loadedMediaKinds;
@@ -108,6 +116,12 @@ NSURL *TGProfileFirstURL(NSString *text, NSArray *entities);
 // lives in statusLabelOwnerChanged (B4).
 @property (nonatomic, strong) NSString *restingStatus;
 - (void)statusLabelOwnerChanged:(NSNotification *)note;
+- (void)updateNavigationItem;
+- (void)showQRCodeForValue:(NSString *)value;
+- (void)mediaSearchTapped;
+/// The pane's search field, created once and re-used across reloads so the
+/// keyboard survives a keystroke.
+- (UISearchBar *)ensureMediaSearchBar;
 @property (nonatomic, strong) NSArray *actionNames;
 @property (nonatomic, assign) BOOL muted;
 @property (nonatomic, strong) NSString *phoneNumber;
@@ -129,6 +143,7 @@ NSURL *TGProfileFirstURL(NSString *text, NSArray *entities);
 @property (nonatomic, assign) BOOL hasDirectMessages;
 @property (nonatomic, assign) BOOL canManageDirectMessages;
 @property (nonatomic, assign) int64_t communityId;
+@property (nonatomic, assign) NSInteger personalChannelMemberCount;
 @property (nonatomic, strong) NSArray *similarChatIds;
 @property (nonatomic, strong) NSMutableDictionary *chatAvatars;
 @property (nonatomic, strong) NSMutableSet *requestedChatAvatars;
@@ -183,6 +198,10 @@ NSURL *TGProfileFirstURL(NSString *text, NSArray *entities);
 @property (nonatomic, copy) NSString *myStatus;
 @property (nonatomic, strong) NSDictionary *myRights;
 @property (nonatomic, assign) BOOL canManage;
+/// The group's public @name from getSupergroup, nil until that read answers.
+/// The info card prints https://t.me/<name>; an empty string means "asked,
+/// this group has no public name", so the read is not repeated.
+@property (nonatomic, copy) NSString *groupUsername;
 @property (nonatomic, assign) BOOL canInvite;
 @property (nonatomic, assign) BOOL isGroup;
 @property (nonatomic, assign) BOOL isChannel;

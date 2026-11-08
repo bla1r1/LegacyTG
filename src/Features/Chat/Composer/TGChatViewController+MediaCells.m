@@ -7,6 +7,7 @@
 #import "TGCapabilities.h"
 #import "TGDevice.h"
 #import "TGStyle.h"
+#import "TGLocalization.h"
 
 @implementation TGChatViewController (MediaCells)
 
@@ -283,8 +284,11 @@
 			cell.icon.backgroundColor = [[TGTheme shared] mediaOverlayColour];
 			cell.icon.textColor = [[TGTheme shared] onMediaColour];
 			cell.icon.font = TGFontPlate();
-			cell.icon.text = [TGCapabilities gifAutoplayWanted] ? @" GIF · tap to play "
-																: @" GIF · autoplay off ";
+			cell.icon.text = [TGCapabilities gifAutoplayWanted]
+					? [NSString stringWithFormat:@" %@ · %@ ", TGLocalized(@"GIF"),
+							TGLocalized(@"Play")]
+					: [NSString stringWithFormat:@" %@ · %@ ", TGLocalized(@"GIF"),
+							TGLocalized(@"Off")];
 			CGSize fits = [cell.icon sizeThatFits:CGSizeMake(layout.picSize.width, TGMetricLineCaption)];
 			cell.icon.frame = CGRectMake(kPadH + kCaptionInset,
 										 layout.pictureFrame.origin.y + kCaptionInset,

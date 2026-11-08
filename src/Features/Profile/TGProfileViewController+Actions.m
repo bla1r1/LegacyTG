@@ -1,4 +1,5 @@
 #import "TGProfileViewControllerInternal.h"
+#import "TGLocalization.h"
 #import "TGCapabilities.h"
 #import "TGStatusText.h"
 #import "TGStyle.h"
@@ -10,11 +11,15 @@
 #import "TGGroupMemberActions.h"
 #import "TGGroupCallViewController.h"
 #import "TGContactsViewController.h"
+#import "TGNewContactViewController.h"
+#import "TGProfileBirthdaySuggestViewController.h"
 #import "TGProfileViewController+Tier2.h"
 #import "TGSponsoredMessagesViewController.h"
 #import "TGStoryComposerViewController.h"
 #import "TGDevBotConsoleViewController.h"
 #import "TGAffiliateProgramsViewController.h"
+#import "TGGroupLogic.h"
+#import <CoreImage/CoreImage.h>
 
 /// The glyph on an action tile, over the word that names it.
 static const CGFloat kTileGlyph = TGMetricMenuGlyph;
@@ -47,7 +52,7 @@ static UIImage *TGSolidImage(UIColor *colour) {
 
 	__weak typeof(self) weakSelf = self;
 	NSMutableArray *choices = [NSMutableArray arrayWithObjects:
-			@"View All Photos", @"Copy Profile Link", nil];
+			@"Photos", @"Copy Link", nil];
 	NSString *sheetTitle = self.name.length ? self.name : @"Profile";
 	// The account wears no photo, so there is nothing to take back.
 	if ([TGClient shared].me[@"profile_photo"])
@@ -58,18 +63,18 @@ static UIImage *TGSolidImage(UIColor *colour) {
 					   inView:self.view
 					 onChoice:^(NSInteger index){
 		NSString *picked = choices[index];
-		if ([picked isEqualToString:@"View All Photos"]){
+		if ([picked isEqualToString:@"Photos"]){
 			TGProfilePhotosViewController *photos =
 					[[TGProfilePhotosViewController alloc] initWithUserId:self.userId];
 			photos.hidesBottomBarWhenPushed = YES;
 			[weakSelf.navigationController pushViewController:photos animated:YES];
 			return;
 		}
-		if ([picked isEqualToString:@"Copy Profile Link"]){
+		if ([picked isEqualToString:@"Copy Link"]){
 			[[TGClient shared] myUserLink:^(NSString *link){
 				if (link.length){
 					[UIPasteboard generalPasteboard].string = link;
-					[TGAlertSheet showMessage:@"Copied." title:nil
+					[TGAlertSheet showMessage:@"Link copied." title:nil
 									   inView:weakSelf.view];
 				}
 			}];
@@ -105,6 +110,10 @@ static UIImage *TGSolidImage(UIColor *colour) {
 /// The tiles under the name: a glyph over a word, on a soft rounded plate.
 /// Only the ones that mean something here - a group has no one to call.
 - (void)buildActionsIn:(UIView *)header atY:(CGFloat)y {
+	// My Profile has no header action row: Add Story and Edit live in the
+	// navigation bar, as in the official client.
+	if (self.isOwnProfile)
+		return;
 	NSMutableArray *tiles = [NSMutableArray array];
 	BOOL own = self.isOwnProfile;
 	if (own){
@@ -122,11 +131,16 @@ static UIImage *TGSolidImage(UIColor *colour) {
 		// from that chat (it passes a search), the chat is one step back.
 		if (!self.onSearchTapped)
 			[tiles addObject:@[@"chat", @"message"]];
-		// The person's own setting decides, and it arrives with full info.
-		if (self.canCall)
+		// A bot cannot place or receive calls; its profile offers Message
+		// and Stop instead.
+		if (self.canCall && !self.isBot)
 			[tiles addObject:@[@"call",  @"call"]];
-		if (self.canCall && self.canVideoCall && [TGCapabilities canEncodeVideoCall])
+		if (self.canCall && self.canVideoCall && !self.isBot &&
+				[TGCapabilities canEncodeVideoCall])
 			[tiles addObject:@[@"video", @"video"]];
+		// A bot can be stopped from here; blocking it is what Stop does.
+		if (self.isBot && !self.blocked)
+			[tiles addObject:@[@"close", @"stop"]];
 		[tiles addObject:@[(self.muted ? @"unmute" : @"mute"),
 						   (self.muted ? @"unmute" : @"mute")]];
 		if (self.onSearchTapped)
@@ -231,6 +245,8 @@ static UIImage *TGSolidImage(UIColor *colour) {
 		[TGCallViewController presentForUserId:self.userId
 										  name:self.name
 									  outgoing:YES];
+	} else if ([action isEqualToString:@"stop"]){
+		[self stopBot];
 	} else if ([action isEqualToString:@"message"]){
 		if (self.isChannel)
 			[self openDirectMessages];
@@ -254,24 +270,72 @@ static UIImage *TGSolidImage(UIColor *colour) {
 /// The Message tile. A profile reached from Contacts has no chat behind it,
 /// and Telegram opens one from here after the same can-send pre-check the
 /// member sheet uses.
+/// The Add to Contacts row opens the contact form prefilled with the name
+/// and known number, and writes only when the person taps Done.
 - (void)addToContactsTapped {
 	NSArray *words = [self.name componentsSeparatedByString:@" "];
-	NSString *first = words.firstObject ?: @"";
-	NSString *last = words.count > 1 ? [[words subarrayWithRange:NSMakeRange(1, words.count - 1)]
-			componentsJoinedByString:@" "] : @"";
+	TGNewContactViewController *contact = [[TGNewContactViewController alloc] init];
+	contact.first = words.firstObject ?: @"";
+	contact.last = words.count > 1
+			? [[words subarrayWithRange:NSMakeRange(1, words.count - 1)]
+					componentsJoinedByString:@" "] : @"";
+	contact.phone = self.phoneNumber ?: @"";
+	UINavigationController *nav = [[UINavigationController alloc]
+			initWithRootViewController:contact];
+	[self presentViewController:nav animated:YES completion:nil];
+}
+
+/// Stop is the bot's block: Telegram marks the bot stopped so it cannot
+/// message again until the person starts it.
+- (void)stopBot {
+	int64_t userId = self.userId;
+	if (!userId)
+		return;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] addContactWithUserId:self.userId firstName:first lastName:last
-									  phone:self.phoneNumber ?: @"" completion:^(BOOL ok){
+	[[TGClient shared] setUser:userId blocked:YES completion:^(BOOL ok){
 		TGProfileViewController *me = weakSelf;
-		if (!me)
+		if (!me || !ok)
 			return;
-		if (!ok){
-			[TGAlertSheet showMessage:@"Telegram did not add this contact."
-								title:@"Add to Contacts" inView:me.view];
-			return;
-		}
-		me.isContact = YES;
+		me.blocked = YES;
 		[me loadDetails];
+	}];
+}
+
+/// The bot's own policy page when it declares one. Official falls back to the
+/// public page for a bot that has no URL of its own.
+- (void)openBotPrivacyPolicy {
+	int64_t userId = self.userId;
+	if (!userId)
+		return;
+	[[TGClient shared] request:@{@"@type" : @"getUserFullInfo", @"user_id" : @(userId)}
+				   completion:^(NSDictionary *full){
+		NSString *url = full[@"bot_info"][@"privacy_policy_url"];
+		if (![url isKindOfClass:NSString.class] || !url.length)
+			url = @"https://telegram.org/privacy";
+		NSURL *target = [NSURL URLWithString:url];
+		if (target)
+			[[UIApplication sharedApplication] openURL:target];
+	}];
+}
+
+/// A bot command is a chat message; open the bot's chat once and send it.
+- (void)performBotCommand:(NSString *)command {
+	int64_t userId = self.userId;
+	if (!userId || !command.length)
+		return;
+	NSString *name = self.name;
+	__weak typeof(self) weakSelf = self;
+	[[TGClient shared] privateChatWithUser:userId completion:^(int64_t chatId){
+		TGProfileViewController *me = weakSelf;
+		if (!me || !chatId)
+			return;
+		[[TGClient shared] sendText:[@"/" stringByAppendingString:command]
+							 toChat:chatId];
+		TGChatViewController *chat = [[TGChatViewController alloc] init];
+		chat.chatId = chatId;
+		chat.chatTitle = name ?: @"";
+		chat.hidesBottomBarWhenPushed = YES;
+		[me.navigationController pushViewController:chat animated:YES];
 	}];
 }
 
@@ -287,11 +351,10 @@ static UIImage *TGSolidImage(UIColor *colour) {
 			return;
 		if (![result isEqualToString:@"ok"]){
 			NSString *say = [result isEqualToString:@"paidMessages"]
-					? @"They charge for incoming messages, and this account "
-					  @"carries no wallet for that."
+					? @"An error occurred."
 					: ([result isEqualToString:@"userRestrictsNewChats"]
-					   ? @"They set their profile to messages from contacts only."
-					   : @"That profile is gone.");
+					   ? @"An error occurred."
+					   : @"An error occurred.");
 			[TGAlertSheet showMessage:say
 								title:name.length ? name : @"Message"
 							   inView:me.view];
@@ -338,45 +401,32 @@ static UIImage *TGSolidImage(UIColor *colour) {
 /// no secret chats, no gifts.
 - (void)showMoreMenuFrom:(UIView *)tile {
 	NSMutableArray *items = [NSMutableArray array];
-	if (self.isOwnProfile){
-		// Add Story and Edit Profile have a tile and a bar button of their own.
-		[items addObject:@{@"title" : @"Story Archive", @"icon" : @"archive"}];
-		[items addObject:@{@"title" : @"Copy Profile Link", @"icon" : @"copy"}];
-		[items addObject:@{@"title" : @"Add Local Note", @"icon" : @"edit"}];
-		CGPoint where = [tile convertPoint:CGPointMake(TGHalf(tile.bounds.size.width),
-													   tile.bounds.size.height)
-									toView:self.navigationController.view];
-		__weak typeof(self) weakSelf = self;
-		[TGPopupMenu showItems:items atPoint:where inView:self.navigationController.view
-					  onChoice:^(NSInteger index, NSString *title){
-			[weakSelf runMoreAction:title];
-		}];
-		return;
-	}
-
 	// Emoji status, profile audio, direct messages and stake dice: one
 	// category answers the rows and the tap so this menu stays a menu.
 	[items addObjectsFromArray:[self tier2MoreItems]];
 	if (self.userId){
-		[items addObject:@{@"title" : @"Share contact", @"icon" : @"forward"}];
+		// Share Contact only exists for a real contact with a number to send.
+		if (self.isContact && self.phoneNumber.length)
+			[items addObject:@{@"title" : @"Share Contact", @"icon" : @"forward"}];
 		if (self.userId == [[TGClient shared].me[@"id"] longLongValue])
-			[items addObject:@{@"title" : @"Copy Profile Link", @"icon" : @"forward"}];
-		[items addObject:@{@"title" : @"Start Secret Chat", @"icon" : @"privacy"}];
+			[items addObject:@{@"title" : @"Copy Link", @"icon" : @"forward"}];
+		// Bots cannot have secret chats.
+		if (!self.isBot)
+			[items addObject:@{@"title" : @"Start Secret Chat", @"icon" : @"privacy"}];
 	}
-	// The things one person can do to another's profile: a note only this
-	// account reads, a photo or birthday they may accept, the picture only
-	// this account sees, and the card their link opens with.
+	// The things one person can do to another's profile: a photo or birthday
+	// they may accept, the picture only this account sees, and the card their
+	// link opens with. The note row is added once, below, so it routes to the
+	// note editor rather than the local-message branch.
 	if (self.userId && self.userId != [[TGClient shared].me[@"id"] longLongValue]){
-		[items addObject:@{@"title" : (self.personalNote.length
-				? @"Personal Note" : @"Add Personal Note"), @"icon" : @"edit"}];
-		[items addObject:@{@"title" : @"Suggest Profile Photo", @"icon" : @"react"}];
+		[items addObject:@{@"title" : @"Suggest as Profile Photo", @"icon" : @"react"}];
 		[items addObject:@{@"title" : @"Suggest Birthday", @"icon" : @"star"}];
 		[items addObject:@{@"title" : (self.hasPersonalPhoto
-				? @"Change Personal Photo" : @"Set Personal Photo"), @"icon" : @"user"}];
+				? @"Change Profile Photo" : @"Set Profile Photo"), @"icon" : @"user"}];
 		if (self.hasPersonalPhoto)
-			[items addObject:@{@"title" : @"Remove Personal Photo", @"icon" : @"delete",
+			[items addObject:@{@"title" : @"Remove Photo", @"icon" : @"delete",
 							   @"destructive" : @YES}];
-		[items addObject:@{@"title" : @"Share Theme", @"icon" : @"folder"}];
+		[items addObject:@{@"title" : @"Share", @"icon" : @"folder"}];
 	}
 	// A group's own management lives on one screen now. The menu keeps the
 	// way in and the rows that are not group management (a note, the date
@@ -387,7 +437,7 @@ static UIImage *TGSolidImage(UIColor *colour) {
 														 : @"Group Settings",
 							   @"icon" : @"privacy"}];
 			if (self.isChannel)
-				[items addObject:@{@"title" : @"Sponsored Messages",
+				[items addObject:@{@"title" : @"Telegram Ads",
 								   @"icon" : @"data"}];
 			if (self.isChannel)
 				[items addObject:@{@"title" : @"Affiliate Program",
@@ -397,32 +447,33 @@ static UIImage *TGSolidImage(UIColor *colour) {
 			[items addObject:@{@"title" : @"Add Members", @"icon" : @"plus"}];
 		if (!self.isChannel) {
 			[items addObject:@{@"title" : @"Calls", @"icon" : @"call"}];
-			[items addObject:@{@"title" : @"View with Topics", @"icon" : @"folder"}];
+			[items addObject:@{@"title" : @"View as Topics", @"icon" : @"folder"}];
 		}
 	}
-	// A bot's own record is editable by the account that owns it. The row is
-	// only there for a bot, because every request behind it is refused for a
-	// person.
-	if (self.userId && [[TGClient shared] userIsBot:self.userId])
+	// A bot's own record is editable by the account that owns it, and its
+	// commands carry the Settings / Help / Privacy rows official offers.
+	if (self.userId && (self.isBot || [[TGClient shared] userIsBot:self.userId])){
 		[items addObject:@{@"title" : @"Bot Settings", @"icon" : @"data"}];
-	if (self.userId && [[TGClient shared] userIsBot:self.userId])
-		[items addObject:@{@"title" : @"Affiliate Program", @"icon" : @"star"}];
+		[items addObject:@{@"title" : @"Help", @"icon" : @"faq"}];
+		[items addObject:@{@"title" : @"Privacy Policy", @"icon" : @"policy"}];
+	}
 	// A note kept in the chat without being sent to anyone. It is the only
 	// way to make a message that never leaves this device.
-	[items addObject:@{@"title" : @"Add Local Note", @"icon" : @"edit"}];
+	if (self.userId && !self.isOwnProfile)
+		[items addObject:@{@"title" : (self.personalNote.length
+				? @"Note" : @"Add Notes"), @"icon" : @"edit"}];
 	if ([[TGClient shared] chatIsSavedMessages:self.chatId])
 		[items insertObject:@{@"title" : @"Topics", @"icon" : @"folder"} atIndex:0];
 	if (self.onJumpToDateTapped)
 		[items addObject:@{@"title" : @"Jump to Date", @"icon" : @"folder"}];
 	if (self.userId || !self.isChannel || self.canManage)
-		[items addObject:@{@"title" : @"Auto-delete messages", @"icon" : @"delete"}];
+		[items addObject:@{@"title" : @"Auto-Delete Messages", @"icon" : @"delete"}];
 	if (self.userId || !self.isChannel)
 		[items addObject:@{@"title" : @"Clear history", @"icon" : @"delete"}];
 	[items addObject:@{@"title" : @"Report", @"icon" : @"privacy",
 					   @"destructive" : @YES}];
 	BOOL isMe = self.userId == [[TGClient shared].me[@"id"] longLongValue];
-	if (self.userId && !isMe && self.isContact)
-		[items addObject:@{@"title" : @"Delete Contact", @"icon" : @"delete", @"destructive" : @YES}];
+	// Delete Contact has its own bottom section on the profile.
 	// Leaving and deleting are not the same row. Telegram keeps Delete Group
 	// for the owner, because a group without one cannot be left; everybody
 	// else gets Leave Group. The role arrives with loadOwnRole.
@@ -437,7 +488,8 @@ static UIImage *TGSolidImage(UIColor *colour) {
 							   @"icon" : @"delete", @"destructive" : @YES}];
 		}
 	}
-	if (self.userId)
+	// A non-contact gets Block User in the card; a contact keeps it in More.
+	if (self.userId && !isMe && !self.isBot && self.isContact)
 		[items addObject:@{@"title" : (self.blocked ? @"Unblock" : @"Block"),
 						   @"icon" : @"privacy", @"destructive" : @YES}];
 
@@ -463,15 +515,14 @@ static UIImage *TGSolidImage(UIColor *colour) {
 		if (!me)
 			return;
 		if (done){
-			[TGAlertSheet showMessage:@"Thank you. Telegram has the report."
-								title:@"Reported" inView:me.view];
+			[TGAlertSheet showMessage:@"Telegram moderators will review your report. Thank you!"
+								title:@"Report" inView:me.view];
 			return;
 		}
 		if (!options.count){
 			// A reason this screen has no step for - free text, or a report
 			// that has to name messages. Saying so beats a dead menu row.
-			[TGAlertSheet showMessage:@"This report needs a reason this app "
-									  @"cannot ask for yet."
+			[TGAlertSheet showMessage:@"An error occurred."
 								title:@"Report" inView:me.view];
 			return;
 		}
@@ -491,10 +542,12 @@ static UIImage *TGSolidImage(UIColor *colour) {
 
 - (void)leaveChatTapped {
 	int64_t chatId = self.chatId;
-	NSString *what = self.isChannel ? @"channel" : @"group";
 	NSString *title = self.isChannel ? @"Leave Channel" : @"Leave Group";
-	[TGAlertSheet showConfirm:[NSString stringWithFormat:
-					@"You will stop receiving messages from this %@.", what]
+	NSString *name = self.name ?: @"";
+	NSString *message = self.isChannel
+			? TGLocalizedFormat(@"Are you sure you want to leave the channel **%@**?", name)
+			: TGLocalizedFormat(@"Do you want to leave the group **%@**?", name);
+	[TGAlertSheet showConfirm:TGStripBoldMarkers(message)
 						title:title
 					   action:@"Leave"
 				  destructive:YES
@@ -514,24 +567,22 @@ static UIImage *TGSolidImage(UIColor *colour) {
 		[self editProfileTapped];
 		return;
 	}
-	if ([title isEqualToString:@"Copy Profile Link"]){
+	if ([title isEqualToString:@"Copy Link"]){
 		// The link is Telegram's, not the username's spellcheck: ask whose
 		// account it hands out, which here is the signed-in one.
 		NSString *name = self.name;
 		__weak typeof(self) weakSelf = self;
 		[[TGClient shared] myUserLink:^(NSString *link){
 			if (!link.length){
-				[TGAlertSheet showMessage:@"Telegram did not hand a link back."
-									title:@"Copy Profile Link"
+				[TGAlertSheet showMessage:@"An error occurred."
+									title:@"Copy Link"
 								   inView:weakSelf.view];
 				return;
 			}
 			[UIPasteboard generalPasteboard].string = link;
-			NSString *who = name.length ? name : @"link";
-			NSString *message = [NSString stringWithFormat:@"%@ copied:\n%@",
-					who, link];
+			NSString *message = @"Link copied.";
 			[TGAlertSheet showMessage:message
-								title:@"Copy Profile Link"
+								title:@"Copy Link"
 							   inView:weakSelf.view];
 		}];
 		return;
@@ -542,31 +593,30 @@ static UIImage *TGSolidImage(UIColor *colour) {
 		return;
 	}
 
-	if ([title isEqualToString:@"Share contact"]){
-		TGForwardPicker *picker = [[TGForwardPicker alloc] init];
-		NSString *name = self.name;
-		int64_t userId = self.userId;
-		__weak typeof(self) weakSelf = self;
-		picker.onPicked = ^(int64_t targetChatId){
-			NSString *phone = weakSelf.phoneNumber;
-			if (!phone.length){
-				[TGAlertSheet showMessage:@"This account does not show its phone number."
-									title:@"Share contact"
-								   inView:weakSelf.view];
-				return;
-			}
-			[[TGClient shared] sendContactNamed:name phone:phone toChat:targetChatId];
-		};
-		(void)userId;
-		[self.navigationController pushViewController:picker animated:YES];
+	if ([title isEqualToString:@"Share Contact"]){
+		NSString *phone = self.phoneNumber;
+		if (!phone.length)
+			return;
+		NSString *name = self.name.length ? self.name : phone;
+		NSString *card = [NSString stringWithFormat:
+				@"BEGIN:VCARD\nVERSION:3.0\nFN:%@\nTEL;TYPE=CELL:+%@\nEND:VCARD\n",
+				name, phone];
+		NSString *path = [NSTemporaryDirectory()
+				stringByAppendingPathComponent:@"contact.vcf"];
+		[card writeToFile:path atomically:YES
+				 encoding:NSUTF8StringEncoding error:NULL];
+		NSURL *url = [NSURL fileURLWithPath:path];
+		UIActivityViewController *share = [[UIActivityViewController alloc]
+				initWithActivityItems:@[url] applicationActivities:nil];
+		[self presentViewController:share animated:YES completion:nil];
 		return;
 	}
 
 
-	if ([title isEqualToString:@"Auto-delete messages"]){
+	if ([title isEqualToString:@"Auto-Delete Messages"]){
 		int64_t chatId = self.chatId;
-		[TGAlertSheet showChoices:@[@"Off", @"1 day", @"1 week", @"1 month"]
-							title:@"Delete messages after"
+		[TGAlertSheet showChoices:@[@"Off", @"1 day", @"1 week", TGLocalizedPluralValue(@"%@ month", @"%@ months", @"1", 1)]
+							title:@"Auto-Delete After..."
 				 destructiveIndex:-1
 						   inView:self.view
 						 onChoice:^(NSInteger index){
@@ -585,32 +635,6 @@ static UIImage *TGSolidImage(UIColor *colour) {
 		return;
 	}
 
-	if ([title isEqualToString:@"Add Local Note"]){
-		int64_t chatId = self.chatId;
-		__weak typeof(self) weakSelf = self;
-		[TGAlertSheet showInput:@"Add Local Note"
-						message:@"Kept in this chat on this device; never sent."
-					placeholder:@"Note"
-						   text:nil
-						 action:@"Add"
-						 inView:self.view
-					   onSubmit:^(NSString *text){
-			[[TGClient shared] addLocalTextMessage:text toChat:chatId
-										completion:^(int64_t messageId){
-				TGProfileViewController *me = weakSelf;
-				if (!me)
-					return;
-				[TGSnackbar showInView:me.view
-								  text:(messageId ? @"Note added"
-												  : @"Telegram refused the note")
-							   seconds:2 onCommit:nil];
-			}];
-		}];
-		return;
-	}
-
-
-
 	if ([title isEqualToString:@"Start Secret Chat"]){
 		int64_t userId = self.userId;
 		NSString *name = self.name;
@@ -619,8 +643,7 @@ static UIImage *TGSolidImage(UIColor *colour) {
 										completion:^(int64_t chatId){
 			TGProfileViewController *me = weakSelf;
 			if (!chatId){
-				[TGAlertSheet showMessage:@"Telegram refused a secret chat with "
-										  @"this account."
+				[TGAlertSheet showMessage:@"An error occurred."
 									title:@"Secret Chat" inView:me.view];
 				return;
 			}
@@ -634,8 +657,7 @@ static UIImage *TGSolidImage(UIColor *colour) {
 					name.length ? name : @"Secret"] forKey:@"chatTitle"];
 			chat.hidesBottomBarWhenPushed = YES;
 			[me.navigationController pushViewController:chat animated:YES];
-			[TGAlertSheet showMessage:@"Nothing can be sent until their device "
-									  @"comes online and accepts the key."
+			[TGAlertSheet showMessage:@"An error occurred."
 								title:@"Secret Chat" inView:chat.view];
 		}];
 		return;
@@ -648,7 +670,7 @@ static UIImage *TGSolidImage(UIColor *colour) {
 
 
 
-	if ([title isEqualToString:@"Sponsored Messages"]){
+	if ([title isEqualToString:@"Telegram Ads"]){
 		TGSponsoredMessagesViewController *ads =
 				[[TGSponsoredMessagesViewController alloc] init];
 		ads.chatId = self.chatId;
@@ -677,6 +699,14 @@ static UIImage *TGSolidImage(UIColor *colour) {
 		TGPresentControllerFrom(bots, self);
 		return;
 	}
+	if ([title isEqualToString:@"Help"]){
+		[self performBotCommand:[title lowercaseString]];
+		return;
+	}
+	if ([title isEqualToString:@"Privacy"] || [title isEqualToString:@"Privacy Policy"]){
+		[self openBotPrivacyPolicy];
+		return;
+	}
 
 	if ([title isEqualToString:@"Calls"]){
 		TGGroupCallViewController *screen = [[TGGroupCallViewController alloc]
@@ -697,7 +727,7 @@ static UIImage *TGSolidImage(UIColor *colour) {
 			NSLog(@"TGProfile: Group Settings unavailable (class %@, chat %lld)",
 				  settingsClass ? @"present but init returned nil" : @"missing",
 				  self.chatId);
-			[TGAlertSheet showMessage:[NSString stringWithFormat:@"%@ could not be opened on this build.", title]
+			[TGAlertSheet showMessage:@"An error occurred."
 								title:title inView:self.view];
 			return;
 		}
@@ -733,18 +763,16 @@ static UIImage *TGSolidImage(UIColor *colour) {
 
 
 
-	if ([title isEqualToString:@"View with Topics"]){
+	if ([title isEqualToString:@"View as Topics"]){
 		int64_t chatId = self.chatId;
 		NSString *chatTitle = self.name;
 		__weak typeof(self) weakSelf = self;
 		// What it is now is read off the chat, so the menu row says the
 		// move it is about to make rather than one it has already made.
-		NSString *next = @"Show Topics";
-		NSString *warn = @"The channel is shown as one flow of messages now; "
-						 @"showing it as a list of topics instead.";
-		NSString *now = @"Show as One Flow";
-		NSString *warnBack = @"The channel is shown as topics now; showing "
-							 @"it as one flow of messages instead.";
+		NSString *next = @"Show in Topics";
+		NSString *warn = @"View as Topics";
+		NSString *now = @"Messages";
+		NSString *warnBack = @"View as Topics";
 		[[TGClient shared] chatWithViewAsTopics:chatId completion:^(BOOL viewAsTopics){
 			NSString *action = viewAsTopics ? now : next;
 			NSString *say = viewAsTopics ? warnBack : warn;
@@ -759,10 +787,7 @@ static UIImage *TGSolidImage(UIColor *colour) {
 											completion:^(BOOL ok){
 					TGProfileViewController *me = weakSelf;
 					if (!ok)
-						[TGAlertSheet showMessage:@"Telegram refused that. Only "
-												  @"an administrator of a forum "
-												  @"supergroup or a channel "
-												  @"flips this."
+						[TGAlertSheet showMessage:@"An error occurred."
 											title:(chatTitle ?: @"Topics")
 										   inView:me.view];
 				}];
@@ -771,14 +796,14 @@ static UIImage *TGSolidImage(UIColor *colour) {
 		return;
 	}
 
-	if ([title isEqualToString:@"Add Personal Note"] ||
-			[title isEqualToString:@"Personal Note"]){
+	if ([title isEqualToString:@"Add Notes"] ||
+			[title isEqualToString:@"Note"]){
 		int64_t userId = self.userId;
 		__weak typeof(self) weakSelf = self;
 		void (^write)(void) = ^{
-			[TGAlertSheet showInput:@"Personal Note"
-							message:@"Only you see this. An empty note removes it."
-						placeholder:@"A few words"
+			[TGAlertSheet showInput:@"Note"
+							message:@"Notes are only visible to you."
+						placeholder:@"Note"
 							   text:weakSelf.personalNote
 							 action:@"Save"
 							 inView:weakSelf.view
@@ -787,14 +812,14 @@ static UIImage *TGSolidImage(UIColor *colour) {
 									completion:^(BOOL ok, NSString *error){
 					TGProfileViewController *me = weakSelf;
 					if (!ok){
-						[TGAlertSheet showMessage:(error ?: @"Telegram refused that.")
-											title:@"Personal Note" inView:me.view];
+						[TGAlertSheet showMessage:(error ?: @"An error occurred.")
+											title:@"Note" inView:me.view];
 						return;
 					}
 					me.personalNote = text;
 					[me loadDetails];
-					[TGAlertSheet showMessage:@"Note saved."
-										title:@"Personal Note" inView:me.view];
+					[TGAlertSheet showMessage:@"Saved"
+										title:@"Note" inView:me.view];
 				}];
 			}];
 		};
@@ -802,8 +827,8 @@ static UIImage *TGSolidImage(UIColor *colour) {
 			write();
 			return;
 		}
-		[TGAlertSheet showChoices:@[@"Edit Note", @"Remove Note"]
-							title:@"Personal Note"
+		[TGAlertSheet showChoices:@[@"Edit Note", @"Remove"]
+							title:@"Note"
 				 destructiveIndex:1
 						   inView:self.view
 						 onChoice:^(NSInteger index){
@@ -815,56 +840,32 @@ static UIImage *TGSolidImage(UIColor *colour) {
 								completion:^(BOOL ok, NSString *error){
 				TGProfileViewController *me = weakSelf;
 				if (!ok){
-					[TGAlertSheet showMessage:(error ?: @"Telegram refused that.")
-										title:@"Personal Note" inView:me.view];
+					[TGAlertSheet showMessage:(error ?: @"An error occurred.")
+										title:@"Note" inView:me.view];
 					return;
 				}
 				me.personalNote = @"";
 				[me loadDetails];
-				[TGAlertSheet showMessage:@"Note removed."
-									title:@"Personal Note" inView:me.view];
+				[TGAlertSheet showMessage:@"Saved"
+									title:@"Note" inView:me.view];
 			}];
 		}];
 		return;
 	}
 
 	if ([title isEqualToString:@"Suggest Birthday"]){
-		int64_t userId = self.userId;
-		__weak typeof(self) weakSelf = self;
-		[TGAlertSheet showInput:@"Suggest Birthday"
-						message:@"Telegram asks them to accept it; their profile "
-								@"does not change until they do."
-					placeholder:@"YYYY-MM-DD"
-						   text:nil
-						 action:@"Suggest"
-						 inView:self.view
-					   onSubmit:^(NSString *text){
-			NSArray *parts = [text componentsSeparatedByString:@"-"];
-			NSInteger year = parts.count > 0 ? [parts[0] integerValue] : 0;
-			NSInteger month = parts.count > 1 ? [parts[1] integerValue] : 0;
-			NSInteger day = parts.count > 2 ? [parts[2] integerValue] : 0;
-			if (day < 1 || day > 31 || month < 1 || month > 12){
-				[TGAlertSheet showMessage:@"Write the date as YYYY-MM-DD."
-									title:@"Suggest Birthday" inView:weakSelf.view];
-				return;
-			}
-			[[TGClient shared] suggestBirthdateDay:day month:month year:year
-										  forUser:userId
-									   completion:^(BOOL ok, NSString *error){
-				TGProfileViewController *me = weakSelf;
-				[TGAlertSheet showMessage:(ok
-						? @"Birthday suggested."
-						: (error ?: @"Telegram refused that."))
-									title:@"Suggest Birthday" inView:me.view];
-			}];
-		}];
+		TGProfileBirthdaySuggestViewController *suggest =
+				[[TGProfileBirthdaySuggestViewController alloc] init];
+		suggest.userId = self.userId;
+		suggest.hidesBottomBarWhenPushed = YES;
+		[self.navigationController pushViewController:suggest animated:YES];
 		return;
 	}
 
-	if ([title isEqualToString:@"Suggest Profile Photo"] ||
-			[title isEqualToString:@"Set Personal Photo"] ||
-			[title isEqualToString:@"Change Personal Photo"]){
-		self.pendingPhotoAction = [title isEqualToString:@"Suggest Profile Photo"]
+	if ([title isEqualToString:@"Suggest as Profile Photo"] ||
+			[title isEqualToString:@"Set Profile Photo"] ||
+			[title isEqualToString:@"Change Profile Photo"]){
+		self.pendingPhotoAction = [title isEqualToString:@"Suggest as Profile Photo"]
 				? @"suggest" : @"personal";
 		UIImagePickerController *picker = [[UIImagePickerController alloc] init];
 		picker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;
@@ -873,11 +874,11 @@ static UIImage *TGSolidImage(UIColor *colour) {
 		return;
 	}
 
-	if ([title isEqualToString:@"Remove Personal Photo"]){
+	if ([title isEqualToString:@"Remove Photo"]){
 		int64_t userId = self.userId;
 		__weak typeof(self) weakSelf = self;
-		[TGAlertSheet showConfirm:@"The picture only you see for them is removed."
-							title:@"Remove Personal Photo"
+		[TGAlertSheet showConfirm:@"Remove Photo"
+							title:@"Remove Photo"
 						   action:@"Remove"
 					  destructive:YES
 						   inView:self.view
@@ -886,20 +887,20 @@ static UIImage *TGSolidImage(UIColor *colour) {
 												  completion:^(BOOL ok, NSString *error){
 				TGProfileViewController *me = weakSelf;
 				if (!ok){
-					[TGAlertSheet showMessage:(error ?: @"Telegram refused that.")
-										title:@"Personal Photo" inView:me.view];
+					[TGAlertSheet showMessage:(error ?: @"An error occurred.")
+										title:@"Edit Profile Photo" inView:me.view];
 					return;
 				}
 				me.hasPersonalPhoto = NO;
 				[me loadDetails];
-				[TGAlertSheet showMessage:@"Personal photo removed."
-									title:@"Personal Photo" inView:me.view];
+				[TGAlertSheet showMessage:@"Saved"
+									title:@"Edit Profile Photo" inView:me.view];
 			}];
 		}];
 		return;
 	}
 
-	if ([title isEqualToString:@"Share Theme"]){
+	if ([title isEqualToString:@"Share"]){
 		int64_t userId = self.userId;
 		__weak typeof(self) weakSelf = self;
 		[[TGClient shared] profileShareThemeBackdropsWithCompletion:^(NSArray *backdrops,
@@ -908,34 +909,34 @@ static UIImage *TGSolidImage(UIColor *colour) {
 			if (!me)
 				return;
 			if (error.length){
-				[TGAlertSheet showMessage:error title:@"Share Theme" inView:me.view];
+				[TGAlertSheet showMessage:error title:@"Share" inView:me.view];
 				return;
 			}
 			NSMutableArray *titles = [NSMutableArray arrayWithObject:@"Default"];
 			for (NSDictionary *backdrop in backdrops)
 				[titles addObject:backdrop[@"name"] ?: @"Backdrop"];
 			if (titles.count == 1){
-				[TGAlertSheet showMessage:@"Telegram did not send any backdrops."
-									title:@"Share Theme" inView:me.view];
+				[TGAlertSheet showMessage:@"An error occurred."
+									title:@"Share" inView:me.view];
 				return;
 			}
 			[TGAlertSheet showChoices:titles
-								title:@"Share Theme"
-							  message:@"The card shown when your link to them is shared."
+								title:@"Share"
+							  message:nil
 					 destructiveIndex:-1
 							   inView:me.view
 							 onChoice:^(NSInteger index){
 				[[TGClient shared] privateChatWithUser:userId completion:^(int64_t chatId){
 					if (!chatId){
-						[TGAlertSheet showMessage:@"Telegram did not open a chat for the theme."
-											title:@"Share Theme" inView:me.view];
+						[TGAlertSheet showMessage:@"An error occurred."
+											title:@"Share" inView:me.view];
 						return;
 					}
 					void (^answer)(BOOL, NSString *) = ^(BOOL ok, NSString *error){
 						[TGAlertSheet showMessage:(ok
-								? @"Share theme updated."
-								: (error ?: @"Telegram refused that."))
-											title:@"Share Theme" inView:me.view];
+								? @"Saved"
+								: (error ?: @"An error occurred."))
+											title:@"Share" inView:me.view];
 						if (ok)
 							[me loadDetails];
 					};
@@ -969,15 +970,24 @@ static UIImage *TGSolidImage(UIColor *colour) {
 	if ([title isEqualToString:@"Delete Contact"]){
 		int64_t userId = self.userId;
 		__weak typeof(self) weakSelf = self;
-		[TGAlertSheet showConfirm:@"They leave your contacts. The chat with them stays."
-							title:@"Delete Contact"
-						   action:@"Delete"
+		// One red row in an action sheet, as official has it; no repeated
+		// message under the title.
+		[TGAlertSheet showConfirm:nil
+							title:nil
+						   action:@"Delete Contact"
 					  destructive:YES
 						   inView:self.view
 						onConfirm:^{
 			[[TGClient shared] removeContactWithUserId:userId completion:^(BOOL ok){
-				[TGAlertSheet showMessage:(ok ? @"Removed from your contacts." : @"Telegram refused that.")
-									title:@"Delete Contact" inView:weakSelf.view];
+				TGProfileViewController *me = weakSelf;
+				if (!me)
+					return;
+				NSString *done = TGStripBoldMarkers(TGLocalizedFormat(
+						@"**%@** deleted from your contacts", me.name ?: @""));
+				[TGAlertSheet showMessage:(ok ? done : @"An error occurred.")
+									title:@"Delete Contact" inView:me.view];
+				if (ok)
+					[me loadDetails];
 			}];
 		}];
 		return;
@@ -996,8 +1006,12 @@ static UIImage *TGSolidImage(UIColor *colour) {
 	if ([title isEqualToString:@"Delete Group"] || [title isEqualToString:@"Delete Channel"] ||
 			[title isEqualToString:@"Delete for Everyone"]){
 		int64_t chatId = self.chatId;
+		NSString *name = self.name ?: @"";
+		NSString *message = [title isEqualToString:@"Delete Channel"]
+				? TGLocalizedFormat(@"Do you want to delete the channel **%@** and all of its messages for all subscribers?", name)
+				: TGLocalizedFormat(@"Do you want to delete the group **%@** and all of its messages for all members?", name);
 		__weak typeof(self) weakSelf = self;
-		[TGAlertSheet showConfirm:@"The group and every message in it are deleted for all members. This cannot be undone."
+		[TGAlertSheet showConfirm:TGStripBoldMarkers(message)
 							title:title
 						   action:@"Delete"
 					  destructive:YES
@@ -1017,7 +1031,7 @@ static UIImage *TGSolidImage(UIColor *colour) {
 
 	if ([title isEqualToString:@"Clear history"]){
 		int64_t chatId = self.chatId;
-		[TGAlertSheet showConfirm:@"Every message in this chat will be removed for you."
+		[TGAlertSheet showConfirm:@"This will **delete all messages** in this chat."
 							title:@"Clear history"
 						   action:@"Clear"
 					  destructive:YES
@@ -1029,8 +1043,33 @@ static UIImage *TGSolidImage(UIColor *colour) {
 	// The last row of a user's menu is Block/Unblock; an unknown title must
 	// not fall through and silently block them.
 	if ([title isEqualToString:@"Block"] || [title isEqualToString:@"Unblock"]){
-		[[TGClient shared] setUser:self.userId blocked:!self.blocked];
-		self.blocked = !self.blocked;
+		BOOL block = ![title isEqualToString:@"Unblock"];
+		int64_t userId = self.userId;
+		__weak typeof(self) weakSelf = self;
+		if (!block){
+			[[TGClient shared] setUser:userId blocked:NO completion:^(BOOL ok){
+				TGProfileViewController *me = weakSelf;
+				if (!me || !ok)
+					return;
+				me.blocked = NO;
+				[me loadDetails];
+			}];
+			return;
+		}
+		[TGAlertSheet showConfirm:TGLocalizedFormat(@"Do you want to block %@ from messaging and calling you on Telegram?", self.name ?: @"")
+							title:nil
+						   action:TGLocalizedFormat(@"Block %@", self.name ?: @"")
+					  destructive:YES
+						   inView:self.view
+						onConfirm:^{
+			[[TGClient shared] setUser:userId blocked:YES completion:^(BOOL ok){
+				TGProfileViewController *me = weakSelf;
+				if (!me || !ok)
+					return;
+				me.blocked = YES;
+				[me loadDetails];
+			}];
+		}];
 	}
 }
 
@@ -1052,8 +1091,8 @@ static UIImage *TGSolidImage(UIColor *colour) {
 		NSString *path = [NSTemporaryDirectory()
 				stringByAppendingPathComponent:@"profile-suggestion.jpg"];
 		if (![UIImageJPEGRepresentation(scaled, TGCompressionQualityStandard) writeToFile:path atomically:YES]){
-			[TGAlertSheet showMessage:@"Could not prepare the picture."
-								title:@"Profile Photo" inView:self.view];
+			[TGAlertSheet showMessage:@"An error occurred."
+								title:@"Edit Profile Photo" inView:self.view];
 			return;
 		}
 		int64_t userId = self.userId;
@@ -1062,14 +1101,14 @@ static UIImage *TGSolidImage(UIColor *colour) {
 		void (^answer)(BOOL, NSString *) = ^(BOOL ok, NSString *error){
 			TGProfileViewController *me = weakSelf;
 			if (!ok){
-				[TGAlertSheet showMessage:(error ?: @"Telegram refused that.")
-									title:@"Profile Photo" inView:me.view];
+				[TGAlertSheet showMessage:(error ?: @"An error occurred.")
+									title:@"Edit Profile Photo" inView:me.view];
 				return;
 			}
 			[TGAlertSheet showMessage:(suggest
-					? @"Photo suggested."
-					: @"Personal photo saved.")
-								title:@"Profile Photo" inView:me.view];
+					? @"Suggested Profile Photo"
+					: @"Saved")
+								title:@"Edit Profile Photo" inView:me.view];
 			if (!suggest)
 				[me loadDetails];
 		};
@@ -1081,6 +1120,70 @@ static UIImage *TGSolidImage(UIColor *colour) {
 												  completion:answer];
 		return;
 	}
+}
+
+/// A username row's QR: the t.me address drawn as a code, with the address
+/// under it for anyone who has to type it. CoreImage's generator is used when
+/// the OS has it; the oldest devices fall back to the plain address.
+- (void)showQRCodeForValue:(NSString *)value {
+	NSString *address = value ?: @"";
+	if ([address hasPrefix:@"@"])
+		address = [@"https://t.me/" stringByAppendingString:
+				[address substringFromIndex:1]];
+	UIViewController *sheet = [[UIViewController alloc] init];
+	sheet.title = @"QR Code";
+	sheet.view.backgroundColor = [[TGTheme shared] groupedBackgroundColour];
+	CGFloat width = sheet.view.bounds.size.width;
+	UIImageView *image = [[UIImageView alloc] initWithFrame:
+			CGRectMake(TGCenteredOrigin(width, TGMetricProfileAvatar), TGMetricPadLarge,
+					TGMetricProfileAvatar, TGMetricProfileAvatar)];
+	image.contentMode = UIViewContentModeScaleAspectFit;
+	image.backgroundColor = [[TGTheme shared] cardBackgroundColour];
+	Class filterClass = NSClassFromString(@"CIFilter");
+	if (filterClass){
+		CIFilter *filter = [CIFilter filterWithName:@"CIQRCodeGenerator"];
+		[filter setValue:[address dataUsingEncoding:NSUTF8StringEncoding]
+				  forKey:@"inputMessage"];
+		[filter setValue:@"H" forKey:@"inputCorrectionLevel"];
+		CIImage *output = filter.outputImage;
+		if (output){
+			CIContext *context = [CIContext contextWithOptions:nil];
+			CGFloat scale = TGMetricProfileAvatar / MAX(1, output.extent.size.width);
+			CGImageRef cg = [context createCGImage:output
+										 fromRect:CGRectMake(0, 0,
+												 output.extent.size.width * scale,
+												 output.extent.size.height * scale)];
+			if (cg){
+				image.image = [UIImage imageWithCGImage:cg];
+				CGImageRelease(cg);
+			}
+		}
+	}
+	if (!image.image)
+		image.hidden = YES;
+	[sheet.view addSubview:image];
+
+	UILabel *label = [[UILabel alloc] initWithFrame:
+			CGRectMake(TGMetricPadLarge, CGRectGetMaxY(image.frame) + TGMetricPad,
+					width - TGDoubled(TGMetricPadLarge), TGDoubled(TGMetricLineBody))];
+	label.numberOfLines = 2;
+	label.textAlignment = NSTextAlignmentCenter;
+	label.font = TGFontBody();
+	label.textColor = [[TGTheme shared] secondaryTextColour];
+	label.backgroundColor = [UIColor clearColor];
+	label.text = address;
+	[sheet.view addSubview:label];
+
+	sheet.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
+			initWithTitle:@"Close" style:UIBarButtonItemStylePlain
+				   target:self action:@selector(closeQRCode:)];
+	UINavigationController *nav = [[UINavigationController alloc]
+			initWithRootViewController:sheet];
+	[self presentViewController:nav animated:YES completion:nil];
+}
+
+- (void)closeQRCode:(id)sender {
+	[self dismissViewControllerAnimated:YES completion:nil];
 }
 
 - (void)imagePickerControllerDidCancel:(UIImagePickerController *)picker {

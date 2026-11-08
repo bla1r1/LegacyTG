@@ -119,7 +119,7 @@ static NSArray *TGPacksFrom(NSDictionary *target) {
 		   completion:^(NSDictionary *result){
 			BOOL failed = [result[@"@type"] isEqualToString:@"error"];
 			if (completion)
-				completion(!failed, failed ? (result[@"message"] ?: @"Telegram refused that.") : nil);
+				completion(!failed, failed ? (result[@"message"] ?: @"An error occurred.") : nil);
 		}];
 		return;
 	}
@@ -134,7 +134,7 @@ static NSArray *TGPacksFrom(NSDictionary *target) {
 	   completion:^(NSDictionary *result){
 		BOOL failed = [result[@"@type"] isEqualToString:@"error"];
 		if (completion)
-			completion(!failed, failed ? (result[@"message"] ?: @"Telegram refused that.") : nil);
+			completion(!failed, failed ? (result[@"message"] ?: @"An error occurred.") : nil);
 	}];
 }
 

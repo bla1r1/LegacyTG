@@ -89,6 +89,31 @@ void TGDrawText(NSString *text, CGRect rect, UIFont *font, UIColor *colour,
 // DEFAULT, not LOW or BACKGROUND: during launch TDLib keeps
 // the default band busy and the lower ones did not run for 15-30 s, long
 // after the first chat was open. The main thread still outranks it.
+void TGWarmEmojiFont(CGFloat bodySize) {
+	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+		double start = TGPerfNow();
+		// Through the system font's cascade, the way a label reaches it, and
+		// with the emoji the chat list shows most: the cmap and the metrics
+		// load once and the main thread then finds them in the cache.
+		CTFontRef font = CTFontCreateWithName(
+				(__bridge CFStringRef)[UIFont systemFontOfSize:bodySize].fontName,
+				bodySize, NULL);
+		if (!font)
+			return;
+		NSAttributedString *sample = [[NSAttributedString alloc]
+				initWithString:@"\u26A1\u2728\u2764\U0001F600\U0001F44D\U0001F525\u26D4"
+					attributes:@{(__bridge NSString *)kCTFontAttributeName : (__bridge id)font}];
+		CTLineRef line = CTLineCreateWithAttributedString(
+				(__bridge CFAttributedStringRef)sample);
+		if (line){
+			CTLineGetTypographicBounds(line, NULL, NULL, NULL);
+			CFRelease(line);
+		}
+		CFRelease(font);
+		TGPerfReport("emoji font warmed", NULL, start, 0.0);
+	});
+}
+
 void TGWarmFonts(CGFloat bodySize) {
 	NSArray *names = [NSArray arrayWithObjects:
 			[UIFont systemFontOfSize:bodySize].fontName,

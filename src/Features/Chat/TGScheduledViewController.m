@@ -14,13 +14,13 @@
 #import "TGTheme.h"
 #import "TGUIFormat.h"
 #import "TGStyle.h"
+#import "TGTableViewCell.h"
 
 @interface TGScheduledViewController ()
 @property (nonatomic, strong) NSArray *messages;
 @property (nonatomic, strong) UIDatePicker *picker;
 @property (nonatomic, strong) TGSheet *pickerSheet;
 @property (nonatomic, assign) int64_t pickerMessageId;
-@property (nonatomic, strong) TGEmptyView *emptyView;
 @end
 
 @implementation TGScheduledViewController
@@ -28,35 +28,14 @@
 - (void)viewDidLoad {
 	[super viewDidLoad];
 
-	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
-		self.edgesForExtendedLayout = UIRectEdgeNone;
 
 	self.title = @"Scheduled Messages";
 	self.messages = @[];
 	self.tableView.rowHeight = TGMetricPersonRow;
 	[self applyTheme];
 
-	UIRefreshControl *refresh = [[UIRefreshControl alloc] init];
-	[refresh addTarget:self action:@selector(refreshPulled)
-	  forControlEvents:UIControlEventValueChanged];
-	self.refreshControl = refresh;
-
 	[self reload];
 
-	__weak typeof(self) weakSelf = self;
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGThemeChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note) {
-		[weakSelf applyTheme];
-		weakSelf.emptyView = nil;
-		weakSelf.tableView.backgroundView = nil;
-		[weakSelf updateEmptyView];
-		[weakSelf.tableView reloadData];
-	}];
-}
-
-- (void)dealloc {
-	[[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -76,7 +55,6 @@
 		if (!me)
 			return;
 		me.messages = messages ?: @[];
-		[me.refreshControl endRefreshing];
 		[me updateEmptyView];
 		[me.tableView reloadData];
 		NSLog(@"TDLIB SCHEDULED: %lu", (unsigned long)messages.count);
@@ -92,20 +70,12 @@
 
 - (void)updateEmptyView {
 	if (self.messages.count) {
-		self.tableView.backgroundView = nil;
-		self.emptyView = nil;
+		[self hideEmpty];
 		return;
 	}
-	if (!self.emptyView) {
-		self.emptyView = [TGEmptyView emptyViewWithFrame:self.tableView.bounds
-				image:[TGIcons emptySearchIllustration]
-				title:@"No scheduled messages"
-				subtitle:@"Messages you schedule to send later appear here."
-				buttonTitle:nil
-				target:nil
-				action:nil];
-	}
-	self.tableView.backgroundView = self.emptyView;
+	[self showEmptyWithImage:[TGIcons emptySearchIllustration]
+	                   title:@"No scheduled messages here yet..."
+	                subtitle:nil];
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
@@ -113,9 +83,7 @@
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-	if (!self.messages.count)
-		return nil;
-	return @"Tap a message to send it now, move it, or delete it.";
+	return nil;
 }
 
 - (void)tableView:(UITableView *)tableView willDisplayFooterView:(UIView *)view forSection:(NSInteger)section {
@@ -129,21 +97,13 @@
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
 	static NSString *reuse = @"TGScheduledCell";
-	UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:reuse];
+	TGTableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:reuse];
 	if (!cell)
-		cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle
-									  reuseIdentifier:reuse];
-
-	TGTheme *theme = [TGTheme shared];
-	cell.backgroundColor = [theme listBackgroundColour];
-	cell.contentView.backgroundColor = [theme listBackgroundColour];
+		cell = [TGTableViewCell cellWithStyle:TGTableCellKindSubtitle reuseIdentifier:reuse];
 
 	NSDictionary *m = self.messages[indexPath.row];
 	NSString *text = m[@"text"];
-	cell.textLabel.text = text.length ? text : @"Message";
-	cell.textLabel.font = TGFontRowStrong();
-	cell.textLabel.textColor = [theme primaryTextColour];
-	cell.textLabel.backgroundColor = [theme listBackgroundColour];
+	cell.title = text.length ? text : @"Message";
 
 	// Telegram names the day and the clock first, then how long that is.
 	// "in 2 h 15 min" alone never says when it lands.
@@ -151,13 +111,10 @@
 	NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
 	NSString *when = TGUIFormatScheduledWhen(stamp, now);
 	NSString *until = TGUIFormatScheduledRelative(stamp, now);
-	cell.detailTextLabel.text = when.length
+	cell.detail = when.length
 			? (until.length ? [NSString stringWithFormat:@"%@  ·  %@", when, until] : when)
 			: until;
-	cell.detailTextLabel.textColor = [theme secondaryTextColour];
-	cell.detailTextLabel.backgroundColor = [theme listBackgroundColour];
 
-	cell.accessoryType = UITableViewCellAccessoryNone;
 	return cell;
 }
 
@@ -171,16 +128,15 @@
 	NSString *what = m[@"text"] ?: @"Message";
 	__weak typeof(self) weakSelf = self;
 
-	NSString *whenOnline = @"Send When Online";
 	NSMutableArray *choices = [NSMutableArray arrayWithObjects:
-			@"Send Now", whenOnline, @"Pick a Date...", @"Delete", nil];
+			@"Send Now", @"Edit Time", @"Delete", nil];
 	[TGAlertSheet showChoices:choices
 						title:what.length > 60 ? [what substringToIndex:60] : what
-			 destructiveIndex:3
+			 destructiveIndex:2
 					   inView:self.navigationController.view ?: self.view
 					 onChoice:^(NSInteger index){
 		void (^done)(BOOL) = ^(BOOL ok){
-			NSString *say = ok ? @"Done." : @"Telegram refused that.";
+			NSString *say = ok ? @"Done" : @"An error occurred.";
 			[TGAlertSheet showMessage:say title:nil inView:weakSelf.view];
 			[weakSelf reload];
 		};
@@ -188,14 +144,9 @@
 			[[TGClient shared] setSchedulingState:nil forMessage:messageId
 										   inChat:weakSelf.chatId completion:done];
 		else if (index == 1)
-			[[TGClient shared] setSchedulingState:[TGClient scheduledWhenOnline]
-									   forMessage:messageId
-										   inChat:weakSelf.chatId completion:done];
-		else if (index == 2)
 			[weakSelf pickDateFor:messageId];
 		else {
-			[TGAlertSheet showConfirm:@"The message is taken out of the queue "
-									  @"and does not go to the chat."
+			[TGAlertSheet showConfirm:nil
 								title:@"Delete"
 							   action:@"Delete"
 						  destructive:YES
@@ -223,8 +174,7 @@
 		return;
 	int64_t messageId = [self.messages[(NSUInteger)indexPath.row][@"id"] longLongValue];
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:@"The message is taken out of the queue and "
-							  @"does not go to the chat."
+	[TGAlertSheet showConfirm:nil
 						title:@"Delete"
 					   action:@"Delete"
 				  destructive:YES
@@ -284,7 +234,7 @@
 							   forMessage:self.pickerMessageId
 								   inChat:self.chatId
 							   completion:^(BOOL ok){
-		NSString *say = ok ? @"Scheduled." : @"Telegram refused that move.";
+		NSString *say = ok ? @"Message Scheduled" : @"An error occurred.";
 		[TGAlertSheet showMessage:say title:nil inView:weakSelf.view];
 		[weakSelf reload];
 	}];

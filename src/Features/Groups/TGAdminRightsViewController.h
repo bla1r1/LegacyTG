@@ -3,6 +3,7 @@
 // when this account's bot is added to a group or a channel.
 //
 #import <UIKit/UIKit.h>
+#import "TGTableViewController.h"
 
-@interface TGAdminRightsViewController : UITableViewController
+@interface TGAdminRightsViewController : TGTableViewController
 @end

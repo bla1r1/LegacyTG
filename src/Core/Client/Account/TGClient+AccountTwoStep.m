@@ -68,15 +68,28 @@ static NSArray *TGPacksFrom(NSDictionary *target) {
 /// email would have been.
 - (void)recoveryEmailAddress:(NSString *)password
 				  completion:(void (^)(NSString *))completion {
+	[self recoveryEmailAddress:password completionWithError:^(NSString *email, NSString *error){
+		if (completion)
+			completion(email ?: @"");
+	}];
+}
+
+- (void)recoveryEmailAddress:(NSString *)password
+		  completionWithError:(void (^)(NSString *, NSString *))completion {
 	[self request:@{
 		@"@type"    : @"getRecoveryEmailAddress",
 		@"password" : password ?: @"",
 	} completion:^(NSDictionary *result){
-		NSString *email = [result[@"@type"] isEqualToString:
-				@"recoveryEmailAddress"]
-				? (result[@"recovery_email_address"] ?: @"")
-				: @"";
-		if (completion) completion(email);
+		if ([result[@"@type"] isEqualToString:@"recoveryEmailAddress"]){
+			if (completion)
+				completion(result[@"recovery_email_address"] ?: @"", nil);
+			return;
+		}
+		NSString *error = result[@"message"];
+		if (!error.length)
+			error = @"An error occurred.";
+		if (completion)
+			completion(nil, error);
 	}];
 }
 

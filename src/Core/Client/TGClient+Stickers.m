@@ -522,7 +522,7 @@ static NSArray *TGCustomEmojiStickerList(NSArray *stickers) {
 					@"underscores, starting with a letter.");
 			return;
 		}
-		completion(@"invalid", result[@"message"] ?: @"Telegram refused the name.");
+		completion(@"invalid", result[@"message"] ?: @"An error occurred.");
 	}];
 }
 

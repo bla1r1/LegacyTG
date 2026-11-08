@@ -170,24 +170,23 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 		[[TGClient shared] setChat:weakSelf.chatId title:name completion:^(BOOL ok){
 			TGGroupSettingsViewController *me = weakSelf;
 			if (!ok){
-				[TGAlertSheet showMessage:@"Only an administrator can rename this group."
+				[TGAlertSheet showMessage:@"An error occurred."
 									title:@"Group Name" inView:me.view];
 				return;
 			}
 			me.chatTitle = name;
 			me.title = name;
 			[me rebuild];
-			[TGSnackbar showInView:me.view text:@"Group name updated"
-						   seconds:2 onCommit:nil];
+			[TGSnackbar showInView:me.view text:@"Your name was updated." seconds:2 onCommit:nil];
 		}];
 	}];
 }
 
 - (void)editDescription {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"Group Description"
+	[TGAlertSheet showInput:@"Edit Description"
 					message:nil
-				placeholder:@"What this group is about"
+				placeholder:@"Description"
 					   text:self.descriptionText
 					 action:@"Save"
 					 inView:self.view
@@ -196,14 +195,13 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 						completion:^(BOOL ok){
 			TGGroupSettingsViewController *me = weakSelf;
 			if (!ok){
-				[TGAlertSheet showMessage:@"Only an administrator of a supergroup "
-										  @"or a channel writes a description."
-									title:@"Group Description" inView:me.view];
+				[TGAlertSheet showMessage:@"An error occurred."
+									title:@"Edit Description" inView:me.view];
 				return;
 			}
 			me.descriptionText = text;
 			[me rebuild];
-			[TGSnackbar showInView:me.view text:@"Description updated"
+			[TGSnackbar showInView:me.view text:@"Description is changed."
 						   seconds:2 onCommit:nil];
 		}];
 	}];
@@ -212,8 +210,8 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 - (void)editPhoto {
 	if (![UIImagePickerController isSourceTypeAvailable:
 			UIImagePickerControllerSourceTypePhotoLibrary]){
-		[TGAlertSheet showMessage:@"The photo library is not on this device."
-							title:@"Group Photo" inView:self.view];
+		[TGAlertSheet showMessage:@"An error occurred."
+							title:@"Set Group Photo" inView:self.view];
 		return;
 	}
 	self.pickingPhoto = YES;
@@ -238,16 +236,16 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 	NSString *path = [NSTemporaryDirectory()
 			stringByAppendingPathComponent:@"group-photo.jpg"];
 	if (![UIImageJPEGRepresentation(scaled, TGCompressionQualityStandard) writeToFile:path atomically:YES]){
-		[TGAlertSheet showMessage:@"Could not prepare the picture."
-							title:@"Group Photo" inView:self.view];
+		[TGAlertSheet showMessage:@"An error occurred."
+							title:@"Set Group Photo" inView:self.view];
 		return;
 	}
 	__weak typeof(self) weakSelf = self;
 	[[TGClient shared] setChat:self.chatId photoAtPath:path completion:^(BOOL ok){
 		TGGroupSettingsViewController *me = weakSelf;
 		if (!ok){
-			[TGAlertSheet showMessage:@"Only an administrator can change this group's photo."
-								title:@"Group Photo" inView:me.view];
+			[TGAlertSheet showMessage:@"An error occurred."
+								title:@"Set Group Photo" inView:me.view];
 			return;
 		}
 		me.hasPhoto = YES;
@@ -268,14 +266,14 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 	NSArray *titles = @[@"Posts", @"Media", @"Files", @"Links", @"Music",
 						@"Voice", @"GIFs"];
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:titles title:@"Main Profile Tab" destructiveIndex:-1
+	[TGAlertSheet showChoices:titles title:@"Set as Main Tab" destructiveIndex:-1
 					   inView:self.view onChoice:^(NSInteger index){
 		NSString *tab = names[(NSUInteger)index];
 		[[TGClient shared] setSupergroupMainProfileTab:tab inChat:weakSelf.chatId
 				completion:^(BOOL ok, NSString *error){
 			TGGroupSettingsViewController *me = weakSelf;
 			if (!ok){
-				[me showRefusal:error title:@"Main Profile Tab"];
+				[me showRefusal:error title:@"Set as Main Tab"];
 				return;
 			}
 			NSMutableDictionary *changed = [me.settings mutableCopy];
@@ -288,10 +286,8 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 
 - (void)confirmUpgrade {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:@"A basic group becomes a supergroup: it gets a "
-			@"link of its own, room past two hundred members, and a new chat "
-			@"id. This screen closes with the old one."
-						 title:@"Upgrade"
+	[TGAlertSheet showConfirm:@"To go over the limit and get additional features, upgrade to a supergroup:"
+						 title:@"Upgrade to supergroup"
 						action:@"Upgrade"
 				   destructive:NO
 						inView:self.view
@@ -300,15 +296,14 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 										 completion:^(int64_t newChatId){
 			TGGroupSettingsViewController *me = weakSelf;
 			if (!newChatId){
-				[TGAlertSheet showMessage:@"Telegram refused the upgrade - a "
-						@"supergroup or a channel is already one."
+				[TGAlertSheet showMessage:@"An error occurred."
 										  title:@"Upgrade" inView:me.view];
 				return;
 			}
 			UINavigationController *nav = me.navigationController;
 			[nav popToRootViewControllerAnimated:YES];
-			[TGAlertSheet showMessage:@"The group is now a supergroup."
-								  title:@"Upgraded"
+			[TGAlertSheet showMessage:@"This group was upgraded to a supergroup"
+								  title:@"Upgrade to supergroup"
 								 inView:(nav.view ?: me.view)];
 		}];
 	}];

@@ -109,10 +109,7 @@ static NSDictionary *TGNetSection(NSString *header, NSString *footer, NSArray *r
 	for (NSDictionary *section in self.sections)
 		[flat addObjectsFromArray:section[@"rows"]];
 	self.rows = flat;
-	self.listFooter = self.status.length ? self.status
-			: @"TDLib reopens every connection when the network type changes. "
-			  @"The counters are reset by TDLib itself and cover this launch only "
-			  @"until reset.";
+	self.listFooter = self.status;
 	[self.tableView reloadData];
 }
 
@@ -123,7 +120,7 @@ static NSDictionary *TGNetSection(NSString *header, NSString *footer, NSArray *r
 			: (self.stateLoaded
 				? [NSString stringWithFormat:@"%lu updates",
 						(unsigned long)self.stateRows.count]
-				: @"Reading...");
+				: @"Loading...");
 
 	NSArray *connection = @[
 		TGNetRow(@"Network Type", TGNetworkTypeTitle(self.networkType), ^{
@@ -135,10 +132,10 @@ static NSDictionary *TGNetSection(NSString *header, NSString *footer, NSArray *r
 		TGNetOpenRow(@"TDLib State", stateDetail, ^{
 			[weakSelf showCurrentState];
 		}),
-		TGNetOpenRow(@"Application Config", @"Tap to read", ^{
+		TGNetOpenRow(@"Application Config", nil, ^{
 			[weakSelf showApplicationConfig];
 		}),
-		TGNetOpenRow(@"Database Statistics", @"Tap to read", ^{
+		TGNetOpenRow(@"Database Statistics", nil, ^{
 			[weakSelf showDatabaseStatistics];
 		}),
 	];
@@ -148,28 +145,18 @@ static NSDictionary *TGNetSection(NSString *header, NSString *footer, NSArray *r
 				[NSString stringWithFormat:@"%@ in, %@ out",
 						TGNetBytes(weakSelf.received), TGNetBytes(weakSelf.sent)],
 				^{ [weakSelf loadTotals]; }),
-		TGNetRow(@"Add Usage Entry",
-				@"A call's bytes and duration", ^{ [weakSelf addUsageEntry]; }),
+		TGNetRow(@"Add Usage Entry", nil, ^{ [weakSelf addUsageEntry]; }),
 	];
 
 	NSArray *graph = @[
-		TGNetRow(@"Statistical Graph",
-				@"Render a chat statistics token", ^{ [weakSelf askStatisticalGraph]; }),
+		TGNetRow(@"Statistical Graph", nil, ^{ [weakSelf askStatisticalGraph]; }),
 	];
 
 	return @[
-		TGNetSection(@"CONNECTION",
-				@"TDLib reports the network it is on; changing it here reopens "
-				@"every connection.", connection),
-		TGNetSection(@"DIAGNOSTICS",
-				@"The state, configuration and database report TDLib answers "
-				@"when this page asks.", diagnostics),
-		TGNetSection(@"DATA USAGE",
-				@"The counters cover this launch. Reset adds a call's bytes "
-				@"back into TDLib's own totals.", usage),
-		TGNetSection(@"STATISTICS",
-				@"A statistics token from a chat's admin panel draws its graph "
-				@"here as a list of points.", graph),
+		TGNetSection(@"CONNECTION", nil, connection),
+		TGNetSection(@"DIAGNOSTICS", nil, diagnostics),
+		TGNetSection(@"DATA USAGE", nil, usage),
+		TGNetSection(@"STATISTICS", nil, graph),
 	];
 }
 
@@ -238,7 +225,7 @@ static NSDictionary *TGNetSection(NSString *header, NSString *footer, NSArray *r
 	__weak typeof(self) weakSelf = self;
 	[TGAlertSheet showChoices:titles
 						title:@"Network Type"
-					  message:@"Telegram reopens its connections when this changes."
+					  message:nil
 			 destructiveIndex:-1
 					   inView:self.view
 					 onChoice:^(NSInteger index){
@@ -253,8 +240,7 @@ static NSDictionary *TGNetSection(NSString *header, NSString *footer, NSArray *r
 			weakSelf.networkType = type;
 			[NSUserDefaults.standardUserDefaults setObject:type forKey:@"TGNetworkType"];
 			[NSUserDefaults.standardUserDefaults synchronize];
-			weakSelf.status = [NSString stringWithFormat:
-					@"Telegram accepted the network type: %@.", TGNetworkTypeTitle(type)];
+			weakSelf.status = @"Done";
 			[weakSelf rebuild];
 		}];
 	}];
@@ -285,7 +271,7 @@ static NSDictionary *TGNetSection(NSString *header, NSString *footer, NSArray *r
 		TGListViewController *list = [[TGListViewController alloc] init];
 		list.listTitle = @"TDLib State";
 		list.rows = rows;
-		list.emptyText = error.length ? error : @"TDLib is in no state yet.";
+		list.emptyText = error.length ? error : @"Empty";
 		list.offersCopy = YES;
 		list.hidesBottomBarWhenPushed = YES;
 		[weakSelf.navigationController pushViewController:list animated:YES];
@@ -319,9 +305,8 @@ static NSDictionary *TGNetSection(NSString *header, NSString *footer, NSArray *r
 		TGListViewController *list = [[TGListViewController alloc] init];
 		list.listTitle = @"Application Config";
 		list.rows = rows;
-		list.emptyText = @"Telegram sent an empty configuration.";
-		list.listFooter = [NSString stringWithFormat:
-				@"getApplicationConfig answered %lu values.", (unsigned long)keys.count];
+		list.emptyText = @"An error occurred.";
+		list.listFooter = nil;
 		list.offersCopy = YES;
 		list.hidesBottomBarWhenPushed = YES;
 		[weakSelf.navigationController pushViewController:list animated:YES];
@@ -333,7 +318,7 @@ static NSDictionary *TGNetSection(NSString *header, NSString *footer, NSArray *r
 	[[TGClient shared] databaseStatisticsWithCompletion:^(NSString *statistics,
 														   NSString *error){
 		if (!statistics.length){
-			[weakSelf showError:(error ?: @"Telegram sent no database statistics.")
+			[weakSelf showError:(error ?: @"An error occurred.")
 						  title:@"Database Statistics"];
 			return;
 		}
@@ -403,10 +388,7 @@ static NSDictionary *TGNetSection(NSString *header, NSString *footer, NSArray *r
 							[weakSelf showError:error title:@"Add Usage Entry"];
 							return;
 						}
-						weakSelf.status = [NSString stringWithFormat:
-								@"Telegram added the entry: %@ in, %@ out.",
-								TGNetBytes([receivedText longLongValue]),
-								TGNetBytes([sentText longLongValue])];
+						weakSelf.status = @"Done";
 						[weakSelf loadTotals];
 						[TGAlertSheet showMessage:weakSelf.status
 											title:@"Add Usage Entry"
@@ -452,12 +434,8 @@ static NSDictionary *TGNetSection(NSString *header, NSString *footer, NSArray *r
 					TGListViewController *list = [[TGListViewController alloc] init];
 					list.listTitle = @"Statistical Graph";
 					list.rows = rows;
-					list.emptyText = @"Telegram sent an empty graph.";
-					list.listFooter = [graph[@"kind"] isEqualToString:@"async"]
-							? @"The graph is still being prepared. Open the page "
-							  @"again with the token above."
-							: [NSString stringWithFormat:@"getStatisticalGraph answered %lu lines.",
-									(unsigned long)rows.count];
+					list.emptyText = @"An error occurred.";
+					list.listFooter = nil;
 					list.offersCopy = YES;
 					list.hidesBottomBarWhenPushed = YES;
 					[weakSelf.navigationController pushViewController:list animated:YES];
@@ -471,7 +449,7 @@ static NSDictionary *TGNetSection(NSString *header, NSString *footer, NSArray *r
 
 - (void)showError:(NSString *)message title:(NSString *)title {
 	if (!message.length)
-		message = @"Telegram refused that.";
+		message = @"An error occurred.";
 	self.status = message;
 	[TGAlertSheet showMessage:message title:title inView:self.view];
 	[self rebuild];

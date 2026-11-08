@@ -26,24 +26,11 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	self.title = @"Connected Websites";
+	self.title = @"Active Websites";
 	self.tableView.rowHeight = TGMetricPersonRow;
-	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
-		self.edgesForExtendedLayout = UIRectEdgeNone;
 	[self applyTheme];
 	[self refresh];
 
-	__weak typeof(self) weakSelf = self;
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGThemeChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note){
-		[weakSelf applyTheme];
-		[weakSelf.tableView reloadData];
-	}];
-}
-
-- (void)dealloc {
-	[[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 - (void)applyTheme {
@@ -71,7 +58,7 @@
 static NSString *TGWebsiteWhen(NSNumber *seconds) {
 	NSTimeInterval stamp = seconds.doubleValue;
 	if (stamp <= 0)
-		return @"never used";
+		return @"—";
 	static NSDateFormatter *formatter = nil;
 	if (!formatter){
 		formatter = [[NSDateFormatter alloc] init];
@@ -93,8 +80,7 @@ static NSString *TGWebsiteWhen(NSNumber *seconds) {
 	NSString *ip = site[@"ip"];
 	if (ip.length)
 		[parts addObject:ip];
-	[parts addObject:[NSString stringWithFormat:@"last used %@",
-			TGWebsiteWhen(site[@"lastActive"])]];
+	[parts addObject:TGWebsiteWhen(site[@"lastActive"])];
 	return [parts componentsJoinedByString:@" · "];
 }
 
@@ -108,17 +94,11 @@ static NSString *TGWebsiteWhen(NSNumber *seconds) {
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
 	if (section == 1)
-		return @"ALL WEBSITES";
-	return self.sites.count || self.readError ? @"SIGNED IN" : nil;
+		return @"Websites";
+	return self.sites.count || self.readError ? @"Active Websites" : nil;
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-	if (section == 1)
-		return @"Signs out every site at once. A site that is not shown here is "
-			   @"signed out too, because Telegram keeps the list.";
-	if (self.sites.count)
-		return @"A site loses access on its next request. Removing it here does "
-			   @"not change the account's password.";
 	return nil;
 }
 
@@ -150,8 +130,8 @@ static NSString *TGWebsiteWhen(NSNumber *seconds) {
 	}
 
 	if (!self.sites.count){
-		cell.textLabel.text = self.loaded ? @"No websites are signed in"
-				: @"Reading connected websites...";
+		cell.textLabel.text = self.loaded ? @"None"
+				: @"Loading...";
 		if (self.readError.length)
 			cell.textLabel.text = self.readError;
 		cell.detailTextLabel.text = nil;
@@ -172,9 +152,7 @@ static NSString *TGWebsiteWhen(NSNumber *seconds) {
 
 	if (indexPath.section == 1){
 		__weak typeof(self) weakSelf = self;
-		[TGAlertSheet showConfirm:@"Every website loses access on its next "
-								  @"request, including ones this list has not "
-								  @"shown yet."
+		[TGAlertSheet showConfirm:nil
 							title:@"Disconnect All Websites"
 						   action:@"Disconnect All"
 					  destructive:YES
@@ -182,7 +160,7 @@ static NSString *TGWebsiteWhen(NSNumber *seconds) {
 						onConfirm:^{
 			[[TGClient shared] disconnectAllWebsitesWithCompletion:^(BOOL ok,
 																	 NSString *error){
-				[weakSelf answer:ok error:error title:@"Connected Websites"];
+				[weakSelf answer:ok error:error title:@"Active Websites"];
 			}];
 		}];
 		return;
@@ -197,18 +175,15 @@ static NSString *TGWebsiteWhen(NSNumber *seconds) {
 
 	NSString *domain = site[@"domain"] ?: @"this website";
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:@[@"Sign Out This Website"]
+	[TGAlertSheet showChoices:@[@"Log Out"]
 						title:domain
-					  message:[NSString stringWithFormat:@"Signed in on %@. "
-							  @"Signing it out cannot be undone from here.",
-							  [self detailForSite:site]]
+					  message:[self detailForSite:site]
 			 destructiveIndex:0
 					   inView:self.view
 					 onChoice:^(NSInteger index){
-		[TGAlertSheet showConfirm:[NSString stringWithFormat:
-				@"%@ will need a new Telegram login.", domain]
-							title:@"Sign Out Website"
-						   action:@"Sign Out"
+		[TGAlertSheet showConfirm:nil
+							title:@"Log Out"
+						   action:@"Log Out"
 					  destructive:YES
 						   inView:weakSelf.view
 						onConfirm:^{
@@ -225,17 +200,12 @@ static NSString *TGWebsiteWhen(NSNumber *seconds) {
 /// accepted still takes a moment to leave the record.
 - (void)answer:(BOOL)ok error:(NSString *)error title:(NSString *)title {
 	if (!ok){
-		[TGAlertSheet showMessage:(error ?: @"Telegram refused that.")
+		[TGAlertSheet showMessage:(error ?: @"An error occurred.")
 							title:title
 						   inView:self.view];
 		return;
 	}
-	__weak typeof(self) weakSelf = self;
 	[self performSelector:@selector(refresh) withObject:nil afterDelay:0.7];
-	[TGAlertSheet showMessage:@"Signed out on Telegram. The site loses "
-							  @"access on its next request."
-						title:title
-					   inView:weakSelf.view];
 }
 
 @end

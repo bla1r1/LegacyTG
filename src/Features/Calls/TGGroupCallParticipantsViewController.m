@@ -85,7 +85,7 @@
 		me.loading = NO;
 		me.call = call;
 		if (!call){
-			me.footerText = error ?: @"Telegram did not return this call.";
+			me.footerText = error ?: @"An error occurred.";
 			[me refresh];
 			return;
 		}
@@ -116,14 +116,11 @@
 					return;
 				}
 				again.listedSenders = answer[@"senders"];
-				again.footerText = [NSString stringWithFormat:
-						@"%ld participants Telegram listed. Join the call on the "
-						@"call screen for their speaking and mute state.",
-						(long)[answer[@"total"] integerValue]];
+				again.footerText = nil;
 				[again refresh];
 			}];
 		} else {
-			me.footerText = @"Join the call on the call screen to load its participants.";
+			me.footerText = nil;
 			[me refresh];
 		}
 	}];
@@ -137,12 +134,7 @@
 	if (!self.footerText.length){
 		NSInteger count = [self.call[@"participantCount"] integerValue];
 		if (count > 0)
-			self.footerText = [NSString stringWithFormat:
-					@"%ld in the call. Mute, volume and hand actions go to Telegram; "
-					@"the server applies them and the list follows its answer.",
-					(long)count];
-		else
-			self.footerText = @"Nobody has joined yet.";
+			self.footerText = nil;
 	}
 	[self.tableView reloadData];
 }
@@ -219,7 +211,7 @@
 
 	if (!current && ([participant[@"canBeMutedForAllUsers"] boolValue] ||
 					 [participant[@"canBeUnmutedForAllUsers"] boolValue])){
-		[titles addObject:(mutedAll ? @"Unmute for Everyone" : @"Mute for Everyone")];
+		[titles addObject:(mutedAll ? @"Unmute All" : @"Mute All")];
 		[keys addObject:@"muteAll"];
 	}
 	if (!current && ([participant[@"canBeMutedForCurrentUser"] boolValue] ||
@@ -227,19 +219,9 @@
 		[titles addObject:(mutedMe ? @"Unmute for Me" : @"Mute for Me")];
 		[keys addObject:@"muteMe"];
 	}
-	[titles addObject:@"Volume"];
-	[keys addObject:@"volume"];
-	if (current){
-		[titles addObject:([participant[@"isHandRaised"] boolValue]
-				? @"Lower My Hand" : @"Raise My Hand")];
-		[keys addObject:@"hand"];
-	} else if ([participant[@"isHandRaised"] boolValue]){
-		[titles addObject:@"Lower Their Hand"];
-		[keys addObject:@"hand"];
-	}
 	BOOL owned = [self.call[@"isOwned"] boolValue];
 	if (owned && !current && [participant[@"userId"] longLongValue]){
-		[titles addObject:@"Ban from Call"];
+		[titles addObject:@"Ban"];
 		[keys addObject:@"ban"];
 	}
 
@@ -251,12 +233,8 @@
 		if (!me || index < 0 || index >= (NSInteger)keys.count)
 			return;
 		NSString *key = keys[(NSUInteger)index];
-		if ([key isEqualToString:@"volume"])
-			[me askVolumeForParticipant:participant];
-		else if ([key isEqualToString:@"muteAll"] || [key isEqualToString:@"muteMe"])
+		if ([key isEqualToString:@"muteAll"] || [key isEqualToString:@"muteMe"])
 			[me toggleMuteForParticipant:participant forAll:[key isEqualToString:@"muteAll"]];
-		else if ([key isEqualToString:@"hand"])
-			[me toggleHandForParticipant:participant];
 		else if ([key isEqualToString:@"ban"])
 			[me banParticipant:participant];
 	}];
@@ -274,7 +252,7 @@
 		if (!me)
 			return;
 		if (!ok){
-			[TGAlertSheet showMessage:error ?: @"Telegram refused that."
+			[TGAlertSheet showMessage:error ?: @"An error occurred."
 								title:@"Mute" inView:me.view];
 			return;
 		}
@@ -282,51 +260,10 @@
 	}];
 }
 
-- (void)toggleHandForParticipant:(NSDictionary *)participant {
-	BOOL raised = [participant[@"isHandRaised"] boolValue];
-	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] toggleGroupCallParticipant:participant[@"sender"]
-										   inCall:self.groupCallId
-									 isHandRaised:!raised
-									   completion:^(BOOL ok, NSString *error){
-		TGGroupCallParticipantsViewController *me = weakSelf;
-		if (!me)
-			return;
-		if (!ok){
-			[TGAlertSheet showMessage:error ?: @"Telegram refused that."
-								title:@"Hand" inView:me.view];
-			return;
-		}
-		[me load];
-	}];
-}
-
-- (void)askVolumeForParticipant:(NSDictionary *)participant {
-	NSArray *titles = @[@"25%", @"50%", @"100%", @"150%", @"200%"];
-	NSArray *levels = @[@(2500), @(5000), @(10000), @(15000), @(20000)];
-	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:titles title:@"Volume"
-			destructiveIndex:-1 inView:self.view onChoice:^(NSInteger index){
-		TGGroupCallParticipantsViewController *me = weakSelf;
-		if (!me || index < 0 || index >= (NSInteger)levels.count)
-			return;
-		[[TGClient shared] setGroupCallParticipant:participant[@"sender"]
-											inCall:me.groupCallId
-									   volumeLevel:[levels[(NSUInteger)index] integerValue]
-										completion:^(BOOL ok, NSString *error){
-			if (!ok)
-				[TGAlertSheet showMessage:error ?: @"Telegram refused that."
-									title:@"Volume" inView:me.view];
-			else
-				[me load];
-		}];
-	}];
-}
-
 - (void)banParticipant:(NSDictionary *)participant {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:@"The owner can invite them back later."
-						title:@"Ban from Call" action:@"Ban" destructive:YES
+	[TGAlertSheet showConfirm:nil
+						title:@"Ban" action:@"Ban" destructive:YES
 					   inView:self.view onConfirm:^{
 		TGGroupCallParticipantsViewController *me = weakSelf;
 		if (!me)
@@ -335,7 +272,7 @@
 				@[participant[@"userId"] ?: @(0)] inCall:me.groupCallId
 				completion:^(BOOL ok, NSString *error){
 			if (!ok)
-				[TGAlertSheet showMessage:error ?: @"Telegram refused that."
+				[TGAlertSheet showMessage:error ?: @"An error occurred."
 									title:@"Ban" inView:me.view];
 			else
 				[me load];

@@ -19,10 +19,10 @@
 	if (self){
 		_chatId = chatId;
 		_groupCallId = groupCallId;
-		self.listTitle = @"Streams and Data";
-		self.emptyText = @"No stream channels loaded yet.";
+		self.listTitle = @"Data";
+		self.emptyText = @"None";
 		_sample = [@"LegacyTG group-call data channel sample" dataUsingEncoding:NSUTF8StringEncoding];
-		_statusText = @"Load the call's stream channels, or run the data-channel check.";
+		_statusText = nil;
 	}
 	return self;
 }
@@ -51,7 +51,7 @@
 	__weak typeof(self) weakSelf = self;
 	NSMutableArray *rows = [NSMutableArray array];
 	[rows addObject:[self rowWithTitle:@"Load Streams"
-			detail:@"getGroupCallStreams"
+			detail:nil
 			tap:^{ [weakSelf loadStreams]; }]];
 	for (NSDictionary *stream in self.streams){
 		NSString *title = [NSString stringWithFormat:@"Channel %ld · scale %ld",
@@ -64,17 +64,16 @@
 		}]];
 	}
 	[rows addObject:[self rowWithTitle:@"Mark Myself Speaking"
-			detail:@"setGroupCallParticipantIsSpeaking, audio source of this account"
+			detail:nil
 			tap:^{ [weakSelf setSpeaking:YES]; }]];
 	[rows addObject:[self rowWithTitle:@"Stop Speaking Indicator"
-			detail:@"Sends the same flag as false"
+			detail:nil
 			tap:^{ [weakSelf setSpeaking:NO]; }]];
 	[rows addObject:[self rowWithTitle:@"Encrypt Sample Payload"
-			detail:@"encryptGroupCallData on the main channel"
+			detail:nil
 			tap:^{ [weakSelf encryptSample]; }]];
 	[rows addObject:[self rowWithTitle:@"Decrypt Last Payload"
-			detail:self.lastEncrypted.length ? @"decryptGroupCallData as this account"
-					: @"Encrypt a sample first"
+			detail:nil
 			tap:^{ [weakSelf decryptLast]; }]];
 	self.rows = rows;
 	self.listFooter = self.statusText;
@@ -85,7 +84,7 @@
 
 - (void)loadStreams {
 	if (!self.groupCallId){
-		[self setStatus:@"Open this screen from a call."];
+		[self setStatus:@"An error occurred."];
 		return;
 	}
 	__weak typeof(self) weakSelf = self;
@@ -95,19 +94,16 @@
 		if (!me)
 			return;
 		if (!streams){
-			[me setStatus:error ?: @"Telegram refused that."];
+			[me setStatus:error ?: @"An error occurred."];
 			return;
 		}
 		me.streams = streams;
-		[me setStatus:streams.count
-				? [NSString stringWithFormat:@"%ld stream channel%@ returned.",
-						(long)streams.count, streams.count == 1 ? @"" : @"s"]
-				: @"Telegram returned no stream channels for this call."];
+		[me setStatus:nil];
 	}];
 }
 
 - (void)chooseQualityForStream:(NSDictionary *)stream {
-	NSArray *titles = @[@"Thumbnail quality", @"Medium quality", @"Full quality"];
+	NSArray *titles = @[@"Decrease Quality", @"Quality", @"Higher Quality"];
 	NSArray *keys = @[@"thumbnail", @"medium", @"full"];
 	__weak typeof(self) weakSelf = self;
 	[TGAlertSheet showChoices:titles title:@"Stream Segment"
@@ -135,7 +131,7 @@
 			return;
 		me.busy = NO;
 		if (!data){
-			[me setStatus:error ?: @"Telegram refused that segment."];
+			[me setStatus:error ?: @"An error occurred."];
 			return;
 		}
 		NSString *name = [NSString stringWithFormat:@"group-call-%d-%ld-%lld.ogg",
@@ -184,7 +180,7 @@
 	if (self.busy || !self.sample.length)
 		return;
 	if (!self.groupCallId){
-		[self setStatus:@"Open this screen from a call."];
+		[self setStatus:@"An error occurred."];
 		return;
 	}
 	self.busy = YES;
@@ -197,7 +193,7 @@
 			return;
 		me.busy = NO;
 		if (!encrypted){
-			[me setStatus:error ?: @"Telegram refused to encrypt the sample."];
+			[me setStatus:error ?: @"An error occurred."];
 			return;
 		}
 		me.lastEncrypted = encrypted;
@@ -227,7 +223,7 @@
 			return;
 		me.busy = NO;
 		if (!decrypted){
-			[me setStatus:error ?: @"Telegram refused to decrypt the payload."];
+			[me setStatus:error ?: @"An error occurred."];
 			return;
 		}
 		BOOL roundTrip = [decrypted isEqualToData:me.sample];

@@ -128,17 +128,14 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 				[NSString stringWithFormat:@"day%ld", (long)day],
 				[self.days[(NSUInteger)day] boolValue], self.enabled)];
 	self.sections = @[
-		TGBSection(@"BUSINESS HOURS",
-				@"Turn this on to show an opening-hours schedule to customers.",
-				@[
+		TGBSection(@"BUSINESS HOURS", nil, @[
 			TGBSwitch(@"Show Business Hours", nil, @"enabled", self.enabled, YES),
 			TGBInfo(@"Time Zone", [NSTimeZone localTimeZone].name ?: @"UTC"),
-			TGBAction(@"Daily Hours", [NSString stringWithFormat:@"%@ to %@",
+			TGBAction(@"Opening Hours", [NSString stringWithFormat:@"%@ to %@",
 					TGBClockTime(self.startHour * 60), TGBClockTime(self.endHour * 60)],
 					@"hours"),
 		]),
-		TGBSection(@"DAYS OPEN", @"The schedule is sent as one interval per open day.",
-				dayRows),
+		TGBSection(@"SCHEDULE", nil, dayRows),
 	];
 	[self rebuild];
 }
@@ -182,11 +179,11 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 	if (![action isEqualToString:@"hours"])
 		return;
 	__weak typeof(self) weakSelf = self;
-	[self askText:@"Opening Time" message:@"Hour of the day, 0 to 23."
+	[self askText:@"Start Time" message:nil
 	  placeholder:@"9" text:[NSString stringWithFormat:@"%ld", (long)self.startHour]
 		   action:@"Next" completion:^(NSString *text){
 		NSInteger start = MAX(0, MIN(23, [text integerValue]));
-		[weakSelf askText:@"Closing Time" message:@"Hour of the day, 0 to 23."
+		[weakSelf askText:@"End Time" message:nil
 			  placeholder:@"18" text:[NSString stringWithFormat:@"%ld", (long)weakSelf.endHour]
 				   action:@"Save" completion:^(NSString *close){
 			weakSelf.startHour = start;

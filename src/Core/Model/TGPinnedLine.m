@@ -34,8 +34,15 @@ NSString *TGPinnedLine(NSString *serviceText, NSDictionary *pinned) {
 		return serviceText;
 
 	static NSString *const suffix = @"a message";
-	if (![serviceText hasSuffix:suffix])
+	static NSString *const marker = @"\u200B";
+	BOOL isPinnedLine = [serviceText hasSuffix:marker] ||
+			[serviceText hasSuffix:suffix];
+	if (!isPinnedLine)
 		return serviceText;
+	if ([serviceText hasSuffix:marker])
+		serviceText = [serviceText substringToIndex:serviceText.length - 1];
+
+	BOOL replacesSuffix = [serviceText hasSuffix:suffix];
 
 	id raw = pinned[@"text"];
 	NSString *text = [raw isKindOfClass:NSString.class] ? raw : @"";
@@ -64,6 +71,8 @@ NSString *TGPinnedLine(NSString *serviceText, NSDictionary *pinned) {
 	if (!quoted.length)
 		return serviceText;
 
+	if (!replacesSuffix)
+		return [serviceText stringByAppendingFormat:@": %@", quoted];
 	return [[serviceText substringToIndex:serviceText.length - suffix.length]
 			stringByAppendingString:quoted];
 }

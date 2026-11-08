@@ -16,6 +16,7 @@
 #import "TGCustomEmojiStore.h"
 #import <objc/runtime.h>
 #import "TGEmojiPanelInternal.h"
+#import "TGLocalization.h"
 
 
 static const char kTGItemDataKey = 0;
@@ -141,7 +142,7 @@ static UIImage *TGBackspaceImage(UIColor *colour) {
 	if (!query.length){
 		self.items = @[];
 		self.sections = nil;
-		self.emptyLabel.text = @"Search emoji by word";
+		self.emptyLabel.text = @"Search Emoji";
 		[self reloadGrid];
 		return;
 	}
@@ -164,7 +165,7 @@ static UIImage *TGBackspaceImage(UIColor *colour) {
 		NSMutableArray *flat = [NSMutableArray array];
 		NSMutableArray *sections = [NSMutableArray array];
 		NSArray *parts = @[suggested, found];
-		NSArray *titles = @[@"Suggested", @"Results"];
+		NSArray *titles = @[@"Trending", @"Results"];
 		for (NSUInteger i = 0; i < parts.count; i++){
 			NSArray *part = parts[i];
 			if (!part.count)
@@ -197,7 +198,7 @@ static UIImage *TGBackspaceImage(UIColor *colour) {
 - (void)askForEmojiSearch {
 	__weak typeof(self) weakSelf = self;
 	[TGAlertSheet showInput:@"Search Emoji"
-					message:@"A word, or an emoji to see what it is filed under."
+					message:@"Search Emoji"
 				placeholder:@"\U0001F603"
 					   text:self.emojiQuery
 					 action:@"Search"
@@ -248,9 +249,9 @@ static UIImage *TGBackspaceImage(UIColor *colour) {
 		// already lit. A query that finds no pack at all falls back to what
 		// is popular, which is the only way the shelf advertises anything.
 		NSArray *packRows = packs.count ? packs : trending;
-		NSString *packTitle = packs.count ? @"Packs" : @"Trending";
+		NSString *packTitle = packs.count ? @"Stickers" : @"Trending";
 		NSArray *parts = @[mine, everywhere, minePacks, packRows];
-		NSArray *titles = @[@"Yours", @"All stickers", @"Your packs", packTitle];
+		NSArray *titles = @[@"Yours", @"Stickers", @"Your packs", packTitle];
 		for (NSUInteger i = 0; i < parts.count; i++){
 			NSArray *part = parts[i];
 			if (!part.count)
@@ -320,7 +321,7 @@ static UIImage *TGBackspaceImage(UIColor *colour) {
 - (void)askForStickerSearch {
 	__weak typeof(self) weakSelf = self;
 	[TGAlertSheet showInput:@"Search Stickers"
-					message:@"By emoji - the one a sticker is filed under."
+					message:@"Search Stickers"
 				placeholder:@"\U0001F603"
 					   text:self.stickerQuery
 					 action:@"Search"
@@ -339,7 +340,7 @@ static UIImage *TGBackspaceImage(UIColor *colour) {
 	NSUInteger generation = self.generation;
 
 	// Strip slot 0 is the magnifier, so the feed's own sections start at 1.
-	NSMutableArray *titles = [NSMutableArray arrayWithObjects:@"Favourites", @"Recently Used", nil];
+	NSMutableArray *titles = [NSMutableArray arrayWithObjects:@"Favorites", @"Recently Used", nil];
 	for (NSDictionary *set in self.stickerSets)
 		[titles addObject:[set[@"title"] length] ? set[@"title"] : @"Stickers"];
 
@@ -349,7 +350,7 @@ static UIImage *TGBackspaceImage(UIColor *colour) {
 
 	self.items = @[];
 	self.sections = nil;
-	self.emptyLabel.text = @"No stickers yet";
+	self.emptyLabel.text = @"None";
 	[self reloadGrid];
 
 	__weak typeof(self) weakSelf = self;

@@ -4,8 +4,9 @@
 // swatches, a live preview of your own name and avatar, and a reset.
 //
 #import <UIKit/UIKit.h>
+#import "TGTableViewController.h"
 
-@interface TGProfileAppearanceViewController : UITableViewController
+@interface TGProfileAppearanceViewController : TGTableViewController
 
 /// NO opens on the name colour, YES on the profile colour.
 - (instancetype)initWithProfileTab:(BOOL)profileTab;
