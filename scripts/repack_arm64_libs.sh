@@ -19,6 +19,7 @@ AR="${AR:-/opt/homebrew/opt/llvm/bin/llvm-ar}"
 LIPO="${LIPO:-/opt/homebrew/opt/llvm/bin/llvm-lipo}"
 OUT="${ROOT_DIR}/build/arm64/tdlib64"
 WOUT="${ROOT_DIR}/build/arm64/libs"
+mkdir -p "${OUT}" "${WOUT}"
 
 cd "$(mktemp -d "${TMPDIR:-/tmp}/repack.XXXXXX")"
 echo "[+] repacking TDLib archives into thin arm64"

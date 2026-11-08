@@ -1,47 +1,18 @@
 #!/bin/bash
-# Build third-party dependencies from source for iOS arm64/armv7
-# Places output static libraries into build/libs/
-
+# OpenSSL slices from the prebuilt universal archives in vendor/libs:
+#   build/libs/lib{crypto,ssl}.a           armv7+arm64, what build_tdlib.sh links
+#   build/{armv7,arm64}/libs/lib{crypto,ssl}.a   thin, what the app links
+# armv7 TDLib uses the assembly OpenSSL from build_openssl.sh instead.
 set -e
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+IN="${ROOT_DIR}/vendor/libs"
+mkdir -p "${ROOT_DIR}/build/libs" "${ROOT_DIR}/build/armv7/libs" "${ROOT_DIR}/build/arm64/libs"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-BUILD_LIBS_DIR="${ROOT_DIR}/build/libs"
-SRC_LIBS_DIR="${ROOT_DIR}/libs"
-
-mkdir -p "${BUILD_LIBS_DIR}"
-
-SDK_PATH="${ROOT_DIR}/build/sdks/iPhoneOS12.4.sdk"
-if [ ! -d "${SDK_PATH}" ]; then
-  SDK_PATH="${ROOT_DIR}/build/sdks/iPhoneOS9.3.sdk"
-fi
-
-echo "[+] Preparing dependencies into ${BUILD_LIBS_DIR}..."
-
-# Source directory for universal binaries (either in libs/ or build/libs/)
-INPUT_DIR="${SRC_LIBS_DIR}"
-if [ ! -d "${INPUT_DIR}" ]; then
-  INPUT_DIR="${BUILD_LIBS_DIR}"
-fi
-
-# ── Dual-arch (armv7 32-bit + arm64 64-bit) slices from universal .a files ─
-echo "[openssl] Preparing dual-arch (armv7 + arm64) static libraries..."
-if [ -f "${INPUT_DIR}/libcrypto-universal.a" ]; then
-  lipo "${INPUT_DIR}/libcrypto-universal.a" -extract armv7 -extract arm64 -output "${BUILD_LIBS_DIR}/libcrypto.a" 2>/dev/null || \
-    cp "${INPUT_DIR}/libcrypto-universal.a" "${BUILD_LIBS_DIR}/libcrypto.a"
-  lipo "${INPUT_DIR}/libssl-universal.a"    -extract armv7 -extract arm64 -output "${BUILD_LIBS_DIR}/libssl.a"    2>/dev/null || \
-    cp "${INPUT_DIR}/libssl-universal.a"    "${BUILD_LIBS_DIR}/libssl.a"
-fi
-
-echo "[libcurl] Preparing dual-arch (armv7 + arm64) static libraries..."
-if [ -f "${INPUT_DIR}/libcurl-universal.a" ]; then
-  lipo "${INPUT_DIR}/libcurl-universal.a" -extract armv7 -extract arm64 -output "${BUILD_LIBS_DIR}/libcurl.a" 2>/dev/null || \
-    cp "${INPUT_DIR}/libcurl-universal.a"   "${BUILD_LIBS_DIR}/libcurl.a"
-  lipo "${INPUT_DIR}/libnghttp2-universal.a" -extract armv7 -extract arm64 -output "${BUILD_LIBS_DIR}/libnghttp2.a" 2>/dev/null || \
-    cp "${INPUT_DIR}/libnghttp2-universal.a" "${BUILD_LIBS_DIR}/libnghttp2.a"
-fi
-
-echo "[+] All dependencies ready in ${BUILD_LIBS_DIR}"
-echo ""
-echo "Libraries prepared:"
-ls -lh "${BUILD_LIBS_DIR}/"*.a 2>/dev/null || true
+for lib in crypto ssl; do
+	src="${IN}/lib${lib}-universal.a"
+	[ -f "${src}" ] || { echo "[-] ${src} missing"; exit 1; }
+	lipo "${src}" -extract armv7 -extract arm64 -output "${ROOT_DIR}/build/libs/lib${lib}.a"
+	lipo "${src}" -thin armv7 -output "${ROOT_DIR}/build/armv7/libs/lib${lib}.a"
+	lipo "${src}" -thin arm64 -output "${ROOT_DIR}/build/arm64/libs/lib${lib}.a"
+done
+ls -lh "${ROOT_DIR}"/build/libs/*.a "${ROOT_DIR}"/build/arm*/libs/lib{crypto,ssl}.a
