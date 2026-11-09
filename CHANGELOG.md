@@ -1,10 +1,14 @@
 # Changelog
 
-## Unreleased
+## 1.2 (2) - 2026-11-09
 
-- Themes and wallpapers: official light and dark themes, chat themes, Night Mode and scheduled Auto-Night, and the Telegram wallpaper collection.
-- A composer that grows with the text. Return starts a new line, and the AI screen can translate, restyle or fix a message before you send it.
-- Faster launch: the first screen now appears in about a second instead of three to five, with custom emoji already drawn in the chat list.
+- Official Telegram themes: light and dark, chat themes with their paired wallpapers, patterns, Night Blue and scheduled Auto-Night.
+- The composer grows with the text; Return starts a new line. The AI screen can translate, restyle or fix a message before you send it.
+- Faster launch: the first screen appears in about a second instead of three to five, with custom emoji already drawn in the chat list.
+- The app checks for updates through our bot once a day and shows the official update screen with the changelog.
+- A "Share Statistics" switch in Privacy and Security. It sends the app version, iOS, device, tier, jailbreak flag and language; never the account id.
+- The blocked list shows real blocked accounts with their avatars; deleted accounts are left out.
+- An empty Downloads screen now says that files downloaded in chats will appear there.
 
 ## 1.1 (1) - 2026-11-08
 
