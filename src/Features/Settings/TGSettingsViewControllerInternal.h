@@ -22,152 +22,8 @@
 #import "TGQRViewController.h"
 #import "TGPlaceholderViewController.h"
 #import "TGIcons.h"
+#import "TGRows.h"
 #import <QuartzCore/QuartzCore.h>
-
-#pragma mark - the row model
-
-static NSString *const TGRowTitle    = @"title";
-static NSString *const TGRowDetail   = @"detail";
-static NSString *const TGRowKind     = @"kind";
-static NSString *const TGRowTap      = @"tap";       // void(^)(void)
-static NSString *const TGRowToggle   = @"toggle";    // void(^)(BOOL)
-static NSString *const TGRowOn       = @"on";
-static NSString *const TGRowChecked  = @"checked";
-static NSString *const TGRowIcon     = @"icon";
-static NSString *const TGRowColour   = @"colour";
-static NSString *const TGRowSubtitle = @"subtitle";
-static NSString *const TGRowOpens    = @"opens";
-static NSString *const TGRowBadge    = @"badge";   // red warning mark
-
-// Kinds
-static NSString *const TGKindPlain       = @"plain";
-static NSString *const TGKindDisclosure  = @"disclosure";
-static NSString *const TGKindToggle      = @"switch";
-static NSString *const TGKindCheck       = @"check";
-static NSString *const TGKindDestructive = @"destructive";
-static NSString *const TGKindProfile     = @"profile";
-static NSString *const TGKindPreview     = @"preview";   // the two sample bubbles
-static NSString *const TGKindAction      = @"action";    // blue text, no chevron
-static NSString *const TGKindToggleInfo  = @"switchinfo";// icon, description, switch
-
-static inline NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows) {
-	NSMutableDictionary *section = [NSMutableDictionary dictionary];
-	if (header) section[@"header"] = header;
-	if (footer) section[@"footer"] = footer;
-	section[@"rows"] = rows ?: @[];
-	return section;
-}
-
-static inline NSMutableDictionary *TGRow(NSString *kind, NSString *title) {
-	return [@{TGRowKind : kind, TGRowTitle : title ?: @""} mutableCopy];
-}
-
-static inline NSDictionary *TGTapRow(NSString *title, NSString *detail, void (^tap)(void)) {
-	NSMutableDictionary *row = TGRow(TGKindDisclosure, title);
-	if (detail) row[TGRowDetail] = detail;
-	if (tap) row[TGRowTap] = [tap copy];
-	return row;
-}
-
-static inline NSDictionary *TGOpenRow(NSString *title, NSString *detail, void (^tap)(void)) {
-	NSMutableDictionary *row = [TGTapRow(title, detail, tap) mutableCopy];
-	row[TGRowOpens] = @YES;
-	return row;
-}
-
-static inline NSDictionary *TGSwitchRow(NSString *title, BOOL on, void (^changed)(BOOL)) {
-	NSMutableDictionary *row = TGRow(TGKindToggle, title);
-	row[TGRowOn] = @(on);
-	if (changed) row[TGRowToggle] = [changed copy];
-	return row;
-}
-
-static inline NSDictionary *TGSwitchInfoRow(NSString *title, NSString *detail,
-									 NSString *icon, UIColor *colour,
-									 BOOL on, void (^changed)(BOOL)) {
-	NSMutableDictionary *row = TGRow(TGKindToggleInfo, title);
-	if (detail) row[TGRowDetail] = detail;
-	if (icon)   row[TGRowIcon]   = icon;
-	if (colour) row[TGRowColour] = colour;
-	row[TGRowOn] = @(on);
-	if (changed) row[TGRowToggle] = [changed copy];
-	return row;
-}
-
-static inline NSDictionary *TGCheckRow(NSString *title, NSString *detail,
-								BOOL checked, void (^tap)(void)) {
-	NSMutableDictionary *row = TGRow(TGKindCheck, title);
-	if (detail) row[TGRowDetail] = detail;
-	row[TGRowChecked] = @(checked);
-	if (tap) row[TGRowTap] = [tap copy];
-	return row;
-}
-
-static inline NSDictionary *TGSubtitleRow(NSString *title, NSString *subtitle,
-								   void (^tap)(void)) {
-	NSMutableDictionary *row = TGRow(TGKindDisclosure, title);
-	if (subtitle) row[TGRowDetail] = subtitle;
-	row[TGRowSubtitle] = @YES;
-	if (tap) row[TGRowTap] = [tap copy];
-	return row;
-}
-
-static inline NSDictionary *TGSubtitleOpenRow(NSString *title, NSString *subtitle,
-									  void (^tap)(void)) {
-	NSMutableDictionary *row = [TGSubtitleRow(title, subtitle, tap) mutableCopy];
-	row[TGRowOpens] = @YES;
-	return row;
-}
-
-
-static inline NSDictionary *TGActionRow(NSString *title, void (^tap)(void)) {
-	NSMutableDictionary *row = TGRow(TGKindAction, title);
-	if (tap) row[TGRowTap] = [tap copy];
-	return row;
-}
-
-static inline NSDictionary *TGRedRow(NSString *title, void (^tap)(void)) {
-	NSMutableDictionary *row = TGRow(TGKindDestructive, title);
-	if (tap) row[TGRowTap] = [tap copy];
-	return row;
-}
-
-static inline NSDictionary *TGIconRow(NSString *title, NSString *icon, UIColor *colour,
-							   void (^tap)(void)) {
-	NSMutableDictionary *row = TGRow(TGKindDisclosure, title);
-	row[TGRowIcon] = icon;
-	row[TGRowColour] = colour;
-	if (tap) row[TGRowTap] = [tap copy];
-	return row;
-}
-
-static inline NSDictionary *TGIconOpenRow(NSString *title, NSString *icon, UIColor *colour,
-								  void (^tap)(void)) {
-	NSMutableDictionary *row = [TGIconRow(title, icon, colour, tap) mutableCopy];
-	row[TGRowOpens] = @YES;
-	return row;
-}
-
-/// Telegram's settings rows pair the glyph with the value the setting holds:
-/// "Data and Storage  1.2 GB", "Language  Українська". The plain icon row has
-/// nowhere to put that value, so these pages were either glyphs or values.
-static inline NSDictionary *TGIconTapRow(NSString *title, NSString *detail,
-								  NSString *icon, UIColor *colour,
-								  void (^tap)(void)) {
-	NSMutableDictionary *row = [TGIconRow(title, icon, colour, tap) mutableCopy];
-	if (detail) row[TGRowDetail] = detail;
-	return row;
-}
-
-static inline NSDictionary *TGIconTapOpenRow(NSString *title, NSString *detail,
-									 NSString *icon, UIColor *colour,
-									 void (^tap)(void)) {
-	NSMutableDictionary *row = [TGIconTapRow(title, detail, icon, colour, tap) mutableCopy];
-	row[TGRowOpens] = @YES;
-	return row;
-}
-
-
 
 @interface TGSettingsViewController (Tier2)
 /// The profile-extras card: emoji status, profile audio, text styles and the
@@ -180,12 +36,12 @@ static inline NSDictionary *TGIconTapOpenRow(NSString *title, NSString *detail,
 		UIImagePickerControllerDelegate, UINavigationControllerDelegate,
 		UISearchBarDelegate>
 
-@property (nonatomic, strong) NSArray *sections;
 @property (nonatomic, strong) NSMutableDictionary *privacy;    // setting -> value
 @property (nonatomic, strong) NSMutableDictionary *muted;      // scope -> NSNumber
 @property (nonatomic, strong) NSMutableDictionary *previews;   // scope -> NSNumber
+/// Keep the slot the profile-photo action clears after an upload; the header
+/// itself is now a shared row cell and no longer held here.
 @property (nonatomic, strong) UITableViewCell *profileCell;
-@property (nonatomic, strong) UIImageView *avatarView;
 @property (nonatomic, strong) NSArray *languages;
 @property (nonatomic, strong) NSString *currentLanguage;
 /// The language page's navigation-bar search. The list is filtered by the
@@ -268,6 +124,9 @@ static inline NSDictionary *TGIconTapOpenRow(NSString *title, NSString *detail,
 @property (nonatomic, assign) BOOL accentColorsLoaded;
 @property (nonatomic, assign) NSInteger accentColorId;
 @property (nonatomic, assign) NSInteger profileAccentColorId;
+/// Auto-Night's time picker and which end of the schedule it is editing.
+@property (nonatomic, strong) UIDatePicker *autoNightPicker;
+@property (nonatomic, assign) BOOL autoNightPickingFrom;
 /// The payment page: the order Telegram kept from the last checkout. A 404
 /// is "none saved", not a read failure, so the error is kept apart.
 @property (nonatomic, strong) NSDictionary *savedOrder;
@@ -364,7 +223,6 @@ static inline NSDictionary *TGIconTapOpenRow(NSString *title, NSString *detail,
 - (void)hideCloseBirthdays;
 - (void)chooseAccentColorForProfile:(BOOL)profile;
 - (void)showDefaultBackground;
-- (void)showEmojiChatThemes;
 - (void)chooseTextSize;
 - (void)chooseWallpaper;
 - (void)presentWallpaperPicker;
@@ -379,6 +237,10 @@ static inline NSDictionary *TGIconTapOpenRow(NSString *title, NSString *detail,
 /// TGSettingsViewController+Tier2.m so the root list stays a list.
 - (NSDictionary *)tier2ToolsRow;
 - (NSArray *)appearanceSections;
+- (NSArray *)chatThemesSections;
+- (NSArray *)autoNightSections;
+- (void)chooseAutoNightTimeFrom:(BOOL)from;
+- (void)saveAutoNightTime;
 - (NSArray *)dataSections;
 - (NSArray *)notificationSections;
 - (NSArray *)soundSections;
@@ -397,7 +259,6 @@ static inline NSDictionary *TGIconTapOpenRow(NSString *title, NSString *detail,
 - (NSArray *)blockedSections;
 - (NSArray *)powerSavingSections;
 - (NSArray *)recentCallSections;
-- (NSArray *)wallpaperSections;
 - (NSArray *)paymentSections;
 - (NSArray *)paymentDevSections;
 - (void)showBankCardLookup;

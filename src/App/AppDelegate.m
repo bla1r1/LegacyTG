@@ -4,6 +4,7 @@
 // Licensed under GNU General Public License v3.0
 //
 #import "AppDelegate.h"
+#import "TGSampler.h"
 #import "AppDelegate+URL.h"
 #import "RootViewController.h"
 #import "TGNavController.h"
@@ -33,7 +34,14 @@
 #import "TGPerf.h"
 #import "TGTextDraw.h"
 #import "TGDevFeedback.h"
+#import "TGUpdateStore.h"
+#import "TGUpdateInfoViewController.h"
 #include <stdio.h>
+
+@interface AppDelegate ()
+@property (nonatomic, assign) BOOL updateInfoPresented;
+- (void)presentUpdateInfo:(TGUpdateInfo *)info;
+@end
 
 @implementation AppDelegate
 
@@ -125,7 +133,37 @@ static UIImage *TGCustomEmojiFromStore(int64_t emojiId, CGFloat side) {
 
 	NSLog(@"[LegacyTG] Starting application...");
 	double launchStart = TGPerfNow();
-	TGWarmEmojiFont([TGTheme shared].messageFontSize);
+#if TG_DEV
+	// ssh: touch <container>/Library/Caches/prof-launch, relaunch, then pull
+	// Caches/bench-launch.txt for scripts/bench_report.py.
+	// Resident memory by kind a little after launch, and once settled.
+	for (int seconds = 3; seconds <= 9; seconds += 6){
+		dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(seconds * NSEC_PER_SEC)),
+				dispatch_get_main_queue(), ^{
+			char line[1024];
+			TGMemoryBreakdown(line, sizeof(line));
+			NSLog(@"[perf] memory at %ds: %s", seconds, line);
+		});
+	}
+	// main.m starts the sampler from a constructor, before main().
+	extern int TGLaunchSampling;
+	if (TGLaunchSampling){
+		NSString *dump = [cacheDir stringByAppendingPathComponent:@"bench-launch.txt"];
+		dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(6 * NSEC_PER_SEC)),
+				dispatch_get_main_queue(), ^{
+			NSLog(@"[perf] launch samples %d", TGSamplerStopAndWrite(dump.fileSystemRepresentation));
+		});
+	}
+#endif
+	double stepStart = TGPerfNow();
+	TGTheme *launchTheme = [TGTheme shared];
+	TGPerfReport("launch", "theme", stepStart, 50.0);
+	TGWarmEmojiFont(launchTheme.messageFontSize);
+	// The first bundled-emoji check opens Apple Color Emoji for its coverage
+	// test; done here, it is not paid in the first chat row's preview.
+	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+		TGTextHasUndrawableEmoji(@"\u2604");
+	});
 	TGWatchForIncomingCalls();
 
 	// The pack arrives after the first screen exists. When it does, repaint
@@ -172,6 +210,17 @@ static UIImage *TGCustomEmojiFromStore(int64_t emojiId, CGFloat side) {
 	// Service notifications belong to no chat: TDLib asks for a popup, and
 	// the window is the only surface that is not somebody's conversation.
 	__weak AppDelegate *weakSelf = self;
+
+	// The update screen is presented from here, once per launch, like the
+	// official client does from ApplicationContext.
+	[[NSNotificationCenter defaultCenter]
+			addObserverForName:TGUpdateAvailableNotification
+						object:nil
+						 queue:[NSOperationQueue mainQueue]
+					usingBlock:^(NSNotification *n){
+		[weakSelf presentUpdateInfo:n.userInfo[@"info"]];
+	}];
+
 	[[NSNotificationCenter defaultCenter]
 			addObserverForName:TGInAppNotificationReceivedNotification
 						object:nil
@@ -245,10 +294,14 @@ static UIImage *TGCustomEmojiFromStore(int64_t emojiId, CGFloat side) {
 
 	[fm changeCurrentDirectoryPath:[[NSBundle mainBundle] bundlePath]];
 
+	stepStart = TGPerfNow();
 	self.window = [[UIWindow alloc] initWithFrame:[[UIScreen mainScreen] bounds]];
 	self.window.backgroundColor = [[TGTheme shared] listBackgroundColour];
 	[self showMainUI];
+	TGPerfReport("launch", "showMainUI", stepStart, 100.0);
+	stepStart = TGPerfNow();
 	[self.window makeKeyAndVisible];
+	TGPerfReport("launch", "makeKeyAndVisible", stepStart, 100.0);
 #if TG_DEV
 	[TGDevFeedback installInWindow:self.window];
 #endif
@@ -258,7 +311,9 @@ static UIImage *TGCustomEmojiFromStore(int64_t emojiId, CGFloat side) {
 		[TGPasscodeViewController presentUnlockIfLocked];
 	}
 
+	stepStart = TGPerfNow();
 	[self startTDLib];
+	TGPerfReport("launch", "startTDLib", stepStart, 50.0);
 	TGWarmFonts([TGTheme shared].messageFontSize);
 	// One line if the launch itself misbehaves; silent when it is healthy.
 	TGPerfReport("launch", "didFinishLaunching", launchStart, 300.0);
@@ -288,6 +343,13 @@ static UIImage *TGCustomEmojiFromStore(int64_t emojiId, CGFloat side) {
 		[TGPasscodeViewController presentUnlockIfLocked];
 	}
 	[[TGClient shared] resumeFromBackground];
+	// Resume reconnects TDLib on the main queue; the check waits a moment so
+	// it does not race that restart on an old device.
+	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)NSEC_PER_SEC),
+			dispatch_get_main_queue(), ^{
+		if ([TGClient shared].authState == TGAuthStateReady)
+			[[TGUpdateStore shared] checkIfDue:NO];
+	});
 }
 
 - (void)startTDLib {
@@ -356,6 +418,7 @@ static UIImage *TGCustomEmojiFromStore(int64_t emojiId, CGFloat side) {
 					TGSetAuthorizedSession(YES);
 					[me.loginVC setBusy:NO];
 					[me showMainUI];
+					[[TGUpdateStore shared] checkIfDue:NO];
 					break;
 				case TGAuthStateClosed:
 				case TGAuthStateLoggingOut:
@@ -524,6 +587,42 @@ static UIImage *TGCustomEmojiFromStore(int64_t emojiId, CGFloat side) {
 			return;
 		[[TGClient shared] processPushPayload:userInfo];
 	}];
+}
+
+/// Official presents the update controller from the account context as soon
+/// as AppUpdateInfo arrives. Here it waits for the main UI, never covers the
+/// login flow or a call, and only one screen is shown per launch.
+- (void)presentUpdateInfo:(TGUpdateInfo *)info {
+	if (!info || self.updateInfoPresented)
+		return;
+	if (self.loginVC || [TGClient shared].authState != TGAuthStateReady)
+		return;
+	if ([TGPasscode hasPasscode] && [TGPasscode isLocked])
+		return;
+	if (![self.rootViewController isKindOfClass:[RootViewController class]])
+		return;
+
+	TGCallState callState = [TGCall shared].state;
+	if (callState == TGCallStatePending ||
+		callState == TGCallStateExchangingKeys ||
+		callState == TGCallStateConnecting ||
+		callState == TGCallStateEstablished)
+		return;
+
+	UIViewController *top = self.rootViewController;
+	while (top.presentedViewController)
+		top = top.presentedViewController;
+	if ([top isKindOfClass:[UINavigationController class]] &&
+		[((UINavigationController *)top).topViewController
+				isKindOfClass:[TGUpdateInfoViewController class]])
+		return;
+
+	TGUpdateInfoViewController *screen = [[TGUpdateInfoViewController alloc]
+			initWithUpdateInfo:info];
+	UINavigationController *nav = [[TGNavController alloc]
+			initWithRootViewController:screen];
+	[top presentViewController:nav animated:YES completion:nil];
+	self.updateInfoPresented = YES;
 }
 
 - (void)showMessage:(NSString *)msg {

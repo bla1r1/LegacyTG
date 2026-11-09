@@ -41,6 +41,18 @@ FOUNDATION_EXPORT TGMessageCard *TGChatCardForRow(NSDictionary *m);
 /// height they place and the height they draw cannot drift.
 FOUNDATION_EXPORT CGFloat TGPollOptionRowHeight(NSDictionary *option, CGFloat rowWidth);
 
+/// The composer's text view. UITextView has no placeholder or enabled flag,
+/// and the rest of the chat already speaks those two; the composer class
+/// implements them without a second text model.
+@interface UITextView (TGComposerInput)
+@property (nonatomic, copy) NSString *placeholder;
+@property (nonatomic, assign, getter=isEnabled) BOOL enabled;
+/// The bot keyboard's toggle used to ride in a text field's rightView. The
+/// composer keeps the same call site by drawing it inside the text view.
+@property (nonatomic, strong) UIView *rightView;
+@property (nonatomic, assign) UITextFieldViewMode rightViewMode;
+@end
+
 @interface TGChatViewController () <UISearchBarDelegate, CLLocationManagerDelegate, TGEmojiPanelDelegate,
 		UIScrollViewDelegate, AVAudioPlayerDelegate, TGStreamingVoicePlayerDelegate,
 		ABPeoplePickerNavigationControllerDelegate, UIDocumentInteractionControllerDelegate>
@@ -49,8 +61,14 @@ FOUNDATION_EXPORT CGFloat TGPollOptionRowHeight(NSDictionary *option, CGFloat ro
 
 @property (nonatomic, strong) UITableView *table;
 @property (nonatomic, strong) UIView *inputBar;
-@property (nonatomic, strong) UITextField *input;
+@property (nonatomic, strong) UITextView *input;
+@property (nonatomic, strong) UIButton *attachButton;
+@property (nonatomic, strong) UIButton *aiButton;
+@property (nonatomic, strong) UIImageView *composerWell;
 @property (nonatomic, strong) UIButton *sendButton;
+/// The input bar's current height: the old capsule plus whatever the field
+/// has grown by. Keyboard and panel shifts read it instead of kInputHeight.
+@property (nonatomic, assign) CGFloat composerBarHeight;
 @property (nonatomic, strong) NSArray *messages;          // flattened TDLib dicts (may contain grouped album composites)
 @property (nonatomic, strong) NSArray *rawMessages;       // raw flattened messages before grouping
 @property (nonatomic, strong) TGImageLruCache *images;    // fileId -> UIImage (cap 40)
@@ -291,6 +309,9 @@ FOUNDATION_EXPORT CGFloat TGPollOptionRowHeight(NSDictionary *option, CGFloat ro
 - (void)showPlaybackFailure;
 - (void)applyTheme;
 - (void)inputChanged;
+/// Recomputes the field and bar height from the text's line count. The bar
+/// grows up to TGMetricComposerMaxLines and the text view scrolls after.
+- (void)updateComposerHeightAnimated:(BOOL)animated;
 - (void)reportTyping;
 - (void)refreshLinkPreview;
 - (void)sendImageAlbum:(NSArray *)images;
@@ -443,6 +464,8 @@ FOUNDATION_EXPORT CGFloat TGPollOptionRowHeight(NSDictionary *option, CGFloat ro
 - (void)openStickerPanelTab:(NSString *)name;
 - (void)hideStickerPanel;
 - (void)attachTapped;
+/// Puts the AI screen's result into the field without sending it.
+- (void)applyComposerText:(NSString *)text;
 - (void)shiftForKeyboardHeight:(CGFloat)height;
 - (void)keyboardWillShow:(NSNotification *)note;
 - (void)keyboardWillHide:(NSNotification *)note;

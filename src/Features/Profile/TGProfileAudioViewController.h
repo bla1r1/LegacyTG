@@ -5,9 +5,9 @@
 // audio tracks use, so the lock screen and the transport do not fork.
 //
 #import <UIKit/UIKit.h>
-#import "TGTableViewController.h"
+#import "TGRowsViewController.h"
 
-@interface TGProfileAudioViewController : TGTableViewController
+@interface TGProfileAudioViewController : TGRowsViewController
 
 @property (nonatomic, assign) int64_t userId;
 @property (nonatomic, copy)   NSString *subjectTitle;

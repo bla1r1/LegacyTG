@@ -34,6 +34,13 @@ BOOL TGIsEmojiScalar(UTF32Char c);
 /// against the system font and its fallback list, cached per character.
 /// Returns the same object when nothing goes.
 NSString *TGStripUndrawableScalars(NSString *text);
+/// Drops U+FE0F after emoji Apple Color Emoji lacks: no face has it, and
+/// CoreText searched every font on disk for it. YES if anything went.
+BOOL TGMarkUndrawableEmoji(NSMutableAttributedString *text, CGFloat size);
+/// Whether the text has such a selector; cached per character, no shaping.
+BOOL TGTextHasUndrawableEmoji(NSString *text);
+/// The same drop with the coverage test passed in, for host tests.
+BOOL TGDropEmojiSelectors(NSMutableAttributedString *text, BOOL (*lacking)(UTF32Char));
 /// The same walk with the coverage test passed in, so a host test does not
 /// depend on the fonts of the machine it runs on.
 NSString *TGStripScalars(NSString *text, BOOL (*drawable)(UTF32Char));
@@ -104,6 +111,16 @@ CGFloat TGInlineStampY(CGRect bodyFrame);
 @property (nonatomic, copy)   NSString *quoteAuthor;
 @property (nonatomic, strong) NSArray  *quoteEntities;
 @property (nonatomic, assign) BOOL isService;
+/// Which service plate the row is: a day header has more air and a heavier
+/// line; the unread band is full width with no plate at all. The factory uses
+/// these resolved flags, so a card that also came in as a service update stays
+/// a bubble.
+@property (nonatomic, assign) BOOL isDateHeader;
+@property (nonatomic, assign) BOOL isUnreadSeparator;
+/// The final service line, worked out once with the layout and cached with it.
+@property (nonatomic, copy)   NSString *serviceText;
+/// Which side sent the message, for the shared bubble configure.
+@property (nonatomic, assign) BOOL mine;
 @property (nonatomic, assign) BOOL isSticker;
 @property (nonatomic, assign) BOOL isVoice;
 @property (nonatomic, assign) BOOL isPoll;

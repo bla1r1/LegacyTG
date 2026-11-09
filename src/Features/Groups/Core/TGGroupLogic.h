@@ -30,3 +30,18 @@ FOUNDATION_EXPORT NSString *TGMemberRowName(NSDictionary *member);
 /// The pack marks the name in confirmations as **bold**. The alert draws plain
 /// text, so the key is looked up with the markers and they are removed after.
 FOUNDATION_EXPORT NSString *TGStripBoldMarkers(NSString *text);
+
+/// One member of the group as a TGPeerRow: face, name, role badge, emoji
+/// status and chevron. The emoji status id is passed in so the model stays
+/// pure; TGClient is asked by the screen.
+FOUNDATION_EXPORT NSDictionary *TGGroupMemberRowModel(NSDictionary *member,
+													  int64_t statusEmojiId);
+
+/// A group settings value row as the shared cell draws it: the title, the
+/// value under it when it has one, the chevron when the tap opens a page and
+/// the red title of a destructive action.
+FOUNDATION_EXPORT NSDictionary *TGGroupInfoRowModel(NSString *title,
+													NSString *detail,
+													BOOL opens,
+													BOOL destructive,
+													BOOL disabled);

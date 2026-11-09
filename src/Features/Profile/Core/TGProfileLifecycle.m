@@ -7,7 +7,6 @@
 #import "TGMemberCell.h"
 #import "TGGroupMemberActions.h"
 #import "TGProfileAudioViewController.h"
-#import "TGProfileTrackCell.h"
 #import "TGMusicPlayer.h"
 #import "TGChatViewController.h"
 #import "TGSimilarChannelsViewController.h"
@@ -15,7 +14,7 @@
 #import "UIImage+WebP.h"
 #import <AVFoundation/AVFoundation.h>
 #import "TGProfileViewController.h"
-#import "TGProfileDetailCell.h"
+#import "TGProfileHeaderView.h"
 #import "TGNewContactViewController.h"
 #import "TGLocalization.h"
 #import "TGGroupSettingsViewController.h"
@@ -120,33 +119,6 @@ static int64_t TGProfileChatIdFromItem(id item) {
 	return 0;
 }
 
-static NSString *TGProfileRowGlyphName(NSString *kind) {
-	if (![kind isKindOfClass:[NSString class]])
-		return nil;
-	if ([kind isEqualToString:@"phone"])
-		return @"call";
-	if ([kind isEqualToString:@"username"])
-		return @"mention";
-	if ([kind isEqualToString:@"birthday"])
-		return @"star";
-	if ([kind isEqualToString:@"bio"] || [kind isEqualToString:@"about"] ||
-		[kind isEqualToString:@"note"] || [kind isEqualToString:@"addBio"])
-		return @"edit";
-	if ([kind isEqualToString:@"channel"] || [kind isEqualToString:@"linkedChat"] ||
-		[kind isEqualToString:@"community"] || [kind isEqualToString:@"similarChannels"] ||
-		[kind isEqualToString:@"directMessages"])
-		return @"chat";
-	if ([kind isEqualToString:@"businessLocation"])
-		return @"archive";
-	if ([kind isEqualToString:@"invite"])
-		return @"forward";
-	if ([kind isEqualToString:@"addContact"])
-		return @"contacts";
-	if ([kind isEqualToString:@"warning"])
-		return @"close";
-	return nil;
-}
-
 /// Overlaps up to three avatars with CoreGraphics into a single bitmap.
 /// Each circular face is clipped in the context, separated from its neighbour
 /// by a ring cut into the prior face using cardBackgroundColour.
@@ -242,12 +214,9 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 - (void)willAnimateRotationToInterfaceOrientation:(UIInterfaceOrientation)toInterfaceOrientation
 							  duration:(NSTimeInterval)duration {
 	[super willAnimateRotationToInterfaceOrientation:toInterfaceOrientation duration:duration];
-	// grid tiles and cached cells are laid out to the width at build time;
-	// caches pinned to the old width would keep portrait frames spanning a
-	// rotated screen, so drop them and let the table re-ask its metrics.
-	self.storyGridCellCache = nil;
-	self.mediaGridCacheContent = nil;
-	[self.tableView reloadData];
+	// Grid tiles are laid out to the width at build time; rebuilding the rows
+	// lets the table re-ask their metrics at the new width.
+	[self rebuildSections];
 }
 
 - (void)viewDidLoad {
@@ -277,6 +246,7 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 			name:TGChatMembersChangedNotification object:nil];
 
 	[self buildHeader];
+	[self rebuildSections];
 	[self loadDetails];
 	[self loadMedia];
 
@@ -295,7 +265,7 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 		 usingBlock:^(NSNotification *note) {
 		[weakSelf applyTheme];
 		[weakSelf buildHeader];
-		[weakSelf.tableView reloadData];
+		[weakSelf rebuildSections];
 	}];
 
 	[[NSNotificationCenter defaultCenter] addObserverForName:TGCustomEmojiLoadedNotification
@@ -338,12 +308,17 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 	// My Profile posts a story from the bar; every profile you may edit gets
 	// the Edit word on the right.
 	if (self.isOwnProfile){
-		UIBarButtonItem *story = [[UIBarButtonItem alloc]
-				initWithImage:[TGIcons glyphNamed:@"plus"
-										   colour:nil
-											 side:TGMetricMenuGlyph]
-				style:UIBarButtonItemStylePlain
-			   target:self action:@selector(addStoryTapped)];
+		// Same control as the chat list's: the official ring at the bar's
+		// button size, in the bar-button colour.
+		UIButton *storyButton = [UIButton buttonWithType:UIButtonTypeCustom];
+		CGFloat side = TGMetricButtonMediumH;
+		storyButton.frame = CGRectMake(0, 0, side, side);
+		[storyButton setImage:[TGIcons glyphNamed:@"addStory"
+				colour:[[TGTheme shared] barButtonColour] side:side]
+				forState:UIControlStateNormal];
+		[storyButton addTarget:self action:@selector(addStoryTapped)
+				forControlEvents:UIControlEventTouchUpInside];
+		UIBarButtonItem *story = [[UIBarButtonItem alloc] initWithCustomView:storyButton];
 		[items addObject:story];
 	}
 	// A creator or administrator can edit a group/channel profile too; the
@@ -438,7 +413,7 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 			return;
 		dispatch_async(dispatch_get_main_queue(), ^{
 			weakSelf.avatarImage = round;
-			weakSelf.avatarView.image = round;
+			weakSelf.headerView.avatarImage = round;
 		});
 	});
 }

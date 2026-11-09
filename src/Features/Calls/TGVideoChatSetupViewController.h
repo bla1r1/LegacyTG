@@ -7,9 +7,9 @@
 // reachable, and every row reports the answer it got instead of assuming one.
 //
 #import <UIKit/UIKit.h>
-#import "TGListViewController.h"
+#import "TGRowsViewController.h"
 
-@interface TGVideoChatSetupViewController : TGListViewController
+@interface TGVideoChatSetupViewController : TGRowsViewController
 
 @property (nonatomic, assign) int64_t chatId;
 @property (nonatomic, assign) int32_t groupCallId;

@@ -6,7 +6,7 @@
 // the way in. The client keeps the state; the screen only reads and removes.
 //
 #import <UIKit/UIKit.h>
-#import "TGTableViewController.h"
+#import "TGRowsViewController.h"
 
-@interface TGActiveNotificationsViewController : TGTableViewController
+@interface TGActiveNotificationsViewController : TGRowsViewController
 @end

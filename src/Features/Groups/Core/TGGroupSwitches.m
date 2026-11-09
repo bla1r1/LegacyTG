@@ -137,22 +137,20 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 #pragma mark - switches
 
 - (void)switchChanged:(TGGroupSwitch *)sender {
-	if (self.busy){
-		sender.on = !sender.on;
+	if (self.busy)
 		return;
-	}
 	NSString *key = sender.key;
 	BOOL on = sender.on;
 	if ([key hasPrefix:@"@"])
-		[self setUsername:key active:on sender:sender];
+		[self setUsername:key active:on];
 	else
-		[self setBehaviour:key on:on sender:sender];
+		[self setBehaviour:key on:on];
 }
 
-- (void)setUsername:(NSString *)key active:(BOOL)on sender:(TGGroupSwitch *)sender {
+- (void)setUsername:(NSString *)key active:(BOOL)on {
 	NSString *username = [key substringFromIndex:1];
 	self.busy = YES;
-	sender.enabled = NO;
+	[self rebuild];
 	__weak typeof(self) weakSelf = self;
 	[[TGClient shared] toggleSupergroupUsernameIsActive:username
 												 inChat:self.chatId
@@ -163,18 +161,17 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 			return;
 		me.busy = NO;
 		if (!ok){
-			sender.on = !on;
-			sender.enabled = YES;
-			[me showRefusal:error title:@"Username"];
+			[me showRefusal:error title:TGLocalized(@"Username")];
+			[me rebuild];
 			return;
 		}
 		[me load];
 	}];
 }
 
-- (void)setBehaviour:(NSString *)key on:(BOOL)on sender:(TGGroupSwitch *)sender {
+- (void)setBehaviour:(NSString *)key on:(BOOL)on {
 	self.busy = YES;
-	sender.enabled = NO;
+	[self rebuild];
 	__weak typeof(self) weakSelf = self;
 	void (^done)(BOOL, NSString *) = ^(BOOL ok, NSString *error){
 		TGGroupSettingsViewController *me = weakSelf;
@@ -182,9 +179,8 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 			return;
 		me.busy = NO;
 		if (!ok){
-			sender.on = !on;
-			sender.enabled = YES;
-			[me showRefusal:error title:@"Group Settings"];
+			[me showRefusal:error title:TGLocalized(@"Group Settings")];
+			[me rebuild];
 			return;
 		}
 		if ([key isEqualToString:@"sign"])

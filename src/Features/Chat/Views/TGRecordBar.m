@@ -1,4 +1,5 @@
 #import "TGRecordBar.h"
+#import "TGChatActionMenuModel.h"
 #import "TGIcons.h"
 #import "TGStyle.h"
 #import "TGTheme.h"
@@ -114,41 +115,9 @@ static const CGFloat kRecordCancelH = 32.0f;
 }
 
 + (UIImage *)flipGlyphOfSide:(CGFloat)side colour:(UIColor *)colour {
-	UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), NO, 0);
-	CGContextRef ctx = UIGraphicsGetCurrentContext();
-	[colour setStroke];
-	[colour setFill];
-	CGContextSetLineWidth(ctx, TGMetricStrokeIcon);
-	CGContextSetLineCap(ctx, kCGLineCapRound);
-	CGFloat centre = TGHalf(side);
-	CGFloat radius = side * 0.3f;
-	CGFloat trim = 0.55f;
-	CGFloat head = side * 0.16f;
-	const NSInteger steps = 14;
-	for (NSInteger arc = 0; arc < 2; arc++){
-		CGFloat from = arc * (CGFloat)M_PI + trim;
-		CGFloat span = (CGFloat)M_PI - TGDoubled(trim);
-		CGPoint last = CGPointZero;
-		CGFloat heading = 0;
-		for (NSInteger i = 0; i <= steps; i++){
-			CGFloat angle = from + span * i / steps;
-			last = CGPointMake(centre + radius * cosf(angle), centre + radius * sinf(angle));
-			if (i == 0)
-				CGContextMoveToPoint(ctx, last.x, last.y);
-			else
-				CGContextAddLineToPoint(ctx, last.x, last.y);
-			heading = angle + (CGFloat)M_PI_2;
-		}
-		CGContextStrokePath(ctx);
-		CGContextMoveToPoint(ctx, last.x + head * cosf(heading), last.y + head * sinf(heading));
-		CGContextAddLineToPoint(ctx, last.x + head * cosf(heading + 2.2f), last.y + head * sinf(heading + 2.2f));
-		CGContextAddLineToPoint(ctx, last.x + head * cosf(heading - 2.2f), last.y + head * sinf(heading - 2.2f));
-		CGContextClosePath(ctx);
-		CGContextFillPath(ctx);
-	}
-	UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
-	UIGraphicsEndImageContext();
-	return image;
+	if (!TGChatDrawableSize(CGSizeMake(side, side)))
+		return nil;
+	return [TGIcons glyphNamed:@"flip" colour:colour side:side];
 }
 
 + (UIButton *)discOfSide:(CGFloat)side {
@@ -160,6 +129,8 @@ static const CGFloat kRecordCancelH = 32.0f;
 
 + (void)paintDisc:(UIButton *)disc colour:(UIColor *)colour {
 	CGFloat side = disc.bounds.size.width;
+	if (!TGChatDrawableSize(CGSizeMake(side, disc.bounds.size.height)))
+		return;
 	UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), NO, 0);
 	CGRect box = CGRectMake(0, 0, side, side);
 	[colour setFill];

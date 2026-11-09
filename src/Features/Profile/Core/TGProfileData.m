@@ -8,7 +8,6 @@
 #import "TGMemberCell.h"
 #import "TGGroupMemberActions.h"
 #import "TGProfileAudioViewController.h"
-#import "TGProfileTrackCell.h"
 #import "TGMusicPlayer.h"
 #import "TGChatViewController.h"
 #import "TGSimilarChannelsViewController.h"
@@ -16,7 +15,6 @@
 #import "UIImage+WebP.h"
 #import <AVFoundation/AVFoundation.h>
 #import "TGProfileViewController.h"
-#import "TGProfileDetailCell.h"
 #import "TGGroupLogic.h"
 #import "TGProfileLogic.h"
 
@@ -117,33 +115,6 @@ static int64_t TGProfileChatIdFromItem(id item) {
 		return [item longLongValue];
 	}
 	return 0;
-}
-
-static NSString *TGProfileRowGlyphName(NSString *kind) {
-	if (![kind isKindOfClass:[NSString class]])
-		return nil;
-	if ([kind isEqualToString:@"phone"])
-		return @"call";
-	if ([kind isEqualToString:@"username"])
-		return @"mention";
-	if ([kind isEqualToString:@"birthday"])
-		return @"star";
-	if ([kind isEqualToString:@"bio"] || [kind isEqualToString:@"about"] ||
-		[kind isEqualToString:@"note"] || [kind isEqualToString:@"addBio"])
-		return @"edit";
-	if ([kind isEqualToString:@"channel"] || [kind isEqualToString:@"linkedChat"] ||
-		[kind isEqualToString:@"community"] || [kind isEqualToString:@"similarChannels"] ||
-		[kind isEqualToString:@"directMessages"])
-		return @"chat";
-	if ([kind isEqualToString:@"businessLocation"])
-		return @"archive";
-	if ([kind isEqualToString:@"invite"])
-		return @"forward";
-	if ([kind isEqualToString:@"addContact"])
-		return @"contacts";
-	if ([kind isEqualToString:@"warning"])
-		return @"close";
-	return nil;
 }
 
 /// Overlaps up to three avatars with CoreGraphics into a single bitmap.
@@ -377,8 +348,8 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 			me.canManageDirectMessages = [info[@"canManageDirectMessages"] boolValue];
 			[me updateGroupStatus];
 			me.communityId = [info[@"communityId"] longLongValue];
-			NSString *commName = nil;
-			NSString *commSubtitle = nil;
+			me.communityName = nil;
+			me.communitySubtitle = nil;
 			if (me.communityId != 0) {
 				NSDictionary *commRecord = nil;
 				for (NSDictionary *c in [TGClient shared].communities) {
@@ -388,42 +359,27 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 					}
 				}
 				NSDictionary *fullComm = [[TGClient shared] cachedCommunityFullInfo:me.communityId];
-				commName = commRecord[@"name"];
+				NSString *commName = commRecord[@"name"];
 				if (!commName.length && [fullComm[@"name"] isKindOfClass:[NSString class]]) {
 					commName = fullComm[@"name"];
 				}
-				if (!commName.length) {
-					commName = @"Community";
-				}
+				me.communityName = commName.length ? commName : @"Community";
 				NSArray *commChats = [fullComm[@"chats"] isKindOfClass:[NSArray class]] ? fullComm[@"chats"] : @[];
 				if (commChats.count > 0) {
-					commSubtitle = TGLocalizedFormat(@"Community with %@ chats", @(commChats.count));
+					me.communitySubtitle = TGLocalizedFormat(@"Community with %@ chats", @(commChats.count));
 				} else {
-					commSubtitle = @"Community";
+					me.communitySubtitle = @"Community";
 				}
 			}
 
-			NSString *similarValue = nil;
-			if (me.isChannel && me.similarChatIds.count) {
-				similarValue = TGLocalizedPluralValue(@"%@ channel", @"%@ channels",
-						[NSString stringWithFormat:@"%lu", (unsigned long)me.similarChatIds.count],
-						(NSInteger)me.similarChatIds.count);
-				[me loadSimilarChannelsAvatars];
-			}
-			// PeerInfoProfileItems order: community, link, description,
-			// Settings, then the rows this client still keeps on the card.
+			// The community is its own section before the card, so the card
+			// keeps only the link, the description and Settings.
 			me.details = TGProfileGroupInfoRows(@{
-				@"communityId"          : @(me.communityId),
-				@"communityName"        : commName ?: @"",
-				@"communitySubtitle"    : commSubtitle ?: @"",
 				@"inviteLink"           : me.inviteLink ?: @"",
 				@"username"             : me.groupUsername ?: @"",
 				@"description"          : info[@"description"] ?: @"",
 				@"canManage"            : @(me.canManage),
 				@"isChannel"            : @(me.isChannel),
-				@"linkedChatTitle"      : me.linkedChatTitle ?: @"",
-				@"similarChannelsCount" : @(me.similarChatIds.count),
-				@"similarChannelsValue" : similarValue ?: @"",
 			});
 			[me buildHeader];
 			[me reloadTableDebounced];
@@ -439,65 +395,22 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 				}
 			}
 
+			// Similar channels are the last media pane, not an info row.
 			if (me.isChannel){
 				[[TGClient shared] similarChatsForChat:me.chatId completion:^(NSArray *chats, NSInteger total){
 					TGProfileViewController *again = weakSelf;
 					if (!again || !chats.count)
 						return;
 					again.similarChatIds = chats;
-					NSMutableArray *updated = [again.details mutableCopy];
-					BOOL exists = NO;
-					for (NSDictionary *r in updated){
-						if ([r[@"kind"] isEqualToString:@"similarChannels"]){
-							exists = YES;
-							break;
-						}
-					}
-					if (!exists){
-						[updated addObject:@{@"kind" : @"similarChannels",
-								@"label" : @"Similar Channels",
-								@"value" : TGLocalizedPluralValue(@"%@ channel", @"%@ channels", [NSString stringWithFormat:@"%lu", (unsigned long)(total > 0 ? total : chats.count)], (NSInteger)(total > 0 ? total : chats.count))}];
-						again.details = updated;
-						[again reloadTableDebounced];
-					}
-					[again loadSimilarChannelsAvatars];
+					[again reloadTableDebounced];
 				}];
 			}
 
+			// A linked discussion group or channel is edited in Settings;
+			// the profile card itself does not list it.
 			int64_t linkedId = [info[@"linkedChatId"] longLongValue];
-			if (linkedId != 0 && linkedId != me.linkedChatId){
+			if (linkedId != 0)
 				me.linkedChatId = linkedId;
-				[[TGClient shared] chatRecordForChat:linkedId completion:^(NSDictionary *linkedChat){
-					TGProfileViewController *again = weakSelf;
-					if (!again || !linkedChat)
-						return;
-					again.linkedChatTitle = linkedChat[@"title"] ?: @"";
-					if (!again.linkedChatTitle.length)
-						return;
-					NSMutableArray *updated = [again.details mutableCopy];
-					BOOL exists = NO;
-					for (NSDictionary *r in updated){
-						if ([r[@"kind"] isEqualToString:@"linkedChat"]){
-							exists = YES;
-							break;
-						}
-					}
-					if (!exists){
-						[updated addObject:@{@"kind" : @"linkedChat",
-								@"label" : (again.isChannel ? @"Discussion Group" : @"Linked Channel"),
-								@"value" : again.linkedChatTitle}];
-						again.details = updated;
-						[again reloadTableDebounced];
-					}
-					int64_t targetLinkedId = again.linkedChatId;
-					if (targetLinkedId && !again.chatAvatars[@(targetLinkedId)]) {
-						NSNumber *fileId = linkedChat[@"photo"][@"small"][@"id"];
-						if ([fileId isKindOfClass:[NSNumber class]] && fileId.integerValue > 0) {
-							[again downloadAvatarWithFileId:fileId.integerValue chatId:targetLinkedId kind:@"linkedChat" cell:nil];
-						}
-					}
-				}];
-			}
 		}];
 		return;
 	}
@@ -532,6 +445,9 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 			[weakSelf fetchEmojiStatusImage:statusId];
 		}
 		weakSelf.phoneNumber = user[@"phone_number"] ?: @"";
+		if (weakSelf.isOwnProfile &&
+				(!weakSelf.name.length || [weakSelf.name isEqualToString:@"."]))
+			weakSelf.name = TGProfileDisplayName(user, weakSelf.phoneNumber);
 		NSArray *activeUsernames = user[@"usernames"][@"active_usernames"];
 		if ([activeUsernames isKindOfClass:NSArray.class] && activeUsernames.count) {
 			weakSelf.activeUsernames = activeUsernames;

@@ -3,6 +3,7 @@
 // Component dimensions, padding scales, corner radii and layout metrics.
 //
 #import <UIKit/UIKit.h>
+#include <math.h>
 #import "TGStyle+Decorations.h"
 #import "TGStyle+Typography.h"
 
@@ -43,6 +44,38 @@ static const CGFloat TGMetricSettingsProfileRow = 168.0f;
 static const CGFloat TGMetricBusinessRow = 60.0f;
 /// Settings theme preview row height.
 static const CGFloat TGMetricSettingsPreviewRow = 108.0f;
+/// Theme carousel: ThemeCarouselItem draws 82 x 108 cards in a 133 pt row,
+/// with two small bubbles and an accent chip inside each card.
+static const CGFloat TGMetricThemeCardW          = 82.0f;
+static const CGFloat TGMetricThemeCardH          = 108.0f;
+static const CGFloat TGMetricThemeCardRow        = 133.0f;
+static const CGFloat TGMetricThemeCardBubbleW    = 54.0f;
+static const CGFloat TGMetricThemeCardBubbleH    = 22.0f;
+static const CGFloat TGMetricThemeCardBubbleGap  = 6.0f;
+static const CGFloat TGMetricThemeCardEmojiH     = 18.0f;
+static const CGFloat TGMetricThemeCardNameH      = 11.0f;
+/// Chat Themes' emoji grid: ThemeSettingsController lays three cards per row.
+static const NSInteger TGMetricThemeGridColumns   = 3;
+static const CGFloat TGMetricThemeGridGap        = 8.0f;
+
+/// The Chat Wallpapers grid: a 3-column grid of installed backgrounds. The
+/// picture is baked at 80 px; the cell is taller than it is wide, as in the
+/// official gallery.
+static const CGFloat TGMetricBackgroundThumbSide = 80.0f;
+static const CGFloat TGMetricBackgroundGridGap   = 8.0f;
+static const CGFloat TGMetricBackgroundGridAspect = 1.18f;
+static const CGFloat TGMetricBackgroundGridRow   = 116.0f;
+static const NSInteger TGMetricBackgroundGridColumns = 3;
+
+/// The shared picture grid. A cell holds one line of square tiles; the inset
+/// is inside the card, the gap is between two tiles, and the table margin is
+/// what a grouped cell loses on each side before the first tile.
+static const CGFloat TGMetricGridInset        = TGMetricPadMedium;
+static const CGFloat TGMetricGridGap          = TGMetricPadSmall;
+static const CGFloat TGMetricGridTableMargin  = TGMetricPadWide;
+static const NSInteger TGMetricGridMaxColumns = 8;
+/// The emoji status picker keeps six tiles across on the narrowest phone.
+static const NSInteger TGMetricEmojiStatusGridColumns = 6;
 /// Profile avatar photos row height.
 static const CGFloat TGMetricProfilePhotoRow    = 180.0f;
 /// Profile avatar photo square side in photos viewer.
@@ -340,6 +373,29 @@ static const CGFloat TGMetricChatListMenuX         = 120.0f;
 static const CGFloat TGMetricChatCellDateGap       = TGMetricPadSmall;
 static const CGFloat TGFontMessageBaseSize      = 13.0f;
 static const CGFloat TGFontMessageStep          = 2.0f;
+/// ThemeSettingsFontSizeItem offers seven positions; the message store keeps
+/// the point size, so the page maps between the two rather than storing a step.
+static const NSInteger TGMetricMessageSizeSteps = 7;
+
+/// A slider position as the point size TGTheme.messageFontSize stores.
+static inline CGFloat TGMessageFontSizeForStep(NSInteger step) {
+	if (step < 0)
+		step = 0;
+	if (step >= TGMetricMessageSizeSteps)
+		step = TGMetricMessageSizeSteps - 1;
+	return TGFontMessageBaseSize + (CGFloat)step * TGFontMessageStep;
+}
+
+/// The slider position for a stored size. A size between two steps belongs to
+/// the nearer one, so opening the page never moves the text by itself.
+static inline NSInteger TGMessageFontSizeStep(CGFloat size) {
+	NSInteger step = (NSInteger)lroundf((size - TGFontMessageBaseSize) / TGFontMessageStep);
+	if (step < 0)
+		step = 0;
+	if (step >= TGMetricMessageSizeSteps)
+		step = TGMetricMessageSizeSteps - 1;
+	return step;
+}
 static const CGFloat TGPlaybackSpeedNormal      = 1.0f;
 static const CGFloat TGPlaybackSpeedFast        = 1.5f;
 static const CGFloat TGPlaybackSpeedDouble      = 2.0f;
@@ -386,6 +442,24 @@ static const CGFloat TGMetricChatAvatar         = 60.0f;
 static const CGFloat TGMetricFileDisc           = 37.0f;
 static const CGFloat TGMetricFileTile           = 71.0f;
 static const CGFloat TGMetricInputBarHeight     = 48.0f;
+/// The composer grows like official's input panel: one line keeps the old
+/// capsule height, each further line adds one body line, and it stops at
+/// twelve lines before the text view scrolls (ChatTextInputPanelNode,
+/// calculateTextFieldMetrics' min(12, …) cap).
+static const CGFloat TGMetricComposerFieldMinHeight =
+		TGMetricInputBarHeight - TGMetricPad - TGMetricPad;
+static const CGFloat TGMetricComposerFieldInsetV =
+		(TGMetricComposerFieldMinHeight - TGMetricLineBody) / 2.0f;
+/// The field's own left edge, after the paperclip and its air. The bar keeps
+/// this at one line and at twelve so the field grows upward, not sideways.
+static const CGFloat TGMetricComposerFieldLeft   = 40.0f;
+/// Air between the field and the round send/mic control on its right.
+static const CGFloat TGMetricComposerSendInset   = 6.0f;
+/// The field's top and bottom inset inside the bar.
+static const CGFloat TGMetricComposerBarInsetV   = TGMetricPad;
+static const NSInteger TGMetricComposerMaxLines   = 12;
+/// Official fades the AI button in once the non-empty field reaches 3 lines.
+static const NSInteger TGMetricComposerAIMinLines = 3;
 static const CGFloat TGMetricPlayerArt          = 36.0f;
 static const CGFloat TGMetricPlayerBarHeight    = 48.0f;
 static const CGFloat TGMetricSendSide           = 36.0f;
@@ -417,6 +491,11 @@ static const CGFloat TGMetricSliderH               = 28.0f;
 static const CGFloat TGMetricSliderThumbD          = 22.0f;
 static const CGFloat TGMetricSliderTrackH          = 6.0f;
 static const CGFloat TGMetricTextFieldH            = 36.0f;
+/// A form field row: the prefix column of an inline address ("t.me/"), the
+/// growing multiline floor, and the width reserved for the official counter.
+static const CGFloat TGMetricFieldPrefixWidth      = 42.0f;
+static const CGFloat TGMetricFieldCounterWidth     = 30.0f;
+static const CGFloat TGMetricFieldMultilineMinHeight = TGMetricRow * 2.0f;
 static const CGFloat TGMetricBadgeH                = 18.0f;
 /// Every badge is one badge: the chat row's and the jump button's are the
 /// control's height, so the three cannot drift to 18, 18 and 20 again.

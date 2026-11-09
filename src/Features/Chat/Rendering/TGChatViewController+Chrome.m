@@ -18,9 +18,6 @@
 #import "TGListViewController.h"
 
 static const CGFloat kJumpSide = TGMetricJumpSide;
-/// The ticks are drawn a point shorter than the box they sit in, so the two
-/// strokes do not touch its edge.
-static const CGFloat kTicksDrawnHeight = 11.0f;
 /// The widest the unread count on the jump button goes before it truncates.
 static const CGFloat kJumpBadgeMaxW    = 60.0f;
 /// The arrow that appears while a bubble is dragged to be replied to.
@@ -442,22 +439,10 @@ static const CGFloat kActionBarCloseSide = TGMetricButtonLargeH;
 	[self layoutChrome];
 }
 
-/// A chevron pointing down, for the jump button.
+/// The jump button's chevron, from TGIconPaths.
 static UIImage *TGJumpChevron(UIColor *colour) {
-	CGSize size = CGSizeMake(TGMetricStampTicksRoom, kTicksDrawnHeight);
-	UIGraphicsBeginImageContextWithOptions(size, NO, 0);
-	CGContextRef ctx = UIGraphicsGetCurrentContext();
-	CGContextSetStrokeColorWithColor(ctx, colour.CGColor);
-	CGContextSetLineWidth(ctx, TGMetricBorderThick);
-	CGContextSetLineCap(ctx, kCGLineCapRound);
-	CGContextSetLineJoin(ctx, kCGLineJoinRound);
-	CGContextMoveToPoint(ctx, 2, 2);
-	CGContextAddLineToPoint(ctx, 9, 9);
-	CGContextAddLineToPoint(ctx, 16, 2);
-	CGContextStrokePath(ctx);
-	UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
-	UIGraphicsEndImageContext();
-	return image;
+	return [TGIcons glyphNamed:@"chevronDown" colour:colour
+						  side:TGMetricStampTicksRoom];
 }
 
 - (void)applyChromeTheme:(TGTheme *)theme {
@@ -933,52 +918,9 @@ static const CGFloat kReplyPull = TGMetricReplyPull;   // how far a bubble trave
 
 #pragma mark - header emoji status
 
-/// A padlock for a secret chat: a rounded body and a shackle, drawn at the
-/// bar's own colour. There is no lock glyph in the icon set, and a system
-/// emoji would bring its own colour into a monochrome bar.
-static UIImage *TGChatLockImageDraw(CGFloat side, UIColor *colour) {
-	UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), NO, 0);
-	CGContextRef ctx = UIGraphicsGetCurrentContext();
-	if (!ctx){
-		UIGraphicsEndImageContext();
-		return nil;
-	}
-	CGContextSetStrokeColorWithColor(ctx, colour.CGColor);
-	CGContextSetFillColorWithColor(ctx, colour.CGColor);
-	CGFloat bodyH = side * 0.52f;
-	CGRect body = CGRectZero;
-	body.origin.x = side * 0.18f;
-	body.origin.y = side - bodyH - side * 0.08f;
-	body.size.width = side * 0.64f;
-	body.size.height = bodyH;
-	UIBezierPath *bodyPath = [UIBezierPath bezierPathWithRoundedRect:body
-			cornerRadius:side * 0.12f];
-	[bodyPath fill];
-	CGFloat shackleW = side * 0.38f;
-	CGRect shackle = CGRectZero;
-	shackle.origin.x = (side - shackleW) * 0.5f;
-	shackle.origin.y = side * 0.12f;
-	shackle.size.width = shackleW;
-	shackle.size.height = side * 0.50f;
-	CGContextSetLineWidth(ctx, MAX(1.0f, side * 0.10f));
-	CGContextStrokeEllipseInRect(ctx, shackle);
-	UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
-	UIGraphicsEndImageContext();
-	return image;
-}
-
-/// The title refreshes on every chat update; the lock only changes with the
-/// theme, so keep the last one.
+/// A padlock for a secret chat: the catalog's lock path at the bar's colour.
 static UIImage *TGChatLockImage(CGFloat side, UIColor *colour) {
-	static UIImage *cached = nil;
-	static UIColor *cachedColour = nil;
-	static CGFloat cachedSide = 0;
-	if (!cached || side != cachedSide || ![colour isEqual:cachedColour]){
-		cached = TGChatLockImageDraw(side, colour);
-		cachedColour = colour;
-		cachedSide = side;
-	}
-	return cached;
+	return [TGIcons glyphNamed:@"lock" colour:colour side:side];
 }
 
 - (void)updateTitleEmojiStatus {
@@ -1014,9 +956,14 @@ static UIImage *TGChatLockImage(CGFloat side, UIColor *colour) {
 			: (self.chatTitle ?: (self.titleNameLabel.text ?: @""));
 	if (rawTitle.length && ![rawTitle isEqualToString:self.chatTitle])
 		self.chatTitle = rawTitle;
-	self.titleNameLabel.attributedText = TGNameWithStatus(rawTitle, statusId, self.titleNameLabel.font, [[TGTheme shared] barTitleColour]);
+	// TDLib names the chat "Saved Messages" in English; the pack has it.
+	NSString *shownTitle = isSaved ? TGLocalized(@"Saved Messages") : rawTitle;
+	self.titleNameLabel.attributedText = TGNameWithStatus(shownTitle, statusId, self.titleNameLabel.font, [[TGTheme shared] barTitleColour]);
+	// The header is narrower when search sits beside the avatar.
+	CGFloat titleWidth = self.titleNameLabel.superview
+			? self.titleNameLabel.superview.bounds.size.width : kTitleWidth;
 	self.titleNameLabel.frame = CGRectMake(TGMetricZero, TGMetricBorderWidth,
-			kTitleWidth, TGMetricLineRow);
+			titleWidth, TGMetricLineRow);
 	self.titleNameLabel.textAlignment = NSTextAlignmentCenter;
 
 	// A secret chat keeps the ordinary presence line and marks itself with a
@@ -1032,7 +979,7 @@ static UIImage *TGChatLockImage(CGFloat side, UIColor *colour) {
 	if (secret){
 		CGFloat side = TGMetricLineSubhead;
 		CGFloat textWidth = [rawTitle sizeWithFont:self.titleNameLabel.font].width;
-		CGFloat x = MAX(TGMetricZero, (kTitleWidth - textWidth) * 0.5f
+		CGFloat x = MAX(TGMetricZero, (titleWidth - textWidth) * 0.5f
 				- side - TGMetricPadTiny);
 		self.titleStatusIcon.image = TGChatLockImage(side,
 				[[TGTheme shared] barTitleColour]);

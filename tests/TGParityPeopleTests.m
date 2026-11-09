@@ -220,10 +220,12 @@ static void peopleTestReply(TGClient *c, NSDictionary *request, NSDictionary *an
 		@"isChannel"      : @NO,
 		@"linkedChatTitle": @"Discussion",
 	});
+	// The community is its own section and the linked chat belongs to the
+	// edit screen, so neither is a row in the info card.
 	XCTAssertEqualObjects([rows valueForKey:@"kind"],
-			(@[@"community", @"invite", @"about", @"settings", @"linkedChat"]));
-	XCTAssertEqualObjects(rows[1][@"value"], @"https://t.me/+abc");
-	XCTAssertEqualObjects(rows[3][@"label"], @"Group Settings");
+			(@[@"invite", @"about", @"settings"]));
+	XCTAssertEqualObjects(rows[0][@"value"], @"https://t.me/+abc");
+	XCTAssertEqualObjects(rows[2][@"label"], @"Group Settings");
 }
 
 - (void)testProfileGroupInfoRows_PublicUsernameIsTheLink {

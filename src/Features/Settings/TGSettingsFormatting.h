@@ -10,7 +10,11 @@
 #import <Foundation/Foundation.h>
 #include <math.h>
 #import "TGLocalization.h"
+#import "TGThemeTypes.h"
+#import "TGThemeList.h"
 #import "TGUIFormat.h"
+#import "TGStyle.h"
+#import "TGRows.h"
 
 /// A byte count in the pack's own unit strings ("%@ KB", "%@ MB", "%@ GB"),
 /// with the decimal separator of the app's language rather than the phone's.
@@ -50,6 +54,102 @@ static inline NSString *TGBytesForLanguage(long long bytes, NSString *language) 
 
 static inline NSString *TGBytes(long long bytes) {
 	return TGBytesForLanguage(bytes, TGAppLanguage());
+}
+
+/// The auto-download value as official's autodownloadDataSizeString makes it:
+/// a whole number of MB from 10 MB up, one decimal below that, and the app
+/// language's decimal separator. "121,5 МБ" was wider than the value column
+/// beside "Using Wi-Fi"; "121 МБ" fits.
+static inline NSString *TGSettingsAutoDownloadBytesForLanguage(long long bytes,
+															   NSString *language) {
+	if (bytes <= 0)
+		return TGLocalized(@"Off");
+	NSString *code = language.length ? language : @"en";
+	NSLocale *locale = [NSLocale localeWithLocaleIdentifier:code];
+	NSString *separator = [locale objectForKey:NSLocaleDecimalSeparator] ?: @".";
+	NSString *unit;
+	long long whole;
+	long long fraction = 0;
+	if (bytes >= 1024LL * 1024 * 1024){
+		unit = @"GB";
+		whole = bytes / (1024LL * 1024 * 1024);
+		fraction = (bytes % (1024LL * 1024 * 1024)) / (1024LL * 1024 * 102);
+	} else if (bytes >= 1024 * 1024){
+		unit = @"MB";
+		whole = bytes / (1024 * 1024);
+		fraction = (bytes % (1024 * 1024)) / (1024 * 102);
+		if (whole >= 10)
+			fraction = 0;
+	} else if (bytes >= 1024){
+		unit = @"KB";
+		whole = bytes / 1024;
+	} else {
+		return TGLocalizedFormat(@"%@ B",
+				[NSString stringWithFormat:@"%lld", bytes]);
+	}
+	if (fraction == 10){
+		fraction = 9;
+	}
+	while (fraction != 0 && fraction % 10 == 0)
+		fraction /= 10;
+	NSString *number = fraction > 0
+			? [NSString stringWithFormat:@"%lld%@%lld", whole, separator, fraction]
+			: [NSString stringWithFormat:@"%lld", whole];
+	return TGLocalizedFormat([@"%@ " stringByAppendingString:TGLocalized(unit)],
+			number);
+}
+
+static inline NSString *TGSettingsAutoDownloadBytes(long long bytes) {
+	return TGSettingsAutoDownloadBytesForLanguage(bytes, TGAppLanguage());
+}
+
+/// A segmented-control segment wide enough for the translated title plus the
+/// control's own side inset. "Пропущ." was clipped because the control split
+/// the bar in half; each segment now gets its own measured width.
+static inline CGFloat TGSettingsSegmentWidth(NSString *title, UIFont *font,
+											 CGFloat horizontalPadding) {
+	if (!title.length)
+		return TGMetricZero;
+	UIFont *face = font ?: TGFontCaption();
+	return ceilf([title sizeWithFont:face].width) +
+			TGDoubled(horizontalPadding);
+}
+
+/// A capability row on This Device: the feature name and On (in the online
+/// green, applied by the screen) or the reason it is unavailable.
+static inline NSDictionary *TGDeviceCapabilityRowModel(NSString *name,
+													   BOOL available,
+													   NSString *requirement) {
+	NSString *detail = available ? TGLocalized(@"On")
+			: TGLocalized(requirement ?: @"");
+	return TGTapRow(TGLocalized(name ?: @""), detail, nil);
+}
+
+/// The storage page's category rows: "Photos  42.3%" over the size, with the
+/// panel's check state. The screen adds the chart-coloured disc; the model
+/// keeps the order, the share and the selection rule testable.
+static inline NSArray *TGSettingsStorageCategoryRowModels(NSArray *categories,
+														  long long total,
+														  NSSet *selectedKinds) {
+	NSMutableArray *rows = [NSMutableArray array];
+	for (NSDictionary *category in categories){
+		long long bytes = [category[@"bytes"] longLongValue];
+		double share = total > 0 ? (bytes / (double)total) * 100.0 : 0;
+		NSString *title = [NSString stringWithFormat:@"%@  %.1f%%",
+				category[@"name"] ?: @"", share];
+		NSArray *kinds = category[@"kinds"] ?: @[];
+		BOOL allSelected = kinds.count > 0;
+		for (NSString *kind in kinds)
+			if (![selectedKinds containsObject:kind]){
+				allSelected = NO;
+				break;
+			}
+		NSMutableDictionary *row = [TGCheckRow(title, TGBytes(bytes),
+				allSelected, nil) mutableCopy];
+		row[@"storageKinds"] = kinds;
+		[rows addObject:row];
+	}
+	return rows;
 }
 
 #pragma mark - usernames
@@ -308,6 +408,138 @@ static inline NSString *TGPrivacyLabel(NSString *value) {
 				[NSString stringWithFormat:@"%ld", (long)count]);
 	return TGLocalizedFormat([label stringByAppendingString:@" (+%@)"],
 			[NSString stringWithFormat:@"%ld", (long)count]);
+}
+
+#pragma mark - Appearance
+
+/// The five physical textures the app has always drawn itself, in the order
+/// the old wallpaper list showed them. Their ids are stable strings because a
+/// grid mixes them with server backgrounds, whose ids are numbers.
+static inline NSArray *TGSettingsLocalWallpaperItems(void) {
+	return @[
+		@{@"id" : @"local:paper-grain", @"title" : @"Paper Grain",
+		  @"localWallpaperType" : @(TGWallpaperTypePaperGrain)},
+		@{@"id" : @"local:pinstripes", @"title" : @"Pinstripes",
+		  @"localWallpaperType" : @(TGWallpaperTypePinstripes)},
+		@{@"id" : @"local:classic-linen", @"title" : @"Classic Linen",
+		  @"localWallpaperType" : @(TGWallpaperTypeLinen)},
+		@{@"id" : @"local:parchment", @"title" : @"Parchment",
+		  @"localWallpaperType" : @(TGWallpaperTypeParchment)},
+		@{@"id" : @"local:game-center-felt", @"title" : @"Game Center Felt",
+		  @"localWallpaperType" : @(TGWallpaperTypeFelt)},
+	];
+}
+
+/// The wallpaper gallery model: the app's own textures first, then the
+/// account's installed backgrounds. The caller puts the active theme's
+/// wallpaper in front of this list.
+static inline NSArray *TGSettingsWallpaperGridItems(NSArray *localItems,
+													NSArray *serverItems) {
+	NSMutableArray *items = [NSMutableArray array];
+	[items addObjectsFromArray:localItems ?: @[]];
+	[items addObjectsFromArray:serverItems ?: @[]];
+	return items;
+}
+
+/// The sample conversation in ThemeSettingsChatPreviewItem. The four strings
+/// are the official pack keys, not the account's own name or an old preview
+/// sentence: that is why they translate on a Ukrainian or Russian phone.
+static inline NSDictionary *TGSettingsAppearancePreviewTexts(void) {
+	return @{
+		@"author"   : TGLocalized(@"Zakhar"),
+		@"reply"    : TGLocalized(@"Good morning! 👋"),
+		@"incoming" : TGLocalized(@"It's almost noon..."),
+		@"outgoing" : TGLocalized(@"It's morning in Tokyo 😎"),
+	};
+}
+
+/// Official section headers are uppercased after the pack lookup, not before:
+/// the pack stores "Select Theme" in title case, and ThemePickerController
+/// calls .uppercased() on the translated value.
+static inline NSString *TGSettingsHeaderText(NSString *english) {
+	return [TGLocalized(english) uppercaseString];
+}
+
+/// ThemeSettingsController inserts .builtin(.dayClassic) at the front of the
+/// chat theme list. The carousel and the Chat Themes grid therefore show one
+/// Classic card before the server's emoji themes.
+static inline NSDictionary *TGSettingsClassicThemeEntry(void) {
+	return @{@"id" : @"classic", @"name" : @"Classic", @"dark" : @NO,
+			 @"emoji" : @NO};
+}
+
+static inline NSArray *TGSettingsThemesWithClassic(NSArray *themes) {
+	NSMutableArray *result = [NSMutableArray arrayWithObject:
+			TGSettingsClassicThemeEntry()];
+	for (NSDictionary *entry in themes){
+		if (![entry isKindOfClass:NSDictionary.class])
+			continue;
+		if ([entry[@"id"] isEqualToString:@"classic"])
+			continue;
+		[result addObject:entry];
+	}
+	return result;
+}
+
+/// The Chat Themes page order, matching ThemePickerController: the server's
+/// emoji themes are the grid under "Select Theme"; the base themes sit under
+/// the preview, because they are what "Create Your Own Theme" edits. Kept as
+/// data so the host test can pin the two sections without UIKit.
+static inline NSArray *TGSettingsChatThemesModel(NSArray *emojiThemes,
+												 NSArray *baseThemes,
+												 NSString *currentThemeId) {
+	return @[
+		@{
+			@"kind"   : @"emojiGrid",
+			@"header" : @"Select Theme",
+			@"themes" : emojiThemes ?: @[],
+		},
+		@{
+			@"kind"    : @"customTheme",
+			@"header"  : @"Create Your Own Theme",
+			@"themes"  : baseThemes ?: @[],
+			@"current" : currentThemeId ?: @"",
+		},
+	];
+}
+
+static inline NSString *TGSettingsAutoNightModeLabel(NSUserDefaults *defaults) {
+	return TGSettingsAutoNightMode(defaults) == TGSettingsAutoNightModeScheduled
+			? TGLocalized(@"Scheduled") : TGLocalized(@"Disabled");
+}
+
+/// A stored minute of day as the phone's own short time ("22:00", "10 PM").
+static inline NSString *TGSettingsAutoNightTimeText(NSInteger minutes) {
+	if (minutes < 0 || minutes >= 24 * 60)
+		minutes = 0;
+	NSCalendar *calendar = [NSCalendar currentCalendar];
+	NSDateComponents *today = [calendar components:(NSYearCalendarUnit |
+			NSMonthCalendarUnit | NSDayCalendarUnit) fromDate:[NSDate date]];
+	today.hour = minutes / 60;
+	today.minute = minutes % 60;
+	today.second = 0;
+	NSDate *date = [calendar dateFromComponents:today] ?: [NSDate date];
+	return [NSDateFormatter localizedStringFromDate:date
+										  dateStyle:NSDateFormatterNoStyle
+										  timeStyle:NSDateFormatterShortStyle];
+}
+
+/// getInstalledBackgrounds is asked for one side of the theme, but a list can
+/// still carry both. Keep the side the caller is drawing; entries without a
+/// side are kept rather than silently disappearing from the grid.
+static inline NSArray *TGSettingsBackgroundsForDarkTheme(NSArray *backgrounds,
+														 BOOL darkTheme) {
+	NSMutableArray *kept = [NSMutableArray array];
+	for (NSDictionary *background in backgrounds){
+		if (![background isKindOfClass:NSDictionary.class])
+			continue;
+		id side = background[@"isDark"];
+		if ([side isKindOfClass:NSNumber.class] &&
+			[side boolValue] != darkTheme)
+			continue;
+		[kept addObject:background];
+	}
+	return kept;
 }
 
 #endif // TGSETTINGSFORMATTING_H

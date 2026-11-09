@@ -19,7 +19,7 @@
 	if (self){
 		_chatId = chatId;
 		_groupCallId = groupCallId;
-		self.listTitle = @"Data";
+		self.title = @"Data";
 		self.emptyText = @"None";
 		_sample = [@"LegacyTG group-call data channel sample" dataUsingEncoding:NSUTF8StringEncoding];
 		_statusText = nil;
@@ -75,7 +75,7 @@
 	[rows addObject:[self rowWithTitle:@"Decrypt Last Payload"
 			detail:nil
 			tap:^{ [weakSelf decryptLast]; }]];
-	self.rows = rows;
+	self.listRows = rows;
 	self.listFooter = self.statusText;
 	[self.tableView reloadData];
 }

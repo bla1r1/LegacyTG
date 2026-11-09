@@ -42,6 +42,11 @@ void TGSetTelegramLanguageLookup(NSDictionary *englishToTranslated);
 /// `@"%d chats" -> @{@"one": …, @"few": …, @"many": …, @"other": …}`.
 void TGSetTelegramLanguagePlurals(NSDictionary *englishToForms);
 
+/// YES when these are the tables already in use, so a pack that arrives
+/// unchanged at launch skips the reinstall and the interface walk it posts.
+BOOL TGTelegramLanguageMatches(NSDictionary *englishToTranslated,
+		NSDictionary *englishToForms);
+
 /// Posted after the lookup or the selected language changes.
 extern NSString *const TGAppLanguageChangedNotification;
 

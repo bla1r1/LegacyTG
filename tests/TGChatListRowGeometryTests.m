@@ -23,6 +23,23 @@ static const CGFloat kBadgeH = 18.0f;
 static const CGFloat kPin = 16.0f;
 static const CGFloat kGap = 8.0f;
 
+/// The launch snapshot keeps the preview's custom emoji, so the first paint
+/// can show pictures already on disk instead of the fallback characters.
+- (void)testSnapshotKeepsPreviewCustomEmojiAsNumbers {
+	NSArray *kept = TGSnapshotCustomEmoji(@[
+		@{@"offset" : @0, @"length" : @2, @"customEmojiId" : @"5206607081334906820"},
+		@[@2, @2, @5206607081334906820LL],
+		@{@"offset" : @4, @"length" : @2},
+		@"junk",
+	]);
+	XCTAssertEqual(kept.count, (NSUInteger)2);
+	XCTAssertEqualObjects(kept[0][@"customEmojiId"], @5206607081334906820LL);
+	XCTAssertEqualObjects(kept[1][@"offset"], @2);
+	XCTAssertNil(TGSnapshotCustomEmoji(@"not an array"));
+	XCTAssertTrue([NSPropertyListSerialization propertyList:kept
+			isValidForFormat:NSPropertyListXMLFormat_v1_0]);
+}
+
 - (void)testPinnedUnreadRowKeepsBothMarksAndTheyDoNotOverlap {
 	CGRect badge = CGRectZero, pin = CGRectZero;
 	CGFloat previewRight = 0;

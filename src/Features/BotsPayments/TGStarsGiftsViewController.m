@@ -13,6 +13,7 @@
 #import "TGStyle.h"
 #import "TGTheme.h"
 #import "TGLocalization.h"
+#import "TGRows.h"
 
 /// A transaction timestamp in the app's date format; the audit screen used to
 /// print the raw Unix number.
@@ -37,7 +38,7 @@ static NSString *TGStarsTransactionDate(NSNumber *unix) {
 
 /// The ledger as rows: localized type and date on the left, the signed Stars
 /// amount in a value label on the right. An alert cannot lay that out.
-@interface TGStarsTransactionsViewController : UITableViewController
+@interface TGStarsTransactionsViewController : TGRowsViewController
 @property (nonatomic, strong) NSArray *rows;
 @end
 
@@ -45,54 +46,23 @@ static NSString *TGStarsTransactionDate(NSNumber *unix) {
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	self.title = @"Stars Transactions";
-	[[TGTheme shared] styleGroupedTable:self.tableView];
+	self.title = TGLocalized(@"Stars Transactions");
+	[self rebuildSections];
 }
 
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-	return 1;
-}
-
-- (NSInteger)tableView:(UITableView *)tableView
-		numberOfRowsInSection:(NSInteger)section {
-	return (NSInteger)self.rows.count;
-}
-
-- (UITableViewCell *)tableView:(UITableView *)tableView
-		 cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-	static NSString *const cellId = @"TGStarsTransactionCell";
-	UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:cellId];
-	if (!cell){
-		cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle
-									  reuseIdentifier:cellId];
-		[[TGTheme shared] styleCell:cell];
-		cell.selectionStyle = UITableViewCellSelectionStyleNone;
+- (void)rebuildSections {
+	TGTheme *theme = [TGTheme shared];
+	NSMutableArray *rows = [NSMutableArray array];
+	for (NSDictionary *model in TGStarsLedgerRowModels(self.rows)){
+		NSMutableDictionary *row = [TGSubtitleRow(model[@"title"],
+				model[@"subtitle"], nil) mutableCopy];
+		row[TGRowAccessory] = model[@"amount"];
+		row[TGRowAccessoryColour] = [model[@"isOutgoing"] boolValue]
+				? [theme secondaryTextColour] : [theme accentColour];
+		[rows addObject:row];
 	}
-	NSDictionary *row = self.rows[(NSUInteger)indexPath.row];
-	cell.textLabel.text = row[@"title"];
-	cell.textLabel.textColor = [[TGTheme shared] primaryTextColour];
-	cell.detailTextLabel.text = row[@"subtitle"];
-	cell.detailTextLabel.textColor = [[TGTheme shared] secondaryTextColour];
-	// A trailing value label, as the official ledger has, instead of gluing
-	// the amount onto the title.
-	UILabel *amount = (UILabel *)[cell.contentView viewWithTag:0x5701];
-	if (!amount){
-		amount = [[UILabel alloc] initWithFrame:CGRectZero];
-		amount.tag = 0x5701;
-		amount.textAlignment = NSTextAlignmentRight;
-		amount.font = TGFontSubheadStrong();
-		[cell.contentView addSubview:amount];
-	}
-	amount.text = row[@"amount"];
-	amount.textColor = [row[@"isOutgoing"] boolValue]
-			? [[TGTheme shared] secondaryTextColour]
-			: [[TGTheme shared] accentColour];
-	CGFloat amountWidth = TGMetricRow * 3;
-	amount.frame = CGRectMake(cell.contentView.bounds.size.width - amountWidth -
-			TGMetricPadSmall, TGMetricPadSmall, amountWidth,
-			TGMetricRow - TGDoubled(TGMetricPadSmall));
-	amount.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin;
-	return cell;
+	self.sections = @[TGSection(nil, nil, rows)];
+	[self reloadRows];
 }
 
 @end

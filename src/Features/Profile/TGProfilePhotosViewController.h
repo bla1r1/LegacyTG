@@ -1,11 +1,11 @@
 //
 // TGProfilePhotosViewController.h - every profile photo an account still has,
-// one to a row, each removable by swipe.
+// as the shared picture grid.
 //
 #import <UIKit/UIKit.h>
-#import "TGTableViewController.h"
+#import "TGRowsViewController.h"
 
-@interface TGProfilePhotosViewController : TGTableViewController
+@interface TGProfilePhotosViewController : TGGridRowsViewController
 
 - (instancetype)initWithUserId:(int64_t)userId;
 

@@ -23,6 +23,44 @@
 	[super tearDown];
 }
 
+/// A pack that arrives unchanged at launch must be recognised, or every
+/// screen is walked and relabelled again on the main thread.
+/// The pack cache is written as a binary plist. A writer that called itself
+/// once grew the app to ~190 MB on a 4S; this would never return.
+- (void)testPackCacheIsWrittenAsBinaryPlist {
+	TGSetAppLanguage(@"xx-test");
+	NSString *path = [[NSSearchPathForDirectoriesInDomains(NSCachesDirectory,
+			NSUserDomainMask, YES) firstObject]
+			stringByAppendingPathComponent:@"localization-xx-test.plist"];
+	[[NSFileManager defaultManager] removeItemAtPath:path error:nil];
+	TGSetTelegramLanguageLookup(@{@"Chats" : @"Чаты"});
+	NSData *head = nil;
+	for (int i = 0; i < 300 && head.length < 6; i++){
+		[NSThread sleepForTimeInterval:0.01];
+		NSFileHandle *file = [NSFileHandle fileHandleForReadingAtPath:path];
+		head = [file readDataOfLength:6];
+		[file closeFile];
+	}
+	XCTAssertEqualObjects(head, [@"bplist" dataUsingEncoding:NSASCIIStringEncoding]);
+	XCTAssertEqualObjects([NSDictionary dictionaryWithContentsOfFile:path][@"Chats"], @"Чаты");
+	[[NSFileManager defaultManager] removeItemAtPath:path error:nil];
+	TGSetTelegramLanguageLookup(nil);
+	TGSetAppLanguage(nil);
+}
+
+- (void)testSamePackIsRecognisedAndAChangedOneIsNot {
+	NSDictionary *lookup = @{@"Chats" : @"Чаты", @"Settings" : @"Настройки"};
+	NSDictionary *plurals = @{@"%d chats" : @{@"one" : @"%d чат"}};
+	TGSetTelegramLanguageLookup(lookup);
+	TGSetTelegramLanguagePlurals(plurals);
+	XCTAssertTrue(TGTelegramLanguageMatches([lookup copy], [plurals copy]));
+	XCTAssertFalse(TGTelegramLanguageMatches(@{@"Chats" : @"Чаты"}, plurals));
+	XCTAssertFalse(TGTelegramLanguageMatches(lookup, @{}));
+	TGSetTelegramLanguageLookup(nil);
+	XCTAssertFalse(TGTelegramLanguageMatches(@{}, @{}),
+			@"no pack installed is never 'the same pack'");
+}
+
 - (void)testExactValueWins {
 	TGSetTelegramLanguageLookup(@{
 		@"Settings" : @"НАСТРОЙКИ",

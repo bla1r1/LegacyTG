@@ -6,13 +6,16 @@
 #import "TGDevShowcase.h"
 #import "TGNavController.h"
 #import "TGSettingsViewController.h"
+#import "TGLocalization.h"
 #import "TGStyle.h"
 #import "TGTheme.h"
 #import "TGIcons.h"
+#import "TGRowsViewController.h"
+#import "TGRows.h"
 
 /// The fixture chats. They live here and not in the chat list, so a real account's
 /// list is only that account's.
-@interface TGDevChatsViewController : UITableViewController
+@interface TGDevChatsViewController : TGRowsViewController
 @property (nonatomic, strong) NSArray *chats;
 @end
 
@@ -20,40 +23,26 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	self.title = @"Dev Chats";
+	self.title = TGLocalized(@"Dev Chats");
 	self.chats = [TGDevShowcase allShowcaseChats];
-	[self applyTheme];
-	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(applyTheme)
-												 name:TGThemeChangedNotification object:nil];
+	[self rebuildSections];
 }
 
-- (void)dealloc {
-	[[NSNotificationCenter defaultCenter] removeObserver:self];
+- (void)rebuildSections {
+	__weak typeof(self) weakSelf = self;
+	NSArray *titles = TGDevChatRowTitles(self.chats);
+	NSMutableArray *rows = [NSMutableArray arrayWithCapacity:titles.count];
+	for (NSUInteger index = 0; index < titles.count; index++){
+		NSDictionary *chatRecord = self.chats[index];
+		[rows addObject:TGOpenRow(titles[index], nil, ^{
+			[weakSelf openChat:chatRecord];
+		})];
+	}
+	self.sections = @[TGSection(nil, nil, rows)];
+	[self reloadRows];
 }
 
-- (void)applyTheme {
-	self.tableView.backgroundColor = [[TGTheme shared] groupedBackgroundColour];
-	[self.tableView reloadData];
-}
-
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-	return self.chats.count;
-}
-
-- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-	UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"chat"];
-	if (!cell)
-		cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
-									  reuseIdentifier:@"chat"];
-	[[TGTheme shared] styleCell:cell];
-	cell.textLabel.text = self.chats[indexPath.row][@"title"];
-	cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-	return cell;
-}
-
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
-	NSDictionary *row = self.chats[indexPath.row];
+- (void)openChat:(NSDictionary *)row {
 	TGChatViewController *chat = [[TGChatViewController alloc] init];
 	chat.chatId = [row[@"id"] longLongValue];
 	chat.chatTitle = row[@"title"];

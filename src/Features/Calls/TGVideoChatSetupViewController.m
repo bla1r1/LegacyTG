@@ -22,7 +22,7 @@
 	if (self){
 		_chatId = chatId;
 		_groupCallId = groupCallId;
-		self.listTitle = @"Video Chat";
+		self.title = @"Video Chat";
 		self.emptyText = @"None";
 		_statusLine = nil;
 	}
@@ -176,7 +176,7 @@
 				tap:^{ [weakSelf endCall]; }]];
 	}
 
-	self.rows = rows;
+	self.listRows = rows;
 }
 
 #pragma mark - create

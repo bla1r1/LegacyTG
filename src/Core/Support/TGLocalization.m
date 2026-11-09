@@ -1,3 +1,4 @@
+#include <string.h>
 #import "TGLocalization.h"
 
 NSString *const TGAppLanguageChangedNotification = @"TGAppLanguageChangedNotification";
@@ -93,6 +94,71 @@ static NSString *TGLocalizationPluralCachePath(NSString *packId) {
 	return [dir stringByAppendingPathComponent:name];
 }
 
+/// The caches are written as binary plists: the 1.6 MB XML pack plus its
+/// folded table took ~0.8 s to parse before main() on an A5 (binary: 0.6 s
+/// for the whole stretch to main instead of 1.23 s).
+static void TGWriteBinaryPlist(NSDictionary *dictionary, NSString *path) {
+	if (!dictionary || !path.length)
+		return;
+	NSData *data = [NSPropertyListSerialization dataWithPropertyList:dictionary
+			format:NSPropertyListBinaryFormat_v1_0 options:0 error:NULL];
+	[data writeToFile:path atomically:YES];
+}
+
+/// An XML cache from an older build is rewritten as binary once, one file at
+/// a time, after launch has settled, so it never competes with the first
+/// screen on the single core.
+static void TGConvertToBinaryLater(NSDictionary *dictionary, NSString *path) {
+	static dispatch_queue_t queue;
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{
+		queue = dispatch_queue_create("org.legacy.itg.plist", DISPATCH_QUEUE_SERIAL);
+		dispatch_set_target_queue(queue,
+				dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_BACKGROUND, 0));
+	});
+	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(15 * NSEC_PER_SEC)),
+			queue, ^{
+		@autoreleasepool {
+			TGWriteBinaryPlist(dictionary, path);
+		}
+	});
+}
+
+static NSDictionary *TGReadPlist(NSString *path) {
+	if (!path.length)
+		return nil;
+	NSFileHandle *file = [NSFileHandle fileHandleForReadingAtPath:path];
+	NSData *head = [file readDataOfLength:6];
+	[file closeFile];
+	NSDictionary *dictionary = [NSDictionary dictionaryWithContentsOfFile:path];
+	if (![dictionary isKindOfClass:NSDictionary.class])
+		return nil;
+	if (head.length == 6 && memcmp(head.bytes, "bplist", 6) != 0)
+		TGConvertToBinaryLater(dictionary, path);
+	return dictionary;
+}
+
+/// The folded table is derived from the pack and only changes with it, so it
+/// is stored next to it. "-v1" moves with TGLocalizationFoldKey's rules.
+static NSString *TGLocalizationFoldedCachePath(NSString *packId) {
+	NSString *path = TGLocalizationCachePath(packId);
+	return path.length ? [path stringByReplacingOccurrencesOfString:@".plist"
+			withString:@"-folded-v1.plist"] : nil;
+}
+
+/// Builds the folded table off the main thread and stores it. Built inline at
+/// startup it was ~1.6 s before main() on an A5: 9500 strings, each lowercased
+/// and searched for eight typographic characters, on every launch.
+static void TGBuildFoldedLookupInBackground(NSString *packId) {
+	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_BACKGROUND, 0), ^{
+		TGBuildFoldedLookup();
+		NSDictionary *folded = TGTelegramLookupFolded;
+		NSString *path = TGLocalizationFoldedCachePath(packId);
+		if (folded.count && path.length)
+			TGWriteBinaryPlist(folded, path);
+	});
+}
+
 static void TGLoadCachedLookup(void) {
 	NSString *packId = TGAppLanguage();
 	if (!packId.length || [packId isEqualToString:@"en"]){
@@ -103,12 +169,18 @@ static void TGLoadCachedLookup(void) {
 	}
 	NSString *path = TGLocalizationCachePath(packId);
 	NSDictionary *cached = path.length
-			? [NSDictionary dictionaryWithContentsOfFile:path] : nil;
+			? TGReadPlist(path) : nil;
 	TGTelegramLookup = [cached isKindOfClass:NSDictionary.class] ? cached : nil;
-	TGBuildFoldedLookup();
+	NSString *foldedPath = TGLocalizationFoldedCachePath(packId);
+	NSDictionary *folded = (TGTelegramLookup && foldedPath.length)
+			? TGReadPlist(foldedPath) : nil;
+	TGTelegramLookupFolded = [folded isKindOfClass:NSDictionary.class] ? folded : nil;
+	// Exact matches work from here; the folded fallback follows shortly.
+	if (TGTelegramLookup && !TGTelegramLookupFolded)
+		TGBuildFoldedLookupInBackground(packId);
 	NSString *pluralPath = TGLocalizationPluralCachePath(packId);
 	NSDictionary *pluralCache = pluralPath.length
-			? [NSDictionary dictionaryWithContentsOfFile:pluralPath] : nil;
+			? TGReadPlist(pluralPath) : nil;
 	TGTelegramPlurals = [pluralCache isKindOfClass:NSDictionary.class]
 			? pluralCache : nil;
 }
@@ -153,20 +225,25 @@ void TGSetTelegramLanguageLookup(NSDictionary *englishToTranslated) {
 	} else if (NSClassFromString(@"XCTestCase") != nil) {
 		TGBuildFoldedLookup();
 	} else {
-		dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_BACKGROUND, 0), ^{
-			TGBuildFoldedLookup();
-		});
+		TGBuildFoldedLookupInBackground(TGAppLanguage());
 	}
 	NSString *packId = TGAppLanguage();
 	NSString *path = TGLocalizationCachePath(packId);
 	if (path.length && TGTelegramLookup) {
 		NSDictionary *copy = [TGTelegramLookup copy];
 		dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_BACKGROUND, 0), ^{
-			[copy writeToFile:path atomically:YES];
+			TGWriteBinaryPlist(copy, path);
 		});
 	}
 	[[NSNotificationCenter defaultCenter]
 			postNotificationName:TGAppLanguageChangedNotification object:nil];
+}
+
+BOOL TGTelegramLanguageMatches(NSDictionary *englishToTranslated,
+		NSDictionary *englishToForms) {
+	NSDictionary *lookup = TGTelegramLookup, *plurals = TGTelegramPlurals;
+	return lookup.count && [lookup isEqualToDictionary:englishToTranslated ?: @{}] &&
+			[plurals ?: @{} isEqualToDictionary:englishToForms ?: @{}];
 }
 
 void TGSetTelegramLanguagePlurals(NSDictionary *englishToForms) {
@@ -177,11 +254,28 @@ void TGSetTelegramLanguagePlurals(NSDictionary *englishToForms) {
 	if (path.length && TGTelegramPlurals) {
 		NSDictionary *copy = [TGTelegramPlurals copy];
 		dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_BACKGROUND, 0), ^{
-			[copy writeToFile:path atomically:YES];
+			TGWriteBinaryPlist(copy, path);
 		});
 	}
 	[[NSNotificationCenter defaultCenter]
 			postNotificationName:TGAppLanguageChangedNotification object:nil];
+}
+
+/// Strings official Telegram has no key for (our own screens: This Device,
+/// the usage statistics footer). resources/strings/app-<lang>.plist, read
+/// once per language; the pack still wins wherever it has the string.
+static NSDictionary *TGAppStringsTable(void) {
+	static NSDictionary *table = nil;
+	static NSString *tableLanguage = nil;
+	NSString *lang = [[TGAppLanguage() componentsSeparatedByString:@"-"] firstObject] ?: @"";
+	if (tableLanguage && [tableLanguage isEqualToString:lang])
+		return table;
+	tableLanguage = [lang copy];
+	NSString *path = lang.length ? [[NSBundle mainBundle]
+			pathForResource:[@"app-" stringByAppendingString:lang] ofType:@"plist"] : nil;
+	NSDictionary *loaded = path ? [NSDictionary dictionaryWithContentsOfFile:path] : nil;
+	table = [loaded isKindOfClass:NSDictionary.class] ? loaded : nil;
+	return table;
 }
 
 NSString *TGLocalized(NSString *english) {
@@ -192,6 +286,8 @@ NSString *TGLocalized(NSString *english) {
 		NSString *fold = TGLocalizationFoldKey(english);
 		translated = fold.length ? TGTelegramLookupFolded[fold] : nil;
 	}
+	if (!translated.length)
+		translated = TGAppStringsTable()[english];
 	return translated.length ? translated : english;
 }
 

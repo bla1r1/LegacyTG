@@ -3,6 +3,7 @@
 // lists and alerts are the system's; a theme file only recolours the chat.
 //
 #import <UIKit/UIKit.h>
+#import "TGThemeTypes.h"
 
 @interface TGTheme : NSObject
 
@@ -23,7 +24,7 @@ extern NSString *const TGThemeChangedNotification;
 /// Name of the imported theme in use, or nil for the built-in styles.
 @property (nonatomic, readonly) NSString *importedName;
 /// Adopt a theme file made for an official client (.tgios-theme, .attheme).
-/// Returns NO if the file cannot be read or is dark. Persists across launches.
+/// Returns NO if the file cannot be read. Persists across launches.
 - (BOOL)importThemeAtPath:(NSString *)path;
 
 /// Drop the imported theme and go back to the built-in style.
@@ -39,6 +40,11 @@ extern NSString *const TGThemeChangedNotification;
 /// Entries contain: "id", "name", "dark" (BOOL), and optional "path".
 + (NSArray *)availableThemes;
 
+/// The colours a theme card draws for one availableThemes entry, keyed by
+/// "wallpaper", "bubbleMine", "bubbleTheirs", "bubbleMineText",
+/// "bubbleTheirsText", "text" and "accent".
++ (NSDictionary *)cardPaletteForThemeEntry:(NSDictionary *)entry;
+
 /// The id of the theme in use.
 - (NSString *)currentThemeId;
 
@@ -46,20 +52,21 @@ extern NSString *const TGThemeChangedNotification;
 /// stays in that case. Posts TGThemeChangedNotification once.
 - (BOOL)selectThemeId:(NSString *)themeId;
 
+/// Night Mode forces the chosen dark theme and remembers the light theme it
+/// came from, so turning it off puts the user back where they were. Persisted.
+- (BOOL)isNightModeEnabled;
+- (void)setNightModeEnabled:(BOOL)enabled;
+/// The dark theme Night Mode applies, or nil when none is available.
+- (NSString *)nightThemeId;
+
+/// Apply the Auto-Night schedule to Night Mode. Called when the app becomes
+/// active, on a one-minute timer and after the schedule is edited.
+- (void)refreshAutoNightMode;
+
 /// Message text size in points. Persisted; 15 is the default.
 @property (nonatomic, assign) CGFloat messageFontSize;
 
 #pragma mark - wallpaper
-
-typedef NS_ENUM(NSInteger, TGWallpaperType) {
-	TGWallpaperTypeNone = 0,
-	TGWallpaperTypePaperGrain = 1,
-	TGWallpaperTypePinstripes = 2,
-	TGWallpaperTypeLinen = 3,
-	TGWallpaperTypeParchment = 4,
-	TGWallpaperTypeFelt = 5,
-	TGWallpaperTypeCustom = 6
-};
 
 /// The chat wallpaper, or nil for a plain background. Either a picture the
 /// user chose, a physical texture preset, or one carried by an imported theme.

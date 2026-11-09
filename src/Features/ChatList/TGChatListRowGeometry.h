@@ -4,7 +4,7 @@
 // The unread count and the pin marker are two objects on the same line, and
 // Telegram draws both: a pinned chat that also has unread messages used to
 // lose its pin because the count was placed where the pin went. Keeping the
-// arithmetic here lets the host suite prove the two never overlap; TGChatCell
+// arithmetic here lets the host suite prove the two never overlap; TGChatRowCell
 // has no honest way to be measured without a live UIKit hierarchy.
 //
 #ifndef TGCHATLISTROWGEOMETRY_H
@@ -44,6 +44,11 @@ void TGChatListRowAccessories(CGFloat rightEdge,
 /// The chats a stopped scroll needs pictures for: one row behind it, for the
 /// archive row that shifts the list by one, and `rows` from there on.
 NSRange TGAvatarWindow(NSInteger firstVisible, NSUInteger rows, NSUInteger total);
+
+/// The preview's custom emoji ranges reduced to plain numbers for the launch
+/// snapshot: { offset, length, customEmojiId } from either row shape, nil
+/// entries dropped. Without them the first paint drew fallback characters.
+NSArray *TGSnapshotCustomEmoji(id value);
 
 #ifdef __cplusplus
 }

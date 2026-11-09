@@ -137,21 +137,11 @@ static char kAwaitedKey;
 }
 
 + (UIImage *)play {
-	return [self iconNamed:@"play" draw:^(CGContextRef ctx, CGFloat s){
-		CGContextMoveToPoint(ctx, 8, 5);
-		CGContextAddLineToPoint(ctx, s - 6, TGHalf(s));
-		CGContextAddLineToPoint(ctx, 8, s - 5);
-		CGContextClosePath(ctx);
-		CGContextFillPath(ctx);
-	}];
+	return [self pathIconNamed:@"play" margin:0];
 }
 
 + (UIImage *)pause {
-	return [self iconNamed:@"pause" draw:^(CGContextRef ctx, CGFloat s){
-		CGFloat w = s * 0.18f;
-		CGContextFillRect(ctx, CGRectMake(8, 6, w, s - 12));
-		CGContextFillRect(ctx, CGRectMake(s - 8 - w, 6, w, s - 12));
-	}];
+	return [self pathIconNamed:@"pause" margin:0];
 }
 
 + (UIImage *)previousTrack {

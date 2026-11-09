@@ -8,9 +8,9 @@
 //
 #import "TGWebsitesViewController.h"
 #import "TGClient.h"
-#import "TGTheme.h"
 #import "TGAlertSheet.h"
 #import "TGStyle.h"
+#import "TGRows.h"
 
 @interface TGWebsitesViewController ()
 @property (nonatomic, strong) NSArray *sites;
@@ -20,27 +20,10 @@
 
 @implementation TGWebsitesViewController
 
-- (instancetype)init {
-	return [super initWithStyle:UITableViewStyleGrouped];
-}
-
 - (void)viewDidLoad {
 	[super viewDidLoad];
 	self.title = @"Active Websites";
-	self.tableView.rowHeight = TGMetricPersonRow;
-	[self applyTheme];
 	[self refresh];
-
-}
-
-- (void)applyTheme {
-	[[TGTheme shared] styleGroupedTable:self.tableView];
-	[[TGTheme shared] styleNavigationBar:self.navigationController.navigationBar];
-}
-
-- (void)viewWillAppear:(BOOL)animated {
-	[super viewWillAppear:animated];
-	[self applyTheme];
 }
 
 - (void)refresh {
@@ -49,126 +32,60 @@
 		weakSelf.sites = sites ?: @[];
 		weakSelf.readError = error;
 		weakSelf.loaded = YES;
-		[weakSelf.tableView reloadData];
+		[weakSelf rebuildSections];
 	}];
 }
 
-/// When the site last used its token, as a short date. A site that never did
-/// is not a parse failure; it is one that signed in and did nothing.
-static NSString *TGWebsiteWhen(NSNumber *seconds) {
-	NSTimeInterval stamp = seconds.doubleValue;
-	if (stamp <= 0)
-		return @"—";
-	static NSDateFormatter *formatter = nil;
-	if (!formatter){
-		formatter = [[NSDateFormatter alloc] init];
-		formatter.dateStyle = NSDateFormatterShortStyle;
-		formatter.timeStyle = NSDateFormatterShortStyle;
-	}
-	return [formatter stringFromDate:[NSDate dateWithTimeIntervalSince1970:stamp]];
-}
-
-- (NSString *)detailForSite:(NSDictionary *)site {
-	NSMutableArray *parts = [NSMutableArray array];
-	NSString *browser = site[@"browser"];
-	NSString *platform = site[@"platform"];
-	NSString *where = site[@"location"];
-	if (browser.length || platform.length)
-		[parts addObject:[NSString stringWithFormat:@"%@ %@", browser ?: @"", platform ?: @""]];
-	if (where.length)
-		[parts addObject:where];
-	NSString *ip = site[@"ip"];
-	if (ip.length)
-		[parts addObject:ip];
-	[parts addObject:TGWebsiteWhen(site[@"lastActive"])];
-	return [parts componentsJoinedByString:@" · "];
-}
-
-#pragma mark - table
-
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-	if (!self.loaded)
-		return 1;
-	return self.sites.count ? 2 : 1;
-}
-
-- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-	if (section == 1)
-		return @"Websites";
-	return self.sites.count || self.readError ? @"Active Websites" : nil;
-}
-
-- (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-	return nil;
-}
-
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-	if (section == 1)
-		return 1;
-	if (self.sites.count || self.loaded)
-		return self.sites.count ? self.sites.count : 1;
-	return 1;
-}
-
-- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-	UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"site"];
-	if (!cell)
-		cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle
-									  reuseIdentifier:@"site"];
-	[[TGTheme shared] styleCell:cell];
-	cell.textLabel.textAlignment = NSTextAlignmentLeft;
-	cell.textLabel.textColor = [[TGTheme shared] primaryTextColour];
-	cell.detailTextLabel.textColor = [[TGTheme shared] secondaryTextColour];
-
-	if (indexPath.section == 1){
-		cell.textLabel.text = @"Disconnect All Websites";
-		cell.textLabel.textColor = [[TGTheme shared] destructiveColour];
-		cell.detailTextLabel.text = nil;
-		cell.textLabel.textAlignment = NSTextAlignmentCenter;
-		cell.selectionStyle = UITableViewCellSelectionStyleBlue;
-		return cell;
-	}
+- (void)rebuildSections {
+	__weak typeof(self) weakSelf = self;
+	NSMutableArray *sections = [NSMutableArray array];
 
 	if (!self.sites.count){
-		cell.textLabel.text = self.loaded ? @"None"
-				: @"Loading...";
-		if (self.readError.length)
-			cell.textLabel.text = self.readError;
-		cell.detailTextLabel.text = nil;
-		cell.selectionStyle = UITableViewCellSelectionStyleNone;
-		return cell;
+		NSString *title = TGWebsiteEmptyTitle(self.sites, self.loaded,
+				self.readError);
+		NSString *header = (self.sites.count || self.readError)
+				? @"Active Websites" : nil;
+		[sections addObject:TGSection(header, nil, @[
+			TGTapRow(title, nil, nil),
+		])];
+	} else {
+		NSMutableArray *rows = [NSMutableArray array];
+		for (NSDictionary *site in self.sites){
+			NSMutableDictionary *row = [TGSubtitleRow(site[@"domain"] ?: @"?",
+					TGWebsiteDetail(site),
+					^{ [weakSelf showActionsForSite:site]; }) mutableCopy];
+			row[TGRowDetailLines] = @2;
+			row[TGRowHeight] = @(TGMetricPersonRow);
+			[rows addObject:row];
+		}
+		[sections addObject:TGSection(@"Active Websites", nil, rows)];
+		[sections addObject:TGSection(@"Websites", nil, @[
+			TGRedRow(@"Disconnect All Websites", ^{ [weakSelf confirmDisconnectAll]; }),
+		])];
 	}
 
-	NSDictionary *site = self.sites[(NSUInteger)indexPath.row];
-	cell.textLabel.text = site[@"domain"] ?: @"?";
-	cell.detailTextLabel.text = [self detailForSite:site];
-	cell.detailTextLabel.numberOfLines = 2;
-	cell.selectionStyle = UITableViewCellSelectionStyleBlue;
-	return cell;
+	self.sections = sections;
+	[self reloadRows];
 }
 
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
+#pragma mark - actions
 
-	if (indexPath.section == 1){
-		__weak typeof(self) weakSelf = self;
-		[TGAlertSheet showConfirm:nil
-							title:@"Disconnect All Websites"
-						   action:@"Disconnect All"
-					  destructive:YES
-						   inView:self.view
-						onConfirm:^{
-			[[TGClient shared] disconnectAllWebsitesWithCompletion:^(BOOL ok,
-																	 NSString *error){
-				[weakSelf answer:ok error:error title:@"Active Websites"];
-			}];
+- (void)confirmDisconnectAll {
+	__weak typeof(self) weakSelf = self;
+	[TGAlertSheet showConfirm:nil
+						title:@"Disconnect All Websites"
+					   action:@"Disconnect All"
+				  destructive:YES
+					   inView:self.view
+					onConfirm:^{
+		[[TGClient shared] disconnectAllWebsitesWithCompletion:^(BOOL ok,
+																 NSString *error){
+			[weakSelf answer:ok error:error title:@"Active Websites"];
 		}];
-		return;
-	}
+	}];
+}
 
-	if (indexPath.row >= (NSInteger)self.sites.count)
-		return;
-	NSDictionary *site = self.sites[(NSUInteger)indexPath.row];
+- (void)showActionsForSite:(NSDictionary *)site {
 	int64_t websiteId = [site[@"id"] longLongValue];
 	if (!websiteId)
 		return;
@@ -177,7 +94,7 @@ static NSString *TGWebsiteWhen(NSNumber *seconds) {
 	__weak typeof(self) weakSelf = self;
 	[TGAlertSheet showChoices:@[@"Log Out"]
 						title:domain
-					  message:[self detailForSite:site]
+					  message:TGWebsiteDetail(site)
 			 destructiveIndex:0
 					   inView:self.view
 					 onChoice:^(NSInteger index){

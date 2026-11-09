@@ -19,7 +19,7 @@
 	if (self){
 		_chatId = chatId;
 		_groupCallId = groupCallId;
-		self.listTitle = @"Live Stream";
+		self.title = @"Live Stream";
 		self.emptyText = @"No Results";
 	}
 	return self;
@@ -73,16 +73,16 @@
 	[rows addObject:@{@"title" : @"Replace RTMP URL",
 					  @"detail" : @"Invalidates the current stream key",
 					  @"tap" : ^{ [weakSelf replaceRtmpUrl]; }}];
-	self.rows = rows;
+	self.listRows = rows;
 	[self.tableView reloadData];
 }
 
 - (void)appendTitle:(NSString *)title detail:(NSString *)detail {
-	NSMutableArray *rows = [self.rows mutableCopy];
+	NSMutableArray *rows = [self.listRows mutableCopy];
 	NSMutableDictionary *row = [@{@"title" : title ?: @"",
 								   @"detail" : detail ?: @""} mutableCopy];
 	[rows addObject:row];
-	self.rows = rows;
+	self.listRows = rows;
 	[self.tableView reloadData];
 }
 

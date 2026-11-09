@@ -83,6 +83,7 @@ INCLUDES  := -I$(ROOT_DIR)/vendor/include \
              -I$(ROOT_DIR)/src/Compat \
              $(SRC_INCLUDES) \
              -I$(ROOT_DIR)/third_party \
+             -I$(ROOT_DIR)/third_party/nanosvg \
              -I$(ROOT_DIR)/third_party/libvpx/include \
              -I$(ROOT_DIR)/third_party/nestegg/include \
              -I$(ROOT_DIR)/third_party/ogg \
@@ -208,6 +209,7 @@ VENDOR_SRC_M := \
 
 VENDOR_SRC_C := \
 	third_party/yyjson/yyjson.c \
+	third_party/nanosvg/nanosvg.c \
 	third_party/nestegg/nestegg.c \
 	third_party/opusfile/internal.c \
 	third_party/opusfile/opusfile.c \
@@ -227,6 +229,7 @@ APP_SRC_M := \
 	src/Features/Dev/TGDevBench.m \
 	src/Features/Dev/TGDevFeedback.m \
 	src/Core/Client/TGClient.m \
+	src/Core/Client/TGClient+Peers.m \
 	src/Core/Stores/TGStickerStore.m \
 	src/Core/Stores/TGEmojiStore.m \
 	src/Core/Model/TGServiceMessageText.m \
@@ -240,6 +243,7 @@ APP_SRC_M := \
 	src/Core/Stores/TGCustomEmojiStore.m \
 	src/Core/Stores/TGMediaStore.m \
 	src/Core/Stores/TGMemberAvatarStore.m \
+	src/Core/Stores/TGPeerStore.m \
 	src/Core/Client/TGClient+Auth.m \
 	src/Core/Client/Messages/TGClient+MessagesUpload.m \
 	src/Core/Client/Messages/TGClient+Messages.m \
@@ -326,6 +330,7 @@ APP_SRC_M := \
 	src/Core/Client/TGClient+Downloads.m \
 	src/Core/Client/TGClient+Secret.m \
 	src/Core/Client/TGClient+Stickers.m \
+	src/Core/Client/TGClient+Updates.m \
 	src/Core/Platform/TGDevice.m \
 	src/Core/Platform/TGCapabilities.m \
 	src/Core/Style/TGTheme.m \
@@ -337,6 +342,9 @@ APP_SRC_M := \
 	src/Core/Style/TGTextDraw.m \
 	src/Core/Platform/TGPerf.m \
 	src/Core/Stores/TGStickerBudget.m \
+	src/Core/Stores/TGBackgroundStore.m \
+	src/Core/Stores/TGUpdateStore.m \
+	src/Core/Stores/TGChatThemeStore.m \
 	src/Core/Style/TGThemeFile.m \
 	src/Views/Icons/TGIcons.m \
 	src/Views/Icons/TGIconPaths.m \
@@ -391,9 +399,7 @@ APP_SRC_M := \
 	src/Features/ChatList/Core/TGChatListSelection.m \
 	src/Features/ChatList/TGChatListViewController+Actions.m \
 	src/Features/ChatList/TGChatListViewController+Search.m \
-	src/Features/Chat/Views/TGChatCell.m \
 	src/Features/Chat/Views/TGRecordBar.m \
-	src/Features/Profile/TGProfileTrackCell.m \
 	src/Core/Platform/TGGhostMode.m \
 	src/Core/Stores/TGPlaybackQueue.m \
 	src/Core/Model/TGProfileTabs.m \
@@ -419,7 +425,12 @@ APP_SRC_M := \
 	src/Features/Chat/Views/EmojiPanel/TGEmojiPanelGIFSearch.m \
 	src/Features/Chat/Views/TGAttachSheet.m \
 	src/Features/Profile/TGMemberCell.m \
-	src/Features/Chat/Views/TGBubbleCell.m \
+	src/UI/Messages/TGMessageBubbleCell.m \
+	src/UI/Messages/TGMessageServiceCell.m \
+	src/UI/Messages/TGMessageDateHeaderCell.m \
+	src/UI/Messages/TGMessageUnreadSeparatorCell.m \
+	src/UI/Messages/TGMessageCellKind.m \
+	src/UI/Messages/TGMessageCellFactory.m \
 	src/Features/Dev/TGDevShowcase.m \
 	src/Features/Dev/TGDevModeViewController.m \
 	src/Features/Chat/TGChatViewController.m \
@@ -501,7 +512,6 @@ APP_SRC_M := \
 	src/UI/Controllers/TGFormViewController.m \
 	src/Features/Settings/TGNetworkViewController.m \
 	src/Features/Chat/TGChatToolsViewController.m \
-	src/Features/Profile/Views/TGProfileDetailCell.m \
 	src/Features/Profile/TGProfileViewController.m \
 	src/Features/Profile/Core/TGProfileLifecycle.m \
 	src/Features/Profile/Core/TGProfileHeader.m \
@@ -523,7 +533,6 @@ APP_SRC_M := \
 	src/Features/Groups/Core/TGGroupBase.m \
 	src/Features/Groups/Core/TGGroupData.m \
 	src/Features/Groups/Core/TGGroupSections.m \
-	src/Features/Groups/Core/TGGroupTable.m \
 	src/Features/Groups/Core/TGGroupSwitches.m \
 	src/Features/Groups/TGGroupSettingsViewController.m \
 	src/Features/Groups/Core/TGGroupActions.m \
@@ -557,11 +566,29 @@ APP_SRC_M := \
 	src/Features/Settings/TGSettingsViewController.m \
 	src/Features/Settings/Pages/TGSettingsPagesCore.m \
 	src/Features/Settings/Pages/TGSettingsPagesPayments.m \
+	src/Features/Settings/Pages/TGSettingsPageModels.m \
 	src/Features/Settings/TGSettingsViewController+AppearancePages.m \
 	src/Features/Settings/TGSettingsViewController+PrivacyPages.m \
 	src/Features/Settings/TGSettingsViewController+NetworkPages.m \
 	src/Features/Settings/TGSettingsViewController+Actions.m \
 	src/Features/Settings/TGSettingsViewController+Tier2.m \
+	src/UI/Rows/TGRows.m \
+	src/UI/Rows/TGRowCell.m \
+	src/UI/Rows/TGGridRowCell.m \
+	src/UI/Rows/TGPeerRowCell.m \
+	src/UI/Rows/TGFieldRowCell.m \
+	src/UI/Rows/TGChatRowCell.m \
+	src/UI/Rows/TGStoryStripRowCell.m \
+	src/UI/Rows/TGMessageResultRowCell.m \
+	src/UI/Rows/TGPictureRowCell.m \
+	src/UI/Rows/TGTabStripRowCell.m \
+	src/UI/Controls/TGProfileHeaderView.m \
+	src/UI/Rows/TGProfileHeaderRowCell.m \
+	src/UI/Rows/TGChatPreviewRowCell.m \
+	src/UI/Rows/TGThemeCardsRowCell.m \
+	src/UI/Rows/TGThemeGridRowCell.m \
+	src/UI/Controllers/TGRowsViewController.m \
+	src/UI/Controllers/TGRowsDataSource.m \
 	src/UI/Controllers/TGFeatureListViewController.m \
 	src/Features/Dev/TGDevHubViewController.m \
 	src/Features/Groups/TGCommunitiesViewController.m \
@@ -580,6 +607,7 @@ APP_SRC_M := \
 	src/Features/BotsPayments/TGAffiliateProgramsViewController.m \
 	src/Features/Chat/TGGameScoresViewController.m \
 	src/Features/Settings/TGSupportInfoViewController.m \
+	src/Features/Settings/TGUpdateInfoViewController.m \
 	src/Audio/TGVoiceDecoder.m \
 	src/Audio/TGStreamingVoicePlayer.m \
 	src/CallEngine/Network/TGCallIce.m \
@@ -591,6 +619,7 @@ APP_SRC_M := \
 	src/CallEngine/Signaling/TGCallDtls.m \
 	src/CallEngine/Media/TGCallVideoRtp.m \
 	src/Media/UIImage+WebP.m \
+	src/Media/TGPatternImage.m \
 	src/Media/TGStickerImage.m \
 	src/Media/TGWebMDecoder.m \
 	src/Media/TGSoftVideoPlayer.m \
@@ -659,8 +688,7 @@ DEV_SRC_M := \
 	src/Features/Groups/TGCommunityViewController.m \
 	src/Features/Dev/TGDevWebProxyCarrierViewController.m \
 	src/Features/Settings/TGTextStylesViewController.m \
-	src/Features/Chat/TGMessageToolsViewController.m \
-	src/Features/Chat/TGSuggestedPostViewController.m
+	src/Features/Chat/TGMessageToolsViewController.m
 ifneq ($(DEV),1)
 APP_SRC_M := $(filter-out $(DEV_SRC_M),$(APP_SRC_M))
 endif
@@ -699,13 +727,13 @@ ARM64_ALL_OBJS   := $(ARM64_LIBTG_OBJS) $(ARM64_APP_OBJS)
 # result crashes with unrecognized selectors at runtime (2026-10-25).
 CFLAGS_ARMV7    := -arch armv7 -mthumb -O2 -isysroot $(SDK_PATH) $(MIN_IOS) $(INCLUDES) $(ARMV7_FFMPEG_INC) $(DEFINES) -fPIC \
                    -MMD -MP \
-                   -Wno-macro-redefined -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-deprecated-declarations
+                   -Wno-macro-redefined -Wno-incompatible-pointer-types -Wno-deprecated-declarations
 OBJCFLAGS_ARMV7 := $(CFLAGS_ARMV7) -fobjc-arc
 CXXFLAGS_ARMV7  := $(CFLAGS_ARMV7) $(CXX_STDLIB_INC) -std=c++11 -fno-use-cxa-atexit -fno-threadsafe-statics -Wno-error
 
 CFLAGS_ARM64    := -arch arm64 -O2 -isysroot $(SDK_PATH) $(MIN_IOS) $(INCLUDES) $(DEFINES) -fPIC \
                    -MMD -MP \
-                   -Wno-macro-redefined -Wno-implicit-function-declaration -Wno-incompatible-pointer-types -Wno-deprecated-declarations
+                   -Wno-macro-redefined -Wno-incompatible-pointer-types -Wno-deprecated-declarations
 OBJCFLAGS_ARM64 := $(CFLAGS_ARM64) -fobjc-arc
 CXXFLAGS_ARM64  := $(CFLAGS_ARM64) $(CXX_STDLIB_INC) -std=c++11 -fno-use-cxa-atexit -fno-threadsafe-statics -Wno-error
 
@@ -765,6 +793,7 @@ ipa-armv7: $(MACHOFIX) $(ARMV7_ALL_OBJS)
 	@$(call ADD_DEV_SCHEMES,$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/Info.plist)
 	@cp -f "$(ROOT_DIR)/resources/fonts/"*.ttf "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
 	@cp -f "$(ROOT_DIR)/resources/sounds/"*.mp3 "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
+	@cp -f "$(ROOT_DIR)/resources/strings/"*.plist "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
 	@cp -f "$(ROOT_DIR)/resources/"*.tgios-theme "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
 	@cp -rf "$(ROOT_DIR)/resources/images/"* "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
 	@# TDLib rides along as its own image: statically linked it pushes __TEXT
@@ -791,6 +820,7 @@ ipa-arm64: $(ARM64_ALL_OBJS)
 	@$(call ADD_DEV_SCHEMES,$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app/Info.plist)
 	@cp -f "$(ROOT_DIR)/resources/fonts/"*.ttf "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
 	@cp -f "$(ROOT_DIR)/resources/sounds/"*.mp3 "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
+	@cp -f "$(ROOT_DIR)/resources/strings/"*.plist "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
 	@cp -f "$(ROOT_DIR)/resources/"*.tgios-theme "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
 	@cp -rf "$(ROOT_DIR)/resources/images/"* "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
 	@codesign -s - --force "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app" 2>/dev/null || true

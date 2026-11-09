@@ -9,66 +9,16 @@
 
 #import "TGClient.h"
 #import "TGTheme.h"
-#import <QuartzCore/QuartzCore.h>
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
 #import "TGLocalization.h"
 #import "TGIcons.h"
+#import "TGRows.h"
 
-@interface TGNewContactFieldCell : UITableViewCell
-@property (nonatomic, strong) UITextField *field;
-- (void)configureWithPlaceholder:(NSString *)placeholder
-							text:(NSString *)text
-						delegate:(id<UITextFieldDelegate>)delegate
-						keyboard:(UIKeyboardType)keyboard;
-@end
-
-@implementation TGNewContactFieldCell
-
-- (instancetype)initWithStyle:(UITableViewCellStyle)style
-			   reuseIdentifier:(NSString *)reuseIdentifier {
-	self = [super initWithStyle:style reuseIdentifier:reuseIdentifier];
-	if (!self)
-		return nil;
-	self.selectionStyle = UITableViewCellSelectionStyleNone;
-	return self;
-}
-
-- (void)layoutSubviews {
-	[super layoutSubviews];
-	CGRect b = self.contentView.bounds;
-	CGFloat inset = TGMetricGutter;
-	_field.frame = CGRectMake(inset, 0, MAX(0, b.size.width - TGDoubled(inset)),
-			b.size.height);
-}
-
-- (void)configureWithPlaceholder:(NSString *)placeholder
-							text:(NSString *)text
-						delegate:(id<UITextFieldDelegate>)delegate
-						keyboard:(UIKeyboardType)keyboard {
-	_field.delegate = delegate;
-	_field.font = TGFontRow();
-	_field.returnKeyType = UIReturnKeyDone;
-	_field.contentVerticalAlignment = UIControlContentVerticalAlignmentCenter;
-	_field.text = [text isKindOfClass:NSString.class] ? text : @"";
-	_field.keyboardType = keyboard;
-	_field.textColor = [[TGTheme shared] primaryTextColour];
-	_field.keyboardAppearance = UIKeyboardAppearanceDefault;
-	_field.attributedPlaceholder = [[NSAttributedString alloc]
-			initWithString:placeholder
-				attributes:@{NSForegroundColorAttributeName:
-							 [[TGTheme shared] secondaryTextColour]}];
-	if (_field.superview != self.contentView)
-		[self.contentView addSubview:_field];
-	[self setNeedsLayout];
-}
-
-@end
-
-@interface TGNewContactViewController () <UITextFieldDelegate>
-@property (nonatomic, strong) UITextField *firstField;
-@property (nonatomic, strong) UITextField *lastField;
-@property (nonatomic, strong) UITextField *phoneField;
+@interface TGNewContactViewController ()
+@property (nonatomic, copy) NSString *firstText;
+@property (nonatomic, copy) NSString *lastText;
+@property (nonatomic, copy) NSString *phoneText;
 @property (nonatomic, strong) UIBarButtonItem *doneItem;
 @property (nonatomic, strong) UIActivityIndicatorView *spinner;
 @property (nonatomic, assign) BOOL saving;
@@ -77,7 +27,7 @@
 @implementation TGNewContactViewController
 
 - (instancetype)init {
-	return [super initWithStyle:UITableViewStyleGrouped];
+	return [super init];
 }
 
 - (void)viewDidLoad {
@@ -86,8 +36,10 @@
 	// keeps that title; only an unnamed form is a New Contact.
 	if (!self.title.length)
 		self.title = @"New Contact";
-	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
-		self.edgesForExtendedLayout = UIRectEdgeNone;
+
+	self.firstText = self.first ?: @"";
+	self.lastText = self.last ?: @"";
+	self.phoneText = self.phone ?: @"";
 
 	self.doneItem = [[UIBarButtonItem alloc]
 			initWithImage:[TGIcons glyphNamed:@"checkboxSelected"
@@ -104,73 +56,61 @@
 					   target:self action:@selector(closeTapped)];
 	}
 
-	self.firstField = [self fieldWithPlaceholder:TGLocalized(@"First Name") text:self.first];
-	self.lastField  = [self fieldWithPlaceholder:TGLocalized(@"Last Name")  text:self.last];
-	self.phoneField = [self fieldWithPlaceholder:TGLocalized(@"Phone number") text:self.phone];
-	self.phoneField.keyboardType = UIKeyboardTypePhonePad;
-	for (UITextField *field in @[self.firstField, self.lastField, self.phoneField])
-		[field addTarget:self action:@selector(fieldChanged:)
-		forControlEvents:UIControlEventEditingChanged];
-	[self updateDoneState];
-
-	if (self.firstField.text.length)
-		[self.phoneField becomeFirstResponder];
-	else
-		[self.firstField becomeFirstResponder];
-
-	[self applyTheme];
-
 	__weak typeof(self) weakSelf = self;
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGThemeChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note) {
-		[weakSelf applyTheme];
-		[weakSelf.tableView reloadData];
-	}];
-}
+	NSMutableDictionary *first = TGFieldRow(TGLocalized(@"First Name"),
+			self.firstText, ^(NSString *text){
+		weakSelf.firstText = text;
+		[weakSelf updateDoneState];
+	});
+	first[TGRowFieldIdentifier] = @"first";
+	first[TGRowFieldClear] = @YES;
+	first[TGRowFieldReturnKey] = @(UIReturnKeyNext);
+	first[TGRowFieldReturn] = ^{
+		[weakSelf focusFieldWithIdentifier:@"last"];
+	};
 
-- (void)dealloc {
-	[[NSNotificationCenter defaultCenter] removeObserver:self];
+	NSMutableDictionary *last = TGFieldRow(TGLocalized(@"Last Name"),
+			self.lastText, ^(NSString *text){
+		weakSelf.lastText = text;
+		[weakSelf updateDoneState];
+	});
+	last[TGRowFieldIdentifier] = @"last";
+	last[TGRowFieldClear] = @YES;
+	last[TGRowFieldReturnKey] = @(UIReturnKeyNext);
+	last[TGRowFieldReturn] = ^{
+		[weakSelf focusFieldWithIdentifier:@"phone"];
+	};
+
+	NSMutableDictionary *phone = TGFieldRow(TGLocalized(@"Phone number"),
+			self.phoneText, ^(NSString *text){
+		weakSelf.phoneText = text;
+		[weakSelf updateDoneState];
+	});
+	phone[TGRowFieldIdentifier] = @"phone";
+	phone[TGRowFieldKeyboard] = @(UIKeyboardTypePhonePad);
+	phone[TGRowFieldClear] = @YES;
+	phone[TGRowFieldReturn] = ^{
+		[weakSelf.view endEditing:YES];
+	};
+
+	self.sections = @[
+		TGSection(nil, nil, @[first, last]),
+		TGSection(nil, nil, @[phone]),
+	];
+	// The form's two cards keep the old 10 pt breath above them.
+	self.tableView.sectionHeaderHeight = TGMetricPadMedium;
+	[self updateDoneState];
+	[self.tableView reloadData];
+
+	[self focusFieldWithIdentifier:self.firstText.length ? @"phone" : @"first"];
 }
 
 - (void)closeTapped {
 	[self dismissViewControllerAnimated:YES completion:nil];
 }
 
-- (void)applyTheme {
-	[[TGTheme shared] styleGroupedTable:self.tableView];
-	[[TGTheme shared] styleNavigationBar:self.navigationController.navigationBar];
-	if (self.firstField) {
-		self.firstField.textColor = [[TGTheme shared] primaryTextColour];
-		self.firstField.keyboardAppearance = UIKeyboardAppearanceDefault;
-	}
-	if (self.lastField) {
-		self.lastField.textColor = [[TGTheme shared] primaryTextColour];
-		self.lastField.keyboardAppearance = UIKeyboardAppearanceDefault;
-	}
-	if (self.phoneField) {
-		self.phoneField.textColor = [[TGTheme shared] primaryTextColour];
-		self.phoneField.keyboardAppearance = UIKeyboardAppearanceDefault;
-	}
-}
-
-- (UITextField *)fieldWithPlaceholder:(NSString *)placeholder text:(NSString *)text {
-	UITextField *field = [[UITextField alloc] initWithFrame:CGRectZero];
-	field.text = [text isKindOfClass:NSString.class] ? text : @"";
-	field.font = TGFontRow();
-	field.delegate = self;
-	field.returnKeyType = UIReturnKeyDone;
-	field.keyboardAppearance = UIKeyboardAppearanceDefault;
-	field.textColor = [[TGTheme shared] primaryTextColour];
-	field.attributedPlaceholder = [[NSAttributedString alloc]
-			initWithString:placeholder
-				attributes:@{NSForegroundColorAttributeName:
-							 [[TGTheme shared] secondaryTextColour]}];
-	return field;
-}
-
 - (NSString *)phoneDigits {
-	NSString *phone = self.phoneField.text ?: @"";
+	NSString *phone = self.phoneText ?: @"";
 	return [phone stringByReplacingOccurrencesOfString:@"\\D" withString:@""
 			options:NSRegularExpressionSearch
 			range:NSMakeRange(0, phone.length)];
@@ -179,93 +119,8 @@
 /// Telegram keeps Done inactive until there is a name and a number it could
 /// dial; a disabled button says that without nagging in a sheet.
 - (void)updateDoneState {
-	BOOL ready = self.firstField.text.length > 0 && [self phoneDigits].length >= 5;
+	BOOL ready = self.firstText.length > 0 && [self phoneDigits].length >= 5;
 	self.doneItem.enabled = ready && !self.saving;
-}
-
-- (void)fieldChanged:(UITextField *)field {
-	[self updateDoneState];
-}
-
-- (BOOL)textFieldShouldReturn:(UITextField *)field {
-	if (field == self.firstField)
-		[self.lastField becomeFirstResponder];
-	else if (field == self.lastField)
-		[self.phoneField becomeFirstResponder];
-	else
-		[field resignFirstResponder];
-	return YES;
-}
-
-#pragma mark - the table
-
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-	return 2;
-}
-
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-	return section == 0 ? 2 : 1;
-}
-
-- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-	return nil;
-}
-
-- (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-	if (section == 0)
-		return nil;
-	return nil;
-}
-
-- (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section {
-	return TGMetricPadMedium;
-}
-
-- (void)tableView:(UITableView *)tableView willDisplayHeaderView:(UIView *)view forSection:(NSInteger)section {
-	if ([view isKindOfClass:[UITableViewHeaderFooterView class]]) {
-		UITableViewHeaderFooterView *sectionHeader = (UITableViewHeaderFooterView *)view;
-		sectionHeader.textLabel.font = TGFontMetaStrong();
-		sectionHeader.textLabel.textColor = [[TGTheme shared] sectionHeaderColour];
-	}
-}
-
-- (UITableViewCell *)tableView:(UITableView *)tableView
-		 cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-	static NSString *first = @"TGNewContactFirst";
-	static NSString *last = @"TGNewContactLast";
-	static NSString *phone = @"TGNewContactPhone";
-	NSString *reuse = indexPath.section == 0
-			? (indexPath.row == 0 ? first : last) : phone;
-	TGNewContactFieldCell *cell = [tableView dequeueReusableCellWithIdentifier:reuse];
-	if (!cell)
-		cell = [[TGNewContactFieldCell alloc] initWithStyle:UITableViewCellStyleDefault
-											 reuseIdentifier:reuse];
-
-	UITextField *field = indexPath.section == 0
-			? (indexPath.row == 0 ? self.firstField : self.lastField)
-			: self.phoneField;
-	cell.field = field;
-	if (indexPath.section == 0)
-		[cell configureWithPlaceholder:(indexPath.row == 0
-					? TGLocalized(@"First Name") : TGLocalized(@"Last Name"))
-								  text:field.text
-							  delegate:self
-							  keyboard:UIKeyboardTypeDefault];
-	else
-		[cell configureWithPlaceholder:TGLocalized(@"Phone number")
-								  text:field.text
-							  delegate:self
-							  keyboard:UIKeyboardTypePhonePad];
-	cell.backgroundColor = [[TGTheme shared] cardBackgroundColour];
-	cell.contentView.backgroundColor = [[TGTheme shared] cardBackgroundColour];
-	return cell;
-}
-
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
-	UITableViewCell *cell = [tableView cellForRowAtIndexPath:indexPath];
-	if ([cell isKindOfClass:[TGNewContactFieldCell class]])
-		[((TGNewContactFieldCell *)cell).field becomeFirstResponder];
 }
 
 #pragma mark - saving
@@ -292,11 +147,11 @@
 /// The import makes the user when Telegram has never met the number; the
 /// contact is what adds them, and it answers on the phone number either way.
 - (void)save {
-	NSString *first = [self.firstField.text stringByTrimmingCharactersInSet:
+	NSString *first = [self.firstText stringByTrimmingCharactersInSet:
 			[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-	NSString *last  = [self.lastField.text stringByTrimmingCharactersInSet:
+	NSString *last  = [self.lastText stringByTrimmingCharactersInSet:
 			[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-	NSString *phone = self.phoneField.text ?: @"";
+	NSString *phone = self.phoneText ?: @"";
 
 	if (!first.length || [self phoneDigits].length < 5){
 		[TGAlertSheet showMessage:@"An error occurred."

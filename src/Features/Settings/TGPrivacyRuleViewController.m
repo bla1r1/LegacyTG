@@ -5,9 +5,8 @@
 #import "TGUserPickerViewController.h"
 #import "TGLocalization.h"
 #import "TGClient.h"
-#import "TGTheme.h"
-#import "TGStyle.h"
 #import "TGAlertSheet.h"
+#import "TGRows.h"
 
 @interface TGPrivacyRuleViewController ()
 @property (nonatomic, copy) NSString *setting;
@@ -18,10 +17,27 @@
 @property (nonatomic, assign) BOOL loaded;
 @end
 
+static NSString *TGPrivacyRuleFooterText(NSString *setting) {
+	if ([setting isEqualToString:@"ShowStatus"])
+		return TGLocalized(@"You won't see Last Seen or Online times for people with whom you don't share yours. Approximate times will be shown instead.");
+	if ([setting isEqualToString:@"ShowProfilePhoto"])
+		return TGLocalized(@"You can restrict who can see your profile photo and choose exceptions.");
+	if ([setting isEqualToString:@"ShowPhoneNumber"])
+		return TGLocalized(@"Users who have your number saved in their contacts will also see it on Telegram.");
+	if ([setting isEqualToString:@"AllowCalls"] ||
+		[setting isEqualToString:@"ShowPeerToPeerCall"])
+		return TGLocalized(@"Choose who can call you.");
+	if ([setting isEqualToString:@"ShowLinkInForwardedMessages"])
+		return TGLocalized(@"Messages you send will link to your account when forwarded by others.");
+	if ([setting isEqualToString:@"AllowChatInvites"])
+		return TGLocalized(@"You can restrict who can add you to groups and channels.");
+	return nil;
+}
+
 @implementation TGPrivacyRuleViewController
 
 - (instancetype)initWithSetting:(NSString *)setting title:(NSString *)title {
-	self = [super initWithStyle:UITableViewStyleGrouped];
+	self = [super init];
 	if (self) {
 		_setting = [setting copy];
 		_ruleTitle = [title copy] ?: TGLocalized(@"Privacy");
@@ -35,7 +51,6 @@
 - (void)viewDidLoad {
 	[super viewDidLoad];
 	self.title = self.ruleTitle;
-	self.tableView.rowHeight = TGMetricRow;
 	[self loadDetails];
 }
 
@@ -48,7 +63,7 @@
 			weakSelf.allowUserIds = [NSMutableArray arrayWithArray:allowUserIds ?: @[]];
 			weakSelf.restrictUserIds = [NSMutableArray arrayWithArray:restrictUserIds ?: @[]];
 			weakSelf.loaded = YES;
-			[weakSelf.tableView reloadData];
+			[weakSelf rebuildSections];
 		});
 	}];
 }
@@ -75,134 +90,64 @@
 	}];
 }
 
-#pragma mark - Table View Data Source & Delegate
-
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-	return 2;
-}
-
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-	if (section == 0) {
-		return 3; // Everybody, My Contacts, Nobody
-	}
-	return 2; // Always Allow, Never Allow
-}
-
-- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-	if (section == 0) {
-		return [NSString stringWithFormat:@"WHO CAN SEE MY %@", [self.ruleTitle uppercaseString]];
-	}
-	return @"ADD EXCEPTIONS";
-}
-
-- (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-	if (section == 0) {
-		if ([self.setting isEqualToString:@"ShowStatus"]) {
-			return @"You won't see Last Seen or Online times for people with whom you don't share yours. Approximate times will be shown instead.";
-		} else if ([self.setting isEqualToString:@"ShowProfilePhoto"]) {
-			return @"You can restrict who can see your profile photo and choose exceptions.";
-		} else if ([self.setting isEqualToString:@"ShowPhoneNumber"]) {
-			return @"Users who have your number saved in their contacts will also see it on Telegram.";
-		} else if ([self.setting isEqualToString:@"AllowCalls"] || [self.setting isEqualToString:@"ShowPeerToPeerCall"]) {
-			return @"Choose who can call you.";
-		} else if ([self.setting isEqualToString:@"ShowLinkInForwardedMessages"]) {
-			return @"Messages you send will link to your account when forwarded by others.";
-		} else if ([self.setting isEqualToString:@"AllowChatInvites"]) {
-			return @"You can restrict who can add you to groups and channels.";
-		}
-	}
-	return nil;
-}
-
-- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-	TGTheme *theme = [TGTheme shared];
-	if (indexPath.section == 0) {
-		static NSString *ident = @"TGPrivacyChoiceCell";
-		UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:ident];
-		if (!cell) {
-			cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:ident];
-		}
-		[theme styleCell:cell];
-		cell.textLabel.font = TGFontRow();
-		cell.textLabel.textColor = [theme primaryTextColour];
-
-		NSArray *options = @[TGLocalized(@"Everybody"), TGLocalized(@"My Contacts"), TGLocalized(@"Nobody")];
-		NSArray *keys = @[@"everybody", @"contacts", @"nobody"];
-		cell.textLabel.text = options[indexPath.row];
-
-		BOOL selected = [self.ruleType isEqualToString:keys[indexPath.row]];
-		cell.accessoryType = selected ? UITableViewCellAccessoryCheckmark : UITableViewCellAccessoryNone;
-		return cell;
-	}
-
-	static NSString *identEx = @"TGPrivacyExceptionCell";
-	UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:identEx];
-	if (!cell) {
-		cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:identEx];
-	}
-	[theme styleCell:cell];
-	cell.textLabel.font = TGFontRow();
-	cell.textLabel.textColor = [theme primaryTextColour];
-	cell.detailTextLabel.font = TGFontBody();
-	cell.detailTextLabel.textColor = [theme cellDetailColour];
-	cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-
-	if (indexPath.row == 0) {
-		cell.textLabel.text = TGLocalized(@"Always Allow");
-		cell.detailTextLabel.text = self.allowUserIds.count > 0
-				? [NSString stringWithFormat:@"%lu %@", (unsigned long)self.allowUserIds.count,
-						self.allowUserIds.count == 1 ? @"user" : @"users"]
-				: TGLocalized(@"Never");
-	} else {
-		cell.textLabel.text = TGLocalized(@"Never Allow");
-		cell.detailTextLabel.text = self.restrictUserIds.count > 0
-				? [NSString stringWithFormat:@"%lu %@", (unsigned long)self.restrictUserIds.count,
-						self.restrictUserIds.count == 1 ? @"user" : @"users"]
-				: TGLocalized(@"Never");
-	}
-	return cell;
-}
-
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
-
-	if (indexPath.section == 0) {
-		NSArray *keys = @[@"everybody", @"contacts", @"nobody"];
-		self.ruleType = keys[indexPath.row];
-		[self.tableView reloadSections:[NSIndexSet indexSetWithIndex:0]
-					  withRowAnimation:UITableViewRowAnimationNone];
-		[self saveRule];
-		return;
-	}
-
+- (void)rebuildSections {
 	__weak typeof(self) weakSelf = self;
-	if (indexPath.row == 0) {
-		NSSet *currentSet = [NSSet setWithArray:self.allowUserIds];
-		TGUserPickerViewController *picker =
-				[[TGUserPickerViewController alloc] initWithSelectedUserIds:currentSet
-																	  title:TGLocalized(@"Always Allow")];
-		picker.onDone = ^(NSSet *chosenIds){
-			weakSelf.allowUserIds = [NSMutableArray arrayWithArray:chosenIds.allObjects];
-			[weakSelf.tableView reloadSections:[NSIndexSet indexSetWithIndex:1]
-							  withRowAnimation:UITableViewRowAnimationNone];
-			[weakSelf saveRule];
-		};
-		picker.hidesBottomBarWhenPushed = YES;
-		[self.navigationController pushViewController:picker animated:YES];
-	} else {
-		NSSet *currentSet = [NSSet setWithArray:self.restrictUserIds];
-		TGUserPickerViewController *picker =
-				[[TGUserPickerViewController alloc] initWithSelectedUserIds:currentSet
-																	  title:TGLocalized(@"Never Allow")];
-		picker.onDone = ^(NSSet *chosenIds){
-			weakSelf.restrictUserIds = [NSMutableArray arrayWithArray:chosenIds.allObjects];
-			[weakSelf.tableView reloadSections:[NSIndexSet indexSetWithIndex:1]
-							  withRowAnimation:UITableViewRowAnimationNone];
-			[weakSelf saveRule];
-		};
-		picker.hidesBottomBarWhenPushed = YES;
-		[self.navigationController pushViewController:picker animated:YES];
+	NSArray *keys = TGPrivacyRuleOptionKeys();
+	NSArray *titles = TGPrivacyRuleOptionTitles();
+	NSMutableArray *choiceRows = [NSMutableArray array];
+	for (NSUInteger i = 0; i < keys.count; i++){
+		NSString *key = keys[i];
+		BOOL selected = [self.ruleType isEqualToString:key];
+		[choiceRows addObject:TGCheckRow(titles[i], nil, selected, ^{
+			[weakSelf chooseRuleType:key];
+		})];
 	}
+
+	NSString *header = [NSString stringWithFormat:@"WHO CAN SEE MY %@",
+			[self.ruleTitle uppercaseString]];
+	NSMutableArray *exceptionRows = [NSMutableArray array];
+	[exceptionRows addObject:TGOpenRow(TGLocalized(@"Always Allow"),
+			TGPrivacyExceptionDetail(self.allowUserIds.count),
+			^{ [weakSelf openExceptionsAllowing:YES]; })];
+	[exceptionRows addObject:TGOpenRow(TGLocalized(@"Never Allow"),
+			TGPrivacyExceptionDetail(self.restrictUserIds.count),
+			^{ [weakSelf openExceptionsAllowing:NO]; })];
+
+	self.sections = @[
+		TGSection(header, TGPrivacyRuleFooterText(self.setting), choiceRows),
+		TGSection(@"ADD EXCEPTIONS", nil, exceptionRows),
+	];
+	[self reloadRows];
+}
+
+#pragma mark - actions
+
+- (void)chooseRuleType:(NSString *)key {
+	self.ruleType = key;
+	[self rebuildSections];
+	[self saveRule];
+}
+
+- (void)openExceptionsAllowing:(BOOL)allowing {
+	NSArray *current = allowing ? self.allowUserIds : self.restrictUserIds;
+	NSSet *currentSet = [NSSet setWithArray:current];
+	TGUserPickerViewController *picker =
+			[[TGUserPickerViewController alloc] initWithSelectedUserIds:currentSet
+																  title:allowing
+																		  ? TGLocalized(@"Always Allow")
+																		  : TGLocalized(@"Never Allow")];
+	__weak typeof(self) weakSelf = self;
+	picker.onDone = ^(NSSet *chosenIds){
+		NSMutableArray *ids = [NSMutableArray arrayWithArray:chosenIds.allObjects];
+		if (allowing)
+			weakSelf.allowUserIds = ids;
+		else
+			weakSelf.restrictUserIds = ids;
+		[weakSelf rebuildSections];
+		[weakSelf saveRule];
+	};
+	picker.hidesBottomBarWhenPushed = YES;
+	[self.navigationController pushViewController:picker animated:YES];
 }
 
 @end

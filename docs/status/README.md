@@ -79,6 +79,7 @@ area are in each file's header.
 | M42 Landscape and iPad | deferred | Portrait iPhone layout only | No design for either size class |
 | M43 Platform delivery | partial | iOS 6 run, 4-inch check, background fetch, crash reporting, arm64 TDLib; `scripts/build_all.sh` builds release IPAs | Bench hardware; second architecture in TDLib |
 | M44 Message detail and unread fields | partial | Rich-message blocks, signature, view/forward counts, gift counts, action buttons; read summary in the message menu is done | Flatten model drops fields or bubble has no slot |
+| M45 Updates, changelog and usage | planned | Update check through our bot, update screen with changelog, usage counts, Cydia repo | Bot token, Cloudflare account, GitHub Pages |
 
 ## Top gaps
 

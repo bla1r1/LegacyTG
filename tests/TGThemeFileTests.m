@@ -6,6 +6,7 @@
 // TGClientTests.
 #import "TGTestRunner.h"
 #import "TGThemeFile.h"
+#import "TGChatThemeStore.h"
 
 // Writes text into the inherited temp dir and returns the path.
 static NSString *TGThemeWriteTemp(NSString *name, NSString *text) {
@@ -95,6 +96,7 @@ static void TGAssertColour(NSString *key, NSDictionary *palette,
 	XCTAssertTrue([palette[@"isDark"] boolValue]);
 	TGAssertColour(@"bar", palette, 0x17, 0x21, 0x2B);
 	TGAssertColour(@"barTitle", palette, 0xFF, 0xFF, 0xFF);
+	TGAssertColour(@"wallpaper", palette, 0x0E, 0x16, 0x21);
 	TGAssertColour(@"chatBackground", palette, 0x0E, 0x16, 0x21);
 	TGAssertColour(@"bubbleMine", palette, 0x2B, 0x52, 0x78);
 	TGAssertColour(@"bubbleTheirs", palette, 0x18, 0x25, 0x33);
@@ -103,6 +105,137 @@ static void TGAssertColour(NSString *key, NSDictionary *palette,
 	TGAssertColour(@"accent", palette, 0x52, 0x88, 0xC1);
 	TGAssertColour(@"barButton", palette, 0x52, 0x88, 0xC1);
 	TGAssertColour(@"tabBar", palette, 0x17, 0x21, 0x2B);
+}
+
+- (void)testCardPaletteComesFromTheEntry {
+	NSDictionary *classic = [TGThemeFile cardPaletteForThemeEntry:@{@"id" : @"classic"}];
+	TGAssertColour(@"wallpaper", classic, 0xE2, 0xE6, 0xEC);
+	TGAssertColour(@"bubbleMine", classic, 0xDF, 0xEE, 0xFA);
+	TGAssertColour(@"bubbleTheirs", classic, 0xFF, 0xFF, 0xFF);
+	TGAssertColour(@"accent", classic, 0x51, 0x7D, 0xA2);
+
+	NSDictionary *night = [TGThemeFile cardPaletteForThemeEntry:@{
+		@"id" : @"file:NightBlue.tgios-theme",
+		@"path" : @"resources/NightBlue.tgios-theme",
+		@"dark" : @YES,
+	}];
+	TGAssertColour(@"wallpaper", night, 0x0E, 0x16, 0x21);
+	TGAssertColour(@"bubbleMine", night, 0x2B, 0x52, 0x78);
+	TGAssertColour(@"bubbleTheirs", night, 0x18, 0x25, 0x33);
+	TGAssertColour(@"text", night, 0xFF, 0xFF, 0xFF);
+	TGAssertColour(@"accent", night, 0x52, 0x88, 0xC1);
+	XCTAssertFalse([classic[@"wallpaper"] isEqual:night[@"wallpaper"]]);
+}
+
+- (void)testEmojiChatTheme_ParsesLightAndDarkSettings {
+	NSDictionary *light = @{
+		@"@type" : @"themeSettings",
+		@"base_theme" : @{@"@type" : @"baseThemeClassic"},
+		@"accent_color" : @(0x112233),
+		@"outgoing_message_fill" : @{
+			@"@type" : @"backgroundFillFreeformGradient",
+			@"colors" : @[@(0x111111), @(0x222222), @(0x333333)],
+		},
+		@"outgoing_message_accent_color" : @(0x445566),
+		@"background" : @{
+			@"@type" : @"background",
+			@"document" : @{
+				@"@type" : @"document",
+				@"document" : @{@"@type" : @"file", @"id" : @77},
+			},
+			@"type" : @{
+				@"@type" : @"backgroundTypePattern",
+				@"intensity" : @50,
+				@"fill" : @{
+					@"@type" : @"backgroundFillGradient",
+					@"top_color" : @(0xAABBCC),
+					@"bottom_color" : @(0xDDEEFF),
+					@"rotation_angle" : @45,
+				},
+			},
+		},
+	};
+	NSDictionary *dark = @{
+		@"@type" : @"themeSettings",
+		@"base_theme" : @{@"@type" : @"baseThemeNight"},
+		@"accent_color" : @(0x445566),
+		@"outgoing_message_fill" : @{
+			@"@type" : @"backgroundFillSolid",
+			@"color" : @(0x123456),
+		},
+		@"background" : @{
+			@"@type" : @"background",
+			@"type" : @{
+				@"@type" : @"backgroundTypeFill",
+				@"fill" : @{
+					@"@type" : @"backgroundFillSolid",
+					@"color" : @(0x0A0B0C),
+				},
+			},
+		},
+	};
+	NSArray *themes = [TGChatThemeStore parseThemes:@[@{
+		@"@type" : @"emojiChatTheme",
+		@"name" : @"Sunset",
+		@"light_settings" : light,
+		@"dark_settings" : dark,
+	}]];
+	XCTAssertEqual(themes.count, (NSUInteger)1);
+	NSDictionary *entry = themes.firstObject;
+	XCTAssertEqualObjects(entry[@"id"], @"emoji:Sunset");
+	XCTAssertTrue([entry[@"hasDark"] boolValue]);
+
+	NSDictionary *lightPalette = entry[@"light"];
+	TGAssertColour(@"accent", lightPalette, 0x11, 0x22, 0x33);
+	TGAssertColour(@"bubbleMine", lightPalette, 0x11, 0x11, 0x11);
+	XCTAssertEqual([lightPalette[@"bubbleMineGradient"] count], (NSUInteger)3);
+	XCTAssertEqualObjects(lightPalette[@"patternFileId"], @77);
+	XCTAssertEqualObjects(lightPalette[@"patternIntensity"], @50);
+	XCTAssertEqualObjects(lightPalette[@"wallpaperFill"][@"kind"],
+			@"backgroundFillGradient");
+	TGAssertColour(@"wallpaper", lightPalette, 0xAA, 0xBB, 0xCC);
+	XCTAssertFalse([lightPalette[@"isDark"] boolValue]);
+
+	NSDictionary *darkPalette = entry[@"dark"];
+	TGAssertColour(@"accent", darkPalette, 0x44, 0x55, 0x66);
+	TGAssertColour(@"bubbleMine", darkPalette, 0x12, 0x34, 0x56);
+	TGAssertColour(@"wallpaper", darkPalette, 0x0A, 0x0B, 0x0C);
+	XCTAssertTrue([darkPalette[@"isDark"] boolValue]);
+
+	// Night Mode is a variant switch inside the same theme, not a jump to
+	// another theme: the entry keeps one id and answers its dark settings.
+	XCTAssertEqual(TGChatThemeSettingsForMode(entry, NO), lightPalette);
+	XCTAssertEqual(TGChatThemeSettingsForMode(entry, YES), darkPalette);
+}
+
+- (void)testNightBlueCard_KeepsItsOwnWallpaperAndBubble {
+	NSDictionary *palette = [TGThemeFile cardPaletteForThemeEntry:@{
+		@"id" : @"file:NightBlue.tgios-theme",
+		@"name" : @"Night Blue",
+		@"path" : @"resources/NightBlue.tgios-theme",
+		@"dark" : @YES,
+	}];
+	TGAssertColour(@"wallpaper", palette, 0x0E, 0x16, 0x21);
+	TGAssertColour(@"bubbleMine", palette, 0x2B, 0x52, 0x78);
+	TGAssertColour(@"bubbleTheirs", palette, 0x18, 0x25, 0x33);
+	TGAssertColour(@"text", palette, 0xFF, 0xFF, 0xFF);
+	// Classic's light paper must not leak into the Night Blue card.
+	NSDictionary *classic = [TGThemeFile cardPaletteForThemeEntry:
+			@{@"id" : @"classic"}];
+	XCTAssertFalse([palette[@"wallpaper"] isEqual:classic[@"wallpaper"]]);
+}
+
+- (void)testIOSThemeCarriesBubbleGradients {
+	NSString *json = @"{\"dark\": true, \"chat\": {\"message\": {"
+		"\"outgoing\": {\"bubble\": {\"withoutWp\": {\"bg\": \"#112233-#445566\"}}},"
+		"\"incoming\": {\"bubble\": {\"withoutWp\": {\"bg\": \"#778899-#aabbcc\"}}}}}}";
+	NSDictionary *palette = [TGThemeFile paletteFromFile:
+			TGThemeWriteTemp(@"gradient.tgios-theme", json) name:NULL];
+	NSArray *mineGradient = palette[@"bubbleMineGradient"];
+	XCTAssertEqual(mineGradient.count, (NSUInteger)2);
+	XCTAssertEqual([palette[@"bubbleTheirsGradient"] count], (NSUInteger)2);
+	TGAssertColour(@"bubbleMine", palette, 0x11, 0x22, 0x33);
+	XCTAssertTrue(TGColourMatches(mineGradient[1], 0x44, 0x55, 0x66));
 }
 
 - (void)testAndroidThemeMapsRolesAndGuessesDark {
@@ -227,3 +360,7 @@ static void TGAssertColour(NSString *key, NSDictionary *palette,
 }
 
 @end
+
+// The .tgv pipeline lives in its own file; this suite is what main_client
+// already imports, so it pulls the pattern tests into the same binary.
+#import "TGPatternTests.m"

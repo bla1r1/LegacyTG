@@ -9,4 +9,12 @@
 @interface TGDevModeViewController : UITabBarController
 + (void)presentFrom:(UIViewController *)host;
 @end
+
+/// The fixture list's row titles, in the order the dev tab draws them.
+static inline NSArray *TGDevChatRowTitles(NSArray *chats) {
+	NSMutableArray *titles = [NSMutableArray arrayWithCapacity:chats.count];
+	for (NSDictionary *chat in chats)
+		[titles addObject:chat[@"title"] ?: @""];
+	return titles;
+}
 #endif

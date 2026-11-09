@@ -1,6 +1,7 @@
 #import "TGChatViewControllerInternal.h"
 #import "TGLocalization.h"
 #import "TGChatParityModel.h"
+#import "TGChatActionMenuModel.h"
 #import "TGTheme.h"
 #import "TGIcons.h"
 #import "UIImage+WebP.h"
@@ -20,16 +21,109 @@
 // for every other one.
 #import "TGVideoNoteRecorder.h"
 
-@interface TGComposerInputField : UITextField
+@interface TGComposerInputField : UITextView
 @property (nonatomic, copy) void (^onLayout)(void);
+@property (nonatomic, copy) NSString *placeholder;
+@property (nonatomic, strong) UIColor *placeholderColour;
+@property (nonatomic, assign, getter=isEnabled) BOOL enabled;
+@property (nonatomic, strong) UILabel *placeholderLabel;
 @end
 
 @implementation TGComposerInputField {
 	BOOL _inLayout;
+	UIView *_rightView;
+	UITextFieldViewMode _rightViewMode;
+}
+
+- (UIView *)rightView {
+	return _rightView;
+}
+
+- (void)setRightView:(UIView *)rightView {
+	if (_rightView == rightView)
+		return;
+	[_rightView removeFromSuperview];
+	_rightView = rightView;
+	if (rightView)
+		[self addSubview:rightView];
+	[self setNeedsLayout];
+}
+
+- (UITextFieldViewMode)rightViewMode {
+	return _rightViewMode;
+}
+
+- (void)setRightViewMode:(UITextFieldViewMode)mode {
+	_rightViewMode = mode;
+	[self setNeedsLayout];
+}
+
+- (instancetype)initWithFrame:(CGRect)frame {
+	self = [super initWithFrame:frame];
+	if (!self)
+		return nil;
+	_placeholderLabel = [[UILabel alloc] initWithFrame:CGRectZero];
+	_placeholderLabel.font = TGFontBody();
+	_placeholderLabel.backgroundColor = [UIColor clearColor];
+	_placeholderLabel.userInteractionEnabled = NO;
+	[self addSubview:_placeholderLabel];
+	_placeholderColour = [[TGTheme shared] secondaryTextColour];
+	_placeholderLabel.textColor = _placeholderColour;
+	return self;
+}
+
+- (void)setPlaceholder:(NSString *)placeholder {
+	_placeholder = [placeholder copy];
+	self.placeholderLabel.text = placeholder;
+	[self setNeedsLayout];
+}
+
+- (void)setPlaceholderColour:(UIColor *)colour {
+	_placeholderColour = colour;
+	self.placeholderLabel.textColor = colour;
+}
+
+- (void)setEnabled:(BOOL)enabled {
+	_enabled = enabled;
+	self.editable = enabled;
+	self.selectable = enabled;
+	if (!enabled)
+		[self resignFirstResponder];
 }
 
 - (void)layoutSubviews {
 	[super layoutSubviews];
+	UIEdgeInsets insets = UIEdgeInsetsZero;
+	if ([self respondsToSelector:@selector(textContainerInset)])
+		insets = self.textContainerInset;
+	else
+		insets = self.contentInset;
+	CGFloat left = insets.left + TGMetricPadSmall;
+	CGFloat width = MAX(0.0f, self.bounds.size.width - left - insets.right);
+	CGFloat labelHeight = MAX(TGMetricLineBody, self.bounds.size.height -
+			insets.top - insets.bottom);
+	if (TGChatDrawableSize(CGSizeMake(width, labelHeight))) {
+		self.placeholderLabel.frame = CGRectMake(left, insets.top,
+				width, labelHeight);
+		self.placeholderLabel.hidden = self.text.length > 0;
+	} else {
+		// A zero-width text host has no context to draw a label into. Keep it
+		// hidden until the field has a real frame and layout runs again.
+		self.placeholderLabel.hidden = YES;
+	}
+	BOOL editing = [self isFirstResponder];
+	_rightView.hidden = (_rightViewMode == UITextFieldViewModeNever ||
+			(_rightViewMode == UITextFieldViewModeUnlessEditing && editing) ||
+			(_rightViewMode == UITextFieldViewModeWhileEditing && !editing));
+	if (_rightView){
+		CGFloat side = MIN(self.bounds.size.height - TGDoubled(TGMetricPadSmall),
+				TGMetricRow);
+		if (TGChatDrawableSize(CGSizeMake(side, side))) {
+			_rightView.frame = CGRectMake(self.bounds.size.width - side -
+					TGMetricPadSmall, TGHalf(self.bounds.size.height - side),
+					side, side);
+		}
+	}
 	if (_inLayout)
 		return;
 	_inLayout = YES;
@@ -62,7 +156,10 @@
 	hair.autoresizingMask = UIViewAutoresizingFlexibleWidth;
 	[self.inputBar addSubview:hair];
 
-	CGFloat sendY = TGCenteredOrigin(kInputHeight, kSendSide);
+	CGFloat fieldH = TGChatComposerFieldHeightForLines(1);
+	CGRect sendFrame = TGChatComposerSendFrame(b.size.width, kInputHeight);
+	CGRect fieldFrame = TGChatComposerFieldFrame(b.size.width, kInputHeight, fieldH);
+	CGFloat sendY = CGRectGetMinY(sendFrame);
 
 	UIButton *attach = [UIButton buttonWithType:UIButtonTypeCustom];
 	attach.frame = CGRectMake(kComposerInset, sendY, kAttachWidth, kSendSide);
@@ -71,29 +168,38 @@
 	[attach addTarget:self action:@selector(attachTapped)
 			forControlEvents:UIControlEventTouchUpInside];
 	[self.inputBar addSubview:attach];
+	self.attachButton = attach;
 
-	CGFloat fieldH = kInputHeight - TGDoubled(kFieldInsetV);
-	// The send control lives inside the field capsule; the mic sits outside
-	// it, as official places them. Nothing else goes between the two.
-	CGFloat micX = b.size.width - kSendSide - kSendInset;
-	CGFloat fieldRight = micX - kComposerInset;
-	TGComposerInputField *field = [[TGComposerInputField alloc] initWithFrame:
-			CGRectMake(kFieldLeft, kFieldInsetV, fieldRight - kFieldLeft, fieldH)];
-	field.borderStyle = UITextBorderStyleNone;
-	field.background = [TGTheme skeuomorphicWellImageWithHeight:fieldH cornerRadius:TGHalf(fieldH)];
+	TGComposerInputField *field = [[TGComposerInputField alloc] initWithFrame:fieldFrame];
 	field.backgroundColor = [UIColor clearColor];
 	field.layer.borderWidth = 0.0f;
 	field.layer.shouldRasterize = YES;
 	field.layer.rasterizationScale = scale;
-	field.leftView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, kFieldLeftPad,
-			TGMetricBorderWidth)];
-	field.leftViewMode = UITextFieldViewModeAlways;
-	field.placeholder = TGLocalized(@"Message");	field.textColor = [[TGTheme shared] primaryTextColour];
+	field.textColor = [[TGTheme shared] primaryTextColour];
 	field.font = TGFontBody();
-	field.returnKeyType = UIReturnKeySend;
-	field.delegate = self;
+	// Return is a line break now; Send is the button. Official's composer
+	// uses a text view for the same reason.
+	field.returnKeyType = UIReturnKeyDefault;
+	field.delegate = (id<UITextViewDelegate>)self;
 	field.autoresizingMask = UIViewAutoresizingFlexibleWidth;
 	field.clipsToBounds = YES;
+	field.scrollEnabled = NO;
+	field.showsVerticalScrollIndicator = NO;
+	field.showsHorizontalScrollIndicator = NO;
+	// iOS 6 has contentInset only; iOS 7+ has a text container. The vertical
+	// inset is the 32 pt capsule's leftover around one 18 pt line.
+	if ([field respondsToSelector:@selector(textContainerInset)]){
+		// No right inset: the text view already ends where the sticker
+		// toggle starts, and that button's own margin is the gap.
+		field.textContainerInset = UIEdgeInsetsMake(TGMetricComposerFieldInsetV,
+				kFieldLeftPad, TGMetricComposerFieldInsetV, TGMetricCornerNone);
+		field.textContainer.lineFragmentPadding = 0.0f;
+	} else {
+		field.contentInset = UIEdgeInsetsMake(TGMetricComposerFieldInsetV,
+				kFieldLeftPad, TGMetricComposerFieldInsetV, TGMetricCornerNone);
+	}
+	field.placeholderColour = [[TGTheme shared] secondaryTextColour];
+	field.placeholder = TGLocalized(@"Message");
 	__weak typeof(self) weakSelf = self;
 	field.onLayout = ^{
 		[weakSelf refreshComposerEmojiOverlay];
@@ -101,11 +207,17 @@
 	self.input = field;
 	self.composerEmojiViews = [NSMutableArray array];
 	self.composerText = [[TGComposerText alloc] initWithText:@"" entities:@[]];
+
+	// The field's recessed plate. It is a sibling rather than a subview so it
+	// does not scroll with the text once the field passes its line cap.
+	self.composerWell = [[UIImageView alloc] initWithFrame:fieldFrame];
+	self.composerWell.userInteractionEnabled = NO;
+	self.composerWell.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+	[self.inputBar addSubview:self.composerWell];
 	[self.inputBar addSubview:self.input];
 
 	self.sendButton = [UIButton buttonWithType:UIButtonTypeCustom];
-	self.sendButton.frame = CGRectMake(fieldRight - kSendSide - TGMetricPadTiny, sendY,
-									   kSendSide, kSendSide);
+	self.sendButton.frame = sendFrame;
 	[self.sendButton setBackgroundImage:[TGTheme buttonImageForStyle:TGButtonStyleAction highlighted:NO height:kSendSide] forState:UIControlStateNormal];
 	[self.sendButton setBackgroundImage:[TGTheme buttonImageForStyle:TGButtonStyleAction highlighted:YES height:kSendSide] forState:UIControlStateHighlighted];
 	self.sendButton.backgroundColor = [UIColor clearColor];
@@ -125,10 +237,15 @@
 	[self.sendButton addGestureRecognizer:sendHold];
 	[self.inputBar addSubview:self.sendButton];
 
-	// The sticker button is retired: official keeps the field, the send
-	// control inside it and the mic outside it, with no extra glyph.
+	// Official keeps a stickers/emoji toggle at the field's right edge
+	// (ChatTextInputAccessoryItem .input, keyboard/stickers/emoji); ec1284a
+	// retired it as "no extra glyph" and the panel lost its only button.
 	self.stickerButton = [UIButton buttonWithType:UIButtonTypeCustom];
-	self.stickerButton.hidden = YES;
+	[self.stickerButton setImage:[TGIcons sticker] forState:UIControlStateNormal];
+	self.stickerButton.tintColor = [[TGTheme shared] secondaryTextColour];
+	self.stickerButton.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin;
+	[self.stickerButton addTarget:self action:@selector(toggleStickerPanel)
+			forControlEvents:UIControlEventTouchUpInside];
 	[self.inputBar addSubview:self.stickerButton];
 
 	// Hold to record, release to send - the gesture every client uses. It sits
@@ -137,7 +254,7 @@
 	// recording into a round video note and back, the way Telegram keeps two
 	// modes on one spot instead of a second control beside the paperclip.
 	self.micButton = [UIButton buttonWithType:UIButtonTypeCustom];
-	self.micButton.frame = CGRectMake(micX, sendY, kSendSide, kSendSide);
+	self.micButton.frame = sendFrame;
 	[self.micButton setImage:[TGIcons microphone] forState:UIControlStateNormal];
 	self.micButton.tintColor = [[TGTheme shared] secondaryTextColour];
 	self.micButton.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin;
@@ -152,6 +269,23 @@
 	[self.micButton addTarget:self action:@selector(recordDrag:withEvent:)
 			 forControlEvents:UIControlEventTouchDragInside | UIControlEventTouchDragOutside];
 	[self.inputBar addSubview:self.micButton];
+
+	// Official's AI entry is the top slot of the attachment capsule, faded in
+	// once the typed text reaches three lines. Our capsule is one button tall,
+	// so the same slot sits directly above the paperclip.
+	self.aiButton = [UIButton buttonWithType:UIButtonTypeCustom];
+	self.aiButton.frame = CGRectMake(kComposerInset, sendY - kSendSide,
+			kAttachWidth, kSendSide);
+	self.aiButton.hidden = YES;
+	self.aiButton.alpha = TGAlphaTransparent;
+	[self.aiButton setImage:[TGIcons glyphNamed:@"edit"
+			colour:[[TGTheme shared] accentColour] side:TGMetricMenuGlyph]
+			forState:UIControlStateNormal];
+	self.aiButton.autoresizingMask = UIViewAutoresizingFlexibleTopMargin;
+	[self.aiButton addTarget:self action:@selector(aiComposeTapped)
+			forControlEvents:UIControlEventTouchUpInside];
+	[self.inputBar addSubview:self.aiButton];
+
 	self.videoNoteMode = [[NSUserDefaults standardUserDefaults]
 			boolForKey:kRecordVideoModeKey];
 	[self updateRecordModeIcon];
@@ -161,14 +295,12 @@
 												 name:TGCustomEmojiLoadedNotification
 											   object:nil];
 
-	[self.input addTarget:self action:@selector(inputChanged)
-		 forControlEvents:UIControlEventEditingChanged];
-	[self.input addTarget:self action:@selector(composerEditingChanged)
-		 forControlEvents:UIControlEventEditingChanged];
+	self.composerBarHeight = kInputHeight;
 	[self inputChanged];
 	[self updateComposerPlaceholder];
 
 	[self.view addSubview:self.inputBar];
+	[self updateComposerHeightAnimated:NO];
 }
 
 /// Official picks the field's word from the chat kind: a channel broadcasts,
@@ -176,6 +308,131 @@
 - (void)updateComposerPlaceholder {
 	self.input.placeholder = TGChatComposerPlaceholder(self.isChannel,
 			self.silentPosting, self.canBeAnonymous);
+}
+
+/// The bar's own growth: the text view asks how many lines it has, the field
+/// takes that height up to twelve lines, and the bar, its plate and the
+/// table's bottom all move together. Past the cap the text view scrolls.
+- (void)updateComposerHeightAnimated:(BOOL)animated {
+	if (!self.input || !self.inputBar)
+		return;
+	CGFloat width = self.inputBar.bounds.size.width;
+	if (width <= 0.0f)
+		width = self.view.bounds.size.width;
+	if (width <= 0.0f)
+		return;
+
+	CGFloat textWidth = MAX(1.0f, TGChatComposerFieldFrame(width,
+			kInputHeight, TGChatComposerFieldHeightForLines(1)).size.width -
+			kFieldLeftPad - kSendSide);
+	NSString *text = self.input.text ?: @"";
+	NSInteger lines = TGChatComposerLineCount(text, textWidth);
+	CGFloat fieldH = TGChatComposerFieldHeightForLines(lines);
+	CGFloat barH = TGChatComposerBarHeightForLines(lines);
+	BOOL overflow = lines > TGChatComposerMaxLines();
+	BOOL showAI = TGChatComposerShowsAIEntry(text, textWidth);
+	CGRect fieldFrame = TGChatComposerFieldFrame(width, barH, fieldH);
+	CGRect sendFrame = TGChatComposerSendFrame(width, barH);
+
+	self.input.scrollEnabled = overflow;
+	self.composerBarHeight = barH;
+	// The corner stays the one-line capsule's as the field grows, as
+	// official's input panel keeps it; half the grown height turned a
+	// six-line field into an oval. The image is drawn at the one-line height
+	// and stretched, leaving one stretchable row between the caps.
+	CGFloat wellRadius = MAX(TGMetricCornerNone,
+			TGHalf(TGMetricComposerFieldMinHeight) - TGMetricBorderWidth);
+	if (TGChatDrawableSize(fieldFrame.size)) {
+		self.composerWell.image = [TGTheme
+				skeuomorphicWellImageWithHeight:TGMetricComposerFieldMinHeight
+				cornerRadius:wellRadius];
+	} else {
+		self.composerWell.image = nil;
+	}
+	((TGComposerInputField *)self.input).placeholderColour =
+			[[TGTheme shared] secondaryTextColour];
+
+	CGFloat bottom = CGRectGetMaxY(self.inputBar.frame);
+	if (bottom <= 0.0f || CGRectIsEmpty(self.inputBar.frame))
+		bottom = self.view.bounds.size.height;
+	CGFloat controlY = CGRectGetMinY(sendFrame);
+
+	void (^apply)(void) = ^{
+		self.inputBar.frame = CGRectMake(0, bottom - barH, width, barH);
+		self.composerWell.frame = fieldFrame;
+		// The text stops short of the sticker toggle sitting in the well.
+		CGRect textFrame = fieldFrame;
+		textFrame.size.width = MAX(0.0f, textFrame.size.width - kSendSide);
+		self.input.frame = textFrame;
+		self.stickerButton.frame = CGRectMake(CGRectGetMaxX(fieldFrame) - kSendSide,
+				controlY, kSendSide, kSendSide);
+		self.attachButton.frame = CGRectMake(kComposerInset, controlY,
+				kAttachWidth, kSendSide);
+		self.aiButton.frame = CGRectMake(kComposerInset, controlY - kSendSide,
+				kAttachWidth, kSendSide);
+		self.sendButton.frame = sendFrame;
+		self.micButton.frame = sendFrame;
+		self.table.frame = CGRectMake(0, 0, width, bottom - barH);
+		[self layoutChrome];
+	};
+
+	BOOL changed = fabs(self.inputBar.bounds.size.height - barH) > 0.5f;
+	if (animated && changed && self.view.window){
+		[UIView animateWithDuration:TGAnimationDurationFast animations:apply
+				completion:^(BOOL done){
+			[self refreshComposerEmojiOverlay];
+		}];
+	} else {
+		apply();
+		[self refreshComposerEmojiOverlay];
+	}
+
+	if (showAI && self.aiButton.hidden){
+		self.aiButton.hidden = NO;
+		self.aiButton.alpha = TGAlphaTransparent;
+		[UIView animateWithDuration:TGAnimationDurationFast animations:^{
+			self.aiButton.alpha = TGAlphaOpaque;
+		}];
+	} else if (!showAI && !self.aiButton.hidden){
+		[UIView animateWithDuration:TGAnimationDurationFast animations:^{
+			self.aiButton.alpha = TGAlphaTransparent;
+		} completion:^(BOOL finished){
+			if (!TGChatComposerShowsAIEntry(self.input.text ?: @"", textWidth))
+				self.aiButton.hidden = YES;
+		}];
+	} else if (showAI){
+		self.aiButton.alpha = TGAlphaOpaque;
+	}
+	((TGComposerInputField *)self.input).placeholderLabel.hidden = text.length > 0;
+}
+
+/// The composer's AI button, where official shows it once the text is long
+/// enough: the existing AI composer opens with what has been typed.
+- (void)aiComposeTapped {
+	TGAiComposeViewController *vc = [[TGAiComposeViewController alloc] init];
+	vc.chatId = self.chatId;
+	vc.chatTitle = self.chatTitle;
+	vc.initialText = self.input.text ?: @"";
+	__weak typeof(self) weakSelf = self;
+	// Official's edit mode applies the result to the composer; it does not
+	// send it. The user still presses Send themselves.
+	vc.onApply = ^(NSString *text){
+		[weakSelf applyComposerText:text];
+	};
+	vc.hidesBottomBarWhenPushed = YES;
+	[self.navigationController pushViewController:vc animated:YES];
+}
+
+/// Puts the AI screen's result where the composer's text was, keeping the
+/// custom-emoji model in step and growing the bar for the new line count.
+- (void)applyComposerText:(NSString *)text {
+	NSString *body = text ?: @"";
+	self.input.text = body;
+	self.composerText = [[TGComposerText alloc] initWithText:body entities:@[]];
+	[self updateComposerHeightAnimated:NO];
+	[self inputChanged];
+	[self composerEditingChanged];
+	[self refreshComposerEmojiOverlay];
 }
 
 /// The first thing in `text` that could be a link. Not a validator - TDLib
@@ -402,7 +659,7 @@ static const NSInteger kBannerSubtitleTag = 72;
 
 #pragma mark - sending
 
-static NSRange TGTextFieldSelectedRange(UITextField *tf) {
+static NSRange TGTextFieldSelectedRange(UITextView *tf) {
 	UITextRange *r = tf.selectedTextRange;
 	if (!r) return NSMakeRange(NSNotFound, 0);
 	NSInteger start = [tf offsetFromPosition:tf.beginningOfDocument toPosition:r.start];
@@ -410,7 +667,7 @@ static NSRange TGTextFieldSelectedRange(UITextField *tf) {
 	return NSMakeRange(start, end - start);
 }
 
-static void TGTextFieldSetSelectedRange(UITextField *tf, NSRange range) {
+static void TGTextFieldSetSelectedRange(UITextView *tf, NSRange range) {
 	if (range.location == NSNotFound) return;
 	UITextPosition *start = [tf positionFromPosition:tf.beginningOfDocument offset:range.location];
 	UITextPosition *end = [tf positionFromPosition:start offset:range.length];
@@ -569,6 +826,10 @@ static void TGTextFieldSetSelectedRange(UITextField *tf, NSRange range) {
 			TGAiComposeViewController *vc = [[TGAiComposeViewController alloc] init];
 			vc.chatId = weakSelf.chatId;
 			vc.chatTitle = weakSelf.chatTitle;
+			vc.initialText = weakSelf.input.text ?: @"";
+			vc.onApply = ^(NSString *text){
+				[weakSelf applyComposerText:text];
+			};
 			vc.hidesBottomBarWhenPushed = YES;
 			[weakSelf.navigationController pushViewController:vc animated:YES];
 		} else if (index == 2)
@@ -746,36 +1007,26 @@ static void TGTextFieldSetSelectedRange(UITextField *tf, NSRange range) {
 	[self openScheduledMessages];
 }
 
-- (BOOL)textField:(UITextField *)textField shouldChangeCharactersInRange:(NSRange)range replacementString:(NSString *)string {
-	if (textField == self.input) {
+- (BOOL)textView:(UITextView *)textView shouldChangeTextInRange:(NSRange)range
+		replacementText:(NSString *)string {
+	if (textView == self.input) {
 		if (!self.composerText) {
 			self.composerText = [[TGComposerText alloc] initWithText:self.input.text ?: @"" entities:@[]];
 		} else if (![self.composerText.text isEqualToString:self.input.text ?: @""]) {
 			[self.composerText resetText:self.input.text ?: @""];
 		}
 		[self.composerText replaceCharactersInRange:range withString:string];
-		__weak typeof(self) weakSelf = self;
-		dispatch_async(dispatch_get_main_queue(), ^{
-			[weakSelf refreshComposerEmojiOverlay];
-		});
 	}
+	// Return is a line break; sending is the button, as official's composer.
 	return YES;
 }
 
-- (BOOL)textFieldShouldClear:(UITextField *)textField {
-	if (textField == self.input) {
-		self.composerText = [[TGComposerText alloc] initWithText:@"" entities:@[]];
-		__weak typeof(self) weakSelf = self;
-		dispatch_async(dispatch_get_main_queue(), ^{
-			[weakSelf refreshComposerEmojiOverlay];
-		});
-	}
-	return YES;
-}
-
-- (BOOL)textFieldShouldReturn:(UITextField *)textField {
-	[self sendTapped];
-	return NO;
+- (void)textViewDidChange:(UITextView *)textView {
+	if (textView != self.input)
+		return;
+	[self updateComposerHeightAnimated:YES];
+	[self inputChanged];
+	[self composerEditingChanged];
 }
 
 
@@ -999,11 +1250,13 @@ static void TGTextFieldSetSelectedRange(UITextField *tf, NSRange range) {
 
 - (void)shiftForKeyboardHeight:(CGFloat)height {
 	CGRect b = self.view.bounds;
+	CGFloat barH = self.composerBarHeight > 0.0f
+			? self.composerBarHeight : kInputHeight;
 	[UIView animateWithDuration:TGAnimationDurationMedium animations:^{
-		self.inputBar.frame = CGRectMake(0, b.size.height - kInputHeight - height,
-				b.size.width, kInputHeight);
+		self.inputBar.frame = CGRectMake(0, b.size.height - barH - height,
+				b.size.width, barH);
 		self.table.frame = CGRectMake(0, 0, b.size.width,
-				b.size.height - kInputHeight - height);
+				b.size.height - barH - height);
 		[self layoutChrome];
 	} completion:^(BOOL done){
 		[self scrollToBottomAnimated:NO];

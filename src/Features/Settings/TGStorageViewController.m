@@ -6,6 +6,8 @@
 #import "TGAlertSheet.h"
 #import "TGLocalization.h"
 #import "TGSettingsFormatting.h"
+#import "TGRows.h"
+#import "TGRowCell.h"
 
 // Their storage page opens with a ring: the total in the middle, one arc per
 // kind of file, the same colours in the list underneath. A column of numbers
@@ -17,9 +19,10 @@ static const CGFloat kRingWidth = TGMetricStorageRingWidth;
 static const CGFloat kRingHeaderRoom = 54.0f;
 static const CGFloat kRingTotalLine  = TGMetricVoicePillWidth;
 
+static UIColor *TGSliceColour(NSUInteger index);
+
 @interface TGStorageViewController ()
 @property (nonatomic, strong) NSArray *categories;   // name / bytes / kinds
-@property (nonatomic, strong) NSArray *categoryRows;    // preformatted title / size
 @property (nonatomic, assign) long long total;
 @property (nonatomic, assign) NSInteger fileCount;
 @property (nonatomic, assign) BOOL working;
@@ -49,22 +52,14 @@ static const CGFloat kRingTotalLine  = TGMetricVoicePillWidth;
 	return self.selectedKinds.count > 0;
 }
 
-- (NSInteger)keepMediaSectionIndex {
-	return [self hasClearSection] ? 2 : 1;
-}
-
-- (NSInteger)maxCacheSectionIndex {
-	return [self hasClearSection] ? 3 : 2;
-}
-
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	self.title = @"Storage Usage";
+	self.title = TGLocalized(@"Storage Usage");
 	self.categories = @[];
 	self.selectedKinds = [NSMutableSet set];
-	[self applyTheme];
 	[self refresh];
 	[self loadStorageOptions];
+	[self rebuildSections];
 }
 
 - (void)loadStorageOptions {
@@ -78,7 +73,7 @@ static const CGFloat kRingTotalLine  = TGMetricVoicePillWidth;
 			else if (sec == 2592000) idx = 2; // 1 month
 			dispatch_async(dispatch_get_main_queue(), ^{
 				weakSelf.keepMediaIndex = idx;
-				[weakSelf.tableView reloadData];
+				[weakSelf rebuildSections];
 			});
 		}
 	}];
@@ -91,7 +86,7 @@ static const CGFloat kRingTotalLine  = TGMetricVoicePillWidth;
 			else if (bytes == 50LL * 1024 * 1024 * 1024) idx = 2; // 50 GB
 			dispatch_async(dispatch_get_main_queue(), ^{
 				weakSelf.maxCacheIndex = idx;
-				[weakSelf.tableView reloadData];
+				[weakSelf rebuildSections];
 			});
 		}
 	}];
@@ -101,13 +96,6 @@ static const CGFloat kRingTotalLine  = TGMetricVoicePillWidth;
 	[super viewWillAppear:animated];
 	[self applyTheme];
 }
-
-- (void)applyTheme {
-	[[TGTheme shared] styleGroupedTable:self.tableView];
-	[[TGTheme shared] styleNavigationBar:self.navigationController.navigationBar];
-}
-
-
 
 - (void)refresh {
 	__weak typeof(self) weakSelf = self;
@@ -119,36 +107,87 @@ static const CGFloat kRingTotalLine  = TGMetricVoicePillWidth;
 		weakSelf.fileCount = files;
 		weakSelf.loaded = YES;
 		weakSelf.totalText = TGBytes(bytes);
-		[weakSelf.tableView reloadData];
+		[weakSelf rebuildSections];
 	}];
 	[[TGClient shared] storageBreakdownWithCompletion:^(NSArray *categories,
 														long long total){
 		weakSelf.categories = categories;
 		weakSelf.total = total;
 		weakSelf.totalText = TGBytes(total);
-		[weakSelf rebuildCategoryRows];
 		weakSelf.loaded = YES;
-		[weakSelf.tableView reloadData];
+		[weakSelf rebuildSections];
 	}];
 }
 
-/// Percentages and sizes are formatted here, once per refresh, rather than in
-/// cellForRow: the no-NSNumber rule applies to cell layout too, and a
-/// formatter per row is a compile per scroll.
-- (void)rebuildCategoryRows {
-	NSMutableArray *rows = [NSMutableArray arrayWithCapacity:self.categories.count];
-	for (NSDictionary *category in self.categories){
-		long long bytes = [category[@"bytes"] longLongValue];
-		double share = self.total > 0 ? (bytes / (double)self.total) * 100 : 0;
-		[rows addObject:@{
-			@"name" : category[@"name"] ?: @"",
-			@"kinds" : category[@"kinds"] ?: @[],
-			@"title" : [NSString stringWithFormat:@"%@  %.1f%%",
-					category[@"name"] ?: @"", share],
-			@"size" : TGBytes(bytes),
-		}];
+#pragma mark - sections
+
+/// The one place the page's rows are built. Storage changes from three
+/// callbacks and every tap, so a row never reads a half-updated selection.
+- (void)rebuildSections {
+	NSMutableArray *categoryRows = [NSMutableArray array];
+	if (!self.loaded){
+		[categoryRows addObject:TGRow(TGKindPlain, TGLocalized(@"Loading..."))];
+	} else if (!self.categories.count){
+		[categoryRows addObject:TGRow(TGKindPlain, TGLocalized(@"No media files yet"))];
+	} else {
+		NSArray *rows = TGSettingsStorageCategoryRowModels(self.categories,
+				self.total, self.selectedKinds);
+		for (NSUInteger i = 0; i < rows.count; i++){
+			NSMutableDictionary *row = [rows[i] mutableCopy];
+			row[TGRowColour] = TGSliceColour(i);
+			NSArray *kinds = row[@"storageKinds"] ?: @[];
+			__weak typeof(self) weakSelf = self;
+			row[TGRowTap] = ^{ [weakSelf toggleKinds:kinds]; };
+			[categoryRows addObject:row];
+		}
 	}
-	self.categoryRows = rows;
+
+	NSString *keepFooter = TGLocalized(@"Photos, videos and other files from cloud chats that have not been accessed during this period will be removed from this device to save disk space.");
+	NSString *cacheFooter = TGLocalized(@"If your cache size exceeds this limit, the oldest unused media will be removed from the device.");
+	static NSArray *keepLabels = nil;
+	if (!keepLabels)
+		keepLabels = @[
+			TGLocalizedPluralValue(@"%@ day", @"%@ days", @"3", 3),
+			TGLocalizedPluralValue(@"%@ week", @"%@ weeks", @"1", 1),
+			TGLocalizedPluralValue(@"%@ month", @"%@ months", @"1", 1),
+			TGLocalized(@"Forever"),
+		];
+	static NSArray *maxLabels = nil;
+	if (!maxLabels)
+		maxLabels = @[@"5 GB", @"20 GB", @"50 GB", TGLocalized(@"No Limit")];
+	__weak typeof(self) weakSelf = self;
+
+	NSMutableDictionary *keepRow = [TGOpenRow(TGLocalized(@"Keep Media"),
+			keepLabels[self.keepMediaIndex], ^{ [weakSelf chooseKeepMedia]; })
+			mutableCopy];
+	NSMutableDictionary *cacheRow = [TGOpenRow(TGLocalized(@"Maximum Cache Size"),
+			maxLabels[self.maxCacheIndex], ^{ [weakSelf chooseMaxCache]; })
+			mutableCopy];
+
+	NSMutableArray *sections = [NSMutableArray array];
+	[sections addObject:TGSection(nil, nil, categoryRows)];
+	if ([self hasClearSection]){
+		NSMutableDictionary *clear;
+		if (self.working){
+			clear = [TGRow(TGKindPlain, TGLocalized(@"Clearing the Cache"))
+					mutableCopy];
+			clear[TGRowCentred] = @YES;
+			clear[TGRowTitleColour] = [[TGTheme shared] secondaryTextColour];
+		} else {
+			NSString *title = [NSString stringWithFormat:@"%@  %@",
+					TGLocalized(@"Clear Selected"), self.selectedText ?: @""];
+			clear = [TGCentredDestructiveRow(title, ^{ [weakSelf confirmClear]; })
+					mutableCopy];
+		}
+		[sections addObject:TGSection(nil, nil, @[clear])];
+	}
+	[sections addObject:TGSection(TGLocalized(@"KEEP MEDIA"), keepFooter,
+			@[keepRow])];
+	[sections addObject:TGSection(TGLocalized(@"MAXIMUM CACHE SIZE"),
+			cacheFooter, @[cacheRow])];
+
+	self.sections = sections;
+	[self reloadRows];
 }
 
 /// The bottom button's label is written when the selection changes, not while
@@ -247,202 +286,126 @@ static UIColor *TGSliceColour(NSUInteger index) {
 
 #pragma mark - table
 
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-	return [self hasClearSection] ? 4 : 3;
-}
-
+/// The ring is a section header, not a row: the page's first group is the
+/// category list, and the ring belongs above it.
 - (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
+	(void)tableView;
 	return section == 0 ? [self ringHeader] : nil;
 }
 
 - (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section {
-	return section == 0 ? kRingSide + 54 : 24;
-}
-
-- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-	if (section == [self keepMediaSectionIndex]) {
-		return @"KEEP MEDIA";
-	}
-	if (section == [self maxCacheSectionIndex]) {
-		return @"MAXIMUM CACHE SIZE";
-	}
-	return nil;
-}
-
-- (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-	if (section == [self keepMediaSectionIndex]) {
-		return @"Photos, videos and other files from cloud chats that have not been accessed during this period will be removed from this device to save disk space.";
-	}
-	if (section == [self maxCacheSectionIndex]) {
-		return @"If your cache size exceeds this limit, the oldest unused media will be removed from the device.";
-	}
-	return nil;
-}
-
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
+	(void)tableView;
 	if (section == 0)
-		return self.loaded ? MAX((NSUInteger)1, self.categoryRows.count) : 1;
-	return 1;
+		return kRingSide + TGMetricPadLarge + TGMetricLineRow;
+	return TGMetricPadWide + TGMetricLineCaption;
 }
 
+/// The shared cell draws the row; the storage page adds the chart disc its
+/// category rows need. The disc is a bitmap from the screen's own palette, so
+/// the cell family never has to know about the storage chart.
 - (UITableViewCell *)tableView:(UITableView *)tableView
-		 cellForRowAtIndexPath:(NSIndexPath *)path
-{
-	TGTheme *theme = [TGTheme shared];
-	UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"row"];
-	if (!cell)
-		cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1
-									  reuseIdentifier:@"row"];
-	[theme styleCell:cell];
-	cell.imageView.image = nil;
-	cell.textLabel.font = TGFontRow();
-	cell.textLabel.textColor = [theme primaryTextColour];
-	cell.textLabel.textAlignment = NSTextAlignmentLeft;
-	cell.detailTextLabel.font = TGFontBody();
-	cell.detailTextLabel.textColor = [theme cellDetailColour];
-	cell.selectionStyle = UITableViewCellSelectionStyleDefault;
-	cell.accessoryType = UITableViewCellAccessoryNone;
-
-	if ([self hasClearSection] && path.section == 1){
-		cell.textLabel.text = self.working
-				? @"Clearing the Cache"
-				: [NSString stringWithFormat:@"%@  %@",
-						@"Clear Selected", self.selectedText ?: @""];
-		cell.textLabel.textAlignment = NSTextAlignmentCenter;
-		cell.textLabel.textColor = self.working
-				? [theme secondaryTextColour] : [theme destructiveColour];
-		cell.detailTextLabel.text = @"";
-		return cell;
-	}
-
-	if (path.section == [self keepMediaSectionIndex]) {
-		cell.textLabel.text = @"Keep Media";
-		static NSArray *keepLabels = nil;
-		if (!keepLabels) keepLabels = @[@"3 days", @"1 week", @"1 month", @"Forever"];
-		cell.detailTextLabel.text = keepLabels[self.keepMediaIndex];
-		cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-		return cell;
-	}
-
-	if (path.section == [self maxCacheSectionIndex]) {
-		cell.textLabel.text = @"Maximum Cache Size";
-		static NSArray *maxLabels = nil;
-		if (!maxLabels) maxLabels = @[@"5 GB", @"20 GB", @"50 GB", @"No Limit"];
-		cell.detailTextLabel.text = maxLabels[self.maxCacheIndex];
-		cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-		return cell;
-	}
-
-	if (!self.loaded){
-		cell.textLabel.text = @"Loading...";
-		cell.textLabel.textColor = [theme secondaryTextColour];
-		cell.detailTextLabel.text = @"";
-		cell.selectionStyle = UITableViewCellSelectionStyleNone;
-		return cell;
-	}
-
-	if (!self.categoryRows.count){
-		cell.textLabel.text = @"No media files yet";
-		cell.textLabel.textColor = [theme secondaryTextColour];
-		cell.detailTextLabel.text = @"";
-		cell.selectionStyle = UITableViewCellSelectionStyleNone;
-		return cell;
-	}
-
-	NSDictionary *category = self.categoryRows[path.row];
-	cell.textLabel.text = category[@"title"];
-	cell.detailTextLabel.text = category[@"size"];
-	cell.imageView.image = [self dotOfColour:TGSliceColour(path.row)];
-	NSArray *kinds = category[@"kinds"];
-	BOOL allSelected = kinds.count > 0;
-	for (NSString *kind in kinds)
-		if (![self.selectedKinds containsObject:kind]){
-			allSelected = NO;
-			break;
-		}
-	cell.accessoryType = allSelected
-			? UITableViewCellAccessoryCheckmark : UITableViewCellAccessoryNone;
+		 cellForRowAtIndexPath:(NSIndexPath *)path {
+	UITableViewCell *cell = [super tableView:tableView
+					   cellForRowAtIndexPath:path];
+	NSDictionary *row = [self rowAtPath:path];
+	if ([cell isKindOfClass:TGRowCell.class])
+		[(TGRowCell *)cell applyAppendedOptions:row];
+	UIColor *colour = row[TGRowColour];
+	if ([cell isKindOfClass:TGRowCell.class] &&
+			[colour isKindOfClass:UIColor.class] &&
+			![row[TGRowIcon] length])
+		cell.imageView.image = [self dotOfColour:colour];
 	return cell;
 }
 
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)path {
-	[tableView deselectRowAtIndexPath:path animated:YES];
-	if (self.working || !self.loaded)
-		return;
+- (NSDictionary *)rowAtPath:(NSIndexPath *)path {
+	if (path.section < 0 || path.section >= (NSInteger)self.sections.count)
+		return nil;
+	NSArray *rows = self.sections[(NSUInteger)path.section][@"rows"];
+	if (path.row < 0 || path.row >= (NSInteger)rows.count)
+		return nil;
+	return rows[(NSUInteger)path.row];
+}
 
-	if ([self hasClearSection] && path.section == 1){
-		__weak typeof(self) weakSelf = self;
-		NSArray *kinds = self.selectedKinds.allObjects;
-		if (!kinds.count)
-			return;
-		[TGAlertSheet showConfirm:@"Are you sure you want to clear cache?"
-							title:@"Clear Selected"
-						   action:@"Clear"
-					  destructive:YES
-						   inView:self.view
-						onConfirm:^{ [weakSelf clearKinds:kinds]; }];
-		return;
-	}
+#pragma mark - actions
 
-	if (path.section == [self keepMediaSectionIndex]) {
-		static NSArray *keepLabels = nil;
-		if (!keepLabels) keepLabels = @[@"3 days", @"1 week", @"1 month", @"Forever"];
-		__weak typeof(self) weakSelf = self;
-		[TGAlertSheet showChoices:keepLabels
-							title:@"Keep Media"
-				 destructiveIndex:-1
-						   inView:self.view
-						 onChoice:^(NSInteger index){
-			weakSelf.keepMediaIndex = index;
-			static const int64_t seconds[4] = {259200, 604800, 2592000, 0};
-			[[TGClient shared] setOption:@"storage_max_time_from_last_access" integerValue:seconds[index]];
-			[[NSUserDefaults standardUserDefaults] setInteger:index forKey:@"TGStorageKeepMedia"];
-			[weakSelf.tableView reloadSections:[NSIndexSet indexSetWithIndex:[weakSelf keepMediaSectionIndex]]
-							  withRowAnimation:UITableViewRowAnimationNone];
-		}];
+- (void)toggleKinds:(NSArray *)kinds {
+	if (self.working || !self.loaded || !kinds.count)
 		return;
-	}
-
-	if (path.section == [self maxCacheSectionIndex]) {
-		static NSArray *maxLabels = nil;
-		if (!maxLabels) maxLabels = @[@"5 GB", @"20 GB", @"50 GB", @"No Limit"];
-		__weak typeof(self) weakSelf = self;
-		[TGAlertSheet showChoices:maxLabels
-							title:@"Maximum Cache Size"
-				 destructiveIndex:-1
-						   inView:self.view
-						 onChoice:^(NSInteger index){
-			weakSelf.maxCacheIndex = index;
-			static const int64_t bytes[4] = {5LL * 1024 * 1024 * 1024, 20LL * 1024 * 1024 * 1024, 50LL * 1024 * 1024 * 1024, 0};
-			[[TGClient shared] setOption:@"storage_max_files_size" integerValue:bytes[index]];
-			[[NSUserDefaults standardUserDefaults] setInteger:index forKey:@"TGStorageMaxCache"];
-			[weakSelf.tableView reloadSections:[NSIndexSet indexSetWithIndex:[weakSelf maxCacheSectionIndex]]
-							  withRowAnimation:UITableViewRowAnimationNone];
-		}];
-		return;
-	}
-
-	if (!self.categories.count)
-		return;
-	NSDictionary *category = self.categories[path.row];
-	NSArray *kinds = category[@"kinds"];
-	if (!kinds.count)
-		return;               // "Other" is whatever the walk could not name
-
-	// A tap selects the panel; nothing is deleted until the bottom button.
 	TGSettingsToggleKinds(self.selectedKinds, kinds);
 	[self updateSelectedBytes];
-	[self.tableView reloadData];
+}
+
+- (void)confirmClear {
+	if (self.working || !self.loaded)
+		return;
+	NSArray *kinds = self.selectedKinds.allObjects;
+	if (!kinds.count)
+		return;
+	__weak typeof(self) weakSelf = self;
+	[TGAlertSheet showConfirm:TGLocalized(@"Are you sure you want to clear cache?")
+						title:TGLocalized(@"Clear Selected")
+					   action:TGLocalized(@"Clear")
+				  destructive:YES
+					   inView:self.view
+					onConfirm:^{ [weakSelf clearKinds:kinds]; }];
+}
+
+- (void)chooseKeepMedia {
+	static int64_t seconds[4] = {259200, 604800, 2592000, 0};
+	NSArray *labels = @[
+		TGLocalizedPluralValue(@"%@ day", @"%@ days", @"3", 3),
+		TGLocalizedPluralValue(@"%@ week", @"%@ weeks", @"1", 1),
+		TGLocalizedPluralValue(@"%@ month", @"%@ months", @"1", 1),
+		TGLocalized(@"Forever"),
+	];
+	__weak typeof(self) weakSelf = self;
+	[TGAlertSheet showChoices:labels
+						title:TGLocalized(@"Keep Media")
+			 destructiveIndex:-1
+					   inView:self.view
+					 onChoice:^(NSInteger index){
+		if (index < 0 || index > 3)
+			return;
+		weakSelf.keepMediaIndex = index;
+		[[TGClient shared] setOption:@"storage_max_time_from_last_access"
+						integerValue:seconds[index]];
+		[[NSUserDefaults standardUserDefaults] setInteger:index
+				forKey:@"TGStorageKeepMedia"];
+		[weakSelf rebuildSections];
+	}];
+}
+
+- (void)chooseMaxCache {
+	static int64_t bytes[4] = {5LL * 1024 * 1024 * 1024,
+			20LL * 1024 * 1024 * 1024, 50LL * 1024 * 1024 * 1024, 0};
+	NSArray *labels = @[@"5 GB", @"20 GB", @"50 GB", TGLocalized(@"No Limit")];
+	__weak typeof(self) weakSelf = self;
+	[TGAlertSheet showChoices:labels
+						title:TGLocalized(@"Maximum Cache Size")
+			 destructiveIndex:-1
+					   inView:self.view
+					 onChoice:^(NSInteger index){
+		if (index < 0 || index > 3)
+			return;
+		weakSelf.maxCacheIndex = index;
+		[[TGClient shared] setOption:@"storage_max_files_size"
+						integerValue:bytes[index]];
+		[[NSUserDefaults standardUserDefaults] setInteger:index
+				forKey:@"TGStorageMaxCache"];
+		[weakSelf rebuildSections];
+	}];
 }
 
 - (void)updateSelectedBytes {
 	self.selectedBytes = TGSettingsSelectedBytes(self.categories, self.selectedKinds);
 	[self updateSelectedText];
+	[self rebuildSections];
 }
 
 - (void)clearKinds:(NSArray *)kinds {
 	self.working = YES;
-	[self.tableView reloadData];
+	[self rebuildSections];
 
 	__weak typeof(self) weakSelf = self;
 	[[TGClient shared] clearCacheOfTypes:kinds completion:^(long long freed){
@@ -452,8 +415,8 @@ static UIColor *TGSliceColour(NSUInteger index) {
 		[weakSelf updateSelectedText];
 		[weakSelf refresh];
 		(void)freed;
-		[TGAlertSheet showMessage:@"Cache cleared."
-							title:@"Storage Usage" inView:weakSelf.view];
+		[TGAlertSheet showMessage:TGLocalized(@"Cache cleared.")
+							title:TGLocalized(@"Storage Usage") inView:weakSelf.view];
 	}];
 }
 

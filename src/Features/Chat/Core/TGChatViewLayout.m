@@ -1,6 +1,7 @@
 #import "TGPerf.h"
 #import "TGChatViewController.h"
 #import "TGClient.h"
+#import "TGLocalization.h"
 #import "TGTheme.h"
 #import "TGIcons.h"
 #import "TGForwardPicker.h"
@@ -271,7 +272,14 @@ static int64_t sActiveChatId = 0;
 		// Every bubble measured itself against the old width.
 		[self.layoutCache removeAllObjects];
 		[self.table reloadData];
+		// The number of lines the composer text wraps to may change with it.
+		[self updateComposerHeightAnimated:NO];
 	}
+	// The first build can run before the controller has a real width. The well
+	// bitmap is deliberately left unset then; a real layout is the moment it
+	// can be drawn.
+	if (self.inputBar && self.composerWell && !self.composerWell.image)
+		[self updateComposerHeightAnimated:NO];
 }
 
 /// A two-line header: the chat name with member count or status beneath it,
@@ -281,7 +289,8 @@ static int64_t sActiveChatId = 0;
 
 	UILabel *name = [[UILabel alloc] initWithFrame:CGRectMake(0, TGMetricBorderWidth,
 			kTitleWidth, TGMetricLineRow)];
-	name.text = self.chatTitle ?: @"Chat";
+	BOOL isSaved = self.chatId == [[TGClient shared] savedMessagesChatId];
+	name.text = isSaved ? TGLocalized(@"Saved Messages") : (self.chatTitle ?: @"Chat");
 	name.font = TGFontHeader();
 	name.textColor = [[TGTheme shared] barTitleColour];
 	name.backgroundColor = [UIColor clearColor];
@@ -311,6 +320,15 @@ static int64_t sActiveChatId = 0;
 	[header addGestureRecognizer:headerHold];
 	self.navigationItem.titleView = header;
 	[self buildAvatarButton];
+	// Saved Messages and forums carry search beside the avatar; a 200 pt
+	// title centred on the bar then ran under both buttons.
+	if (self.navigationItem.rightBarButtonItems.count > 1){
+		CGFloat narrow = kTitleWidth - 2 * TGMetricRow;
+		header.frame = CGRectMake(0, 0, narrow, kTitleRow);
+		name.frame = CGRectMake(0, TGMetricBorderWidth, narrow, TGMetricLineRow);
+		subtitle.frame = CGRectMake(0, TGMetricBorderWidth + TGMetricLineRow,
+				narrow, TGMetricLineMicro);
+	}
 
 	// "typing..." takes the subtitle over while it lasts, then hands it back.
 	__weak typeof(self) weakSelf = self;
@@ -370,6 +388,8 @@ FOUNDATION_EXPORT void TGBubbleFlushCache(void);
 	self.input.textColor = [theme primaryTextColour];
 	self.input.layer.borderColor = [theme separatorColour].CGColor;
 	self.input.keyboardAppearance = [theme isDark] ? UIKeyboardAppearanceDark : UIKeyboardAppearanceLight;
+	// Repaint the composer plate and its placeholder in the new theme.
+	[self updateComposerHeightAnimated:NO];
 	self.sendButton.backgroundColor = [theme accentColour];
 	self.wallpaperView.image = [theme wallpaper];
 	self.titleNameLabel.textColor = [theme barTitleColour];

@@ -17,7 +17,7 @@
 	if (self){
 		_chatId = chatId;
 		_groupCallId = groupCallId;
-		self.listTitle = @"Calls";
+		self.title = @"Calls";
 		self.emptyText = @"No messages here yet...";
 	}
 	return self;
@@ -101,7 +101,7 @@
 						  @"detail" : text.length ? text : @"Star Reaction",
 						  @"tap" : ^{ [weakSelf showActionsForMessage:message]; }}];
 	}
-	self.rows = rows;
+	self.listRows = rows;
 	self.listFooter = [self statusLine];
 	[self.tableView reloadData];
 }

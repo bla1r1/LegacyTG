@@ -2,12 +2,7 @@
 #import "TGLocalization.h"
 #import "TGAlertSheet.h"
 #import "TGClient.h"
-#import "TGTheme.h"
-#import "TGStyle.h"
-
-static const NSInteger kSectionInfo = 0;
-static const NSInteger kSectionActions = 1;
-static const NSInteger kSectionHistory = 2;
+#import "TGRows.h"
 
 @interface TGDMTopicViewController ()
 @property (nonatomic, strong) NSArray *history;
@@ -16,48 +11,49 @@ static const NSInteger kSectionHistory = 2;
 
 @implementation TGDMTopicViewController
 
-- (id)init {
-	return [super initWithStyle:UITableViewStyleGrouped];
-}
-
 - (void)viewDidLoad {
 	[super viewDidLoad];
 	NSString *name = self.topic[@"senderName"];
-	self.title = name.length ? name : @"Topic";
+	self.title = name.length ? name : TGLocalized(@"Topic");
 	self.history = @[];
-	self.tableView.rowHeight = TGMetricRow;
 	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
-			initWithTitle:@"Reply" style:UIBarButtonItemStylePlain
+			initWithTitle:TGLocalized(@"Reply") style:UIBarButtonItemStylePlain
 				   target:self action:@selector(replyTapped)];
-	[self applyTheme];
-	[self rebuildActions];
+	[self rebuildSections];
 	[self loadTopic];
 	[self loadHistory];
-	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(applyTheme) name:TGThemeChangedNotification object:nil];
 }
 
-- (void)applyTheme {
-	self.tableView.separatorColor = [[TGTheme shared] separatorColour];
-	self.tableView.backgroundColor = [[TGTheme shared] groupedBackgroundColour];
-	[[TGTheme shared] styleNavigationBar:self.navigationController.navigationBar];
-	[self.tableView reloadData];
-}
+- (void)rebuildSections {
+	__weak typeof(self) weakSelf = self;
+	NSDictionary *topic = self.topic ?: @{};
+	self.actionTitles = TGDMTopicActionTitles([topic[@"isMarkedUnread"] boolValue]);
 
-- (void)viewWillAppear:(BOOL)animated {
-	[super viewWillAppear:animated];
-	[[TGTheme shared] styleNavigationBar:self.navigationController.navigationBar];
-}
+	NSMutableArray *infoRows = [NSMutableArray array];
+	for (NSArray *pair in TGDMTopicInfoPairs(topic))
+		[infoRows addObject:TGSubtitleRow(pair[0], pair[1], nil)];
 
-- (void)rebuildActions {
-	NSMutableArray *actions = [NSMutableArray arrayWithObjects:
-			@"Send Message",
-			(@"Jump to Date"), @"Read All Reactions", @"Unpin All Messages",
-			@"Delete Messages", @"Delete All Messages", nil];
-	if ([self.topic[@"isMarkedUnread"] boolValue])
-		[actions insertObject:@"Mark as Read" atIndex:0];
-	else
-		[actions insertObject:@"Mark as Unread" atIndex:0];
-	self.actionTitles = actions;
+	NSMutableArray *actionRows = [NSMutableArray array];
+	for (NSString *title in self.actionTitles){
+		void (^tap)(void) = ^{ [weakSelf performAction:title]; };
+		if ([title hasPrefix:TGLocalized(@"Delete")])
+			[actionRows addObject:TGRedRow(title, tap)];
+		else
+			[actionRows addObject:TGActionRow(title, tap)];
+	}
+
+	NSMutableArray *historyRows = [NSMutableArray array];
+	for (NSDictionary *message in self.history)
+		[historyRows addObject:TGSubtitleRow(TGDMTopicMessageTitle(message),
+				TGDMTopicMessageDetail(message), nil)];
+
+	self.sections = @[
+		TGSection(TGLocalized(@"Topic"), nil, infoRows),
+		TGSection(TGLocalized(@"Actions"), nil, actionRows),
+		TGSection(self.history.count ? TGLocalized(@"Messages") : nil, nil,
+				historyRows),
+	];
+	[self reloadRows];
 }
 
 - (void)replyTapped {
@@ -107,8 +103,7 @@ static const NSInteger kSectionHistory = 2;
 		if (!me || !topic)
 			return;
 		me.topic = topic;
-		[me rebuildActions];
-		[me.tableView reloadData];
+		[me rebuildSections];
 	}];
 }
 
@@ -122,130 +117,20 @@ static const NSInteger kSectionHistory = 2;
 		if (!me)
 			return;
 		me.history = messages ?: @[];
-		[me.tableView reloadData];
+		[me rebuildSections];
 	}];
 }
 
-#pragma mark - table
+#pragma mark - actions
 
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-	return 3;
-}
-
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-	if (section == kSectionInfo)
-		return 5;
-	if (section == kSectionActions)
-		return self.actionTitles.count;
-	return self.history.count;
-}
-
-- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-	if (section == kSectionInfo)
-		return @"Topic";
-	if (section == kSectionActions)
-		return @"Actions";
-	return self.history.count ? @"Messages" : nil;
-}
-
-- (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-	return nil;
-}
-
-- (NSArray *)infoPairs {
-	NSDictionary *topic = self.topic ?: @{};
-	NSString *sender = topic[@"senderName"];
-	if (!sender.length)
-		sender = [NSString stringWithFormat:@"%@ %@",
-				topic[@"senderKind"] ?: @"user", topic[@"senderId"] ?: @(0)];
-	NSString *marked = [topic[@"isMarkedUnread"] boolValue] ? @"Yes" : @"No";
-	id lastValue = topic[@"lastMessage"];
-	NSString *last = @"—";
-	if ([lastValue isKindOfClass:NSDictionary.class]){
-		NSString *text = lastValue[@"text"];
-		last = text.length ? text : @"(media)";
-	}
-	return @[
-		@[@"Sender", sender],
-		@[@"Unread", [NSString stringWithFormat:@"%@, %@",
-				[NSString stringWithFormat:TGLocalized(@"%@ messages"),
-						topic[@"unread"] ?: @(0)],
-				[NSString stringWithFormat:TGLocalized(@"%@ reactions"),
-						topic[@"unreadReactions"] ?: @(0)]]],
-		@[@"Mark as Unread", marked],
-		@[@"Paid messages", [topic[@"canSendUnpaid"] boolValue]
-				? @"Unpaid allowed" : @"Paid only"],
-		@[@"Last message", [last isKindOfClass:NSString.class] ? last : @"—"],
-	];
-}
-
-- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-	UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"row"];
-	if (!cell)
-		cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle
-									  reuseIdentifier:@"row"];
-	[[TGTheme shared] styleCell:cell];
-	cell.textLabel.font = TGFontBody();
-	cell.textLabel.textColor = [[TGTheme shared] primaryTextColour];
-	cell.detailTextLabel.font = TGFontSubhead();
-	cell.detailTextLabel.textColor = [[TGTheme shared] secondaryTextColour];
-	cell.accessoryType = UITableViewCellAccessoryNone;
-	cell.selectionStyle = UITableViewCellSelectionStyleNone;
-
-	if (indexPath.section == kSectionInfo){
-		NSArray *pair = [self infoPairs][indexPath.row];
-		cell.textLabel.text = pair[0];
-		cell.detailTextLabel.text = pair[1];
-		return cell;
-	}
-	if (indexPath.section == kSectionActions){
-		cell.textLabel.text = self.actionTitles[indexPath.row];
-		cell.textLabel.textColor = [self.actionTitles[indexPath.row]
-				hasPrefix:@"Delete"] ? [[TGTheme shared] destructiveColour]
-									 : [[TGTheme shared] accentColour];
-		cell.detailTextLabel.text = nil;
-		cell.selectionStyle = UITableViewCellSelectionStyleBlue;
-		return cell;
-	}
-
-	NSDictionary *message = self.history[indexPath.row];
-	NSString *text = message[@"text"];
-	cell.textLabel.text = text.length ? text : [self describeMessage:message];
-	NSNumber *date = message[@"date"];
-	NSString *when = [date isKindOfClass:NSNumber.class] && date.doubleValue > 0
-			? [NSDateFormatter localizedStringFromDate:
-					[NSDate dateWithTimeIntervalSince1970:date.doubleValue]
-					dateStyle:NSDateFormatterShortStyle
-					timeStyle:NSDateFormatterShortStyle]
-			: @"";
-	cell.detailTextLabel.text = [message[@"outgoing"] boolValue]
-			? [NSString stringWithFormat:@"%@ · %@", TGLocalized(@"You"), when]
-			: when;
-	return cell;
-}
-
-- (NSString *)describeMessage:(NSDictionary *)message {
-	NSString *kind = message[@"kind"];
-	if ([kind isEqualToString:@"messagePhoto"]) return @"Photo";
-	if ([kind isEqualToString:@"messageVideo"]) return @"Video";
-	if ([kind isEqualToString:@"messageAudio"]) return @"Audio";
-	if ([kind isEqualToString:@"messageVoiceNote"]) return @"Voice Message";
-	if ([kind isEqualToString:@"messageDocument"]) return @"File";
-	if ([kind isEqualToString:@"messageSticker"]) return @"Sticker";
-	return @"Message";
-}
-
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
-	if (indexPath.section != kSectionActions)
-		return;
-	NSString *title = self.actionTitles[indexPath.row];
-	if ([title isEqualToString:@"Send Message"]){
+- (void)performAction:(NSString *)title {
+	if ([title isEqualToString:TGLocalized(@"Send Message")]){
 		[self replyTapped];
 		return;
 	}
-	if ([title hasPrefix:@"Mark as"]){
-		BOOL mark = [title isEqualToString:@"Mark as Unread"];
+	if ([title isEqualToString:TGLocalized(@"Mark as Unread")] ||
+		[title isEqualToString:TGLocalized(@"Mark as Read")]){
+		BOOL mark = [title isEqualToString:TGLocalized(@"Mark as Unread")];
 		__weak typeof(self) weakSelf = self;
 		[[TGClient shared] setDirectMessagesChatTopic:self.topicId
 											  inChat:self.chatId
@@ -253,46 +138,47 @@ static const NSInteger kSectionHistory = 2;
 										  completion:^(BOOL ok, NSString *error){
 			TGDMTopicViewController *me = weakSelf;
 			if (!ok){
-				[TGAlertSheet showMessage:(error ?: @"An error occurred.")
-									title:@"Topics" inView:me.view];
+				[TGAlertSheet showMessage:(error ?: TGLocalized(@"An error occurred."))
+									title:TGLocalized(@"Topics") inView:me.view];
 				return;
 			}
 			NSMutableDictionary *patched = [me.topic mutableCopy];
 			patched[@"isMarkedUnread"] = @(mark);
 			me.topic = patched;
-			[me rebuildActions];
-			[me.tableView reloadData];
+			[me rebuildSections];
 		}];
 		return;
 	}
-	if ([title isEqualToString:@"Jump to Date"]){
+	if ([title isEqualToString:TGLocalized(@"Jump to Date")]){
 		[self jumpToDate];
 		return;
 	}
-	if ([title isEqualToString:@"Read All Reactions"]){
+	if ([title isEqualToString:TGLocalized(@"Read All Reactions")]){
 		[self runSimple:@"readAllDirectMessagesChatTopicReactions"
-				  title:@"Read All Reactions"];
+				  title:TGLocalized(@"Read All Reactions")];
 		return;
 	}
-	if ([title isEqualToString:@"Unpin All Messages"]){
+	if ([title isEqualToString:TGLocalized(@"Unpin All Messages")]){
 		[self runSimple:@"unpinAllDirectMessagesChatTopicMessages"
-				  title:@"Unpin All Messages"];
+				  title:TGLocalized(@"Unpin All Messages")];
 		return;
 	}
-	if ([title isEqualToString:@"Delete Messages"]){
+	if ([title isEqualToString:TGLocalized(@"Delete Messages")]){
 		[self deleteByDate];
 		return;
 	}
-	if ([title isEqualToString:@"Delete All Messages"]){
+	if ([title isEqualToString:TGLocalized(@"Delete All Messages")]){
 		__weak typeof(self) weakSelf = self;
 		[TGAlertSheet showConfirm:nil
-							title:@"Delete All Messages" action:@"Delete"
+							title:TGLocalized(@"Delete All Messages")
+						   action:TGLocalized(@"Delete")
 					  destructive:YES inView:self.view onConfirm:^{
 			[[TGClient shared] deleteDirectMessagesChatTopicHistory:weakSelf.topicId
 														  inChat:weakSelf.chatId
 													  completion:^(BOOL ok,
 																   NSString *error){
-				[weakSelf finish:ok error:error title:@"Delete All Messages"];
+				[weakSelf finish:ok error:error
+						title:TGLocalized(@"Delete All Messages")];
 			}];
 		}];
 	}
@@ -320,7 +206,8 @@ static const NSInteger kSectionHistory = 2;
 }
 
 - (void)finish:(BOOL)ok error:(NSString *)error title:(NSString *)title {
-	[TGAlertSheet showMessage:(ok ? @"Done" : (error ?: @"An error occurred."))
+	[TGAlertSheet showMessage:(ok ? TGLocalized(@"Done")
+			: (error ?: TGLocalized(@"An error occurred.")))
 						title:title inView:self.view];
 	[self loadTopic];
 	[self loadHistory];
@@ -369,10 +256,8 @@ static const NSInteger kSectionHistory = 2;
 									title:@"Jump to Date" inView:me.view];
 				return;
 			}
-			NSString *text = message[@"text"];
-			[TGAlertSheet showMessage:(text.length ? text
-					: [me describeMessage:message])
-								title:@"Jump to Date" inView:me.view];
+			[TGAlertSheet showMessage:TGDMTopicMessageTitle(message)
+								title:TGLocalized(@"Jump to Date") inView:me.view];
 		}];
 	}];
 }

@@ -7,8 +7,12 @@
 
 @implementation TGNavController
 
+/// While our bar is showing, the bar's colour decides the status bar, so the
+/// theme does: a screen that never overrides the style would otherwise get
+/// UIKit's dark default over a Night Blue bar. A screen that hides the bar
+/// (stories, the player) draws under the status bar itself and decides.
 - (UIViewController *)childViewControllerForStatusBarStyle {
-	return self.topViewController;
+	return self.navigationBarHidden ? self.topViewController : nil;
 }
 
 - (UIStatusBarStyle)preferredStatusBarStyle {

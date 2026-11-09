@@ -1,11 +1,14 @@
+#import "TGChatRowCell.h"
 #import "TGTextDraw.h"
-#import "TGChatCell.h"
+#import "TGMessageLayout.h"
 #import "TGLocalization.h"
+#import "TGNameWithStatus.h"
 #import "TGChatListRowGeometry.h"
 #import "TGTheme.h"
 #import "TGCustomEmojiStore.h"
+#import "TGIcons.h"
 #import <QuartzCore/QuartzCore.h>
-#import "TGStyle.h"
+#import <math.h>
 
 static const CGFloat kInset    = TGMetricPadMedium;   // picture from the left edge, text from the right
 static const CGFloat kTextLeft = kInset + kAvatar + TGMetricPadMedium;
@@ -16,6 +19,9 @@ static const CGFloat kSecondLineTop = 32.0f;
 static const CGFloat kPreviewMax    = 40.0f;
 static const CGFloat kMuteGlyph     = 16.0f;
 static const CGFloat kMuteRoom      = 20.0f;
+/// The mute and pin marks are drawn at this side and fitted into the smaller
+/// box the cell gives them, which keeps their strokes even.
+static const CGFloat kRowGlyph      = 28.0f;
 /// Telegram draws the status a little larger than the mute glyph beside it.
 static const CGFloat kStatusGlyph   = 18.0f;
 static const CGFloat kStatusRoom    = 22.0f;
@@ -24,7 +30,20 @@ static const CGFloat kBadgePad      = TGMetricPadMedium + TGMetricPadTiny;
 /// Three buttons fit beside a 320 pt row without clipping.
 static const CGFloat kSwipeActionWidth = 76.0f;
 
-@interface TGChatCell ()
+@interface TGChatRowCell ()
+@property (nonatomic, strong) UIImageView *avatar;
+@property (nonatomic, strong) UILabel *titleLabel;
+@property (nonatomic, strong) UILabel *previewLabel;
+@property (nonatomic, strong) UILabel *dateLabel;
+@property (nonatomic, strong) UILabel *badge;
+@property (nonatomic, strong) UILabel *mentionBadge;
+@property (nonatomic, strong) UIView *onlineDot;
+@property (nonatomic, strong) UIImageView *tick;   // your own last message
+@property (nonatomic, strong) UIImageView *pin;   // pinned to the top
+@property (nonatomic, strong) UIImageView *statusIcon; // the emoji status after the title
+@property (nonatomic, strong) UIImageView *muteIcon;   // beside the title of a muted chat
+@property (nonatomic, strong) UIView *separator;   // starts under the text, not the picture
+
 @property (nonatomic, strong) NSMutableArray *trailingActionButtons;
 @property (nonatomic, assign) CGFloat trailingActionsWidth;
 @property (nonatomic, strong) NSMutableArray *leadingActionButtons;
@@ -34,23 +53,99 @@ static const CGFloat kSwipeActionWidth = 76.0f;
 /// A close animation must not strip the buttons of a row that was swiped
 /// again before the first animation finished.
 @property (nonatomic, assign) NSUInteger swipeActionsGeneration;
+
+@property (nonatomic, strong) NSDictionary *row;
+@property (nonatomic, assign) TGChatRowAccessories accessories;
+@property (nonatomic, assign) BOOL hasAccessories;
+
 - (void)removeSwipeActionButtons;
+- (void)setPreview:(NSString *)text author:(NSString *)author;
+- (void)setPreview:(NSString *)text author:(NSString *)author customEmoji:(NSArray *)customEmoji;
+- (void)setDraftPreview:(NSString *)draftText;
 @end
 
-static CGSize TGChatCellTextSize(NSString *text, UIFont *font) {
+static CGSize TGChatRowCellTextSize(NSString *text, UIFont *font) {
 	return TGLineTextSize(text, font);
 }
 
 /// Their titles are a medium weight, not bold; Helvetica Neue has carried one
 /// since iOS 5, and bold is the fallback where it does not.
-static UIFont *TGChatCellTitleFont(void) {
+static UIFont *TGChatRowCellTitleFont(void) {
 	return TGFontListTitle();
 }
 
-@implementation TGChatCell
+/// The unread count occupies the badge slot; over four digits Telegram stops
+/// counting and says "9999+".
+static NSString *TGChatRowCellBadgeText(NSDictionary *row) {
+	NSInteger unread = [row[TGRowChatUnread] integerValue];
+	if (unread <= 0)
+		return @"";
+	return unread > 9999 ? @"9999+" : [NSString stringWithFormat:@"%ld",
+			(long)unread];
+}
+
+static TGChatRowAccessories TGChatRowCellAccessories(NSDictionary *row,
+		CGFloat width) {
+	TGChatRowAccessories a = {0};
+	CGFloat w = width > 0 ? width : TGMetricScreenWidth;
+	a.width = w;
+	CGFloat right = w - kInset;
+	NSInteger unread = [row[TGRowChatUnread] integerValue];
+	BOOL marked = [row[TGRowChatMarkedUnread] boolValue];
+	BOOL hasBadge = unread > 0 || marked;
+	BOOL hasPin = !hasBadge && [row[TGRowChatPinned] boolValue];
+	CGFloat badgeW = 0;
+	if (hasBadge){
+		CGSize size = TGChatRowCellTextSize(TGChatRowCellBadgeText(row),
+				TGFontCaptionStrong());
+		badgeW = MAX(TGMetricChatBadgeHeight, ceilf(size.width) + kBadgePad);
+	}
+	a.hasBadge = hasBadge;
+	a.hasPin = hasPin;
+	a.badgeWidth = badgeW;
+
+	CGFloat previewRight = right;
+	TGChatListRowAccessories(right, TGMetricChatBadgeTop, hasBadge, badgeW,
+			TGMetricChatBadgeHeight, hasPin, kPinGlyph, TGMetricPad,
+			&a.badgeFrame, &a.pinFrame, &previewRight);
+
+	a.hasMentions = [row[TGRowChatMentions] integerValue] > 0;
+	if (a.hasMentions){
+		CGFloat side = TGMetricChatBadgeHeight;
+		CGFloat x = previewRight - side;
+		a.mentionFrame = CGRectMake(x, TGMetricChatBadgeTop, side, side);
+		previewRight = x - TGMetricPadSmall;
+	}
+	a.previewRight = previewRight;
+	return a;
+}
+
+@implementation TGChatRowCell
 
 + (CGFloat)statusSide {
 	return kStatusGlyph;
+}
+
++ (CGFloat)heightForRow:(NSDictionary *)row {
+	(void)row;
+	return kRowHeight;
+}
+
++ (instancetype)cellForTableView:(UITableView *)tableView
+							 row:(NSDictionary *)row {
+	static NSString *reuse = @"TGChatRowCell";
+	TGChatRowCell *cell = [tableView dequeueReusableCellWithIdentifier:reuse];
+	if (!cell)
+		cell = [[TGChatRowCell alloc] initWithStyle:UITableViewCellStyleDefault
+									 reuseIdentifier:reuse];
+	[cell configureWithRow:row];
+	return cell;
+}
+
++ (NSValue *)accessoriesValueForRow:(NSDictionary *)row width:(CGFloat)width {
+	TGChatRowAccessories accessories = TGChatRowCellAccessories(row, width);
+	return [NSValue valueWithBytes:&accessories
+						  objCType:@encode(TGChatRowAccessories)];
 }
 
 - (id)initWithStyle:(UITableViewCellStyle)style reuseIdentifier:(NSString *)reuseIdentifier {
@@ -58,7 +153,6 @@ static UIFont *TGChatCellTitleFont(void) {
 	if (!self)
 		return nil;
 
-	CGFloat scale = [UIScreen mainScreen].scale;
 	TGTheme *theme = [TGTheme shared];
 
 	self.backgroundColor = [theme listBackgroundColour];
@@ -72,7 +166,7 @@ static UIFont *TGChatCellTitleFont(void) {
 	[self.contentView addSubview:self.avatar];
 
 	self.titleLabel = [[UILabel alloc] init];
-	self.titleLabel.font = TGChatCellTitleFont();
+	self.titleLabel.font = TGChatRowCellTitleFont();
 	self.titleLabel.textColor = [theme primaryTextColour];
 	self.titleLabel.lineBreakMode = NSLineBreakByTruncatingTail;
 	[self.contentView addSubview:self.titleLabel];
@@ -152,6 +246,137 @@ static UIFont *TGChatCellTitleFont(void) {
 	return self;
 }
 
+#pragma mark - row
+
+- (void)configureWithRow:(NSDictionary *)row {
+	self.row = row;
+	TGTheme *theme = [TGTheme shared];
+	UIColor *bg = [theme listBackgroundColour];
+
+	self.backgroundColor = bg;
+	self.contentView.backgroundColor = bg;
+	self.titleLabel.backgroundColor = bg;
+	self.titleLabel.opaque = YES;
+	self.titleLabel.textColor = [theme primaryTextColour];
+	self.previewLabel.backgroundColor = bg;
+	self.previewLabel.opaque = YES;
+	self.previewLabel.textColor = [theme secondaryTextColour];
+	self.dateLabel.backgroundColor = bg;
+	self.dateLabel.opaque = YES;
+	self.dateLabel.textColor = [theme listDateColour];
+	self.dateLabel.text = @"";
+	self.onlineDot.layer.borderColor = bg.CGColor;
+	self.separator.backgroundColor = [theme separatorColour];
+	if ([theme isDark]) {
+		UIView *selection = [[UIView alloc] init];
+		selection.backgroundColor = [theme inputBarColour];
+		self.selectedBackgroundView = selection;
+	} else {
+		self.selectedBackgroundView = nil;
+	}
+
+	self.onlineDot.hidden = YES;
+	self.tick.hidden = YES;
+	self.tick.image = nil;
+	self.muteIcon.hidden = YES;
+	self.muteIcon.image = nil;
+	self.pin.hidden = YES;
+	self.pin.image = nil;
+	self.statusIcon.hidden = YES;
+	self.statusIcon.image = nil;
+	self.mentionBadge.hidden = YES;
+	self.badge.hidden = YES;
+	self.badge.text = @"";
+	self.badge.backgroundColor = [theme badgeColour];
+	self.avatar.image = nil;
+	self.avatar.opaque = NO;
+	self.avatar.backgroundColor = [UIColor clearColor];
+
+	NSString *title = row[TGRowTitle];
+	if (![title isKindOfClass:NSString.class])
+		title = @"";
+	BOOL saved = [row[TGRowChatSaved] boolValue];
+	int64_t statusId = saved ? 0
+			: [row[TGRowChatStatusEmojiId] longLongValue];
+	self.titleLabel.attributedText = TGNameWithStatus(title, statusId,
+			self.titleLabel.font, [theme primaryTextColour]);
+
+	NSString *date = row[TGRowChatDate];
+	self.dateLabel.text = [date isKindOfClass:NSString.class] ? date : @"";
+
+	NSString *action = row[TGRowChatAction];
+	NSString *draft = row[TGRowChatDraft];
+	if ([action isKindOfClass:NSString.class] && action.length){
+		self.previewLabel.text = action;
+		self.previewLabel.textColor = [theme typingColour];
+	} else if ([draft isKindOfClass:NSString.class] && draft.length){
+		[self setDraftPreview:draft];
+	} else {
+		[self setPreview:row[TGRowChatPreview]
+				  author:row[TGRowChatAuthor]
+			 customEmoji:row[TGRowChatCustomEmoji]];
+	}
+
+	self.onlineDot.hidden = ![row[TGRowChatOnline] boolValue];
+
+	// Your own last message shows whether it has been read, beside the date.
+	// Saved Messages has no one to read it.
+	if (!saved && [row[TGRowChatOutgoing] boolValue] && ![action length]){
+		BOOL read = [row[TGRowChatRead] boolValue];
+		self.tick.image = [TGIcons ticksColour:[theme ticksColour] read:read];
+		self.tick.hidden = NO;
+	}
+
+	BOOL muted = [row[TGRowChatMuted] boolValue];
+	self.muteIcon.hidden = !muted;
+	if (muted)
+		self.muteIcon.image = [TGIcons glyphNamed:@"mute"
+										   colour:[theme listDateColour]
+											 side:kRowGlyph];
+
+	NSInteger unread = [row[TGRowChatUnread] integerValue];
+	NSInteger mentions = [row[TGRowChatMentions] integerValue];
+	self.mentionBadge.hidden = (mentions <= 0);
+
+	BOOL marked = [row[TGRowChatMarkedUnread] boolValue];
+	BOOL anyBadge = unread > 0 || marked;
+	self.badge.hidden = !anyBadge;
+	// The unread count occupies the badge slot; the pin only shows when that
+	// slot is free.
+	self.pin.hidden = anyBadge || ![row[TGRowChatPinned] boolValue];
+	if (!self.pin.hidden)
+		self.pin.image = [TGIcons glyphNamed:@"pin"
+									  colour:[theme listDateColour]
+										side:kRowGlyph];
+	self.badge.text = TGChatRowCellBadgeText(row);
+	// A muted chat still counts, it just stops shouting about it.
+	self.badge.backgroundColor = muted
+			? [theme mutedBadgeColour] : [theme badgeColour];
+
+	NSString *glyph = row[TGRowChatAvatarGlyph];
+	UIImage *photo = row[TGRowChatAvatarImage];
+	if ([glyph isEqualToString:TGChatAvatarGlyphArchive])
+		photo = [TGIcons archiveAvatarOfSide:kAvatar];
+	else if ([glyph isEqualToString:TGChatAvatarGlyphSaved])
+		photo = [TGIcons savedMessagesAvatarOfSide:kAvatar];
+	if (![photo isKindOfClass:UIImage.class]){
+		NSString *initials = [TGIcons initialsForTitle:title];
+		photo = [TGIcons avatarWithInitials:initials
+									   size:kAvatar
+								   colourId:[row[TGRowChatAvatarId] longLongValue]];
+	}
+	self.avatar.image = photo;
+
+	NSValue *boxed = row[TGRowChatLayout];
+	if ([boxed isKindOfClass:NSValue.class]){
+		[boxed getValue:&_accessories];
+	} else {
+		_accessories = TGChatRowCellAccessories(row, 0);
+	}
+	self.hasAccessories = YES;
+	[self setNeedsLayout];
+}
+
 - (void)setPreview:(NSString *)text author:(NSString *)author {
 	[self setPreview:text author:author customEmoji:nil];
 }
@@ -168,7 +393,12 @@ static UIFont *TGChatCellTitleFont(void) {
 		return;
 	}
 
-	if (!author.length && (!canUseAttachments || customEmoji.count == 0)) {
+	BOOL undrawable = TGTextHasUndrawableEmoji(text);
+	// UILabel takes the first run's font as its own once attributed text is
+	// set; a reused row would otherwise draw plain text, or build the next
+	// attributed line, in the OpenMoji face of the row before.
+	self.previewLabel.font = TGFontBody();
+	if (!author.length && !undrawable && (!canUseAttachments || customEmoji.count == 0)) {
 		self.previewLabel.text = text;
 		self.previewLabel.textColor = [theme secondaryTextColour];
 		return;
@@ -180,7 +410,7 @@ static UIFont *TGChatCellTitleFont(void) {
 
 	NSMutableAttributedString *line = [[NSMutableAttributedString alloc]
 			initWithString:fullText
-				attributes:@{NSFontAttributeName: self.previewLabel.font,
+				attributes:@{NSFontAttributeName: TGFontBody(),
 							 NSForegroundColorAttributeName: [theme secondaryTextColour]}];
 
 	if (authorOffset > 0) {
@@ -222,7 +452,7 @@ static UIFont *TGChatCellTitleFont(void) {
 			return [b[@"offset"] compare:a[@"offset"]];
 		}];
 
-		UIFont *font = self.previewLabel.font ?: TGFontBody();
+		UIFont *font = TGFontBody();
 		CGFloat side = font.pointSize;
 
 		for (NSDictionary *entry in entries) {
@@ -251,6 +481,10 @@ static UIFont *TGChatCellTitleFont(void) {
 		}
 	}
 
+	// After the custom emoji: their offsets from TDLib count the U+FE0F, and
+	// dropping it first moved every picture after it onto the wrong character.
+	if (undrawable)
+		TGMarkUndrawableEmoji(line, TGFontBody().pointSize);
 	self.previewLabel.attributedText = line;
 }
 
@@ -265,7 +499,7 @@ static UIFont *TGChatCellTitleFont(void) {
 	}
 	NSMutableAttributedString *line = [[NSMutableAttributedString alloc]
 			initWithString:[prefix stringByAppendingString:draftText]
-				attributes:@{NSFontAttributeName: self.previewLabel.font,
+				attributes:@{NSFontAttributeName: TGFontBody(),
 							 NSForegroundColorAttributeName: [theme secondaryTextColour]}];
 	[line addAttribute:NSForegroundColorAttributeName
 				 value:[theme destructiveColour]
@@ -288,7 +522,7 @@ static UIFont *TGChatCellTitleFont(void) {
 
 	// The first line: the date pinned to the right edge, the ticks before it,
 	// and the title taking whatever is left.
-	CGSize date = TGChatCellTextSize(self.dateLabel.text, self.dateLabel.font);
+	CGSize date = TGChatRowCellTextSize(self.dateLabel.text, self.dateLabel.font);
 	self.dateLabel.frame = CGRectMake(right - ceilf(date.width), kFirstLineTop + TGMetricBorderWidth,
 			ceilf(date.width), TGMetricLineBody);
 	CGFloat titleRight = CGRectGetMinX(self.dateLabel.frame) - TGMetricChatCellDateGap;
@@ -310,7 +544,7 @@ static UIFont *TGChatCellTitleFont(void) {
 															   context:nil];
 		textW = ceilf(r.size.width);
 	} else {
-		textW = ceilf(TGChatCellTextSize(self.titleLabel.text, self.titleLabel.font).width);
+		textW = ceilf(TGChatRowCellTextSize(self.titleLabel.text, self.titleLabel.font).width);
 	}
 	CGFloat titleW = MIN(textW, titleRoom);
 	self.titleLabel.frame = CGRectMake(kTextLeft, kFirstLineTop, titleW, TGMetricLineRow);
@@ -328,26 +562,14 @@ static UIFont *TGChatCellTitleFont(void) {
 	// and the preview wrapping onto a second line up to whichever is leftmost.
 	// The two are not alternatives - a pinned chat with unread messages keeps
 	// both, which is what the official row shows.
-	CGFloat badgeW = 0;
-	if (!self.badge.hidden) {
-		CGSize s = TGChatCellTextSize(self.badge.text, self.badge.font);
-		badgeW = MAX(TGMetricChatBadgeHeight, ceilf(s.width) + kBadgePad);
-	}
-	CGRect badgeFrame = CGRectZero, pinFrame = CGRectZero;
-	CGFloat previewRight = right;
-	TGChatListRowAccessories(right, TGMetricChatBadgeTop,
-			!self.badge.hidden, badgeW, TGMetricChatBadgeHeight,
-			!self.pin.hidden, kPinGlyph, TGMetricPad,
-			&badgeFrame, &pinFrame, &previewRight);
-	self.badge.frame = badgeFrame;
-	self.pin.frame = pinFrame;
-
-	if (!self.mentionBadge.hidden) {
-		CGFloat mentionSide = TGMetricChatBadgeHeight;
-		CGFloat mentionX = previewRight - mentionSide;
-		self.mentionBadge.frame = CGRectMake(mentionX, TGMetricChatBadgeTop, mentionSide, mentionSide);
-		previewRight = mentionX - TGMetricPadSmall;
-	}
+	TGChatRowAccessories accessories = self.accessories;
+	if (!self.hasAccessories || fabs(accessories.width - w) > 0.5f)
+		accessories = TGChatRowCellAccessories(self.row, w);
+	self.badge.frame = accessories.badgeFrame;
+	self.pin.frame = accessories.pinFrame;
+	if (!self.mentionBadge.hidden)
+		self.mentionBadge.frame = accessories.mentionFrame;
+	CGFloat previewRight = accessories.previewRight;
 
 	CGFloat previewW = MAX(0, previewRight - kTextLeft);
 	CGSize fit = [self.previewLabel sizeThatFits:CGSizeMake(previewW, kPreviewMax)];
@@ -569,6 +791,8 @@ static UIFont *TGChatCellTitleFont(void) {
 - (void)prepareForReuse {
 	[super prepareForReuse];
 	[self closeSwipeActionsAnimated:NO];
+	self.row = nil;
+	self.hasAccessories = NO;
 	self.dateLabel.hidden = NO;
 }
 

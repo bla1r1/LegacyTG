@@ -63,8 +63,8 @@
 - (BOOL)isBasicGroupChat;
 - (void)showRefusal:(NSString *)error title:(NSString *)title;
 - (void)switchChanged:(TGGroupSwitch *)sender;
-- (void)setUsername:(NSString *)key active:(BOOL)on sender:(TGGroupSwitch *)sender;
-- (void)setBehaviour:(NSString *)key on:(BOOL)on sender:(TGGroupSwitch *)sender;
+- (void)setUsername:(NSString *)key active:(BOOL)on;
+- (void)setBehaviour:(NSString *)key on:(BOOL)on;
 - (void)updateEditButton;
 - (void)toggleEditing;
 - (void)addMembers;

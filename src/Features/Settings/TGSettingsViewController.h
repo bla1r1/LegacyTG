@@ -2,7 +2,7 @@
 // TGSettingsViewController - account, settings pages, and maintenance UI.
 //
 #import <UIKit/UIKit.h>
-#import "TGTableViewController.h"
+#import "TGRowsViewController.h"
 
 typedef NS_ENUM(NSInteger, TGSettingsPage) {
 	TGSettingsPageRoot = 0,
@@ -17,7 +17,10 @@ typedef NS_ENUM(NSInteger, TGSettingsPage) {
 	TGSettingsPageFolders,
 	TGSettingsPageProxy,
 	TGSettingsPageDownloads,
+	/// The URL route's wallpaper page; the visible row opens the gallery.
 	TGSettingsPageWallpaper,
+	TGSettingsPageChatThemes,
+	TGSettingsPageAutoNight,
 	TGSettingsPageAutosave,
 	/// Orders and payment data: the saved checkout, a card lookup, a
 	/// suggested post's offer and validateOrderInfo. Reached from Privacy and
@@ -34,7 +37,7 @@ typedef NS_ENUM(NSInteger, TGSettingsPage) {
 	TGSettingsPagePaymentDev
 };
 
-@interface TGSettingsViewController : TGTableViewController
+@interface TGSettingsViewController : TGRowsViewController
 
 /// Root unless set before the view loads.
 @property (nonatomic, assign) TGSettingsPage page;

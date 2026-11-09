@@ -2,8 +2,9 @@
 // TGContactsViewController - contacts list controller backed by TDLib.
 //
 #import <UIKit/UIKit.h>
+#import "TGRowsViewController.h"
 
-@interface TGContactsViewController : UITableViewController
+@interface TGContactsViewController : TGRowsViewController
 
 /// Picking people for a new group instead of opening a chat: a tap ticks a
 /// row, and Create in the navigation bar asks for the group's name. Set

@@ -9,9 +9,9 @@
 // play them.
 //
 #import <UIKit/UIKit.h>
-#import "TGListViewController.h"
+#import "TGRowsViewController.h"
 
-@interface TGVideoChatStreamViewController : TGListViewController
+@interface TGVideoChatStreamViewController : TGRowsViewController
 
 @property (nonatomic, assign) int64_t chatId;
 @property (nonatomic, assign) int32_t groupCallId;

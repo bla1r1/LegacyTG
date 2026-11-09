@@ -6,7 +6,7 @@
 #import "TGStatusText.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
-#import "TGMemberAvatarStore.h"
+#import "TGPeerStore.h"
 #import "TGDateFormat.h"
 #import "TGOptions.h"
 #import "TGStoryViewerViewController.h"
@@ -105,127 +105,12 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 
 
 
-static dispatch_semaphore_t TGAvtDecodeGate(NSInteger cap) {
-	static dispatch_semaphore_t gate = nil;
-	static dispatch_once_t once;
-	dispatch_once(&once, ^{
-		gate = dispatch_semaphore_create((long)cap);
-	});
-	return gate;
-}
-
 @implementation TGChatListViewController (TGChatListTable)
 
 #pragma mark - table data
-static NSString *TGAvatarDiskCacheDir(void) {
-	static NSString *dir = nil;
-	static dispatch_once_t once;
-	dispatch_once(&once, ^{
-		NSString *caches = [NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES) firstObject];
-		dir = [caches stringByAppendingPathComponent:@"avatars"];
-		[[NSFileManager defaultManager] createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
-	});
-	return dir;
-}
-
-static NSString *TGAvatarDiskPath(int64_t chatId, NSInteger fileId) {
-	if (fileId > 0)
-		return [TGAvatarDiskCacheDir() stringByAppendingPathComponent:[NSString stringWithFormat:@"av_%ld.png", (long)fileId]];
-	if (chatId != 0)
-		return [TGAvatarDiskCacheDir() stringByAppendingPathComponent:[NSString stringWithFormat:@"chat_%lld.png", (long long)chatId]];
-	return nil;
-}
-
+/// Pictures are loaded by TGPeerStore as rows ask for them; there is no
+/// separate window pass to keep in step with the table any more.
 - (void)fetchMissingAvatars {
-	// Wait until live chats from TDLib arrive: snapshot rows must not query
-	// file IDs from a prior session.
-	if (![TGClient shared].chats.count && self.cachedChats.count)
-		return;
-
-	__weak typeof(self) weakSelf = self;
-	CGFloat screenScale = [UIScreen mainScreen].scale;
-	dispatch_semaphore_t gate = TGAvtDecodeGate(2);
-	// What is on screen and a screenful ahead, not the whole list: 176 downloads
-	// and decodes at launch on the A4 paid for rows nobody had looked at yet.
-	// The next stop of the scroll asks for what it reached.
-	NSArray *chats = self.chats ?: @[];
-	NSInteger first = [[self.tableView indexPathsForVisibleRows] firstObject]
-			? [[[self.tableView indexPathsForVisibleRows] firstObject] row] : 0;
-	NSRange window = TGAvatarWindow(first, kAvatarWindowRows, chats.count);
-	NSMutableArray *rows = [NSMutableArray arrayWithArray:[chats subarrayWithRange:window]];
-	[rows addObjectsFromArray:self.storyRows ?: @[]];
-	NSNumber *ownPhoto = [TGClient shared].me[@"profile_photo"][@"small"][@"id"]
-			?: [[TGClient shared] photoFileIdForUserId:
-					[[TGClient shared].me[@"id"] longLongValue]];
-	if (ownPhoto)
-		[rows addObject:@{@"photoFileId" : ownPhoto}];
-	for (NSDictionary *c in rows){
-		NSNumber *fileId = c[@"photoFileId"];
-		if (!fileId || fileId.longLongValue < 0 || self.avatars[fileId] || [self.avatarsRequested containsObject:fileId])
-			continue;
-		int64_t cid = [c[@"id"] longLongValue];
-		NSString *diskPath = TGAvatarDiskPath(cid, [fileId integerValue]);
-		if (diskPath && [[NSFileManager defaultManager] fileExistsAtPath:diskPath]) {
-			UIImage *cached = [UIImage imageWithContentsOfFile:diskPath];
-			if (cached) {
-				self.avatars[fileId] = cached;
-				continue;
-			}
-		}
-		// The mark follows the request from start to finish: set here, and
-		// lifted on a nil callback, so a watchdog timeout or a lost download
-		// reads as "ask me again on the next pass" instead of leaving the
-		// avatar a placeholder forever (B2).
-		[self.avatarsRequested addObject:fileId];
-
-		[[TGClient shared] downloadFile:[fileId integerValue]
-							   priority:TGDownloadPriorityAvatar
-							 completion:^(NSString *path){
-			if (!path){
-				TGChatListViewController *me = weakSelf;
-				[me.avatarsRequested removeObject:fileId];
-				return;
-			}
-			dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_BACKGROUND, 0), ^{
-				// The gate is taken inside the block, not before: an entry
-				// slot costs the wait, and the semaphore release happens in
-				// the same block that took it.
-				dispatch_semaphore_wait(gate, DISPATCH_TIME_FOREVER);
-				@autoreleasepool {
-					UIImage *img = [TGIcons decodedImageAtPath:path
-												   fittingSize:CGSizeMake(kAvatar, kAvatar)
-														  fill:YES
-														 scale:screenScale];
-					if (img){
-						UIImage *rounded = [TGIcons roundedImage:img
-														    size:CGSizeMake(kAvatar, kAvatar)
-														  radius:TGHalf(kAvatar)
-														 corners:UIRectCornerAllCorners];
-						UIImage *finalImg = rounded ?: img;
-						NSString *saveDisk = TGAvatarDiskPath(cid, [fileId integerValue]);
-						if (saveDisk) {
-							NSData *png = UIImagePNGRepresentation(finalImg);
-							[png writeToFile:saveDisk atomically:YES];
-						}
-						dispatch_async(dispatch_get_main_queue(), ^{
-							TGChatListViewController *me = weakSelf;
-							if (!me) { dispatch_semaphore_signal(gate); return; }
-							me.avatars[fileId] = finalImg;
-							[me.avatarsRequested removeObject:fileId];
-							[me refreshListTitleView];
-							[me reloadTableDebounced];
-							dispatch_semaphore_signal(gate);
-						});
-						return;
-					}
-					dispatch_async(dispatch_get_main_queue(), ^{
-						[weakSelf.avatarsRequested removeObject:fileId];
-					});
-					dispatch_semaphore_signal(gate);
-				}
-			});
-		}];
-	}
 }
 
 /// Today shows the time, this week the weekday, older the date - as clients do.
@@ -260,7 +145,7 @@ static NSString *TGChatDate(NSTimeInterval unix) {
 }
 
 /// Fills the strip whether it is the header's expanded row or a table cell.
-- (void)configureStoriesCell:(TGStoriesCell *)strip {
+- (void)configureStoriesCell:(TGStoryStripRowCell *)strip {
 	NSMutableArray *display = [NSMutableArray array];
 	NSDictionary *own = nil;
 	for (NSDictionary *row in self.storyRows){
@@ -269,31 +154,34 @@ static NSString *TGChatDate(NSTimeInterval unix) {
 			continue;
 		}
 		NSMutableDictionary *copy = [row mutableCopy];
-		NSNumber *fileId = row[@"photoFileId"];
-		if (fileId && self.avatars[fileId])
-			copy[@"avatarImage"] = self.avatars[fileId];
+		int64_t peerId = [row[@"chatId"] longLongValue];
+		UIImage *picture = peerId
+				? [[TGPeerStore shared] cachedAvatarForPeer:peerId
+													   side:TGMetricStoryAvatar]
+				: nil;
+		if (picture)
+			copy[@"avatarImage"] = picture;
 		[display addObject:copy];
 	}
 	int64_t myId = [[TGClient shared].me[@"id"] longLongValue];
 	NSMutableDictionary *mine = [own mutableCopy] ?: [NSMutableDictionary dictionary];
-	mine[@"title"] = @"My Story";
+	mine[@"title"] = TGLocalized(@"My Story");
 	mine[@"isOwn"] = @YES;
 	mine[@"userId"] = @(myId);
 	if (!mine[@"chatId"])
 		mine[@"chatId"] = @([[TGClient shared] savedMessagesChatId] ?: myId);
-	NSNumber *ownPhoto = [TGClient shared].me[@"profile_photo"][@"small"][@"id"]
-			?: [[TGClient shared] photoFileIdForUserId:myId]
-			?: mine[@"photoFileId"];
-	if (ownPhoto)
-		mine[@"photoFileId"] = ownPhoto;
-	if (ownPhoto && self.avatars[ownPhoto])
-		mine[@"avatarImage"] = self.avatars[ownPhoto];
-	strip.stories = display;
-	strip.ownStory = mine;
+	UIImage *ownPicture = myId
+			? [[TGPeerStore shared] cachedAvatarForPeer:myId
+												   side:TGMetricStoryAvatar]
+			: nil;
+	if (ownPicture)
+		mine[@"avatarImage"] = ownPicture;
+
+	NSMutableDictionary *stripRow = TGStoryStripRow(display, mine);
 	__weak typeof(self) weakSelf = self;
-	strip.onAddStory = ^{ [weakSelf openStoryComposer]; };
-	strip.onMore = ^{ [weakSelf openStoriesMenu]; };
-	strip.onMyStoryTapped = ^{
+	stripRow[TGRowStoryAdd] = ^{ [weakSelf openStoryComposer]; };
+	stripRow[TGRowStoryMore] = ^{ [weakSelf openStoriesMenu]; };
+	stripRow[TGRowStoryMyTap] = ^{
 		TGChatListViewController *me = weakSelf;
 		if (!me) return;
 		if ([own[@"stories"] count])
@@ -301,9 +189,10 @@ static NSString *TGChatDate(NSTimeInterval unix) {
 		else
 			[me openStoryComposer];
 	};
-	strip.onMyStoryHeld = ^{ [weakSelf openStoriesMenu]; };
-	strip.onStoryTapped = ^(NSDictionary *row){ [weakSelf showStoryRow:row]; };
-	strip.onStoryHeld = ^(NSDictionary *row){ [weakSelf runStoryRowMenu:row]; };
+	stripRow[TGRowStoryMyHold] = ^{ [weakSelf openStoriesMenu]; };
+	stripRow[TGRowStoryTap] = ^(NSDictionary *row){ [weakSelf showStoryRow:row]; };
+	stripRow[TGRowStoryHold] = ^(NSDictionary *row){ [weakSelf runStoryRowMenu:row]; };
+	[strip configureWithRow:stripRow];
 }
 
 - (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -324,149 +213,49 @@ static NSString *TGChatDate(NSTimeInterval unix) {
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-	static NSString *reuse = @"TGChatCell";
-	TGChatCell *cell = [tableView dequeueReusableCellWithIdentifier:reuse];
-	if (!cell)
-		cell = [[TGChatCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:reuse];
-
-	TGTheme *theme = [TGTheme shared];
-	UIColor *bg = [theme listBackgroundColour];
-	cell.backgroundColor = bg;
-	cell.contentView.backgroundColor = bg;
-	cell.titleLabel.backgroundColor = bg;
-	cell.titleLabel.opaque = YES;
-	cell.titleLabel.textColor = [theme primaryTextColour];
-	cell.previewLabel.backgroundColor = bg;
-	cell.previewLabel.opaque = YES;
-	cell.previewLabel.textColor = [theme secondaryTextColour];
-	cell.dateLabel.backgroundColor = bg;
-	cell.dateLabel.opaque = YES;
-	cell.dateLabel.textColor = [theme listDateColour];
-	cell.onlineDot.hidden = YES;
-	cell.tick.hidden = YES;
-	cell.muteIcon.hidden = YES;
-	cell.pin.hidden = YES;
-	cell.onlineDot.layer.borderColor = bg.CGColor;
-	cell.separator.backgroundColor = [theme separatorColour];
-	if ([theme isDark]) {
-		UIView *sel = [[UIView alloc] init];
-		sel.backgroundColor = [theme inputBarColour];
-		cell.selectedBackgroundView = sel;
-	} else {
-		cell.selectedBackgroundView = nil;
-	}
-
-
 	NSArray *header = [self headerRows];
 	if (indexPath.row < (NSInteger)header.count){
-
 		BOOL isArchive = [header[indexPath.row] isEqualToString:@"archive"];
-		cell.titleLabel.text = isArchive ? TGLocalized(@"Archived Chats") : TGLocalized(@"Saved Messages");
 		NSUInteger archived = [TGClient shared].archivedChats.count;
-		cell.previewLabel.text = isArchive
-				? TGChatListArchiveSubtitle(archived)
-				: @"Your own notes and forwards";
-		cell.dateLabel.text = @"";
-		cell.badge.hidden = YES;
-		// A cell reused from a chat with unseen mentions kept its "@" on the
-		// archive row; the early return never cleared it.
-		cell.mentionBadge.hidden = YES;
-		cell.pin.hidden = YES;
-		cell.avatar.image = isArchive
-				? [TGIcons archiveAvatarOfSide:kAvatar]
-				: [TGIcons savedMessagesAvatarOfSide:kAvatar];
-		cell.avatar.backgroundColor = [UIColor clearColor];
-		[cell setNeedsLayout];
-		return cell;
+		NSMutableDictionary *row = isArchive
+				? TGArchiveChatRow(TGLocalized(@"Archived Chats"),
+						TGChatListArchiveSubtitle(archived))
+				: TGSavedMessagesChatRow(TGLocalized(@"Saved Messages"),
+						TGLocalized(@"Your own notes and forwards"));
+		return [TGChatRowCell cellForTableView:tableView row:row];
 	}
 
 	NSDictionary *c = [self visibleChats][indexPath.row - header.count];
 	double cellStart = TGPerfNow();
-	int64_t statusId = [c[@"isSaved"] boolValue] ? 0 : [c[@"emojiStatusId"] longLongValue];
-	cell.titleLabel.attributedText = TGNameWithStatus(c[@"title"] ?: @"", statusId, cell.titleLabel.font, [theme primaryTextColour]);
-	cell.statusIcon.image = nil;
-	cell.statusIcon.hidden = YES;
-	cell.dateLabel.text = TGChatDate([c[@"date"] doubleValue]);
+	NSMutableDictionary *row = TGChatRow(c, TGChatDate([c[@"date"] doubleValue]));
 
-	// Someone typing takes the preview over for as long as it lasts, in their
-	// blurple rather than the grey the preview uses.
-	NSString *action = c[@"action"];
-	NSString *draft = c[@"draft"];
-	if ([action length]){
-		cell.previewLabel.text = action;
-		cell.previewLabel.textColor = [theme typingColour];
-	} else if ([draft length]){
-		[cell setDraftPreview:draft];
-	} else if (c[@"previewText"]){
-		[cell setPreview:c[@"previewText"] author:c[@"lastAuthor"] customEmoji:c[@"previewCustomEmoji"]];
-	} else if (c[@"text"]){
-		[cell setPreview:c[@"text"] author:nil customEmoji:c[@"previewCustomEmoji"]];
-	} else {
-		cell.previewLabel.text = @"";
-	}
-
-	cell.onlineDot.hidden = ![c[@"isOnline"] boolValue];
-
-	// Your own last message shows whether it has been read, beside the date.
-	// Saved Messages has no one to read it.
-	if ([c[@"lastOutgoing"] boolValue] && ![c[@"isSaved"] boolValue] && ![action length]){
-		BOOL read = [c[@"lastId"] longLongValue] <= [c[@"readOutbox"] longLongValue];
-		cell.tick.image = [TGIcons ticksColour:[theme ticksColour] read:read];
-		cell.tick.hidden = NO;
-	}
-
-	[cell setNeedsLayout];
-
-	BOOL muted = [c[@"isMuted"] boolValue];
-	cell.muteIcon.hidden = !muted;
-	if (muted)
-		cell.muteIcon.image = [TGIcons glyphNamed:@"mute" colour:[theme listDateColour]
-											 side:kRowGlyph];
-
-	NSInteger unread = [c[@"unread"] integerValue];
-	NSInteger mentions = [c[@"unreadMentions"] integerValue];
-	cell.mentionBadge.hidden = (mentions <= 0);
-
-	BOOL marked = [c[@"markedUnread"] boolValue];
-	BOOL anyBadge = unread > 0 || marked;
-	cell.badge.hidden = !anyBadge;
-	// The unread count occupies the badge slot; the pin only shows when that
-	// slot is free.
-	cell.pin.hidden = anyBadge || ![c[@"isPinned"] boolValue];
-	if (!cell.pin.hidden)
-		cell.pin.image = [TGIcons glyphNamed:@"pin" colour:[theme listDateColour]
-									  side:kRowGlyph];
-	cell.badge.text = unread > 0 ? (unread > 9999 ? @"9999+" : [NSString stringWithFormat:@"%ld", (long)unread]) : @"";
-	// A muted chat still counts, it just stops shouting about it.
-	cell.badge.backgroundColor = [c[@"isMuted"] boolValue]
-			? [theme mutedBadgeColour] : [theme badgeColour];
-
-	NSNumber *fileId = c[@"photoFileId"];
-	UIImage *photo = fileId ? self.avatars[fileId] : nil;
 	int64_t cid = [c[@"id"] longLongValue];
-	if (!photo && (fileId.integerValue > 0 || cid != 0)) {
-		NSString *diskPath = TGAvatarDiskPath(cid, [fileId integerValue]);
-		if (diskPath && [[NSFileManager defaultManager] fileExistsAtPath:diskPath]) {
-			photo = [UIImage imageWithContentsOfFile:diskPath];
-			if (photo && fileId) {
-				self.avatars[fileId] = photo;
-			}
-		}
-	}
-	if ([c[@"isSaved"] boolValue])
-		photo = [TGIcons savedMessagesAvatarOfSide:kAvatar];
+	BOOL saved = [c[@"isSaved"] boolValue];
+	// TDLib names the chat "Saved Messages" in English; the pack has it.
+	if (saved)
+		row[TGRowTitle] = TGLocalized(@"Saved Messages");
+	UIImage *photo = saved ? [TGIcons savedMessagesAvatarOfSide:kAvatar]
+			: [[TGPeerStore shared] cachedAvatarForPeer:cid side:kAvatar];
 	if (!photo){
 		NSString *title = c[@"title"] ?: @"";
 		NSString *initials = [TGIcons initialsForTitle:title];
 		photo = [TGIcons avatarWithInitials:initials
 									   size:kAvatar
-								   colourId:[c[@"id"] longLongValue]];
+								   colourId:cid];
 	}
-	cell.avatar.image = photo;
-	cell.avatar.opaque = NO;
-	cell.avatar.backgroundColor = [UIColor clearColor];
+	row[TGRowChatAvatarImage] = photo;
+	if (!saved && cid != 0){
+		__weak typeof(self) weakSelf = self;
+		[[TGPeerStore shared] loadAvatarForPeer:cid side:kAvatar
+									completion:^(UIImage *image){
+			if (image)
+				[weakSelf reloadTableDebounced];
+		}];
+	}
 
-	[cell setNeedsLayout];
+	row[TGRowChatLayout] = [TGChatRowCell accessoriesValueForRow:row
+														   width:tableView.bounds.size.width];
+	UITableViewCell *cell = [TGChatRowCell cellForTableView:tableView row:row];
 	TGPerfReport("list cell", [c[@"title"] UTF8String] ?: "", cellStart, 33.0);
 	return cell;
 }

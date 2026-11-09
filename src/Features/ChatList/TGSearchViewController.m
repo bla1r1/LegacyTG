@@ -8,12 +8,13 @@
 #import "TGNameWithStatus.h"
 #import "TGCustomEmojiStore.h"
 #import "TGTheme.h"
-#import "TGIcons.h"
 #import <QuartzCore/QuartzCore.h>
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
 #import "TGPublicStoriesViewController.h"
 #import "TGChatParityModel.h"
+#import "TGRows.h"
+#import "TGDateFormat.h"
 
 
 @interface TGSearchViewController () <UISearchBarDelegate>
@@ -56,8 +57,6 @@
 @property (nonatomic, copy) NSString *pendingPublicQuery;
 /// t.me links this account followed before it had a chat list.
 @property (nonatomic, strong) NSArray *recentLinks;
-@property (nonatomic, strong) NSMutableDictionary *avatars;
-@property (nonatomic, strong) NSMutableSet *avatarsRequested;
 @end
 
 /// The bar in the navigation item, which is narrower than the screen so the
@@ -88,6 +87,18 @@ static NSArray *TGSearchScopeTitles(void) {
 static NSString *const kRecentQueriesKey = @"TGSearchRecentQueries";
 static const NSInteger kRecentQueriesLimit = 8;
 
+/// A message hit's date, in the same short form the chat list uses.
+static NSString *TGSearchDateText(NSNumber *stamp) {
+	if (![stamp isKindOfClass:NSNumber.class] || ![stamp longLongValue])
+		return @"";
+	char buf[TGDateFormatBufferSize + 1] = {0};
+	size_t len = TGChatDateFormat((time_t)[stamp doubleValue],
+			(time_t)[[NSDate date] timeIntervalSince1970], buf,
+			TGDateFormatBufferSize);
+	return len ? [[NSString alloc] initWithBytes:buf length:len
+									   encoding:NSUTF8StringEncoding] : @"";
+}
+
 static NSString *TGPublicPostText(NSDictionary *message) {
 	NSDictionary *content = [message[@"content"] isKindOfClass:NSDictionary.class]
 			? message[@"content"] : nil;
@@ -108,6 +119,10 @@ static NSString *TGPublicPostText(NSDictionary *message) {
 
 @implementation TGSearchViewController
 
+- (instancetype)init {
+	return [super initWithStyle:UITableViewStylePlain];
+}
+
 - (void)viewDidLoad {
 	[super viewDidLoad];
 
@@ -123,8 +138,6 @@ static NSString *TGPublicPostText(NSDictionary *message) {
 	self.recentLinks = @[];
 	self.publicNextOffset = @"";
 	self.publicLimitExceeded = NO;
-	self.avatars = [NSMutableDictionary dictionary];
-	self.avatarsRequested = [NSMutableSet set];
 	self.scope = TGSearchScopeAll;
 	self.recentQueries = [[NSUserDefaults standardUserDefaults]
 			arrayForKey:TGAccountDefaultsKey(kRecentQueriesKey)] ?: @[];
@@ -148,7 +161,7 @@ static NSString *TGPublicPostText(NSDictionary *message) {
 			object:nil queue:[NSOperationQueue mainQueue]
 		 usingBlock:^(NSNotification *note) {
 		[weakSelf applyTheme];
-		[weakSelf.tableView reloadData];
+		[weakSelf reloadSearchRows];
 	}];
 
 	[[NSNotificationCenter defaultCenter] addObserverForName:TGCustomEmojiLoadedNotification
@@ -168,6 +181,7 @@ static NSString *TGPublicPostText(NSDictionary *message) {
 	[self.tableView addGestureRecognizer:hold];
 
 	[self buildScopeBar];
+	[self rebuildSections];
 	[self loadFrequentChats];
 	[self loadRecentTags];
 	[self loadRecentLinks];
@@ -336,7 +350,7 @@ static NSString *TGPublicPostText(NSDictionary *message) {
 		return;
 	self.scope = pill.tag;
 	[self styleScopeButtons];
-	[self.tableView reloadData];
+	[self reloadSearchRows];
 	[self.tableView scrollRectToVisible:CGRectMake(0, 0, 1, 1) animated:YES];
 }
 
@@ -360,7 +374,7 @@ static NSString *TGPublicPostText(NSDictionary *message) {
 - (void)clearRecentQueries {
 	self.recentQueries = @[];
 	[[NSUserDefaults standardUserDefaults] removeObjectForKey:TGAccountDefaultsKey(kRecentQueriesKey)];
-	[self.tableView reloadData];
+	[self reloadSearchRows];
 }
 
 - (void)cancel {
@@ -377,7 +391,7 @@ static NSString *TGPublicPostText(NSDictionary *message) {
 		if (!me || me.bar.text.length)
 			return;
 		me.frequent = chats ?: @[];
-		[me.tableView reloadData];
+		[me reloadSearchRows];
 	}];
 	[[TGClient shared] recentlyOpenedChatsWithCompletion:^(NSArray *chats){
 		TGSearchViewController *me = weakSelf;
@@ -393,7 +407,7 @@ static NSString *TGPublicPostText(NSDictionary *message) {
 			if (![shown containsObject:chat[@"id"]])
 				[rest addObject:chat];
 		me.recent = rest;
-		[me.tableView reloadData];
+		[me reloadSearchRows];
 	}];
 	[self loadRecentlyFound];
 }
@@ -405,7 +419,7 @@ static NSString *TGPublicPostText(NSDictionary *message) {
 		if (!me || me.bar.text.length)
 			return;
 		me.recentlyFound = chats ?: @[];
-		[me.tableView reloadData];
+		[me reloadSearchRows];
 	}];
 }
 
@@ -416,7 +430,7 @@ static NSString *TGPublicPostText(NSDictionary *message) {
 		if (!me || me.bar.text.length)
 			return;
 		me.recentTags = tags ?: @[];
-		[me.tableView reloadData];
+		[me reloadSearchRows];
 	}];
 }
 
@@ -428,7 +442,7 @@ static NSString *TGPublicPostText(NSDictionary *message) {
 		if (!me || me.bar.text.length)
 			return;
 		me.recentLinks = urls ?: @[];
-		[me.tableView reloadData];
+		[me reloadSearchRows];
 	}];
 }
 
@@ -478,7 +492,7 @@ static NSString *TGPublicPostText(NSDictionary *message) {
 		self.recentQueries = rest;
 		[[NSUserDefaults standardUserDefaults] setObject:rest
 												  forKey:TGAccountDefaultsKey(kRecentQueriesKey)];
-		[self.tableView reloadData];
+		[self reloadSearchRows];
 		return;
 	}
 
@@ -502,7 +516,7 @@ static NSString *TGPublicPostText(NSDictionary *message) {
 			NSMutableArray *rest = [me.recentTags mutableCopy];
 			[rest removeObject:tag];
 			me.recentTags = rest;
-			[me.tableView reloadData];
+			[me reloadSearchRows];
 		}];
 		return;
 	}
@@ -537,7 +551,7 @@ static NSString *TGPublicPostText(NSDictionary *message) {
 			me.frequent = rest;
 		else
 			me.recentlyFound = rest;
-		[me.tableView reloadData];
+		[me reloadSearchRows];
 	}];
 }
 
@@ -637,7 +651,7 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 		[self loadFrequentChats];
 		[self loadRecentTags];
 		[self loadRecentLinks];
-		[self.tableView reloadData];
+		[self reloadSearchRows];
 		return;
 	}
 
@@ -656,7 +670,7 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 	self.suggestions = @[];
 	self.publicHits = @[];
 	self.publicLimitExceeded = NO;
-	[self.tableView reloadData];
+	[self reloadSearchRows];
 
 	__weak typeof(self) weakSelf = self;
 	// Matching titles here only ever found chats already loaded, so a chat
@@ -667,26 +681,26 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 		if (!me || ![me.bar.text isEqualToString:query]) return;
 		me.chatHits = chats ?: @[];
 		[me refreshPrefixSuggestionsForQuery:query extra:@[]];
-		[me.tableView reloadData];
+		[me reloadSearchRows];
 	}];
 	[[TGClient shared] searchContactsForQuery:query completion:^(NSArray *users){
 		TGSearchViewController *me = weakSelf;
 		if (!me || ![me.bar.text isEqualToString:query]) return;
 		me.contactHits = users ?: @[];
-		[me.tableView reloadData];
+		[me reloadSearchRows];
 	}];
 	[[TGClient shared] searchMessages:query completion:^(NSArray *messages) {
 		TGSearchViewController *me = weakSelf;
 		if (!me || ![me.bar.text isEqualToString:query]) return;
 		me.messageHits = messages ?: @[];
-		[me.tableView reloadData];
+		[me reloadSearchRows];
 	}];
 	[[TGClient shared] searchHashtags:query limit:10 completion:^(NSArray *tags){
 		TGSearchViewController *me = weakSelf;
 		if (!me || ![me.bar.text isEqualToString:query]) return;
 		me.hashtagHits = tags ?: @[];
 		[me refreshPrefixSuggestionsForQuery:query extra:tags];
-		[me.tableView reloadData];
+		[me reloadSearchRows];
 	}];
 	[self refreshPrefixSuggestionsForQuery:query extra:@[]];
 	[self searchPublicPostsForQuery:query];
@@ -722,7 +736,7 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 		if (!me || ![me.bar.text isEqualToString:query])
 			return;
 		me.suggestions = matches ?: @[];
-		[me.tableView reloadData];
+		[me reloadSearchRows];
 	}];
 }
 
@@ -752,7 +766,7 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 			![limits[@"currentIsFree"] boolValue] &&
 			[limits[@"remainingFree"] integerValue] <= 0){
 			me.publicLimitExceeded = YES;
-			[me.tableView reloadData];
+			[me reloadSearchRows];
 			return;
 		}
 		[[TGClient shared] searchPublicPosts:query offset:@"" limit:20 starCount:0
@@ -766,7 +780,7 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 			if (answerLimits)
 				live.publicLimits = answerLimits;
 			live.publicLimitExceeded = exceeded;
-			[live.tableView reloadData];
+			[live reloadSearchRows];
 		}];
 	}];
 }
@@ -790,7 +804,7 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 		if (limits)
 			me.publicLimits = limits;
 		me.publicLimitExceeded = exceeded;
-		[me.tableView reloadData];
+		[me reloadSearchRows];
 	}];
 }
 
@@ -799,79 +813,19 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 	[searchBar resignFirstResponder];
 }
 
-#pragma mark - table
+#pragma mark - rows
 
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-	// Before a query: people, places, recently found, tags, links and the
-	// recent search log. While searching: suggestions, chats, contacts,
-	// messages, tags, public posts and public stories.
-	return [self showsFrequent] ? 6 : 7;
+- (void)reloadSearchRows {
+	[self rebuildSections];
+	[self.tableView reloadData];
 }
 
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-	if ([self showsFrequent]){
-		if (section == 0) return self.frequent.count;
-		if (section == 1) return self.recent.count;
-		// The last row of a log is the clear action; it exists only when
-		// there is a log to clear.
-		if (section == 2) return self.recentlyFound.count ? self.recentlyFound.count + 1 : 0;
-		if (section == 3) return self.recentTags.count ? self.recentTags.count + 1 : 0;
-		if (section == 4) return self.recentLinks.count;
-		return self.recentQueries.count ? self.recentQueries.count + 1 : 0;
-	}
-
-	// A scope is a filter over the same answer: only the sections it names
-	// have rows, and the others collapse to zero rather than being removed,
-	// so a row's index still means the same thing across a switch.
-	if (![self scopeShowsChats]){
-		if (section == 3) return [self scopedMessageHits].count;
-		return 0;
-	}
-	if (section == 0) return self.scope == TGSearchScopeAll ? self.suggestions.count : 0;
-	if (section == 1) return self.chatHits.count;
-	if (section == 2) return self.contactHits.count;
-	if (section == 3)
-		return self.scope == TGSearchScopeChats ? 0 : [self scopedMessageHits].count;
-	if (section == 4)
-		return self.scope == TGSearchScopeChats ? 0 : self.hashtagHits.count;
-	if (![self scopeShowsPublic])
-		return 0;
-	if (section == 6) return 1;
-	return self.publicHits.count +
-			((self.publicNextOffset.length && !self.publicLimitExceeded) ? 1 : 0);
+- (void)rebuildSections {
+	self.sections = [self showsFrequent] ? [self frequentSections]
+			: [self searchSections];
 }
 
-- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-	if ([self showsFrequent]){
-		if (section == 0) return self.frequent.count ? @"People" : nil;
-		if (section == 1) return self.recent.count ? @"Recent" : nil;
-		if (section == 2) return self.recentlyFound.count ? @"Recent" : nil;
-		if (section == 3) return self.recentTags.count ? @"Hashtag search" : nil;
-		return self.recentLinks.count ? @"RECENTLY VISITED" : nil;
-	}
-	if (section == 0) return (self.scope == TGSearchScopeAll && self.suggestions.count)
-			? @"Suggested Chats" : nil;
-	if (section == 1) return self.chatHits.count ? @"Chats" : nil;
-	if (section == 2) return self.contactHits.count ? @"Contacts" : nil;
-	if (section == 3){
-		if (self.scope == TGSearchScopeChats)
-			return nil;
-		if ([self scopedMessageHits].count)
-			return self.scope == TGSearchScopeAll ? @"Messages"
-					: TGSearchScopeTitles()[(NSUInteger)self.scope];
-		return nil;
-	}
-	if (section == 4)
-		return (self.scope == TGSearchScopeAll && self.hashtagHits.count)
-				? @"Hashtag search" : nil;
-	if (section == 6) return self.scope == TGSearchScopeAll ? @"Stories" : nil;
-	return (self.scope == TGSearchScopeAll && self.publicHits.count)
-			? @"Public Posts" : nil;
-}
-
-- (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-	if ([self showsFrequent] || section != 5 || !self.bar.text.length)
-		return nil;
+- (NSString *)publicFooter {
 	if (self.scope != TGSearchScopeAll)
 		return nil;
 	if (self.publicLimitExceeded){
@@ -891,253 +845,287 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 	return nil;
 }
 
-- (void)tableView:(UITableView *)tableView willDisplayHeaderView:(UIView *)view forSection:(NSInteger)section {
-	[[TGTheme shared] styleHeaderFooterView:view];
+- (NSMutableDictionary *)peerRowForChat:(NSDictionary *)chat detail:(id)detail {
+	int64_t chatId = [chat[@"id"] longLongValue];
+	NSString *title = [chat[@"title"] length] ? chat[@"title"] : @"Loading...";
+	NSString *line = [detail isKindOfClass:NSString.class] ? detail : nil;
+	NSMutableDictionary *row = TGPeerRow(@(chatId), title, line, nil);
+	// The cell asks the peer store for the picture when the row is on screen;
+	// building a hit list must not start fifty downloads or draw fifty
+	// initials the user will never see.
+	row[TGRowAvatarUser] = @(chatId > 0);
+	return row;
 }
 
-- (void)tableView:(UITableView *)tableView willDisplayFooterView:(UIView *)view forSection:(NSInteger)section {
-	[[TGTheme shared] styleHeaderFooterView:view];
+- (NSMutableDictionary *)peerRowForContact:(NSDictionary *)contact {
+	int64_t userId = [contact[@"id"] longLongValue];
+	NSString *name = [contact[@"name"] length] ? contact[@"name"]
+			: [[TGClient shared] nameForUserId:userId];
+	NSMutableDictionary *row = TGPeerRow(@(userId), name ?: @"", nil, nil);
+	row[TGRowAvatarUser] = @YES;
+	int64_t statusId = [[TGClient shared] emojiStatusIdForUser:userId];
+	if (statusId > 0)
+		row[TGRowStatusEmojiId] = @(statusId);
+	return row;
 }
 
-- (UIImage *)avatarForChat:(int64_t)chatId
-					 title:(NSString *)title
-					fileId:(NSNumber *)fileId
-{
-	UIImage *cached = [fileId isKindOfClass:NSNumber.class] ? self.avatars[fileId] : nil;
-	if (cached)
-		return cached;
+- (NSMutableDictionary *)messageResultFor:(NSDictionary *)m
+								  chatKey:(NSString *)chatKey
+								   titleKey:(NSString *)titleKey
+									textKey:(NSString *)textKey {
+	int64_t chatId = [m[chatKey] longLongValue];
+	NSString *title = [m[titleKey] length] ? m[titleKey]
+			: [[TGClient shared] titleForChat:chatId] ?: @"Post";
+	NSString *text = textKey.length ? m[textKey] : TGPublicPostText(m);
+	NSString *date = TGSearchDateText(m[@"date"]);
+	int64_t messageId = [m[@"id"] longLongValue];
+	__weak typeof(self) weakSelf = self;
+	NSMutableDictionary *row = TGMessageResultRow(@(chatId), title, text, date, ^{
+		[weakSelf openChatId:chatId title:title messageId:messageId isGroup:NO];
+	});
+	return row;
+}
 
-	if ([fileId isKindOfClass:NSNumber.class] &&
-		![self.avatarsRequested containsObject:fileId]){
-		[self.avatarsRequested addObject:fileId];
-		__weak typeof(self) weakSelf = self;
-		[[TGClient shared] downloadFile:fileId.integerValue completion:^(NSString *path){
-			TGSearchViewController *me = weakSelf;
-			if (!me || !path.length)
-				return;
-			UIImage *decoded = [TGIcons decodedImageAtPath:path
-											   fittingSize:CGSizeMake(TGMetricListAvatar, TGMetricListAvatar)
-													  fill:YES
-													 scale:TGMainScreenScale()];
-			UIImage *rounded = [TGIcons roundedImage:decoded
-												size:CGSizeMake(TGMetricListAvatar, TGMetricListAvatar)
-											  radius:TGHalf(TGMetricListAvatar)
-											 corners:UIRectCornerAllCorners];
-			me.avatars[fileId] = rounded ?: decoded;
-			[me.tableView reloadData];
-		}];
+- (void)openChatId:(int64_t)chatId title:(NSString *)title
+		 messageId:(int64_t)messageId isGroup:(BOOL)isGroup {
+	if (!chatId)
+		return;
+	[self.bar resignFirstResponder];
+	[[TGClient shared] rememberFoundChat:chatId];
+	[self rememberQuery:self.bar.text];
+	TGChatViewController *chat = [[TGChatViewController alloc] init];
+	chat.chatId = chatId;
+	chat.chatTitle = title;
+	chat.isGroup = isGroup;
+	if (messageId)
+		chat.initialMessageId = messageId;
+	chat.hidesBottomBarWhenPushed = YES;
+	[self.navigationController pushViewController:chat animated:YES];
+}
+
+- (void)openContactHit:(NSDictionary *)u {
+	int64_t userId = [u[@"id"] longLongValue];
+	NSString *name = [u[@"name"] length] ? u[@"name"]
+			: [[TGClient shared] nameForUserId:userId];
+	__weak typeof(self) weakSelf = self;
+	[[TGClient shared] privateChatWithUser:userId completion:^(int64_t privateId){
+		TGSearchViewController *me = weakSelf;
+		if (!me || !privateId)
+			return;
+		[me openChatId:privateId title:name ?: @"" messageId:0 isGroup:NO];
+	}];
+}
+
+- (void)applyQuery:(NSString *)query {
+	self.bar.text = query;
+	[self searchBar:self.bar textDidChange:query];
+}
+
+- (NSDictionary *)clearRowWithTitle:(NSString *)title
+							 handler:(void (^)(void))handler {
+	return TGRedRow(title, handler);
+}
+
+- (NSArray *)frequentSections {
+	__weak typeof(self) weakSelf = self;
+	NSMutableArray *people = [NSMutableArray array];
+	for (NSDictionary *chat in self.frequent){
+		NSMutableDictionary *row = [self peerRowForChat:chat
+				detail:chat[@"previewText"]];
+		int64_t chatId = [chat[@"id"] longLongValue];
+		int64_t statusId = [chat[@"emojiStatusId"] longLongValue];
+		if (statusId == 0 && chatId > 0)
+			statusId = [[TGClient shared] emojiStatusIdForUser:chatId];
+		if (statusId > 0)
+			row[TGRowStatusEmojiId] = @(statusId);
+		row[TGRowTap] = ^{ [weakSelf openChatId:chatId
+				title:chat[@"title"] ?: @"" messageId:0
+				isGroup:[chat[@"isGroup"] boolValue]]; };
+		[people addObject:row];
 	}
 
-	return [TGIcons avatarWithInitials:[TGIcons initialsForTitle:title]
-								  size:TGMetricListAvatar
-							  colourId:chatId];
-}
+	NSMutableArray *recent = [NSMutableArray array];
+	for (NSDictionary *chat in self.recent){
+		NSMutableDictionary *row = [self peerRowForChat:chat
+				detail:chat[@"previewText"]];
+		int64_t chatId = [chat[@"id"] longLongValue];
+		row[TGRowTap] = ^{ [weakSelf openChatId:chatId
+				title:chat[@"title"] ?: @"" messageId:0
+				isGroup:[chat[@"isGroup"] boolValue]]; };
+		[recent addObject:row];
+	}
 
-/// The word the user typed is marked where it appears, which is what makes a
-/// long message result readable at a glance. A miss returns nil so the cell
-/// keeps its plain string and no attributed layout is paid for.
-- (NSAttributedString *)highlightedText:(NSString *)text
-								 query:(NSString *)query
-								  font:(UIFont *)font
-								colour:(UIColor *)colour {
-	if (!text.length || !query.length)
-		return nil;
-	NSMutableAttributedString *marked = [[NSMutableAttributedString alloc]
-			initWithString:text attributes:@{
-				NSFontAttributeName : font,
-				NSForegroundColorAttributeName : colour,
+	NSMutableArray *found = [NSMutableArray array];
+	for (NSDictionary *chat in self.recentlyFound){
+		NSMutableDictionary *row = [self peerRowForChat:chat
+				detail:chat[@"previewText"]];
+		int64_t chatId = [chat[@"id"] longLongValue];
+		row[TGRowTap] = ^{ [weakSelf openChatId:chatId
+				title:chat[@"title"] ?: @"" messageId:0
+				isGroup:[chat[@"isGroup"] boolValue]]; };
+		[found addObject:row];
+	}
+	if (found.count)
+		[found addObject:[self clearRowWithTitle:@"Clear" handler:^{
+			[TGAlertSheet showConfirm:nil title:@"Clear" action:@"Clear"
+					destructive:YES inView:weakSelf.view onConfirm:^{
+				[[TGClient shared] clearRecentlyFoundChats];
+				weakSelf.recentlyFound = @[];
+				[weakSelf reloadSearchRows];
 			}];
-	NSRange search = NSMakeRange(0, text.length);
-	UIColor *accent = [[TGTheme shared] accentColour];
-	BOOL any = NO;
-	while (search.length > 0){
-		NSRange found = [text rangeOfString:query options:NSCaseInsensitiveSearch
-									  range:search];
-		if (found.location == NSNotFound)
-			break;
-		[marked addAttribute:NSForegroundColorAttributeName value:accent
-					   range:found];
-		any = YES;
-		NSUInteger next = NSMaxRange(found);
-		if (next >= text.length)
-			break;
-		search = NSMakeRange(next, text.length - next);
+		}]];
+
+	NSMutableArray *tags = [NSMutableArray array];
+	for (NSString *tag in self.recentTags){
+		NSMutableDictionary *row = [TGTapRow([NSString stringWithFormat:@"#%@", tag],
+				@"Recent", ^{ [weakSelf applyQuery:[NSString stringWithFormat:@"#%@", tag]]; })
+				mutableCopy];
+		row[TGRowIcon] = @"search";
+		row[TGRowColour] = [[TGTheme shared] secondaryTextColour];
+		[tags addObject:row];
 	}
-	return any ? marked : nil;
+	if (tags.count)
+		[tags addObject:[self clearRowWithTitle:@"Clear" handler:^{
+			[TGAlertSheet showConfirm:@"Do you want to clear your search history?"
+					title:@"Clear" action:@"Clear" destructive:YES
+					inView:weakSelf.view onConfirm:^{
+				[[TGClient shared] clearSearchedForTags];
+				weakSelf.recentTags = @[];
+				[weakSelf reloadSearchRows];
+			}];
+		}]];
+
+	NSMutableArray *links = [NSMutableArray array];
+	for (NSDictionary *link in self.recentLinks){
+		NSString *url = link[@"url"] ?: @"";
+		NSDictionary *row = TGTapRow(url, nil, ^{
+			[weakSelf openRecentTMeLink:url];
+		});
+		[links addObject:row];
+	}
+
+	NSMutableArray *queries = [NSMutableArray array];
+	for (NSString *query in self.recentQueries){
+		NSMutableDictionary *row = [TGTapRow(query, @"Recent", ^{
+			[weakSelf applyQuery:query];
+		}) mutableCopy];
+		row[TGRowIcon] = @"search";
+		row[TGRowColour] = [[TGTheme shared] secondaryTextColour];
+		[queries addObject:row];
+	}
+	if (queries.count)
+		[queries addObject:[self clearRowWithTitle:@"Clear" handler:^{
+			[TGAlertSheet showConfirm:@"Do you want to clear your search history?"
+					title:@"Clear" action:@"Clear" destructive:YES
+					inView:weakSelf.view onConfirm:^{
+				[weakSelf clearRecentQueries];
+			}];
+		}]];
+
+	return @[
+		TGSection(self.frequent.count ? @"People" : nil, nil, people),
+		TGSection(self.recent.count ? @"Recent" : nil, nil, recent),
+		TGSection(self.recentlyFound.count ? @"Recent" : nil, nil, found),
+		TGSection(self.recentTags.count ? @"Hashtag search" : nil, nil, tags),
+		TGSection(self.recentLinks.count ? @"RECENTLY VISITED" : nil, nil, links),
+		TGSection(nil, nil, queries),
+	];
 }
 
-- (UITableViewCell *)tableView:(UITableView *)tableView
-		 cellForRowAtIndexPath:(NSIndexPath *)indexPath
-{
-	static NSString *reuse = @"TGSearchCell";
-	UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:reuse];
-	if (!cell) {
-		cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:reuse];
-		cell.imageView.layer.cornerRadius = TGHalf(TGMetricListAvatar);
-		cell.imageView.clipsToBounds = YES;
-		cell.imageView.layer.shouldRasterize = YES;
-		cell.imageView.layer.rasterizationScale = [UIScreen mainScreen].scale;
+- (NSArray *)searchSections {
+	__weak typeof(self) weakSelf = self;
+	BOOL all = self.scope == TGSearchScopeAll;
+	BOOL chats = [self scopeShowsChats];
+	NSArray *messages = [self scopedMessageHits];
+
+	NSMutableArray *suggestions = [NSMutableArray array];
+	if (all)
+		for (NSString *suggestion in self.suggestions){
+			[suggestions addObject:TGTapRow(suggestion, @"Suggest", ^{
+				[weakSelf applyQuery:suggestion];
+			})];
+		}
+
+	NSMutableArray *chatRows = [NSMutableArray array];
+	if (chats)
+		for (NSDictionary *chat in self.chatHits){
+			NSMutableDictionary *row = [self peerRowForChat:chat
+					detail:chat[@"text"]];
+			int64_t chatId = [chat[@"id"] longLongValue];
+			row[TGRowTap] = ^{ [weakSelf openChatId:chatId
+					title:chat[@"title"] ?: @"" messageId:0
+					isGroup:[chat[@"isGroup"] boolValue]]; };
+			[chatRows addObject:row];
+		}
+
+	NSMutableArray *contactRows = [NSMutableArray array];
+	if (chats)
+		for (NSDictionary *contact in self.contactHits){
+			NSMutableDictionary *row = [self peerRowForContact:contact];
+			row[TGRowTap] = ^{ [weakSelf openContactHit:contact]; };
+			[contactRows addObject:row];
+		}
+
+	NSMutableArray *messageRows = [NSMutableArray array];
+	if (self.scope != TGSearchScopeChats)
+		for (NSDictionary *m in messages){
+			NSMutableDictionary *row = [self messageResultFor:m
+					chatKey:@"chatId" titleKey:@"chatTitle" textKey:@"text"];
+			[messageRows addObject:row];
+		}
+
+	NSMutableArray *hashtags = [NSMutableArray array];
+	if (self.scope != TGSearchScopeChats)
+		for (NSString *tag in self.hashtagHits){
+			NSString *hashed = [NSString stringWithFormat:@"#%@", tag];
+			[hashtags addObject:TGTapRow(hashed, @"Public Post Search", ^{
+				[weakSelf applyQuery:hashed];
+			})];
+		}
+
+	NSMutableArray *publicRows = [NSMutableArray array];
+	NSString *publicFooter = nil;
+	if ([self scopeShowsPublic]){
+		for (NSDictionary *m in self.publicHits){
+			NSMutableDictionary *row = [self messageResultFor:m
+					chatKey:@"chat_id" titleKey:@"chatTitle" textKey:@""];
+			[publicRows addObject:row];
+		}
+		if (self.publicNextOffset.length && !self.publicLimitExceeded)
+			[publicRows addObject:TGActionRow(@"Public Posts", ^{
+				[weakSelf loadMorePublicPosts];
+			})];
+		publicFooter = [self publicFooter];
 	}
 
-	TGTheme *theme = [TGTheme shared];
-	UIColor *bg = [theme listBackgroundColour];
-	cell.backgroundColor = bg;
-	cell.contentView.backgroundColor = bg;
-	cell.textLabel.font = TGFontBodyStrong();
-	cell.textLabel.textColor = [theme primaryTextColour];
-	cell.textLabel.backgroundColor = bg;
-	cell.textLabel.opaque = YES;
-
-	cell.detailTextLabel.font = TGFontCaption();
-	cell.detailTextLabel.textColor = [theme secondaryTextColour];
-	cell.detailTextLabel.backgroundColor = bg;
-	cell.detailTextLabel.opaque = YES;
-	cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-	cell.imageView.image = nil;
-	cell.textLabel.attributedText = nil;
-	cell.detailTextLabel.attributedText = nil;
-
-	if ([self showsFrequent]) {
-		if (indexPath.section == 5){
-			if (indexPath.row >= (NSInteger)self.recentQueries.count){
-				cell.textLabel.text = @"Clear";
-				cell.textLabel.textColor = [theme destructiveColour];
-				cell.detailTextLabel.text = nil;
-				cell.accessoryType = UITableViewCellAccessoryNone;
-				return cell;
-			}
-			cell.textLabel.text = self.recentQueries[(NSUInteger)indexPath.row];
-			cell.textLabel.textColor = [theme primaryTextColour];
-			cell.detailTextLabel.text = @"Recent";
-			cell.imageView.image = [TGIcons glyphNamed:@"search"
-												colour:[theme secondaryTextColour]
-												  side:TGMetricListAvatar - TGMetricPadLarge];
-			cell.accessoryType = UITableViewCellAccessoryNone;
-			return cell;
-		}
-		// The last row of a log is the clear action.
-		if (indexPath.section == 2 &&
-			indexPath.row >= (NSInteger)self.recentlyFound.count){
-			cell.textLabel.text = @"Clear";
-			cell.textLabel.textColor = [theme destructiveColour];
-			cell.detailTextLabel.text = nil;
-			cell.accessoryType = UITableViewCellAccessoryNone;
-			return cell;
-		}
-		if (indexPath.section == 3 &&
-			indexPath.row >= (NSInteger)self.recentTags.count){
-			cell.textLabel.text = @"Clear";
-			cell.textLabel.textColor = [theme destructiveColour];
-			cell.detailTextLabel.text = nil;
-			cell.accessoryType = UITableViewCellAccessoryNone;
-			return cell;
-		}
-		if (indexPath.section == 3){
-			cell.textLabel.text = [NSString stringWithFormat:@"#%@", self.recentTags[indexPath.row]];
-			cell.detailTextLabel.text = @"Recent";
-			cell.accessoryType = UITableViewCellAccessoryNone;
-			return cell;
-		}
-		if (indexPath.section == 4){
-			NSDictionary *link = self.recentLinks[indexPath.row];
-			cell.textLabel.text = link[@"url"] ?: @"";
-			cell.detailTextLabel.text = nil;
-			return cell;
-		}
-		NSDictionary *c = [self emptyStateRowAt:indexPath];
-		int64_t cid = [c[@"id"] longLongValue];
-		int64_t statusId = [c[@"emojiStatusId"] longLongValue];
-		if (statusId == 0 && cid > 0) {
-			statusId = [[TGClient shared] emojiStatusIdForUser:cid];
-		}
-		if (indexPath.section == 0) {
-			cell.textLabel.attributedText = TGNameWithStatus(c[@"title"] ?: @"", statusId, cell.textLabel.font, [theme primaryTextColour]);
-		} else {
-			cell.textLabel.text = c[@"title"];
-			cell.textLabel.textColor = [theme primaryTextColour];
-		}
-		cell.detailTextLabel.text = c[@"previewText"];
-		cell.imageView.image = [self avatarForChat:cid
-											 title:c[@"title"]
-											fileId:c[@"photoFileId"]];
-	} else if (indexPath.section == 0) {
-		cell.textLabel.text = self.suggestions[indexPath.row];
-		cell.textLabel.textColor = [theme primaryTextColour];
-		cell.detailTextLabel.text = @"Suggest";
-		cell.accessoryType = UITableViewCellAccessoryNone;
-	} else if (indexPath.section == 1) {
-		NSDictionary *c = self.chatHits[indexPath.row];
-		// A public chat the list has never seen answers with no title until
-		// its own fetch lands; the row says so rather than being blank.
-		NSString *title = [c[@"title"] length] ? c[@"title"] : @"Loading...";
-		cell.textLabel.attributedText = [self highlightedText:title
-														query:self.bar.text
-														 font:TGFontBodyStrong()
-													   colour:[theme primaryTextColour]];
-		if (!cell.textLabel.attributedText)
-			cell.textLabel.text = title;
-		cell.textLabel.textColor = [theme primaryTextColour];
-		cell.detailTextLabel.text = c[@"text"];
-		cell.imageView.image = [self avatarForChat:[c[@"id"] longLongValue]
-											 title:title
-											fileId:c[@"photoFileId"]];
-	} else if (indexPath.section == 2) {
-		NSDictionary *u = self.contactHits[indexPath.row];
-		int64_t uid = [u[@"id"] longLongValue];
-		NSString *name = [u[@"name"] length] ? u[@"name"]
-				: [[TGClient shared] nameForUserId:uid];
-		int64_t statusId = [[TGClient shared] emojiStatusIdForUser:uid];
-		cell.textLabel.attributedText = TGNameWithStatus(name ?: @"", statusId, cell.textLabel.font, [theme primaryTextColour]);
-		cell.detailTextLabel.text = nil;
-		cell.imageView.image = [self avatarForChat:uid
-											 title:name
-											fileId:nil];
-	} else if (indexPath.section == 3) {
-		NSArray *hits = [self scopedMessageHits];
-		if (indexPath.row >= (NSInteger)hits.count)
-			return cell;
-		NSDictionary *m = hits[indexPath.row];
-		cell.textLabel.text = m[@"chatTitle"];
-		cell.textLabel.textColor = [theme primaryTextColour];
-		cell.detailTextLabel.attributedText = [self highlightedText:m[@"text"] ?: @""
-															  query:self.bar.text
-															   font:TGFontCaption()
-															 colour:[theme secondaryTextColour]];
-		if (!cell.detailTextLabel.attributedText)
-			cell.detailTextLabel.text = m[@"text"];
-		cell.imageView.image = [self avatarForChat:[m[@"chatId"] longLongValue]
-											 title:m[@"chatTitle"]
-											fileId:nil];
-	} else if (indexPath.section == 4) {
-		cell.textLabel.text = [NSString stringWithFormat:@"#%@", self.hashtagHits[indexPath.row]];
-		cell.textLabel.textColor = [theme primaryTextColour];
-		cell.detailTextLabel.text = @"Public Post Search";
-		cell.accessoryType = UITableViewCellAccessoryNone;
-	} else if (indexPath.section == 5) {
-		if (indexPath.row >= (NSInteger)self.publicHits.count){
-			cell.textLabel.text = @"Public Posts";
-			cell.textLabel.textColor = [theme accentColour];
-			cell.detailTextLabel.text = nil;
-			cell.accessoryType = UITableViewCellAccessoryNone;
-			return cell;
-		}
-		NSDictionary *m = self.publicHits[indexPath.row];
-		int64_t chatId = [m[@"chat_id"] longLongValue];
-		NSString *title = [[TGClient shared] titleForChat:chatId] ?: @"Post";
-		cell.textLabel.text = title;
-		cell.textLabel.textColor = [theme primaryTextColour];
-		cell.detailTextLabel.text = TGPublicPostText(m);
-		cell.imageView.image = [self avatarForChat:chatId title:title fileId:nil];
-	} else {
-		cell.textLabel.text = @"Stories";
-		cell.textLabel.textColor = [theme accentColour];
-		cell.detailTextLabel.text = nil;
-		cell.imageView.image = [TGIcons avatarWithInitials:@"S"
-													 size:TGMetricListAvatar
-												 colourId:0];
+	NSMutableArray *stories = [NSMutableArray array];
+	if ([self scopeShowsPublic]){
+		NSMutableDictionary *row = TGPeerRow(nil, @"Stories", nil, ^{
+			TGPublicStoriesViewController *viewer =
+					[[TGPublicStoriesViewController alloc]
+							initWithTag:weakSelf.bar.text ?: @""];
+			viewer.hidesBottomBarWhenPushed = YES;
+			[weakSelf.navigationController pushViewController:viewer animated:YES];
+		});
+		row[TGRowAccessory] = TGRowAccessoryDisclosure;
+		[stories addObject:row];
 	}
 
-	return cell;
+	NSString *messagesHeader = nil;
+	if (self.scope != TGSearchScopeChats && messages.count)
+		messagesHeader = all ? @"Messages"
+				: TGSearchScopeTitles()[(NSUInteger)self.scope];
+
+	return @[
+		TGSection(all && suggestions.count ? @"Suggested Chats" : nil, nil, suggestions),
+		TGSection(chatRows.count ? @"Chats" : nil, nil, chatRows),
+		TGSection(contactRows.count ? @"Contacts" : nil, nil, contactRows),
+		TGSection(messagesHeader, nil, messageRows),
+		TGSection(all && hashtags.count ? @"Hashtag search" : nil, nil, hashtags),
+		TGSection(all && publicRows.count ? @"Public Posts" : nil,
+				publicFooter, publicRows),
+		TGSection(all ? @"Stories" : nil, nil, stories),
+	];
 }
 
 /// Telegram's own link handler, trimmed to what a recent t.me URL can be:
@@ -1194,152 +1182,6 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 		if (url)
 			[[UIApplication sharedApplication] openURL:url];
 	}];
-}
-
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
-	[self.bar resignFirstResponder];
-
-	BOOL fromFrequent = [self showsFrequent];
-
-	if (fromFrequent && indexPath.section == 5){
-		if (indexPath.row >= (NSInteger)self.recentQueries.count){
-			__weak typeof(self) weakSelf = self;
-			[TGAlertSheet showConfirm:@"Do you want to clear your search history?"
-								title:@"Clear"
-							   action:@"Clear" destructive:YES inView:self.view
-							onConfirm:^{ [weakSelf clearRecentQueries]; }];
-			return;
-		}
-		NSString *query = self.recentQueries[(NSUInteger)indexPath.row];
-		self.bar.text = query;
-		[self searchBar:self.bar textDidChange:query];
-		return;
-	}
-
-	if (fromFrequent && indexPath.section == 3){
-		if (indexPath.row >= (NSInteger)self.recentTags.count){
-			__weak typeof(self) weakSelf = self;
-			[TGAlertSheet showConfirm:@"Do you want to clear your search history?"
-								title:@"Clear"
-							   action:@"Clear" destructive:YES inView:self.view
-							onConfirm:^{
-				[[TGClient shared] clearSearchedForTags];
-				weakSelf.recentTags = @[];
-				[weakSelf.tableView reloadData];
-			}];
-			return;
-		}
-		NSString *tag = self.recentTags[indexPath.row];
-		self.bar.text = [NSString stringWithFormat:@"#%@", tag];
-		[self searchBar:self.bar textDidChange:self.bar.text];
-		return;
-	}
-	if (fromFrequent && indexPath.section == 4){
-		[self openRecentTMeLink:self.recentLinks[indexPath.row][@"url"]];
-		return;
-	}
-
-	// A contact is a person, not a chat: the private chat with them has to be
-	// asked for before there is anything to open.
-	if (!fromFrequent && indexPath.section == 2){
-		NSDictionary *u = self.contactHits[indexPath.row];
-		NSString *name = [u[@"name"] length] ? u[@"name"]
-				: [[TGClient shared] nameForUserId:[u[@"id"] longLongValue]];
-		__weak typeof(self) weakSelf = self;
-		[[TGClient shared] privateChatWithUser:[u[@"id"] longLongValue]
-									completion:^(int64_t privateId){
-			TGSearchViewController *me = weakSelf;
-			if (!me || !privateId)
-				return;
-			[[TGClient shared] rememberFoundChat:privateId];
-			TGChatViewController *chat = [[TGChatViewController alloc] init];
-			chat.chatId = privateId;
-			chat.chatTitle = name ?: @"";
-			chat.hidesBottomBarWhenPushed = YES;
-			[me.navigationController pushViewController:chat animated:YES];
-		}];
-		return;
-	}
-
-	if (!fromFrequent && indexPath.section == 0){
-		NSString *suggestion = self.suggestions[indexPath.row];
-		self.bar.text = suggestion;
-		[self searchBar:self.bar textDidChange:suggestion];
-		return;
-	}
-
-	if (!fromFrequent && indexPath.section == 4){
-		NSString *tag = self.hashtagHits[indexPath.row];
-		self.bar.text = [NSString stringWithFormat:@"#%@", tag];
-		[self searchBar:self.bar textDidChange:self.bar.text];
-		return;
-	}
-
-	if (!fromFrequent && indexPath.section == 6){
-		TGPublicStoriesViewController *stories = [[TGPublicStoriesViewController alloc]
-				initWithTag:self.bar.text ?: @""];
-		stories.hidesBottomBarWhenPushed = YES;
-		[self.navigationController pushViewController:stories animated:YES];
-		return;
-	}
-
-	if (!fromFrequent && indexPath.section == 5){
-		if (indexPath.row >= (NSInteger)self.publicHits.count){
-			[self loadMorePublicPosts];
-			return;
-		}
-		NSDictionary *m = self.publicHits[indexPath.row];
-		int64_t chatId = [m[@"chat_id"] longLongValue];
-		if (!chatId)
-			return;
-		[[TGClient shared] rememberFoundChat:chatId];
-		TGChatViewController *chat = [[TGChatViewController alloc] init];
-		chat.chatId = chatId;
-		chat.chatTitle = [[TGClient shared] titleForChat:chatId] ?: @"Post";
-		chat.initialMessageId = [m[@"id"] longLongValue];
-		chat.hidesBottomBarWhenPushed = YES;
-		[self.navigationController pushViewController:chat animated:YES];
-		return;
-	}
-
-	if (fromFrequent && indexPath.section == 2 &&
-		indexPath.row >= (NSInteger)self.recentlyFound.count){
-		__weak typeof(self) weakSelf = self;
-		[TGAlertSheet showConfirm:nil
-							title:@"Clear"
-						   action:@"Clear" destructive:YES inView:self.view
-						onConfirm:^{
-			[[TGClient shared] clearRecentlyFoundChats];
-			weakSelf.recentlyFound = @[];
-			[weakSelf.tableView reloadData];
-		}];
-		return;
-	}
-
-	NSDictionary *row = fromFrequent ? [self emptyStateRowAt:indexPath]
-			: (indexPath.section == 1 ? self.chatHits[indexPath.row]
-									  : [self scopedMessageHits][indexPath.row]);
-	int64_t chatId = [((fromFrequent || indexPath.section == 1)
-			? row[@"id"] : row[@"chatId"]) longLongValue];
-	if (!chatId)
-		return;
-
-	// Opening a chat from search is what puts it in the recently-found list,
-	// which is the other half of what this screen shows when it is empty.
-	[[TGClient shared] rememberFoundChat:chatId];
-	[self rememberQuery:self.bar.text];
-
-	TGChatViewController *chat = [[TGChatViewController alloc] init];
-	chat.chatId = chatId;
-	chat.chatTitle = (fromFrequent || indexPath.section == 1)
-			? row[@"title"] : row[@"chatTitle"];
-	chat.isGroup = [row[@"isGroup"] boolValue];
-	// A message result must open at the hit, not at the latest message.
-	if (!fromFrequent && indexPath.section != 1 && TGChatSearchHitOpensMessage(row))
-		chat.initialMessageId = [row[@"id"] longLongValue];
-	chat.hidesBottomBarWhenPushed = YES;
-	[self.navigationController pushViewController:chat animated:YES];
 }
 
 @end

@@ -1,27 +1,30 @@
 //
-// TGFeatureListViewController.h - the row model three Tier 2 screens share.
+// TGFeatureListViewController.h - the Tier 2 lists, now a TGRowsViewController.
 //
-// Communities, quick replies and the message tools are all settings-shaped
-// lists: a title, a value on the right, and a tap. Their rows are dictionaries
-// rather than eight hand-written table views, the way Settings does it.
+// Communities, quick replies and the message tools are settings-shaped lists:
+// a title, a value on the right, and a tap. They describe rows with the shared
+// model and this controller renders them.
 //
 #import <UIKit/UIKit.h>
-#import "TGTableViewController.h"
+#import "TGRowsViewController.h"
+#import "TGRows.h"
 
-extern NSString *const TGFeatureRowTitle;
-extern NSString *const TGFeatureRowDetail;
-extern NSString *const TGFeatureRowKind;
-extern NSString *const TGFeatureRowTap;
-extern NSString *const TGFeatureRowChecked;
-extern NSString *const TGFeatureRowSubtitle;
-extern NSString *const TGFeatureRowDestructive;
-extern NSString *const TGFeatureRowOpens;
+// The old names stay as thin aliases so the screens that already build these
+// rows do not carry a second vocabulary.
+#define TGFeatureRowTitle       TGRowTitle
+#define TGFeatureRowDetail      TGRowDetail
+#define TGFeatureRowKind        TGRowKind
+#define TGFeatureRowTap         TGRowTap
+#define TGFeatureRowChecked     TGRowChecked
+#define TGFeatureRowSubtitle    TGRowSubtitle
+#define TGFeatureRowDestructive TGRowDestructive
+#define TGFeatureRowOpens       TGRowOpens
 
-extern NSString *const TGFeatureKindPlain;
-extern NSString *const TGFeatureKindDisclosure;
-extern NSString *const TGFeatureKindCheck;
-extern NSString *const TGFeatureKindAction;
-extern NSString *const TGFeatureKindDestructive;
+#define TGFeatureKindPlain       TGKindPlain
+#define TGFeatureKindDisclosure  TGKindDisclosure
+#define TGFeatureKindCheck       TGKindCheck
+#define TGFeatureKindAction      TGKindAction
+#define TGFeatureKindDestructive TGKindDestructive
 
 NSMutableDictionary *TGFeatureRow(NSString *title, NSString *detail, void (^tap)(void));
 NSMutableDictionary *TGFeatureOpenRow(NSString *title, NSString *detail, void (^tap)(void));
@@ -30,16 +33,7 @@ NSMutableDictionary *TGFeatureCheck(NSString *title, NSString *detail, BOOL chec
 								  void (^tap)(void));
 NSDictionary *TGFeatureSection(NSString *header, NSString *footer, NSArray *rows);
 
-@interface TGFeatureListViewController : TGTableViewController
-
-/// Each section is "header", "footer" and "rows". Subclasses replace this
-/// and call -reloadRows.
-@property (nonatomic, strong) NSArray *sections;
-
-- (void)reloadRows;
-- (void)applyTheme;
-- (void)toast:(NSString *)text;
-
+@interface TGFeatureListViewController : TGRowsViewController
 @end
 
 /// A read-only text screen with Copy, and Send when the caller has a chat to

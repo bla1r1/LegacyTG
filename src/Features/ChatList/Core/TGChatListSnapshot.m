@@ -5,7 +5,6 @@
 #import "TGStatusText.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
-#import "TGMemberAvatarStore.h"
 #import "TGDateFormat.h"
 #import "TGOptions.h"
 #import "TGStoryViewerViewController.h"
@@ -99,6 +98,12 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 		if ([value isKindOfClass:NSNumber.class] || [value isKindOfClass:NSString.class])
 			row[key] = value;
 	}
+	// The preview's custom emoji ranges: without them the first paint showed
+	// the fallback characters and the pictures only arrived with the live list,
+	// though they were already on disk. Kept only as plain numbers.
+	NSArray *emoji = TGSnapshotCustomEmoji(chat[@"previewCustomEmoji"]);
+	if (emoji.count)
+		row[@"previewCustomEmoji"] = emoji;
 	return row[@"id"] ? row : nil;
 }
 

@@ -279,6 +279,93 @@ NSString *TGStripUndrawableScalars(NSString *text) {
 	return TGStripScalars(text, TGFontsHaveScalar);
 }
 
+/// Whether Apple Color Emoji itself has the scalar. A face elsewhere in the
+/// cascade may draw it as a plain symbol (U+2604 COMET on iOS 7), but then the
+/// U+FE0F after it has no face at all and CoreText scans every font on disk.
+static BOOL TGAppleEmojiHasScalar(UTF32Char c) {
+	static NSMutableDictionary *answers = nil;
+	static CTFontRef emoji = NULL;
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{
+		answers = [NSMutableDictionary dictionary];
+		emoji = CTFontCreateWithName(CFSTR("AppleColorEmoji"), TGFontBody().pointSize, NULL);
+	});
+	NSNumber *key = @(c), *known;
+	@synchronized (answers){
+		known = answers[key];
+	}
+	if (known)
+		return known.boolValue;
+	UniChar units[2];
+	CFIndex count = CFStringGetSurrogatePairForLongCharacter(c, units) ? 2 : 1;
+	if (count == 1)
+		units[0] = (UniChar)c;
+	CGGlyph glyphs[2] = {0, 0};
+	BOOL found = emoji && CTFontGetGlyphsForCharacters(emoji, units, glyphs, count) && glyphs[0];
+	@synchronized (answers){
+		answers[key] = @(found);
+	}
+	return found;
+}
+
+/// An emoji scalar Apple Color Emoji lacks; message bubbles draw these from
+/// the bundled OpenMoji.
+static BOOL TGNeedsBundledEmoji(UTF32Char c) {
+	return TGIsEmojiScalar(c) && !TGAppleEmojiHasScalar(c);
+}
+
+/// U+FE0F after an emoji Apple Color Emoji lacks has no face on iOS 7 at all:
+/// the symbol itself comes from the system cascade, its selector from nowhere,
+/// and CoreText searched every font on disk for it. A Saved Messages preview
+/// of four comets (U+2604 U+FE0F) cost 2.4 s cold and 0.48 s warm in the first
+/// chat row's layout. The selector only asks for colour presentation, which
+/// that face cannot give, so dropping it changes nothing drawn.
+BOOL TGMarkUndrawableEmoji(NSMutableAttributedString *text, CGFloat size) {
+	(void)size;
+	return TGDropEmojiSelectors(text, TGNeedsBundledEmoji);
+}
+
+BOOL TGDropEmojiSelectors(NSMutableAttributedString *text, BOOL (*lacking)(UTF32Char)) {
+	NSString *string = text.string;
+	BOOL changed = NO;
+	NSUInteger i = string.length;
+	while (i > 0){
+		i--;
+		if ([string characterAtIndex:i] != 0xFE0F || i == 0)
+			continue;
+		NSUInteger base = i - 1;
+		UTF32Char c = [string characterAtIndex:base];
+		if (CFStringIsSurrogateLowCharacter((UniChar)c) && base > 0){
+			UniChar high = [string characterAtIndex:base - 1];
+			if (CFStringIsSurrogateHighCharacter(high))
+				c = CFStringGetLongCharacterForSurrogatePair(high, (UniChar)c);
+		}
+		if (lacking(c)){
+			[text deleteCharactersInRange:NSMakeRange(i, 1)];
+			string = text.string;
+			changed = YES;
+		}
+	}
+	return changed;
+}
+
+BOOL TGTextHasUndrawableEmoji(NSString *text) {
+	NSUInteger length = text.length;
+	for (NSUInteger i = 1; i < length; i++){
+		if ([text characterAtIndex:i] != 0xFE0F)
+			continue;
+		UTF32Char c = [text characterAtIndex:i - 1];
+		if (CFStringIsSurrogateLowCharacter((UniChar)c) && i >= 2){
+			UniChar high = [text characterAtIndex:i - 2];
+			if (CFStringIsSurrogateHighCharacter(high))
+				c = CFStringGetLongCharacterForSurrogatePair(high, (UniChar)c);
+		}
+		if (TGNeedsBundledEmoji(c))
+			return YES;
+	}
+	return NO;
+}
+
 static inline BOOL TGTextContainsEmoji(NSString *text) {
 	NSUInteger len = text.length;
 	if (len == 0) return NO;

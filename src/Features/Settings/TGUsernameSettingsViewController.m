@@ -12,23 +12,15 @@
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
 #import "TGSettingsFormatting.h"
+#import "TGRows.h"
 
-/// A switch that remembers which username it changes. The row is rebuilt on
-/// every reload, so an index would point at whatever moved into its place.
-@interface TGUsernameSwitch : UISwitch
-@property (nonatomic, copy) NSString *username;
-@end
-
-@implementation TGUsernameSwitch
-@end
-
-@interface TGUsernameSettingsViewController () <UITextFieldDelegate>
+@interface TGUsernameSettingsViewController ()
 @property (nonatomic, strong) NSDictionary *usernames;
 @property (nonatomic, strong) NSMutableArray *active;
 @property (nonatomic, strong) NSMutableArray *disabled;
 @property (nonatomic, copy) NSString *editable;
+@property (nonatomic, copy) NSString *inlineText;
 @property (nonatomic, assign) BOOL busy;
-@property (nonatomic, strong) UITextField *inlineField;
 /// The answer under the field: Checking username..., the name is available,
 /// already taken or invalid. Empty until the field differs from the account.
 @property (nonatomic, copy) NSString *statusText;
@@ -36,14 +28,10 @@
 @property (nonatomic, assign) NSInteger statusTone;
 @end
 
-static const CGFloat kUsernamePrefixWidth = 42.0f;
-static const CGFloat kUsernameFieldHeight = 44.0f;
-static const CGFloat kUsernameFieldInset = 12.0f;
-
 @implementation TGUsernameSettingsViewController
 
 - (instancetype)init {
-	return [super initWithStyle:UITableViewStyleGrouped];
+	return [super init];
 }
 
 - (void)viewDidLoad {
@@ -51,25 +39,20 @@ static const CGFloat kUsernameFieldInset = 12.0f;
 	self.title = @"Username";
 	self.active = [NSMutableArray array];
 	self.disabled = [NSMutableArray array];
+	self.inlineText = @"";
+	[self rebuildSections];
 	[self applyTheme];
 	[self load];
-
 }
 
 - (void)dealloc {
 	[NSObject cancelPreviousPerformRequestsWithTarget:self];
-	[[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
 	[super viewWillAppear:animated];
 	[self applyTheme];
 	[self load];
-}
-
-- (void)applyTheme {
-	[[TGTheme shared] styleGroupedTable:self.tableView];
-	[[TGTheme shared] styleNavigationBar:self.navigationController.navigationBar];
 }
 
 - (void)load {
@@ -84,9 +67,12 @@ static const CGFloat kUsernameFieldInset = 12.0f;
 		me.disabled = [usernames[@"disabled_usernames"] isKindOfClass:NSArray.class]
 				? [usernames[@"disabled_usernames"] mutableCopy] : [NSMutableArray array];
 		me.editable = usernames[@"editable_username"] ?: @"";
+		me.inlineText = me.editable;
 		me.statusText = nil;
+		[me clearStoredFieldText];
 		[me updateEditButton];
-		[me.tableView reloadData];
+		[me rebuildSections];
+		[me reloadRows];
 	}];
 }
 
@@ -104,149 +90,87 @@ static const CGFloat kUsernameFieldInset = 12.0f;
 	[self updateEditButton];
 }
 
-#pragma mark - table
+#pragma mark - rows
 
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-	return 3;
-}
+- (void)rebuildSections {
+	__weak typeof(self) weakSelf = self;
+	NSMutableArray *sections = [NSMutableArray array];
 
-- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-	if (section == 1) return @"LINKS ORDER";
-	return nil;
-}
+	NSMutableArray *accountRows = [NSMutableArray array];
+	NSMutableDictionary *field = TGFieldRow(@"username", self.inlineText,
+			^(NSString *text){
+		[weakSelf usernameChanged:text];
+	});
+	field[TGRowFieldIdentifier] = @"username";
+	field[TGRowFieldPrefix] = @"t.me/";
+	field[TGRowFieldAutocapitalization] = @(UITextAutocapitalizationTypeNone);
+	field[TGRowFieldAutocorrection] = @(UITextAutocorrectionTypeNo);
+	field[TGRowFieldReturnKey] = @(UIReturnKeyDone);
+	field[TGRowFieldReturn] = ^{
+		[weakSelf.view endEditing:YES];
+	};
+	field[TGRowFieldEndEditing] = ^(NSString *text){
+		[weakSelf usernameEditingEnded:text];
+	};
+	[accountRows addObject:field];
 
-- (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-	if (section == 0)
-		return @"Usernames must have at least 5 characters.";
-	return nil;
-}
-
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-	if (section == 0)
-		return 1 + (self.statusText.length ? 1 : 0) +
-				(self.editable.length ? 1 : 0);
-	if (section == 1)
-		return self.active.count;
-	return self.disabled.count;
-}
-
-- (UITableViewCell *)tableView:(UITableView *)tableView
-		 cellForRowAtIndexPath:(NSIndexPath *)path
-{
-	TGTheme *theme = [TGTheme shared];
-	if (path.section == 0){
-		NSInteger removeRow = 1 + (self.statusText.length ? 1 : 0);
-		if (path.row == 1 && self.statusText.length){
-			UITableViewCell *status = [[UITableViewCell alloc]
-					initWithStyle:UITableViewCellStyleDefault reuseIdentifier:nil];
-			[theme styleCell:status];
-			status.textLabel.text = self.statusText;
-			status.textLabel.font = TGFontCaption();
-			status.textLabel.numberOfLines = 0;
-			status.textLabel.textColor = self.statusTone == 2
-					? [theme destructiveColour]
-					: (self.statusTone == 1 ? [theme accentColour]
-										   : [theme secondaryTextColour]);
-			status.selectionStyle = UITableViewCellSelectionStyleNone;
-			status.accessoryType = UITableViewCellAccessoryNone;
-			return status;
-		}
-		UITableViewCell *cell = [[UITableViewCell alloc]
-				initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:nil];
-		[theme styleCell:cell];
-		cell.textLabel.font = TGFontRow();
-		cell.detailTextLabel.font = TGFontBody();
-		cell.detailTextLabel.textColor = [theme cellDetailColour];
-		if (path.row == 0){
-			// The official field is inline, with t.me/ as a fixed prefix, not
-			// an alert that hides what the link will look like.
-			cell.textLabel.text = nil;
-			cell.selectionStyle = UITableViewCellSelectionStyleNone;
-			cell.accessoryType = UITableViewCellAccessoryNone;
-			UILabel *prefix = [[UILabel alloc] initWithFrame:
-					CGRectMake(kUsernameFieldInset, 0, kUsernamePrefixWidth,
-							kUsernameFieldHeight)];
-			prefix.font = TGFontRow();
-			prefix.textColor = [theme secondaryTextColour];
-			prefix.backgroundColor = [UIColor clearColor];
-			prefix.text = @"t.me/";
-			[cell.contentView addSubview:prefix];
-			UITextField *field = [[UITextField alloc] initWithFrame:
-					CGRectMake(kUsernameFieldInset + kUsernamePrefixWidth, 0,
-							cell.contentView.bounds.size.width -
-									kUsernameFieldInset - kUsernamePrefixWidth -
-									kUsernameFieldInset,
-							kUsernameFieldHeight)];
-			field.font = TGFontRow();
-			field.textColor = [theme primaryTextColour];
-			field.placeholder = @"username";
-			field.text = self.editable;
-			field.autocapitalizationType = UITextAutocapitalizationTypeNone;
-			field.autocorrectionType = UITextAutocorrectionTypeNo;
-			field.returnKeyType = UIReturnKeyDone;
-			field.delegate = self;
-			[field addTarget:self action:@selector(usernameChanged:)
-					forControlEvents:UIControlEventEditingChanged];
-			[cell.contentView addSubview:field];
-			self.inlineField = field;
-		} else if (path.row == removeRow) {
-			cell.textLabel.text = @"Remove";
-			cell.textLabel.textColor = [theme destructiveColour];
-			cell.textLabel.textAlignment = NSTextAlignmentCenter;
-			cell.accessoryType = UITableViewCellAccessoryNone;
-		}
-		return cell;
+	if (self.statusText.length){
+		NSMutableDictionary *status = TGRow(TGKindNote, self.statusText);
+		status[TGRowTextTone] = @(self.statusTone);
+		[accountRows addObject:status];
 	}
+	if (self.editable.length){
+		NSMutableDictionary *remove = TGRedRow(@"Remove", ^{
+			[weakSelf removeUsername];
+		});
+		[accountRows addObject:remove];
+	}
+	[sections addObject:TGSection(nil,
+			@"Usernames must have at least 5 characters.", accountRows)];
 
-	BOOL isActive = path.section == 1;
-	NSString *username = isActive ? self.active[(NSUInteger)path.row]
-								 : self.disabled[(NSUInteger)path.row];
-	UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"username"];
-	if (!cell)
-		cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle
-									  reuseIdentifier:@"username"];
-	[theme styleCell:cell];
-	cell.textLabel.text = [@"@" stringByAppendingString:username];
-	cell.textLabel.font = TGFontRow();
-	cell.textLabel.textColor = [theme primaryTextColour];
-	cell.detailTextLabel.font = TGFontCaption();
-	cell.detailTextLabel.textColor = [theme secondaryTextColour];
-	cell.detailTextLabel.text = isActive
-			? ([username isEqualToString:self.editable] ? @"Primary" : @"Active")
-			: @"Disabled";
-	cell.selectionStyle = UITableViewCellSelectionStyleNone;
-	cell.showsReorderControl = isActive;
+	NSMutableArray *activeRows = [NSMutableArray array];
+	for (NSString *username in self.active){
+		BOOL primary = [username isEqualToString:self.editable];
+		NSMutableDictionary *row = [TGSubtitleRow(
+				[@"@" stringByAppendingString:username],
+				primary ? @"Primary" : @"Active", nil) mutableCopy];
+		row[TGRowKind] = TGKindToggle;
+		row[TGRowOn] = @YES;
+		row[TGRowEnabled] = @(!(primary || self.busy));
+		row[TGRowCanMove] = @(self.active.count > 1);
+		row[TGRowToggle] = ^(BOOL on){
+			[weakSelf setUsername:username active:on];
+		};
+		row[TGRowMove] = ^(NSInteger from, NSInteger to){
+			[weakSelf moveUsernameFrom:from to:to];
+		};
+		[activeRows addObject:row];
+	}
+	[sections addObject:TGSection(@"LINKS ORDER", nil, activeRows)];
 
-	TGUsernameSwitch *toggle = [[TGUsernameSwitch alloc] init];
-	toggle.username = username;
-	toggle.on = isActive;
-	// The editable name cannot be switched off; Telegram refuses it and the
-	// switch says so before the request is sent.
-	toggle.enabled = !(isActive && [username isEqualToString:self.editable]) && !self.busy;
-	[toggle addTarget:self action:@selector(usernameSwitchChanged:)
-	 forControlEvents:UIControlEventValueChanged];
-	cell.accessoryView = toggle;
-	return cell;
+	NSMutableArray *disabledRows = [NSMutableArray array];
+	for (NSString *username in self.disabled){
+		NSMutableDictionary *row = [TGSubtitleRow(
+				[@"@" stringByAppendingString:username], @"Disabled", nil) mutableCopy];
+		row[TGRowKind] = TGKindToggle;
+		row[TGRowOn] = @NO;
+		row[TGRowEnabled] = @(!self.busy);
+		row[TGRowToggle] = ^(BOOL on){
+			[weakSelf setUsername:username active:on];
+		};
+		[disabledRows addObject:row];
+	}
+	[sections addObject:TGSection(nil, nil, disabledRows)];
+
+	self.sections = sections;
 }
 
-- (BOOL)tableView:(UITableView *)tableView canEditRowAtIndexPath:(NSIndexPath *)path {
-	// Editing here is ordering only: a username is removed by switching it
-	// off or by changing the editable name, not by deleting a row.
-	return NO;
-}
-
-- (BOOL)tableView:(UITableView *)tableView canMoveRowAtIndexPath:(NSIndexPath *)path {
-	return path.section == 1 && self.active.count > 1;
-}
-
-- (void)tableView:(UITableView *)tableView
-		moveRowAtIndexPath:(NSIndexPath *)from
-			  toIndexPath:(NSIndexPath *)to
-{
+- (void)moveUsernameFrom:(NSInteger)from to:(NSInteger)to {
 	NSArray *before = [self.active copy];
-	NSString *name = self.active[(NSUInteger)from.row];
-	[self.active removeObjectAtIndex:(NSUInteger)from.row];
-	[self.active insertObject:name atIndex:(NSUInteger)to.row];
+	NSUInteger source = (NSUInteger)from, destination = (NSUInteger)to;
+	NSString *name = self.active[source];
+	[self.active removeObjectAtIndex:source];
+	[self.active insertObject:name atIndex:destination];
 	[self saveOrderRestoring:before];
 }
 
@@ -261,7 +185,8 @@ static const CGFloat kUsernameFieldInset = 12.0f;
 		me.busy = NO;
 		if (!ok){
 			me.active = [before mutableCopy];
-			[me.tableView reloadData];
+			[me rebuildSections];
+			[me reloadRows];
 			[TGAlertSheet showMessage:(error ?: @"An error occurred.")
 								title:@"Username Order" inView:me.view];
 			return;
@@ -270,15 +195,13 @@ static const CGFloat kUsernameFieldInset = 12.0f;
 	}];
 }
 
-- (void)usernameSwitchChanged:(TGUsernameSwitch *)sender {
+- (void)setUsername:(NSString *)username active:(BOOL)on {
 	if (self.busy){
-		sender.on = !sender.on;
+		[self rebuildSections];
+		[self reloadRows];
 		return;
 	}
-	NSString *username = sender.username;
-	BOOL on = sender.on;
 	self.busy = YES;
-	sender.enabled = NO;
 	__weak typeof(self) weakSelf = self;
 	[[TGClient shared] toggleUsernameIsActive:username isActive:on
 			completion:^(BOOL ok, NSString *error){
@@ -287,8 +210,8 @@ static const CGFloat kUsernameFieldInset = 12.0f;
 			return;
 		me.busy = NO;
 		if (!ok){
-			sender.on = !on;
-			sender.enabled = YES;
+			[me rebuildSections];
+			[me reloadRows];
 			[TGAlertSheet showMessage:(error ?: @"An error occurred.")
 								title:@"Username" inView:me.view];
 			return;
@@ -301,25 +224,16 @@ static const CGFloat kUsernameFieldInset = 12.0f;
 
 #pragma mark - choosing
 
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)path {
-	if (path.section != 0)
-		return;
-	[tableView deselectRowAtIndexPath:path animated:YES];
-	NSInteger removeRow = 1 + (self.statusText.length ? 1 : 0);
-	if (self.editable.length && path.row == removeRow){
-		[self removeUsername];
-		return;
-	}
-	if (path.row == 0)
-		[self.inlineField becomeFirstResponder];
-}
-
 - (void)updateStatusText:(NSString *)text tone:(NSInteger)tone {
 	BOOL had = self.statusText.length > 0;
 	BOOL has = text.length > 0;
 	self.statusText = text;
 	self.statusTone = tone;
-	if (!self.isViewLoaded || had == has){
+	[self rebuildSections];
+	if (!self.isViewLoaded){
+		return;
+	}
+	if (had == has){
 		if (has)
 			[self.tableView reloadRowsAtIndexPaths:@[
 					[NSIndexPath indexPathForRow:1 inSection:0]]
@@ -346,10 +260,11 @@ static const CGFloat kUsernameFieldInset = 12.0f;
 
 /// Typing stops for half a second before the check goes out: one request per
 /// pause, not one per keystroke, which is what TDLib's rate limits expect.
-- (void)usernameChanged:(UITextField *)field {
+- (void)usernameChanged:(NSString *)text {
+	self.inlineText = text ?: @"";
 	[NSObject cancelPreviousPerformRequestsWithTarget:self
 			selector:@selector(checkUsernameNow) object:nil];
-	NSString *typed = TGUsernameNormalized(field.text);
+	NSString *typed = TGUsernameNormalized(self.inlineText);
 	if (!TGUsernameShouldCheck(typed, self.editable)){
 		[self updateStatusText:nil tone:0];
 		return;
@@ -359,7 +274,7 @@ static const CGFloat kUsernameFieldInset = 12.0f;
 }
 
 - (void)checkUsernameNow {
-	NSString *typed = TGUsernameNormalized(self.inlineField.text);
+	NSString *typed = TGUsernameNormalized(self.inlineText);
 	if (!TGUsernameShouldCheck(typed, self.editable))
 		return;
 	__weak typeof(self) weakSelf = self;
@@ -368,7 +283,7 @@ static const CGFloat kUsernameFieldInset = 12.0f;
 		TGUsernameSettingsViewController *me = weakSelf;
 		if (!me)
 			return;
-		NSString *current = TGUsernameNormalized(me.inlineField.text);
+		NSString *current = TGUsernameNormalized(me.inlineText);
 		if (!TGUsernameAnswerStillApplies(typed, current))
 			return;
 		NSInteger tone = [result isEqualToString:@"ok"] ? 1
@@ -377,17 +292,11 @@ static const CGFloat kUsernameFieldInset = 12.0f;
 	}];
 }
 
-- (BOOL)textFieldShouldReturn:(UITextField *)textField {
+- (void)usernameEditingEnded:(NSString *)text {
+	self.inlineText = text ?: @"";
 	[NSObject cancelPreviousPerformRequestsWithTarget:self
 			selector:@selector(checkUsernameNow) object:nil];
-	[textField resignFirstResponder];
-	return YES;
-}
-
-- (void)textFieldDidEndEditing:(UITextField *)textField {
-	[NSObject cancelPreviousPerformRequestsWithTarget:self
-			selector:@selector(checkUsernameNow) object:nil];
-	NSString *typed = TGUsernameNormalized(textField.text);
+	NSString *typed = TGUsernameNormalized(self.inlineText);
 	if (!TGUsernameShouldCheck(typed, self.editable))
 		return;
 	__weak typeof(self) weakSelf = self;
@@ -395,7 +304,8 @@ static const CGFloat kUsernameFieldInset = 12.0f;
 		if (!ok){
 			[TGAlertSheet showMessage:@"An error occurred."
 								title:@"Username" inView:weakSelf.view];
-			[weakSelf.tableView reloadData];
+			[weakSelf rebuildSections];
+			[weakSelf reloadRows];
 			return;
 		}
 		[weakSelf load];

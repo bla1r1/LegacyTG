@@ -1,4 +1,5 @@
 #import "TGProfileViewControllerInternal.h"
+#import "TGProfileHeaderView.h"
 #import "TGLocalization.h"
 #import "TGCapabilities.h"
 #import "TGStatusText.h"
@@ -20,19 +21,6 @@
 #import "TGAffiliateProgramsViewController.h"
 #import "TGGroupLogic.h"
 #import <CoreImage/CoreImage.h>
-
-/// The glyph on an action tile, over the word that names it.
-static const CGFloat kTileGlyph = TGMetricMenuGlyph;
-
-/// A 1 pt image of one colour, stretched by UIButton as its pressed background.
-static UIImage *TGSolidImage(UIColor *colour) {
-	UIGraphicsBeginImageContextWithOptions(CGSizeMake(1, 1), YES, 0);
-	[colour setFill];
-	UIRectFill(CGRectMake(0, 0, 1, 1));
-	UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
-	UIGraphicsEndImageContext();
-	return image;
-}
 
 @implementation TGProfileViewController (Actions)
 
@@ -103,118 +91,8 @@ static UIImage *TGSolidImage(UIColor *colour) {
 	NSString *network = TGNetworkSubtitleForState(
 			(NSInteger)[TGClient shared].connectionState, nil);
 	NSString *line = network ?: (self.restingStatus ?: @"");
-	if (line.length && ![self.statusLabel.text isEqualToString:line])
-		self.statusLabel.text = line;
-}
-
-/// The tiles under the name: a glyph over a word, on a soft rounded plate.
-/// Only the ones that mean something here - a group has no one to call.
-- (void)buildActionsIn:(UIView *)header atY:(CGFloat)y {
-	// My Profile has no header action row: Add Story and Edit live in the
-	// navigation bar, as in the official client.
-	if (self.isOwnProfile)
-		return;
-	NSMutableArray *tiles = [NSMutableArray array];
-	BOOL own = self.isOwnProfile;
-	if (own){
-		if (self.onSearchTapped) {
-			[tiles addObject:@[@"search", @"search"]];
-		} else {
-			[tiles addObject:@[@"chat", @"saved"]];
-		}
-		// No edit tile: Edit is in the bar above, the way Telegram has it.
-		[tiles addObject:@[@"plus", @"story"]];
-		[tiles addObject:@[@"more", @"more"]];
-	} else if (self.userId){
-		// A profile is often reached from a contact or a member list, not
-		// from the chat, so Message is the first thing Telegram offers. Opened
-		// from that chat (it passes a search), the chat is one step back.
-		if (!self.onSearchTapped)
-			[tiles addObject:@[@"chat", @"message"]];
-		// A bot cannot place or receive calls; its profile offers Message
-		// and Stop instead.
-		if (self.canCall && !self.isBot)
-			[tiles addObject:@[@"call",  @"call"]];
-		if (self.canCall && self.canVideoCall && !self.isBot &&
-				[TGCapabilities canEncodeVideoCall])
-			[tiles addObject:@[@"video", @"video"]];
-		// A bot can be stopped from here; blocking it is what Stop does.
-		if (self.isBot && !self.blocked)
-			[tiles addObject:@[@"close", @"stop"]];
-		[tiles addObject:@[(self.muted ? @"unmute" : @"mute"),
-						   (self.muted ? @"unmute" : @"mute")]];
-		if (self.onSearchTapped)
-			[tiles addObject:@[@"search", @"search"]];
-		[tiles addObject:@[@"more", @"more"]];
-	} else if (self.isChannel){
-		// For a channel you follow, the tiles are "message" (only when it has Direct Messages),
-		// "mute"/"unmute", "leave", "more".
-		BOOL hasDM = (self.directMessagesChatId != 0) || self.hasDirectMessages || self.canManageDirectMessages;
-		if (hasDM)
-			[tiles addObject:@[@"chat", @"message"]];
-		[tiles addObject:@[(self.muted ? @"unmute" : @"mute"),
-						   (self.muted ? @"unmute" : @"mute")]];
-		[tiles addObject:@[@"logout", @"leave"]];   // a door, not a bin: leaving deletes nothing
-		[tiles addObject:@[@"more", @"more"]];
-	} else {
-		// Group
-		if (self.canInvite)
-			[tiles addObject:@[@"plus", @"add"]];
-		[tiles addObject:@[(self.muted ? @"unmute" : @"mute"),
-						   (self.muted ? @"unmute" : @"mute")]];
-		if (self.onSearchTapped)
-			[tiles addObject:@[@"search", @"search"]];
-		[tiles addObject:@[@"more", @"more"]];
-	}
-
-	CGFloat width = header.bounds.size.width;
-	CGFloat gap = 6, margin = 10;
-	CGFloat tileW = (width - TGDoubled(margin) - gap * (tiles.count - 1)) / (CGFloat)MAX(tiles.count, 1);
-	if (tileW > 96.0f)
-		tileW = 96.0f;
-	CGFloat totalW = tiles.count * tileW + (tiles.count - 1) * gap;
-	CGFloat startX = TGCenteredOrigin(width, totalW);
-	TGTheme *theme = [TGTheme shared];
-
-	for (NSUInteger i = 0; i < tiles.count; i++){
-		UIButton *tile = [UIButton buttonWithType:UIButtonTypeCustom];
-		tile.frame = CGRectMake(startX + i * (tileW + gap), y, tileW, kActionTile);
-		if ([TGTheme drawsSkeuomorphicChrome]){
-			[tile setBackgroundImage:[TGTheme buttonImageForStyle:TGButtonStyleSecondary highlighted:NO height:kActionTile] forState:UIControlStateNormal];
-			[tile setBackgroundImage:[TGTheme buttonImageForStyle:TGButtonStyleSecondary highlighted:YES height:kActionTile] forState:UIControlStateHighlighted];
-			tile.backgroundColor = [UIColor clearColor];
-		} else {
-			// Flat chrome: Telegram's tiles are white cards on the grey page,
-			// the same card the rows under them sit on. The silver bevel is
-			// the iOS 6 button and read as a grey slab here.
-			tile.backgroundColor = [theme cardBackgroundColour];
-			[tile setBackgroundImage:TGSolidImage([theme groupedBackgroundColour])
-							forState:UIControlStateHighlighted];
-		}
-		tile.layer.cornerRadius = TGMetricCornerControl;
-		tile.clipsToBounds = YES;
-		tile.tag = i;
-		[tile addTarget:self action:@selector(actionTileTapped:)
-	   forControlEvents:UIControlEventTouchUpInside];
-		[header addSubview:tile];
-
-		UIImageView *glyph = [[UIImageView alloc] initWithFrame:
-				CGRectMake(TGCenteredOrigin(tileW, kTileGlyph), TGMetricPad, kTileGlyph, kTileGlyph)];
-		glyph.image = [TGIcons menuGlyphNamed:tiles[i][0]];
-		glyph.contentMode = UIViewContentModeScaleAspectFit;
-		[TGIcons tintImageView:glyph colour:[theme accentColour]];
-		[tile addSubview:glyph];
-
-		UILabel *label = [[UILabel alloc] initWithFrame:
-				CGRectMake(0, kActionTile - TGMetricQuoteForwardLine, tileW, TGMetricLineMicro)];
-		label.text = tiles[i][1];
-		label.font = TGFontMicro();
-		label.textAlignment = NSTextAlignmentCenter;
-		label.textColor = [theme accentColour];
-		label.backgroundColor = [UIColor clearColor];
-		[tile addSubview:label];
-	}
-	self.actionNames = tiles;
+	if (line.length && ![self.headerView.statusText isEqualToString:line])
+		self.headerView.statusText = line;
 }
 
 /// The Story tile and the empty Stories tab's link both start here.
@@ -226,9 +104,7 @@ static UIImage *TGSolidImage(UIColor *colour) {
 	}];
 }
 
-- (void)actionTileTapped:(UIButton *)tile {
-	NSString *action = self.actionNames[tile.tag][1];
-
+- (void)handleActionKey:(NSString *)action {
 	if ([action isEqualToString:@"saved"]){
 		int64_t myId = [[TGClient shared].me[@"id"] longLongValue];
 		int64_t savedChatId = [[TGClient shared] savedMessagesChatId] ?: myId;
@@ -263,7 +139,7 @@ static UIImage *TGSolidImage(UIColor *colour) {
 	} else if ([action isEqualToString:@"search"]){
 		if (self.onSearchTapped) self.onSearchTapped();
 	} else {
-		[self showMoreMenuFrom:tile];
+		[self showMoreMenuFrom:(self.headerView ?: self.view)];
 	}
 }
 

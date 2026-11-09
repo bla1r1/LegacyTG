@@ -10,9 +10,8 @@
 //
 #import "TGAdminRightsViewController.h"
 #import "TGClient.h"
-#import "TGTheme.h"
-#import "TGStyle.h"
 #import "TGAlertSheet.h"
+#import "TGRows.h"
 
 static NSString *const kGroupPresetKey   = @"TGDefaultGroupAdminRights";
 static NSString *const kChannelPresetKey = @"TGDefaultChannelAdminRights";
@@ -23,25 +22,10 @@ static NSString *const kChannelPresetKey = @"TGDefaultChannelAdminRights";
 
 @implementation TGAdminRightsViewController
 
-- (instancetype)init {
-	return [super initWithStyle:UITableViewStyleGrouped];
-}
-
 - (void)viewDidLoad {
 	[super viewDidLoad];
 	self.title = @"Admin Rights";
-	[self applyTheme];
-
-}
-
-- (void)viewWillAppear:(BOOL)animated {
-	[super viewWillAppear:animated];
-	[self applyTheme];
-}
-
-- (void)applyTheme {
-	[[TGTheme shared] styleGroupedTable:self.tableView];
-	[[TGTheme shared] styleNavigationBar:self.navigationController.navigationBar];
+	[self rebuildSections];
 }
 
 - (NSString *)savedPresetForKey:(NSString *)key {
@@ -49,56 +33,31 @@ static NSString *const kChannelPresetKey = @"TGDefaultChannelAdminRights";
 	return saved.length ? saved : nil;
 }
 
-- (NSString *)labelForPreset:(NSString *)preset {
-	if ([preset isEqualToString:@"readonly"]) return @"Read-Only Mode";
-	if ([preset isEqualToString:@"posting"])  return @"Posting Members";
-	if ([preset isEqualToString:@"full"])     return @"Admin";
-	if ([preset isEqualToString:@"standard"]) return @"Default";
-	return @"Default";
+- (void)rebuildSections {
+	__weak typeof(self) weakSelf = self;
+	NSArray *details = TGAdminRightsRowDetails(
+			[self savedPresetForKey:kGroupPresetKey],
+			[self savedPresetForKey:kChannelPresetKey]);
+
+	NSMutableDictionary *groupRow = [TGTapRow(TGAdminRightsRowTitles()[0],
+			details[0], nil) mutableCopy];
+	NSMutableDictionary *channelRow = [TGTapRow(TGAdminRightsRowTitles()[1],
+			details[1], nil) mutableCopy];
+	if (!self.busy){
+		groupRow[TGRowTap] = ^{ [weakSelf showPresetsForChannel:NO]; };
+		channelRow[TGRowTap] = ^{ [weakSelf showPresetsForChannel:YES]; };
+	}
+
+	self.sections = @[
+		TGSection(@"Group", nil, @[groupRow]),
+		TGSection(@"Channel", nil, @[channelRow]),
+	];
+	[self reloadRows];
 }
 
-#pragma mark - table
+#pragma mark - actions
 
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-	return 2;
-}
-
-- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-	return section == 0 ? @"Group"
-						: @"Channel";
-}
-
-- (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-	return nil;
-}
-
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-	return 1;
-}
-
-- (UITableViewCell *)tableView:(UITableView *)tableView
-		 cellForRowAtIndexPath:(NSIndexPath *)path
-{
-	UITableViewCell *cell = [[UITableViewCell alloc]
-			initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:nil];
-	[[TGTheme shared] styleCell:cell];
-	cell.textLabel.font = TGFontRow();
-	cell.detailTextLabel.font = TGFontBody();
-	cell.detailTextLabel.textColor = [[TGTheme shared] cellDetailColour];
-	cell.textLabel.text = @"Admin Rights";
-	NSString *key = path.section == 0 ? kGroupPresetKey : kChannelPresetKey;
-	cell.detailTextLabel.text = [self labelForPreset:[self savedPresetForKey:key]];
-	cell.accessoryType = UITableViewCellAccessoryNone;
-	cell.selectionStyle = self.busy ? UITableViewCellSelectionStyleNone
-									: UITableViewCellSelectionStyleBlue;
-	return cell;
-}
-
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)path {
-	if (self.busy)
-		return;
-	[tableView deselectRowAtIndexPath:path animated:YES];
-	BOOL channel = path.section == 1;
+- (void)showPresetsForChannel:(BOOL)channel {
 	NSArray *presets = @[@"readonly", @"standard", @"posting", @"full"];
 	NSArray *titles = @[@"Read-Only Mode", @"Default", @"Posting Members", @"Admin"];
 	__weak typeof(self) weakSelf = self;
@@ -110,7 +69,7 @@ static NSString *const kChannelPresetKey = @"TGDefaultChannelAdminRights";
 					   onChoice:^(NSInteger index){
 		NSString *preset = presets[(NSUInteger)index];
 		weakSelf.busy = YES;
-		[weakSelf.tableView reloadData];
+		[weakSelf rebuildSections];
 		void (^done)(BOOL, NSString *) = ^(BOOL ok, NSString *error){
 			TGAdminRightsViewController *me = weakSelf;
 			if (!me)
@@ -119,13 +78,13 @@ static NSString *const kChannelPresetKey = @"TGDefaultChannelAdminRights";
 			if (!ok){
 				[TGAlertSheet showMessage:(error ?: @"An error occurred.")
 									title:@"Admin Rights" inView:me.view];
-				[me.tableView reloadData];
+				[me rebuildSections];
 				return;
 			}
 			[NSUserDefaults.standardUserDefaults setObject:preset
 					forKey:(channel ? kChannelPresetKey : kGroupPresetKey)];
 			[NSUserDefaults.standardUserDefaults synchronize];
-			[me.tableView reloadData];
+			[me rebuildSections];
 		};
 		if (channel)
 			[[TGClient shared] setDefaultChannelAdministratorRightsPreset:preset

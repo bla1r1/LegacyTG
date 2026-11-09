@@ -11,6 +11,7 @@
 #import "TGCapabilities.h"
 #import "TGMessageLayout.h"
 #import "TGGiftText.h"
+#import "TGRows.h"
 
 static const CGFloat kArtSide = TGMetricProfilePhotoSide;
 static const CGFloat kHeaderPadTop = TGMetricPadLarge;
@@ -18,7 +19,6 @@ static const CGFloat kHeaderPadMid = TGMetricPadMedium;
 static const CGFloat kHeaderPadBottom = TGMetricPadLarge;
 static const CGFloat kTitleHeight = TGMetricLineTitle;
 static const CGFloat kHeaderHeight = TGMetricPadLarge + TGMetricProfilePhotoSide + TGMetricPadMedium + TGMetricLineTitle + TGMetricLineMicro + TGMetricPadLarge;
-static const CGFloat kNoteMargin = TGMetricPadLarge + TGMetricPadMedium;
 static const CGFloat kRGBDivisor = 255.0f;
 
 static UIImage *TGGiftRadialGradient(int32_t centerColor, int32_t edgeColor, CGFloat side) {
@@ -120,11 +120,12 @@ static UIImage *TGGiftRadialGradient(int32_t centerColor, int32_t edgeColor, CGF
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	self.title = @"Gift";
+	self.title = TGLocalized(@"Gift");
 
 
 	[self applyTheme];
 	[self setupTableHeader];
+	[self rebuildSections];
 
 	// The art is the screen: no bar, and a Close X sits over it as official
 	// draws it.
@@ -164,7 +165,7 @@ static UIImage *TGGiftRadialGradient(int32_t centerColor, int32_t edgeColor, CGF
 }
 
 - (void)applyTheme {
-	[[TGTheme shared] styleGroupedTable:self.tableView];
+	[super applyTheme];
 	[[TGTheme shared] styleNavigationBar:self.navigationController.navigationBar];
 }
 
@@ -386,109 +387,42 @@ static UIImage *TGGiftRadialGradient(int32_t centerColor, int32_t edgeColor, CGF
 	return [fmt stringFromDate:[NSDate dateWithTimeIntervalSince1970:[unix doubleValue]]];
 }
 
-#pragma mark - Table View Data Source
+#pragma mark - rows
 
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-	// The note is part of the gift's detail rows, not a second table section.
-	return 1;
+- (NSString *)detailForTitle:(NSString *)title {
+	if ([title isEqualToString:TGLocalized(@"Date")])
+		return [self formattedDate];
+	if ([title isEqualToString:TGLocalized(@"Model")])
+		return [self.gift[@"modelName"] isKindOfClass:[NSString class]]
+				? self.gift[@"modelName"] : @"";
+	if ([title isEqualToString:TGLocalized(@"Symbol")])
+		return [self.gift[@"symbolName"] isKindOfClass:[NSString class]]
+				? self.gift[@"symbolName"] : @"";
+	if ([title isEqualToString:TGLocalized(@"Backdrop")])
+		return [self.gift[@"backdropName"] isKindOfClass:[NSString class]]
+				? self.gift[@"backdropName"] : @"";
+	if ([self.gift[@"isCollectible"] boolValue])
+		return TGGiftValueText(self.gift);
+	NSInteger stars = [self.gift[@"starCount"] integerValue];
+	// The pack only has the "%@ Stars" form; a one-star gift used to fall
+	// back to English through the missing singular.
+	return TGLocalizedFormat(@"%@ Stars", @(stars));
 }
 
-- (NSInteger)detailRowCount {
-	if (![self.gift[@"isCollectible"] boolValue])
-		return 2;
-	// Date, Model, Symbol, Backdrop, and Value when the gift carries a fiat
-	// amount and currency; TDLib sends no value for most gifts.
-	return TGGiftHasValue(self.gift) ? 5 : 4;
-}
+- (void)rebuildSections {
+	NSMutableArray *rows = [NSMutableArray array];
+	for (NSString *title in TGGiftDetailRowTitles(self.gift))
+		[rows addObject:TGTapRow(title, [self detailForTitle:title], nil)];
 
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-	if (section != 0)
-		return 0;
-	return [self detailRowCount] + ([self giftNote].length > 0 ? 1 : 0);
-}
-
-- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-	return nil;
-}
-
-- (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath {
-	if (indexPath.section == 0 && indexPath.row >= [self detailRowCount]) {
-		NSString *note = [self giftNote];
-		CGFloat textW = tableView.bounds.size.width - TGDoubled(kNoteMargin);
-		if (textW <= 0)
-			textW = TGMetricScreenWidth - TGDoubled(kNoteMargin);
-		CGSize size = TGTextSize(note, TGFontBody(), textW);
-		return MAX(TGMetricRow, ceilf(size.height) + TGDoubled(TGMetricPadMedium));
-	}
-	return TGMetricRow;
-}
-
-- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-	if (indexPath.section == 0 && indexPath.row >= [self detailRowCount]) {
-		static NSString *const kNoteCellId = @"TGGiftNoteCell";
-		UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:kNoteCellId];
-		if (!cell) {
-			cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
-										  reuseIdentifier:kNoteCellId];
-		}
-		[[TGTheme shared] styleCell:cell];
-		cell.selectionStyle = UITableViewCellSelectionStyleNone;
-		// Official draws the comment as a plain text row inside the gift card,
-		// with no title of its own.
-		cell.textLabel.text = [self giftNote];
-		cell.textLabel.font = TGFontBody();
-		cell.textLabel.textColor = [[TGTheme shared] primaryTextColour];
-		cell.textLabel.numberOfLines = 0;
-		cell.textLabel.lineBreakMode = NSLineBreakByWordWrapping;
-		return cell;
+	NSString *note = [self giftNote];
+	if (note.length){
+		NSMutableDictionary *row = [TGTapRow(note, nil, nil) mutableCopy];
+		row[TGRowTitleLines] = @0;
+		[rows addObject:row];
 	}
 
-	static NSString *const kDetailCellId = @"TGGiftDetailCell";
-	UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:kDetailCellId];
-	if (!cell) {
-		cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:kDetailCellId];
-	}
-	[[TGTheme shared] styleCell:cell];
-	cell.selectionStyle = UITableViewCellSelectionStyleNone;
-
-	BOOL isCollectible = [self.gift[@"isCollectible"] boolValue];
-	NSString *title = @"";
-	NSString *detail = @"";
-
-	if (indexPath.row == 0) {
-		title = @"Date";
-		detail = [self formattedDate];
-	} else if (isCollectible) {
-		if (indexPath.row == 1) {
-			title = @"Model";
-			detail = [self.gift[@"modelName"] isKindOfClass:[NSString class]] ? self.gift[@"modelName"] : @"";
-		} else if (indexPath.row == 2) {
-			title = @"Symbol";
-			detail = [self.gift[@"symbolName"] isKindOfClass:[NSString class]] ? self.gift[@"symbolName"] : @"";
-		} else if (indexPath.row == 3) {
-			title = @"Backdrop";
-			detail = [self.gift[@"backdropName"] isKindOfClass:[NSString class]] ? self.gift[@"backdropName"] : @"";
-		} else {
-			title = @"Value";
-			// A unique gift's Value is its fiat worth, not the resale star
-			// count; the row only exists when both amount and currency came.
-			detail = TGGiftValueText(self.gift);
-		}
-	} else {
-		title = @"Value";
-		NSInteger stars = [self.gift[@"starCount"] integerValue];
-		// The pack only has the "%@ Stars" form; a one-star gift used to fall
-		// back to English through the missing singular.
-		detail = TGLocalizedFormat(@"%@ Stars", @(stars));
-	}
-
-	cell.textLabel.text = title;
-	cell.detailTextLabel.text = detail;
-	return cell;
-}
-
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	[tableView deselectRowAtIndexPath:indexPath animated:NO];
+	self.sections = @[TGSection(nil, nil, rows)];
+	[self reloadRows];
 }
 
 @end

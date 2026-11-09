@@ -1,42 +1,36 @@
 //
-// TGBackgroundsViewController.m - the background catalogue.
+// TGBackgroundsViewController.m - the chat wallpaper gallery.
 //
-// Telegram keeps two lists (light and dark) of the backgrounds an account has
-// installed, and one default behind the chat. The screen draws the list it is
-// looking at, searches the public catalogue by name, and sends every change
-// back through TDLib. A found background is drawn with its own thumbnail or,
-// when Telegram stores it as a colour, a swatch of that colour.
+// The official screen is two actions, a footer, then the account's installed
+// backgrounds as a square-tile grid. The thumbnails are baked once: a pattern
+// is its fill plus the pattern image, a photo is the downloaded picture.
 //
 #import "TGBackgroundsViewController.h"
 #import "TGBackgroundEditorViewController.h"
-#import "TGClient.h"
+#import "TGBackgroundStore.h"
 #import "TGAlertSheet.h"
+#import "TGSettingsFormatting.h"
 #import "TGStyle.h"
 #import "TGTheme.h"
+#import "TGIcons.h"
+#import "TGLocalization.h"
+#import "TGRows.h"
+#import "TGGridRowCell.h"
 #import <QuartzCore/QuartzCore.h>
 
-static NSMutableDictionary *TGBRow(NSString *kind, NSString *title) {
-	return [@{@"kind" : kind, @"title" : title ?: @""} mutableCopy];
-}
-
-static NSDictionary *TGBCellRow(NSString *title, NSString *detail, NSString *action) {
-	NSMutableDictionary *row = TGBRow(@"action", title);
-	if (detail) row[@"detail"] = detail;
-	if (action) row[@"action"] = action;
-	return row;
-}
-
-static NSDictionary *TGBSection(NSString *header, NSString *footer, NSArray *rows) {
-	NSMutableDictionary *section = [NSMutableDictionary dictionary];
-	if (header) section[@"header"] = header;
-	if (footer) section[@"footer"] = footer;
-	section[@"rows"] = rows ?: @[];
-	return section;
+/// The current theme's wallpaper is the first cell in the gallery, the way
+/// official shows the active background before the collection.
+static NSDictionary *TGBThemeWallpaperItem(void) {
+	NSString *name = [[TGTheme shared] importedName];
+	return @{
+		@"id" : @"theme-wallpaper",
+		@"title" : name.length ? name : @"Classic",
+		@"themeWallpaper" : @YES,
+	};
 }
 
 /// TDLib's RGB integer as a colour. This is server data - the colour Telegram
-/// itself draws the background with - not a design token, which is why it is
-/// built here rather than added to the theme palette.
+/// itself draws the wallpaper with - not a design token.
 static UIColor *TGBackgroundColour(NSInteger rgb) {
 	CGFloat red   = (CGFloat)((rgb >> 16) & 0xFF) / 255.0f;
 	CGFloat green = (CGFloat)((rgb >> 8) & 0xFF) / 255.0f;
@@ -44,476 +38,347 @@ static UIColor *TGBackgroundColour(NSInteger rgb) {
 	return [UIColor colorWithRed:red green:green blue:blue alpha:1.0f];
 }
 
-/// A square cell picture: the downloaded thumbnail when there is one, the
-/// background's colour otherwise. Backgrounds are pictures or fills; a row
-/// with neither would be a blank line in a list about how things look.
-static UIImage *TGBackgroundPreview(UIImage *source, NSInteger fillColour) {
-	CGFloat side = TGMetricListAvatar;
-	CGSize box = CGSizeMake(side, side);
-	UIGraphicsBeginImageContextWithOptions(box, YES, 0);
-	UIColor *fallback = fillColour >= 0
-			? TGBackgroundColour(fillColour)
+static CGSize TGBBackgroundThumbSize(void) {
+	return CGSizeMake(TGMetricBackgroundThumbSide,
+			TGMetricBackgroundThumbSide * TGMetricBackgroundGridAspect);
+}
+
+static void TGBDrawFilling(UIImage *image, CGRect rect, CGBlendMode mode) {
+	if (!image || image.size.width <= 0 || image.size.height <= 0)
+		return;
+	CGFloat scale = MAX(rect.size.width / image.size.width,
+			rect.size.height / image.size.height);
+	CGSize drawn = CGSizeMake(image.size.width * scale, image.size.height * scale);
+	CGRect frame = CGRectMake(CGRectGetMinX(rect) + TGCenteredOrigin(rect.size.width, drawn.width),
+			CGRectGetMinY(rect) + TGCenteredOrigin(rect.size.height, drawn.height),
+			drawn.width, drawn.height);
+	[image drawInRect:frame blendMode:mode alpha:TGAlphaOpaque];
+}
+
+/// One grid picture: the background's fill, its pattern or photo, all clipped
+/// to the cell's rounded rectangle. Called once per background, then cached.
+static UIImage *TGBackgroundThumbnail(NSDictionary *background, UIImage *source) {
+	CGSize size = TGBBackgroundThumbSize();
+	UIGraphicsBeginImageContextWithOptions(size, YES, 0);
+	CGRect rect = CGRectMake(0, 0, size.width, size.height);
+	UIBezierPath *clip = [UIBezierPath bezierPathWithRoundedRect:rect
+			cornerRadius:TGMetricCornerMedium];
+	[clip addClip];
+
+	NSNumber *fill = background[@"fillColour"];
+	UIColor *fallback = fill ? TGBackgroundColour(fill.integerValue)
 			: [[TGTheme shared] groupedBackgroundColour];
 	[fallback setFill];
-	UIRectFill(CGRectMake(0, 0, side, side));
-	if (source && source.size.width > 0 && source.size.height > 0){
-		// Aspect fill: a wallpaper thumbnail is usually wider than a row
-		// picture, and squashing it would show the wrong shape.
-		CGFloat scale = MAX(side / source.size.width, side / source.size.height);
-		CGSize drawn = CGSizeMake(source.size.width * scale,
-				source.size.height * scale);
-		[source drawInRect:CGRectMake(TGCenteredOrigin(side, drawn.width),
-				TGCenteredOrigin(side, drawn.height),
-				drawn.width, drawn.height)];
+	UIRectFill(rect);
+
+	if (background[@"localWallpaperType"]){
+		UIImage *texture = [TGTheme textureImageForType:
+				(TGWallpaperType)[background[@"localWallpaperType"] integerValue]];
+		TGBDrawFilling(texture, rect, kCGBlendModeNormal);
+	} else if (background[@"themeWallpaper"]){
+		UIImage *paper = [[TGTheme shared] wallpaper];
+		if (paper)
+			TGBDrawFilling(paper, rect, kCGBlendModeNormal);
+	} else if (source){
+		TGBDrawFilling(source, rect, kCGBlendModeNormal);
 	}
+	// A server pattern is not drawn here: TGBackgroundStore bakes the real
+	// .tgv over this fill, and the cell keeps the fill until it arrives.
+
 	UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
 	UIGraphicsEndImageContext();
 	return image;
 }
 
-@interface TGBackgroundsViewController ()
-@property (nonatomic, strong) NSArray *sections;
+/// Which cell carries the check: the theme default when no local choice is
+/// in force, a texture when its type is selected, or the server's default.
+static BOOL TGBBackgroundIsCurrent(NSDictionary *background, int64_t currentId) {
+	TGTheme *theme = [TGTheme shared];
+	if ([background[@"themeWallpaper"] boolValue])
+		return [theme wallpaperType] == TGWallpaperTypeNone;
+	NSNumber *localType = background[@"localWallpaperType"];
+	if ([localType isKindOfClass:NSNumber.class])
+		return [theme wallpaperType] == (TGWallpaperType)localType.integerValue;
+	int64_t identifier = [background[@"id"] longLongValue];
+	return identifier == currentId || [background[@"isDefault"] boolValue];
+}
+
+@interface TGBackgroundsViewController () <UINavigationControllerDelegate,
+		UIImagePickerControllerDelegate>
 @property (nonatomic, strong) NSArray *installed;
-@property (nonatomic, strong) NSDictionary *found;
-@property (nonatomic, copy) NSString *loadError;
-@property (nonatomic, copy) NSString *searchError;
-@property (nonatomic, copy) NSString *status;
-@property (nonatomic, assign) BOOL darkTheme;
-@property (nonatomic, strong) NSMutableDictionary *previews;   // background id -> UIImage
-@property (nonatomic, strong) NSMutableSet *requested;         // background id
+@property (nonatomic, strong) NSMutableDictionary *previews;
+@property (nonatomic, strong) NSMutableSet *requested;
+@property (nonatomic, copy) NSString *errorText;
+@property (nonatomic, assign) BOOL editingBackgrounds;
+@property (nonatomic, assign) BOOL loadedDarkTheme;
+@property (nonatomic, assign) BOOL hasLoaded;
 @end
 
 @implementation TGBackgroundsViewController
 
-- (instancetype)init {
-	return [super initWithStyle:UITableViewStyleGrouped];
-}
-
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	self.title = @"Chat Wallpaper";
+	self.title = TGLocalized(@"Chat Wallpaper");
 	self.installed = @[];
 	self.previews = [NSMutableDictionary dictionary];
 	self.requested = [NSMutableSet set];
+	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
+			initWithTitle:TGLocalized(@"Edit")
+					style:UIBarButtonItemStylePlain
+				   target:self action:@selector(toggleEditing)];
+	[[NSNotificationCenter defaultCenter] addObserver:self
+			selector:@selector(patternThumbnailReady:)
+				name:TGBackgroundStoreChangedNotification object:nil];
+	[[NSNotificationCenter defaultCenter] addObserver:self
+			selector:@selector(themeChanged:)
+				name:TGThemeChangedNotification object:nil];
 	[self applyTheme];
 	[self loadInstalled];
+}
 
+- (void)patternThumbnailReady:(NSNotification *)note {
+	(void)note;
+	[self reloadRows];
+}
+
+- (void)themeChanged:(NSNotification *)note {
+	(void)note;
+	// The theme wallpaper's picture and the light/dark shelf both change.
+	if (self.hasLoaded)
+		[self loadInstalled];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
 	[super viewWillAppear:animated];
 	[self applyTheme];
-	[self.tableView reloadData];
+	if (self.hasLoaded)
+		[self loadInstalled];
 }
 
-- (void)applyTheme {
-	[[TGTheme shared] styleGroupedTable:self.tableView];
-	[[TGTheme shared] styleNavigationBar:self.navigationController.navigationBar];
+- (void)dealloc {
+	[[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 #pragma mark - loading
 
 - (void)loadInstalled {
+	BOOL dark = [[TGTheme shared] isDark];
+	self.loadedDarkTheme = dark;
+	self.hasLoaded = YES;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] installedBackgroundsForDarkTheme:self.darkTheme
+	[[TGBackgroundStore shared] installedBackgroundsForDarkTheme:dark
 			completion:^(NSArray *backgrounds, NSString *error){
-		weakSelf.installed = backgrounds ?: @[];
-		weakSelf.loadError = error;
+		weakSelf.installed = TGSettingsBackgroundsForDarkTheme(backgrounds, dark);
+		weakSelf.errorText = error;
 		[weakSelf rebuild];
 	}];
 }
 
 - (void)rebuild {
 	self.sections = [self buildSections];
-	[self.tableView reloadData];
+	[self reloadRows];
 }
 
 #pragma mark - sections
 
-- (NSArray *)buildSections {
-	NSMutableArray *sections = [NSMutableArray array];
+- (CGFloat)gridWidth {
+	CGFloat width = self.tableView.bounds.size.width - TGMetricGridTableMargin;
+	return width > 0 ? width : TGMetricScreenWidth - TGMetricGridTableMargin;
+}
 
-	NSMutableDictionary *themeRow = TGBRow(@"switch", @"Night Mode");
-	themeRow[@"on"] = @(self.darkTheme);
-	[sections addObject:TGBSection(nil, nil, @[
-		themeRow,
-		TGBCellRow(@"Set a Color", @"Colors & Gradients", @"editor")
+- (NSInteger)gridColumns {
+	return TGGridColumnsForWidth([self gridWidth], TGMetricBackgroundThumbSide);
+}
+
+- (NSArray *)buildSections {
+	__weak typeof(self) weakSelf = self;
+	NSMutableArray *sections = [NSMutableArray array];
+	[sections addObject:TGSection(nil,
+			TGLocalized(@"You can set a custom background image and share it with your friends."),
+			@[
+		TGTapRow(TGLocalized(@"Set a Color"), nil,
+				^{ [weakSelf openEditor]; }),
+		TGTapRow(TGLocalized(@"Choose from Photos"), nil,
+				^{ [weakSelf presentPicker]; }),
 	])];
 
-	NSMutableArray *installedRows = [NSMutableArray array];
-	if (self.loadError.length)
-		[installedRows addObject:TGBRow(@"plain", self.loadError)];
-	else if (!self.installed.count)
-		[installedRows addObject:TGBRow(@"plain", @"None")];
-	else {
-		for (NSDictionary *background in self.installed){
-			NSMutableDictionary *row = TGBRow(@"background", background[@"title"] ?: background[@"name"]);
-			row[@"background"] = background;
-			row[@"installed"] = @YES;
-			[installedRows addObject:row];
-		}
+	if (self.errorText.length)
+		[sections addObject:TGSection(nil, nil,
+				@[TGRow(TGKindPlain, self.errorText)])];
+
+	NSMutableArray *items = [NSMutableArray array];
+	[items addObject:TGBThemeWallpaperItem()];
+	[items addObjectsFromArray:TGSettingsWallpaperGridItems(
+			TGSettingsLocalWallpaperItems(), self.installed)];
+
+	int64_t current = [[TGBackgroundStore shared]
+			defaultBackgroundIdForDarkTheme:[[TGTheme shared] isDark]];
+	NSMutableArray *tiles = [NSMutableArray array];
+	for (NSDictionary *background in items){
+		UIImage *image = [self previewForBackground:background];
+		NSMutableDictionary *tile = [NSMutableDictionary dictionary];
+		if (image)
+			tile[TGGridItemImage] = image;
+		tile[TGGridItemInitials] = [TGIcons initialsForTitle:
+				background[@"title"] ?: @""] ?: @"";
+		tile[TGGridItemChecked] = @(TGBBackgroundIsCurrent(background, current));
+		[tiles addObject:tile];
 	}
-	[sections addObject:TGBSection(nil, nil, installedRows)];
 
-	NSMutableArray *searchRows = [NSMutableArray array];
-	[searchRows addObject:TGBCellRow(@"Search", nil, @"search")];
-	if (self.searchError.length)
-		[searchRows addObject:TGBRow(@"plain", self.searchError)];
-	if (self.found){
-		NSMutableDictionary *row = TGBRow(@"background", self.found[@"title"] ?: self.found[@"name"]);
-		row[@"background"] = self.found;
-		row[@"installed"] = @NO;
-		[searchRows addObject:row];
+	NSInteger columns = [self gridColumns];
+	NSMutableArray *rows = [NSMutableArray array];
+	for (NSUInteger start = 0; start < tiles.count;
+			start += (NSUInteger)columns){
+		NSRange range = NSMakeRange(start, MIN((NSUInteger)columns,
+				tiles.count - start));
+		NSArray *line = [tiles subarrayWithRange:range];
+		[rows addObject:TGGridRow(line, columns, ^(NSInteger index){
+			NSUInteger absolute = start + (NSUInteger)index;
+			TGBackgroundsViewController *me = weakSelf;
+			if (me && absolute < items.count)
+				[me tappedBackground:items[absolute]];
+		})];
 	}
-	[sections addObject:TGBSection(nil, nil, searchRows)];
-
-	NSMutableArray *defaultRows = [NSMutableArray array];
-	[defaultRows addObject:TGBCellRow(@"Remove Wallpaper", nil,
-			@"deleteDefault")];
-	[defaultRows addObject:TGBCellRow(@"Reset Chat Wallpapers", nil,
-			@"reset")];
-	[sections addObject:TGBSection(nil, nil, defaultRows)];
-
-	if (self.status.length)
-		[sections addObject:TGBSection(nil, nil,
-				@[TGBRow(@"plain", self.status)])];
-
+	[sections addObject:TGSection(nil, nil, rows)];
 	return sections;
-}
-
-#pragma mark - table
-
-- (NSDictionary *)rowAt:(NSIndexPath *)indexPath {
-	if (indexPath.section >= (NSInteger)self.sections.count)
-		return nil;
-	NSArray *rows = self.sections[(NSUInteger)indexPath.section][@"rows"];
-	return indexPath.row < (NSInteger)rows.count ? rows[(NSUInteger)indexPath.row] : nil;
-}
-
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-	return (NSInteger)self.sections.count;
-}
-
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-	return (NSInteger)[self.sections[(NSUInteger)section][@"rows"] count];
-}
-
-- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-	NSString *text = self.sections[(NSUInteger)section][@"header"];
-	return text.length ? text : nil;
-}
-
-- (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-	NSString *text = self.sections[(NSUInteger)section][@"footer"];
-	return text.length ? text : nil;
-}
-
-- (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath {
-	NSDictionary *row = [self rowAt:indexPath];
-	if ([row[@"kind"] isEqualToString:@"background"])
-		return TGMetricPersonRow;
-	return TGMetricRow;
-}
-
-- (UITableViewCell *)tableView:(UITableView *)tableView
-		 cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-	NSDictionary *row = [self rowAt:indexPath];
-	TGTheme *theme = [TGTheme shared];
-	NSString *kind = row[@"kind"];
-
-	if ([kind isEqualToString:@"switch"]){
-		UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"switch"];
-		if (!cell){
-			cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
-										  reuseIdentifier:@"switch"];
-			[theme styleCell:cell];
-			cell.selectionStyle = UITableViewCellSelectionStyleNone;
-		}
-		cell.textLabel.text = row[@"title"];
-		cell.textLabel.font = TGFontRow();
-		cell.textLabel.textColor = [theme primaryTextColour];
-		cell.backgroundColor = [theme cardBackgroundColour];
-		UISwitch *toggle = [[UISwitch alloc] init];
-		toggle.on = [row[@"on"] boolValue];
-		[toggle addTarget:self action:@selector(darkThemeToggled:)
-		 forControlEvents:UIControlEventValueChanged];
-		cell.accessoryView = toggle;
-		return cell;
-	}
-
-	if ([kind isEqualToString:@"background"]){
-		UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"background"];
-		if (!cell){
-			cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle
-										  reuseIdentifier:@"background"];
-			[theme styleCell:cell];
-		}
-		NSDictionary *background = row[@"background"];
-		cell.textLabel.text = row[@"title"];
-		cell.textLabel.font = TGFontRow();
-		cell.textLabel.textColor = [theme primaryTextColour];
-
-		NSMutableArray *parts = [NSMutableArray array];
-		if ([background[@"isDefault"] boolValue])
-			[parts addObject:@"Default"];
-		NSString *type = [background[@"typeName"] capitalizedString];
-		if (type.length)
-			[parts addObject:type];
-		cell.detailTextLabel.text = [parts componentsJoinedByString:@" · "];
-		cell.detailTextLabel.font = TGFontCaption();
-		cell.detailTextLabel.textColor = [theme secondaryTextColour];
-		cell.imageView.image = [self previewForBackground:background];
-		cell.imageView.contentMode = UIViewContentModeScaleAspectFill;
-		cell.imageView.clipsToBounds = YES;
-		cell.imageView.layer.cornerRadius = TGMetricCornerSmall;
-		cell.backgroundColor = [theme cardBackgroundColour];
-		cell.accessoryType = UITableViewCellAccessoryNone;
-		cell.selectionStyle = UITableViewCellSelectionStyleBlue;
-		return cell;
-	}
-
-	UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"action"];
-	if (!cell){
-		cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle
-									  reuseIdentifier:@"action"];
-		[theme styleCell:cell];
-	}
-	cell.textLabel.text = row[@"title"];
-	cell.detailTextLabel.text = row[@"detail"];
-	cell.backgroundColor = [theme listBackgroundColour];
-	cell.imageView.image = nil;
-	cell.accessoryView = nil;
-	cell.accessoryType = UITableViewCellAccessoryNone;
-
-	if ([kind isEqualToString:@"plain"]){
-		cell.textLabel.font = TGFontBody();
-		cell.textLabel.textColor = [theme secondaryTextColour];
-		cell.detailTextLabel.text = nil;
-		cell.selectionStyle = UITableViewCellSelectionStyleNone;
-		return cell;
-	}
-
-	BOOL destructive = [row[@"action"] isEqualToString:@"deleteDefault"] ||
-					   [row[@"action"] isEqualToString:@"reset"];
-	cell.textLabel.font = TGFontRow();
-	cell.textLabel.textColor = destructive ? [theme destructiveColour]
-										   : [theme accentColour];
-	cell.detailTextLabel.font = TGFontCaption();
-	cell.detailTextLabel.textColor = [theme secondaryTextColour];
-	cell.selectionStyle = UITableViewCellSelectionStyleBlue;
-	return cell;
-}
-
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	NSDictionary *row = [self rowAt:indexPath];
-	if (!row || [row[@"kind"] isEqualToString:@"plain"])
-		return;
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
-	if ([row[@"kind"] isEqualToString:@"background"])
-		[self showActionsForBackground:row[@"background"]
-							 installed:[row[@"installed"] boolValue]];
-	else if ([row[@"kind"] isEqualToString:@"action"])
-		[self runAction:row[@"action"]];
 }
 
 #pragma mark - previews
 
 - (UIImage *)previewForBackground:(NSDictionary *)background {
-	NSNumber *backgroundId = background[@"id"];
-	UIImage *cached = self.previews[backgroundId];
+	id identifier = background[@"id"];
+	UIImage *cached = self.previews[identifier];
 	if (cached)
 		return cached;
 
-	NSNumber *fileId = background[@"fileId"];
-	if (fileId.longLongValue > 0 && ![self.requested containsObject:backgroundId]){
-		[self.requested addObject:backgroundId];
+	if (background[@"localWallpaperType"] || background[@"themeWallpaper"]){
+		UIImage *image = TGBackgroundThumbnail(background, nil);
+		if (image && identifier)
+			self.previews[identifier] = image;
+		return image;
+	}
+
+	if ([background[@"typeName"] isEqualToString:@"pattern"]){
+		UIImage *image = [[TGBackgroundStore shared]
+				patternThumbnailForBackground:background
+										 size:TGBBackgroundThumbSize()
+										 dark:[[TGTheme shared] isDark]];
+		if (image){
+			if (identifier)
+				self.previews[identifier] = image;
+			return image;
+		}
+		return TGBackgroundThumbnail(background, nil);
+	}
+
+	if (identifier && ![self.requested containsObject:identifier]){
+		[self.requested addObject:identifier];
 		__weak typeof(self) weakSelf = self;
-		[[TGClient shared] downloadFile:fileId.integerValue
-							   priority:TGDownloadPriorityOnScreen
-							 completion:^(NSString *path){
-			if (!path.length)
-				return;
-			UIImage *image = [UIImage imageWithContentsOfFile:path];
+		[[TGBackgroundStore shared] loadThumbnailForBackground:background
+				completion:^(UIImage *image){
 			if (!image)
 				return;
-			weakSelf.previews[backgroundId] = image;
-			[weakSelf.tableView reloadData];
+			weakSelf.previews[identifier] = TGBackgroundThumbnail(background, image);
+			[weakSelf reloadRows];
 		}];
 	}
-	return TGBackgroundPreview(nil, [background[@"fillColour"] integerValue]);
-}
-
-#pragma mark - the switch
-
-- (void)darkThemeToggled:(UISwitch *)toggle {
-	self.darkTheme = toggle.on;
-	self.found = nil;
-	self.searchError = nil;
-	[self loadInstalled];
+	return TGBackgroundThumbnail(background, nil);
 }
 
 #pragma mark - actions
 
-- (void)runAction:(NSString *)action {
-	__weak typeof(self) weakSelf = self;
-	if ([action isEqualToString:@"editor"]){
-		TGBackgroundEditorViewController *editor = [[TGBackgroundEditorViewController alloc] init];
-		editor.hidesBottomBarWhenPushed = YES;
-		[self.navigationController pushViewController:editor animated:YES];
-		return;
-	}
-	if ([action isEqualToString:@"search"]){
-		[TGAlertSheet showInput:@"Search"
-						message:nil
-					placeholder:@"cat"
-						   text:nil action:@"Search" inView:self.view
-					   onSubmit:^(NSString *name){
-			[weakSelf searchNamed:name];
-		}];
-		return;
-	}
-	if ([action isEqualToString:@"reset"]){
-		[TGAlertSheet showConfirm:nil
-							title:@"Reset Chat Wallpapers"
-						   action:@"Reset" destructive:YES inView:self.view
-						onConfirm:^{
-			[[TGClient shared] resetInstalledBackgroundsWithCompletion:
-					^(BOOL ok, NSString *error){
-				if (!ok){
-					[weakSelf showError:error title:@"Reset Chat Wallpapers"];
-					return;
-				}
-				weakSelf.status = @"Done";
-				[weakSelf loadInstalled];
-			}];
-		}];
-		return;
-	}
-	if ([action isEqualToString:@"deleteDefault"]){
-		[TGAlertSheet showConfirm:nil
-							title:@"Remove Wallpaper"
-						   action:@"Delete" destructive:YES inView:self.view
-						onConfirm:^{
-			[[TGClient shared] deleteDefaultBackgroundForDarkTheme:weakSelf.darkTheme
-					completion:^(BOOL ok, NSString *error){
-				if (!ok){
-					[weakSelf showError:error title:@"Wallpaper"];
-					return;
-				}
-				weakSelf.status = @"Done";
-				[weakSelf loadInstalled];
-			}];
-		}];
-	}
+- (void)openEditor {
+	TGBackgroundEditorViewController *editor =
+			[[TGBackgroundEditorViewController alloc] init];
+	editor.hidesBottomBarWhenPushed = YES;
+	[self.navigationController pushViewController:editor animated:YES];
 }
 
-- (void)searchNamed:(NSString *)name {
-	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] searchBackgroundNamed:name
-			completion:^(NSDictionary *background, NSString *error){
-		weakSelf.found = background;
-		weakSelf.searchError = error;
-		if (error){
-			[TGAlertSheet showMessage:error title:@"Search"
-							   inView:weakSelf.view];
-		} else if (background){
-			weakSelf.status = background[@"title"] ?: background[@"name"];
-		}
-		[weakSelf rebuild];
-	}];
+- (void)toggleEditing {
+	self.editingBackgrounds = !self.editingBackgrounds;
+	self.navigationItem.rightBarButtonItem.title = self.editingBackgrounds
+			? TGLocalized(@"Done") : TGLocalized(@"Edit");
+	[self rebuild];
 }
 
-- (void)showActionsForBackground:(NSDictionary *)background installed:(BOOL)installed {
-	__weak typeof(self) weakSelf = self;
-	NSArray *titles = installed
-			? @[@"Apply Wallpaper", @"Link", @"Remove Wallpaper"]
-			: @[@"Apply Wallpaper", @"Link"];
-	[TGAlertSheet showChoices:titles
-						title:(background[@"title"] ?: background[@"name"] ?: @"Background")
-					  message:[self detailForBackground:background]
-			 destructiveIndex:(installed ? 2 : -1)
-					   inView:self.view
-					 onChoice:^(NSInteger index){
-		if (index == 0)
-			[weakSelf installBackground:background];
-		else if (index == 1)
-			[weakSelf showUrlForBackground:background];
-		else if (installed && index == 2)
-			[weakSelf removeBackground:background];
-	}];
-}
-
-- (NSString *)detailForBackground:(NSDictionary *)background {
-	NSMutableArray *parts = [NSMutableArray array];
-	[parts addObject:[background[@"typeName"] capitalizedString] ?: @"Background"];
-	if ([background[@"isDark"] boolValue])
-		[parts addObject:@"Night Mode"];
-	return [parts componentsJoinedByString:@" · "];
-}
-
-- (void)installBackground:(NSDictionary *)background {
-	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] setDefaultBackground:background
-							   forDarkTheme:self.darkTheme
-								 completion:^(NSDictionary *installed, NSString *error){
-		if (!installed){
-			[weakSelf showError:(error ?: @"An error occurred.")
-						  title:@"Chat Wallpaper"];
+- (void)tappedBackground:(NSDictionary *)background {
+	if (!self.editingBackgrounds){
+		if ([background[@"themeWallpaper"] boolValue]){
+			[[TGTheme shared] setWallpaperType:TGWallpaperTypeNone];
+			[self rebuild];
 			return;
 		}
-		weakSelf.status = @"Done";
-		[weakSelf loadInstalled];
-	}];
-}
-
-- (void)showUrlForBackground:(NSDictionary *)background {
-	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] backgroundUrlForBackground:background
-			completion:^(NSString *url, NSString *error){
-		if (!url.length){
-			[weakSelf showError:(error ?: @"An error occurred.")
-						  title:@"Link"];
+		NSNumber *localType = background[@"localWallpaperType"];
+		if ([localType isKindOfClass:NSNumber.class]){
+			[[TGTheme shared] setWallpaperType:
+					(TGWallpaperType)localType.integerValue];
+			[self rebuild];
 			return;
 		}
-		[TGAlertSheet showChoices:@[@"Copy Address", @"Open Link"]
-							title:@"Link"
-						  message:url
-				 destructiveIndex:-1
-						   inView:weakSelf.view
-						 onChoice:^(NSInteger index){
-			if (index == 0)
-				[UIPasteboard generalPasteboard].string = url;
-			else
-				[[UIApplication sharedApplication]
-						openURL:[NSURL URLWithString:url]];
-		}];
-	}];
-}
-
-- (void)removeBackground:(NSDictionary *)background {
-	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:nil
-						title:@"Remove Wallpaper"
-					   action:@"Remove" destructive:YES inView:self.view
-					onConfirm:^{
-		[[TGClient shared] removeInstalledBackground:[background[@"id"] longLongValue]
-				completion:^(BOOL ok, NSString *error){
-			if (!ok){
-				[weakSelf showError:error title:@"Remove Wallpaper"];
+		__weak typeof(self) weakSelf = self;
+		[[TGBackgroundStore shared] setDefaultBackground:background
+				forDarkTheme:[[TGTheme shared] isDark]
+				completion:^(NSDictionary *installed, NSString *error){
+			if (!installed){
+				[TGAlertSheet showMessage:(error ?: TGLocalized(@"An error occurred."))
+									 title:TGLocalized(@"Chat Wallpaper")
+									inView:weakSelf.view];
 				return;
 			}
-			weakSelf.status = @"Done";
+			[weakSelf loadInstalled];
+		}];
+		return;
+	}
+
+	if ([background[@"themeWallpaper"] boolValue] ||
+		[background[@"localWallpaperType"] isKindOfClass:NSNumber.class])
+		return;
+
+	__weak typeof(self) weakSelf = self;
+	[TGAlertSheet showConfirm:nil
+						title:TGLocalized(@"Remove Wallpaper")
+					   action:TGLocalized(@"Remove") destructive:YES inView:self.view
+					onConfirm:^{
+		[[TGBackgroundStore shared] removeInstalledBackground:
+				[background[@"id"] longLongValue]
+				completion:^(BOOL ok, NSString *error){
+			if (!ok){
+				[TGAlertSheet showMessage:(error ?: TGLocalized(@"An error occurred."))
+									 title:TGLocalized(@"Remove Wallpaper")
+									inView:weakSelf.view];
+				return;
+			}
 			[weakSelf loadInstalled];
 		}];
 	}];
 }
 
-- (void)showError:(NSString *)message title:(NSString *)title {
-	if (!message.length)
-		message = @"An error occurred.";
-	self.status = message;
-	[TGAlertSheet showMessage:message title:title inView:self.view];
-	[self rebuild];
+#pragma mark - photos
+
+- (void)presentPicker {
+	if (![UIImagePickerController isSourceTypeAvailable:
+			UIImagePickerControllerSourceTypePhotoLibrary])
+		return;
+	UIImagePickerController *picker = [[UIImagePickerController alloc] init];
+	picker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;
+	picker.delegate = self;
+	[self presentViewController:picker animated:YES completion:nil];
+}
+
+- (void)imagePickerController:(UIImagePickerController *)picker
+		didFinishPickingMediaWithInfo:(NSDictionary *)info {
+	[picker dismissViewControllerAnimated:YES completion:nil];
+	UIImage *image = info[UIImagePickerControllerOriginalImage];
+	if (!image)
+		return;
+	[[TGTheme shared] setWallpaperImage:image];
+	[self loadInstalled];
+}
+
+- (void)imagePickerControllerDidCancel:(UIImagePickerController *)picker {
+	[picker dismissViewControllerAnimated:YES completion:nil];
 }
 
 @end
+
+// vim:ft=objc

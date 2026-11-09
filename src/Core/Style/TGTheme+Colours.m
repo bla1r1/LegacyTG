@@ -56,7 +56,7 @@
 
 - (UIColor *)accentColour {
 	///< buttons, links, unread badges
-	return TGRole(@"accent", TG_BLUE_DARK4);
+	return TGRole(@"accent", TGClassicThemeRoleColours()[@"accent"]);
 }
 
 - (UIColor *)onAccentColour {
@@ -97,15 +97,15 @@
 
 - (UIColor *)chatBackgroundColour {
 	///< crisp paper grain canvas
-	return TGRole(@"chatBackground", rgb(226, 230, 236));
+	return TGRole(@"chatBackground", TGClassicThemeRoleColours()[@"wallpaper"]);
 }
 
 - (UIColor *)bubbleMineColour {
-	return TGRole(@"bubbleMine", TG_BLUE_BUBBLE_LIGHT);
+	return TGRole(@"bubbleMine", TGClassicThemeRoleColours()[@"bubbleMine"]);
 }
 
 - (UIColor *)bubbleTheirsColour {
-	return TGRole(@"bubbleTheirs", [UIColor whiteColor]);
+	return TGRole(@"bubbleTheirs", TGClassicThemeRoleColours()[@"bubbleTheirs"]);
 }
 
 static inline BOOL TGColourIsDark(UIColor *colour) {
@@ -175,7 +175,7 @@ static inline BOOL TGColourIsDark(UIColor *colour) {
 #pragma mark - text roles
 
 - (UIColor *)primaryTextColour {
-	return TGRole(@"primaryText", TG_TEXT_PRIMARY);
+	return TGRole(@"primaryText", TGClassicThemeRoleColours()[@"text"]);
 }
 
 - (UIColor *)secondaryTextColour {

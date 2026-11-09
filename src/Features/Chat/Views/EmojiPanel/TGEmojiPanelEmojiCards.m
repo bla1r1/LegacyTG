@@ -103,30 +103,9 @@ static UIImage *TGPanelDecode(NSString *path) {
 	return image;
 }
 
-/// The key that deletes backwards: a pentagon pointing left with a cross.
+/// The key that deletes backwards, from TGIconPaths.
 static UIImage *TGBackspaceImage(UIColor *colour) {
-	CGSize size = CGSizeMake(kBackspaceGlyphW, kBackspaceGlyphH);
-	UIGraphicsBeginImageContextWithOptions(size, NO, 0);
-	CGContextRef ctx = UIGraphicsGetCurrentContext();
-	CGContextSetStrokeColorWithColor(ctx, colour.CGColor);
-	CGContextSetLineWidth(ctx, TGMetricStrokeIcon);
-	CGContextSetLineJoin(ctx, kCGLineJoinRound);
-	CGContextSetLineCap(ctx, kCGLineCapRound);
-	CGContextMoveToPoint(ctx, 7, 1.5f);
-	CGContextAddLineToPoint(ctx, 22.5f, 1.5f);
-	CGContextAddLineToPoint(ctx, 22.5f, 16.5f);
-	CGContextAddLineToPoint(ctx, 7, 16.5f);
-	CGContextAddLineToPoint(ctx, 1, 9);
-	CGContextClosePath(ctx);
-	CGContextStrokePath(ctx);
-	CGContextMoveToPoint(ctx, 11, 5.5f);
-	CGContextAddLineToPoint(ctx, 18, 12.5f);
-	CGContextMoveToPoint(ctx, 18, 5.5f);
-	CGContextAddLineToPoint(ctx, 11, 12.5f);
-	CGContextStrokePath(ctx);
-	UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
-	UIGraphicsEndImageContext();
-	return image;
+	return [TGIcons glyphNamed:@"backspace" colour:colour side:kBackspaceGlyphW];
 }
 
 

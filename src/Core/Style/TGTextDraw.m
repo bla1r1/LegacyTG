@@ -90,7 +90,9 @@ void TGDrawText(NSString *text, CGRect rect, UIFont *font, UIColor *colour,
 // the default band busy and the lower ones did not run for 15-30 s, long
 // after the first chat was open. The main thread still outranks it.
 void TGWarmEmojiFont(CGFloat bodySize) {
-	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_BACKGROUND, 0), ^{
+	// It said BACKGROUND, against the note above: the warm-up then ran after
+	// the first chat rows, and their layout paid 0.4 s in CGFontDB itself.
+	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
 		double start = TGPerfNow();
 		// Through the system font's cascade, the way a label reaches it, and
 		// with the emoji the chat list shows most: the cmap and the metrics

@@ -8,6 +8,7 @@
 #import "TGChatParityModel.h"
 #import "TGChatActionMenuModel.h"
 #import "TGClientNotifications.h"
+#include <math.h>
 
 static TGChatActionMenuContext TGMenuContext(BOOL mine, BOOL group, BOOL channel) {
 	TGChatActionMenuContext context = {0};
@@ -79,6 +80,7 @@ static NSArray *TGMenuActions(NSDictionary *message, TGChatActionMenuContext con
 	NSArray *actions = TGMenuActions(message, TGMenuContext(YES, YES, NO));
 	NSArray *expected = @[@"Reply", @"Copy", @"Find Quote", @"Translate",
 			@"Speak", @"Edit", @"Pin", @"Forward", @"Delete", @"Select"];
+	// "Find Quote" is the action key; the visible row is official's "Quote".
 	XCTAssertTrue(actions.count >= expected.count);
 	XCTAssertEqualObjects([actions subarrayWithRange:NSMakeRange(0, expected.count)],
 			expected, @"the one card must follow official's row order");
@@ -105,6 +107,162 @@ static NSArray *TGMenuActions(NSDictionary *message, TGChatActionMenuContext con
 			@"a group reports spam, not a private-chat user");
 	XCTAssertFalse([actions containsObject:@"Delete"],
 			@"somebody else's message is not yours to delete");
+}
+
+- (void)testMessageToolsNeverAppearsInAnyHoldMenu {
+	NSArray *kinds = @[@"messageText", @"messagePhoto", @"messageVoiceNote",
+			@"messageSticker"];
+	for (NSString *kind in kinds){
+		NSDictionary *message = @{
+			@"id" : @10, @"text" : @"hello", @"outgoing" : @YES,
+			@"kind" : kind, @"service" : @NO, @"failed" : @NO,
+			@"photoId" : @55, @"docId" : @56,
+		};
+		NSArray *actions = TGMenuActions(message, TGMenuContext(YES, YES, NO));
+		XCTAssertFalse([actions containsObject:@"Message Tools"],
+				@"%@ must not grow a dev row", kind);
+	}
+}
+
+- (void)testQuoteSpeakAndTranslateNeedRealTextOrACaption {
+	NSDictionary *photo = @{
+		@"id" : @11, @"text" : @"Photo", @"outgoing" : @NO,
+		@"kind" : @"messagePhoto", @"photoId" : @5, @"caption" : @"",
+	};
+	NSDictionary *voice = @{
+		@"id" : @12, @"text" : @"Voice message", @"outgoing" : @NO,
+		@"kind" : @"messageVoiceNote", @"docId" : @6,
+	};
+	NSDictionary *sticker = @{
+		@"id" : @13, @"text" : @"Sticker", @"outgoing" : @NO,
+		@"kind" : @"messageSticker", @"photoId" : @7,
+	};
+	for (NSDictionary *message in @[photo, voice, sticker]){
+		NSArray *actions = TGMenuActions(message, TGMenuContext(NO, NO, NO));
+		XCTAssertFalse([actions containsObject:@"Find Quote"]);
+		XCTAssertFalse([actions containsObject:@"Translate"]);
+		XCTAssertFalse([actions containsObject:@"Speak"]);
+	}
+	NSArray *stickerActions = TGMenuActions(sticker, TGMenuContext(NO, NO, NO));
+	XCTAssertTrue([stickerActions containsObject:@"Add to Favourites"]);
+	NSArray *voiceActions = TGMenuActions(voice, TGMenuContext(NO, NO, NO));
+	XCTAssertFalse([voiceActions containsObject:@"Transcribe"],
+			@"official transcribes from the voice bubble, not the hold menu");
+}
+
+- (void)testReplacePhotoIsOnlyTheAuthorsEditablePhoto {
+	NSDictionary *caption = @{
+		@"id" : @14, @"text" : @"caption", @"caption" : @"caption",
+		@"kind" : @"messagePhoto", @"photoId" : @8, @"outgoing" : @YES,
+	};
+	TGChatActionMenuContext own = TGMenuContext(YES, NO, NO);
+	NSArray *ownActions = TGMenuActions(caption, own);
+	XCTAssertTrue([ownActions containsObject:@"Replace Photo"]);
+	XCTAssertTrue([ownActions containsObject:@"Find Quote"],
+			@"a caption is a text the sender wrote");
+
+	TGChatActionMenuContext other = TGMenuContext(NO, NO, NO);
+	NSArray *otherActions = TGMenuActions(caption, other);
+	XCTAssertFalse([otherActions containsObject:@"Replace Photo"],
+			@"somebody else's photo is not yours to replace");
+	XCTAssertFalse([otherActions containsObject:@"Edit"]);
+}
+
+- (void)testComposerHeightGrowsPerLineAndStopsAtTheCap {
+	CGFloat one = TGChatComposerFieldHeightForLines(1);
+	CGFloat two = TGChatComposerFieldHeightForLines(2);
+	XCTAssertEqual(two - one, TGChatComposerLineHeight());
+	XCTAssertEqual(TGChatComposerMaxLines(), 12);
+	XCTAssertEqual(TGChatComposerFieldHeightForLines(13),
+			TGChatComposerFieldHeightForLines(12),
+			"past the cap the text view scrolls, the bar does not grow");
+	XCTAssertEqual(TGChatComposerLineCount(@"a\nb\nc", 200), 3);
+	XCTAssertEqual(TGChatComposerLineCount(@"", 200), 1);
+}
+
+- (void)testAIEntryAppearsAtTheThirdLineOnlyWithText {
+	XCTAssertFalse(TGChatComposerShowsAIEntry(@"a\nb", 200));
+	XCTAssertTrue(TGChatComposerShowsAIEntry(@"a\nb\nc", 200));
+	XCTAssertFalse(TGChatComposerShowsAIEntry(@" \n\t\n ", 200),
+			"whitespace alone is not a message");
+}
+
+- (void)testComposerFieldEndsBeforeTheSendButtonAtOneAndSixLines {
+	for (NSInteger lines = 1; lines <= 6; lines += 5) {
+		CGFloat fieldHeight = TGChatComposerFieldHeightForLines(lines);
+		CGFloat barHeight = TGChatComposerBarHeightForLines(lines);
+		CGRect field = TGChatComposerFieldFrame(320.0f, barHeight, fieldHeight);
+		CGRect send = TGChatComposerSendFrame(320.0f, barHeight);
+		XCTAssertGreaterThan(field.size.width, 0.0f);
+		XCTAssertLessThanOrEqual(CGRectGetMaxX(field), CGRectGetMinX(send),
+				"%ld lines: the field must end before the send control",
+				(long)lines);
+		XCTAssertTrue(fabs(CGRectGetMaxY(field) - CGRectGetMaxY(send)) < 0.01f,
+				"%ld lines: the send control is bottom-aligned with the field",
+				(long)lines);
+		XCTAssertLessThanOrEqual(CGRectGetMaxX(send), 320.0f);
+	}
+}
+
+- (void)testAIComposeRecipientIsTheOpenChat {
+	NSDictionary *model = TGAiComposeInputModel(@"hello", 4242, @"en", @"en");
+	XCTAssertEqual([model[@"chatId"] longLongValue], (int64_t)4242);
+	XCTAssertEqualObjects(model[@"text"], @"hello");
+	XCTAssertNil(model[@"recipient"],
+			"the recipient is the chat, not a separately chosen row");
+}
+
+- (void)testAIComposeLanguageComesFromTextThenChat {
+	XCTAssertEqualObjects(TGAiComposeSourceLanguage(@"Привет", @"en", @"de"),
+			@"ru", "the text's script wins over the chat's language");
+	XCTAssertEqualObjects(TGAiComposeSourceLanguage(@"hello", @"uk", @"en"),
+			@"uk", "Latin text falls back to the chat's language");
+	XCTAssertEqualObjects(TGAiComposeSourceLanguage(@"", @"", @"fr"),
+			@"fr", "an empty draft uses the app language");
+	XCTAssertEqualObjects(TGAiComposeSourceLanguage(@"hello", @"", @""),
+			@"en", "English is the last resort");
+}
+
+- (void)testAIComposeTargetIsTheOtherLanguage {
+	XCTAssertEqualObjects(TGAiComposeTargetLanguage(@"ru", @"en"), @"en");
+	XCTAssertEqualObjects(TGAiComposeTargetLanguage(@"en", @"en"), @"ru");
+	XCTAssertFalse([TGAiComposeLanguageName(@"en") isEqualToString:@"en"],
+			"the UI shows a language name, never the raw code");
+}
+
+/// The target language comes from Translation.Language.<code> by key: by
+/// English value "English" is the pack's own name and read "Русский".
+- (void)testAIComposeLanguageNameUsesTheOfficialKeyNotTheValue {
+	TGSetTelegramLanguageLookup(@{
+		@"English" : @"Русский",
+		@"@@Translation.Language.en" : @"английский",
+	});
+	XCTAssertEqualObjects(TGAiComposeLanguageName(@"en"), @"английский");
+	TGSetTelegramLanguageLookup(@{@"English" : @"Русский"});
+	XCTAssertFalse([TGAiComposeLanguageName(@"en") isEqualToString:@"Русский"],
+			@"a missing key must not fall back to the colliding English value");
+	TGSetTelegramLanguageLookup(nil);
+}
+
+- (void)testAIComposeModeAndStyleListsFollowOfficial {
+	XCTAssertEqualObjects(TGAiComposeModeTitles(),
+			(@[@"Translate", @"Style", @"Fix"]));
+	NSArray *styles = TGAiComposeStyleChoices();
+	XCTAssertEqual(styles.count, (NSUInteger)3);
+	for (NSDictionary *style in styles) {
+		XCTAssertFalse([style[@"title"] isEqualToString:style[@"key"]],
+				"a style shows its title, not the request key");
+		XCTAssertFalse([style[@"title"] isEqualToString:@"Neutral"],
+				"official does not list neutral as a style chip");
+	}
+}
+
+- (void)testDrawableSizeRejectsZeroAndNaN {
+	XCTAssertFalse(TGChatDrawableSize(CGSizeZero));
+	XCTAssertFalse(TGChatDrawableSize(CGSizeMake(0.0f, 20.0f)));
+	XCTAssertFalse(TGChatDrawableSize(CGSizeMake(20.0f, 0.0f)));
+	XCTAssertFalse(TGChatDrawableSize(CGSizeMake(NAN, 20.0f)));
+	XCTAssertTrue(TGChatDrawableSize(CGSizeMake(1.0f, 1.0f)));
 }
 
 - (void)testMenuNeverShowsTheSameTitleTwice {

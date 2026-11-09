@@ -7,6 +7,7 @@
 #import "TGCommunitiesViewController.h"
 #import "TGQuickRepliesViewController.h"
 #import "TGAiComposeViewController.h"
+#import "TGMessageToolsViewController.h"
 
 @implementation TGDevHubViewController
 
@@ -64,6 +65,18 @@
 		screen.hidesBottomBarWhenPushed = YES;
 		[weakSelf.navigationController pushViewController:screen animated:YES];
 	})];
+#if TG_DEV
+	// The one entry point left for the per-message calls that no release
+	// screen shows: AI summary, full rich message, rich drafts.
+	[toolRows addObject:TGFeatureOpenRow(@"Message Tools", nil, ^{
+		TGMessageToolsViewController *screen =
+				[[TGMessageToolsViewController alloc] init];
+		screen.chatId = [TGClient shared].savedMessagesChatId;
+		screen.chatTitle = @"Saved Messages";
+		screen.hidesBottomBarWhenPushed = YES;
+		[weakSelf.navigationController pushViewController:screen animated:YES];
+	})];
+#endif
 
 	NSMutableArray *sections = [NSMutableArray array];
 	[sections addObject:TGFeatureSection(nil,

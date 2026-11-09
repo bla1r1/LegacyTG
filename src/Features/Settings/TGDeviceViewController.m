@@ -1,10 +1,13 @@
 #import "TGDeviceViewController.h"
 #import "TGDevice.h"
 #import "TGCapabilities.h"
-#import "TGTheme.h"
 #import "TGClient.h"
-#import "TGStyle.h"
 #import "TGAlertSheet.h"
+#import "TGLocalization.h"
+#import "TGSettingsFormatting.h"
+#import "TGTheme.h"
+#import "TGRows.h"
+#import "TGRowCell.h"
 
 @interface TGDeviceViewController ()
 @property (nonatomic, strong) NSArray *capabilities;
@@ -12,21 +15,11 @@
 
 @implementation TGDeviceViewController
 
-- (instancetype)init {
-	return [super initWithStyle:UITableViewStyleGrouped];
-}
-
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	self.title = @"This Device";
-	[self applyTheme];
+	self.title = TGLocalized(@"Device");
 	self.capabilities = [TGCapabilities all];
-
-}
-
-- (void)applyTheme {
-	[[TGTheme shared] styleGroupedTable:self.tableView];
-	[[TGTheme shared] styleNavigationBar:self.navigationController.navigationBar];
+	[self rebuildSections];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -34,117 +27,63 @@
 	[self applyTheme];
 }
 
-#pragma mark - table
+- (void)rebuildSections {
+	NSDictionary *info = [NSBundle mainBundle].infoDictionary;
+	NSMutableArray *sections = [NSMutableArray array];
 
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-	return 4;
-}
+	[sections addObject:TGSection(TGSettingsHeaderText(@"SOFTWARE"), nil, @[
+		TGTapRow(TGLocalized(@"iOS"),
+				[UIDevice currentDevice].systemVersion, nil),
+		TGTapRow(TGLocalized(@"LegacyTG"),
+				[NSString stringWithFormat:@"%@ (%@)",
+						info[@"CFBundleShortVersionString"] ?: @"?",
+						info[@"CFBundleVersion"] ?: @"?"], nil),
+	])];
 
-- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-	switch (section){
-		case 0: return @"SOFTWARE";
-		case 1: return @"HARDWARE";
-		case 2: return @"FEATURES";
-		default: return nil;
+	[sections addObject:TGSection(TGSettingsHeaderText(@"HARDWARE"), nil, @[
+		TGTapRow(TGLocalized(@"Model"), [TGDevice modelName], nil),
+		TGTapRow(TGLocalized(@"Chip and Memory"),
+				[NSString stringWithFormat:@"%@, %lu MB",
+						[TGDevice chip] ?: @"?",
+						(unsigned long)[TGDevice memoryMB]], nil),
+		TGTapRow(TGLocalized(@"Device Tier"), [TGDevice tierName], nil),
+	])];
+
+	NSMutableArray *featureRows = [NSMutableArray array];
+	for (TGCapability *capability in self.capabilities){
+		NSMutableDictionary *row = [TGDeviceCapabilityRowModel(capability.name,
+				capability.available, capability.requirement) mutableCopy];
+		if (capability.available)
+			row[TGRowDetailColour] = [[TGTheme shared] onlineColour];
+		[featureRows addObject:row];
 	}
+	[sections addObject:TGSection(TGSettingsHeaderText(@"FEATURES"), nil,
+			featureRows)];
+
+	__weak typeof(self) weakSelf = self;
+	[sections addObject:TGSection(nil, nil, @[
+		TGCentredDestructiveRow(TGLocalized(@"Log out"), ^{
+			[TGAlertSheet showConfirm:
+					TGLocalized(@"Are you sure you want to log out from this device?")
+								title:TGLocalized(@"Log out")
+							   action:TGLocalized(@"Log out")
+						  destructive:YES
+							   inView:weakSelf.view
+							onConfirm:^{ [[TGClient shared] logOut]; }];
+		}),
+	])];
+
+	self.sections = sections;
+	[self reloadRows];
 }
 
-- (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-	return nil;
+- (NSDictionary *)rowAtPath:(NSIndexPath *)path {
+	if (path.section < 0 || path.section >= (NSInteger)self.sections.count)
+		return nil;
+	NSArray *rows = self.sections[(NSUInteger)path.section][@"rows"];
+	if (path.row < 0 || path.row >= (NSInteger)rows.count)
+		return nil;
+	return rows[(NSUInteger)path.row];
 }
-
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-	if (section == 0) return 2;
-	if (section == 1) return 3;
-	if (section == 2) return self.capabilities.count;
-	return 1; // Log out
-}
-
-- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-	UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"row"];
-	if (!cell)
-		cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1
-									  reuseIdentifier:@"row"];
-	cell.selectionStyle = UITableViewCellSelectionStyleNone;
-	cell.accessoryType = UITableViewCellAccessoryNone;
-	cell.accessoryView = nil;
-	cell.textLabel.font = TGFontBody();
-	cell.detailTextLabel.font = TGFontSubhead();
-	[[TGTheme shared] styleCell:cell];
-	cell.textLabel.textColor = [[TGTheme shared] primaryTextColour];
-	cell.textLabel.textAlignment = NSTextAlignmentLeft;
-	cell.detailTextLabel.textColor = [[TGTheme shared] secondaryTextColour];
-
-	if (indexPath.section == 0){
-		NSDictionary *info = [NSBundle mainBundle].infoDictionary;
-		if (indexPath.row == 0){
-			cell.textLabel.text = @"iOS";
-			cell.detailTextLabel.text = [UIDevice currentDevice].systemVersion;
-		} else {
-			cell.textLabel.text = @"LegacyTG";
-			cell.detailTextLabel.text = [NSString stringWithFormat:@"%@ (%@)",
-					info[@"CFBundleShortVersionString"] ?: @"?",
-					info[@"CFBundleVersion"] ?: @"?"];
-		}
-		return cell;
-	}
-
-	if (indexPath.section == 1){
-		switch (indexPath.row){
-			case 0:
-				cell.textLabel.text = @"Model";
-				cell.detailTextLabel.text = [TGDevice modelName];
-				break;
-			case 1:
-				cell.textLabel.text = @"Chip and Memory";
-				cell.detailTextLabel.text = [NSString stringWithFormat:@"%@, %lu MB",
-						[TGDevice chip] ?: @"?", (unsigned long)[TGDevice memoryMB]];
-				break;
-			default:
-				cell.textLabel.text = @"Device Tier";
-				cell.detailTextLabel.text = [TGDevice tierName];
-				break;
-		}
-		return cell;
-	}
-
-	if (indexPath.section == 3){
-		// Log out — red, centred, tappable
-		cell.selectionStyle = UITableViewCellSelectionStyleDefault;
-		cell.textLabel.text = @"Log out";
-		cell.textLabel.textColor = [[TGTheme shared] destructiveColour];
-		cell.textLabel.textAlignment = NSTextAlignmentCenter;
-		cell.detailTextLabel.text = nil;
-		return cell;
-	}
-
-	TGCapability *capability = self.capabilities[indexPath.row];
-	cell.textLabel.text = capability.name;
-	cell.detailTextLabel.text = capability.available ? @"On" : capability.requirement;
-	cell.detailTextLabel.textColor = capability.available
-			? [[TGTheme shared] onlineColour]
-			: [[TGTheme shared] secondaryTextColour];
-	cell.textLabel.textColor = capability.available
-			? [[TGTheme shared] primaryTextColour]
-			: [[TGTheme shared] secondaryTextColour];
-	return cell;
-}
-
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	if (indexPath.section != 3)
-		return;
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
-	// Log out — confirm before doing anything irreversible
-	[TGAlertSheet showConfirm:@"Are you sure you want to log out from this device?"
-						title:@"Log out"
-					   action:@"Log out"
-				  destructive:YES
-					   inView:self.view
-					onConfirm:^{ [[TGClient shared] logOut]; }];
-}
-
-
 
 @end
-
-// vim:ft=objc

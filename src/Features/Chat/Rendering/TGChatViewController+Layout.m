@@ -509,6 +509,7 @@ static UIImage *TGImageFromMinithumbnail(id mini) {
 	if (tableW <= 0) tableW = TGMetricScreenWidth;
 
 	BOOL mine = [m[@"outgoing"] boolValue];
+	layout.mine = mine;
 	NSString *kind = m[@"kind"];
 	BOOL isSticker = [kind isEqualToString:@"messageSticker"] || [kind isEqualToString:@"messageAnimatedEmoji"];
 	// A dice that came with its sticker draws like one: the thumbnail has no
@@ -560,6 +561,8 @@ static UIImage *TGImageFromMinithumbnail(id mini) {
 	if ([separator isEqualToString:@"unread"]) {
 		// A full-width bar, not a plate: it marks a place, not an event.
 		layout.isService = YES;
+		layout.isUnreadSeparator = YES;
+		layout.serviceText = [m[@"text"] isKindOfClass:NSString.class] ? m[@"text"] : @"";
 		layout.bubbleFrame = CGRectMake(TGMetricZero, TGCenteredOrigin(kServiceRow, kUnreadBar),
 				tableW, kUnreadBar);
 		layout.bodyFrame = CGRectMake(TGMetricZero, TGCenteredOrigin(kUnreadBar, TGMetricLineBody),
@@ -570,6 +573,8 @@ static UIImage *TGImageFromMinithumbnail(id mini) {
 
 	if (isService && !layout.isCard) {
 		NSString *line = [self serviceLineForMessage:m];
+		layout.serviceText = line;
+		layout.isDateHeader = separator != nil;
 		UIFont *font = TGFontMeta();
 		CGFloat textW = MIN(TGTextSize(line, font, 0).width,
 				tableW - TGDoubled(kServicePlateMargin));

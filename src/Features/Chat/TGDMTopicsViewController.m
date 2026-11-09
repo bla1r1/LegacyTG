@@ -3,8 +3,7 @@
 #import "TGAlertSheet.h"
 #import "TGClient.h"
 #import "TGDMTopicViewController.h"
-#import "TGTheme.h"
-#import "TGStyle.h"
+#import "TGRows.h"
 
 @interface TGDMTopicsViewController ()
 @property (nonatomic, strong) NSArray *topics;
@@ -13,21 +12,17 @@
 
 @implementation TGDMTopicsViewController
 
-- (id)init {
-	return [super initWithStyle:UITableViewStyleGrouped];
-}
-
 - (void)viewDidLoad {
 	[super viewDidLoad];
 	self.title = self.chatTitle.length
-			? [NSString stringWithFormat:@"%@ · %@", self.chatTitle, TGLocalized(@"Direct")]
-			: @"Direct Messages";
+			? [NSString stringWithFormat:@"%@ · %@", self.chatTitle,
+					TGLocalized(@"Direct")]
+			: TGLocalized(@"Direct Messages");
 	self.topics = [[TGClient shared] directMessagesChatTopicsForChat:self.chatId]
 			?: @[];
-	self.tableView.rowHeight = TGMetricPersonRow;
-	[self applyTheme];
+	[self rebuildSections];
 	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
-			initWithTitle:@"More" style:UIBarButtonItemStylePlain
+			initWithTitle:TGLocalized(@"More") style:UIBarButtonItemStylePlain
 				   target:self action:@selector(loadMoreTapped)];
 	[[NSNotificationCenter defaultCenter] addObserver:self
 			selector:@selector(topicsChanged:)
@@ -40,27 +35,18 @@
 			if (dmId != 0 && dmId != weakSelf.chatId) {
 				weakSelf.chatId = dmId;
 				weakSelf.topics = [[TGClient shared] directMessagesChatTopicsForChat:dmId] ?: @[];
-				[weakSelf.tableView reloadData];
+				[weakSelf rebuildSections];
 				[weakSelf loadMore];
 			}
 		}];
 	}
-	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(applyTheme) name:TGThemeChangedNotification object:nil];
-}
-
-- (void)applyTheme {
-	self.tableView.separatorColor = [[TGTheme shared] separatorColour];
-	self.tableView.backgroundColor = [[TGTheme shared] groupedBackgroundColour];
-	[[TGTheme shared] styleNavigationBar:self.navigationController.navigationBar];
-	[self.tableView reloadData];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
 	[super viewWillAppear:animated];
 	self.topics = [[TGClient shared] directMessagesChatTopicsForChat:self.chatId]
 			?: @[];
-	[self.tableView reloadData];
-	[[TGTheme shared] styleNavigationBar:self.navigationController.navigationBar];
+	[self rebuildSections];
 }
 
 - (void)topicsChanged:(NSNotification *)note {
@@ -69,7 +55,7 @@
 		return;
 	self.topics = [[TGClient shared] directMessagesChatTopicsForChat:self.chatId]
 			?: @[];
-	[self.tableView reloadData];
+	[self rebuildSections];
 }
 
 - (void)loadMore {
@@ -82,9 +68,9 @@
 		me.loaded = YES;
 		me.topics = [[TGClient shared] directMessagesChatTopicsForChat:me.chatId]
 				?: @[];
-		[me.tableView reloadData];
+		[me rebuildSections];
 		if (!ok && error.length)
-			[TGAlertSheet showMessage:error title:@"Direct Messages"
+			[TGAlertSheet showMessage:error title:TGLocalized(@"Direct Messages")
 							   inView:me.view];
 	}];
 }
@@ -93,60 +79,25 @@
 	[self loadMore];
 }
 
-#pragma mark - table
+#pragma mark - rows
 
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-	return 1;
+- (void)rebuildSections {
+	__weak typeof(self) weakSelf = self;
+	NSArray *models = TGDMTopicsRowModels(self.topics);
+	NSMutableArray *rows = [NSMutableArray arrayWithCapacity:models.count];
+	for (NSUInteger index = 0; index < models.count; index++){
+		NSDictionary *model = models[index];
+		NSDictionary *topic = self.topics[index];
+		[rows addObject:TGSubtitleOpenRow(model[@"title"], model[@"detail"], ^{
+			[weakSelf openTopic:topic];
+		})];
+	}
+	self.sections = @[TGSection(self.topics.count ? TGLocalized(@"Topics") : nil,
+			TGDMTopicsFooter(self.loaded, self.topics.count), rows)];
+	[self reloadRows];
 }
 
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-	return self.topics.count;
-}
-
-- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-	return self.topics.count ? @"Topics" : nil;
-}
-
-- (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-	if (self.topics.count)
-		return nil;
-	return (self.loaded ? @"No topics here yet" : @"Loading...");
-}
-
-- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-	UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"topic"];
-	if (!cell)
-		cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle
-									  reuseIdentifier:@"topic"];
-	[[TGTheme shared] styleCell:cell];
-	NSDictionary *topic = self.topics[indexPath.row];
-	NSString *name = topic[@"senderName"];
-	cell.textLabel.text = name.length ? name : @"Topic";
-	cell.textLabel.font = TGFontBody();
-	cell.textLabel.textColor = [[TGTheme shared] primaryTextColour];
-	NSDictionary *last = topic[@"lastMessage"];
-	NSString *preview = [last isKindOfClass:NSDictionary.class]
-			? last[@"text"] : nil;
-	NSInteger unread = [topic[@"unread"] integerValue];
-	NSString *detail = preview.length ? preview : @"No messages here yet...";
-	if (unread > 0)
-		detail = [NSString stringWithFormat:@"%@ · %@",
-				[NSString stringWithFormat:TGLocalized(@"%@ unread messages"), @(unread)],
-				detail];
-	else if ([topic[@"isMarkedUnread"] boolValue])
-		detail = [NSString stringWithFormat:@"%@ · %@", TGLocalized(@"Unread"), detail];
-	cell.detailTextLabel.text = detail;
-	cell.detailTextLabel.font = TGFontSubhead();
-	cell.detailTextLabel.textColor = [[TGTheme shared] secondaryTextColour];
-	cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-	return cell;
-}
-
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
-	if (indexPath.row >= (NSInteger)self.topics.count)
-		return;
-	NSDictionary *topic = self.topics[indexPath.row];
+- (void)openTopic:(NSDictionary *)topic {
 	TGDMTopicViewController *detail = [[TGDMTopicViewController alloc] init];
 	detail.chatId = self.chatId;
 	detail.topicId = [topic[@"topicId"] longLongValue];

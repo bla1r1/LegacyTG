@@ -6,37 +6,13 @@
 #import "TGUIFormat.h"
 #import "TGStyle.h"
 #import "TGChatParityModel.h"
+#import "TGRows.h"
 
 /// The sheet's title view: "Share" over "Select Chats", as official has it.
 static const CGFloat kPickerTitleWidth  = TGMetricShareTitleWidth;
 static const CGFloat kPickerTitleHeight = TGMetricRow;
 static const CGFloat kPickerRowHeight   = TGMetricShareRow;
-static const CGFloat kPickerBadgeSide   = TGMetricMenuGlyph;
 static const CGFloat kPickerPanelHeight = TGMetricRow;
-
-@interface TGForwardCell : UITableViewCell
-@property (nonatomic, strong) UIImageView *checkBadge;
-@end
-
-@implementation TGForwardCell
-- (instancetype)initWithStyle:(UITableViewCellStyle)style reuseIdentifier:(NSString *)reuseIdentifier {
-	if ((self = [super initWithStyle:style reuseIdentifier:reuseIdentifier])){
-		_checkBadge = [[UIImageView alloc] initWithFrame:CGRectZero];
-		_checkBadge.image = [TGIcons selectionCheckboxSelected:YES];
-		_checkBadge.hidden = YES;
-		[self.contentView addSubview:_checkBadge];
-	}
-	return self;
-}
-
-- (void)layoutSubviews {
-	[super layoutSubviews];
-	CGRect avatar = self.imageView.frame;
-	self.checkBadge.frame = CGRectMake(CGRectGetMaxX(avatar) - kPickerBadgeSide,
-			CGRectGetMaxY(avatar) - kPickerBadgeSide, kPickerBadgeSide, kPickerBadgeSide);
-	[self.contentView bringSubviewToFront:self.checkBadge];
-}
-@end
 
 @interface TGForwardPicker () <UISearchBarDelegate>
 @property (nonatomic, strong) NSArray *chats;
@@ -56,6 +32,12 @@ static const CGFloat kPickerPanelHeight = TGMetricRow;
 	return [super initWithStyle:UITableViewStylePlain];
 }
 
+- (void)applyTheme {
+	[super applyTheme];
+	self.tableView.backgroundColor = [[TGTheme shared] listBackgroundColour];
+	self.tableView.separatorColor = [[TGTheme shared] separatorColour];
+}
+
 - (void)viewDidLoad {
 	[super viewDidLoad];
 	self.chats = [TGClient shared].chats ?: @[];
@@ -68,7 +50,6 @@ static const CGFloat kPickerPanelHeight = TGMetricRow;
 	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
 		self.edgesForExtendedLayout = UIRectEdgeNone;
 
-	self.tableView.rowHeight = kPickerRowHeight;
 	self.tableView.backgroundColor = [[TGTheme shared] listBackgroundColour];
 	self.tableView.separatorColor = [[TGTheme shared] separatorColour];
 	[[TGTheme shared] styleNavigationBar:self.navigationController.navigationBar];
@@ -104,15 +85,14 @@ static const CGFloat kPickerPanelHeight = TGMetricRow;
 		TGForwardPicker *me = weakSelf;
 		if (!me) return;
 		[TGIcons flush];
-		me.tableView.backgroundColor = [[TGTheme shared] listBackgroundColour];
-		me.tableView.separatorColor = [[TGTheme shared] separatorColour];
-		[[TGTheme shared] styleNavigationBar:me.navigationController.navigationBar];
+		[me applyTheme];
 		[[TGTheme shared] styleSearchBar:me.searchBar];
-		[me.tableView reloadData];
+		[me rebuildSections];
 	}];
 
 	[self fetchMissingAvatars];
 	[self updateSendItem];
+	[self rebuildSections];
 
 	[[TGClient shared] topChatsWithCompletion:^(NSArray *chats){
 		TGForwardPicker *me = weakSelf;
@@ -120,7 +100,7 @@ static const CGFloat kPickerPanelHeight = TGMetricRow;
 			return;
 		me.recentChats = chats ?: @[];
 		[me fetchMissingAvatars];
-		[me.tableView reloadData];
+		[me rebuildSections];
 		[me updateEmptyState];
 	}];
 }
@@ -268,11 +248,6 @@ static const CGFloat kPickerPanelHeight = TGMetricRow;
 	[self cancel];
 }
 
-- (void)reloadTableDebounced {
-	[NSObject cancelPreviousPerformRequestsWithTarget:self.tableView selector:@selector(reloadData) object:nil];
-	[self.tableView performSelector:@selector(reloadData) withObject:nil afterDelay:0.05];
-}
-
 - (void)fetchMissingAvatars {
 	__weak typeof(self) weakSelf = self;
 	CGFloat side = TGMetricListAvatar;
@@ -297,7 +272,7 @@ static const CGFloat kPickerPanelHeight = TGMetricRow;
 					TGForwardPicker *me = weakSelf;
 					if (!me || !rounded) return;
 					me.avatars[fileId] = rounded;
-					[me reloadTableDebounced];
+					[me rebuildSections];
 				});
 			});
 		}];
@@ -310,108 +285,55 @@ static const CGFloat kPickerPanelHeight = TGMetricRow;
 	self.query = [searchText stringByTrimmingCharactersInSet:
 			[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 	[self updateEmptyState];
-	[self.tableView reloadData];
+	[self rebuildSections];
 }
 
 - (void)searchBarSearchButtonClicked:(UISearchBar *)searchBar {
 	[searchBar resignFirstResponder];
 }
 
-#pragma mark - table
+#pragma mark - rows
 
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-	return 1;
-}
+- (void)rebuildSections {
+	NSArray *matches = [self matchingChats];
+	NSMutableArray *rows = [NSMutableArray arrayWithCapacity:matches.count];
+	__weak typeof(self) weakSelf = self;
+	for (NSUInteger index = 0; index < matches.count; index++){
+		NSDictionary *c = matches[index];
+		NSString *title = c[@"title"] ?: @"";
+		NSMutableDictionary *row = TGPeerRow(c[@"id"], title,
+				c[@"text"] ?: @"",
+				^{ [weakSelf toggleChatAtIndex:index]; });
+		row[TGRowHeight] = @(kPickerRowHeight);
+		if ([c[@"isVerified"] boolValue])
+			row[TGRowVerified] = @YES;
 
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-	return (NSInteger)[self matchingChats].count;
-}
+		NSNumber *fileId = c[@"photoFileId"];
+		UIImage *photo = [fileId isKindOfClass:NSNumber.class]
+				? self.avatars[fileId] : nil;
+		if ([c[@"isSaved"] boolValue])
+			photo = [TGIcons savedMessagesAvatarOfSide:TGMetricListAvatar];
+		if (photo)
+			row[TGRowAvatarImage] = photo;
 
-- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-	// One "Recent chats" heading; the flat list below has no second heading
-	// and a live query - or an empty result - has none at all.
-	if (self.query.length || [self matchingChats].count == 0)
-		return nil;
-	return TGLocalized(@"Recent chats");
-}
-
-- (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section {
-	if (self.query.length || [self matchingChats].count == 0)
-		return TGMetricZero;
-	return TGMetricRow - TGMetricPadLarge;
-}
-
-- (void)tableView:(UITableView *)tableView willDisplayHeaderView:(UIView *)view forSection:(NSInteger)section {
-	if ([view isKindOfClass:[UITableViewHeaderFooterView class]]) {
-		UITableViewHeaderFooterView *sectionHeader = (UITableViewHeaderFooterView *)view;
-		sectionHeader.textLabel.font = TGFontMetaStrong();
-		sectionHeader.textLabel.textColor = [[TGTheme shared] sectionHeaderColour];
-		sectionHeader.contentView.backgroundColor = [[TGTheme shared] listBackgroundColour];
-	}
-}
-
-- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-	static NSString *reuse = @"TGForwardCell";
-	TGForwardCell *cell = [tableView dequeueReusableCellWithIdentifier:reuse];
-	if (!cell)
-		cell = [[TGForwardCell alloc] initWithStyle:UITableViewCellStyleSubtitle
-									  reuseIdentifier:reuse];
-
-	NSArray *rows = [self matchingChats];
-	NSDictionary *c = indexPath.row < (NSInteger)rows.count ? rows[(NSUInteger)indexPath.row] : nil;
-	UIColor *bg = [[TGTheme shared] listBackgroundColour];
-	cell.backgroundColor = bg;
-	cell.contentView.backgroundColor = bg;
-	cell.accessoryType = UITableViewCellAccessoryNone;
-	cell.imageView.image = nil;
-	cell.checkBadge.hidden = YES;
-
-	if (!c)
-		return cell;
-
-	NSString *title = c[@"title"] ?: @"";
-	cell.textLabel.text = title;
-	cell.textLabel.font = TGFontBody();
-	cell.textLabel.textColor = [[TGTheme shared] primaryTextColour];
-	cell.textLabel.backgroundColor = bg;
-	cell.textLabel.opaque = YES;
-
-	cell.detailTextLabel.text = c[@"text"] ?: @"";
-	cell.detailTextLabel.font = TGFontCaption();
-	cell.detailTextLabel.textColor = [[TGTheme shared] secondaryTextColour];
-	cell.detailTextLabel.backgroundColor = bg;
-	cell.detailTextLabel.opaque = YES;
-
-	NSNumber *fileId = c[@"photoFileId"];
-	UIImage *photo = [fileId isKindOfClass:NSNumber.class] ? self.avatars[fileId] : nil;
-	if ([c[@"isSaved"] boolValue])
-		photo = [TGIcons savedMessagesAvatarOfSide:TGMetricListAvatar];
-
-	if (!photo){
-		NSString *initials = [TGIcons initialsForTitle:title];
-		photo = [TGIcons avatarWithInitials:initials
-									   size:TGMetricListAvatar
-								   colourId:[c[@"id"] longLongValue]];
+		NSNumber *chatId = c[@"id"];
+		BOOL selected = [chatId isKindOfClass:NSNumber.class] &&
+				[self.selectedChatIds containsObject:chatId];
+		row[TGRowAccessory] = TGRowAccessoryCheck;
+		row[TGRowChecked] = @(selected);
+		[rows addObject:row];
 	}
 
-	cell.imageView.image = photo;
-	cell.imageView.contentMode = UIViewContentModeScaleAspectFill;
-
-	NSNumber *chatId = c[@"id"];
-	BOOL selected = [chatId isKindOfClass:NSNumber.class] &&
-			[self.selectedChatIds containsObject:chatId];
-	cell.checkBadge.hidden = !selected;
-	cell.selectionStyle = UITableViewCellSelectionStyleBlue;
-	return cell;
+	self.sections = @[TGSection(
+			TGForwardPickerSectionHeader(self.query, matches.count), nil, rows)];
+	[self reloadRows];
 }
 
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
-	NSArray *rows = [self matchingChats];
-	if (indexPath.row >= (NSInteger)rows.count)
+- (void)toggleChatAtIndex:(NSUInteger)index {
+	NSArray *matches = [self matchingChats];
+	if (index >= matches.count)
 		return;
-	NSDictionary *c = rows[(NSUInteger)indexPath.row];
-	NSNumber *chatId = c[@"id"];
+	NSNumber *chatId = matches[index][@"id"];
 	if (![chatId isKindOfClass:NSNumber.class])
 		return;
 	if ([self.selectedChatIds containsObject:chatId])
@@ -419,8 +341,7 @@ static const CGFloat kPickerPanelHeight = TGMetricRow;
 	else
 		[self.selectedChatIds addObject:chatId];
 	[self updateSendItem];
-	[tableView reloadRowsAtIndexPaths:@[indexPath]
-					 withRowAnimation:UITableViewRowAnimationNone];
+	[self rebuildSections];
 }
 
 @end

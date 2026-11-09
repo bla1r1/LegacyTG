@@ -3,6 +3,11 @@
 //
 #import <UIKit/UIKit.h>
 
+/// The main screen scale. Declared here, not only in TGIconsInternal.h: a
+/// call without a prototype returned the float bits as an int (2.0 read as
+/// 1073741824), which broke avatar decoding in search and the account header.
+CGFloat TGMainScreenScale(void);
+
 FOUNDATION_EXPORT dispatch_semaphore_t TGIconsDecodeGate(void);
 
 @interface TGIcons : NSObject

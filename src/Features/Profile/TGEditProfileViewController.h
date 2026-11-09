@@ -2,7 +2,7 @@
 // TGEditProfileViewController - your own name, username and bio.
 //
 #import <UIKit/UIKit.h>
-#import "TGTableViewController.h"
+#import "TGRowsViewController.h"
 
-@interface TGEditProfileViewController : TGTableViewController
+@interface TGEditProfileViewController : TGRowsViewController
 @end

@@ -14,7 +14,7 @@
 - (instancetype)init {
 	self = [super init];
 	if (self){
-		self.listTitle = @"Story Notifications";
+		self.title = @"Story Notifications";
 		self.emptyText = @"No Results";
 	}
 	return self;
@@ -51,7 +51,7 @@
 			@"tap" : ^{ [weakSelf openChat:chat]; },
 		}];
 	}
-	self.rows = rows;
+	self.listRows = rows;
 	[self.tableView reloadData];
 }
 

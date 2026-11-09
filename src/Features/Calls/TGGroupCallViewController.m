@@ -4,6 +4,9 @@
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
+#import "TGIcons.h"
+#import "TGRows.h"
+#import "TGRowsDataSource.h"
 #import "TGGroupCallParticipantCell.h"
 #import "TGGroupCallParticipantsViewController.h"
 #import "TGVideoChatSetupViewController.h"
@@ -18,8 +21,9 @@ static const CGFloat kGCCallStatusHeight = TGMetricLineBody;
 static const CGFloat kGCCallStatusLines = 2.0f;
 static const CGFloat kGCCallNoteHeight = TGMetricLineCaption;
 
-@interface TGGroupCallViewController () <UITableViewDataSource, UITableViewDelegate>
+@interface TGGroupCallViewController ()
 @property (nonatomic, strong) UITableView *table;
+@property (nonatomic, strong) TGRowsDataSource *rowSource;
 @property (nonatomic, strong) UIView *header;
 @property (nonatomic, strong) UILabel *titleLabel;
 @property (nonatomic, strong) UILabel *statusLabel;
@@ -123,10 +127,8 @@ static const CGFloat kGCCallNoteHeight = TGMetricLineCaption;
 	self.table = [[UITableView alloc] initWithFrame:container.bounds
 											  style:UITableViewStyleGrouped];
 	self.table.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-	self.table.dataSource = self;
-	self.table.delegate = self;
-	self.table.rowHeight = TGMetricPersonRow;
 	self.table.tableHeaderView = self.header;
+	self.rowSource = [[TGRowsDataSource alloc] initWithTableView:self.table];
 	[self.view addSubview:self.table];
 }
 
@@ -167,7 +169,11 @@ static const CGFloat kGCCallNoteHeight = TGMetricLineCaption;
 	[[TGTheme shared] styleNavigationBar:self.navigationController.navigationBar];
 	self.header.backgroundColor = [[TGTheme shared] groupedBackgroundColour];
 	[self updateHeader];
-	[self.table reloadData];
+	// The participant rows carry the accent and the muted glyph as values, so
+	// a theme change rebuilds them; reloading alone would keep the old colours.
+	self.sections = [self buildSections];
+	self.rowSource.sections = self.sections;
+	[self.rowSource reloadRows];
 }
 
 - (void)viewDidLayoutSubviews {
@@ -245,7 +251,8 @@ static const CGFloat kGCCallNoteHeight = TGMetricLineCaption;
 		self.openedAt = [NSDate date];
 	[self updateHeader];
 	self.sections = [self buildSections];
-	[self.table reloadData];
+	self.rowSource.sections = self.sections;
+	[self.rowSource reloadRows];
 }
 
 - (void)tick {
@@ -369,16 +376,14 @@ static NSString *TGGroupCallStartsText(int32_t stamp) {
 #pragma mark - sections
 
 - (NSDictionary *)row:(NSString *)title detail:(NSString *)detail opens:(BOOL)opens tap:(void (^)(void))tap {
-	NSMutableDictionary *row = [NSMutableDictionary dictionary];
-	row[@"kind"] = @"row";
-	row[@"title"] = title ?: @"";
-	if (detail.length)
-		row[@"detail"] = detail;
-	if (opens)
-		row[@"opens"] = @YES;
-	if (tap)
-		row[@"tap"] = tap;
-	return row;
+	if (!tap)
+		return TGSubtitleRow(title, detail, nil);
+	if (opens){
+		return detail.length ? TGSubtitleOpenRow(title, detail, tap)
+				: TGOpenRow(title, detail, tap);
+	}
+	return detail.length ? TGSubtitleRow(title, detail, tap)
+			: TGTapRow(title, detail, tap);
 }
 
 - (NSDictionary *)row:(NSString *)title detail:(NSString *)detail tap:(void (^)(void))tap {
@@ -386,8 +391,9 @@ static NSString *TGGroupCallStartsText(int32_t stamp) {
 }
 
 - (NSDictionary *)destructiveRow:(NSString *)title detail:(NSString *)detail tap:(void (^)(void))tap {
-	NSMutableDictionary *row = [[self row:title detail:detail tap:tap] mutableCopy];
-	row[@"destructive"] = @YES;
+	NSMutableDictionary *row = [TGRedRow(title, tap) mutableCopy];
+	if (detail.length)
+		row[TGRowDetail] = detail;
 	return row;
 }
 
@@ -399,19 +405,19 @@ static NSString *TGGroupCallStartsText(int32_t stamp) {
 #if TG_DEV
 		// Creating a call from setup is a bench tool; Telegram creates it and
 		// drops straight into the call.
-		[sections addObject:@{@"header" : @"Video Chat",
-			@"rows" : @[[self row:@"Start Video Chat"
-						   detail:nil
-							opens:YES
-								  tap:^{ [weakSelf openSetup]; }]]}];
+		[sections addObject:TGSection(@"Video Chat", nil,
+				@[[self row:@"Start Video Chat"
+					 detail:nil
+					 opens:YES
+					   tap:^{ [weakSelf openSetup]; }]])];
 #endif
 		return sections;
 	}
 	if (!self.call){
 		if (self.loadError.length){
-			[sections addObject:@{@"header" : @"Call",
-				@"rows" : @[[self row:@"Unavailable"
-							   detail:self.loadError tap:nil]]}];
+			[sections addObject:TGSection(@"Call", nil,
+					@[[self row:@"Unavailable"
+						 detail:self.loadError tap:nil]])];
 		}
 		return sections;
 	}
@@ -444,26 +450,29 @@ static NSString *TGGroupCallStartsText(int32_t stamp) {
 				detail:nil
 				tap:^{ [weakSelf toggleMyVideoPaused]; }]];
 	}
-	[sections addObject:@{@"header" : @"Call", @"rows" : callRows}];
+	[sections addObject:TGSection(@"Call", nil, callRows)];
 
 	NSMutableArray *people = [NSMutableArray array];
+	UIImage *mutedIcon = [TGIcons microphoneOffOfSide:TGMetricLineCaption
+			colour:[[TGTheme shared] secondaryTextColour]];
 	NSInteger shown = MIN((NSInteger)self.participants.count, (NSInteger)kGCCallRowsShown);
 	for (NSInteger i = 0; i < shown; i++){
-		NSMutableDictionary *row = [NSMutableDictionary dictionary];
-		row[@"kind"] = @"participant";
-		row[@"value"] = self.participants[(NSUInteger)i];
-		row[@"tap"] = ^{ [weakSelf openParticipants]; };
+		NSDictionary *participant = self.participants[(NSUInteger)i];
+		NSMutableDictionary *row = TGGroupCallParticipantRow(participant,
+				[[TGTheme shared] accentColour], mutedIcon);
+		if (!row)
+			continue;
+		row[TGRowTap] = ^{ [weakSelf openParticipants]; };
 		[people addObject:row];
 	}
 	NSInteger count = [self.call[@"participantCount"] integerValue];
 	if (self.participants.count || count > shown){
-		[people addObject:[self row:(self.participants.count
-						? @"Participants" : @"Participants")
+		[people addObject:[self row:@"Participants"
 				detail:[NSString stringWithFormat:@"%ld", (long)count]
 				opens:YES
 				tap:^{ [weakSelf openParticipants]; }]];
 	}
-	[sections addObject:@{@"header" : @"People", @"rows" : people}];
+	[sections addObject:TGSection(@"People", nil, people)];
 
 	NSMutableArray *messages = [NSMutableArray array];
 	NSArray *callMessages = [[TGClient shared] groupCallMessageSnapshot:self.groupCallId];
@@ -477,7 +486,7 @@ static NSString *TGGroupCallStartsText(int32_t stamp) {
 	}
 	[messages addObject:[self row:(callMessages.count ? @"Messages" : @"Send Message")
 			detail:nil opens:YES tap:^{ [weakSelf openMessages]; }]];
-	[sections addObject:@{@"header" : @"Messages", @"rows" : messages}];
+	[sections addObject:TGSection(@"Messages", nil, messages)];
 
 #if TG_DEV
 	NSMutableArray *tools = [NSMutableArray array];
@@ -489,7 +498,7 @@ static NSString *TGGroupCallStartsText(int32_t stamp) {
 						detail:nil
 						 opens:YES
 						   tap:^{ [weakSelf openStreams]; }]];
-	[sections addObject:@{@"header" : @"Settings", @"rows" : tools}];
+	[sections addObject:TGSection(@"Settings", nil, tools)];
 #endif
 
 	NSMutableArray *invite = [NSMutableArray array];
@@ -499,76 +508,15 @@ static NSString *TGGroupCallStartsText(int32_t stamp) {
 	[invite addObject:[self row:@"Copy Invite Link"
 						 detail:self.call[@"inviteLink"] ?: @""
 							tap:^{ [weakSelf copyInviteLink]; }]];
-	[sections addObject:@{@"header" : @"Invite", @"rows" : invite}];
+	[sections addObject:TGSection(@"Invite", nil, invite)];
 
 	NSMutableArray *end = [NSMutableArray array];
 	if (active){
 		[end addObject:[self destructiveRow:@"End"
 				detail:nil tap:^{ [weakSelf endCall]; }]];
-		[sections addObject:@{@"header" : @"End", @"rows" : end}];
+		[sections addObject:TGSection(@"End", nil, end)];
 	}
 	return sections;
-}
-
-#pragma mark - table
-
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-	return (NSInteger)self.sections.count;
-}
-
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-	return [(NSArray *)self.sections[(NSUInteger)section][@"rows"] count];
-}
-
-- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-	return self.sections[(NSUInteger)section][@"header"];
-}
-
-- (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-	return nil;
-}
-
-- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-	NSDictionary *row = self.sections[(NSUInteger)indexPath.section][@"rows"][(NSUInteger)indexPath.row];
-	if ([row[@"kind"] isEqualToString:@"participant"]){
-		TGGroupCallParticipantCell *cell = [tableView dequeueReusableCellWithIdentifier:@"participant"];
-		if (!cell)
-			cell = [[TGGroupCallParticipantCell alloc] initWithStyle:UITableViewCellStyleDefault
-													 reuseIdentifier:@"participant"];
-		[cell setParticipant:row[@"value"] inTable:tableView];
-		return cell;
-	}
-	UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"row"];
-	if (!cell)
-		cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle
-									  reuseIdentifier:@"row"];
-	[[TGTheme shared] styleCell:cell];
-	cell.textLabel.text = row[@"title"];
-	cell.textLabel.font = TGFontBody();
-	cell.textLabel.textColor = [row[@"destructive"] boolValue]
-			? [[TGTheme shared] destructiveColour] : [[TGTheme shared] primaryTextColour];
-	cell.detailTextLabel.text = row[@"detail"];
-	cell.detailTextLabel.font = TGFontSubhead();
-	cell.detailTextLabel.textColor = [[TGTheme shared] secondaryTextColour];
-	cell.accessoryType = (row[@"tap"] && [row[@"opens"] boolValue])
-			? UITableViewCellAccessoryDisclosureIndicator
-			: UITableViewCellAccessoryNone;
-	cell.selectionStyle = row[@"tap"] ? UITableViewCellSelectionStyleBlue
-									  : UITableViewCellSelectionStyleNone;
-	return cell;
-}
-
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	if (indexPath.section >= (NSInteger)self.sections.count)
-		return;
-	NSArray *rows = self.sections[(NSUInteger)indexPath.section][@"rows"];
-	if (indexPath.row >= (NSInteger)rows.count)
-		return;
-	void (^tap)(void) = rows[(NSUInteger)indexPath.row][@"tap"];
-	if (!tap)
-		return;
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
-	tap();
 }
 
 #pragma mark - call actions

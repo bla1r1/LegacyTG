@@ -271,7 +271,7 @@ static UIImage *TGCallCircleImage(CGFloat side, UIColor *colour, TGCallCircleSty
     [self.view addSubview:self.pipContainer];
 
     self.flipCameraBtn = [UIButton buttonWithType:UIButtonTypeCustom];
-    [self.flipCameraBtn setImage:[TGIcons glyphNamed:@"switchCamera" colour:[[TGTheme shared] onAccentColour] side:TGMetricPadLarge] forState:UIControlStateNormal];
+    [self.flipCameraBtn setImage:[TGIcons glyphNamed:@"flip" colour:[[TGTheme shared] onAccentColour] side:TGMetricPadLarge] forState:UIControlStateNormal];
     [self.flipCameraBtn addTarget:self action:@selector(switchCamera) forControlEvents:UIControlEventTouchUpInside];
     self.flipCameraBtn.hidden = YES;
     [self.view addSubview:self.flipCameraBtn];

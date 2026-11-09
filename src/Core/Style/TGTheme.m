@@ -1,22 +1,26 @@
 #import "TGTheme.h"
 #import "TGThemeFile.h"
+#import <objc/runtime.h>
 #import "TGIcons.h"
 #import "TGThemeInternal.h"
 #import "TGStyle.h"
+#import "TGThemeList.h"
+#import "TGChatThemeStore.h"
 
 #define rgb TGThemeRGB
 
 NSString *const TGThemeChangedNotification = @"TGThemeChanged";
 
-static NSString *const kStyleKey  = @"themeStyle";
 static NSString *const kImportKey = @"themeImportPath";
 static NSString *const kFontKey   = @"messageFontSize";
 
 static NSString *const kWallpaperTypeKey = @"themeWallpaperType";
+static const NSTimeInterval kAutoNightCheckInterval = 60.0;
 
 @implementation TGTheme {
 	NSDictionary *_imported;
 	UIImage *_wallpaper;
+	UIImage *_themeWallpaper;
 }
 
 + (instancetype)shared {
@@ -35,68 +39,219 @@ static NSString *const kWallpaperTypeKey = @"themeWallpaperType";
 	return draws;
 }
 
+/// A theme's wallpaper is a colour with Telegram's doodle sheet over it. The
+/// official client bakes the same two layers; doing it once keeps the chat's
+/// scrolling layer free of blends.
+static UIImage *TGThemeWallpaperImage(UIColor *colour, BOOL dark) {
+	UIImage *pattern = [UIImage imageNamed:@"builtin-wallpaper-0.jpg"];
+	if (!pattern || pattern.size.width <= 0 || pattern.size.height <= 0)
+		return nil;
+	CGSize size = pattern.size;
+	UIGraphicsBeginImageContextWithOptions(size, YES, 1);
+	CGRect rect = CGRectMake(0, 0, size.width, size.height);
+	[colour setFill];
+	UIRectFill(rect);
+	[pattern drawInRect:rect
+			  blendMode:(dark ? kCGBlendModeScreen : kCGBlendModeNormal)
+				  alpha:TGAlphaOpaque];
+	UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+	UIGraphicsEndImageContext();
+	return image;
+}
+
 - (id)init {
 	self = [super init];
 	if (!self)
 		return nil;
 
-	// Night is gone; a stored Night, or a dark theme file, comes back light.
-	[NSUserDefaults.standardUserDefaults removeObjectForKey:kStyleKey];
+	// A theme file, light or dark, survives a launch as the current theme.
 	NSString *imported = [NSUserDefaults.standardUserDefaults stringForKey:kImportKey];
 	if (imported.length)
 		[self loadImportedTheme:[TGTheme pathInDocuments:imported]];
+
+	// Auto-Night has to fire even when Settings is not open, so the theme
+	// observes foregrounding itself and checks once a minute while running.
+	[[NSNotificationCenter defaultCenter] addObserver:self
+			selector:@selector(refreshAutoNightMode)
+				name:UIApplicationDidBecomeActiveNotification object:nil];
+	// A pattern file finishes after the theme list was drawn; the baked
+	// wallpaper has to be thrown away when the document behind it arrives.
+	[[NSNotificationCenter defaultCenter] addObserver:self
+			selector:@selector(chatThemeStoreChanged)
+				name:TGChatThemeStoreChangedNotification object:nil];
+	NSTimer *timer = [NSTimer timerWithTimeInterval:kAutoNightCheckInterval
+			target:self selector:@selector(refreshAutoNightMode)
+			userInfo:nil repeats:YES];
+	[[NSRunLoop mainRunLoop] addTimer:timer forMode:NSRunLoopCommonModes];
+	dispatch_async(dispatch_get_main_queue(), ^{
+		[self refreshAutoNightMode];
+	});
 	return self;
 }
 
 #pragma mark - the theme list
 
 + (NSArray *)availableThemes {
-	NSMutableArray *themes = [@[
-		@{@"id" : @"classic", @"name" : @"Classic", @"dark" : @NO},
-	] mutableCopy];
-
+	NSMutableArray *files = [NSMutableArray array];
 	for (NSString *path in [self availableThemeFiles]){
 		NSString *name = nil;
 		NSDictionary *p = [TGThemeFile paletteFromFile:path name:&name];
 		if (!name.length)
 			name = [path.lastPathComponent stringByDeletingPathExtension];
 		BOOL dark = [p[@"isDark"] boolValue];
-		[themes addObject:@{
+		[files addObject:@{
 			@"id"   : [@"file:" stringByAppendingString:path.lastPathComponent],
 			@"name" : name,
 			@"dark" : @(dark),
 			@"path" : path,
 		}];
 	}
-	return themes;
+	return TGSettingsThemeList(files);
+}
+
+/// The role colours and card geometry for one availableThemes entry. The
+/// resolver lives in TGThemeFile so the host tests can read a Classic and a
+/// file card without a live theme.
++ (NSDictionary *)cardPaletteForThemeEntry:(NSDictionary *)entry {
+	return [TGThemeFile cardPaletteForThemeEntry:entry];
 }
 
 - (NSString *)currentThemeId {
+	NSString *emoji = [TGChatThemeStore shared].currentThemeName;
+	if (emoji.length)
+		return TGChatThemeIdForName(emoji);
 	NSString *imported = [NSUserDefaults.standardUserDefaults stringForKey:kImportKey];
 	if (_imported && imported.length)
 		return [@"file:" stringByAppendingString:imported];
 	return @"classic";
 }
 
+- (void)chatThemeStoreChanged {
+	_themeWallpaper = nil;
+	[self themeChanged];
+}
+
+- (NSString *)nightThemeId {
+	return TGSettingsNightThemeId(NSUserDefaults.standardUserDefaults,
+			[[self class] availableThemes]);
+}
+
+- (BOOL)isNightModeEnabled {
+	return TGSettingsNightModeEnabled(NSUserDefaults.standardUserDefaults);
+}
+
+/// Night Mode does not change the palette by itself: it selects the dark theme
+/// the user chose and remembers the light one. Picking a theme while it is on
+/// updates that choice; picking a light theme turns the mode off.
+- (void)setNightModeEnabled:(BOOL)enabled {
+	NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+
+	// An emoji theme carries both variants itself. Night Mode flips to the
+	// dark settings of that theme; it must not swap in Night Blue behind it.
+	if ([TGChatThemeStore shared].currentThemeName.length){
+		[defaults setBool:enabled forKey:TGSettingsNightModeKey];
+		[defaults synchronize];
+		_themeWallpaper = nil;
+		[self themeChanged];
+		return;
+	}
+
+	NSArray *themes = [[self class] availableThemes];
+	if (enabled){
+		NSString *night = TGSettingsNightThemeId(defaults, themes);
+		if (!night.length)
+			return;
+		NSString *day = [self currentThemeId];
+		if (day.length && !TGSettingsThemeIsDark(themes, day))
+			[defaults setObject:day forKey:TGSettingsDayThemeKey];
+		[defaults setBool:YES forKey:TGSettingsNightModeKey];
+		[defaults synchronize];
+		if (![night isEqualToString:[self currentThemeId]])
+			[self selectThemeId:night];
+		else
+			[self themeChanged];
+		return;
+	}
+
+	[defaults setBool:NO forKey:TGSettingsNightModeKey];
+	[defaults synchronize];
+	NSString *day = TGSettingsDayThemeId(defaults, themes);
+	if (![day isEqualToString:[self currentThemeId]])
+		[self selectThemeId:day];
+	else
+		[self themeChanged];
+}
+
+- (void)refreshAutoNightMode {
+	NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+	if (TGSettingsAutoNightMode(defaults) != TGSettingsAutoNightModeScheduled)
+		return;
+	NSInteger from = TGSettingsAutoNightMinute(defaults,
+			TGSettingsAutoNightFromKey, TGSettingsAutoNightDefaultFrom);
+	NSInteger to = TGSettingsAutoNightMinute(defaults,
+			TGSettingsAutoNightToKey, TGSettingsAutoNightDefaultTo);
+	BOOL dark = TGSettingsAutoNightShouldBeDark(
+			TGSettingsMinuteOfDay([NSDate date]), from, to);
+	if (dark != [self isNightModeEnabled])
+		[self setNightModeEnabled:dark];
+}
+
 - (BOOL)selectThemeId:(NSString *)themeId {
 	if (![themeId isKindOfClass:NSString.class] || !themeId.length)
 		return NO;
 
-	if ([themeId hasPrefix:@"file:"]){
+	if (TGChatThemeIdIsEmoji(themeId)){
+		NSString *name = TGChatThemeNameFromId(themeId);
+		TGChatThemeStore *store = [TGChatThemeStore shared];
+		if (!name.length || (store.themes.count && ![store themeNamed:name]))
+			return NO;
+		[store setCurrentThemeName:name];
+		_imported = nil;
+		_importedName = nil;
+		_themeWallpaper = nil;
+		[NSUserDefaults.standardUserDefaults removeObjectForKey:kImportKey];
+	} else if ([themeId hasPrefix:@"file:"]){
 		NSString *name = [themeId substringFromIndex:5];
 		if (![self loadImportedTheme:[TGTheme pathInDocuments:name]])
 			return NO;
+		[[TGChatThemeStore shared] clearCurrentThemeName];
 		[NSUserDefaults.standardUserDefaults setObject:name forKey:kImportKey];
+	} else {
+		// Anything else is Classic: clear the imported file.
+		[[TGChatThemeStore shared] clearCurrentThemeName];
+		_imported = nil;
+		_importedName = nil;
+		_themeWallpaper = nil;
+		[NSUserDefaults.standardUserDefaults removeObjectForKey:kImportKey];
+	}
+
+	// A theme carries its own wall. Selecting it makes that the chat
+	// background again, dropping a photo or texture chosen for the old theme.
+	_wallpaper = nil;
+	[NSUserDefaults.standardUserDefaults setInteger:TGWallpaperTypeNone
+											 forKey:kWallpaperTypeKey];
+
+	if (TGChatThemeIdIsEmoji(themeId)){
+		// The emoji theme owns both day and night variants; the base theme
+		// keys keep pointing at whatever base was last chosen for later.
 		[NSUserDefaults.standardUserDefaults synchronize];
 		[self themeChanged];
 		return YES;
 	}
 
-	// Anything else is Classic: clear the imported file.
-	_imported = nil;
-	_importedName = nil;
-	[NSUserDefaults.standardUserDefaults removeObjectForKey:kImportKey];
-	[NSUserDefaults.standardUserDefaults synchronize];
+	// Keep the two Night Mode choices pointing at the theme that is in use:
+	// a dark theme is what Night Mode will apply, a light one is what it
+	// returns to. Picking a light theme while Night Mode is on turns it off.
+	NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+	NSArray *themes = [[self class] availableThemes];
+	BOOL dark = TGSettingsThemeIsDark(themes, themeId);
+	if (dark)
+		[defaults setObject:themeId forKey:TGSettingsNightThemeKey];
+	else
+		[defaults setObject:themeId forKey:TGSettingsDayThemeKey];
+	if (!dark && TGSettingsNightModeEnabled(defaults))
+		[defaults setBool:NO forKey:TGSettingsNightModeKey];
+	[defaults synchronize];
 	[self themeChanged];
 	return YES;
 }
@@ -148,6 +303,8 @@ static NSString *const kWallpaperTypeKey = @"themeWallpaperType";
 		return NO;
 	_imported = palette;
 	_importedName = name;
+	_themeWallpaper = nil;
+	_wallpaper = nil;
 	return YES;
 }
 
@@ -176,10 +333,26 @@ static NSString *const kWallpaperTypeKey = @"themeWallpaperType";
 }
 
 - (UIColor *)importedColour:(NSString *)key {
+	NSString *emoji = [TGChatThemeStore shared].currentThemeName;
+	if (emoji.length){
+		NSDictionary *palette = [[TGChatThemeStore shared]
+				paletteForThemeNamed:emoji dark:[self isNightModeEnabled]];
+		UIColor *colour = palette[key];
+		if ([colour isKindOfClass:UIColor.class])
+			return colour;
+	}
 	return _imported[key];
 }
 
 - (BOOL)isDark {
+	NSString *emoji = [TGChatThemeStore shared].currentThemeName;
+	if (emoji.length){
+		NSDictionary *palette = [[TGChatThemeStore shared]
+				paletteForThemeNamed:emoji dark:[self isNightModeEnabled]];
+		if (palette)
+			return [palette[@"isDark"] boolValue];
+		return [self isNightModeEnabled];
+	}
 	return [_imported[@"isDark"] boolValue];
 }
 
@@ -306,9 +479,24 @@ static NSString *const kWallpaperTypeKey = @"themeWallpaperType";
 	}
 }
 
+static char kTabOnMaskKey;
+static char kTabStyleKey;
+static char kTabOffMaskKey;
+
 - (void)styleTabBar:(UITabBar *)bar {
 	if (!bar)
 		return;
+	// Launch styled the same bar three times (root build, chat list load and
+	// appear), re-tinting every glyph each time: 92 ms on an A5. Same theme,
+	// same items: nothing to repaint.
+	NSMutableString *signature = [NSMutableString stringWithFormat:@"%@|%d",
+			[self currentThemeId], [self isDark]];
+	for (UITabBarItem *item in bar.items)
+		[signature appendFormat:@"|%p", item];
+	if ([objc_getAssociatedObject(bar, &kTabStyleKey) isEqualToString:signature])
+		return;
+	objc_setAssociatedObject(bar, &kTabStyleKey, signature,
+			OBJC_ASSOCIATION_COPY_NONATOMIC);
 
 	UIColor *barBg = [self importedColour:@"tabBar"] ?: [self barColour];
 	UIColor *on = [self isDark] ? [self accentColour] : [UIColor whiteColor];
@@ -333,12 +521,25 @@ static NSString *const kWallpaperTypeKey = @"themeWallpaperType";
 	// On the tinted bar the system's grey glyphs went dark/gray; they are drawn
 	// white instead - full for the selected tab, faded for the rest.
 	for (UITabBarItem *item in bar.items) {
-		UIImage *onMask = nil;
-		if ([item respondsToSelector:@selector(selectedImage)])
-			onMask = item.selectedImage;
-		if (!onMask)
-			onMask = item.image;
-		UIImage *offMask = item.image ?: onMask;
+		// The masks are the glyphs the item was made with, kept on first use.
+		// Re-reading item.image took the faded copy painted last time as the
+		// next mask, so every theme change multiplied the alpha again (0.75,
+		// 0.56, 0.42 ...) and the unselected tabs faded away.
+		UIImage *onMask = objc_getAssociatedObject(item, &kTabOnMaskKey);
+		UIImage *offMask = objc_getAssociatedObject(item, &kTabOffMaskKey);
+		if (!onMask && !offMask) {
+			if ([item respondsToSelector:@selector(selectedImage)])
+				onMask = item.selectedImage;
+			if (!onMask)
+				onMask = item.image;
+			offMask = item.image ?: onMask;
+			if (onMask)
+				objc_setAssociatedObject(item, &kTabOnMaskKey, onMask,
+						OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+			if (offMask)
+				objc_setAssociatedObject(item, &kTabOffMaskKey, offMask,
+						OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+		}
 
 		if (onMask || offMask) {
 			UIImage *onImg = [TGIcons image:(onMask ?: offMask) filledWith:on];
@@ -413,14 +614,35 @@ static NSString *const kWallpaperTypeKey = @"themeWallpaperType";
 	if (_wallpaper)
 		return _wallpaper;
 	TGWallpaperType type = [self wallpaperType];
-	if (type == TGWallpaperTypeNone)
-		return nil;
 	if (type == TGWallpaperTypeCustom) {
 		_wallpaper = [UIImage imageWithContentsOfFile:[self wallpaperPath]];
 		return _wallpaper;
 	}
-	_wallpaper = [TGTheme textureImageForType:type];
-	return _wallpaper;
+	if (type != TGWallpaperTypeNone) {
+		_wallpaper = [TGTheme textureImageForType:type];
+		return _wallpaper;
+	}
+
+	// No photo or texture chosen: the theme's own wallpaper is in force.
+	if (_themeWallpaper)
+		return _themeWallpaper;
+	NSString *emoji = [TGChatThemeStore shared].currentThemeName;
+	if (emoji.length){
+		// The emoji theme's background is a fill plus its own pattern document;
+		// the store bakes and caches it, and asks Telegram for the pattern.
+		CGSize size = [UIScreen mainScreen].bounds.size;
+		_themeWallpaper = [[TGChatThemeStore shared]
+				wallpaperForThemeNamed:emoji dark:[self isNightModeEnabled]
+				size:size];
+		if (_themeWallpaper)
+			return _themeWallpaper;
+	}
+	UIColor *colour = [self importedColour:@"wallpaper"];
+	if (colour)
+		_themeWallpaper = TGThemeWallpaperImage(colour, [self isDark]);
+	if (!_themeWallpaper)
+		_themeWallpaper = [UIImage imageNamed:@"builtin-wallpaper-0.jpg"];
+	return _themeWallpaper;
 }
 
 - (void)setWallpaperImage:(UIImage *)image {

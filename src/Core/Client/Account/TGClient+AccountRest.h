@@ -4,6 +4,18 @@
 #import "TGClient+Base.h"
 
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+/// A blocked sender's display name from its getUser / getChat answer.
+NSString *TGBlockedSenderName(NSDictionary *answer);
+/// YES for a deleted account: it stays in Telegram's block list but there is
+/// nobody left to unblock, so the list leaves it out.
+BOOL TGBlockedSenderIsDeleted(NSDictionary *answer);
+#ifdef __cplusplus
+}
+#endif
+
 @interface TGClient (AccountRest)
 
 - (NSString *)nameForUserId:(int64_t)userId;

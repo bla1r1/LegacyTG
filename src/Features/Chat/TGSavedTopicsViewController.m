@@ -15,6 +15,9 @@
 #import "TGIcons.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
+#import "TGLocalization.h"
+#import "TGPeerRowCell.h"
+#import "TGRows.h"
 
 static NSString *TGSavedTopicDateText(NSNumber *stamp) {
 	if (![stamp isKindOfClass:NSNumber.class] || ![stamp longLongValue])
@@ -27,94 +30,6 @@ static NSString *TGSavedTopicDateText(NSNumber *stamp) {
 									   encoding:NSUTF8StringEncoding] : @"";
 }
 
-@interface TGSavedTopicCell : UITableViewCell
-- (void)applyTopic:(NSDictionary *)topic;
-@end
-
-@implementation TGSavedTopicCell {
-	UIImageView *_iconView;
-	UILabel *_titleLabel;
-	UILabel *_previewLabel;
-	UILabel *_dateLabel;
-	UIImageView *_pinView;
-}
-
-- (instancetype)initWithStyle:(UITableViewCellStyle)style
-			   reuseIdentifier:(NSString *)reuseIdentifier {
-	self = [super initWithStyle:style reuseIdentifier:reuseIdentifier];
-	if (!self)
-		return nil;
-	_iconView = [[UIImageView alloc] initWithFrame:CGRectZero];
-	[self.contentView addSubview:_iconView];
-
-	_titleLabel = [[UILabel alloc] initWithFrame:CGRectZero];
-	_titleLabel.font = TGFontRowStrong();
-	_titleLabel.backgroundColor = [UIColor clearColor];
-	[self.contentView addSubview:_titleLabel];
-
-	_previewLabel = [[UILabel alloc] initWithFrame:CGRectZero];
-	_previewLabel.font = TGFontCaption();
-	_previewLabel.backgroundColor = [UIColor clearColor];
-	[self.contentView addSubview:_previewLabel];
-
-	_dateLabel = [[UILabel alloc] initWithFrame:CGRectZero];
-	_dateLabel.font = TGFontCaption();
-	_dateLabel.textAlignment = NSTextAlignmentRight;
-	_dateLabel.backgroundColor = [UIColor clearColor];
-	[self.contentView addSubview:_dateLabel];
-
-	_pinView = [[UIImageView alloc] initWithFrame:CGRectZero];
-	_pinView.contentMode = UIViewContentModeScaleAspectFit;
-	[self.contentView addSubview:_pinView];
-	return self;
-}
-
-- (void)layoutSubviews {
-	[super layoutSubviews];
-	CGRect b = self.contentView.bounds;
-	CGFloat iconSide = TGMetricTopicIcon;
-	_iconView.frame = CGRectMake(TGMetricPad,
-			TGCenteredOrigin(b.size.height, iconSide), iconSide, iconSide);
-
-	CGFloat dateWidth = TGMetricCallLabelWidth;
-	CGFloat right = b.size.width - TGMetricGutter;
-	_dateLabel.frame = CGRectMake(right - dateWidth, TGMetricPad,
-			dateWidth, TGMetricLineCaption);
-
-	CGFloat x = TGMetricPad + iconSide + TGMetricPadMedium;
-	CGFloat maxX = right - dateWidth - TGMetricPad;
-	CGFloat titleX = x;
-	if (!_pinView.hidden) {
-		_pinView.frame = CGRectMake(x, TGMetricPad + TGMetricPadTiny,
-				TGMetricLineCaption, TGMetricLineCaption);
-		titleX = CGRectGetMaxX(_pinView.frame) + TGMetricPadSmall;
-	}
-	_titleLabel.frame = CGRectMake(titleX, TGMetricPad,
-			MAX(0, maxX - titleX), TGMetricLineRow);
-	_previewLabel.frame = CGRectMake(x, TGMetricPad + TGMetricLineRow + TGMetricPadTiny,
-			MAX(0, maxX - x), TGMetricLineCaption);
-}
-
-- (void)applyTopic:(NSDictionary *)topic {
-	TGTheme *theme = [TGTheme shared];
-	_iconView.image = [TGIcons savedMessagesAvatarOfSide:TGMetricTopicIcon];
-	_titleLabel.text = topic[@"title"] ?: @"Saved Messages";
-	_titleLabel.textColor = [theme primaryTextColour];
-	_previewLabel.text = [topic[@"text"] length] ? topic[@"text"] : @"No messages here yet...";
-	_previewLabel.textColor = [theme secondaryTextColour];
-	_dateLabel.text = TGSavedTopicDateText(topic[@"date"]);
-	_dateLabel.textColor = [theme listDateColour];
-	_pinView.hidden = ![topic[@"pinned"] boolValue];
-	_pinView.image = [TGIcons glyphNamed:@"pin"
-								  colour:[theme secondaryTextColour]
-									side:TGMetricLineCaption];
-	self.backgroundColor = [theme listBackgroundColour];
-	self.contentView.backgroundColor = [theme listBackgroundColour];
-	[self setNeedsLayout];
-}
-
-@end
-
 @interface TGSavedTopicsViewController ()
 @property (nonatomic, strong) TGEmptyView *emptyView;
 @property (nonatomic, assign) BOOL loaded;
@@ -122,6 +37,10 @@ static NSString *TGSavedTopicDateText(NSNumber *stamp) {
 @end
 
 @implementation TGSavedTopicsViewController
+
+- (instancetype)init {
+	return [super initWithStyle:UITableViewStylePlain];
+}
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
@@ -201,8 +120,31 @@ static NSString *TGSavedTopicDateText(NSNumber *stamp) {
 			weakSelf.loaded = YES;
 		[weakSelf.refreshControl endRefreshing];
 		[weakSelf updateEmptyView];
+		[weakSelf rebuildSections];
 		[weakSelf.tableView reloadData];
 	});
+}
+
+- (void)rebuildSections {
+	NSMutableArray *rows = [NSMutableArray arrayWithCapacity:self.topics.count];
+	__weak typeof(self) weakSelf = self;
+	for (NSDictionary *topic in self.topics){
+		NSMutableDictionary *row = [self topicRow:topic];
+		int64_t topicId = [topic[@"id"] longLongValue];
+		row[TGRowTap] = ^{ [weakSelf openTopicWithId:topicId
+				title:topic[@"title"] ?: @"Saved"]; };
+		[rows addObject:row];
+	}
+	self.sections = @[TGSection(nil, nil, rows)];
+}
+
+- (void)openTopicWithId:(int64_t)topicId title:(NSString *)title {
+	TGChatViewController *vc = [[TGChatViewController alloc] init];
+	vc.chatId = [TGClient shared].savedMessagesChatId;
+	vc.threadId = topicId;
+	vc.chatTitle = title ?: @"Saved";
+	vc.isGroup = NO;
+	[self.navigationController pushViewController:vc animated:YES];
 }
 
 - (void)updateEmptyView {
@@ -411,34 +353,20 @@ static NSString *TGSavedTopicDateText(NSNumber *stamp) {
 	return emoji.length ? emoji : @"Tag";
 }
 
-#pragma mark - the table
+#pragma mark - the rows
 
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-	return self.topics.count;
-}
-
-- (UITableViewCell *)tableView:(UITableView *)tableView
-		 cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-	static NSString *reuse = @"TGSavedTopicCell";
-	TGSavedTopicCell *cell = [tableView dequeueReusableCellWithIdentifier:reuse];
-	if (!cell)
-		cell = [[TGSavedTopicCell alloc] initWithStyle:UITableViewCellStyleDefault
-									   reuseIdentifier:reuse];
-	[cell applyTopic:self.topics[indexPath.row]];
-	cell.accessoryType = UITableViewCellAccessoryNone;
-	return cell;
-}
-
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
-
-	NSDictionary *t = self.topics[indexPath.row];
-	TGChatViewController *vc = [[TGChatViewController alloc] init];
-	vc.chatId = [TGClient shared].savedMessagesChatId;
-	vc.threadId = [t[@"id"] longLongValue];
-	vc.chatTitle = t[@"title"] ?: @"Saved";
-	vc.isGroup = NO;
-	[self.navigationController pushViewController:vc animated:YES];
+- (NSMutableDictionary *)topicRow:(NSDictionary *)topic {
+	NSMutableDictionary *row = TGPeerRow(@([topic[@"id"] longLongValue]),
+			topic[@"title"] ?: TGLocalized(@"Saved Messages"),
+			[topic[@"text"] length] ? topic[@"text"]
+					: TGLocalized(@"No messages here yet..."), nil);
+	row[TGRowHeight] = @(TGMetricTopicRow);
+	row[TGRowAvatarImage] = [TGIcons savedMessagesAvatarOfSide:TGMetricListAvatar];
+	row[TGRowPin] = @([topic[@"pinned"] boolValue]);
+	NSString *date = TGSavedTopicDateText(topic[@"date"]);
+	if (date.length)
+		row[TGRowAccessory] = date;
+	return row;
 }
 
 @end

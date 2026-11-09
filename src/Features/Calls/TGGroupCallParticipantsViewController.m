@@ -1,8 +1,9 @@
 #import "TGGroupCallParticipantsViewController.h"
 #import "TGClient.h"
-#import "TGTheme.h"
-#import "TGStyle.h"
+#import "TGLocalization.h"
 #import "TGAlertSheet.h"
+#import "TGRows.h"
+#import "TGTheme.h"
 #import "TGGroupCallParticipantCell.h"
 
 @interface TGGroupCallParticipantsViewController ()
@@ -12,37 +13,33 @@
 @property (nonatomic, copy) NSString *footerText;
 @property (nonatomic, assign) BOOL loading;
 @property (nonatomic, strong) NSArray *observers;
+- (void)refresh;
+- (void)rebuildSections;
+- (void)showActionsForParticipant:(NSDictionary *)participant;
 @end
 
 @implementation TGGroupCallParticipantsViewController
 
 - (instancetype)initWithChatId:(int64_t)chatId groupCallId:(int32_t)groupCallId {
-	self = [super initWithStyle:UITableViewStyleGrouped];
+	self = [super init];
 	if (self){
 		_chatId = chatId;
 		_groupCallId = groupCallId;
-		self.title = @"Participants";
+		self.title = TGLocalized(@"Participants");
 	}
 	return self;
 }
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
-		self.edgesForExtendedLayout = UIRectEdgeNone;
-	self.tableView.rowHeight = TGMetricPersonRow;
-	[self applyTheme];
 	[self observe];
 	[self load];
 }
 
 - (void)dealloc {
+	for (id observer in self.observers)
+		[[NSNotificationCenter defaultCenter] removeObserver:observer];
 	[[NSNotificationCenter defaultCenter] removeObserver:self];
-}
-
-- (void)applyTheme {
-	[[TGTheme shared] styleGroupedTable:self.tableView];
-	[[TGTheme shared] styleNavigationBar:self.navigationController.navigationBar];
 }
 
 - (void)observe {
@@ -63,13 +60,6 @@
 		[[NSNotificationCenter defaultCenter]
 				addObserverForName:TGGroupCallChangedNotification
 							object:nil queue:[NSOperationQueue mainQueue] usingBlock:changed],
-		[[NSNotificationCenter defaultCenter]
-				addObserverForName:TGThemeChangedNotification
-							object:nil queue:[NSOperationQueue mainQueue]
-						usingBlock:^(NSNotification *note){
-			[weakSelf applyTheme];
-			[weakSelf.tableView reloadData];
-		}],
 	];
 }
 
@@ -85,7 +75,7 @@
 		me.loading = NO;
 		me.call = call;
 		if (!call){
-			me.footerText = error ?: @"An error occurred.";
+			me.footerText = error ?: TGLocalized(@"An error occurred.");
 			[me refresh];
 			return;
 		}
@@ -136,6 +126,7 @@
 		if (count > 0)
 			self.footerText = nil;
 	}
+	[self rebuildSections];
 	[self.tableView reloadData];
 }
 
@@ -168,36 +159,32 @@
 	return rows;
 }
 
-#pragma mark - table
-
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-	return 1;
-}
-
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-	return self.participants.count;
-}
-
-- (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-	return self.footerText;
-}
-
-- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-	if (indexPath.row >= (NSInteger)self.participants.count)
-		return [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:nil];
-	TGGroupCallParticipantCell *cell = [tableView dequeueReusableCellWithIdentifier:@"participant"];
-	if (!cell)
-		cell = [[TGGroupCallParticipantCell alloc] initWithStyle:UITableViewCellStyleDefault
-												 reuseIdentifier:@"participant"];
-	[cell setParticipant:self.participants[(NSUInteger)indexPath.row] inTable:tableView];
-	return cell;
-}
-
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
-	if (indexPath.row >= (NSInteger)self.participants.count)
-		return;
-	[self showActionsForParticipant:self.participants[(NSUInteger)indexPath.row]];
+- (void)rebuildSections {
+	NSMutableArray *rows = [NSMutableArray array];
+	__weak typeof(self) weakSelf = self;
+	for (NSDictionary *participant in self.participants){
+		NSString *name = participant[@"name"];
+		if (!name.length)
+			name = [participant[@"kind"] isEqualToString:@"chat"]
+					? TGLocalized(@"Channel") : TGLocalized(@"Participant");
+		int64_t userId = [participant[@"userId"] longLongValue];
+		int64_t chatId = [participant[@"chatId"] longLongValue];
+		int64_t peerId = userId ?: chatId;
+		NSMutableDictionary *row = TGPeerRow(@(peerId), name,
+				TGGroupCallParticipantDetail(participant), nil);
+		row[TGRowAvatarUser] = @(userId != 0);
+		BOOL speaking = [participant[@"isSpeaking"] boolValue] &&
+				![participant[@"isMutedForAllUsers"] boolValue];
+		row[TGRowOnline] = @(speaking);
+		if ([participant[@"isCurrentUser"] boolValue])
+			row[TGRowTitleColour] = [TGTheme shared].accentColour;
+		NSDictionary *captured = participant;
+		row[TGRowTap] = ^{
+			[weakSelf showActionsForParticipant:captured];
+		};
+		[rows addObject:row];
+	}
+	self.sections = @[TGSection(nil, self.footerText, rows)];
 }
 
 #pragma mark - one person's actions
@@ -211,17 +198,19 @@
 
 	if (!current && ([participant[@"canBeMutedForAllUsers"] boolValue] ||
 					 [participant[@"canBeUnmutedForAllUsers"] boolValue])){
-		[titles addObject:(mutedAll ? @"Unmute All" : @"Mute All")];
+		[titles addObject:(mutedAll ? TGLocalized(@"Unmute All")
+				: TGLocalized(@"Mute All"))];
 		[keys addObject:@"muteAll"];
 	}
 	if (!current && ([participant[@"canBeMutedForCurrentUser"] boolValue] ||
 					 [participant[@"canBeUnmutedForCurrentUser"] boolValue])){
-		[titles addObject:(mutedMe ? @"Unmute for Me" : @"Mute for Me")];
+		[titles addObject:(mutedMe ? TGLocalized(@"Unmute for Me")
+				: TGLocalized(@"Mute for Me"))];
 		[keys addObject:@"muteMe"];
 	}
 	BOOL owned = [self.call[@"isOwned"] boolValue];
 	if (owned && !current && [participant[@"userId"] longLongValue]){
-		[titles addObject:@"Ban"];
+		[titles addObject:TGLocalized(@"Ban")];
 		[keys addObject:@"ban"];
 	}
 
@@ -252,8 +241,8 @@
 		if (!me)
 			return;
 		if (!ok){
-			[TGAlertSheet showMessage:error ?: @"An error occurred."
-								title:@"Mute" inView:me.view];
+			[TGAlertSheet showMessage:error ?: TGLocalized(@"An error occurred.")
+								title:TGLocalized(@"Mute") inView:me.view];
 			return;
 		}
 		[me load];
@@ -263,7 +252,8 @@
 - (void)banParticipant:(NSDictionary *)participant {
 	__weak typeof(self) weakSelf = self;
 	[TGAlertSheet showConfirm:nil
-						title:@"Ban" action:@"Ban" destructive:YES
+						title:TGLocalized(@"Ban") action:TGLocalized(@"Ban")
+				  destructive:YES
 					   inView:self.view onConfirm:^{
 		TGGroupCallParticipantsViewController *me = weakSelf;
 		if (!me)
@@ -272,8 +262,8 @@
 				@[participant[@"userId"] ?: @(0)] inCall:me.groupCallId
 				completion:^(BOOL ok, NSString *error){
 			if (!ok)
-				[TGAlertSheet showMessage:error ?: @"An error occurred."
-									title:@"Ban" inView:me.view];
+				[TGAlertSheet showMessage:error ?: TGLocalized(@"An error occurred.")
+									title:TGLocalized(@"Ban") inView:me.view];
 			else
 				[me load];
 		}];

@@ -6,9 +6,9 @@
 // second tap. This is the pane the official client opens from the same row.
 //
 #import <UIKit/UIKit.h>
-#import "TGTableViewController.h"
+#import "TGRowsViewController.h"
 
-@interface TGMemberListViewController : TGTableViewController
+@interface TGMemberListViewController : TGRowsViewController
 
 @property (nonatomic, assign) int64_t chatId;
 /// The rows Group Settings already loaded, so the first paint is immediate.

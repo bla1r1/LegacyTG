@@ -1,8 +1,8 @@
 #import "TGActiveNotificationsViewController.h"
 #import "TGClient.h"
-#import "TGTheme.h"
-#import "TGStyle.h"
 #import "TGAlertSheet.h"
+#import "TGLocalization.h"
+#import "TGRows.h"
 
 /// One date format for every row; creating one per cell was the usual
 /// reason a notification list scrolls badly on an A5.
@@ -19,17 +19,14 @@ static NSString *TGNotificationDateText(NSNumber *timestamp) {
 
 @implementation TGActiveNotificationsViewController
 
-- (id)init {
-	return [super initWithStyle:UITableViewStyleGrouped];
-}
-
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	self.title = @"Notifications";
+	self.title = TGLocalized(@"Notifications");
 	[self applyTheme];
 
 	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
-			initWithTitle:@"Clear All" style:UIBarButtonItemStylePlain
+			initWithTitle:TGLocalized(@"Clear All")
+					style:UIBarButtonItemStylePlain
 				   target:self action:@selector(clearAll)];
 
 	__weak typeof(self) weakSelf = self;
@@ -39,18 +36,12 @@ static NSString *TGNotificationDateText(NSNumber *timestamp) {
 		 usingBlock:^(NSNotification *note){
 		[weakSelf reloadList];
 	}];
-
 }
 
 - (void)viewWillAppear:(BOOL)animated {
 	[super viewWillAppear:animated];
 	[self applyTheme];
 	[self reloadList];
-}
-
-- (void)applyTheme {
-	[[TGTheme shared] styleGroupedTable:self.tableView];
-	[[TGTheme shared] styleNavigationBar:self.navigationController.navigationBar];
 }
 
 - (NSArray *)groups {
@@ -63,142 +54,64 @@ static NSString *TGNotificationDateText(NSNumber *timestamp) {
 
 - (void)reloadList {
 	self.navigationItem.rightBarButtonItem.enabled = self.groups.count > 0;
-	[self.tableView reloadData];
+	[self rebuildSections];
 }
 
-/// Section 0 is the pending banner when one is due; the group sections follow.
-- (NSInteger)groupIndexForSection:(NSInteger)section {
-	return self.pending ? section - 1 : section;
-}
-
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-	if (self.pending)
-		return (NSInteger)self.groups.count + 1;
-	return MAX((NSInteger)1, (NSInteger)self.groups.count);
-}
-
-- (NSInteger)tableView:(UITableView *)tableView
- numberOfRowsInSection:(NSInteger)section {
-	if (self.pending && section == 0)
-		return 1;
-	NSInteger index = [self groupIndexForSection:section];
-	if (index < 0 || index >= (NSInteger)self.groups.count)
-		return 1;   // the empty state
-	NSArray *notifications = self.groups[(NSUInteger)index][@"notifications"];
-	return MAX((NSInteger)1, (NSInteger)notifications.count);
-}
-
-- (NSString *)tableView:(UITableView *)tableView
-titleForHeaderInSection:(NSInteger)section {
-	if (self.pending && section == 0)
-		return nil;
-	NSInteger index = [self groupIndexForSection:section];
-	if (index < 0 || index >= (NSInteger)self.groups.count)
-		return @"NOTIFICATIONS";
-	NSDictionary *group = self.groups[(NSUInteger)index];
-	NSString *title = [[TGClient shared] titleForChat:
-			[group[@"chatId"] longLongValue]] ?: @"Notifications";
-	return [NSString stringWithFormat:@"%@ · %@ · %@",
-			title, group[@"type"] ?: @"Messages", group[@"totalCount"] ?: @(0)];
-}
-
-- (NSString *)tableView:(UITableView *)tableView
-titleForFooterInSection:(NSInteger)section {
-	if (section != (NSInteger)[self numberOfSectionsInTableView:tableView] - 1)
-		return nil;
-	return nil;
-}
-
-- (UITableViewCell *)pendingCellForTableView:(UITableView *)tableView {
-	UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"pending"];
-	if (!cell){
-		cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
-									  reuseIdentifier:@"pending"];
-		UIActivityIndicatorView *spinner = [[UIActivityIndicatorView alloc]
-				initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleGray];
-		[spinner startAnimating];
-		cell.accessoryView = spinner;
-	}
-	[[TGTheme shared] styleCell:cell];
-	cell.textLabel.text = @"Updating...";
-	cell.textLabel.font = TGFontBody();
-	cell.textLabel.textColor = [[TGTheme shared] secondaryTextColour];
-	cell.selectionStyle = UITableViewCellSelectionStyleNone;
-	return cell;
-}
-
-- (UITableViewCell *)emptyCellForTableView:(UITableView *)tableView {
-	UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"empty"];
-	if (!cell)
-		cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
-									  reuseIdentifier:@"empty"];
-	[[TGTheme shared] styleCell:cell];
-	cell.textLabel.text = @"None";
-	cell.textLabel.font = TGFontBody();
-	cell.textLabel.textColor = [[TGTheme shared] secondaryTextColour];
-	cell.selectionStyle = UITableViewCellSelectionStyleNone;
-	return cell;
-}
-
-- (UITableViewCell *)tableView:(UITableView *)tableView
-		 cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-	if (self.pending && indexPath.section == 0)
-		return [self pendingCellForTableView:tableView];
-	NSInteger index = [self groupIndexForSection:indexPath.section];
-	if (index < 0 || index >= (NSInteger)self.groups.count)
-		return [self emptyCellForTableView:tableView];
-	NSDictionary *group = self.groups[(NSUInteger)index];
-	NSArray *notifications = group[@"notifications"];
-	if (indexPath.row >= (NSInteger)notifications.count)
-		return [self emptyCellForTableView:tableView];
-
-	NSDictionary *row = notifications[(NSUInteger)indexPath.row];
-	UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"row"];
-	if (!cell)
-		cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle
-									  reuseIdentifier:@"row"];
-	[[TGTheme shared] styleCell:cell];
-	cell.textLabel.text = row[@"text"] ?: @"Notifications";
-	cell.textLabel.font = TGFontBody();
-	cell.textLabel.textColor = [[TGTheme shared] primaryTextColour];
-	cell.detailTextLabel.text = [NSString stringWithFormat:@"%@ · %@%@",
-			row[@"kind"] ?: @"Notifications",
-			TGNotificationDateText(row[@"date"]),
-			[row[@"silent"] boolValue] ? @" · silent" : @""];
-	cell.detailTextLabel.font = TGFontSubhead();
-	cell.detailTextLabel.textColor = [[TGTheme shared] secondaryTextColour];
-	cell.accessoryType = UITableViewCellAccessoryNone;
-	cell.selectionStyle = UITableViewCellSelectionStyleBlue;
-	return cell;
-}
-
-- (void)tableView:(UITableView *)tableView
-didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	if (self.pending && indexPath.section == 0)
-		return;
-	NSInteger index = [self groupIndexForSection:indexPath.section];
-	if (index < 0 || index >= (NSInteger)self.groups.count)
-		return;
-	NSDictionary *group = self.groups[(NSUInteger)index];
-	NSArray *notifications = group[@"notifications"];
-	if (indexPath.row >= (NSInteger)notifications.count)
-		return;
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
-	NSDictionary *row = notifications[(NSUInteger)indexPath.row];
-	int32_t groupId = (int32_t)[group[@"id"] intValue];
-	int32_t notificationId = (int32_t)[row[@"id"] intValue];
+- (void)rebuildSections {
 	__weak typeof(self) weakSelf = self;
+	NSMutableArray *sections = [NSMutableArray array];
 
-	[TGAlertSheet showChoices:@[@"Delete"]
-						title:row[@"text"] ?: @"Notifications"
+	if (self.pending){
+		[sections addObject:TGSection(nil, nil, @[
+			TGRow(TGKindPlain, TGLocalized(@"Updating...")),
+		])];
+	}
+
+	NSArray *groups = self.groups;
+	if (!groups.count){
+		[sections addObject:TGSection(TGLocalized(@"NOTIFICATIONS"), nil, @[
+			TGRow(TGKindPlain, TGLocalized(@"None")),
+		])];
+	} else {
+		for (NSDictionary *group in groups){
+			NSString *title = [[TGClient shared] titleForChat:
+					[group[@"chatId"] longLongValue]] ?: TGLocalized(@"Notifications");
+			NSString *header = [NSString stringWithFormat:@"%@ · %@ · %@",
+					title, group[@"type"] ?: TGLocalized(@"Messages"),
+					group[@"totalCount"] ?: @(0)];
+			NSMutableArray *rows = [NSMutableArray array];
+			NSArray *notifications = group[@"notifications"];
+			for (NSDictionary *note in notifications){
+				NSString *detail = [NSString stringWithFormat:@"%@ · %@",
+						note[@"kind"] ?: TGLocalized(@"Notifications"),
+						TGNotificationDateText(note[@"date"])];
+				[rows addObject:TGSubtitleRow(note[@"text"] ?: TGLocalized(@"Notifications"),
+						detail, ^{ [weakSelf removeNotification:note inGroup:group]; })];
+			}
+			if (!rows.count)
+				[rows addObject:TGRow(TGKindPlain, TGLocalized(@"None"))];
+			[sections addObject:TGSection(header, nil, rows)];
+		}
+	}
+
+	self.sections = sections;
+	[self reloadRows];
+}
+
+- (void)removeNotification:(NSDictionary *)note inGroup:(NSDictionary *)group {
+	int32_t groupId = (int32_t)[group[@"id"] intValue];
+	int32_t notificationId = (int32_t)[note[@"id"] intValue];
+	__weak typeof(self) weakSelf = self;
+	[TGAlertSheet showChoices:@[TGLocalized(@"Delete")]
+						title:note[@"text"] ?: TGLocalized(@"Notifications")
 			 destructiveIndex:0
 					   inView:self.view
 					 onChoice:^(NSInteger choice){
 		[[TGClient shared] removeNotification:notificationId inGroup:groupId
 								   completion:^(BOOL ok, NSString *error){
 			if (!ok)
-				[TGAlertSheet showMessage:(error ?: @"An error occurred.")
-									title:@"Notifications"
+				[TGAlertSheet showMessage:(error ?: TGLocalized(@"An error occurred."))
+									title:TGLocalized(@"Notifications")
 								   inView:weakSelf.view];
 			[weakSelf reloadList];
 		}];
@@ -210,8 +123,8 @@ didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
 		return;
 	__weak typeof(self) weakSelf = self;
 	[TGAlertSheet showConfirm:nil
-						title:@"Clear All"
-					   action:@"Clear"
+						title:TGLocalized(@"Clear All")
+					   action:TGLocalized(@"Clear")
 				  destructive:YES
 					   inView:self.view
 					onConfirm:^{

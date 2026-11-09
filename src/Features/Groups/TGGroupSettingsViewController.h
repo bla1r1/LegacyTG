@@ -8,11 +8,11 @@
 // what a row is set to instead of asking the server after a tap.
 //
 #import <UIKit/UIKit.h>
-#import "TGTableViewController.h"
+#import "TGRowsViewController.h"
 
 @class TGGroupSwitch;
 
-@interface TGGroupSettingsViewController : TGTableViewController
+@interface TGGroupSettingsViewController : TGRowsViewController
 
 @property (nonatomic, assign) int64_t chatId;
 @property (nonatomic, copy) NSString *chatTitle;

@@ -169,7 +169,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 			object:nil queue:[NSOperationQueue mainQueue]
 		 usingBlock:^(NSNotification *note) {
 		[weakSelf applyTheme];
-		[weakSelf.tableView reloadData];
+		[weakSelf rebuild];
 	}];
 	// A switch moved on another device is a full-info update here. The screen
 	// re-reads rather than showing the value it opened with.
@@ -200,6 +200,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 }
 
 - (void)applyTheme {
+	[super applyTheme];
 	[[TGTheme shared] styleGroupedTable:self.tableView];
 	[[TGTheme shared] styleNavigationBar:self.navigationController.navigationBar];
 }

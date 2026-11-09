@@ -892,6 +892,14 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 					 @{@"@type" : @"messageSenderUser", @"user_id" : @(7)},
 					 @{@"@type" : @"messageSenderChat", @"chat_id" : @(-500)}],
 				 @"total_count" : @(2)});
+	// Every sender is now asked for, so a deleted account can be told apart.
+	NSDictionary *askUser = lastA(c, @"getUser");
+	NSDictionary *askChat = lastA(c, @"getChat");
+	[c handleUpdate:@{@"@type" : @"user", @"id" : @(7), @"first_name" : @"Ann",
+			@"type" : @{@"@type" : @"userTypeRegular"}, @"@extra" : askUser[@"@extra"]}];
+	XCTAssertNil(blocked, @"answers only when every sender is known");
+	[c handleUpdate:@{@"@type" : @"chat", @"id" : @(-500), @"title" : @"News",
+			@"@extra" : askChat[@"@extra"]}];
 	XCTAssertEqual(blocked.count, (NSUInteger)2);
 	XCTAssertEqualObjects(blocked[1][@"id"], @(-500));
 	XCTAssertEqualObjects(blocked[1][@"name"], @"News");
@@ -903,6 +911,19 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 }
 
 #pragma mark - editing the profile
+
+- (void)testBlockedUsers_LeaveDeletedAccountsOut {
+	TGClient *c = A();
+	__block NSArray *blocked = nil;
+	[c blockedUsersWithCompletion:^(NSArray *users){ blocked = users; }];
+	answerA(c, @{@"@type" : @"messageSenders",
+				 @"senders" : @[@{@"@type" : @"messageSenderUser", @"user_id" : @(9)}],
+				 @"total_count" : @(1)});
+	answerA(c, @{@"@type" : @"user", @"id" : @(9), @"first_name" : @"",
+				 @"type" : @{@"@type" : @"userTypeDeleted"}});
+	XCTAssertNotNil(blocked);
+	XCTAssertEqual(blocked.count, (NSUInteger)0);
+}
 
 - (void)testSetName_AnswersTheRefusalSoTheFormCanStay {
 	TGClient *c = A();

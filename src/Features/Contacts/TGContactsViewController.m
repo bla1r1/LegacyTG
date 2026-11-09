@@ -3,17 +3,16 @@
 #import "TGNewContactViewController.h"
 #import "TGChatViewController.h"
 #import "TGClient.h"
-#import "TGNameWithStatus.h"
 #import "TGCustomEmojiStore.h"
 #import "TGIcons.h"
 #import "TGTheme.h"
-#import <QuartzCore/QuartzCore.h>
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
 #import "TGEmptyView.h"
-#import "TGMemberAvatarStore.h"
 #import "TGStatusText.h"
 #import "TGContactSort.h"
+#import "TGPeerRowCell.h"
+#import "TGRows.h"
 
 @interface TGContactsViewController () <UISearchBarDelegate>
 @property (nonatomic, strong) TGEmptyView *emptyView;
@@ -21,9 +20,6 @@
 @property (nonatomic, strong) UISearchBar *searchBar;
 @property (nonatomic, strong) NSArray *filteredUsers;
 @property (nonatomic, assign) BOOL isSearching;
-/// The same contacts split by their first letter, so the list reads like
-/// Telegram's address book instead of one long run of names.
-@property (nonatomic, strong) NSArray *sections;
 /// Who is ticked, while this screen is picking rather than opening.
 @property (nonatomic, strong) NSMutableSet *picked;
 /// How many contacts this account has uploaded from a phone's address book.
@@ -33,79 +29,7 @@
 - (void)updateSearchEmptyViewForQuery:(NSString *)query;
 @end
 
-/// A contact row with its avatar inset and a fixed size. The stock cell sized
-/// the image view to the picture and put it at x 0 on iOS 6, so a large
-/// photo filled the row's height flush against the screen edge.
-@interface TGContactCell : UITableViewCell
-@property (nonatomic, strong) UIImageView *avatarView;
-@property (nonatomic, strong) UIImageView *checkView;
-@property (nonatomic, assign) int64_t avatarUser;
-@property (nonatomic, assign) BOOL showsCheck;
-@property (nonatomic, assign) BOOL checked;
-@end
-
-@implementation TGContactCell
-
-- (instancetype)initWithStyle:(UITableViewCellStyle)style reuseIdentifier:(NSString *)reuseIdentifier {
-	if ((self = [super initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:reuseIdentifier])) {
-		_avatarView = [[UIImageView alloc] initWithFrame:CGRectMake(TGMetricPad, TGMetricZero, TGMetricListAvatar, TGMetricListAvatar)];
-		_avatarView.contentMode = UIViewContentModeScaleAspectFill;
-		_avatarView.clipsToBounds = YES;
-		_avatarView.opaque = NO;
-		_avatarView.backgroundColor = [UIColor clearColor];
-		[self.contentView addSubview:_avatarView];
-
-		_checkView = [[UIImageView alloc] initWithFrame:CGRectZero];
-		_checkView.contentMode = UIViewContentModeScaleAspectFit;
-		[self.contentView addSubview:_checkView];
-	}
-	return self;
-}
-
-- (void)layoutSubviews {
-	[super layoutSubviews];
-	CGFloat side = TGMetricListAvatar;
-	CGFloat h = self.contentView.bounds.size.height;
-	CGFloat checkSide = TGMetricMenuGlyph;
-	CGFloat left = TGMetricPad;
-	if (self.showsCheck){
-		self.checkView.frame = CGRectMake(left, TGCenteredOrigin(h, checkSide), checkSide, checkSide);
-		left += checkSide + TGMetricPadSmall;
-	} else {
-		self.checkView.frame = CGRectZero;
-	}
-	self.avatarView.frame = CGRectMake(left, TGCenteredOrigin(h, side), side, side);
-	CGFloat x = left + side + TGMetricPadMedium;
-	// To the content view's edge: UIKit sized the labels for the picture as
-	// it was before the inset, and the names came out cut short.
-	CGFloat width = MAX(TGMetricZero, self.contentView.bounds.size.width - x - TGMetricPadMedium);
-	for (UILabel *label in @[self.textLabel, self.detailTextLabel]) {
-		CGRect f = label.frame;
-		f.origin.x = x;
-		f.size.width = width;
-		label.frame = f;
-	}
-}
-@end
-
 static NSString *TGContactName(NSDictionary *u);
-
-/// A name's section letter. Anything that is not a letter lands in "#", the
-/// way the phone's address book groups punctuation and emoji.
-static NSString *TGContactSectionTitle(NSString *name) {
-	NSString *trimmed = [name stringByTrimmingCharactersInSet:
-			[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-	if (!trimmed.length)
-		return @"#";
-	NSRange r = [trimmed rangeOfComposedCharacterSequenceAtIndex:0];
-	if (r.length != 1)
-		return @"#";
-	NSString *first = [[trimmed substringWithRange:r] uppercaseString];
-	unichar c = [first characterAtIndex:0];
-	if ((c >= 'A' && c <= 'Z') || (c >= 0x0400 && c <= 0x04FF))
-		return first;
-	return @"#";
-}
 
 /// Contacts grouped in the order the list already sorted them. The "#"
 /// bucket always comes last, so it does not push A down the screen.
@@ -133,6 +57,10 @@ static NSArray *TGContactSections(NSArray *users) {
 }
 
 @implementation TGContactsViewController
+
+- (instancetype)init {
+	return [super initWithStyle:UITableViewStylePlain];
+}
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
@@ -250,11 +178,64 @@ static NSArray *TGContactSections(NSArray *users) {
 - (void)sortAndGroupContacts {
 	if (self.sortByLastSeen) {
 		self.users = TGContactsSortedByLastSeen(self.users);
-		self.sections = @[@{@"title": @"", @"users": self.users}];
 	} else {
 		self.users = TGContactsSortedByName(self.users);
-		self.sections = TGContactSections(self.users);
 	}
+	[self rebuildSections];
+}
+
+- (NSArray *)sectionGroups {
+	NSArray *users = self.isSearching ? self.filteredUsers : self.users;
+	if (self.isSearching || self.sortByLastSeen)
+		return @[@{@"title" : @"", @"users" : users ?: @[]}];
+	return TGContactSections(users ?: @[]);
+}
+
+- (void)rebuildSections {
+	NSMutableArray *sections = [NSMutableArray array];
+	for (NSDictionary *group in [self sectionGroups]){
+		NSArray *users = group[@"users"];
+		NSMutableArray *rows = [NSMutableArray arrayWithCapacity:users.count];
+		for (NSDictionary *user in users)
+			[rows addObject:[self rowForUser:user]];
+		NSString *header = [group[@"title"] length] ? group[@"title"] : nil;
+		[sections addObject:TGSection(header, nil, rows)];
+	}
+	self.sections = sections;
+}
+
+- (NSMutableDictionary *)rowForUser:(NSDictionary *)u {
+	NSString *name = TGContactName(u);
+	NSNumber *userId = u[@"id"];
+	int64_t uid = [userId longLongValue];
+	int64_t statusEmojiId = [[TGClient shared] emojiStatusIdForUser:uid];
+
+	NSString *subtitle = @"";
+	BOOL online = NO;
+	NSString *presence = TGStatusTextFromTDStatus(u[@"status"]);
+	if (presence.length) {
+		subtitle = presence;
+		online = [u[@"status"][@"@type"] isEqualToString:@"userStatusOnline"];
+	} else if ([u[@"username"] length]) {
+		subtitle = [@"@" stringByAppendingString:u[@"username"]];
+		online = YES;
+	} else if ([u[@"phone"] length]) {
+		subtitle = [NSString stringWithFormat:@"+%@", u[@"phone"]];
+	}
+
+	__weak typeof(self) weakSelf = self;
+	NSMutableDictionary *row = TGPeerRow(userId, name, subtitle, ^{
+		[weakSelf selectUser:u];
+	});
+	row[TGRowAvatarUser] = @YES;
+	row[TGRowOnline] = @(online);
+	if (statusEmojiId > 0)
+		row[TGRowStatusEmojiId] = @(statusEmojiId);
+	if ([self isPicking]){
+		row[TGRowAccessory] = TGRowAccessoryCheck;
+		row[TGRowChecked] = @([self.picked containsObject:userId]);
+	}
+	return row;
 }
 
 - (void)addContactTapped {
@@ -339,6 +320,7 @@ static NSString *TGContactName(NSDictionary *u) {
 		self.isSearching = NO;
 		self.filteredUsers = @[];
 		[self updateSearchEmptyViewForQuery:nil];
+		[self rebuildSections];
 		[self.tableView reloadData];
 		return;
 	}
@@ -361,6 +343,7 @@ static NSString *TGContactName(NSDictionary *u) {
 	}
 	self.filteredUsers = matches;
 	[self updateSearchEmptyViewForQuery:trimmed];
+	[self rebuildSections];
 	[self.tableView reloadData];
 }
 
@@ -390,6 +373,7 @@ static NSString *TGContactName(NSDictionary *u) {
 	self.isSearching = NO;
 	self.filteredUsers = @[];
 	[self updateSearchEmptyViewForQuery:nil];
+	[self rebuildSections];
 	[self.tableView reloadData];
 }
 
@@ -397,33 +381,8 @@ static NSString *TGContactName(NSDictionary *u) {
 	[searchBar resignFirstResponder];
 }
 
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-	if (self.isSearching)
-		return 1;
-	return (NSInteger)self.sections.count;
-}
-
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-	if (self.isSearching)
-		return (NSInteger)self.filteredUsers.count;
-	if (section < 0 || section >= (NSInteger)self.sections.count)
-		return 0;
-	return [self.sections[(NSUInteger)section][@"users"] count];
-}
-
-- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-	if (self.isSearching || self.sortByLastSeen)
-		return nil;
-	if (section < 0 || section >= (NSInteger)self.sections.count)
-		return nil;
-	return self.sections[(NSUInteger)section][@"title"];
-}
-
-- (void)tableView:(UITableView *)tableView willDisplayHeaderView:(UIView *)view forSection:(NSInteger)section {
-	[[TGTheme shared] styleHeaderFooterView:view];
-}
-
 - (NSArray *)sectionIndexTitlesForTableView:(UITableView *)tableView {
+	(void)tableView;
 	if (self.isSearching || self.sortByLastSeen)
 		return nil;
 	// A short list reads worse with a rail down the side; Telegram keeps it
@@ -431,117 +390,49 @@ static NSString *TGContactName(NSDictionary *u) {
 	if (self.sections.count < 8)
 		return nil;
 	NSMutableArray *titles = [NSMutableArray array];
-	for (NSDictionary *section in self.sections)
-		[titles addObject:section[@"title"]];
+	for (NSDictionary *section in self.sections){
+		NSString *title = section[@"header"];
+		[titles addObject:title.length ? title : @""];
+	}
 	return titles;
 }
 
 - (NSInteger)tableView:(UITableView *)tableView
  sectionForSectionIndexTitle:(NSString *)title atIndex:(NSInteger)index {
+	(void)tableView;
+	(void)title;
 	return index;
 }
 
-- (NSDictionary *)userAtIndexPath:(NSIndexPath *)indexPath {
-	if (self.isSearching) {
-		if (indexPath.row < 0 || indexPath.row >= (NSInteger)self.filteredUsers.count)
-			return nil;
-		return self.filteredUsers[(NSUInteger)indexPath.row];
+- (void)selectUser:(NSDictionary *)u {
+	if ([self isPicking]){
+		[self togglePickedUser:u];
+		return;
 	}
-	if (indexPath.section < 0 || indexPath.section >= (NSInteger)self.sections.count)
-		return nil;
-	NSArray *users = self.sections[(NSUInteger)indexPath.section][@"users"];
-	if (indexPath.row < 0 || indexPath.row >= (NSInteger)users.count)
-		return nil;
-	return users[(NSUInteger)indexPath.row];
+	NSString *name = TGContactName(u);
+	__weak typeof(self) weakSelf = self;
+	[[TGClient shared] privateChatWithUser:[u[@"id"] longLongValue]
+								completion:^(int64_t chatId){
+		TGContactsViewController *me = weakSelf;
+		if (!me || chatId == 0)
+			return;
+		TGChatViewController *vc = [[TGChatViewController alloc] init];
+		vc.chatId = chatId;
+		vc.chatTitle = name;
+		vc.hidesBottomBarWhenPushed = YES;
+		[me.navigationController pushViewController:vc animated:YES];
+	}];
 }
 
-- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-	static NSString *reuse = @"TGContactCell";
-	UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:reuse];
-	if (!cell)
-		cell = [[TGContactCell alloc] initWithStyle:UITableViewCellStyleSubtitle
-									reuseIdentifier:reuse];
-
-	NSDictionary *u = [self userAtIndexPath:indexPath];
-	if (!u)
-		return cell;
-	NSString *name = TGContactName(u);
-	int64_t uid = [u[@"id"] longLongValue];
-	int64_t statusEmojiId = [[TGClient shared] emojiStatusIdForUser:uid];
-	UIColor *bg = [[TGTheme shared] listBackgroundColour];
-	cell.backgroundColor = bg;
-	cell.contentView.backgroundColor = bg;
-	cell.textLabel.backgroundColor = bg;
-	cell.textLabel.opaque = YES;
-	cell.textLabel.attributedText = TGNameWithStatus(name ?: @"", statusEmojiId, TGFontBody(), [[TGTheme shared] primaryTextColour]);
-	cell.textLabel.font = TGFontBody();
-	cell.detailTextLabel.backgroundColor = bg;
-	cell.detailTextLabel.opaque = YES;
-
-	NSString *presence = TGStatusTextFromTDStatus(u[@"status"]);
-	if (presence.length) {
-		cell.detailTextLabel.text = presence;
-		if ([u[@"status"][@"@type"] isEqualToString:@"userStatusOnline"]) {
-			cell.detailTextLabel.textColor = [[TGTheme shared] accentColour];
-		} else {
-			cell.detailTextLabel.textColor = [[TGTheme shared] secondaryTextColour];
-		}
-	} else if ([u[@"username"] length]) {
-		cell.detailTextLabel.text = [@"@" stringByAppendingString:u[@"username"]];
-		cell.detailTextLabel.textColor = [[TGTheme shared] accentColour];
-	} else if ([u[@"phone"] length]) {
-		cell.detailTextLabel.text = [NSString stringWithFormat:@"+%@", u[@"phone"]];
-		cell.detailTextLabel.textColor = [[TGTheme shared] secondaryTextColour];
-	} else {
-		cell.detailTextLabel.text = @"";
-	}
-	cell.detailTextLabel.font = TGFontCaption();
-	cell.textLabel.textColor = [[TGTheme shared] primaryTextColour];
-	cell.accessoryType = UITableViewCellAccessoryNone;
-
-	TGContactCell *contactCell = (TGContactCell *)cell;
-	contactCell.avatarUser = uid;
-	contactCell.showsCheck = [self isPicking];
-	contactCell.checked = [self.picked containsObject:u[@"id"]];
-	contactCell.checkView.hidden = !contactCell.showsCheck;
-	if (contactCell.showsCheck){
-		NSString *glyph = contactCell.checked ? @"checkboxSelected"
-											  : @"checkboxUnselected";
-		contactCell.checkView.image = [TGIcons glyphNamed:glyph
-												   colour:contactCell.checked
-														  ? [[TGTheme shared] accentColour]
-														  : [[TGTheme shared] secondaryTextColour]
-													 side:TGMetricMenuGlyph];
-	}
-	[contactCell setNeedsLayout];
-
-	UIImage *photo = [[TGMemberAvatarStore shared] cachedAvatarForUser:uid side:TGMetricListAvatar];
-	if (photo) {
-		contactCell.avatarView.image = [TGIcons roundedImage:photo
-														size:CGSizeMake(TGMetricListAvatar, TGMetricListAvatar)
-													  radius:TGHalf(TGMetricListAvatar)
-													 corners:UIRectCornerAllCorners];
-	} else {
-		contactCell.avatarView.image = [TGIcons avatarWithInitials:[TGIcons initialsForTitle:name]
-															  size:TGMetricListAvatar
-														  colourId:uid];
-		__weak TGContactCell *weakCell = contactCell;
-		__weak UITableView *weakTable = tableView;
-		[[TGMemberAvatarStore shared] loadAvatarForUser:uid side:TGMetricListAvatar completion:^(UIImage *img){
-			if (!img) return;
-			dispatch_async(dispatch_get_main_queue(), ^{
-				TGContactCell *c = weakCell;
-				if (!c || c.avatarUser != uid) return;
-				c.avatarView.image = [TGIcons roundedImage:img
-													  size:CGSizeMake(TGMetricListAvatar, TGMetricListAvatar)
-													radius:TGHalf(TGMetricListAvatar)
-												   corners:UIRectCornerAllCorners];
-			});
-		}];
-	}
-	cell.imageView.image = nil;
-
-	return cell;
+- (void)togglePickedUser:(NSDictionary *)u {
+	NSNumber *userId = u[@"id"];
+	if ([self.picked containsObject:userId])
+		[self.picked removeObject:userId];
+	else
+		[self.picked addObject:userId];
+	self.navigationItem.rightBarButtonItem.enabled = self.picked.count > 0;
+	[self rebuildSections];
+	[self.tableView reloadData];
 }
 
 /// Either mode ticks rows; the difference is what the button at the top does
@@ -620,40 +511,6 @@ static NSString *TGContactName(NSDictionary *u) {
 				[TGAlertSheet showMessage:@"An error occurred."
 									title:@"New Group" inView:chat.view];
 		}];
-	}];
-}
-
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
-
-	NSDictionary *u = [self userAtIndexPath:indexPath];
-	if (!u)
-		return;
-	if ([self isPicking]){
-		NSNumber *userId = u[@"id"];
-		if ([self.picked containsObject:userId])
-			[self.picked removeObject:userId];
-		else
-			[self.picked addObject:userId];
-		self.navigationItem.rightBarButtonItem.enabled = self.picked.count > 0;
-		[tableView reloadRowsAtIndexPaths:@[indexPath]
-						 withRowAnimation:UITableViewRowAnimationNone];
-		return;
-	}
-	NSString *name = TGContactName(u);
-	int64_t uid = [u[@"id"] longLongValue];
-	__weak typeof(self) weakSelf = self;
-
-	[[TGClient shared] privateChatWithUser:[u[@"id"] longLongValue]
-								completion:^(int64_t chatId){
-		TGContactsViewController *me = weakSelf;
-		if (!me || chatId == 0)
-			return;
-		TGChatViewController *vc = [[TGChatViewController alloc] init];
-		vc.chatId = chatId;
-		vc.chatTitle = name;
-		vc.hidesBottomBarWhenPushed = YES;
-		[me.navigationController pushViewController:vc animated:YES];
 	}];
 }
 
