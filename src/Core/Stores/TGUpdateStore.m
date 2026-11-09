@@ -13,9 +13,9 @@ static NSString *const TGUpdateLastCheckKey = @"TGUpdateLastCheck";
 static NSString *const TGUpdateSkippedBuildKey = @"TGUpdateSkippedBuild";
 static NSString *const TGUpdateStatisticsKey = @"TGUsageStatisticsEnabled";
 
-// Placeholder until the owner creates the bot with BotFather and turns
-// inline mode on. This is the one name to change.
-static NSString *const TGUpdateBotUsername = @"LegacyTGBot";
+// The bot that answers the daily update check. The name is compiled in, so a
+// rename needs a build. Inline mode must stay on.
+static NSString *const TGUpdateBotUsername = @"LegacyTGbot";
 
 static const NSTimeInterval TGUpdateCheckInterval = 24.0 * 60.0 * 60.0;
 static const NSTimeInterval TGUpdateAccountWait = 2.0;
