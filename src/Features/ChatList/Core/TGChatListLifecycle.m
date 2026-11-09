@@ -6,7 +6,7 @@
 #import "TGStatusText.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
-#import "TGMemberAvatarStore.h"
+#import "TGPeerStore.h"
 #import "TGDateFormat.h"
 #import "TGOptions.h"
 #import "TGStoryViewerViewController.h"
@@ -137,7 +137,7 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 	[self installLegacySwipeActions];
 
 	self.tableView.rowHeight = kRowHeight;
-	// Each row draws its own hairline from under the text; see TGChatCell.
+	// Each row draws its own hairline from under the text; see TGChatRowCell.
 	self.tableView.separatorStyle = UITableViewCellSeparatorStyleNone;
 	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
 		self.edgesForExtendedLayout = UIRectEdgeNone;
@@ -390,10 +390,11 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 	if (showStory){
 		self.listStoryAvatar.frame = CGRectMake(x, TGCenteredOrigin(kListTitleHeight,
 				kListStorySide), kListStorySide, kListStorySide);
+		int64_t peerId = [story[@"chatId"] longLongValue];
 		UIImage *image = story[@"avatarImage"];
-		NSNumber *fileId = story[@"photoFileId"];
-		if (!image && fileId)
-			image = self.avatars[fileId];
+		if (!image && peerId)
+			image = [[TGPeerStore shared] cachedAvatarForPeer:peerId
+													   side:kListStorySide];
 		if (!image){
 			NSString *title = [story[@"title"] isKindOfClass:NSString.class]
 					? story[@"title"] : @"?";
@@ -402,18 +403,15 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 									 colourId:[story[@"chatId"] longLongValue]];
 		}
 		[self.listStoryAvatar setImage:image forState:UIControlStateNormal];
-		if (!story[@"avatarImage"] && !story[@"isOwn"]){
-			int64_t userId = [story[@"chatId"] longLongValue];
+		if (!story[@"avatarImage"] && !story[@"isOwn"] && peerId){
 			__weak typeof(self) weakSelf = self;
-			[[TGMemberAvatarStore shared] loadAvatarForUser:userId
-													 side:kListStorySide
-											   completion:^(UIImage *loaded){
+			[[TGPeerStore shared] loadAvatarForPeer:peerId
+											 side:kListStorySide
+									   completion:^(UIImage *loaded){
 				if (!loaded)
 					return;
-				dispatch_async(dispatch_get_main_queue(), ^{
-					[weakSelf.listStoryAvatar setImage:loaded
-											  forState:UIControlStateNormal];
-				});
+				[weakSelf.listStoryAvatar setImage:loaded
+										  forState:UIControlStateNormal];
 			}];
 		}
 		x += kListStorySide + kListStoryGap;

@@ -7,7 +7,7 @@
 // when a chat is the target.
 //
 #import <UIKit/UIKit.h>
-#import "TGTableViewController.h"
+#import "TGRowsViewController.h"
 
 typedef NS_ENUM(NSInteger, TGEmojiStatusTarget) {
 	TGEmojiStatusTargetSelf = 0,
@@ -15,7 +15,7 @@ typedef NS_ENUM(NSInteger, TGEmojiStatusTarget) {
 	TGEmojiStatusTargetChat,
 };
 
-@interface TGEmojiStatusViewController : TGTableViewController
+@interface TGEmojiStatusViewController : TGGridRowsViewController
 
 @property (nonatomic, assign) TGEmojiStatusTarget target;
 @property (nonatomic, assign) int64_t userId;

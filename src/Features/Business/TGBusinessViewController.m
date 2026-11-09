@@ -1,11 +1,6 @@
 #import "TGBusinessViewController.h"
 #import "TGBusinessMessagesViewController.h"
-#import "TGClient.h"
-#import "TGTheme.h"
 #import "TGStyle.h"
-#import "TGAlertSheet.h"
-#import "TGIcons.h"
-#import "TGBusinessViewController.h"
 #import "TGBusinessBaseViewController.h"
 #import "TGBusinessProfileViewController.h"
 #import "TGBusinessChatLinksViewController.h"
@@ -14,6 +9,7 @@
 #import "TGBusinessHoursViewController.h"
 #import "TGBusinessLocationViewController.h"
 #import "TGBusinessIntroViewController.h"
+#import "TGRows.h"
 
 @interface TGBusinessViewController ()
 @end
@@ -23,23 +19,6 @@
 // one icon-tile row per feature, in PremiumIntroScreen's businessPerks order.
 // The account-level settings themselves live on the pushed pages.
 //
-
-/// A presentation row: a 29 pt tile, the feature name and the description
-/// official gives it. Settings root colours the same tile through TGIcons, so
-/// the Business page does not draw a second kind of icon.
-static NSDictionary *TGBBusinessPerk(NSString *title, NSString *description,
-									 NSString *action, NSString *icon,
-									 UIColor *tile) {
-	NSMutableDictionary *row = [(action
-			? TGBOpenAction(title, description, action)
-			: TGBInfo(title, description)) mutableCopy];
-	row[@"icon"] = icon;
-	row[@"tile"] = tile;
-	return row;
-}
-
-#pragma mark - the shared list screen
-
 
 @implementation TGBusinessViewController
 
@@ -51,86 +30,64 @@ static NSDictionary *TGBBusinessPerk(NSString *title, NSString *description,
 
 #pragma mark - the presentation
 
+/// PremiumIntroScreen's businessPerks: location, hours, quick replies,
+/// greeting, away, links, intro, chatbots. The two rows with no page in
+/// this client stay informational rather than opening an invented console.
 - (void)rebuildSections {
-	// PremiumIntroScreen's businessPerks: location, hours, quick replies,
-	// greeting, away, links, intro, chatbots. The two rows with no page in
-	// this client stay informational rather than opening an invented console.
+	__weak typeof(self) weakSelf = self;
 	NSArray *rows = @[
-		TGBBusinessPerk(@"Location",
-				@"Display the location of your business on your account.",
-				@"location", @"pin", TGIconTileCoral()),
-		TGBBusinessPerk(@"Opening Hours",
-				@"Show to your customers when you are open for business.",
-				@"hours", @"recent", TGIconTileAmber()),
-		TGBBusinessPerk(@"Quick Replies",
-				@"Set up shortcuts with rich text and media to respond to messages faster.",
-				nil, @"reply", TGIconTileGreen()),
-		TGBBusinessPerk(@"Greeting Messages",
-				@"Greet customers when they message you the first time or after a period of no activity.",
-				@"greeting", @"chat", TGIconTileSky()),
-		TGBBusinessPerk(@"Away Messages",
-				@"Automatically reply with a message when you are away.",
-				@"away", @"mute", TGIconTileViolet()),
-		TGBBusinessPerk(@"Links to Chat",
-				@"Create links that start a chat with you, suggesting the first message.",
-				@"links", @"mention", TGIconTileAzure()),
-		TGBBusinessPerk(@"Start Page", nil, @"intro", @"compose",
-				TGIconTilePurple()),
-		TGBBusinessPerk(@"Chatbots",
-				@"Add any third-party chatbots that will process customer interactions.",
-				nil, @"contacts", TGIconTileGrey()),
+		[self perkRow:@"Location"
+				detail:@"Display the location of your business on your account."
+				action:@"location" icon:@"pin" tile:TGIconTileCoral()],
+		[self perkRow:@"Opening Hours"
+				detail:@"Show to your customers when you are open for business."
+				action:@"hours" icon:@"recent" tile:TGIconTileAmber()],
+		[self perkRow:@"Quick Replies"
+				detail:@"Set up shortcuts with rich text and media to respond to messages faster."
+				action:nil icon:@"reply" tile:TGIconTileGreen()],
+		[self perkRow:@"Greeting Messages"
+				detail:@"Greet customers when they message you the first time or after a period of no activity."
+				action:@"greeting" icon:@"chat" tile:TGIconTileSky()],
+		[self perkRow:@"Away Messages"
+				detail:@"Automatically reply with a message when you are away."
+				action:@"away" icon:@"mute" tile:TGIconTileViolet()],
+		[self perkRow:@"Links to Chat"
+				detail:@"Create links that start a chat with you, suggesting the first message."
+				action:@"links" icon:@"mention" tile:TGIconTileAzure()],
+		[self perkRow:@"Start Page" detail:nil action:@"intro" icon:@"compose"
+				tile:TGIconTilePurple()],
+		[self perkRow:@"Chatbots"
+				detail:@"Add any third-party chatbots that will process customer interactions."
+				action:nil icon:@"contacts" tile:TGIconTileGrey()],
 	];
-	self.sections = @[TGBSection(nil,
+	self.sections = @[TGSection(nil,
 			@"Turn your account to a business page with these additional features.",
 			rows)];
 	[self rebuild];
 }
 
-#pragma mark - the shared cell
-
-- (NSDictionary *)perkRowAt:(NSIndexPath *)path {
-	if (path.section >= (NSInteger)self.sections.count)
-		return nil;
-	NSArray *rows = self.sections[(NSUInteger)path.section][@"rows"];
-	return path.row < (NSInteger)rows.count ? rows[(NSUInteger)path.row] : nil;
+/// A presentation row: a 29 pt tile, the feature name and the description
+/// official gives it. Settings root colours the same tile through TGIcons, so
+/// the Business page does not draw a second kind of icon.
+- (NSDictionary *)perkRow:(NSString *)title
+				   detail:(NSString *)detail
+				   action:(NSString *)action
+					 icon:(NSString *)icon
+					 tile:(UIColor *)tile {
+	__weak typeof(self) weakSelf = self;
+	NSMutableDictionary *row = action
+			? [TGIconTapOpenRow(title, detail, icon, tile, nil) mutableCopy]
+			: [TGIconTapRow(title, detail, icon, tile, nil) mutableCopy];
+	row[TGRowSubtitle] = @YES;
+	row[TGRowDetailLines] = @2;
+	row[TGRowHeight] = @(TGMetricBusinessRow);
+	if (action){
+		row[TGRowTap] = ^{ [weakSelf didChooseAction:action row:nil]; };
+	}
+	return row;
 }
 
-- (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)path {
-	NSDictionary *row = [self perkRowAt:path];
-	return row[@"icon"] ? TGMetricBusinessRow
-						: [super tableView:tableView heightForRowAtIndexPath:path];
-}
-
-- (UITableViewCell *)tableView:(UITableView *)tableView
-		 cellForRowAtIndexPath:(NSIndexPath *)path {
-	NSDictionary *row = [self perkRowAt:path];
-	if (!row[@"icon"])
-		return [super tableView:tableView cellForRowAtIndexPath:path];
-
-	static NSString *reuse = @"TGBusinessPerkCell";
-	UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:reuse];
-	if (!cell)
-		cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle
-									  reuseIdentifier:reuse];
-	TGTheme *theme = [TGTheme shared];
-	[theme styleCell:cell];
-	cell.textLabel.text = row[@"title"];
-	cell.textLabel.font = TGFontRow();
-	cell.textLabel.textColor = [theme primaryTextColour];
-	cell.detailTextLabel.text = row[@"detail"] ?: @"";
-	cell.detailTextLabel.font = TGFontCaption();
-	cell.detailTextLabel.textColor = [theme secondaryTextColour];
-	cell.detailTextLabel.numberOfLines = 2;
-	cell.imageView.image = [TGIcons settingsIconNamed:row[@"icon"]
-											   color:row[@"tile"]];
-	BOOL tappable = row[@"action"] != nil;
-	cell.accessoryType = (tappable && [row[@"opens"] boolValue])
-			? UITableViewCellAccessoryDisclosureIndicator
-			: UITableViewCellAccessoryNone;
-	cell.selectionStyle = tappable ? UITableViewCellSelectionStyleDefault
-								   : UITableViewCellSelectionStyleNone;
-	return cell;
-}
+#pragma mark - actions
 
 - (void)didChooseAction:(NSString *)action row:(NSDictionary *)row {
 	if ([action isEqualToString:@"profile"]){

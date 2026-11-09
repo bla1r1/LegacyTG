@@ -6,7 +6,6 @@
 #import "TGStatusText.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
-#import "TGMemberAvatarStore.h"
 #import "TGDateFormat.h"
 #import "TGOptions.h"
 #import "TGStoryViewerViewController.h"

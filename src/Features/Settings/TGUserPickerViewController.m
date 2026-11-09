@@ -4,83 +4,20 @@
 #import "TGUserPickerViewController.h"
 #import "TGLocalization.h"
 #import "TGClient.h"
-#import "TGTheme.h"
-#import "TGStyle.h"
-#import "TGIcons.h"
-#import "TGAlertSheet.h"
-
-@interface TGUserPickerCell : UITableViewCell
-- (void)applyContact:(NSDictionary *)contact
-			selected:(BOOL)selected
-			   theme:(TGTheme *)theme;
-@end
-
-@implementation TGUserPickerCell {
-	UILabel *_name;
-	UILabel *_detail;
-}
-
-- (instancetype)initWithStyle:(UITableViewCellStyle)style
-			   reuseIdentifier:(NSString *)reuseIdentifier {
-	self = [super initWithStyle:style reuseIdentifier:reuseIdentifier];
-	if (!self)
-		return nil;
-
-	_name = [[UILabel alloc] initWithFrame:CGRectZero];
-	_name.font = TGFontRow();
-	_name.backgroundColor = [UIColor clearColor];
-	[self.contentView addSubview:_name];
-
-	_detail = [[UILabel alloc] initWithFrame:CGRectZero];
-	_detail.font = TGFontCaption();
-	_detail.backgroundColor = [UIColor clearColor];
-	[self.contentView addSubview:_detail];
-	return self;
-}
-
-- (void)layoutSubviews {
-	[super layoutSubviews];
-	CGFloat x = TGMetricGutter;
-	CGFloat width = MAX(0, self.contentView.bounds.size.width - x - TGMetricPadLarge - 30);
-	_name.frame = CGRectMake(x, TGMetricPadSmall, width, TGMetricLineRow);
-	_detail.frame = CGRectMake(x, TGMetricPadSmall + TGMetricLineRow, width, TGMetricLineCaption);
-}
-
-- (void)applyContact:(NSDictionary *)contact
-			selected:(BOOL)selected
-			   theme:(TGTheme *)theme {
-	NSString *first = contact[@"first_name"] ?: @"";
-	NSString *last = contact[@"last_name"] ?: @"";
-	NSString *name = [[NSString stringWithFormat:@"%@ %@", first, last]
-			stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
-	if (!name.length)
-		name = contact[@"username"] ?: @"User";
-	_name.text = name;
-	_name.textColor = [theme primaryTextColour];
-
-	NSString *username = contact[@"username"];
-	_detail.text = username.length ? [@"@" stringByAppendingString:username]
-								   : (contact[@"phone"] ?: @"");
-	_detail.textColor = [theme secondaryTextColour];
-
-	self.accessoryView = [[UIImageView alloc] initWithImage:
-			[TGIcons selectionCheckboxSelected:selected]];
-	self.backgroundColor = [theme cardBackgroundColour];
-	self.contentView.backgroundColor = [theme cardBackgroundColour];
-}
-
-@end
+#import "TGRows.h"
 
 @interface TGUserPickerViewController ()
 @property (nonatomic, strong) NSMutableSet *selectedIds;
 @property (nonatomic, strong) NSArray *contacts;
 @property (nonatomic, copy) NSString *pickerTitle;
+- (void)rebuildSections;
+- (void)toggleContact:(NSDictionary *)contact;
 @end
 
 @implementation TGUserPickerViewController
 
 - (instancetype)initWithSelectedUserIds:(NSSet *)userIds title:(NSString *)title {
-	self = [super initWithStyle:UITableViewStylePlain];
+	self = [super init];
 	if (self) {
 		_selectedIds = [NSMutableSet setWithSet:userIds ?: [NSSet set]];
 		_pickerTitle = [title copy] ?: TGLocalized(@"Add Users");
@@ -95,7 +32,7 @@
 			[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemDone
 														  target:self
 														  action:@selector(doneTapped)];
-	self.tableView.rowHeight = TGMetricPersonRow;
+	[self rebuildSections];
 	[self loadContacts];
 }
 
@@ -104,6 +41,7 @@
 	[[TGClient shared] contactsWithCompletion:^(NSArray *contacts){
 		dispatch_async(dispatch_get_main_queue(), ^{
 			weakSelf.contacts = contacts ?: @[];
+			[weakSelf rebuildSections];
 			[weakSelf.tableView reloadData];
 		});
 	}];
@@ -116,37 +54,46 @@
 	[self.navigationController popViewControllerAnimated:YES];
 }
 
-#pragma mark - Table View
-
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-	return self.contacts.count;
+- (NSString *)nameForContact:(NSDictionary *)contact {
+	NSString *first = contact[@"first_name"] ?: @"";
+	NSString *last = contact[@"last_name"] ?: @"";
+	NSString *name = [[NSString stringWithFormat:@"%@ %@", first, last]
+			stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+	if (!name.length)
+		name = contact[@"username"] ?: TGLocalized(@"User");
+	return name;
 }
 
-- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-	static NSString *ident = @"TGUserPickerCell";
-	TGUserPickerCell *cell = [tableView dequeueReusableCellWithIdentifier:ident];
-	if (!cell) {
-		cell = [[TGUserPickerCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:ident];
+- (void)rebuildSections {
+	NSMutableArray *rows = [NSMutableArray arrayWithCapacity:self.contacts.count];
+	__weak typeof(self) weakSelf = self;
+	for (NSDictionary *contact in self.contacts){
+		NSNumber *uid = contact[@"id"] ?: @([contact[@"user_id"] longLongValue]);
+		NSString *username = contact[@"username"];
+		NSString *detail = username.length
+				? [@"@" stringByAppendingString:username]
+				: (contact[@"phone"] ?: @"");
+		NSMutableDictionary *row = TGPeerRow(uid, [self nameForContact:contact],
+				detail, nil);
+		row[TGRowAvatarUser] = @YES;
+		row[TGRowAccessory] = TGRowAccessoryCheck;
+		row[TGRowChecked] = @([self.selectedIds containsObject:uid]);
+		row[TGRowTap] = ^{ [weakSelf toggleContact:contact]; };
+		[rows addObject:row];
 	}
-	NSDictionary *c = self.contacts[indexPath.row];
-	NSNumber *uid = c[@"id"] ?: @([c[@"user_id"] longLongValue]);
-	BOOL selected = [self.selectedIds containsObject:uid];
-	[cell applyContact:c selected:selected theme:[TGTheme shared]];
-	return cell;
+	self.sections = @[TGSection(nil, nil, rows)];
 }
 
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
-	NSDictionary *c = self.contacts[indexPath.row];
-	NSNumber *uid = c[@"id"] ?: @([c[@"user_id"] longLongValue]);
-	if (!uid) return;
-
-	if ([self.selectedIds containsObject:uid]) {
+- (void)toggleContact:(NSDictionary *)contact {
+	NSNumber *uid = contact[@"id"] ?: @([contact[@"user_id"] longLongValue]);
+	if (!uid)
+		return;
+	if ([self.selectedIds containsObject:uid])
 		[self.selectedIds removeObject:uid];
-	} else {
+	else
 		[self.selectedIds addObject:uid];
-	}
-	[self.tableView reloadRowsAtIndexPaths:@[indexPath] withRowAnimation:UITableViewRowAnimationNone];
+	[self rebuildSections];
+	[self.tableView reloadData];
 }
 
 @end

@@ -1,7 +1,6 @@
 //
 // TGProfilePhotosViewController - every profile photo an account still has,
-// one to a row, with taking one off the account close by: the swipe, or the
-// tap's confirm. The avatar tap is what leads here.
+// as the shared square grid. Holding a photo offers to take it off the account.
 //
 #import "TGProfilePhotosViewController.h"
 #import "TGClient.h"
@@ -9,37 +8,42 @@
 #import "TGIcons.h"
 #import "TGAlertSheet.h"
 #import "TGStyle.h"
+#import "TGLocalization.h"
+#import "TGRows.h"
+#import "TGProfileLogic.h"
+#import "TGGridRowCell.h"
+
+static const NSInteger kPhotoGridColumns = 3;
 
 @interface TGProfilePhotosViewController ()
 @property (nonatomic, assign) int64_t userId;
 @property (nonatomic, strong) NSArray *photos;   // @{"photoId", "fileId"}
+@property (nonatomic, strong) NSMutableDictionary *images;
+@property (nonatomic, strong) NSMutableSet *requested;
 @end
-
-/// Where "No photos" sits when there are none: a third of the way down, not
-/// centred, so it reads as a caption to the empty grid above it.
-static const CGFloat kEmptyLabelTop = 130.0f;
 
 @implementation TGProfilePhotosViewController
 
 - (instancetype)initWithUserId:(int64_t)userId {
-	if ((self = [super initWithStyle:UITableViewStylePlain])){
+	if ((self = [super init])){
 		_userId = userId;
 		_photos = @[];
+		_images = [NSMutableDictionary dictionary];
+		_requested = [NSMutableSet set];
 	}
 	return self;
 }
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	self.title = @"Profile Photos";
+	self.title = TGLocalized(@"Profile Photos");
 	[self applyTheme];
 	[self refresh];
-
 }
 
 - (void)applyTheme {
-	self.tableView.backgroundColor = [[TGTheme shared] groupedBackgroundColour];
-	self.tableView.separatorColor = [[TGTheme shared] separatorColour];
+	[super applyTheme];
+	[[TGTheme shared] styleGroupedTable:self.tableView];
 	[[TGTheme shared] styleNavigationBar:self.navigationController.navigationBar];
 }
 
@@ -51,114 +55,111 @@ static const CGFloat kEmptyLabelTop = 130.0f;
 - (void)refresh {
 	__weak typeof(self) weakSelf = self;
 	[[TGClient shared] userProfilePhotos:self.userId completion:^(NSArray *photos){
-		weakSelf.photos = photos;
-		[weakSelf.tableView reloadData];
+		TGProfilePhotosViewController *me = weakSelf;
+		if (!me)
+			return;
+		me.photos = photos ?: @[];
+		[me rebuildSections];
 	}];
 }
 
-#pragma mark - table
-
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-	return self.photos.count;
-}
-
-- (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath {
-	// Photos sit one to a row, at the size the avatar behind them is drawn.
-	return TGMetricProfilePhotoRow;
-}
-
-- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-	UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:
-			@"TGProfilePhoto"];
-	if (!cell){
-		cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
-									  reuseIdentifier:@"TGProfilePhoto"];
-		cell.selectionStyle = UITableViewCellSelectionStyleNone;
-
-		CGFloat side = TGMetricProfilePhotoSide;
-		CGFloat x = TGCenteredOrigin(UIScreen.mainScreen.bounds.size.width, side);
-		UIImageView *image = [[UIImageView alloc] initWithFrame:
-				CGRectMake(x, TGMetricPadWide, side, side)];
-		image.tag = 1;
-		image.layer.cornerRadius = TGHalf(side);
-		image.clipsToBounds = YES;
-		image.contentMode = UIViewContentModeScaleAspectFill;
-		image.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin |
-				UIViewAutoresizingFlexibleRightMargin;
-		[cell.contentView addSubview:image];
-
-		UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(TGMetricPadMedium,
-			kEmptyLabelTop,
-				UIScreen.mainScreen.bounds.size.width - TGDoubled(TGMetricPadMedium),
-				TGMetricLineCaption)];
-		label.tag = 2;
-		label.font = TGFontMeta();
-		label.textAlignment = NSTextAlignmentCenter;
-		label.textColor = [[TGTheme shared] secondaryTextColour];
-		label.autoresizingMask = UIViewAutoresizingFlexibleWidth;
-		[cell.contentView addSubview:label];
-	}
-
-	NSDictionary *photo = self.photos[indexPath.row];
-	UIImageView *image = (UIImageView *)[cell.contentView viewWithTag:1];
-	UILabel *label = (UILabel *)[cell.contentView viewWithTag:2];
-	// Telegram dates a profile photo instead of numbering it. The swipe is
-	// still the delete gesture this OS owns; the row does not need to explain
-	// it in the caption.
+- (NSString *)dateTextForPhoto:(NSDictionary *)photo {
 	double date = [photo[@"date"] doubleValue];
-	label.text = date > 0
-			? [NSDateFormatter localizedStringFromDate:
-					[NSDate dateWithTimeIntervalSince1970:date]
-					dateStyle:NSDateFormatterMediumStyle
-					timeStyle:NSDateFormatterNoStyle]
-			: @"Profile Photos";
-
-	NSInteger fileId = [photo[@"fileId"] integerValue];
-	image.image = [TGIcons avatarWithInitials:@"?" size:TGMetricProfilePhotoSide
-									 colourId:[photo[@"photoId"] longLongValue]];
-	if (fileId)
-		[[TGClient shared] downloadFile:fileId
-							   priority:TGDownloadPriorityAvatar
-							 completion:^(NSString *path){
-		[TGIcons loadImageAtPath:path into:image];
-	}];
-	return cell;
+	if (date <= 0)
+		return TGLocalized(@"Profile Photos");
+	NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
+	formatter.dateStyle = NSDateFormatterMediumStyle;
+	formatter.timeStyle = NSDateFormatterNoStyle;
+	NSString *language = TGAppLanguage();
+	formatter.locale = language.length
+			? [NSLocale localeWithLocaleIdentifier:language]
+			: [NSLocale currentLocale];
+	return [formatter stringFromDate:[NSDate dateWithTimeIntervalSince1970:date]];
 }
 
-/// The swipe reveals a Delete button: the photo comes off the account, and
-/// the row leaves the gallery with it.
-- (UITableViewCellEditingStyle)tableView:(UITableView *)tableView
-						   editingStyleForRowAtIndexPath:(NSIndexPath *)indexPath {
-	return UITableViewCellEditingStyleDelete;
-}
-
-- (NSString *)tableView:(UITableView *)tableView
-	titleForDeleteConfirmationButtonForRowAtIndexPath:(NSIndexPath *)indexPath {
-	return @"Remove";
-}
-
-- (void)tableView:(UITableView *)tableView
-	commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
-   forRowAtIndexPath:(NSIndexPath *)indexPath {
-	if (editingStyle != UITableViewCellEditingStyleDelete)
+- (void)downloadPhoto:(NSDictionary *)photo {
+	NSNumber *fileId = photo[@"fileId"];
+	if (![fileId isKindOfClass:NSNumber.class] || fileId.integerValue <= 0)
 		return;
-	NSDictionary *photo = self.photos[indexPath.row];
+	if (self.images[fileId] || [self.requested containsObject:fileId])
+		return;
+	[self.requested addObject:fileId];
+	__weak typeof(self) weakSelf = self;
+	[[TGClient shared] downloadFile:fileId.integerValue
+						   priority:TGDownloadPriorityAvatar
+						 completion:^(NSString *path){
+		if (!path.length)
+			return;
+		UIImage *image = [TGIcons decodedImageAtPath:path
+				fittingSize:CGSizeMake(TGMetricProfilePhotoSide,
+						TGMetricProfilePhotoSide)
+						 fill:YES
+						scale:[UIScreen mainScreen].scale];
+		if (!image)
+			return;
+		dispatch_async(dispatch_get_main_queue(), ^{
+			TGProfilePhotosViewController *me = weakSelf;
+			if (!me)
+				return;
+			me.images[fileId] = image;
+			[me rebuildSections];
+		});
+	}];
+}
+
+- (void)rebuildSections {
+	if (!self.photos.count){
+		self.sections = @[TGSection(nil, nil,
+				@[TGRow(TGKindPlain, TGLocalized(@"No Photos"))])];
+		[self reloadRows];
+		return;
+	}
+	__weak typeof(self) weakSelf = self;
+	NSArray *rows = TGProfileGridRowModels(self.photos, kPhotoGridColumns,
+			^NSDictionary *(NSInteger index){
+		TGProfilePhotosViewController *me = weakSelf;
+		NSDictionary *photo = me.photos[(NSUInteger)index];
+		NSMutableDictionary *tile = [NSMutableDictionary dictionary];
+		NSNumber *fileId = photo[@"fileId"];
+		UIImage *image = [fileId isKindOfClass:NSNumber.class]
+				? me.images[fileId] : nil;
+		if (image)
+			tile[TGGridItemImage] = image;
+		else {
+			NSNumber *photoId = photo[@"photoId"];
+			tile[TGGridItemImage] = [TGIcons avatarWithInitials:@"?"
+					size:TGMetricProfilePhotoSide
+					colourId:photoId.longLongValue];
+			[me downloadPhoto:photo];
+		}
+		tile[TGGridItemCaption] = [me dateTextForPhoto:photo];
+		tile[TGGridItemHold] = ^{ [weakSelf confirmRemoveAtIndex:index]; };
+		return tile;
+	}, nil);
+	self.sections = @[TGSection(nil, nil, rows)];
+	[self reloadRows];
+}
+
+- (void)confirmRemoveAtIndex:(NSInteger)index {
+	if (index < 0 || index >= (NSInteger)self.photos.count)
+		return;
+	NSDictionary *photo = self.photos[(NSUInteger)index];
 	int64_t photoId = [photo[@"photoId"] longLongValue];
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:@"Remove Photo"
-						title:@"Remove Photo"
-					   action:@"Remove"
+	[TGAlertSheet showConfirm:nil
+						title:TGLocalized(@"Remove Photo")
+					   action:TGLocalized(@"Remove")
 				  destructive:YES
 					   inView:self.view
 					onConfirm:^{
 		[[TGClient shared] deleteProfilePhoto:photoId completion:^(BOOL ok){
 			if (!ok)
 				return;
-			NSMutableArray *fresh = [weakSelf.photos mutableCopy];
-			[fresh removeObjectAtIndex:indexPath.row];
-			weakSelf.photos = fresh;
-			[weakSelf.tableView deleteRowsAtIndexPaths:@[indexPath]
-									  withRowAnimation:UITableViewRowAnimationFade];
+			TGProfilePhotosViewController *me = weakSelf;
+			NSMutableArray *fresh = [me.photos mutableCopy];
+			[fresh removeObjectAtIndex:(NSUInteger)index];
+			me.photos = fresh;
+			[me rebuildSections];
 		}];
 	}];
 }

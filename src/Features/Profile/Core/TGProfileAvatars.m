@@ -1,4 +1,5 @@
 #import "TGProfileViewControllerInternal.h"
+#import "TGPeerStore.h"
 #import "TGLocalization.h"
 #import "TGClientInternal.h"
 #import "TGNameWithStatus.h"
@@ -8,7 +9,6 @@
 #import "TGMemberCell.h"
 #import "TGGroupMemberActions.h"
 #import "TGProfileAudioViewController.h"
-#import "TGProfileTrackCell.h"
 #import "TGMusicPlayer.h"
 #import "TGChatViewController.h"
 #import "TGSimilarChannelsViewController.h"
@@ -16,7 +16,6 @@
 #import "UIImage+WebP.h"
 #import <AVFoundation/AVFoundation.h>
 #import "TGProfileViewController.h"
-#import "TGProfileDetailCell.h"
 
 
 
@@ -117,33 +116,6 @@ static int64_t TGProfileChatIdFromItem(id item) {
 	return 0;
 }
 
-static NSString *TGProfileRowGlyphName(NSString *kind) {
-	if (![kind isKindOfClass:[NSString class]])
-		return nil;
-	if ([kind isEqualToString:@"phone"])
-		return @"call";
-	if ([kind isEqualToString:@"username"])
-		return @"mention";
-	if ([kind isEqualToString:@"birthday"])
-		return @"star";
-	if ([kind isEqualToString:@"bio"] || [kind isEqualToString:@"about"] ||
-		[kind isEqualToString:@"note"] || [kind isEqualToString:@"addBio"])
-		return @"edit";
-	if ([kind isEqualToString:@"channel"] || [kind isEqualToString:@"linkedChat"] ||
-		[kind isEqualToString:@"community"] || [kind isEqualToString:@"similarChannels"] ||
-		[kind isEqualToString:@"directMessages"])
-		return @"chat";
-	if ([kind isEqualToString:@"businessLocation"])
-		return @"archive";
-	if ([kind isEqualToString:@"invite"])
-		return @"forward";
-	if ([kind isEqualToString:@"addContact"])
-		return @"contacts";
-	if ([kind isEqualToString:@"warning"])
-		return @"close";
-	return nil;
-}
-
 /// Overlaps up to three avatars with CoreGraphics into a single bitmap.
 /// Each circular face is clipped in the context, separated from its neighbour
 /// by a ring cut into the prior face using cardBackgroundColour.
@@ -237,7 +209,7 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 
 #pragma mark - row avatars and composite icons
 
-- (void)loadAvatarForChatId:(int64_t)chatId kind:(NSString *)kind cell:(TGProfileDetailCell *)cell {
+- (void)loadAvatarForChatId:(int64_t)chatId kind:(NSString *)kind {
 	if (!chatId)
 		return;
 	if (self.chatAvatars[@(chatId)])
@@ -246,76 +218,34 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 		return;
 	[self.requestedChatAvatars addObject:@(chatId)];
 
-	NSNumber *photoFileId = [[TGClient shared] photoFileIdForChat:chatId];
-	if (![photoFileId isKindOfClass:[NSNumber class]] || photoFileId.integerValue <= 0) {
-		if ([kind isEqualToString:@"channel"]) {
-			NSNumber *pId = self.personalChannel[@"photoFileId"];
-			if ([pId isKindOfClass:[NSNumber class]] && pId.integerValue > 0) {
-				photoFileId = pId;
-			}
-		}
-	}
-	if ([photoFileId isKindOfClass:[NSNumber class]] && photoFileId.integerValue > 0) {
-		[self downloadAvatarWithFileId:photoFileId.integerValue chatId:chatId kind:kind cell:cell];
-		return;
-	}
-
 	__weak typeof(self) weakSelf = self;
-	__weak TGProfileDetailCell *weakCell = cell;
-	[[TGClient shared] chatRecordForChat:chatId completion:^(NSDictionary *chat){
+	[[TGPeerStore shared] loadAvatarForPeer:chatId side:TGMetricMenuGlyph
+								 completion:^(UIImage *round){
 		TGProfileViewController *me = weakSelf;
-		if (!me || ![chat isKindOfClass:[NSDictionary class]])
+		if (!me)
 			return;
-		NSNumber *fileId = chat[@"photo"][@"small"][@"id"];
-		if ([fileId isKindOfClass:[NSNumber class]] && fileId.integerValue > 0) {
-			[me downloadAvatarWithFileId:fileId.integerValue chatId:chatId kind:kind cell:weakCell];
-		}
-	}];
-}
-
-- (void)downloadAvatarWithFileId:(NSInteger)fileId chatId:(int64_t)chatId kind:(NSString *)kind cell:(TGProfileDetailCell *)cell {
-	__weak typeof(self) weakSelf = self;
-	__weak TGProfileDetailCell *weakCell = cell;
-	[[TGClient shared] downloadFile:fileId
-						   priority:TGDownloadPriorityAvatar
-						 completion:^(NSString *path){
-		if (!path.length)
-			return;
-		CGFloat side = TGMetricMenuGlyph;
-		CGFloat scale = [UIScreen mainScreen].scale;
-		dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-			UIImage *image = [TGIcons decodedImageAtPath:path
-											 fittingSize:CGSizeMake(side, side)
-													fill:YES
-												   scale:scale];
-			UIImage *round = [TGIcons roundedImage:image
-											 size:CGSizeMake(side, side)
-										   radius:TGHalf(side)
-										  corners:UIRectCornerAllCorners];
+		if (!round){
+			if (![kind isEqualToString:@"communityChat"])
+				return;
+			NSString *title = [[TGPeerStore shared] peerForId:chatId].title ?: @"";
+			round = [TGIcons avatarWithInitials:[TGIcons initialsForTitle:title]
+										   size:TGMetricMenuGlyph colourId:chatId];
 			if (!round)
 				return;
-			dispatch_async(dispatch_get_main_queue(), ^{
-				TGProfileViewController *me = weakSelf;
-				if (me) {
-					me.chatAvatars[@(chatId)] = round;
-				}
-				TGProfileDetailCell *c = weakCell;
-				if (c && [c.rowKind isEqualToString:kind] && c.rowChatId == chatId) {
-					c.iconView.image = round;
-				}
-				if (me && [kind isEqualToString:@"communityChat"]) {
-					NSDictionary *fullComm = [[TGClient shared] cachedCommunityFullInfo:me.communityId];
-					NSArray *chats = [fullComm[@"chats"] isKindOfClass:[NSArray class]] ? fullComm[@"chats"] : @[];
-					NSUInteger count = MIN((NSUInteger)3, chats.count);
-					NSMutableArray *cids = [NSMutableArray arrayWithCapacity:count];
-					for (NSUInteger i = 0; i < count; i++) {
-						int64_t cId = [chats[i][@"chatId"] longLongValue];
-						if (cId != 0) [cids addObject:@(cId)];
-					}
-					[me checkAndCompositeCommunityAvatars:cids];
-				}
-			});
-		});
+		}
+		me.chatAvatars[@(chatId)] = round;
+		[me reloadTableDebounced];
+		if ([kind isEqualToString:@"communityChat"]){
+			NSDictionary *fullComm = [[TGClient shared] cachedCommunityFullInfo:me.communityId];
+			NSArray *chats = [fullComm[@"chats"] isKindOfClass:[NSArray class]] ? fullComm[@"chats"] : @[];
+			NSUInteger count = MIN((NSUInteger)3, chats.count);
+			NSMutableArray *cids = [NSMutableArray arrayWithCapacity:count];
+			for (NSUInteger i = 0; i < count; i++){
+				int64_t cId = [chats[i][@"chatId"] longLongValue];
+				if (cId != 0) [cids addObject:@(cId)];
+			}
+			[me checkAndCompositeCommunityAvatars:cids];
+		}
 	}];
 }
 
@@ -336,80 +266,32 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 			continue;
 		[self.similarChannelsRequested addObject:@(cId)];
 
-		NSNumber *photoFileId = [[TGClient shared] photoFileIdForChat:cId];
-		if ([photoFileId isKindOfClass:[NSNumber class]] && photoFileId.integerValue > 0) {
-			[self downloadSimilarAvatarWithFileId:photoFileId.integerValue chatId:cId];
+		UIImage *cached = [[TGPeerStore shared] cachedAvatarForPeer:cId
+															   side:TGMetricMenuGlyph];
+		if (cached){
+			[self handleSimilarAvatarLoaded:cached forChatId:cId];
 			continue;
 		}
 
 		__weak typeof(self) weakSelf = self;
-		[[TGClient shared] chatRecordForChat:cId completion:^(NSDictionary *chat){
+		[[TGPeerStore shared] loadAvatarForPeer:cId side:TGMetricMenuGlyph
+									 completion:^(UIImage *image){
 			TGProfileViewController *me = weakSelf;
-			if (!me || ![chat isKindOfClass:[NSDictionary class]])
+			if (!me)
 				return;
-			NSNumber *fileId = chat[@"photo"][@"small"][@"id"];
-			if ([fileId isKindOfClass:[NSNumber class]] && fileId.integerValue > 0) {
-				[me downloadSimilarAvatarWithFileId:fileId.integerValue chatId:cId];
-			} else {
-				NSString *title = chat[@"title"] ?: @"";
-				CGFloat side = TGMetricMenuGlyph;
-				UIImage *initials = [TGIcons avatarWithInitials:[TGIcons initialsForTitle:title]
-														   size:side
-													   colourId:cId];
-				if (initials) {
-					[me handleSimilarAvatarLoaded:initials forChatId:cId];
-				}
+			if (image){
+				[me handleSimilarAvatarLoaded:image forChatId:cId];
+				return;
 			}
-		}];
-	}
-}
-
-- (void)downloadSimilarAvatarWithFileId:(NSInteger)fileId chatId:(int64_t)chatId {
-	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] downloadFile:fileId
-						   priority:TGDownloadPriorityAvatar
-						 completion:^(NSString *path){
-		TGProfileViewController *me = weakSelf;
-		if (!me)
-			return;
-		CGFloat side = TGMetricMenuGlyph;
-		CGFloat scale = [UIScreen mainScreen].scale;
-		if (!path.length) {
-			NSString *title = [[TGClient shared] titleForChat:chatId] ?: @"";
+			NSString *title = [[TGPeerStore shared] peerForId:cId].title ?: @"";
+			CGFloat side = TGMetricMenuGlyph;
 			UIImage *initials = [TGIcons avatarWithInitials:[TGIcons initialsForTitle:title]
 													   size:side
-												   colourId:chatId];
-			if (initials) {
-				[me handleSimilarAvatarLoaded:initials forChatId:chatId];
-			}
-			return;
-		}
-		dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-			UIImage *image = [TGIcons decodedImageAtPath:path
-											 fittingSize:CGSizeMake(side, side)
-													fill:YES
-												   scale:scale];
-			UIImage *round = [TGIcons roundedImage:image
-											 size:CGSizeMake(side, side)
-										   radius:TGHalf(side)
-										  corners:UIRectCornerAllCorners];
-			dispatch_async(dispatch_get_main_queue(), ^{
-				TGProfileViewController *again = weakSelf;
-				if (!again)
-					return;
-				UIImage *picture = round;
-				if (!picture) {
-					NSString *title = [[TGClient shared] titleForChat:chatId] ?: @"";
-					picture = [TGIcons avatarWithInitials:[TGIcons initialsForTitle:title]
-													 size:side
-												 colourId:chatId];
-				}
-				if (picture) {
-					[again handleSimilarAvatarLoaded:picture forChatId:chatId];
-				}
-			});
-		});
-	}];
+												   colourId:cId];
+			if (initials)
+				[me handleSimilarAvatarLoaded:initials forChatId:cId];
+		}];
+	}
 }
 
 - (void)handleSimilarAvatarLoaded:(UIImage *)avatar forChatId:(int64_t)chatId {
@@ -471,30 +353,8 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 		commSubtitle = @"Community";
 	}
 
-	NSMutableArray *updated = [self.details mutableCopy];
-	BOOL found = NO;
-	for (NSUInteger i = 0; i < updated.count; i++) {
-		NSDictionary *r = updated[i];
-		if ([r[@"kind"] isEqualToString:@"community"]) {
-			updated[i] = @{
-				@"kind" : @"community",
-				@"label" : commName,
-				@"value" : commSubtitle,
-				@"communityId" : @(self.communityId)
-			};
-			found = YES;
-			break;
-		}
-	}
-	if (!found) {
-		[updated insertObject:@{
-			@"kind" : @"community",
-			@"label" : commName,
-			@"value" : commSubtitle,
-			@"communityId" : @(self.communityId)
-		} atIndex:0];
-	}
-	self.details = updated;
+	self.communityName = commName;
+	self.communitySubtitle = commSubtitle;
 	[self loadCommunityPhotoOrAvatars];
 	[self reloadTableDebounced];
 }
@@ -553,27 +413,13 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 	for (NSNumber *cidNum in chatIds) {
 		int64_t cId = [cidNum longLongValue];
 		if (self.chatAvatars[@(cId)]) continue;
-		NSNumber *pFileId = [[TGClient shared] photoFileIdForChat:cId];
-		if ([pFileId isKindOfClass:[NSNumber class]] && pFileId.integerValue > 0) {
-			[self downloadAvatarWithFileId:pFileId.integerValue chatId:cId kind:@"communityChat" cell:nil];
+		UIImage *cached = [[TGPeerStore shared] cachedAvatarForPeer:cId
+															   side:TGMetricMenuGlyph];
+		if (cached){
+			self.chatAvatars[@(cId)] = cached;
 			continue;
 		}
-		[[TGClient shared] chatRecordForChat:cId completion:^(NSDictionary *chat){
-			TGProfileViewController *me = weakSelf;
-			if (!me || ![chat isKindOfClass:[NSDictionary class]]) return;
-			NSNumber *fileId = chat[@"photo"][@"small"][@"id"];
-			if ([fileId isKindOfClass:[NSNumber class]] && fileId.integerValue > 0) {
-				[me downloadAvatarWithFileId:fileId.integerValue chatId:cId kind:@"communityChat" cell:nil];
-			} else {
-				NSString *title = chat[@"title"] ?: @"";
-				CGFloat side = TGMetricMenuGlyph;
-				UIImage *initials = [TGIcons avatarWithInitials:[TGIcons initialsForTitle:title] size:side colourId:cId];
-				if (initials) {
-					me.chatAvatars[@(cId)] = initials;
-					[me checkAndCompositeCommunityAvatars:chatIds];
-				}
-			}
-		}];
+		[self loadAvatarForChatId:cId kind:@"communityChat"];
 	}
 	[self checkAndCompositeCommunityAvatars:chatIds];
 }

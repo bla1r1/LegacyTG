@@ -33,6 +33,7 @@ CFLAGS  := \
     -I$(SRC)/Compat \
     $(SRC_INCLUDES) \
     -I$(ROOT)/third_party \
+    -I$(ROOT)/third_party/nanosvg \
     -I$(ROOT)/vendor/libs \
     -I$(ROOT)/third_party/libtgvoip \
     -I$(TESTS) \
@@ -74,6 +75,7 @@ OBJC_SRCS := \
     src/CallEngine/TGCall.mm \
     src/Features/Chat/Views/TGMessageLayout.mm \
     src/Features/Chat/Views/TGMessageCardLayout.m \
+    src/UI/Messages/TGMessageCellKind.m \
     src/Core/Model/TGMessageCard.m \
     src/Core/Style/TGStyle.m \
     src/Core/Support/TGBase64.m \
@@ -86,9 +88,12 @@ OBJC_SRCS := \
 # binary links a test stub of TGClient instead, which the call tests need.
 CLIENT_OBJC_SRCS := \
     $(ROOT)/third_party/yyjson/yyjson.c \
+    $(ROOT)/third_party/nanosvg/nanosvg.c \
+    src/Media/TGPatternImage.m \
     src/Core/Support/TGBase64.m \
     src/Core/Support/TGLocalization.m \
     src/Core/Style/TGStyle.m \
+    src/Features/Settings/Pages/TGSettingsPageModels.m \
     src/Features/Profile/Core/TGProfileLogic.m \
     src/Core/Support/TGUpdateType.c \
     src/Views/Icons/TGSVGPath.c \
@@ -96,6 +101,7 @@ CLIENT_OBJC_SRCS := \
     src/Core/Stores/TGOptions.mm \
     src/Core/Support/TGJson.mm \
     src/Core/Client/TGClient.m \
+    src/Core/Client/TGClient+Peers.m \
     src/Core/Client/Chats/TGClient+ChatsSupport.mm \
     src/Core/Client/Chats/TGClient+Chats.mm \
     src/Core/Client/Chats/TGClient+ChatMembers.mm \
@@ -124,6 +130,8 @@ CLIENT_OBJC_SRCS := \
     src/Core/Client/TGClient+SavedMessages.m \
     src/Core/Client/TGClient+Notifications.m \
     src/Core/Client/TGClient+Stickers.m \
+    src/Core/Client/TGClient+Updates.m \
+    src/Core/Stores/TGUpdateStore.m \
     src/Core/Client/TGClient+Files.mm \
     src/Core/Stores/TGStickerPack.mm \
     $(SRC)/Media/TGStickerImage.m \
@@ -205,10 +213,17 @@ CLIENT_OBJC_SRCS := \
     src/Core/Client/TGClient+Dice.m \
     src/Core/Client/TGClient+Auth.m \
     src/Core/Style/TGThemeFile.m \
+    src/Core/Stores/TGChatThemeStore.m \
     src/Core/Stores/TGImageLruCache.mm \
+    src/Core/Stores/TGPeerStore.m \
     src/Core/Stores/TGStickerBudget.m \
     src/Core/Platform/TGPerf.m \
     src/UI/Format/TGUIFormat.m \
+    src/UI/Rows/TGRows.m \
+    src/UI/Controllers/TGRowsDataSource.m \
+    src/Features/Calls/TGGroupCallParticipantCell.m \
+    src/Features/Chat/Views/TGMessageLayout.mm \
+    src/UI/Messages/TGMessageCellKind.m \
     src/Features/Chat/TGPollPresentation.m \
     src/Features/Chat/Core/TGChatParityModel.m \
     src/Features/Chat/Core/TGChatActionMenuModel.m \
@@ -286,6 +301,8 @@ CLIENT_TEST_SRCS := \
     $(TESTS)/TGMediaVeilBlurTests.m \
     $(TESTS)/TGClientAccountTests.m \
     $(TESTS)/TGClientProfileTests.m \
+    $(TESTS)/TGProfileInfoRowsTests.m \
+    $(TESTS)/TGProfileRowsTests.m \
     $(TESTS)/TGClientComposeTests.m \
     $(TESTS)/TGClientBareTests.m \
     $(TESTS)/TGClientAuthFunctionsTests.m \
@@ -308,17 +325,36 @@ CLIENT_TEST_SRCS := \
     $(TESTS)/TGClientBusinessTests.m \
     $(TESTS)/TGClientNotificationsForumTests.m \
     $(TESTS)/TGThemeFileTests.m \
+    $(TESTS)/TGPatternTests.m \
     $(TESTS)/TGUpdatesTests.mm \
     $(TESTS)/TGP1MigrationTests.mm \
     $(TESTS)/TGStickerBudgetTests.m \
     $(TESTS)/TGStickerImageTests.m \
     $(TESTS)/TGChatListRowGeometryTests.m \
+    $(TESTS)/TGChatListRowsTests.m \
+    $(TESTS)/TGUpdateStoreTests.m \
+    $(TESTS)/TGPeerStoreTests.m \
     $(TESTS)/TGParitySettingsTests.m \
+    $(TESTS)/TGSettingsPageModelsTests.m \
     $(TESTS)/TGSVGPathTests.m \
+    $(TESTS)/TGIconCatalogTests.m \
     $(TESTS)/TGUIFormatTests.m \
     $(TESTS)/TGCustomEmojiStoreTests.m \
     $(TESTS)/TGParityRestTests.m \
-    $(TESTS)/TGParityPeopleTests.m
+    $(TESTS)/TGParityPeopleTests.m \
+    $(TESTS)/TGRowModelTests.m \
+    $(TESTS)/TGPeerRowTests.m \
+    $(TESTS)/TGBlockedSendersTests.m \
+    $(TESTS)/TGSettingsPageRowsTests.m \
+    $(TESTS)/TGListRowsTests.m \
+    $(TESTS)/TGCallRowsTests.m \
+    $(TESTS)/TGGridRowTests.m \
+    $(TESTS)/TGFieldRowTests.m \
+    $(TESTS)/TGSettingsProfileGroupRowsTests.m \
+    $(TESTS)/TGAccountPrivacyRowsTests.m \
+    $(TESTS)/TGChatToolsStickerRowsTests.m \
+    $(TESTS)/TGBotsChatMediaRowsTests.m \
+    $(TESTS)/TGMessageCellFactoryTests.m
 
 TEST_BINARY := $(BUILD)/TGCallTests
 CLIENT_BINARY := $(BUILD)/TGClientTests
@@ -355,7 +391,21 @@ LIBTGVOIP_SRCS := \
 
 # ─── targets ──────────────────────────────────────────────────────────────────
 
-.PHONY: test build clean tokens sizes sim official_sim
+.PHONY: test build clean tokens sizes screens sim official_sim icons client
+
+icons:
+	@echo "\n════════ Icon catalogue lint ════════"
+	@sh $(ROOT)/scripts/lint_icons.sh
+
+client:
+	@echo "\n════════ Client import lint ════════"
+	@chmod +x $(ROOT)/scripts/lint_client.sh
+	@sh $(ROOT)/scripts/lint_client.sh
+
+screens:
+	@echo "\n════════ Screen ownership lint ════════"
+	@chmod +x $(ROOT)/scripts/lint_screens.sh
+	@sh $(ROOT)/scripts/lint_screens.sh
 
 # The design-token lint. Cheap, so it runs first: a literal size or colour
 # fails the suite the same way a broken assertion does.
@@ -375,7 +425,7 @@ SIM_BINARY_DEPS := $(TESTS)/call_sim.mm $(C_SRCS) $(OBJC_SRCS) $(TEST_HELPER_SRC
                 $(TESTS)/TGCallTestHelpers.h
 OFFICIAL_SIM_DEPS := $(TESTS)/official_tgvoip_sim.mm $(LIBTGVOIP_SRCS)
 
-test: tokens sizes $(TEST_BINARY) $(CLIENT_BINARY)
+test: tokens sizes screens $(TEST_BINARY) $(CLIENT_BINARY)
 	@echo "\n════════ Running call stack tests ════════"
 	$(TEST_BINARY)
 	@echo "\n════════ Running TGClient regression tests ════════"

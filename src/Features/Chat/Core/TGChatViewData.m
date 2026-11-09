@@ -41,6 +41,7 @@
 #import "TGBubbleCell.h"
 #import "TGChatViewControllerInternal.h"
 #import "TGMessageStreamStore.h"
+#import "TGPeerStore.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
 #import "TGDMTopicsViewController.h"
@@ -339,10 +340,14 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 
 	NSString *title = self.chatTitle ?: @"";
 	BOOL isSaved = (self.chatId == [[TGClient shared] savedMessagesChatId]);
+	TGPeer *peer = isSaved ? nil : [[TGPeerStore shared] peerForId:self.chatId];
+	if (!title.length && peer.title.length)
+		title = peer.title;
+	NSString *initials = peer.initials.length ? peer.initials
+			: [TGIcons initialsForTitle:title];
 	[button setImage:(isSaved
 			? [TGIcons savedMessagesAvatarOfSide:side]
-			: [TGIcons avatarWithInitials:[TGIcons initialsForTitle:title]
-									 size:side colourId:self.chatId])
+			: [TGIcons avatarWithInitials:initials size:side colourId:self.chatId])
 			forState:UIControlStateNormal];
 
 	self.navigationItem.rightBarButtonItem =
@@ -380,23 +385,16 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 	if (isSaved)
 		return;
 
-	NSNumber *fileId = [[TGClient shared] photoFileIdForChat:self.chatId];
-	if (!fileId)
+	UIImage *cached = [[TGPeerStore shared] cachedAvatarForPeer:self.chatId
+														   side:side];
+	if (cached){
+		[button setImage:cached forState:UIControlStateNormal];
 		return;
-	CGFloat screenScale = [UIScreen mainScreen].scale;
-	[[TGClient shared] downloadFile:fileId.integerValue completion:^(NSString *path){
-		if (!path.length) return;
-		dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
-			UIImage *photo = [TGIcons decodedImage:[UIImage imageWithContentsOfFile:path]
-									   fittingSize:CGSizeMake(side, side)
-											  fill:YES scale:screenScale];
-			if (!photo) return;
-			photo = [TGIcons roundedImage:photo size:CGSizeMake(side, side) radius:TGHalf(side)
-								  corners:UIRectCornerAllCorners];
-			dispatch_async(dispatch_get_main_queue(), ^{
-				[button setImage:photo forState:UIControlStateNormal];
-			});
-		});
+	}
+	[[TGPeerStore shared] loadAvatarForPeer:self.chatId side:side
+								 completion:^(UIImage *photo){
+		if (photo)
+			[button setImage:photo forState:UIControlStateNormal];
 	}];
 }
 
@@ -510,11 +508,11 @@ static NSMutableDictionary *TGChatProfileMemo(void) {
 		}
 
 		if (!isGroup){
-			[[TGClient shared] statusForUser:me.chatId completion:^(NSString *status){
+			[[TGPeerStore shared] refreshPeerForId:me.chatId completion:^(TGPeer *peer){
 				TGChatViewController *again = weakSelf;
-				if (!again || !status.length)
+				if (!again || !peer.lastSeenText.length)
 					return;
-				again.restingSubtitle = status;
+				again.restingSubtitle = peer.lastSeenText;
 				[again titleSubtitleOwnerChanged:nil];
 			}];
 		} else if (count > 0){

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Chip and Memory</key>
+	<string>Процессор и память</string>
+	<key>Device Tier</key>
+	<string>Класс устройства</string>
+	<key>HARDWARE</key>
+	<string>ОБОРУДОВАНИЕ</string>
+	<key>Hardware</key>
+	<string>Оборудование</string>
+	<key>No downloads yet. Files you download in chats will appear here.</key>
+	<string>Загрузок пока нет. Файлы, которые Вы скачаете в чатах, появятся здесь.</string>
+	<key>SOFTWARE</key>
+	<string>ПРОГРАММНОЕ ОБЕСПЕЧЕНИЕ</string>
+	<key>Send anonymous usage statistics. The update check sends the app version, iOS version, device model, device tier, jailbreak yes/no and language. The bot stores a salted hash of your account id, never the id itself. Turning this off sends stats=0 and update checks still work.</key>
+	<string>Проверка обновлений отправляет версию приложения и iOS, модель и класс устройства, наличие джейлбрейка и язык. Бот хранит только хеш с солью от id аккаунта, сам id не хранится. Если выключить, отправляется stats=0, а проверка обновлений продолжает работать.</string>
+	<key>Software</key>
+	<string>Программное обеспечение</string>
+</dict>
+</plist>

@@ -28,35 +28,6 @@ TGMessageCard *TGChatCardForRow(NSDictionary *m) {
 @implementation TGChatViewController (ServiceCells)
 
 - (BOOL)configureServiceCell:(TGBubbleCell *)cell message:(NSDictionary *)m layout:(TGMessageLayout *)layout isMine:(BOOL)mine indexPath:(NSIndexPath *)indexPath {
-	// Service messages & separators
-	if (layout.isService && !layout.isCard) {
-		TGTheme *serviceTheme = [TGTheme shared];
-		NSString *line = [self serviceLineForMessage:m];
-
-		cell.bubble.frame = layout.bubbleFrame;
-		cell.bubble.backgroundColor = [serviceTheme serviceBubbleColour];
-		cell.bubble.layer.borderWidth = 0;
-		cell.bubble.layer.cornerRadius = [serviceTheme bubbleCornerRadius];
-		cell.picture.hidden = YES;
-		cell.time.text = @"";
-		cell.body.hidden = NO;
-		cell.body.numberOfLines = 1;
-		cell.body.font = TGFontMeta();
-		cell.body.textAlignment = NSTextAlignmentCenter;
-		cell.body.textColor = [serviceTheme serviceTextColour];
-		cell.body.text = line;
-		cell.body.frame = layout.bodyFrame;
-		if ([m[@"separator"] isEqualToString:@"unread"]) {
-			cell.bubble.backgroundColor = [serviceTheme unreadSeparatorColour];
-			cell.bubble.layer.cornerRadius = TGMetricCornerNone;
-			cell.body.font = TGFontCaptionStrong();
-			cell.body.textColor = [serviceTheme secondaryTextColour];
-		} else if (m[@"separator"]) {
-			cell.body.font = TGFontMetaStrong();
-		}
-		return YES;
-	}
-
 	// Invoices, gifts, giveaways, games, shared peers, calls, stories
 	if (layout.isCard) {
 		TGTheme *theme = [TGTheme shared];

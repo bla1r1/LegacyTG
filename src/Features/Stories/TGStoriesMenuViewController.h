@@ -3,9 +3,9 @@
 // bubble: add, albums, archive, notifications, discovery, stealth and live.
 //
 #import <UIKit/UIKit.h>
-#import "TGListViewController.h"
+#import "TGRowsViewController.h"
 
-@interface TGStoriesMenuViewController : TGListViewController
+@interface TGStoriesMenuViewController : TGRowsViewController
 
 - (instancetype)initWithChatId:(int64_t)chatId title:(NSString *)title;
 

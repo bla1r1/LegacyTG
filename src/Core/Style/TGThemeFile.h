@@ -10,10 +10,18 @@
 + (NSDictionary *)paletteFromFile:(NSString *)path name:(NSString **)name;
 
 /// The part of a theme the app applies: the chat roles only, since bars
-/// and lists stay the system's. nil for a dark theme - iOS 6-12 had none.
+/// and lists stay the system's. Light and dark files are both accepted.
 + (NSDictionary *)chatPaletteFromFile:(NSString *)path name:(NSString **)name;
 
 /// YES for a path this class can read.
 + (BOOL)handlesFile:(NSString *)path;
+
+/// The role colours one availableThemes entry paints with, without switching
+/// the live theme: Classic reads TGClassicThemeRoleColours(), a file theme
+/// reads its own chat palette. Keyed by "wallpaper", "bubbleMine",
+/// "bubbleTheirs", "bubbleMineText", "bubbleTheirsText", "text", "accent",
+/// and, when the file carries them, "bubbleMineGradient" and
+/// "bubbleTheirsGradient".
++ (NSDictionary *)cardPaletteForThemeEntry:(NSDictionary *)entry;
 
 @end

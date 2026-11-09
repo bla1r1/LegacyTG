@@ -65,6 +65,7 @@
 #import "TGClient+Search.h"
 #import "TGClient+Secret.h"
 #import "TGClient+Stickers.h"
+#import "TGClient+Updates.h"
 #import "TGClient+StoriesFeed.h"
 #import "TGClient+StoriesViewer.h"
 #import "TGClient+StoriesPosting.h"

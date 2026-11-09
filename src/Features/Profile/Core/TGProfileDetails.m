@@ -7,7 +7,6 @@
 #import "TGMemberCell.h"
 #import "TGGroupMemberActions.h"
 #import "TGProfileAudioViewController.h"
-#import "TGProfileTrackCell.h"
 #import "TGMusicPlayer.h"
 #import "TGChatViewController.h"
 #import "TGSimilarChannelsViewController.h"
@@ -15,7 +14,7 @@
 #import "UIImage+WebP.h"
 #import <AVFoundation/AVFoundation.h>
 #import "TGProfileViewController.h"
-#import "TGProfileDetailCell.h"
+#import "TGProfileLogic.h"
 
 
 
@@ -116,33 +115,6 @@ static int64_t TGProfileChatIdFromItem(id item) {
 	return 0;
 }
 
-static NSString *TGProfileRowGlyphName(NSString *kind) {
-	if (![kind isKindOfClass:[NSString class]])
-		return nil;
-	if ([kind isEqualToString:@"phone"])
-		return @"call";
-	if ([kind isEqualToString:@"username"])
-		return @"mention";
-	if ([kind isEqualToString:@"birthday"])
-		return @"star";
-	if ([kind isEqualToString:@"bio"] || [kind isEqualToString:@"about"] ||
-		[kind isEqualToString:@"note"] || [kind isEqualToString:@"addBio"])
-		return @"edit";
-	if ([kind isEqualToString:@"channel"] || [kind isEqualToString:@"linkedChat"] ||
-		[kind isEqualToString:@"community"] || [kind isEqualToString:@"similarChannels"] ||
-		[kind isEqualToString:@"directMessages"])
-		return @"chat";
-	if ([kind isEqualToString:@"businessLocation"])
-		return @"archive";
-	if ([kind isEqualToString:@"invite"])
-		return @"forward";
-	if ([kind isEqualToString:@"addContact"])
-		return @"contacts";
-	if ([kind isEqualToString:@"warning"])
-		return @"close";
-	return nil;
-}
-
 /// Overlaps up to three avatars with CoreGraphics into a single bitmap.
 /// Each circular face is clipped in the context, separated from its neighbour
 /// by a ring cut into the prior face using cardBackgroundColour.
@@ -236,64 +208,31 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 
 #pragma mark - details model
 - (NSArray *)basicDetailsRows {
-	NSMutableArray *rows = [NSMutableArray array];
-	if (self.phoneNumber.length)
-		[rows addObject:@{@"kind" : @"phone", @"label" : @"Mobile",
-				@"value" : [@"+" stringByAppendingString:self.phoneNumber]}];
-	if (self.username.length)
-		[rows addObject:@{@"kind" : @"username", @"label" : @"Username",
-				@"value" : [@"@" stringByAppendingString:self.username]}];
-	return rows;
+	return TGProfileUserInfoRows(@{
+		@"phoneNumber"     : self.phoneNumber ?: @"",
+		@"username"        : self.username ?: @"",
+		@"activeUsernames" : self.activeUsernames ?: @[],
+	});
 }
 
-/// The whole card, rebuilt once full info answers: phone, username, the bio
-/// (or the scam/fake warning in its place), birthday, note, then the
-/// add-to-contacts row for a stranger.
+/// The whole card, rebuilt once full info answers. Order and row kinds come
+/// from TGProfileUserInfoRows so the host tests can check them without UIKit.
 - (NSArray *)fullDetailsRowsWithBio:(NSString *)bio birthday:(NSString *)birthday {
-	NSMutableArray *rows = [NSMutableArray array];
-	if (self.phoneNumber.length)
-		[rows addObject:@{@"kind" : @"phone", @"label" : @"Mobile",
-				@"value" : [@"+" stringByAppendingString:self.phoneNumber]}];
-	if (self.activeUsernames.count > 0){
-		for (NSUInteger i = 0; i < self.activeUsernames.count; i++){
-			NSString *u = self.activeUsernames[i];
-			if (!u.length) continue;
-			[rows addObject:@{@"kind" : @"username",
-					@"label" : (i == 0 ? @"Username" : @"Link"),
-					@"value" : [@"@" stringByAppendingString:u]}];
-		}
-	} else if (self.username.length){
-		[rows addObject:@{@"kind" : @"username", @"label" : @"Username",
-				@"value" : [@"@" stringByAppendingString:self.username]}];
-	}
-	if (self.isScam || self.isFake){
-		[rows addObject:@{@"kind" : @"warning", @"label" : @"",
-				@"value" : (self.isScam ? @"Scam" : @"Fake")}];
-	}
-	if (birthday.length)
-		[rows addObject:@{@"kind" : @"birthday", @"label" : @"Birthday",
-				@"value" : birthday}];
-	// The date of birth reads before the long text; the note and the address
-	// follow it, as in the official card.
-	if (bio.length)
-		// Kind "bio" for every user ("about" is the group description); My
-		// Profile labels it About (Profile_About), others Bio.
-		[rows addObject:@{@"kind" : @"bio",
-				@"label" : (self.isOwnProfile ? @"About" : @"Bio"), @"value" : bio}];
-	if (self.personalNote.length)
-		[rows addObject:@{@"kind" : @"note", @"label" : @"Note",
-				@"value" : self.personalNote}];
-	if (self.businessLocation.length)
-		[rows addObject:@{@"kind" : @"businessLocation", @"label" : @"Location",
-				@"value" : self.businessLocation}];
-	if (!self.isContact && !self.isOwnProfile && !self.isBot)
-		[rows addObject:@{@"kind" : @"addContact", @"label" : @"",
-				@"value" : @"Add to Contacts"}];
-	// A stranger's card ends with Block User; a contact keeps it in More.
-	if (!self.isContact && !self.isOwnProfile && !self.isBot)
-		[rows addObject:@{@"kind" : @"block", @"label" : @"",
-				@"value" : (self.blocked ? @"Unblock" : @"Block User")}];
-	return rows;
+	return TGProfileUserInfoRows(@{
+		@"phoneNumber"     : self.phoneNumber ?: @"",
+		@"username"        : self.username ?: @"",
+		@"activeUsernames" : self.activeUsernames ?: @[],
+		@"isScam"          : @(self.isScam),
+		@"isFake"          : @(self.isFake),
+		@"birthday"        : birthday ?: @"",
+		@"bio"             : bio ?: @"",
+		@"note"            : self.personalNote ?: @"",
+		@"businessLocation": self.businessLocation ?: @"",
+		@"isOwnProfile"    : @(self.isOwnProfile),
+		@"isContact"       : @(self.isContact),
+		@"isBot"           : @(self.isBot),
+		@"blocked"         : @(self.blocked),
+	});
 }
 
 /// The person's personal channel: one getChat, then a row at the top of the
@@ -338,16 +277,30 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 			@"title" : title,
 			@"photoFileId" : [photoId isKindOfClass:NSNumber.class] ? photoId : @0,
 		};
-		if ([photoId isKindOfClass:[NSNumber class]] && photoId.integerValue > 0 && !me.chatAvatars[@(chatId)]) {
-			[me downloadAvatarWithFileId:photoId.integerValue chatId:chatId kind:@"channel" cell:nil];
+		if ([photoId isKindOfClass:[NSNumber class]] && photoId.integerValue > 0 &&
+				!me.chatAvatars[@(chatId)]){
+			[me loadAvatarForChatId:chatId kind:@"channel"];
 		}
 		// The personal channel is its own section above the card, not a row
-		// inside it.
+		// inside it. Its row is a chat-list item, so the last post reads as
+		// the preview under the channel name.
 		[[TGClient shared] memberCountForChat:chatId completion:^(NSInteger count){
 			TGProfileViewController *again = weakSelf;
 			if (!again)
 				return;
 			again.personalChannelMemberCount = count;
+			[again reloadTableDebounced];
+		}];
+		[[TGClient shared] historyForChat:chatId limit:1 completion:^(NSArray *messages){
+			TGProfileViewController *again = weakSelf;
+			if (!again)
+				return;
+			NSDictionary *last = messages.lastObject;
+			NSString *preview = [last[@"text"] isKindOfClass:NSString.class]
+					? last[@"text"] : @"";
+			if (!preview.length && [last[@"photoId"] respondsToSelector:@selector(longLongValue)])
+				preview = @"Photo";
+			again.personalChannelPreview = preview;
 			[again reloadTableDebounced];
 		}];
 		[me reloadTableDebounced];
@@ -360,7 +313,7 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 }
 
 - (void)doReloadTable {
-	[self.tableView reloadData];
+	[self rebuildSections];
 }
 
 

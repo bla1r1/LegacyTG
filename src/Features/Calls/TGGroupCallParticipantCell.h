@@ -1,20 +1,30 @@
 //
-// TGGroupCallParticipantCell - one person in a group call.
+// TGGroupCallParticipantCell - one person in a group call, as row data.
 //
-// The row carries more state than a member row: speaking, a raised hand, a
-// mute that can be for everyone or only for this device, the volume, and
-// whether video or screen sharing is live. Keeping it in one cell means the
-// call screen and the full participant list cannot describe the same person
-// two different ways.
+// The call screen and the full participant list describe a person with the
+// same TGPeerRow; the drawing is TGPeerRowCell's. This file is the shared
+// description, not a cell: a screen hands the row to TGRowsDataSource and the
+// table renders it.
 //
 #import <UIKit/UIKit.h>
 
-@interface TGGroupCallParticipantCell : UITableViewCell
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-/// `participant` is the flat row TGClient+GroupCalls hands out. `table` is
-/// only used to re-draw this one row after a profile photo arrives.
-- (void)setParticipant:(NSDictionary *)participant inTable:(UITableView *)table;
+/// What the row says under the name. One line, in the order a person scans
+/// it: mute, hand, video, screen, volume. Shared by both lists.
+FOUNDATION_EXPORT NSString *TGGroupCallParticipantDetail(NSDictionary *participant);
 
-@end
+/// The TGPeerRow for one participant. Speaking turns the subtitle to the
+/// accent colour, the current user turns the name to it, and a muted row
+/// carries `mutedIcon` (TGRowTrailingImage) so the state is a row key rather
+/// than a second cell class.
+FOUNDATION_EXPORT NSMutableDictionary *TGGroupCallParticipantRow(
+		NSDictionary *participant, UIColor *accentColour, UIImage *mutedIcon);
+
+#ifdef __cplusplus
+}
+#endif
 
 // vim:ft=objc

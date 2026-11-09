@@ -7,8 +7,9 @@
 // lists use this cell so a group profile and Group Settings cannot drift.
 //
 #import <UIKit/UIKit.h>
+#import "TGPeerRowCell.h"
 
-@interface TGMemberCell : UITableViewCell
+@interface TGMemberCell : TGPeerRowCell
 
 /// Draws the row's picture from the avatar store, or the initials while it
 /// arrives. `tableView` is only used to re-ask for this one row once the

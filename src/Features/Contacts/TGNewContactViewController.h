@@ -2,8 +2,9 @@
 // TGNewContactViewController - a new contact: first name, last name, phone.
 //
 #import <UIKit/UIKit.h>
+#import "TGRowsViewController.h"
 
-@interface TGNewContactViewController : UITableViewController
+@interface TGNewContactViewController : TGRowsViewController
 
 /// Where the fields start, when the chat adds a name it already knows.
 /// Set before the view loads.

@@ -5,9 +5,9 @@
 // be edited is one that can be created.
 //
 #import <UIKit/UIKit.h>
-#import "TGTableViewController.h"
+#import "TGRowsViewController.h"
 
-@interface TGStickerEditorViewController : TGTableViewController
+@interface TGStickerEditorViewController : TGRowsViewController
 
 /// The pack being edited. `setName` is the short name TDLib changes a pack
 /// by; `setId` is what reads its stickers. `stickerType` is "regular",

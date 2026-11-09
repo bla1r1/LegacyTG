@@ -9,14 +9,10 @@
 #import "TGLocalization.h"
 #import "TGUsernameSettingsViewController.h"
 #import "TGEmojiStatusViewController.h"
+#import "TGRows.h"
 
 // Profile editing: avatar photo, names, bio, birthday, phone, username and the
 // profile's default tab.
-static const CGFloat kPhotoSide = TGMetricProfileAvatar;
-/// A field in a row: the table's gutter on the left, and enough room for the
-/// Done button on the right.
-static const CGFloat kBioRowHeight = TGMetricRow * 2.0f;
-static const CGFloat kBioCountHeight = TGMetricLineCaption;
 static const CGFloat kBirthdayYearRow = TGMetricRow;
 
 typedef void (^TGEditRequest)(void (^completion)(BOOL ok, NSString *error));
@@ -30,12 +26,11 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 	return @"...";
 }
 
-@interface TGEditProfileViewController () <UITextFieldDelegate, UITextViewDelegate,
-		UIImagePickerControllerDelegate, UINavigationControllerDelegate>
-@property (nonatomic, strong) UITextField *firstField;
-@property (nonatomic, strong) UITextField *lastField;
-@property (nonatomic, strong) UITextView *bioField;
-@property (nonatomic, strong) UILabel *bioCountLabel;
+@interface TGEditProfileViewController ()
+		<UIImagePickerControllerDelegate, UINavigationControllerDelegate>
+@property (nonatomic, copy) NSString *firstText;
+@property (nonatomic, copy) NSString *lastText;
+@property (nonatomic, copy) NSString *bioText;
 @property (nonatomic, assign) NSInteger bioLengthMax;
 @property (nonatomic, assign) BOOL bioEdited;
 @property (nonatomic, assign) BOOL firstEdited;
@@ -45,7 +40,7 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 @property (nonatomic, copy) NSString *originalFirst;
 @property (nonatomic, copy) NSString *originalLast;
 @property (nonatomic, copy) NSString *originalBio;
-@property (nonatomic, strong) UIImageView *photoView;
+@property (nonatomic, strong) UIImage *photoImage;
 @property (nonatomic, assign) NSInteger birthDay;
 @property (nonatomic, assign) NSInteger birthMonth;
 @property (nonatomic, assign) NSInteger birthYear;
@@ -63,7 +58,7 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 @implementation TGEditProfileViewController
 
 - (instancetype)init {
-	return [super initWithStyle:UITableViewStyleGrouped];
+	return [super init];
 }
 
 - (void)viewDidLoad {
@@ -79,30 +74,17 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 				   target:self action:@selector(save)];
 
 	NSDictionary *me = [TGClient shared].me;
-	self.firstField = [self fieldWithPlaceholder:TGLocalized(@"First Name") text:me[@"first_name"]];
-	self.lastField = [self fieldWithPlaceholder:TGLocalized(@"Last Name") text:me[@"last_name"]];
-	self.originalFirst = self.firstField.text ?: @"";
-	self.originalLast = self.lastField.text ?: @"";
+	self.firstText = me[@"first_name"] ?: @"";
+	self.lastText = me[@"last_name"] ?: @"";
+	self.firstEdited = NO;
+	self.lastEdited = NO;
+	self.originalFirst = self.firstText;
+	self.originalLast = self.lastText;
 	self.originalBio = @"";
+	self.bioText = @"";
 	self.username = me[@"username"] ?: @"";
 	self.phoneNumber = me[@"phone"] ?: @"";
-
-	self.bioField = [[UITextView alloc] initWithFrame:CGRectZero];
-	self.bioField.font = TGFontRow();
-	self.bioField.backgroundColor = [UIColor clearColor];
-	self.bioField.textColor = [[TGTheme shared] primaryTextColour];
-	self.bioField.delegate = self;
-	self.bioField.scrollEnabled = NO;
-	self.bioField.contentInset = UIEdgeInsetsZero;
-	if ([self.bioField respondsToSelector:@selector(setTextContainerInset:)])
-		self.bioField.textContainerInset = UIEdgeInsetsZero;
-
-	self.bioCountLabel = [[UILabel alloc] initWithFrame:CGRectZero];
-	self.bioCountLabel.font = TGFontMicro();
-	self.bioCountLabel.textColor = [[TGTheme shared] secondaryTextColour];
-	self.bioCountLabel.backgroundColor = [UIColor clearColor];
-	self.bioCountLabel.textAlignment = NSTextAlignmentRight;
-	[self updateBioCount];
+	[self rebuildSections];
 
 	__weak typeof(self) weakSelf = self;
 	[[TGClient shared] request:@{
@@ -115,8 +97,9 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 			bio = @"";
 		weakSelf.originalBio = bio;
 		if (!weakSelf.bioEdited){
-			weakSelf.bioField.text = bio;
-			[weakSelf updateBioCount];
+			weakSelf.bioText = bio;
+			[weakSelf rebuildSections];
+			[weakSelf reloadRows];
 		}
 	}];
 
@@ -128,81 +111,151 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 		weakSelf.birthDay = day;
 		weakSelf.birthMonth = month;
 		weakSelf.birthYear = year;
-		[weakSelf.tableView reloadData];
+		[weakSelf rebuildSections];
+		[weakSelf reloadRows];
 	}];
 
 	[[TGClient shared] bioLengthMaxWithCompletion:^(NSInteger max){
 		weakSelf.bioLengthMax = max;
-		[weakSelf updateBioCount];
+		[weakSelf rebuildSections];
+		[weakSelf reloadRows];
 	}];
 
 	[[TGClient shared] privacyRule:@"ShowBirthdate" completion:^(NSString *value){
 		weakSelf.birthdayPrivacy = value;
-		[weakSelf.tableView reloadData];
+		[weakSelf rebuildSections];
+		[weakSelf reloadRows];
 	}];
 
 	[[TGClient shared] myMainProfileTabWithCompletion:^(NSString *tab){
 		weakSelf.mainProfileTab = tab;
-		[weakSelf.tableView reloadData];
+		[weakSelf rebuildSections];
+		[weakSelf reloadRows];
 	}];
-
 }
 
-- (void)applyTheme {
-	[[TGTheme shared] styleGroupedTable:self.tableView];
-	[[TGTheme shared] styleNavigationBar:self.navigationController.navigationBar];
-}
+#pragma mark - rows
 
-- (void)updateFieldAppearances {
-	NSArray *fields = @[self.firstField, self.lastField];
-	UIKeyboardAppearance kb = UIKeyboardAppearanceDefault;
-	for (UITextField *f in fields) {
-		if (!f) continue;
-		f.textColor = [[TGTheme shared] primaryTextColour];
-		f.keyboardAppearance = kb;
+- (void)rebuildSections {
+	NSDictionary *me = [TGClient shared].me;
+	__weak typeof(self) weakSelf = self;
+	NSMutableArray *sections = [NSMutableArray array];
+
+	// The picture: the initials stand in until the photo download answers.
+	NSString *name = [me[@"first_name"] length] ? me[@"first_name"] : @"?";
+	NSNumber *fileId = [[TGClient shared] photoFileIdForUserId:
+			[me[@"id"] longLongValue]];
+	NSMutableDictionary *photo = TGRow(TGKindPhoto, @"");
+	photo[TGRowImage] = self.photoImage ?: [TGIcons avatarWithInitials:
+			[TGIcons initialsForTitle:name]
+			size:TGMetricProfileAvatar
+			colourId:[me[@"id"] longLongValue]];
+	photo[TGRowAccessoryTitle] = fileId ? @"Change Photo" : @"Set Photo";
+	photo[TGRowAccessoryTap] = ^{
+		[weakSelf changePhoto];
+	};
+	if (fileId){
+		NSInteger value = fileId.integerValue;
+		photo[TGRowImageLoader] = ^(UIImageView *view){
+			[[TGClient shared] downloadFile:value
+								   priority:TGDownloadPriorityAvatar
+								 completion:^(NSString *path){
+				[TGIcons loadImageAtPath:path into:view];
+			}];
+		};
 	}
-	self.bioField.textColor = [[TGTheme shared] primaryTextColour];
-	self.bioField.font = TGFontRow();
-	self.bioCountLabel.textColor = [[TGTheme shared] secondaryTextColour];
-	self.bioCountLabel.font = TGFontMicro();
-	[self setPlaceholder:@"First name" on:self.firstField];
-	[self setPlaceholder:@"Last Name" on:self.lastField];
-}
+	[sections addObject:TGSection(nil, nil, @[photo])];
 
-- (UITextField *)fieldWithPlaceholder:(NSString *)placeholder text:(NSString *)text {
-	UITextField *field = [[UITextField alloc] initWithFrame:CGRectZero];
-	field.text = [text isKindOfClass:NSString.class] ? text : @"";
-	field.font = TGFontRow();
-	field.delegate = self;
-	field.returnKeyType = UIReturnKeyDone;
-	field.keyboardAppearance = UIKeyboardAppearanceDefault;
-	field.textColor = [[TGTheme shared] primaryTextColour];
-	[self setPlaceholder:placeholder on:field];
-	return field;
-}
+	NSMutableDictionary *first = TGFieldRow(@"First name", self.firstText,
+			^(NSString *text){
+		weakSelf.firstText = text;
+		weakSelf.firstEdited = YES;
+	});
+	first[TGRowFieldIdentifier] = @"first";
+	first[TGRowFieldReturnKey] = @(UIReturnKeyNext);
+	first[TGRowFieldReturn] = ^{
+		[weakSelf focusFieldWithIdentifier:@"last"];
+	};
+	NSMutableDictionary *last = TGFieldRow(@"Last Name", self.lastText,
+			^(NSString *text){
+		weakSelf.lastText = text;
+		weakSelf.lastEdited = YES;
+	});
+	last[TGRowFieldIdentifier] = @"last";
+	last[TGRowFieldReturn] = ^{
+		[weakSelf.view endEditing:YES];
+	};
+	// Official SettingsUI: no header over the names, the hint as a footer.
+	[sections addObject:TGSection(nil,
+			@"Enter your name and add an optional profile photo.", @[first, last])];
 
-/// UITextField draws its placeholder in a fixed pale grey, which on a dark
-/// theme is grey on near-black and effectively invisible - an empty Last name
-/// field looked like an empty row with nothing in it at all.
-- (void)setPlaceholder:(NSString *)placeholder on:(UITextField *)field {
-	if (!placeholder.length)
-		return;
-	UIColor *colour = [[TGTheme shared] placeholderColour];
-	if ([field respondsToSelector:@selector(setAttributedPlaceholder:)]){
-		field.attributedPlaceholder = [[NSAttributedString alloc]
-				initWithString:placeholder
-					attributes:@{NSForegroundColorAttributeName : colour}];
-		return;
+	NSMutableDictionary *bio = TGMultilineFieldRow(@"Bio", self.bioText,
+			^(NSString *text){
+		weakSelf.bioText = text;
+		weakSelf.bioEdited = YES;
+	});
+	bio[TGRowFieldIdentifier] = @"bio";
+	if (self.bioLengthMax > 0)
+		bio[TGRowFieldMaxLength] = @(self.bioLengthMax);
+	[sections addObject:TGSection(@"Bio", nil, @[bio])];
+
+	NSMutableArray *birthdayRows = [NSMutableArray array];
+	[birthdayRows addObject:TGTapRow(@"Birthday", [self birthdayText], ^{
+		[weakSelf editBirthday];
+	})];
+	if (self.birthDay > 0){
+		[birthdayRows addObject:TGTapRow(@"Birthday",
+				self.birthdayPrivacy.length
+						? TGBirthdayPrivacyLabel(self.birthdayPrivacy) : nil,
+				^{
+			[weakSelf askBirthdayPrivacy];
+		})];
 	}
-	field.placeholder = placeholder;
-}
+	[sections addObject:TGSection(@"Birthday", nil, birthdayRows)];
 
-- (void)updateBioCount {
-	NSUInteger count = self.bioField.text.length;
-	self.bioCountLabel.text = self.bioLengthMax > 0
-			? [NSString stringWithFormat:@"%lu / %ld", (unsigned long)count,
-					(long)self.bioLengthMax]
-			: [NSString stringWithFormat:@"%lu", (unsigned long)count];
+	NSMutableArray *accountRows = [NSMutableArray array];
+	NSString *phoneDetail = self.phoneNumber.length
+			? [NSString stringWithFormat:@"+%@", self.phoneNumber] : nil;
+	NSMutableDictionary *phoneRow = TGRow(TGKindDisclosure, @"Phone Number");
+	if (phoneDetail)
+		phoneRow[TGRowDetail] = phoneDetail;
+	[accountRows addObject:phoneRow];
+	[accountRows addObject:TGOpenRow(@"Username",
+			self.username.length ? [NSString stringWithFormat:@"@%@", self.username] : nil,
+			^{
+		[weakSelf openUsernames];
+	})];
+	BOOL hasStatus = [[TGClient shared] emojiStatusIdForUser:
+			[[TGClient shared].me[@"id"] longLongValue]] != 0;
+	[accountRows addObject:TGOpenRow(hasStatus ? @"Change Emoji Status"
+			: @"Set Emoji Status", nil, ^{
+		[weakSelf openEmojiStatus];
+	})];
+	[accountRows addObject:TGOpenRow(@"Channel", nil, ^{
+		[weakSelf choosePersonalChannel];
+	})];
+	[sections addObject:TGSection(@"Edit Account", nil, accountRows)];
+
+	static NSArray *names = nil;
+	if (!names)
+		names = @[@"posts", @"gifts", @"media", @"files",
+				  @"links", @"music", @"voice", @"gifs"];
+	NSString *tab = self.mainProfileTab.length ? self.mainProfileTab : @"posts";
+	NSUInteger index = [names indexOfObject:tab];
+	NSString *tabTitle = index == NSNotFound ? tab
+			: [tab stringByReplacingCharactersInRange:NSMakeRange(0, 1)
+					withString:[[tab substringToIndex:1] uppercaseString]];
+	NSDictionary *mainTab = TGTapRow(@"Set as Main Tab", tabTitle, ^{
+		[weakSelf chooseMainProfileTab];
+	});
+	[sections addObject:TGSection(@"Profile", nil, @[mainTab])];
+
+	NSMutableDictionary *logOut = TGRedRow(@"Log out", ^{
+		[weakSelf confirmLogOut];
+	});
+	[sections addObject:TGSection(nil, nil, @[logOut])];
+
+	self.sections = sections;
 }
 
 #pragma mark - saving
@@ -231,16 +284,17 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 		controller.originalFirst = first;
 		controller.originalLast = last;
 		if (!controller.firstEdited)
-			controller.firstField.text = first;
+			controller.firstText = first;
 		if (!controller.lastEdited)
-			controller.lastField.text = last;
+			controller.lastText = last;
 		id usernames = user[@"usernames"];
 		id active = [usernames isKindOfClass:NSDictionary.class] ? usernames[@"active_usernames"] : nil;
 		controller.username = ([active isKindOfClass:NSArray.class] ? [active firstObject] : nil)
 				?: (user[@"username"] ?: @"");
 		controller.phoneNumber = user[@"phone_number"] ?: @"";
 		controller.userInfoLoaded = YES;
-		[controller.tableView reloadData];
+		[controller rebuildSections];
+		[controller reloadRows];
 		if (waiting)
 			[controller save];
 	}];
@@ -264,9 +318,9 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 		[self loadUserInfo];
 		return;
 	}
-	NSString *first = [(self.firstField.text ?: @"")
+	NSString *first = [self.firstText
 			stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-	NSString *last = [(self.lastField.text ?: @"")
+	NSString *last = [self.lastText
 			stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 	if (!first.length){
 		[TGAlertSheet showMessage:@"Enter a Name"
@@ -274,7 +328,7 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 		return;
 	}
 
-	NSString *bio = self.bioField.text ?: @"";
+	NSString *bio = self.bioText ?: @"";
 	NSString *originalFirst = self.originalFirst ?: @"";
 	NSString *originalLast = self.originalLast ?: @"";
 	NSString *originalBio = self.originalBio ?: @"";
@@ -325,52 +379,10 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 	}
 }
 
-- (BOOL)textFieldShouldReturn:(UITextField *)field {
-	[field resignFirstResponder];
-	return NO;
-}
-
-- (BOOL)textField:(UITextField *)field
-		shouldChangeCharactersInRange:(NSRange)range
-		replacementString:(NSString *)string {
-	if (field == self.firstField)
-		self.firstEdited = YES;
-	else if (field == self.lastField)
-		self.lastEdited = YES;
-	return YES;
-}
-
-- (void)textViewDidChange:(UITextView *)textView {
-	if (textView == self.bioField){
-		self.bioEdited = YES;
-		[self updateBioCount];
-	}
-}
-
-- (BOOL)textView:(UITextView *)textView
-		shouldChangeTextInRange:(NSRange)range
-		replacementText:(NSString *)text {
-	if (textView != self.bioField || self.bioLengthMax <= 0)
-		return YES;
-	NSUInteger length = textView.text.length - range.length + text.length;
-	return length <= (NSUInteger)self.bioLengthMax;
-}
-
-/// Settings has its own navigation controller, and nothing was styling
-/// its bar - an imported theme stopped at the top of the screen.
 - (void)viewWillAppear:(BOOL)animated {
 	[super viewWillAppear:animated];
-	[[TGTheme shared] styleNavigationBar:self.navigationController.navigationBar];
+	[self rebuildSections];
 	[self applyTheme];
-	// The fields are built once and outlive a theme change.
-	for (UITextField *field in @[self.firstField, self.lastField]){
-		field.textColor = [[TGTheme shared] primaryTextColour];
-		[self setPlaceholder:field.attributedPlaceholder.string ?: field.placeholder
-						  on:field];
-	}
-	self.bioField.textColor = [[TGTheme shared] primaryTextColour];
-	self.bioCountLabel.textColor = [[TGTheme shared] secondaryTextColour];
-	[self.tableView reloadData];
 }
 
 #pragma mark - birthday
@@ -470,7 +482,8 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 	self.birthdaySheet = nil;
 	self.birthdayPicker = nil;
 	self.birthdayYearSwitch = nil;
-	[self.tableView reloadData];
+	[self rebuildSections];
+	[self reloadRows];
 }
 
 - (void)askBirthdayPrivacy {
@@ -485,7 +498,8 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 		NSString *value = @[@"everybody", @"contacts", @"nobody"][(NSUInteger)index];
 		weakSelf.birthdayPrivacy = value;
 		[[TGClient shared] setPrivacyRule:@"ShowBirthdate" to:value];
-		[weakSelf.tableView reloadData];
+		[weakSelf rebuildSections];
+		[weakSelf reloadRows];
 	}];
 }
 
@@ -515,7 +529,9 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 	if (![UIImageJPEGRepresentation(scaled, TGCompressionQualityStandard) writeToFile:path atomically:YES])
 		return;
 
-	self.photoView.image = scaled;      // show it before the upload finishes
+	self.photoImage = scaled;      // show it before the upload finishes
+	[self rebuildSections];
+	[self reloadRows];
 	__weak typeof(self) weakSelf = self;
 	[[TGClient shared] setProfilePhotoAtPath:path completion:^(BOOL ok){
 		if (ok)
@@ -529,259 +545,23 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 	[picker dismissViewControllerAnimated:YES completion:nil];
 }
 
-#pragma mark - table
+#pragma mark - account actions
 
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return 7; }
-
-- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-	if (section == 1) return @"Name";
-	if (section == 2) return @"Bio";
-	if (section == 3) return @"Birthday";
-	if (section == 4) return @"Edit Account";
-	if (section == 5) return @"Profile";
-	if (section == 6) return nil;
-	return nil;
+- (void)openUsernames {
+	TGUsernameSettingsViewController *usernames =
+			[[TGUsernameSettingsViewController alloc] init];
+	usernames.hidesBottomBarWhenPushed = YES;
+	[self.navigationController pushViewController:usernames animated:YES];
 }
 
-- (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-	return nil;
-}
-
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-	if (section == 0) return 1;    // the picture
-	if (section == 1) return 2;    // first, last
-	if (section == 2) return 1;    // bio
-	if (section == 3) return self.birthDay > 0 ? 2 : 1;    // birthday, (privacy only when set)
-	if (section == 4) return 4;    // phone, username, emoji status, channel
-	if (section == 6) return 1;    // log out
-	return 1;                      // main profile tab
-}
-
-- (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)path {
-	if (path.section == 0)
-		return TGMetricEditProfileHeaderRow;
-	if (path.section == 2)
-		return kBioRowHeight;
-	return TGMetricRow;
-}
-
-- (UITableViewCell *)tableView:(UITableView *)tableView
-		 cellForRowAtIndexPath:(NSIndexPath *)path
-{
-	TGTheme *theme = [TGTheme shared];
-
-	if (path.section == 0)
-		return [self photoCellFor:tableView];
-
-	if (path.section == 2){
-		UITableViewCell *cell = [[UITableViewCell alloc]
-				initWithStyle:UITableViewCellStyleDefault reuseIdentifier:nil];
-		[theme styleCell:cell];
-		cell.selectionStyle = UITableViewCellSelectionStyleNone;
-		CGFloat width = tableView.bounds.size.width;
-		CGFloat contentWidth = width - TGDoubled(TGMetricGutter);
-		self.bioField.frame = CGRectMake(TGMetricGutter, 0, contentWidth,
-				kBioRowHeight - kBioCountHeight);
-		[cell.contentView addSubview:self.bioField];
-		self.bioCountLabel.frame = CGRectMake(TGMetricGutter,
-				kBioRowHeight - kBioCountHeight, contentWidth, kBioCountHeight);
-		[cell.contentView addSubview:self.bioCountLabel];
-		return cell;
-	}
-
-	if (path.section == 5){
-		UITableViewCell *cell = [[UITableViewCell alloc]
-				initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:nil];
-		[theme styleCell:cell];
-		cell.textLabel.font = TGFontRow();
-		cell.detailTextLabel.font = TGFontBody();
-		cell.detailTextLabel.textColor = [theme cellDetailColour];
-		cell.textLabel.text = @"Set as Main Tab";
-		static NSArray *names = nil;
-		if (!names)
-			names = @[@"posts", @"gifts", @"media", @"files",
-					  @"links", @"music", @"voice", @"gifs"];
-		NSString *tab = self.mainProfileTab.length ? self.mainProfileTab : @"posts";
-		NSUInteger index = [names indexOfObject:tab];
-		cell.detailTextLabel.text = index == NSNotFound ? tab
-				: [tab stringByReplacingCharactersInRange:NSMakeRange(0, 1)
-						withString:[[tab substringToIndex:1] uppercaseString]];
-		cell.accessoryType = UITableViewCellAccessoryNone;
-		return cell;
-	}
-
-	if (path.section == 3){
-		UITableViewCell *cell = [[UITableViewCell alloc]
-				initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:nil];
-		[theme styleCell:cell];
-		cell.textLabel.font = TGFontRow();
-		cell.detailTextLabel.font = TGFontBody();
-		cell.detailTextLabel.textColor = [theme cellDetailColour];
-		if (path.row == 0){
-			cell.textLabel.text = @"Birthday";
-			cell.detailTextLabel.text = [self birthdayText];
-			cell.accessoryType = UITableViewCellAccessoryNone;
-		} else {
-			cell.textLabel.text = @"Birthday";
-			cell.detailTextLabel.text = self.birthdayPrivacy.length
-					? TGBirthdayPrivacyLabel(self.birthdayPrivacy) : nil;
-			cell.accessoryType = UITableViewCellAccessoryNone;
-			cell.selectionStyle = UITableViewCellSelectionStyleBlue;
-		}
-		return cell;
-	}
-
-	// The last card carries values rather than fields: a number cannot be
-	// typed here at all, and a username needs its own screen to check itself.
-	if (path.section == 4){
-		UITableViewCell *cell = [[UITableViewCell alloc]
-				initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:nil];
-		[theme styleCell:cell];
-		cell.textLabel.font = TGFontRow();
-		cell.detailTextLabel.font = TGFontBody();
-		cell.detailTextLabel.textColor = [theme cellDetailColour];
-		if (path.row == 0){
-			cell.textLabel.text = @"Phone Number";
-			cell.detailTextLabel.text = self.phoneNumber.length
-					? [NSString stringWithFormat:@"+%@", self.phoneNumber] : nil;
-			// Changing a number is a whole login flow; this shows it.
-			cell.selectionStyle = UITableViewCellSelectionStyleNone;
-		} else if (path.row == 1) {
-			// Telegram puts the public name first: it is the row people
-			// come here to change, and its own screen owns the switches.
-			cell.textLabel.text = @"Username";
-			cell.detailTextLabel.text = self.username.length
-					? [NSString stringWithFormat:@"@%@", self.username] : nil;
-			cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-			cell.selectionStyle = UITableViewCellSelectionStyleBlue;
-		} else if (path.row == 2) {
-			// The own-profile emoji status is an edit row, not a row in a
-			// menu that no longer has a trigger.
-			BOOL hasStatus = [[TGClient shared] emojiStatusIdForUser:
-					[[TGClient shared].me[@"id"] longLongValue]] != 0;
-			cell.textLabel.text = hasStatus ? @"Change Emoji Status"
-											: @"Set Emoji Status";
-			cell.detailTextLabel.text = nil;
-			cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-			cell.selectionStyle = UITableViewCellSelectionStyleBlue;
-		} else {
-			cell.textLabel.text = @"Channel";
-			cell.detailTextLabel.text = nil;
-			cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-			cell.selectionStyle = UITableViewCellSelectionStyleBlue;
-		}
-		return cell;
-	}
-
-	if (path.section == 6){
-		UITableViewCell *cell = [[UITableViewCell alloc]
-				initWithStyle:UITableViewCellStyleDefault reuseIdentifier:nil];
-		[theme styleCell:cell];
-		cell.textLabel.text = @"Log out";
-		cell.textLabel.textColor = [theme destructiveColour];
-		cell.textLabel.textAlignment = NSTextAlignmentLeft;
-		cell.accessoryType = UITableViewCellAccessoryNone;
-		return cell;
-	}
-
-	UITableViewCell *cell = [[UITableViewCell alloc]
-			initWithStyle:UITableViewCellStyleDefault reuseIdentifier:nil];
-	[theme styleCell:cell];
-	cell.selectionStyle = UITableViewCellSelectionStyleNone;
-
-	UITextField *field = path.row == 0 ? self.firstField : self.lastField;
-	field.frame = CGRectMake(TGMetricGutter, 0,
-			tableView.bounds.size.width - TGDoubled(TGMetricGutter), TGMetricRow);
-	field.textColor = [theme primaryTextColour];
-	[cell.contentView addSubview:field];
-	return cell;
-}
-
-- (UITableViewCell *)photoCellFor:(UITableView *)tableView {
-	TGTheme *theme = [TGTheme shared];
-	CGFloat width = tableView.bounds.size.width;
-
-	UITableViewCell *cell = [[UITableViewCell alloc]
-			initWithStyle:UITableViewCellStyleDefault reuseIdentifier:nil];
-	[theme styleCell:cell];
-	cell.selectionStyle = UITableViewCellSelectionStyleNone;
-
-	NSDictionary *me = [TGClient shared].me;
-	NSString *name = [me[@"first_name"] length] ? me[@"first_name"] : @"?";
-
-	self.photoView = [[UIImageView alloc] initWithFrame:
-			CGRectMake(TGCenteredOrigin(width, kPhotoSide), TGMetricPad, kPhotoSide, kPhotoSide)];
-	self.photoView.layer.cornerRadius = TGHalf(kPhotoSide);
-	self.photoView.clipsToBounds = YES;
-	self.photoView.layer.shouldRasterize = YES;
-	self.photoView.layer.rasterizationScale = [UIScreen mainScreen].scale;
-	self.photoView.layer.borderColor = [theme separatorColour].CGColor;
-	self.photoView.layer.borderWidth = 1.0f;
-	self.photoView.contentMode = UIViewContentModeScaleAspectFill;
-	self.photoView.image = [TGIcons avatarWithInitials:
-			[TGIcons initialsForTitle:name]
-												  size:kPhotoSide
-											  colourId:[me[@"id"] longLongValue]];
-	[cell.contentView addSubview:self.photoView];
-
-	NSNumber *fileId = [[TGClient shared] photoFileIdForUserId:[me[@"id"] longLongValue]];
-	if (fileId)
-		[[TGClient shared] downloadFile:fileId.integerValue
-							   priority:TGDownloadPriorityAvatar
-							 completion:^(NSString *path){
-			[TGIcons loadImageAtPath:path into:self.photoView];
-		}];
-
-	UIButton *change = [UIButton buttonWithType:UIButtonTypeCustom];
-	change.frame = CGRectMake(0, kPhotoSide + TGMetricPadMedium, width, TGMetricLineTitle);
-	[change setTitle:(fileId ? @"Change Photo" : @"Set Photo")
-			forState:UIControlStateNormal];
-	[change setTitleColor:[theme accentColour] forState:UIControlStateNormal];
-	change.titleLabel.font = TGFontRow();
-	[change addTarget:self action:@selector(changePhoto)
-	 forControlEvents:UIControlEventTouchUpInside];
-	[cell.contentView addSubview:change];
-
-	return cell;
-}
-
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)path {
-	if ((path.section == 4 && path.row == 0) || path.section < 3)
-		return;
-	[tableView deselectRowAtIndexPath:path animated:YES];
-	if (path.section == 3 && path.row == 0){
-		[self editBirthday];
-		return;
-	}
-	if (path.section == 3 && path.row == 1){
-		[self askBirthdayPrivacy];
-		return;
-	}
-	if (path.section == 4 && path.row == 1){
-		TGUsernameSettingsViewController *usernames =
-				[[TGUsernameSettingsViewController alloc] init];
-		usernames.hidesBottomBarWhenPushed = YES;
-		[self.navigationController pushViewController:usernames animated:YES];
-		return;
-	}
-	if (path.section == 4 && path.row == 2){
-		TGEmojiStatusViewController *status =
-				[[TGEmojiStatusViewController alloc] init];
-		status.target = TGEmojiStatusTargetSelf;
-		status.userId = [[TGClient shared].me[@"id"] longLongValue];
-		status.subjectTitle = @"Emoji Status";
-		status.hidesBottomBarWhenPushed = YES;
-		[self.navigationController pushViewController:status animated:YES];
-		return;
-	}
-	if (path.section == 4 && path.row == 3){
-		[self choosePersonalChannel];
-		return;
-	}
-	if (path.section == 5)
-		[self chooseMainProfileTab];
-	if (path.section == 6)
-		[self confirmLogOut];
+- (void)openEmojiStatus {
+	TGEmojiStatusViewController *status =
+			[[TGEmojiStatusViewController alloc] init];
+	status.target = TGEmojiStatusTargetSelf;
+	status.userId = [[TGClient shared].me[@"id"] longLongValue];
+	status.subjectTitle = @"Emoji Status";
+	status.hidesBottomBarWhenPushed = YES;
+	[self.navigationController pushViewController:status animated:YES];
 }
 
 - (void)choosePersonalChannel {
@@ -839,7 +619,8 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 				return;
 			}
 			weakSelf.mainProfileTab = tab;
-			[weakSelf.tableView reloadData];
+			[weakSelf rebuildSections];
+			[weakSelf reloadRows];
 		}];
 	}];
 }

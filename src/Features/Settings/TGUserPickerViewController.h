@@ -2,9 +2,9 @@
 // TGUserPickerViewController.h - contact picker for privacy exception lists.
 //
 #import <UIKit/UIKit.h>
-#import "TGTableViewController.h"
+#import "TGRowsViewController.h"
 
-@interface TGUserPickerViewController : TGTableViewController
+@interface TGUserPickerViewController : TGRowsViewController
 
 - (instancetype)initWithSelectedUserIds:(NSSet *)userIds title:(NSString *)title;
 

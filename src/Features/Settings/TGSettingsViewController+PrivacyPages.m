@@ -13,6 +13,7 @@
 #import "TGListViewController.h"
 #import "TGAdminRightsViewController.h"
 #import "TGNotificationCategoryViewController.h"
+#import "TGUpdateStore.h"
 
 static NSString *TGFreezeDetail(NSDictionary *state) {
 	if (![state isKindOfClass:NSDictionary.class])
@@ -202,14 +203,24 @@ static NSString *TGNotificationGroupLabel(NSString *type) {
 		[rows addObject:TGRow(TGKindPlain, empty)];
 	}
 
-	NSArray *addRows = @[
-		TGActionRow(@"Add Bundled Sample", ^{ [weakSelf addSoundFromBundle]; }),
-		TGActionRow(@"Add MP3 from Documents", ^{ [weakSelf addSoundFromDocuments]; }),
-	];
+	// Official has one cloud section: the installed tones, then the upload
+	// row. Adding a bundled sample or reading the sandbox's Documents folder
+	// are developer tools, not a user's upload path.
+	[rows addObject:TGActionRow(@"Upload Sound", ^{
+		[weakSelf addSoundFromDocuments];
+	})];
+
+#if TG_DEV
+	[rows addObject:TGActionRow(@"Add Bundled Sample", ^{
+		[weakSelf addSoundFromBundle];
+	})];
+	[rows addObject:TGActionRow(@"Add MP3 from Documents", ^{
+		[weakSelf addSoundFromDocuments];
+	})];
+#endif
 
 	return @[
-		TGSection(@"Sound", nil, rows),
-		TGSection(@"Upload Sound", nil, addRows),
+		TGSection(@"Telegram Tones", nil, rows),
 	];
 }
 
@@ -505,13 +516,13 @@ static NSString *TGNotificationGroupLabel(NSString *type) {
 		TGSection(nil,
 			@"Automatically archive and mute new chats, groups and channels from non-contacts.",
 			@[
-			TGIconTapRow(@"Automatically Archive",
-					[[TGClient shared].archiveSettings[@"archive_and_mute_new_chats_from_unknown_users"] boolValue]
-							? @"On" : @"Off",
-					@"archive", TGIconTileGrey(), ^{
+			// Official's auto-archive row is a switch, and its section has
+			// no icon tile.
+			TGSwitchRow(@"Automatically Archive",
+					[[TGClient shared].archiveSettings[@"archive_and_mute_new_chats_from_unknown_users"] boolValue],
+					^(BOOL on){
 				NSDictionary *settings = [TGClient shared].archiveSettings ?: @{};
-				BOOL on = [settings[@"archive_and_mute_new_chats_from_unknown_users"] boolValue];
-				[[TGClient shared] setArchiveSettingsArchiveAndMute:!on
+				[[TGClient shared] setArchiveSettingsArchiveAndMute:on
 												keepUnmutedArchived:
 						[settings[@"keep_unmuted_chats_archived"] boolValue]
 											  keepFolderChatsArchived:
@@ -523,8 +534,7 @@ static NSString *TGNotificationGroupLabel(NSString *type) {
 		TGSection(@"AUTOMATICALLY DELETE MY ACCOUNT",
 			@"If you do not come online at least once within this period, your account will be deleted along with all messages and contacts.",
 			@[
-			TGIconTapRow(@"If Away For", deleteLabel,
-					@"archive", TGIconTileGrey(), ^{
+			TGOpenRow(@"If Away For", deleteLabel, ^{
 				NSArray *choices = @[
 						TGLocalizedPluralValue(@"%@ month", @"%@ months", @"1", 1),
 						TGLocalizedPluralValue(@"%@ month", @"%@ months", @"3", 3),
@@ -554,9 +564,25 @@ static NSString *TGNotificationGroupLabel(NSString *type) {
 		TGSection(nil,
 			@"Tools to set the default folder, auto-archive and hide new chats from non-contacts.",
 			@[
-			TGIconTapOpenRow(@"Data Settings", nil,
-					@"data", TGIconTileGreen(), ^{
+			TGOpenRow(@"Data Settings", nil, ^{
 				[weakSelf openPage:TGSettingsPageData];
+			}),
+		]),
+
+		// The update check sends this to our bot; nothing else is shared.
+		// "Share Statistics" is the pack's short label; the sentence that
+		// explains what is sent stays in the footer, where it has the width.
+		TGSection(nil,
+			TGLocalized(@"Send anonymous usage statistics. The update check sends the app "
+			@"version, iOS version, device model, device tier, jailbreak yes/no "
+			@"and language. The bot stores a salted hash of your account id, "
+			@"never the id itself. Turning this off sends stats=0 and update "
+			@"checks still work."),
+			@[
+			TGSwitchRow(@"Share Statistics",
+					[TGUpdateStore usageStatisticsEnabled], ^(BOOL on){
+				[TGUpdateStore setUsageStatisticsEnabled:on];
+				[weakSelf rebuild];
 			}),
 		]),
 	];
@@ -574,13 +600,18 @@ static NSString *TGNotificationGroupLabel(NSString *type) {
 	NSMutableArray *rows = [NSMutableArray array];
 	for (NSDictionary *user in self.blocked){
 		int64_t userId = [user[@"id"] longLongValue];
-		[rows addObject:TGTapRow(user[@"name"], nil, ^{
+		// The shared person row: the photo through the peer store, the name
+		// as the account has it (not a pack key).
+		NSMutableDictionary *row = TGPeerRow(@(userId), user[@"name"] ?: @"", nil, ^{
 			TGProfileViewController *profile = [[TGProfileViewController alloc]
 					initWithChatId:userId userId:userId
 							 title:user[@"name"] ?: @"Profile"];
 			profile.hidesBottomBarWhenPushed = YES;
 			[weakSelf.navigationController pushViewController:profile animated:YES];
-		})];
+		});
+		if (userId > 0)
+			row[TGRowAvatarUser] = @YES;
+		[rows addObject:row];
 	}
 	return @[TGSection(nil, nil, rows)];
 }

@@ -2,8 +2,8 @@
 // TGBackgroundEditorViewController.h - custom color and gradient wallpaper editor.
 //
 #import <UIKit/UIKit.h>
-#import "TGTableViewController.h"
+#import "TGRowsViewController.h"
 
-@interface TGBackgroundEditorViewController : TGTableViewController
+@interface TGBackgroundEditorViewController : TGRowsViewController
 
 @end

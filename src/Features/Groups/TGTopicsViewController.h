@@ -2,9 +2,9 @@
 // TGTopicsViewController - topic list controller for forum supergroups.
 //
 #import <UIKit/UIKit.h>
-#import "TGTableViewController.h"
+#import "TGRowsViewController.h"
 
-@interface TGTopicsViewController : TGTableViewController
+@interface TGTopicsViewController : TGRowsViewController
 
 @property (nonatomic, assign) int64_t chatId;
 @property (nonatomic, copy)   NSString *chatTitle;

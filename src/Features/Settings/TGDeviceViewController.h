@@ -2,7 +2,7 @@
 // TGDeviceViewController - device specifications and feature availability status.
 //
 #import <UIKit/UIKit.h>
-#import "TGTableViewController.h"
+#import "TGRowsViewController.h"
 
-@interface TGDeviceViewController : TGTableViewController
+@interface TGDeviceViewController : TGRowsViewController
 @end

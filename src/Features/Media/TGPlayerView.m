@@ -7,6 +7,8 @@
 #import "TGTheme.h"
 #import "TGIcons.h"
 #import "TGStyle.h"
+#import "TGRows.h"
+#import "TGRowsDataSource.h"
 #import <QuartzCore/QuartzCore.h>
 
 #pragma mark - Constants
@@ -23,7 +25,6 @@ static const CGFloat kModalSliderH       = TGMetricPlayerModalSliderH;
 static const CGFloat kModalTimeW         = 50.0f;
 static const CGFloat kModalHeaderH       = TGMetricRow;
 static const CGFloat kModalTimeH         = TGMetricLineCaption;
-static const CGFloat kModalQueueRowH     = TGMetricActionRow;
 
 static NSString *TGPlayerFormatTime(NSTimeInterval seconds) {
 	if (seconds < 0 || isnan(seconds)) seconds = 0;
@@ -238,7 +239,8 @@ static NSString *TGPlayerFormatTime(NSTimeInterval seconds) {
 
 #pragma mark - TGPlayerModalViewController
 
-@interface TGPlayerModalViewController () <UITableViewDataSource, UITableViewDelegate>
+@interface TGPlayerModalViewController ()
+@property (nonatomic, strong) TGRowsDataSource *queueSource;
 @end
 
 @implementation TGPlayerModalViewController
@@ -354,10 +356,9 @@ static NSString *TGPlayerFormatTime(NSTimeInterval seconds) {
 
 	_queueTable = [[UITableView alloc] initWithFrame:_queueContainer.bounds style:UITableViewStylePlain];
 	_queueTable.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-	_queueTable.dataSource = self;
-	_queueTable.delegate = self;
 	_queueTable.backgroundColor = [theme listBackgroundColour];
 	_queueTable.separatorColor = [theme separatorColour];
+	self.queueSource = [[TGRowsDataSource alloc] initWithTableView:_queueTable];
 	[_queueContainer addSubview:_queueTable];
 	[self.view addSubview:_queueContainer];
 
@@ -601,7 +602,7 @@ static NSString *TGPlayerFormatTime(NSTimeInterval seconds) {
 	[_shuffleBtn setImage:[TGIcons shuffleIconActive:player.shuffle] forState:UIControlStateNormal];
 	[_shuffleBtn setTintColor:player.shuffle ? [[TGTheme shared] accentColour] : [[TGTheme shared] secondaryTextColour]];
 
-	[_queueTable reloadData];
+	[self reloadQueue];
 	[self tick];
 }
 
@@ -616,7 +617,7 @@ static NSString *TGPlayerFormatTime(NSTimeInterval seconds) {
 	_queueContainer.hidden = !show;
 	_deckView.hidden = show;
 	_navTitleLabel.text = show ? @"Your Playlist" : @"Music";
-	if (show) [_queueTable reloadData];
+	if (show) [self reloadQueue];
 }
 
 - (void)playPauseTapped {
@@ -666,52 +667,41 @@ static NSString *TGPlayerFormatTime(NSTimeInterval seconds) {
 	}
 }
 
-#pragma mark - UITableViewDataSource & Delegate
+#pragma mark - queue rows
 
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-	return (NSInteger)[TGMusicPlayer shared].tracks.count;
-}
-
-- (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath {
-	return kModalQueueRowH;
-}
-
-- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-	static NSString *ident = @"QueueCell";
-	UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:ident];
-	if (!cell) {
-		cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:ident];
-	}
-
+/// The queue is data: a subtitle row per track, the current one in the accent
+/// colour, its cover in the picture slot. TGRowsDataSource renders it, so the
+/// list keeps the same rows as the rest of the app.
+- (void)reloadQueue {
 	TGMusicPlayer *player = [TGMusicPlayer shared];
-	if (indexPath.row < (NSInteger)player.tracks.count) {
-		NSDictionary *track = player.tracks[indexPath.row];
-		cell.textLabel.text = [player titleForTrack:track];
-		cell.detailTextLabel.text = [player performerForTrack:track];
-
-		BOOL isCurrent = (indexPath.row == player.index);
-		if (isCurrent) {
-			cell.textLabel.textColor = [[TGTheme shared] accentColour];
-			cell.detailTextLabel.textColor = [[TGTheme shared] accentColour];
-			cell.imageView.image = [TGIcons mediaDiscOfSide:TGMetricPadLarge playing:player.playing];
-		} else {
-			cell.textLabel.textColor = [[TGTheme shared] primaryTextColour];
-			cell.detailTextLabel.textColor = [[TGTheme shared] secondaryTextColour];
-			cell.imageView.image = [TGIcons mediaDiscOfSide:TGMetricPadLarge playing:NO];
-		}
+	TGTheme *theme = [TGTheme shared];
+	NSMutableArray *rows = [NSMutableArray arrayWithCapacity:player.tracks.count];
+	__weak typeof(self) weakSelf = self;
+	for (NSInteger i = 0; i < (NSInteger)player.tracks.count; i++){
+		NSDictionary *track = player.tracks[(NSUInteger)i];
+		BOOL current = (i == player.index);
+		NSMutableDictionary *row = TGSubtitleRow([player titleForTrack:track],
+				[player performerForTrack:track], ^{
+			TGMusicPlayer *live = [TGMusicPlayer shared];
+			[live playTracks:live.tracks atIndex:i inChat:live.currentMessageId];
+			[weakSelf toggleQueueTapped];
+		});
+		UIImage *cover = (current && player.currentArtwork)
+				? [TGIcons roundedImage:player.currentArtwork
+						size:CGSizeMake(TGMetricPadLarge, TGMetricPadLarge)
+						radius:TGMetricCornerSmall
+						corners:UIRectCornerAllCorners]
+				: [TGIcons mediaDiscOfSide:TGMetricPadLarge
+						playing:(current && player.playing)];
+		row[TGRowAvatarImage] = cover;
+		row[TGRowTitleColour] = current ? [theme accentColour]
+				: [theme primaryTextColour];
+		row[TGRowDetailColour] = current ? [theme accentColour]
+				: [theme secondaryTextColour];
+		[rows addObject:row];
 	}
-
-	[[TGTheme shared] styleCell:cell];
-	return cell;
-}
-
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
-	TGMusicPlayer *player = [TGMusicPlayer shared];
-	if (indexPath.row < (NSInteger)player.tracks.count) {
-		[player playTracks:player.tracks atIndex:indexPath.row inChat:player.currentMessageId];
-		[self toggleQueueTapped];
-	}
+	self.queueSource.sections = @[TGSection(nil, nil, rows)];
+	[self.queueSource reloadRows];
 }
 
 @end

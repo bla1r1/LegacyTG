@@ -2,9 +2,9 @@
 // TGStoryAlbumsViewController - the album list and the album's stories.
 //
 #import <UIKit/UIKit.h>
-#import "TGTableViewController.h"
+#import "TGRowsViewController.h"
 
-@interface TGStoryAlbumsViewController : TGTableViewController
+@interface TGStoryAlbumsViewController : TGRowsViewController
 
 /// `storyToAdd` is an existing story the viewer wants in an album; 0 opens
 /// the manager in its ordinary form.

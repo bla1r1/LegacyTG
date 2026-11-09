@@ -2,9 +2,9 @@
 // TGBackgroundsViewController.h - Settings > Appearance > Telegram Backgrounds.
 //
 #import <UIKit/UIKit.h>
-#import "TGTableViewController.h"
+#import "TGRowsViewController.h"
 
-/// The account's installed chat backgrounds, Telegram's catalogue search,
-/// the default background and the address a background is served from.
-@interface TGBackgroundsViewController : TGTableViewController
+/// Chat Wallpapers: Set a Color, Choose from Photos, then the account's
+/// installed backgrounds in the shared square-tile grid.
+@interface TGBackgroundsViewController : TGGridRowsViewController
 @end

@@ -3,7 +3,7 @@
 // from the account default, and the per-chat switch the server reports.
 //
 #import <UIKit/UIKit.h>
-#import "TGListViewController.h"
+#import "TGRowsViewController.h"
 
-@interface TGStorySettingsViewController : TGListViewController
+@interface TGStorySettingsViewController : TGRowsViewController
 @end

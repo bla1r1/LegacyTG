@@ -10,6 +10,7 @@
 #import "TGStickerGalleryViewController.h"
 #import "TGStyle.h"
 #import "TGTheme.h"
+#import "TGRows.h"
 
 @implementation TGStickerPacksViewController {
 	NSArray *_ownedSets;
@@ -21,10 +22,7 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-
-
-	self.title = @"Stickers";
-	self.tableView.rowHeight = TGMetricPersonRow;
+	self.title = TGLocalized(@"Stickers");
 	// Edit reorders and archives the installed packs, as the official list.
 	self.navigationItem.rightBarButtonItem = self.editButtonItem;
 	_ownedSets = @[];
@@ -32,23 +30,15 @@
 	_archivedSets = @[];
 	_recentStickers = @[];
 	_favoriteStickers = @[];
-	[self applyTheme];
+	[self rebuildSections];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
 	[super viewWillAppear:animated];
-	[self applyTheme];
 	[self reloadOwnedPacks];
 	[self reloadTrending];
 	[self reloadArchived];
 	[self reloadStickerShelves];
-}
-
-- (void)applyTheme {
-	TGTheme *theme = [TGTheme shared];
-	self.tableView.backgroundColor = [theme listBackgroundColour];
-	self.tableView.separatorColor = [theme separatorColour];
-	[theme styleNavigationBar:self.navigationController.navigationBar];
 }
 
 #pragma mark - loading
@@ -60,7 +50,7 @@
 		if (!me)
 			return;
 		_ownedSets = sets ?: @[];
-		[me.tableView reloadData];
+		[me rebuildSections];
 	}];
 }
 
@@ -79,7 +69,7 @@
 			if (set[@"id"])
 				[ids addObject:set[@"id"]];
 		[[TGClient shared] viewTrendingStickerSets:ids];
-		[me.tableView reloadData];
+		[me rebuildSections];
 	}];
 }
 
@@ -92,7 +82,7 @@
 		if (!me)
 			return;
 		_archivedSets = sets ?: @[];
-		[me.tableView reloadData];
+		[me rebuildSections];
 	}];
 }
 
@@ -103,206 +93,105 @@
 		if (!me)
 			return;
 		_recentStickers = stickers ?: @[];
-		[me.tableView reloadData];
+		[me rebuildSections];
 	}];
 	[[TGClient shared] favoriteStickersWithCompletion:^(NSArray *stickers){
 		TGStickerPacksViewController *me = weakSelf;
 		if (!me)
 			return;
 		_favoriteStickers = stickers ?: @[];
-		[me.tableView reloadData];
+		[me rebuildSections];
 	}];
 }
 
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-	return 7;
-}
+- (void)rebuildSections {
+	__weak typeof(self) weakSelf = self;
+	NSArray *titles = TGStickerPacksRowTitles(_ownedSets, _trendingSets,
+			_archivedSets, _recentStickers, _favoriteStickers);
 
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-	switch (section){
-		case 0: return 3;             // new, search, clear recents
-		case 1: return MAX((NSInteger)_ownedSets.count, 1);
-		case 2: return MAX((NSInteger)_trendingSets.count, 1);
-		case 3: return 4;             // three default shelves, id lookup
-		case 5: return 2;             // recently used, favourites
-		case 6: return MAX((NSInteger)_archivedSets.count, 1);
-		default: return 1;            // greeting stickers
+	NSMutableArray *topRows = [NSMutableArray arrayWithArray:@[
+		TGOpenRow(titles[0][0], nil, ^{ [weakSelf openNewPack]; }),
+		TGSubtitleRow(titles[0][1], nil, ^{ [weakSelf askForShortName]; }),
+		TGRedRow(titles[0][2], ^{ [weakSelf confirmClearRecent]; }),
+	]];
+
+	NSMutableArray *ownedRows = [NSMutableArray array];
+	if (!_ownedSets.count){
+		[ownedRows addObject:TGRow(TGKindPlain, titles[1][0])];
+	} else {
+		for (NSUInteger index = 0; index < _ownedSets.count; index++){
+			NSDictionary *set = _ownedSets[index];
+			NSString *title = TGStripUndrawableScalars(titles[1][index]);
+			[ownedRows addObject:TGButtonRow(title,
+					TGStickerPackOwnedDetail(set), TGLocalized(@"Archive"),
+					^{ [weakSelf archivePack:set]; },
+					^{ [weakSelf openPack:set]; })];
+		}
 	}
-}
 
-- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-	switch (section){
-		case 1: return @"My Stickers";
-		case 2: return @"Trending";
-		case 3: return @"Custom Emoji";
-		case 5: return @"Favorites";
-		case 6: return @"Archived";
-		default: return section == 4 ? @"Stickers" : nil;
+	NSMutableArray *trendingRows = [NSMutableArray array];
+	if (!_trendingSets.count){
+		[trendingRows addObject:TGRow(TGKindPlain, titles[2][0])];
+	} else {
+		for (NSUInteger index = 0; index < _trendingSets.count; index++){
+			NSDictionary *set = _trendingSets[index];
+			NSString *title = TGStripUndrawableScalars(titles[2][index]);
+			[trendingRows addObject:TGSubtitleRow(title,
+					TGStickerPackTrendingDetail(set),
+					^{ [weakSelf offerPack:set]; })];
+		}
 	}
-}
 
-- (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-	return nil;
-}
+	NSMutableArray *emojiRows = [NSMutableArray array];
+	for (NSUInteger index = 0; index < 4; index++){
+		NSString *title = titles[3][index];
+		[emojiRows addObject:TGSubtitleOpenRow(title, nil, ^{
+			[weakSelf openEmojiShelf:index title:title];
+		})];
+	}
 
-- (UITableViewCell *)baseCell:(UITableView *)tableView {
-	static NSString *cellId = @"row";
-	UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:cellId];
-	if (!cell)
-		cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle
-									  reuseIdentifier:cellId];
-	TGTheme *theme = [TGTheme shared];
-	cell.backgroundColor = [theme listBackgroundColour];
-	cell.textLabel.textColor = [theme primaryTextColour];
-	cell.detailTextLabel.textColor = [theme secondaryTextColour];
-	cell.textLabel.font = TGFontRow();
-	cell.detailTextLabel.font = TGFontCaption();
-	cell.accessoryType = UITableViewCellAccessoryNone;
-	return cell;
-}
-
-- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-	UITableViewCell *cell = [self baseCell:tableView];
-	cell.accessoryView = nil;
-	cell.accessoryType = UITableViewCellAccessoryNone;
-	cell.textLabel.textColor = [[TGTheme shared] primaryTextColour];
-	cell.detailTextLabel.text = nil;
-	cell.selectionStyle = UITableViewCellSelectionStyleDefault;
-
-	if (indexPath.section == 0){
-		if (indexPath.row == 0){
-			cell.textLabel.text = @"New Sticker Set";
-			cell.detailTextLabel.text = nil;
-			cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-		} else if (indexPath.row == 1){
-			cell.textLabel.text = @"Search Stickers";
-			cell.detailTextLabel.text = nil;
+	NSMutableArray *shelfRows = [NSMutableArray array];
+	for (NSUInteger index = 0; index < 2; index++){
+		NSArray *list = index == 0 ? _recentStickers : _favoriteStickers;
+		NSString *title = titles[5][index];
+		NSString *detail = TGStickerPacksShelfDetail(list);
+		if (list.count){
+			[shelfRows addObject:TGSubtitleOpenRow(title, detail, ^{
+				[weakSelf showGallery:list title:title
+						empty:TGLocalized(@"No Results")];
+			})];
 		} else {
-			cell.textLabel.text = @"Clear Recent Stickers";
-			cell.detailTextLabel.text = nil;
-			cell.textLabel.textColor = [TGTheme shared].destructiveColour;
+			[shelfRows addObject:TGSubtitleRow(title, detail, nil)];
 		}
-		return cell;
 	}
 
-	if (indexPath.section == 1){
-		if (!_ownedSets.count){
-			cell.textLabel.text = @"No Stickers Found";
-			cell.detailTextLabel.text = nil;
-			cell.accessoryType = UITableViewCellAccessoryNone;
-			cell.selectionStyle = UITableViewCellSelectionStyleNone;
-			return cell;
+	NSMutableArray *archivedRows = [NSMutableArray array];
+	if (!_archivedSets.count){
+		[archivedRows addObject:TGRow(TGKindPlain, titles[6][0])];
+	} else {
+		for (NSUInteger index = 0; index < _archivedSets.count; index++){
+			NSDictionary *set = _archivedSets[index];
+			NSString *title = TGStripUndrawableScalars(titles[6][index]);
+			[archivedRows addObject:TGButtonRow(title,
+					TGStickerPackArchivedDetail(set), TGLocalized(@"Restore"),
+					^{ [weakSelf restorePack:set]; },
+					^{ [weakSelf openPack:set]; })];
 		}
-		NSDictionary *set = _ownedSets[(NSUInteger)indexPath.row];
-		cell.textLabel.text = [set[@"title"] length] ? TGStripUndrawableScalars(set[@"title"]) : @"Stickers";
-		NSString *type = [self typeWord:set[@"stickerType"]];
-		NSUInteger ownedCount = (NSUInteger)[set[@"count"] unsignedIntegerValue];
-		NSString *ownedCountText = TGLocalizedPluralValue(@"%@ sticker", @"%@ stickers",
-				[NSString stringWithFormat:@"%lu", (unsigned long)ownedCount],
-				(NSInteger)ownedCount);
-		cell.detailTextLabel.text = [NSString stringWithFormat:@"%@  ·  %@  ·  %@",
-				set[@"shortName"] ?: @"-", ownedCountText, type];
-		UIButton *archive = [UIButton buttonWithType:UIButtonTypeCustom];
-		archive.frame = CGRectMake(0, 0, TGMetricStoryBubble, TGMetricSearchScopeHeight);
-		archive.titleLabel.font = TGFontCaption();
-		[archive setTitle:@"Archive" forState:UIControlStateNormal];
-		[archive setTitleColor:[[TGTheme shared] accentColour]
-					  forState:UIControlStateNormal];
-		archive.tag = indexPath.row;
-		[archive addTarget:self action:@selector(archivePackTapped:)
-		  forControlEvents:UIControlEventTouchUpInside];
-		cell.accessoryView = archive;
-		cell.accessoryType = UITableViewCellAccessoryNone;
-		return cell;
 	}
 
-	if (indexPath.section == 2){
-		if (!_trendingSets.count){
-			cell.textLabel.text = @"No Results";
-			cell.detailTextLabel.text = nil;
-			cell.accessoryType = UITableViewCellAccessoryNone;
-			cell.selectionStyle = UITableViewCellSelectionStyleNone;
-			return cell;
-		}
-		NSDictionary *set = _trendingSets[(NSUInteger)indexPath.row];
-		cell.textLabel.text = [set[@"title"] length] ? TGStripUndrawableScalars(set[@"title"]) : @"Trending Stickers";
-		NSUInteger trendingCount = (NSUInteger)[set[@"count"] unsignedIntegerValue];
-		NSString *trendingCountText = TGLocalizedPluralValue(@"%@ sticker", @"%@ stickers",
-				[NSString stringWithFormat:@"%lu", (unsigned long)trendingCount],
-				(NSInteger)trendingCount);
-		cell.detailTextLabel.text = [NSString stringWithFormat:@"%@%@",
-				trendingCountText,
-				[set[@"installed"] boolValue] ? @"  ·  installed" : @""];
-		return cell;
-	}
-
-	if (indexPath.section == 5){
-		BOOL recent = indexPath.row == 0;
-		NSArray *list = recent ? _recentStickers : _favoriteStickers;
-		cell.textLabel.text = recent ? @"Recently Used" : @"Favorites";
-		cell.detailTextLabel.text = list.count
-				? TGLocalizedPluralValue(@"%@ sticker", @"%@ stickers", [NSString stringWithFormat:@"%lu", (unsigned long)list.count], (NSInteger)list.count)
-				: @"No Results";
-		cell.accessoryType = list.count ? UITableViewCellAccessoryDisclosureIndicator
-										: UITableViewCellAccessoryNone;
-		cell.selectionStyle = list.count ? UITableViewCellSelectionStyleDefault
-										 : UITableViewCellSelectionStyleNone;
-		return cell;
-	}
-
-	if (indexPath.section == 6){
-		cell.selectionStyle = UITableViewCellSelectionStyleDefault;
-		if (!_archivedSets.count){
-			cell.textLabel.text = @"No Results";
-			cell.detailTextLabel.text = nil;
-			cell.accessoryType = UITableViewCellAccessoryNone;
-			return cell;
-		}
-		NSDictionary *set = _archivedSets[(NSUInteger)indexPath.row];
-		cell.textLabel.text = [set[@"title"] length] ? TGStripUndrawableScalars(set[@"title"]) : @"Archived Stickers";
-		NSUInteger archivedCount = (NSUInteger)[set[@"count"] unsignedIntegerValue];
-		NSString *archivedCountText = TGLocalizedPluralValue(@"%@ sticker", @"%@ stickers",
-				[NSString stringWithFormat:@"%lu", (unsigned long)archivedCount],
-				(NSInteger)archivedCount);
-		cell.detailTextLabel.text = [NSString stringWithFormat:@"%@  ·  %@",
-				set[@"shortName"] ?: @"-", archivedCountText];
-		UIButton *restore = [UIButton buttonWithType:UIButtonTypeCustom];
-		restore.frame = CGRectMake(0, 0, TGMetricStoryBubble, TGMetricSearchScopeHeight);
-		restore.titleLabel.font = TGFontCaption();
-		[restore setTitle:@"Restore" forState:UIControlStateNormal];
-		[restore setTitleColor:[[TGTheme shared] accentColour]
-					  forState:UIControlStateNormal];
-		restore.tag = indexPath.row;
-		[restore addTarget:self action:@selector(restorePackTapped:)
-		  forControlEvents:UIControlEventTouchUpInside];
-		cell.accessoryView = restore;
-		cell.accessoryType = UITableViewCellAccessoryNone;
-		return cell;
-	}
-
-	if (indexPath.section == 3){
-		NSArray *titles = @[@"Add Icons To Profile", @"Add Icons To Replies",
-							@"Background Emoji", @"Search Emoji"];
-		NSArray *notes = @[@"", @"", @"", @""];
-		cell.textLabel.text = titles[(NSUInteger)indexPath.row];
-		cell.detailTextLabel.text = notes[(NSUInteger)indexPath.row];
-		cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-		return cell;
-	}
-
-	cell.textLabel.text = @"Stickers";
-	cell.detailTextLabel.text = nil;
-	cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-	return cell;
-}
-
-- (NSString *)typeWord:(NSString *)type {
-	if ([type isEqualToString:@"stickerTypeCustomEmoji"] ||
-		[type isEqualToString:@"customEmoji"])
-		return @"custom emoji";
-	if ([type isEqualToString:@"stickerTypeMask"] || [type isEqualToString:@"mask"])
-		return @"masks";
-	return @"regular";
+	self.sections = @[
+		TGSection(nil, nil, topRows),
+		TGSection(TGLocalized(@"My Stickers"), nil, ownedRows),
+		TGSection(TGLocalized(@"Trending"), nil, trendingRows),
+		TGSection(TGLocalized(@"Custom Emoji"), nil, emojiRows),
+		TGSection(TGLocalized(@"Stickers"), nil, @[
+			TGSubtitleOpenRow(titles[4][0], nil,
+					^{ [weakSelf loadGreetingStickers]; }),
+		]),
+		TGSection(TGLocalized(@"Favorites"), nil, shelfRows),
+		TGSection(TGLocalized(@"Archived"), nil, archivedRows),
+	];
+	[self reloadRows];
 }
 
 #pragma mark - choosing
@@ -331,6 +220,7 @@
 		if (item[@"id"])
 			[ids addObject:item[@"id"]];
 	[[TGClient shared] reorderInstalledStickerSets:ids];
+	[self rebuildSections];
 }
 
 - (void)tableView:(UITableView *)tableView
@@ -346,92 +236,26 @@
 	[self reloadArchived];
 }
 
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	if (indexPath.section == 6){
-		// An archived pack opens like any other; Restore is the button beside it.
-		if (indexPath.row >= (NSInteger)_archivedSets.count)
-			return;
-		NSDictionary *set = _archivedSets[(NSUInteger)indexPath.row];
-		TGStickerEditorViewController *editor =
-				[[TGStickerEditorViewController alloc] init];
-		editor.setId = [set[@"id"] longLongValue];
-		editor.setName = set[@"shortName"];
-		editor.setTitle = set[@"title"];
-		editor.stickerType = set[@"stickerType"];
-		editor.hidesBottomBarWhenPushed = YES;
-		[self.navigationController pushViewController:editor animated:YES];
-		return;
-	}
-	if (indexPath.section == 1 && !_ownedSets.count)
-		return;
-	if (indexPath.section == 2 && !_trendingSets.count)
-		return;
-	if (indexPath.section == 5){
-		BOOL recent = indexPath.row == 0;
-		NSArray *list = recent ? _recentStickers : _favoriteStickers;
-		if (!list.count)
-			return;
-	}
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
+- (void)openPack:(NSDictionary *)set {
+	TGStickerEditorViewController *editor =
+			[[TGStickerEditorViewController alloc] init];
+	editor.setId = [set[@"id"] longLongValue];
+	editor.setName = set[@"shortName"];
+	editor.setTitle = set[@"title"];
+	editor.stickerType = set[@"stickerType"];
+	editor.hidesBottomBarWhenPushed = YES;
+	[self.navigationController pushViewController:editor animated:YES];
+}
 
-	if (indexPath.section == 0){
-		if (indexPath.row == 0)
-			[self openNewPack];
-		else if (indexPath.row == 1)
-			[self askForShortName];
-		else
-			[self confirmClearRecent];
-		return;
-	}
-
-	if (indexPath.section == 1){
-		if (!_ownedSets.count)
-			return;
-		NSDictionary *set = _ownedSets[(NSUInteger)indexPath.row];
-		TGStickerEditorViewController *editor =
-				[[TGStickerEditorViewController alloc] init];
-		editor.setId = [set[@"id"] longLongValue];
-		editor.setName = set[@"shortName"];
-		editor.setTitle = set[@"title"];
-		editor.stickerType = set[@"stickerType"];
-		editor.hidesBottomBarWhenPushed = YES;
-		[self.navigationController pushViewController:editor animated:YES];
-		return;
-	}
-
-	if (indexPath.section == 2){
-		if (!_trendingSets.count)
-			return;
-		[self offerPack:_trendingSets[(NSUInteger)indexPath.row]];
-		return;
-	}
-
-	if (indexPath.section == 5){
-		BOOL recent = indexPath.row == 0;
-		NSArray *list = recent ? _recentStickers : _favoriteStickers;
-		if (!list.count)
-			return;
-		[self showGallery:list title:recent ? @"Recently Used" : @"Favorites"
-				empty:@"No Results"];
-		return;
-	}
-
-	if (indexPath.section == 6)
-		return;
-
-	if (indexPath.section == 3){
-		if (indexPath.row == 0)
-			[self loadDefaultEmojiShelf:@"Add Icons To Profile" kind:0];
-		else if (indexPath.row == 1)
-			[self loadDefaultEmojiShelf:@"Add Icons To Replies" kind:1];
-		else if (indexPath.row == 2)
-			[self loadDefaultEmojiShelf:@"Background Emoji" kind:2];
-		else
-			[self askForCustomEmojiIds];
-		return;
-	}
-
-	[self loadGreetingStickers];
+- (void)openEmojiShelf:(NSInteger)kind title:(NSString *)title {
+	if (kind == 0)
+		[self loadDefaultEmojiShelf:title kind:0];
+	else if (kind == 1)
+		[self loadDefaultEmojiShelf:title kind:1];
+	else if (kind == 2)
+		[self loadDefaultEmojiShelf:title kind:2];
+	else
+		[self askForCustomEmojiIds];
 }
 
 #pragma mark - actions
@@ -517,15 +341,11 @@
 	}];
 }
 
-- (void)archivePackTapped:(UIButton *)button {
-	NSInteger row = button.tag;
-	if (row < 0 || row >= (NSInteger)_ownedSets.count)
-		return;
-	NSDictionary *set = _ownedSets[(NSUInteger)row];
+- (void)archivePack:(NSDictionary *)set {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:@"Archive"
-						title:set[@"title"] ?: @"Archive"
-					   action:@"Archive"
+	[TGAlertSheet showConfirm:TGLocalized(@"Archive")
+						title:set[@"title"] ?: TGLocalized(@"Archive")
+					   action:TGLocalized(@"Archive")
 				  destructive:NO
 					   inView:self.view
 					onConfirm:^{
@@ -538,16 +358,13 @@
 	}];
 }
 
-- (void)restorePackTapped:(UIButton *)button {
-	NSInteger row = button.tag;
-	if (row < 0 || row >= (NSInteger)_archivedSets.count)
-		return;
-	NSDictionary *set = _archivedSets[(NSUInteger)row];
+- (void)restorePack:(NSDictionary *)set {
 	[[TGClient shared] setStickerSet:set[@"id"] installed:YES archived:NO];
 	[self reloadOwnedPacks];
 	[self reloadArchived];
-	[TGAlertSheet showMessage:@"Stickers Added"
-						  title:set[@"title"] ?: @"Archived Stickers" inView:self.view];
+	[TGAlertSheet showMessage:TGLocalized(@"Stickers Added")
+						  title:set[@"title"] ?: TGLocalized(@"Archived Stickers")
+						 inView:self.view];
 }
 
 - (void)offerPack:(NSDictionary *)set {

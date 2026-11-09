@@ -1,6 +1,8 @@
+#import "TGBubbleBackImage.h"
 #import "TGPerf.h"
 #import "TGLocalization.h"
 #import "TGChatViewControllerInternal.h"
+#import "TGMessageCellFactory.h"
 #import "TGNameWithStatus.h"
 #import <QuartzCore/QuartzCore.h>
 #import <objc/runtime.h>
@@ -45,11 +47,6 @@ static char kTGReactionChipInfoKey;
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-	static NSString *reuse = @"TGBubbleCell";
-	TGBubbleCell *cell = [tableView dequeueReusableCellWithIdentifier:reuse];
-	if (!cell)
-		cell = [[TGBubbleCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:reuse];
-
 	NSDictionary *m = self.messages[indexPath.row];
 	BOOL mine = [m[@"outgoing"] boolValue];
 	// One row has a sixtieth of a second if the scroll is to hold 60 fps, and
@@ -59,7 +56,24 @@ static char kTGReactionChipInfoKey;
 	double cellStart = TGPerfNow();
 	TGMessageLayout *layout = [self layoutForMessage:m atRow:indexPath.row];
 
-	[cell resetForReuse];
+	// The shared factory owns the elements: bubble, service plate, day header
+	// and unread band. It resets a reused cell and places the base from the
+	// cached layout; a service element is complete and returns here.
+	TGMessageCellKind kind = TGMessageCellKindForMessage(m, layout);
+	// A service line names the sender and, for a pin, quotes the message;
+	// both can resolve after the plate was measured. Refresh the words here,
+	// as the old in-screen service branch did, without re-measuring frames.
+	if (layout.isService && !layout.isUnreadSeparator)
+		layout.serviceText = [self serviceLineForMessage:m];
+	UITableViewCell *ready = [TGMessageCellFactory cellForTableView:tableView
+															 message:m
+															  layout:layout];
+	if (kind != TGMessageCellKindBubble) {
+		TGPerfReport("cell", [m[@"kind"] UTF8String], cellStart, 33.0);
+		return ready;
+	}
+	TGBubbleCell *cell = (TGBubbleCell *)ready;
+
 	// A row that is not the standard bubble path (service, audio, round note)
 	// still inherits the previous message's chips unless they are hidden
 	// before the branch returns.
@@ -87,7 +101,9 @@ static char kTGReactionChipInfoKey;
 		cell.sender.frame = layout.senderFrame;
 	}
 
-	// 2. Service cells (service messages, separators, polls, docs, contacts, locations)
+	// 2. Card-like bubbles (polls, checklists, documents, contacts, locations).
+	// Pure service events, day headers and the unread band never reach here:
+	// the factory returned their element already.
 	if ([self configureServiceCell:cell message:m layout:layout isMine:mine indexPath:indexPath]) {
 		[self placeViewsEyeIn:cell message:m layout:layout mine:mine];
 		UITableViewCell *done = [self finalizeCell:cell message:m layout:layout isMine:mine];
@@ -103,18 +119,8 @@ static char kTGReactionChipInfoKey;
 		return done;
 	}
 
-	cell.bubble.frame = layout.bubbleFrame;
-
 	TGTheme *theme = [TGTheme shared];
-	UIColor *fill = mine ? [theme bubbleMineColour] : [theme bubbleTheirsColour];
-	cell.bubble.backgroundColor = layout.isSticker ? [UIColor clearColor] : fill;
-
-	cell.tail.hidden = YES;
-	cell.bubble.layer.borderWidth = TGMetricBorderNone;
-	cell.bubble.layer.borderColor = [UIColor clearColor].CGColor;
-	cell.bubble.layer.cornerRadius = [theme bubbleCornerRadius];
 	UIColor *bodyColor = mine ? [theme bubbleMineTextColour] : [theme bubbleTheirsTextColour];
-	cell.body.textColor = bodyColor;
 
 	// 4. Round video notes or animated stickers
 	if ([self configureRoundOrStickerCell:cell message:m layout:layout isMine:mine]) {

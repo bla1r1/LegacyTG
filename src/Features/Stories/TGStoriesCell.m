@@ -2,7 +2,7 @@
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGIcons.h"
-#import "TGMemberAvatarStore.h"
+#import "TGPeerStore.h"
 #import <QuartzCore/QuartzCore.h>
 
 /// The strip scrolls; the cell does not. Ten bubbles fit the first screen and
@@ -84,8 +84,11 @@
 									 colourId:[row[@"chatId"] longLongValue]];
 		}
 		BOOL unread = [row[@"unread"] boolValue];
+		int64_t peerId = [row[@"userId"] longLongValue];
+		if (!peerId)
+			peerId = [row[@"chatId"] longLongValue];
 		[self addBubbleAt:x title:title ring:unread ? @YES : @NO image:image
-					userId:[row[@"userId"] longLongValue] tag:i];
+					userId:peerId tag:i];
 		x += TGMetricStoryBubble + TGMetricStoryBubbleGap;
 	}
 
@@ -108,14 +111,11 @@
 	[bubble addSubview:picture];
 	int64_t userId = [self.ownStory[@"userId"] longLongValue];
 	if (!self.ownStory[@"avatarImage"] && userId){
-		[[TGMemberAvatarStore shared] loadAvatarForUser:userId
-												   side:TGMetricStoryAvatar
-											 completion:^(UIImage *image){
-			if (!image)
-				return;
-			dispatch_async(dispatch_get_main_queue(), ^{
+		[[TGPeerStore shared] loadAvatarForPeer:userId
+										   side:TGMetricStoryAvatar
+									 completion:^(UIImage *image){
+			if (image)
 				picture.image = image;
-			});
 		}];
 	}
 
@@ -204,14 +204,11 @@
 	picture.backgroundColor = [[TGTheme shared] fileTileColour];
 	[bubble addSubview:picture];
 	if (!image && userId){
-		[[TGMemberAvatarStore shared] loadAvatarForUser:userId
-												   side:TGMetricStoryAvatar
-											 completion:^(UIImage *avatar){
-			if (!avatar)
-				return;
-			dispatch_async(dispatch_get_main_queue(), ^{
+		[[TGPeerStore shared] loadAvatarForPeer:userId
+										   side:TGMetricStoryAvatar
+									 completion:^(UIImage *avatar){
+			if (avatar)
 				picture.image = avatar;
-			});
 		}];
 	}
 

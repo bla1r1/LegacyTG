@@ -7,9 +7,9 @@
 // the server is what the screen shows.
 //
 #import <UIKit/UIKit.h>
-#import "TGListViewController.h"
+#import "TGRowsViewController.h"
 
-@interface TGCallMessagesViewController : TGListViewController
+@interface TGCallMessagesViewController : TGRowsViewController
 
 @property (nonatomic, assign) int64_t chatId;
 @property (nonatomic, assign) int32_t groupCallId;

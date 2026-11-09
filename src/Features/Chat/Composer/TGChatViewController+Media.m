@@ -4,6 +4,7 @@
 #import "TGCapabilities.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
+#import "TGPeerStore.h"
 #import "TGDevShowcase.h"
 
 @implementation TGChatViewController (Media)
@@ -313,7 +314,7 @@
 }
 
 /// Cached initials until the real photo arrives; drawing it every row would
-/// re-download and re-decode on every scroll.
+/// re-download and re-decode on every scroll. TGPeerStore owns both halves.
 - (UIImage *)avatarForUser:(int64_t)userId name:(NSString *)name {
 	NSNumber *key = @(userId);
 	UIImage *cached = self.senderAvatars[key];
@@ -330,6 +331,13 @@
 	}
 #endif
 
+	UIImage *stored = [[TGPeerStore shared] cachedAvatarForPeer:userId
+														  side:kAvatarSide];
+	if (stored){
+		self.senderAvatars[key] = stored;
+		return stored;
+	}
+
 	NSString *initials = [TGIcons initialsForTitle:name];
 	UIImage *placeholder = [TGIcons avatarWithInitials:initials
 												  size:kAvatarSide
@@ -341,57 +349,18 @@
 	[self.senderAvatarsRequested addObject:key];
 
 	__weak typeof(self) weakSelf = self;
-	void (^fetch)(NSNumber *) = ^(NSNumber *fileId){
-		if (!fileId)
+	[[TGPeerStore shared] loadAvatarForPeer:userId side:kAvatarSide
+								 completion:^(UIImage *photo){
+		TGChatViewController *me = weakSelf;
+		if (!me)
 			return;
-		CGFloat screenScale = [UIScreen mainScreen].scale;
-		[[TGClient shared] downloadFile:fileId.integerValue
-							   priority:TGDownloadPriorityAvatar
-							 completion:^(NSString *path){
-			if (!path.length) {
-				dispatch_async(dispatch_get_main_queue(), ^{
-					[weakSelf.senderAvatarsRequested removeObject:key];
-				});
-				return;
-			}
-			dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
-				// Same pooled-gated decode as every other avatar path: a busy
-				// group's flood used to ride this block pool-free (B15).
-				dispatch_semaphore_wait(TGIconsDecodeGate(), DISPATCH_TIME_FOREVER);
-				__block UIImage *photo = nil;
-				@autoreleasepool {
-					photo = [TGIcons decodedImageAtPath:path
-											fittingSize:CGSizeMake(kAvatarSide, kAvatarSide)
-												   fill:YES scale:screenScale];
-				}
-				dispatch_semaphore_signal(TGIconsDecodeGate());
-				if (!photo) {
-					dispatch_async(dispatch_get_main_queue(), ^{
-						[weakSelf.senderAvatarsRequested removeObject:key];
-					});
-					return;
-				}
-				dispatch_async(dispatch_get_main_queue(), ^{
-					weakSelf.senderAvatars[key] = photo;
-					[weakSelf.senderAvatarsRequested removeObject:key];
-					// One reload per arriving avatar loaded the whole table once
-					// per participant in a busy group.
-					[weakSelf reloadTableDebounced];
-				});
-			});
-		}];
-	};
-
-	NSNumber *cachedFile = [[TGClient shared] photoFileIdForUserId:userId];
-	if (cachedFile){
-		fetch(cachedFile);
-		return placeholder;
-	}
-
-	// TDLib only volunteers updateUser for people it has reason to send; the
-	// rest of a group's members have to be asked for.
-	[[TGClient shared] userInfo:userId completion:^(NSDictionary *user){
-		fetch(user[@"profile_photo"][@"small"][@"id"]);
+		[me.senderAvatarsRequested removeObject:key];
+		if (!photo)
+			return;
+		me.senderAvatars[key] = photo;
+		// One reload per arriving avatar loaded the whole table once per
+		// participant in a busy group; the debounce keeps that to a tick.
+		[me reloadTableDebounced];
 	}];
 	return placeholder;
 }

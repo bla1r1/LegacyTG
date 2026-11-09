@@ -40,6 +40,14 @@ static NSArray *TGPacksFrom(NSDictionary *target) {
 
 /// The row title for a blocked user or chat answer; a deleted account has
 /// no name at all and says so, as official does.
+BOOL TGBlockedSenderIsDeleted(NSDictionary *answer) {
+	if (![answer isKindOfClass:NSDictionary.class])
+		return NO;
+	if ([answer[@"@type"] isEqualToString:@"user"])
+		return [answer[@"type"][@"@type"] isEqualToString:@"userTypeDeleted"];
+	return NO;
+}
+
 NSString *TGBlockedSenderName(NSDictionary *answer) {
 	if ([answer[@"@type"] isEqualToString:@"chat"])
 		return [answer[@"title"] length] ? answer[@"title"] : TGLocalized(@"Deleted Account");
@@ -340,43 +348,41 @@ NSString *TGBlockedSenderName(NSDictionary *answer) {
 		@"limit"       : @(100),
 	} completion:^(NSDictionary *result){
 		TGClient *me = weakSelf;
-		NSMutableArray *out = [NSMutableArray array];
-		NSMutableArray *missing = [NSMutableArray array];
-		for (NSDictionary *sender in result[@"senders"]){
-			// A blocked MessageSender is either a user or a chat/channel;
-			// keeping only user_id dropped every blocked channel.
-			NSNumber *userId = sender[@"user_id"];
-			NSNumber *chatId = sender[@"chat_id"];
-			NSNumber *senderId = userId ?: chatId;
-			if (!senderId)
-				continue;
-			NSString *name = userId ? [me nameForUserId:userId.longLongValue]
-					: me.chatsById[chatId][@"title"];
-			NSMutableDictionary *row = [@{@"id" : senderId,
-					@"name" : name ?: @""} mutableCopy];
-			[out addObject:row];
-			if (!name.length)
-				[missing addObject:row];
+		NSArray *senders = [result[@"senders"] isKindOfClass:NSArray.class]
+				? result[@"senders"] : @[];
+		// Every sender is asked for: the cached name alone could not tell a
+		// live account from a deleted one, and the list filled with "Deleted
+		// Account" rows nobody can act on. The full record also carries the
+		// photo the row draws.
+		NSMutableArray *rows = [NSMutableArray array];
+		for (NSDictionary *sender in senders){
+			NSNumber *senderId = sender[@"user_id"] ?: sender[@"chat_id"];
+			if (senderId)
+				[rows addObject:[@{@"id" : senderId} mutableCopy]];
 		}
-		// Users this session has not seen came back as blank rows; ask for
-		// each before answering, so the list never shows an empty line.
-		__block NSInteger pending = (NSInteger)missing.count;
+		__block NSInteger pending = (NSInteger)rows.count;
 		void (^finish)(void) = ^{
-			if (--pending <= 0 && completion)
-				completion(out);
+			if (--pending > 0 || !completion)
+				return;
+			NSMutableArray *live = [NSMutableArray array];
+			for (NSMutableDictionary *row in rows)
+				if (![row[@"deleted"] boolValue])
+					[live addObject:row];
+			completion(live);
 		};
-		if (!missing.count){
+		if (!rows.count){
 			pending = 1;
 			finish();
 			return;
 		}
-		for (NSMutableDictionary *row in missing){
+		for (NSMutableDictionary *row in rows){
 			int64_t senderId = [row[@"id"] longLongValue];
 			NSDictionary *ask = senderId < 0
 					? @{@"@type" : @"getChat", @"chat_id" : @(senderId)}
 					: @{@"@type" : @"getUser", @"user_id" : @(senderId)};
 			[me request:ask completion:^(NSDictionary *answer){
 				row[@"name"] = TGBlockedSenderName(answer);
+				row[@"deleted"] = @(TGBlockedSenderIsDeleted(answer));
 				if ([answer[@"@type"] isEqualToString:@"user"])
 					[weakSelf cacheProfilePhoto:answer];
 				finish();

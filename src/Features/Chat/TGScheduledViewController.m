@@ -14,7 +14,7 @@
 #import "TGTheme.h"
 #import "TGUIFormat.h"
 #import "TGStyle.h"
-#import "TGTableViewCell.h"
+#import "TGRows.h"
 
 @interface TGScheduledViewController ()
 @property (nonatomic, strong) NSArray *messages;
@@ -29,13 +29,27 @@
 	[super viewDidLoad];
 
 
-	self.title = @"Scheduled Messages";
+	self.title = TGLocalized(@"Scheduled Messages");
 	self.messages = @[];
-	self.tableView.rowHeight = TGMetricPersonRow;
 	[self applyTheme];
-
 	[self reload];
+}
 
+- (void)rebuildSections {
+	NSArray *models = TGScheduledRowModels(self.messages,
+			[[NSDate date] timeIntervalSince1970]);
+	NSMutableArray *rows = [NSMutableArray arrayWithCapacity:models.count];
+	__weak typeof(self) weakSelf = self;
+	for (NSUInteger index = 0; index < models.count; index++){
+		NSDictionary *model = models[index];
+		NSMutableDictionary *row = [TGSubtitleRow(model[@"title"],
+				model[@"detail"], ^{ [weakSelf showActionsForRow:index]; })
+				mutableCopy];
+		row[TGRowHeight] = @(TGMetricPersonRow);
+		[rows addObject:row];
+	}
+	self.sections = @[TGSection(nil, nil, rows)];
+	[self reloadRows];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -56,16 +70,16 @@
 			return;
 		me.messages = messages ?: @[];
 		[me updateEmptyView];
-		[me.tableView reloadData];
+		[me rebuildSections];
 		NSLog(@"TDLIB SCHEDULED: %lu", (unsigned long)messages.count);
 	}];
 }
 
 - (void)applyTheme {
+	[super applyTheme];
 	TGTheme *theme = [TGTheme shared];
 	self.tableView.backgroundColor = [theme listBackgroundColour];
 	self.tableView.separatorColor = [theme separatorColour];
-	[theme styleNavigationBar:self.navigationController.navigationBar];
 }
 
 - (void)updateEmptyView {
@@ -74,69 +88,31 @@
 		return;
 	}
 	[self showEmptyWithImage:[TGIcons emptySearchIllustration]
-	                   title:@"No scheduled messages here yet..."
+	                   title:TGLocalized(@"No scheduled messages here yet...")
 	                subtitle:nil];
 }
 
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-	return self.messages.count;
-}
-
-- (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-	return nil;
-}
-
-- (void)tableView:(UITableView *)tableView willDisplayFooterView:(UIView *)view forSection:(NSInteger)section {
-	if ([view isKindOfClass:[UITableViewHeaderFooterView class]]) {
-		UITableViewHeaderFooterView *footer = (UITableViewHeaderFooterView *)view;
-		footer.textLabel.font = TGFontCaption();
-		footer.textLabel.textColor = [[TGTheme shared] sectionHeaderColour];
-		footer.contentView.backgroundColor = [[TGTheme shared] listBackgroundColour];
-	}
-}
-
-- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-	static NSString *reuse = @"TGScheduledCell";
-	TGTableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:reuse];
-	if (!cell)
-		cell = [TGTableViewCell cellWithStyle:TGTableCellKindSubtitle reuseIdentifier:reuse];
-
-	NSDictionary *m = self.messages[indexPath.row];
-	NSString *text = m[@"text"];
-	cell.title = text.length ? text : @"Message";
-
-	// Telegram names the day and the clock first, then how long that is.
-	// "in 2 h 15 min" alone never says when it lands.
-	NSTimeInterval stamp = [m[@"date"] doubleValue];
-	NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
-	NSString *when = TGUIFormatScheduledWhen(stamp, now);
-	NSString *until = TGUIFormatScheduledRelative(stamp, now);
-	cell.detail = when.length
-			? (until.length ? [NSString stringWithFormat:@"%@  ·  %@", when, until] : when)
-			: until;
-
-	return cell;
-}
-
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	if (indexPath.row >= (NSInteger)self.messages.count)
+/// The menu a waiting message answers with: send it now, move its time, or
+/// take it away.
+- (void)showActionsForRow:(NSUInteger)row {
+	if (row >= self.messages.count)
 		return;
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
-
-	NSDictionary *m = self.messages[indexPath.row];
+	NSDictionary *m = self.messages[row];
 	int64_t messageId = [m[@"id"] longLongValue];
-	NSString *what = m[@"text"] ?: @"Message";
+	NSString *what = m[@"text"] ?: TGLocalized(@"Message");
 	__weak typeof(self) weakSelf = self;
 
 	NSMutableArray *choices = [NSMutableArray arrayWithObjects:
-			@"Send Now", @"Edit Time", @"Delete", nil];
+			TGLocalized(@"Send Now"), TGLocalized(@"Edit Time"),
+			TGLocalized(@"Delete"), nil];
 	[TGAlertSheet showChoices:choices
 						title:what.length > 60 ? [what substringToIndex:60] : what
 			 destructiveIndex:2
 					   inView:self.navigationController.view ?: self.view
 					 onChoice:^(NSInteger index){
 		void (^done)(BOOL) = ^(BOOL ok){
-			NSString *say = ok ? @"Done" : @"An error occurred.";
+			NSString *say = ok ? TGLocalized(@"Done")
+					: TGLocalized(@"An error occurred.");
 			[TGAlertSheet showMessage:say title:nil inView:weakSelf.view];
 			[weakSelf reload];
 		};
@@ -147,8 +123,8 @@
 			[weakSelf pickDateFor:messageId];
 		else {
 			[TGAlertSheet showConfirm:nil
-								title:@"Delete"
-							   action:@"Delete"
+								title:TGLocalized(@"Delete")
+							   action:TGLocalized(@"Delete")
 						  destructive:YES
 							   inView:weakSelf.navigationController.view ?: weakSelf.view
 						   onConfirm:^{
@@ -175,8 +151,8 @@
 	int64_t messageId = [self.messages[(NSUInteger)indexPath.row][@"id"] longLongValue];
 	__weak typeof(self) weakSelf = self;
 	[TGAlertSheet showConfirm:nil
-						title:@"Delete"
-					   action:@"Delete"
+						title:TGLocalized(@"Delete")
+					   action:TGLocalized(@"Delete")
 				  destructive:YES
 					   inView:self.navigationController.view ?: self.view
 				   onConfirm:^{
@@ -204,11 +180,13 @@
 	UIToolbar *bar = [[UIToolbar alloc] initWithFrame:
 			CGRectMake(0, 0, card.bounds.size.width, kBar)];
 	bar.items = @[
-		[[UIBarButtonItem alloc] initWithTitle:@"Cancel" style:UIBarButtonItemStylePlain
+		[[UIBarButtonItem alloc] initWithTitle:TGLocalized(@"Cancel")
+				style:UIBarButtonItemStylePlain
 				target:self action:@selector(sheetDismissed)],
 		[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace
 				target:nil action:nil],
-		[[UIBarButtonItem alloc] initWithTitle:@"Schedule" style:UIBarButtonItemStyleDone
+		[[UIBarButtonItem alloc] initWithTitle:TGLocalized(@"Schedule")
+				style:UIBarButtonItemStyleDone
 				target:self action:@selector(sheetCommitted)],
 	];
 	[card addSubview:bar];
@@ -234,7 +212,8 @@
 							   forMessage:self.pickerMessageId
 								   inChat:self.chatId
 							   completion:^(BOOL ok){
-		NSString *say = ok ? @"Message Scheduled" : @"An error occurred.";
+		NSString *say = ok ? TGLocalized(@"Message Scheduled")
+				: TGLocalized(@"An error occurred.");
 		[TGAlertSheet showMessage:say title:nil inView:weakSelf.view];
 		[weakSelf reload];
 	}];

@@ -36,6 +36,15 @@
 
 /// Vertical celestial blue for your own skeuomorphic bubble, with deep blue in Night.
 - (NSArray *)skeuoBubbleMineGradientColours {
+	// An imported or emoji theme may carry a gradient as its outgoing fill;
+	// it is the bubble, not a decoration, so it wins over the built-in run.
+	NSArray *imported = [self importedColour:@"bubbleMineGradient"];
+	if (imported.count > 1){
+		NSMutableArray *cg = [NSMutableArray arrayWithCapacity:imported.count];
+		for (UIColor *colour in imported)
+			[cg addObject:(__bridge id)colour.CGColor];
+		return cg;
+	}
 	if ([self isDark]) {
 		CGColorRef c = [self bubbleMineColour].CGColor;
 		return @[ (__bridge id)c, (__bridge id)c ];

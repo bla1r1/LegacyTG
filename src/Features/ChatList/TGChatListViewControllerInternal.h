@@ -11,8 +11,8 @@
 #import "TGPopupMenu.h"
 #import "TGSnackbar.h"
 #import "TGSearchViewController.h"
-#import "TGChatCell.h"
-#import "TGStoriesCell.h"
+#import "TGChatRowCell.h"
+#import "TGStoryStripRowCell.h"
 #import "TGEmptyView.h"
 #import "TGImageLruCache.h"
 #import <QuartzCore/QuartzCore.h>
@@ -43,7 +43,7 @@
 /// The story strip is a pull-down sheet: collapsed into the title avatar,
 /// expanded above the search field only while somebody else has a story.
 @property (nonatomic, assign) BOOL storiesExpanded;
-@property (nonatomic, strong) TGStoriesCell *headerStoriesCell;
+@property (nonatomic, strong) TGStoryStripRowCell *headerStoriesCell;
 @property (nonatomic, strong) UILabel *listSubtitleLabel;
 @property (nonatomic, copy) NSString *connectionLine;
 - (void)buildListTitleView;
@@ -54,7 +54,7 @@ UIImage *TGChatListLockIcon(CGFloat side, UIColor *colour);
 @property (nonatomic, strong) NSDictionary *actionChat; // long-pressed row
 /// On iOS below 8 the table cannot draw row actions, so this screen swipes
 /// one row itself. The cell is weak: the reuse pool may outlive a reload.
-@property (nonatomic, weak) TGChatCell *swipeActionsCell;
+@property (nonatomic, weak) TGChatRowCell *swipeActionsCell;
 @property (nonatomic, strong) NSDictionary *swipeActionsChat;
 @property (nonatomic, strong) UIPanGestureRecognizer *swipeActionsPan;
 /// The tap that closed a row must not also select the row and open the chat.
@@ -140,7 +140,7 @@ UIImage *TGChatListLockIcon(CGFloat side, UIColor *colour);
 - (void)openArchive;
 - (void)fetchMissingAvatars;
 - (NSArray *)visibleChats;
-- (void)configureStoriesCell:(TGStoriesCell *)strip;
+- (void)configureStoriesCell:(TGStoryStripRowCell *)strip;
 - (void)reloadVisibleRows;
 - (void)hideHeaderAboveFrom:(CGFloat)previousHeight;
 

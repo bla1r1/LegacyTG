@@ -86,6 +86,7 @@ already exist.
 | M42 Landscape and iPad | `deferred` | Portrait iPhone layout only; no iPad or landscape pass. |
 | M43 Platform delivery and device coverage | `partial` | iOS 6 device run, 4-inch check, background fetch, crash reporting, arm64 `libtdjson`. Release build script done. |
 | M44 Message detail and unread TDLib fields | `partial` | Rich-message blocks, author signature, view/forward counts, gift counts, service-action buttons. Read summary done. |
+| M45 Updates, changelog and usage | `planned` | Update check through our bot, official update screen with the changelog, usage counts by version and device, Cydia repo. |
 
 ## M20: Payments, Stars and gifts
 
@@ -566,3 +567,73 @@ Buttons inside rich messages, Poll option media, Signed gift note, AI summary
 block, DateTime entity; `channels.md` — Post author signature, Post
 statistics on the bubble, Forward count; `chat.md` — Message Info; old
 section 8 — Data TDLib sends that no screen shows.
+
+## M45: Updates, changelog and usage
+
+Users install LegacyTG from GitHub or by hand, so nobody learns about a new
+build and we do not know how many people run which version. Channel views
+do not answer that: they count readers, not installs. The app asks our bot
+instead, over MTProto, so the old root certificates of iOS 6-9 do not
+matter.
+
+How it works. Once a day, and on launch when the last check is older than
+that, the app resolves the bot with `searchPublicChat` and calls
+`getInlineQueryResults` with the bot as the target, the account's own Saved
+Messages as the chat and the query below. Nothing is sent to any chat. The
+bot records the ping and answers with the latest release.
+
+Query (one line, space-separated `key=value`, max 256 bytes):
+`lt1 v=<CFBundleShortVersionString> b=<CFBundleVersion> ios=<systemVersion>
+dev=<hw.machine> tier=<vintage|legacy|modern|full> jb=<0|1> lang=<pack id>
+stats=<0|1>`. `lt1` is the protocol version.
+
+Answer: `is_personal`, `cache_time` 0, up to two `article` results.
+- `id` `update`: present when a newer build exists. `title` is the version
+  text ("1.3"), `description` is one-line JSON: `{"v":"1.3","b":45,
+  "min_ios":"6.0","blocking":false,"ipa":"<GitHub asset URL>",
+  "cydia":"cydia://package/org.legacy.itg","notes_b":44}`.
+- `id` `notes`: `description` is the changelog text for every build newer
+  than the client's `b`, newest first, plain text with `\n`, at most 3500
+  characters; older entries are cut whole.
+No results means up to date. Any error is silent and retried next day.
+
+The bot. A Cloudflare Worker, kept outside this repository with the
+owner (`LegacyTG-update-bot`): the Telegram webhook
+answers `inline_query`, reads the latest GitHub release of
+`bla1r1/iTgLegacy` (cached 10 minutes) and `CHANGELOG.md` from the same
+tag, and writes one row per user per day to D1 when `stats=1`:
+`day, uid_hash, v, b, ios, dev, tier, jb, lang`. `uid_hash` is
+SHA-256(secret salt + Telegram user id); the id itself is never stored.
+`stats=0` still gets the update answer and writes nothing. `/stats` from
+the owner's account returns daily and weekly users, by version, iOS
+version, device and tier.
+
+The app.
+- [ ] `planned` `TGUpdateStore` in `src/Core/Stores`: the daily check, the
+  query above, parsing the two results, the skipped build in defaults.
+- [ ] `planned` The official update screen (`UpdateInfoController.swift`,
+  presented from `ApplicationContext.swift:589-597`): modal, title
+  "Telegram Update" style with our name, app icon, "LegacyTG %@", the
+  changelog text, "Update" button, "Skip" on the left unless `blocking`.
+  Update opens `cydia` on a jailbroken device, otherwise the `ipa` URL.
+- [ ] `planned` A switch in Privacy and Security, "Send anonymous usage
+  statistics", on by default, with a footer that says what is sent. Off
+  sends `stats=0`.
+- [ ] `planned` Dev route `itglegacy://updatecheck` forcing a check.
+
+Releases.
+- [ ] `planned` `CHANGELOG.md` at the root, one section per build
+  (`## 1.2 (42) - 2026-11-20`), the single source for GitHub release
+  notes, the Cydia depiction and the bot's `notes`.
+- [ ] `planned` Cydia repo on GitHub Pages, its scripts kept outside this
+  repository with the owner (`LegacyTG-cydia`): `scripts/build_deb.sh` packs
+  `LegacyTG.app` into `/Applications` with `uicache` in `postinst`;
+  `scripts/cydia_repo.py` writes `Packages`, `Packages.bz2`, `Release` and
+  a depiction page from `CHANGELOG.md`.
+
+**Blocked by:** a bot username and its token from BotFather (inline mode
+on), a Cloudflare account for the Worker and D1, and GitHub Pages for the
+repo.
+
+**Closes:** nothing in `status/` yet; adds the delivery rows to M43.
+

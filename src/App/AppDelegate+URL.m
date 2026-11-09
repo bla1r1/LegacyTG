@@ -9,6 +9,7 @@ static const CGFloat kIconDumpSide = 52.0f;
 #import "TGSnackbar.h"
 #import "TGSearchViewController.h"
 #import "TGDeviceViewController.h"
+#import "TGBackgroundsViewController.h"
 #import "TGSettingsViewController.h"
 #import "TGCall.h"
 #import "TGCallViewController.h"
@@ -31,6 +32,9 @@ static const CGFloat kIconDumpSide = 52.0f;
 #import "TGIcons.h"
 #import "TGDevBench.h"
 #import "TGLoginViewController.h"
+#import "TGUpdateStore.h"
+#import "TGUpdateInfoViewController.h"
+#import "TGNavController.h"
 #import <QuartzCore/QuartzCore.h>
 #include <dlfcn.h>
 
@@ -158,6 +162,40 @@ static NSUInteger TGChatsIndex(UITabBarController *tabs) {
 				[root dismissViewControllerAnimated:NO completion:nil];
 			else
 				[TGDevModeViewController presentFrom:root];
+		});
+		return YES;
+	}
+
+	// itglegacy://updatecheck - force the daily bot check now.
+	if ([host isEqualToString:@"updatecheck"]){
+		dispatch_async(dispatch_get_main_queue(), ^{
+			[[TGUpdateStore shared] checkIfDue:YES];
+		});
+		return YES;
+	}
+
+	// itglegacy://updatescreen - the update modal with a fake release, so its
+	// layout can be checked without waiting for a real bot answer.
+	if ([host isEqualToString:@"updatescreen"]){
+		dispatch_async(dispatch_get_main_queue(), ^{
+			NSInteger build = [[[NSBundle mainBundle]
+					objectForInfoDictionaryKey:@"CFBundleVersion"] integerValue] + 1;
+			TGUpdateInfo *fake = [[TGUpdateInfo alloc]
+					initWithVersion:@"1.3"
+							  build:build
+						 minimumIOS:@"6.0"
+						   blocking:NO
+							 ipaURL:@"https://github.com/bla1r1/iTgLegacy/releases/latest"
+						   cydiaURL:@"cydia://package/org.legacy.itg"
+						  changelog:@"1.3\n- Faster chat list on old devices.\n"
+								  @"- Fixed stickers in dark themes.\n"
+								  @"- New update notice and usage statistics switch."];
+			TGUpdateInfoViewController *screen = [[TGUpdateInfoViewController alloc]
+					initWithUpdateInfo:fake];
+			UINavigationController *nav = [[TGNavController alloc]
+					initWithRootViewController:screen];
+			UIViewController *root = self.rootViewController ?: self.window.rootViewController;
+			[root presentViewController:nav animated:NO completion:nil];
 		});
 		return YES;
 	}
@@ -589,6 +627,23 @@ static NSUInteger TGChatsIndex(UITabBarController *tabs) {
 				field.text = text;
 				[field sendActionsForControlEvents:UIControlEventEditingChanged];
 			}
+			// The chat composer is a multi-line text view now, and a script has
+			// no keyboard to focus it with: reach the open chat's field directly.
+			UITextView *textView = [responder isKindOfClass:UITextView.class]
+					? (UITextView *)responder : nil;
+			if (!textView){
+				UITabBarController *tabs = [self activeTabBarController];
+				UINavigationController *nc = [tabs isKindOfClass:UITabBarController.class]
+						? tabs.viewControllers[tabs.selectedIndex] : nil;
+				if ([nc.topViewController isKindOfClass:[TGChatViewController class]])
+					textView = [(TGChatViewController *)nc.topViewController input];
+			}
+			if (textView){
+				textView.text = text;
+				if ([textView.delegate respondsToSelector:@selector(textViewDidChange:)])
+					[textView.delegate textViewDidChange:textView];
+				responder = textView;
+			}
 
 			// A search bar owns a text field but may be the responder itself,
 			// and either way its delegate is what wants to hear about this.
@@ -863,12 +918,19 @@ static NSUInteger TGChatsIndex(UITabBarController *tabs) {
 			[nc popToRootViewControllerAnimated:NO];
 			if (!arg.length)
 				return;                     // the root is where we already are
-			TGSettingsViewController *page = [[TGSettingsViewController alloc] init];
-			if ([arg isEqualToString:@"wallpaper"]) {
-				page.page = TGSettingsPageWallpaper;
-			} else {
-				page.page = (TGSettingsPage)[arg integerValue];
+			// The wallpaper gallery is reached from Appearance > Chat
+			// Wallpaper in one push; the URL lands on the same screen rather
+			// than on a page holding only a link to it.
+			if ([arg isEqualToString:@"wallpaper"] ||
+					[arg integerValue] == TGSettingsPageWallpaper) {
+				TGBackgroundsViewController *gallery =
+						[[TGBackgroundsViewController alloc] init];
+				gallery.hidesBottomBarWhenPushed = YES;
+				[nc pushViewController:gallery animated:NO];
+				return;
 			}
+			TGSettingsViewController *page = [[TGSettingsViewController alloc] init];
+			page.page = (TGSettingsPage)[arg integerValue];
 			// As the rows push it, so a screenshot shows the page the way a
 			// finger would reach it rather than under the tab bar.
 			page.hidesBottomBarWhenPushed = YES;
@@ -1235,6 +1297,24 @@ static NSUInteger TGChatsIndex(UITabBarController *tabs) {
 					NSUTF8StringEncoding] ?: arg;
 			NSLog(@"send: %lu chars to chat %lld", (unsigned long)text.length, chatId);
 			[[TGClient shared] sendText:text toChat:chatId];
+		});
+		return YES;
+	}
+
+	// itglegacy://aicompose - what the AI button above the paperclip does,
+	// for the open chat; the button only shows from the third line on.
+	if ([host isEqualToString:@"aicompose"]){
+		dispatch_async(dispatch_get_main_queue(), ^{
+			UITabBarController *tabs = [self activeTabBarController];
+			UINavigationController *nc = [tabs isKindOfClass:UITabBarController.class]
+					? tabs.viewControllers[tabs.selectedIndex] : nil;
+			UIViewController *top = nc.topViewController;
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+			if ([top respondsToSelector:@selector(aiComposeTapped)])
+				[top performSelector:@selector(aiComposeTapped)];
+#pragma clang diagnostic pop
+			NSLog(@"aicompose on %@", [top class]);
 		});
 		return YES;
 	}

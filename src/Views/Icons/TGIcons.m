@@ -634,26 +634,9 @@ static void TGDrawTabPath(CGContextRef ctx, UIBezierPath *path, BOOL filled) {
 
 	UIGraphicsBeginImageContextWithOptions(CGSizeMake(size, size), NO, scale);
 	CGContextRef ctx = UIGraphicsGetCurrentContext();
-
-	CGFloat r = size * 0.28f;
-	CGFloat cx = size * 0.38f;
-	CGFloat cy = size * 0.38f;
-	CGFloat lw = MAX(1.5f, size * 0.10f);
-
-	CGContextSetStrokeColorWithColor(ctx, colour.CGColor);
-	CGContextSetLineWidth(ctx, lw);
-	CGContextSetLineCap(ctx, kCGLineCapRound);
-
-	// Rim
-	CGContextStrokeEllipseInRect(ctx, CGRectMake(cx - r, cy - r, r * 2.0f, r * 2.0f));
-
-	// Handle at 45 degrees meeting rim edge cleanly
-	CGFloat cos45 = 0.7071f;
-	CGFloat handleStart = r;
-	CGFloat handleEnd = size * 0.38f;
-	CGContextMoveToPoint(ctx, cx + handleStart * cos45, cy + handleStart * cos45);
-	CGContextAddLineToPoint(ctx, cx + (handleStart + handleEnd) * cos45, cy + (handleStart + handleEnd) * cos45);
-	CGContextStrokePath(ctx);
+	CGContextSetFillColorWithColor(ctx, colour.CGColor);
+	if (TGIconAddPath(ctx, "searchLens", CGRectMake(0, 0, size, size)))
+		CGContextFillPath(ctx);
 
 	UIImage *img = UIGraphicsGetImageFromCurrentImageContext();
 	UIGraphicsEndImageContext();
@@ -671,16 +654,9 @@ static void TGDrawTabPath(CGContextRef ctx, UIBezierPath *path, BOOL filled) {
 	CGSize size = CGSizeMake(13.0f, 21.0f);
 	UIGraphicsBeginImageContextWithOptions(size, NO, scale);
 	CGContextRef ctx = UIGraphicsGetCurrentContext();
-
-	CGContextSetStrokeColorWithColor(ctx, colour.CGColor);
-	CGContextSetLineWidth(ctx, TGIconStroke);
-	CGContextSetLineCap(ctx, kCGLineCapRound);
-	CGContextSetLineJoin(ctx, kCGLineJoinRound);
-
-	CGContextMoveToPoint(ctx, 10.0f, 2.5f);
-	CGContextAddLineToPoint(ctx, 2.5f, 10.5f);
-	CGContextAddLineToPoint(ctx, 10.0f, 18.5f);
-	CGContextStrokePath(ctx);
+	CGContextSetFillColorWithColor(ctx, colour.CGColor);
+	if (TGIconAddPath(ctx, "backChevron", CGRectMake(0, 0, size.width, size.height)))
+		CGContextFillPath(ctx);
 
 	UIImage *img = UIGraphicsGetImageFromCurrentImageContext();
 	UIGraphicsEndImageContext();

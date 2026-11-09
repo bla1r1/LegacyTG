@@ -9,7 +9,6 @@
 #import "TGClientInternal.h"
 #import "TGInstantViewController.h"
 #import "TGMessageAudienceViewController.h"
-#import "TGMessageToolsViewController.h"
 #import "TGSponsoredMessagesViewController.h"
 #import "TGGameScoresViewController.h"
 #import "TGPollPresentation.h"

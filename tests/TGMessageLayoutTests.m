@@ -6,7 +6,7 @@
 // the inputs the chat bubble geometry chain feeds on.
 //
 // The bubble/caption/reply-bar geometry itself lives in
-// TGChatViewController+Layout.m and TGBubbleCell.m, whose measurement needs
+// TGChatViewController+Layout.m and TGMessageBubbleCell.m, whose measurement needs
 // a live UIView hierarchy a host shim cannot honestly provide; those are
 // not covered here (see the PR report).
 #import "TGTestRunner.h"
@@ -29,6 +29,22 @@ static NSString *kWord2 = @"antidisestablishmentarianism";
 /// A stamp on the body's last line sits inside the body, its bottom on the
 /// body's bottom. The chat once added the body height twice and drew every
 /// stamp under its own bubble, over the top of the next one.
+static BOOL TGTestLacksComet(UTF32Char c) { return c == 0x2604; }
+
+/// U+FE0F after an emoji the emoji face lacks sent CoreText through every
+/// font on disk (2.4 s cold in the first chat row). Only that selector goes;
+/// one after an emoji the face has stays, and nothing else moves.
+- (void)testSelectorAfterLackingEmojiIsDroppedAndOthersStay {
+	NSMutableAttributedString *text = [[NSMutableAttributedString alloc]
+			initWithString:@"\u2604\uFE0F\u2604\uFE0F\u26D4\uFE0F a"];
+	XCTAssertTrue(TGDropEmojiSelectors(text, TGTestLacksComet));
+	XCTAssertEqualObjects(text.string, @"\u2604\u2604\u26D4\uFE0F a");
+	NSMutableAttributedString *plain = [[NSMutableAttributedString alloc]
+			initWithString:@"\u26D4\uFE0F"];
+	XCTAssertFalse(TGDropEmojiSelectors(plain, TGTestLacksComet));
+	XCTAssertEqualObjects(plain.string, @"\u26D4\uFE0F");
+}
+
 - (void)testInlineStamp_SitsOnTheBodysLastLine {
 	CGRect body = CGRectMake(10, 6, 120, 21);
 	CGFloat y = TGInlineStampY(body);

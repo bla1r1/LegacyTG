@@ -6,7 +6,6 @@
 #import "TGStatusText.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
-#import "TGMemberAvatarStore.h"
 #import "TGDateFormat.h"
 #import "TGOptions.h"
 #import "TGStoryViewerViewController.h"
@@ -67,65 +66,15 @@ static void TGPaintFolderPill(UIButton *pill, BOOL active) {
 }
 
 
-/// The add-story control: a dashed circle with a plus, which is what the
-/// official bar shows where the system Add button used to be. Drawn once per
-/// bar build, not per frame.
+/// The add-story control: the official story ring with a plus, from TGIconPaths.
 static UIImage *TGAddStoryIcon(CGFloat side, UIColor *colour) {
-	UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), NO, 0);
-	CGContextRef ctx = UIGraphicsGetCurrentContext();
-	if (!ctx){
-		UIGraphicsEndImageContext();
-		return nil;
-	}
-	CGFloat inset = side * 0.16f;
-	CGRect circle = CGRectInset(CGRectMake(0, 0, side, side), inset, inset);
-	CGContextSetStrokeColorWithColor(ctx, colour.CGColor);
-	CGContextSetLineWidth(ctx, MAX(1.0f, side * 0.07f));
-	CGContextSetLineDash(ctx, 0, (CGFloat[]){ side * 0.16f, side * 0.12f }, 2);
-	CGContextStrokeEllipseInRect(ctx, circle);
-	CGContextSetLineDash(ctx, 0, NULL, 0);
-	CGFloat arm = side * 0.17f;
-	CGPoint centre = CGPointMake(CGRectGetMidX(circle), CGRectGetMidY(circle));
-	CGContextMoveToPoint(ctx, centre.x - arm, centre.y);
-	CGContextAddLineToPoint(ctx, centre.x + arm, centre.y);
-	CGContextMoveToPoint(ctx, centre.x, centre.y - arm);
-	CGContextAddLineToPoint(ctx, centre.x, centre.y + arm);
-	CGContextStrokePath(ctx);
-	UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
-	UIGraphicsEndImageContext();
-	return image;
+	return [TGIcons glyphNamed:@"addStory" colour:colour side:side];
 }
 
 /// The lock in the title view: passcode users could lock the app from the
-/// list before the bar item was removed. There is no lock glyph in the icon
-/// set, so this draws a small padlock.
+/// list before the bar item was removed.
 UIImage *TGChatListLockIcon(CGFloat side, UIColor *colour) {
-	UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), NO, 0);
-	CGContextRef ctx = UIGraphicsGetCurrentContext();
-	if (!ctx){
-		UIGraphicsEndImageContext();
-		return nil;
-	}
-	CGContextSetStrokeColorWithColor(ctx, colour.CGColor);
-	CGContextSetFillColorWithColor(ctx, colour.CGColor);
-	CGFloat bodyH = side * 0.52f;
-	CGRect body = CGRectZero;
-	body.origin.x = side * 0.18f;
-	body.origin.y = side - bodyH - side * 0.08f;
-	body.size.width = side * 0.64f;
-	body.size.height = bodyH;
-	[[UIBezierPath bezierPathWithRoundedRect:body cornerRadius:side * 0.12f] fill];
-	CGFloat shackleW = side * 0.38f;
-	CGRect shackle = CGRectZero;
-	shackle.origin.x = (side - shackleW) * 0.5f;
-	shackle.origin.y = side * 0.12f;
-	shackle.size.width = shackleW;
-	shackle.size.height = side * 0.50f;
-	CGContextSetLineWidth(ctx, MAX(1.0f, side * 0.10f));
-	CGContextStrokeEllipseInRect(ctx, shackle);
-	UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
-	UIGraphicsEndImageContext();
-	return image;
+	return [TGIcons glyphNamed:@"lock" colour:colour side:side];
 }
 
 
@@ -215,7 +164,9 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 		UIButton *storyButton = [UIButton buttonWithType:UIButtonTypeCustom];
 		CGFloat side = TGMetricButtonMediumH;
 		storyButton.frame = CGRectMake(0, 0, side, side);
-		[storyButton setImage:TGAddStoryIcon(side, [[TGTheme shared] accentColour])
+		// Bar items take the bar-button role; the accent is the bar itself in
+		// Classic, so the circle vanished into it.
+		[storyButton setImage:TGAddStoryIcon(side, [[TGTheme shared] barButtonColour])
 					 forState:UIControlStateNormal];
 		[storyButton addTarget:self action:@selector(openStoryComposer)
 			 forControlEvents:UIControlEventTouchUpInside];
@@ -617,8 +568,8 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 
 	if (hasStories){
 		if (!self.headerStoriesCell)
-			self.headerStoriesCell = [[TGStoriesCell alloc] initWithStyle:
-					UITableViewCellStyleDefault reuseIdentifier:nil];
+			self.headerStoriesCell = [TGStoryStripRowCell
+					cellForRow:TGStoryStripRow(@[], nil)];
 		self.headerStoriesCell.frame = CGRectMake(0, 0, width, storyH);
 		self.headerStoriesCell.backgroundColor = bg;
 		self.headerStoriesCell.contentView.backgroundColor = bg;

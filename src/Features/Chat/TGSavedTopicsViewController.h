@@ -3,7 +3,7 @@
 // the forward-from chats and the tagged threads, pinned rows first.
 //
 #import <UIKit/UIKit.h>
-#import "TGTableViewController.h"
+#import "TGRowsViewController.h"
 
-@interface TGSavedTopicsViewController : TGTableViewController
+@interface TGSavedTopicsViewController : TGRowsViewController
 @end

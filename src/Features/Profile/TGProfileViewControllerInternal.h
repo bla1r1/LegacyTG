@@ -13,6 +13,8 @@
 #import "TGEditProfileViewController.h"
 #import "TGCapabilities.h"
 
+@class TGProfileHeaderView;
+
 static const CGFloat kActionTile = TGMetricActionTile;
 
 // ── the profile's own geometry ───────────────────────────────────────────────
@@ -51,14 +53,15 @@ static const CGFloat kLinkGlyph     = 24.0f;
 static const CGFloat kToastWidth    = 120.0f;
 static const CGFloat kToastHeight   = 34.0f;
 
-static const NSInteger kSectionPersonalChannel = 0;
-static const NSInteger kSectionDetails        = 1;
-static const NSInteger kSectionDanger         = 2;
-static const NSInteger kSectionDirectMessages = 3;
-static const NSInteger kSectionStories        = 4;
-static const NSInteger kSectionGifts          = 5;
-static const NSInteger kSectionMembers        = 6;
-static const NSInteger kSectionMedia          = 7;
+static const NSInteger kSectionCommunity       = 0;
+static const NSInteger kSectionPersonalChannel = 1;
+static const NSInteger kSectionDetails         = 2;
+static const NSInteger kSectionDanger          = 3;
+static const NSInteger kSectionDirectMessages  = 4;
+static const NSInteger kSectionStories         = 5;
+static const NSInteger kSectionGifts           = 6;
+static const NSInteger kSectionMembers         = 7;
+static const NSInteger kSectionMedia           = 8;
 
 static const NSInteger kStoryGridCols  = 3;
 static const CGFloat   kStoryGridGap   = TGMetricCollageGap;
@@ -105,12 +108,8 @@ NSURL *TGProfileFirstURL(NSString *text, NSArray *entities);
 /// before the full profile-audio page answers.
 @property (nonatomic, strong) NSDictionary *firstProfileAudio;
 @property (nonatomic, assign) BOOL blocked;
-@property (nonatomic, strong) UIImageView *avatarView;
-// The one grid cell, cached by kind: "story" or "media", per
-// mediaGridCacheContent. A fresh cache per kind, invalidated by data or tab.
-@property (nonatomic, strong) NSString *mediaGridCacheContent;
-@property (nonatomic, strong) UITableViewCell *storyGridCellCache;
-@property (nonatomic, strong) UILabel *statusLabel;
+@property (nonatomic, strong) TGProfileHeaderView *headerView;
+@property (nonatomic, strong) NSMutableDictionary *mediaImages;
 // What the status line would say without the network: the last seen that
 // answered, or the member count. The network override for TDLib-not-ready
 // lives in statusLabelOwnerChanged (B4).
@@ -122,7 +121,6 @@ NSURL *TGProfileFirstURL(NSString *text, NSArray *entities);
 /// The pane's search field, created once and re-used across reloads so the
 /// keyboard survives a keystroke.
 - (UISearchBar *)ensureMediaSearchBar;
-@property (nonatomic, strong) NSArray *actionNames;
 @property (nonatomic, assign) BOOL muted;
 @property (nonatomic, strong) NSString *phoneNumber;
 /// The note kept on this person's profile, and whether a private picture is
@@ -143,7 +141,10 @@ NSURL *TGProfileFirstURL(NSString *text, NSArray *entities);
 @property (nonatomic, assign) BOOL hasDirectMessages;
 @property (nonatomic, assign) BOOL canManageDirectMessages;
 @property (nonatomic, assign) int64_t communityId;
+@property (nonatomic, copy) NSString *communityName;
+@property (nonatomic, copy) NSString *communitySubtitle;
 @property (nonatomic, assign) NSInteger personalChannelMemberCount;
+@property (nonatomic, copy) NSString *personalChannelPreview;
 @property (nonatomic, strong) NSArray *similarChatIds;
 @property (nonatomic, strong) NSMutableDictionary *chatAvatars;
 @property (nonatomic, strong) NSMutableSet *requestedChatAvatars;
@@ -181,11 +182,20 @@ NSURL *TGProfileFirstURL(NSString *text, NSArray *entities);
 - (void)loadDetails;
 - (void)reloadTableDebounced;
 - (void)doReloadTable;
+- (void)rebuildSections;
 - (void)showMemberActionsFor:(NSDictionary *)member;
 - (void)applyAvatarImageAtPath:(NSString *)path;
-- (void)buildMusicStripIn:(UIView *)header atY:(CGFloat)y;
 - (void)musicStripTapped;
+- (void)handleActionKey:(NSString *)action;
 - (void)loadSimilarChannelsAvatars;
+- (void)openCommunity;
+- (void)openDetailKind:(NSString *)kind;
+- (void)openChat:(int64_t)chatId title:(NSString *)title message:(int64_t)messageId;
+- (void)openMediaRow:(NSInteger)index;
+- (void)copyDetailValue:(NSString *)value;
+- (void)setMainTabKind:(NSString *)kind;
+- (NSInteger)mediaSectionIndex;
+- (void)avatarTapped;
 
 /// The description the group profile's details section reads.
 @property (nonatomic, copy) NSString *chatDescription;
@@ -228,8 +238,6 @@ NSURL *TGProfileFirstURL(NSString *text, NSArray *entities);
 
 @interface TGProfileViewController (Actions)
 
-- (void)buildActionsIn:(UIView *)header atY:(CGFloat)y;
-- (void)actionTileTapped:(UIButton *)tile;
 - (void)showMoreMenuFrom:(UIView *)tile;
 - (void)runMoreAction:(NSString *)title;
 - (void)addMemberTapped;
@@ -241,7 +249,6 @@ NSURL *TGProfileFirstURL(NSString *text, NSArray *entities);
 @interface TGProfileViewController (Media)
 
 - (NSDictionary *)giftOwnerSenderId;
-+ (CGFloat)storySideForWidth:(CGFloat)width;
 - (void)loadMedia;
 - (void)fetchAllMediaCounts;
 - (void)fetchMediaForKind:(NSString *)kind;
@@ -252,27 +259,20 @@ NSURL *TGProfileFirstURL(NSString *text, NSArray *entities);
 - (NSArray *)currentMediaTabs;
 - (NSString *)selectedMediaKind;
 - (BOOL)selectedTabIsGrid;
-- (CGFloat)storyGridHeight;
-- (UITableViewCell *)mediaGridCell:(UITableView *)tableView;
-- (UITableViewCell *)mediaGridCellForTableView:(UITableView *)tableView atRow:(NSInteger)row;
 - (NSArray *)selectedMediaRows;
+- (NSArray *)mediaContentRows;
+- (void)openMediaGridItemAtIndex:(NSInteger)index kind:(NSString *)kind;
 - (void)openStoryAtIndex:(NSInteger)index;
-- (void)closeStory:(UITapGestureRecognizer *)tap;
-- (void)storyTileTapped:(UIButton *)button;
-- (void)photoTileTapped:(UIButton *)button;
-- (void)stopStoryPlayback;
+- (void)handleStoryHoldAtIndex:(NSInteger)index;
 - (void)loadMoreMediaForCurrentTab;
-- (void)applyArtworkToTrackCell:(UITableViewCell *)cell
-						message:(NSDictionary *)message
-					  indexPath:(NSIndexPath *)indexPath;
 - (NSString *)linkDomainForMessage:(NSDictionary *)message;
-- (void)downloadAvatarWithFileId:(NSInteger)fileId chatId:(int64_t)chatId kind:(NSString *)kind cell:(TGProfileDetailCell *)cell;
 - (void)fetchEmojiStatusImage:(int64_t)emojiId;
 - (NSArray *)basicDetailsRows;
 - (NSArray *)fullDetailsRowsWithBio:(NSString *)bio birthday:(NSString *)birthday;
 - (void)fetchPersonalChannel:(int64_t)chatId;
 - (void)checkAndCompositeSimilarChannelsAvatars;
-- (void)loadAvatarForChatId:(int64_t)chatId kind:(NSString *)kind cell:(TGProfileDetailCell *)cell;
+- (void)loadAvatarForChatId:(int64_t)chatId kind:(NSString *)kind;
+- (void)downloadMediaImage:(NSNumber *)fileId;
 
 @end
 

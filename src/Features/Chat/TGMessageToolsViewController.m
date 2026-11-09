@@ -4,9 +4,6 @@
 #import "TGMessageToolsViewController.h"
 #import "TGClient.h"
 #import "TGAlertSheet.h"
-#import "TGChecklistViewController.h"
-#import "TGSuggestedPostViewController.h"
-#import "TGAiComposeViewController.h"
 
 @implementation TGMessageToolsViewController
 
@@ -23,60 +20,21 @@
 
 - (void)rebuild {
 	__weak typeof(self) weakSelf = self;
+	// Everything official puts in a message or the composer has moved there:
+	// Translate, facts, checklists and suggested posts are hold-menu rows, the
+	// AI composer is the composer's three-line button. This screen is only
+	// reached from the dev hub and keeps the calls that have no release entry.
 	NSMutableArray *aiRows = [NSMutableArray array];
 	[aiRows addObject:TGFeatureAction(@"AI Summary", ^{ [weakSelf summarize]; })];
-	[aiRows addObject:TGFeatureAction(@"AI Editor", ^{ [weakSelf fixText]; })];
-	[aiRows addObject:TGFeatureAction(@"Translate", ^{
-		[weakSelf translateRichMessage];
-	})];
 	[aiRows addObject:TGFeatureAction(@"Get Full Rich Message", ^{
 		[weakSelf fullRichMessage];
 	})];
 
-	NSMutableArray *messageRows = [NSMutableArray array];
-	if (self.isChecklist){
-		[messageRows addObject:TGFeatureOpenRow(@"Checklist", nil, ^{
-			TGChecklistViewController *screen = [[TGChecklistViewController alloc]
-					initWithChatId:weakSelf.chatId
-						 messageId:weakSelf.messageId
-							 title:@"Checklist"];
-			screen.hidesBottomBarWhenPushed = YES;
-			[weakSelf.navigationController pushViewController:screen animated:YES];
-		})];
-	}
-	if (self.hasSuggestedPost){
-		[messageRows addObject:TGFeatureOpenRow(@"Suggest Post", nil, ^{
-			TGSuggestedPostViewController *screen =
-					[[TGSuggestedPostViewController alloc]
-							initWithChatId:weakSelf.chatId
-								 messageId:weakSelf.messageId];
-			screen.hidesBottomBarWhenPushed = YES;
-			[weakSelf.navigationController pushViewController:screen animated:YES];
-		})];
-	}
-	[messageRows addObject:TGFeatureRow(@"Fact Check",
-			self.factCheck.length ? self.factCheck : @"None", ^{
-		[weakSelf editFactCheck];
-	})];
-	if (self.factCheck.length){
-		[messageRows addObject:TGFeatureAction(@"Clear", ^{
-			[weakSelf clearFactCheck];
-		})];
-	}
-
 	NSMutableArray *richRows = [NSMutableArray array];
 	[richRows addObject:TGFeatureAction(@"Send as Rich Draft", ^{ [weakSelf sendDraft]; })];
-	[richRows addObject:TGFeatureOpenRow(@"Create with AI", nil, ^{
-		TGAiComposeViewController *screen = [[TGAiComposeViewController alloc] init];
-		screen.chatId = weakSelf.chatId;
-		screen.chatTitle = weakSelf.chatTitle;
-		screen.hidesBottomBarWhenPushed = YES;
-		[weakSelf.navigationController pushViewController:screen animated:YES];
-	})];
 
 	self.sections = @[
 		TGFeatureSection(@"AI Tools", nil, aiRows),
-		TGFeatureSection(@"Message", nil, messageRows),
 		TGFeatureSection(@"Rich Messages", nil, richRows),
 	];
 	[self reloadRows];

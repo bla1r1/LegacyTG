@@ -4,9 +4,9 @@
 // camera and editor steps in TGStoryCameraViewController.
 //
 #import <UIKit/UIKit.h>
-#import "TGTableViewController.h"
+#import "TGRowsViewController.h"
 
-@interface TGStoryComposerViewController : TGTableViewController
+@interface TGStoryComposerViewController : TGRowsViewController
 
 - (instancetype)initWithChatId:(int64_t)chatId title:(NSString *)title;
 

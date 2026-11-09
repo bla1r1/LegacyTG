@@ -37,6 +37,9 @@ static const NSTimeInterval kRecordHintSeconds = 1.6;
 /// Send takes the microphone's place once there is something to send, and
 /// the two cross over with a quick scale rather than blinking.
 - (void)inputChanged {
+	// Every edit goes through here after the field's own delegate has run, so
+	// programmatic edits (formatting, drafts, send) resize the bar too.
+	[self updateComposerHeightAnimated:NO];
 	[self reportTyping];
 	// Asked after the typing settles rather than per keystroke: one request
 	// per link, and the answer is thrown away if the text moved on.

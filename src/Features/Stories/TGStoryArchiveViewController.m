@@ -3,9 +3,11 @@
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
+#import "TGMediaStore.h"
 #import "TGStoryViewerViewController.h"
 #import "TGIcons.h"
 #import "TGLocalization.h"
+#import "TGRows.h"
 
 /// The archive list's date uses the app language, not the device locale.
 static NSString *TGStoryArchiveDateText(NSNumber *unixTime) {
@@ -32,25 +34,29 @@ static NSString *TGStoryArchiveDateText(NSNumber *unixTime) {
 @property (nonatomic, strong) NSMutableArray *stories;
 @property (nonatomic, assign) int32_t lastStoryId;
 @property (nonatomic, assign) BOOL loading;
+@property (nonatomic, strong) NSMutableDictionary *pictures;
+@property (nonatomic, strong) NSMutableSet *picturesRequested;
 @end
 
 @implementation TGStoryArchiveViewController
 
 - (instancetype)initWithChatId:(int64_t)chatId title:(NSString *)title {
-	self = [super initWithStyle:UITableViewStyleGrouped];
+	self = [super init];
 	if (self){
 		_chatId = chatId;
-		_chatTitle = [title copy] ?: @"Stories";
+		_chatTitle = [title copy] ?: TGLocalized(@"Stories");
 		_stories = [NSMutableArray array];
+		_pictures = [NSMutableDictionary dictionary];
+		_picturesRequested = [NSMutableSet set];
 	}
 	return self;
 }
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	self.title = @"Archived Stories";
-	[[TGTheme shared] styleGroupedTable:self.tableView];
+	self.title = TGLocalized(@"Archived Stories");
 	[self loadMore];
+	[self rebuildSections];
 }
 
 - (void)loadMore {
@@ -67,12 +73,15 @@ static NSString *TGStoryArchiveDateText(NSNumber *unixTime) {
 			return;
 		if (error.length && !storyIds.count){
 			me.loading = NO;
-			[TGAlertSheet showMessage:error title:@"Story Archive" inView:me.view];
+			[me rebuildSections];
+			[TGAlertSheet showMessage:error
+								 title:TGLocalized(@"Story Archive")
+								inView:me.view];
 			return;
 		}
 		if (!storyIds.count){
 			me.loading = NO;
-			[me.tableView reloadData];
+			[me rebuildSections];
 			return;
 		}
 		me.lastStoryId = [storyIds.lastObject intValue];
@@ -83,11 +92,11 @@ static NSString *TGStoryArchiveDateText(NSNumber *unixTime) {
 - (void)fetchStories:(NSArray *)ids at:(NSInteger)index {
 	if (index >= (NSInteger)ids.count){
 		self.loading = NO;
-		[self.tableView reloadData];
+		[self rebuildSections];
 		return;
 	}
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] story:[ids[index] intValue] fromChat:self.chatId
+	[[TGClient shared] story:[ids[(NSUInteger)index] intValue] fromChat:self.chatId
 				  completion:^(NSDictionary *story){
 		TGStoryArchiveViewController *me = weakSelf;
 		if (!me)
@@ -98,87 +107,88 @@ static NSString *TGStoryArchiveDateText(NSNumber *unixTime) {
 	}];
 }
 
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-	return 1;
-}
+#pragma mark - rows
 
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-	return self.stories.count + 1;
-}
+- (UIImage *)pictureForStory:(NSDictionary *)story {
+	NSNumber *storyId = @([story[@"storyId"] longLongValue]);
+	UIImage *cached = self.pictures[storyId];
+	if (cached)
+		return cached;
 
-- (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
+	NSNumber *photoId = story[@"thumbPhotoId"] ?: story[@"photoId"];
+	if ([photoId isKindOfClass:NSNumber.class] && photoId.integerValue > 0 &&
+		![self.picturesRequested containsObject:storyId]){
+		[self.picturesRequested addObject:storyId];
+		__weak typeof(self) weakSelf = self;
+		[[TGMediaStore shared] downloadFile:photoId.integerValue
+				priority:TGDownloadPriorityOnScreen
+				completion:^(NSString *path){
+			TGStoryArchiveViewController *me = weakSelf;
+			if (!me)
+				return;
+			UIImage *image = path.length ? [TGIcons decodedImageAtPath:path
+					fittingSize:CGSizeMake(TGMetricListAvatar, TGMetricListAvatar)
+							 fill:YES
+							scale:[UIScreen mainScreen].scale] : nil;
+			if (!image)
+				return;
+			me.pictures[storyId] = image;
+			[me rebuildSections];
+		}];
+	}
 	return nil;
 }
 
-- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-	UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"archiveStory"];
-	if (!cell)
-		cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle
-									  reuseIdentifier:@"archiveStory"];
-	[[TGTheme shared] styleCell:cell];
-	cell.imageView.image = nil;
-	if (indexPath.row >= (NSInteger)self.stories.count){
-		if (!self.stories.count && !self.loading){
-			cell.textLabel.text = @"No Archived Stories";
-			cell.detailTextLabel.text = nil;
-			cell.accessoryType = UITableViewCellAccessoryNone;
-			cell.selectionStyle = UITableViewCellSelectionStyleNone;
-			return cell;
+- (void)rebuildSections {
+	__weak typeof(self) weakSelf = self;
+	NSMutableArray *rows = [NSMutableArray array];
+	if (!self.stories.count && !self.loading){
+		[rows addObject:TGRow(TGKindPlain,
+				TGLocalized(@"No Archived Stories"))];
+	} else {
+		for (NSUInteger index = 0; index < self.stories.count; index++){
+			NSDictionary *story = self.stories[index];
+			NSString *caption = [story[@"caption"] isKindOfClass:NSString.class]
+					? story[@"caption"] : nil;
+			NSString *title = caption.length ? caption : TGLocalized(@"Story");
+			NSInteger viewers = (NSInteger)[story[@"viewers"] integerValue];
+			NSString *views = TGLocalizedPluralValue(@"%@ view", @"%@ views",
+					[NSString stringWithFormat:@"%ld", (long)viewers], viewers);
+			NSString *detail = [NSString stringWithFormat:@"%@ · %@", views,
+					TGStoryArchiveDateText(story[@"date"]) ?: @""];
+			NSNumber *storyId = @([story[@"storyId"] longLongValue]);
+			NSMutableDictionary *row = TGPeerRow(storyId, title, detail,
+					^{ [weakSelf openStoryAtIndex:(NSInteger)index]; });
+			row[TGRowAccessory] = TGRowAccessoryDisclosure;
+			UIImage *picture = [self pictureForStory:story];
+			if (picture)
+				row[TGRowAvatarImage] = picture;
+			[rows addObject:row];
 		}
-		cell.textLabel.text = self.loading ? @"Loading..." : @"Show More";
-		cell.detailTextLabel.text = nil;
-		cell.accessoryType = UITableViewCellAccessoryNone;
-		cell.selectionStyle = self.loading
-				? UITableViewCellSelectionStyleNone : UITableViewCellSelectionStyleBlue;
-		return cell;
+		NSString *footerTitle = self.loading ? TGLocalized(@"Loading...")
+				: TGLocalized(@"Show More");
+		[rows addObject:TGSubtitleRow(footerTitle, nil, self.loading
+				? nil : ^{ [weakSelf loadMore]; })];
 	}
-	NSDictionary *story = self.stories[indexPath.row];
-	cell.textLabel.text = story[@"caption"];
-	if (!cell.textLabel.text.length)
-		cell.textLabel.text = @"Story";
-	cell.textLabel.font = TGFontBody();
-	cell.detailTextLabel.font = TGFontSubhead();
-	NSInteger viewers = (NSInteger)[story[@"viewers"] integerValue];
-	NSString *views = TGLocalizedPluralValue(@"%@ view", @"%@ views",
-			[NSString stringWithFormat:@"%ld", (long)viewers], viewers);
-	cell.detailTextLabel.text = [NSString stringWithFormat:@"%@ · %@", views,
-			TGStoryArchiveDateText(story[@"date"]) ?: @""];
-	cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-	cell.selectionStyle = UITableViewCellSelectionStyleBlue;
-	NSNumber *photoId = story[@"thumbPhotoId"] ?: story[@"photoId"];
-	if ([photoId isKindOfClass:NSNumber.class] && photoId.integerValue > 0){
-		__weak UITableViewCell *weakCell = cell;
-		[[TGClient shared] downloadFile:photoId.integerValue
-							   priority:TGDownloadPriorityOnScreen
-							 completion:^(NSString *path){
-			[weakCell.imageView setImage:path.length
-					? [UIImage imageWithContentsOfFile:path] : nil];
-			[weakCell setNeedsLayout];
-		}];
-	}
-	return cell;
+	self.sections = @[TGSection(nil, nil, rows)];
+	[self reloadRows];
 }
 
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	if (indexPath.row >= (NSInteger)self.stories.count){
-		if (!self.stories.count || self.loading)
-			return;
-		[tableView deselectRowAtIndexPath:indexPath animated:YES];
-		[self loadMore];
+- (void)openStoryAtIndex:(NSInteger)index {
+	if (index < 0 || index >= (NSInteger)self.stories.count)
 		return;
-	}
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
+	__weak typeof(self) weakSelf = self;
 	TGStoryViewerViewController *viewer = [[TGStoryViewerViewController alloc]
 			initWithChatId:self.chatId
 					 title:self.chatTitle
 				   stories:self.stories
-				startIndex:indexPath.row
+				startIndex:index
 				 canManage:YES];
 	viewer.hidesBottomBarWhenPushed = YES;
-	viewer.onStoriesChanged = ^{
-		[tableView reloadData];
-	};
+	viewer.onStoriesChanged = ^{ [weakSelf reloadRows]; };
 	[self.navigationController pushViewController:viewer animated:YES];
 }
 
 @end
+
+// vim:ft=objc

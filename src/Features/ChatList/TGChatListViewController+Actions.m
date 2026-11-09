@@ -314,8 +314,8 @@ static const CGFloat kSwipeFlickVelocity = 500.0f;
 /// The cell that is actually open. A reload can leave the weak pointer aimed
 /// at a cell already back in the reuse pool; that cell has closed itself and
 /// must not swallow the next tap on the list.
-- (TGChatCell *)openSwipeCell {
-	TGChatCell *cell = self.swipeActionsCell;
+- (TGChatRowCell *)openSwipeCell {
+	TGChatRowCell *cell = self.swipeActionsCell;
 	if (!cell || !cell.swipeActionsOpen){
 		self.swipeActionsCell = nil;
 		self.swipeActionsChat = nil;
@@ -381,7 +381,7 @@ static const CGFloat kSwipeFlickVelocity = 500.0f;
 
 	// The action buttons sit directly under the swiped row. Taking
 	// their touches would close the row before the button could run.
-	TGChatCell *cell = self.swipeActionsCell;
+	TGChatRowCell *cell = self.swipeActionsCell;
 	UIView *view = touch.view;
 	return !([view isKindOfClass:UIButton.class] && [view isDescendantOfView:cell] &&
 			![view isDescendantOfView:cell.contentView]);
@@ -414,8 +414,8 @@ static const CGFloat kSwipeFlickVelocity = 500.0f;
 
 	NSInteger index = path.row - (NSInteger)[self headerRows].count;
 	NSDictionary *chat = [self visibleChats][(NSUInteger)index];
-	TGChatCell *cell = (TGChatCell *)[self.tableView cellForRowAtIndexPath:path];
-	if (![cell isKindOfClass:TGChatCell.class])
+	TGChatRowCell *cell = (TGChatRowCell *)[self.tableView cellForRowAtIndexPath:path];
+	if (![cell isKindOfClass:TGChatRowCell.class])
 		return NO;
 
 	// Two rows open at once would leave two chat previews half hidden.
@@ -475,7 +475,7 @@ static const CGFloat kSwipeFlickVelocity = 500.0f;
 		return;
 	}
 
-	TGChatCell *cell = self.swipeActionsCell;
+	TGChatRowCell *cell = self.swipeActionsCell;
 	if (!cell)
 		return;
 
@@ -512,7 +512,7 @@ static const CGFloat kSwipeFlickVelocity = 500.0f;
 /// Archive, Delete, Pin, exactly the words runChatAction expects.
 - (void)swipeActionButtonTapped:(UIButton *)button {
 	NSDictionary *chat = self.swipeActionsChat;
-	TGChatCell *cell = self.swipeActionsCell;
+	TGChatRowCell *cell = self.swipeActionsCell;
 	NSString *title = button.titleLabel.text;
 	if (!chat)
 		return;
@@ -534,7 +534,7 @@ static const CGFloat kSwipeFlickVelocity = 500.0f;
 }
 
 - (void)closeSwipeActionsAnimated:(BOOL)animated {
-	TGChatCell *cell = self.swipeActionsCell;
+	TGChatRowCell *cell = self.swipeActionsCell;
 	self.swipeActionsCell = nil;
 	self.swipeActionsChat = nil;
 	[cell closeSwipeActionsAnimated:animated];

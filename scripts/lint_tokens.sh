@@ -311,7 +311,7 @@ fi
 
 # ── 21. a badge in its own type ─────────────────────────────────────────────
 # The chat row's badge was 13 bold, the jump button's 12 and TGBadge's 11.
-hits=$(grep -rnE '(_label|[bB]adge)\.font\s*=\s*TGFont' src/UI/Controls/TGBadge.m src/Features/Chat/Views/TGChatCell.m \
+hits=$(grep -rnE '(_label|[bB]adge)\.font\s*=\s*TGFont' src/UI/Controls/TGBadge.m src/UI/Rows/TGChatRowCell.m \
         src/Features/Chat/Rendering/TGChatViewController+Chrome.m | grep -v 'TGFontCaptionStrong()')
 if [ -n "$hits" ]; then
     report "A badge has its own type:" "TGFontCaptionStrong()"
@@ -335,7 +335,7 @@ for f in $(find src/Features src/App src/UI -name '*ViewController.m'); do
     esac
     sup=$(sed -n "s/^@interface $b *: *\([A-Za-z0-9_]*\).*/\1/p" "${f%.m}.h" "$f" 2>/dev/null | head -1)
     case "$sup" in
-        TGViewController|TGTableViewController|TGListViewController|TGFeatureListViewController|TGBusinessBaseViewController) continue ;;
+        TGViewController|TGTableViewController|TGListViewController|TGFeatureListViewController|TGRowsViewController|TGBusinessBaseViewController) continue ;;
     esac
     report "A screen paints theme colours but never hears the theme change:" "$f"
 done

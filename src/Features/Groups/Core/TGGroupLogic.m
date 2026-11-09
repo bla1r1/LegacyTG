@@ -1,4 +1,7 @@
 #import "TGGroupLogic.h"
+#import "TGRows.h"
+#import "TGBadge.h"
+#import "TGLocalization.h"
 
 void TGClearHistoryWindowForChoice(NSInteger choiceIndex, NSDate *now,
 								   NSInteger *minDate, NSInteger *maxDate) {
@@ -53,4 +56,49 @@ NSString *TGStripBoldMarkers(NSString *text) {
 	if (!text.length)
 		return @"";
 	return [text stringByReplacingOccurrencesOfString:@"**" withString:@""];
+}
+
+NSDictionary *TGGroupMemberRowModel(NSDictionary *member,
+									int64_t statusEmojiId) {
+	if (![member isKindOfClass:NSDictionary.class])
+		return nil;
+	int64_t userId = [member[@"id"] longLongValue];
+	NSString *name = TGMemberRowName(member) ?: @"";
+	NSMutableDictionary *row = [TGPeerRow(@(userId), name, nil, nil) mutableCopy];
+	row[TGRowAvatarUser] = @YES;
+	row[TGRowAccessory] = TGRowAccessoryDisclosure;
+	if (statusEmojiId > 0)
+		row[TGRowStatusEmojiId] = @(statusEmojiId);
+	NSString *status = member[@"status"];
+	NSString *tag = [member[@"tag"] isKindOfClass:NSString.class]
+			? [member[@"tag"] stringByTrimmingCharactersInSet:
+					[NSCharacterSet whitespaceAndNewlineCharacterSet]] : nil;
+	if ([status isEqualToString:@"owner"]){
+		row[TGRowBadge] = tag.length ? tag : TGLocalized(@"Owner");
+		row[TGRowBadgeVariant] = @(TGBadgeVariantAccent);
+		row[TGRowBadgeInline] = @YES;
+	} else if ([status isEqualToString:@"admin"]){
+		row[TGRowBadge] = tag.length ? tag : TGLocalized(@"Admin");
+		row[TGRowBadgeVariant] = @(TGBadgeVariantMuted);
+		row[TGRowBadgeInline] = @YES;
+	}
+	return row;
+}
+
+NSDictionary *TGGroupInfoRowModel(NSString *title, NSString *detail,
+								  BOOL opens, BOOL destructive,
+								  BOOL disabled) {
+	NSMutableDictionary *row = destructive
+			? [TGRedRow(title, nil) mutableCopy]
+			: [TGRow(TGKindDisclosure, title) mutableCopy];
+	if (detail.length)
+		row[TGRowDetail] = detail;
+	// The value is the group's own name, description or a count; only the
+	// label is ours to translate.
+	row[TGRowRawDetail] = @YES;
+	if (opens)
+		row[TGRowOpens] = @YES;
+	if (disabled)
+		row[TGRowEnabled] = @NO;
+	return row;
 }

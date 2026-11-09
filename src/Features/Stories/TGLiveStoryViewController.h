@@ -4,9 +4,9 @@
 // donors and the pending paid reactions.
 //
 #import <UIKit/UIKit.h>
-#import "TGListViewController.h"
+#import "TGRowsViewController.h"
 
-@interface TGLiveStoryViewController : TGListViewController
+@interface TGLiveStoryViewController : TGRowsViewController
 
 /// `groupCallId` 0 means this screen starts a new live story; a nonzero id
 /// means it was opened from an existing live story.

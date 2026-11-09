@@ -6,24 +6,7 @@
 #import "TGIcons.h"
 #import "TGLocalization.h"
 #import "TGStoryText.h"
-
-static NSString *TGStoryDateText(NSNumber *unixTime) {
-	static NSDateFormatter *formatter = nil;
-	static dispatch_once_t once;
-	dispatch_once(&once, ^{
-		formatter = [[NSDateFormatter alloc] init];
-		[formatter setDateStyle:NSDateFormatterMediumStyle];
-		[formatter setTimeStyle:NSDateFormatterShortStyle];
-	});
-	if (![unixTime isKindOfClass:NSNumber.class] || unixTime.doubleValue <= 0)
-		return @"-";
-	NSString *language = TGAppLanguage();
-	formatter.locale = language.length
-			? [NSLocale localeWithLocaleIdentifier:language]
-			: [NSLocale currentLocale];
-	return [formatter stringFromDate:
-			[NSDate dateWithTimeIntervalSince1970:unixTime.doubleValue]];
-}
+#import "TGRows.h"
 
 /// The mappings live in TGStoryText.h so the host tests exercise the same
 /// function the screen calls.
@@ -80,38 +63,34 @@ static NSString *TGStoryDateText(NSNumber *unixTime) {
 	}
 }
 
-- (void)buildRows {
-	[self.rows removeAllObjects];
-	NSDictionary *story = self.story;
-	[self.rows addObject:@{@"title" : @"Posted Stories",
-						   @"detail" : TGStoryDateText(story[@"date"])}];
-	[self.rows addObject:@{@"title" : @"Views",
-						   @"detail" : [NSString stringWithFormat:@"%@",
-								   story[@"viewers"] ?: @(0)]}];
-	[self.rows addObject:@{@"title" : @"Forwarded Messages",
-						   @"detail" : [NSString stringWithFormat:@"%@",
-								   story[@"forwards"] ?: @(0)]}];
-	[self.rows addObject:@{@"title" : @"Reactions",
-						   @"detail" : [NSString stringWithFormat:@"%@",
-								   story[@"reactions"] ?: @(0)]}];
-	NSString *privacy = story[@"privacy"];
-	[self.rows addObject:@{@"title" : @"Privacy",
-						   @"detail" : TGStoryPrivacyNoun(privacy)}];
-	[self.rows addObject:@{@"title" : @"Chat",
-						   @"detail" : [story[@"isPostedToChatPage"] boolValue]
-								   ? @"Yes" : @"No"}];
+/// The one place the sheet's sections are built. Rows are shared-model rows;
+/// interactions, forwards and statistics append to `rows` and call this again,
+/// so a reload never reads a half-built list.
+- (void)publishRows {
+	self.sections = @[TGSection(
+			self.mode == TGStoryInfoModeReport ? TGLocalized(@"Report")
+											   : TGLocalized(@"Story"),
+			nil, self.rows)];
+	[self reloadRows];
+}
 
+- (void)buildRows {
+	NSMutableArray *rows = [TGStoryInfoRowsModel(self.story,
+			self.mode == TGStoryInfoModeReport) mutableCopy];
 	__weak typeof(self) weakSelf = self;
-	[self.rows addObject:@{@"title" : @"Interactions",
-						   @"tap" : ^{ [weakSelf loadInteractions]; }}];
-	[self.rows addObject:@{@"title" : @"Forwarded Messages",
-						   @"tap" : ^{ [weakSelf loadPublicForwards]; }}];
-	[self.rows addObject:@{@"title" : @"Statistics",
-						   @"tap" : ^{ [weakSelf loadStatistics]; }}];
-	if (self.mode == TGStoryInfoModeInfo)
-		[self.rows addObject:@{@"title" : @"Report Story",
-							   @"tap" : ^{ [weakSelf startReport]; }}];
-	[self.tableView reloadData];
+	NSInteger firstAction = rows.count - 4;
+	if (self.mode == TGStoryInfoModeInfo && firstAction >= 0){
+		rows[(NSUInteger)firstAction][TGRowTap] =
+				^{ [weakSelf loadInteractions]; };
+		rows[(NSUInteger)firstAction + 1][TGRowTap] =
+				^{ [weakSelf loadPublicForwards]; };
+		rows[(NSUInteger)firstAction + 2][TGRowTap] =
+				^{ [weakSelf loadStatistics]; };
+		rows[(NSUInteger)firstAction + 3][TGRowTap] =
+				^{ [weakSelf startReport]; };
+	}
+	self.rows = rows;
+	[self publishRows];
 }
 
 - (void)loadInteractions {
@@ -150,24 +129,24 @@ static NSString *TGStoryDateText(NSNumber *unixTime) {
 - (void)appendPage:(NSDictionary *)page {
 	NSArray *interactions = page[@"interactions"];
 	NSMutableArray *added = [NSMutableArray array];
-	[added addObject:@{@"title" : @"Interactions",
-					   @"detail" : [NSString stringWithFormat:@"%@ total, %@ forwards, %@ reactions",
-							   page[@"totalCount"] ?: @(0),
-							   page[@"totalForwardCount"] ?: @(0),
-							   page[@"totalReactionCount"] ?: @(0)]}];
+	[added addObject:TGStoryInfoRowModel(TGLocalized(@"Interactions"),
+			[NSString stringWithFormat:@"%@ total, %@ forwards, %@ reactions",
+					page[@"totalCount"] ?: @(0),
+					page[@"totalForwardCount"] ?: @(0),
+					page[@"totalReactionCount"] ?: @(0)], nil)];
 	for (NSDictionary *row in interactions){
 		NSString *kind = TGStoryInteractionNoun(row[@"kind"]);
 		NSString *reaction = row[@"reaction"] ?: @"";
 		NSString *detail = [NSString stringWithFormat:@"%@ · %@%@",
 				TGStoryDateText(row[@"date"]), kind,
 				reaction.length ? [@" · " stringByAppendingString:reaction] : @""];
-		[added addObject:@{@"title" : row[@"name"] ?: @"Someone",
-						   @"detail" : detail}];
+		[added addObject:TGStoryInfoRowModel(row[@"name"] ?: TGLocalized(@"Someone"),
+				detail, nil)];
 	}
 	if (!interactions.count)
-		[added addObject:@{@"title" : TGLocalized(@"No views")}];
+		[added addObject:TGStoryInfoRowModel(TGLocalized(@"No views"), nil, nil)];
 	[self.rows addObjectsFromArray:added];
-	[self.tableView reloadData];
+	[self publishRows];
 }
 
 - (void)loadPublicForwards {
@@ -186,21 +165,21 @@ static NSString *TGStoryDateText(NSNumber *unixTime) {
 			return;
 		}
 		NSMutableArray *added = [NSMutableArray array];
-		[added addObject:@{@"title" : @"Forwarded Messages",
-						   @"detail" : [NSString stringWithFormat:@"%@ total",
-								   page[@"totalCount"] ?: @(0)]}];
+		[added addObject:TGStoryInfoRowModel(TGLocalized(@"Forwarded Messages"),
+				[NSString stringWithFormat:@"%@ total",
+						page[@"totalCount"] ?: @(0)], nil)];
 		for (NSDictionary *row in page[@"forwards"]){
 			NSString *title = row[@"title"];
 			if (!title.length)
 				title = [row[@"kind"] isEqualToString:@"story"]
-						? @"Story" : @"Forwarded Messages";
+						? TGLocalized(@"Story") : TGLocalized(@"Forwarded Messages");
 			NSString *detail = row[@"text"];
 			if (!detail.length)
 				detail = TGStoryDateText(row[@"date"]);
-			[added addObject:@{@"title" : title, @"detail" : detail}];
+			[added addObject:TGStoryInfoRowModel(title, detail, nil)];
 		}
 		[me.rows addObjectsFromArray:added];
-		[me.tableView reloadData];
+		[me publishRows];
 	}];
 }
 
@@ -223,16 +202,16 @@ static NSString *TGStoryDateText(NSNumber *unixTime) {
 		NSMutableArray *added = [NSMutableArray array];
 		NSDictionary *interaction = statistics[@"interaction"] ?: @{};
 		NSDictionary *reaction = statistics[@"reaction"] ?: @{};
-		[added addObject:@{@"title" : @"Interactions",
-						   @"detail" : interaction[@"kind"] ?: @"none"}];
+		[added addObject:TGStoryInfoRowModel(TGLocalized(@"Interactions"),
+				interaction[@"kind"] ?: TGLocalized(@"none"), nil)];
 		for (NSString *line in interaction[@"lines"] ?: @[])
-			[added addObject:@{@"title" : line}];
-		[added addObject:@{@"title" : @"Reactions",
-						   @"detail" : reaction[@"kind"] ?: @"none"}];
+			[added addObject:TGStoryInfoRowModel(line, nil, nil)];
+		[added addObject:TGStoryInfoRowModel(TGLocalized(@"Reactions"),
+				reaction[@"kind"] ?: TGLocalized(@"none"), nil)];
 		for (NSString *line in reaction[@"lines"] ?: @[])
-			[added addObject:@{@"title" : line}];
+			[added addObject:TGStoryInfoRowModel(line, nil, nil)];
 		[me.rows addObjectsFromArray:added];
-		[me.tableView reloadData];
+		[me publishRows];
 	}];
 }
 
@@ -331,48 +310,6 @@ static NSString *TGStoryDateText(NSNumber *unixTime) {
 		[self dismissViewControllerAnimated:YES completion:nil];
 	else
 		[self.navigationController popViewControllerAnimated:YES];
-}
-
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-	return 1;
-}
-
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-	return self.rows.count;
-}
-
-- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-	return self.mode == TGStoryInfoModeReport ? @"Report" : @"Story";
-}
-
-- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-	NSDictionary *row = self.rows[indexPath.row];
-	UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"storyInfo"];
-	if (!cell)
-		cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle
-									  reuseIdentifier:@"storyInfo"];
-	[[TGTheme shared] styleCell:cell];
-	cell.textLabel.text = row[@"title"] ?: @"";
-	cell.textLabel.font = TGFontBody();
-	cell.textLabel.textColor = [[TGTheme shared] primaryTextColour];
-	cell.detailTextLabel.text = row[@"detail"];
-	cell.detailTextLabel.font = TGFontSubhead();
-	cell.detailTextLabel.textColor = [[TGTheme shared] secondaryTextColour];
-	cell.detailTextLabel.numberOfLines = 4;
-	cell.accessoryType = UITableViewCellAccessoryNone;
-	cell.selectionStyle = row[@"tap"] ? UITableViewCellSelectionStyleBlue
-									  : UITableViewCellSelectionStyleNone;
-	return cell;
-}
-
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	if (indexPath.row >= (NSInteger)self.rows.count)
-		return;
-	void (^tap)(void) = self.rows[indexPath.row][@"tap"];
-	if (!tap)
-		return;
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
-	tap();
 }
 
 @end

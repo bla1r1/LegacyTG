@@ -10,6 +10,9 @@
 #import "TGStyle.h"
 #import "TGIcons.h"
 #import "TGAlertSheet.h"
+#import "TGLocalization.h"
+#import "TGRows.h"
+#import "TGRowCell.h"
 
 /// Telegram's swatch is 44 pt on a phone, per the parity spec; the gap and
 /// gutter come from the spacing scale.
@@ -67,72 +70,23 @@ static UIImage *TGAppearanceAvatar(UIImage *avatar, UIColor *ring) {
 
 #pragma mark - the swatch grid
 
-@interface TGProfileSwatchCell : UITableViewCell
-@property (nonatomic, copy) void (^onSwatch)(NSInteger index);
-- (void)setSwatches:(NSArray *)swatches;   // array of UIImage
-- (void)swatchTapped:(UIButton *)button;
+/// The swatch strip and the live preview are drawn into the shared cell's
+/// content view. The screen owns the buttons, the cell family stays the one
+/// renderer; tags below its own range keep reuse from doubling the strip.
+static const NSInteger kSwatchButtonTag = 8100;
+static const NSInteger kPreviewAvatarTag = 8200;
+static const NSInteger kPreviewNameTag = 8201;
+
+@interface TGAppearanceSwatchButton : UIButton
+@property (nonatomic, copy) void (^onTap)(void);
 @end
 
-@implementation TGProfileSwatchCell {
-	NSArray *_swatches;
-	NSMutableArray *_tiles;
+@implementation TGAppearanceSwatchButton
+- (void)tapped {
+	void (^tap)(void) = self.onTap;
+	if (tap)
+		tap();
 }
-
-- (id)initWithStyle:(UITableViewCellStyle)style reuseIdentifier:(NSString *)reuse {
-	self = [super initWithStyle:style reuseIdentifier:reuse];
-	if (!self)
-		return nil;
-	self.selectionStyle = UITableViewCellSelectionStyleNone;
-	self.contentView.backgroundColor = [UIColor clearColor];
-	self.backgroundColor = [UIColor clearColor];
-	_tiles = [NSMutableArray array];
-	return self;
-}
-
-- (void)layoutSubviews {
-	[super layoutSubviews];
-	CGFloat width = self.contentView.bounds.size.width;
-	CGFloat usable = width - TGDoubled(kSwatchInset) -
-			kSwatchGap * (kSwatchColumns - 1);
-	CGFloat side = floorf(usable / kSwatchColumns);
-	for (NSUInteger i = 0; i < _tiles.count; i++){
-		UIButton *tile = _tiles[i];
-		CGFloat x = kSwatchInset + i * (side + kSwatchGap);
-		tile.frame = CGRectMake(x, TGCenteredOrigin(self.contentView.bounds.size.height, kSwatchSide),
-				side, kSwatchSide);
-	}
-}
-
-- (void)setSwatches:(NSArray *)swatches {
-	_swatches = [swatches copy] ?: @[];
-	while (_tiles.count < (NSUInteger)kSwatchColumns){
-		UIButton *tile = [UIButton buttonWithType:UIButtonTypeCustom];
-		tile.tag = (NSInteger)_tiles.count;
-		[tile addTarget:self action:@selector(swatchTapped:)
-	   forControlEvents:UIControlEventTouchUpInside];
-		[self.contentView addSubview:tile];
-		[_tiles addObject:tile];
-	}
-	for (NSUInteger i = 0; i < _tiles.count; i++){
-		UIButton *tile = _tiles[i];
-		if (i >= _swatches.count){
-			tile.hidden = YES;
-			continue;
-		}
-		tile.hidden = NO;
-		[tile setImage:_swatches[i] forState:UIControlStateNormal];
-	}
-	[self setNeedsLayout];
-}
-
-- (void)swatchTapped:(UIButton *)button {
-	NSInteger index = button.tag;
-	if (index < 0 || index >= (NSInteger)_swatches.count)
-		return;
-	if (self.onSwatch)
-		self.onSwatch(index);
-}
-
 @end
 
 #pragma mark - the screen
@@ -166,16 +120,15 @@ static UIImage *TGAppearanceAvatar(UIImage *avatar, UIColor *ring) {
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	self.title = @"Your Color";
+	self.title = TGLocalized(@"Your Color");
 	self.swatchCache = [[NSCache alloc] init];
-	[self applyTheme];
 
 	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
-			initWithTitle:@"Apply" style:UIBarButtonItemStyleDone
+			initWithTitle:TGLocalized(@"Apply") style:UIBarButtonItemStyleDone
 				   target:self action:@selector(applyTapped)];
 
 	UISegmentedControl *tabs = [[UISegmentedControl alloc]
-			initWithItems:@[@"Profile", @"Name"]];
+			initWithItems:@[TGLocalized(@"Profile"), TGLocalized(@"Name")]];
 	tabs.selectedSegmentIndex = self.tab;
 	[tabs addTarget:self action:@selector(tabChanged:)
    forControlEvents:UIControlEventValueChanged];
@@ -190,6 +143,7 @@ static UIImage *TGAppearanceAvatar(UIImage *avatar, UIColor *ring) {
 	self.tableView.tableHeaderView = header;
 
 	[self loadColours];
+	[self rebuildSections];
 
 	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(loadColours)
 			name:TGAccentColorsChangedNotification object:nil];
@@ -198,10 +152,8 @@ static UIImage *TGAppearanceAvatar(UIImage *avatar, UIColor *ring) {
 }
 
 - (void)applyTheme {
-	self.tableView.separatorColor = [[TGTheme shared] separatorColour];
-	self.tableView.backgroundColor = [[TGTheme shared] groupedBackgroundColour];
+	[super applyTheme];
 	[[TGTheme shared] styleNavigationBar:self.navigationController.navigationBar];
-	[self.tableView reloadData];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -211,7 +163,7 @@ static UIImage *TGAppearanceAvatar(UIImage *avatar, UIColor *ring) {
 
 - (void)tabChanged:(UISegmentedControl *)tabs {
 	self.tab = tabs.selectedSegmentIndex;
-	[self.tableView reloadData];
+	[self rebuildSections];
 }
 
 /// The ids come from updateAccentColors (cached on the client), the two chosen
@@ -232,8 +184,76 @@ static UIImage *TGAppearanceAvatar(UIImage *avatar, UIColor *ring) {
 		me.pendingProfileId = profile;
 		me.backgroundEmojiId = emoji;
 		me.profileBackgroundEmojiId = profileEmoji;
-		[me.tableView reloadData];
+		[me rebuildSections];
 	}];
+}
+
+/// The one place the page's rows are built. A tab switch, a palette update and
+/// a chosen swatch all replace the list here and reload once.
+- (void)rebuildSections {
+	NSMutableDictionary *preview = [TGRow(TGKindAppearancePreview, @"")
+			mutableCopy];
+	NSDictionary *me = [TGClient shared].me;
+	NSString *name = [me[@"first_name"] length] ? me[@"first_name"]
+			: TGLocalized(@"Name");
+	if ([me[@"last_name"] length])
+		name = [NSString stringWithFormat:@"%@ %@", name, me[@"last_name"]];
+	CGFloat side = TGMetricListAvatar;
+	UIImage *avatar = [TGIcons avatarWithInitials:[TGIcons initialsForTitle:name]
+											 size:side
+										 colourId:[me[@"id"] longLongValue]];
+	UIColor *profileColour = [[TGClient shared] accentColourForId:self.pendingProfileId
+														  profile:YES];
+	preview[TGRowPreviewImage] = TGAppearanceAvatar(avatar,
+			profileColour ?: [[TGTheme shared] separatorColour]);
+	preview[TGRowPreviewText] = name;
+	preview[TGRowPreviewTextColour] = [[TGClient shared]
+			accentColourForId:self.pendingAccentId profile:NO] ?:
+			[[TGTheme shared] primaryTextColour];
+
+	NSArray *ids = self.activeIds;
+	NSInteger count = (NSInteger)ids.count;
+	NSInteger rowCount = (count + kSwatchColumns - 1) / kSwatchColumns;
+	NSMutableArray *swatchRows = [NSMutableArray array];
+	for (NSInteger row = 0; row < rowCount; row++){
+		NSInteger start = row * kSwatchColumns;
+		NSInteger end = MIN(start + kSwatchColumns, count);
+		NSMutableArray *images = [NSMutableArray array];
+		NSInteger active = [self activeId];
+		for (NSInteger i = start; i < end; i++){
+			NSInteger colourId = [ids[(NSUInteger)i] integerValue];
+			[images addObject:[self swatchImageForId:colourId
+					selected:(colourId == active)]];
+		}
+		NSMutableDictionary *row = [TGRow(TGKindSwatchStrip, @"") mutableCopy];
+		row[TGRowSwatches] = images;
+		NSArray *colourIds = [ids subarrayWithRange:
+				NSMakeRange((NSUInteger)start, (NSUInteger)(end - start))];
+		__weak typeof(self) weakSelf = self;
+		row[TGRowSwatchTap] = ^(NSInteger index){
+			if (index < 0 || index >= (NSInteger)colourIds.count)
+				return;
+			[weakSelf chooseColourId:[colourIds[(NSUInteger)index] integerValue]];
+		};
+		[swatchRows addObject:row];
+	}
+
+	NSMutableArray *sections = [NSMutableArray array];
+	[sections addObject:TGSection(nil, nil, @[preview])];
+	[sections addObject:TGSection(self.tab == kTabProfile
+			? TGLocalized(@"Profile") : TGLocalized(@"Name"), nil, swatchRows)];
+	if (self.tab == kTabProfile){
+		__weak typeof(self) weakSelf = self;
+		[sections addObject:TGSection(nil, nil, @[
+			TGCentredDestructiveRow(TGLocalized(@"Reset"), ^{
+				weakSelf.pendingProfileId = -1;
+				weakSelf.profileChanged = YES;
+				[weakSelf rebuildSections];
+			}),
+		])];
+	}
+	self.sections = sections;
+	[self reloadRows];
 }
 
 - (NSInteger)activeId {
@@ -265,121 +285,111 @@ static UIImage *TGAppearanceAvatar(UIImage *avatar, UIColor *ring) {
 
 #pragma mark - table
 
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-	return self.tab == kTabProfile ? 3 : 2;
-}
-
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-	if (section == 1){
-		NSInteger count = (NSInteger)self.activeIds.count;
-		return (count + kSwatchColumns - 1) / kSwatchColumns;
-	}
-	return 1;
-}
-
 - (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)path {
-	if (path.section == 1)
+	NSDictionary *row = [self rowAtPath:path];
+	if ([row[TGRowKind] isEqualToString:TGKindSwatchStrip])
 		return kSwatchRow;
-	if (path.section == 0)
+	if ([row[TGRowKind] isEqualToString:TGKindAppearancePreview])
 		return TGMetricPersonRow;
-	return TGMetricRow;
+	return [super tableView:tableView heightForRowAtIndexPath:path];
 }
 
-- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-	if (section == 1)
-		return self.tab == kTabProfile ? @"Profile" : @"Name";
-	return nil;
+- (NSDictionary *)rowAtPath:(NSIndexPath *)path {
+	if (path.section < 0 || path.section >= (NSInteger)self.sections.count)
+		return nil;
+	NSArray *rows = self.sections[(NSUInteger)path.section][@"rows"];
+	if (path.row < 0 || path.row >= (NSInteger)rows.count)
+		return nil;
+	return rows[(NSUInteger)path.row];
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView
 		 cellForRowAtIndexPath:(NSIndexPath *)path {
-	TGTheme *theme = [TGTheme shared];
-
-	if (path.section == 0)
-		return [self previewCellFor:tableView];
-
-	if (path.section == 1){
-		static NSString *reuse = @"swatch";
-		TGProfileSwatchCell *cell = [tableView dequeueReusableCellWithIdentifier:reuse];
-		if (!cell)
-			cell = [[TGProfileSwatchCell alloc] initWithStyle:UITableViewCellStyleDefault
-											  reuseIdentifier:reuse];
-		NSArray *ids = self.activeIds;
-		NSInteger start = path.row * kSwatchColumns;
-		NSInteger end = MIN(start + kSwatchColumns, (NSInteger)ids.count);
-		NSInteger activeId = [self activeId];
-		NSMutableArray *images = [NSMutableArray array];
-		for (NSInteger i = start; i < end; i++){
-			NSInteger colourId = [ids[i] integerValue];
-			[images addObject:[self swatchImageForId:colourId selected:(colourId == activeId)]];
-		}
-		__weak typeof(self) weakSelf = self;
-		cell.onSwatch = ^(NSInteger index){
-			[weakSelf chooseColourId:[ids[start + index] integerValue]];
-		};
-		[cell setSwatches:images];
+	NSDictionary *row = [self rowAtPath:path];
+	NSString *kind = row[TGRowKind];
+	if ([kind isEqualToString:TGKindAppearancePreview] ||
+			[kind isEqualToString:TGKindSwatchStrip]){
+		NSArray *rows = self.sections[(NSUInteger)path.section][@"rows"];
+		TGRowCell *cell = [TGRowCell cellForTableView:tableView row:row
+											 rowIndex:path.row totalRows:rows.count];
+		if ([kind isEqualToString:TGKindAppearancePreview])
+			[self decoratePreviewCell:cell row:row tableView:tableView];
+		else
+			[self decorateSwatchCell:cell row:row tableView:tableView];
 		return cell;
 	}
-
-	UITableViewCell *cell = [[UITableViewCell alloc]
-			initWithStyle:UITableViewCellStyleDefault reuseIdentifier:nil];
-	[theme styleGroupedCell:cell forRow:0 totalRows:1];
-	cell.textLabel.text = @"Reset";
-	cell.textLabel.font = TGFontRow();
-	cell.textLabel.textColor = [theme destructiveColour];
-	cell.textLabel.textAlignment = NSTextAlignmentCenter;
-	cell.selectionStyle = UITableViewCellSelectionStyleBlue;
+	UITableViewCell *cell = [super tableView:tableView
+					   cellForRowAtIndexPath:path];
+	if ([cell isKindOfClass:TGRowCell.class])
+		[(TGRowCell *)cell applyAppendedOptions:row];
 	return cell;
 }
 
-- (UITableViewCell *)previewCellFor:(UITableView *)tableView {
-	TGTheme *theme = [TGTheme shared];
-	UITableViewCell *cell = [[UITableViewCell alloc]
-			initWithStyle:UITableViewCellStyleDefault reuseIdentifier:nil];
-	[theme styleGroupedCell:cell forRow:0 totalRows:1];
-	cell.selectionStyle = UITableViewCellSelectionStyleNone;
-
-	NSDictionary *me = [TGClient shared].me;
-	NSString *name = [me[@"first_name"] length] ? me[@"first_name"] : @"Name";
-	if ([me[@"last_name"] length])
-		name = [NSString stringWithFormat:@"%@ %@", name, me[@"last_name"]];
+/// The live preview: the picture with the pending profile ring and the name in
+/// the pending accent colour. Both are baked by the screen, so the shared cell
+/// only carries them.
+- (void)decoratePreviewCell:(TGRowCell *)cell
+						row:(NSDictionary *)row
+				  tableView:(UITableView *)tableView {
+	for (UIView *view in [cell.contentView.subviews copy])
+		if (view.tag == kPreviewAvatarTag || view.tag == kPreviewNameTag)
+			[view removeFromSuperview];
 
 	CGFloat side = TGMetricListAvatar;
-	UIImage *avatar = [TGIcons avatarWithInitials:[TGIcons initialsForTitle:name]
-											 size:side
-										 colourId:[me[@"id"] longLongValue]];
-	UIColor *profileColour = [[TGClient shared] accentColourForId:self.pendingProfileId
-														  profile:YES];
-	avatar = TGAppearanceAvatar(avatar, profileColour ?: [theme separatorColour]);
-
 	UIImageView *avatarView = [[UIImageView alloc] initWithFrame:
-			CGRectMake(TGMetricGutter, TGCenteredOrigin(TGMetricPersonRow, side), side, side)];
-	avatarView.image = avatar;
+			CGRectMake(TGMetricGutter,
+					TGCenteredOrigin(TGMetricPersonRow, side), side, side)];
+	avatarView.tag = kPreviewAvatarTag;
+	avatarView.image = row[TGRowPreviewImage];
 	[cell.contentView addSubview:avatarView];
 
-	UIColor *nameColour = [[TGClient shared] accentColourForId:self.pendingAccentId
-													   profile:NO];
-	CGFloat width = tableView.bounds.size.width;
+	CGFloat width = tableView.bounds.size.width ?: TGMetricScreenWidth;
 	UILabel *nameLabel = [[UILabel alloc] initWithFrame:
 			CGRectMake(TGMetricGutter + side + TGMetricPadMedium,
 					TGCenteredOrigin(TGMetricPersonRow, TGMetricLineRow),
 					width - TGMetricGutter - side - TGMetricPadMedium - TGMetricGutter,
 					TGMetricLineRow)];
-	nameLabel.text = name;
+	nameLabel.tag = kPreviewNameTag;
+	nameLabel.text = row[TGRowPreviewText];
 	nameLabel.font = TGFontRowStrong();
-	nameLabel.textColor = nameColour ?: [theme primaryTextColour];
+	nameLabel.textColor = row[TGRowPreviewTextColour] ?:
+			[[TGTheme shared] primaryTextColour];
 	nameLabel.backgroundColor = [UIColor clearColor];
 	[cell.contentView addSubview:nameLabel];
-	return cell;
 }
 
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)path {
-	[tableView deselectRowAtIndexPath:path animated:YES];
-	if (path.section == 2){
-		self.pendingProfileId = -1;
-		self.profileChanged = YES;
-		[self.tableView reloadData];
+/// The swatch strip: five discs to a row, each a button that reports its slot
+/// in `TGRowSwatchTap`. The images were baked once per id by the screen.
+- (void)decorateSwatchCell:(TGRowCell *)cell
+					   row:(NSDictionary *)row
+				 tableView:(UITableView *)tableView {
+	for (UIView *view in [cell.contentView.subviews copy])
+		if (view.tag >= kSwatchButtonTag && view.tag < kSwatchButtonTag + kSwatchColumns)
+			[view removeFromSuperview];
+
+	NSArray *images = row[TGRowSwatches] ?: @[];
+	void (^tap)(NSInteger) = row[TGRowSwatchTap];
+	CGFloat width = tableView.bounds.size.width ?: TGMetricScreenWidth;
+	CGFloat usable = width - TGDoubled(kSwatchInset) -
+			kSwatchGap * (kSwatchColumns - 1);
+	CGFloat side = floorf(usable / kSwatchColumns);
+	for (NSUInteger i = 0; i < images.count && i < (NSUInteger)kSwatchColumns; i++){
+		TGAppearanceSwatchButton *tile = [TGAppearanceSwatchButton
+				buttonWithType:UIButtonTypeCustom];
+		tile.tag = kSwatchButtonTag + (NSInteger)i;
+		tile.frame = CGRectMake(kSwatchInset + i * (side + kSwatchGap),
+				TGCenteredOrigin(kSwatchRow, kSwatchSide), side, kSwatchSide);
+		[tile setImage:images[i] forState:UIControlStateNormal];
+		NSInteger index = (NSInteger)i;
+		tile.onTap = ^{ if (tap) tap(index); };
+		[tile addTarget:self action:@selector(swatchTapped:)
+	   forControlEvents:UIControlEventTouchUpInside];
+		[cell.contentView addSubview:tile];
 	}
+}
+
+- (void)swatchTapped:(TGAppearanceSwatchButton *)button {
+	[button tapped];
 }
 
 #pragma mark - choosing and applying
@@ -392,7 +402,7 @@ static UIImage *TGAppearanceAvatar(UIImage *avatar, UIColor *ring) {
 		self.pendingAccentId = colourId;
 		self.accentChanged = YES;
 	}
-	[self.tableView reloadData];
+	[self rebuildSections];
 }
 
 - (void)applyTapped {

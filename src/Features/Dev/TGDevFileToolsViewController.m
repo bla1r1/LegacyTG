@@ -3,39 +3,7 @@
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
-
-/// The progress row draws a bar under the stage label. A stock cell puts the
-/// label where the bar wants to be, so the two are laid out here once.
-@interface TGFileProgressCell : UITableViewCell
-@property (nonatomic, strong) UIProgressView *bar;
-@end
-
-@implementation TGFileProgressCell
-
-- (instancetype)initWithStyle:(UITableViewCellStyle)style
-			   reuseIdentifier:(NSString *)reuseIdentifier {
-	self = [super initWithStyle:style reuseIdentifier:reuseIdentifier];
-	if (self){
-		self.bar = [[UIProgressView alloc]
-				initWithProgressViewStyle:UIProgressViewStyleDefault];
-		self.bar.progressTintColor = [[TGTheme shared] accentColour];
-		[self.contentView addSubview:self.bar];
-	}
-	return self;
-}
-
-- (void)layoutSubviews {
-	[super layoutSubviews];
-	CGRect bounds = self.contentView.bounds;
-	CGFloat inset = TGMetricPadLarge;
-	self.textLabel.frame = CGRectMake(inset, 0, bounds.size.width - TGDoubled(inset),
-			TGMetricLineRow + TGMetricPadSmall);
-	self.bar.frame = CGRectMake(inset,
-			TGCenteredOrigin(bounds.size.height, TGMetricLineMicro),
-			bounds.size.width - TGDoubled(inset), TGMetricLineMicro);
-}
-
-@end
+#import "TGRows.h"
 
 @interface TGDevFileToolsViewController ()
 @property (nonatomic, assign) BOOL busy;
@@ -55,11 +23,11 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	self.title = @"File Tools";
-	self.stage = @"Ready";
+	self.title = TGLocalized(@"File Tools");
+	self.stage = TGLocalized(@"Ready");
 	self.tableView.tableFooterView = [[UIView alloc] initWithFrame:CGRectZero];
+	[self rebuildSections];
 	[self applyTheme];
-
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -73,8 +41,8 @@
 		if (!me || me.fileId != fileId)
 			return;
 		me.progress = progress;
-		me.stage = @"Uploading";
-		[me.tableView reloadData];
+		me.stage = TGLocalized(@"Uploading");
+		[me rebuildSections];
 	};
 }
 
@@ -84,9 +52,8 @@
 }
 
 - (void)applyTheme {
-	[[TGTheme shared] styleGroupedTable:self.tableView];
+	[super applyTheme];
 	[[TGTheme shared] styleNavigationBar:self.navigationController.navigationBar];
-	[self.tableView reloadData];
 }
 
 - (BOOL)hasTransfer {
@@ -97,157 +64,92 @@
 	return self.generatedPath.length > 0;
 }
 
-#pragma mark - table
+#pragma mark - rows
 
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-	return 1 + (self.hasTransfer ? 1 : 0) + (self.hasResult ? 1 : 0);
-}
+- (void)rebuildSections {
+	__weak typeof(self) weakSelf = self;
+	NSMutableArray *sections = [NSMutableArray array];
 
-- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-	if (section == 0)
-		return @"GENERATE AND UPLOAD";
-	if (section == 1 && self.hasTransfer)
-		return @"TRANSFER";
-	return self.hasResult ? @"GENERATED FILE" : nil;
-}
+	NSString *generateTitle = self.busy ? TGLocalized(@"Generating...")
+			: TGLocalized(@"Generate and Upload a File");
+	NSDictionary *generateRow = self.busy
+			? TGRow(TGKindPlain, generateTitle)
+			: TGActionRow(generateTitle, ^{ [weakSelf showGenerate]; });
+	[sections addObject:TGSection(TGLocalized(@"GENERATE AND UPLOAD"),
+			TGLocalized(@"TDLib asks this app for the bytes through "
+					@"updateFileGenerationStart. The file is written part by part, "
+					@"finished, and uploaded with preliminaryUploadFile - the same "
+					@"path a recording takes before it is sent. Cancel stops the "
+					@"upload."), @[generateRow])];
 
-- (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-	if (section == 0)
-		return @"TDLib asks this app for the bytes through updateFileGenerationStart. "
-			   @"The file is written part by part, finished, and uploaded with "
-			   @"preliminaryUploadFile - the same path a recording takes before it "
-			   @"is sent. Cancel stops the upload.";
-	return nil;
-}
-
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-	if (section == 0)
-		return 1;
-	if (section == 1 && self.hasTransfer)
-		return 2;
-	return self.hasResult ? 3 : 0;
-}
-
-- (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath {
-	if (indexPath.section == 1 && indexPath.row == 0)
-		return TGMetricRow + TGMetricLineMicro;
-	return TGMetricRow;
-}
-
-- (UITableViewCell *)tableView:(UITableView *)tableView
-		 cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-	TGTheme *theme = [TGTheme shared];
-	NSString *reuse = @"fileTools";
-	UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:reuse];
-	if (!cell)
-		cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1
-									  reuseIdentifier:reuse];
-	[theme styleCell:cell];
-	cell.textLabel.font = TGFontBody();
-	cell.textLabel.textColor = [theme primaryTextColour];
-	cell.textLabel.textAlignment = NSTextAlignmentLeft;
-	cell.detailTextLabel.font = TGFontCaption();
-	cell.detailTextLabel.textColor = [theme cellDetailColour];
-	cell.accessoryType = UITableViewCellAccessoryNone;
-	cell.selectionStyle = UITableViewCellSelectionStyleNone;
-
-	if (indexPath.section == 0){
-		cell.textLabel.text = self.busy ? @"Generating..." : @"Generate and Upload a File";
-		cell.textLabel.textColor = self.busy
-				? [theme secondaryTextColour] : [theme accentColour];
-		cell.selectionStyle = self.busy
-				? UITableViewCellSelectionStyleNone : UITableViewCellSelectionStyleDefault;
-		return cell;
+	if (self.hasTransfer){
+		NSMutableDictionary *progress = [TGTapRow(
+				TGDevFileToolsProgressText(self.stage, self.progress), nil, nil)
+				mutableCopy];
+		progress[TGRowHeight] = @(TGMetricRow + TGMetricLineMicro);
+		NSString *actionTitle = self.busy ? TGLocalized(@"Cancel Upload")
+				: TGLocalized(@"Clear");
+		[sections addObject:TGSection(TGLocalized(@"TRANSFER"), nil, @[
+			progress,
+			TGRedRow(actionTitle, ^{ [weakSelf cancelOrClear]; }),
+		])];
 	}
 
-	if (indexPath.section == 1){
-		if (indexPath.row == 1){
-			cell.textLabel.text = self.busy ? @"Cancel Upload" : @"Clear";
-			cell.textLabel.textColor = [theme destructiveColour];
-			cell.textLabel.textAlignment = NSTextAlignmentCenter;
-			cell.selectionStyle = UITableViewCellSelectionStyleDefault;
-			return cell;
+	if (self.hasResult){
+		NSMutableArray *rows = [NSMutableArray array];
+		NSArray *models = TGDevFileToolsResultModels(self.generatedPath,
+				self.generatedSize, self.preview);
+		for (NSUInteger index = 0; index < models.count; index++){
+			NSDictionary *model = models[index];
+			if (index < 2){
+				[rows addObject:TGTapRow(model[@"title"], model[@"detail"], nil)];
+			} else {
+				NSMutableDictionary *preview = [TGTapRow(model[@"title"], nil,
+						^{ [weakSelf readPreview]; }) mutableCopy];
+				preview[TGRowTitleLines] = @0;
+				[rows addObject:preview];
+			}
 		}
-
-		TGFileProgressCell *progressCell = [tableView
-				dequeueReusableCellWithIdentifier:@"fileProgress"];
-		if (!progressCell)
-			progressCell = [[TGFileProgressCell alloc]
-					initWithStyle:UITableViewCellStyleDefault
-				   reuseIdentifier:@"fileProgress"];
-		[theme styleCell:progressCell];
-		progressCell.textLabel.font = TGFontBody();
-		progressCell.textLabel.textColor = [theme primaryTextColour];
-		progressCell.textLabel.text = [NSString stringWithFormat:@"%@  %d%%",
-				self.stage ?: @"Working", (int)(self.progress * 100)];
-		progressCell.bar.progress = self.progress;
-		progressCell.bar.progressTintColor = [theme accentColour];
-		progressCell.selectionStyle = UITableViewCellSelectionStyleNone;
-		return progressCell;
+		[sections addObject:TGSection(TGLocalized(@"GENERATED FILE"), nil, rows)];
 	}
 
-	if (indexPath.row == 0){
-		cell.textLabel.text = @"Path";
-		cell.detailTextLabel.text = self.generatedPath;
-	} else if (indexPath.row == 1){
-		cell.textLabel.text = @"Size";
-		cell.detailTextLabel.text = [NSString stringWithFormat:@"%lld bytes",
-				self.generatedSize];
+	self.sections = sections;
+	[self reloadRows];
+}
+
+- (void)showGenerate {
+	if (self.busy)
+		return;
+	__weak typeof(self) weakSelf = self;
+	[TGAlertSheet showInput:TGLocalized(@"Generate a File")
+					message:TGLocalized(@"A text file is written through TDLib's "
+							@"file-generation API and uploaded preliminarily. The "
+							@"upload stops short of a message, which is what "
+							@"preliminary means.")
+				placeholder:TGLocalized(@"File name")
+					   text:@"legacy-note.txt"
+					 action:TGLocalized(@"Create")
+					 inView:self.view
+				   onSubmit:^(NSString *name){
+		[weakSelf startGenerationWithName:name];
+	}];
+}
+
+- (void)cancelOrClear {
+	if (self.busy){
+		[[TGClient shared] cancelPreliminaryUploadOfFile:self.fileId];
+		self.busy = NO;
+		self.stage = TGLocalized(@"Cancelled");
+		self.progress = 0;
+		self.fileId = 0;
 	} else {
-		cell.textLabel.numberOfLines = 3;
-		cell.textLabel.font = TGFontCaption();
-		cell.textLabel.text = self.preview.length
-				? [self.preview stringByReplacingOccurrencesOfString:@"\n"
-														 withString:@" "]
-				: @"Tap to read the first bytes back.";
-		cell.selectionStyle = UITableViewCellSelectionStyleDefault;
+		self.generatedPath = nil;
+		self.preview = nil;
+		self.fileId = 0;
+		self.generatedSize = 0;
+		self.stage = TGLocalized(@"Ready");
 	}
-	return cell;
-}
-
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
-
-	if (indexPath.section == 0){
-		if (self.busy)
-			return;
-		__weak typeof(self) weakSelf = self;
-		[TGAlertSheet showInput:@"Generate a File"
-						message:@"A text file is written through TDLib's file-generation "
-								@"API and uploaded preliminarily. The upload stops short of "
-								@"a message, which is what preliminary means."
-					placeholder:@"File name"
-						   text:@"legacy-note.txt"
-						 action:@"Create"
-						 inView:self.view
-					   onSubmit:^(NSString *name){
-			[weakSelf startGenerationWithName:name];
-		}];
-		return;
-	}
-
-	if (indexPath.section == 1){
-		if (indexPath.row == 0)
-			return;
-		if (self.busy){
-			[[TGClient shared] cancelPreliminaryUploadOfFile:self.fileId];
-			self.busy = NO;
-			self.stage = @"Cancelled";
-			self.progress = 0;
-			self.fileId = 0;
-		} else {
-			self.generatedPath = nil;
-			self.preview = nil;
-			self.fileId = 0;
-			self.generatedSize = 0;
-			self.stage = @"Ready";
-		}
-		[self.tableView reloadData];
-		return;
-	}
-
-	if (indexPath.section == 2 && indexPath.row == 2)
-		[self readPreview];
+	[self rebuildSections];
 }
 
 #pragma mark - generation
@@ -267,12 +169,12 @@
 
 	self.busy = YES;
 	self.progress = 0;
-	self.stage = @"Preparing";
+	self.stage = TGLocalized(@"Preparing");
 	self.fileId = 0;
 	self.generatedPath = nil;
 	self.generatedSize = 0;
 	self.preview = nil;
-	[self.tableView reloadData];
+	[self rebuildSections];
 
 	__weak typeof(self) weakSelf = self;
 	[[TGClient shared] generateTextFileNamed:name contents:contents
@@ -284,7 +186,7 @@
 			me.fileId = fileId;
 		me.progress = progress;
 		me.stage = stage;
-		[me.tableView reloadData];
+		[me rebuildSections];
 	} completion:^(NSInteger fileId, NSString *path, NSError *error){
 		TGDevFileToolsViewController *me = weakSelf;
 		if (!me)
@@ -292,20 +194,20 @@
 		me.busy = NO;
 		if (error){
 			me.fileId = 0;
-			me.stage = @"Stopped";
+			me.stage = TGLocalized(@"Stopped");
 			me.progress = 0;
-			[me.tableView reloadData];
+			[me rebuildSections];
 			[TGAlertSheet showMessage:error.localizedDescription
-								 title:@"File Tools" inView:me.view];
+								 title:TGLocalized(@"File Tools") inView:me.view];
 			return;
 		}
 		me.fileId = fileId;
 		me.generatedPath = path;
-		me.stage = @"Uploading";
+		me.stage = TGLocalized(@"Uploading");
 		NSDictionary *attributes = [[NSFileManager defaultManager]
 				attributesOfItemAtPath:path error:nil];
 		me.generatedSize = [attributes[NSFileSize] longLongValue];
-		[me.tableView reloadData];
+		[me rebuildSections];
 		[me readPreview];
 	}];
 }
@@ -323,9 +225,9 @@
 				? [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding]
 				: nil;
 		me.preview = text.length ? text : (data.length
-				? @"(The first bytes are not text.)"
-				: @"TDLib has not cached the first part yet.");
-		[me.tableView reloadData];
+				? TGLocalized(@"(The first bytes are not text.)")
+				: TGLocalized(@"TDLib has not cached the first part yet."));
+		[me rebuildSections];
 	}];
 }
 

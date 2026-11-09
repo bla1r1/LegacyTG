@@ -10,6 +10,8 @@
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGLocalization.h"
+#import "TGPeerRowCell.h"
+#import "TGRows.h"
 
 /// A topic row is a chat row in miniature: a coloured icon made from the
 /// topic's own id, the name, the last message, the time and the unread count.
@@ -25,150 +27,6 @@ static NSString *TGTopicDateText(NSNumber *stamp) {
 	return len ? [[NSString alloc] initWithBytes:buf length:len
 									   encoding:NSUTF8StringEncoding] : @"";
 }
-
-@interface TGTopicCell : UITableViewCell
-- (void)applyTopic:(NSDictionary *)topic;
-@end
-
-@implementation TGTopicCell {
-	UIImageView *_iconView;
-	UILabel *_titleLabel;
-	UILabel *_previewLabel;
-	UILabel *_dateLabel;
-	UIImageView *_pinView;
-	TGBadge *_badge;
-}
-
-- (instancetype)initWithStyle:(UITableViewCellStyle)style
-			   reuseIdentifier:(NSString *)reuseIdentifier {
-	self = [super initWithStyle:style reuseIdentifier:reuseIdentifier];
-	if (!self)
-		return nil;
-	_iconView = [[UIImageView alloc] initWithFrame:CGRectZero];
-	_iconView.contentMode = UIViewContentModeScaleAspectFill;
-	[self.contentView addSubview:_iconView];
-
-	_titleLabel = [[UILabel alloc] initWithFrame:CGRectZero];
-	_titleLabel.font = TGFontRowStrong();
-	_titleLabel.backgroundColor = [UIColor clearColor];
-	_titleLabel.lineBreakMode = NSLineBreakByTruncatingTail;
-	[self.contentView addSubview:_titleLabel];
-
-	_previewLabel = [[UILabel alloc] initWithFrame:CGRectZero];
-	_previewLabel.font = TGFontCaption();
-	_previewLabel.backgroundColor = [UIColor clearColor];
-	_previewLabel.lineBreakMode = NSLineBreakByTruncatingTail;
-	[self.contentView addSubview:_previewLabel];
-
-	_dateLabel = [[UILabel alloc] initWithFrame:CGRectZero];
-	_dateLabel.font = TGFontCaption();
-	_dateLabel.textAlignment = NSTextAlignmentRight;
-	_dateLabel.backgroundColor = [UIColor clearColor];
-	[self.contentView addSubview:_dateLabel];
-
-	_pinView = [[UIImageView alloc] initWithFrame:CGRectZero];
-	_pinView.contentMode = UIViewContentModeScaleAspectFit;
-	[self.contentView addSubview:_pinView];
-
-	_badge = [TGBadge badgeWithCount:0];
-	[self.contentView addSubview:_badge];
-	return self;
-}
-
-- (void)layoutSubviews {
-	[super layoutSubviews];
-	CGRect b = self.contentView.bounds;
-	CGFloat iconSide = TGMetricTopicIcon;
-
-	_iconView.frame = CGRectMake(TGMetricPad,
-			TGCenteredOrigin(b.size.height, iconSide), iconSide, iconSide);
-
-	CGFloat dateWidth = TGMetricCallLabelWidth;
-	CGFloat right = b.size.width - TGMetricGutter;
-	_dateLabel.frame = CGRectMake(right - dateWidth, TGMetricPad,
-			dateWidth, TGMetricLineCaption);
-	CGSize badgeSize = [_badge sizeThatFits:CGSizeZero];
-	_badge.frame = CGRectMake(right - badgeSize.width,
-			TGMetricPad + TGMetricLineCaption + TGMetricPadTiny,
-			badgeSize.width, badgeSize.height);
-
-	CGFloat x = TGMetricPad + iconSide + TGMetricPadMedium;
-	CGFloat maxX = right - dateWidth - TGMetricPad;
-	CGFloat titleX = x;
-	if (!_pinView.hidden) {
-		_pinView.frame = CGRectMake(x, TGMetricPad + TGMetricPadTiny,
-				TGMetricLineCaption, TGMetricLineCaption);
-		titleX = CGRectGetMaxX(_pinView.frame) + TGMetricPadSmall;
-	}
-	_titleLabel.frame = CGRectMake(titleX, TGMetricPad,
-			MAX(0, maxX - titleX), TGMetricLineRow);
-	_previewLabel.frame = CGRectMake(x, TGMetricPad + TGMetricLineRow + TGMetricPadTiny,
-			MAX(0, maxX - x), TGMetricLineCaption);
-}
-
-- (void)applyTopic:(NSDictionary *)topic {
-	TGTheme *theme = [TGTheme shared];
-	NSString *name = topic[@"name"] ?: @"Topic";
-	NSString *initials = [TGIcons initialsForTitle:name];
-	if (!initials.length)
-		initials = [topic[@"general"] boolValue] ? @"G" : @"?";
-	_iconView.image = [TGIcons avatarWithInitials:initials
-			size:TGMetricTopicIcon
-			colourId:[topic[@"threadId"] longLongValue]];
-	_iconView.layer.cornerRadius = TGHalf(TGMetricTopicIcon);
-	_iconView.clipsToBounds = YES;
-
-	_titleLabel.text = name;
-	_titleLabel.textColor = [theme primaryTextColour];
-	_dateLabel.text = TGTopicDateText(topic[@"date"]);
-	_dateLabel.textColor = [theme listDateColour];
-
-	NSMutableArray *marks = [NSMutableArray array];
-	NSInteger mentions = [topic[@"unreadMentions"] integerValue];
-	NSInteger polls = [topic[@"unreadPollVotes"] integerValue];
-	NSInteger reactions = [topic[@"unreadReactions"] integerValue];
-	if (mentions > 0)
-		[marks addObject:[NSString stringWithFormat:@"@ %ld", (long)mentions]];
-	if (polls > 0)
-		[marks addObject:[NSString stringWithFormat:@"%ld poll vote%@",
-				(long)polls, polls == 1 ? @"" : @"s"]];
-	if (reactions > 0)
-		[marks addObject:[NSString stringWithFormat:@"%ld reaction%@",
-				(long)reactions, reactions == 1 ? @"" : @"s"]];
-
-	NSString *preview = topic[@"text"] ?: @"";
-	if ([topic[@"closed"] boolValue])
-		preview = preview.length
-				? [NSString stringWithFormat:@"Closed · %@", preview]
-				: @"Closed";
-	if (marks.count) {
-		NSString *line = [marks componentsJoinedByString:@" · "];
-		preview = preview.length
-				? [NSString stringWithFormat:@"%@ · %@", line, preview] : line;
-	}
-	_previewLabel.text = preview.length ? preview : @"No messages here yet...";
-	_previewLabel.textColor = [theme secondaryTextColour];
-
-	_pinView.hidden = ![topic[@"pinned"] boolValue];
-	_pinView.image = [TGIcons glyphNamed:@"pin"
-								  colour:[theme secondaryTextColour]
-									side:TGMetricLineCaption];
-
-	NSInteger unread = [topic[@"unread"] integerValue];
-	NSDictionary *settings = topic[@"notificationSettings"];
-	BOOL muted = [settings isKindOfClass:NSDictionary.class] &&
-			![settings[@"use_default_mute_for"] boolValue] &&
-			[settings[@"mute_for"] integerValue] > 0;
-	_badge.variant = muted ? TGBadgeVariantMuted : TGBadgeVariantNotification;
-	_badge.count = unread;
-	_badge.hidden = unread <= 0;
-
-	self.backgroundColor = [theme listBackgroundColour];
-	self.contentView.backgroundColor = [theme listBackgroundColour];
-	[self setNeedsLayout];
-}
-
-@end
 
 @interface TGTopicsViewController ()
 @property (nonatomic, strong) NSArray *topics;
@@ -198,6 +56,10 @@ static NSString *TGTopicDateText(NSNumber *stamp) {
 @end
 
 @implementation TGTopicsViewController
+
+- (instancetype)init {
+	return [super initWithStyle:UITableViewStylePlain];
+}
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
@@ -239,6 +101,7 @@ static NSString *TGTopicDateText(NSNumber *stamp) {
 		me.loaded = YES;
 		[me.refreshControl endRefreshing];
 		[me updateEmptyView];
+		[me rebuildSections];
 		[me.tableView reloadData];
 		NSLog(@"TDLIB TOPICS: %lu", (unsigned long)topics.count);
 	}];
@@ -287,6 +150,7 @@ static NSString *TGTopicDateText(NSNumber *stamp) {
 		me.loaded = YES;
 		[me.refreshControl endRefreshing];
 		[me updateEmptyView];
+		[me rebuildSections];
 		[me.tableView reloadData];
 	}];
 }
@@ -543,26 +407,66 @@ static NSString *TGTopicDateText(NSNumber *stamp) {
 	}];
 }
 
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-	return self.topics.count;
+- (void)rebuildSections {
+	NSMutableArray *rows = [NSMutableArray arrayWithCapacity:self.topics.count];
+	__weak typeof(self) weakSelf = self;
+	for (NSDictionary *topic in self.topics){
+		NSMutableDictionary *row = [self topicRow:topic];
+		NSDictionary *captured = topic;
+		row[TGRowTap] = ^{ [weakSelf openTopic:captured]; };
+		[rows addObject:row];
+	}
+	self.sections = @[TGSection(nil, nil, rows)];
 }
 
-- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-	static NSString *reuse = @"TGTopicCell";
-	TGTopicCell *cell = [tableView dequeueReusableCellWithIdentifier:reuse];
-	if (!cell)
-		cell = [[TGTopicCell alloc] initWithStyle:UITableViewCellStyleDefault
-								  reuseIdentifier:reuse];
-	[cell applyTopic:self.topics[indexPath.row]];
-	cell.accessoryType = UITableViewCellAccessoryNone;
-	return cell;
-}
+- (NSMutableDictionary *)topicRow:(NSDictionary *)topic {
+	NSString *name = topic[@"name"] ?: TGLocalized(@"Topic");
 
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
-	if (indexPath.row >= (NSInteger)self.topics.count)
-		return;
-	[self openTopic:self.topics[indexPath.row]];
+	NSMutableArray *marks = [NSMutableArray array];
+	NSInteger mentions = [topic[@"unreadMentions"] integerValue];
+	NSInteger polls = [topic[@"unreadPollVotes"] integerValue];
+	NSInteger reactions = [topic[@"unreadReactions"] integerValue];
+	if (mentions > 0)
+		[marks addObject:[NSString stringWithFormat:@"@ %ld", (long)mentions]];
+	if (polls > 0)
+		[marks addObject:TGLocalizedPlural(@"%d poll vote", @"%d poll votes",
+				polls)];
+	if (reactions > 0)
+		[marks addObject:TGLocalizedPlural(@"%d reaction", @"%d reactions",
+				reactions)];
+
+	NSString *preview = topic[@"text"] ?: @"";
+	if ([topic[@"closed"] boolValue])
+		preview = preview.length
+				? [NSString stringWithFormat:TGLocalized(@"Closed · %@"), preview]
+				: TGLocalized(@"Closed");
+	if (marks.count) {
+		NSString *line = [marks componentsJoinedByString:@" · "];
+		preview = preview.length
+				? [NSString stringWithFormat:@"%@ · %@", line, preview] : line;
+	}
+	if (!preview.length)
+		preview = TGLocalized(@"No messages here yet...");
+
+	NSMutableDictionary *row = TGPeerRow(@([topic[@"threadId"] longLongValue]),
+			name, preview, nil);
+	row[TGRowHeight] = @(TGMetricTopicRow);
+	row[TGRowPin] = @([topic[@"pinned"] boolValue]);
+	NSString *date = TGTopicDateText(topic[@"date"]);
+	if (date.length)
+		row[TGRowAccessory] = date;
+
+	NSInteger unread = [topic[@"unread"] integerValue];
+	if (unread > 0){
+		NSDictionary *settings = topic[@"notificationSettings"];
+		BOOL muted = [settings isKindOfClass:NSDictionary.class] &&
+				![settings[@"use_default_mute_for"] boolValue] &&
+				[settings[@"mute_for"] integerValue] > 0;
+		row[TGRowBadge] = @(unread);
+		row[TGRowBadgeVariant] = @(muted ? TGBadgeVariantMuted
+				: TGBadgeVariantNotification);
+	}
+	return row;
 }
 
 /// Opening a topic is reading it. The message list makes the unread count
@@ -589,6 +493,7 @@ static NSString *TGTopicDateText(NSNumber *stamp) {
 			break;
 		}
 		self.topics = rows;
+		[self rebuildSections];
 		[self.tableView reloadData];
 	}
 
@@ -792,6 +697,7 @@ static NSString *TGTopicStateLine(NSDictionary *info) {
 		break;
 	}
 	self.topics = rows;
+	[self rebuildSections];
 	[self.tableView reloadData];
 }
 
@@ -887,6 +793,7 @@ static NSString *TGTopicStateLine(NSDictionary *info) {
 		if (!me || !screen)
 			return;
 		me.topics = topics;
+		[me rebuildSections];
 		[me.tableView reloadData];
 		NSMutableArray *rows = [NSMutableArray array];
 		for (NSDictionary *topic in topics){

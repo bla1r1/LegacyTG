@@ -5,9 +5,11 @@
 // by a day. These are the pure helpers that fix that, pinned without UIKit.
 #import "TGTestRunner.h"
 #import "TGSettingsFormatting.h"
+#import "TGStyle.h"
 #import "TGPasscode.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
+#import "TGChatThemeStore.h"
 
 static TGClient *TPSSettingsClient(void) {
 	TGClient *c = TGClient.shared;
@@ -46,6 +48,147 @@ static void TPSAnswer(TGClient *c, NSDictionary *answer) {
 @interface TGParitySettingsTests : XCTestCase @end
 
 @implementation TGParitySettingsTests
+
+- (void)testThemeList_ClassicLeadsAndDarkFilesStay {
+	// Classic is always the first card; imported files keep the order
+	// availableThemeFiles returned, and a dark file is a card of its own.
+	NSArray *files = @[
+		@{@"id" : @"file:Day.tgios-theme", @"name" : @"Day", @"dark" : @NO},
+		@{@"id" : @"file:NightBlue.tgios-theme", @"name" : @"Night Blue",
+		  @"dark" : @YES},
+		@{@"id" : @"file:Night.attheme", @"name" : @"Night", @"dark" : @YES},
+	];
+	NSArray *themes = TGSettingsThemeList(files);
+	XCTAssertEqual(themes.count, (NSUInteger)4);
+	XCTAssertEqualObjects(themes[0][@"id"], @"classic");
+	XCTAssertEqualObjects(themes[1][@"id"], @"file:Day.tgios-theme");
+	XCTAssertEqualObjects(themes[2][@"id"], @"file:NightBlue.tgios-theme");
+	XCTAssertEqualObjects(themes[3][@"id"], @"file:Night.attheme");
+	XCTAssertFalse([themes[0][@"dark"] boolValue]);
+	XCTAssertTrue(TGSettingsThemeIsDark(themes, @"file:NightBlue.tgios-theme"));
+	XCTAssertFalse(TGSettingsThemeIsDark(themes, @"file:Day.tgios-theme"));
+}
+
+- (void)testChatThemesModel_EmojiGridThenBaseThemesUnderPreview {
+	NSArray *emoji = @[
+		@{@"id" : @"emoji:🏠", @"name" : @"🏠"},
+		@{@"id" : @"emoji:🐥", @"name" : @"🐥"},
+	];
+	NSArray *base = @[
+		@{@"id" : @"classic", @"name" : @"Classic", @"dark" : @NO},
+		@{@"id" : @"file:NightBlue.tgios-theme", @"name" : @"Night Blue",
+		  @"dark" : @YES},
+	];
+	NSArray *model = TGSettingsChatThemesModel(emoji, base, @"emoji:🏠");
+	XCTAssertEqual(model.count, (NSUInteger)2);
+	// "Select Theme" is the server's emoji grid; a base theme inside it was
+	// the bug (reference/8).
+	XCTAssertEqualObjects(model[0][@"kind"], @"emojiGrid");
+	XCTAssertEqualObjects(model[0][@"header"], @"Select Theme");
+	XCTAssertEqualObjects(model[0][@"themes"], emoji);
+	// The base row belongs under the preview, in "Create Your Own Theme".
+	XCTAssertEqualObjects(model[1][@"kind"], @"customTheme");
+	XCTAssertEqualObjects(model[1][@"header"], @"Create Your Own Theme");
+	XCTAssertEqualObjects(model[1][@"themes"], base);
+	XCTAssertEqualObjects(model[1][@"current"], @"emoji:🏠");
+}
+
+- (void)testChatThemesModel_ClassicLeadsTheEmojiGrid {
+	NSArray *emoji = @[
+		@{@"id" : @"emoji:🏠", @"name" : @"🏠"},
+		@{@"id" : @"emoji:🐥", @"name" : @"🐥"},
+	];
+	NSArray *themes = TGSettingsThemesWithClassic(emoji);
+	XCTAssertEqual(themes.count, (NSUInteger)3);
+	XCTAssertEqualObjects(themes[0][@"id"], @"classic");
+	XCTAssertFalse([themes[0][@"emoji"] boolValue]);
+	XCTAssertEqualObjects(themes[1][@"id"], @"emoji:🏠");
+	// A caller that already has Classic must not get a second card.
+	NSArray *once = TGSettingsThemesWithClassic(themes);
+	XCTAssertEqual(once.count, (NSUInteger)3);
+}
+
+- (void)testChatThemesStrings_GoThroughThePackLookup {
+	// The pack stores "Select Theme" in title case; the section header is
+	// uppercased after lookup, exactly as ThemePickerController does.
+	TGSetTelegramLanguageLookup(@{
+		@"Select Theme" : @"ВИБЕРІТЬ ТЕМУ",
+		@"Chat Themes" : @"Теми для чатів",
+	});
+	NSArray *model = TGSettingsChatThemesModel(@[], @[], @"classic");
+	XCTAssertEqualObjects(TGSettingsHeaderText(model[0][@"header"]),
+			@"ВИБЕРІТЬ ТЕМУ");
+	XCTAssertEqualObjects(TGLocalized(@"Chat Themes"), @"Теми для чатів");
+	TGSetTelegramLanguageLookup(nil);
+}
+
+- (void)testNightTheme_RemembersTheChoiceAndFallsBackToADarkCard {
+	NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+	[defaults removeObjectForKey:TGSettingsNightModeKey];
+	[defaults removeObjectForKey:TGSettingsNightThemeKey];
+	[defaults removeObjectForKey:TGSettingsDayThemeKey];
+
+	NSArray *themes = TGSettingsThemeList(@[
+		@{@"id" : @"file:Day.tgios-theme", @"name" : @"Day", @"dark" : @NO},
+		@{@"id" : @"file:NightBlue.tgios-theme", @"name" : @"Night Blue",
+		  @"dark" : @YES},
+		@{@"id" : @"file:Night.attheme", @"name" : @"Night", @"dark" : @YES},
+	]);
+
+	// The first dark theme until the user picks another.
+	XCTAssertEqualObjects(TGSettingsNightThemeId(defaults, themes),
+			@"file:NightBlue.tgios-theme");
+	[defaults setObject:@"file:Night.attheme" forKey:TGSettingsNightThemeKey];
+	XCTAssertEqualObjects(TGSettingsNightThemeId(defaults, themes),
+			@"file:Night.attheme");
+	// A stored light id is not a night theme.
+	[defaults setObject:@"file:Day.tgios-theme" forKey:TGSettingsNightThemeKey];
+	XCTAssertEqualObjects(TGSettingsNightThemeId(defaults, themes),
+			@"file:NightBlue.tgios-theme");
+	XCTAssertEqualObjects(TGSettingsDayThemeId(defaults, themes), @"classic");
+	[defaults setObject:@"file:Day.tgios-theme" forKey:TGSettingsDayThemeKey];
+	XCTAssertEqualObjects(TGSettingsDayThemeId(defaults, themes),
+			@"file:Day.tgios-theme");
+	XCTAssertFalse(TGSettingsNightModeEnabled(defaults));
+	[defaults setBool:YES forKey:TGSettingsNightModeKey];
+	XCTAssertTrue(TGSettingsNightModeEnabled(defaults));
+
+	[defaults removeObjectForKey:TGSettingsNightModeKey];
+	[defaults removeObjectForKey:TGSettingsNightThemeKey];
+	[defaults removeObjectForKey:TGSettingsDayThemeKey];
+}
+
+- (void)testEmojiThemeChoice_IsPersistedByName {
+	TGChatThemeStore *store = [TGChatThemeStore shared];
+	NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+	[defaults removeObjectForKey:TGSettingsEmojiThemeKey];
+	[store setCurrentThemeName:@"Sunset"];
+	XCTAssertEqualObjects(store.currentThemeName, @"Sunset");
+	XCTAssertEqualObjects([defaults stringForKey:TGSettingsEmojiThemeKey], @"Sunset");
+	XCTAssertEqualObjects(TGChatThemeIdForName(store.currentThemeName),
+			@"emoji:Sunset");
+	XCTAssertEqualObjects(TGChatThemeNameFromId(@"emoji:Sunset"), @"Sunset");
+	XCTAssertTrue(TGChatThemeIdIsEmoji(@"emoji:Sunset"));
+	XCTAssertFalse(TGChatThemeIdIsEmoji(@"classic"));
+	[store clearCurrentThemeName];
+	XCTAssertNil(store.currentThemeName);
+}
+
+- (void)testTextSize_SevenStepsRoundTripThroughPoints {
+	XCTAssertEqual(TGMetricMessageSizeSteps, (NSInteger)7);
+	for (NSInteger step = 0; step < TGMetricMessageSizeSteps; step++){
+		CGFloat size = TGMessageFontSizeForStep(step);
+		CGFloat expected = TGFontMessageBaseSize + step * TGFontMessageStep;
+		XCTAssertTrue(fabs(size - expected) < 0.01f,
+				"step %ld must be %.1f pt, got %.1f", (long)step, expected, size);
+		XCTAssertEqual(TGMessageFontSizeStep(size), step);
+	}
+	// A size between two steps opens on the nearer one; outside the scale
+	// clamps to the ends instead of leaving the slider without a position.
+	XCTAssertEqual(TGMessageFontSizeStep(TGFontMessageBaseSize + TGFontMessageStep + 0.9f), 1);
+	XCTAssertEqual(TGMessageFontSizeStep(0), 0);
+	XCTAssertEqual(TGMessageFontSizeStep(1000), TGMetricMessageSizeSteps - 1);
+}
 
 - (void)testPrivacyLabel_BaseValuesArePackWords {
 	XCTAssertTrue([TGPrivacyLabel(@"everybody") isEqualToString:@"Everybody"]);
@@ -354,6 +497,132 @@ static void TPSAnswer(TGClient *c, NSDictionary *answer) {
 	XCTAssertEqualObjects(req[@"name"], @"storage_max_files_size");
 	XCTAssertEqualObjects(req[@"value"][@"@type"], @"optionValueInteger");
 	XCTAssertEqualObjects(req[@"value"][@"value"], @(5368709120LL));
+}
+
+- (void)testAppearancePreview_UsesTheOfficialPackKeys {
+	// The 2019 preview sentences and the account name must never come back.
+	NSDictionary *lookup = @{
+		@"Zakhar" : @"Захар",
+		@"Good morning! 👋" : @"Доброго ранку! 👋",
+		@"It's almost noon..." : @"Вже ніби день...",
+		@"It's morning in Tokyo 😎" : @"А в Токіо ранок 😎",
+	};
+	TGSetTelegramLanguageLookup(lookup);
+	NSDictionary *texts = TGSettingsAppearancePreviewTexts();
+	XCTAssertEqualObjects(texts[@"author"], @"Захар");
+	XCTAssertEqualObjects(texts[@"reply"], @"Доброго ранку! 👋");
+	XCTAssertEqualObjects(texts[@"incoming"], @"Вже ніби день...");
+	XCTAssertEqualObjects(texts[@"outgoing"], @"А в Токіо ранок 😎");
+	TGSetTelegramLanguageLookup(nil);
+}
+
+- (void)testThemeDisplayName_StripsExtensionsAndTrailingDots {
+	XCTAssertEqualObjects(TGSettingsThemeDisplayName(
+			@{@"id" : @"file:Night.attheme", @"name" : @"Night.attheme"}),
+			@"Night");
+	XCTAssertEqualObjects(TGSettingsThemeDisplayName(
+			@{@"id" : @"file:Blue.tgios-theme", @"name" : @"Blue Butter."}),
+			@"Blue Butter");
+	XCTAssertEqualObjects(TGSettingsThemeDisplayName(
+			@{@"id" : @"file:Day.tgios-theme"}), @"Day");
+	XCTAssertEqualObjects(TGSettingsThemeDisplayName(
+			@{@"id" : @"classic"}), @"Classic");
+}
+
+- (void)testThemeList_UsesDisplayNamesNotFileNames {
+	NSArray *themes = TGSettingsThemeList(@[
+		@{@"id" : @"file:Night.attheme", @"name" : @"Night.attheme",
+		  @"dark" : @YES},
+	]);
+	XCTAssertEqualObjects(themes[1][@"name"], @"Night");
+	XCTAssertEqualObjects(TGSettingsThemeDisplayName(themes[1]), @"Night");
+}
+
+- (void)testBackgrounds_FilterToTheThemeSideAndKeepUnknowns {
+	NSArray *backgrounds = @[
+		@{@"id" : @1, @"isDark" : @NO},
+		@{@"id" : @2, @"isDark" : @YES},
+		@{@"id" : @3, @"isDark" : @YES},
+		@{@"id" : @4},                       // no side: keep rather than hide
+	];
+	NSArray *dark = TGSettingsBackgroundsForDarkTheme(backgrounds, YES);
+	NSArray *light = TGSettingsBackgroundsForDarkTheme(backgrounds, NO);
+	XCTAssertEqual(dark.count, (NSUInteger)3);
+	XCTAssertEqual(light.count, (NSUInteger)2);
+	XCTAssertEqualObjects([dark valueForKey:@"id"], (@[@2, @3, @4]));
+	XCTAssertEqualObjects([light valueForKey:@"id"], (@[@1, @4]));
+}
+
+- (void)testLocalTextures_AreInTheWallpaperGridModel {
+	NSArray *local = TGSettingsLocalWallpaperItems();
+	XCTAssertEqual(local.count, (NSUInteger)5);
+	XCTAssertEqualObjects([local valueForKey:@"title"], (@[@"Paper Grain",
+			@"Pinstripes", @"Classic Linen", @"Parchment", @"Game Center Felt"]));
+	XCTAssertEqualObjects([local valueForKey:@"localWallpaperType"],
+			(@[@(TGWallpaperTypePaperGrain), @(TGWallpaperTypePinstripes),
+			   @(TGWallpaperTypeLinen), @(TGWallpaperTypeParchment),
+			   @(TGWallpaperTypeFelt)]));
+
+	NSArray *server = @[@{@"id" : @7, @"typeName" : @"wallpaper"}];
+	NSArray *grid = TGSettingsWallpaperGridItems(local, server);
+	XCTAssertEqual(grid.count, (NSUInteger)6);
+	XCTAssertEqualObjects([grid.lastObject objectForKey:@"id"], @7);
+	XCTAssertEqualObjects([grid[0] objectForKey:@"title"], @"Paper Grain");
+}
+
+- (void)testClassicThemeRoles_AreNotClear {
+	NSDictionary *roles = TGClassicThemeRoleColours();
+	for (NSString *key in @[@"accent", @"text", @"bubbleMine",
+			@"bubbleTheirs", @"bubbleMineText", @"bubbleTheirsText"]){
+		UIColor *colour = roles[key];
+		XCTAssertNotNil(colour, @"Classic role %@ is missing", key);
+		XCTAssertGreaterThan(CGColorGetAlpha(colour.CGColor), 0.99f,
+				@"Classic role %@ is transparent", key);
+	}
+}
+
+- (void)testAutoNightSchedule_WrapsMidnightAndIsEndExclusive {
+	// 22:00 to 07:00.
+	XCTAssertTrue(TGSettingsAutoNightShouldBeDark(23 * 60, 22 * 60, 7 * 60));
+	XCTAssertTrue(TGSettingsAutoNightShouldBeDark(0, 22 * 60, 7 * 60));
+	XCTAssertTrue(TGSettingsAutoNightShouldBeDark(6 * 60 + 59, 22 * 60, 7 * 60));
+	XCTAssertFalse(TGSettingsAutoNightShouldBeDark(7 * 60, 22 * 60, 7 * 60));
+	XCTAssertFalse(TGSettingsAutoNightShouldBeDark(12 * 60, 22 * 60, 7 * 60));
+
+	// 08:00 to 17:00 does not wrap.
+	XCTAssertTrue(TGSettingsAutoNightShouldBeDark(8 * 60, 8 * 60, 17 * 60));
+	XCTAssertTrue(TGSettingsAutoNightShouldBeDark(16 * 60 + 59, 8 * 60, 17 * 60));
+	XCTAssertFalse(TGSettingsAutoNightShouldBeDark(17 * 60, 8 * 60, 17 * 60));
+
+	// Equal ends are an empty window, not permanent night.
+	XCTAssertFalse(TGSettingsAutoNightShouldBeDark(12 * 60, 9 * 60, 9 * 60));
+}
+
+- (void)testAutoNightMode_LabelAndStoredTimes {
+	NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+	[defaults removeObjectForKey:TGSettingsAutoNightModeKey];
+	[defaults removeObjectForKey:TGSettingsAutoNightFromKey];
+	[defaults removeObjectForKey:TGSettingsAutoNightToKey];
+	XCTAssertEqual(TGSettingsAutoNightMode(defaults),
+			TGSettingsAutoNightModeDisabled);
+	XCTAssertEqualObjects(TGSettingsAutoNightModeLabel(defaults), @"Disabled");
+	XCTAssertEqual(TGSettingsAutoNightMinute(defaults,
+			TGSettingsAutoNightFromKey, TGSettingsAutoNightDefaultFrom),
+			TGSettingsAutoNightDefaultFrom);
+
+	TGSettingsSetAutoNightMode(defaults, TGSettingsAutoNightModeScheduled);
+	XCTAssertEqualObjects(TGSettingsAutoNightModeLabel(defaults), @"Scheduled");
+	[defaults setInteger:90 forKey:TGSettingsAutoNightFromKey];
+	XCTAssertEqual(TGSettingsAutoNightMinute(defaults,
+			TGSettingsAutoNightFromKey, TGSettingsAutoNightDefaultFrom), 90);
+	[defaults setInteger:24 * 60 forKey:TGSettingsAutoNightFromKey];
+	XCTAssertEqual(TGSettingsAutoNightMinute(defaults,
+			TGSettingsAutoNightFromKey, TGSettingsAutoNightDefaultFrom),
+			TGSettingsAutoNightDefaultFrom);
+
+	[defaults removeObjectForKey:TGSettingsAutoNightModeKey];
+	[defaults removeObjectForKey:TGSettingsAutoNightFromKey];
+	[defaults removeObjectForKey:TGSettingsAutoNightToKey];
 }
 
 @end

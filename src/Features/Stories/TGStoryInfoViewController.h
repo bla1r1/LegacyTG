@@ -3,14 +3,14 @@
 // statistics, and the two-step report flow.
 //
 #import <UIKit/UIKit.h>
-#import "TGTableViewController.h"
+#import "TGRowsViewController.h"
 
 typedef NS_ENUM(NSInteger, TGStoryInfoMode) {
 	TGStoryInfoModeInfo = 0,
 	TGStoryInfoModeReport
 };
 
-@interface TGStoryInfoViewController : TGTableViewController
+@interface TGStoryInfoViewController : TGRowsViewController
 
 /// YES when the viewer adds this controller as a bottom panel over the story
 /// instead of presenting it full screen.

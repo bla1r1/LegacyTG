@@ -254,9 +254,15 @@ static void TGTextAnswer(TGClient *client, NSDictionary *request,
 						if (englishOther.length && forms.count)
 							plurals[englishOther] = forms;
 					}
+					// The cached pack is already installed at launch; the same
+					// pack again only repainted every screen twice (~0.8 s on
+					// the main thread of an A5), so an unchanged one stops here.
+					BOOL unchanged = TGTelegramLanguageMatches(lookup, plurals);
 					dispatch_async(dispatch_get_main_queue(), ^{
-						TGSetTelegramLanguageLookup(lookup);
-						TGSetTelegramLanguagePlurals(plurals);
+						if (!unchanged){
+							TGSetTelegramLanguageLookup(lookup);
+							TGSetTelegramLanguagePlurals(plurals);
+						}
 						if (completion) completion(lookup.count > 0 || plurals.count > 0);
 					});
 				});

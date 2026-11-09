@@ -14,23 +14,13 @@ static const CGFloat kSettingsQRIconSide = 24.0f;
 static const CGFloat kSettingsQRSide = 220.0f;
 static const CGFloat kSettingsQRTopOffset = 30.0f;
 
+/// The bar button's QR glyph, from TGIconPaths.
 static UIImage *TGSettingsQRIcon(void) {
-	UIGraphicsBeginImageContextWithOptions(
-			CGSizeMake(kSettingsQRIconSide, kSettingsQRIconSide), NO, 0);
-	UIBezierPath *path = [UIBezierPath bezierPath];
-	[path appendPath:[UIBezierPath bezierPathWithRect:CGRectMake(2, 2, 7, 7)]];
-	[path appendPath:[UIBezierPath bezierPathWithRect:CGRectMake(15, 2, 7, 7)]];
-	[path appendPath:[UIBezierPath bezierPathWithRect:CGRectMake(2, 15, 7, 7)]];
-	[path appendPath:[UIBezierPath bezierPathWithRect:CGRectMake(10, 10, 4, 4)]];
-	[path appendPath:[UIBezierPath bezierPathWithRect:CGRectMake(15, 15, 3, 3)]];
-	[path appendPath:[UIBezierPath bezierPathWithRect:CGRectMake(19, 19, 3, 3)]];
-	[[UIColor blackColor] setFill];
-	[path fill];
-	UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+	UIImage *image = [TGIcons glyphNamed:@"qr" colour:[UIColor blackColor]
+									side:kSettingsQRIconSide];
 	// Template rendering is iOS 7+; iOS 6 bar items tint the glyph anyway.
 	if ([image respondsToSelector:@selector(imageWithRenderingMode:)])
 		image = [image imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
-	UIGraphicsEndImageContext();
 	return image;
 }
 
@@ -65,6 +55,101 @@ static UIImage *TGSettingsQRIcon(void) {
 	caption.text = self.code;
 	[self.view addSubview:caption];
 }
+@end
+
+/// ThemeSettingsFontSizeItem is a slider of seven positions. It edits the
+/// message size the whole app reads from TGTheme, and the sample above it is
+/// the same face at that size.
+@interface TGTextSizeViewController : UIViewController
+@end
+
+@implementation TGTextSizeViewController {
+	UISlider *_slider;
+	UILabel *_sample;
+	NSInteger _step;
+}
+
+- (void)viewDidLoad {
+	[super viewDidLoad];
+	self.title = TGLocalized(@"Text Size");
+	self.view.backgroundColor = [[TGTheme shared] groupedBackgroundColour];
+
+	CGFloat width = self.view.bounds.size.width;
+	CGFloat sliderW = width - TGDoubled(TGMetricPadLarge);
+	TGTheme *theme = [TGTheme shared];
+	_step = TGMessageFontSizeStep(theme.messageFontSize);
+
+	_sample = [[UILabel alloc] initWithFrame:
+			CGRectMake(TGMetricPadLarge, TGMetricPadLarge, sliderW,
+					TGMetricLineTitle + TGMetricPadLarge)];
+	_sample.text = TGLocalized(@"Hello");
+	_sample.textAlignment = NSTextAlignmentCenter;
+	_sample.textColor = [theme primaryTextColour];
+	_sample.backgroundColor = [UIColor clearColor];
+	_sample.adjustsFontSizeToFitWidth = YES;
+	[self.view addSubview:_sample];
+
+	UILabel *small = [[UILabel alloc] initWithFrame:
+			CGRectMake(TGMetricPadLarge, CGRectGetMaxY(_sample.frame) + TGMetricPadLarge,
+					TGMetricLineRow, TGMetricLineRow)];
+	small.text = @"A";
+	small.font = TGFontMicro();
+	small.textColor = [theme secondaryTextColour];
+	small.backgroundColor = [UIColor clearColor];
+	[self.view addSubview:small];
+
+	UILabel *large = [[UILabel alloc] initWithFrame:
+			CGRectMake(width - TGMetricPadLarge - TGMetricLineRow,
+					CGRectGetMinY(small.frame), TGMetricLineRow, TGMetricLineRow)];
+	large.text = @"A";
+	large.font = TGFontHeader();
+	large.textAlignment = NSTextAlignmentRight;
+	large.textColor = [theme primaryTextColour];
+	large.backgroundColor = [UIColor clearColor];
+	[self.view addSubview:large];
+
+	CGFloat sliderX = CGRectGetMaxX(small.frame) + TGMetricPad;
+	_slider = [[UISlider alloc] initWithFrame:
+			CGRectMake(sliderX, TGCenteredOrigin(TGMetricLineRow, TGMetricSliderH) +
+					CGRectGetMinY(small.frame), width - TGDoubled(sliderX), TGMetricSliderH)];
+	_slider.minimumValue = 0;
+	_slider.maximumValue = TGMetricMessageSizeSteps - 1;
+	_slider.value = (float)_step;
+	if ([_slider respondsToSelector:@selector(setMinimumTrackTintColor:)])
+		_slider.minimumTrackTintColor = [theme accentColour];
+	_slider.continuous = YES;
+	[_slider addTarget:self action:@selector(sizeChanged:)
+	  forControlEvents:UIControlEventValueChanged];
+	[self.view addSubview:_slider];
+	[self updateSample];
+}
+
+- (void)viewWillAppear:(BOOL)animated {
+	[super viewWillAppear:animated];
+	if (self.navigationController.navigationBarHidden)
+		[self.navigationController setNavigationBarHidden:NO animated:NO];
+	[[TGTheme shared] styleNavigationBar:self.navigationController.navigationBar];
+}
+
+- (void)sizeChanged:(UISlider *)slider {
+	NSInteger step = (NSInteger)lroundf(slider.value);
+	if (step == _step)
+		return;
+	_step = step;
+	slider.value = (float)step;
+	[TGTheme shared].messageFontSize = TGMessageFontSizeForStep(step);
+	[self updateSample];
+}
+
+- (void)updateSample {
+	CGFloat size = TGMessageFontSizeForStep(_step);
+	_sample.font = TGFontAtSize(size);
+	CGFloat height = _sample.font.lineHeight + TGMetricPadLarge;
+	CGRect frame = _sample.frame;
+	frame.size.height = height;
+	_sample.frame = frame;
+}
+
 @end
 
 @implementation TGSettingsViewController (Actions)
@@ -586,18 +671,12 @@ static UIImage *TGSettingsQRIcon(void) {
 	[self.navigationController pushViewController:vc animated:YES];
 }
 
-/// Four sizes is enough on a 3.5-inch screen; a slider would be finer than
-/// the difference it makes.
+/// Official opens TextSizeSelectionController from this row; the slider there
+/// is ThemeSettingsFontSizeItem. The size itself stays in TGTheme.
 - (void)chooseTextSize {
-	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:@[@"13 pt", @"15 pt", @"17 pt", @"19 pt"]
-						title:@"Text Size"
-			 destructiveIndex:-1
-					   inView:self.view
-					 onChoice:^(NSInteger index){
-		[TGTheme shared].messageFontSize = TGFontMessageBaseSize + index * TGFontMessageStep;
-		[weakSelf rebuild];
-	}];
+	TGTextSizeViewController *size = [[TGTextSizeViewController alloc] init];
+	size.hidesBottomBarWhenPushed = YES;
+	[self.navigationController pushViewController:size animated:YES];
 }
 
 #pragma mark - wallpaper

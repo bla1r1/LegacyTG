@@ -1,10 +1,10 @@
 #import "TGSessionsViewController.h"
 #import "TGLocalization.h"
 #import "TGClient.h"
-#import "TGTheme.h"
 #import "TGAlertSheet.h"
 #import "TGQRViewController.h"
 #import "TGWebsitesViewController.h"
+#import "TGRows.h"
 
 @interface TGSessionsViewController ()
 @property (nonatomic, strong) NSArray *sessions;
@@ -16,14 +16,9 @@
 
 @implementation TGSessionsViewController
 
-- (instancetype)init {
-	return [super initWithStyle:UITableViewStyleGrouped];
-}
-
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	self.title = @"Devices";
-	[self applyTheme];
+	self.title = TGLocalized(@"Devices");
 	[self refresh];
 
 	__weak typeof(self) weakSelf = self;
@@ -36,14 +31,8 @@
 	}];
 }
 
-- (void)applyTheme {
-	[[TGTheme shared] styleGroupedTable:self.tableView];
-	[[TGTheme shared] styleNavigationBar:self.navigationController.navigationBar];
-}
-
 - (void)viewWillAppear:(BOOL)animated {
 	[super viewWillAppear:animated];
-	[self applyTheme];
 	self.navigationItem.rightBarButtonItem = [self otherSessions].count
 			? self.editButtonItem : nil;
 }
@@ -56,7 +45,7 @@
 		weakSelf.ttlLoaded = YES;
 		weakSelf.navigationItem.rightBarButtonItem = [weakSelf otherSessions].count
 				? weakSelf.editButtonItem : nil;
-		[weakSelf.tableView reloadData];
+		[weakSelf rebuildSections];
 	}];
 }
 
@@ -118,26 +107,6 @@
 	[self performSelector:@selector(refresh) withObject:nil afterDelay:1.0];
 }
 
-/// The TTL is a span, not a number of days; the official row says "6 months"
-/// rather than "180".
-- (NSString *)ttlDetail {
-	NSInteger days = self.inactiveTtl;
-	if (days <= 0)
-		return @"Disabled";
-	if (days == 7)
-		return TGLocalizedPluralValue(@"%@ week", @"%@ weeks", @"1", 1);
-	if (days == 180)
-		return TGLocalizedPluralValue(@"%@ month", @"%@ months", @"6", 6);
-	if (days == 365 || days == 366)
-		return TGLocalizedPluralValue(@"%@ year", @"%@ years", @"1", 1);
-	if (days == 30)
-		return TGLocalizedPluralValue(@"%@ month", @"%@ months", @"1", 1);
-	if (days == 90)
-		return TGLocalizedPluralValue(@"%@ month", @"%@ months", @"3", 3);
-	return TGLocalizedPluralValue(@"%@ day", @"%@ days",
-			[NSString stringWithFormat:@"%ld", (long)days], days);
-}
-
 /// The official order: this device with its terminate action, incomplete
 /// attempts when there are any, the other sessions, websites, then the TTL.
 - (NSArray *)sectionKinds {
@@ -150,221 +119,136 @@
 	return kinds;
 }
 
-
-
-#pragma mark - table
-
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-	return (NSInteger)[self sectionKinds].count;
-}
-
-- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
+- (void)rebuildSections {
+	__weak typeof(self) weakSelf = self;
 	NSArray *kinds = [self sectionKinds];
-	if (section >= (NSInteger)kinds.count)
-		return nil;
-	NSString *kind = kinds[(NSUInteger)section];
-	if ([kind isEqualToString:@"this"])        return @"THIS DEVICE";
-	if ([kind isEqualToString:@"unconfirmed"]) return @"INCOMPLETE LOGIN ATTEMPTS";
-	if ([kind isEqualToString:@"other"])       return TGLocalized(@"ACTIVE SESSIONS");
-	if ([kind isEqualToString:@"websites"])    return @"Websites";
-	return TGLocalized(@"IF AWAY FOR");
-}
+	NSMutableArray *sections = [NSMutableArray array];
 
-- (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-	return nil;
-}
-
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-	NSArray *kinds = [self sectionKinds];
-	if (section >= (NSInteger)kinds.count)
-		return 0;
-	NSString *kind = kinds[(NSUInteger)section];
-	if ([kind isEqualToString:@"this"])
-		return 1 + ([self othersOnly].count > 0 ? 1 : 0);
-	if ([kind isEqualToString:@"unconfirmed"])
-		return (NSInteger)[self unconfirmedSessions].count;
-	if ([kind isEqualToString:@"other"])
-		return MAX((NSInteger)[self otherSessions].count, (NSInteger)1);
-	if ([kind isEqualToString:@"websites"])
-		return 2;
-	return 1;   // terminate if away
-}
-
-- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-	UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"row"];
-	if (!cell)
-		cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle
-									  reuseIdentifier:@"row"];
-	[[TGTheme shared] styleCell:cell];
-	cell.textLabel.textColor = [[TGTheme shared] primaryTextColour];
-	cell.detailTextLabel.textColor = [[TGTheme shared] secondaryTextColour];
-	cell.textLabel.textAlignment = NSTextAlignmentLeft;
-
-	NSArray *kinds = [self sectionKinds];
-	if (indexPath.section >= (NSInteger)kinds.count)
-		return cell;
-	NSString *kind = kinds[(NSUInteger)indexPath.section];
-
-	if ([kind isEqualToString:@"this"] && indexPath.row == 1){
-		cell.textLabel.text = @"Terminate all other sessions";
-		cell.textLabel.textColor = [[TGTheme shared] destructiveColour];
-		cell.detailTextLabel.text = nil;
-		cell.textLabel.textAlignment = NSTextAlignmentCenter;
-		cell.selectionStyle = UITableViewCellSelectionStyleBlue;
-		return cell;
-	}
-
-	if ([kind isEqualToString:@"websites"]){
-		cell.textLabel.text = indexPath.row == 1 ? @"Scan QR Code" : @"Active Websites";
-		cell.detailTextLabel.text = nil;
-		cell.selectionStyle = UITableViewCellSelectionStyleBlue;
-		return cell;
-	}
-
-	if ([kind isEqualToString:@"ttl"]){
-		NSString *detail = self.ttlLoaded ? [self ttlDetail] : @"...";
-		cell.textLabel.text = TGLocalized(@"If Away For");
-		cell.detailTextLabel.text = detail;
-		cell.selectionStyle = UITableViewCellSelectionStyleBlue;
-		return cell;
-	}
-
-	if ([kind isEqualToString:@"other"] && ![self otherSessions].count){
-		cell.textLabel.text = @"No other sessions";
-		cell.detailTextLabel.text = nil;
-		cell.textLabel.textColor = [[TGTheme shared] secondaryTextColour];
-		cell.selectionStyle = UITableViewCellSelectionStyleNone;
-		return cell;
-	}
-
-	NSDictionary *session = nil;
-	if ([kind isEqualToString:@"this"]){
-		session = [self currentSession];
-	} else if ([kind isEqualToString:@"unconfirmed"]){
-		NSArray *rows = [self unconfirmedSessions];
-		if (indexPath.row < (NSInteger)rows.count)
-			session = rows[(NSUInteger)indexPath.row];
-	} else {
-		NSArray *rows = [self otherSessions];
-		if (indexPath.row < (NSInteger)rows.count)
-			session = rows[(NSUInteger)indexPath.row];
-	}
-	if (!session){
-		cell.textLabel.text = @"Loading...";
-		cell.detailTextLabel.text = nil;
-		cell.textLabel.textColor = [[TGTheme shared] secondaryTextColour];
-		cell.selectionStyle = UITableViewCellSelectionStyleNone;
-		return cell;
-	}
-	cell.textLabel.text = session[@"name"];
-	NSMutableArray *parts = [NSMutableArray array];
-	if ([session[@"platform"] length])
-		[parts addObject:session[@"platform"]];
-	if ([session[@"ip"] length])
-		[parts addObject:session[@"ip"]];
-	if ([kind isEqualToString:@"this"])
-		[parts addObject:@"online"];
-	if ([session[@"isUnconfirmed"] boolValue])
-		[parts addObject:@"Confirm"];
-	cell.detailTextLabel.text = [parts componentsJoinedByString:@" · "];
-	// This device's own row opens the same switches, because a phone that
-	// should not ring is a setting about the session, not about the others.
-	cell.selectionStyle = UITableViewCellSelectionStyleBlue;
-	return cell;
-}
-
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
-
-	NSArray *kinds = [self sectionKinds];
-	if (indexPath.section >= (NSInteger)kinds.count)
-		return;
-	NSString *kind = kinds[(NSUInteger)indexPath.section];
-
-	if ([kind isEqualToString:@"websites"] && indexPath.row == 1){
-		TGQRViewController *scanner = [[TGQRViewController alloc] init];
-		scanner.hidesBottomBarWhenPushed = YES;
-		[self.navigationController pushViewController:scanner animated:YES];
-		return;
-	}
-
-	if ([kind isEqualToString:@"ttl"]){
-		// 1-366 days is TDLib's own range. The presets are the spans their
-		// page offers; anything finer would be a number nobody means.
-		NSArray *titles = @[
-			TGLocalizedPluralValue(@"%@ week", @"%@ weeks", @"1", 1),
-			TGLocalizedPluralValue(@"%@ month", @"%@ months", @"1", 1),
-			TGLocalizedPluralValue(@"%@ month", @"%@ months", @"3", 3),
-			TGLocalizedPluralValue(@"%@ month", @"%@ months", @"6", 6),
-			TGLocalizedPluralValue(@"%@ year", @"%@ years", @"1", 1),
-		];
-		NSArray *days = @[@7, @30, @90, @180, @365];
-		__weak typeof(self) weakSelf = self;
-		[TGAlertSheet showChoices:titles
-							title:@"Automatically Terminate Old Sessions"
-						  message:nil
-				 destructiveIndex:-1
-						   inView:self.view
-						 onChoice:^(NSInteger index){
-			[[TGClient shared] setInactiveSessionTtlDays:[days[(NSUInteger)index] integerValue]
-											 completion:^(BOOL ok, NSString *error){
-				if (!ok){
-					[TGAlertSheet showMessage:(error ?: @"An error occurred.")
-										title:@"Automatically Terminate Old Sessions"
-									   inView:weakSelf.view];
-					return;
+	for (NSString *kind in kinds){
+		if ([kind isEqualToString:@"this"]){
+			NSMutableArray *rows = [NSMutableArray array];
+			NSDictionary *current = [self currentSession];
+			if (current){
+				[rows addObject:TGSubtitleRow(TGSessionRowTitle(current),
+						TGSessionRowDetail(current, YES),
+						^{ [weakSelf showSessionActions:current isCurrent:YES]; })];
+			} else {
+				[rows addObject:TGRow(TGKindPlain, @"Loading...")];
+			}
+			if ([self othersOnly].count){
+				[rows addObject:TGRedRow(@"Terminate all other sessions", ^{
+					[weakSelf confirmTerminateAll];
+				})];
+			}
+			[sections addObject:TGSection(TGLocalized(@"THIS DEVICE"), nil, rows)];
+		} else if ([kind isEqualToString:@"unconfirmed"]){
+			NSMutableArray *rows = [NSMutableArray array];
+			for (NSDictionary *session in [self unconfirmedSessions]){
+				[rows addObject:TGSubtitleRow(TGSessionRowTitle(session),
+						TGSessionRowDetail(session, NO),
+						^{ [weakSelf showSessionActions:session isCurrent:NO]; })];
+			}
+			[sections addObject:TGSection(
+					TGLocalized(@"INCOMPLETE LOGIN ATTEMPTS"), nil, rows)];
+		} else if ([kind isEqualToString:@"other"]){
+			NSMutableArray *rows = [NSMutableArray array];
+			NSArray *others = [self otherSessions];
+			if (!others.count){
+				[rows addObject:TGRow(TGKindPlain, @"No other sessions")];
+			} else {
+				for (NSDictionary *session in others){
+					[rows addObject:TGSubtitleRow(TGSessionRowTitle(session),
+							TGSessionRowDetail(session, NO),
+							^{ [weakSelf showSessionActions:session isCurrent:NO]; })];
 				}
-				[weakSelf performSelector:@selector(refresh)
-							   withObject:nil afterDelay:0.5];
-			}];
+			}
+			[sections addObject:TGSection(TGLocalized(@"ACTIVE SESSIONS"), nil, rows)];
+		} else if ([kind isEqualToString:@"websites"]){
+			[sections addObject:TGSection(TGLocalized(@"Websites"), nil, @[
+				TGTapRow(@"Active Websites", nil, ^{ [weakSelf openWebsites]; }),
+				TGTapRow(@"Scan QR Code", nil, ^{ [weakSelf openScanner]; }),
+			])];
+		} else if ([kind isEqualToString:@"ttl"]){
+			[sections addObject:TGSection(TGLocalized(@"IF AWAY FOR"), nil, @[
+				TGTapRow(TGLocalized(@"If Away For"),
+						TGSessionTtlDetail(self.inactiveTtl, self.ttlLoaded),
+						^{ [weakSelf showTtlChoices]; }),
+			])];
+		}
+	}
+
+	self.sections = sections;
+	[self reloadRows];
+}
+
+#pragma mark - actions
+
+- (void)openWebsites {
+	TGWebsitesViewController *sites = [[TGWebsitesViewController alloc] init];
+	sites.hidesBottomBarWhenPushed = YES;
+	[self.navigationController pushViewController:sites animated:YES];
+}
+
+- (void)openScanner {
+	TGQRViewController *scanner = [[TGQRViewController alloc] init];
+	scanner.hidesBottomBarWhenPushed = YES;
+	[self.navigationController pushViewController:scanner animated:YES];
+}
+
+- (void)confirmTerminateAll {
+	__weak typeof(self) weakSelf = self;
+	[TGAlertSheet showConfirm:nil
+						title:@"Terminate all other sessions"
+					   action:@"Terminate"
+				  destructive:YES
+					   inView:self.view
+					onConfirm:^{
+		[[TGClient shared] terminateAllOtherSessions:^(BOOL ok){
+			TGSessionsViewController *me = weakSelf;
+			if (!ok){
+				[TGAlertSheet showMessage:@"An error occurred."
+									title:@"Active Sessions" inView:me.view];
+				return;
+			}
+			// The server needs a moment before the list reflects it.
+			[me performSelector:@selector(refresh) withObject:nil afterDelay:1.0];
 		}];
-		return;
-	}
+	}];
+}
 
-	if ([kind isEqualToString:@"websites"]){
-		TGWebsitesViewController *sites = [[TGWebsitesViewController alloc] init];
-		sites.hidesBottomBarWhenPushed = YES;
-		[self.navigationController pushViewController:sites animated:YES];
-		return;
-	}
-
-	if ([kind isEqualToString:@"this"] && indexPath.row == 1){
-		__weak typeof(self) weakSelf = self;
-		[TGAlertSheet showConfirm:nil
-							title:@"Terminate all other sessions"
-						   action:@"Terminate"
-					  destructive:YES
-						   inView:self.view
-						onConfirm:^{
-			[[TGClient shared] terminateAllOtherSessions:^(BOOL ok){
-				TGSessionsViewController *me = weakSelf;
-				if (!ok){
-					[TGAlertSheet showMessage:@"An error occurred."
-										title:@"Active Sessions" inView:me.view];
-					return;
-				}
-				// The server needs a moment before the list reflects it.
-				[me performSelector:@selector(refresh) withObject:nil afterDelay:1.0];
-			}];
+- (void)showTtlChoices {
+	// 1-366 days is TDLib's own range. The presets are the spans their page
+	// offers; anything finer would be a number nobody means.
+	NSArray *titles = @[
+		TGLocalizedPluralValue(@"%@ week", @"%@ weeks", @"1", 1),
+		TGLocalizedPluralValue(@"%@ month", @"%@ months", @"1", 1),
+		TGLocalizedPluralValue(@"%@ month", @"%@ months", @"3", 3),
+		TGLocalizedPluralValue(@"%@ month", @"%@ months", @"6", 6),
+		TGLocalizedPluralValue(@"%@ year", @"%@ years", @"1", 1),
+	];
+	NSArray *days = @[@7, @30, @90, @180, @365];
+	__weak typeof(self) weakSelf = self;
+	[TGAlertSheet showChoices:titles
+						title:@"Automatically Terminate Old Sessions"
+					  message:nil
+			 destructiveIndex:-1
+					   inView:self.view
+					 onChoice:^(NSInteger index){
+		[[TGClient shared] setInactiveSessionTtlDays:[days[(NSUInteger)index] integerValue]
+										 completion:^(BOOL ok, NSString *error){
+			if (!ok){
+				[TGAlertSheet showMessage:(error ?: @"An error occurred.")
+									title:@"Automatically Terminate Old Sessions"
+								   inView:weakSelf.view];
+				return;
+			}
+			[weakSelf performSelector:@selector(refresh)
+						   withObject:nil afterDelay:0.5];
 		}];
-		return;
-	}
+	}];
+}
 
-	BOOL isCurrent = [kind isEqualToString:@"this"];
-	NSDictionary *session = nil;
-	if (isCurrent){
-		session = [self currentSession];
-	} else if ([kind isEqualToString:@"unconfirmed"]){
-		NSArray *rows = [self unconfirmedSessions];
-		if (indexPath.row < (NSInteger)rows.count)
-			session = rows[(NSUInteger)indexPath.row];
-	} else if ([kind isEqualToString:@"other"]){
-		NSArray *rows = [self otherSessions];
-		if (indexPath.row < (NSInteger)rows.count)
-			session = rows[(NSUInteger)indexPath.row];
-	}
-	if (!session)
-		return;
+- (void)showSessionActions:(NSDictionary *)session isCurrent:(BOOL)isCurrent {
 	int64_t sessionId = [session[@"id"] longLongValue];
 	if (!sessionId)
 		return;

@@ -9,40 +9,7 @@
 #import "TGAlertSheet.h"
 #import "TGListViewController.h"
 #import "TGChatViewController.h"
-
-/// One row: a title, the value it currently holds, and what a tap does.
-static NSMutableDictionary *TGRow(NSString *title, NSString *detail,
-								  void (^tap)(void)) {
-	NSMutableDictionary *row = [@{@"title" : title ?: @""} mutableCopy];
-	if (detail.length)
-		row[@"detail"] = detail;
-	if (tap)
-		row[@"tap"] = [tap copy];
-	return row;
-}
-
-static NSMutableDictionary *TGOpenRow(NSString *title, NSString *detail,
-									  void (^tap)(void)) {
-	NSMutableDictionary *row = TGRow(title, detail, tap);
-	row[@"opens"] = @YES;
-	return row;
-}
-
-static NSMutableDictionary *TGSwitchRow(NSString *title, BOOL on,
-									   void (^toggle)(void)) {
-	NSMutableDictionary *row = TGRow(title, nil, toggle);
-	row[@"switch"] = @YES;
-	row[@"on"] = @(on);
-	return row;
-}
-
-static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows) {
-	NSMutableDictionary *section = [NSMutableDictionary dictionary];
-	if (header) section[@"header"] = header;
-	if (footer) section[@"footer"] = footer;
-	section[@"rows"] = rows ?: @[];
-	return section;
-}
+#import "TGRows.h"
 
 /// A colour as TDLib's RGB integer: 0xRRGGBB.
 static NSInteger TGRGB(UIColor *colour) {
@@ -70,7 +37,6 @@ static NSString *TGWriteBackground(UIColor *colour) {
 }
 
 @interface TGChatToolsViewController ()
-@property (nonatomic, strong) NSArray *sections;
 @property (nonatomic, strong) NSDictionary *chat;
 @property (nonatomic, strong) NSDictionary *groupInfo;
 @property (nonatomic, assign) BOOL protectedContent;
@@ -87,28 +53,16 @@ static NSString *TGWriteBackground(UIColor *colour) {
 
 @implementation TGChatToolsViewController
 
-- (instancetype)init {
-	return [super initWithStyle:UITableViewStyleGrouped];
-}
-
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	self.title = @"Chat Tools";
-	[self applyTheme];
+	self.title = TGLocalized(@"Chat Tools");
 	[self rebuild];
 	[self loadChat];
-
 }
 
 - (void)viewWillAppear:(BOOL)animated {
 	[super viewWillAppear:animated];
 	[self applyTheme];
-	[self.tableView reloadData];
-}
-
-- (void)applyTheme {
-	[[TGTheme shared] styleGroupedTable:self.tableView];
-	[[TGTheme shared] styleNavigationBar:self.navigationController.navigationBar];
 }
 
 #pragma mark - state
@@ -147,154 +101,97 @@ static NSString *TGWriteBackground(UIColor *colour) {
 
 - (void)rebuild {
 	__weak typeof(self) weakSelf = self;
-
-	NSMutableArray *insights = [NSMutableArray array];
-	[insights addObject:TGOpenRow(@"Suggested Chats", nil,
-			^{ [weakSelf showRecommendedChats]; })];
-
-	NSMutableArray *moderation = [NSMutableArray array];
-	[moderation addObject:TGRow(@"Slow Mode",
-			self.slowMode ? TGLocalizedFormat(@"%@s", @(self.slowMode))
-						  : @"Off", ^{ [weakSelf chooseSlowMode]; })];
-	[moderation addObject:TGRow(@"Available Reactions",
-			self.reactionsAll ? @"All" : @"Some Reactions", ^{ [weakSelf chooseReactions]; })];
-	[moderation addObject:TGSwitchRow(@"Restrict Saving Content",
-			self.protectedContent, ^{ [weakSelf toggleProtected]; })];
-	[moderation addObject:TGSwitchRow(@"Translate",
-			self.translatable, ^{ [weakSelf toggleTranslatable]; })];
-	[moderation addObject:TGSwitchRow(@"Send Without Sound",
-			self.defaultSilent, ^{ [weakSelf toggleDefaultSilent]; })];
-
-	NSMutableArray *appearance = [NSMutableArray array];
-	[appearance addObject:TGRow(@"Accent Color",
-			[NSString stringWithFormat:@"%ld", (long)self.accentId],
-			^{ [weakSelf chooseAccent:NO]; })];
-	[appearance addObject:TGRow(@"Change Profile Color",
-			[NSString stringWithFormat:@"%ld", (long)self.profileAccentId],
-			^{ [weakSelf chooseAccent:YES]; })];
-	[appearance addObject:TGRow(@"Color Theme", self.themeName ?: @"Default",
-			^{ [weakSelf chooseTheme]; })];
-	[appearance addObject:TGRow(@"Wallpaper", @"Set", ^{ [weakSelf chooseBackground]; })];
-	[appearance addObject:TGRow(@"Reset Chat Wallpapers", nil, ^{ [weakSelf resetBackground]; })];
-
-	NSMutableArray *group = [NSMutableArray array];
-	[group addObject:TGRow(@"Discussion Group",
-			self.discussionChatId ? @"Linked" : @"None",
-			^{ [weakSelf chooseDiscussionGroup]; })];
-	[group addObject:TGRow(@"Location", nil, ^{ [weakSelf setLocation]; })];
-	[group addObject:TGRow(@"Local Note", self.note.length ? self.note : @"None",
-			^{ [weakSelf editNote]; })];
-	[group addObject:TGRow(@"Owner After Leaving", nil,
-			^{ [weakSelf showOwnerAfterLeaving]; })];
-
-	NSMutableArray *photo = [NSMutableArray array];
-	[photo addObject:TGRow(@"Emoji", nil, ^{ [weakSelf chooseEmojiPhoto]; })];
-	[photo addObject:TGRow(@"Report Profile Photo", nil, ^{ [weakSelf reportPhoto]; })];
-
-	NSMutableArray *admin = [NSMutableArray array];
-	[admin addObject:TGRow(@"Approve", nil,
-			^{ [weakSelf processJoinRequests:YES]; })];
-	[admin addObject:TGRow(@"Decline All", nil,
-			^{ [weakSelf processJoinRequests:NO]; })];
-	[admin addObject:TGRow(@"Join Requests", nil,
-			^{ [weakSelf answerJoinRequestQuery]; })];
-
-	NSMutableArray *folders = [NSMutableArray array];
-	[folders addObject:TGRow(@"Add to Folder", nil,
-			^{ [weakSelf addToChatList]; })];
-
-	self.sections = @[
-		TGSection(@"Channels", nil, insights),
-		TGSection(@"Moderation", nil, moderation),
-		TGSection(@"Appearance", nil, appearance),
-		TGSection(@"This Chat", nil, group),
-		TGSection(@"Photo", nil, photo),
-		TGSection(@"Join Requests", nil, admin),
-		TGSection(@"Chat Folders", nil, folders),
-	];
-	[self.tableView reloadData];
-}
-
-#pragma mark - table
-
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-	return self.sections.count;
-}
-
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-	return [self.sections[section][@"rows"] count];
-}
-
-- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-	return self.sections[section][@"header"];
-}
-
-- (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-	return self.sections[section][@"footer"];
-}
-
-- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-	NSDictionary *row = self.sections[indexPath.section][@"rows"][indexPath.row];
-	UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"row"];
-	if (!cell)
-		cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle
-									  reuseIdentifier:@"row"];
-	[[TGTheme shared] styleCell:cell];
-	cell.textLabel.text = row[@"title"];
-	cell.textLabel.font = TGFontBody();
-	cell.textLabel.textColor = [[TGTheme shared] primaryTextColour];
-	cell.detailTextLabel.text = row[@"detail"];
-	cell.detailTextLabel.font = TGFontSubhead();
-	cell.detailTextLabel.textColor = [[TGTheme shared] secondaryTextColour];
-	cell.accessoryView = nil;
-	cell.accessoryType = UITableViewCellAccessoryNone;
-	if ([row[@"switch"] boolValue]){
-		UISwitch *toggle = [[UISwitch alloc] init];
-		toggle.on = [row[@"on"] boolValue];
-		toggle.tag = indexPath.section * 1000 + indexPath.row;
-		[toggle addTarget:self action:@selector(switchChanged:)
-		 forControlEvents:UIControlEventValueChanged];
-		cell.accessoryView = toggle;
-		cell.selectionStyle = UITableViewCellSelectionStyleNone;
-		return cell;
+	NSDictionary *state = @{
+		@"slowMode" : @(self.slowMode),
+		@"reactionsAll" : @(self.reactionsAll),
+		@"protectedContent" : @(self.protectedContent),
+		@"translatable" : @(self.translatable),
+		@"defaultSilent" : @(self.defaultSilent),
+		@"accentId" : @(self.accentId),
+		@"profileAccentId" : @(self.profileAccentId),
+		@"themeName" : self.themeName ?: @"Default",
+		@"discussionChatId" : @(self.discussionChatId),
+		@"note" : self.note ?: @"",
+	};
+	NSArray *model = TGChatToolsSectionsModel(state);
+	NSMutableArray *sections = [NSMutableArray arrayWithCapacity:model.count];
+	for (NSUInteger sectionIndex = 0; sectionIndex < model.count; sectionIndex++){
+		NSDictionary *sectionModel = model[sectionIndex];
+		NSArray *rowModels = sectionModel[@"rows"];
+		NSMutableArray *rows = [NSMutableArray arrayWithCapacity:rowModels.count];
+		for (NSUInteger rowIndex = 0; rowIndex < rowModels.count; rowIndex++){
+			NSDictionary *rowModel = rowModels[rowIndex];
+			NSString *title = rowModel[@"title"];
+			NSString *detail = rowModel[@"detail"];
+			if ([rowModel[@"switch"] boolValue]){
+				BOOL on = [rowModel[@"on"] boolValue];
+				void (^changed)(BOOL) = ^(BOOL value){
+					(void)value;
+					if (sectionIndex == 1 && rowIndex == 2)
+						[weakSelf toggleProtected];
+					else if (sectionIndex == 1 && rowIndex == 3)
+						[weakSelf toggleTranslatable];
+					else if (sectionIndex == 1 && rowIndex == 4)
+						[weakSelf toggleDefaultSilent];
+				};
+				[rows addObject:TGSwitchRow(title, on, changed)];
+				continue;
+			}
+			void (^tap)(void) = [self tapForSection:sectionIndex
+					index:rowIndex];
+			if ([rowModel[@"opens"] boolValue])
+				[rows addObject:TGSubtitleOpenRow(title, detail, tap)];
+			else
+				[rows addObject:TGSubtitleRow(title, detail, tap)];
+		}
+		[sections addObject:TGSection(sectionModel[@"header"], nil, rows)];
 	}
-	cell.accessoryType = (row[@"tap"] && [row[@"opens"] boolValue])
-			? UITableViewCellAccessoryDisclosureIndicator
-			: UITableViewCellAccessoryNone;
-	cell.selectionStyle = row[@"tap"] ? UITableViewCellSelectionStyleBlue
-									  : UITableViewCellSelectionStyleNone;
-	return cell;
+	self.sections = sections;
+	[self reloadRows];
 }
 
-- (void)switchChanged:(UISwitch *)toggle {
-	NSInteger section = toggle.tag / 1000;
-	NSInteger rowIndex = toggle.tag % 1000;
-	if (section >= (NSInteger)self.sections.count)
-		return;
-	NSArray *rows = self.sections[(NSUInteger)section][@"rows"];
-	if (rowIndex >= (NSInteger)rows.count)
-		return;
-	void (^tap)(void) = rows[(NSUInteger)rowIndex][@"tap"];
-	if (tap)
-		tap();
-}
-
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	if (indexPath.section >= (NSInteger)self.sections.count)
-		return;
-	NSArray *rows = self.sections[indexPath.section][@"rows"];
-	if (indexPath.row >= (NSInteger)rows.count)
-		return;
-	NSDictionary *row = rows[indexPath.row];
-	if ([row[@"switch"] boolValue]){
-		[tableView deselectRowAtIndexPath:indexPath animated:NO];
-		return;
+- (void (^)(void))tapForSection:(NSUInteger)section index:(NSUInteger)index {
+	__weak typeof(self) weakSelf = self;
+	if (section == 0)
+		return ^{ [weakSelf showRecommendedChats]; };
+	if (section == 1){
+		if (index == 0)
+			return ^{ [weakSelf chooseSlowMode]; };
+		if (index == 1)
+			return ^{ [weakSelf chooseReactions]; };
+		return nil;
 	}
-	void (^tap)(void) = row[@"tap"];
-	if (!tap)
-		return;
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
-	tap();
+	if (section == 2){
+		if (index == 0)
+			return ^{ [weakSelf chooseAccent:NO]; };
+		if (index == 1)
+			return ^{ [weakSelf chooseAccent:YES]; };
+		if (index == 2)
+			return ^{ [weakSelf chooseTheme]; };
+		if (index == 3)
+			return ^{ [weakSelf chooseBackground]; };
+		return ^{ [weakSelf resetBackground]; };
+	}
+	if (section == 3){
+		if (index == 0)
+			return ^{ [weakSelf chooseDiscussionGroup]; };
+		if (index == 1)
+			return ^{ [weakSelf setLocation]; };
+		if (index == 2)
+			return ^{ [weakSelf editNote]; };
+		return ^{ [weakSelf showOwnerAfterLeaving]; };
+	}
+	if (section == 4)
+		return index == 0 ? ^{ [weakSelf chooseEmojiPhoto]; }
+				: ^{ [weakSelf reportPhoto]; };
+	if (section == 5){
+		if (index == 0)
+			return ^{ [weakSelf processJoinRequests:YES]; };
+		if (index == 1)
+			return ^{ [weakSelf processJoinRequests:NO]; };
+		return ^{ [weakSelf answerJoinRequestQuery]; };
+	}
+	return ^{ [weakSelf addToChatList]; };
 }
 
 #pragma mark - insights

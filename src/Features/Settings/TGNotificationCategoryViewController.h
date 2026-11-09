@@ -7,9 +7,9 @@
 // settings stack.
 //
 #import <UIKit/UIKit.h>
-#import "TGTableViewController.h"
+#import "TGRowsViewController.h"
 
-@interface TGNotificationCategoryViewController : TGTableViewController
+@interface TGNotificationCategoryViewController : TGRowsViewController
 
 /// `scope` is the client's short name: private, groups or channels.
 - (instancetype)initWithScope:(NSString *)scope title:(NSString *)title;

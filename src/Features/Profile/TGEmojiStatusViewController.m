@@ -2,18 +2,12 @@
 #import "TGLocalization.h"
 #import "TGAlertSheet.h"
 #import "TGClient.h"
-#import "TGStickerStore.h"
+#import "TGCustomEmojiStore.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGIcons.h"
-#import "UIImage+WebP.h"
-
-/// Six per row is what fits beside the gutter at the smallest supported
-/// width, and it is the column count Telegram's own picker uses on a phone.
-static const NSInteger kStatusColumns = 6;
-static const CGFloat kStatusGridGap = TGMetricPadSmall;
-static const CGFloat kStatusGridInset = TGMetricPadMedium;
-static const CGFloat kStatusGridRow = TGMetricEmojiCell + TGMetricPad;
+#import "TGRows.h"
+#import "TGGridRowCell.h"
 
 /// The status durations Telegram offers. Forever is 0, which is what TDLib
 /// stores for a status with no end.
@@ -22,156 +16,49 @@ static const NSTimeInterval kStatusTwoHours = 2 * kStatusHour;
 static const NSTimeInterval kStatusEightHours = 8 * kStatusHour;
 static const NSTimeInterval kStatusTwoDays = 48 * kStatusHour;
 
-/// A still picture from a downloaded sticker: PNG and JPEG through UIKit,
-/// WebP through the decoder the app carries.
-static UIImage *TGStatusImageAtPath(NSString *path) {
-	if (!path.length)
-		return nil;
-	UIImage *image = nil;
-	if (![path.pathExtension.lowercaseString isEqualToString:@"webp"])
-		image = [UIImage imageWithContentsOfFile:path];
-	if (!image)
-		image = [UIImage convertFromWebP:path compressedData:nil error:nil];
-	return image;
-}
-
-#pragma mark - the tile grid
-
-@interface TGEmojiStatusGridCell : UITableViewCell
-
-/// Each entry: "emojiId", "emoji" (character), "image" (UIImage or NSNull),
-/// "disallowed" (NSNumber BOOL). Tapping a tile calls the block with its
-/// index; a disallowed tile never calls it.
-@property (nonatomic, copy) void (^onTile)(NSInteger index);
-
-- (void)setItems:(NSArray *)items;
-- (void)tileTapped:(UIButton *)button;
-
-@end
-
-@implementation TGEmojiStatusGridCell {
-	NSArray *_items;
-	NSMutableArray *_tiles;
-}
-
-- (id)initWithStyle:(UITableViewCellStyle)style reuseIdentifier:(NSString *)reuse {
-	self = [super initWithStyle:style reuseIdentifier:reuse];
-	if (!self)
-		return nil;
-	self.selectionStyle = UITableViewCellSelectionStyleNone;
-	self.contentView.backgroundColor = [UIColor clearColor];
-	self.backgroundColor = [UIColor clearColor];
-	_tiles = [NSMutableArray array];
-	return self;
-}
-
-- (void)layoutSubviews {
-	[super layoutSubviews];
-	CGFloat width = self.contentView.bounds.size.width;
-	CGFloat usable = width - TGDoubled(kStatusGridInset) -
-			kStatusGridGap * (kStatusColumns - 1);
-	CGFloat side = floorf(usable / kStatusColumns);
-	CGFloat y = TGCenteredOrigin(self.contentView.bounds.size.height,
-								 TGMetricEmojiCell);
-	for (NSUInteger i = 0; i < _tiles.count; i++){
-		UIButton *tile = _tiles[i];
-		CGFloat x = kStatusGridInset + i * (side + kStatusGridGap);
-		tile.frame = CGRectMake(x, y, side, TGMetricEmojiCell);
-		tile.layer.cornerRadius = TGMetricCornerSmall;
-	}
-}
-
-- (void)setItems:(NSArray *)items {
-	_items = [items copy] ?: @[];
-	while (_tiles.count < (NSUInteger)kStatusColumns){
-		UIButton *tile = [UIButton buttonWithType:UIButtonTypeCustom];
-		tile.tag = (NSInteger)_tiles.count;
-		tile.titleLabel.font = TGFontEmoji();
-		tile.titleLabel.textAlignment = NSTextAlignmentCenter;
-		tile.backgroundColor = [[TGTheme shared] fileTileColour];
-		tile.titleLabel.adjustsFontSizeToFitWidth = YES;
-		tile.titleLabel.minimumFontSize = TGFontSizeMicro;
-		[tile addTarget:self action:@selector(tileTapped:)
-	   forControlEvents:UIControlEventTouchUpInside];
-		[self.contentView addSubview:tile];
-		[_tiles addObject:tile];
-	}
-	for (NSUInteger i = 0; i < _tiles.count; i++){
-		UIButton *tile = _tiles[i];
-		if (i >= _items.count){
-			tile.hidden = YES;
-			continue;
-		}
-		NSDictionary *item = _items[i];
-		tile.hidden = NO;
-		tile.enabled = ![item[@"disallowed"] boolValue];
-		tile.alpha = tile.enabled ? TGAlphaOpaque : TGAlphaSecondary;
-		id image = item[@"image"];
-		if ([image isKindOfClass:UIImage.class]){
-			[tile setImage:image forState:UIControlStateNormal];
-			[tile setTitle:nil forState:UIControlStateNormal];
-		} else {
-			[tile setImage:nil forState:UIControlStateNormal];
-			[tile setTitle:(item[@"emoji"] ?: @"🙂") forState:UIControlStateNormal];
-		}
-	}
-	[self setNeedsLayout];
-}
-
-- (void)tileTapped:(UIButton *)button {
-	NSInteger index = button.tag;
-	if (index < 0 || index >= (NSInteger)_items.count)
-		return;
-	if ([_items[index][@"disallowed"] boolValue])
-		return;
-	if (self.onTile)
-		self.onTile(index);
-}
-
-@end
-
 #pragma mark - the picker
 
 @interface TGEmojiStatusViewController ()
-@property (nonatomic, strong) NSArray *sections;
 @property (nonatomic, strong) NSMutableDictionary *stickerByEmojiId;
-@property (nonatomic, strong) NSMutableSet *imagesRequested;
+@property (nonatomic, strong) NSArray *themedIds;
+@property (nonatomic, strong) NSArray *defaultIds;
+@property (nonatomic, strong) NSArray *recentIds;
+@property (nonatomic, strong) NSArray *refusedIds;
 @end
 
 @implementation TGEmojiStatusViewController
 
-- (id)init {
-	return [super initWithStyle:UITableViewStyleGrouped];
-}
-
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	self.title = self.subjectTitle.length ? self.subjectTitle : @"Emoji Status";
-	self.sections = @[];
+	self.title = self.subjectTitle.length ? self.subjectTitle
+			: TGLocalized(@"Emoji Status");
 	self.stickerByEmojiId = [NSMutableDictionary dictionary];
-	self.imagesRequested = [NSMutableSet set];
-	self.tableView.rowHeight = kStatusGridRow;
+	self.themedIds = @[];
+	self.defaultIds = @[];
+	self.recentIds = @[];
+	self.refusedIds = @[];
 	[self applyTheme];
 
 	if (self.target != TGEmojiStatusTargetChat)
 		self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
-				initWithTitle:@"Clear" style:UIBarButtonItemStylePlain
+				initWithTitle:TGLocalized(@"Clear")
+						style:UIBarButtonItemStylePlain
 					   target:self action:@selector(clearTapped)];
 
 	[self loadLists];
-	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(applyTheme) name:TGThemeChangedNotification object:nil];
-}
-
-- (void)applyTheme {
-	self.tableView.separatorColor = [[TGTheme shared] separatorColour];
-	self.tableView.backgroundColor = [[TGTheme shared] groupedBackgroundColour];
-	[[TGTheme shared] styleNavigationBar:self.navigationController.navigationBar];
-	[self.tableView reloadData];
+	[[NSNotificationCenter defaultCenter] addObserver:self
+			selector:@selector(emojiPictureReady:)
+				name:TGCustomEmojiLoadedNotification object:nil];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
 	[super viewWillAppear:animated];
 	[[TGTheme shared] styleNavigationBar:self.navigationController.navigationBar];
+}
+
+- (void)emojiPictureReady:(NSNotification *)note {
+	(void)note;
+	[self reloadRows];
 }
 
 #pragma mark - the lists
@@ -246,43 +133,96 @@ static UIImage *TGStatusImageAtPath(NSString *path) {
 						default:(NSArray *)standard
 						 recent:(NSArray *)recent
 						refused:(NSArray *)refused {
-	NSMutableSet *refusedSet = [NSMutableSet set];
-	for (NSNumber *identifier in refused ?: @[])
-		[refusedSet addObject:identifier];
-
-	NSMutableArray *sections = [NSMutableArray array];
+	NSMutableSet *used = [NSMutableSet set];
 	NSArray *themedIds = [self uniqueIds:themed excluding:nil];
-	NSMutableSet *used = [NSMutableSet setWithArray:themedIds];
+	[used addObjectsFromArray:themedIds];
 	NSArray *defaultIds = [self uniqueIds:standard excluding:used];
 	[used addObjectsFromArray:defaultIds];
 	NSArray *recentIds = [self uniqueIds:recent excluding:used];
 	[used addObjectsFromArray:recentIds];
+	NSArray *refusedIds = [self uniqueIds:refused excluding:nil];
 
-	if (themedIds.count)
-		[sections addObject:@{@"header" : @"Emoji Statuses",
-							  @"ids" : themedIds}];
-	if (defaultIds.count)
-		[sections addObject:@{@"header" : @"Default",
-							  @"ids" : defaultIds}];
-	if (recentIds.count)
-		[sections addObject:@{@"header" : @"Recently Used",
-							  @"ids" : recentIds}];
-	if (refusedSet.count){
-		NSArray *refusedIds = [self uniqueIds:refused excluding:nil];
-		[sections addObject:@{@"header" : @"Emoji Status",
-							  @"ids" : refusedIds}];
-	}
-	self.sections = sections;
+	self.themedIds = themedIds;
+	self.defaultIds = defaultIds;
+	self.recentIds = recentIds;
+	self.refusedIds = refusedIds;
+	[self rebuildSections];
 
 	NSMutableArray *all = [NSMutableArray array];
-	for (NSDictionary *section in sections)
-		[all addObjectsFromArray:section[@"ids"]];
+	for (NSArray *list in @[themedIds, defaultIds, recentIds, refusedIds])
+		[all addObjectsFromArray:list];
 	[self fetchStickersForIds:all];
-	[self.tableView reloadData];
+}
+
+- (CGFloat)gridWidth {
+	CGFloat width = self.tableView.bounds.size.width - TGMetricGridTableMargin;
+	return width > 0 ? width : TGMetricScreenWidth - TGMetricGridTableMargin;
+}
+
+- (NSInteger)gridColumns {
+	return MIN(TGGridColumnsForWidth([self gridWidth], TGMetricEmojiCell),
+			TGMetricEmojiStatusGridColumns);
+}
+
+- (NSArray *)rowsForIds:(NSArray *)ids {
+	__weak typeof(self) weakSelf = self;
+	NSInteger columns = [self gridColumns];
+	CGFloat side = TGGridTileSideForWidth([self gridWidth], columns);
+	NSMutableArray *rows = [NSMutableArray array];
+	for (NSUInteger start = 0; start < ids.count;
+			start += (NSUInteger)columns){
+		NSRange range = NSMakeRange(start, MIN((NSUInteger)columns,
+				ids.count - start));
+		NSArray *lineIds = [ids subarrayWithRange:range];
+		NSMutableArray *tiles = [NSMutableArray array];
+		for (NSNumber *identifier in lineIds){
+			NSDictionary *sticker = self.stickerByEmojiId[identifier] ?: @{};
+			NSMutableDictionary *tile = [NSMutableDictionary dictionary];
+			UIImage *image = [[TGCustomEmojiStore shared]
+					imageForId:identifier.longLongValue side:side];
+			if (image)
+				tile[TGGridItemImage] = image;
+			if ([sticker[@"emoji"] isKindOfClass:NSString.class])
+				tile[TGGridItemEmoji] = sticker[@"emoji"];
+			[tiles addObject:tile];
+		}
+		[rows addObject:TGGridRow(tiles, columns, ^(NSInteger index){
+			NSUInteger absolute = start + (NSUInteger)index;
+			if (absolute < ids.count)
+				[weakSelf chooseEmojiId:[ids[absolute] longLongValue]];
+		})];
+	}
+	return rows;
+}
+
+- (void)rebuildSections {
+	NSMutableArray *sections = [NSMutableArray array];
+	if (self.themedIds.count)
+		[sections addObject:TGSection(TGLocalized(@"Emoji Statuses"), nil,
+				[self rowsForIds:self.themedIds])];
+	if (self.defaultIds.count)
+		[sections addObject:TGSection(TGLocalized(@"Default"), nil,
+				[self rowsForIds:self.defaultIds])];
+	if (self.recentIds.count)
+		[sections addObject:TGSection(TGLocalized(@"Recently Used"), nil,
+				[self rowsForIds:self.recentIds])];
+	if (self.refusedIds.count)
+		[sections addObject:TGSection(TGLocalized(@"Emoji Status"), nil,
+				[self rowsForIds:self.refusedIds])];
+	if (self.target != TGEmojiStatusTargetChat){
+		__weak typeof(self) weakSelf = self;
+		[sections addObject:TGSection(nil, nil, @[
+			TGTapRow(TGLocalized(@"Clear Recent Emoji"), nil,
+					^{ [weakSelf clearRecent]; }),
+		])];
+	}
+	self.sections = sections;
+	[self reloadRows];
 }
 
 /// Custom emoji ids are not characters: the character and the picture both
-/// come from getCustomEmojiStickers. One request covers every id on screen.
+/// come from getCustomEmojiStickers. One request covers every id on screen;
+/// the pictures themselves are then served by TGCustomEmojiStore.
 - (void)fetchStickersForIds:(NSArray *)ids {
 	if (!ids.count)
 		return;
@@ -298,116 +238,17 @@ static UIImage *TGStatusImageAtPath(NSString *path) {
 				continue;
 			me.stickerByEmojiId[identifier] = sticker;
 		}
-		[me downloadThumbs];
-		[me.tableView reloadData];
+		[[TGCustomEmojiStore shared] receiveStickers:stickers forIds:ids];
+		[me rebuildSections];
 	}];
 }
 
-- (void)downloadThumbs {
-	for (NSNumber *identifier in self.stickerByEmojiId){
-		if ([self.imagesRequested containsObject:identifier])
-			continue;
-		NSDictionary *sticker = self.stickerByEmojiId[identifier];
-		NSNumber *fileId = sticker[@"thumbId"];
-		if ([fileId longLongValue] <= 0)
-			fileId = sticker[@"fileId"];
-		if ([fileId longLongValue] <= 0)
-			continue;
-		[self.imagesRequested addObject:identifier];
-		__weak typeof(self) weakSelf = self;
-		[[TGClient shared] downloadFile:fileId.integerValue
-							 completion:^(NSString *path){
-			TGEmojiStatusViewController *me = weakSelf;
-			if (!me || !path.length)
-				return;
-			UIImage *image = TGStatusImageAtPath(path);
-			if (!image)
-				return;
-			NSMutableDictionary *sticker = [me.stickerByEmojiId[identifier] mutableCopy];
-			sticker[@"image"] = image;
-			me.stickerByEmojiId[identifier] = sticker;
-			[me.tableView reloadData];
-		}];
-	}
-}
+#pragma mark - clearing recent
 
-#pragma mark - table
-
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-	NSInteger extra = (self.target != TGEmojiStatusTargetChat) ? 1 : 0;
-	return self.sections.count + extra;
-}
-
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-	if (section < (NSInteger)self.sections.count){
-		NSInteger count = [(NSArray *)self.sections[section][@"ids"] count];
-		return (count + kStatusColumns - 1) / kStatusColumns;
-	}
-	return 1;
-}
-
-- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-	if (section < (NSInteger)self.sections.count)
-		return self.sections[section][@"header"];
-	return nil;
-}
-
-- (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-	return nil;
-}
-
-- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-	if (indexPath.section >= (NSInteger)self.sections.count){
-		UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"clear"];
-		if (!cell)
-			cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
-										  reuseIdentifier:@"clear"];
-		[[TGTheme shared] styleCell:cell];
-		cell.textLabel.text = @"Clear Recent Emoji";
-		cell.textLabel.font = TGFontBody();
-		cell.textLabel.textColor = [[TGTheme shared] accentColour];
-		cell.selectionStyle = UITableViewCellSelectionStyleBlue;
-		return cell;
-	}
-
-	static NSString *reuse = @"grid";
-	TGEmojiStatusGridCell *cell = [tableView dequeueReusableCellWithIdentifier:reuse];
-	if (!cell)
-		cell = [[TGEmojiStatusGridCell alloc] initWithStyle:UITableViewCellStyleDefault
-											 reuseIdentifier:reuse];
-	NSArray *ids = self.sections[indexPath.section][@"ids"];
-	NSInteger start = indexPath.row * kStatusColumns;
-	NSInteger end = MIN(start + kStatusColumns, (NSInteger)ids.count);
-	NSMutableArray *items = [NSMutableArray array];
-	BOOL refusedSection = [self.sections[indexPath.section][@"header"]
-			isEqualToString:@"Not Allowed in This Chat"];
-	for (NSInteger i = start; i < end; i++){
-		NSNumber *identifier = ids[i];
-		NSDictionary *sticker = self.stickerByEmojiId[identifier] ?: @{};
-		[items addObject:@{
-			@"emojiId" : identifier,
-			@"emoji" : sticker[@"emoji"] ?: @"🙂",
-			@"image" : sticker[@"image"] ?: [NSNull null],
-			@"disallowed" : @(refusedSection),
-		}];
-	}
-	__weak typeof(self) weakSelf = self;
-	cell.onTile = ^(NSInteger index){
-		NSInteger absolute = start + index;
-		if (absolute < (NSInteger)ids.count)
-			[weakSelf chooseEmojiId:[ids[absolute] longLongValue]];
-	};
-	[cell setItems:items];
-	return cell;
-}
-
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
-	if (indexPath.section < (NSInteger)self.sections.count)
-		return;
+- (void)clearRecent {
 	__weak typeof(self) weakSelf = self;
 	[[TGClient shared] clearRecentEmojiStatusesWithCompletion:^(BOOL ok, NSString *error){
-		[weakSelf showResult:ok error:error title:@"Recently Used"];
+		[weakSelf showResult:ok error:error title:TGLocalized(@"Recently Used")];
 		if (ok)
 			[weakSelf loadLists];
 	}];
@@ -422,12 +263,12 @@ static UIImage *TGStatusImageAtPath(NSString *path) {
 		TGLocalizedPluralValue(@"%@ hour", @"%@ hours", @"2", 2),
 		TGLocalizedPluralValue(@"%@ hour", @"%@ hours", @"8", 8),
 		TGLocalizedPluralValue(@"%@ day", @"%@ days", @"2", 2),
-		@"Forever",
+		TGLocalized(@"Forever"),
 	];
 	NSArray *durations = @[@(kStatusHour), @(kStatusTwoHours),
 						   @(kStatusEightHours), @(kStatusTwoDays), @(0)];
 	[TGAlertSheet showChoices:titles
-						title:@"Set Emoji Status"
+						title:TGLocalized(@"Set Emoji Status")
 			 destructiveIndex:-1
 					   inView:self.view
 					 onChoice:^(NSInteger index){
@@ -442,7 +283,7 @@ static UIImage *TGStatusImageAtPath(NSString *path) {
 
 - (void)applyEmojiId:(int64_t)emojiId expirationDate:(int64_t)expiration {
 	__weak typeof(self) weakSelf = self;
-	NSString *title = self.subjectTitle ?: @"Emoji Status";
+	NSString *title = self.subjectTitle ?: TGLocalized(@"Emoji Status");
 	if (self.target == TGEmojiStatusTargetChat){
 		[[TGClient shared] setChatEmojiStatus:emojiId expirationDate:expiration
 									  inChat:self.chatId
@@ -471,20 +312,22 @@ static UIImage *TGStatusImageAtPath(NSString *path) {
 		[[TGClient shared] setUserEmojiStatus:0 expirationDate:0
 									  forUser:self.userId
 								   completion:^(BOOL ok, NSString *error){
-			[weakSelf showResult:ok error:error title:@"Emoji Status"];
+			[weakSelf showResult:ok error:error title:TGLocalized(@"Emoji Status")];
 		}];
 		return;
 	}
 	[[TGClient shared] setEmojiStatus:0 expirationDate:0
 						  completion:^(BOOL ok, NSString *error){
-		[weakSelf showResult:ok error:error title:@"Emoji Status"];
+		[weakSelf showResult:ok error:error title:TGLocalized(@"Emoji Status")];
 	}];
 }
 
 - (void)showResult:(BOOL)ok error:(NSString *)error title:(NSString *)title {
-	[TGAlertSheet showMessage:(ok ? @"Saved"
-								   : (error ?: @"An error occurred."))
+	[TGAlertSheet showMessage:(ok ? TGLocalized(@"Saved")
+								   : (error ?: TGLocalized(@"An error occurred.")))
 						title:title inView:self.view];
 }
 
 @end
+
+// vim:ft=objc

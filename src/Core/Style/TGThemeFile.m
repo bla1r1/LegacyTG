@@ -1,4 +1,5 @@
 #import "TGThemeFile.h"
+#import "TGStylePalette.h"
 
 //
 // Theme file import. Every format here has one job: turn a third-party theme
@@ -29,7 +30,8 @@
 	NSDictionary *palette = [self paletteFromFile:path name:name];
 	if (!palette)
 		return nil;
-	NSArray *roles = @[@"chatBackground", @"bubbleMine", @"bubbleTheirs",
+	NSArray *roles = @[@"chatBackground", @"wallpaper", @"bubbleMine", @"bubbleTheirs",
+					   @"bubbleMineGradient", @"bubbleTheirsGradient",
 					   @"bubbleMineText", @"bubbleTheirsText",
 					   @"service", @"serviceText", @"ticks", @"isDark"];
 	NSMutableDictionary *chat = [NSMutableDictionary dictionary];
@@ -93,6 +95,24 @@ static UIColor *TGColourFromHex(id value) {
 						   alpha:alpha];
 }
 
+/// A gradient is written in the same field as a flat colour, stops separated
+/// by '-'. The first stop still becomes the bubble fill; the run is kept so a
+/// card can show what the file actually paints.
+static NSArray *TGColoursFromHexGradient(id value) {
+	if (![value isKindOfClass:NSString.class])
+		return nil;
+	NSArray *parts = [(NSString *)value componentsSeparatedByString:@"-"];
+	if (parts.count < 2)
+		return nil;
+	NSMutableArray *colours = [NSMutableArray array];
+	for (NSString *part in parts){
+		UIColor *colour = TGColourFromHex(part);
+		if (colour)
+			[colours addObject:colour];
+	}
+	return colours.count > 1 ? colours : nil;
+}
+
 /// Follow a dotted key path, tolerating a missing branch.
 static id TGDig(NSDictionary *root, NSString *path) {
 	id node = root;
@@ -126,6 +146,7 @@ static id TGDig(NSDictionary *root, NSString *path) {
 		{@"tabBar",        @"root.tabBar.background|root.navBar.background"},
 		{@"accent",        @"root.navBar.accentText|list.accent|chatList.unreadBadgeActiveBg"},
 		{@"destructive",   @"list.destructiveText"},
+		{@"wallpaper",     @"chat.defaultWallpaper.color|chat.defaultWallpaper|chat.message.freeform.withoutWp.bg"},
 		{@"chatBackground",@"chat.message.freeform.withoutWp.bg|chat.defaultWallpaper.color|list.plainBg"},
 		{@"bubbleMine",    @"chat.message.outgoing.bubble.withoutWp.bg|chat.message.outgoing.bubble.withWp.bg"},
 		{@"bubbleTheirs",  @"chat.message.incoming.bubble.withoutWp.bg|chat.message.incoming.bubble.withWp.bg"},
@@ -157,6 +178,19 @@ static id TGDig(NSDictionary *root, NSString *path) {
 			}
 		}
 	}
+
+	// Bubbles may carry a gradient instead of one fill. Keep the whole run
+	// beside the first-stop colour the loop above stored.
+	id mine = TGDig(root, @"chat.message.outgoing.bubble.withoutWp.bg")
+			?: TGDig(root, @"chat.message.outgoing.bubble.withWp.bg");
+	NSArray *mineGradient = TGColoursFromHexGradient(mine);
+	if (mineGradient)
+		palette[@"bubbleMineGradient"] = mineGradient;
+	id theirs = TGDig(root, @"chat.message.incoming.bubble.withoutWp.bg")
+			?: TGDig(root, @"chat.message.incoming.bubble.withWp.bg");
+	NSArray *theirsGradient = TGColoursFromHexGradient(theirs);
+	if (theirsGradient)
+		palette[@"bubbleTheirsGradient"] = theirsGradient;
 
 	palette[@"isDark"] = @([root[@"dark"] boolValue]);
 	return palette.count > 2 ? palette : nil;
@@ -214,6 +248,7 @@ static CGFloat TGLuminanceOf(UIColor *colour) {
 		{@"barButton",     @"actionBarDefaultIcon"},
 		{@"accent",        @"windowBackgroundWhiteBlueText|actionBarDefaultSubtitle"},
 		{@"destructive",   @"windowBackgroundWhiteRedText"},
+		{@"wallpaper",     @"chat_wallpaper"},
 		{@"chatBackground",@"chat_wallpaper|windowBackgroundWhite"},
 		{@"bubbleMine",    @"chat_outBubble"},
 		{@"bubbleTheirs",  @"chat_inBubble"},
@@ -239,6 +274,25 @@ static CGFloat TGLuminanceOf(UIColor *colour) {
 			}
 		}
 	}
+
+	// Android writes a gradient as up to three named stops beside the flat
+	// bubble colour. Keep them when present so the cards can show the run.
+	NSArray *mineKeys = @[@"chat_outBubbleGradient", @"chat_outBubbleGradient2",
+			@"chat_outBubbleGradient3"];
+	NSMutableArray *mineGradient = [NSMutableArray array];
+	for (NSString *key in mineKeys)
+		if (raw[key])
+			[mineGradient addObject:TGColourFromSignedARGB(raw[key])];
+	if (mineGradient.count > 1)
+		palette[@"bubbleMineGradient"] = mineGradient;
+	NSArray *theirsKeys = @[@"chat_inBubbleGradient", @"chat_inBubbleGradient2",
+			@"chat_inBubbleGradient3"];
+	NSMutableArray *theirsGradient = [NSMutableArray array];
+	for (NSString *key in theirsKeys)
+		if (raw[key])
+			[theirsGradient addObject:TGColourFromSignedARGB(raw[key])];
+	if (theirsGradient.count > 1)
+		palette[@"bubbleTheirsGradient"] = theirsGradient;
 
 	// Android themes carry no explicit dark flag; guess it from the paper
 	// behind the lists. Without a guess a dark .attheme would keep the built
@@ -324,6 +378,7 @@ static UIColor *TGColourFromDesktopHex(NSString *raw) {
 		{@"bar",           @"topBarBg|titleBg"},
 		{@"barTitle",      @"topBarFg|titleFg"},
 		{@"accent",        @"windowBgActive"},
+		{@"wallpaper",     @"chatBg|windowBg"},
 		{@"chatBackground",@"chatBg|windowBg"},
 		{@"bubbleMine",    @"msgOutBg"},
 		{@"bubbleTheirs",  @"msgInBg"},
@@ -367,6 +422,32 @@ static UIColor *TGColourFromDesktopHex(NSString *raw) {
 	UIColor *paper = [palette objectForKey:@"listBackground"];
 	palette[@"isDark"] = @(paper && TGLuminanceOf(paper) < 0.5f);
 	return palette.count > 2 ? palette : nil;
+}
+
+#pragma mark - card palette
+
++ (NSDictionary *)cardPaletteForThemeEntry:(NSDictionary *)entry {
+	NSMutableDictionary *roles = [TGClassicThemeRoleColours() mutableCopy];
+	NSString *path = [entry isKindOfClass:NSDictionary.class] ? entry[@"path"] : nil;
+	NSDictionary *palette = path.length ? [self paletteFromFile:path name:NULL] : nil;
+	if (palette){
+		NSArray *keys = @[@"wallpaper", @"bubbleMine", @"bubbleTheirs",
+				@"bubbleMineGradient", @"bubbleTheirsGradient",
+				@"bubbleMineText", @"bubbleTheirsText", @"text", @"accent"];
+		for (NSString *key in keys)
+			if (palette[key])
+				roles[key] = palette[key];
+		if (palette[@"primaryText"])
+			roles[@"text"] = palette[@"primaryText"];
+		// Older files carry the chat canvas but no separate wallpaper role.
+		if (!palette[@"wallpaper"] && palette[@"chatBackground"])
+			roles[@"wallpaper"] = palette[@"chatBackground"];
+	}
+	if (!roles[@"bubbleMineText"])
+		roles[@"bubbleMineText"] = roles[@"text"];
+	if (!roles[@"bubbleTheirsText"])
+		roles[@"bubbleTheirsText"] = roles[@"text"];
+	return roles;
 }
 
 @end

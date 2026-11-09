@@ -82,18 +82,7 @@ static UIImage *TGStoryDrawn(NSString *key, UIImage *(^make)(void)) {
 	return image;
 }
 
-/// Two short strokes trailing back from `tip`, so a line reads as an arrow.
-static void TGStoryArrowhead(CGContextRef ctx, CGPoint tip, CGFloat heading, CGFloat size) {
-	CGFloat spread = 0.6f;
-	CGFloat back = heading + (CGFloat)M_PI;
-	CGContextMoveToPoint(ctx, tip.x + size * cosf(back - spread),
-						 tip.y + size * sinf(back - spread));
-	CGContextAddLineToPoint(ctx, tip.x, tip.y);
-	CGContextAddLineToPoint(ctx, tip.x + size * cosf(back + spread),
-							tip.y + size * sinf(back + spread));
-	CGContextStrokePath(ctx);
-}
-
+/// The shutter: a ring around a disc, drawn once.
 static UIImage *TGStoryShutterImage(void) {
 	return TGStoryDrawn(@"shutter", ^UIImage *{
 		CGColorRef white = [[TGTheme shared] onMediaColour].CGColor;
@@ -116,103 +105,20 @@ static UIImage *TGStoryShutterImage(void) {
 
 /// Two arcs chasing each other, the usual "turn the camera round" mark.
 static UIImage *TGStoryFlipGlyph(CGFloat side) {
-	return TGStoryDrawn(@"flip", ^UIImage *{
-		UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), NO, 0);
-		CGContextRef ctx = UIGraphicsGetCurrentContext();
-		CGContextSetStrokeColorWithColor(ctx, [[TGTheme shared] onMediaColour].CGColor);
-		CGContextSetLineWidth(ctx, TGMetricStrokeIcon);
-		CGContextSetLineCap(ctx, kCGLineCapRound);
-		CGContextSetLineJoin(ctx, kCGLineJoinRound);
-		CGFloat centre = TGHalf(side);
-		CGFloat radius = side * 0.3f;
-		CGFloat trim = 0.55f;
-		NSInteger steps = 14;
-		for (NSInteger arc = 0; arc < 2; arc++){
-			CGFloat from = arc * (CGFloat)M_PI + trim;
-			CGFloat span = (CGFloat)M_PI - TGDoubled(trim);
-			CGPoint last = CGPointZero;
-			CGFloat heading = 0;
-			// Sampled by hand rather than CGContextAddArc: that call's sense
-			// flips with the context, and the arrowhead needs the true direction.
-			for (NSInteger i = 0; i <= steps; i++){
-				CGFloat angle = from + span * i / steps;
-				CGPoint p = CGPointMake(centre + radius * cosf(angle),
-										centre + radius * sinf(angle));
-				if (i == 0)
-					CGContextMoveToPoint(ctx, p.x, p.y);
-				else
-					CGContextAddLineToPoint(ctx, p.x, p.y);
-				heading = angle + (CGFloat)M_PI_2;
-				last = p;
-			}
-			CGContextStrokePath(ctx);
-			TGStoryArrowhead(ctx, last, heading, side * 0.16f);
-		}
-		UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
-		UIGraphicsEndImageContext();
-		return image;
-	});
+	return [TGIcons glyphNamed:@"flip"
+						colour:[[TGTheme shared] onMediaColour] side:side];
 }
 
 /// A frame with a hill and a sun: the gallery.
 static UIImage *TGStoryGalleryGlyph(CGFloat side) {
-	return TGStoryDrawn(@"gallery", ^UIImage *{
-		UIColor *colour = [[TGTheme shared] onMediaColour];
-		UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), NO, 0);
-		CGContextRef ctx = UIGraphicsGetCurrentContext();
-		CGContextSetStrokeColorWithColor(ctx, colour.CGColor);
-		CGContextSetLineWidth(ctx, TGMetricStrokeIcon);
-		CGContextSetLineCap(ctx, kCGLineCapRound);
-		CGContextSetLineJoin(ctx, kCGLineJoinRound);
-		CGFloat margin = side * 0.14f;
-		CGRect frame = CGRectInset(CGRectMake(0, 0, side, side), margin, margin);
-		UIBezierPath *path = [UIBezierPath bezierPathWithRoundedRect:frame
-														cornerRadius:side * 0.12f];
-		path.lineWidth = TGMetricStrokeIcon;
-		[path stroke];
-		CGContextMoveToPoint(ctx, side * 0.2f, side * 0.72f);
-		CGContextAddLineToPoint(ctx, side * 0.42f, side * 0.5f);
-		CGContextAddLineToPoint(ctx, side * 0.56f, side * 0.64f);
-		CGContextAddLineToPoint(ctx, side * 0.66f, side * 0.54f);
-		CGContextAddLineToPoint(ctx, side * 0.8f, side * 0.7f);
-		CGContextStrokePath(ctx);
-		CGFloat sunRadius = side * 0.06f;
-		CGFloat sunX = side * 0.62f;
-		CGFloat sunY = side * 0.34f;
-		CGRect sun = CGRectMake(sunX - sunRadius, sunY - sunRadius,
-								TGDoubled(sunRadius), TGDoubled(sunRadius));
-		CGContextStrokeEllipseInRect(ctx, sun);
-		UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
-		UIGraphicsEndImageContext();
-		return image;
-	});
+	return [TGIcons glyphNamed:@"gallery"
+						colour:[[TGTheme shared] onMediaColour] side:side];
 }
 
-/// The bolt with a stroke through it. The slash first clears a channel round
-/// itself so it stays readable where it crosses the bolt.
+/// The bolt with a stroke through it, from the catalogue.
 static UIImage *TGStoryFlashOffGlyph(CGFloat side) {
-	return TGStoryDrawn(@"flashOff", ^UIImage *{
-		UIColor *colour = [[TGTheme shared] onMediaColour];
-		UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), NO, 0);
-		CGContextRef ctx = UIGraphicsGetCurrentContext();
-		[[TGIcons glyphNamed:@"flash" colour:colour side:side]
-				drawInRect:CGRectMake(0, 0, side, side)];
-		CGContextSetLineCap(ctx, kCGLineCapRound);
-		CGContextSetBlendMode(ctx, kCGBlendModeClear);
-		CGContextSetLineWidth(ctx, TGMetricStrokeIcon * 3);
-		CGContextMoveToPoint(ctx, side * 0.2f, side * 0.14f);
-		CGContextAddLineToPoint(ctx, side * 0.8f, side * 0.86f);
-		CGContextStrokePath(ctx);
-		CGContextSetBlendMode(ctx, kCGBlendModeNormal);
-		CGContextSetStrokeColorWithColor(ctx, colour.CGColor);
-		CGContextSetLineWidth(ctx, TGMetricStrokeIcon);
-		CGContextMoveToPoint(ctx, side * 0.2f, side * 0.14f);
-		CGContextAddLineToPoint(ctx, side * 0.8f, side * 0.86f);
-		CGContextStrokePath(ctx);
-		UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
-		UIGraphicsEndImageContext();
-		return image;
-	});
+	return [TGIcons glyphNamed:@"flashOff"
+						colour:[[TGTheme shared] onMediaColour] side:side];
 }
 
 static UIButton *TGStoryEdgeButton(UIImage *image, id target, SEL action) {

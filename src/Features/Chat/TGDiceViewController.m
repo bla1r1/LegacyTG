@@ -1,8 +1,7 @@
 #import "TGDiceViewController.h"
 #import "TGAlertSheet.h"
 #import "TGClient.h"
-#import "TGTheme.h"
-#import "TGStyle.h"
+#import "TGRows.h"
 
 @interface TGDiceViewController ()
 @property (nonatomic, strong) NSDictionary *state;
@@ -10,32 +9,21 @@
 
 @implementation TGDiceViewController
 
-- (id)init {
-	return [super initWithStyle:UITableViewStyleGrouped];
-}
-
 - (void)viewDidLoad {
 	[super viewDidLoad];
 	self.title = self.chatTitle.length
-			? [NSString stringWithFormat:@"%@ · Dice", self.chatTitle]
-			: @"Stake";
-	self.tableView.rowHeight = TGMetricRow;
-	[self applyTheme];
+			? [NSString stringWithFormat:@"%@ · %@", self.chatTitle,
+					TGLocalized(@"Dice")]
+			: TGLocalized(@"Stake");
+	[self rebuildSections];
 	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
-			initWithTitle:@"Update" style:UIBarButtonItemStylePlain
+			initWithTitle:TGLocalized(@"Update")
+					style:UIBarButtonItemStylePlain
 				   target:self action:@selector(refreshTapped)];
 	[[NSNotificationCenter defaultCenter] addObserver:self
 			selector:@selector(stateChanged:)
 				name:TGStakeDiceStateChangedNotification object:nil];
 	[self refresh];
-	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(applyTheme) name:TGThemeChangedNotification object:nil];
-}
-
-- (void)applyTheme {
-	self.tableView.separatorColor = [[TGTheme shared] separatorColour];
-	self.tableView.backgroundColor = [[TGTheme shared] groupedBackgroundColour];
-	[[TGTheme shared] styleNavigationBar:self.navigationController.navigationBar];
-	[self.tableView reloadData];
 }
 
 - (void)stateChanged:(NSNotification *)note {
@@ -56,34 +44,16 @@
 		if (!me)
 			return;
 		if (error.length){
-			[TGAlertSheet showMessage:error title:@"Stake" inView:me.view];
+			[TGAlertSheet showMessage:error title:TGLocalized(@"Stake")
+							   inView:me.view];
 			return;
 		}
 		me.state = state;
-		[me.tableView reloadData];
+		[me rebuildSections];
 	}];
 }
 
-/// The API counts in the smallest TON unit; the panel reads in TON, with
-/// enough decimals to see a small suggested stake.
-- (NSString *)ton:(NSNumber *)grams {
-	double value = [grams doubleValue] / 1000000000.0;
-	return [NSString stringWithFormat:@"%.4f TON", value];
-}
-
-#pragma mark - table
-
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-	return 3;
-}
-
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-	if (section == 0)
-		return self.state ? 5 : 1;
-	if (section == 1)
-		return [self suggestedStakes].count;
-	return [self prizeTable].count;
-}
+#pragma mark - rows
 
 - (NSArray *)suggestedStakes {
 	id value = self.state[@"suggestedStakeGramAmounts"];
@@ -95,62 +65,28 @@
 	return [value isKindOfClass:NSArray.class] ? value : @[];
 }
 
-- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-	if (section == 0)
-		return @"Status";
-	if (section == 1)
-		return @"Suggested Stakes";
-	if (section == 2)
-		return @"Prize per 1000";
-	return nil;
-}
-
-- (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-	return nil;
-}
-
-- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-	UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"row"];
-	if (!cell)
-		cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle
-									  reuseIdentifier:@"row"];
-	[[TGTheme shared] styleCell:cell];
-	cell.textLabel.font = TGFontBody();
-	cell.textLabel.textColor = [[TGTheme shared] primaryTextColour];
-	cell.detailTextLabel.font = TGFontSubhead();
-	cell.detailTextLabel.textColor = [[TGTheme shared] secondaryTextColour];
-	cell.selectionStyle = UITableViewCellSelectionStyleNone;
-
+- (void)rebuildSections {
+	NSMutableArray *statusRows = [NSMutableArray array];
+	NSMutableArray *suggestedRows = [NSMutableArray array];
+	NSMutableArray *prizeRows = [NSMutableArray array];
 	if (!self.state){
-		cell.textLabel.text = @"Loading...";
-		cell.textLabel.textColor = [[TGTheme shared] secondaryTextColour];
-		return cell;
+		[statusRows addObject:TGRow(TGKindPlain, TGLocalized(@"Loading..."))];
+	} else {
+		for (NSDictionary *model in TGDiceStatusRows(self.state, self.chatId))
+			[statusRows addObject:TGSubtitleRow(model[@"title"],
+					model[@"detail"], nil)];
+		for (NSDictionary *model in TGDiceSuggestedRows([self suggestedStakes]))
+			[suggestedRows addObject:TGSubtitleRow(model[@"title"], nil, nil)];
+		for (NSDictionary *model in TGDicePrizeRows([self prizeTable]))
+			[prizeRows addObject:TGSubtitleRow(model[@"title"],
+					model[@"detail"], nil)];
 	}
-	if (indexPath.section == 0){
-		NSArray *pairs = @[
-			@[@"State hash", self.state[@"stateHash"] ?: @"None"],
-			@[@"Last stake", [self ton:self.state[@"stakeGramAmount"] ?: @(0)]],
-			@[@"Current streak", [NSString stringWithFormat:@"%@ of 3",
-					self.state[@"currentStreak"] ?: @(0)]],
-			@[@"Streak prize", [NSString stringWithFormat:@"%@ per 1000",
-					self.state[@"streakPrizePerMille"] ?: @(0)]],
-			@[@"Chat", self.chatId ? [NSString stringWithFormat:@"%lld", self.chatId]
-								   : @"—"],
-		];
-		NSArray *pair = pairs[indexPath.row];
-		cell.textLabel.text = pair[0];
-		cell.detailTextLabel.text = pair[1];
-		return cell;
-	}
-	if (indexPath.section == 1){
-		cell.textLabel.text = [self ton:[self suggestedStakes][indexPath.row]];
-		cell.detailTextLabel.text = nil;
-		return cell;
-	}
-	cell.textLabel.text = [NSString stringWithFormat:@"Face %ld", (long)indexPath.row + 1];
-	cell.detailTextLabel.text = [NSString stringWithFormat:@"%@ per 1000 staked",
-			[self prizeTable][indexPath.row]];
-	return cell;
+	self.sections = @[
+		TGSection(TGLocalized(@"Status"), nil, statusRows),
+		TGSection(TGLocalized(@"Suggested Stakes"), nil, suggestedRows),
+		TGSection(TGLocalized(@"Prize per 1000"), nil, prizeRows),
+	];
+	[self reloadRows];
 }
 
 @end

@@ -1,16 +1,46 @@
 #import "TGProfileAudioViewController.h"
 #import "TGAlertSheet.h"
 #import "TGClient.h"
+#import "TGMediaStore.h"
 #import "TGMusicPlayer.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGSnackbar.h"
 #import "TGIcons.h"
-#import "TGProfileTrackCell.h"
+#import "TGLocalization.h"
+#import "TGRows.h"
 
 /// One page of the saved-music list. The old screen asked for 100 once and
 /// showed the total above it, so anything past the first 100 never appeared.
 static const NSInteger kProfileAudioPage = 100;
+
+/// The shared peer row draws a circular picture; the track still needs its
+/// cover and its play/pause disc, so the two are composed before the row gets
+/// them. No cover keeps the old music-note tile.
+static UIImage *TGProfileAudioArtwork(UIImage *cover, BOOL playing) {
+	CGFloat side = TGMetricTrackArt;
+	UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), NO, 0);
+	CGRect rect = CGRectMake(0, 0, side, side);
+	if (cover){
+		[cover drawInRect:rect];
+	} else {
+		TGTheme *theme = [TGTheme shared];
+		[theme.fileTileColour setFill];
+		UIRectFill(rect);
+		UIImage *glyph = [TGIcons glyphNamed:@"music"
+				colour:[theme secondaryTextColour] side:TGMetricMenuGlyph];
+		CGFloat glyphSide = TGMetricMenuGlyph;
+		[glyph drawInRect:CGRectMake(TGCenteredOrigin(side, glyphSide),
+				TGCenteredOrigin(side, glyphSide), glyphSide, glyphSide)];
+	}
+	CGFloat discSide = TGMetricTrackDisc;
+	UIImage *disc = [TGIcons mediaDiscOfSide:discSide playing:playing];
+	[disc drawInRect:CGRectMake(TGCenteredOrigin(side, discSide),
+			TGCenteredOrigin(side, discSide), discSide, discSide)];
+	UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+	UIGraphicsEndImageContext();
+	return image;
+}
 
 @interface TGProfileAudioViewController ()
 @property (nonatomic, strong) NSArray *audios;
@@ -23,21 +53,17 @@ static const NSInteger kProfileAudioPage = 100;
 
 @implementation TGProfileAudioViewController
 
-- (id)init {
-	return [super initWithStyle:UITableViewStyleGrouped];
-}
-
 - (BOOL)isOwnProfile {
 	return self.userId == [[TGClient shared].me[@"id"] longLongValue];
 }
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	self.title = self.subjectTitle.length ? self.subjectTitle : @"Profile Music";
+	self.title = self.subjectTitle.length ? self.subjectTitle
+			: TGLocalized(@"Profile Music");
 	self.audios = @[];
 	self.covers = [NSMutableDictionary dictionary];
 	self.coversRequested = [NSMutableSet set];
-	self.tableView.rowHeight = TGMetricTrackRow;
 	[self applyTheme];
 	if ([self isOwnProfile])
 		self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
@@ -46,19 +72,18 @@ static const NSInteger kProfileAudioPage = 100;
 	// A row's verbs do not fit on a tap: the hold is the menu.
 	UILongPressGestureRecognizer *hold = [[UILongPressGestureRecognizer alloc]
 			initWithTarget:self action:@selector(rowHeld:)];
-	hold.minimumPressDuration = 0.5;
+	hold.minimumPressDuration = TGAnimationDurationHighlight;
 	[self.tableView addGestureRecognizer:hold];
 	[self load];
-	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(applyTheme) name:TGThemeChangedNotification object:nil];
-	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(playerChanged)
-												 name:TGMusicPlayerChangedNotification object:nil];
+	[[NSNotificationCenter defaultCenter] addObserver:self
+			selector:@selector(playerChanged)
+				name:TGMusicPlayerChangedNotification object:nil];
 }
 
 - (void)applyTheme {
-	self.tableView.separatorColor = [[TGTheme shared] separatorColour];
-	self.tableView.backgroundColor = [[TGTheme shared] groupedBackgroundColour];
-	[[TGTheme shared] styleNavigationBar:self.navigationController.navigationBar];
-	[self.tableView reloadData];
+	[super applyTheme];
+	if (self.audios)
+		[self rebuildSections];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -79,12 +104,13 @@ static const NSInteger kProfileAudioPage = 100;
 			return;
 		me.loading = NO;
 		if (error.length){
-			[TGAlertSheet showMessage:error title:@"Profile Music" inView:me.view];
+			[TGAlertSheet showMessage:error title:TGLocalized(@"Profile Music")
+								inView:me.view];
 			return;
 		}
-		me.audios = audios;
-		me.total = total ?: (NSInteger)audios.count;
-		[me.tableView reloadData];
+		me.audios = audios ?: @[];
+		me.total = total ?: (NSInteger)me.audios.count;
+		[me rebuildSections];
 		if (me.autoplay && me.audios.count){
 			me.autoplay = NO;
 			[me playAtIndex:0];
@@ -117,14 +143,14 @@ static const NSInteger kProfileAudioPage = 100;
 		}
 		me.total = total ?: (NSInteger)(me.audios.count + audios.count);
 		me.audios = [me.audios arrayByAddingObjectsFromArray:audios];
-		[me.tableView reloadData];
+		[me rebuildSections];
 	}];
 }
 
 - (void)playerChanged {
 	// The current row wears a pause glyph and the accent title. The player
 	// holds one queue, so any of its state changes can be the row's.
-	[self.tableView reloadData];
+	[self rebuildSections];
 }
 
 - (NSString *)durationText:(NSNumber *)seconds {
@@ -135,89 +161,72 @@ static const NSInteger kProfileAudioPage = 100;
 			(long)(value % 60)];
 }
 
-#pragma mark - table
+#pragma mark - rows
 
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-	return 1;
+- (void)requestCover:(NSNumber *)coverId {
+	if (!coverId || [self.coversRequested containsObject:coverId])
+		return;
+	[self.coversRequested addObject:coverId];
+	__weak typeof(self) weakSelf = self;
+	[[TGMediaStore shared] downloadFile:coverId.integerValue
+			priority:TGDownloadPriorityOnScreen
+			completion:^(NSString *path){
+		TGProfileAudioViewController *me = weakSelf;
+		if (!me || !path.length)
+			return;
+		UIImage *image = [TGIcons decodedImageAtPath:path
+				fittingSize:CGSizeMake(TGMetricTrackArt, TGMetricTrackArt)
+						 fill:YES
+						scale:[UIScreen mainScreen].scale];
+		if (!image)
+			return;
+		me.covers[coverId] = image;
+		[me rebuildSections];
+	}];
 }
 
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-	return self.audios.count;
-}
-
-- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-	if (!self.audios.count)
-		return nil;
+- (void)rebuildSections {
+	__weak typeof(self) weakSelf = self;
 	NSInteger count = self.total > 0 ? self.total : (NSInteger)self.audios.count;
-	return [NSString stringWithFormat:@"%ld %@", (long)count, count == 1 ? @"track" : @"tracks"];
-}
+	NSString *header = self.audios.count
+			? TGLocalizedPluralValue(@"%@ track", @"%@ tracks",
+					[NSString stringWithFormat:@"%ld", (long)count], count)
+			: nil;
+	NSString *footer = self.audios.count ? nil : TGLocalized(@"No music");
 
-- (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-	// Only the owner can reorder; a visitor's hold offers nothing of the kind.
-	if (self.audios.count)
-		return nil;
-	return @"No music";
-}
-
-- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-	static NSString *reuse = @"audio-track";
-	TGProfileTrackCell *cell = [tableView dequeueReusableCellWithIdentifier:reuse];
-	if (!cell)
-		cell = [[TGProfileTrackCell alloc] initWithStyle:UITableViewCellStyleDefault
-										 reuseIdentifier:reuse];
-	[[TGTheme shared] styleCell:cell];
-	NSDictionary *audio = self.audios[indexPath.row];
-	NSString *title = [audio[@"title"] length] ? audio[@"title"]
-			: ([audio[@"fileName"] length] ? audio[@"fileName"] : @"Audio");
-	NSString *performer = [audio[@"performer"] length] ? audio[@"performer"]
-			: @"Unknown artist";
-	NSInteger messageId = [audio[@"fileId"] longLongValue];
 	TGMusicPlayer *player = [TGMusicPlayer shared];
-	BOOL current = player.currentMessageId == messageId;
-	[cell configureTitle:title
-				  artist:performer
-				duration:[self durationText:audio[@"duration"]]
-				 current:current
-				 playing:player.playing];
+	NSMutableArray *rows = [NSMutableArray array];
+	for (NSUInteger index = 0; index < self.audios.count; index++){
+		NSDictionary *audio = self.audios[index];
+		NSString *title = [audio[@"title"] length] ? audio[@"title"]
+				: ([audio[@"fileName"] length] ? audio[@"fileName"]
+						: TGLocalized(@"Audio"));
+		NSString *performer = [audio[@"performer"] length]
+				? audio[@"performer"] : TGLocalized(@"Unknown artist");
+		NSInteger messageId = [audio[@"fileId"] longLongValue];
+		BOOL current = player.currentMessageId == messageId;
 
-	NSNumber *coverId = [audio[@"albumCoverId"] isKindOfClass:NSNumber.class]
-			? audio[@"albumCoverId"] : nil;
-	UIImage *cover = coverId ? self.covers[coverId] : nil;
-	[cell setArtworkImage:cover];
-	if (coverId && !cover && ![self.coversRequested containsObject:coverId]){
-		[self.coversRequested addObject:coverId];
-		__weak typeof(self) weakSelf = self;
-		[[TGClient shared] downloadFile:coverId.integerValue
-							   priority:TGDownloadPriorityOnScreen
-							 completion:^(NSString *path){
-			if (!path.length)
-				return;
-			UIImage *image = [TGIcons decodedImageAtPath:path
-											fittingSize:CGSizeMake(TGMetricTrackArt,
-																   TGMetricTrackArt)
-												   fill:YES
-												  scale:[UIScreen mainScreen].scale];
-			UIImage *rounded = [TGIcons roundedImage:image
-											 size:CGSizeMake(TGMetricTrackArt, TGMetricTrackArt)
-										   radius:TGMetricCornerSmall
-										  corners:UIRectCornerAllCorners];
-			if (!rounded)
-				return;
-			TGProfileAudioViewController *me = weakSelf;
-			if (!me)
-				return;
-			me.covers[coverId] = rounded;
-			[me.tableView reloadRowsAtIndexPaths:@[indexPath]
-								withRowAnimation:UITableViewRowAnimationNone];
-		}];
+		NSNumber *coverId = [audio[@"albumCoverId"] isKindOfClass:NSNumber.class]
+				? audio[@"albumCoverId"] : nil;
+		UIImage *cover = coverId ? self.covers[coverId] : nil;
+		if (coverId && !cover)
+			[self requestCover:coverId];
+
+		NSMutableDictionary *row = TGPeerRow(@(messageId), title, performer,
+				^{ [weakSelf playAtIndex:(NSInteger)index]; });
+		row[TGRowHeight] = @(TGMetricTrackRow);
+		row[TGRowAccessory] = [self durationText:audio[@"duration"]];
+		row[TGRowAvatarImage] = TGProfileAudioArtwork(cover,
+				current && player.playing);
+		if (current)
+			row[TGRowTitleColour] = [[TGTheme shared] accentColour];
+		[rows addObject:row];
 	}
-	return cell;
+	self.sections = @[TGSection(header, footer, rows)];
+	[self reloadRows];
 }
 
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
-	[self playAtIndex:indexPath.row];
-}
+#pragma mark - table
 
 - (void)scrollViewDidScroll:(UIScrollView *)scrollView {
 	CGFloat distance = scrollView.contentSize.height -
@@ -246,8 +255,9 @@ static const NSInteger kProfileAudioPage = 100;
 	}
 	[[TGMusicPlayer shared] playTracks:tracks atIndex:index inChat:0];
 	[TGSnackbar showInView:self.view
-					  text:[NSString stringWithFormat:@"Playing %@",
-							  self.audios[index][@"title"] ?: @"audio"]
+					  text:[NSString stringWithFormat:TGLocalized(@"Playing %@"),
+							  self.audios[(NSUInteger)index][@"title"]
+									  ?: TGLocalized(@"audio")]
 				   seconds:2 onCommit:nil];
 }
 
@@ -260,45 +270,46 @@ static const NSInteger kProfileAudioPage = 100;
 		return;
 	CGPoint where = [hold locationInView:self.tableView];
 	NSIndexPath *path = [self.tableView indexPathForRowAtPoint:where];
-	if (!path || path.row >= (NSInteger)self.audios.count)
+	if (!path || path.section != 0 ||
+		path.row >= (NSInteger)self.audios.count)
 		return;
-	NSDictionary *audio = self.audios[path.row];
+	NSDictionary *audio = self.audios[(NSUInteger)path.row];
 	NSMutableArray *choices = [NSMutableArray arrayWithObjects:
-			@"Play", @"View in Profile", nil];
+			TGLocalized(@"Play"), TGLocalized(@"View in Profile"), nil];
 	BOOL own = [self isOwnProfile];
 	if (own){
-		[choices addObject:@"Move Up"];
+		[choices addObject:TGLocalized(@"Move Up")];
 		if (path.row > 0)
-			[choices addObject:@"Move Down"];
-		[choices addObject:@"Remove from Profile"];
+			[choices addObject:TGLocalized(@"Move Down")];
+		[choices addObject:TGLocalized(@"Remove from Profile")];
 	}
 	__weak typeof(self) weakSelf = self;
 	[TGAlertSheet showChoices:choices
-						title:(audio[@"title"] ?: @"Audio")
+						title:(audio[@"title"] ?: TGLocalized(@"Audio"))
 			 destructiveIndex:(own ? (NSInteger)choices.count - 1 : -1)
 					   inView:self.view
 					 onChoice:^(NSInteger index){
-		NSString *choice = choices[index];
-		if ([choice isEqualToString:@"Play"]){
+		NSString *choice = choices[(NSUInteger)index];
+		if ([choice isEqualToString:TGLocalized(@"Play")]){
 			[weakSelf playAtIndex:path.row];
 			return;
 		}
-		if ([choice isEqualToString:@"View in Profile"]){
+		if ([choice isEqualToString:TGLocalized(@"View in Profile")]){
 			[weakSelf checkAudio:audio];
 			return;
 		}
-		if ([choice isEqualToString:@"Move Up"]){
+		if ([choice isEqualToString:TGLocalized(@"Move Up")]){
 			[weakSelf moveAudio:audio after:0];
 			return;
 		}
-		if ([choice isEqualToString:@"Move Down"]){
-			NSDictionary *previous = weakSelf.audios[path.row - 1];
-			[weakSelf moveAudio:audio after:[previous[@"fileId"] integerValue]];
+		if ([choice isEqualToString:TGLocalized(@"Move Down")]){
+			NSDictionary *previous = weakSelf.audios[(NSUInteger)path.row - 1];
+			[weakSelf moveAudio:audio
+						  after:[previous[@"fileId"] integerValue]];
 			return;
 		}
-		if ([choice isEqualToString:@"Remove from Profile"]){
+		if ([choice isEqualToString:TGLocalized(@"Remove from Profile")])
 			[weakSelf removeAudio:audio];
-		}
 	}];
 }
 
@@ -307,9 +318,10 @@ static const NSInteger kProfileAudioPage = 100;
 	[[TGClient shared] isProfileAudioFileId:[audio[@"fileId"] integerValue]
 								 completion:^(BOOL isAudio, NSString *error){
 		NSString *text = isAudio
-				? @"An error occurred."
-				: ([error length] ? error : @"An error occurred.");
-		[TGAlertSheet showMessage:text title:@"Profile Music"
+				? TGLocalized(@"An error occurred.")
+				: ([error length] ? error
+						: TGLocalized(@"An error occurred."));
+		[TGAlertSheet showMessage:text title:TGLocalized(@"Profile Music")
 						   inView:weakSelf.view];
 	}];
 }
@@ -320,8 +332,9 @@ static const NSInteger kProfileAudioPage = 100;
 								 afterFileId:afterFileId
 								  completion:^(BOOL ok, NSString *error){
 		if (!ok){
-			[TGAlertSheet showMessage:(error ?: @"An error occurred.")
-								title:@"Profile Music" inView:weakSelf.view];
+			[TGAlertSheet showMessage:(error ?: TGLocalized(@"An error occurred."))
+								title:TGLocalized(@"Profile Music")
+							   inView:weakSelf.view];
 			return;
 		}
 		[weakSelf load];
@@ -330,17 +343,20 @@ static const NSInteger kProfileAudioPage = 100;
 
 - (void)removeAudio:(NSDictionary *)audio {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:@"Remove from Profile"
-						title:(audio[@"title"] ?: @"Profile Music")
-					   action:@"Remove"
+	[TGAlertSheet showConfirm:TGLocalized(@"Remove from Profile")
+						title:(audio[@"title"] ?: TGLocalized(@"Profile Music"))
+					   action:TGLocalized(@"Remove")
 				  destructive:YES
 					   inView:self.view
 					onConfirm:^{
-		[[TGClient shared] removeProfileAudioFileId:[audio[@"fileId"] integerValue]
+		[[TGClient shared] removeProfileAudioFileId:
+				[audio[@"fileId"] integerValue]
 										 completion:^(BOOL ok, NSString *error){
 			if (!ok){
-				[TGAlertSheet showMessage:(error ?: @"An error occurred.")
-									title:@"Profile Music" inView:weakSelf.view];
+				[TGAlertSheet showMessage:
+						(error ?: TGLocalized(@"An error occurred."))
+									title:TGLocalized(@"Profile Music")
+								   inView:weakSelf.view];
 				return;
 			}
 			[weakSelf load];
@@ -367,18 +383,21 @@ static const NSInteger kProfileAudioPage = 100;
 			if ([message[@"kind"] isEqualToString:@"messageAudio"])
 				[tracks addObject:message];
 		if (!tracks.count){
-			[TGAlertSheet showMessage:@"An error occurred."
-								title:@"Add to Profile" inView:me.view];
+			[TGAlertSheet showMessage:TGLocalized(@"An error occurred.")
+								title:TGLocalized(@"Add to Profile")
+							   inView:me.view];
 			return;
 		}
 		NSMutableArray *titles = [NSMutableArray array];
 		for (NSDictionary *track in tracks)
-			[titles addObject:[NSString stringWithFormat:@"%@ — %@",
-					track[@"audioTitle"] ?: track[@"docName"] ?: @"Audio",
-					track[@"audioPerformer"] ?: @"Unknown artist"]];
-		[TGAlertSheet showChoices:titles title:@"Add to Profile"
+			[titles addObject:[NSString stringWithFormat:
+					TGLocalized(@"%@ — %@"),
+					track[@"audioTitle"] ?: track[@"docName"]
+							?: TGLocalized(@"Audio"),
+					track[@"audioPerformer"] ?: TGLocalized(@"Unknown artist")]];
+		[TGAlertSheet showChoices:titles title:TGLocalized(@"Add to Profile")
 				destructiveIndex:-1 inView:me.view onChoice:^(NSInteger index){
-			[me addTrack:tracks[index]];
+			[me addTrack:tracks[(NSUInteger)index]];
 		}];
 	}];
 }
@@ -386,17 +405,18 @@ static const NSInteger kProfileAudioPage = 100;
 - (void)addTrack:(NSDictionary *)track {
 	NSNumber *fileId = track[@"docId"];
 	if ([fileId longLongValue] <= 0){
-		[TGAlertSheet showMessage:@"An error occurred."
-							title:@"Add to Profile" inView:self.view];
+		[TGAlertSheet showMessage:TGLocalized(@"An error occurred.")
+							title:TGLocalized(@"Add to Profile") inView:self.view];
 		return;
 	}
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] downloadFile:fileId.integerValue
+	[[TGMediaStore shared] downloadFile:fileId.integerValue
 						 completion:^(NSString *path){
 		TGProfileAudioViewController *me = weakSelf;
 		if (!me || !path.length){
-			[TGAlertSheet showMessage:@"An error occurred."
-								title:@"Add to Profile" inView:me.view];
+			[TGAlertSheet showMessage:TGLocalized(@"An error occurred.")
+								title:TGLocalized(@"Add to Profile")
+							   inView:me.view];
 			return;
 		}
 		[[TGClient shared] addProfileAudioAtPath:path
@@ -405,8 +425,10 @@ static const NSInteger kProfileAudioPage = 100;
 										duration:[track[@"duration"] integerValue]
 									  completion:^(BOOL ok, NSString *error){
 			if (!ok){
-				[TGAlertSheet showMessage:(error ?: @"An error occurred.")
-									title:@"Add to Profile" inView:me.view];
+				[TGAlertSheet showMessage:
+						(error ?: TGLocalized(@"An error occurred."))
+									title:TGLocalized(@"Add to Profile")
+								   inView:me.view];
 				return;
 			}
 			[me load];
@@ -415,3 +437,5 @@ static const NSInteger kProfileAudioPage = 100;
 }
 
 @end
+
+// vim:ft=objc

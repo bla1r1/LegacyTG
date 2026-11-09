@@ -17,7 +17,7 @@
 - (instancetype)initWithTag:(NSString *)tag {
 	self = [super init];
 	if (self){
-		self.listTitle = @"Stories";
+		self.title = @"Stories";
 		self.emptyText = @"No Results";
 		_results = [NSMutableArray array];
 		if (tag.length){
@@ -59,7 +59,7 @@
 	if (self.nextOffset.length)
 		[rows addObject:@{@"title" : @"Show More",
 						  @"tap" : ^{ [weakSelf loadMore]; }}];
-	self.rows = rows;
+	self.listRows = rows;
 	[self.tableView reloadData];
 }
 

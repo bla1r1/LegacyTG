@@ -3,7 +3,7 @@
 // one, which names are switched on, and the order they appear in.
 //
 #import <UIKit/UIKit.h>
-#import "TGTableViewController.h"
+#import "TGRowsViewController.h"
 
-@interface TGUsernameSettingsViewController : TGTableViewController
+@interface TGUsernameSettingsViewController : TGRowsViewController
 @end

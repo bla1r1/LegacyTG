@@ -3,8 +3,7 @@
 #import "TGClient.h"
 #import "TGForwardPicker.h"
 #import "TGListViewController.h"
-#import "TGTheme.h"
-#import "TGStyle.h"
+#import "TGRows.h"
 
 @interface TGTextStylesViewController ()
 @property (nonatomic, strong) NSArray *styles;
@@ -12,16 +11,10 @@
 
 @implementation TGTextStylesViewController
 
-- (id)init {
-	return [super initWithStyle:UITableViewStyleGrouped];
-}
-
 - (void)viewDidLoad {
 	[super viewDidLoad];
 	self.title = @"Text Styles";
 	self.styles = [TGClient shared].textCompositionStyles ?: @[];
-	self.tableView.rowHeight = TGMetricRow;
-	[self applyTheme];
 	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
 			initWithBarButtonSystemItem:UIBarButtonSystemItemAdd
 								 target:self action:@selector(createTapped)];
@@ -32,66 +25,32 @@
 	[[NSNotificationCenter defaultCenter] addObserver:self
 			selector:@selector(stylesChanged:)
 				name:TGTextCompositionStylesChangedNotification object:nil];
-	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(applyTheme) name:TGThemeChangedNotification object:nil];
-}
-
-- (void)applyTheme {
-	self.tableView.separatorColor = [[TGTheme shared] separatorColour];
-	self.tableView.backgroundColor = [[TGTheme shared] groupedBackgroundColour];
-	[[TGTheme shared] styleNavigationBar:self.navigationController.navigationBar];
-	[self.tableView reloadData];
+	[self rebuildSections];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
 	[super viewWillAppear:animated];
 	self.styles = [TGClient shared].textCompositionStyles ?: @[];
-	[self.tableView reloadData];
-	[[TGTheme shared] styleNavigationBar:self.navigationController.navigationBar];
+	[self rebuildSections];
 }
 
 - (void)stylesChanged:(NSNotification *)note {
 	self.styles = [TGClient shared].textCompositionStyles ?: @[];
-	[self.tableView reloadData];
+	[self rebuildSections];
 }
 
-#pragma mark - table
+#pragma mark - rows
 
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-	return 1;
-}
-
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-	return self.styles.count;
-}
-
-- (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-	return nil;
-}
-
-- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-	UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"style"];
-	if (!cell)
-		cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle
-									  reuseIdentifier:@"style"];
-	[[TGTheme shared] styleCell:cell];
-	NSDictionary *style = self.styles[indexPath.row];
-	cell.textLabel.text = style[@"title"] ?: style[@"name"] ?: @"Style";
-	cell.textLabel.font = TGFontBody();
-	cell.textLabel.textColor = [[TGTheme shared] primaryTextColour];
-	NSString *prompt = style[@"prompt"];
-	cell.detailTextLabel.text = prompt.length ? prompt
-			: ([style[@"isCreator"] boolValue] ? @"Created by you" : @"Telegram style");
-	cell.detailTextLabel.font = TGFontSubhead();
-	cell.detailTextLabel.textColor = [[TGTheme shared] secondaryTextColour];
-	cell.accessoryType = UITableViewCellAccessoryNone;
-	return cell;
-}
-
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	if (indexPath.row >= (NSInteger)self.styles.count)
-		return;
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
-	[self showActionsForStyle:self.styles[indexPath.row]];
+- (void)rebuildSections {
+	__weak typeof(self) weakSelf = self;
+	NSMutableArray *rows = [NSMutableArray array];
+	for (NSDictionary *style in self.styles){
+		[rows addObject:TGSubtitleRow(TGTextStyleRowTitle(style),
+				TGTextStyleRowDetail(style),
+				^{ [weakSelf showActionsForStyle:style]; })];
+	}
+	self.sections = @[TGSection(nil, nil, rows)];
+	[self reloadRows];
 }
 
 #pragma mark - one style

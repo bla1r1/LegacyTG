@@ -6,6 +6,7 @@
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
+#import "TGRows.h"
 #import <QuartzCore/QuartzCore.h>
 
 static const CGFloat kPreviewHeight = 130.0f;
@@ -30,7 +31,7 @@ static const CGFloat kWallpaperDefaultHeight = 480.0f;
 @implementation TGBackgroundEditorViewController
 
 - (instancetype)init {
-	self = [super initWithStyle:UITableViewStyleGrouped];
+	self = [super init];
 	if (self) {
 		_presets = TGWallpaperPalettePresets();
 		_selectedPresetIndex = 0;
@@ -46,8 +47,9 @@ static const CGFloat kWallpaperDefaultHeight = 480.0f;
 											 style:UIBarButtonItemStyleDone
 											target:self
 											action:@selector(applyTapped)];
-	self.tableView.rowHeight = TGMetricRow;
 	[self setupHeaderPreview];
+	[self rebuildSections];
+	[self applyTheme];
 }
 
 - (void)setupHeaderPreview {
@@ -77,7 +79,7 @@ static const CGFloat kWallpaperDefaultHeight = 480.0f;
 
 	UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(TGMetricPadSmall, kPreviewLabelTop,
 			bubble.bounds.size.width - TGDoubled(TGMetricPadSmall), kPreviewLabelHeight)];
-	label.text = @"Preview of your chat wallpaper";
+	label.text = TGLocalized(@"Preview of your chat wallpaper");
 	label.font = TGFontRow();
 	label.textColor = [[TGTheme shared] primaryTextColour];
 	label.backgroundColor = [UIColor clearColor];
@@ -88,6 +90,25 @@ static const CGFloat kWallpaperDefaultHeight = 480.0f;
 	[header addSubview:box];
 	self.tableView.tableHeaderView = header;
 	[self updatePreview];
+}
+
+- (void)rebuildSections {
+	__weak typeof(self) weakSelf = self;
+	NSMutableArray *rows = [NSMutableArray arrayWithCapacity:self.presets.count];
+	for (NSUInteger i = 0; i < self.presets.count; i++){
+		TGWallpaperPreset *preset = self.presets[i];
+		NSMutableDictionary *row = TGRow(TGKindImageCheck, preset.name);
+		row[TGRowImage] = [self swatchImageForPreset:preset];
+		row[TGRowChecked] = @((NSInteger)i == self.selectedPresetIndex);
+		row[TGRowTap] = ^{
+			weakSelf.selectedPresetIndex = (NSInteger)i;
+			[weakSelf updatePreview];
+			[weakSelf rebuildSections];
+			[weakSelf reloadRows];
+		};
+		[rows addObject:row];
+	}
+	self.sections = @[TGSection(@"COLORS & GRADIENTS", nil, rows)];
 }
 
 - (void)updatePreview {
@@ -154,44 +175,6 @@ static const CGFloat kWallpaperDefaultHeight = 480.0f;
 	UIImage *img = UIGraphicsGetImageFromCurrentImageContext();
 	UIGraphicsEndImageContext();
 	return img;
-}
-
-#pragma mark - Table View
-
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-	return 1;
-}
-
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-	return self.presets.count;
-}
-
-- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-	return @"COLORS & GRADIENTS";
-}
-
-- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-	static NSString *ident = @"TGWallpaperPresetCell";
-	UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:ident];
-	if (!cell) {
-		cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:ident];
-	}
-	[[TGTheme shared] styleCell:cell];
-	TGWallpaperPreset *p = self.presets[indexPath.row];
-	cell.textLabel.text = p.name;
-	cell.textLabel.font = TGFontRow();
-	cell.textLabel.textColor = [[TGTheme shared] primaryTextColour];
-	cell.imageView.image = [self swatchImageForPreset:p];
-	cell.accessoryType = (indexPath.row == self.selectedPresetIndex)
-			? UITableViewCellAccessoryCheckmark : UITableViewCellAccessoryNone;
-	return cell;
-}
-
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
-	self.selectedPresetIndex = indexPath.row;
-	[self updatePreview];
-	[self.tableView reloadData];
 }
 
 @end

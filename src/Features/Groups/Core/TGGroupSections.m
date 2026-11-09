@@ -4,171 +4,140 @@
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
-#import "TGSnackbar.h"
-#import "TGContactsViewController.h"
-#import "TGChatToolsViewController.h"
-#import "TGGroupMemberActions.h"
-#import "TGMemberCell.h"
-#import "TGProfileViewController.h"
-#import "TGIcons.h"
-#import "TGGroupCallViewController.h"
-#import "TGVideoChatSetupViewController.h"
-#import "TGAntiSpamViewController.h"
-#import "TGGroupSettingsViewController.h"
-#import "TGGroupSwitch.h"
 #import "TGGroupSettingsViewControllerInternal.h"
-
-
+#import "TGGroupLogic.h"
+#import "TGRows.h"
+#import "TGRowCell.h"
 
 //
-// TGGroupSettingsViewController.m - one screen for everything a group is.
+// TGGroupSettingsViewController (TGGroupSections) - the screen's data.
 //
-// The group profile's More menu used to grow one row per setting: Photo,
-// Name, Description, Invite Link, Permissions, Sign Messages, Join to Send,
-// All History, Welcome Messages, Direct Messages, Import, Send as, Clear by
-// Date, Chat Tools. Each row asked the server what it sat on and answered
-// with a sheet. A settings screen can show the value, group the rows by what
-// they change, and leave the profile menu for the things a profile does.
+// One screen for everything a group is: identity, people, calls, behaviour,
+// usernames, tools and the way out. Every row is a shared TGRows row; the
+// controller and TGRowCell own how it is drawn.
 //
-// The chat id is the only thing the caller passes. Every action here names
-// that id directly, so nothing is routed through the profile controller
-// behind this screen.
-//
-
-/// The rows a section can hold. A switch draws a UISwitch, a member row a
-/// face, and everything else a value with a chevron.
-typedef NS_ENUM(NSInteger, TGGroupRowKind) {
-	TGGroupRowInfo = 0,
-	TGGroupRowAction,
-	TGGroupRowSwitch,
-	TGGroupRowUsername,
-	TGGroupRowMember,
-};
-
-/// A switch that names the setting it changes, so a reload can rebuild rows
-/// without an index pointing at the wrong one.
-
-
-static NSMutableDictionary *TGRow(NSString *title, NSString *detail,
-								  NSString *action, TGGroupRowKind kind) {
-	NSMutableDictionary *row = [@{@"kind" : @(kind), @"title" : title ?: @""}
-			mutableCopy];
-	if (detail)
-		row[@"detail"] = detail;
-	if (action)
-		row[@"action"] = action;
-	return row;
-}
-
-static NSMutableDictionary *TGInfoRow(NSString *title, NSString *detail,
-									  NSString *action) {
-	return TGRow(title, detail, action, TGGroupRowInfo);
-}
-
-static NSMutableDictionary *TGOpenRow(NSString *title, NSString *detail,
-									  NSString *action) {
-	NSMutableDictionary *row = TGInfoRow(title, detail, action);
-	row[@"opens"] = @YES;
-	return row;
-}
-
-static NSMutableDictionary *TGActionRow(NSString *title, NSString *detail,
-										NSString *action, BOOL destructive) {
-	NSMutableDictionary *row = TGRow(title, detail, action, TGGroupRowAction);
-	if (destructive)
-		row[@"destructive"] = @YES;
-	return row;
-}
-
-static NSMutableDictionary *TGOpenActionRow(NSString *title, NSString *detail,
-											NSString *action, BOOL destructive) {
-	NSMutableDictionary *row = TGActionRow(title, detail, action, destructive);
-	row[@"opens"] = @YES;
-	return row;
-}
-
-/// The same row when the account has no right for it: the title and the
-/// reason stay on screen, the chevron and the tap do not. That is what
-/// Telegram does for a switch an administrator may see but not move.
-static NSMutableDictionary *TGDisabledRow(NSString *title, NSString *reason,
-										  NSString *action) {
-	NSMutableDictionary *row = TGActionRow(title, reason, nil, NO);
-	if (action)
-		row[@"refusedAction"] = action;
-	row[@"disabled"] = @YES;
-	return row;
-}
-
-static NSMutableDictionary *TGSwitchRow(NSString *title, NSString *detail,
-										NSString *key, BOOL on, BOOL enabled) {
-	NSMutableDictionary *row = TGRow(title, detail, nil, TGGroupRowSwitch);
-	row[@"switch"] = key;
-	row[@"on"] = @(on);
-	row[@"enabled"] = @(enabled);
-	return row;
-}
-
-static NSMutableDictionary *TGUsernameRow(NSString *username, BOOL active) {
-	NSMutableDictionary *row = TGRow([@"@" stringByAppendingString:username],
-									 active ? @"Active" : @"Disabled",
-									 nil, TGGroupRowUsername);
-	row[@"switch"] = [@"@" stringByAppendingString:username];
-	row[@"username"] = username;
-	row[@"active"] = @(active);
-	row[@"on"] = @(active);
-	row[@"enabled"] = @YES;
-	return row;
-}
-
-static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows) {
-	NSMutableDictionary *section = [NSMutableDictionary dictionary];
-	if (header) section[@"header"] = header;
-	if (footer) section[@"footer"] = footer;
-	section[@"rows"] = rows ?: @[];
-	return section;
-}
-
-
-
 
 @implementation TGGroupSettingsViewController (TGGroupSections)
 
-#pragma mark - the section model
+#pragma mark - row builders
+
+- (NSMutableDictionary *)valueRow:(NSString *)title detail:(NSString *)detail
+						   action:(NSString *)action opens:(BOOL)opens
+					  destructive:(BOOL)destructive disabled:(BOOL)disabled {
+	NSMutableDictionary *row = [TGGroupInfoRowModel(title, detail, opens,
+			destructive, disabled) mutableCopy];
+	TGTheme *theme = [TGTheme shared];
+	BOOL tappable = action.length > 0 && !disabled;
+	row[TGRowDetailColour] = tappable ? [theme cellDetailColour]
+			: [theme secondaryTextColour];
+	if (disabled)
+		row[TGRowTitleColour] = [theme secondaryTextColour];
+	if (tappable){
+		__weak typeof(self) weakSelf = self;
+		row[TGRowTap] = ^{ [weakSelf runAction:action]; };
+	}
+	return row;
+}
+
+- (NSMutableDictionary *)switchRow:(NSString *)title detail:(NSString *)detail
+							   key:(NSString *)key on:(BOOL)on
+						   enabled:(BOOL)enabled {
+	__weak typeof(self) weakSelf = self;
+	NSMutableDictionary *row = [TGSwitchRow(title, on, ^(BOOL value){
+		[weakSelf switchKey:key on:value];
+	}) mutableCopy];
+	row[TGRowSubtitle] = @YES;
+	if (detail)
+		row[TGRowDetail] = detail;
+	row[TGRowEnabled] = @(enabled && !self.busy);
+	return row;
+}
+
+- (NSMutableDictionary *)usernameRow:(NSString *)username active:(BOOL)active {
+	NSString *key = [@"@" stringByAppendingString:username];
+	__weak typeof(self) weakSelf = self;
+	NSMutableDictionary *row = [TGSwitchRow(key, active, ^(BOOL value){
+		[weakSelf switchKey:key on:value];
+	}) mutableCopy];
+	row[TGRowRawTitle] = @YES;
+	row[TGRowDetail] = active ? TGLocalized(@"Active") : TGLocalized(@"Disabled");
+	row[TGRowSubtitle] = @YES;
+	row[TGRowEnabled] = @(self.canChangeInfo && !self.busy);
+	if (active && self.active.count > 1 && self.canChangeInfo){
+		row[TGRowCanMove] = @YES;
+		NSUInteger index = (NSUInteger)[self.active indexOfObject:username];
+		row[TGRowMove] = ^(NSInteger from, NSInteger to){
+			(void)index;
+			[weakSelf reorderUsernameFrom:from to:to];
+		};
+	}
+	return row;
+}
+
+#pragma mark - switches
+
+/// A switch names its setting: "@name" is a username, everything else is a
+/// behaviour key. The real work stays in TGGroupSwitches.
+- (void)switchKey:(NSString *)key on:(BOOL)on {
+	if ([key hasPrefix:@"@"])
+		[self setUsername:key active:on];
+	else
+		[self setBehaviour:key on:on];
+}
+
+#pragma mark - reordering usernames
+
+- (void)reorderUsernameFrom:(NSInteger)from to:(NSInteger)to {
+	if (from < 0 || to < 0 || from >= (NSInteger)self.active.count ||
+			to >= (NSInteger)self.active.count)
+		return;
+	NSArray *before = [self.active copy];
+	NSString *name = self.active[(NSUInteger)from];
+	[self.active removeObjectAtIndex:(NSUInteger)from];
+	[self.active insertObject:name atIndex:(NSUInteger)to];
+	self.busy = YES;
+	__weak typeof(self) weakSelf = self;
+	[[TGClient shared] reorderSupergroupActiveUsernames:self.active inChat:self.chatId
+			completion:^(BOOL ok, NSString *error){
+		TGGroupSettingsViewController *me = weakSelf;
+		if (!me)
+			return;
+		me.busy = NO;
+		if (!ok){
+			me.active = [before mutableCopy];
+			[me showRefusal:error title:TGLocalized(@"Username Order")];
+		}
+		[me rebuild];
+	}];
+}
+
+
+#pragma mark - details
 
 - (NSString *)permissionsDetail {
 	NSDictionary *p = self.chat[@"permissions"];
 	if (![p isKindOfClass:NSDictionary.class])
-		return @"Change";
+		return TGLocalized(@"Change");
 	BOOL send = [p[@"can_send_basic_messages"] boolValue] ||
 				[p[@"can_send_messages"] boolValue];
 	BOOL media = [p[@"can_send_photos"] boolValue] ||
 				 [p[@"can_send_videos"] boolValue] ||
 				 [p[@"can_send_documents"] boolValue];
 	if (!send)
-		return @"Read-Only Mode";
-	return media ? @"All" : @"Messages";
+		return TGLocalized(@"Read-Only Mode");
+	return media ? TGLocalized(@"All") : TGLocalized(@"Messages");
 }
 
 - (NSString *)slowModeDetail {
 	NSInteger seconds = [self.groupInfo[@"slow_mode_delay"] integerValue];
 	if (seconds <= 0)
-		return @"Off";
+		return TGLocalized(@"Off");
 	if (seconds < 60)
 		return TGLocalizedFormat(@"%@ seconds",
 				[NSString stringWithFormat:@"%ld", (long)seconds]);
 	if (seconds < 3600)
 		return TGLocalizedFormat(@"%@ min", @(seconds / 60));
 	return TGLocalizedFormat(@"%@ h", @(seconds / 3600));
-}
-
-- (NSString *)labelForTab:(NSString *)tab {
-	if ([tab isEqualToString:@"media"]) return @"Media";
-	if ([tab isEqualToString:@"files"]) return @"Files";
-	if ([tab isEqualToString:@"links"]) return @"Links";
-	if ([tab isEqualToString:@"music"]) return @"Music";
-	if ([tab isEqualToString:@"voice"]) return @"Voice";
-	if ([tab isEqualToString:@"gifs"])  return @"GIFs";
-	return @"Posts";
 }
 
 - (void)updateEditButton {
@@ -179,9 +148,10 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 		return;
 	}
 	self.navigationItem.rightBarButtonItem =
-			[[UIBarButtonItem alloc] initWithTitle:(self.editingNames ? @"Done" : @"Edit")
-											  style:UIBarButtonItemStylePlain
-											 target:self action:@selector(toggleEditing)];
+			[[UIBarButtonItem alloc] initWithTitle:(self.editingNames
+					? TGLocalized(@"Done") : TGLocalized(@"Edit"))
+					style:UIBarButtonItemStylePlain
+					target:self action:@selector(toggleEditing)];
 }
 
 - (void)toggleEditing {
@@ -189,6 +159,8 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 	[self.tableView setEditing:self.editingNames animated:YES];
 	[self updateEditButton];
 }
+
+#pragma mark - the section model
 
 - (void)rebuild {
 	if (!self.loaded || !self.chat)
@@ -203,273 +175,264 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 	// ── identity ────────────────────────────────────────────────────────
 	NSMutableArray *info = [NSMutableArray array];
 	BOOL editInfo = manager && self.canChangeInfo;
-	NSString *photoDetail = self.hasPhoto ? @"Change" : @"Set";
+	NSString *photoDetail = self.hasPhoto ? TGLocalized(@"Change")
+			: TGLocalized(@"Set");
 	NSString *nameDetail = self.chatTitle ?: @"";
-	NSString *photoTitle = channel ? @"Set Channel Photo" : @"Set Group Photo";
-	NSString *nameTitle = channel ? @"Channel Name" : @"Group Name";
-	NSString *noInfoRight = nil;
+	NSString *photoTitle = channel ? TGLocalized(@"Set Channel Photo")
+			: TGLocalized(@"Set Group Photo");
+	NSString *nameTitle = channel ? TGLocalized(@"Channel Name")
+			: TGLocalized(@"Group Name");
 	if (manager && !self.canChangeInfo){
-		[info addObject:TGDisabledRow(photoTitle, noInfoRight, @"photo")];
-		[info addObject:TGDisabledRow(nameTitle, nameDetail, @"name")];
+		[info addObject:[self valueRow:photoTitle detail:nil action:@"photo"
+				opens:NO destructive:NO disabled:YES]];
+		[info addObject:[self valueRow:nameTitle detail:nameDetail
+				action:@"name" opens:NO destructive:NO disabled:YES]];
 	} else {
-		[info addObject:TGOpenRow(photoTitle,
-				manager ? photoDetail : (self.hasPhoto ? @"Set" : @"None"),
-				manager ? @"photo" : nil)];
-		[info addObject:TGOpenRow(nameTitle, nameDetail, manager ? @"name" : nil)];
+		[info addObject:[self valueRow:photoTitle
+				detail:manager ? photoDetail : (self.hasPhoto
+						? TGLocalized(@"Set") : TGLocalized(@"None"))
+				action:(manager ? @"photo" : nil) opens:manager
+				destructive:NO disabled:NO]];
+		[info addObject:[self valueRow:nameTitle detail:nameDetail
+				action:(manager ? @"name" : nil) opens:manager
+				destructive:NO disabled:NO]];
 	}
 	if (supergroup){
 		if (manager && !self.canChangeInfo){
-			[info addObject:TGDisabledRow(@"Description",
-					self.descriptionText.length ? self.descriptionText
-							: @"None", @"description")];
+			[info addObject:[self valueRow:TGLocalized(@"Description")
+					detail:self.descriptionText.length ? self.descriptionText
+							: TGLocalized(@"None")
+					action:@"description" opens:NO destructive:NO disabled:YES]];
 		} else {
-			[info addObject:TGOpenRow(@"Description",
-					self.descriptionText.length ? self.descriptionText
-							: (manager ? @"Description" : @"None"),
-					manager ? @"description" : nil)];
+			[info addObject:[self valueRow:TGLocalized(@"Description")
+					detail:self.descriptionText.length ? self.descriptionText
+							: (manager ? TGLocalized(@"Description")
+									: TGLocalized(@"None"))
+					action:(manager ? @"description" : nil) opens:manager
+					destructive:NO disabled:NO]];
 		}
 		if (manager && !self.canInvite){
-			[info addObject:TGDisabledRow(@"Invite Link",
-					self.inviteLink.length ? self.inviteLink
-							: @"Manage",
-					@"invite")];
+			[info addObject:[self valueRow:TGLocalized(@"Invite Link")
+					detail:self.inviteLink.length ? self.inviteLink
+							: TGLocalized(@"Manage")
+					action:@"invite" opens:NO destructive:NO disabled:YES]];
 		} else if (manager || self.inviteLink.length){
-			[info addObject:TGOpenRow(@"Invite Link",
-					self.inviteLink.length ? self.inviteLink
-							: (manager ? @"Manage" : @"None"),
-					manager ? @"invite" : nil)];
+			[info addObject:[self valueRow:TGLocalized(@"Invite Link")
+					detail:self.inviteLink.length ? self.inviteLink
+							: (manager ? TGLocalized(@"Manage")
+									: TGLocalized(@"None"))
+					action:(manager ? @"invite" : nil) opens:manager
+					destructive:NO disabled:NO]];
 		}
-		// Telegram names this row Group Type / Channel Type and sits it
-		// above the link. Private here means no active username.
 		BOOL isPublic = self.editable.length > 0 || self.active.count > 0;
-		NSString *typeTitle = channel ? @"Channel Type" : @"Group Type";
-		// The official row names the visibility (Group.Setup.TypePublic).
-		// By key: the English "Public" is shared and maps to the pack's
-		// "sociality" word.
+		NSString *typeTitle = channel ? TGLocalized(@"Channel Type")
+				: TGLocalized(@"Group Type");
 		NSString *typeKey = [NSString stringWithFormat:@"%@.Setup.Type%@",
-				channel ? @"Channel" : @"Group", isPublic ? @"Public" : @"Private"];
-		NSString *typeDetail = TGLocalizedKey(typeKey, isPublic ? @"Public" : @"Private");
+				channel ? @"Channel" : @"Group",
+				isPublic ? @"Public" : @"Private"];
+		NSString *typeDetail = TGLocalizedKey(typeKey,
+				isPublic ? @"Public" : @"Private");
 		if (editInfo)
-			[info addObject:TGOpenRow(typeTitle, typeDetail, @"groupType")];
+			[info addObject:[self valueRow:typeTitle detail:typeDetail
+					action:@"groupType" opens:YES destructive:NO disabled:NO]];
 		else if (manager)
-			[info addObject:TGDisabledRow(typeTitle, typeDetail, @"groupType")];
+			[info addObject:[self valueRow:typeTitle detail:typeDetail
+					action:@"groupType" opens:NO destructive:NO disabled:YES]];
 		else
-			[info addObject:TGInfoRow(typeTitle, typeDetail, nil)];
+			[info addObject:[self valueRow:typeTitle detail:typeDetail
+					action:nil opens:NO destructive:NO disabled:NO]];
 	}
 	if (basic)
-		[info addObject:TGInfoRow(@"Group Type", @"Private", nil)];
+		[info addObject:[self valueRow:TGLocalized(@"Group Type")
+				detail:TGLocalized(@"Private") action:nil opens:NO
+				destructive:NO disabled:NO]];
 	if (self.memberCount > 0)
-		[info addObject:TGOpenRow(channel ? @"Subscribers" : @"Members",
-				[NSString stringWithFormat:@"%ld", (long)self.memberCount],
-				@"members")];
+		[info addObject:[self valueRow:(channel ? TGLocalized(@"Subscribers")
+				: TGLocalized(@"Members"))
+				detail:[NSString stringWithFormat:@"%ld", (long)self.memberCount]
+				action:@"members" opens:YES destructive:NO disabled:NO]];
 	if (basic && manager)
-		[info addObject:TGActionRow(@"Upgrade to Supergroup",
-				nil, @"upgrade", NO)];
-	[sections addObject:TGSection(channel ? @"Channel Info" : @"Group Info",
-			nil,
-			info)];
+		[info addObject:[self valueRow:TGLocalized(@"Upgrade to Supergroup")
+				detail:nil action:@"upgrade" opens:NO destructive:NO disabled:NO]];
+	[sections addObject:TGSection(channel ? TGLocalized(@"Channel Info")
+			: TGLocalized(@"Group Info"), nil, info)];
 
 	// ── people ──────────────────────────────────────────────────────────
 	if (!channel){
 		NSMutableArray *people = [NSMutableArray array];
 		if (manager && !self.canInvite)
-			[people addObject:TGDisabledRow(@"Add Members",
-					nil,
-					@"addMembers")];
+			[people addObject:[self valueRow:TGLocalized(@"Add Members")
+					detail:nil action:@"addMembers" opens:NO
+					destructive:NO disabled:YES]];
 		else if (self.canInvite)
-			[people addObject:TGOpenActionRow(@"Add Members", nil, @"addMembers", NO)];
-		[people addObject:TGOpenActionRow(@"Search Members", nil,
-										 @"findMember", NO)];
+			[people addObject:[self valueRow:TGLocalized(@"Add Members")
+					detail:nil action:@"addMembers" opens:YES
+					destructive:NO disabled:NO]];
+		[people addObject:[self valueRow:TGLocalized(@"Search Members")
+				detail:nil action:@"findMember" opens:YES
+				destructive:NO disabled:NO]];
 		NSString *header = self.memberCount > 0
-				? TGLocalizedPluralValue(@"%@ member", @"%@ members", [NSString stringWithFormat:@"%ld", (long)self.memberCount], (NSInteger)self.memberCount)
-				: @"Members";
-		[sections addObject:TGSection(header,
-				nil, people)];
+				? TGLocalizedPluralValue(@"%@ member", @"%@ members",
+						[NSString stringWithFormat:@"%ld",
+								(long)self.memberCount],
+						(NSInteger)self.memberCount)
+				: TGLocalized(@"Members");
+		[sections addObject:TGSection(header, nil, people)];
 	}
 
 	// ── calls ───────────────────────────────────────────────────────────
-	NSMutableArray *calls = [NSMutableArray array];
-	[calls addObject:TGOpenActionRow(@"Group Call",
-			nil, @"groupCall", NO)];
-	[calls addObject:TGOpenActionRow(@"Video Chat",
-			nil, @"videoChat", NO)];
-	[sections addObject:TGSection(@"Calls",
-			nil, calls)];
+	[sections addObject:TGSection(TGLocalized(@"Calls"), nil, @[
+		[self valueRow:TGLocalized(@"Group Call") detail:nil
+				action:@"groupCall" opens:YES destructive:NO disabled:NO],
+		[self valueRow:TGLocalized(@"Video Chat") detail:nil
+				action:@"videoChat" opens:YES destructive:NO disabled:NO],
+	])];
 
 	// ── what the group does ─────────────────────────────────────────────
 	if (supergroup && manager){
 		BOOL canBehaviour = self.canChangeInfo;
 		NSMutableArray *behaviour = [NSMutableArray array];
-		if (self.canRestrict)
-			[behaviour addObject:TGOpenActionRow(@"Permissions",
-					[self permissionsDetail], @"permissions", NO)];
-		else
-			[behaviour addObject:TGDisabledRow(@"Permissions",
-					[self permissionsDetail], @"permissions")];
-		if (canBehaviour)
-			[behaviour addObject:TGOpenActionRow(@"Slow Mode", [self slowModeDetail],
-											 @"slow", NO)];
-		else
-			[behaviour addObject:TGDisabledRow(@"Slow Mode", [self slowModeDetail],
-											   @"slow")];
-		[behaviour addObject:TGSwitchRow(@"Sign Messages", nil, @"sign",
-										 self.signMessages, canBehaviour)];
-		[behaviour addObject:TGSwitchRow(@"Send Messages", nil, @"join",
-										 self.joinToSend, canBehaviour)];
-		[behaviour addObject:TGSwitchRow(@"History", nil, @"history",
-										 self.allHistory, canBehaviour)];
-		[behaviour addObject:TGSwitchRow(@"Aggressive Anti-Spam",
-				nil,
-				@"antispam", self.aggressiveAntiSpam, self.canToggleAntiSpam)];
-		[behaviour addObject:TGOpenActionRow(@"Report False Positive",
-				nil, @"antispamFalsePositive",
-				NO)];
-		[behaviour addObject:TGSwitchRow(@"Approve New Members",
-				nil,
-				@"joinRequests",
-				[self.settings[@"joinByRequest"] boolValue], canBehaviour)];
+		[behaviour addObject:[self valueRow:TGLocalized(@"Permissions")
+				detail:[self permissionsDetail]
+				action:@"permissions" opens:YES destructive:NO
+				disabled:!self.canRestrict]];
+		[behaviour addObject:[self valueRow:TGLocalized(@"Slow Mode")
+				detail:[self slowModeDetail] action:@"slow" opens:YES
+				destructive:NO disabled:!canBehaviour]];
+		[behaviour addObject:[self switchRow:TGLocalized(@"Sign Messages")
+				detail:nil key:@"sign" on:self.signMessages
+				enabled:canBehaviour]];
+		[behaviour addObject:[self switchRow:TGLocalized(@"Send Messages")
+				detail:nil key:@"join" on:self.joinToSend
+				enabled:canBehaviour]];
+		[behaviour addObject:[self switchRow:TGLocalized(@"History")
+				detail:nil key:@"history" on:self.allHistory
+				enabled:canBehaviour]];
+		[behaviour addObject:[self switchRow:TGLocalized(@"Aggressive Anti-Spam")
+				detail:nil key:@"antispam" on:self.aggressiveAntiSpam
+				enabled:self.canToggleAntiSpam]];
+		[behaviour addObject:[self valueRow:TGLocalized(@"Report False Positive")
+				detail:nil action:@"antispamFalsePositive" opens:YES
+				destructive:NO disabled:NO]];
+		[behaviour addObject:[self switchRow:TGLocalized(@"Approve New Members")
+				detail:nil key:@"joinRequests"
+				on:[self.settings[@"joinByRequest"] boolValue]
+				enabled:canBehaviour]];
 		BOOL canHide = [self.settings[@"canHideMembers"] boolValue];
-		[behaviour addObject:TGSwitchRow(@"Hide Members",
-				nil,
-				@"hidden", [self.settings[@"hiddenMembers"] boolValue],
-				canBehaviour && canHide)];
+		[behaviour addObject:[self switchRow:TGLocalized(@"Hide Members")
+				detail:nil key:@"hidden"
+				on:[self.settings[@"hiddenMembers"] boolValue]
+				enabled:canBehaviour && canHide]];
 		if (!channel){
-			[behaviour addObject:TGSwitchRow(@"Topics",
-					self.settings[@"isForum"] ? @"On" : @"Off",
-					@"forum", [self.settings[@"isForum"] boolValue], canBehaviour)];
+			[behaviour addObject:[self switchRow:TGLocalized(@"Topics")
+					detail:[self.settings[@"isForum"] boolValue]
+							? TGLocalized(@"On") : TGLocalized(@"Off")
+					key:@"forum" on:[self.settings[@"isForum"] boolValue]
+					enabled:canBehaviour]];
 			BOOL broadcast = [self.settings[@"isBroadcast"] boolValue];
-			if (canBehaviour)
-				[behaviour addObject:TGActionRow(@"Broadcast Group",
-						broadcast ? @"On" : @"Convert",
-						broadcast ? nil : @"broadcast", NO)];
-			else
-				[behaviour addObject:TGDisabledRow(@"Broadcast Group",
-						broadcast ? @"On" : @"Convert", @"broadcast")];
-			if (canBehaviour)
-				[behaviour addObject:TGActionRow(@"Manage Welcome Messages",
-						nil, @"welcome", NO)];
-			else
-				[behaviour addObject:TGDisabledRow(@"Manage Welcome Messages",
-						nil, @"welcome")];
+			[behaviour addObject:[self valueRow:TGLocalized(@"Broadcast Group")
+					detail:broadcast ? TGLocalized(@"On")
+							: TGLocalized(@"Convert")
+					action:(broadcast ? nil : @"broadcast") opens:!broadcast
+					destructive:NO disabled:!canBehaviour]];
+			[behaviour addObject:[self valueRow:
+					TGLocalized(@"Manage Welcome Messages")
+					detail:nil action:@"welcome" opens:YES destructive:NO
+					disabled:!canBehaviour]];
 		}
-		[behaviour addObject:TGSwitchRow(@"Auto-Translate Messages",
-				self.settings[@"automaticTranslation"] ? @"On" : @"Off",
-				@"translation",
-				[self.settings[@"automaticTranslation"] boolValue], canBehaviour)];
-		// No requests means no row; a count on the right is the badge.
+		[behaviour addObject:[self switchRow:
+				TGLocalized(@"Auto-Translate Messages")
+				detail:[self.settings[@"automaticTranslation"] boolValue]
+						? TGLocalized(@"On") : TGLocalized(@"Off")
+				key:@"translation"
+				on:[self.settings[@"automaticTranslation"] boolValue]
+				enabled:canBehaviour]];
 		if (self.joinRequestCount > 0){
 			NSString *count = [NSString stringWithFormat:@"%ld",
 					(long)self.joinRequestCount];
-			if (self.canInvite)
-				[behaviour addObject:TGOpenActionRow(@"Join Requests", count,
-												 @"joinRequests", NO)];
-			else
-				[behaviour addObject:TGDisabledRow(@"Join Requests",
-						count, @"joinRequests")];
+			[behaviour addObject:[self valueRow:TGLocalized(@"Join Requests")
+					detail:count action:@"joinRequests" opens:YES
+					destructive:NO disabled:!self.canInvite]];
 		}
-		[sections addObject:TGSection(@"Permissions",
-				nil,
+		[sections addObject:TGSection(TGLocalized(@"Permissions"), nil,
 				behaviour)];
 	}
 
-	// ── tools ───────────────────────────────────────────────────────────
 	// ── usernames ───────────────────────────────────────────────────────
 	if (supergroup && self.settings && manager){
 		NSMutableArray *names = [NSMutableArray array];
-		if (self.canChangeInfo){
-			[names addObject:TGOpenRow(@"Username",
-					self.editable.length ? [@"@" stringByAppendingString:self.editable]
-										 : @"None", @"username")];
-			if (self.editable.length)
-				[names addObject:TGActionRow(@"Deactivate Username",
-						nil, @"removeUsername", YES)];
-		} else {
-			[names addObject:TGDisabledRow(@"Username",
-					self.editable.length ? [@"@" stringByAppendingString:self.editable]
-										 : @"None", @"username")];
-		}
-		[sections addObject:TGSection(@"Username",
-				nil, names)];
+		NSString *usernameDetail = self.editable.length
+				? [@"@" stringByAppendingString:self.editable]
+				: TGLocalized(@"None");
+		[names addObject:[self valueRow:TGLocalized(@"Username")
+				detail:usernameDetail action:@"username" opens:YES
+				destructive:NO disabled:!self.canChangeInfo]];
+		if (self.editable.length)
+			[names addObject:[self valueRow:
+					TGLocalized(@"Deactivate Username") detail:nil
+					action:@"removeUsername" opens:NO destructive:YES
+					disabled:!self.canChangeInfo]];
+		[sections addObject:TGSection(TGLocalized(@"Username"), nil, names)];
 
 		if (self.active.count){
 			NSMutableArray *rows = [NSMutableArray array];
-			for (NSString *name in self.active){
-				NSMutableDictionary *row = TGUsernameRow(name, YES);
-				row[@"enabled"] = @(self.canChangeInfo);
-				[rows addObject:row];
-			}
-			[sections addObject:TGSection(@"USERNAME ORDER",
-					nil, rows)];
+			for (NSString *name in self.active)
+				[rows addObject:[self usernameRow:name active:YES]];
+			[sections addObject:TGSection(@"USERNAME ORDER", nil, rows)];
 		}
 		if (self.disabled.count){
 			NSMutableArray *rows = [NSMutableArray array];
-			for (NSString *name in self.disabled){
-				NSMutableDictionary *row = TGUsernameRow(name, NO);
-				row[@"enabled"] = @(self.canChangeInfo);
-				[rows addObject:row];
-			}
-			[sections addObject:TGSection(@"Disabled",
-					nil, rows)];
+			for (NSString *name in self.disabled)
+				[rows addObject:[self usernameRow:name active:NO]];
+			[sections addObject:TGSection(TGLocalized(@"Disabled"), nil, rows)];
 		}
 	}
 
 	// ── tools ───────────────────────────────────────────────────────────
 	if (manager){
 		NSMutableArray *tools = [NSMutableArray array];
-		[tools addObject:TGOpenActionRow(@"Manage", nil,
-									 @"chatTools", NO)];
+		[tools addObject:[self valueRow:TGLocalized(@"Manage") detail:nil
+				action:@"chatTools" opens:YES destructive:NO disabled:NO]];
 		if (channel)
-			[tools addObject:TGOpenActionRow(@"Direct Messages", nil,
-										 @"directMessages", NO)];
-		[tools addObject:TGOpenActionRow(@"Import Messages", nil,
-									 @"import", NO)];
+			[tools addObject:[self valueRow:TGLocalized(@"Direct Messages")
+					detail:nil action:@"directMessages" opens:YES
+					destructive:NO disabled:NO]];
+		[tools addObject:[self valueRow:TGLocalized(@"Import Messages")
+				detail:nil action:@"import" opens:YES destructive:NO
+				disabled:NO]];
 		if (supergroup)
-			[tools addObject:TGOpenActionRow(@"Send Message As...", nil,
-										 @"sendAs", NO)];
-		if (self.canDeleteMessages)
-			[tools addObject:TGOpenActionRow(@"Clear History", nil,
-										 @"clearByDate", YES)];
-		else
-			[tools addObject:TGDisabledRow(@"Clear History",
-					nil,
-					@"clearByDate")];
+			[tools addObject:[self valueRow:TGLocalized(@"Send Message As...")
+					detail:nil action:@"sendAs" opens:YES destructive:NO
+					disabled:NO]];
+		[tools addObject:[self valueRow:TGLocalized(@"Clear History")
+				detail:nil action:@"clearByDate" opens:YES destructive:YES
+				disabled:!self.canDeleteMessages]];
 		if (supergroup){
-			if (self.canChangeInfo){
-				[tools addObject:TGOpenActionRow(@"Group Stickers", nil,
-											 @"groupStickers", NO)];
-				[tools addObject:TGOpenActionRow(@"Custom Emoji", nil,
-											 @"customEmojiStickers", NO)];
-			} else {
-				[tools addObject:TGDisabledRow(@"Group Stickers",
-						nil,
-						@"groupStickers")];
-				[tools addObject:TGDisabledRow(@"Custom Emoji",
-						nil,
-						@"customEmojiStickers")];
-			}
+			[tools addObject:[self valueRow:TGLocalized(@"Group Stickers")
+					detail:nil action:@"groupStickers" opens:YES
+					destructive:NO disabled:!self.canChangeInfo]];
+			[tools addObject:[self valueRow:TGLocalized(@"Custom Emoji")
+					detail:nil action:@"customEmojiStickers" opens:YES
+					destructive:NO disabled:!self.canChangeInfo]];
 		}
-		[sections addObject:TGSection(@"Manage", nil, tools)];
+		[sections addObject:TGSection(TGLocalized(@"Manage"), nil, tools)];
 	}
 
 	// ── leaving and deleting ────────────────────────────────────────────
 	if (self.myStatus.length){
-		NSMutableArray *danger = [NSMutableArray array];
-		NSString *what = channel ? @"Channel" : @"Group";
-		NSMutableDictionary *dangerRow = self.isOwner
-				? TGActionRow([NSString stringWithFormat:@"Delete %@", what],
-							  nil, @"deleteChat", YES)
-				: TGActionRow([NSString stringWithFormat:@"Leave %@", what],
-							  nil, @"leave", YES);
-		[danger addObject:dangerRow];
-		[sections addObject:TGSection(nil,
-				nil,
-				danger)];
+		NSString *what = channel ? TGLocalized(@"Channel") : TGLocalized(@"Group");
+		NSString *title = self.isOwner
+				? TGLocalizedFormat(@"Delete %@", what)
+				: TGLocalizedFormat(@"Leave %@", what);
+		NSString *action = self.isOwner ? @"deleteChat" : @"leave";
+		NSMutableDictionary *row = [self valueRow:title detail:nil
+				action:action opens:NO destructive:YES disabled:NO];
+		[sections addObject:TGSection(nil, nil, @[row])];
 	}
 
 	self.sections = sections;
 	[self updateEditButton];
 	[self reloadTableDebounced];
 }
-
 
 @end

@@ -23,7 +23,7 @@
 	if (self){
 		_chatId = chatId;
 		_chatTitle = [title copy] ?: @"Your Story";
-		self.listTitle = @"Stories";
+		self.title = @"Stories";
 		self.emptyText = @"No Results";
 	}
 	return self;
@@ -61,7 +61,7 @@
 					  @"tap" : ^{ [weakSelf openLive]; }}];
 	[rows addObject:@{@"title" : @"Enable Stealth Mode",
 					  @"tap" : ^{ [weakSelf activateStealth]; }}];
-	self.rows = rows;
+	self.listRows = rows;
 	[self.tableView reloadData];
 }
 

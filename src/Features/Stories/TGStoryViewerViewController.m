@@ -5,6 +5,7 @@
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
 #import "TGIcons.h"
+#import "TGPeerStore.h"
 #import "TGStoryInfoViewController.h"
 #import "TGStoryAlbumsViewController.h"
 #import "TGStoryComposerViewController.h"
@@ -428,32 +429,20 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 												   size:TGMetricStoryHeaderAvatar
 											   colourId:self.chatId];
 
-	NSNumber *fileId = [[TGClient shared] photoFileIdForChat:self.chatId];
-	if (![fileId isKindOfClass:NSNumber.class] || fileId.integerValue <= 0)
+	UIImage *cached = [[TGPeerStore shared] cachedAvatarForPeer:self.chatId
+														   side:TGMetricStoryHeaderAvatar];
+	if (cached){
+		self.authorAvatar.image = cached;
 		return;
+	}
 	__weak typeof(self) weakSelf = self;
 	__weak UIImageView *weakAvatar = self.authorAvatar;
-	[[TGClient shared] downloadFile:fileId.integerValue
-						   priority:TGDownloadPriorityAvatar
-						 completion:^(NSString *path){
-		if (!path.length)
-			return;
-		dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
-			UIImage *image = [UIImage imageWithContentsOfFile:path];
-			if (!image)
-				return;
-			image = [TGIcons decodedImage:image
-					fittingSize:CGSizeMake(TGMetricStoryHeaderAvatar,
-										   TGMetricStoryHeaderAvatar)
-							 fill:YES scale:[UIScreen mainScreen].scale];
-			if (!image)
-				return;
-			dispatch_async(dispatch_get_main_queue(), ^{
-				TGStoryViewerViewController *me = weakSelf;
-				if (me && !me.closed)
-					weakAvatar.image = image;
-			});
-		});
+	[[TGPeerStore shared] loadAvatarForPeer:self.chatId
+									   side:TGMetricStoryHeaderAvatar
+								 completion:^(UIImage *image){
+		TGStoryViewerViewController *me = weakSelf;
+		if (me && !me.closed && image)
+			weakAvatar.image = image;
 	}];
 }
 

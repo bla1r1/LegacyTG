@@ -1,361 +1,437 @@
 //
 // TGAiComposeViewController.m
 //
+// Official's TextProcessingScreen, edit mode, rebuilt for the composer: the
+// chat and its text arrive with the push, Translate / Style / Fix are the
+// tabs across the top, the original and the result are the two blocks, and
+// the one bottom action is Apply. Nothing here sends a message.
+//
 #import "TGAiComposeViewController.h"
 #import "TGClient.h"
 #import "TGAlertSheet.h"
-#import "TGForwardPicker.h"
+#import "TGChatActionMenuModel.h"
+#import "TGLocalization.h"
+#import "TGStyle.h"
+#import "TGTheme.h"
+#import "TGSegmentedControl.h"
+
+static const CGFloat kAiTextAreaHeight = 118.0f;
 
 @interface TGAiComposeViewController ()
-@property (nonatomic, copy) NSString *text;
-@property (nonatomic, copy) NSString *prompt;
-@property (nonatomic, copy) NSString *style;
-@property (nonatomic, copy) NSString *language;
-@property (nonatomic, copy) NSString *tone;
+
+@property (nonatomic, strong) UIScrollView *scrollView;
+@property (nonatomic, strong) TGSegmentedControl *modeControl;
+@property (nonatomic, strong) UIButton *languageButton;
+@property (nonatomic, strong) NSArray *styleButtons;
+@property (nonatomic, strong) UILabel *emojiLabel;
+@property (nonatomic, strong) UISwitch *emojiSwitch;
+@property (nonatomic, strong) UILabel *sourceBadge;
+@property (nonatomic, strong) UITextView *sourceView;
+@property (nonatomic, strong) UILabel *resultBadge;
+@property (nonatomic, strong) UITextView *resultView;
+@property (nonatomic, strong) UIActivityIndicatorView *spinner;
+@property (nonatomic, strong) UIButton *applyButton;
+
+@property (nonatomic, assign) TGAiComposeMode mode;
+@property (nonatomic, copy) NSString *sourceLanguage;
+@property (nonatomic, copy) NSString *targetLanguage;
+@property (nonatomic, copy) NSString *styleKey;
 @property (nonatomic, assign) BOOL addEmojis;
 @property (nonatomic, copy) NSString *result;
+@property (nonatomic, assign) BOOL processing;
+@property (nonatomic, assign) NSInteger requestGeneration;
+
 @end
 
 @implementation TGAiComposeViewController
 
 - (void)viewDidLoad {
-	self.title = @"Create with AI";
+	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
+		self.edgesForExtendedLayout = UIRectEdgeNone;
 	[super viewDidLoad];
-	NSString *code = [[NSLocale currentLocale] objectForKey:NSLocaleLanguageCode];
-	self.language = code.length ? code : @"en";
-	self.tone = @"";
-	self.text = @"";
-	self.prompt = @"";
-	self.style = @"";
-	[self rebuild];
+	self.title = TGLocalized(@"Edit");
+	self.mode = TGAiComposeModeTranslate;
+	self.addEmojis = NO;
+	NSArray *styles = TGAiComposeStyleChoices();
+	self.styleKey = styles.count ? styles[0][@"key"] : @"";
+
+	NSString *appLanguage = [[NSLocale currentLocale] objectForKey:NSLocaleLanguageCode]
+			?: @"en";
+	NSDictionary *model = TGAiComposeInputModel(self.initialText ?: @"",
+			self.chatId, self.chatLanguage, appLanguage);
+	self.sourceLanguage = model[@"sourceLanguage"];
+	self.targetLanguage = model[@"targetLanguage"];
+	self.result = @"";
+
+	[self buildViews];
+	[self applyTheme];
+	[self updateModeControls];
+	[self runRequest];
 }
 
-- (void)viewWillAppear:(BOOL)animated {
-	[super viewWillAppear:animated];
-	[self rebuild];
-}
+- (void)buildViews {
+	TGTheme *theme = [TGTheme shared];
+	self.view.backgroundColor = [theme groupedBackgroundColour];
 
-- (NSString *)short:(NSString *)value {
-	if (!value.length)
-		return nil;
-	return value.length > 48
-			? [[value substringToIndex:48] stringByAppendingString:@"…"]
-			: value;
-}
+	self.scrollView = [[UIScrollView alloc] initWithFrame:CGRectZero];
+	self.scrollView.autoresizingMask = UIViewAutoresizingFlexibleWidth |
+			UIViewAutoresizingFlexibleHeight;
+	self.scrollView.alwaysBounceVertical = YES;
+	[self.view addSubview:self.scrollView];
 
-- (void)rebuild {
-	__weak typeof(self) weakSelf = self;
-	NSMutableArray *inputRows = [NSMutableArray array];
-	[inputRows addObject:TGFeatureRow(@"Text", [self short:self.text], ^{
-		[weakSelf editText];
-	})];
-	[inputRows addObject:TGFeatureRow(@"Prompt", [self short:self.prompt], ^{
-		[weakSelf editPrompt];
-	})];
-	[inputRows addObject:TGFeatureRow(@"Style", self.style.length ? self.style : @"None", ^{
-		[weakSelf editStyle];
-	})];
-	[inputRows addObject:TGFeatureRow(@"Language", self.language, ^{
-		[weakSelf editLanguage];
-	})];
-	[inputRows addObject:TGFeatureRow(@"Tone",
-			self.tone.length ? self.tone : @"neutral", ^{
-		[weakSelf editTone];
-	})];
-	[inputRows addObject:TGFeatureRow(@"Add Emoji", self.addEmojis ? @"On" : @"Off", ^{
-		weakSelf.addEmojis = !weakSelf.addEmojis;
-		[weakSelf rebuild];
-	})];
-	[inputRows addObject:TGFeatureOpenRow(@"Recipient", self.chatTitle.length
-			? self.chatTitle : @"Select Chat", ^{
-		[weakSelf chooseChat];
-	})];
+	self.modeControl = [[TGSegmentedControl alloc] initWithItems:TGAiComposeModeTitles()];
+	[self.modeControl addTarget:self action:@selector(modeChanged:)
+			   forControlEvents:UIControlEventValueChanged];
+	[self.scrollView addSubview:self.modeControl];
 
-	NSMutableArray *actionRows = [NSMutableArray array];
-	[actionRows addObject:TGFeatureAction(@"Create with AI", ^{ [weakSelf composeText]; })];
-	[actionRows addObject:TGFeatureAction(@"AI Editor", ^{ [weakSelf fixText]; })];
-	[actionRows addObject:TGFeatureAction(@"Compose", ^{
-		[weakSelf composeRich];
-	})];
-	[actionRows addObject:TGFeatureAction(@"Fix", ^{
-		[weakSelf fixRich];
-	})];
-	[actionRows addObject:TGFeatureAction(@"Generate", ^{
-		[weakSelf createRich];
-	})];
-	[actionRows addObject:TGFeatureAction(@"Translate", ^{
-		[weakSelf translateRich];
-	})];
-
-	NSMutableArray *sendRows = [NSMutableArray array];
-	if (self.result.length){
-		[sendRows addObject:TGFeatureOpenRow(@"Result", [self short:self.result], ^{
-			[weakSelf showResult];
-		})];
+	NSMutableArray *buttons = [NSMutableArray array];
+	NSArray *choices = TGAiComposeStyleChoices();
+	for (NSUInteger i = 0; i < choices.count; i++) {
+		NSDictionary *choice = choices[i];
+		UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
+		button.tag = (NSInteger)i;
+		button.titleLabel.font = TGFontCaptionStrong();
+		[button setTitle:choice[@"title"] forState:UIControlStateNormal];
+		[button addTarget:self action:@selector(styleTapped:)
+		 forControlEvents:UIControlEventTouchUpInside];
+		[self.scrollView addSubview:button];
+		[buttons addObject:button];
 	}
-	[sendRows addObject:TGFeatureAction(@"Send Message", ^{ [weakSelf sendResult]; })];
-	[sendRows addObject:TGFeatureAction(@"Send as Rich Draft", ^{
-		[weakSelf sendDraft];
-	})];
+	self.styleButtons = buttons;
 
-	self.sections = @[
-		TGFeatureSection(nil, nil, inputRows),
-		TGFeatureSection(@"AI Tools", nil, actionRows),
-		TGFeatureSection(@"Result", nil, sendRows),
-	];
-	[self reloadRows];
+	self.emojiLabel = [[UILabel alloc] initWithFrame:CGRectZero];
+	self.emojiLabel.font = TGFontBody();
+	self.emojiLabel.text = TGLocalized(@"Add emoji");
+	self.emojiLabel.backgroundColor = [UIColor clearColor];
+	[self.scrollView addSubview:self.emojiLabel];
+
+	self.emojiSwitch = [[UISwitch alloc] initWithFrame:CGRectMake(0, 0,
+			TGMetricSwitchW, TGMetricSwitchH)];
+	self.emojiSwitch.on = self.addEmojis;
+	[self.emojiSwitch addTarget:self action:@selector(emojiChanged:)
+			   forControlEvents:UIControlEventValueChanged];
+	[self.scrollView addSubview:self.emojiSwitch];
+
+	self.languageButton = [UIButton buttonWithType:UIButtonTypeCustom];
+	self.languageButton.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeft;
+	self.languageButton.titleLabel.font = TGFontRow();
+	[self.languageButton addTarget:self action:@selector(languageTapped)
+				   forControlEvents:UIControlEventTouchUpInside];
+	[self.scrollView addSubview:self.languageButton];
+
+	self.sourceBadge = [[UILabel alloc] initWithFrame:CGRectZero];
+	self.sourceBadge.font = TGFontCaptionStrong();
+	self.sourceBadge.text = TGLocalized(@"Original");
+	self.sourceBadge.backgroundColor = [UIColor clearColor];
+	[self.scrollView addSubview:self.sourceBadge];
+
+	self.sourceView = [self textView];
+	self.sourceView.text = self.initialText ?: @"";
+	[self.scrollView addSubview:self.sourceView];
+
+	self.resultBadge = [[UILabel alloc] initWithFrame:CGRectZero];
+	self.resultBadge.font = TGFontCaptionStrong();
+	self.resultBadge.text = TGLocalized(@"Result");
+	self.resultBadge.backgroundColor = [UIColor clearColor];
+	[self.scrollView addSubview:self.resultBadge];
+
+	self.resultView = [self textView];
+	[self.scrollView addSubview:self.resultView];
+
+	self.spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:
+			UIActivityIndicatorViewStyleGray];
+	self.spinner.hidesWhenStopped = YES;
+	[self.scrollView addSubview:self.spinner];
+
+	self.applyButton = [UIButton buttonWithType:UIButtonTypeCustom];
+	self.applyButton.titleLabel.font = TGFontHeader();
+	[self.applyButton setTitle:TGLocalized(@"Apply") forState:UIControlStateNormal];
+	[self.applyButton addTarget:self action:@selector(applyTapped)
+			   forControlEvents:UIControlEventTouchUpInside];
+	self.applyButton.autoresizingMask = UIViewAutoresizingFlexibleTopMargin |
+			UIViewAutoresizingFlexibleWidth;
+	[self.view addSubview:self.applyButton];
 }
 
-#pragma mark - fields
+- (UITextView *)textView {
+	UITextView *view = [[UITextView alloc] initWithFrame:CGRectZero];
+	view.editable = NO;
+	view.selectable = YES;
+	view.scrollEnabled = YES;
+	view.font = TGFontBody();
+	view.layer.cornerRadius = TGMetricCornerControl;
+	view.layer.borderWidth = TGMetricHairline;
+	if ([view respondsToSelector:@selector(textContainerInset)])
+		view.textContainerInset = UIEdgeInsetsMake(TGMetricPadMedium,
+				TGMetricPadMedium, TGMetricPadMedium, TGMetricPadMedium);
+	else
+		view.contentInset = UIEdgeInsetsMake(TGMetricPadMedium,
+				TGMetricPadMedium, TGMetricPadMedium, TGMetricPadMedium);
+	return view;
+}
 
-- (void)editText {
+- (void)applyTheme {
+	[super applyTheme];
+	TGTheme *theme = [TGTheme shared];
+	self.view.backgroundColor = [theme groupedBackgroundColour];
+	// TGViewController's viewDidLoad calls this before our views exist; the
+	// array literal below threw on the nil text views and killed the app.
+	if (!self.sourceView || !self.resultView)
+		return;
+	self.sourceBadge.textColor = [theme secondaryTextColour];
+	self.resultBadge.textColor = [theme secondaryTextColour];
+	self.emojiLabel.textColor = [theme primaryTextColour];
+	for (UITextView *view in @[self.sourceView, self.resultView]) {
+		view.backgroundColor = [theme cardBackgroundColour];
+		view.textColor = [theme primaryTextColour];
+		view.layer.borderColor = [theme separatorColour].CGColor;
+	}
+	[self.languageButton setTitleColor:[theme accentColour]
+							  forState:UIControlStateNormal];
+	[self.applyButton setBackgroundImage:
+			[TGTheme buttonImageForStyle:TGButtonStyleAction highlighted:NO
+								   height:TGMetricButtonHeight]
+								forState:UIControlStateNormal];
+	[self.applyButton setBackgroundImage:
+			[TGTheme buttonImageForStyle:TGButtonStyleAction highlighted:YES
+								   height:TGMetricButtonHeight]
+								forState:UIControlStateHighlighted];
+	[self.applyButton setTitleColor:[theme onAccentColour]
+						   forState:UIControlStateNormal];
+	[self updateStyleButtons];
+	[self updateResultState];
+}
+
+#pragma mark - mode and controls
+
+- (void)modeChanged:(TGSegmentedControl *)control {
+	TGAiComposeMode mode = (TGAiComposeMode)control.selectedSegmentIndex;
+	if (mode == self.mode)
+		return;
+	self.mode = mode;
+	self.result = @"";
+	[self updateModeControls];
+	[self runRequest];
+}
+
+- (void)styleTapped:(UIButton *)button {
+	NSArray *choices = TGAiComposeStyleChoices();
+	if (button.tag < 0 || button.tag >= (NSInteger)choices.count)
+		return;
+	NSString *key = choices[(NSUInteger)button.tag][@"key"];
+	if ([key isEqualToString:self.styleKey])
+		return;
+	self.styleKey = key;
+	[self updateStyleButtons];
+	self.result = @"";
+	[self runRequest];
+}
+
+- (void)emojiChanged:(UISwitch *)sender {
+	self.addEmojis = sender.on;
+	if (self.mode == TGAiComposeModeTranslate || self.mode == TGAiComposeModeStyle) {
+		self.result = @"";
+		[self runRequest];
+	}
+}
+
+- (void)languageTapped {
+	NSArray *codes = TGAiComposeLanguageChoices();
+	NSMutableArray *titles = [NSMutableArray arrayWithCapacity:codes.count];
+	for (NSUInteger i = 0; i < codes.count; i++)
+		[titles addObject:TGAiComposeLanguageName(codes[i])];
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"Text"
-					message:nil
-				placeholder:@"Text"
-					   text:self.text
-					 action:@"Save"
-					 inView:self.view
-				   onSubmit:^(NSString *text){
-		weakSelf.text = text;
-		[weakSelf rebuild];
+	[TGAlertSheet showChoices:titles title:TGLocalized(@"Translate")
+			 destructiveIndex:-1 inView:self.view onChoice:^(NSInteger index){
+		TGAiComposeViewController *me = weakSelf;
+		if (!me || index < 0 || index >= (NSInteger)codes.count)
+			return;
+		me.targetLanguage = codes[(NSUInteger)index];
+		[me updateModeControls];
+		me.result = @"";
+		[me runRequest];
 	}];
 }
 
-- (void)editPrompt {
-	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"Prompt"
-					message:nil
-				placeholder:@"Prompt"
-					   text:self.prompt
-					 action:@"Save"
-					 inView:self.view
-				   onSubmit:^(NSString *prompt){
-		weakSelf.prompt = prompt;
-		[weakSelf rebuild];
-	}];
+- (void)updateModeControls {
+	BOOL translate = self.mode == TGAiComposeModeTranslate;
+	BOOL style = self.mode == TGAiComposeModeStyle;
+	self.languageButton.hidden = !translate;
+	self.emojiLabel.hidden = !(translate || style);
+	self.emojiSwitch.hidden = !(translate || style);
+	for (UIButton *button in self.styleButtons)
+		button.hidden = !style;
+	[self.languageButton setTitle:TGLocalizedFormat(@"Translate to %@",
+			TGAiComposeLanguageName(self.targetLanguage))
+						forState:UIControlStateNormal];
+	self.modeControl.selectedSegmentIndex = self.mode;
+	[self updateStyleButtons];
+	[self updateResultState];
+	[self.view setNeedsLayout];
 }
 
-- (void)editStyle {
-	__weak typeof(self) weakSelf = self;
-	NSArray *titles = @[@"None", @"Formal", @"Casual", @"Excited"];
-	[TGAlertSheet showChoices:titles
-						title:@"Style"
-			 destructiveIndex:-1
-					   inView:self.view
-					 onChoice:^(NSInteger index){
-		weakSelf.style = index == 0 ? @"" : [titles[index] lowercaseString];
-		[weakSelf rebuild];
-	}];
+- (void)updateStyleButtons {
+	NSArray *choices = TGAiComposeStyleChoices();
+	TGTheme *theme = [TGTheme shared];
+	for (UIButton *button in self.styleButtons) {
+		NSInteger index = button.tag;
+		BOOL selected = index >= 0 && index < (NSInteger)choices.count &&
+				[choices[(NSUInteger)index][@"key"] isEqualToString:self.styleKey];
+		TGButtonStyle style = selected ? TGButtonStyleAction : TGButtonStyleSilver;
+		[button setBackgroundImage:[TGTheme buttonImageForStyle:style
+				highlighted:NO height:TGMetricRow]
+						  forState:UIControlStateNormal];
+		[button setBackgroundImage:[TGTheme buttonImageForStyle:style
+				highlighted:YES height:TGMetricRow]
+						  forState:UIControlStateHighlighted];
+		[button setTitleColor:selected ? [theme onAccentColour]
+				: [theme primaryTextColour] forState:UIControlStateNormal];
+	}
 }
 
-- (void)editLanguage {
-	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showInput:@"Language"
-					message:nil
-				placeholder:@"en"
-					   text:self.language
-					 action:@"Save"
-					 inView:self.view
-				   onSubmit:^(NSString *code){
-		weakSelf.language = code;
-		[weakSelf rebuild];
-	}];
-}
-
-- (void)editTone {
-	__weak typeof(self) weakSelf = self;
-	NSArray *titles = @[@"Neutral", @"Formal", @"Casual"];
-	[TGAlertSheet showChoices:titles
-						title:@"Tone"
-			 destructiveIndex:-1
-					   inView:self.view
-					 onChoice:^(NSInteger index){
-		weakSelf.tone = index == 0 ? @"" : [titles[index] lowercaseString];
-		[weakSelf rebuild];
-	}];
-}
-
-- (void)chooseChat {
-	TGForwardPicker *picker = [[TGForwardPicker alloc] init];
-	__weak typeof(self) weakSelf = self;
-	picker.onPicked = ^(int64_t targetChatId){
-		weakSelf.chatId = targetChatId;
-		weakSelf.chatTitle = [[TGClient shared] titleForChat:targetChatId] ?: @"Chat";
-		[weakSelf rebuild];
-	};
-	[self.navigationController pushViewController:picker animated:YES];
+- (void)updateResultState {
+	self.resultView.text = self.result ?: @"";
+	self.applyButton.enabled = self.result.length > 0 && !self.processing;
+	self.applyButton.alpha = self.applyButton.enabled
+			? TGAlphaOpaque : TGAlphaDisabled;
+	if (self.processing) {
+		[self.spinner startAnimating];
+		self.resultView.text = @"";
+	} else {
+		[self.spinner stopAnimating];
+	}
 }
 
 #pragma mark - requests
 
-- (void)composeText {
-	if (!self.text.length){
-		[self toast:@"An error occurred."];
+- (void)runRequest {
+	NSString *text = [self.initialText ?: @"" stringByTrimmingCharactersInSet:
+			[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+	if (!text.length) {
+		self.processing = NO;
+		self.result = @"";
+		[self updateResultState];
 		return;
 	}
+	NSInteger generation = ++self.requestGeneration;
+	self.processing = YES;
+	self.result = @"";
+	[self updateResultState];
+
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] composeTextWithAi:self.text
-							 translateTo:self.language
-								   style:self.style
-							   addEmojis:self.addEmojis
-							  completion:^(NSString *text, NSString *error){
-		if (!text){
-			[weakSelf toast:error ?: @"An error occurred."];
+	void (^finish)(NSString *, NSString *) = ^(NSString *answer, NSString *error){
+		TGAiComposeViewController *me = weakSelf;
+		if (!me || generation != me.requestGeneration)
 			return;
+		me.processing = NO;
+		NSString *clean = [answer isKindOfClass:NSString.class] ? answer : @"";
+		me.result = clean.length ? clean : (error ?: TGLocalized(@"An error occurred."));
+		[me updateResultState];
+	};
+
+	NSString *body = self.initialText ?: @"";
+	switch (self.mode) {
+		case TGAiComposeModeTranslate: {
+			[[TGClient shared] composeTextWithAi:body
+									 translateTo:self.targetLanguage
+										   style:@""
+									   addEmojis:self.addEmojis
+									  completion:^(NSString *answer, NSString *error){
+				finish(answer, error);
+			}];
+			break;
 		}
-		weakSelf.result = text;
-		[weakSelf showResult];
-	}];
-}
-
-- (void)fixText {
-	if (!self.text.length){
-		[self toast:@"An error occurred."];
-		return;
-	}
-	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] fixTextWithAi:self.text
-						  completion:^(NSString *text, NSString *diff, NSString *error){
-		if (!text){
-			[weakSelf toast:error ?: @"An error occurred."];
-			return;
+		case TGAiComposeModeStyle: {
+			[[TGClient shared] composeTextWithAi:body
+									 translateTo:@""
+										   style:self.styleKey
+									   addEmojis:self.addEmojis
+									  completion:^(NSString *answer, NSString *error){
+				finish(answer, error);
+			}];
+			break;
 		}
-		weakSelf.result = text;
-		[weakSelf showResult];
-	}];
-}
-
-- (void)composeRich {
-	if (!self.text.length){
-		[self toast:@"An error occurred."];
-		return;
-	}
-	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] composeRichMessageWithAi:self.text
-									translateTo:self.language
-										  style:self.style
-								   customPrompt:@""
-									  addEmojis:self.addEmojis
-									 completion:^(NSString *text, NSString *error){
-		if (!text.length){
-			[weakSelf toast:error ?: @"An error occurred."];
-			return;
+		case TGAiComposeModeFix: {
+			[[TGClient shared] fixTextWithAi:body
+								  completion:^(NSString *answer, NSString *diff,
+										  NSString *error){
+				finish(answer, error);
+			}];
+			break;
 		}
-		weakSelf.result = text;
-		[weakSelf showResult];
-	}];
+	}
 }
 
-- (void)fixRich {
-	if (!self.text.length){
-		[self toast:@"An error occurred."];
+- (void)applyTapped {
+	if (!self.result.length)
 		return;
-	}
-	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] fixRichMessageWithAi:self.text
-								  completion:^(NSString *text, NSString *error){
-		if (!text.length){
-			[weakSelf toast:error ?: @"An error occurred."];
-			return;
+	if (self.onApply)
+		self.onApply(self.result);
+	[self.navigationController popViewControllerAnimated:YES];
+}
+
+#pragma mark - layout
+
+- (void)viewDidLayoutSubviews {
+	[super viewDidLayoutSubviews];
+	CGFloat width = self.view.bounds.size.width;
+	CGFloat height = self.view.bounds.size.height;
+	CGFloat pad = TGMetricPadLarge;
+	CGFloat contentWidth = MAX(0.0f, width - TGDoubled(pad));
+	CGFloat applyHeight = TGMetricButtonHeight;
+	CGFloat applyY = height - applyHeight - pad;
+	CGFloat scrollBottom = applyY - TGMetricPadSmall;
+
+	self.scrollView.frame = CGRectMake(0, 0, width, MAX(0.0f, scrollBottom));
+	self.applyButton.frame = CGRectMake(pad, applyY, contentWidth, applyHeight);
+
+	CGFloat y = pad;
+	self.modeControl.frame = CGRectMake(pad, y, contentWidth, TGMetricRow);
+	y += TGMetricRow + TGMetricPadSmall;
+
+	if (self.mode == TGAiComposeModeStyle) {
+		CGFloat gap = TGMetricPadSmall;
+		CGFloat buttonWidth = MAX(0.0f,
+				(contentWidth - TGDoubled(gap)) / self.styleButtons.count);
+		for (NSUInteger i = 0; i < self.styleButtons.count; i++) {
+			UIButton *button = self.styleButtons[i];
+			button.frame = CGRectMake(pad + (buttonWidth + gap) * i, y,
+					buttonWidth, TGMetricRow);
 		}
-		weakSelf.result = text;
-		[weakSelf showResult];
-	}];
-}
-
-- (void)createRich {
-	if (!self.prompt.length){
-		[self toast:@"An error occurred."];
-		return;
+		y += TGMetricRow + TGMetricPadSmall;
 	}
-	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] createRichMessageWithAi:self.prompt
-								  languageCode:self.language
-									 addEmojis:self.addEmojis
-									completion:^(NSString *text, NSString *error){
-		if (!text.length){
-			[weakSelf toast:error ?: @"An error occurred."];
-			return;
-		}
-		weakSelf.result = text;
-		[weakSelf showResult];
-	}];
-}
 
-- (void)translateRich {
-	if (!self.text.length){
-		[self toast:@"An error occurred."];
-		return;
+	if (!self.emojiSwitch.hidden) {
+		self.emojiSwitch.frame = CGRectMake(pad, y +
+				TGCenteredOrigin(TGMetricRow, self.emojiSwitch.bounds.size.height),
+				self.emojiSwitch.bounds.size.width, self.emojiSwitch.bounds.size.height);
+		self.emojiLabel.frame = CGRectMake(CGRectGetMaxX(self.emojiSwitch.frame) +
+				TGMetricPadSmall, y,
+				contentWidth - self.emojiSwitch.bounds.size.width - TGMetricPadSmall,
+				TGMetricRow);
+		y += TGMetricRow + TGMetricPadSmall;
 	}
-	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] translateRichMessage:self.text
-									 toCode:self.language
-									   tone:self.tone
-								 completion:^(NSString *text, NSString *error){
-		if (!text.length){
-			[weakSelf toast:error ?: @"An error occurred."];
-			return;
-		}
-		weakSelf.result = text;
-		[weakSelf showResult];
-	}];
-}
 
-- (void)showResult {
-	__weak typeof(self) weakSelf = self;
-	TGFeatureResultViewController *screen = [[TGFeatureResultViewController alloc]
-			initWithTitle:@"Result" body:self.result];
-	screen.onSend = self.chatId ? ^(NSString *text){
-		[weakSelf sendText:text];
-	} : nil;
-	screen.hidesBottomBarWhenPushed = YES;
-	[self.navigationController pushViewController:screen animated:YES];
-	[self rebuild];
-}
+	if (!self.languageButton.hidden) {
+		self.languageButton.frame = CGRectMake(pad, y, contentWidth, TGMetricRow);
+		y += TGMetricRow + TGMetricPadSmall;
+	}
 
-- (void)sendResult {
-	if (!self.result.length){
-		[self toast:@"An error occurred."];
-		return;
-	}
-	[self sendText:self.result];
-}
+	self.sourceBadge.frame = CGRectMake(pad, y, contentWidth, TGMetricLineSubhead);
+	y += TGMetricLineSubhead + TGMetricPadSmall;
+	self.sourceView.frame = CGRectMake(pad, y, contentWidth, kAiTextAreaHeight);
+	y += kAiTextAreaHeight + TGMetricPadLarge;
 
-- (void)sendText:(NSString *)text {
-	if (!self.chatId){
-		[self chooseChat];
-		return;
-	}
-	[[TGClient shared] sendText:text toChat:self.chatId];
-	[self toast:@"Sent"];
-}
+	self.resultBadge.frame = CGRectMake(pad, y, contentWidth, TGMetricLineSubhead);
+	self.spinner.frame = CGRectMake(CGRectGetMaxX(self.resultBadge.frame) -
+			TGMetricRow, CGRectGetMinY(self.resultBadge.frame), TGMetricRow,
+			TGMetricLineSubhead);
+	self.spinner.activityIndicatorViewStyle = UIActivityIndicatorViewStyleGray;
+	y += TGMetricLineSubhead + TGMetricPadSmall;
+	self.resultView.frame = CGRectMake(pad, y, contentWidth, kAiTextAreaHeight);
+	y += kAiTextAreaHeight + TGMetricPadLarge;
 
-- (void)sendDraft {
-	if (!self.chatId){
-		[self chooseChat];
-		return;
-	}
-	NSString *body = self.result.length ? self.result : self.text;
-	if (!body.length){
-		[self toast:@"An error occurred."];
-		return;
-	}
-	__weak typeof(self) weakSelf = self;
-	int64_t draftId = (int64_t)arc4random();
-	[[TGClient shared] sendRichMessageDraft:body
-									 toChat:self.chatId
-									topicId:0
-									draftId:draftId
-									canStop:NO
-								 keepOnStop:YES
-								 completion:^(BOOL ok, NSString *error){
-		if (!ok){
-			[weakSelf toast:error ?: @"An error occurred."];
-			return;
-		}
-		[weakSelf toast:@"Draft Saved"];
-	}];
+	self.scrollView.contentSize = CGSizeMake(width, y);
 }
 
 @end

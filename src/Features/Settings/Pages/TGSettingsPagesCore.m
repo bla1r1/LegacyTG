@@ -92,7 +92,9 @@ static BOOL TGNotificationsWarning(void) {
 		case TGSettingsPageProxy:         return [self proxySections];
 		case TGSettingsPageDownloads:     return [self downloadSections];
 		case TGSettingsPageAutosave:      return [self autosaveSections];
-		case TGSettingsPageWallpaper:     return [self wallpaperSections];
+		case TGSettingsPageWallpaper:     return @[];   // the URL opens the gallery itself
+		case TGSettingsPageChatThemes:    return [self chatThemesSections];
+		case TGSettingsPageAutoNight:     return [self autoNightSections];
 		case TGSettingsPagePaymentData:   return [self paymentSections];
 #if TG_DEV
 		case TGSettingsPageDebug:         return [self debugSections];
@@ -232,7 +234,7 @@ static BOOL TGNotificationsWarning(void) {
 		}),
 	])];
 	[sections addObject:TGSection(nil, nil, @[
-		TGIconTapOpenRow(TGLocalized(@"This Device"), [TGDevice tierName], @"devices", TGIconTileSlate(), ^{
+		TGIconTapOpenRow(TGLocalized(@"Device"), [TGDevice tierName], @"devices", TGIconTileSlate(), ^{
 			TGDeviceViewController *device = [[TGDeviceViewController alloc] init];
 			device.hidesBottomBarWhenPushed = YES;
 			[weakSelf.navigationController pushViewController:device animated:YES];
@@ -278,7 +280,9 @@ static BOOL TGNotificationsWarning(void) {
 			[name.lowercaseString rangeOfString:query].location == NSNotFound &&
 			[packId.lowercaseString rangeOfString:query].location == NSNotFound)
 			continue;
-		[rows addObject:TGCheckRow(name, packId,
+		// Official shows the language's native name and a checkmark. The
+		// pack id on the right read as "en" under "Русский".
+		[rows addObject:TGCheckRow(name, nil,
 				[packId isEqualToString:appLanguage], ^{
 			TGSetAppLanguage(packId);
 			TGSetTelegramLanguageLookup(nil);
@@ -747,6 +751,31 @@ static NSString *TGCallDebugText(NSDictionary *call) {
 
 - (NSArray *)recentCallSections {
 	__weak typeof(self) weakSelf = self;
+	// The bar's filter belongs to this page, and its English-only titles were
+	// what overflowed once the pack supplied "Пропущ.". Size each segment to
+	// its own title instead of splitting the bar in two.
+	UISegmentedControl *filter =
+			(UISegmentedControl *)self.navigationItem.titleView;
+	if ([filter isKindOfClass:UISegmentedControl.class] &&
+		filter.numberOfSegments == 2){
+		NSString *all = TGLocalized(@"All");
+		NSString *missed = TGLocalized(@"Missed");
+		UIFont *font = TGFontCaption();
+		[filter setTitle:all forSegmentAtIndex:0];
+		[filter setTitle:missed forSegmentAtIndex:1];
+		[filter setTitleTextAttributes:@{NSFontAttributeName : font}
+							  forState:UIControlStateNormal];
+		// The pack's "Пропущ." is nine characters; the control's equal split
+		// cut it. Each segment gets its own measured width and the same
+		// narrowed padding, so the whole word is on screen.
+		filter.apportionsSegmentWidthsByContent = NO;
+		[filter setWidth:TGSettingsSegmentWidth(all, font, TGMetricPadSmall)
+		 forSegmentAtIndex:0];
+		[filter setWidth:TGSettingsSegmentWidth(missed, font, TGMetricPadSmall)
+		 forSegmentAtIndex:1];
+		[filter sizeToFit];
+	}
+
 	NSArray *displayCalls = self.calls;
 	if (self.recentCallsFilter == 1) {
 		NSPredicate *pred = [NSPredicate predicateWithBlock:^BOOL(NSDictionary *c, NSDictionary *bindings) {

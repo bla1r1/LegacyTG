@@ -1,5 +1,6 @@
 #import "TGGroupSettingsViewController.h"
 #import "TGClient.h"
+#import "TGPeerStore.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
@@ -169,7 +170,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 			me.chatTitle = title;
 			me.title = title;
 		}
-		me.hasPhoto = [[TGClient shared] photoFileIdForChat:me.chatId] != nil;
+		me.hasPhoto = [[TGPeerStore shared] peerHasAvatar:me.chatId];
 		me.loaded = YES;
 		[me rebuild];
 		[me loadOwnRole];

@@ -5,18 +5,14 @@
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
 #import "TGLocalization.h"
+#import "TGRows.h"
 
 /// Telegram accepts a 1080x1920 photo and a 720x1280 video. This client only
 /// re-sizes the photo; a picked video is sent as recorded.
 static const CGFloat kStoryPhotoWidth = 1080.0f;
 static const CGFloat kStoryPhotoHeight = 1920.0f;
-static const NSInteger kStorySectionChoices = 0;
-static const NSInteger kStorySectionOptions = 1;
-static const NSInteger kStorySectionPublish = 2;
 /// POST STORY AS carries only the poster; WHO CAN VIEW THIS STORY carries the
 /// privacy controls: privacy, expiry, profile, saving and albums.
-static const NSInteger kStoryChoiceRows = 1;
-static const NSInteger kStoryViewRows = 5;
 /// Only 24 hours is free; the other three periods are Premium.
 static const NSInteger kStoryFreePeriod = 86400;
 
@@ -60,7 +56,7 @@ static BOOL sStoryFlowOpening = NO;
 @implementation TGStoryComposerViewController
 
 - (instancetype)initWithChatId:(int64_t)chatId title:(NSString *)title {
-	self = [super initWithStyle:UITableViewStyleGrouped];
+	self = [super init];
 	if (self){
 		_chatId = chatId;
 		_posterTitle = [title copy] ?: @"Your story";
@@ -108,6 +104,7 @@ static BOOL sStoryFlowOpening = NO;
 	[super viewDidLoad];
 	self.title = @"Story";
 	[[TGTheme shared] styleGroupedTable:self.tableView];
+	[self rebuildSections];
 
 	__weak typeof(self) weakSelf = self;
 	// postStory returns while the upload is still running, so the server's
@@ -122,7 +119,8 @@ static BOOL sStoryFlowOpening = NO;
 		if ([note.userInfo[@"chatId"] longLongValue] != me.targetChatId)
 			return;
 		me.posting = NO;
-		[me.tableView reloadData];
+		[me rebuildSections];
+		[me reloadRows];
 		if ([note.userInfo[@"ok"] boolValue]){
 			if (me.onPosted)
 				me.onPosted();
@@ -154,129 +152,66 @@ static BOOL sStoryFlowOpening = NO;
 		if (!me)
 			return;
 		me.postChats = chats ?: @[];
-		[me.tableView reloadData];
+		[me rebuildSections];
+		[me reloadRows];
 	}];
 }
 
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-	return 3;
+#pragma mark - rows
+
+- (void)rebuildSections {
+	__weak typeof(self) weakSelf = self;
+	NSMutableArray *sections = [NSMutableArray array];
+
+	NSMutableDictionary *target = [TGTapRow(@"Post Story As",
+			self.targetTitle ?: @"My Story", ^{
+		[weakSelf chooseTargetChat];
+	}) mutableCopy];
+	[sections addObject:TGSection(@"POST STORY AS", nil, @[target])];
+
+	NSMutableArray *viewRows = [NSMutableArray array];
+	[viewRows addObject:[TGTapRow(@"Privacy", [self privacyTitle], ^{
+		[weakSelf choosePrivacy];
+	}) mutableCopy]];
+	[viewRows addObject:[TGTapRow(TGLocalizedFormat(@"Expires in %@",
+			[self activePeriodTitle]), nil, ^{
+		[weakSelf chooseActivePeriod];
+	}) mutableCopy]];
+	[viewRows addObject:TGSwitchRow(@"Add to Profile", self.postedToChatPage,
+			^(BOOL on){
+		weakSelf.postedToChatPage = on;
+	})];
+	[viewRows addObject:TGSwitchRow(@"Restrict Saving Content", self.protectContent,
+			^(BOOL on){
+		weakSelf.protectContent = on;
+	})];
+	NSString *albums = self.albumIds.count
+			? [self.albumIds componentsJoinedByString:@", "] : @"None";
+	[viewRows addObject:[TGTapRow(@"Albums", albums, ^{
+		[weakSelf chooseAlbums];
+	}) mutableCopy]];
+	[sections addObject:TGSection(@"WHO CAN VIEW THIS STORY", nil, viewRows)];
+
+	NSMutableArray *publishRows = [NSMutableArray array];
+	NSString *postTitle = self.posting ? @"Uploading..." : @"Post Story";
+	if (self.posting){
+		[publishRows addObject:TGRow(TGKindAction, postTitle)];
+	} else {
+		[publishRows addObject:TGActionRow(postTitle, ^{
+			[weakSelf postStory];
+		})];
+	}
+	[publishRows addObject:TGRedRow(@"Cancel", ^{
+		[weakSelf closeFlow];
+	})];
+	[sections addObject:TGSection(nil, nil, publishRows)];
+
+	self.sections = sections;
 }
 
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-	if (section == kStorySectionChoices)
-		return kStoryChoiceRows;
-	if (section == kStorySectionOptions)
-		return kStoryViewRows;
-	return 2;
-}
+#pragma mark - choices
 
-- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-	if (section == kStorySectionChoices)
-		return @"POST STORY AS";
-	if (section == kStorySectionOptions)
-		return @"WHO CAN VIEW THIS STORY";
-	return nil;
-}
-
-- (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath {
-	return TGMetricRow;
-}
-
-- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-	NSString *identifier = [NSString stringWithFormat:@"story-%ld-%ld",
-			(long)indexPath.section, (long)indexPath.row];
-	UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:identifier];
-	if (!cell)
-		cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1
-									  reuseIdentifier:identifier];
-	[[TGTheme shared] styleCell:cell];
-	cell.accessoryView = nil;
-	cell.accessoryType = UITableViewCellAccessoryNone;
-	cell.selectionStyle = UITableViewCellSelectionStyleBlue;
-	cell.textLabel.textColor = [[TGTheme shared] primaryTextColour];
-	cell.detailTextLabel.textColor = [[TGTheme shared] secondaryTextColour];
-	cell.textLabel.font = TGFontBody();
-	cell.detailTextLabel.font = TGFontSubhead();
-
-	if (indexPath.section == kStorySectionPublish){
-		if (indexPath.row == 0){
-			cell.textLabel.text = self.posting ? @"Uploading..." : @"Post Story";
-			cell.textLabel.textColor = [[TGTheme shared] accentColour];
-			cell.detailTextLabel.text = @"";
-			cell.selectionStyle = self.mediaPath && !self.posting
-					? UITableViewCellSelectionStyleBlue
-					: UITableViewCellSelectionStyleNone;
-		} else {
-			cell.textLabel.text = @"Cancel";
-			cell.textLabel.textColor = [[TGTheme shared] destructiveColour];
-		}
-		return cell;
-	}
-
-	if (indexPath.section == kStorySectionOptions){
-		if (indexPath.row == 2 || indexPath.row == 3){
-			UISwitch *toggle = [[UISwitch alloc] init];
-			toggle.on = indexPath.row == 2 ? self.postedToChatPage : self.protectContent;
-			toggle.tag = indexPath.row;
-			[toggle addTarget:self action:@selector(toggleChanged:)
-			 forControlEvents:UIControlEventValueChanged];
-			cell.textLabel.text = indexPath.row == 2
-					? @"Add to Profile" : @"Restrict Saving Content";
-			cell.accessoryView = toggle;
-			cell.selectionStyle = UITableViewCellSelectionStyleNone;
-			return cell;
-		}
-		if (indexPath.row == 0){
-			cell.textLabel.text = @"Privacy";
-			cell.detailTextLabel.text = [self privacyTitle];
-			cell.accessoryType = UITableViewCellAccessoryNone;
-			return cell;
-		}
-		if (indexPath.row == 1){
-			cell.textLabel.text = TGLocalizedFormat(@"Expires in %@",
-					[self activePeriodTitle]);
-			cell.detailTextLabel.text = @"";
-			cell.accessoryType = UITableViewCellAccessoryNone;
-			return cell;
-		}
-		cell.textLabel.text = @"Albums";
-		cell.detailTextLabel.text = self.albumIds.count
-				? [self.albumIds componentsJoinedByString:@", "] : @"None";
-		cell.accessoryType = UITableViewCellAccessoryNone;
-		return cell;
-	}
-
-	// POST STORY AS: the account the story is posted as.
-	cell.textLabel.text = @"Post Story As";
-	cell.detailTextLabel.text = self.targetTitle ?: @"My Story";
-	cell.accessoryType = UITableViewCellAccessoryNone;
-	return cell;
-}
-
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
-	if (indexPath.section == kStorySectionPublish){
-		if (indexPath.row == 0)
-			[self postStory];
-		else
-			[self closeFlow];
-		return;
-	}
-	if (indexPath.section == kStorySectionChoices){
-		[self chooseTargetChat];
-		return;
-	}
-	// Index 2 and 3 are the switches; the table does not select them.
-	if (indexPath.row == 0){
-		[self choosePrivacy];
-		return;
-	}
-	if (indexPath.row == 1){
-		[self chooseActivePeriod];
-		return;
-	}
-	if (indexPath.row != 4)
-		return;
+- (void)chooseAlbums {
 	__weak typeof(self) weakSelf = self;
 	[TGAlertSheet showInput:@"Albums"
 					message:nil
@@ -296,11 +231,10 @@ static BOOL sStoryFlowOpening = NO;
 				[ids addObject:@(trimmed.integerValue)];
 		}
 		me.albumIds = ids;
-		[me.tableView reloadData];
+		[me rebuildSections];
+		[me reloadRows];
 	}];
 }
-
-#pragma mark - choices
 
 - (void)choosePrivacy {
 	NSArray *choices = @[@"Everybody", @"My Contacts", @"Close Friends", @"Selected Users"];
@@ -336,11 +270,13 @@ static BOOL sStoryFlowOpening = NO;
 				}
 				me.privacy = @"selected";
 				me.privacyUserIds = ids;
-				[me.tableView reloadData];
+				[me rebuildSections];
+				[me reloadRows];
 			}];
 			return;
 		}
-		[me.tableView reloadData];
+		[me rebuildSections];
+		[me reloadRows];
 	}];
 }
 
@@ -366,7 +302,8 @@ static BOOL sStoryFlowOpening = NO;
 			return;
 		}
 		me.activePeriod = period;
-		[me.tableView reloadData];
+		[me rebuildSections];
+		[me reloadRows];
 	}];
 }
 
@@ -388,7 +325,8 @@ static BOOL sStoryFlowOpening = NO;
 			return;
 		me.targetChatId = [ids[choice] longLongValue];
 		me.targetTitle = titles[choice];
-		[me.tableView reloadData];
+		[me rebuildSections];
+		[me reloadRows];
 	}];
 }
 
@@ -418,14 +356,6 @@ static BOOL sStoryFlowOpening = NO;
 	self.isVideo = isVideo;
 	self.videoDuration = duration;
 	self.caption = caption;
-}
-
-- (void)toggleChanged:(UISwitch *)toggle {
-	// The switches sit at rows 2 and 3 of the WHO CAN VIEW section.
-	if (toggle.tag == 2)
-		self.postedToChatPage = toggle.on;
-	else if (toggle.tag == 3)
-		self.protectContent = toggle.on;
 }
 
 /// Telegram wants a 1080x1920 JPEG. Scaling here, not on the server, keeps a
@@ -464,7 +394,8 @@ static BOOL sStoryFlowOpening = NO;
 		return;
 	}
 	self.posting = YES;
-	[self.tableView reloadData];
+	[self rebuildSections];
+	[self reloadRows];
 	__weak typeof(self) weakSelf = self;
 	[[TGClient shared] canPostStoryInChat:self.targetChatId
 							   completion:^(NSDictionary *answer){
@@ -473,7 +404,8 @@ static BOOL sStoryFlowOpening = NO;
 			return;
 		if (![answer[@"ok"] boolValue]){
 			me.posting = NO;
-			[me.tableView reloadData];
+			[me rebuildSections];
+			[me reloadRows];
 			[TGAlertSheet showMessage:TGStoryRefusalText(answer)
 								title:@"New Story" inView:me.view];
 			return;
@@ -493,7 +425,8 @@ static BOOL sStoryFlowOpening = NO;
 			if (!me.posting)
 				return;
 			me.posting = NO;
-			[me.tableView reloadData];
+			[me rebuildSections];
+			[me reloadRows];
 			if (!story){
 				[TGAlertSheet showMessage:error ?: @"An error occurred."
 									title:@"New Story" inView:me.view];

@@ -1,7 +1,7 @@
 //
-// TGBubbleCell.m - Table view cell for chat bubbles.
+// TGMessageBubbleCell.m - the shared chat message bubble.
 //
-#import "TGBubbleCell.h"
+#import "TGMessageBubbleCell.h"
 #import "TGTheme.h"
 #import "TGIcons.h"
 #import <AVFoundation/AVFoundation.h>
@@ -315,6 +315,21 @@ static const NSUInteger kMaxCustomEmojiViews = 3;
 	[self.body addGestureRecognizer:bodyTap];
 
 	return self;
+}
+
+- (void)configureWithLayout:(TGMessageLayout *)layout theme:(TGTheme *)theme {
+	[self resetForReuse];
+
+	BOOL mine = layout.mine;
+	self.bubble.frame = layout.bubbleFrame;
+	UIColor *fill = mine ? [theme bubbleMineColour] : [theme bubbleTheirsColour];
+	self.bubble.backgroundColor = layout.isSticker ? [UIColor clearColor] : fill;
+
+	self.tail.hidden = YES;
+	self.bubble.layer.borderWidth = TGMetricBorderNone;
+	self.bubble.layer.borderColor = [UIColor clearColor].CGColor;
+	self.bubble.layer.cornerRadius = [theme bubbleCornerRadius];
+	self.body.textColor = mine ? [theme bubbleMineTextColour] : [theme bubbleTheirsTextColour];
 }
 
 /// The frame CoreText laid the label's text out in, kept until the text or

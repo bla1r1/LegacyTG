@@ -84,6 +84,9 @@ static NSString *TGOrderLines(NSDictionary *order) {
 
 - (NSArray *)paymentSections {
 	__weak typeof(self) weakSelf = self;
+	// "Orders and Payment Data" is not in the language pack. The screen
+	// shows the saved order, and "Payment Info" is its official name.
+	self.title = TGLocalized(@"Payment Info");
 	NSString *orderDetail;
 	if (!self.savedOrderLoaded)
 		orderDetail = @"Loading...";

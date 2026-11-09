@@ -10,7 +10,8 @@
 #import "TGClientInternal.h"
 #import "TGInstantViewController.h"
 #import "TGMessageAudienceViewController.h"
-#import "TGMessageToolsViewController.h"
+#import "TGChecklistViewController.h"
+#import "TGSuggestedPostViewController.h"
 #import "TGSponsoredMessagesViewController.h"
 #import "TGGameScoresViewController.h"
 #import "TGPollPresentation.h"
@@ -282,6 +283,9 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 	context.canSelect = YES;
 	context.canReport = !mine;
 	context.canAddToFavorites = NO;
+	// Mono-forum posts are the only ones whose author official names here.
+	context.canViewAuthor = NO;
+	context.canEditFactCheck = self.isChannel;
 #if TG_DEV
 	context.hasMessageEffects = [m[@"effectId"] longLongValue] > 0 ||
 			[TGClient shared].availableMessageEffectIds.count ||
@@ -415,22 +419,46 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 	} else if ([action isEqualToString:@"Retry"]){
 		[[TGClient shared] resendMessages:@[@(messageId)] inChat:self.chatId];
 
-#if TG_DEV
-	} else if ([action isEqualToString:@"Message Tools"]){
-		TGMessageToolsViewController *tools = [[TGMessageToolsViewController alloc] init];
-		tools.chatId = self.chatId;
-		tools.chatTitle = self.chatTitle;
-		tools.messageId = messageId;
-		tools.messageText = [m[@"text"] isKindOfClass:NSString.class]
-				? m[@"text"] : @"";
-		tools.isChecklist = [m[@"kind"] isEqualToString:@"messageChecklist"];
-		tools.hasSuggestedPost = [m[@"hasSuggestedPost"] boolValue];
-		tools.factCheck = [m[@"factCheck"] isKindOfClass:NSString.class]
-				? m[@"factCheck"] : @"";
-		tools.hidesBottomBarWhenPushed = YES;
-		[self.navigationController pushViewController:tools animated:YES];
+	} else if ([action isEqualToString:@"Checklist"]){
+		TGChecklistViewController *checklist = [[TGChecklistViewController alloc]
+				initWithChatId:self.chatId messageId:messageId title:@"Checklist"];
+		checklist.hidesBottomBarWhenPushed = YES;
+		[self.navigationController pushViewController:checklist animated:YES];
 
-#endif
+	} else if ([action isEqualToString:@"Suggest Post"]){
+		TGSuggestedPostViewController *post = [[TGSuggestedPostViewController alloc]
+				initWithChatId:self.chatId messageId:messageId];
+		post.hidesBottomBarWhenPushed = YES;
+		[self.navigationController pushViewController:post animated:YES];
+
+	} else if ([action isEqualToString:@"Fact Check"]){
+		NSString *existing = [m[@"factCheck"] isKindOfClass:NSString.class]
+				? m[@"factCheck"] : @"";
+		int64_t chatId = self.chatId;
+		__weak typeof(self) weakSelf = self;
+		[TGAlertSheet showInput:@"Fact Check"
+						message:nil
+					placeholder:@"Fact Check"
+						   text:existing
+						 action:@"Save"
+						 inView:self.view
+					   onSubmit:^(NSString *text){
+			[[TGClient shared] setMessageFactCheck:messageId
+											 inChat:chatId
+											   text:text
+										 completion:^(BOOL ok, NSString *error){
+				TGChatViewController *me = weakSelf;
+				if (!ok){
+					[TGAlertSheet showMessage:(error.length ? error
+							: @"An error occurred.")
+										 title:@"Fact Check" inView:me.view];
+					return;
+				}
+				[me.layoutCache removeLayoutForMessageId:messageId];
+				[me reload];
+			}];
+		}];
+
 	} else if ([action isEqualToString:@"Show 1 Reply"] ||
 			   [action hasPrefix:@"Show "] ||
 			   [action isEqualToString:@"Leave a Comment"]){

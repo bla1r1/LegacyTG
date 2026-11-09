@@ -2,6 +2,7 @@
 // TGSearchViewController - search controller for chats and messages.
 //
 #import <UIKit/UIKit.h>
+#import "TGRowsViewController.h"
 
-@interface TGSearchViewController : UITableViewController
+@interface TGSearchViewController : TGRowsViewController
 @end
