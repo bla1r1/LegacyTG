@@ -107,12 +107,26 @@ NSString *TGErrorMessage(NSDictionary *message, NSDictionary *fallback) {
 				   thread:(int64_t)threadId
 				  replyTo:(int64_t)replyToId
 		  schedulingState:(NSDictionary *)schedulingState {
+	[self sendFormattedText:formattedText toChat:chatId thread:threadId
+					replyTo:replyToId schedulingState:schedulingState silent:NO];
+}
+
+- (void)sendFormattedText:(NSDictionary *)formattedText
+				   toChat:(int64_t)chatId
+				   thread:(int64_t)threadId
+				  replyTo:(int64_t)replyToId
+		  schedulingState:(NSDictionary *)schedulingState
+				   silent:(BOOL)silent {
+	NSDictionary *options = (silent || schedulingState[@"@type"])
+			? [TGClient messageSendOptionsSilent:silent schedulingState:schedulingState]
+			: nil;
 	__weak __typeof__(self) weakSelf = self;
 	[[TGClient shared] sendFormattedText:formattedText
 								  toChat:chatId
 								  thread:threadId
 								 replyTo:replyToId
 						 schedulingState:schedulingState
+								 options:options
 							  completion:^(NSDictionary *message) {
 		[weakSelf registerPendingMessage:message inChat:chatId];
 	}];
@@ -123,18 +137,37 @@ NSString *TGErrorMessage(NSDictionary *message, NSDictionary *fallback) {
 		  thread:(int64_t)threadId
 		 replyTo:(int64_t)replyToId
  schedulingState:(NSDictionary *)schedulingState {
+	[self sendText:text toChat:chatId thread:threadId replyTo:replyToId
+   schedulingState:schedulingState silent:NO];
+}
+
+- (void)sendText:(NSString *)text
+		  toChat:(int64_t)chatId
+		  thread:(int64_t)threadId
+		 replyTo:(int64_t)replyToId
+ schedulingState:(NSDictionary *)schedulingState
+		   silent:(BOOL)silent {
+	NSDictionary *options = (silent || schedulingState[@"@type"])
+			? [TGClient messageSendOptionsSilent:silent schedulingState:schedulingState]
+			: nil;
 	__weak __typeof__(self) weakSelf = self;
 	[[TGClient shared] sendText:text
 						toChat:chatId
 						thread:threadId
 					   replyTo:replyToId
 					 scheduled:schedulingState
+					   options:options
 					completion:^(NSDictionary *message) {
 		[weakSelf registerPendingMessage:message inChat:chatId];
 	}];
 }
 
 - (void)sendAnimation:(NSDictionary *)animation toChat:(int64_t)chatId thread:(int64_t)threadId {
+	[self sendAnimation:animation caption:@"" toChat:chatId thread:threadId];
+}
+
+- (void)sendAnimation:(NSDictionary *)animation caption:(NSString *)caption
+			  toChat:(int64_t)chatId thread:(int64_t)threadId {
 	if (animation[@"queryId"] && animation[@"resultId"]){
 		[[TGClient shared] send:@{
 			@"@type"             : @"sendInlineQueryResultMessage",
@@ -155,6 +188,8 @@ NSString *TGErrorMessage(NSDictionary *message, NSDictionary *fallback) {
 		// inputAnimation, and that is what holds the InputFile.
 		@"input_message_content": @{
 			@"@type"     : @"inputMessageAnimation",
+			@"caption"   : [caption ?: @"" length]
+					? TGFormattedText(caption) : [NSNull null],
 			@"animation" : @{
 				@"@type"     : @"inputAnimation",
 				@"animation" : @{@"@type" : @"inputFileId", @"id" : animation[@"fileId"]},
@@ -264,10 +299,18 @@ NSString *TGErrorMessage(NSDictionary *message, NSDictionary *fallback) {
 }
 
 - (void)sendPhotoAtPath:(NSString *)path viewOnce:(BOOL)viewOnce toChat:(int64_t)chatId {
+	[self sendPhotoAtPath:path viewOnce:viewOnce seconds:0 toChat:chatId];
+}
+
+- (void)sendPhotoAtPath:(NSString *)path viewOnce:(BOOL)viewOnce seconds:(NSInteger)seconds
+				 toChat:(int64_t)chatId {
 	if (!path.length)
 		return;
 	id destruct = viewOnce
-			? @{@"@type" : @"messageSelfDestructTypeImmediately"}
+			? (seconds > 0
+					? @{@"@type" : @"messageSelfDestructTypeTimer",
+						@"self_destruct_time" : @(seconds)}
+					: @{@"@type" : @"messageSelfDestructTypeImmediately"})
 			: [NSNull null];
 	[[TGClient shared] send:@{
 		@"@type"                : @"sendMessage",
@@ -329,10 +372,18 @@ NSString *TGErrorMessage(NSDictionary *message, NSDictionary *fallback) {
 }
 
 - (void)sendVideoAtPath:(NSString *)path viewOnce:(BOOL)viewOnce toChat:(int64_t)chatId {
+	[self sendVideoAtPath:path viewOnce:viewOnce seconds:0 toChat:chatId];
+}
+
+- (void)sendVideoAtPath:(NSString *)path viewOnce:(BOOL)viewOnce seconds:(NSInteger)seconds
+				 toChat:(int64_t)chatId {
 	if (!path.length)
 		return;
 	id destruct = viewOnce
-			? @{@"@type" : @"messageSelfDestructTypeImmediately"}
+			? (seconds > 0
+					? @{@"@type" : @"messageSelfDestructTypeTimer",
+						@"self_destruct_time" : @(seconds)}
+					: @{@"@type" : @"messageSelfDestructTypeImmediately"})
 			: [NSNull null];
 	[[TGClient shared] send:@{
 		@"@type"                : @"sendMessage",
@@ -344,6 +395,53 @@ NSString *TGErrorMessage(NSDictionary *message, NSDictionary *fallback) {
 				@"video" : @{@"@type" : @"inputFileLocal", @"path" : path},
 			},
 			@"self_destruct_type" : destruct,
+		},
+	}];
+}
+
+- (void)sendDocumentAtPath:(NSString *)path caption:(NSString *)caption
+					toChat:(int64_t)chatId thread:(int64_t)threadId {
+	if (!path.length)
+		return;
+	NSString *text = [caption ?: @"" stringByTrimmingCharactersInSet:
+			[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+	[[TGClient shared] send:@{
+		@"@type"                : @"sendMessage",
+		@"chat_id"              : @(chatId),
+		@"message_thread_id"    : @(threadId),
+		@"input_message_content": @{
+			@"@type"    : @"inputMessageDocument",
+			@"document" : @{
+				@"@type"      : @"inputDocument",
+				@"document"   : @{@"@type" : @"inputFileLocal", @"path" : path},
+				@"force_file" : @YES,
+			},
+			@"caption"  : text.length ? TGFormattedText(text) : [NSNull null],
+		},
+	}];
+}
+
+- (void)sendAudioAtPath:(NSString *)path title:(NSString *)title
+			  performer:(NSString *)performer duration:(NSInteger)seconds
+				caption:(NSString *)caption toChat:(int64_t)chatId thread:(int64_t)threadId {
+	if (!path.length)
+		return;
+	NSString *text = [caption ?: @"" stringByTrimmingCharactersInSet:
+			[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+	[[TGClient shared] send:@{
+		@"@type"                : @"sendMessage",
+		@"chat_id"              : @(chatId),
+		@"message_thread_id"    : @(threadId),
+		@"input_message_content": @{
+			@"@type" : @"inputMessageAudio",
+			@"audio" : @{
+				@"@type"     : @"inputAudio",
+				@"audio"     : @{@"@type" : @"inputFileLocal", @"path" : path},
+				@"duration"  : @(MAX(0, seconds)),
+				@"title"     : title ?: @"",
+				@"performer" : performer ?: @"",
+			},
+			@"caption" : text.length ? TGFormattedText(text) : [NSNull null],
 		},
 	}];
 }

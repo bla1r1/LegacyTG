@@ -1,5 +1,5 @@
 #import "TGProfileViewControllerInternal.h"
-#import "TGClientInternal.h"
+#import "TGProfileStore.h"
 #import "TGRows.h"
 #import "TGRowCell.h"
 #import "TGStyle.h"
@@ -256,7 +256,7 @@ heightForHeaderInSection:(NSInteger)section {
 	int64_t targetId = self.directMessagesChatId;
 	if (targetId == 0) {
 		__weak typeof(self) weakSelf = self;
-		[[TGClient shared] chatProfile:self.chatId completion:^(NSDictionary *info){
+		[[TGProfileStore shared] chatProfile:self.chatId completion:^(NSDictionary *info){
 			TGProfileViewController *me = weakSelf;
 			if (!me) return;
 			int64_t dmId = [info[@"directMessagesChatId"] longLongValue];
@@ -320,7 +320,7 @@ heightForHeaderInSection:(NSInteger)section {
 		[self openChat:[m[@"chatId"] longLongValue] title:m[@"title"] message:0];
 	} else if ([kind isEqualToString:@"similar"]){
 		int64_t chatId = [m[@"id"] longLongValue];
-		[[TGClient shared] openSimilarChat:chatId fromChat:self.chatId];
+		[[TGProfileStore shared] openSimilarChat:chatId fromChat:self.chatId];
 		[self openChat:chatId title:m[@"title"] message:0];
 	} else if ([kind isEqualToString:@"voice"] &&
 			   ![m[@"kind"] isEqualToString:@"messageVideoNote"]){
@@ -341,7 +341,7 @@ heightForHeaderInSection:(NSInteger)section {
 	if (same || ![docId isKindOfClass:NSNumber.class])
 		return;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] downloadFile:docId.integerValue completion:^(NSString *path){
+	[[TGProfileStore shared] downloadFile:docId.integerValue completion:^(NSString *path){
 		dispatch_async(dispatch_get_main_queue(), ^{
 			TGProfileViewController *me = weakSelf;
 			if (!me || !path)

@@ -1,12 +1,12 @@
 Chat screen: history, bubbles, composer, message actions, search, scheduling and bot controls. Parity rows come from `_parity_audit/s_chat.md` and the chat half of `changelog.md`; checked against `src/` on 7 November 2026. Message content types have their own file, `message-types.md`.
 
-Counts: 57 done, 14 partial, 20 missing, 0 dev-only.
+Counts: 61 done, 14 partial, 16 missing, 0 dev-only.
 
 Built: M4 (60-message pages, bubbles, actions, drafts, pins, reactions,
 multi-select, scheduled sends), M10 (text search), M16 (polls, cards, veils),
-M17 (custom emoji in the text model), M27 (failed-send mark). Open: M23
-(silent/repeated send, GIF caption), M26 (search filters), M35 (poll creation,
-copy in multi-select, forward options).
+M17 (custom emoji in the text model), M23 (silent and repeated sends, GIF
+caption, file and music picker), M27 (failed-send mark). Open: M26 (search
+filters), M35 (poll creation, copy in multi-select, forward options).
 
 | Feature | State | Where | Note |
 |---|---|---|---|
@@ -39,13 +39,13 @@ copy in multi-select, forward options).
 | Markdown send | done | `Features/Chat/Composer/TGChatViewController+Input.m:728` | `markdownParsed:` keeps the typed markup as entities and the store sends the formatted record. |
 | Formatted send/edit interface | done | `Core/Stores/TGSendStore.mm:104` | `sendFormattedText:…schedulingState:` and `editMessageText:…formattedText:` own the request and track the result. |
 | Send custom emoji ids | done | `Core/Model/TGComposerText.m`, `Features/Chat/Composer/TGChatViewController+Input.m` | `TGComposerText` keeps the ids; Send goes through `parseMarkdown` and `sendFormattedText`; seen on the 4S in Saved Messages on 7 November 2026. |
-| File and music picker | missing | `Features/Chat/Views/TGAttachSheet.h:8` | No document picker and no `inputMessageDocument` / `inputMessageAudio` request. |
+| File and music picker | done | `Features/Chat/Views/TGAttachSheet.h:8` | File uses `UIDocumentPicker` on iOS 8+, music uses `MPMediaPickerController` and exports to .m4a; both send through `TGSendStore` with `inputMessageDocument` / `inputMessageAudio`. |
 | Attach sheet | done | `Features/Chat/Composer/TGChatViewController+Input.m:747` | Gallery, camera, location, contact, checklist, quick reply, dice, ephemeral. |
 | Pick photo / video / album | done | `Features/Chat/Actions/TGChatViewController+Attachments.m:182` | Picker accepts images and movies; multi-select sends an album. |
 | Voice recording and send | done | `src/Features/Chat/Composer/TGChatAudioVoice.m:539` | Hold-to-record, pause, waveform, `sendVoiceAtPath:`. |
 | Round video note record/play | done | `src/Features/Chat/Composer/TGChatAudioVoice.m:736` | `TGVideoNoteRecorder` writes the file; bubble plays it in a circle. |
 | Sticker and GIF send | done | `Features/Chat/Composer/TGChatViewController+Input.m:717` | Panel picks send `sendStickerWithFileId:` / `sendAnimation:`. |
-| GIF caption | missing | `Core/Client/TGClient+Stickers.m:405` | `sendAnimation` has no caption parameter or caption step. |
+| GIF caption | done | `Core/Stores/TGSendStore.mm:141` | `sendAnimation:caption:` sends the composer text as `inputMessageAnimation.caption`. |
 | Custom emoji tab in picker | done | `Features/Chat/Views/TGEmojiPanel.m` | Custom tab with the installed packs; without Premium only Saved Messages takes them. |
 | Reply | done | `src/Features/Chat/Actions/TGChatActionsHoldMenu.m:588` | Sets reply target and opens the composer. |
 | Forward | done | `src/Features/Chat/Actions/TGChatActionsHoldMenu.m:614` | Single and batched forwards through `TGForwardPicker`. |
@@ -65,8 +65,8 @@ copy in multi-select, forward options).
 | Search result opens the message | missing | `Features/Chat/Search/TGChatViewController+Search.m:68` | Results replace the feed; ending search returns to the bottom. |
 | Scheduled send | done | `Features/Chat/Composer/TGChatViewController+Input.m:451` | Long-press Send offers a time or "When Online". |
 | Scheduled queue screen | done | `Features/Chat/TGScheduledViewController.m:72` | Lists, reschedules and deletes scheduled messages. |
-| Repeated scheduled message | missing | `Core/Client/Messages/TGClient+Messages.m:324` | `repeat_period` is hardcoded to 0; no repeat control. |
-| Silent send | missing | `Core/Client/Messages/TGClient+Messages.m:275` | The normal send path builds no `messageSendOptions`. |
+| Repeated scheduled message | done | `Core/Stores/TGMessageStore.m:26` | `scheduledAtDate:repeatPeriod:` and the composer's Repeat row carry the period. |
+| Silent send | done | `Core/Stores/TGSendStore.mm:112` | `sendText:...silent:` and the hold sheet's Send Without Sound build `messageSendOptions`. |
 | Drafts | done | `src/Features/Chat/Core/TGChatViewLayout.m:403` | Typed text is written with `setDraft:` and restored on reopen. |
 | Remote "draft stopped" | done | `src/Features/Chat/Core/TGChatViewData.m:87` | Shows a snackbar and clears the field when TDLib names the same text. |
 | Send typing action | done | `Features/Chat/Composer/TGChatViewController+Input.m:198` | One `sendChatAction` per 4 s. |

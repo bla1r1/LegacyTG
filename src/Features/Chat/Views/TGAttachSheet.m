@@ -258,12 +258,13 @@ static NSString *const kTileIdentifier = @"tile";
 - (void)moreTapped {
 	UIView *host = self.superview;
 	void (^onChoice)(TGAttachChoice) = self.onChoice;
-	static const TGAttachChoice rest[] = {TGAttachChoiceChecklist, TGAttachChoiceQuickReply,
+	static const TGAttachChoice rest[] = {TGAttachChoiceDocument, TGAttachChoiceAudio,
+			TGAttachChoiceChecklist, TGAttachChoiceQuickReply,
 			TGAttachChoiceDice, TGAttachChoiceEphemeral};
 	[self dismiss];
-	[TGAlertSheet showChoices:@[@"Checklist", @"Add Quick Reply", @"Stake", @"Ephemeral Message"]
+	[TGAlertSheet showChoices:@[@"File", @"Music", @"Checklist", @"Add Quick Reply", @"Stake", @"Ephemeral Message"]
 						title:nil destructiveIndex:-1 inView:host onChoice:^(NSInteger choice){
-		if (onChoice && choice >= 0 && choice < 4)
+		if (onChoice && choice >= 0 && choice < 6)
 			onChoice(rest[choice]);
 	}];
 }

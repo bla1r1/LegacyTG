@@ -23,7 +23,7 @@
 - (BOOL)runTier2Action:(NSString *)title {
 	if ([title isEqualToString:@"Emoji Status"] ||
 			[title isEqualToString:@"Set Emoji Status"]){
-		BOOL own = self.userId == [[TGClient shared].me[@"id"] longLongValue];
+		BOOL own = self.userId == [[TGProfileStore shared].me[@"id"] longLongValue];
 		TGEmojiStatusViewController *status =
 				[[TGEmojiStatusViewController alloc] init];
 		status.target = own ? TGEmojiStatusTargetSelf : TGEmojiStatusTargetUser;

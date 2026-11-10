@@ -156,7 +156,8 @@ static const CGFloat kAiTextAreaHeight = 118.0f;
 - (UITextView *)textView {
 	UITextView *view = [[UITextView alloc] initWithFrame:CGRectZero];
 	view.editable = NO;
-	view.selectable = YES;
+	if ([view respondsToSelector:@selector(setSelectable:)])
+		view.selectable = YES;
 	view.scrollEnabled = YES;
 	view.font = TGFontBody();
 	view.layer.cornerRadius = TGMetricCornerControl;

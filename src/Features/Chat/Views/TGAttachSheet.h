@@ -15,6 +15,8 @@ typedef NS_ENUM(NSInteger, TGAttachChoice) {
 	/// they open a screen of their own at the end of the same row.
 	TGAttachChoiceDice,
 	TGAttachChoiceEphemeral,
+	TGAttachChoiceDocument,
+	TGAttachChoiceAudio,
 	/// The first tile of the grid. Last in the enum so the values the strip
 	/// maps to its tiles keep their numbers.
 	TGAttachChoiceCamera

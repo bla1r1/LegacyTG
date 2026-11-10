@@ -4,7 +4,8 @@
 #import "TGAlertSheet.h"
 #import "TGStoryViewerViewController.h"
 #import "TGProfileTabs.h"
-#import "TGClientInternal.h"
+#import "TGProfileStore.h"
+#import "TGProfileSupport.h"
 #import "TGIcons.h"
 #import "TGCapabilities.h"
 #import "TGLocalization.h"
@@ -109,7 +110,7 @@ static NSString *TGProfileJoin(NSString *left, NSString *right) {
 	};
 	__weak typeof(self) weakSelf = self;
 	[filters enumerateKeysAndObjectsUsingBlock:^(NSString *kind, NSString *filterType, BOOL *stop){
-		[[TGClient shared] messageCountInChat:weakSelf.chatId
+		[[TGProfileStore shared] messageCountInChat:weakSelf.chatId
 									   filter:filterType
 								   completion:^(NSInteger count){
 			TGProfileViewController *me = weakSelf;
@@ -164,7 +165,7 @@ static NSString *TGProfileJoin(NSString *left, NSString *right) {
 		else if ([kind isEqualToString:@"gifts"])
 			me.gifts = safe;
 		if (filterForCount)
-			[[TGClient shared] messageCountInChat:me.chatId filter:filterForCount
+			[[TGProfileStore shared] messageCountInChat:me.chatId filter:filterForCount
 									   completion:^(NSInteger count){
 				me.mediaCounts[kind] = @(count);
 				[me reloadTableDebounced];
@@ -180,14 +181,14 @@ static NSString *TGProfileJoin(NSString *left, NSString *right) {
 	}
 
 	if ([kind isEqualToString:@"stories"]){
-		[[TGClient shared] storiesForChat:self.chatId completion:done];
+		[[TGProfileStore shared] storiesForChat:self.chatId completion:done];
 	} else if ([kind isEqualToString:@"archive"]){
-		[[TGClient shared] archivedStoriesForChat:self.chatId completion:done];
+		[[TGProfileStore shared] archivedStoriesForChat:self.chatId completion:done];
 	} else if ([kind isEqualToString:@"gifts"]){
 		NSDictionary *owner = [self giftOwnerSenderId];
 		if (owner){
 			__weak typeof(self) weakProfile = self;
-			[[TGClient shared] giftsForOwner:owner offset:@"" completion:^(NSArray *gifts, NSString *nextOffset, NSInteger totalCount){
+			[[TGProfileStore shared] giftsForOwner:owner offset:@"" completion:^(NSArray *gifts, NSString *nextOffset, NSInteger totalCount){
 				TGProfileViewController *me = weakProfile;
 				if (!me) return;
 				me.giftsNextOffset = nextOffset;
@@ -199,13 +200,13 @@ static NSString *TGProfileJoin(NSString *left, NSString *right) {
 			done(@[]);
 		}
 	} else if ([kind isEqualToString:@"groups"]){
-		[[TGClient shared] groupsInCommonWithUser:self.userId completion:done];
+		[[TGProfileStore shared] groupsInCommonWithUser:self.userId completion:done];
 	} else {
 		if (!filterForCount){
 			[self.loadingMediaKinds removeObject:kind];
 			return;
 		}
-		[[TGClient shared] mediaInChat:self.chatId filter:filterForCount completion:done];
+		[[TGProfileStore shared] mediaInChat:self.chatId filter:filterForCount completion:done];
 	}
 }
 
@@ -277,7 +278,7 @@ static NSString *TGProfileJoin(NSString *left, NSString *right) {
 				  destructive:NO
 					   inView:self.view
 					onConfirm:^{
-		[[TGClient shared] setSupergroupMainProfileTab:kind inChat:weakSelf.chatId
+		[[TGProfileStore shared] setSupergroupMainProfileTab:kind inChat:weakSelf.chatId
 				completion:^(BOOL ok, NSString *error){
 			TGProfileViewController *me = weakSelf;
 			if (!ok){
@@ -319,7 +320,7 @@ static NSString *TGProfileJoin(NSString *left, NSString *right) {
 }
 
 - (BOOL)showsSavedMessages {
-	return self.chatId && self.chatId == [[TGClient shared] savedMessagesChatId] &&
+	return self.chatId && self.chatId == [[TGProfileStore shared] savedMessagesChatId] &&
 			self.onSearchTapped != nil;
 }
 
@@ -413,7 +414,7 @@ static NSString *TGProfileJoin(NSString *left, NSString *right) {
 		return;
 	[self.thumbnailsRequested addObject:fileId];
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] downloadFile:fileId.integerValue
+	[[TGProfileStore shared] downloadFile:fileId.integerValue
 						   priority:TGDownloadPriorityOnScreen
 						 completion:^(NSString *path){
 		if (!path.length)
@@ -688,7 +689,7 @@ static NSString *TGProfileJoin(NSString *left, NSString *right) {
 			return;
 		NSString *picked = choices[(NSUInteger)choice];
 		if ([picked isEqualToString:TGLocalized(@"Delete Story")]){
-			[[TGClient shared] deleteStory:[story[@"storyId"] intValue]
+			[[TGProfileStore shared] deleteStory:[story[@"storyId"] intValue]
 								  fromChat:weakSelf.chatId
 								completion:^(BOOL ok, NSString *error){
 				TGProfileViewController *me = weakSelf;
@@ -701,7 +702,7 @@ static NSString *TGProfileJoin(NSString *left, NSString *right) {
 				[me reloadOwnStories];
 			}];
 		} else {
-			[[TGClient shared] toggleStory:(int32_t)[story[@"storyId"] intValue]
+			[[TGProfileStore shared] toggleStory:(int32_t)[story[@"storyId"] intValue]
 								  fromChat:weakSelf.chatId
 						  postedToChatPage:!posted
 								completion:^(BOOL ok, NSString *error){
@@ -736,7 +737,7 @@ static NSString *TGProfileJoin(NSString *left, NSString *right) {
 					 title:self.title ?: TGLocalized(@"Stories")
 				   stories:rows
 				startIndex:index
-				 canManage:self.chatId == [[TGClient shared] savedMessagesChatId]];
+				 canManage:self.chatId == [[TGProfileStore shared] savedMessagesChatId]];
 	UINavigationController *nav = [[UINavigationController alloc]
 			initWithRootViewController:viewer];
 	nav.navigationBar.barStyle = UIBarStyleBlack;
@@ -755,7 +756,7 @@ static NSString *TGProfileJoin(NSString *left, NSString *right) {
 			return;
 		self.isLoadingMoreMedia = YES;
 		__weak typeof(self) weakProfile = self;
-		[[TGClient shared] giftsForOwner:owner offset:self.giftsNextOffset completion:^(NSArray *more, NSString *nextOffset, NSInteger totalCount){
+		[[TGProfileStore shared] giftsForOwner:owner offset:self.giftsNextOffset completion:^(NSArray *more, NSString *nextOffset, NSInteger totalCount){
 			dispatch_async(dispatch_get_main_queue(), ^{
 				TGProfileViewController *me = weakProfile;
 				if (!me) return;
@@ -797,7 +798,7 @@ static NSString *TGProfileJoin(NSString *left, NSString *right) {
 	if (!lastId) return;
 	self.isLoadingMoreMedia = YES;
 	__weak typeof(self) weakProfile = self;
-	[[TGClient shared] mediaInChat:self.chatId filter:filter fromMessageId:lastId limit:60 completion:^(NSArray *more){
+	[[TGProfileStore shared] mediaInChat:self.chatId filter:filter fromMessageId:lastId limit:60 completion:^(NSArray *more){
 		dispatch_async(dispatch_get_main_queue(), ^{
 			TGProfileViewController *me = weakProfile;
 			if (!me) return;

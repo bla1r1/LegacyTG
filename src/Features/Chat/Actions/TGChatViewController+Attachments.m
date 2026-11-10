@@ -241,12 +241,14 @@
 		return;
 	}
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:@[@"Send Message", @"View Once"]
+	[TGAlertSheet showChoices:@[@"Send Message", @"View Once",
+			@"View Once, 10 s", @"View Once, 30 s", @"View Once, 1 min"]
 						title:nil
 			 destructiveIndex:-1
 					   inView:self.view
 					 onChoice:^(NSInteger index){
-		[weakSelf sendImage:image viewOnce:(index == 1)];
+		NSInteger seconds = index == 2 ? 10 : (index == 3 ? 30 : (index == 4 ? 60 : 0));
+		[weakSelf sendImage:image viewOnce:(index > 0) seconds:seconds];
 	}];
 }
 
@@ -258,19 +260,26 @@
 		return;
 	}
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:@[@"Send Message", @"View Once"]
+	[TGAlertSheet showChoices:@[@"Send Message", @"View Once",
+			@"View Once, 10 s", @"View Once, 30 s", @"View Once, 1 min"]
 						title:nil
 			 destructiveIndex:-1
 					   inView:self.view
 					 onChoice:^(NSInteger index){
-		[weakSelf sendVideoAtPath:path viewOnce:(index == 1)];
+		NSInteger seconds = index == 2 ? 10 : (index == 3 ? 30 : (index == 4 ? 60 : 0));
+		[weakSelf sendVideoAtPath:path viewOnce:(index > 0) seconds:seconds];
 	}];
 }
 
 - (void)sendVideoAtPath:(NSString *)path viewOnce:(BOOL)viewOnce {
+	[self sendVideoAtPath:path viewOnce:viewOnce seconds:0];
+}
+
+- (void)sendVideoAtPath:(NSString *)path viewOnce:(BOOL)viewOnce seconds:(NSInteger)seconds {
 	if (!path.length)
 		return;
-	[[TGSendStore shared] sendVideoAtPath:path viewOnce:viewOnce toChat:self.chatId];
+	[[TGSendStore shared] sendVideoAtPath:path viewOnce:viewOnce seconds:seconds
+								   toChat:self.chatId];
 }
 
 /// TDLib wants a path, so the picture is written to a temporary file first -
@@ -281,6 +290,10 @@
 }
 
 - (void)sendImage:(UIImage *)image viewOnce:(BOOL)viewOnce {
+	[self sendImage:image viewOnce:viewOnce seconds:0];
+}
+
+- (void)sendImage:(UIImage *)image viewOnce:(BOOL)viewOnce seconds:(NSInteger)seconds {
 	if (!image)
 		return;
 	CFUUIDRef uuid = CFUUIDCreate(NULL);
@@ -292,7 +305,8 @@
 		NSLog(@"cannot stage the picked image");
 		return;
 	}
-	[[TGSendStore shared] sendPhotoAtPath:path viewOnce:viewOnce toChat:self.chatId];
+	[[TGSendStore shared] sendPhotoAtPath:path viewOnce:viewOnce seconds:seconds
+								   toChat:self.chatId];
 }
 
 /// Several pictures as one message. Each is staged on disk the way a single
@@ -986,6 +1000,135 @@
 	[self.navigationController pushViewController:reader animated:YES];
 }
 
+
+
+#pragma mark - files and music
+
+/// A file from the system picker. iOS 8 is the first OS with one; on iOS 6/7
+/// the sheet says so instead of pretending a button works.
+- (void)pickDocument {
+	Class pickerClass = NSClassFromString(@"UIDocumentPickerViewController");
+	if (!pickerClass){
+		[TGAlertSheet showMessage:TGLocalized(@"Sending files needs iOS 8 or later.")
+							title:TGLocalized(@"File") inView:self.view];
+		return;
+	}
+	id picker = [[pickerClass alloc] initWithDocumentTypes:@[(NSString *)kUTTypeData]
+													 inMode:1 /* UIDocumentPickerModeImport */];
+	[picker setDelegate:(id<UIDocumentPickerDelegate>)self];
+	[self presentViewController:picker animated:YES completion:nil];
+}
+
+/// Music comes from the iPod library, which iOS 6 already had. The item is
+/// exported to a temporary .m4a because TDLib sends a local file, not a
+/// library URL.
+- (void)pickAudio {
+	MPMediaPickerController *picker = [[MPMediaPickerController alloc]
+			initWithMediaTypes:MPMediaTypeMusic];
+	picker.delegate = self;
+	picker.allowsPickingMultipleItems = NO;
+	picker.prompt = TGLocalized(@"Choose a track");
+	[self presentViewController:picker animated:YES completion:nil];
+}
+
+- (NSString *)attachmentCaption {
+	return [self.input.text stringByTrimmingCharactersInSet:
+			[NSCharacterSet whitespaceAndNewlineCharacterSet]] ?: @"";
+}
+
+- (void)clearComposerAfterAttachment {
+	self.input.text = @"";
+	self.composerText = [[TGComposerText alloc] initWithText:@"" entities:@[]];
+	[self clearComposeState];
+	[[TGMessageStore shared] setDraft:@"" inChat:self.chatId thread:self.threadId replyTo:0];
+	[[TGMessageStore shared] cancelTypingInChat:self.chatId thread:self.threadId];
+}
+
+- (void)sendPickedDocumentAtPath:(NSString *)path {
+	if (!path.length)
+		return;
+	NSString *caption = [self attachmentCaption];
+	[[TGSendStore shared] sendDocumentAtPath:path caption:caption
+									  toChat:self.chatId thread:self.threadId];
+	if (caption.length)
+		[self clearComposerAfterAttachment];
+}
+
+- (void)sendPickedAudioAtPath:(NSString *)path title:(NSString *)title
+					performer:(NSString *)performer duration:(NSInteger)seconds {
+	if (!path.length)
+		return;
+	NSString *caption = [self attachmentCaption];
+	[[TGSendStore shared] sendAudioAtPath:path title:title performer:performer
+								 duration:seconds caption:caption
+								   toChat:self.chatId thread:self.threadId];
+	if (caption.length)
+		[self clearComposerAfterAttachment];
+}
+
+- (void)documentPicker:(UIDocumentPickerViewController *)controller
+	didPickDocumentAtURL:(NSURL *)url {
+	[self dismissViewControllerAnimated:YES completion:^{
+		[self sendPickedDocumentAtPath:url.path];
+	}];
+}
+
+- (void)documentPicker:(UIDocumentPickerViewController *)controller
+	didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
+	[self dismissViewControllerAnimated:YES completion:^{
+		NSURL *url = urls.firstObject;
+		if (url)
+			[self sendPickedDocumentAtPath:url.path];
+	}];
+}
+
+- (void)documentPickerWasCancelled:(UIDocumentPickerViewController *)controller {
+	[self dismissViewControllerAnimated:YES completion:nil];
+}
+
+- (void)mediaPicker:(MPMediaPickerController *)mediaPicker
+ didPickMediaItems:(MPMediaItemCollection *)mediaItemCollection {
+	MPMediaItem *item = mediaItemCollection.items.firstObject;
+	[self dismissViewControllerAnimated:YES completion:^{
+		if (!item)
+			return;
+		NSURL *assetURL = [item valueForProperty:MPMediaItemPropertyAssetURL];
+		if (!assetURL){
+			[TGAlertSheet showMessage:TGLocalized(@"This track cannot be sent.")
+								title:TGLocalized(@"Music") inView:self.view];
+			return;
+		}
+		NSString *out = [NSTemporaryDirectory() stringByAppendingPathComponent:
+				[NSString stringWithFormat:@"tg-audio-%.0f.m4a",
+						[[NSDate date] timeIntervalSince1970] * 1000.0]];
+		AVURLAsset *asset = [AVURLAsset URLAssetWithURL:assetURL options:nil];
+		AVAssetExportSession *export = [[AVAssetExportSession alloc]
+				initWithAsset:asset presetName:AVAssetExportPresetAppleM4A];
+		export.outputURL = [NSURL fileURLWithPath:out];
+		export.outputFileType = AVFileTypeAppleM4A;
+		__weak typeof(self) weakSelf = self;
+		[export exportAsynchronouslyWithCompletionHandler:^{
+			dispatch_async(dispatch_get_main_queue(), ^{
+				TGChatViewController *me = weakSelf;
+				if (!me)
+					return;
+				if (export.status != AVAssetExportSessionStatusCompleted){
+					[TGAlertSheet showMessage:TGLocalized(@"This track cannot be sent.")
+										title:TGLocalized(@"Music") inView:me.view];
+					return;
+				}
+				NSString *title = [item valueForProperty:MPMediaItemPropertyTitle] ?: @"";
+				NSString *artist = [item valueForProperty:MPMediaItemPropertyArtist] ?: @"";
+				[me sendPickedAudioAtPath:out title:title performer:artist
+								 duration:(NSInteger)round(item.playbackDuration)];
+			});
+		}];
+	}];
+}
+
+- (void)mediaPickerDidCancel:(MPMediaPickerController *)mediaPicker {
+	[self dismissViewControllerAnimated:YES completion:nil];
+}
 
 
 @end

@@ -1,7 +1,7 @@
 #import "TGMediaViewer.h"
 #import "TGMediaPlayerView.h"
 #import "TGMediaStore.h"
-#import "TGClient.h"
+#import "TGMediaStore.h"
 #import "TGDevice.h"
 #import "TGSoftVideoPlayer.h"
 #import "TGStickerStore.h"
@@ -125,7 +125,7 @@ static BOOL TGViewerItemLocked(NSDictionary *item) {
 			return;
 		}
 		if ([what isEqualToString:@"Downloads"]){
-			[[TGClient shared] addFileToDownloads:fileId.integerValue
+			[[TGMediaStore shared] addFileToDownloads:fileId.integerValue
 											inChat:me.chatId
 										   message:[m[@"id"] longLongValue]];
 			[TGSnackbar showInView:host text:@"Saved to Files." seconds:2 onCommit:nil];

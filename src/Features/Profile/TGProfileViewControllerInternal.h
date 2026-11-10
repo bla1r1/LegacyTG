@@ -2,7 +2,7 @@
 #define TGPROFILEVIEWCONTROLLERINTERNAL_H
 
 #import "TGProfileViewController.h"
-#import "TGClient.h"
+#import "TGProfileStore.h"
 #import "TGTheme.h"
 #import "TGIcons.h"
 #import "TGCallViewController.h"

@@ -12,7 +12,7 @@
 /// The one string a profile tab is called by in a row, and the TDLib object
 /// behind it. TDLib sends main_profile_tab as an object; the screens deal in
 /// words so a choice list has something to show.
-static NSString *TGProfileTabName(NSDictionary *tab) {
+NSString *TGProfileTabName(NSDictionary *tab) {
 	if (![tab isKindOfClass:NSDictionary.class])
 		return @"posts";
 	NSString *type = tab[@"@type"];
@@ -25,7 +25,7 @@ static NSString *TGProfileTabName(NSDictionary *tab) {
 	return [first stringByAppendingString:[suffix substringFromIndex:1]];
 }
 
-static NSDictionary *TGProfileTabObject(NSString *name) {
+NSDictionary *TGProfileTabObject(NSString *name) {
 	static NSArray *known = nil;
 	if (!known)
 		known = @[@"posts", @"media", @"files", @"links", @"music", @"voice", @"gifs"];

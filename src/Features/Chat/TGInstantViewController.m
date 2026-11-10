@@ -407,7 +407,8 @@ static void TGInstantAppendBlocks(NSMutableAttributedString *out,
 	UITextView *reader = [[UITextView alloc] initWithFrame:self.view.bounds];
 	reader.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
 	reader.editable = NO;
-	reader.selectable = YES;
+	if ([reader respondsToSelector:@selector(setSelectable:)])
+		reader.selectable = YES;
 	reader.delegate = self;
 	reader.backgroundColor = [theme listBackgroundColour];
 	reader.textColor = [theme primaryTextColour];

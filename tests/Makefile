@@ -220,6 +220,12 @@ CLIENT_OBJC_SRCS := \
     src/Core/Stores/TGImageLruCache.mm \
     src/Core/Stores/TGPeerStore.m \
     src/Core/Stores/TGChatListStore.m \
+    src/Core/Stores/TGMediaStore.m \
+    src/Core/Stores/TGProfileStore.m \
+    src/Core/Stores/TGProfileStore+Profile.m \
+    src/Core/Stores/TGProfileStore+EmojiStatus.m \
+    src/Core/Stores/TGProfileStore+ProfileAudio.m \
+    src/Core/Stores/TGProfileStore+AccountProfileMedia.m \
     src/Core/Stores/TGSearchStore.m \
     src/Core/Stores/TGStickerBudget.m \
     src/Core/Platform/TGPerf.m \
@@ -339,6 +345,7 @@ CLIENT_TEST_SRCS := \
     $(TESTS)/TGChatListRowsTests.m \
     $(TESTS)/TGChatListStoreTests.m \
     $(TESTS)/TGSearchStoreTests.m \
+    $(TESTS)/TGProfileStoreTests.m \
     $(TESTS)/TGUpdateStoreTests.m \
     $(TESTS)/TGSendStoreTests.m \
     $(TESTS)/TGMessageStoreTests.m \

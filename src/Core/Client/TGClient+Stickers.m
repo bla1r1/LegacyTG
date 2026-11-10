@@ -439,7 +439,7 @@ static NSDictionary *TGStickerType(NSString *name) {
 /// One TDLib sticker with the two ids the flat pack drops: the custom emoji
 /// it stands for and the set it belongs to. Used only by the custom emoji
 /// screens, where those ids are the whole point.
-static NSArray *TGCustomEmojiStickerList(NSArray *stickers) {
+NSArray *TGCustomEmojiStickerList(NSArray *stickers) {
 	NSMutableArray *out = [NSMutableArray array];
 	for (NSDictionary *sticker in stickers){
 		if (![sticker isKindOfClass:NSDictionary.class])

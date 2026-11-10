@@ -566,8 +566,12 @@ static TGChatRowAccessories TGChatRowCellAccessories(NSDictionary *row,
 			}
 
 			id attachment = [[attachmentClass alloc] init];
-			[attachment setImage:picture];
-			[attachment setBounds:CGRectMake(0, roundf(font.descender), side, side)];
+			if ([attachment respondsToSelector:@selector(setImage:)])
+				[attachment setImage:picture];
+			// -setBounds: arrived in iOS 7; on iOS 6 the attachment keeps its
+			// own size instead of taking an unknown selector.
+			if ([attachment respondsToSelector:@selector(setBounds:)])
+				[attachment setBounds:CGRectMake(0, roundf(font.descender), side, side)];
 
 			NSAttributedString *glyph = [NSAttributedString attributedStringWithAttachment:attachment];
 			if (glyph) {

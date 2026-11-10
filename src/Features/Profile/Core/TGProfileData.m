@@ -1,6 +1,7 @@
 #import "TGProfileViewControllerInternal.h"
 #import "TGLocalization.h"
-#import "TGClientInternal.h"
+#import "TGProfileStore.h"
+#import "TGProfileSupport.h"
 #import "TGNameWithStatus.h"
 #import "TGCustomEmojiStore.h"
 #import "TGStyle.h"
@@ -212,7 +213,7 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 - (void)loadOwnRole {
 	if (self.userId || !self.chatId)
 		return;
-	int64_t meId = [[TGClient shared].me[@"id"] longLongValue];
+	int64_t meId = [[TGProfileStore shared].me[@"id"] longLongValue];
 	if (!meId)
 		return;
 	__weak typeof(self) weakSelf = self;
@@ -220,7 +221,7 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 	// word, and a basic group's invite right lives on the chat rather than
 	// on a member record. Read it before the member so both answers land in
 	// the same order whichever request finishes first.
-	[[TGClient shared] chatRecordForChat:self.chatId completion:^(NSDictionary *chat){
+	[[TGProfileStore shared] chatRecordForChat:self.chatId completion:^(NSDictionary *chat){
 		TGProfileViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -240,7 +241,7 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 				me.details.count))
 			[me loadDetails];
 
-		[[TGClient shared] chatMember:meId inChat:me.chatId
+		[[TGProfileStore shared] chatMember:meId inChat:me.chatId
 							completion:^(NSDictionary *member){
 			TGProfileViewController *again = weakSelf;
 			if (!again)
@@ -303,14 +304,14 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 }
 
 - (void)loadDetails {
-	self.muted = [[TGClient shared] isChatMuted:self.chatId];
+	self.muted = [[TGProfileStore shared] isChatMuted:self.chatId];
 
 	if (!self.userId){
 		__weak typeof(self) weakSelf = self;
 		// A public group's link is its @name, not the invite link, and the
 		// name lives on the supergroup record only. Ask once per profile.
 		if (self.groupUsername == nil && self.chatId){
-			[[TGClient shared] supergroupSettingsForChat:self.chatId
+			[[TGProfileStore shared] supergroupSettingsForChat:self.chatId
 					completion:^(NSDictionary *settings){
 				TGProfileViewController *again = weakSelf;
 				if (!again)
@@ -329,12 +330,12 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 			}];
 		}
 		[self loadOwnRole];
-		[[TGClient shared] membersOfChat:self.chatId completion:^(NSArray *members){
+		[[TGProfileStore shared] membersOfChat:self.chatId completion:^(NSArray *members){
 			weakSelf.members = members;
 			[weakSelf reloadTableDebounced];
 		}];
 		// Group details: description, member count, invite link.
-		[[TGClient shared] chatProfile:self.chatId completion:^(NSDictionary *info){
+		[[TGProfileStore shared] chatProfile:self.chatId completion:^(NSDictionary *info){
 			TGProfileViewController *me = weakSelf;
 			if (!me)
 				return;
@@ -352,13 +353,13 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 			me.communitySubtitle = nil;
 			if (me.communityId != 0) {
 				NSDictionary *commRecord = nil;
-				for (NSDictionary *c in [TGClient shared].communities) {
+				for (NSDictionary *c in [TGProfileStore shared].communities) {
 					if ([c[@"id"] longLongValue] == me.communityId) {
 						commRecord = c;
 						break;
 					}
 				}
-				NSDictionary *fullComm = [[TGClient shared] cachedCommunityFullInfo:me.communityId];
+				NSDictionary *fullComm = [[TGProfileStore shared] cachedCommunityFullInfo:me.communityId];
 				NSString *commName = commRecord[@"name"];
 				if (!commName.length && [fullComm[@"name"] isKindOfClass:[NSString class]]) {
 					commName = fullComm[@"name"];
@@ -386,8 +387,8 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 
 			if (me.communityId != 0) {
 				[me loadCommunityPhotoOrAvatars];
-				if (![[TGClient shared] cachedCommunityFullInfo:me.communityId]) {
-					[[TGClient shared] communityFullInfo:me.communityId completion:^(NSDictionary *cinfo, NSString *err){
+				if (![[TGProfileStore shared] cachedCommunityFullInfo:me.communityId]) {
+					[[TGProfileStore shared] communityFullInfo:me.communityId completion:^(NSDictionary *cinfo, NSString *err){
 						TGProfileViewController *again = weakSelf;
 						if (!again) return;
 						[again reloadCommunityRow];
@@ -397,7 +398,7 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 
 			// Similar channels are the last media pane, not an info row.
 			if (me.isChannel){
-				[[TGClient shared] similarChatsForChat:me.chatId completion:^(NSArray *chats, NSInteger total){
+				[[TGProfileStore shared] similarChatsForChat:me.chatId completion:^(NSArray *chats, NSInteger total){
 					TGProfileViewController *again = weakSelf;
 					if (!again || !chats.count)
 						return;
@@ -416,7 +417,7 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 	}
 
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] userInfo:self.userId completion:^(NSDictionary *user){
+	[[TGProfileStore shared] userInfo:self.userId completion:^(NSDictionary *user){
 		if (!user) return;
 		NSString *updatedName = TGProfileUserName(user);
 		if (updatedName.length)
@@ -465,7 +466,7 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 		// this screen never asked for - so "about" was missing from a profile
 		// that has one. The same call carries the block flag, so isUserBlocked
 		// would send getUserFullInfo a second time.
-		[[TGClient shared] userProfile:weakSelf.userId completion:^(NSDictionary *info){
+		[[TGProfileStore shared] userProfile:weakSelf.userId completion:^(NSDictionary *info){
 			weakSelf.blocked = [info[@"isBlocked"] boolValue];
 			weakSelf.canCall = [info[@"canCall"] boolValue];
 			weakSelf.canVideoCall = [info[@"canVideoCall"] boolValue];
@@ -506,7 +507,7 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 		NSNumber *photoId = user[@"profile_photo"][@"small"][@"id"];
 		if (photoId && ![photoId isEqual:weakSelf.avatarFileId]){
 			weakSelf.avatarFileId = photoId;
-			[[TGClient shared] downloadFile:photoId.integerValue
+			[[TGProfileStore shared] downloadFile:photoId.integerValue
 								   priority:TGDownloadPriorityAvatar
 								 completion:^(NSString *path){
 				[weakSelf applyAvatarImageAtPath:path];

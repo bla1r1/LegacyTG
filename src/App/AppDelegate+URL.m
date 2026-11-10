@@ -28,6 +28,7 @@ static const CGFloat kIconDumpSide = 52.0f;
 #import "TGStoryCameraViewController.h"
 #import "TGStoryComposerViewController.h"
 #import "TGPlayerView.h"
+#import "TGMusicStreamer.h"
 #import "TGVideoNoteViewController.h"
 #import "TGIcons.h"
 #import "TGDevBench.h"
@@ -610,6 +611,59 @@ static NSUInteger TGChatsIndex(UITabBarController *tabs) {
 			[TGCallViewController presentForUserId:userId
 											  name:[[TGClient shared] nameForUserId:userId]
 										  outgoing:YES];
+		});
+		return YES;
+	}
+
+	// itglegacy://sendsheet and itglegacy://schedulesheet open the composer's
+	// long-press menu and the schedule picker. A long press is a gesture, not
+	// a control action, so touch/ and hold/ cannot reach it from a script.
+	if ([host isEqualToString:@"sendsheet"] || [host isEqualToString:@"schedulesheet"]){
+		BOOL schedule = [host isEqualToString:@"schedulesheet"];
+		dispatch_async(dispatch_get_main_queue(), ^{
+			UITabBarController *tabs = [self activeTabBarController];
+			UINavigationController *nc = [tabs isKindOfClass:UITabBarController.class]
+					? tabs.viewControllers[tabs.selectedIndex] : nil;
+			if (![nc.topViewController isKindOfClass:[TGChatViewController class]]){
+				NSLog(@"%@: no chat is open", schedule ? @"schedulesheet" : @"sendsheet");
+				return;
+			}
+			TGChatViewController *chat = (TGChatViewController *)nc.topViewController;
+			if (schedule)
+				[chat holdScheduledSheet];
+			else
+				[chat showSendOptionsSheet];
+		});
+		return YES;
+	}
+
+	// itglegacy://streamfile/<path> - feed a real audio file to the streaming
+	// player in two halves, so the AudioFileStream/AudioQueue path can be
+	// checked on the device without a chat that happens to hold a track.
+	if ([host isEqualToString:@"streamfile"]){
+		NSString *path = url.path;
+		if ([path hasPrefix:@"/streamfile/"])
+			path = [path substringFromIndex:12];
+		path = [path stringByReplacingPercentEscapesUsingEncoding:NSUTF8StringEncoding];
+		dispatch_async(dispatch_get_main_queue(), ^{
+			NSDictionary *attrs = [[NSFileManager defaultManager]
+					attributesOfItemAtPath:path error:nil];
+			long long size = [attrs[NSFileSize] longLongValue];
+			if (!path.length || size <= 0){
+				NSLog(@"streamfile: no file at %@", path);
+				return;
+			}
+			static TGMusicStreamer *probe = nil;
+			probe = [[TGMusicStreamer alloc] initWithDelegate:nil];
+			[probe feedFileAtPath:path downloadedSize:size
+					 expectedSize:size complete:YES];
+			[probe play];
+			NSLog(@"streamfile: %@ (%lld bytes)", path, size);
+			dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.0 * NSEC_PER_SEC)),
+					dispatch_get_main_queue(), ^{
+				NSLog(@"streamfile: position %.1f playing %d ready %d",
+						probe.position, probe.playing, probe.ready);
+			});
 		});
 		return YES;
 	}

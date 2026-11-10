@@ -25,7 +25,7 @@ static NSDictionary *TGChatRowForId(TGClient *client, NSNumber *chatId) {
 }
 
 /// A list of chat ids as rows, dropping the ids that are not numbers.
-static NSArray *TGChatRowsForIds(TGClient *client, NSArray *ids) {
+NSArray *TGChatRowsForIds(TGClient *client, NSArray *ids) {
 	NSMutableArray *rows = [NSMutableArray array];
 	for (NSNumber *chatId in ids ?: @[]){
 		NSDictionary *row = TGChatRowForId(client, chatId);

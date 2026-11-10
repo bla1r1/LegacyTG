@@ -3,7 +3,7 @@
 //
 #import "TGStickerEditorViewController.h"
 #import "TGAlertSheet.h"
-#import "TGClient.h"
+#import "TGStickerStore.h"
 #import "TGStickerGalleryViewController.h"
 #import "TGStyle.h"
 #import "TGTheme.h"
@@ -41,7 +41,7 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 		// The id alone does not carry the short name the write requests
 		// change a pack by, so it is read once and shown on the info row.
 		if (!self.setName.length && self.setId)
-			[[TGClient shared] stickerSetNameForId:self.setId
+			[[TGStickerStore shared] stickerSetNameForId:self.setId
 					completion:^(NSString *name){
 				self.loadedName = name ?: @"";
 				self.setName = self.loadedName;
@@ -74,7 +74,7 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 		return;
 	}
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] stickersInSet:@(self.setId) completion:^(NSArray *stickers){
+	[[TGStickerStore shared] stickersInSet:@(self.setId) completion:^(NSArray *stickers){
 		TGStickerEditorViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -194,7 +194,7 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 					   text:self.setName action:TGLocalized(@"Check")
 					 inView:self.view onSubmit:^(NSString *text){
 		TGStickerEditorViewController *me = weakSelf;
-		[[TGClient shared] checkStickerSetName:text completion:^(NSString *status,
+		[[TGStickerStore shared] checkStickerSetName:text completion:^(NSString *status,
 															   NSString *message){
 			TGStickerEditorViewController *panel = weakSelf;
 			if (!panel)
@@ -225,7 +225,7 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 /// A name that is taken or malformed is not a dead end: Telegram names the
 /// one it would use for this title, and one tap adopts it.
 - (void)offerSuggestionForTitle:(NSString *)title typed:(NSString *)typed reason:(NSString *)reason {
-	[[TGClient shared] suggestStickerSetNameForTitle:title ?: typed
+	[[TGStickerStore shared] suggestStickerSetNameForTitle:title ?: typed
 			completion:^(NSString *suggestion){
 		TGStickerEditorViewController *me = self;
 		if (!suggestion.length || [suggestion isEqualToString:typed]){
@@ -265,7 +265,7 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 	[self rebuildSections];
 
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] checkStickerSetName:self.setName completion:^(NSString *status,
+	[[TGStickerStore shared] checkStickerSetName:self.setName completion:^(NSString *status,
 																   NSString *message){
 		TGStickerEditorViewController *me = weakSelf;
 		if (!me)
@@ -290,18 +290,18 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 				stringByAppendingPathComponent:@"dev_sticker.tgs"];
 
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] uploadStickerAtPath:path format:@"tgs" completion:^(NSInteger fileId){
+	[[TGStickerStore shared] uploadStickerAtPath:path format:@"tgs" completion:^(NSInteger fileId){
 		TGStickerEditorViewController *me = weakSelf;
 		if (!me)
 			return;
 		NSArray *stickers = @[];
 		if (fileId > 0){
-			NSDictionary *sticker = [[TGClient shared]
+			NSDictionary *sticker = [[TGStickerStore shared]
 					newStickerWithFileId:fileId format:@"tgs" emojis:@"\U0001F600"
 								keywords:@[@"sample"] maskPosition:nil];
 			stickers = @[sticker];
 		}
-		[[TGClient shared] createStickerSetNamed:me.setName title:me.setTitle
+		[[TGStickerStore shared] createStickerSetNamed:me.setName title:me.setTitle
 				stickerType:me.stickerType stickers:stickers
 				completion:^(NSDictionary *set){
 			TGStickerEditorViewController *panel = weakSelf;
@@ -340,7 +340,7 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 		TGStickerEditorViewController *me = weakSelf;
 		if (!me)
 			return;
-		[[TGClient shared] setStickerSetNamed:me.setName title:text
+		[[TGStickerStore shared] setStickerSetNamed:me.setName title:text
 				completion:^(BOOL ok){
 			TGStickerEditorViewController *panel = weakSelf;
 			if (!panel)
@@ -381,17 +381,17 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 		path = [[NSBundle mainBundle].bundlePath
 				stringByAppendingPathComponent:@"dev_video_sticker.webm"];
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] uploadStickerAtPath:path format:@"webm" completion:^(NSInteger fileId){
+	[[TGStickerStore shared] uploadStickerAtPath:path format:@"webm" completion:^(NSInteger fileId){
 		TGStickerEditorViewController *me = weakSelf;
 		if (!me || fileId <= 0){
 			[TGAlertSheet showMessage:TGLocalized(@"An error occurred.")
 								  title:TGLocalized(@"Add Sticker") inView:me.view];
 			return;
 		}
-		NSDictionary *sticker = [[TGClient shared]
+		NSDictionary *sticker = [[TGStickerStore shared]
 				newStickerWithFileId:fileId format:@"webm" emojis:@"\U0001F44D"
 							keywords:@[@"sample"] maskPosition:nil];
-		[[TGClient shared] addStickerToSetNamed:me.setName sticker:sticker
+		[[TGStickerStore shared] addStickerToSetNamed:me.setName sticker:sticker
 				completion:^(BOOL ok){
 			TGStickerEditorViewController *panel = weakSelf;
 			if (!panel)
@@ -462,12 +462,12 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 
 - (void)showEmojiTagsForFileId:(NSInteger)fileId {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] stickerEmojisForFileId:fileId completion:^(NSArray *own){
+	[[TGStickerStore shared] stickerEmojisForFileId:fileId completion:^(NSArray *own){
 		TGStickerEditorViewController *me = weakSelf;
 		if (!me)
 			return;
 		NSString *query = own.count ? own.firstObject : @"";
-		[[TGClient shared] allStickerEmojisForQuery:query chatId:0
+		[[TGStickerStore shared] allStickerEmojisForQuery:query chatId:0
 				stickerType:@"regular" mainOnly:NO completion:^(NSArray *all){
 			TGStickerEditorViewController *panel = weakSelf;
 			if (!panel)
@@ -493,7 +493,7 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 					 action:TGLocalized(@"Save")
 					 inView:self.view onSubmit:^(NSString *text){
 		TGStickerEditorViewController *me = weakSelf;
-		[[TGClient shared] setStickerFileId:fileId emojis:text completion:^(BOOL ok){
+		[[TGStickerStore shared] setStickerFileId:fileId emojis:text completion:^(BOOL ok){
 			[me reportSaved:ok title:TGLocalized(@"Emoji")];
 		}];
 	}];
@@ -514,7 +514,7 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 			if (trimmed.length)
 				[words addObject:trimmed];
 		}
-		[[TGClient shared] setStickerFileId:fileId keywords:words completion:^(BOOL ok){
+		[[TGStickerStore shared] setStickerFileId:fileId keywords:words completion:^(BOOL ok){
 			[me reportSaved:ok title:TGLocalized(@"Edit")];
 		}];
 	}];
@@ -536,7 +536,7 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 			@"y_shift" : @0,
 			@"scale" : @1,
 		};
-		[[TGClient shared] setStickerFileId:fileId maskPosition:mask
+		[[TGStickerStore shared] setStickerFileId:fileId maskPosition:mask
 				completion:^(BOOL ok){
 			[me reportSaved:ok title:TGLocalized(@"Masks")];
 		}];
@@ -547,7 +547,7 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 /// null, and this row is the only way to ask for it.
 - (void)removeMaskPositionForFileId:(NSInteger)fileId {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] setStickerFileId:fileId maskPosition:nil
+	[[TGStickerStore shared] setStickerFileId:fileId maskPosition:nil
 			completion:^(BOOL ok){
 		TGStickerEditorViewController *me = weakSelf;
 		[me reportSaved:ok title:TGLocalized(@"Masks")];
@@ -558,7 +558,7 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 	if (position < 0 || position >= (NSInteger)self.stickers.count)
 		return;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] setStickerFileId:fileId positionInSet:position
+	[[TGStickerStore shared] setStickerFileId:fileId positionInSet:position
 			completion:^(BOOL ok){
 		TGStickerEditorViewController *me = weakSelf;
 		if (!ok)
@@ -575,7 +575,7 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 					   action:TGLocalized(@"Remove") destructive:YES
 					   inView:self.view onConfirm:^{
 		TGStickerEditorViewController *me = weakSelf;
-		[[TGClient shared] removeStickerFileId:fileId completion:^(BOOL ok){
+		[[TGStickerStore shared] removeStickerFileId:fileId completion:^(BOOL ok){
 			TGStickerEditorViewController *panel = weakSelf;
 			if (!ok)
 				[TGAlertSheet showMessage:TGLocalized(@"An error occurred.")
@@ -648,7 +648,7 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 		return;
 	}
 
-	[[TGClient shared] uploadStickerAtPath:path format:@"webp" completion:^(NSInteger fileId){
+	[[TGStickerStore shared] uploadStickerAtPath:path format:@"webp" completion:^(NSInteger fileId){
 		TGStickerEditorViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -657,11 +657,11 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 								  title:TGLocalized(@"Add Sticker") inView:me.view];
 			return;
 		}
-		NSDictionary *sticker = [[TGClient shared]
+		NSDictionary *sticker = [[TGStickerStore shared]
 				newStickerWithFileId:fileId format:@"webp" emojis:@"\U0001F642"
 							keywords:@[] maskPosition:nil];
 		if (what == TGStickerPickReplace){
-			[[TGClient shared] replaceStickerInSetNamed:me.setName
+			[[TGStickerStore shared] replaceStickerInSetNamed:me.setName
 					oldFileId:me.replacingFileId newSticker:sticker
 					completion:^(BOOL ok){
 				TGStickerEditorViewController *panel = weakSelf;
@@ -673,7 +673,7 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 			}];
 			return;
 		}
-		[[TGClient shared] addStickerToSetNamed:me.setName sticker:sticker
+		[[TGStickerStore shared] addStickerToSetNamed:me.setName sticker:sticker
 				completion:^(BOOL ok){
 			TGStickerEditorViewController *panel = weakSelf;
 			if (!ok)
@@ -693,7 +693,7 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 		[weakSelf chooseCustomEmojiThumbnail];
 		return;
 	}
-	[[TGClient shared] setStickerSetNamed:self.setName thumbnailAtPath:path
+	[[TGStickerStore shared] setStickerSetNamed:self.setName thumbnailAtPath:path
 			format:@"webp" completion:^(BOOL ok){
 		TGStickerEditorViewController *me = weakSelf;
 		[TGAlertSheet showMessage:(ok ? TGLocalized(@"Saved")
@@ -706,7 +706,7 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 /// default profile shelf is a concrete list to choose from.
 - (void)chooseCustomEmojiThumbnail {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] defaultProfilePhotoCustomEmojiStickersWithCompletion:
+	[[TGStickerStore shared] defaultProfilePhotoCustomEmojiStickersWithCompletion:
 			^(NSArray *stickers){
 		TGStickerEditorViewController *me = weakSelf;
 		if (!me)
@@ -729,7 +729,7 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 		[TGAlertSheet showChoices:titles title:TGLocalized(@"Sticker")
 				 destructiveIndex:-1 inView:me.view onChoice:^(NSInteger index){
 			int64_t emojiId = [ids[(NSUInteger)index] longLongValue];
-			[[TGClient shared] setCustomEmojiStickerSetNamed:me.setName
+			[[TGStickerStore shared] setCustomEmojiStickerSetNamed:me.setName
 					thumbnailCustomEmojiId:emojiId completion:^(BOOL ok){
 				[TGAlertSheet showMessage:(ok ? TGLocalized(@"Saved")
 											  : TGLocalized(@"An error occurred."))
@@ -753,7 +753,7 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 					   action:TGLocalized(@"Delete") destructive:YES
 					   inView:self.view onConfirm:^{
 		TGStickerEditorViewController *me = weakSelf;
-		[[TGClient shared] deleteStickerSetNamed:me.setName completion:^(BOOL ok){
+		[[TGStickerStore shared] deleteStickerSetNamed:me.setName completion:^(BOOL ok){
 			TGStickerEditorViewController *panel = weakSelf;
 			if (!ok){
 				[TGAlertSheet showMessage:TGLocalized(@"An error occurred.")

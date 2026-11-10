@@ -5,7 +5,7 @@
 #import "TGLocalization.h"
 #import "TGStickerPacksViewController.h"
 #import "TGAlertSheet.h"
-#import "TGClient.h"
+#import "TGStickerStore.h"
 #import "TGStickerEditorViewController.h"
 #import "TGStickerGalleryViewController.h"
 #import "TGStyle.h"
@@ -45,7 +45,7 @@
 
 - (void)reloadOwnedPacks {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] ownedStickerSetsWithCompletion:^(NSArray *sets){
+	[[TGStickerStore shared] ownedStickerSetsWithCompletion:^(NSArray *sets){
 		TGStickerPacksViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -59,7 +59,7 @@
 /// moment the rows are drawn rather than at app launch.
 - (void)reloadTrending {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] trendingStickerSetsWithCompletion:^(NSArray *sets){
+	[[TGStickerStore shared] trendingStickerSetsWithCompletion:^(NSArray *sets){
 		TGStickerPacksViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -68,7 +68,7 @@
 		for (NSDictionary *set in _trendingSets)
 			if (set[@"id"])
 				[ids addObject:set[@"id"]];
-		[[TGClient shared] viewTrendingStickerSets:ids];
+		[[TGStickerStore shared] viewTrendingStickerSets:ids];
 		[me rebuildSections];
 	}];
 }
@@ -77,7 +77,7 @@
 
 - (void)reloadArchived {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] archivedStickerSetsWithCompletion:^(NSArray *sets){
+	[[TGStickerStore shared] archivedStickerSetsWithCompletion:^(NSArray *sets){
 		TGStickerPacksViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -88,14 +88,14 @@
 
 - (void)reloadStickerShelves {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] recentStickersWithCompletion:^(NSArray *stickers){
+	[[TGStickerStore shared] recentStickersWithCompletion:^(NSArray *stickers){
 		TGStickerPacksViewController *me = weakSelf;
 		if (!me)
 			return;
 		_recentStickers = stickers ?: @[];
 		[me rebuildSections];
 	}];
-	[[TGClient shared] favoriteStickersWithCompletion:^(NSArray *stickers){
+	[[TGStickerStore shared] favoriteStickersWithCompletion:^(NSArray *stickers){
 		TGStickerPacksViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -219,7 +219,7 @@
 	for (NSDictionary *item in _ownedSets)
 		if (item[@"id"])
 			[ids addObject:item[@"id"]];
-	[[TGClient shared] reorderInstalledStickerSets:ids];
+	[[TGStickerStore shared] reorderInstalledStickerSets:ids];
 	[self rebuildSections];
 }
 
@@ -231,7 +231,7 @@
 			indexPath.row >= (NSInteger)_ownedSets.count)
 		return;
 	NSDictionary *set = _ownedSets[(NSUInteger)indexPath.row];
-	[[TGClient shared] setStickerSet:set[@"id"] installed:NO archived:YES];
+	[[TGStickerStore shared] setStickerSet:set[@"id"] installed:NO archived:YES];
 	[self reloadOwnedPacks];
 	[self reloadArchived];
 }
@@ -279,7 +279,7 @@
 				placeholder:@"animals" text:@"" action:@"Search"
 					 inView:self.view onSubmit:^(NSString *text){
 		TGStickerPacksViewController *me = weakSelf;
-		[[TGClient shared] searchStickerSetNamed:text ignoreCache:YES
+		[[TGStickerStore shared] searchStickerSetNamed:text ignoreCache:YES
 				completion:^(NSDictionary *set){
 			if (!set){
 				[TGAlertSheet showMessage:@"An error occurred."
@@ -287,7 +287,7 @@
 				return;
 			}
 			int64_t setId = [set[@"id"] longLongValue];
-			[[TGClient shared] stickerSetNameForId:setId completion:^(NSString *name){
+			[[TGStickerStore shared] stickerSetNameForId:setId completion:^(NSString *name){
 				TGStickerPacksViewController *panel = weakSelf;
 				if (!panel)
 					return;
@@ -320,7 +320,7 @@
 															 animated:YES];
 						return;
 					}
-					[[TGClient shared] setStickerSet:set[@"id"] installed:YES archived:NO];
+					[[TGStickerStore shared] setStickerSet:set[@"id"] installed:YES archived:NO];
 					[TGAlertSheet showMessage:@"Stickers Added"
 										  title:@"Stickers Added" inView:panel.view];
 				}];
@@ -335,7 +335,7 @@
 						title:@"Clear Recent Stickers" action:@"Clear" destructive:YES
 					   inView:self.view onConfirm:^{
 		TGStickerPacksViewController *me = weakSelf;
-		[[TGClient shared] clearRecentStickersAttached:NO];
+		[[TGStickerStore shared] clearRecentStickersAttached:NO];
 		[TGAlertSheet showMessage:@"No Results"
 							  title:@"Clear Recent Stickers" inView:me.view];
 	}];
@@ -352,14 +352,14 @@
 		TGStickerPacksViewController *me = weakSelf;
 		if (!me)
 			return;
-		[[TGClient shared] setStickerSet:set[@"id"] installed:NO archived:YES];
+		[[TGStickerStore shared] setStickerSet:set[@"id"] installed:NO archived:YES];
 		[me reloadOwnedPacks];
 		[me reloadArchived];
 	}];
 }
 
 - (void)restorePack:(NSDictionary *)set {
-	[[TGClient shared] setStickerSet:set[@"id"] installed:YES archived:NO];
+	[[TGStickerStore shared] setStickerSet:set[@"id"] installed:YES archived:NO];
 	[self reloadOwnedPacks];
 	[self reloadArchived];
 	[TGAlertSheet showMessage:TGLocalized(@"Stickers Added")
@@ -384,7 +384,7 @@
 		if (index != 0)
 			return;
 		TGStickerPacksViewController *me = weakSelf;
-		[[TGClient shared] setStickerSet:@(setId) installed:YES archived:NO];
+		[[TGStickerStore shared] setStickerSet:@(setId) installed:YES archived:NO];
 		[TGAlertSheet showMessage:@"Stickers Added"
 							  title:@"Stickers Added" inView:me.view];
 	}];
@@ -400,11 +400,11 @@
 				empty:@"No Results"];
 	};
 	if (kind == 0)
-		[[TGClient shared] defaultProfilePhotoCustomEmojiStickersWithCompletion:show];
+		[[TGStickerStore shared] defaultProfilePhotoCustomEmojiStickersWithCompletion:show];
 	else if (kind == 1)
-		[[TGClient shared] defaultChatPhotoCustomEmojiStickersWithCompletion:show];
+		[[TGStickerStore shared] defaultChatPhotoCustomEmojiStickersWithCompletion:show];
 	else
-		[[TGClient shared] defaultBackgroundCustomEmojiStickersWithCompletion:show];
+		[[TGStickerStore shared] defaultBackgroundCustomEmojiStickersWithCompletion:show];
 }
 
 - (void)askForCustomEmojiIds {
@@ -427,7 +427,7 @@
 								  title:@"Custom Emoji" inView:me.view];
 			return;
 		}
-		[[TGClient shared] customEmojiStickersForIds:ids completion:^(NSArray *stickers){
+		[[TGStickerStore shared] customEmojiStickersForIds:ids completion:^(NSArray *stickers){
 			TGStickerPacksViewController *panel = weakSelf;
 			if (!panel)
 				return;
@@ -439,7 +439,7 @@
 
 - (void)loadGreetingStickers {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] greetingStickersWithCompletion:^(NSArray *stickers){
+	[[TGStickerStore shared] greetingStickersWithCompletion:^(NSArray *stickers){
 		TGStickerPacksViewController *me = weakSelf;
 		if (!me)
 			return;

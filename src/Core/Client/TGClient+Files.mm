@@ -1,4 +1,5 @@
 #import "TGClientInternal.h"
+#import "TGMediaSupport.h"
 #import "TGBase64.h"
 
 #include <mutex>
@@ -432,7 +433,7 @@ std::unordered_map<int32_t, int32_t> gPriorities;
 /// A text answer from getFileMimeType, getFileExtension, cleanFileName and
 /// getSuggestedFileName. Errors are an empty string: the File Info screen
 /// still has rows to draw, and a missing MIME is not a failure of the file.
-static NSString *TGFileTextAnswer(NSDictionary *result) {
+NSString *TGFileTextAnswer(NSDictionary *result) {
 	if (![result isKindOfClass:NSDictionary.class])
 		return @"";
 	if ([result[@"@type"] isEqualToString:@"error"])
@@ -440,7 +441,7 @@ static NSString *TGFileTextAnswer(NSDictionary *result) {
 	return [result[@"text"] isKindOfClass:NSString.class] ? result[@"text"] : @"";
 }
 
-static NSDictionary *TGFlattenFileRecord(NSDictionary *file) {
+NSDictionary *TGFlattenFileRecord(NSDictionary *file) {
 	NSDictionary *local = file[@"local"];
 	NSDictionary *remote = file[@"remote"];
 	if (![local isKindOfClass:NSDictionary.class]) local = @{};

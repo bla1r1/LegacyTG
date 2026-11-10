@@ -61,6 +61,11 @@
 				   thread:(int64_t)threadId replyTo:(int64_t)replyToId
 		  schedulingState:(NSDictionary *)schedulingState
 			   completion:(void (^)(NSDictionary *message))completion;
+- (void)sendFormattedText:(NSDictionary *)formattedText toChat:(int64_t)chatId
+				   thread:(int64_t)threadId replyTo:(int64_t)replyToId
+		  schedulingState:(NSDictionary *)schedulingState
+				  options:(NSDictionary *)options
+			   completion:(void (^)(NSDictionary *message))completion;
 
 /// editMessageText with this formattedText as is.
 - (void)editMessage:(int64_t)messageId inChat:(int64_t)chatId formattedText:(NSDictionary *)formattedText;
@@ -76,7 +81,15 @@
 /// TDLib, so the request without one is the send-now call in the header.
 + (NSDictionary *)scheduledAtDate:(NSTimeInterval)date;
 
++ (NSDictionary *)scheduledAtDate:(NSTimeInterval)date repeatPeriod:(NSInteger)seconds;
+
 + (NSDictionary *)scheduledWhenOnline;
+
+/// A complete messageSendOptions record: every field TDLib asks for, with
+/// the scheduling state where the schema expects it. `schedulingState` may
+/// be nil, which sends now; `silent` turns off notifications.
++ (NSDictionary *)messageSendOptionsSilent:(BOOL)silent
+						   schedulingState:(NSDictionary *)schedulingState;
 
 /// The reply send with one of those states attached.
 - (void)sendText:(NSString *)text toChat:(int64_t)chatId
@@ -87,6 +100,11 @@
 - (void)sendText:(NSString *)text toChat:(int64_t)chatId
           thread:(int64_t)threadId replyTo:(int64_t)replyToId
         scheduled:(NSDictionary *)schedulingState
+      completion:(void (^)(NSDictionary *message))completion;
+- (void)sendText:(NSString *)text toChat:(int64_t)chatId
+          thread:(int64_t)threadId replyTo:(int64_t)replyToId
+        scheduled:(NSDictionary *)schedulingState
+          options:(NSDictionary *)options
       completion:(void (^)(NSDictionary *message))completion;
 
 /// What a chat has waiting. Flattened like the history is.

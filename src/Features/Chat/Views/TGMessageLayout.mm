@@ -611,7 +611,10 @@ NSAttributedString *TGAttributedMessageTextRevealing(NSString *text, NSArray *en
 			NSTextAttachment *attachment = [[attachmentClass alloc] init];
 			attachment.image = picture ?: TGEmptyPicture();
 			// Sat on the baseline like a glyph, its bottom at the descender.
-			attachment.bounds = CGRectMake(0, baseFont.descender, side, side);
+			// -setBounds: is iOS 7 and later; before that the attachment keeps
+			// its own size, and asking for bounds here is an unknown selector.
+			if ([attachment respondsToSelector:@selector(setBounds:)])
+				attachment.bounds = CGRectMake(0, baseFont.descender, side, side);
 			NSMutableAttributedString *glyph = [[NSAttributedString attributedStringWithAttachment:attachment] mutableCopy];
 			[glyph addAttribute:@"TGCustomEmojiId" value:@(emojiId) range:NSMakeRange(0, glyph.length)];
 			[str replaceCharactersInRange:range withAttributedString:glyph];
@@ -628,7 +631,13 @@ NSArray *TGCustomEmojiRectsInText(NSAttributedString *text, CGFloat width) {
 	Class lmClass = NSClassFromString(@"NSLayoutManager");
 	Class tcClass = NSClassFromString(@"NSTextContainer");
 	Class tsClass = NSClassFromString(@"NSTextStorage");
-	if (!lmClass || !tcClass || !tsClass)
+	// The whole layout stack is iOS 7 and later. iOS 6 has private classes
+	// with these names but without -initWithSize:, so ask about the methods
+	// themselves rather than trusting the class lookup.
+	if (!lmClass || !tcClass || !tsClass ||
+		![tcClass instancesRespondToSelector:@selector(initWithSize:)] ||
+		![lmClass instancesRespondToSelector:@selector(addTextContainer:)] ||
+		![tsClass instancesRespondToSelector:@selector(addLayoutManager:)])
 		return @[];
 
 	NSTextStorage *storage = [[tsClass alloc] initWithAttributedString:text];

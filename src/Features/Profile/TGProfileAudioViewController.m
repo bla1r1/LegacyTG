@@ -1,6 +1,6 @@
 #import "TGProfileAudioViewController.h"
 #import "TGAlertSheet.h"
-#import "TGClient.h"
+#import "TGProfileStore.h"
 #import "TGMediaStore.h"
 #import "TGMusicPlayer.h"
 #import "TGTheme.h"
@@ -54,7 +54,7 @@ static UIImage *TGProfileAudioArtwork(UIImage *cover, BOOL playing) {
 @implementation TGProfileAudioViewController
 
 - (BOOL)isOwnProfile {
-	return self.userId == [[TGClient shared].me[@"id"] longLongValue];
+	return self.userId == [[TGProfileStore shared].me[@"id"] longLongValue];
 }
 
 - (void)viewDidLoad {
@@ -96,7 +96,7 @@ static UIImage *TGProfileAudioArtwork(UIImage *cover, BOOL playing) {
 		return;
 	self.loading = YES;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] profileAudiosForUser:self.userId offset:0 limit:kProfileAudioPage
+	[[TGProfileStore shared] profileAudiosForUser:self.userId offset:0 limit:kProfileAudioPage
 								 completion:^(NSArray *audios, NSInteger total,
 											  NSString *error){
 		TGProfileAudioViewController *me = weakSelf;
@@ -127,7 +127,7 @@ static UIImage *TGProfileAudioArtwork(UIImage *cover, BOOL playing) {
 		return;
 	self.loadingMore = YES;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] profileAudiosForUser:self.userId
+	[[TGProfileStore shared] profileAudiosForUser:self.userId
 									 offset:(NSInteger)self.audios.count
 									  limit:kProfileAudioPage
 								 completion:^(NSArray *audios, NSInteger total,
@@ -315,7 +315,7 @@ static UIImage *TGProfileAudioArtwork(UIImage *cover, BOOL playing) {
 
 - (void)checkAudio:(NSDictionary *)audio {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] isProfileAudioFileId:[audio[@"fileId"] integerValue]
+	[[TGProfileStore shared] isProfileAudioFileId:[audio[@"fileId"] integerValue]
 								 completion:^(BOOL isAudio, NSString *error){
 		NSString *text = isAudio
 				? TGLocalized(@"An error occurred.")
@@ -328,7 +328,7 @@ static UIImage *TGProfileAudioArtwork(UIImage *cover, BOOL playing) {
 
 - (void)moveAudio:(NSDictionary *)audio after:(NSInteger)afterFileId {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] setProfileAudioFileId:[audio[@"fileId"] integerValue]
+	[[TGProfileStore shared] setProfileAudioFileId:[audio[@"fileId"] integerValue]
 								 afterFileId:afterFileId
 								  completion:^(BOOL ok, NSString *error){
 		if (!ok){
@@ -349,7 +349,7 @@ static UIImage *TGProfileAudioArtwork(UIImage *cover, BOOL playing) {
 				  destructive:YES
 					   inView:self.view
 					onConfirm:^{
-		[[TGClient shared] removeProfileAudioFileId:
+		[[TGProfileStore shared] removeProfileAudioFileId:
 				[audio[@"fileId"] integerValue]
 										 completion:^(BOOL ok, NSString *error){
 			if (!ok){
@@ -372,7 +372,7 @@ static UIImage *TGProfileAudioArtwork(UIImage *cover, BOOL playing) {
 /// track already sent to Saved Messages is the honest way in.
 - (void)addTapped {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] historyForChat:[[TGClient shared] savedMessagesChatId]
+	[[TGProfileStore shared] historyForChat:[[TGProfileStore shared] savedMessagesChatId]
 								limit:100
 						   completion:^(NSArray *messages){
 		TGProfileAudioViewController *me = weakSelf;
@@ -419,7 +419,7 @@ static UIImage *TGProfileAudioArtwork(UIImage *cover, BOOL playing) {
 							   inView:me.view];
 			return;
 		}
-		[[TGClient shared] addProfileAudioAtPath:path
+		[[TGProfileStore shared] addProfileAudioAtPath:path
 										   title:track[@"audioTitle"] ?: @""
 									   performer:track[@"audioPerformer"] ?: @""
 										duration:[track[@"duration"] integerValue]
