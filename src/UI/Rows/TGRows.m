@@ -2,8 +2,10 @@
 // TGRows.m
 //
 #import "TGRows.h"
+#import "TGChatListStore.h"
 #import "TGSendStore.h"
 #import "TGStyle.h"
+#import "TGMessageLayout.h"
 
 NSString *const TGRowTitle    = @"title";
 NSString *const TGRowDetail   = @"detail";
@@ -591,6 +593,10 @@ NSString *const TGRowChatStatusEmojiId = @"chatStatusEmojiId";
 NSString *const TGRowChatAvatarId      = @"chatAvatarId";
 NSString *const TGRowChatAvatarImage   = @"chatAvatarImage";
 NSString *const TGRowChatAvatarGlyph   = @"chatAvatarGlyph";
+NSString *const TGRowChatPreviewKind   = @"chatPreviewKind";
+NSString *const TGRowChatPreviewFileId = @"chatPreviewFileId";
+NSString *const TGRowChatPreviewImage  = @"chatPreviewImage";
+NSString *const TGRowChatPreviewBadge  = @"chatPreviewBadge";
 NSString *const TGRowChatLayout        = @"chatLayout";
 
 NSString *const TGChatAvatarGlyphArchive = @"archive";
@@ -604,27 +610,37 @@ static NSString *TGChatRowString(id value) {
 	return [value isKindOfClass:NSString.class] ? value : nil;
 }
 
+/// M24: a scalar Apple Color Emoji cannot draw costs seconds on a 4S when a
+/// row lays it out. Strip it before the row model, not after.
+static NSString *TGChatRowClean(NSString *text) {
+	return text.length ? TGStripUndrawableScalars(text) : @"";
+}
+
 /// Only the fields a row draws cross over. The chat dictionary also carries
 /// TDLib records (permissions, action bar, background) that are not row data.
 NSMutableDictionary *TGChatRow(NSDictionary *chat, NSString *dateText) {
 	if (![chat isKindOfClass:NSDictionary.class])
 		chat = @{};
 	NSMutableDictionary *row = TGRow(TGKindChatRow,
-			TGChatRowString(chat[@"title"]) ?: @"");
+			TGChatRowClean(TGChatRowString(chat[@"title"]) ?: @""));
 	NSNumber *chatId = TGChatRowNumber(chat[@"id"]);
 	row[TGRowChatId] = chatId;
 	row[TGRowChatAvatarId] = chatId;
 
-	NSString *preview = TGChatRowString(chat[@"previewText"]);
-	if (!preview)
-		preview = TGChatRowString(chat[@"text"]);
-	row[TGRowChatPreview] = preview ?: @"";
-	if (TGChatRowString(chat[@"lastAuthor"]))
-		row[TGRowChatAuthor] = chat[@"lastAuthor"];
+	NSString *rawPreview = TGChatRowString(chat[@"previewText"]);
+	if (!rawPreview)
+		rawPreview = TGChatRowString(chat[@"text"]);
+	NSString *preview = TGChatRowClean(rawPreview ?: @"");
+	row[TGRowChatPreview] = preview;
+	NSString *author = TGChatRowString(chat[@"lastAuthor"]);
+	if (author.length)
+		row[TGRowChatAuthor] = TGChatRowClean(author);
 	if ([dateText isKindOfClass:NSString.class])
 		row[TGRowChatDate] = dateText;
+	// The ranges count the original string; stripping can move them.
 	NSArray *emoji = chat[@"previewCustomEmoji"];
-	if ([emoji isKindOfClass:NSArray.class] && emoji.count)
+	if ([emoji isKindOfClass:NSArray.class] && emoji.count &&
+			[preview isEqualToString:rawPreview ?: @""])
 		row[TGRowChatCustomEmoji] = emoji;
 
 	row[TGRowChatUnread] = TGChatRowNumber(chat[@"unread"]);
@@ -644,11 +660,27 @@ NSMutableDictionary *TGChatRow(NSDictionary *chat, NSString *dateText) {
 											 inChat:[chatId longLongValue]] ==
 					TGSendStateFailed);
 	if ([TGChatRowString(chat[@"action"]) length])
-		row[TGRowChatAction] = chat[@"action"];
+		row[TGRowChatAction] = TGChatRowClean(chat[@"action"]);
 	if ([TGChatRowString(chat[@"draft"]) length])
-		row[TGRowChatDraft] = chat[@"draft"];
+		row[TGRowChatDraft] = TGChatRowClean(chat[@"draft"]);
 	if ([chat[@"emojiStatusId"] isKindOfClass:NSNumber.class])
 		row[TGRowChatStatusEmojiId] = chat[@"emojiStatusId"];
+
+	// M24: the media kind, its thumbnail and the compact trailing facts.
+	TGChatListStore *list = [TGChatListStore shared];
+	NSString *kind = [list previewKindForChat:chat];
+	if (kind.length)
+		row[TGRowChatPreviewKind] = kind;
+	NSNumber *previewFileId = [list previewFileIdForChat:chat];
+	if (previewFileId){
+		row[TGRowChatPreviewFileId] = previewFileId;
+		UIImage *image = [list cachedPreviewImageForFileId:previewFileId];
+		if (image)
+			row[TGRowChatPreviewImage] = image;
+	}
+	NSString *previewBadge = [list trailingBadgeForChat:chat];
+	if (previewBadge.length)
+		row[TGRowChatPreviewBadge] = previewBadge;
 	return row;
 }
 

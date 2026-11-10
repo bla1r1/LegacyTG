@@ -26,6 +26,13 @@ Phase 1 itself moved only the outbound text path; the off-plan section below ext
 - [x] `done` `make -f tests/Makefile test`: 2,245 passed, 0 failed. All 53 Chat translation units and both stores compile against the iOS SDK.
 - [ ] `planned` The separate domains stay on the client for now: chat tools/settings, Saved Messages/DM topics, quick replies, link/media downloads and the name/title/emoji-status caches. They are no longer reached from a view, only from an explicit store method.
 
+
+### Off-plan: chat list store and M24 (done)
+- [x] `done` `TGChatListStore` owns the list data seam: chats, archive, folders, unread total, list callbacks, chat actions and story-list calls. Main `src/Features/ChatList` files import the store, not `TGClient`.
+- [x] `done` M24 row facts: preview kind and thumbnail file, reaction/poll/folder trailing badge, compact `99+` counts, Chats-tab badge, typing sender, Saved Messages row, pinned tint and scalar stripping.
+- [x] `done` `TGChatListStoreTests` covers compact counts, folder tag mapping, the row-model keys and the group typing sender; `make -f tests/Makefile test` is 2,255 passed, 0 failed.
+- [x] `done` `TGSearchStore` owns the search screen; `TGSearchViewController` no longer imports `TGClient` and the ChatList allow entries are gone.
+
 ### Phase 2: Attachment pipeline and file cache (`TGMediaStore`)
 - [ ] `planned` Move all direct `downloadFile:` / `cancelDownloadFile:` invocations from `TGChatViewController+Attachments.m` and `TGChatViewDocumentDelegate.m` to `TGMediaStore`.
 - [ ] `planned` Enforce strict 16 MB LRU eviction ceiling on 32-bit devices for media and document buffers.

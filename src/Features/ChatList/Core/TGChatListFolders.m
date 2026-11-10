@@ -71,7 +71,7 @@ static NSString *TGChatSnapshotPath(void) {
 	// The snapshot is one account's list. Slot 0 keeps the pre-accounts name
 	// so an update does not discard the last list it saved; later slots get
 	// their own file so switching never shows another account's rows.
-	NSInteger slot = [TGClient activeAccountSlot];
+	NSInteger slot = [TGChatListStore activeAccountSlot];
 	NSString *name = slot > 0
 			? [NSString stringWithFormat:@"chat-list-snapshot-%ld.plist", (long)slot]
 			: @"chat-list-snapshot.plist";
@@ -90,12 +90,12 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 				@"isPinned", @"isOnline", @"isSaved", @"lastId", @"lastOutgoing",
 				@"readOutbox", @"readInbox", @"isGroup", @"isForum",
 				@"isSecret", @"order", @"archiveOrder", @"supergroupId", @"draft",
-				@"emojiStatusId"];
+				@"emojiStatusId", @"previewKind", @"previewFileId", @"previewReactionSummary", @"previewPollVotes", @"unreadReactions", @"unreadPollVotes", @"folderIds", @"lastFailed"];
 	});
 	NSMutableDictionary *row = [NSMutableDictionary dictionaryWithCapacity:keys.count];
 	for (NSString *key in keys){
 		id value = chat[key];
-		if ([value isKindOfClass:NSNumber.class] || [value isKindOfClass:NSString.class])
+		if ([value isKindOfClass:NSNumber.class] || [value isKindOfClass:NSString.class] || [value isKindOfClass:NSArray.class])
 			row[key] = value;
 	}
 	return row[@"id"] ? row : nil;
@@ -111,8 +111,8 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 		return;
 
 	NSString *sig = [NSString stringWithFormat:@"c%lu f%lu",
-			(unsigned long)[TGClient shared].chatsCached,
-			(unsigned long)[TGClient shared].folders.count];
+			(unsigned long)[TGChatListStore shared].chatsCached,
+			(unsigned long)[TGChatListStore shared].folders.count];
 	if (!self.mergedChats &&
 			![sig isEqualToString:self.mergedSignature]) {
 		// first pass, wait for the chain
@@ -122,7 +122,7 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 	}
 
 	NSMutableArray *folders = [NSMutableArray arrayWithArray:
-			[TGClient shared].folders];
+			[TGChatListStore shared].folders];
 	if (!folders.count){
 		self.mergedChats = nil;
 		self.mergedSignature = nil;
@@ -133,7 +133,7 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 		return;
 	self.mergeInFlight = YES;
 
-	NSArray *base = [TGClient shared].chats ?: @[];
+	NSArray *base = [TGChatListStore shared].chats ?: @[];
 	NSMutableArray *merged = [NSMutableArray arrayWithArray:base];
 	NSMutableSet *seen = [NSMutableSet set];
 	for (NSDictionary *c in merged){
@@ -151,7 +151,7 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 	for (NSDictionary *folder in folders){
 		NSInteger askId = [folder[@"id"] integerValue];
 		dispatch_group_enter(group);
-		[[TGClient shared] chatsInFolder:askId completion:^(NSArray *chats){
+		[[TGChatListStore shared] chatsInFolder:askId completion:^(NSArray *chats){
 			for (NSDictionary *c in chats){
 				// A folder may hold archived chats too (the archive is a
 				// flag, not a separate bucket from the folders); they belong

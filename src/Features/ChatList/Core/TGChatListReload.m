@@ -73,7 +73,7 @@ static NSString *TGChatSnapshotPath(void) {
 	// The snapshot is one account's list. Slot 0 keeps the pre-accounts name
 	// so an update does not discard the last list it saved; later slots get
 	// their own file so switching never shows another account's rows.
-	NSInteger slot = [TGClient activeAccountSlot];
+	NSInteger slot = [TGChatListStore activeAccountSlot];
 	NSString *name = slot > 0
 			? [NSString stringWithFormat:@"chat-list-snapshot-%ld.plist", (long)slot]
 			: @"chat-list-snapshot.plist";
@@ -92,12 +92,12 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 				@"isPinned", @"isOnline", @"isSaved", @"lastId", @"lastOutgoing",
 				@"readOutbox", @"readInbox", @"isGroup", @"isForum",
 				@"isSecret", @"order", @"archiveOrder", @"supergroupId", @"draft",
-				@"emojiStatusId"];
+				@"emojiStatusId", @"previewKind", @"previewFileId", @"previewReactionSummary", @"previewPollVotes", @"unreadReactions", @"unreadPollVotes", @"folderIds", @"lastFailed"];
 	});
 	NSMutableDictionary *row = [NSMutableDictionary dictionaryWithCapacity:keys.count];
 	for (NSString *key in keys){
 		id value = chat[key];
-		if ([value isKindOfClass:NSNumber.class] || [value isKindOfClass:NSString.class])
+		if ([value isKindOfClass:NSNumber.class] || [value isKindOfClass:NSString.class] || [value isKindOfClass:NSArray.class])
 			row[key] = value;
 	}
 	return row[@"id"] ? row : nil;
@@ -120,7 +120,7 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 
 - (void)reload {
 	if (self.showsArchive){
-		self.chats = [TGClient shared].archivedChats;
+		self.chats = [TGChatListStore shared].archivedChats;
 		[self reloadStoriesIfNeeded];
 		[self.tableView reloadData];
 		[self fetchMissingAvatars];
@@ -130,7 +130,7 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 	if (self.folderId != 0){
 		NSInteger folder = self.folderId;
 		__weak typeof(self) weakSelf = self;
-		[[TGClient shared] chatsInFolder:folder completion:^(NSArray *chats){
+		[[TGChatListStore shared] chatsInFolder:folder completion:^(NSArray *chats){
 			// A late answer for a folder the user already left must not fill
 			// the folder now on screen.
 			if (!TGChatFolderAnswerStillWanted(folder, weakSelf.folderId))
@@ -149,12 +149,12 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 	// "All chats" means all of them: tdlib's chatListMain holds only the
 	// chats with no folder, the rest lives behind chatListFolder requests.
 	// The merge below fills the gap in the background.
-	NSArray *baseChats = self.mergedChats ?: [TGClient shared].chats;
+	NSArray *baseChats = self.mergedChats ?: [TGChatListStore shared].chats;
 	if (!baseChats.count && self.cachedChats.count)
 		baseChats = self.cachedChats;
 	// Once the live list is here the snapshot has done its job; keeping it
 	// would let a logout or a cleared account bring the old rows back.
-	if ([TGClient shared].chats.count)
+	if ([TGChatListStore shared].chats.count)
 		self.cachedChats = @[];
 	self.chats = baseChats;
 	[self reloadStoriesIfNeeded];
@@ -171,12 +171,12 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 			self.tableView.contentOffset = CGPointMake(TGMetricZero, self.parkOffset);
 	}
 	[self fetchMissingAvatars];
-	if ([TGClient shared].chats.count)
+	if ([TGChatListStore shared].chats.count)
 		[self saveChatSnapshot:baseChats];
 	[self mergeAllFolderChats];
 
 	BOOL hasContent = ([self visibleChats].count > 0 || self.searchResults != nil || [self headerRows].count > 0);
-	if ([TGClient shared].chats.count || self.cachedChats.count || self.mergedChats.count)
+	if ([TGChatListStore shared].chats.count || self.cachedChats.count || self.mergedChats.count)
 		self.listAnswered = YES;
 	if (!hasContent && !self.listAnswered) {
 		// TDLib has not answered yet; an empty state now would be a guess.
@@ -195,7 +195,7 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 		}
 		self.emptyView.hidden = NO;
 	} else if (!hasContent) {
-		NSString *empty = [TGClient shared].archivedChats.count
+		NSString *empty = [TGChatListStore shared].archivedChats.count
 				? TGLocalized(@"All of your chats are archived.")
 				: TGLocalized(@"You have no\nconversations yet.");
 		// The "Loading..." view has a one-line title and no button; rebuild
@@ -230,8 +230,12 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 	if (self.searchResults || self.showsArchive || self.folderId != 0)
 		return @[];
 	NSMutableArray *rows = [NSMutableArray array];
-	if ([TGClient shared].archivedChats.count > 0)
+	if ([TGChatListStore shared].archivedChats.count > 0)
 		[rows addObject:@"archive"];
+	// Saved Messages has its own row above the chats and is hidden from the
+	// live list by visibleChats; without this row it had no way in.
+	if ([TGChatListStore shared].savedMessagesChatId)
+		[rows addObject:@"saved"];
 	return rows;
 }
 
@@ -250,7 +254,7 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 	self.storyRowsLoading = YES;
 	NSString *list = self.showsArchive ? @"archive" : @"main";
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] activeStoryRowsForList:list completion:^(NSArray *rows){
+	[[TGChatListStore shared] activeStoryRowsForList:list completion:^(NSArray *rows){
 		TGChatListViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -325,7 +329,7 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 		if (!me)
 			return;
 		int64_t chatId = [row[@"chatId"] longLongValue];
-		[[TGClient shared] setActiveStoriesList:(archived ? @"main" : @"archive")
+		[[TGChatListStore shared] setActiveStoriesList:(archived ? @"main" : @"archive")
 										forChat:chatId
 									 completion:^(BOOL ok, NSString *error){
 			if (!ok){
@@ -340,7 +344,7 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 }
 
 - (void)openStoryComposer {
-	int64_t savedId = [[TGClient shared] savedMessagesChatId];
+	int64_t savedId = [[TGChatListStore shared] savedMessagesChatId];
 	if (!savedId){
 		[TGAlertSheet showMessage:@"An error occurred."
 							title:@"New Story" inView:self.view];
@@ -356,7 +360,7 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 }
 
 - (void)openStoriesMenu {
-	int64_t savedId = [[TGClient shared] savedMessagesChatId];
+	int64_t savedId = [[TGChatListStore shared] savedMessagesChatId];
 	if (!savedId){
 		[TGAlertSheet showMessage:@"An error occurred."
 							title:@"Stories" inView:self.view];

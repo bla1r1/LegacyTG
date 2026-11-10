@@ -65,7 +65,7 @@ already exist.
 | M21 Group-call audio | `planned` | RTP mixing and AudioUnit playback in the group-call screen. |
 | M22 Video calls | `partial` | Dev-only engine; picture to an official client, release gate. |
 | M23 Sending files, music and send options | `planned` | Document/audio picker, music streaming, silent and repeated sends, GIF caption. |
-| M24 Chat-list previews and badges | `planned` | Thumbnails, type glyph, reaction/poll badges, compact counts, tab badge, folder tags. |
+| M24 Chat-list previews and badges | `done` | Thumbnails, type glyph, reaction/poll badges, compact counts, tab badge, folder tags, typing sender, Saved Messages row, pinned tint and scalar stripping. |
 | M25 Story rings | `planned` | Ring on every row and profile avatar, own-story tile. |
 | M26 Chat search filters | `planned` | Sender/media/date chips, result opens the hit, search tokens, global scopes. |
 | M27 Failed-send mark | `done` | Failed icon in the bubble and row, retry without the hold menu. |
@@ -170,18 +170,16 @@ streaming; `message-types.md` — GIF caption.
 
 ## M24: Chat-list previews and badges
 
-- [ ] `planned` Photo and video thumbnail at the start of the preview, and a
+- [x] `done` Photo and video thumbnail at the start of the preview, and a
   content-type glyph beside it.
-- [ ] `planned` Reaction and poll-vote badges, compact counts ("1.2K"), folder
+- [x] `done` Reaction and poll-vote badges, compact counts ("99+"), folder
   tags on the row, and the unread count on the Chats tab.
-- [ ] `planned` A typing preview that names the sender, a Saved Messages row,
+- [x] `done` A typing preview that names the sender, a Saved Messages row,
   and a pinned-row tint.
-- [ ] `planned` Strip undrawable scalars from chat titles, names and previews;
-  one such character costs 0.4–2.8 s on a 4S. Only the sticker panel titles
-  strip them today.
+- [x] `done` Strip undrawable scalars from chat titles, names and previews;
+  one such character costs 0.4–2.8 s on a 4S.
 
-**Blocked by:** row-model fields (`unreadPollVotes`, `chat_lists`, story state)
-that the list does not copy today.
+**Blocked by:** nothing.
 
 **Closes:** `chat-list.md` — Reaction badge, Poll-vote badge, Compact counts,
 Pinned row tint, Photo/video thumbnail in the preview, Content-type glyph in

@@ -35,8 +35,6 @@ src/Features/Calls/TGVideoChatSetupViewController.m
 src/Features/Calls/TGVideoChatStreamViewController.m
 src/Features/Calls/Views/TGCallMiniBar.m
 src/Features/Channels/TGSimilarChannelsViewController.m
-src/Features/ChatList/TGChatListViewControllerInternal.h
-src/Features/ChatList/TGSearchViewController.m
 src/Features/Contacts/TGCloseFriendsViewController.m
 src/Features/Contacts/TGContactsViewController.m
 src/Features/Contacts/TGNewContactViewController.m

@@ -219,6 +219,8 @@ CLIENT_OBJC_SRCS := \
     src/Core/Stores/TGChatThemeStore.m \
     src/Core/Stores/TGImageLruCache.mm \
     src/Core/Stores/TGPeerStore.m \
+    src/Core/Stores/TGChatListStore.m \
+    src/Core/Stores/TGSearchStore.m \
     src/Core/Stores/TGStickerBudget.m \
     src/Core/Platform/TGPerf.m \
     src/UI/Format/TGUIFormat.m \
@@ -335,6 +337,8 @@ CLIENT_TEST_SRCS := \
     $(TESTS)/TGStickerImageTests.m \
     $(TESTS)/TGChatListRowGeometryTests.m \
     $(TESTS)/TGChatListRowsTests.m \
+    $(TESTS)/TGChatListStoreTests.m \
+    $(TESTS)/TGSearchStoreTests.m \
     $(TESTS)/TGUpdateStoreTests.m \
     $(TESTS)/TGSendStoreTests.m \
     $(TESTS)/TGMessageStoreTests.m \

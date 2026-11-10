@@ -73,6 +73,8 @@
 #import "TGStickerImageTests.m"
 #import "TGChatListRowGeometryTests.m"
 #import "TGChatListRowsTests.m"
+#import "TGChatListStoreTests.m"
+#import "TGSearchStoreTests.m"
 #import "TGUpdateStoreTests.m"
 #import "TGSendStoreTests.m"
 #import "TGMessageStoreTests.m"

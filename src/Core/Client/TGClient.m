@@ -1501,9 +1501,18 @@ NSDictionary *TGFormattedText(NSString *text) {
 			phrase = @"sending a file...";
 		// chatActionCancel and anything unknown clear it.
 		int64_t actingChat = [obj[@"chat_id"] longLongValue];
+		int64_t actor = [obj[@"sender_id"][@"user_id"] longLongValue];
+		NSMutableDictionary *acting = self.chatsById[@(actingChat)];
+		// A group says who is typing; a private chat does not need to name the
+		// only other person in it. Your own action is not shown to you.
+		if (phrase && actor && [acting[@"isGroup"] boolValue] &&
+				actor != [self.me[@"id"] longLongValue]){
+			NSString *name = [self nameForUserId:actor];
+			if (name.length)
+				phrase = [NSString stringWithFormat:@"%@: %@", name, phrase];
+		}
 		// The chat list shows this in place of the preview, so it has to live
 		// on the chat rather than only reach whichever chat is open.
-		NSMutableDictionary *acting = self.chatsById[@(actingChat)];
 		if (acting){
 			acting[@"action"] = phrase ?: @"";
 			[self markChatRowDirty:actingChat];
