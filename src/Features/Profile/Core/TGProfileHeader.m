@@ -1,5 +1,5 @@
 #import "TGProfileViewControllerInternal.h"
-#import "TGClientInternal.h"
+#import "TGProfileStore.h"
 #import "TGPeerStore.h"
 #import "TGStyle.h"
 #import "TGProfileHeaderView.h"
@@ -70,7 +70,7 @@
 	// header, and a nameless account still shows its phone, never a dot.
 	if (self.isOwnProfile && (!self.name.length ||
 			[self.name isEqualToString:@"."])){
-		self.name = TGProfileDisplayName([TGClient shared].me, self.phoneNumber);
+		self.name = TGProfileDisplayName([TGProfileStore shared].me, self.phoneNumber);
 	}
 	CGFloat width = self.view.bounds.size.width ?: TGMetricScreenWidth;
 	NSArray *actions = [self headerActions];
@@ -179,7 +179,7 @@
 }
 
 - (BOOL)isOwnProfile {
-	return self.userId && self.userId == [[TGClient shared].me[@"id"] longLongValue];
+	return self.userId && self.userId == [[TGProfileStore shared].me[@"id"] longLongValue];
 }
 
 @end

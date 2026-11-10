@@ -331,6 +331,15 @@
            thread:(int64_t)threadId replyTo:(int64_t)replyToId
         scheduled:(NSDictionary *)schedulingState
       completion:(void (^)(NSDictionary *message))completion {
+	[self sendText:text toChat:chatId thread:threadId replyTo:replyToId
+		 scheduled:schedulingState options:nil completion:completion];
+}
+
+- (void)sendText:(NSString *)text toChat:(int64_t)chatId
+           thread:(int64_t)threadId replyTo:(int64_t)replyToId
+        scheduled:(NSDictionary *)schedulingState
+          options:(NSDictionary *)options
+      completion:(void (^)(NSDictionary *message))completion {
 	NSMutableDictionary *request = [@{
 		@"@type"                : @"sendMessage",
 		@"chat_id"              : @(chatId),
@@ -346,6 +355,12 @@
 								 @"message_id" : @(replyToId)};
 	if (schedulingState[@"@type"])
 		request[@"scheduling_state"] = schedulingState;
+	NSDictionary *sendOptions = options[@"@type"] ? options
+			: (schedulingState[@"@type"]
+					? [TGClient messageSendOptionsSilent:NO schedulingState:schedulingState]
+					: nil);
+	if (sendOptions[@"@type"])
+		request[@"options"] = sendOptions;
 
 	if (!completion){
 		[self send:request];
@@ -359,9 +374,35 @@
 /// At a wall-clock date. The date is int32 seconds, which is what the
 /// request carries.
 + (NSDictionary *)scheduledAtDate:(NSTimeInterval)date {
+	return [self scheduledAtDate:date repeatPeriod:0];
+}
+
++ (NSDictionary *)scheduledAtDate:(NSTimeInterval)date repeatPeriod:(NSInteger)seconds {
 	return @{@"@type"     : @"messageSchedulingStateSendAtDate",
-			 @"send_date" : @(date),
-			 @"repeat_period" : @(0)};
+			 @"send_date" : @((long long)date),
+			 @"repeat_period" : @(MAX(0, seconds))};
+}
+
+/// messageSendOptions has no optional members in this schema, so every field
+/// is written. `scheduling_state` is null for send-now, which is TDLib's own
+/// spelling, and a state for a held-back message.
++ (NSDictionary *)messageSendOptionsSilent:(BOOL)silent
+						   schedulingState:(NSDictionary *)schedulingState {
+	id schedule = schedulingState[@"@type"] ? schedulingState : [NSNull null];
+	return @{
+		@"@type"            : @"messageSendOptions",
+		@"suggested_post_info" : [NSNull null],
+		@"disable_notification" : @(silent),
+		@"from_background"      : @NO,
+		@"protect_content"      : @NO,
+		@"allow_paid_broadcast" : @NO,
+		@"paid_message_star_count" : @0,
+		@"update_order_of_installed_sticker_sets" : @NO,
+		@"scheduling_state"     : schedule,
+		@"effect_id"            : @0,
+		@"sending_id"           : @0,
+		@"only_preview"         : @NO,
+	};
 }
 
 /// The moment the other side is next seen. Private chats only; TDLib
@@ -435,6 +476,16 @@
 				   thread:(int64_t)threadId replyTo:(int64_t)replyToId
 		  schedulingState:(NSDictionary *)schedulingState
 			   completion:(void (^)(NSDictionary *message))completion {
+	[self sendFormattedText:formattedText toChat:chatId thread:threadId
+					replyTo:replyToId schedulingState:schedulingState
+					options:nil completion:completion];
+}
+
+- (void)sendFormattedText:(NSDictionary *)formattedText toChat:(int64_t)chatId
+				   thread:(int64_t)threadId replyTo:(int64_t)replyToId
+		  schedulingState:(NSDictionary *)schedulingState
+				  options:(NSDictionary *)options
+			   completion:(void (^)(NSDictionary *message))completion {
 	NSDictionary *empty = @{@"@type" : @"formattedText", @"text" : @"", @"entities" : @[]};
 	NSDictionary *textPayload = [formattedText isKindOfClass:[NSDictionary class]] ? formattedText : empty;
 
@@ -453,6 +504,12 @@
 								 @"message_id" : @(replyToId)};
 	if (schedulingState[@"@type"])
 		request[@"scheduling_state"] = schedulingState;
+	NSDictionary *sendOptions = options[@"@type"] ? options
+			: (schedulingState[@"@type"]
+					? [TGClient messageSendOptionsSilent:NO schedulingState:schedulingState]
+					: nil);
+	if (sendOptions[@"@type"])
+		request[@"options"] = sendOptions;
 
 	if (!completion){
 		[self send:request];

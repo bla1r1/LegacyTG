@@ -1,5 +1,5 @@
 #import "TGProfileViewControllerInternal.h"
-#import "TGClientInternal.h"
+#import "TGProfileStore.h"
 #import "TGNameWithStatus.h"
 #import "TGCustomEmojiStore.h"
 #import "TGStyle.h"
@@ -239,11 +239,11 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 /// card that opens it like any chat the list holds.
 - (void)fetchEmojiStatusImage:(int64_t)emojiId {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] customEmojiStickersForIds:@[@(emojiId)] completion:^(NSArray *stickers){
+	[[TGProfileStore shared] customEmojiStickersForIds:@[@(emojiId)] completion:^(NSArray *stickers){
 		NSNumber *thumb = stickers.count ? stickers[0][@"thumbId"] : nil;
 		if (![thumb isKindOfClass:NSNumber.class] || !thumb.integerValue)
 			return;
-		[[TGClient shared] downloadFile:thumb.integerValue
+		[[TGProfileStore shared] downloadFile:thumb.integerValue
 							   priority:TGDownloadPriorityAvatar
 							 completion:^(NSString *path){
 			if (!path.length)
@@ -266,7 +266,7 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 	if (self.personalChannel)
 		return;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] chatRecordForChat:chatId completion:^(NSDictionary *chat){
+	[[TGProfileStore shared] chatRecordForChat:chatId completion:^(NSDictionary *chat){
 		TGProfileViewController *me = weakSelf;
 		if (!me || !chat)
 			return;
@@ -284,14 +284,14 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 		// The personal channel is its own section above the card, not a row
 		// inside it. Its row is a chat-list item, so the last post reads as
 		// the preview under the channel name.
-		[[TGClient shared] memberCountForChat:chatId completion:^(NSInteger count){
+		[[TGProfileStore shared] memberCountForChat:chatId completion:^(NSInteger count){
 			TGProfileViewController *again = weakSelf;
 			if (!again)
 				return;
 			again.personalChannelMemberCount = count;
 			[again reloadTableDebounced];
 		}];
-		[[TGClient shared] historyForChat:chatId limit:1 completion:^(NSArray *messages){
+		[[TGProfileStore shared] historyForChat:chatId limit:1 completion:^(NSArray *messages){
 			TGProfileViewController *again = weakSelf;
 			if (!again)
 				return;

@@ -1,7 +1,6 @@
 #import "TGMediaViewer.h"
 #import "TGMediaPlayerView.h"
 #import "TGMediaStore.h"
-#import "TGClient.h"
 #import "TGDevice.h"
 #import "TGSoftVideoPlayer.h"
 #import "TGStickerStore.h"

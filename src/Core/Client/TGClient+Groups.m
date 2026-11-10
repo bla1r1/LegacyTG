@@ -12,7 +12,7 @@
 
 /// A member as a MessageSender, which is the only way setChatMemberStatus and
 /// banChatMember will name one.
-static NSDictionary *TGMemberSender(int64_t userId) {
+NSDictionary *TGMemberSender(int64_t userId) {
 	return @{@"@type" : @"messageSenderUser", @"user_id" : @(userId)};
 }
 

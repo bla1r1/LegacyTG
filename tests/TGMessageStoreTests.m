@@ -60,6 +60,10 @@
 						  [TGClient scheduledWhenOnline]);
 	XCTAssertEqualObjects([TGMessageStore scheduledAtDate:1700000000],
 						  [TGClient scheduledAtDate:1700000000]);
+	XCTAssertEqualObjects([TGMessageStore scheduledAtDate:1700000000 repeatPeriod:86400],
+						  [TGClient scheduledAtDate:1700000000 repeatPeriod:86400]);
+	XCTAssertEqual([[TGMessageStore scheduledAtDate:1700000000 repeatPeriod:86400][@"repeat_period"]
+			integerValue], 86400LL);
 }
 
 - (void)testStoreAnswersTheDeclaredSelectorAtRuntime {

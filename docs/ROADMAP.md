@@ -64,7 +64,7 @@ already exist.
 | M20 Payments, Stars and gifts | `planned` | Pay path, Premium purchase, Stars, gifts, TON, Passport, StoreKit. |
 | M21 Group-call audio | `planned` | RTP mixing and AudioUnit playback in the group-call screen. |
 | M22 Video calls | `partial` | Dev-only engine; picture to an official client, release gate. |
-| M23 Sending files, music and send options | `planned` | Document/audio picker, music streaming, silent and repeated sends, GIF caption. |
+| M23 Sending files, music and send options | `done` | Document/audio picker, music streaming, silent and repeated sends, GIF caption. |
 | M24 Chat-list previews and badges | `done` | Thumbnails, type glyph, reaction/poll badges, compact counts, tab badge, folder tags, typing sender, Saved Messages row, pinned tint and scalar stripping. |
 | M25 Story rings | `planned` | Ring on every row and profile avatar, own-story tile. |
 | M26 Chat search filters | `planned` | Sender/media/date chips, result opens the hit, search tokens, global scopes. |
@@ -150,19 +150,19 @@ video layout, Switch camera; `profile.md` — Video call tile.
 
 ## M23: Sending files, music and send options
 
-- [ ] `planned` Document and audio pickers in the attach sheet, with
-  `inputMessageDocument` and `inputMessageAudio`; today the sheet has gallery,
-  camera, location, contact, checklist, quick reply, dice and ephemeral only.
-- [ ] `planned` Music streaming: `TGMusicPlayer` downloads the whole file
-  before playback; an `AudioFileStream` path is needed for long tracks.
-- [ ] `planned` Silent send and repeated scheduled messages through
-  `messageSendOptions`; normal send builds no options and `repeat_period` is
-  hardcoded to 0.
-- [ ] `planned` GIF caption on the way out; incoming captions already draw.
-- [ ] `planned` A timer choice when sending a view-once photo or video; the
+- [x] `done` Document and audio pickers in the attach sheet, with
+  `inputMessageDocument` and `inputMessageAudio`.
+- [x] `done` Music streaming: `TGMusicStreamer` reads the growing local file
+  with `AudioFileStream` and plays it through `AudioQueue`; the download path
+  stays as the fallback for a format or an m4a whose header is at the end.
+- [x] `done` Silent send and repeated scheduled messages through
+  `messageSendOptions`; the composer's hold sheet has Send Without Sound and
+  the schedule sheet a Repeat row.
+- [x] `done` GIF caption on the way out; incoming captions already draw.
+- [x] `done` A timer choice when sending a view-once photo or video; the
   view-once send itself exists in private chats.
 
-**Blocked by:** nothing beyond the screen work; TDLib 1.8.66 has the calls.
+**Blocked by:** nothing.
 
 **Closes:** `chat.md` — File and music picker, Silent send, Repeated scheduled
 message, GIF caption; `media.md` — Document and audio attachments, Music

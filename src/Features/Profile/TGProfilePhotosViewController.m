@@ -3,7 +3,7 @@
 // as the shared square grid. Holding a photo offers to take it off the account.
 //
 #import "TGProfilePhotosViewController.h"
-#import "TGClient.h"
+#import "TGProfileStore.h"
 #import "TGTheme.h"
 #import "TGIcons.h"
 #import "TGAlertSheet.h"
@@ -54,7 +54,7 @@ static const NSInteger kPhotoGridColumns = 3;
 
 - (void)refresh {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] userProfilePhotos:self.userId completion:^(NSArray *photos){
+	[[TGProfileStore shared] userProfilePhotos:self.userId completion:^(NSArray *photos){
 		TGProfilePhotosViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -85,7 +85,7 @@ static const NSInteger kPhotoGridColumns = 3;
 		return;
 	[self.requested addObject:fileId];
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] downloadFile:fileId.integerValue
+	[[TGProfileStore shared] downloadFile:fileId.integerValue
 						   priority:TGDownloadPriorityAvatar
 						 completion:^(NSString *path){
 		if (!path.length)
@@ -152,7 +152,7 @@ static const NSInteger kPhotoGridColumns = 3;
 				  destructive:YES
 					   inView:self.view
 					onConfirm:^{
-		[[TGClient shared] deleteProfilePhoto:photoId completion:^(BOOL ok){
+		[[TGProfileStore shared] deleteProfilePhoto:photoId completion:^(BOOL ok){
 			if (!ok)
 				return;
 			TGProfilePhotosViewController *me = weakSelf;

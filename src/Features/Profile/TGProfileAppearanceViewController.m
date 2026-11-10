@@ -5,7 +5,7 @@
 // and an Apply step so a colour is never written before the user confirms it.
 //
 #import "TGProfileAppearanceViewController.h"
-#import "TGClient.h"
+#import "TGProfileStore.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGIcons.h"
@@ -170,11 +170,11 @@ static const NSInteger kPreviewNameTag = 8201;
 /// ids and the two background-emoji ids from getMe. The emoji ids are what a
 /// colour write has to hand back so picking a colour never erases the pattern.
 - (void)loadColours {
-	self.accentIds = [[TGClient shared] availableAccentColorIds];
-	self.profileIds = [[TGClient shared] availableProfileAccentColorIds];
+	self.accentIds = [[TGProfileStore shared] availableAccentColorIds];
+	self.profileIds = [[TGProfileStore shared] availableProfileAccentColorIds];
 
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] myAccentColoursWithCompletion:
+	[[TGProfileStore shared] myAccentColoursWithCompletion:
 			^(NSInteger accent, NSInteger profile, int64_t emoji, int64_t profileEmoji){
 		TGProfileAppearanceViewController *me = weakSelf;
 		if (!me || me.loaded)
@@ -193,7 +193,7 @@ static const NSInteger kPreviewNameTag = 8201;
 - (void)rebuildSections {
 	NSMutableDictionary *preview = [TGRow(TGKindAppearancePreview, @"")
 			mutableCopy];
-	NSDictionary *me = [TGClient shared].me;
+	NSDictionary *me = [TGProfileStore shared].me;
 	NSString *name = [me[@"first_name"] length] ? me[@"first_name"]
 			: TGLocalized(@"Name");
 	if ([me[@"last_name"] length])
@@ -202,12 +202,12 @@ static const NSInteger kPreviewNameTag = 8201;
 	UIImage *avatar = [TGIcons avatarWithInitials:[TGIcons initialsForTitle:name]
 											 size:side
 										 colourId:[me[@"id"] longLongValue]];
-	UIColor *profileColour = [[TGClient shared] accentColourForId:self.pendingProfileId
+	UIColor *profileColour = [[TGProfileStore shared] accentColourForId:self.pendingProfileId
 														  profile:YES];
 	preview[TGRowPreviewImage] = TGAppearanceAvatar(avatar,
 			profileColour ?: [[TGTheme shared] separatorColour]);
 	preview[TGRowPreviewText] = name;
-	preview[TGRowPreviewTextColour] = [[TGClient shared]
+	preview[TGRowPreviewTextColour] = [[TGProfileStore shared]
 			accentColourForId:self.pendingAccentId profile:NO] ?:
 			[[TGTheme shared] primaryTextColour];
 
@@ -265,7 +265,7 @@ static const NSInteger kPreviewNameTag = 8201;
 }
 
 - (UIColor *)colourForActiveId:(NSInteger)colourId {
-	UIColor *colour = [[TGClient shared] accentColourForId:colourId
+	UIColor *colour = [[TGProfileStore shared] accentColourForId:colourId
 												  profile:(self.tab == kTabProfile)];
 	return colour ?: [[TGTheme shared] fileTileColour];
 }
@@ -438,11 +438,11 @@ static const NSInteger kPreviewNameTag = 8201;
 	// drops them would erase the pattern Telegram already stores. The client
 	// reads them again at write time rather than trusting this screen's copy.
 	if (self.profileChanged)
-		[[TGClient shared]
+		[[TGProfileStore shared]
 				setAccountProfileAccentColorPreservingBackgroundEmoji:self.pendingProfileId
 														   completion:finish];
 	if (self.accentChanged)
-		[[TGClient shared] setAccountAccentColorPreservingBackgroundEmoji:self.pendingAccentId
+		[[TGProfileStore shared] setAccountAccentColorPreservingBackgroundEmoji:self.pendingAccentId
 															   completion:finish];
 }
 

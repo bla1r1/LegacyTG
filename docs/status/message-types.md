@@ -1,6 +1,6 @@
 Every `MessageContent` type in `tdlib/td/td/generate/scheme/td_api.tl` (108 on 7 November 2026), in schema order, plus the content features the parity audit names. Checked against `src/` on 7 November 2026.
 
-Counts: 86 done, 26 partial, 8 missing, 0 dev-only.
+Counts: 87 done, 25 partial, 8 missing, 0 dev-only.
 
 Built: M16 (service sentences for ~75 types, a preview for every content,
 structured flatten fields, `TGMessageCard`, `TGMediaVeil`, rebuilt polls), M17
@@ -120,7 +120,7 @@ countdowns, service-action buttons).
 | messageProximityAlertTriggered | done | `Core/Model/TGServiceMessageText.m:415` | Sentence naming both people and the distance. |
 | messageUnsupported | done | `Core/Model/TGServiceMessageText.m:605` | "This message is not supported by this app" service line. |
 | Live and motion photos | partial | `Core/Model/TGMessageFlatten.m:226` | The `messagePhoto` branch reads only the still sizes and ignores `content.video`. |
-| GIF caption | partial | `Core/Model/TGMessageFlatten.m:530` | Incoming captions draw; `sendAnimation` has no caption on the way out. |
+| GIF caption | done | `Core/Stores/TGSendStore.mm:141` | Incoming captions draw and outgoing animations carry the composer caption. |
 | Inline documents in rich text | missing | `Core/Model/TGMessageFlatten.m:694` | No page-block renderer, so `pageBlockDocument` never draws. |
 | Buttons inside rich messages | missing | `Core/Model/TGMessageFlatten.m:694` | `pageBlockButtonRow` is not handled anywhere. |
 | Links in poll options | partial | `Core/Model/TGMessageFlatten.m:458` | Option text is flattened to a plain string; entities are dropped. |

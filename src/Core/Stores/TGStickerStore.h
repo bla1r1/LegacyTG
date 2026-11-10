@@ -72,6 +72,11 @@ extern NSString *const TGStickerListsChangedNotification;
 					completion:(void (^)(NSArray *emojis))completion;
 - (void)allStickerEmojisForQuery:(NSString *)query
 					  completion:(void (^)(NSArray *emojis))completion;
+- (void)allStickerEmojisForQuery:(NSString *)query
+						  chatId:(int64_t)chatId
+					 stickerType:(NSString *)type
+						mainOnly:(BOOL)mainOnly
+					  completion:(void (^)(NSArray *emojis))completion;
 
 /// A sticker's outline and its SVG path. The card shows the shape count and
 /// offers the path for copying; no vector renderer is needed for either.
@@ -95,6 +100,98 @@ extern NSString *const TGStickerListsChangedNotification;
 - (void)removeRecentSticker:(NSInteger)fileId;
 - (void)setStickerSet:(id)setId installed:(BOOL)installed archived:(BOOL)archived;
 - (void)saveAnimationFileId:(NSInteger)fileId saved:(BOOL)saved;
+
+#pragma mark - authoring and defaults
+- (void)ownedStickerSetsWithCompletion:(void (^)(NSArray *sets))completion;
+
+- (void)checkStickerSetName:(NSString *)name
+				 completion:(void (^)(NSString *status, NSString *message))completion;
+
+- (void)suggestStickerSetNameForTitle:(NSString *)title
+						   completion:(void (^)(NSString *name))completion;
+
+- (void)stickerSetNameForId:(int64_t)setId
+				 completion:(void (^)(NSString *name))completion;
+
+- (void)searchStickerSetNamed:(NSString *)name
+				  ignoreCache:(BOOL)ignoreCache
+				   completion:(void (^)(NSDictionary *set))completion;
+
+- (void)createStickerSetNamed:(NSString *)name
+						title:(NSString *)title
+				  stickerType:(NSString *)type
+					 stickers:(NSArray *)stickers
+				   completion:(void (^)(NSDictionary *set))completion;
+
+- (void)deleteStickerSetNamed:(NSString *)name
+				   completion:(void (^)(BOOL ok))completion;
+
+- (NSDictionary *)newStickerWithFileId:(NSInteger)fileId
+								format:(NSString *)format
+								emojis:(NSString *)emojis
+							  keywords:(NSArray *)keywords
+						  maskPosition:(NSDictionary *)maskPosition;
+
+- (void)addStickerToSetNamed:(NSString *)name
+					 sticker:(NSDictionary *)sticker
+				  completion:(void (^)(BOOL ok))completion;
+
+- (void)removeStickerFileId:(NSInteger)fileId
+				 completion:(void (^)(BOOL ok))completion;
+
+- (void)replaceStickerInSetNamed:(NSString *)name
+					  oldFileId:(NSInteger)oldFileId
+					  newSticker:(NSDictionary *)sticker
+					  completion:(void (^)(BOOL ok))completion;
+
+- (void)setStickerFileId:(NSInteger)fileId
+		   positionInSet:(NSInteger)position
+			  completion:(void (^)(BOOL ok))completion;
+
+- (void)setStickerFileId:(NSInteger)fileId
+				  emojis:(NSString *)emojis
+			  completion:(void (^)(BOOL ok))completion;
+
+- (void)setStickerFileId:(NSInteger)fileId
+				keywords:(NSArray *)keywords
+			  completion:(void (^)(BOOL ok))completion;
+
+- (void)setStickerFileId:(NSInteger)fileId
+			maskPosition:(NSDictionary *)maskPosition
+			  completion:(void (^)(BOOL ok))completion;
+
+- (void)setStickerSetNamed:(NSString *)name
+					 title:(NSString *)title
+				completion:(void (^)(BOOL ok))completion;
+
+- (void)setStickerSetNamed:(NSString *)name
+		 thumbnailAtPath:(NSString *)path
+				  format:(NSString *)format
+			  completion:(void (^)(BOOL ok))completion;
+
+- (void)uploadStickerAtPath:(NSString *)path
+					 format:(NSString *)format
+				 completion:(void (^)(NSInteger fileId))completion;
+
+- (void)clearRecentStickersAttached:(BOOL)attached;
+
+- (void)customEmojiStickersForIds:(NSArray *)ids
+					   completion:(void (^)(NSArray *stickers))completion;
+
+- (void)defaultBackgroundCustomEmojiStickersWithCompletion:
+		(void (^)(NSArray *stickers))completion;
+
+- (void)defaultChatPhotoCustomEmojiStickersWithCompletion:
+		(void (^)(NSArray *stickers))completion;
+
+- (void)defaultProfilePhotoCustomEmojiStickersWithCompletion:
+		(void (^)(NSArray *stickers))completion;
+
+- (void)greetingStickersWithCompletion:(void (^)(NSArray *stickers))completion;
+
+- (void)setCustomEmojiStickerSetNamed:(NSString *)name
+				   thumbnailCustomEmojiId:(int64_t)customEmojiId
+						  completion:(void (^)(BOOL ok))completion;
 
 #pragma mark - files
 

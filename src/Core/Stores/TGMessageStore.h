@@ -16,8 +16,10 @@
 
 + (instancetype)shared;
 
-/// The two scheduling records a held Send uses.
+/// The two scheduling records a held Send uses. A repeat period of zero
+/// sends once; otherwise TDLib re-sends it every that many seconds.
 + (NSDictionary *)scheduledAtDate:(NSTimeInterval)date;
++ (NSDictionary *)scheduledAtDate:(NSTimeInterval)date repeatPeriod:(NSInteger)seconds;
 + (NSDictionary *)scheduledWhenOnline;
 
 @property (nonatomic, readonly) TGConnectionState connectionState;
@@ -119,6 +121,7 @@
                      inChat:(int64_t)chatId
                  completion:(void (^)(NSDictionary *checklist, NSString *error))completion;
 
+- (void)clearHistoryInChat:(int64_t)chatId;
 - (void)clearHistoryInChat:(int64_t)chatId revoke:(BOOL)revoke;
 
 - (void)clearReplyMarkupOfMessage:(int64_t)messageId
@@ -432,6 +435,9 @@
 		   completion:(void (^)(NSDictionary *message))completion;
 
 - (void)messageCountInChat:(int64_t)chatId
+					filter:(NSString *)filterType
+				completion:(void (^)(NSInteger count))completion;
+- (void)messageCountInChat:(int64_t)chatId
 					thread:(int64_t)threadId
 				completion:(void (^)(NSInteger count))completion;
 
@@ -743,6 +749,7 @@
 - (void)setStickerSet:(id)setId installed:(BOOL)installed archived:(BOOL)archived;
 
 - (void)setUser:(int64_t)userId blocked:(BOOL)blocked;
+- (void)setUser:(int64_t)userId blocked:(BOOL)blocked completion:(void (^)(BOOL ok))completion;
 
 - (void)sharePhoneNumberWithUser:(int64_t)userId;
 

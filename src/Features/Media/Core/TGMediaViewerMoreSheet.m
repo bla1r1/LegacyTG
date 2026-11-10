@@ -1,7 +1,9 @@
 #import "TGMediaViewer.h"
 #import "TGMediaPlayerView.h"
 #import "TGMediaStore.h"
-#import "TGClient.h"
+#import "TGMediaStore.h"
+#import "TGMessageStore.h"
+#import "TGSendStore.h"
 #import "TGDevice.h"
 #import "TGSoftVideoPlayer.h"
 #import "TGStickerStore.h"
@@ -221,7 +223,7 @@ static BOOL TGViewerItemLocked(NSDictionary *item) {
 	picker.onPicked = ^(int64_t toChatId){
 		if (!toChatId)
 			return;
-		[[TGClient shared] forwardMessages:@[@(messageId)]
+		[[TGMessageStore shared] forwardMessages:@[@(messageId)]
 								  fromChat:fromChat toChat:toChatId];
 		TGMediaViewer *me = weakSelf;
 		UIView *host = me.backdrop ?: [UIApplication sharedApplication].keyWindow;
@@ -248,7 +250,7 @@ static BOOL TGViewerItemLocked(NSDictionary *item) {
 	NSDictionary *m = [self currentItem];
 	if (!fileId || !m)
 		return;
-	[[TGClient shared] addFileToDownloads:fileId.integerValue
+	[[TGMediaStore shared] addFileToDownloads:fileId.integerValue
 								   inChat:self.chatId
 								  message:[m[@"id"] longLongValue]];
 	[TGSnackbar showInView:self.backdrop text:@"Saved to Files." seconds:2
@@ -280,7 +282,7 @@ static BOOL TGViewerItemLocked(NSDictionary *item) {
 		TGMediaViewer *me = weakSelf;
 		if (!me)
 			return;
-		[[TGClient shared] deleteMessages:@[@(messageId)]
+		[[TGSendStore shared] deleteMessages:@[@(messageId)]
 								   inChat:me.chatId revoke:YES];
 		[TGSnackbar showInView:me.backdrop
 						  text:TGLocalized(@"Message Deleted.") seconds:2 onCommit:nil];

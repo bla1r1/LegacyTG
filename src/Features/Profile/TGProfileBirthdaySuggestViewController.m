@@ -1,5 +1,5 @@
 #import "TGProfileBirthdaySuggestViewController.h"
-#import "TGClient.h"
+#import "TGProfileStore.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
@@ -37,7 +37,7 @@
 			(NSDayCalendarUnit | NSMonthCalendarUnit | NSYearCalendarUnit)
 			fromDate:_picker.date];
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] suggestBirthdateDay:parts.day month:parts.month
+	[[TGProfileStore shared] suggestBirthdateDay:parts.day month:parts.month
 									  year:parts.year forUser:self.userId
 								completion:^(BOOL ok, NSString *error){
 		TGProfileBirthdaySuggestViewController *me = weakSelf;

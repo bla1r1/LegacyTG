@@ -1,5 +1,5 @@
 #import "TGFileInfoViewController.h"
-#import "TGClient.h"
+#import "TGMediaStore.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
@@ -114,23 +114,23 @@
 	}
 
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] fileInfo:self.fileId completion:^(NSDictionary *info){
+	[[TGMediaStore shared] fileInfo:self.fileId completion:^(NSDictionary *info){
 		weakSelf.info = info;
 		weakSelf.loaded = YES;
 		[weakSelf rebuildSections];
 	}];
-	[[TGClient shared] fileDownloadedPrefixSize:self.fileId offset:0
+	[[TGMediaStore shared] fileDownloadedPrefixSize:self.fileId offset:0
 									 completion:^(long long bytes){
 		weakSelf.prefixBytes = bytes;
 		[weakSelf rebuildSections];
 	}];
 	NSString *documents = [NSSearchPathForDirectoriesInDomains(
 			NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
-	[[TGClient shared] suggestedFileNameForFile:self.fileId directory:documents
+	[[TGMediaStore shared] suggestedFileNameForFile:self.fileId directory:documents
 									 completion:^(NSString *name){
 		weakSelf.suggestedName = name;
 		[weakSelf rebuildSections];
-		[[TGClient shared] fileNameInfo:name completion:^(NSDictionary *info){
+		[[TGMediaStore shared] fileNameInfo:name completion:^(NSDictionary *info){
 			weakSelf.names = info;
 			[weakSelf rebuildSections];
 		}];
@@ -205,7 +205,7 @@
 		TGFileInfoViewController *me = weakSelf;
 		if (!me)
 			return;
-		[[TGClient shared] deleteLocalFile:me.fileId];
+		[[TGMediaStore shared] deleteLocalFile:me.fileId];
 		[TGAlertSheet showMessage:TGLocalized(@"Done")
 							  title:TGLocalized(@"File") inView:me.view];
 		[me load];

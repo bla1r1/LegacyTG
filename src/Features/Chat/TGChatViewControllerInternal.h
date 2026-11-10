@@ -56,7 +56,8 @@ FOUNDATION_EXPORT CGFloat TGPollOptionRowHeight(NSDictionary *option, CGFloat ro
 
 @interface TGChatViewController () <UISearchBarDelegate, CLLocationManagerDelegate, TGEmojiPanelDelegate,
 		UIScrollViewDelegate, AVAudioPlayerDelegate, TGStreamingVoicePlayerDelegate,
-		ABPeoplePickerNavigationControllerDelegate, UIDocumentInteractionControllerDelegate>
+		ABPeoplePickerNavigationControllerDelegate, UIDocumentInteractionControllerDelegate,
+		UIDocumentPickerDelegate, MPMediaPickerControllerDelegate>
 
 @property (nonatomic, strong) UIDocumentInteractionController *docInteractionController;
 
@@ -295,16 +296,19 @@ FOUNDATION_EXPORT CGFloat TGPollOptionRowHeight(NSDictionary *option, CGFloat ro
 @property (nonatomic, copy) NSString *suppressedPreviewLink;
 @property (nonatomic, strong) UIDatePicker *pickPicker;
 @property (nonatomic, strong) UIButton *schedulePrimaryButton;
+@property (nonatomic, assign) NSInteger pickRepeatSeconds;
 @property (nonatomic, strong) TGSheet *pickSheet;
 /// Jump-to-date sheet: the "N messages" line, filled when the count lands.
 @property (nonatomic, strong) UILabel *pickCountLabel;
 - (void)holdScheduledSheet;
+- (void)showSendOptionsSheet;
 - (void)openScheduledMessages;
 - (void)updateComposerPlaceholder;
 - (void)dismissPreviewOrCompose;
 - (void)schedulePickerChanged:(UIDatePicker *)picker;
 - (void)scheduleWhenOnline:(UIButton *)sender;
 - (void)sendHeldText:(NSDictionary *)state;
+- (void)sendHeldTextSilently;
 
 - (void)reload;
 - (void)showPlaybackFailure;
@@ -457,6 +461,8 @@ FOUNDATION_EXPORT CGFloat TGPollOptionRowHeight(NSDictionary *option, CGFloat ro
 @interface TGChatViewController (Input)
 
 - (void)sendTapped;
+- (void)pickDocument;
+- (void)pickAudio;
 - (void)buildInputBar:(CGRect)b;
 - (void)clearComposeState;
 - (void)showComposeBanner:(NSString *)text;

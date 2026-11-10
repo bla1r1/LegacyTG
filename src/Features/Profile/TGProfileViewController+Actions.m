@@ -29,7 +29,7 @@
 /// app can take back - and the t.me link is a copy away.
 - (void)avatarTapped {
 	BOOL mine = !self.userId
-			|| self.userId == [[TGClient shared].me[@"id"] longLongValue];
+			|| self.userId == [[TGProfileStore shared].me[@"id"] longLongValue];
 	if (!mine){
 		TGProfilePhotosViewController *photos =
 				[[TGProfilePhotosViewController alloc] initWithUserId:self.userId];
@@ -43,7 +43,7 @@
 			@"Photos", @"Copy Link", nil];
 	NSString *sheetTitle = self.name.length ? self.name : @"Profile";
 	// The account wears no photo, so there is nothing to take back.
-	if ([TGClient shared].me[@"profile_photo"])
+	if ([TGProfileStore shared].me[@"profile_photo"])
 		[choices addObject:@"Remove Photo"];
 	[TGAlertSheet showChoices:choices
 						title:sheetTitle
@@ -59,7 +59,7 @@
 			return;
 		}
 		if ([picked isEqualToString:@"Copy Link"]){
-			[[TGClient shared] myUserLink:^(NSString *link){
+			[[TGProfileStore shared] myUserLink:^(NSString *link){
 				if (link.length){
 					[UIPasteboard generalPasteboard].string = link;
 					[TGAlertSheet showMessage:@"Link copied." title:nil
@@ -71,9 +71,9 @@
 		if ([picked isEqualToString:@"Remove Photo"]){
 			// The photo to drop is the one the account wears now - the first
 			// of the history is what Telegram wears back.
-			[[TGClient shared] userProfilePhotos:self.userId completion:^(NSArray *photos){
+			[[TGProfileStore shared] userProfilePhotos:self.userId completion:^(NSArray *photos){
 				NSDictionary *first = photos.firstObject;
-				[[TGClient shared] deleteProfilePhoto:
+				[[TGProfileStore shared] deleteProfilePhoto:
 						[first[@"photoId"] longLongValue] completion:^(BOOL ok){
 					if (ok)
 						[weakSelf buildHeader];
@@ -89,7 +89,7 @@
 /// answer - "Waiting for network".
 - (void)statusLabelOwnerChanged:(NSNotification *)note {
 	NSString *network = TGNetworkSubtitleForState(
-			(NSInteger)[TGClient shared].connectionState, nil);
+			(NSInteger)[TGProfileStore shared].connectionState, nil);
 	NSString *line = network ?: (self.restingStatus ?: @"");
 	if (line.length && ![self.headerView.statusText isEqualToString:line])
 		self.headerView.statusText = line;
@@ -106,8 +106,8 @@
 
 - (void)handleActionKey:(NSString *)action {
 	if ([action isEqualToString:@"saved"]){
-		int64_t myId = [[TGClient shared].me[@"id"] longLongValue];
-		int64_t savedChatId = [[TGClient shared] savedMessagesChatId] ?: myId;
+		int64_t myId = [[TGProfileStore shared].me[@"id"] longLongValue];
+		int64_t savedChatId = [[TGProfileStore shared] savedMessagesChatId] ?: myId;
 		TGChatViewController *chat = [[TGChatViewController alloc] init];
 		chat.chatId = savedChatId;
 		chat.chatTitle = @"Saved Messages";
@@ -134,7 +134,7 @@
 		[self addMemberTapped];
 	} else if ([action hasSuffix:@"mute"]){
 		self.muted = !self.muted;
-		[[TGClient shared] setChat:self.chatId muted:self.muted];
+		[[TGProfileStore shared] setChat:self.chatId muted:self.muted];
 		[self buildHeader];              // the tile says the opposite now
 	} else if ([action isEqualToString:@"search"]){
 		if (self.onSearchTapped) self.onSearchTapped();
@@ -168,7 +168,7 @@
 	if (!userId)
 		return;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] setUser:userId blocked:YES completion:^(BOOL ok){
+	[[TGProfileStore shared] setUser:userId blocked:YES completion:^(BOOL ok){
 		TGProfileViewController *me = weakSelf;
 		if (!me || !ok)
 			return;
@@ -183,7 +183,7 @@
 	int64_t userId = self.userId;
 	if (!userId)
 		return;
-	[[TGClient shared] request:@{@"@type" : @"getUserFullInfo", @"user_id" : @(userId)}
+	[[TGProfileStore shared] request:@{@"@type" : @"getUserFullInfo", @"user_id" : @(userId)}
 				   completion:^(NSDictionary *full){
 		NSString *url = full[@"bot_info"][@"privacy_policy_url"];
 		if (![url isKindOfClass:NSString.class] || !url.length)
@@ -201,11 +201,11 @@
 		return;
 	NSString *name = self.name;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] privateChatWithUser:userId completion:^(int64_t chatId){
+	[[TGProfileStore shared] privateChatWithUser:userId completion:^(int64_t chatId){
 		TGProfileViewController *me = weakSelf;
 		if (!me || !chatId)
 			return;
-		[[TGClient shared] sendText:[@"/" stringByAppendingString:command]
+		[[TGProfileStore shared] sendText:[@"/" stringByAppendingString:command]
 							 toChat:chatId];
 		TGChatViewController *chat = [[TGChatViewController alloc] init];
 		chat.chatId = chatId;
@@ -221,7 +221,7 @@
 		return;
 	NSString *name = self.name;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] canSendMessageToUser:userId completion:^(NSString *result){
+	[[TGProfileStore shared] canSendMessageToUser:userId completion:^(NSString *result){
 		TGProfileViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -236,7 +236,7 @@
 							   inView:me.view];
 			return;
 		}
-		[[TGClient shared] privateChatWithUser:userId completion:^(int64_t chatId){
+		[[TGProfileStore shared] privateChatWithUser:userId completion:^(int64_t chatId){
 			TGProfileViewController *again = weakSelf;
 			if (!again || !chatId)
 				return;
@@ -284,7 +284,7 @@
 		// Share Contact only exists for a real contact with a number to send.
 		if (self.isContact && self.phoneNumber.length)
 			[items addObject:@{@"title" : @"Share Contact", @"icon" : @"forward"}];
-		if (self.userId == [[TGClient shared].me[@"id"] longLongValue])
+		if (self.userId == [[TGProfileStore shared].me[@"id"] longLongValue])
 			[items addObject:@{@"title" : @"Copy Link", @"icon" : @"forward"}];
 		// Bots cannot have secret chats.
 		if (!self.isBot)
@@ -294,7 +294,7 @@
 	// they may accept, the picture only this account sees, and the card their
 	// link opens with. The note row is added once, below, so it routes to the
 	// note editor rather than the local-message branch.
-	if (self.userId && self.userId != [[TGClient shared].me[@"id"] longLongValue]){
+	if (self.userId && self.userId != [[TGProfileStore shared].me[@"id"] longLongValue]){
 		[items addObject:@{@"title" : @"Suggest as Profile Photo", @"icon" : @"react"}];
 		[items addObject:@{@"title" : @"Suggest Birthday", @"icon" : @"star"}];
 		[items addObject:@{@"title" : (self.hasPersonalPhoto
@@ -328,7 +328,7 @@
 	}
 	// A bot's own record is editable by the account that owns it, and its
 	// commands carry the Settings / Help / Privacy rows official offers.
-	if (self.userId && (self.isBot || [[TGClient shared] userIsBot:self.userId])){
+	if (self.userId && (self.isBot || [[TGProfileStore shared] userIsBot:self.userId])){
 		[items addObject:@{@"title" : @"Bot Settings", @"icon" : @"data"}];
 		[items addObject:@{@"title" : @"Help", @"icon" : @"faq"}];
 		[items addObject:@{@"title" : @"Privacy Policy", @"icon" : @"policy"}];
@@ -338,7 +338,7 @@
 	if (self.userId && !self.isOwnProfile)
 		[items addObject:@{@"title" : (self.personalNote.length
 				? @"Note" : @"Add Notes"), @"icon" : @"edit"}];
-	if ([[TGClient shared] chatIsSavedMessages:self.chatId])
+	if ([[TGProfileStore shared] chatIsSavedMessages:self.chatId])
 		[items insertObject:@{@"title" : @"Topics", @"icon" : @"folder"} atIndex:0];
 	if (self.onJumpToDateTapped)
 		[items addObject:@{@"title" : @"Jump to Date", @"icon" : @"folder"}];
@@ -348,7 +348,7 @@
 		[items addObject:@{@"title" : @"Clear history", @"icon" : @"delete"}];
 	[items addObject:@{@"title" : @"Report", @"icon" : @"privacy",
 					   @"destructive" : @YES}];
-	BOOL isMe = self.userId == [[TGClient shared].me[@"id"] longLongValue];
+	BOOL isMe = self.userId == [[TGProfileStore shared].me[@"id"] longLongValue];
 	// Delete Contact has its own bottom section on the profile.
 	// Leaving and deleting are not the same row. Telegram keeps Delete Group
 	// for the owner, because a group without one cannot be left; everybody
@@ -386,7 +386,7 @@
 /// and replacing it so the old one stops working.
 - (void)reportThisChatWithOption:(NSString *)optionId {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] reportChat:self.chatId
+	[[TGProfileStore shared] reportChat:self.chatId
 						 optionId:optionId
 							 text:@""
 					   completion:^(NSString *title, NSArray *options, BOOL done){
@@ -434,7 +434,7 @@
 					onConfirm:^{
 		// deleteChat removes the row and leaves the group in one call,
 		// so a later message cannot put it back on the list.
-		[[TGClient shared] deleteChat:chatId];
+		[[TGProfileStore shared] deleteChat:chatId];
 		[self.navigationController popToRootViewControllerAnimated:YES];
 	}];
 }
@@ -451,7 +451,7 @@
 		// account it hands out, which here is the signed-in one.
 		NSString *name = self.name;
 		__weak typeof(self) weakSelf = self;
-		[[TGClient shared] myUserLink:^(NSString *link){
+		[[TGProfileStore shared] myUserLink:^(NSString *link){
 			if (!link.length){
 				[TGAlertSheet showMessage:@"An error occurred."
 									title:@"Copy Link"
@@ -500,7 +500,7 @@
 						   inView:self.view
 						 onChoice:^(NSInteger index){
 			static const NSInteger seconds[4] = {0, 86400, 604800, 2592000};
-			[[TGClient shared] setChat:chatId autoDeleteSeconds:seconds[index]];
+			[[TGProfileStore shared] setChat:chatId autoDeleteSeconds:seconds[index]];
 		}];
 		return;
 	}
@@ -518,7 +518,7 @@
 		int64_t userId = self.userId;
 		NSString *name = self.name;
 		__weak typeof(self) weakSelf = self;
-		[[TGClient shared] createSecretChatWithUser:userId
+		[[TGProfileStore shared] createSecretChatWithUser:userId
 										completion:^(int64_t chatId){
 			TGProfileViewController *me = weakSelf;
 			if (!chatId){
@@ -652,7 +652,7 @@
 		NSString *warn = @"View as Topics";
 		NSString *now = @"Messages";
 		NSString *warnBack = @"View as Topics";
-		[[TGClient shared] chatWithViewAsTopics:chatId completion:^(BOOL viewAsTopics){
+		[[TGProfileStore shared] chatWithViewAsTopics:chatId completion:^(BOOL viewAsTopics){
 			NSString *action = viewAsTopics ? now : next;
 			NSString *say = viewAsTopics ? warnBack : warn;
 			[TGAlertSheet showConfirm:say
@@ -661,7 +661,7 @@
 						  destructive:NO
 							   inView:weakSelf.view
 							onConfirm:^{
-				[[TGClient shared] setChatViewAsTopics:chatId
+				[[TGProfileStore shared] setChatViewAsTopics:chatId
 										  viewAsTopics:!viewAsTopics
 											completion:^(BOOL ok){
 					TGProfileViewController *me = weakSelf;
@@ -687,7 +687,7 @@
 							 action:@"Save"
 							 inView:weakSelf.view
 						   onSubmit:^(NSString *text){
-				[[TGClient shared] setUserNote:text forUser:userId
+				[[TGProfileStore shared] setUserNote:text forUser:userId
 									completion:^(BOOL ok, NSString *error){
 					TGProfileViewController *me = weakSelf;
 					if (!ok){
@@ -715,7 +715,7 @@
 				write();
 				return;
 			}
-			[[TGClient shared] setUserNote:@"" forUser:userId
+			[[TGProfileStore shared] setUserNote:@"" forUser:userId
 								completion:^(BOOL ok, NSString *error){
 				TGProfileViewController *me = weakSelf;
 				if (!ok){
@@ -762,7 +762,7 @@
 					  destructive:YES
 						   inView:self.view
 						onConfirm:^{
-			[[TGClient shared] setPersonalProfilePhotoAtPath:nil forUser:userId
+			[[TGProfileStore shared] setPersonalProfilePhotoAtPath:nil forUser:userId
 												  completion:^(BOOL ok, NSString *error){
 				TGProfileViewController *me = weakSelf;
 				if (!ok){
@@ -782,7 +782,7 @@
 	if ([title isEqualToString:@"Share"]){
 		int64_t userId = self.userId;
 		__weak typeof(self) weakSelf = self;
-		[[TGClient shared] profileShareThemeBackdropsWithCompletion:^(NSArray *backdrops,
+		[[TGProfileStore shared] profileShareThemeBackdropsWithCompletion:^(NSArray *backdrops,
 																	   NSString *error){
 			TGProfileViewController *me = weakSelf;
 			if (!me)
@@ -805,7 +805,7 @@
 					 destructiveIndex:-1
 							   inView:me.view
 							 onChoice:^(NSInteger index){
-				[[TGClient shared] privateChatWithUser:userId completion:^(int64_t chatId){
+				[[TGProfileStore shared] privateChatWithUser:userId completion:^(int64_t chatId){
 					if (!chatId){
 						[TGAlertSheet showMessage:@"An error occurred."
 											title:@"Share" inView:me.view];
@@ -820,12 +820,12 @@
 							[me loadDetails];
 					};
 					if (index == 0){
-						[[TGClient shared] clearProfileShareThemeForChat:chatId
+						[[TGProfileStore shared] clearProfileShareThemeForChat:chatId
 															  completion:answer];
 						return;
 					}
 					NSDictionary *backdrop = backdrops[(NSUInteger)index - 1];
-					[[TGClient shared] setProfileShareThemeForChat:chatId
+					[[TGProfileStore shared] setProfileShareThemeForChat:chatId
 														backdropId:[backdrop[@"id"] integerValue]
 														useDefault:NO
 														completion:answer];
@@ -857,7 +857,7 @@
 					  destructive:YES
 						   inView:self.view
 						onConfirm:^{
-			[[TGClient shared] removeContactWithUserId:userId completion:^(BOOL ok){
+			[[TGProfileStore shared] removeContactWithUserId:userId completion:^(BOOL ok){
 				TGProfileViewController *me = weakSelf;
 				if (!me)
 					return;
@@ -896,7 +896,7 @@
 					  destructive:YES
 						   inView:self.view
 						onConfirm:^{
-			[[TGClient shared] deleteChatForEveryone:chatId completion:^(NSString *error){
+			[[TGProfileStore shared] deleteChatForEveryone:chatId completion:^(NSString *error){
 				TGProfileViewController *me = weakSelf;
 				if (error) {
 					[TGAlertSheet showMessage:error title:title inView:me.view];
@@ -915,7 +915,7 @@
 						   action:@"Clear"
 					  destructive:YES
 						   inView:self.view
-						onConfirm:^{ [[TGClient shared] clearHistoryInChat:chatId]; }];
+						onConfirm:^{ [[TGProfileStore shared] clearHistoryInChat:chatId]; }];
 		return;
 	}
 
@@ -926,7 +926,7 @@
 		int64_t userId = self.userId;
 		__weak typeof(self) weakSelf = self;
 		if (!block){
-			[[TGClient shared] setUser:userId blocked:NO completion:^(BOOL ok){
+			[[TGProfileStore shared] setUser:userId blocked:NO completion:^(BOOL ok){
 				TGProfileViewController *me = weakSelf;
 				if (!me || !ok)
 					return;
@@ -941,7 +941,7 @@
 					  destructive:YES
 						   inView:self.view
 						onConfirm:^{
-			[[TGClient shared] setUser:userId blocked:YES completion:^(BOOL ok){
+			[[TGProfileStore shared] setUser:userId blocked:YES completion:^(BOOL ok){
 				TGProfileViewController *me = weakSelf;
 				if (!me || !ok)
 					return;
@@ -992,10 +992,10 @@
 				[me loadDetails];
 		};
 		if (suggest)
-			[[TGClient shared] suggestProfilePhotoAtPath:path forUser:userId
+			[[TGProfileStore shared] suggestProfilePhotoAtPath:path forUser:userId
 											  completion:answer];
 		else
-			[[TGClient shared] setPersonalProfilePhotoAtPath:path forUser:userId
+			[[TGProfileStore shared] setPersonalProfilePhotoAtPath:path forUser:userId
 												  completion:answer];
 		return;
 	}

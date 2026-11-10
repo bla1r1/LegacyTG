@@ -1,7 +1,7 @@
 #import "TGProfileViewControllerInternal.h"
 #import "TGPeerStore.h"
 #import "TGLocalization.h"
-#import "TGClientInternal.h"
+#import "TGProfileStore.h"
 #import "TGNameWithStatus.h"
 #import "TGCustomEmojiStore.h"
 #import "TGStyle.h"
@@ -236,7 +236,7 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 		me.chatAvatars[@(chatId)] = round;
 		[me reloadTableDebounced];
 		if ([kind isEqualToString:@"communityChat"]){
-			NSDictionary *fullComm = [[TGClient shared] cachedCommunityFullInfo:me.communityId];
+			NSDictionary *fullComm = [[TGProfileStore shared] cachedCommunityFullInfo:me.communityId];
 			NSArray *chats = [fullComm[@"chats"] isKindOfClass:[NSArray class]] ? fullComm[@"chats"] : @[];
 			NSUInteger count = MIN((NSUInteger)3, chats.count);
 			NSMutableArray *cids = [NSMutableArray arrayWithCapacity:count];
@@ -331,13 +331,13 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 - (void)reloadCommunityRow {
 	if (self.communityId == 0) return;
 	NSDictionary *commRecord = nil;
-	for (NSDictionary *c in [TGClient shared].communities) {
+	for (NSDictionary *c in [TGProfileStore shared].communities) {
 		if ([c[@"id"] longLongValue] == self.communityId) {
 			commRecord = c;
 			break;
 		}
 	}
-	NSDictionary *fullComm = [[TGClient shared] cachedCommunityFullInfo:self.communityId];
+	NSDictionary *fullComm = [[TGProfileStore shared] cachedCommunityFullInfo:self.communityId];
 	NSString *commName = commRecord[@"name"];
 	if (!commName.length && [fullComm[@"name"] isKindOfClass:[NSString class]]) {
 		commName = fullComm[@"name"];
@@ -364,13 +364,13 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 	if (self.chatAvatars[@(self.communityId)]) return;
 
 	NSDictionary *commRecord = nil;
-	for (NSDictionary *c in [TGClient shared].communities) {
+	for (NSDictionary *c in [TGProfileStore shared].communities) {
 		if ([c[@"id"] longLongValue] == self.communityId) {
 			commRecord = c;
 			break;
 		}
 	}
-	NSDictionary *fullComm = [[TGClient shared] cachedCommunityFullInfo:self.communityId];
+	NSDictionary *fullComm = [[TGProfileStore shared] cachedCommunityFullInfo:self.communityId];
 	int64_t photoId = [commRecord[@"photoFileId"] respondsToSelector:@selector(longLongValue)]
 			? [commRecord[@"photoFileId"] longLongValue] : 0;
 	if (photoId == 0 && [fullComm[@"photoFileId"] respondsToSelector:@selector(longLongValue)]) {
@@ -379,7 +379,7 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 
 	__weak typeof(self) weakSelf = self;
 	if (photoId != 0) {
-		[[TGClient shared] downloadFile:photoId priority:TGDownloadPriorityAvatar completion:^(NSString *path){
+		[[TGProfileStore shared] downloadFile:photoId priority:TGDownloadPriorityAvatar completion:^(NSString *path){
 			if (!path.length) return;
 			CGFloat side = TGMetricMenuGlyph;
 			CGFloat scale = [UIScreen mainScreen].scale;

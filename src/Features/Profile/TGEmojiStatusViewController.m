@@ -1,7 +1,7 @@
 #import "TGEmojiStatusViewController.h"
 #import "TGLocalization.h"
 #import "TGAlertSheet.h"
-#import "TGClient.h"
+#import "TGProfileStore.h"
 #import "TGCustomEmojiStore.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
@@ -78,13 +78,13 @@ static const NSTimeInterval kStatusTwoDays = 48 * kStatusHour;
 			[me buildSectionsWithThemed:themed default:standard
 								recent:@[] refused:refused];
 		};
-		[[TGClient shared] themedChatEmojiStatusesWithCompletion:^(NSArray *ids){
+		[[TGProfileStore shared] themedChatEmojiStatusesWithCompletion:^(NSArray *ids){
 			themed = ids; done();
 		}];
-		[[TGClient shared] defaultChatEmojiStatusesWithCompletion:^(NSArray *ids){
+		[[TGProfileStore shared] defaultChatEmojiStatusesWithCompletion:^(NSArray *ids){
 			standard = ids; done();
 		}];
-		[[TGClient shared] disallowedChatEmojiStatusesWithCompletion:^(NSArray *ids){
+		[[TGProfileStore shared] disallowedChatEmojiStatusesWithCompletion:^(NSArray *ids){
 			refused = ids; done();
 		}];
 		return;
@@ -103,13 +103,13 @@ static const NSTimeInterval kStatusTwoDays = 48 * kStatusHour;
 		[me buildSectionsWithThemed:themed default:standard
 							recent:recentIds refused:@[]];
 	};
-	[[TGClient shared] themedEmojiStatusesWithCompletion:^(NSArray *ids){
+	[[TGProfileStore shared] themedEmojiStatusesWithCompletion:^(NSArray *ids){
 		themed = ids; done();
 	}];
-	[[TGClient shared] defaultEmojiStatusesWithCompletion:^(NSArray *ids){
+	[[TGProfileStore shared] defaultEmojiStatusesWithCompletion:^(NSArray *ids){
 		standard = ids; done();
 	}];
-	[[TGClient shared] recentEmojiStatusesWithCompletion:^(NSArray *rows){
+	[[TGProfileStore shared] recentEmojiStatusesWithCompletion:^(NSArray *rows){
 		recent = rows; done();
 	}];
 }
@@ -227,7 +227,7 @@ static const NSTimeInterval kStatusTwoDays = 48 * kStatusHour;
 	if (!ids.count)
 		return;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] customEmojiStickersForIds:ids
+	[[TGProfileStore shared] customEmojiStickersForIds:ids
 									  completion:^(NSArray *stickers){
 		TGEmojiStatusViewController *me = weakSelf;
 		if (!me)
@@ -247,7 +247,7 @@ static const NSTimeInterval kStatusTwoDays = 48 * kStatusHour;
 
 - (void)clearRecent {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] clearRecentEmojiStatusesWithCompletion:^(BOOL ok, NSString *error){
+	[[TGProfileStore shared] clearRecentEmojiStatusesWithCompletion:^(BOOL ok, NSString *error){
 		[weakSelf showResult:ok error:error title:TGLocalized(@"Recently Used")];
 		if (ok)
 			[weakSelf loadLists];
@@ -285,7 +285,7 @@ static const NSTimeInterval kStatusTwoDays = 48 * kStatusHour;
 	__weak typeof(self) weakSelf = self;
 	NSString *title = self.subjectTitle ?: TGLocalized(@"Emoji Status");
 	if (self.target == TGEmojiStatusTargetChat){
-		[[TGClient shared] setChatEmojiStatus:emojiId expirationDate:expiration
+		[[TGProfileStore shared] setChatEmojiStatus:emojiId expirationDate:expiration
 									  inChat:self.chatId
 								  completion:^(BOOL ok, NSString *error){
 			[weakSelf showResult:ok error:error title:title];
@@ -293,14 +293,14 @@ static const NSTimeInterval kStatusTwoDays = 48 * kStatusHour;
 		return;
 	}
 	if (self.target == TGEmojiStatusTargetUser){
-		[[TGClient shared] setUserEmojiStatus:emojiId expirationDate:expiration
+		[[TGProfileStore shared] setUserEmojiStatus:emojiId expirationDate:expiration
 									  forUser:self.userId
 								   completion:^(BOOL ok, NSString *error){
 			[weakSelf showResult:ok error:error title:title];
 		}];
 		return;
 	}
-	[[TGClient shared] setEmojiStatus:emojiId expirationDate:expiration
+	[[TGProfileStore shared] setEmojiStatus:emojiId expirationDate:expiration
 						  completion:^(BOOL ok, NSString *error){
 		[weakSelf showResult:ok error:error title:title];
 	}];
@@ -309,14 +309,14 @@ static const NSTimeInterval kStatusTwoDays = 48 * kStatusHour;
 - (void)clearTapped {
 	__weak typeof(self) weakSelf = self;
 	if (self.target == TGEmojiStatusTargetUser){
-		[[TGClient shared] setUserEmojiStatus:0 expirationDate:0
+		[[TGProfileStore shared] setUserEmojiStatus:0 expirationDate:0
 									  forUser:self.userId
 								   completion:^(BOOL ok, NSString *error){
 			[weakSelf showResult:ok error:error title:TGLocalized(@"Emoji Status")];
 		}];
 		return;
 	}
-	[[TGClient shared] setEmojiStatus:0 expirationDate:0
+	[[TGProfileStore shared] setEmojiStatus:0 expirationDate:0
 						  completion:^(BOOL ok, NSString *error){
 		[weakSelf showResult:ok error:error title:TGLocalized(@"Emoji Status")];
 	}];

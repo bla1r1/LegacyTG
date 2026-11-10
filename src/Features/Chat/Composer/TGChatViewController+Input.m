@@ -86,7 +86,10 @@
 - (void)setEnabled:(BOOL)enabled {
 	_enabled = enabled;
 	self.editable = enabled;
-	self.selectable = enabled;
+	// -setSelectable: is absent on this iOS 6 build; without editable there
+	// is nothing to select anyway.
+	if ([self respondsToSelector:@selector(setSelectable:)])
+		self.selectable = enabled;
 	if (!enabled)
 		[self resignFirstResponder];
 }
@@ -733,7 +736,8 @@ static void TGTextFieldSetSelectedRange(UITextView *tf, NSRange range) {
 											toChat:self.chatId
 											thread:self.threadId
 										   replyTo:self.replyToId
-								   schedulingState:nil];
+								   schedulingState:nil
+											silent:self.silentPosting];
 		}
 	}
 
@@ -801,6 +805,12 @@ static void TGTextFieldSetSelectedRange(UITextView *tf, NSRange range) {
 - (void)sendHeld:(UILongPressGestureRecognizer *)hold {
 	if (hold.state != UIGestureRecognizerStateBegan)
 		return;
+	[self showSendOptionsSheet];
+}
+
+/// The hold's menu, also reachable from the dev URL handler so a script can
+/// check the send options without a finger.
+- (void)showSendOptionsSheet {
 	NSString *text = [self.input.text stringByTrimmingCharactersInSet:
 			[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 	if (!text.length){
@@ -816,6 +826,7 @@ static void TGTextFieldSetSelectedRange(UITextView *tf, NSRange range) {
 	NSArray *choices = @[
 		@"Format",
 		@"Create with AI",
+		@"Send Without Sound",
 		@"Schedule Message",
 		@"Send When Online",
 		@"Preview"
@@ -838,8 +849,10 @@ static void TGTextFieldSetSelectedRange(UITextView *tf, NSRange range) {
 			vc.hidesBottomBarWhenPushed = YES;
 			[weakSelf.navigationController pushViewController:vc animated:YES];
 		} else if (index == 2)
-			[weakSelf holdScheduledSheet];
+			[weakSelf sendHeldTextSilently];
 		else if (index == 3)
+			[weakSelf holdScheduledSheet];
+		else if (index == 4)
 			[weakSelf sendHeldText:[TGMessageStore scheduledWhenOnline]];
 		else
 			[weakSelf previewFormattingOfText:text];
@@ -883,7 +896,24 @@ static void TGTextFieldSetSelectedRange(UITextView *tf, NSRange range) {
 		return;
 	[[TGSendStore shared] sendText:text toChat:self.chatId
 							thread:self.threadId replyTo:self.replyToId
-					schedulingState:state];
+					schedulingState:state silent:self.silentPosting];
+	self.input.text = @"";
+	self.composerText = [[TGComposerText alloc] initWithText:@"" entities:@[]];
+	[self clearComposeState];
+	[[TGMessageStore shared] setDraft:@"" inChat:self.chatId thread:self.threadId replyTo:0];
+	[[TGMessageStore shared] cancelTypingInChat:self.chatId thread:self.threadId];
+}
+
+/// Send the composer's text now without a sound, the hold sheet's silent
+/// choice. The chat's own silent default is not touched.
+- (void)sendHeldTextSilently {
+	NSString *text = [self.input.text stringByTrimmingCharactersInSet:
+			[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+	if (!text.length)
+		return;
+	[[TGSendStore shared] sendText:text toChat:self.chatId
+							thread:self.threadId replyTo:self.replyToId
+					schedulingState:nil silent:YES];
 	self.input.text = @"";
 	self.composerText = [[TGComposerText alloc] initWithText:@"" entities:@[]];
 	[self clearComposeState];
@@ -909,7 +939,8 @@ static void TGTextFieldSetSelectedRange(UITextView *tf, NSRange range) {
 	static const CGFloat kBar = TGMetricRow, kPicker = TGMetricPickerHeight;
 
 	TGSheet *sheet = [TGSheet sheetForView:self.view.window ?: self.view];
-	UIView *card = [sheet addCardOfHeight:kBar + kPicker + kBar edgeToEdge:YES];
+	UIView *card = [sheet addCardOfHeight:kBar + kPicker + kBar + TGHalf(kBar)
+							   edgeToEdge:YES];
 
 	UIDatePicker *picker = [[UIDatePicker alloc] initWithFrame:
 			CGRectMake(0, kBar, card.bounds.size.width, kPicker)];
@@ -953,10 +984,47 @@ static void TGTextFieldSetSelectedRange(UITextView *tf, NSRange range) {
 	 forControlEvents:UIControlEventTouchUpInside];
 	[card addSubview:online];
 
+	// Repeat is a cycle rather than a picker: Never, Daily, Weekly, Monthly.
+	// The period travels as seconds beside the date, which is what TDLib's
+	// messageSchedulingStateSendAtDate.repeat_period carries.
+	self.pickRepeatSeconds = 0;
+	UIButton *repeat = [UIButton buttonWithType:UIButtonTypeCustom];
+	repeat.frame = CGRectMake(0, kBar + kPicker + kBar,
+			card.bounds.size.width, TGHalf(kBar));
+	repeat.titleLabel.font = TGFontCaption();
+	[repeat setTitleColor:[[TGTheme shared] accentColour] forState:UIControlStateNormal];
+	[repeat addTarget:self action:@selector(scheduleRepeatTapped:)
+	 forControlEvents:UIControlEventTouchUpInside];
+	[self updateScheduleRepeatTitle:repeat];
+	[card addSubview:repeat];
+
 	self.pickPicker = picker;
 	self.pickSheet = sheet;
 	[self schedulePickerChanged:picker];
 	[sheet present];
+}
+
+/// The four repeat choices, in the order a tap cycles them.
+static NSInteger const kTGRepeatPeriods[] = {0, 86400, 604800, 2592000};
+
+- (void)updateScheduleRepeatTitle:(UIButton *)button {
+	static NSString *const names[] = {@"Never", @"Daily", @"Weekly", @"Monthly"};
+	NSInteger index = 0;
+	for (NSInteger i = 0; i < 4; i++)
+		if (kTGRepeatPeriods[i] == self.pickRepeatSeconds)
+			index = i;
+	[button setTitle:[NSString stringWithFormat:@"Repeat: %@",
+			TGLocalized(names[index])] forState:UIControlStateNormal];
+	button.accessibilityValue = names[index];
+}
+
+- (void)scheduleRepeatTapped:(UIButton *)sender {
+	NSInteger index = 0;
+	for (NSInteger i = 0; i < 4; i++)
+		if (kTGRepeatPeriods[i] == self.pickRepeatSeconds)
+			index = i;
+	self.pickRepeatSeconds = kTGRepeatPeriods[(index + 1) % 4];
+	[self updateScheduleRepeatTitle:sender];
 }
 
 - (void)schedulePickerChanged:(UIDatePicker *)picker {
@@ -991,6 +1059,7 @@ static void TGTextFieldSetSelectedRange(UITextView *tf, NSRange range) {
 	[self.pickSheet dismiss];
 	self.pickSheet = nil;
 	self.pickPicker = nil;
+	self.pickRepeatSeconds = 0;
 	self.schedulePrimaryButton = nil;
 	[self sendHeldText:[TGMessageStore scheduledWhenOnline]];
 	self.scheduledCount++;
@@ -1001,11 +1070,13 @@ static void TGTextFieldSetSelectedRange(UITextView *tf, NSRange range) {
 /// read: the date is taken first, the sheet dismissed after.
 - (void)scheduleCommit:(UIBarButtonItem *)sender {
 	NSTimeInterval date = [self.pickPicker.date timeIntervalSince1970];
+	NSInteger repeat = self.pickRepeatSeconds;
 	[self.pickSheet dismiss];
 	self.pickSheet = nil;
 	self.pickPicker = nil;
+	self.pickRepeatSeconds = 0;
 	self.schedulePrimaryButton = nil;
-	[self sendHeldText:[TGMessageStore scheduledAtDate:date]];
+	[self sendHeldText:[TGMessageStore scheduledAtDate:date repeatPeriod:repeat]];
 	// The queue has one more in it than the menu last said.
 	self.scheduledCount++;
 	// Official lands the user on the queue so the result is visible.
@@ -1158,7 +1229,18 @@ static void TGTextFieldSetSelectedRange(UITextView *tf, NSRange range) {
 }
 
 - (void)emojiPanel:(TGEmojiPanel *)panel didPickAnimation:(NSDictionary *)animation {
-	[[TGSendStore shared] sendAnimation:animation toChat:self.chatId thread:self.threadId];
+	NSString *caption = [self.input.text stringByTrimmingCharactersInSet:
+			[NSCharacterSet whitespaceAndNewlineCharacterSet]] ?: @"";
+	[[TGSendStore shared] sendAnimation:animation caption:caption
+								 toChat:self.chatId thread:self.threadId];
+	if (caption.length){
+		self.input.text = @"";
+		self.composerText = [[TGComposerText alloc] initWithText:@"" entities:@[]];
+		[self clearComposeState];
+		[[TGMessageStore shared] setDraft:@"" inChat:self.chatId
+								  thread:self.threadId replyTo:0];
+		[[TGMessageStore shared] cancelTypingInChat:self.chatId thread:self.threadId];
+	}
 }
 
 #pragma mark - attachments
@@ -1196,6 +1278,8 @@ static void TGTextFieldSetSelectedRange(UITextView *tf, NSRange range) {
 		switch (choice){
 			case TGAttachChoiceGallery:  [weakSelf pickMedia]; break;
 			case TGAttachChoiceCamera:   [weakSelf pickCamera]; break;
+			case TGAttachChoiceDocument: [weakSelf pickDocument]; break;
+			case TGAttachChoiceAudio:    [weakSelf pickAudio]; break;
 			case TGAttachChoiceLocation: [weakSelf sendCurrentLocation]; break;
 			case TGAttachChoiceContact:  [weakSelf pickContact]; break;
 			case TGAttachChoiceChecklist: {

@@ -21,4 +21,22 @@
 - (void)downloadFile:(NSInteger)fileId priority:(NSInteger)priority
           completion:(void (^)(NSString *path))completion;
 
+
+// ─── file facts and the local copy ───────────────────────────────────────────
+- (void)fileInfo:(NSInteger)fileId completion:(void (^)(NSDictionary *info))completion;
+- (void)fileDownloadedPrefixSize:(NSInteger)fileId offset:(long long)offset
+					  completion:(void (^)(long long size))completion;
+- (void)suggestedFileNameForFile:(NSInteger)fileId directory:(NSString *)directory
+					  completion:(void (^)(NSString *name))completion;
+- (void)fileNameInfo:(NSString *)name completion:(void (^)(NSDictionary *info))completion;
+- (void)deleteLocalFile:(NSInteger)fileId;
+
+- (void)addFileToDownloads:(NSInteger)fileId inChat:(int64_t)chatId
+					message:(int64_t)messageId;
+- (void)cancelDownloadOfFile:(NSInteger)fileId onlyIfPending:(BOOL)onlyIfPending;
+
+/// Decoded buffers kept for the media viewer, bounded to 16 MB on 32-bit.
+- (NSData *)cachedBufferForFileId:(NSInteger)fileId;
+- (void)cacheBuffer:(NSData *)data forFileId:(NSInteger)fileId;
+
 @end

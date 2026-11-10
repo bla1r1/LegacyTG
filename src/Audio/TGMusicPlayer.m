@@ -2,14 +2,25 @@
 #import "TGClient.h"
 #import "TGIcons.h"
 #import "TGPlaybackQueue.h"
+#import "TGMediaStore.h"
+#import "TGMusicStreamer.h"
 #import <AVFoundation/AVFoundation.h>
 #import <MediaPlayer/MediaPlayer.h>
 #import <UIKit/UIKit.h>
 
 NSString *const TGMusicPlayerChangedNotification = @"TGMusicPlayerChanged";
 
-@interface TGMusicPlayer () <AVAudioPlayerDelegate>
+@interface TGMusicPlayer () <AVAudioPlayerDelegate, TGMusicStreamerDelegate>
 @property (nonatomic, strong) AVAudioPlayer *player;
+/// Progressive playback of the file as it downloads. When it is running the
+/// AVAudioPlayer stays nil; a format it cannot parse clears it and leaves the
+/// existing download-then-play path to take over.
+@property (nonatomic, strong) TGMusicStreamer *streamer;
+@property (nonatomic, strong) NSTimer *streamTimer;
+@property (nonatomic, assign) NSInteger streamFileId;
+@property (nonatomic, assign) BOOL streamFailed;
+@property (nonatomic, assign) BOOL streamPollInFlight;
+@property (nonatomic, assign) float storedVolume;
 @property (nonatomic, strong) NSArray *tracks;
 /// The track being fetched to play. Skipping on cancels it: TDLib runs a few
 /// downloads at once, and a skipped track held the slot of the wanted one.
@@ -35,6 +46,7 @@ NSString *const TGMusicPlayerChangedNotification = @"TGMusicPlayerChanged";
 	if ((self = [super init])){
 		_index = NSNotFound;
 		_backgroundTask = UIBackgroundTaskInvalid;
+		_storedVolume = 1.0f;
 	}
 	return self;
 }
@@ -71,6 +83,7 @@ NSString *const TGMusicPlayerChangedNotification = @"TGMusicPlayerChanged";
 	self.current = self.tracks[index];
 	// The old track stops now, not when the new file has arrived: the cover
 	// changed at once and the sound went on for seconds.
+	[self stopStreaming];
 	[self.player stop];
 	self.player = nil;
 	[self announce];
@@ -87,6 +100,12 @@ NSString *const TGMusicPlayerChangedNotification = @"TGMusicPlayerChanged";
 
 	__weak typeof(self) weakSelf = self;
 	NSInteger wanted = index;
+
+	// Two paths at once: the parser reads the growing local file and starts
+	// the track in seconds, while the download completion stays as the
+	// fallback for a format or a layout the parser cannot stream.
+	[self startStreamingFileId:docId.integerValue];
+
 	CFAbsoluteTime asked = CFAbsoluteTimeGetCurrent();
 	[[TGClient shared] downloadFile:docId.integerValue priority:TGDownloadPriorityOnScreen
 						 completion:^(NSString *path){
@@ -95,6 +114,9 @@ NSString *const TGMusicPlayerChangedNotification = @"TGMusicPlayerChanged";
 		if (!me || me.index != wanted)
 			return;
 		me.pendingFileId = 0;
+		// The streamer already owns the sound; a second player would fight it.
+		if (me.streamer)
+			return;
 		NSLog(@"music: file ready in %.1f s", CFAbsoluteTimeGetCurrent() - asked);
 		if (!path.length){
 			[me next];
@@ -104,7 +126,118 @@ NSString *const TGMusicPlayerChangedNotification = @"TGMusicPlayerChanged";
 	}];
 }
 
+#pragma mark - progressive playback
+
+- (void)startStreamingFileId:(NSInteger)fileId {
+	self.streamFileId = fileId;
+	self.streamFailed = NO;
+	self.streamPollInFlight = NO;
+	TGMusicStreamer *streamer = [[TGMusicStreamer alloc] initWithDelegate:self];
+	streamer.volume = self.storedVolume;
+	self.streamer = streamer;
+	[streamer play];
+	[self.streamTimer invalidate];
+	self.streamTimer = [NSTimer scheduledTimerWithTimeInterval:0.2
+													   target:self
+													 selector:@selector(pollStream:)
+													 userInfo:nil
+													  repeats:YES];
+}
+
+- (void)pollStream:(NSTimer *)timer {
+	if (self.streamFailed || !self.streamer || self.streamPollInFlight){
+		if (self.streamFailed || !self.streamer)
+			[timer invalidate];
+		return;
+	}
+	NSInteger fileId = self.streamFileId;
+	NSInteger wanted = self.index;
+	self.streamPollInFlight = YES;
+	__weak typeof(self) weakSelf = self;
+	[[TGMediaStore shared] fileInfo:fileId completion:^(NSDictionary *info){
+		TGMusicPlayer *me = weakSelf;
+		if (!me)
+			return;
+		me.streamPollInFlight = NO;
+		if (me.index != wanted || me.streamFileId != fileId || !me.streamer)
+			return;
+
+		NSString *path = info[@"localPath"];
+		long long downloaded = [info[@"downloadedSize"] longLongValue];
+		long long expected = [info[@"expectedSize"] longLongValue];
+		if (expected <= 0)
+			expected = [info[@"size"] longLongValue];
+		BOOL complete = [info[@"completed"] boolValue];
+		if (!path.length || downloaded <= 0)
+			return;
+
+		BOOL ok = [me.streamer feedFileAtPath:path downloadedSize:downloaded
+								expectedSize:expected complete:complete];
+		if (!ok || complete){
+			[me.streamTimer invalidate];
+			me.streamTimer = nil;
+		}
+	}];
+}
+
+- (void)musicStreamerDidFinish:(TGMusicStreamer *)streamer {
+	if (streamer != self.streamer)
+		return;
+	NSNumber *fileId = self.current[@"docId"];
+	if ([fileId isKindOfClass:NSNumber.class] && fileId.intValue > 0 &&
+		streamer.duration > 0){
+		[[TGClient shared] markAudioListened:fileId.intValue
+									duration:(int32_t)streamer.duration
+								  completion:nil];
+	}
+	if (self.repeatMode == TGMusicRepeatOne){
+		[streamer seekToFraction:0.0f];
+		[streamer play];
+		streamer.delegate = self;
+		[self announce];
+		return;
+	}
+	[self next];
+}
+
+- (void)musicStreamer:(TGMusicStreamer *)streamer didFail:(NSError *)error {
+	if (streamer != self.streamer)
+		return;
+	NSLog(@"music: streaming unavailable, waiting for the file: %@",
+			error.localizedDescription);
+	self.streamFailed = YES;
+	[self.streamTimer invalidate];
+	self.streamTimer = nil;
+	self.streamer = nil;
+	// The download may have finished while the parser was trying: in that
+	// case its completion already returned (the streamer owned the sound),
+	// and nothing else would start the file.
+	NSInteger fileId = self.streamFileId;
+	NSInteger wanted = self.index;
+	__weak typeof(self) weakSelf = self;
+	[[TGMediaStore shared] fileInfo:fileId completion:^(NSDictionary *info){
+		TGMusicPlayer *me = weakSelf;
+		if (!me || me.index != wanted || me.streamer)
+			return;
+		NSString *path = info[@"localPath"];
+		if ([info[@"completed"] boolValue] && path.length)
+			[me startFile:path];
+	}];
+}
+
+/// The fallback player and the streamer never share the sound.
+- (void)stopStreaming {
+	[self.streamTimer invalidate];
+	self.streamTimer = nil;
+	self.streamer.delegate = nil;
+	[self.streamer stop];
+	self.streamer = nil;
+	self.streamFailed = NO;
+	self.streamPollInFlight = NO;
+}
+
 - (void)startFile:(NSString *)path {
+	[self stopStreaming];
 	[self.player stop];
 
 	NSError *err = nil;
@@ -149,15 +282,28 @@ NSString *const TGMusicPlayerChangedNotification = @"TGMusicPlayerChanged";
 }
 
 - (float)volume {
-	return self.player ? self.player.volume : 1.0f;
+	if (self.streamer)
+		return self.streamer.volume;
+	return self.player ? self.player.volume : self.storedVolume;
 }
 
 - (void)setVolume:(float)volume {
+	self.storedVolume = MIN(MAX(volume, 0.0f), 1.0f);
+	if (self.streamer)
+		self.streamer.volume = self.storedVolume;
 	if (self.player)
-		self.player.volume = MIN(MAX(volume, 0.0f), 1.0f);
+		self.player.volume = self.storedVolume;
 }
 
 - (void)togglePlayPause {
+	if (self.streamer){
+		if (self.streamer.playing)
+			[self.streamer pause];
+		else
+			[self.streamer play];
+		[self announce];
+		return;
+	}
 	if (!self.player)
 		return;
 	if (self.player.playing)
@@ -195,6 +341,11 @@ NSString *const TGMusicPlayerChangedNotification = @"TGMusicPlayerChanged";
 - (void)previous {
 	// Their previous restarts the track first and only steps back when it has
 	// barely begun, which is what every player does.
+	if (self.streamer && self.streamer.position > 3.0){
+		[self.streamer seekToFraction:0.0f];
+		[self announce];
+		return;
+	}
 	if (self.player && self.player.currentTime > 3.0){
 		self.player.currentTime = 0;
 		[self announce];
@@ -210,6 +361,11 @@ NSString *const TGMusicPlayerChangedNotification = @"TGMusicPlayerChanged";
 }
 
 - (void)seekToFraction:(CGFloat)fraction {
+	if (self.streamer){
+		[self.streamer seekToFraction:fraction];
+		[self announce];
+		return;
+	}
 	if (!self.player)
 		return;
 	self.player.currentTime = MIN(MAX(fraction, 0.0f), 1.0f) * self.player.duration;
@@ -217,6 +373,7 @@ NSString *const TGMusicPlayerChangedNotification = @"TGMusicPlayerChanged";
 }
 
 - (void)stop {
+	[self stopStreaming];
 	[self.player stop];
 	self.player = nil;
 	self.current = nil;
@@ -251,9 +408,19 @@ NSString *const TGMusicPlayerChangedNotification = @"TGMusicPlayerChanged";
 
 #pragma mark - state
 
-- (BOOL)playing            { return self.player.playing; }
-- (NSTimeInterval)duration { return self.player ? self.player.duration : 0; }
-- (NSTimeInterval)position { return self.player ? self.player.currentTime : 0; }
+- (BOOL)playing            {
+	return self.streamer ? self.streamer.playing : self.player.playing;
+}
+- (NSTimeInterval)duration {
+	if (self.streamer)
+		return self.streamer.duration;
+	return self.player ? self.player.duration : 0;
+}
+- (NSTimeInterval)position {
+	if (self.streamer)
+		return self.streamer.position;
+	return self.player ? self.player.currentTime : 0;
+}
 - (int64_t)currentMessageId { return [self.current[@"id"] longLongValue]; }
 
 - (NSString *)titleForTrack:(NSDictionary *)track {

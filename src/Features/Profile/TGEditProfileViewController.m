@@ -1,6 +1,6 @@
 #import "TGEditProfileViewController.h"
 #import "TGSheet.h"
-#import "TGClient.h"
+#import "TGProfileStore.h"
 #import "TGTheme.h"
 #import "TGIcons.h"
 #import <QuartzCore/QuartzCore.h>
@@ -73,7 +73,7 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 			initWithTitle:@"Done" style:UIBarButtonItemStyleDone
 				   target:self action:@selector(save)];
 
-	NSDictionary *me = [TGClient shared].me;
+	NSDictionary *me = [TGProfileStore shared].me;
 	self.firstText = me[@"first_name"] ?: @"";
 	self.lastText = me[@"last_name"] ?: @"";
 	self.firstEdited = NO;
@@ -87,7 +87,7 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 	[self rebuildSections];
 
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] request:@{
+	[[TGProfileStore shared] request:@{
 		@"@type"   : @"getUserFullInfo",
 		@"user_id" : me[@"id"] ?: @0,
 	} completion:^(NSDictionary *full){
@@ -106,7 +106,7 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 	// `me` is built from getMe and has no last name; the user record does.
 	[self loadUserInfo];
 
-	[[TGClient shared] myBirthdayWithCompletion:^(NSInteger day, NSInteger month,
+	[[TGProfileStore shared] myBirthdayWithCompletion:^(NSInteger day, NSInteger month,
 												 NSInteger year){
 		weakSelf.birthDay = day;
 		weakSelf.birthMonth = month;
@@ -115,19 +115,19 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 		[weakSelf reloadRows];
 	}];
 
-	[[TGClient shared] bioLengthMaxWithCompletion:^(NSInteger max){
+	[[TGProfileStore shared] bioLengthMaxWithCompletion:^(NSInteger max){
 		weakSelf.bioLengthMax = max;
 		[weakSelf rebuildSections];
 		[weakSelf reloadRows];
 	}];
 
-	[[TGClient shared] privacyRule:@"ShowBirthdate" completion:^(NSString *value){
+	[[TGProfileStore shared] privacyRule:@"ShowBirthdate" completion:^(NSString *value){
 		weakSelf.birthdayPrivacy = value;
 		[weakSelf rebuildSections];
 		[weakSelf reloadRows];
 	}];
 
-	[[TGClient shared] myMainProfileTabWithCompletion:^(NSString *tab){
+	[[TGProfileStore shared] myMainProfileTabWithCompletion:^(NSString *tab){
 		weakSelf.mainProfileTab = tab;
 		[weakSelf rebuildSections];
 		[weakSelf reloadRows];
@@ -137,13 +137,13 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 #pragma mark - rows
 
 - (void)rebuildSections {
-	NSDictionary *me = [TGClient shared].me;
+	NSDictionary *me = [TGProfileStore shared].me;
 	__weak typeof(self) weakSelf = self;
 	NSMutableArray *sections = [NSMutableArray array];
 
 	// The picture: the initials stand in until the photo download answers.
 	NSString *name = [me[@"first_name"] length] ? me[@"first_name"] : @"?";
-	NSNumber *fileId = [[TGClient shared] photoFileIdForUserId:
+	NSNumber *fileId = [[TGProfileStore shared] photoFileIdForUserId:
 			[me[@"id"] longLongValue]];
 	NSMutableDictionary *photo = TGRow(TGKindPhoto, @"");
 	photo[TGRowImage] = self.photoImage ?: [TGIcons avatarWithInitials:
@@ -157,7 +157,7 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 	if (fileId){
 		NSInteger value = fileId.integerValue;
 		photo[TGRowImageLoader] = ^(UIImageView *view){
-			[[TGClient shared] downloadFile:value
+			[[TGProfileStore shared] downloadFile:value
 								   priority:TGDownloadPriorityAvatar
 								 completion:^(NSString *path){
 				[TGIcons loadImageAtPath:path into:view];
@@ -225,8 +225,8 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 			^{
 		[weakSelf openUsernames];
 	})];
-	BOOL hasStatus = [[TGClient shared] emojiStatusIdForUser:
-			[[TGClient shared].me[@"id"] longLongValue]] != 0;
+	BOOL hasStatus = [[TGProfileStore shared] emojiStatusIdForUser:
+			[[TGProfileStore shared].me[@"id"] longLongValue]] != 0;
 	[accountRows addObject:TGOpenRow(hasStatus ? @"Change Emoji Status"
 			: @"Set Emoji Status", nil, ^{
 		[weakSelf openEmojiStatus];
@@ -264,9 +264,9 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 /// before comparing fields: otherwise saving a new first name would send an
 /// empty last name and erase the real one.
 - (void)loadUserInfo {
-	NSDictionary *me = [TGClient shared].me;
+	NSDictionary *me = [TGProfileStore shared].me;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] userInfo:[me[@"id"] longLongValue]
+	[[TGProfileStore shared] userInfo:[me[@"id"] longLongValue]
 					 completion:^(NSDictionary *user){
 		TGEditProfileViewController *controller = weakSelf;
 		if (!controller)
@@ -336,17 +336,17 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 	NSMutableArray *operations = [NSMutableArray array];
 	if (![first isEqualToString:originalFirst] || ![last isEqualToString:originalLast]){
 		[operations addObject:^(void (^done)(BOOL, NSString *)){
-			[[TGClient shared] setName:first last:last completion:done];
+			[[TGProfileStore shared] setName:first last:last completion:done];
 		}];
 	}
 	if (![bio isEqualToString:originalBio]){
 		[operations addObject:^(void (^done)(BOOL, NSString *)){
-			[[TGClient shared] setBio:bio completion:done];
+			[[TGProfileStore shared] setBio:bio completion:done];
 		}];
 	}
 	if (self.birthdayChanged){
 		[operations addObject:^(void (^done)(BOOL, NSString *)){
-			[[TGClient shared] setBirthdayDay:self.birthDay
+			[[TGProfileStore shared] setBirthdayDay:self.birthDay
 										month:self.birthMonth
 										 year:self.birthYear
 								   completion:done];
@@ -497,7 +497,7 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 			return;
 		NSString *value = @[@"everybody", @"contacts", @"nobody"][(NSUInteger)index];
 		weakSelf.birthdayPrivacy = value;
-		[[TGClient shared] setPrivacyRule:@"ShowBirthdate" to:value];
+		[[TGProfileStore shared] setPrivacyRule:@"ShowBirthdate" to:value];
 		[weakSelf rebuildSections];
 		[weakSelf reloadRows];
 	}];
@@ -533,7 +533,7 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 	[self rebuildSections];
 	[self reloadRows];
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] setProfilePhotoAtPath:path completion:^(BOOL ok){
+	[[TGProfileStore shared] setProfilePhotoAtPath:path completion:^(BOOL ok){
 		if (ok)
 			return;
 		[TGAlertSheet showMessage:@"An error occurred."
@@ -558,7 +558,7 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 	TGEmojiStatusViewController *status =
 			[[TGEmojiStatusViewController alloc] init];
 	status.target = TGEmojiStatusTargetSelf;
-	status.userId = [[TGClient shared].me[@"id"] longLongValue];
+	status.userId = [[TGProfileStore shared].me[@"id"] longLongValue];
 	status.subjectTitle = @"Emoji Status";
 	status.hidesBottomBarWhenPushed = YES;
 	[self.navigationController pushViewController:status animated:YES];
@@ -566,11 +566,11 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 
 - (void)choosePersonalChannel {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] suitablePersonalChatsWithCompletion:^(NSArray *chats){
+	[[TGProfileStore shared] suitablePersonalChatsWithCompletion:^(NSArray *chats){
 		NSMutableArray *titles = [NSMutableArray arrayWithObject:@"None"];
 		NSMutableArray *ids = [NSMutableArray arrayWithObject:@0];
 		for (NSDictionary *chat in chats){
-			NSString *title = chat[@"title"] ?: [[TGClient shared]
+			NSString *title = chat[@"title"] ?: [[TGProfileStore shared]
 					titleForChat:[chat[@"id"] longLongValue]];
 			[titles addObject:title.length ? title : @"Channel"];
 			[ids addObject:chat[@"id"] ?: @0];
@@ -578,7 +578,7 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 		[TGAlertSheet showChoices:titles title:@"Channel"
 				 destructiveIndex:-1 inView:weakSelf.view
 						 onChoice:^(NSInteger index){
-			[[TGClient shared] setPersonalChat:[ids[(NSUInteger)index] longLongValue]
+			[[TGProfileStore shared] setPersonalChat:[ids[(NSUInteger)index] longLongValue]
 									completion:^(BOOL ok){
 				if (!ok)
 					[TGAlertSheet showMessage:@"An error occurred."
@@ -593,7 +593,7 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 	[TGAlertSheet showConfirm:@"Are you sure you want to log out from this device?"
 						title:@"Log out" action:@"Log Out"
 				  destructive:YES inView:self.view onConfirm:^{
-		[[TGClient shared] logOut];
+		[[TGProfileStore shared] logOut];
 	}];
 }
 
@@ -612,7 +612,7 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 		if (index < 0 || index >= (NSInteger)tabs.count)
 			return;
 		NSString *tab = tabs[(NSUInteger)index];
-		[[TGClient shared] setMainProfileTab:tab completion:^(BOOL ok, NSString *error){
+		[[TGProfileStore shared] setMainProfileTab:tab completion:^(BOOL ok, NSString *error){
 			if (!ok){
 				[TGAlertSheet showMessage:(error ?: @"An error occurred.")
 									title:@"Set as Main Tab" inView:weakSelf.view];

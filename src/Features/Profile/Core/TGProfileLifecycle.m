@@ -1,5 +1,5 @@
 #import "TGProfileViewControllerInternal.h"
-#import "TGClientInternal.h"
+#import "TGProfileStore.h"
 #import "TGNameWithStatus.h"
 #import "TGCustomEmojiStore.h"
 #import "TGStyle.h"
@@ -296,7 +296,7 @@ static NSString *TGProfileTruncateToThreeLines(NSString *text, UIFont *font, CGF
 	[self applyTheme];
 	[self updateNavigationItem];
 	if (self.isOwnProfile){
-		NSString *ownName = TGProfileUserName([TGClient shared].me);
+		NSString *ownName = TGProfileUserName([TGProfileStore shared].me);
 		if (ownName.length)
 			self.name = ownName;
 		[self loadDetails];

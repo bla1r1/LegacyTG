@@ -7,6 +7,7 @@
 #import "TGClient.h"
 #import "TGClientInternal.h"
 #import "TGSendStore.h"
+#import "TGMessageStore.h"
 
 @interface TGSendStoreTests : XCTestCase {
 	NSMutableArray *_states;
@@ -243,6 +244,46 @@ static void TGSSAnswer(TGClient *c, NSDictionary *answer) {
 	XCTAssertEqual([request[@"reply_to"][@"message_id"] longLongValue], 33LL);
 	XCTAssertEqualObjects(request[@"scheduling_state"][@"@type"],
 						  @"messageSchedulingStateSendWhenOnline");
+	// The current schema carries the state inside messageSendOptions; the
+	// top-level copy stays for the older request shape.
+	XCTAssertEqualObjects(request[@"options"][@"scheduling_state"][@"@type"],
+						  @"messageSchedulingStateSendWhenOnline");
+}
+
+- (void)testSilentTextSendTurnsOffNotifications {
+	TGClient *c = TGSSClient();
+	[[TGSendStore shared] sendText:@"quiet" toChat:11 thread:0 replyTo:0
+				   schedulingState:nil silent:YES];
+
+	NSDictionary *request = TGSSRequest(c, @"sendMessage", YES);
+	XCTAssertEqualObjects(request[@"options"][@"@type"], @"messageSendOptions");
+	XCTAssertTrue([request[@"options"][@"disable_notification"] boolValue]);
+	XCTAssertEqualObjects(request[@"options"][@"scheduling_state"], [NSNull null]);
+}
+
+- (void)testSilentFormattedSendTurnsOffNotifications {
+	TGClient *c = TGSSClient();
+	NSDictionary *text = @{@"@type" : @"formattedText", @"text" : @"quiet",
+						   @"entities" : @[]};
+	[[TGSendStore shared] sendFormattedText:text toChat:11 thread:0 replyTo:0
+							schedulingState:nil silent:YES];
+
+	NSDictionary *request = TGSSRequest(c, @"sendMessage", YES);
+	XCTAssertTrue([request[@"options"][@"disable_notification"] boolValue]);
+	XCTAssertEqualObjects(request[@"options"][@"@type"], @"messageSendOptions");
+}
+
+- (void)testRepeatedScheduledSendCarriesThePeriod {
+	TGClient *c = TGSSClient();
+	NSDictionary *state = [TGMessageStore scheduledAtDate:1700000000 repeatPeriod:86400];
+	[[TGSendStore shared] sendText:@"daily" toChat:11 thread:0 replyTo:0
+				   schedulingState:state];
+
+	NSDictionary *request = TGSSRequest(c, @"sendMessage", YES);
+	NSDictionary *options = request[@"options"][@"scheduling_state"];
+	XCTAssertEqualObjects(options[@"@type"], @"messageSchedulingStateSendAtDate");
+	XCTAssertEqual([options[@"repeat_period"] integerValue], 86400LL);
+	XCTAssertEqual([options[@"send_date"] integerValue], 1700000000LL);
 }
 
 - (void)testMediaSendUsesTheSameOutboundStore {
@@ -255,5 +296,51 @@ static void TGSSAnswer(TGClient *c, NSDictionary *answer) {
 	XCTAssertEqualObjects(request[@"input_message_content"][@"@type"],
 						  @"inputMessageSticker");
 }
+
+- (void)testDocumentSendCarriesForceFileAndCaption {
+	TGClient *c = TGSSClient();
+	[[TGSendStore shared] sendDocumentAtPath:@"/tmp/report.pdf" caption:@"report"
+									  toChat:7 thread:0];
+	NSDictionary *request = TGSSRequest(c, @"sendMessage", NO);
+	XCTAssertNotNil(request);
+	NSDictionary *content = request[@"input_message_content"];
+	XCTAssertEqualObjects(content[@"@type"], @"inputMessageDocument");
+	XCTAssertTrue([content[@"document"][@"force_file"] boolValue]);
+	XCTAssertEqualObjects(content[@"caption"][@"text"], @"report");
+}
+
+- (void)testAudioSendCarriesTitlePerformerAndDuration {
+	TGClient *c = TGSSClient();
+	[[TGSendStore shared] sendAudioAtPath:@"/tmp/track.m4a" title:@"Track"
+								performer:@"Artist" duration:183 caption:@""
+								   toChat:7 thread:0];
+	NSDictionary *request = TGSSRequest(c, @"sendMessage", NO);
+	XCTAssertNotNil(request);
+	NSDictionary *audio = request[@"input_message_content"][@"audio"];
+	XCTAssertEqualObjects(audio[@"title"], @"Track");
+	XCTAssertEqualObjects(audio[@"performer"], @"Artist");
+	XCTAssertEqual([audio[@"duration"] integerValue], 183LL);
+	XCTAssertEqualObjects(request[@"input_message_content"][@"caption"], [NSNull null]);
+}
+
+
+- (void)testGIFCaptionRidesTheAnimationContent {
+	TGClient *c = TGSSClient();
+	[[TGSendStore shared] sendAnimation:@{@"fileId" : @(44), @"duration" : @(2)}
+								 caption:@"funny" toChat:7 thread:0];
+	NSDictionary *request = TGSSRequest(c, @"sendMessage", NO);
+	XCTAssertEqualObjects(request[@"input_message_content"][@"caption"][@"text"], @"funny");
+}
+
+- (void)testViewOnceTimerUsesTheTimerDestruct {
+	TGClient *c = TGSSClient();
+	[[TGSendStore shared] sendPhotoAtPath:@"/tmp/p.jpg" viewOnce:YES seconds:30
+								   toChat:7];
+	NSDictionary *request = TGSSRequest(c, @"sendMessage", NO);
+	NSDictionary *destruct = request[@"input_message_content"][@"self_destruct_type"];
+	XCTAssertEqualObjects(destruct[@"@type"], @"messageSelfDestructTypeTimer");
+	XCTAssertEqual([destruct[@"self_destruct_time"] integerValue], 30LL);
+}
+
 
 @end

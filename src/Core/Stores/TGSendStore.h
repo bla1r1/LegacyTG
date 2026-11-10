@@ -48,6 +48,12 @@ extern NSString *const TGSendStoreCanRetryKey;
 				   thread:(int64_t)threadId
 				  replyTo:(int64_t)replyToId
 		  schedulingState:(NSDictionary *)schedulingState;
+- (void)sendFormattedText:(NSDictionary *)formattedText
+				   toChat:(int64_t)chatId
+				   thread:(int64_t)threadId
+				  replyTo:(int64_t)replyToId
+		  schedulingState:(NSDictionary *)schedulingState
+				   silent:(BOOL)silent;
 
 /// The plain-text send the composer's held Send uses. Markdown is parsed by
 /// the client as before; the store only tracks what comes back.
@@ -56,6 +62,12 @@ extern NSString *const TGSendStoreCanRetryKey;
 		  thread:(int64_t)threadId
 		 replyTo:(int64_t)replyToId
  schedulingState:(NSDictionary *)schedulingState;
+- (void)sendText:(NSString *)text
+		  toChat:(int64_t)chatId
+		  thread:(int64_t)threadId
+		 replyTo:(int64_t)replyToId
+ schedulingState:(NSDictionary *)schedulingState
+		   silent:(BOOL)silent;
 
 /// editMessageText with a formattedText record.
 - (void)editMessageText:(int64_t)messageId
@@ -78,6 +90,8 @@ extern NSString *const TGSendStoreCanRetryKey;
 #pragma mark - media and other outbound content
 
 - (void)sendAnimation:(NSDictionary *)animation toChat:(int64_t)chatId thread:(int64_t)threadId;
+- (void)sendAnimation:(NSDictionary *)animation caption:(NSString *)caption
+			  toChat:(int64_t)chatId thread:(int64_t)threadId;
 
 - (void)sendChecklist:(NSString *)title tasks:(NSArray *)tasks
 			   toChat:(int64_t)chatId completion:(void (^)(BOOL ok, NSString *error))completion;
@@ -99,6 +113,18 @@ extern NSString *const TGSendStoreCanRetryKey;
 					   toChat:(int64_t)chatId thread:(int64_t)threadId;
 
 - (void)sendPhotoAtPath:(NSString *)path viewOnce:(BOOL)viewOnce toChat:(int64_t)chatId;
+- (void)sendPhotoAtPath:(NSString *)path viewOnce:(BOOL)viewOnce seconds:(NSInteger)seconds
+				toChat:(int64_t)chatId;
+
+/// A local file as a document. `caption` may be empty; TDLib takes a null
+/// caption for a file that has none.
+- (void)sendDocumentAtPath:(NSString *)path caption:(NSString *)caption
+					toChat:(int64_t)chatId thread:(int64_t)threadId;
+
+/// A local audio file as a music message.
+- (void)sendAudioAtPath:(NSString *)path title:(NSString *)title
+			  performer:(NSString *)performer duration:(NSInteger)seconds
+				caption:(NSString *)caption toChat:(int64_t)chatId thread:(int64_t)threadId;
 
 - (void)sendQuickReplyShortcutMessages:(NSInteger)shortcutId toChat:(int64_t)chatId
 							 sendingId:(int32_t)sendingId
@@ -115,6 +141,8 @@ extern NSString *const TGSendStoreCanRetryKey;
 - (void)sendText:(NSString *)text toChat:(int64_t)chatId thread:(int64_t)threadId;
 
 - (void)sendVideoAtPath:(NSString *)path viewOnce:(BOOL)viewOnce toChat:(int64_t)chatId;
+- (void)sendVideoAtPath:(NSString *)path viewOnce:(BOOL)viewOnce seconds:(NSInteger)seconds
+				toChat:(int64_t)chatId;
 
 - (void)sendVideoNoteAtPath:(NSString *)path duration:(NSInteger)seconds
 					 length:(NSInteger)length toChat:(int64_t)chatId thread:(int64_t)threadId

@@ -231,6 +231,7 @@ APP_SRC_M := \
 	src/Core/Client/TGClient.m \
 	src/Core/Client/TGClient+Peers.m \
 	src/Core/Stores/TGStickerStore.m \
+	src/Core/Stores/TGStickerStore+Stickers.m \
 	src/Core/Stores/TGEmojiStore.m \
 	src/Core/Model/TGServiceMessageText.m \
 	src/Core/Model/TGMessageContentCommerce.m \
@@ -346,6 +347,11 @@ APP_SRC_M := \
 	src/Core/Stores/TGUpdateStore.m \
 	src/Core/Stores/TGChatThemeStore.m \
 	src/Core/Stores/TGChatListStore.m \
+	src/Core/Stores/TGProfileStore.m \
+	src/Core/Stores/TGProfileStore+Profile.m \
+	src/Core/Stores/TGProfileStore+EmojiStatus.m \
+	src/Core/Stores/TGProfileStore+ProfileAudio.m \
+	src/Core/Stores/TGProfileStore+AccountProfileMedia.m \
 	src/Core/Stores/TGSearchStore.m \
 	src/Core/Stores/TGMessageStore.m \
 	src/Core/Stores/TGMessageStore+History.m \
@@ -639,6 +645,7 @@ APP_SRC_M := \
 	src/Features/Media/Core/TGMediaViewerMoreSheet.m \
 	src/Features/Media/Core/TGMediaViewerSaving.m \
 	src/Audio/TGMusicPlayer.m \
+	src/Audio/TGMusicStreamer.m \
 	src/Audio/TGVideoNoteRecorder.m
 
 # TGCall.mm sits with the app, not with the vendored libtgvoip: it is the

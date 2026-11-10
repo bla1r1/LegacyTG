@@ -22,6 +22,10 @@
 	return [TGClient scheduledAtDate:date];
 }
 
++ (NSDictionary *)scheduledAtDate:(NSTimeInterval)date repeatPeriod:(NSInteger)seconds {
+	return [TGClient scheduledAtDate:date repeatPeriod:seconds];
+}
+
 + (NSDictionary *)scheduledWhenOnline {
 	return [TGClient scheduledWhenOnline];
 }
@@ -183,6 +187,10 @@
 
 - (void)checklistForMessage:(int64_t)messageId inChat:(int64_t)chatId completion:(void (^)(NSDictionary *checklist, NSString *error))completion {
 	[[TGClient shared] checklistForMessage:messageId inChat:chatId completion:completion];
+}
+
+- (void)clearHistoryInChat:(int64_t)chatId {
+	[self clearHistoryInChat:chatId revoke:NO];
 }
 
 - (void)clearHistoryInChat:(int64_t)chatId revoke:(BOOL)revoke {
@@ -657,6 +665,10 @@
 
 - (void)messageAtDate:(NSTimeInterval)date inChat:(int64_t)chatId completion:(void (^)(NSDictionary *message))completion {
 	[[TGClient shared] messageAtDate:date inChat:chatId completion:completion];
+}
+
+- (void)messageCountInChat:(int64_t)chatId filter:(NSString *)filterType completion:(void (^)(NSInteger count))completion {
+	[[TGClient shared] messageCountInChat:chatId filter:filterType completion:completion];
 }
 
 - (void)messageCountInChat:(int64_t)chatId thread:(int64_t)threadId completion:(void (^)(NSInteger count))completion {
@@ -1216,6 +1228,20 @@
 
 - (void)setStickerSet:(id)setId installed:(BOOL)installed archived:(BOOL)archived {
 	[[TGClient shared] setStickerSet:setId installed:installed archived:archived];
+}
+
+- (void)setUser:(int64_t)userId blocked:(BOOL)blocked completion:(void (^)(BOOL ok))completion {
+	NSDictionary *sender = userId < 0
+			? @{@"@type" : @"messageSenderChat", @"chat_id" : @(userId)}
+			: @{@"@type" : @"messageSenderUser", @"user_id" : @(userId)};
+	[[TGClient shared] request:@{
+		@"@type"      : @"setMessageSenderBlockList",
+		@"sender_id"  : sender,
+		@"block_list" : blocked ? @{@"@type" : @"blockListMain"} : [NSNull null],
+	} completion:^(NSDictionary *result){
+		if (completion)
+			completion([result[@"@type"] isEqualToString:@"ok"]);
+	}];
 }
 
 - (void)setUser:(int64_t)userId blocked:(BOOL)blocked {
