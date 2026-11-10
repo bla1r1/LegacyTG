@@ -369,13 +369,16 @@ typedef struct {
 	CGRect badgeFrame;
 	CGRect pinFrame;
 	CGRect mentionFrame;
+	CGRect previewBadgeFrame;
 	CGFloat previewRight;
 	CGFloat badgeWidth;
+	CGFloat previewBadgeWidth;
 	/// The width the frames were measured at, so a rotation recomputes them.
 	CGFloat width;
 	BOOL hasBadge;
 	BOOL hasPin;
 	BOOL hasMentions;
+	BOOL hasPreviewBadge;
 } TGChatRowAccessories;
 
 extern NSString *const TGRowChatId;             // NSNumber, the chat id/key
@@ -399,6 +402,10 @@ extern NSString *const TGRowChatStatusEmojiId;  // NSNumber, emoji status
 extern NSString *const TGRowChatAvatarId;       // NSNumber, initials colour key
 extern NSString *const TGRowChatAvatarImage;    // UIImage, already decoded
 extern NSString *const TGRowChatAvatarGlyph;    // NSString, archive/saved glyph
+extern NSString *const TGRowChatPreviewKind;    // NSString, photo/video/voice/...
+extern NSString *const TGRowChatPreviewFileId;  // NSNumber, thumbnail file id
+extern NSString *const TGRowChatPreviewImage;   // UIImage, decoded thumbnail
+extern NSString *const TGRowChatPreviewBadge;   // NSString, folder/reaction/poll
 extern NSString *const TGRowChatLayout;         // NSValue(TGChatRowAccessories)
 
 /// The variants of TGKindChatRow: the archive strip's row and Saved Messages.

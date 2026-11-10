@@ -7,6 +7,67 @@
 #endif
 
 
+
+/// The kind of the last message, for the list's preview glyph. A text row
+/// has no glyph; every other kind names the picture or symbol the row draws.
+static NSString *TGChatPreviewKind(NSDictionary *last) {
+	NSDictionary *content = [last[@"content"] isKindOfClass:NSDictionary.class]
+			? last[@"content"] : nil;
+	NSString *type = content[@"@type"];
+	if (![type isKindOfClass:NSString.class] || !type.length)
+		return @"";
+	if ([type isEqualToString:@"messageText"])
+		return @"text";
+	if ([type isEqualToString:@"messagePhoto"]) return @"photo";
+	if ([type isEqualToString:@"messageVideo"]) return @"video";
+	if ([type isEqualToString:@"messageAnimation"]) return @"gif";
+	if ([type isEqualToString:@"messageVoiceNote"]) return @"voice";
+	if ([type isEqualToString:@"messageVideoNote"]) return @"videoNote";
+	if ([type isEqualToString:@"messageSticker"]) return @"sticker";
+	if ([type isEqualToString:@"messageDocument"]) return @"file";
+	if ([type isEqualToString:@"messageAudio"]) return @"audio";
+	if ([type isEqualToString:@"messagePoll"]) return @"poll";
+	if ([type isEqualToString:@"messageLocation"] ||
+		[type isEqualToString:@"messageVenue"] ||
+		[type isEqualToString:@"messageLiveLocation"]) return @"location";
+	if ([type isEqualToString:@"messageContact"]) return @"contact";
+	if ([type isEqualToString:@"messageGame"]) return @"game";
+	if ([type isEqualToString:@"messageCall"]) return @"call";
+	if ([type isEqualToString:@"messageDice"]) return @"dice";
+	if ([type isEqualToString:@"messageChecklist"]) return @"checklist";
+	if ([type hasPrefix:@"messageGift"] || [type hasPrefix:@"messageGiveaway"])
+		return @"gift";
+	return @"media";
+}
+
+/// The smallest file behind a media preview. A photo names its size record; a
+/// video, GIF, document or sticker names its thumbnail. Nil for text, a poll
+/// and the kinds the row draws as a glyph only.
+static NSNumber *TGChatPreviewFileId(NSDictionary *last) {
+	NSDictionary *content = [last[@"content"] isKindOfClass:NSDictionary.class]
+			? last[@"content"] : nil;
+	if (!content) return nil;
+	NSString *type = content[@"@type"];
+	NSNumber *fileId = nil;
+	if ([type isEqualToString:@"messagePhoto"]){
+		NSArray *sizes = content[@"photo"][@"sizes"];
+		if ([sizes isKindOfClass:NSArray.class] && sizes.count)
+			fileId = sizes.firstObject[@"photo"][@"id"];
+	} else if ([type isEqualToString:@"messageVideo"]){
+		fileId = content[@"video"][@"thumbnail"][@"file"][@"id"];
+	} else if ([type isEqualToString:@"messageAnimation"]){
+		fileId = content[@"animation"][@"thumbnail"][@"file"][@"id"];
+	} else if ([type isEqualToString:@"messageDocument"]){
+		fileId = content[@"document"][@"thumbnail"][@"file"][@"id"];
+	} else if ([type isEqualToString:@"messageAudio"]){
+		fileId = content[@"audio"][@"album_cover_thumbnail"][@"file"][@"id"];
+	} else if ([type isEqualToString:@"messageSticker"]){
+		fileId = content[@"sticker"][@"thumbnail"][@"file"][@"id"];
+	}
+	return [fileId isKindOfClass:NSNumber.class] && fileId.longLongValue > 0
+			? fileId : nil;
+}
+
 @implementation TGClient (ChatFolders)
 
 #pragma mark - chat folders, the writing half
@@ -533,6 +594,21 @@ static BOOL TGGroupStatusIsMember(NSDictionary *status) {
 		info[@"unreadMentions"] = chat[@"unread_mention_count"];
 	if (chat[@"unread_reaction_count"])
 		info[@"unreadReactions"] = chat[@"unread_reaction_count"];
+	if (chat[@"unread_poll_vote_count"])
+		info[@"unreadPollVotes"] = chat[@"unread_poll_vote_count"];
+	if ([chat[@"chat_lists"] isKindOfClass:NSArray.class]){
+		info[@"chatLists"] = chat[@"chat_lists"];
+		NSMutableArray *folderIds = [NSMutableArray array];
+		for (id item in chat[@"chat_lists"]){
+			if (![item isKindOfClass:NSDictionary.class])
+				continue;
+			NSNumber *folderId = item[@"chat_folder_id"];
+			if ([folderId isKindOfClass:NSNumber.class])
+				[folderIds addObject:folderId];
+		}
+		if (folderIds.count)
+			info[@"folderIds"] = folderIds;
+	}
 	// The dot you put there yourself, which is not the unread count: a chat
 	// with nothing unread can still be marked, and the menu has to know.
 	if (chat[@"is_marked_as_unread"])
@@ -625,6 +701,24 @@ static BOOL TGGroupStatusIsMember(NSDictionary *status) {
 - (NSString *)previewForLastMessage:(NSDictionary *)last inChat:(NSMutableDictionary *)info {
 	NSString *text = TGMessagePreview(last);
 	info[@"previewText"] = text ?: @"";
+	info[@"previewKind"] = TGChatPreviewKind(last);
+	NSNumber *previewFileId = TGChatPreviewFileId(last);
+	if (previewFileId)
+		info[@"previewFileId"] = previewFileId;
+	else
+		[info removeObjectForKey:@"previewFileId"];
+	NSString *reactionSummary = TGReactionSummary(last);
+	if (reactionSummary.length)
+		info[@"previewReactionSummary"] = reactionSummary;
+	else
+		[info removeObjectForKey:@"previewReactionSummary"];
+	NSNumber *pollVotes = last[@"content"][@"poll"][@"total_voter_count"];
+	if ([pollVotes isKindOfClass:NSNumber.class] && pollVotes.integerValue > 0)
+		info[@"previewPollVotes"] = pollVotes;
+	else
+		[info removeObjectForKey:@"previewPollVotes"];
+	info[@"lastFailed"] = @([last[@"sending_state"][@"@type"]
+			isEqualToString:@"messageSendingStateFailed"]);
 	info[@"lastId"] = last[@"id"] ?: @(0);
 	info[@"lastOutgoing"] = @([last[@"is_outgoing"] boolValue]);
 	[info removeObjectForKey:@"lastAuthor"];
@@ -747,6 +841,8 @@ static BOOL TGGroupStatusIsMember(NSDictionary *status) {
 		info[@"onlineMembers"] = update[@"online_member_count"];
 	if (update[@"unread_poll_vote_count"])
 		info[@"unreadPollVotes"] = update[@"unread_poll_vote_count"];
+	if ([update[@"chat_lists"] isKindOfClass:NSArray.class])
+		info[@"chatLists"] = update[@"chat_lists"];
 	if (update[@"default_disable_notification"])
 		info[@"defaultSilent"] = update[@"default_disable_notification"];
 	// Fields the list does not draw yet, kept true in the row all the same:

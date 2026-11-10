@@ -26,7 +26,7 @@ Where column.
 | [checks.md](checks.md) | Device checks: tap, see, wait, log |
 | [bugs.md](bugs.md) | Closed bug queue, B1 onwards |
 
-Totals: 480 done, 255 partial, 204 missing, 18 dev-only across 957 rows.
+Totals: 490 done, 254 partial, 195 missing, 18 dev-only across 957 rows.
 
 ## Milestones
 
@@ -58,7 +58,7 @@ area are in each file's header.
 | M21 Group-call audio | planned | RTP mixing, AudioUnit playback, recording in `TGGroupCallViewController` | No armv7 WebRTC/C++17 build; iOS 7 has no VideoToolbox encoder |
 | M22 Video calls | partial | Dev-only engine; picture to an official client, release gate | No second-party test; same WebRTC stack limit |
 | M23 Sending files, music and options | planned | Document/audio picker, streaming, silent and repeated sends, GIF caption | Nothing beyond screen work |
-| M24 Chat-list previews and badges | planned | Thumbnails, type glyph, reaction/poll badges, compact counts, tab badge, folder tags | Row model lacks `unreadPollVotes`, `chat_lists`, story state |
+| M24 Chat-list previews and badges | done | Thumbnails, type glyph, reaction/poll badges, compact counts, tab badge, folder tags, typing sender, Saved Messages row, pinned tint and scalar stripping | — |
 | M25 Story rings | planned | Ring on every row and profile avatar, own-story tile | No shared ring view |
 | M26 Chat search filters | planned | Sender/media/date chips, result opens the hit, search tokens, global scopes | `TGSearchViewController` has no result-to-message route |
 | M27 Failed-send mark | done | Failed icon in bubble and row, retry without the hold menu | — |

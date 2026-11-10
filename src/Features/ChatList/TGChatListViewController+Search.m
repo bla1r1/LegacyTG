@@ -29,14 +29,14 @@
 	// Chat titles match locally and instantly; messages need the server. Both
 	// land in one list, chats first, which is what the query usually means.
 	NSMutableArray *results = [NSMutableArray array];
-	for (NSDictionary *c in [TGClient shared].chats)
+	for (NSDictionary *c in [TGChatListStore shared].chats)
 		if ([c[@"title"] rangeOfString:query options:NSCaseInsensitiveSearch].location != NSNotFound)
 			[results addObject:c];
 	self.searchResults = results;
 	[self.tableView reloadData];
 
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] searchMessages:query completion:^(NSArray *messages){
+	[[TGChatListStore shared] searchMessages:query completion:^(NSArray *messages){
 		TGChatListViewController *me = weakSelf;
 		// A slower answer to an older query must not replace a newer one.
 		if (!me || ![me.searchBar.text isEqualToString:query])

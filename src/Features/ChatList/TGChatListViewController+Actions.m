@@ -17,7 +17,7 @@ static const CGFloat kSwipeFlickVelocity = 500.0f;
 - (NSString *)titleForCurrentList {
 	if (self.showsArchive)
 		return TGLocalized(@"Archived Chats");
-	for (NSDictionary *f in [TGClient shared].folders)
+	for (NSDictionary *f in [TGChatListStore shared].folders)
 		if ([f[@"id"] integerValue] == self.folderId)
 			return f[@"title"] ?: TGLocalized(@"Chats");
 	return TGLocalized(@"Chats");
@@ -26,7 +26,7 @@ static const CGFloat kSwipeFlickVelocity = 500.0f;
 - (void)runFolderChoice:(NSInteger)choice {
 	// Saved Messages has its own row now, so the menu is All chats followed
 	// by the folders themselves.
-	NSArray *folders = [TGClient shared].folders;
+	NSArray *folders = [TGChatListStore shared].folders;
 	if (choice == 0){
 		self.folderId = 0;
 		self.title = self.showsArchive ? TGLocalized(@"Archived Chats") : TGLocalized(@"Chats");
@@ -113,7 +113,7 @@ static const CGFloat kSwipeFlickVelocity = 500.0f;
 /// The pinned chats of the main list, top first, as their ids.
 - (NSArray *)pinnedChatIds {
 	NSMutableArray *ids = [NSMutableArray array];
-	for (NSDictionary *chat in [TGClient shared].chats)
+	for (NSDictionary *chat in [TGChatListStore shared].chats)
 		if ([chat[@"isPinned"] boolValue] && chat[@"id"])
 			[ids addObject:chat[@"id"]];
 	return ids;
@@ -139,26 +139,26 @@ static const CGFloat kSwipeFlickVelocity = 500.0f;
 		NSUInteger to = [action isEqualToString:@"Move Up"] ? at - 1 : at + 1;
 		if (at != NSNotFound && to < ids.count) {
 			[ids exchangeObjectAtIndex:at withObjectAtIndex:to];
-			[[TGClient shared] setPinnedChatIds:ids];
+			[[TGChatListStore shared] setPinnedChatIds:ids];
 		}
 	} else if ([verb hasSuffix:@"pin"])
-		[[TGClient shared] setChat:chatId
+		[[TGChatListStore shared] setChat:chatId
 							pinned:![self.actionChat[@"isPinned"] boolValue]];
 	else if ([verb hasSuffix:@"mute"])
-		[[TGClient shared] setChat:chatId
+		[[TGChatListStore shared] setChat:chatId
 							 muted:![self.actionChat[@"isMuted"] boolValue]];
 	else if ([verb hasSuffix:@"archive"])
-		[[TGClient shared] setChat:chatId archived:!self.showsArchive];
+		[[TGChatListStore shared] setChat:chatId archived:!self.showsArchive];
 	else if ([action isEqualToString:@"Mark as Unread"])
-		[[TGClient shared] setChat:chatId markedUnread:YES];
+		[[TGChatListStore shared] setChat:chatId markedUnread:YES];
 	else if ([action isEqualToString:@"Mark as Read"]) {
 		// Clearing the marked-unread flag alone left the count and the
 		// messages unread; the server wants the last message read.
 		NSNumber *lastId = self.actionChat[@"lastId"];
 		if ([lastId longLongValue])
-			[[TGClient shared] markRead:@[lastId] inChat:chatId];
+			[[TGChatListStore shared] markRead:@[lastId] inChat:chatId];
 		else
-			[[TGClient shared] setChat:chatId markedUnread:NO];
+			[[TGChatListStore shared] setChat:chatId markedUnread:NO];
 	}
 	else
 		[self confirmDeleteChat:chatId];
@@ -211,9 +211,9 @@ static const CGFloat kSwipeFlickVelocity = 500.0f;
 				   seconds:5
 				  onCommit:^{
 		if (globally)
-			[[TGClient shared] deleteChatForEveryone:chatId completion:nil];
+			[[TGChatListStore shared] deleteChatForEveryone:chatId completion:nil];
 		else
-			[[TGClient shared] deleteChat:chatId];
+			[[TGChatListStore shared] deleteChat:chatId];
 		TGChatListViewController *me = weakSelf;
 		me.chatPendingDeletion = 0;
 		[me reload];

@@ -345,6 +345,8 @@ APP_SRC_M := \
 	src/Core/Stores/TGBackgroundStore.m \
 	src/Core/Stores/TGUpdateStore.m \
 	src/Core/Stores/TGChatThemeStore.m \
+	src/Core/Stores/TGChatListStore.m \
+	src/Core/Stores/TGSearchStore.m \
 	src/Core/Stores/TGMessageStore.m \
 	src/Core/Stores/TGMessageStore+History.m \
 	src/Core/Style/TGThemeFile.m \

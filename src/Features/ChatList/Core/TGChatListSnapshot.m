@@ -71,7 +71,7 @@ static NSString *TGChatSnapshotPath(void) {
 	// The snapshot is one account's list. Slot 0 keeps the pre-accounts name
 	// so an update does not discard the last list it saved; later slots get
 	// their own file so switching never shows another account's rows.
-	NSInteger slot = [TGClient activeAccountSlot];
+	NSInteger slot = [TGChatListStore activeAccountSlot];
 	NSString *name = slot > 0
 			? [NSString stringWithFormat:@"chat-list-snapshot-%ld.plist", (long)slot]
 			: @"chat-list-snapshot.plist";
@@ -90,12 +90,12 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 				@"isPinned", @"isOnline", @"isSaved", @"lastId", @"lastOutgoing",
 				@"readOutbox", @"readInbox", @"isGroup", @"isForum",
 				@"isSecret", @"order", @"archiveOrder", @"supergroupId", @"draft",
-				@"emojiStatusId", @"photoFileId"];
+				@"emojiStatusId", @"photoFileId", @"previewKind", @"previewFileId", @"previewReactionSummary", @"previewPollVotes", @"unreadReactions", @"unreadPollVotes", @"folderIds", @"lastFailed"];
 	});
 	NSMutableDictionary *row = [NSMutableDictionary dictionaryWithCapacity:keys.count];
 	for (NSString *key in keys){
 		id value = chat[key];
-		if ([value isKindOfClass:NSNumber.class] || [value isKindOfClass:NSString.class])
+		if ([value isKindOfClass:NSNumber.class] || [value isKindOfClass:NSString.class] || [value isKindOfClass:NSArray.class])
 			row[key] = value;
 	}
 	// The preview's custom emoji ranges: without them the first paint showed

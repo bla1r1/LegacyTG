@@ -84,7 +84,7 @@ static NSString *TGChatSnapshotPath(void) {
 	// The snapshot is one account's list. Slot 0 keeps the pre-accounts name
 	// so an update does not discard the last list it saved; later slots get
 	// their own file so switching never shows another account's rows.
-	NSInteger slot = [TGClient activeAccountSlot];
+	NSInteger slot = [TGChatListStore activeAccountSlot];
 	NSString *name = slot > 0
 			? [NSString stringWithFormat:@"chat-list-snapshot-%ld.plist", (long)slot]
 			: @"chat-list-snapshot.plist";
@@ -103,12 +103,12 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 				@"isPinned", @"isOnline", @"isSaved", @"lastId", @"lastOutgoing",
 				@"readOutbox", @"readInbox", @"isGroup", @"isForum",
 				@"isSecret", @"order", @"archiveOrder", @"supergroupId", @"draft",
-				@"emojiStatusId"];
+				@"emojiStatusId", @"previewKind", @"previewFileId", @"previewReactionSummary", @"previewPollVotes", @"unreadReactions", @"unreadPollVotes", @"folderIds", @"lastFailed"];
 	});
 	NSMutableDictionary *row = [NSMutableDictionary dictionaryWithCapacity:keys.count];
 	for (NSString *key in keys){
 		id value = chat[key];
-		if ([value isKindOfClass:NSNumber.class] || [value isKindOfClass:NSString.class])
+		if ([value isKindOfClass:NSNumber.class] || [value isKindOfClass:NSString.class] || [value isKindOfClass:NSArray.class])
 			row[key] = value;
 	}
 	return row[@"id"] ? row : nil;
@@ -276,9 +276,9 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 		int64_t chatId = [chat[@"id"] longLongValue];
 		NSNumber *lastId = chat[@"lastId"];
 		if ([lastId longLongValue])
-			[[TGClient shared] markRead:@[lastId] inChat:chatId];
+			[[TGChatListStore shared] markRead:@[lastId] inChat:chatId];
 		else
-			[[TGClient shared] setChat:chatId markedUnread:NO];
+			[[TGChatListStore shared] setChat:chatId markedUnread:NO];
 	}
 	[self finishChatEditingAction];
 }
@@ -317,14 +317,14 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 						title:@"Delete" action:@"Delete" destructive:YES
 					   inView:self.view onConfirm:^{
 		for (NSDictionary *chat in selected)
-			[[TGClient shared] deleteChat:[chat[@"id"] longLongValue]];
+			[[TGChatListStore shared] deleteChat:[chat[@"id"] longLongValue]];
 		[weakSelf finishChatEditingAction];
 	}];
 }
 
 - (void)archiveSelectedChats {
 	for (NSDictionary *chat in [self selectedChatIndexes])
-		[[TGClient shared] setChat:[chat[@"id"] longLongValue] archived:YES];
+		[[TGChatListStore shared] setChat:[chat[@"id"] longLongValue] archived:YES];
 	[self finishChatEditingAction];
 }
 /// them: "All chats" first, then every folder, the active one filled with
@@ -399,7 +399,7 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 	// The archive is a list too, and the strip is where the folders are
 	// switched; leaving it out meant a small account had no archive at all
 	// until the list grew past the point that used to reveal the strip.
-	if ([TGClient shared].archivedChats.count > 0){
+	if ([TGChatListStore shared].archivedChats.count > 0){
 		NSString *label = TGLocalized(@"Archived");
 		CGFloat w = MIN([label sizeWithFont:font].width + kFolderPillPad, kFolderPillMax);
 		UIButton *pill = [UIButton buttonWithType:UIButtonTypeCustom];
@@ -432,9 +432,9 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 		return;
 	}
 	NSLog(@"TGClient: B3 pill tag=%ld folders=%lu", (long)pill.tag,
-			(unsigned long)[TGClient shared].folders.count);
+			(unsigned long)[TGChatListStore shared].folders.count);
 	NSInteger choice = pill.tag - 100;
-	NSArray *folders = [TGClient shared].folders;
+	NSArray *folders = [TGChatListStore shared].folders;
 	NSInteger target = 0;
 	if (choice > 0 && choice - 1 < (NSInteger)folders.count &&
 			[folders[choice - 1] isKindOfClass:NSDictionary.class])
@@ -496,7 +496,7 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 
 		// The slot is where the pill's centre sits among the other pills:
 		// every centre it cleared on the way over counts as a slot ahead.
-		NSArray *folders = [TGClient shared].folders;
+		NSArray *folders = [TGChatListStore shared].folders;
 		NSInteger from = pill.tag - 101;
 		if (from < 0 || from >= (NSInteger)folders.count)
 			return;
@@ -528,7 +528,7 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 		}];
 		[order insertObject:folders[from][@"id"]
 					atIndex:MIN(slot, (NSInteger)order.count)];
-		[[TGClient shared] reorderFoldersToLocalIds:order mainListAt:0];
+		[[TGChatListStore shared] reorderFoldersToLocalIds:order mainListAt:0];
 		[self.tableView reloadData];
 	}
 }
@@ -559,7 +559,7 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 	BOOL hasStories = self.storiesExpanded && [self collapsedStoryRow] != nil;
 	CGFloat storyH = hasStories ? TGMetricStoryStripRow : TGMetricZero;
 	CGFloat searchH = TGMetricRow;
-	BOOL hasFolders = !self.showsArchive && [TGClient shared].folders.count > 0;
+	BOOL hasFolders = !self.showsArchive && [TGChatListStore shared].folders.count > 0;
 	CGFloat folderH = hasFolders ? kFolderTabRow : TGMetricZero;
 	CGFloat height = storyH + searchH + folderH;
 
@@ -581,7 +581,7 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 
 	if (hasFolders)
 		[self buildFolderTabsInto:header atY:(storyH + searchH) width:width
-				folders:[TGClient shared].folders];
+				folders:[TGChatListStore shared].folders];
 
 	if (fadeStories && !hasStories){
 		CATransition *fade = [CATransition animation];
@@ -604,7 +604,7 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 		}];
 	}
 	if (self.folderHighlightPending){
-		NSArray *folders = [TGClient shared].folders;
+		NSArray *folders = [TGChatListStore shared].folders;
 		NSInteger oldTag = 0, newTag = 0;
 		for (NSInteger i = 0; i <= (NSInteger)folders.count; i++){
 			NSInteger folderId = 0;

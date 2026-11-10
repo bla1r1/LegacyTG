@@ -73,7 +73,7 @@ static NSString *TGChatSnapshotPath(void) {
 	// The snapshot is one account's list. Slot 0 keeps the pre-accounts name
 	// so an update does not discard the last list it saved; later slots get
 	// their own file so switching never shows another account's rows.
-	NSInteger slot = [TGClient activeAccountSlot];
+	NSInteger slot = [TGChatListStore activeAccountSlot];
 	NSString *name = slot > 0
 			? [NSString stringWithFormat:@"chat-list-snapshot-%ld.plist", (long)slot]
 			: @"chat-list-snapshot.plist";
@@ -92,12 +92,12 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 				@"isPinned", @"isOnline", @"isSaved", @"lastId", @"lastOutgoing",
 				@"readOutbox", @"readInbox", @"isGroup", @"isForum",
 				@"isSecret", @"order", @"archiveOrder", @"supergroupId", @"draft",
-				@"emojiStatusId"];
+				@"emojiStatusId", @"previewKind", @"previewFileId", @"previewReactionSummary", @"previewPollVotes", @"unreadReactions", @"unreadPollVotes", @"folderIds", @"lastFailed"];
 	});
 	NSMutableDictionary *row = [NSMutableDictionary dictionaryWithCapacity:keys.count];
 	for (NSString *key in keys){
 		id value = chat[key];
-		if ([value isKindOfClass:NSNumber.class] || [value isKindOfClass:NSString.class])
+		if ([value isKindOfClass:NSNumber.class] || [value isKindOfClass:NSString.class] || [value isKindOfClass:NSArray.class])
 			row[key] = value;
 	}
 	return row[@"id"] ? row : nil;
@@ -134,7 +134,7 @@ static NSString *TGChatDate(NSTimeInterval unix) {
 	NSMutableArray *chats = [NSMutableArray array];
 
 	BOOL hideSaved = [[self headerRows] containsObject:@"saved"];
-	int64_t saved = hideSaved ? [[TGClient shared] savedMessagesChatId] : 0;
+	int64_t saved = hideSaved ? [[TGChatListStore shared] savedMessagesChatId] : 0;
 	for (NSDictionary *c in self.chats){
 		int64_t chatId = [c[@"id"] longLongValue];
 		if (chatId == saved || chatId == self.chatPendingDeletion)
@@ -163,13 +163,13 @@ static NSString *TGChatDate(NSTimeInterval unix) {
 			copy[@"avatarImage"] = picture;
 		[display addObject:copy];
 	}
-	int64_t myId = [[TGClient shared].me[@"id"] longLongValue];
+	int64_t myId = [[TGChatListStore shared].me[@"id"] longLongValue];
 	NSMutableDictionary *mine = [own mutableCopy] ?: [NSMutableDictionary dictionary];
 	mine[@"title"] = TGLocalized(@"My Story");
 	mine[@"isOwn"] = @YES;
 	mine[@"userId"] = @(myId);
 	if (!mine[@"chatId"])
-		mine[@"chatId"] = @([[TGClient shared] savedMessagesChatId] ?: myId);
+		mine[@"chatId"] = @([[TGChatListStore shared] savedMessagesChatId] ?: myId);
 	UIImage *ownPicture = myId
 			? [[TGPeerStore shared] cachedAvatarForPeer:myId
 												   side:TGMetricStoryAvatar]
@@ -216,7 +216,7 @@ static NSString *TGChatDate(NSTimeInterval unix) {
 	NSArray *header = [self headerRows];
 	if (indexPath.row < (NSInteger)header.count){
 		BOOL isArchive = [header[indexPath.row] isEqualToString:@"archive"];
-		NSUInteger archived = [TGClient shared].archivedChats.count;
+		NSUInteger archived = [TGChatListStore shared].archivedChats.count;
 		NSMutableDictionary *row = isArchive
 				? TGArchiveChatRow(TGLocalized(@"Archived Chats"),
 						TGChatListArchiveSubtitle(archived))
@@ -255,6 +255,9 @@ static NSString *TGChatDate(NSTimeInterval unix) {
 
 	row[TGRowChatLayout] = [TGChatRowCell accessoriesValueForRow:row
 														   width:tableView.bounds.size.width];
+	NSNumber *previewFileId = row[TGRowChatPreviewFileId];
+	if (previewFileId)
+		[[TGChatListStore shared] loadPreviewImageForFileId:previewFileId];
 	UITableViewCell *cell = [TGChatRowCell cellForTableView:tableView row:row];
 	TGPerfReport("list cell", [c[@"title"] UTF8String] ?: "", cellStart, 33.0);
 	return cell;
@@ -314,7 +317,7 @@ static NSString *TGChatDate(NSTimeInterval unix) {
 	NSMutableArray *ids = [NSMutableArray array];
 	for (NSDictionary *chat in pinned)
 		[ids addObject:chat[@"id"]];
-	[[TGClient shared] setPinnedChatIds:ids];
+	[[TGChatListStore shared] setPinnedChatIds:ids];
 	__weak typeof(self) weakSelf = self;
 	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.4 * NSEC_PER_SEC)),
 			dispatch_get_main_queue(), ^{ [weakSelf reload]; });

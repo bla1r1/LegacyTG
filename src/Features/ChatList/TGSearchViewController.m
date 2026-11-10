@@ -4,7 +4,7 @@
 #import "TGSearchViewController.h"
 #import "TGLocalization.h"
 #import "TGChatViewController.h"
-#import "TGClient.h"
+#import "TGSearchStore.h"
 #import "TGNameWithStatus.h"
 #import "TGCustomEmojiStore.h"
 #import "TGTheme.h"
@@ -140,7 +140,7 @@ static NSString *TGPublicPostText(NSDictionary *message) {
 	self.publicLimitExceeded = NO;
 	self.scope = TGSearchScopeAll;
 	self.recentQueries = [[NSUserDefaults standardUserDefaults]
-			arrayForKey:TGAccountDefaultsKey(kRecentQueriesKey)] ?: @[];
+			arrayForKey:[[TGSearchStore shared] defaultsKeyForSearchBase:kRecentQueriesKey]] ?: @[];
 	self.tableView.rowHeight = TGMetricPersonRow;
 	if ([self.tableView respondsToSelector:@selector(setKeyboardDismissMode:)])
 		self.tableView.keyboardDismissMode = UIScrollViewKeyboardDismissModeOnDrag;
@@ -368,12 +368,12 @@ static NSString *TGPublicPostText(NSDictionary *message) {
 			[fresh addObject:old];
 	self.recentQueries = fresh;
 	[[NSUserDefaults standardUserDefaults] setObject:fresh
-											  forKey:TGAccountDefaultsKey(kRecentQueriesKey)];
+											  forKey:[[TGSearchStore shared] defaultsKeyForSearchBase:kRecentQueriesKey]];
 }
 
 - (void)clearRecentQueries {
 	self.recentQueries = @[];
-	[[NSUserDefaults standardUserDefaults] removeObjectForKey:TGAccountDefaultsKey(kRecentQueriesKey)];
+	[[NSUserDefaults standardUserDefaults] removeObjectForKey:[[TGSearchStore shared] defaultsKeyForSearchBase:kRecentQueriesKey]];
 	[self reloadSearchRows];
 }
 
@@ -386,14 +386,14 @@ static NSString *TGPublicPostText(NSDictionary *message) {
 /// broken screen. Telegram's own answer is the people you talk to most.
 - (void)loadFrequentChats {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] topChatsWithCompletion:^(NSArray *chats){
+	[[TGSearchStore shared] topChatsWithCompletion:^(NSArray *chats){
 		TGSearchViewController *me = weakSelf;
 		if (!me || me.bar.text.length)
 			return;
 		me.frequent = chats ?: @[];
 		[me reloadSearchRows];
 	}];
-	[[TGClient shared] recentlyOpenedChatsWithCompletion:^(NSArray *chats){
+	[[TGSearchStore shared] recentlyOpenedChatsWithCompletion:^(NSArray *chats){
 		TGSearchViewController *me = weakSelf;
 		if (!me || me.bar.text.length)
 			return;
@@ -414,7 +414,7 @@ static NSString *TGPublicPostText(NSDictionary *message) {
 
 - (void)loadRecentlyFound {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] searchRecentlyFoundChats:@"" completion:^(NSArray *chats){
+	[[TGSearchStore shared] searchRecentlyFoundChats:@"" completion:^(NSArray *chats){
 		TGSearchViewController *me = weakSelf;
 		if (!me || me.bar.text.length)
 			return;
@@ -425,7 +425,7 @@ static NSString *TGPublicPostText(NSDictionary *message) {
 
 - (void)loadRecentTags {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] recentHashtagsWithCompletion:^(NSArray *tags){
+	[[TGSearchStore shared] recentHashtagsWithCompletion:^(NSArray *tags){
 		TGSearchViewController *me = weakSelf;
 		if (!me || me.bar.text.length)
 			return;
@@ -436,7 +436,7 @@ static NSString *TGPublicPostText(NSDictionary *message) {
 
 - (void)loadRecentLinks {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] recentlyVisitedTMeUrlsWithReferrer:@""
+	[[TGSearchStore shared] recentlyVisitedTMeUrlsWithReferrer:@""
 											   completion:^(NSArray *urls){
 		TGSearchViewController *me = weakSelf;
 		if (!me || me.bar.text.length)
@@ -491,7 +491,7 @@ static NSString *TGPublicPostText(NSDictionary *message) {
 		[rest removeObject:query];
 		self.recentQueries = rest;
 		[[NSUserDefaults standardUserDefaults] setObject:rest
-												  forKey:TGAccountDefaultsKey(kRecentQueriesKey)];
+												  forKey:[[TGSearchStore shared] defaultsKeyForSearchBase:kRecentQueriesKey]];
 		[self reloadSearchRows];
 		return;
 	}
@@ -510,9 +510,9 @@ static NSString *TGPublicPostText(NSDictionary *message) {
 			if (!me)
 				return;
 			if (index == 0)
-				[[TGClient shared] removeRecentHashtag:tag];
+				[[TGSearchStore shared] removeRecentHashtag:tag];
 			else
-				[[TGClient shared] removeSearchedForTag:tag];
+				[[TGSearchStore shared] removeSearchedForTag:tag];
 			NSMutableArray *rest = [me.recentTags mutableCopy];
 			[rest removeObject:tag];
 			me.recentTags = rest;
@@ -538,9 +538,9 @@ static NSString *TGPublicPostText(NSDictionary *message) {
 					   inView:self.view
 					onConfirm:^{
 		if (path.section == 0)
-			[[TGClient shared] forgetTopChat:[chat[@"id"] longLongValue]];
+			[[TGSearchStore shared] forgetTopChat:[chat[@"id"] longLongValue]];
 		else
-			[[TGClient shared] forgetRecentlyFoundChat:[chat[@"id"] longLongValue]];
+			[[TGSearchStore shared] forgetRecentlyFoundChat:[chat[@"id"] longLongValue]];
 		TGSearchViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -662,7 +662,7 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 	// The loaded list first, so there is something on screen before the
 	// server answers; what comes back replaces it.
 	NSMutableArray *titles = [NSMutableArray array];
-	for (NSDictionary *c in [TGClient shared].chats)
+	for (NSDictionary *c in [TGSearchStore shared].chats)
 		if ([c[@"title"] rangeOfString:query options:NSCaseInsensitiveSearch].location != NSNotFound)
 			[titles addObject:c];
 	self.chatHits = titles;
@@ -676,26 +676,26 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 	// Matching titles here only ever found chats already loaded, so a chat
 	// this account has and has not opened, and every public chat, were
 	// unfindable by name.
-	[[TGClient shared] searchChatsForQuery:query completion:^(NSArray *chats){
+	[[TGSearchStore shared] searchChatsForQuery:query completion:^(NSArray *chats){
 		TGSearchViewController *me = weakSelf;
 		if (!me || ![me.bar.text isEqualToString:query]) return;
 		me.chatHits = chats ?: @[];
 		[me refreshPrefixSuggestionsForQuery:query extra:@[]];
 		[me reloadSearchRows];
 	}];
-	[[TGClient shared] searchContactsForQuery:query completion:^(NSArray *users){
+	[[TGSearchStore shared] searchContactsForQuery:query completion:^(NSArray *users){
 		TGSearchViewController *me = weakSelf;
 		if (!me || ![me.bar.text isEqualToString:query]) return;
 		me.contactHits = users ?: @[];
 		[me reloadSearchRows];
 	}];
-	[[TGClient shared] searchMessages:query completion:^(NSArray *messages) {
+	[[TGSearchStore shared] searchMessages:query completion:^(NSArray *messages) {
 		TGSearchViewController *me = weakSelf;
 		if (!me || ![me.bar.text isEqualToString:query]) return;
 		me.messageHits = messages ?: @[];
 		[me reloadSearchRows];
 	}];
-	[[TGClient shared] searchHashtags:query limit:10 completion:^(NSArray *tags){
+	[[TGSearchStore shared] searchHashtags:query limit:10 completion:^(NSArray *tags){
 		TGSearchViewController *me = weakSelf;
 		if (!me || ![me.bar.text isEqualToString:query]) return;
 		me.hashtagHits = tags ?: @[];
@@ -711,7 +711,7 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 /// word-prefix match, which is why "te leg" and "tel" agree here.
 - (void)refreshPrefixSuggestionsForQuery:(NSString *)query extra:(NSArray *)extra {
 	NSMutableArray *strings = [NSMutableArray array];
-	for (NSDictionary *chat in [TGClient shared].chats){
+	for (NSDictionary *chat in [TGSearchStore shared].chats){
 		NSString *title = chat[@"title"];
 		if (title.length && ![strings containsObject:title])
 			[strings addObject:title];
@@ -730,7 +730,7 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 		return;
 
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] stringsMatchingPrefix:strings query:query limit:10
+	[[TGSearchStore shared] stringsMatchingPrefix:strings query:query limit:10
 								  completion:^(NSArray *matches){
 		TGSearchViewController *me = weakSelf;
 		if (!me || ![me.bar.text isEqualToString:query])
@@ -757,7 +757,7 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 	if (!query.length || ![self.bar.text isEqualToString:query])
 		return;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] publicPostSearchLimitsForQuery:query completion:^(NSDictionary *limits){
+	[[TGSearchStore shared] publicPostSearchLimitsForQuery:query completion:^(NSDictionary *limits){
 		TGSearchViewController *me = weakSelf;
 		if (!me || ![me.bar.text isEqualToString:query])
 			return;
@@ -769,7 +769,7 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 			[me reloadSearchRows];
 			return;
 		}
-		[[TGClient shared] searchPublicPosts:query offset:@"" limit:20 starCount:0
+		[[TGSearchStore shared] searchPublicPosts:query offset:@"" limit:20 starCount:0
 								  completion:^(NSArray *messages, NSString *next,
 											   NSDictionary *answerLimits, BOOL exceeded){
 			TGSearchViewController *live = weakSelf;
@@ -791,7 +791,7 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 	if (!query.length || !offset.length || self.publicLimitExceeded)
 		return;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] searchPublicPosts:query offset:offset limit:20 starCount:0
+	[[TGSearchStore shared] searchPublicPosts:query offset:offset limit:20 starCount:0
 							  completion:^(NSArray *messages, NSString *next,
 										   NSDictionary *limits, BOOL exceeded){
 		TGSearchViewController *me = weakSelf;
@@ -860,10 +860,10 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 - (NSMutableDictionary *)peerRowForContact:(NSDictionary *)contact {
 	int64_t userId = [contact[@"id"] longLongValue];
 	NSString *name = [contact[@"name"] length] ? contact[@"name"]
-			: [[TGClient shared] nameForUserId:userId];
+			: [[TGSearchStore shared] nameForUserId:userId];
 	NSMutableDictionary *row = TGPeerRow(@(userId), name ?: @"", nil, nil);
 	row[TGRowAvatarUser] = @YES;
-	int64_t statusId = [[TGClient shared] emojiStatusIdForUser:userId];
+	int64_t statusId = [[TGSearchStore shared] emojiStatusIdForUser:userId];
 	if (statusId > 0)
 		row[TGRowStatusEmojiId] = @(statusId);
 	return row;
@@ -875,7 +875,7 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 									textKey:(NSString *)textKey {
 	int64_t chatId = [m[chatKey] longLongValue];
 	NSString *title = [m[titleKey] length] ? m[titleKey]
-			: [[TGClient shared] titleForChat:chatId] ?: @"Post";
+			: [[TGSearchStore shared] titleForChat:chatId] ?: @"Post";
 	NSString *text = textKey.length ? m[textKey] : TGPublicPostText(m);
 	NSString *date = TGSearchDateText(m[@"date"]);
 	int64_t messageId = [m[@"id"] longLongValue];
@@ -891,7 +891,7 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 	if (!chatId)
 		return;
 	[self.bar resignFirstResponder];
-	[[TGClient shared] rememberFoundChat:chatId];
+	[[TGSearchStore shared] rememberFoundChat:chatId];
 	[self rememberQuery:self.bar.text];
 	TGChatViewController *chat = [[TGChatViewController alloc] init];
 	chat.chatId = chatId;
@@ -906,9 +906,9 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 - (void)openContactHit:(NSDictionary *)u {
 	int64_t userId = [u[@"id"] longLongValue];
 	NSString *name = [u[@"name"] length] ? u[@"name"]
-			: [[TGClient shared] nameForUserId:userId];
+			: [[TGSearchStore shared] nameForUserId:userId];
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] privateChatWithUser:userId completion:^(int64_t privateId){
+	[[TGSearchStore shared] privateChatWithUser:userId completion:^(int64_t privateId){
 		TGSearchViewController *me = weakSelf;
 		if (!me || !privateId)
 			return;
@@ -935,7 +935,7 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 		int64_t chatId = [chat[@"id"] longLongValue];
 		int64_t statusId = [chat[@"emojiStatusId"] longLongValue];
 		if (statusId == 0 && chatId > 0)
-			statusId = [[TGClient shared] emojiStatusIdForUser:chatId];
+			statusId = [[TGSearchStore shared] emojiStatusIdForUser:chatId];
 		if (statusId > 0)
 			row[TGRowStatusEmojiId] = @(statusId);
 		row[TGRowTap] = ^{ [weakSelf openChatId:chatId
@@ -969,7 +969,7 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 		[found addObject:[self clearRowWithTitle:@"Clear" handler:^{
 			[TGAlertSheet showConfirm:nil title:@"Clear" action:@"Clear"
 					destructive:YES inView:weakSelf.view onConfirm:^{
-				[[TGClient shared] clearRecentlyFoundChats];
+				[[TGSearchStore shared] clearRecentlyFoundChats];
 				weakSelf.recentlyFound = @[];
 				[weakSelf reloadSearchRows];
 			}];
@@ -989,7 +989,7 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 			[TGAlertSheet showConfirm:@"Do you want to clear your search history?"
 					title:@"Clear" action:@"Clear" destructive:YES
 					inView:weakSelf.view onConfirm:^{
-				[[TGClient shared] clearSearchedForTags];
+				[[TGSearchStore shared] clearSearchedForTags];
 				weakSelf.recentTags = @[];
 				[weakSelf reloadSearchRows];
 			}];
@@ -1134,12 +1134,12 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 	if (!link.length)
 		return;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] internalLinkKind:link completion:^(NSString *kind, NSString *value){
+	[[TGSearchStore shared] internalLinkKind:link completion:^(NSString *kind, NSString *value){
 		TGSearchViewController *me = weakSelf;
 		if (!me)
 			return;
 		if ([kind isEqualToString:@"publicChat"] && value.length){
-			[[TGClient shared] chatWithUsername:value completion:^(int64_t chatId, NSString *title){
+			[[TGSearchStore shared] chatWithUsername:value completion:^(int64_t chatId, NSString *title){
 				TGSearchViewController *live = weakSelf;
 				if (!live || !chatId)
 					return;
@@ -1152,13 +1152,13 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 			return;
 		}
 		if ([kind isEqualToString:@"message"] && value.length){
-			[[TGClient shared] messageLinkInfo:value completion:^(int64_t chatId, int64_t messageId){
+			[[TGSearchStore shared] messageLinkInfo:value completion:^(int64_t chatId, int64_t messageId){
 				TGSearchViewController *live = weakSelf;
 				if (!live || !chatId)
 					return;
 				TGChatViewController *chat = [[TGChatViewController alloc] init];
 				chat.chatId = chatId;
-				chat.chatTitle = [[TGClient shared] titleForChat:chatId] ?: @"Chat";
+				chat.chatTitle = [[TGSearchStore shared] titleForChat:chatId] ?: @"Chat";
 				chat.initialMessageId = messageId;
 				chat.hidesBottomBarWhenPushed = YES;
 				[live.navigationController pushViewController:chat animated:YES];
@@ -1166,7 +1166,7 @@ static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) 
 			return;
 		}
 		if ([kind isEqualToString:@"inviteLink"] && value.length){
-			[[TGClient shared] joinChatByInviteLink:value completion:^(int64_t chatId, NSString *title){
+			[[TGSearchStore shared] joinChatByInviteLink:value completion:^(int64_t chatId, NSString *title){
 				TGSearchViewController *live = weakSelf;
 				if (!live || !chatId)
 					return;

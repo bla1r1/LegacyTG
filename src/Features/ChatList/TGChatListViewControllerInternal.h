@@ -3,7 +3,7 @@
 
 #import "TGChatListViewController.h"
 #import "TGChatViewController.h"
-#import "TGClient.h"
+#import "TGChatListStore.h"
 #import "TGTheme.h"
 #import "TGIcons.h"
 #import "TGContactsViewController.h"

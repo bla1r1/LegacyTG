@@ -74,7 +74,7 @@ static NSString *TGChatSnapshotPath(void) {
 	// The snapshot is one account's list. Slot 0 keeps the pre-accounts name
 	// so an update does not discard the last list it saved; later slots get
 	// their own file so switching never shows another account's rows.
-	NSInteger slot = [TGClient activeAccountSlot];
+	NSInteger slot = [TGChatListStore activeAccountSlot];
 	NSString *name = slot > 0
 			? [NSString stringWithFormat:@"chat-list-snapshot-%ld.plist", (long)slot]
 			: @"chat-list-snapshot.plist";
@@ -93,12 +93,12 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 				@"isPinned", @"isOnline", @"isSaved", @"lastId", @"lastOutgoing",
 				@"readOutbox", @"readInbox", @"isGroup", @"isForum",
 				@"isSecret", @"order", @"archiveOrder", @"supergroupId", @"draft",
-				@"emojiStatusId"];
+				@"emojiStatusId", @"previewKind", @"previewFileId", @"previewReactionSummary", @"previewPollVotes", @"unreadReactions", @"unreadPollVotes", @"folderIds", @"lastFailed"];
 	});
 	NSMutableDictionary *row = [NSMutableDictionary dictionaryWithCapacity:keys.count];
 	for (NSString *key in keys){
 		id value = chat[key];
-		if ([value isKindOfClass:NSNumber.class] || [value isKindOfClass:NSString.class])
+		if ([value isKindOfClass:NSNumber.class] || [value isKindOfClass:NSString.class] || [value isKindOfClass:NSArray.class])
 			row[key] = value;
 	}
 	return row[@"id"] ? row : nil;
@@ -163,7 +163,7 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 		[weakSelf.tableView reloadData];
 	}];
 
-	[TGClient shared].onChatsChanged = ^{
+	[TGChatListStore shared].onChatsChanged = ^{
 		// Reset signature so folder-merged chats refresh on new messages or new chats
 		weakSelf.mergedSignature = nil;
 		// While the cache fills, updates arrive in floods - one per chat.
@@ -189,6 +189,14 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 	// A send was refused or retried: the last-message mark on that chat's row
 	// changes, and TGChatRow rebuilds it from the store.
 	[[NSNotificationCenter defaultCenter] addObserverForName:TGSendStoreMessageStateChangedNotification
+			object:nil queue:[NSOperationQueue mainQueue]
+		usingBlock:^(NSNotification *note){
+		TGChatListViewController *me = weakSelf;
+		if (me)
+			[me reloadVisibleRows];
+	}];
+	// M24: a preview thumbnail landed; the rows showing it redraw in place.
+	[[NSNotificationCenter defaultCenter] addObserverForName:TGChatListPreviewImageLoadedNotification
 			object:nil queue:[NSOperationQueue mainQueue]
 		usingBlock:^(NSNotification *note){
 		TGChatListViewController *me = weakSelf;
@@ -228,10 +236,10 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 		[me fetchMissingAvatars];
 	}];
 
-	[TGClient shared].onArchiveChanged = ^{
+	[TGChatListStore shared].onArchiveChanged = ^{
 		[weakSelf.tableView reloadData];
 	};
-	[TGClient shared].onConnectionState = ^(TGConnectionState state, NSString *text){
+	[TGChatListStore shared].onConnectionState = ^(TGConnectionState state, NSString *text){
 		// The list keeps its name; the network line is the second line of the
 		// title view. Replacing the title took a chosen folder away on every
 		// reconnect (B4), and the state is not what the screen is.

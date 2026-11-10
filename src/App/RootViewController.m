@@ -15,6 +15,7 @@
 #import "TGStyle.h"
 #import "TGPlayerView.h"
 #import "TGChatViewController.h"
+#import "TGChatListStore.h"
 #if TG_DEV
 #import "TGDevModeViewController.h"
 #endif
@@ -149,6 +150,15 @@ static NSString *const TGCallsTabChangedNotification = @"TGCallsTabChangedNotifi
 
 	self.view.backgroundColor = [[TGTheme shared] listBackgroundColour];
 	[[TGTheme shared] styleTabBar:self.tabBar];
+
+	// M24: the Chats tab carries the compact unread total, not only the app icon.
+	__weak typeof(self) weakListSelf = self;
+	[[NSNotificationCenter defaultCenter] addObserverForName:TGChatListStoreChangedNotification
+			object:nil queue:[NSOperationQueue mainQueue]
+		usingBlock:^(NSNotification *note){
+		[weakListSelf updateChatsBadge];
+	}];
+	[self updateChatsBadge];
 	[[TGTheme shared] styleNavigationBar:contactsNC.navigationBar];
 	[[TGTheme shared] styleNavigationBar:chatsNC.navigationBar];
 	[[TGTheme shared] styleNavigationBar:settingsNC.navigationBar];
@@ -326,6 +336,12 @@ static NSString *const TGCallsTabChangedNotification = @"TGCallsTabChangedNotifi
 		default:
 			break;
 	}
+}
+
+- (void)updateChatsBadge {
+	NSString *text = [[TGChatListStore shared]
+			compactBadgeTextForCount:[TGChatListStore shared].unreadTotal];
+	self.chatsNC.tabBarItem.badgeValue = text.length ? text : nil;
 }
 
 @end

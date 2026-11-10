@@ -1,12 +1,10 @@
 Chats screen: the list engine, rows, folders, archive, stories strip and search. Parity items come from `_parity_audit/chat_list.md`; checked against `src/` on 7 November 2026.
 
-Counts: 31 done, 15 partial, 22 missing, 0 dev-only.
+Counts: 41 done, 14 partial, 13 missing, 0 dev-only.
 
 Built: M3 (snapshot first paint, 12 retries, live re-sort, badges, archive,
 folders, bulk actions), M10 (pull-down search), M11 (stories strip, collapsed
-story), M16 (preview for every content type), M17 (emoji status). Open: M24
-(thumbnails, type glyph, reaction/poll badges, compact counts, tab badge,
-folder tags) and M25 (story ring on every row).
+story), M16 (preview for every content type), M17 (emoji status). M24 is done; open M25 (story ring on every row).
 Search filters and tokens are M26.
 
 | Feature | State | Where | Note |
@@ -15,14 +13,14 @@ Search filters and tokens are M26.
 | `loadChats` retry | done | `Core/Client/Chats/TGClient+Chats.mm:8` | Up to 12 attempts, then the cached list stays. |
 | Live list update | done | `src/Features/ChatList/Core/TGChatListLifecycle.m:208` | `onChatsChanged` reloads and re-sorts using TDLib order. |
 | Row count and title | done | `src/Features/ChatList/Core/TGChatListTable.m:265` | Header rows (Saved Messages, archive) plus visible chats. |
-| Unread count badge | done | `src/Features/ChatList/Core/TGChatListTable.m:384` | Up to "9999+"; muted chats use the muted colour. |
+| Unread count badge | done | `src/Features/ChatList/Core/TGChatListTable.m:384` | Compact "99+"; muted chats use the muted colour. |
 | Mention badge | done | `src/Features/ChatList/Core/TGChatListTable.m:373` | Separate "@" badge. |
 | Blank badge for marked unread | done | `src/Features/ChatList/Core/TGChatListTable.m:376` | A marked-read chat with zero messages shows an empty badge. |
-| Reaction badge | missing | `src/Features/ChatList/Core/TGChatListTable.m:371` | Only `unread` and `unreadMentions` are read. |
-| Poll-vote badge | missing | `src/Features/ChatList/Core/TGChatListTable.m:371` | `unreadPollVotes` is not a row field. |
-| Compact counts ("1.2K") | missing | `src/Features/ChatList/Core/TGChatListTable.m:384` | Counts are plain decimals. |
+| Reaction badge | done | `src/Features/ChatList/Core/TGChatListTable.m:371` | `unreadReactions` and the last message reaction summary feed the compact trailing badge. |
+| Poll-vote badge | done | `src/Features/ChatList/Core/TGChatListTable.m:371` | `unreadPollVotes` and the poll total draw as "Poll · N". |
+| Compact counts ("99+") | done | `src/Features/ChatList/Core/TGChatListTable.m:384` | `TGChatListStore compactBadgeTextForCount:` caps at 99+. |
 | Pinned mark beside a badge | done | `src/Features/ChatList/Core/TGChatListTable.m:380` | Pin and unread count both draw; geometry keeps them apart. |
-| Pinned row tint | missing | `Features/Chat/Views/TGChatCell.m:53` | Every row uses `listBackgroundColour`; only the pin glyph differs. |
+| Pinned row tint | done | `src/UI/Rows/TGChatRowCell.m:290` | A pinned row keeps the card plate behind it; the theme repaint follows the row flag. |
 | Muted speaker | done | `src/Features/ChatList/Core/TGChatListTable.m:369` | Mute icon after the title. |
 | Online dot on the row | done | `src/Features/ChatList/Core/TGChatListTable.m:344` | Shown when the chat row says the peer is online. |
 | Emoji status after the title | done | `src/Features/ChatList/Core/TGChatListTable.m:360` | Custom emoji picture, skipped for Saved Messages. |
@@ -31,12 +29,12 @@ Search filters and tokens are M26.
 | Avatar or initials | done | `src/Features/ChatList/Core/TGChatListTable.m:394` | Downloaded photo, Saved Messages glyph, or stable initials. |
 | Preview text | done | `src/Features/ChatList/Core/TGChatListTable.m:334` | `previewText`, sender prefix, two lines. |
 | Draft preview | done | `src/Features/ChatList/Core/TGChatListTable.m:332` | Draft wins over the last message and is coloured destructive. |
-| Typing preview with sender name | partial | `src/Features/ChatList/Core/TGChatListTable.m:331` | The action phrase appears but never names who is typing. |
+| Typing preview with sender name | done | `src/Features/ChatList/Core/TGChatListTable.m:331` | A group action is prefixed with the sender name from `updateChatAction`. |
 | Delivery ticks on your last message | done | `src/Features/ChatList/Core/TGChatListTable.m:348` | Sent/read ticks, or the failed mark from `TGSendStore`; a pending last message still has no clock. |
-| Photo/video thumbnail in the preview | missing | `src/Features/ChatList/Core/TGChatListTable.m:334` | Only text is drawn. |
-| Content-type glyph in the preview | missing | `src/Features/ChatList/Core/TGChatListTable.m:334` | No type glyph. |
+| Photo/video thumbnail in the preview | done | `src/Features/ChatList/Core/TGChatListTable.m:334` | `TGChatListStore` downloads and caches the smallest preview file; the cell draws it or falls back to the kind glyph. |
+| Content-type glyph in the preview | done | `src/Features/ChatList/Core/TGChatListTable.m:334` | Photo/video/voice/sticker/file/poll/location/contact/call/gift map to a TGIcons glyph. |
 | Date of the last message | done | `src/Features/ChatList/Core/TGChatListTable.m:330` | `TGChatDate` keeps today as a clock. |
-| Folder tags on the row | missing | `Core/Client/Chats/TGClient+ChatFolders.mm:483` | `chat_lists` is not copied into the row model and no tag strip is drawn. |
+| Folder tags on the row | done | `Core/Client/Chats/TGClient+ChatFolders.mm:483` | `chat_lists`/`folderIds` are copied and the folder names ride in the compact trailing badge. |
 | Forum row names its latest topics | missing | `src/Features/ChatList/Core/TGChatListSelection.m:130` | The row previews the last message; a tap opens the topic list, not a topic. |
 | Archive row with unread and story states | partial | `src/Features/ChatList/Core/TGChatListReload.m:195` | Appears under the stories strip; the subtitle has a chat count but no archived-story or unread state. |
 | Archive screen with its own More menu | partial | `src/Features/ChatList/Core/TGChatListReload.m:339` | Pushes the filtered list, but `buildHeaderButtons` returns early, so the archive has no bar actions. |
@@ -52,12 +50,12 @@ Search filters and tokens are M26.
 | Delete with undo window | done | `Features/ChatList/TGChatListViewController+Actions.m:213` | Row returns if the snackbar is not committed. |
 | Compose sheet | partial | `src/Features/ChatList/Core/TGChatListCompose.m:112` | Four choices then the contacts picker; no New Contact row or compose search. |
 | Join a chat or folder by link | done | `src/Features/ChatList/Core/TGChatListCompose.m:172` | Resolves invite links and folder links. |
-| Saved Messages row | missing | `src/Features/ChatList/Core/TGChatListReload.m:196` | `headerRows` only ever adds the archive; `openSavedMessages` has no reachable caller here. |
+| Saved Messages row | done | `src/Features/ChatList/Core/TGChatListReload.m:196` | `headerRows` adds the Saved Messages row and the tap opens it. |
 | Empty state | partial | `src/Features/ChatList/Core/TGChatListReload.m:163` | Main list has illustration and "No chats yet"; the archive and folders return before it and stay blank. |
 | Network state as the title subtitle | partial | `src/Features/ChatList/Core/TGChatListLifecycle.m:219` | "Waiting for network" replaces the second line; no spinner and the line disappears on ready. |
 | Proxy and lock marks in the title row | missing | `src/Features/ChatList/Core/TGChatListLifecycle.m:282` | Only a text subtitle; no proxy mark or passcode lock. |
 | Header hierarchy | partial | `src/Features/ChatList/Core/TGChatListHeader.m:590` | Story strip, search and pills all live in `tableHeaderView`; `parkOffset` is zero, so the stack scrolls away. |
-| Unread badge on the Chats tab | missing | `App/RootViewController.m:97` | `tabBarItem` has no badge update anywhere. |
+| Unread badge on the Chats tab | done | `App/RootViewController.m:97` | `TGChatListStoreChangedNotification` updates the Chats tab badge. |
 | Folder list on the title chevron | done | `Features/ChatList/TGChatListViewController+Actions.m:24` | Lists folders plus "Mark All Read". |
 | Folder tabs with counts | partial | `src/Features/ChatList/Core/TGChatListHeader.m:379` | Pills draw without a per-folder unread count or edit/delete. |
 | Folder bar stays pinned and capsule-selected | missing | `src/Features/ChatList/Core/TGChatListHeader.m:590` | The strip scrolls away and the selected pill is a solid accent fill. |
