@@ -1,11 +1,11 @@
 Chat screen: history, bubbles, composer, message actions, search, scheduling and bot controls. Parity rows come from `_parity_audit/s_chat.md` and the chat half of `changelog.md`; checked against `src/` on 7 November 2026. Message content types have their own file, `message-types.md`.
 
-Counts: 54 done, 16 partial, 21 missing, 0 dev-only.
+Counts: 57 done, 14 partial, 20 missing, 0 dev-only.
 
 Built: M4 (60-message pages, bubbles, actions, drafts, pins, reactions,
 multi-select, scheduled sends), M10 (text search), M16 (polls, cards, veils),
-M17 (custom emoji in the text model). Open: M23 (silent/repeated send, GIF
-caption), M26 (search filters), M27 (failed-send mark), M35 (poll creation,
+M17 (custom emoji in the text model), M27 (failed-send mark). Open: M23
+(silent/repeated send, GIF caption), M26 (search filters), M35 (poll creation,
 copy in multi-select, forward options).
 
 | Feature | State | Where | Note |
@@ -26,7 +26,7 @@ copy in multi-select, forward options).
 | Time and "edited" stamp | done | `Features/Chat/Rendering/TGChatViewController+Layout.m:76` | `TGMessageStamp` puts "edited" after the clock. |
 | Sent/read ticks | done | `Features/Chat/Rendering/TGChatViewController+Cells.m:316` | `state` selects single or double ticks. |
 | Sending clock | done | `Features/Chat/Rendering/TGChatViewController+Cells.m:319` | `sending` replaces the ticks with a clock. |
-| Failed delivery mark | missing | `Features/Chat/Rendering/TGChatViewController+Cells.m:316` | No failed icon; the hold menu offers Retry only. |
+| Failed delivery mark | done | `Features/Chat/Rendering/TGChatViewController+Cells.m:419` | Error glyph from `TGSendStore`; tap on the bubble resends and the hold menu keeps Retry. |
 | Reply block and swipe-to-reply | done | `Features/Chat/Rendering/TGChatViewController+Chrome.m:641` | Quote strip draws author and text; pan on a bubble starts a reply. |
 | Reply with a chosen quote | missing | `Core/Client/Messages/TGClient+Messages.m:287` | Reply stores only `replyToId`; no text selection or `inputTextQuote`. |
 | Forward attribution line | done | `Features/Chat/Rendering/TGChatViewController+Layout.m:104` | "Forwarded from …" is drawn above the body. |
@@ -35,9 +35,9 @@ copy in multi-select, forward options).
 | Reaction chips under a bubble | done | `Features/Chat/Rendering/TGChatViewController+Cells.m:577` | One reactor shows their face; more show emoji and count. |
 | Reaction picker and send | done | `src/Features/Chat/Actions/TGChatActionsHoldMenu.m:1400` | Bar sends `addMessageReaction`; holding a reaction makes it default. |
 | Custom emoji in text | done | `Features/Chat/Views/TGMessageLayout.mm:512` | Picture inline on iOS 7+ (iOS 6 shows the fallback); animated through the sticker pipeline where stickers animate, up to 3 per bubble; animation not yet checked on the 4S. |
-| Composer text field and send | done | `Features/Chat/Composer/TGChatViewController+Input.m:352` | Trimmed text goes through `sendText:thread:replyTo:`. |
-| Markdown send | partial | `Features/Chat/Composer/TGChatViewController+Input.m:410` | `sendText` parses markup, but the new `sendFormattedText:` path is an empty stub. |
-| Formatted send/edit interface | partial | `Core/Client/Messages/TGClient+Messages.m:396` | `sendFormattedText:` and `editMessage:…formattedText:` are empty stubs added at HEAD. |
+| Composer text field and send | done | `Features/Chat/Composer/TGChatViewController+Input.m:352` | Trimmed text goes through `TGSendStore sendFormattedText:…`; the store owns the send and its state. |
+| Markdown send | done | `Features/Chat/Composer/TGChatViewController+Input.m:728` | `markdownParsed:` keeps the typed markup as entities and the store sends the formatted record. |
+| Formatted send/edit interface | done | `Core/Stores/TGSendStore.mm:104` | `sendFormattedText:…schedulingState:` and `editMessageText:…formattedText:` own the request and track the result. |
 | Send custom emoji ids | done | `Core/Model/TGComposerText.m`, `Features/Chat/Composer/TGChatViewController+Input.m` | `TGComposerText` keeps the ids; Send goes through `parseMarkdown` and `sendFormattedText`; seen on the 4S in Saved Messages on 7 November 2026. |
 | File and music picker | missing | `Features/Chat/Views/TGAttachSheet.h:8` | No document picker and no `inputMessageDocument` / `inputMessageAudio` request. |
 | Attach sheet | done | `Features/Chat/Composer/TGChatViewController+Input.m:747` | Gallery, camera, location, contact, checklist, quick reply, dice, ephemeral. |

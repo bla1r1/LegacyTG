@@ -1,6 +1,7 @@
 #import "TGClient+MessageRecord.h"
 #import "TGClient+MessagesInternal.h"
 #import "TGClientInternal.h"
+#import "TGMessageStore.h"
 
 @implementation TGClient (MessageRecord)
 
@@ -36,37 +37,13 @@
 - (void)clickAnimatedEmojiMessage:(int64_t)messageId
 						   inChat:(int64_t)chatId
 					   completion:(void (^)(NSString *emoji))completion {
-	[self request:@{
-		@"@type"      : @"clickAnimatedEmojiMessage",
-		@"chat_id"    : @(chatId),
-		@"message_id" : @(messageId),
-	} completion:^(NSDictionary *result){
-		if (!completion)
-			return;
-		// The answer is a Sticker. TDLib's JSON has it both as the object
-		// itself in some builds and under "sticker" in the wrapped form, so
-		// accept either instead of losing a successful roll.
-		NSDictionary *sticker = [result[@"sticker"] isKindOfClass:NSDictionary.class]
-				? result[@"sticker"] : result;
-		NSString *emoji = sticker[@"emoji"];
-		completion([emoji isKindOfClass:NSString.class] ? emoji : nil);
-	}];
+	[[TGMessageStore shared] clickAnimatedEmojiMessage:messageId inChat:chatId completion:completion];
 }
 
 - (void)clearReplyMarkupOfMessage:(int64_t)messageId
 						   inChat:(int64_t)chatId
 					   completion:(void (^)(BOOL ok))completion {
-	// An inline keyboard with no rows is how TDLib spells "no buttons".
-	[self request:@{
-		@"@type"        : @"editMessageReplyMarkup",
-		@"chat_id"      : @(chatId),
-		@"message_id"   : @(messageId),
-		@"reply_markup" : @{@"@type" : @"replyMarkupInlineKeyboard",
-							@"rows" : @[]},
-	} completion:^(NSDictionary *result){
-		if (completion)
-			completion(![result[@"@type"] isEqualToString:@"error"]);
-	}];
+	[[TGMessageStore shared] clearReplyMarkupOfMessage:messageId inChat:chatId completion:completion];
 }
 
 - (void)callbackQueryMessage:(int64_t)messageId
@@ -164,19 +141,7 @@ static id TGMessageTopicForThread(TGClient *client, int64_t chatId, int64_t thre
 - (void)statisticsOfMessage:(int64_t)messageId
 					 inChat:(int64_t)chatId
 				 completion:(void (^)(NSDictionary *statistics))completion {
-	[self request:@{
-		@"@type"      : @"getMessageStatistics",
-		@"chat_id"    : @(chatId),
-		@"message_id" : @(messageId),
-		// The flag only picks the graph's colour scheme; the numbers are the
-		// same either way, so a light chart is safe on every theme.
-		@"is_dark"    : @NO,
-	} completion:^(NSDictionary *result){
-		if (!completion)
-			return;
-		completion([result[@"@type"] isEqualToString:@"messageStatistics"]
-				? result : nil);
-	}];
+	[[TGMessageStore shared] statisticsOfMessage:messageId inChat:chatId completion:completion];
 }
 
 - (void)reportViewOfMessage:(int64_t)messageId
@@ -186,18 +151,7 @@ static id TGMessageTopicForThread(TGClient *client, int64_t chatId, int64_t thre
 				 heightRatio:(NSInteger)heightPerMille
 			   seenRangeRatio:(NSInteger)seenPerMille
 				 completion:(void (^)(BOOL ok))completion {
-	[self request:@{
-		@"@type"                           : @"sendMessageViewMetrics",
-		@"chat_id"                         : @(chatId),
-		@"message_id"                      : @(messageId),
-		@"time_in_view_ms"                 : @(MAX((NSInteger)0, timeInViewMs)),
-		@"active_time_in_view_ms"          : @(MAX((NSInteger)0, activeTimeInViewMs)),
-		@"height_to_viewport_ratio_per_mille" : @(MAX((NSInteger)0, MIN(heightPerMille, (NSInteger)1000))),
-		@"seen_range_ratio_per_mille"      : @(MAX((NSInteger)0, MIN(seenPerMille, (NSInteger)1000))),
-	} completion:^(NSDictionary *result){
-		if (completion)
-			completion(![result[@"@type"] isEqualToString:@"error"]);
-	}];
+	[[TGMessageStore shared] reportViewOfMessage:messageId inChat:chatId timeInViewMs:timeInViewMs activeTimeInViewMs:activeTimeInViewMs heightRatio:heightPerMille seenRangeRatio:seenPerMille completion:completion];
 }
 
 - (void)setReactions:(NSArray *)emojis

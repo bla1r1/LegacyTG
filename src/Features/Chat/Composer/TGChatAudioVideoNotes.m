@@ -45,7 +45,7 @@ static const NSTimeInterval kRecordHintSeconds = 1.6;
 	if (row >= 0 && row < (NSInteger)self.messages.count){
 		NSDictionary *played = self.messages[row];
 		if (![played[@"outgoing"] boolValue])
-			[[TGClient shared] openContentOfMessage:[played[@"id"] longLongValue]
+			[[TGMessageStore shared] openContentOfMessage:[played[@"id"] longLongValue]
 											 inChat:self.chatId];
 	}
 
@@ -134,7 +134,7 @@ static const NSTimeInterval kRecordHintSeconds = 1.6;
 }
 
 - (BOOL)showsUnplayedMarkFor:(NSDictionary *)m {
-	return TGShowsUnplayedMark(m, self.chatId == [[TGClient shared] savedMessagesChatId]);
+	return TGShowsUnplayedMark(m, self.chatId == [[TGMessageStore shared] savedMessagesChatId]);
 }
 
 - (void)playVideoNoteForMessage:(NSDictionary *)m atRow:(NSInteger)row {
@@ -143,7 +143,7 @@ static const NSTimeInterval kRecordHintSeconds = 1.6;
 		return;
 	[self beginDownloadHUDForFile:[docId integerValue]];
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] downloadFile:[docId integerValue] completion:^(NSString *path){
+	[[TGMessageStore shared] downloadFile:[docId integerValue] completion:^(NSString *path){
 		dispatch_async(dispatch_get_main_queue(), ^{
 			[weakSelf endDownloadHUD];
 			if (path)

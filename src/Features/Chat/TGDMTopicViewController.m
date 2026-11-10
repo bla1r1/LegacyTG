@@ -1,7 +1,7 @@
 #import "TGDMTopicViewController.h"
 #import "TGLocalization.h"
 #import "TGAlertSheet.h"
-#import "TGClient.h"
+#import "TGMessageStore.h"
 #import "TGRows.h"
 
 @interface TGDMTopicViewController ()
@@ -77,7 +77,7 @@
 		@"direct_messages_chat_topic_id" : @(self.topicId)
 	};
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] request:@{
+	[[TGMessageStore shared] request:@{
 		@"@type" : @"sendMessage",
 		@"chat_id" : @(self.chatId),
 		@"topic_id" : topicIdObj,
@@ -97,7 +97,7 @@
 
 - (void)loadTopic {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] directMessagesChatTopic:self.topicId inChat:self.chatId
+	[[TGMessageStore shared] directMessagesChatTopic:self.topicId inChat:self.chatId
 									completion:^(NSDictionary *topic, NSString *error){
 		TGDMTopicViewController *me = weakSelf;
 		if (!me || !topic)
@@ -109,7 +109,7 @@
 
 - (void)loadHistory {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] directMessagesChatTopicHistory:self.topicId
+	[[TGMessageStore shared] directMessagesChatTopicHistory:self.topicId
 											  inChat:self.chatId
 									   fromMessageId:0 offset:0 limit:30
 										  completion:^(NSArray *messages, NSString *error){
@@ -132,7 +132,7 @@
 		[title isEqualToString:TGLocalized(@"Mark as Read")]){
 		BOOL mark = [title isEqualToString:TGLocalized(@"Mark as Unread")];
 		__weak typeof(self) weakSelf = self;
-		[[TGClient shared] setDirectMessagesChatTopic:self.topicId
+		[[TGMessageStore shared] setDirectMessagesChatTopic:self.topicId
 											  inChat:self.chatId
 									markedAsUnread:mark
 										  completion:^(BOOL ok, NSString *error){
@@ -173,7 +173,7 @@
 							title:TGLocalized(@"Delete All Messages")
 						   action:TGLocalized(@"Delete")
 					  destructive:YES inView:self.view onConfirm:^{
-			[[TGClient shared] deleteDirectMessagesChatTopicHistory:weakSelf.topicId
+			[[TGMessageStore shared] deleteDirectMessagesChatTopicHistory:weakSelf.topicId
 														  inChat:weakSelf.chatId
 													  completion:^(BOOL ok,
 																   NSString *error){
@@ -189,7 +189,7 @@
 - (void)runSimple:(NSString *)selector title:(NSString *)title {
 	__weak typeof(self) weakSelf = self;
 	if ([selector isEqualToString:@"readAllDirectMessagesChatTopicReactions"]){
-		[[TGClient shared] readAllDirectMessagesChatTopicReactions:self.topicId
+		[[TGMessageStore shared] readAllDirectMessagesChatTopicReactions:self.topicId
 														  inChat:self.chatId
 													  completion:^(BOOL ok,
 																   NSString *error){
@@ -197,7 +197,7 @@
 		}];
 		return;
 	}
-	[[TGClient shared] unpinAllDirectMessagesChatTopicMessages:self.topicId
+	[[TGMessageStore shared] unpinAllDirectMessagesChatTopicMessages:self.topicId
 													   inChat:self.chatId
 												   completion:^(BOOL ok,
 																NSString *error){
@@ -238,7 +238,7 @@
 			date = (NSInteger)(now - 7 * 86400);
 		else if (index == 3)
 			date = (NSInteger)(now - 30 * 86400);
-		[[TGClient shared] directMessagesChatTopicMessageByDate:weakSelf.topicId
+		[[TGMessageStore shared] directMessagesChatTopicMessageByDate:weakSelf.topicId
 													   inChat:weakSelf.chatId
 														 date:date
 												   completion:^(NSDictionary *message,
@@ -279,7 +279,7 @@
 		[TGAlertSheet showConfirm:nil
 							title:@"Delete Messages" action:@"Delete"
 					  destructive:YES inView:weakSelf.view onConfirm:^{
-			[[TGClient shared] deleteDirectMessagesChatTopicMessages:weakSelf.topicId
+			[[TGMessageStore shared] deleteDirectMessagesChatTopicMessages:weakSelf.topicId
 															inChat:weakSelf.chatId
 														   minDate:(NSInteger)minDate
 														   maxDate:(NSInteger)now

@@ -6,7 +6,7 @@
 #import "TGReactionPicker.h"
 #import "TGDateFormat.h"
 #import "TGOptions.h"
-#import "TGClientInternal.h"
+#import "TGMessageStore.h"
 #import "TGInstantViewController.h"
 #import "TGMessageAudienceViewController.h"
 #import "TGSponsoredMessagesViewController.h"
@@ -60,7 +60,7 @@ static NSString *TGSheetDate(NSTimeInterval unix) {
 - (void)showPublicForwardsOfActionMessage {
 	__weak typeof(self) weakSelf = self;
 	[self withActionMessage:^(int64_t messageId, int64_t chatId, NSDictionary *m){
-		[[TGClient shared] publicForwardsOfMessage:messageId
+		[[TGMessageStore shared] publicForwardsOfMessage:messageId
 											 inChat:chatId
 										 completion:^(NSArray *forwards){
 			TGChatViewController *me = weakSelf;
@@ -76,7 +76,7 @@ static NSString *TGSheetDate(NSTimeInterval unix) {
 			for (NSDictionary *copy in forwards){
 				int64_t where = [copy[@"chat_id"] longLongValue];
 				NSString *title = where
-						? ([[TGClient shared] titleForChat:where] ?: @"A chat")
+						? ([[TGMessageStore shared] titleForChat:where] ?: @"A chat")
 						: @"Unknown chat";
 				[rows addObject:[NSString stringWithFormat:@"%@  ·  #%@",
 						title, copy[@"message_id"] ?: @""]];
@@ -93,7 +93,7 @@ static NSString *TGSheetDate(NSTimeInterval unix) {
 					return;
 				TGChatViewController *vc = [[TGChatViewController alloc] init];
 				vc.chatId = where;
-				vc.chatTitle = [[TGClient shared] titleForChat:where] ?: @"";
+				vc.chatTitle = [[TGMessageStore shared] titleForChat:where] ?: @"";
 				vc.isGroup = YES;
 				vc.initialMessageId = copyId;
 				vc.hidesBottomBarWhenPushed = YES;
@@ -169,7 +169,7 @@ static NSString *TGSheetDate(NSTimeInterval unix) {
 - (void)showAuthorOfActionMessage {
 	__weak typeof(self) weakSelf = self;
 	[self withActionMessage:^(int64_t messageId, int64_t chatId, NSDictionary *m){
-		[[TGClient shared] authorOfMessage:messageId inChat:chatId completion:^(NSDictionary *user){
+		[[TGMessageStore shared] authorOfMessage:messageId inChat:chatId completion:^(NSDictionary *user){
 			TGChatViewController *me = weakSelf;
 			if (!me || !user){
 				[TGAlertSheet showMessage:@"Telegram names an author only for a "
@@ -196,7 +196,7 @@ static NSString *TGSheetDate(NSTimeInterval unix) {
 		// fallback for a message with no flattened text, where Telegram can
 		// still translate the content it holds.
 		if (text.length){
-			[[TGClient shared] translateText:text toLanguageCode:language tone:@""
+			[[TGMessageStore shared] translateText:text toLanguageCode:language tone:@""
 								  completion:^(NSString *translated){
 				TGChatViewController *me = weakSelf;
 				if (!me)
@@ -207,7 +207,7 @@ static NSString *TGSheetDate(NSTimeInterval unix) {
 									   inView:me.view];
 					return;
 				}
-				[[TGClient shared] translateMessage:messageId inChat:chatId
+				[[TGMessageStore shared] translateMessage:messageId inChat:chatId
 											 toCode:language
 										  completion:^(NSString *fallback){
 					[TGAlertSheet showMessage:(fallback.length ? fallback : @"Not translatable")
@@ -217,7 +217,7 @@ static NSString *TGSheetDate(NSTimeInterval unix) {
 			}];
 			return;
 		}
-		[[TGClient shared] translateMessage:messageId inChat:chatId
+		[[TGMessageStore shared] translateMessage:messageId inChat:chatId
 									 toCode:language
 								  completion:^(NSString *translated){
 			TGChatViewController *me = weakSelf;
@@ -248,7 +248,7 @@ static NSString *TGSheetDate(NSTimeInterval unix) {
 						 action:@"Search"
 						 inView:me.view
 					 onSubmit:^(NSString *quote){
-			[[TGClient shared] searchQuote:quote inText:text position:0
+			[[TGMessageStore shared] searchQuote:quote inText:text position:0
 								completion:^(NSInteger position, BOOL found){
 				TGChatViewController *live = weakSelf;
 				if (!live)
@@ -273,7 +273,7 @@ static NSString *TGSheetDate(NSTimeInterval unix) {
 - (void)showRecentLocationsInActionMessage {
 	__weak typeof(self) weakSelf = self;
 	[self withActionMessage:^(int64_t messageId, int64_t chatId, NSDictionary *m){
-		[[TGClient shared] recentLocationsInChat:chatId completion:^(NSArray *messages){
+		[[TGMessageStore shared] recentLocationsInChat:chatId completion:^(NSArray *messages){
 			TGChatViewController *me = weakSelf;
 			if (!me) return;
 			if (!messages.count){
@@ -284,7 +284,7 @@ static NSString *TGSheetDate(NSTimeInterval unix) {
 			NSMutableArray *rows = [NSMutableArray array];
 			for (NSDictionary *loc in messages){
 				NSString *who = [loc[@"sender_id"] isKindOfClass:NSDictionary.class]
-						? ([[TGClient shared] nameForUserId:
+						? ([[TGMessageStore shared] nameForUserId:
 						   [loc[@"sender_id"][@"user_id"] longLongValue]]) ?: @"User"
 						: @"Location";
 				NSString *day = TGSheetDate([loc[@"date"] doubleValue]);

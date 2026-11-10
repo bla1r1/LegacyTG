@@ -7,6 +7,13 @@
 /// Posted on the main queue when the other side reads your messages in a
 /// chat; userInfo carries "chatId".
 extern NSString *const TGChatReadOutboxChangedNotification;
+
+/// updateMessageSendSucceeded or updateMessageSendFailed arrived. userInfo
+/// carries "chatId", the flattened "message", "oldMessageId" (0 apart from a
+/// successful rename) and, for a failure, TDLib's own "error" record. The
+/// send store is the only one that needs it; a chat already sees the message
+/// through onMessage.
+extern NSString *const TGMessageSendStateChangedNotification;
 /// The chat list or the folders changed. onChatsChanged belongs to the chat
 /// list; any other screen listens here instead of taking that block over.
 extern NSString *const TGChatsChangedNotification;

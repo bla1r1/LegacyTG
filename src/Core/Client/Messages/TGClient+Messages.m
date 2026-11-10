@@ -1,6 +1,8 @@
 #import "TGClient+Messages.h"
 #import "TGClient+MessagesInternal.h"
 #import "TGClientInternal.h"
+#import "TGSendStore.h"
+#import "TGMessageStore.h"
 
 @implementation TGClient (Messages)
 
@@ -10,59 +12,7 @@
                 thread:(int64_t)threadId
                  limit:(NSInteger)limit
             completion:(void (^)(NSArray *))completion {
-	if (threadId == 0){
-		[self historyForChat:chatId limit:limit completion:completion];
-		return;
-	}
-
-	// A Saved Messages topic is not a message thread; TDLib keeps its own
-	// history call for it, and the thread call answers nothing there.
-	if ([self chatIsSavedMessages:chatId]){
-		[self historyForSavedTopic:threadId fromMessageId:0 limit:limit
-						completion:completion];
-		return;
-	}
-
-	// A forum topic has a topic call of its own. A plain supergroup thread
-	// has no forum id, so an error falls back to the message-thread call
-	// the chat used before.
-	__weak typeof(self) weakSelf = self;
-	[self request:@{
-		@"@type"           : @"getForumTopicHistory",
-		@"chat_id"         : @(chatId),
-		@"forum_topic_id"  : @(threadId),
-		@"from_message_id" : @(0),
-		@"offset"          : @(0),
-		@"limit"           : @(limit),
-	} completion:^(NSDictionary *result){
-		NSArray *msgs = result[@"messages"];
-		if ([msgs isKindOfClass:NSArray.class]){
-			NSMutableArray *out = [NSMutableArray arrayWithCapacity:msgs.count];
-			for (NSDictionary *m in [[msgs reverseObjectEnumerator] allObjects])
-				[out addObject:TGFlattenMessage(m)];
-			if (completion) completion(out);
-			return;
-		}
-		[weakSelf request:@{
-			@"@type"           : @"getMessageThreadHistory",
-			@"chat_id"         : @(chatId),
-			@"message_id"      : @(threadId),
-			@"from_message_id" : @(0),
-			@"offset"          : @(0),
-			@"limit"           : @(limit),
-		} completion:^(NSDictionary *threadResult){
-			NSArray *threadMsgs = threadResult[@"messages"];
-			if (![threadMsgs isKindOfClass:NSArray.class]){
-				NSLog(@"TGClient: thread history -> %@", threadResult[@"@type"]);
-				if (completion) completion(@[]);
-				return;
-			}
-			NSMutableArray *out = [NSMutableArray arrayWithCapacity:threadMsgs.count];
-			for (NSDictionary *m in [[threadMsgs reverseObjectEnumerator] allObjects])
-				[out addObject:TGFlattenMessage(m)];
-			if (completion) completion(out);
-		}];
-	}];
+	[[TGMessageStore shared] historyForChat:chatId thread:threadId limit:limit completion:completion];
 }
 
 /// Presses a callback button. The bot answers with a line to show
@@ -251,24 +201,21 @@
          fromMessageId:(int64_t)fromMessageId
                  limit:(NSInteger)limit
             completion:(void (^)(NSArray *))completion {
-	[self historyForChat:chatId fromMessageId:fromMessageId offset:0 limit:limit completion:completion];
+	[[TGMessageStore shared] historyForChat:chatId fromMessageId:fromMessageId limit:limit completion:completion];
 }
 
 - (void)historyForChat:(int64_t)chatId
        aroundMessageId:(int64_t)messageId
                  limit:(NSInteger)limit
             completion:(void (^)(NSArray *))completion {
-	// Offset 0 starts just before from_message_id and leaves it out, so a jump
-	// fetched the page next to its target and then could not find it (B28).
-	[self historyForChat:chatId fromMessageId:messageId offset:-(limit / 2) limit:limit
-			  completion:completion];
+	[[TGMessageStore shared] historyForChat:chatId aroundMessageId:messageId limit:limit completion:completion];
 }
 
 - (void)newerHistoryForChat:(int64_t)chatId
               fromMessageId:(int64_t)fromMessageId
                       limit:(NSInteger)limit
                  completion:(void (^)(NSArray *))completion {
-	[self historyForChat:chatId fromMessageId:fromMessageId offset:-limit limit:limit completion:completion];
+	[[TGMessageStore shared] newerHistoryForChat:chatId fromMessageId:fromMessageId limit:limit completion:completion];
 }
 
 - (void)historyForChat:(int64_t)chatId
@@ -376,6 +323,14 @@
 - (void)sendText:(NSString *)text toChat:(int64_t)chatId
            thread:(int64_t)threadId replyTo:(int64_t)replyToId
         scheduled:(NSDictionary *)schedulingState {
+	[self sendText:text toChat:chatId thread:threadId replyTo:replyToId
+		 scheduled:schedulingState completion:nil];
+}
+
+- (void)sendText:(NSString *)text toChat:(int64_t)chatId
+           thread:(int64_t)threadId replyTo:(int64_t)replyToId
+        scheduled:(NSDictionary *)schedulingState
+      completion:(void (^)(NSDictionary *message))completion {
 	NSMutableDictionary *request = [@{
 		@"@type"                : @"sendMessage",
 		@"chat_id"              : @(chatId),
@@ -392,7 +347,13 @@
 	if (schedulingState[@"@type"])
 		request[@"scheduling_state"] = schedulingState;
 
-	[self send:request];
+	if (!completion){
+		[self send:request];
+		return;
+	}
+	[self request:request completion:^(NSDictionary *result){
+		completion([result[@"@type"] isEqualToString:@"message"] ? result : nil);
+	}];
 }
 
 /// At a wall-clock date. The date is int32 seconds, which is what the
@@ -431,29 +392,13 @@
 			 forMessage:(int64_t)messageId
 					inChat:(int64_t)chatId
 				completion:(void (^)(BOOL ok))completion {
-	// An optional object reads back as the JSON null TDLib documents for
-	// "send immediately", which is not a dictionary.
-	id value = state[@"@type"] ? state : [NSNull null];
-	[self request:@{
-		@"@type"            : @"editMessageSchedulingState",
-		@"chat_id"          : @(chatId),
-		@"message_id"       : @(messageId),
-		@"scheduling_state" : value,
-	} completion:^(NSDictionary *result){
-		if (completion)
-			completion(![result[@"@type"] isEqualToString:@"error"]);
-	}];
+	[[TGSendStore shared] setSchedulingState:state forMessage:messageId inChat:chatId completion:completion];
 }
 
 - (void)forwardMessages:(NSArray *)messageIds
                fromChat:(int64_t)fromChatId
                  toChat:(int64_t)toChatId {
-	[self send:@{
-		@"@type"        : @"forwardMessages",
-		@"chat_id"      : @(toChatId),
-		@"from_chat_id" : @(fromChatId),
-		@"message_ids"  : messageIds ?: @[],
-	}];
+	[[TGMessageStore shared] forwardMessages:messageIds fromChat:fromChatId toChat:toChatId];
 }
 
 - (NSDictionary *)markdownParsed:(NSDictionary *)formattedText {
@@ -482,6 +427,14 @@
 
 - (void)sendFormattedText:(NSDictionary *)formattedText toChat:(int64_t)chatId
 				   thread:(int64_t)threadId replyTo:(int64_t)replyToId {
+	[self sendFormattedText:formattedText toChat:chatId thread:threadId
+					replyTo:replyToId schedulingState:nil completion:nil];
+}
+
+- (void)sendFormattedText:(NSDictionary *)formattedText toChat:(int64_t)chatId
+				   thread:(int64_t)threadId replyTo:(int64_t)replyToId
+		  schedulingState:(NSDictionary *)schedulingState
+			   completion:(void (^)(NSDictionary *message))completion {
 	NSDictionary *empty = @{@"@type" : @"formattedText", @"text" : @"", @"entities" : @[]};
 	NSDictionary *textPayload = [formattedText isKindOfClass:[NSDictionary class]] ? formattedText : empty;
 
@@ -498,8 +451,16 @@
 	if (replyToId != 0)
 		request[@"reply_to"] = @{@"@type" : @"inputMessageReplyToMessage",
 								 @"message_id" : @(replyToId)};
+	if (schedulingState[@"@type"])
+		request[@"scheduling_state"] = schedulingState;
 
-	[self send:request];
+	if (!completion){
+		[self send:request];
+		return;
+	}
+	[self request:request completion:^(NSDictionary *result){
+		completion([result[@"@type"] isEqualToString:@"message"] ? result : nil);
+	}];
 }
 
 - (void)editMessage:(int64_t)messageId inChat:(int64_t)chatId formattedText:(NSDictionary *)formattedText {
@@ -535,15 +496,8 @@
 		  ofMessage:(int64_t)messageId
 			 inChat:(int64_t)chatId
 		 completion:(void (^)(BOOL ok))completion {
-	[self request:@{
-		@"@type"      : @"editMessageCaption",
-		@"chat_id"    : @(chatId),
-		@"message_id" : @(messageId),
-		@"caption"    : TGFormattedText(caption),
-	} completion:^(NSDictionary *result){
-		if (completion)
-			completion(![result[@"@type"] isEqualToString:@"error"]);
-	}];
+	[[TGMessageStore shared] editCaption:caption ofMessage:messageId
+								  inChat:chatId completion:completion];
 }
 
 /// Replaces the picture itself, keeping the message where it is in the
@@ -554,27 +508,7 @@
 			  ofMessage:(int64_t)messageId
 				 inChat:(int64_t)chatId
 			 completion:(void (^)(BOOL ok))completion {
-	if (!path.length){
-		if (completion) completion(NO);
-		return;
-	}
-	[self request:@{
-		@"@type"      : @"editMessageMedia",
-		@"chat_id"    : @(chatId),
-		@"message_id" : @(messageId),
-		// No keyboard of its own; the one the message had is not ours to
-		// rebuild from here, and an empty one is the honest answer.
-		@"reply_markup" : @{@"@type" : @"replyMarkupInlineKeyboard",
-							@"rows" : @[]},
-		@"input_message_content": @{
-			@"@type"   : @"inputMessagePhoto",
-			@"photo"   : @{@"@type" : @"inputFileLocal", @"path" : path},
-			@"caption" : TGFormattedText(caption),
-		},
-	} completion:^(NSDictionary *result){
-		if (completion)
-			completion(![result[@"@type"] isEqualToString:@"error"]);
-	}];
+	[[TGMessageStore shared] editPhotoAtPath:path caption:caption ofMessage:messageId inChat:chatId completion:completion];
 }
 
 /// Several pictures as one message. Their own client sends up to ten; the
@@ -587,27 +521,8 @@
 					  caption:(NSString *)caption
 					   toChat:(int64_t)chatId
 					   thread:(int64_t)threadId {
-	if (!paths.count)
-		return;
-	NSMutableArray *contents = [NSMutableArray array];
-	for (NSUInteger i = 0; i < MIN(paths.count, (NSUInteger)10); i++){
-		NSString *path = paths[i];
-		if (![path isKindOfClass:NSString.class] || !path.length)
-			continue;
-		[contents addObject:@{
-			@"@type"   : @"inputMessagePhoto",
-			@"photo"   : @{@"@type" : @"inputFileLocal", @"path" : path},
-			@"caption" : TGFormattedText(i == 0 ? caption : nil),
-		}];
-	}
-	if (!contents.count)
-		return;
-	[self send:@{
-		@"@type"                  : @"sendMessageAlbum",
-		@"chat_id"                : @(chatId),
-		@"message_thread_id"      : @(threadId),
-		@"input_message_contents" : contents,
-	}];
+	[[TGSendStore shared] sendPhotoAlbumAtPaths:paths caption:caption
+										 toChat:chatId thread:threadId];
 }
 
 - (void)messageWithId:(int64_t)messageId
@@ -637,30 +552,7 @@
 }
 
 - (void)sendStickerWithFileId:(NSInteger)fileId toChat:(int64_t)chatId thread:(int64_t)threadId {
-	[self send:@{
-		@"@type"                : @"sendMessage",
-		@"chat_id"              : @(chatId),
-		@"message_thread_id"    : @(threadId),
-		// This TDLib nests the file one level down: inputMessageSticker takes
-		// an inputSticker, which is what carries the InputFile. Handing it the
-		// InputFile directly answers "InputFile is not specified".
-		@"input_message_content": @{
-			@"@type"   : @"inputMessageSticker",
-			@"sticker" : @{
-				@"@type"   : @"inputSticker",
-				@"sticker" : @{@"@type" : @"inputFileId", @"id" : @(fileId)},
-				@"width"   : @512,
-				@"height"  : @512,
-			},
-			@"emoji"   : @"",
-		},
-	}];
-
-	// Sending does not put it in Recently Used on its own, so the strip never
-	// filled up as stickers were sent.
-	[self send:@{@"@type"       : @"addRecentSticker",
-				 @"is_attached" : @NO,
-				 @"sticker"     : @{@"@type" : @"inputFileId", @"id" : @(fileId)}}];
+	[[TGSendStore shared] sendStickerWithFileId:fileId toChat:chatId thread:threadId];
 }
 
 - (void)sendVoiceAtPath:(NSString *)path duration:(NSInteger)seconds
@@ -682,68 +574,7 @@
 			   progress:(void (^)(CGFloat))progress
 			   accepted:(void (^)(int64_t))accepted
 			 completion:(void (^)(BOOL))completion {
-	if (!path.length){
-		if (completion)
-			completion(NO);
-		return;
-	}
-
-	NSDictionary *attributes = [[NSFileManager defaultManager]
-			attributesOfItemAtPath:path error:nil];
-	NSLog(@"TGClient: sending voice %@ (%llu bytes, %lds, once %d) to %lld",
-			path.lastPathComponent, [attributes fileSize], (long)seconds,
-			viewOnce, chatId);
-
-	// The one-time mode is written the way their clients do it: a timer of
-	// 0x7fffffff, whose whole meaning is "gone the moment it is opened".
-	id destruct = viewOnce
-			? @{@"@type" : @"messageSelfDestructTypeImmediately"}
-			: [NSNull null];
-
-	// Answered rather than fire-and-forget: a rejected voice note is silent
-	// otherwise, and the file it points at lives in a temporary directory.
-	[self request:@{
-		@"@type"                : @"sendMessage",
-		@"chat_id"              : @(chatId),
-		@"message_thread_id"    : @(threadId),
-		@"input_message_content": @{
-			@"@type"      : @"inputMessageVoiceNote",
-			@"voice_note" : @{
-				@"@type"      : @"inputVoiceNote",
-				@"voice_note" : @{@"@type" : @"inputFileLocal", @"path" : path},
-				@"duration"   : @(seconds),
-				@"waveform"   : @"",
-			},
-			@"caption"    : [NSNull null],
-			@"self_destruct_type" : destruct,
-		},
-	} completion:^(NSDictionary *result){
-		if ([result[@"@type"] isEqualToString:@"error"]){
-			NSLog(@"TGClient: voice rejected: %@ %@",
-					result[@"code"], result[@"message"]);
-			if (completion)
-				completion(NO);
-			return;
-		}
-		NSLog(@"TGClient: voice accepted, message %@", result[@"id"]);
-		int64_t messageId = [result[@"id"] longLongValue];
-		if (messageId <= 0){
-			if (completion)
-				completion(NO);
-			return;
-		}
-		if (accepted)
-			accepted(messageId);
-		NSDictionary *content = [result[@"content"] isKindOfClass:NSDictionary.class]
-				? result[@"content"] : nil;
-		NSDictionary *note = [content[@"voice_note"] isKindOfClass:NSDictionary.class]
-				? content[@"voice_note"] : nil;
-		NSDictionary *voice = [note[@"voice"] isKindOfClass:NSDictionary.class]
-				? note[@"voice"] : nil;
-		[self registerSendWaiterForMessage:messageId
-									fileId:(voice ? [voice[@"id"] integerValue] : 0)
-								  progress:progress completion:completion];
-	}];
+	[[TGSendStore shared] sendVoiceAtPath:path duration:seconds toChat:chatId thread:threadId viewOnce:viewOnce progress:progress accepted:accepted completion:completion];
 }
 
 - (void)sendVideoNoteAtPath:(NSString *)path duration:(NSInteger)seconds
@@ -774,80 +605,11 @@
 				   progress:(void (^)(CGFloat))progress
 				   accepted:(void (^)(int64_t))accepted
 				 completion:(void (^)(BOOL))completion {
-	if (!path.length){
-		if (completion)
-			completion(NO);
-		return;
-	}
-	id destruct = viewOnce
-			? @{@"@type" : @"messageSelfDestructTypeImmediately"}
-			: [NSNull null];
-	// A note with no thumbnail is a black circle to everyone who receives it;
-	// null is what the schema takes when the recorder could not make one.
-	id thumbnail = [NSNull null];
-	if (thumbnailPath.length){
-		thumbnail = @{
-			@"@type"     : @"inputThumbnail",
-			@"thumbnail" : @{@"@type" : @"inputFileLocal", @"path" : thumbnailPath},
-			@"width"     : @240,
-			@"height"    : @240,
-		};
-	}
-	[self request:@{
-		@"@type"                : @"sendMessage",
-		@"chat_id"              : @(chatId),
-		@"message_thread_id"    : @(threadId),
-		@"input_message_content": @{
-			@"@type" : @"inputMessageVideoNote",
-			@"video_note" : @{
-				@"@type" : @"inputVideoNote",
-				@"video_note" : @{@"@type" : @"inputFileLocal", @"path" : path},
-				@"duration" : @(seconds),
-				@"length" : @(length),
-				@"thumbnail" : thumbnail,
-			},
-			@"self_destruct_type" : destruct,
-		},
-	} completion:^(NSDictionary *result){
-		if ([result[@"@type"] isEqualToString:@"error"]){
-			NSLog(@"TGClient: video note rejected: %@ %@",
-					result[@"code"], result[@"message"]);
-			if (completion)
-				completion(NO);
-			return;
-		}
-		NSLog(@"TGClient: video note accepted, message %@", result[@"id"]);
-		int64_t messageId = [result[@"id"] longLongValue];
-		if (messageId <= 0){
-			// Without the pending id there is no update that could ever say
-			// how the send ended.
-			if (completion)
-				completion(NO);
-			return;
-		}
-		// The result is the whole message; its video note names the local
-		// file TDLib will upload, which is what updateFile reports progress on.
-		NSDictionary *content = [result[@"content"] isKindOfClass:NSDictionary.class]
-				? result[@"content"] : nil;
-		NSDictionary *note = [content[@"video_note"] isKindOfClass:NSDictionary.class]
-				? content[@"video_note"] : nil;
-		NSDictionary *video = [note[@"video"] isKindOfClass:NSDictionary.class]
-				? note[@"video"] : nil;
-		if (accepted)
-			accepted(messageId);
-		[self registerSendWaiterForMessage:messageId
-									fileId:(video ? [video[@"id"] integerValue] : 0)
-								  progress:progress completion:completion];
-	}];
+	[[TGSendStore shared] sendVideoNoteAtPath:path duration:seconds length:length toChat:chatId thread:threadId viewOnce:viewOnce thumbnail:thumbnailPath progress:progress accepted:accepted completion:completion];
 }
 
 - (void)cancelSendingMessage:(int64_t)messageId inChat:(int64_t)chatId {
-	if (!messageId)
-		return;
-	[self deleteMessages:@[@(messageId)] inChat:chatId revoke:YES];
-	// Nothing is left to wait for: the person took the message back, so the
-	// waiter answers YES and the chat can drop its sending row.
-	[self noteSendFinished:messageId sent:YES];
+	[[TGSendStore shared] cancelSendingMessage:messageId inChat:chatId];
 }
 
 - (void)sendVideoAtPath:(NSString *)path toChat:(int64_t)chatId {
@@ -855,38 +617,11 @@
 }
 
 - (void)sendVideoAtPath:(NSString *)path viewOnce:(BOOL)viewOnce toChat:(int64_t)chatId {
-	if (!path.length)
-		return;
-	id destruct = viewOnce
-			? @{@"@type" : @"messageSelfDestructTypeImmediately"}
-			: [NSNull null];
-	[self send:@{
-		@"@type"                : @"sendMessage",
-		@"chat_id"              : @(chatId),
-		@"input_message_content": @{
-			@"@type" : @"inputMessageVideo",
-			@"video" : @{
-				@"@type" : @"inputVideo",
-				@"video" : @{@"@type" : @"inputFileLocal", @"path" : path},
-			},
-			@"self_destruct_type" : destruct,
-		},
-	}];
+	[[TGSendStore shared] sendVideoAtPath:path viewOnce:viewOnce toChat:chatId];
 }
 
 - (void)sendLocation:(double)latitude longitude:(double)longitude toChat:(int64_t)chatId {
-	[self send:@{
-		@"@type"                : @"sendMessage",
-		@"chat_id"              : @(chatId),
-		@"input_message_content": @{
-			@"@type"    : @"inputMessageLocation",
-			@"location" : @{
-				@"@type"     : @"location",
-				@"latitude"  : @(latitude),
-				@"longitude" : @(longitude),
-			},
-		},
-	}];
+	[[TGSendStore shared] sendLocation:latitude longitude:longitude toChat:chatId];
 }
 
 /// A place that keeps changing, for `seconds` more. The send is answered
@@ -898,25 +633,9 @@
 			longitude:(double)longitude
 				  toChat:(int64_t)chatId
 			 completion:(void (^)(int64_t messageId))completion {
-	[self request:@{
-		@"@type"                : @"sendMessage",
-		@"chat_id"              : @(chatId),
-		@"input_message_content": @{
-			@"@type"    : @"inputMessageLiveLocation",
-			@"location" : @{
-				@"@type"       : @"liveLocation",
-				@"location"    : @{@"@type"     : @"location",
-								   @"latitude"  : @(latitude),
-								   @"longitude" : @(longitude)},
-				@"live_period" : @(seconds),
-				@"heading"     : @(0),
-				@"proximity_alert_radius" : @(0),
-			},
-		},
-	} completion:^(NSDictionary *result){
-		if (completion)
-			completion([result[@"id"] longLongValue]);
-	}];
+	[[TGSendStore shared] sendLiveLocation:seconds latitude:latitude
+								  longitude:longitude toChat:chatId
+								 completion:completion];
 }
 
 /// The moving pin, moved again, for `seconds` more of its period - and 0 is
@@ -928,45 +647,11 @@
 						longitude:(double)longitude
 					   livePeriod:(NSInteger)seconds
 					   completion:(void (^)(BOOL ok))completion {
-	if (!messageId){
-		if (completion) completion(NO);
-		return;
-	}
-	[self request:@{
-		@"@type"      : @"editMessageLiveLocation",
-		@"chat_id"    : @(chatId),
-		@"message_id" : @(messageId),
-		@"location"   : @{
-			@"@type"       : @"liveLocation",
-			@"location"    : @{@"@type"     : @"location",
-							   @"latitude"  : @(latitude),
-							   @"longitude" : @(longitude)},
-			@"live_period" : @(seconds),
-			@"heading"     : @(0),
-			@"proximity_alert_radius" : @(0),
-		},
-	} completion:^(NSDictionary *result){
-		if (completion)
-			completion(![result[@"@type"] isEqualToString:@"error"]);
-	}];
+	[[TGMessageStore shared] editLiveLocationOfMessage:messageId inChat:chatId latitude:latitude longitude:longitude livePeriod:seconds completion:completion];
 }
 
 - (void)sendContactNamed:(NSString *)name phone:(NSString *)phone toChat:(int64_t)chatId {
-	if (!phone.length)
-		return;
-	[self send:@{
-		@"@type"                : @"sendMessage",
-		@"chat_id"              : @(chatId),
-		@"input_message_content": @{
-			@"@type"   : @"inputMessageContact",
-			@"contact" : @{
-				@"@type"        : @"contact",
-				@"phone_number" : phone,
-				@"first_name"   : name ?: @"",
-				@"user_id"      : @(0),
-			},
-		},
-	}];
+	[[TGSendStore shared] sendContactNamed:name phone:phone toChat:chatId];
 }
 
 - (void)sendPhotoAtPath:(NSString *)path toChat:(int64_t)chatId {
@@ -974,43 +659,15 @@
 }
 
 - (void)sendPhotoAtPath:(NSString *)path viewOnce:(BOOL)viewOnce toChat:(int64_t)chatId {
-	if (!path.length)
-		return;
-	id destruct = viewOnce
-			? @{@"@type" : @"messageSelfDestructTypeImmediately"}
-			: [NSNull null];
-	[self send:@{
-		@"@type"                : @"sendMessage",
-		@"chat_id"              : @(chatId),
-		@"input_message_content": @{
-			@"@type" : @"inputMessagePhoto",
-			@"photo" : @{
-				@"@type" : @"inputPhoto",
-				@"photo" : @{@"@type" : @"inputFileLocal", @"path" : path},
-			},
-			@"self_destruct_type" : destruct,
-		},
-	}];
+	[[TGSendStore shared] sendPhotoAtPath:path viewOnce:viewOnce toChat:chatId];
 }
 
 - (void)votePoll:(int64_t)messageId inChat:(int64_t)chatId options:(NSArray *)optionIds {
-	[self send:@{
-		@"@type"      : @"setPollAnswer",
-		@"chat_id"    : @(chatId),
-		@"message_id" : @(messageId),
-		@"option_ids" : optionIds ?: @[],
-	}];
+	[[TGMessageStore shared] votePoll:messageId inChat:chatId options:optionIds];
 }
 
 - (void)markChecklistTask:(int64_t)taskId done:(BOOL)done inMessage:(int64_t)messageId chat:(int64_t)chatId {
-	NSArray *one = @[@(taskId)];
-	[self send:@{
-		@"@type"                      : @"markChecklistTasksAsDone",
-		@"chat_id"                    : @(chatId),
-		@"message_id"                 : @(messageId),
-		@"marked_as_done_task_ids"    : done ? one : @[],
-		@"marked_as_not_done_task_ids": done ? @[] : one,
-	}];
+	[[TGMessageStore shared] markChecklistTask:taskId done:done inMessage:messageId chat:chatId];
 }
 
 @end

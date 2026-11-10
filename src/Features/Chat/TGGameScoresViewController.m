@@ -7,7 +7,7 @@
 // a score or a leaderboard.
 //
 #import "TGGameScoresViewController.h"
-#import "TGClient.h"
+#import "TGMessageStore.h"
 #import "TGAlertSheet.h"
 
 @interface TGGameScoresViewController ()
@@ -142,7 +142,7 @@
 
 	int32_t score = self.scoreText.intValue;
 	if ([action isEqualToString:@"read"]){
-		[[TGClient shared] gameHighScoresForChat:self.chatId
+		[[TGMessageStore shared] gameHighScoresForChat:self.chatId
 										 message:self.messageId
 											user:self.userId
 									  completion:^(NSArray *scores, NSString *error){
@@ -153,7 +153,7 @@
 			[weakSelf showScores:scores title:@"Game High Scores"];
 		}];
 	} else if ([action isEqualToString:@"readInline"]){
-		[[TGClient shared] inlineGameHighScores:self.inlineMessageId
+		[[TGMessageStore shared] inlineGameHighScores:self.inlineMessageId
 										   user:self.userId
 									 completion:^(NSArray *scores, NSString *error){
 			if (error){
@@ -163,7 +163,7 @@
 			[weakSelf showScores:scores title:@"Inline High Scores"];
 		}];
 	} else if ([action isEqualToString:@"write"]){
-		[[TGClient shared] setGameScoreForChat:self.chatId
+		[[TGMessageStore shared] setGameScoreForChat:self.chatId
 									   message:self.messageId
 										  user:self.userId
 										 score:score
@@ -179,7 +179,7 @@
 						   title:@"Set Game Score"];
 		}];
 	} else if ([action isEqualToString:@"writeInline"]){
-		[[TGClient shared] setInlineGameScore:self.inlineMessageId
+		[[TGMessageStore shared] setInlineGameScore:self.inlineMessageId
 										 user:self.userId
 										score:score
 										force:self.force

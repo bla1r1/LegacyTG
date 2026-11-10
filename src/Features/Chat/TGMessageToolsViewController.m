@@ -2,7 +2,8 @@
 // TGMessageToolsViewController.m
 //
 #import "TGMessageToolsViewController.h"
-#import "TGClient.h"
+#import "TGMessageStore.h"
+#import "TGSendStore.h"
 #import "TGAlertSheet.h"
 
 @implementation TGMessageToolsViewController
@@ -44,7 +45,7 @@
 
 - (void)summarize {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] summarizeMessage:self.messageId
+	[[TGMessageStore shared] summarizeMessage:self.messageId
 								 inChat:self.chatId
 							translateTo:@""
 								   tone:@""
@@ -63,7 +64,7 @@
 		return;
 	}
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] fixTextWithAi:self.messageText
+	[[TGMessageStore shared] fixTextWithAi:self.messageText
 						  completion:^(NSString *text, NSString *diff, NSString *error){
 		if (!text.length){
 			[weakSelf toast:error ?: @"An error occurred."];
@@ -76,7 +77,7 @@
 - (void)translateRichMessage {
 	__weak typeof(self) weakSelf = self;
 	NSString *code = [[NSLocale currentLocale] objectForKey:NSLocaleLanguageCode];
-	[[TGClient shared] translateMessageRichMessage:self.messageId
+	[[TGMessageStore shared] translateMessageRichMessage:self.messageId
 											inChat:self.chatId
 											toCode:code.length ? code : @"en"
 											  tone:@""
@@ -91,7 +92,7 @@
 
 - (void)fullRichMessage {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] getFullRichMessage:self.messageId
+	[[TGMessageStore shared] getFullRichMessage:self.messageId
 								   inChat:self.chatId
 							   completion:^(NSString *text, NSDictionary *message,
 											NSString *error){
@@ -109,7 +110,7 @@
 		return;
 	}
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] sendRichMessageDraft:self.messageText
+	[[TGSendStore shared] sendRichMessageDraft:self.messageText
 									 toChat:self.chatId
 									topicId:0
 									draftId:(int64_t)arc4random()
@@ -133,7 +134,7 @@
 					 action:@"Save"
 					 inView:self.view
 				   onSubmit:^(NSString *text){
-		[[TGClient shared] setMessageFactCheck:weakSelf.messageId
+		[[TGMessageStore shared] setMessageFactCheck:weakSelf.messageId
 										inChat:weakSelf.chatId
 										  text:text
 									completion:^(BOOL ok, NSString *error){
@@ -149,7 +150,7 @@
 
 - (void)clearFactCheck {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] setMessageFactCheck:self.messageId
+	[[TGMessageStore shared] setMessageFactCheck:self.messageId
 									inChat:self.chatId
 									  text:nil
 								completion:^(BOOL ok, NSString *error){

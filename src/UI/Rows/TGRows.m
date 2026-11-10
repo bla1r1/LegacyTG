@@ -2,6 +2,7 @@
 // TGRows.m
 //
 #import "TGRows.h"
+#import "TGSendStore.h"
 #import "TGStyle.h"
 
 NSString *const TGRowTitle    = @"title";
@@ -583,6 +584,7 @@ NSString *const TGRowChatOnline        = @"chatOnline";
 NSString *const TGRowChatSaved         = @"chatSaved";
 NSString *const TGRowChatOutgoing      = @"chatOutgoing";
 NSString *const TGRowChatRead          = @"chatRead";
+NSString *const TGRowChatFailed        = @"chatFailed";
 NSString *const TGRowChatAction        = @"chatAction";
 NSString *const TGRowChatDraft         = @"chatDraft";
 NSString *const TGRowChatStatusEmojiId = @"chatStatusEmojiId";
@@ -635,6 +637,12 @@ NSMutableDictionary *TGChatRow(NSDictionary *chat, NSString *dateText) {
 	row[TGRowChatOutgoing] = @([chat[@"lastOutgoing"] boolValue]);
 	row[TGRowChatRead] = @([chat[@"lastId"] longLongValue] <=
 			[chat[@"readOutbox"] longLongValue]);
+	// The last bubble was refused: the row shows the same mark as the chat.
+	int64_t lastId = [chat[@"lastId"] longLongValue];
+	row[TGRowChatFailed] = @(lastId > 0 &&
+			[[TGSendStore shared] stateForMessageId:lastId
+											 inChat:[chatId longLongValue]] ==
+					TGSendStateFailed);
 	if ([TGChatRowString(chat[@"action"]) length])
 		row[TGRowChatAction] = chat[@"action"];
 	if ([TGChatRowString(chat[@"draft"]) length])

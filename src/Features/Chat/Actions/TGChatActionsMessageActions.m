@@ -7,7 +7,7 @@
 #import "TGReactionPicker.h"
 #import "TGDateFormat.h"
 #import "TGOptions.h"
-#import "TGClientInternal.h"
+#import "TGMessageStore.h"
 #import "TGInstantViewController.h"
 #import "TGMessageAudienceViewController.h"
 #import "TGSponsoredMessagesViewController.h"
@@ -123,7 +123,7 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 /// the app's order. A default the message does not offer is left where it is,
 /// because reacting with it would be refused.
 - (NSArray *)reactionsWithDefaultFirst:(NSArray *)reactions {
-	NSString *first = [TGClient shared].defaultReactionEmoji;
+	NSString *first = [TGMessageStore shared].defaultReactionEmoji;
 	if (!first.length || ![reactions containsObject:first])
 		return reactions;
 	NSMutableArray *out = [NSMutableArray arrayWithObject:first];
@@ -178,9 +178,9 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 			TGChatViewController *strong = weakSelf;
 			if (!strong) return;
 			if ([emoji isEqualToString:myReaction]) {
-				[[TGClient shared] removeReaction:myReaction fromMessage:heldId inChat:strong.chatId];
+				[[TGMessageStore shared] removeReaction:myReaction fromMessage:heldId inChat:strong.chatId];
 			} else {
-				[[TGClient shared] reactTo:heldId inChat:strong.chatId emoji:emoji];
+				[[TGMessageStore shared] reactTo:heldId inChat:strong.chatId emoji:emoji];
 			}
 			// The chips are part of the row's height, so the cached geometry
 			// is stale the moment the reaction lands.
@@ -189,7 +189,7 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 		};
 		void (^onDefaultReaction)(NSString *) = ^(NSString *emoji) {
 			// Telegram keeps the choice; the bar was already promoted in place.
-			[[TGClient shared] setDefaultReactionEmoji:emoji completion:^(BOOL ok){
+			[[TGMessageStore shared] setDefaultReactionEmoji:emoji completion:^(BOOL ok){
 				if (ok)
 					return;
 				TGChatViewController *strong = weakSelf;

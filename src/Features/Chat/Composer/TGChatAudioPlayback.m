@@ -531,7 +531,7 @@ static NSString *TGClockText(NSTimeInterval position, NSTimeInterval duration) {
 	// Telling Telegram it was played is what turns the sender's dot blue, and
 	// nothing else does it - reading the chat does not count as listening.
 	if (![m[@"outgoing"] boolValue])
-		[[TGClient shared] openContentOfMessage:[m[@"id"] longLongValue]
+		[[TGMessageStore shared] openContentOfMessage:[m[@"id"] longLongValue]
 										 inChat:self.chatId];
 
 	// Tapping the one already playing is how you stop it; without this the
@@ -544,7 +544,7 @@ static NSString *TGClockText(NSTimeInterval position, NSTimeInterval duration) {
 		[self stopPlayback];
 	[self beginDownloadHUDForFile:[docId integerValue]];
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] downloadFile:[docId integerValue] priority:32 completion:^(NSString *path){
+	[[TGMessageStore shared] downloadFile:[docId integerValue] priority:32 completion:^(NSString *path){
 		dispatch_async(dispatch_get_main_queue(), ^{
 			[weakSelf endDownloadHUD];
 			TGChatViewController *me = weakSelf;

@@ -433,7 +433,7 @@ static const long long kGifAutoDownloadLimit = 3 * 1024 * 1024;
 		return;
 	[self.gifsRequested addObject:docId];
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] downloadFile:docId.integerValue completion:^(NSString *downloaded){
+	[[TGMessageStore shared] downloadFile:docId.integerValue completion:^(NSString *downloaded){
 		TGChatViewController *me = weakSelf;
 		if (!me || !downloaded.length)
 			return;

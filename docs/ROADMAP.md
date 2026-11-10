@@ -68,7 +68,7 @@ already exist.
 | M24 Chat-list previews and badges | `planned` | Thumbnails, type glyph, reaction/poll badges, compact counts, tab badge, folder tags. |
 | M25 Story rings | `planned` | Ring on every row and profile avatar, own-story tile. |
 | M26 Chat search filters | `planned` | Sender/media/date chips, result opens the hit, search tokens, global scopes. |
-| M27 Failed-send mark | `planned` | Failed icon in the bubble and row, retry without the hold menu. |
+| M27 Failed-send mark | `done` | Failed icon in the bubble and row, retry without the hold menu. |
 | M28 Profile cover, QR and Premium badge | `partial` | Accent gradient, background emoji, star badge, rating, verifier note. QR screen done. |
 | M29 Profile media tabs | `partial` | GIF and Polls panes, photo/video split, month sections, calendar, counts, multi-select. Pane search done. |
 | M30 Settings search | `planned` | A page index and a search field over every Settings row. |
@@ -221,12 +221,13 @@ tokens, Downloads shortcut.
 
 ## M27: Failed-send mark
 
-- [ ] `planned` A failed icon on the bubble and on the chat-list row when
+- [x] `done` A failed icon on the bubble and on the chat-list row when
   TDLib reports `messageSendingStateFailed`.
-- [ ] `planned` Tap or hold to retry without opening the full hold menu; keep
+- [x] `done` Tap or hold to retry without opening the full hold menu; keep
   the existing Retry row as the fallback.
 
-**Blocked by:** the cell reads only the sent/read state, not the failed state.
+**Blocked by:** nothing. `TGSendStore` keeps the failure reason and the
+can-retry flag; the bubble and the row read the same table.
 
 **Closes:** `chat.md` — Failed delivery mark; `chat-list.md` — Delivery ticks
 on your last message.

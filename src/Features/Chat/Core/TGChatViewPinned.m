@@ -1,6 +1,6 @@
 #import "TGPerf.h"
 #import "TGChatViewController.h"
-#import "TGClient.h"
+#import "TGMessageStore.h"
 #import "TGTheme.h"
 #import "TGIcons.h"
 #import "TGForwardPicker.h"
@@ -73,7 +73,7 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 /// A strip under the navigation bar, the way clients surface what is pinned.
 - (void)loadPinnedMessage {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] pinnedMessageForChat:self.chatId completion:^(NSDictionary *m){
+	[[TGMessageStore shared] pinnedMessageForChat:self.chatId completion:^(NSDictionary *m){
 		TGChatViewController *me = weakSelf;
 		me.pinnedMessageId = [m[@"id"] longLongValue];
 		NSString *text = [m[@"text"] isKindOfClass:NSString.class] ? m[@"text"] : nil;
@@ -124,7 +124,7 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 - (void)pinnedCloseTapped {
 	int64_t pinnedId = self.pinnedMessageId;
 	if (pinnedId)
-		[[TGClient shared] unpinMessage:pinnedId inChat:self.chatId];
+		[[TGMessageStore shared] unpinMessage:pinnedId inChat:self.chatId];
 	self.pinnedMessageId = 0;
 	[self hidePinnedBanner];
 }
@@ -159,7 +159,7 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 		if (thumb && self.pinnedThumbnailFileId){
 			int64_t fileId = self.pinnedThumbnailFileId;
 			__weak typeof(self) weakSelf = self;
-			[[TGClient shared] downloadFile:fileId completion:^(NSString *path){
+			[[TGMessageStore shared] downloadFile:fileId completion:^(NSString *path){
 				if (!path.length || !weakSelf.pinnedBannerView)
 					return;
 				UIImage *photo = [UIImage imageWithContentsOfFile:path];
@@ -208,7 +208,7 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 		[banner addSubview:thumb];
 		int64_t fileId = self.pinnedThumbnailFileId;
 		__weak typeof(self) weakSelf = self;
-		[[TGClient shared] downloadFile:fileId completion:^(NSString *path){
+		[[TGMessageStore shared] downloadFile:fileId completion:^(NSString *path){
 			if (!path.length || !weakSelf.pinnedBannerView)
 				return;
 			UIImage *photo = [UIImage imageWithContentsOfFile:path];

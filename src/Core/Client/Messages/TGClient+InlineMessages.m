@@ -1,6 +1,8 @@
 #import "TGClient+InlineMessages.h"
 #import "TGClient+MessagesInternal.h"
 #import "TGClientInternal.h"
+#import "TGMessageStore.h"
+#import "TGSendStore.h"
 
 @implementation TGClient (InlineMessages)
 
@@ -123,14 +125,7 @@
 }
 
 - (void)reactTo:(int64_t)messageId inChat:(int64_t)chatId emoji:(NSString *)emoji {
-	[self send:@{
-		@"@type"      : @"addMessageReaction",
-		@"chat_id"    : @(chatId),
-		@"message_id" : @(messageId),
-		@"reaction_type" : @{@"@type" : @"reactionTypeEmoji", @"emoji" : emoji},
-		@"is_big"     : @NO,
-		@"update_recent_reactions" : @YES,
-	}];
+	[[TGMessageStore shared] reactTo:messageId inChat:chatId emoji:emoji];
 }
 
 - (void)deleteMessage:(int64_t)messageId inChat:(int64_t)chatId {
@@ -138,93 +133,49 @@
 }
 
 - (void)deleteMessages:(NSArray *)messageIds inChat:(int64_t)chatId {
-	[self deleteMessages:messageIds inChat:chatId revoke:YES];
+	[[TGSendStore shared] deleteMessages:messageIds inChat:chatId revoke:YES];
 }
 
 - (void)deleteMessages:(NSArray *)messageIds inChat:(int64_t)chatId revoke:(BOOL)revoke {
-	if (!messageIds.count)
-		return;
-	[self send:@{
-		@"@type"        : @"deleteMessages",
-		@"chat_id"      : @(chatId),
-		@"message_ids"  : messageIds,
-		@"revoke"       : @(revoke),
-	}];
+	[[TGSendStore shared] deleteMessages:messageIds inChat:chatId revoke:revoke];
 }
 
 /// "typing...", as the other side shows it. TDLib expects this repeated while
 /// typing goes on; it expires on its own a few seconds after the last one.
 - (void)sendTypingToChat:(int64_t)chatId thread:(int64_t)threadId {
-	[self send:@{
-		@"@type"             : @"sendChatAction",
-		@"chat_id"           : @(chatId),
-		@"message_thread_id" : @(threadId),
-		@"action"            : @{@"@type" : @"chatActionTyping"},
-	}];
+	[[TGMessageStore shared] sendTypingToChat:chatId thread:threadId];
 }
 
 /// Stops it at once rather than waiting for it to expire - sent when the
 /// message goes or the field is emptied.
 - (void)cancelTypingInChat:(int64_t)chatId thread:(int64_t)threadId {
-	[self send:@{
-		@"@type"             : @"sendChatAction",
-		@"chat_id"           : @(chatId),
-		@"message_thread_id" : @(threadId),
-		@"action"            : @{@"@type" : @"chatActionCancel"},
-	}];
+	[[TGMessageStore shared] cancelTypingInChat:chatId thread:threadId];
 }
 
 - (void)removeReaction:(NSString *)emoji
 			 fromMessage:(int64_t)messageId
 				  inChat:(int64_t)chatId {
-	if (!emoji.length)
-		return;
-	[self send:@{
-		@"@type"         : @"removeMessageReaction",
-		@"chat_id"       : @(chatId),
-		@"message_id"    : @(messageId),
-		@"reaction_type" : @{@"@type" : @"reactionTypeEmoji", @"emoji" : emoji},
-	}];
+	[[TGMessageStore shared] removeReaction:emoji fromMessage:messageId inChat:chatId];
 }
 
 /// Marks a voice note, a video note or a one-time picture as opened. Without
 /// it the sender never sees it played and a self-destructing message never
 /// starts its clock.
 - (void)openContentOfMessage:(int64_t)messageId inChat:(int64_t)chatId {
-	if (!messageId)
-		return;
-	[self send:@{
-		@"@type"      : @"openMessageContent",
-		@"chat_id"    : @(chatId),
-		@"message_id" : @(messageId),
-	}];
+	[[TGMessageStore shared] openContentOfMessage:messageId inChat:chatId];
 }
 
 - (void)pinMessage:(int64_t)messageId inChat:(int64_t)chatId notify:(BOOL)notify {
-	[self send:@{
-		@"@type"                : @"pinChatMessage",
-		@"chat_id"              : @(chatId),
-		@"message_id"           : @(messageId),
-		@"disable_notification" : @(!notify),
-		@"only_for_self"        : @NO,
-	}];
+	[[TGMessageStore shared] pinMessage:messageId inChat:chatId notify:notify];
 }
 
 - (void)unpinMessage:(int64_t)messageId inChat:(int64_t)chatId {
-	[self send:@{
-		@"@type"      : @"unpinChatMessage",
-		@"chat_id"    : @(chatId),
-		@"message_id" : @(messageId),
-	}];
+	[[TGMessageStore shared] unpinMessage:messageId inChat:chatId];
 }
 
 /// Every pinned message down at once - in a forum topic, only that topic's.
 - (void)unpinAllMessagesInChat:(int64_t)chatId thread:(int64_t)threadId {
-	if (threadId)
-		[self send:@{@"@type" : @"unpinAllForumTopicMessages",
-					 @"chat_id" : @(chatId), @"forum_topic_id" : @(threadId)}];
-	else
-		[self send:@{@"@type" : @"unpinAllChatMessages", @"chat_id" : @(chatId)}];
+	[[TGMessageStore shared] unpinAllMessagesInChat:chatId thread:threadId];
 }
 
 /// The last message sent on or before `date` (unix seconds), for jumping to
@@ -246,68 +197,21 @@
 - (void)repliedMessageTo:(int64_t)messageId
 				  inChat:(int64_t)chatId
 			  completion:(void (^)(NSDictionary *message))completion {
-	[self request:@{@"@type"      : @"getRepliedMessage",
-					@"chat_id"    : @(chatId),
-					@"message_id" : @(messageId)}
-	   completion:^(NSDictionary *result){
-		if (!completion)
-			return;
-		NSDictionary *parsed = [result[@"id"] longLongValue]
-				? TGFlattenMessage(result) : nil;
-		if (parsed){
-			// The chat the answer lives in, which a reply across chats is
-			// what reads it: the flattened message carries the id of a
-			// message only, and the chat view would ask itself for it.
-			NSMutableDictionary *withChat = [parsed mutableCopy];
-			withChat[@"chatId"] = result[@"chat_id"];
-			parsed = withChat;
-		}
-		completion(parsed);
-	}];
+	[[TGMessageStore shared] repliedMessageTo:messageId inChat:chatId completion:completion];
 }
 
 /// Returns messages by their ids in a chat. Missing messages are returned as NSNull.
 - (void)messagesInChat:(int64_t)chatId
 			messageIds:(NSArray *)messageIds
 			completion:(void (^)(NSArray *messages))completion {
-	if (!messageIds.count){
-		if (completion) completion(@[]);
-		return;
-	}
-	[self request:@{
-		@"@type"       : @"getMessages",
-		@"chat_id"     : @(chatId),
-		@"message_ids" : messageIds,
-	} completion:^(NSDictionary *result){
-		if (!completion) return;
-		NSArray *raw = result[@"messages"];
-		if (![raw isKindOfClass:NSArray.class]){
-			completion(@[]);
-			return;
-		}
-		NSMutableArray *out = [NSMutableArray arrayWithCapacity:raw.count];
-		for (id item in raw){
-			if ([item isKindOfClass:NSDictionary.class] && [item[@"id"] longLongValue] != 0)
-				[out addObject:TGFlattenMessage(item)];
-			else
-				[out addObject:[NSNull null]];
-		}
-		completion(out);
-	}];
+	[[TGMessageStore shared] messagesInChat:chatId messageIds:messageIds completion:completion];
 }
 
 /// Returns properties of a message (e.g. can_be_replied, can_get_message_thread).
 - (void)messagePropertiesForChat:(int64_t)chatId
 					   messageId:(int64_t)messageId
 					  completion:(void (^)(NSDictionary *properties))completion {
-	[self request:@{
-		@"@type"      : @"getMessageProperties",
-		@"chat_id"    : @(chatId),
-		@"message_id" : @(messageId),
-	} completion:^(NSDictionary *result){
-		if (completion)
-			completion([result isKindOfClass:NSDictionary.class] ? result : nil);
-	}];
+	[[TGMessageStore shared] messagePropertiesForChat:chatId messageId:messageId completion:completion];
 }
 
 /// A t.me link to one message, for Copy Link. Only public chats have one;
@@ -328,22 +232,12 @@
 /// Sends failed messages again. TDLib keeps them in the history with their
 /// own ids until they go or are deleted.
 - (void)resendMessages:(NSArray *)messageIds inChat:(int64_t)chatId {
-	if (!messageIds.count)
-		return;
-	[self send:@{
-		@"@type"       : @"resendMessages",
-		@"chat_id"     : @(chatId),
-		@"message_ids" : messageIds,
-	}];
+	[[TGSendStore shared] resendMessages:messageIds inChat:chatId];
 }
 
 /// Closes a poll you sent. Nobody can vote afterwards and the result stands.
 - (void)stopPoll:(int64_t)messageId inChat:(int64_t)chatId {
-	[self send:@{
-		@"@type"      : @"stopPoll",
-		@"chat_id"    : @(chatId),
-		@"message_id" : @(messageId),
-	}];
+	[[TGMessageStore shared] stopPoll:messageId inChat:chatId];
 }
 
 /// Who voted for one answer. `optionIndex` is the 0-based index the answer
@@ -410,21 +304,7 @@
 			toMessage:(int64_t)messageId
 				 inChat:(int64_t)chatId
 			completion:(void (^)(BOOL ok))completion {
-	if (!text.length){
-		if (completion) completion(NO);
-		return;
-	}
-	[self request:@{
-		@"@type"      : @"addPollOption",
-		@"chat_id"    : @(chatId),
-		@"message_id" : @(messageId),
-		@"option"     : @{@"@type" : @"inputPollOption",
-						  @"text"  : @{@"@type" : @"formattedText",
-									   @"text"  : text}},
-	} completion:^(NSDictionary *result){
-		if (completion)
-			completion(![result[@"@type"] isEqualToString:@"error"]);
-	}];
+	[[TGMessageStore shared] addPollOption:text toMessage:messageId inChat:chatId completion:completion];
 }
 
 /// An option taken out again; `optionId` is the string id pollOption
@@ -433,19 +313,7 @@
 			   ofMessage:(int64_t)messageId
 				  inChat:(int64_t)chatId
 			  completion:(void (^)(BOOL ok))completion {
-	if (!optionId.length){
-		if (completion) completion(NO);
-		return;
-	}
-	[self request:@{
-		@"@type"      : @"deletePollOption",
-		@"chat_id"    : @(chatId),
-		@"message_id" : @(messageId),
-		@"option_id"  : optionId,
-	} completion:^(NSDictionary *result){
-		if (completion)
-			completion(![result[@"@type"] isEqualToString:@"error"]);
-	}];
+	[[TGMessageStore shared] deletePollOption:optionId ofMessage:messageId inChat:chatId completion:completion];
 }
 
 /// What one answer still allows. TDLib answers with a record of four flags;
@@ -498,19 +366,7 @@
 					 ofMessage:(int64_t)messageId
 						 inChat:(int64_t)chatId
 					 completion:(void (^)(BOOL ok))completion {
-	if (![sender isKindOfClass:NSDictionary.class]){
-		if (completion) completion(NO);
-		return;
-	}
-	[self request:@{
-		@"@type"      : @"reportMessageReactions",
-		@"chat_id"    : @(chatId),
-		@"message_id" : @(messageId),
-		@"sender_id"  : sender,
-	} completion:^void (NSDictionary *result){
-		if (completion)
-			completion([result[@"@type"] isEqualToString:@"ok"]);
-	}];
+	[[TGMessageStore shared] reportReactionBySender:sender ofMessage:messageId inChat:chatId completion:completion];
 }
 
 /// Reports messages in a supergroup as spam. It takes the supergroup's own
@@ -551,13 +407,7 @@
 - (void)blockSenderOfMessage:(int64_t)messageId
 			  deleteMessages:(BOOL)deleteMessages
 				  reportSpam:(BOOL)reportSpam {
-	[self send:@{
-		@"@type"              : @"blockMessageSenderFromReplies",
-		@"message_id"         : @(messageId),
-		@"delete_message"     : @(deleteMessages),
-		@"delete_all_messages": @(deleteMessages),
-		@"report_spam"        : @(reportSpam),
-	}];
+	[[TGMessageStore shared] blockSenderOfMessage:messageId deleteMessages:deleteMessages reportSpam:reportSpam];
 }
 
 /// Telegram's own static map of a place, as a PNG. The completion gets a
@@ -737,14 +587,7 @@
 }
 
 - (void)markRead:(NSArray *)messageIds inChat:(int64_t)chatId {
-	if (!messageIds.count)
-		return;
-	[self send:@{
-		@"@type"       : @"viewMessages",
-		@"chat_id"     : @(chatId),
-		@"message_ids" : messageIds,
-		@"force_read"  : @YES,
-	}];
+	[[TGMessageStore shared] markRead:messageIds inChat:chatId];
 }
 
 @end

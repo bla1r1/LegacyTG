@@ -4,6 +4,7 @@
 //
 #import "TGClientInternal.h"
 #import "TGStickerPack.h"
+#import "TGSendStore.h"
 
 /// One sticker as the panel wants it: what to send, and what to draw in the
 /// grid. The thumbnail is drawn only when it is a still picture; a .tgs or
@@ -403,33 +404,7 @@ NSArray *TGFlattenStickerSets(NSArray *sets) {
 }
 
 - (void)sendAnimation:(NSDictionary *)animation toChat:(int64_t)chatId thread:(int64_t)threadId {
-	if (animation[@"queryId"] && animation[@"resultId"]){
-		[self send:@{@"@type"             : @"sendInlineQueryResultMessage",
-					 @"chat_id"           : @(chatId),
-					 @"message_thread_id" : @(threadId),
-					 @"query_id"          : animation[@"queryId"],
-					 @"result_id"         : animation[@"resultId"]}];
-		return;
-	}
-	if (!animation[@"fileId"])
-		return;
-	[self send:@{
-		@"@type"                : @"sendMessage",
-		@"chat_id"              : @(chatId),
-		@"message_thread_id"    : @(threadId),
-		// Same nesting as stickers: inputMessageAnimation takes an
-		// inputAnimation, and that is what holds the InputFile.
-		@"input_message_content": @{
-			@"@type"     : @"inputMessageAnimation",
-			@"animation" : @{
-				@"@type"     : @"inputAnimation",
-				@"animation" : @{@"@type" : @"inputFileId", @"id" : animation[@"fileId"]},
-				@"duration"  : animation[@"duration"] ?: @0,
-				@"width"     : animation[@"width"] ?: @0,
-				@"height"    : animation[@"height"] ?: @0,
-			},
-		},
-	}];
+	[[TGSendStore shared] sendAnimation:animation toChat:chatId thread:threadId];
 }
 
 #pragma mark - authoring a pack

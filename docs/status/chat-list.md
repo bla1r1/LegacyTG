@@ -1,6 +1,6 @@
 Chats screen: the list engine, rows, folders, archive, stories strip and search. Parity items come from `_parity_audit/chat_list.md`; checked against `src/` on 7 November 2026.
 
-Counts: 30 done, 16 partial, 22 missing, 0 dev-only.
+Counts: 31 done, 15 partial, 22 missing, 0 dev-only.
 
 Built: M3 (snapshot first paint, 12 retries, live re-sort, badges, archive,
 folders, bulk actions), M10 (pull-down search), M11 (stories strip, collapsed
@@ -32,7 +32,7 @@ Search filters and tokens are M26.
 | Preview text | done | `src/Features/ChatList/Core/TGChatListTable.m:334` | `previewText`, sender prefix, two lines. |
 | Draft preview | done | `src/Features/ChatList/Core/TGChatListTable.m:332` | Draft wins over the last message and is coloured destructive. |
 | Typing preview with sender name | partial | `src/Features/ChatList/Core/TGChatListTable.m:331` | The action phrase appears but never names who is typing. |
-| Delivery ticks on your last message | partial | `src/Features/ChatList/Core/TGChatListTable.m:348` | Sent/read ticks only; no clock and no failed mark. |
+| Delivery ticks on your last message | done | `src/Features/ChatList/Core/TGChatListTable.m:348` | Sent/read ticks, or the failed mark from `TGSendStore`; a pending last message still has no clock. |
 | Photo/video thumbnail in the preview | missing | `src/Features/ChatList/Core/TGChatListTable.m:334` | Only text is drawn. |
 | Content-type glyph in the preview | missing | `src/Features/ChatList/Core/TGChatListTable.m:334` | No type glyph. |
 | Date of the last message | done | `src/Features/ChatList/Core/TGChatListTable.m:330` | `TGChatDate` keeps today as a clock. |

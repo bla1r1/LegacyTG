@@ -26,7 +26,7 @@ Where column.
 | [checks.md](checks.md) | Device checks: tap, see, wait, log |
 | [bugs.md](bugs.md) | Closed bug queue, B1 onwards |
 
-Totals: 476 done, 258 partial, 205 missing, 18 dev-only across 957 rows.
+Totals: 480 done, 255 partial, 204 missing, 18 dev-only across 957 rows.
 
 ## Milestones
 
@@ -61,7 +61,7 @@ area are in each file's header.
 | M24 Chat-list previews and badges | planned | Thumbnails, type glyph, reaction/poll badges, compact counts, tab badge, folder tags | Row model lacks `unreadPollVotes`, `chat_lists`, story state |
 | M25 Story rings | planned | Ring on every row and profile avatar, own-story tile | No shared ring view |
 | M26 Chat search filters | planned | Sender/media/date chips, result opens the hit, search tokens, global scopes | `TGSearchViewController` has no result-to-message route |
-| M27 Failed-send mark | planned | Failed icon in bubble and row, retry without the hold menu | Cell reads only sent/read state |
+| M27 Failed-send mark | done | Failed icon in bubble and row, retry without the hold menu | — |
 | M28 Profile cover, QR, Premium | partial | Accent gradient, background emoji, star badge, rating, verifier note; the account QR screen is done | Header layout |
 | M29 Profile media tabs | partial | GIF/Polls panes, photo/video split, month sections, calendar, multi-select; search inside a pane is done | `TGProfileTabs` has no kind for either filter; flat grid |
 | M30 Settings search | planned | Page index and search field over every Settings row | None; tree is built in code with no registry |

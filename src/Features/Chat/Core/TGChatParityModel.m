@@ -1,6 +1,6 @@
 #import "TGChatParityModel.h"
 #import "TGLocalization.h"
-#import "TGClientNotifications.h"
+#import "TGMessageStore.h"
 
 // Month.Gen*: the genitive the pack wants after a day ("5 ноября").
 static NSString *TGChatMonthName(NSInteger month) {

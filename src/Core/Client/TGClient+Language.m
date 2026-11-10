@@ -4,6 +4,7 @@
 //
 #import "TGClientInternal.h"
 #import "TGLocalization.h"
+#import "TGMessageStore.h"
 
 /// The localization target this client reads. Telegram ships one pack per
 /// target, and the user clients all read the "ios" target.
@@ -570,26 +571,7 @@ static void TGTextAnswer(TGClient *client, NSDictionary *request,
 	   toLanguageCode:(NSString *)languageCode
 				 tone:(NSString *)tone
 		   completion:(void (^)(NSString *))completion {
-	if (!text.length){
-		if (completion) completion(nil);
-		return;
-	}
-	NSString *code = languageCode.length ? languageCode
-			: ([[NSLocale currentLocale] objectForKey:NSLocaleLanguageCode] ?: @"en");
-	[self request:@{
-		@"@type" : @"translateText",
-		@"text" : @{@"@type" : @"formattedText",
-					@"text" : text,
-					@"entities" : @[]},
-		@"to_language_code" : code,
-		@"tone" : tone ?: @"",
-	} completion:^(NSDictionary *result){
-		if (!completion)
-			return;
-		NSString *translated = [result[@"@type"] isEqualToString:@"formattedText"]
-				? result[@"text"] : nil;
-		completion([translated isKindOfClass:NSString.class] ? translated : nil);
-	}];
+	[[TGMessageStore shared] translateText:text toLanguageCode:languageCode tone:tone completion:completion];
 }
 
 @end

@@ -217,6 +217,7 @@ static TGChatRowAccessories TGChatRowCellAccessories(NSDictionary *row,
 	[self.contentView addSubview:self.onlineDot];
 
 	self.tick = [[UIImageView alloc] init];
+	self.tick.contentMode = UIViewContentModeScaleAspectFit;
 	self.tick.hidden = YES;
 	[self.contentView addSubview:self.tick];
 
@@ -320,8 +321,14 @@ static TGChatRowAccessories TGChatRowCellAccessories(NSDictionary *row,
 	self.onlineDot.hidden = ![row[TGRowChatOnline] boolValue];
 
 	// Your own last message shows whether it has been read, beside the date.
-	// Saved Messages has no one to read it.
-	if (!saved && [row[TGRowChatOutgoing] boolValue] && ![action length]){
+	// Saved Messages has no one to read it. A refused message takes the tick's
+	// slot with the same mark the chat bubble uses.
+	if (!saved && [row[TGRowChatFailed] boolValue]){
+		self.tick.image = [TGIcons glyphNamed:@"error"
+									   colour:[theme destructiveColour]
+										 side:kRowGlyph];
+		self.tick.hidden = NO;
+	} else if (!saved && [row[TGRowChatOutgoing] boolValue] && ![action length]){
 		BOOL read = [row[TGRowChatRead] boolValue];
 		self.tick.image = [TGIcons ticksColour:[theme ticksColour] read:read];
 		self.tick.hidden = NO;

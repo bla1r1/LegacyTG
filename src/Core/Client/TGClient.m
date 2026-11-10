@@ -60,6 +60,7 @@ static NSArray *TGEffectIdList(id value){
 }
 
 NSString *const TGChatReadOutboxChangedNotification = @"TGChatReadOutboxChangedNotification";
+NSString *const TGMessageSendStateChangedNotification = @"TGMessageSendStateChangedNotification";
 NSString *const TGChatsChangedNotification = @"TGChatsChangedNotification";
 NSString *const TGChatReplyMarkupChangedNotification = @"TGChatReplyMarkupChangedNotification";
 NSString *const TGConnectionStateChangedNotification = @"TGConnectionStateChangedNotification";
@@ -648,13 +649,30 @@ NSDictionary *TGFormattedText(NSString *text) {
 		// A failed send keeps the old id and comes back with the failed flag.
 		NSDictionary *m = obj[@"message"];
 		int64_t oldId  = [obj[@"old_message_id"] longLongValue];
-		[self noteSendFinished:oldId sent:[obj[@"@type"] isEqualToString:@"updateMessageSendSucceeded"]];
-		if (!self.onMessage || !m)
+		BOOL sent = [obj[@"@type"] isEqualToString:@"updateMessageSendSucceeded"];
+		[self noteSendFinished:oldId sent:sent];
+		if (!m)
 			return;
 		int64_t chatId = [m[@"chat_id"] longLongValue];
-		if (oldId)
-			self.onMessage(chatId, nil, oldId);
-		self.onMessage(chatId, TGFlattenMessage(m), 0);
+		NSDictionary *flat = TGFlattenMessage(m);
+		if (self.onMessage){
+			if (oldId)
+				self.onMessage(chatId, nil, oldId);
+			self.onMessage(chatId, flat, 0);
+		}
+		// The send store keeps its own table; it hears the same update here
+		// rather than taking the chat's single onMessage slot.
+		NSMutableDictionary *info = [@{
+			@"chatId"       : @(chatId),
+			@"message"      : flat,
+			@"oldMessageId" : @(oldId),
+			@"succeeded"    : @(sent),
+		} mutableCopy];
+		if ([obj[@"error"] isKindOfClass:NSDictionary.class])
+			info[@"error"] = obj[@"error"];
+		[[NSNotificationCenter defaultCenter]
+				postNotificationName:TGMessageSendStateChangedNotification
+							  object:self userInfo:info];
 		return;
 	}
 	case TGUpdateMessageContent: {

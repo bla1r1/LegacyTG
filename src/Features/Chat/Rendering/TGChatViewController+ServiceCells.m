@@ -20,7 +20,7 @@ TGMessageCard *TGChatCardForRow(NSDictionary *m) {
 		card.action = TGMessageCardActionNone;
 	}
 	if (card.action == TGMessageCardActionOpenUser && card.actionTargetId != 0) {
-		card.titleStatusEmojiId = [[TGClient shared] emojiStatusIdForUser:card.actionTargetId];
+		card.titleStatusEmojiId = [[TGMessageStore shared] emojiStatusIdForUser:card.actionTargetId];
 	}
 	return card;
 }
@@ -563,7 +563,7 @@ TGMessageCard *TGChatCardForRow(NSDictionary *m) {
 					[self.imagesRequested addObject:thumbId];
 					int64_t guardId = [m[@"id"] longLongValue];
 					CGFloat screenScale = [UIScreen mainScreen].scale;
-					[[TGClient shared] downloadFile:[thumbId integerValue]
+					[[TGMessageStore shared] downloadFile:[thumbId integerValue]
 										 completion:^(NSString *path){
 						if (!path.length) {
 							dispatch_async(dispatch_get_main_queue(), ^{

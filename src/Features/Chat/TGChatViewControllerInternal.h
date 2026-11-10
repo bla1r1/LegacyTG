@@ -6,7 +6,7 @@
 
 #import "TGChatViewController.h"
 #import "TGUI.h"
-#import "TGClient.h"
+#import "TGMessageStore.h"
 #import "TGVideoNoteViewController.h"
 #import "TGRecordBar.h"
 #import "TGSheet.h"
@@ -23,6 +23,7 @@
 #import "TGStreamingVoicePlayer.h"
 #import "TGImageLruCache.h"
 #import "TGCustomEmojiStore.h"
+#import "TGSendStore.h"
 #import <MediaPlayer/MediaPlayer.h>
 #import <AVFoundation/AVFoundation.h>
 #import <CoreLocation/CoreLocation.h>

@@ -1,6 +1,6 @@
 #import "TGPerf.h"
 #import "TGChatViewController.h"
-#import "TGClient.h"
+#import "TGMessageStore.h"
 #import "TGLocalization.h"
 #import "TGTheme.h"
 #import "TGIcons.h"
@@ -165,7 +165,7 @@ static int64_t sActiveChatId = 0;
 	// After the input bar exists: the kind decides what replaces it. Called
 	// from the title build before, it framed the channel bar on a nil input
 	// bar (zero size), and the composer stayed up until TDLib answered.
-	if (self.chatId != [[TGClient shared] savedMessagesChatId])
+	if (self.chatId != [[TGMessageStore shared] savedMessagesChatId])
 		[self loadChatKindAndChrome];
 	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(replyMarkupChanged:)
 			name:TGChatReplyMarkupChangedNotification object:nil];
@@ -179,6 +179,10 @@ static int64_t sActiveChatId = 0;
 	// stand-in for it. Their size does not change, only what is drawn.
 	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(customEmojiLoaded:)
 			name:TGCustomEmojiLoadedNotification object:nil];
+	// A send turned into a failure, or a retry is on its way: the bubble's
+	// mark is drawn from the store, so the row has to be redrawn.
+	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(sendStateChanged:)
+			name:TGSendStoreMessageStateChangedNotification object:nil];
 	TGPerfReport("chat vc", "chrome", vcStart, 50.0);
 	[self installSwipeToReply];
 	TGPerfReport("chat vc", "swipe + load", vcStart, 100.0);
@@ -190,7 +194,7 @@ static int64_t sActiveChatId = 0;
 
 	// Live updates: append instead of waiting for the screen to be reopened.
 	__weak typeof(self) weakSelf = self;
-	[TGClient shared].onMessage = ^(int64_t chatId, NSDictionary *message, int64_t deletedId){
+	[TGMessageStore shared].onMessage = ^(int64_t chatId, NSDictionary *message, int64_t deletedId){
 		TGChatViewController *me = weakSelf;
 		if (!me || chatId != me.chatId)
 			return;
@@ -198,6 +202,7 @@ static int64_t sActiveChatId = 0;
 		if (message){
 			// Reading further up: leave the place alone and count it on the
 			// jump button instead. Your own message always brings you down.
+			[[TGSendStore shared] adoptMessages:@[message] inChat:chatId];
 			BOOL follow = [me isNearBottom] || [message[@"outgoing"] boolValue];
 			[me.streamStore appendNewerMessages:@[message]];
 			me.rawMessages = [me.streamStore messages];
@@ -210,7 +215,7 @@ static int64_t sActiveChatId = 0;
 				[me noteArrivedWhileAway];
 			}
 			[me fetchMissingImages];
-			[[TGClient shared] markRead:@[message[@"id"]] inChat:chatId];
+			[[TGMessageStore shared] markRead:@[message[@"id"]] inChat:chatId];
 			return;
 		}
 		if (deletedId > 0 && [me.streamStore removeMessageId:deletedId]){
@@ -233,17 +238,17 @@ static int64_t sActiveChatId = 0;
 
 	if (!TGIsDevChat(self.chatId)) {
 		// Captured before opening marks everything read.
-		self.readInboxAtOpen = [[TGClient shared] lastReadInboxForChat:self.chatId];
-		[[TGClient shared] openChat:self.chatId];
+		self.readInboxAtOpen = [[TGMessageStore shared] lastReadInboxForChat:self.chatId];
+		[[TGMessageStore shared] openChat:self.chatId];
 		// Opening clears unread; the @ and the reaction badges are counted apart
 		// from it and stay until they are read in their own right.
-		[[TGClient shared] readAllMentionsAndReactionsInChat:self.chatId];
+		[[TGMessageStore shared] readAllMentionsAndReactionsInChat:self.chatId];
 		// So are the votes: the badge on a fresh poll answer is the chat's to
 		// see, and the chat has now seen it.
-		[[TGClient shared] readAllChatPollVotes:self.chatId];
+		[[TGMessageStore shared] readAllChatPollVotes:self.chatId];
 
 		// Whatever was typed here last and not sent - here or on another device.
-		NSString *draft = [[TGClient shared] draftForChat:self.chatId];
+		NSString *draft = [[TGMessageStore shared] draftForChat:self.chatId];
 		if (draft.length && !self.input.text.length){
 			self.input.text = draft;
 			[self inputChanged];
@@ -289,7 +294,7 @@ static int64_t sActiveChatId = 0;
 
 	UILabel *name = [[UILabel alloc] initWithFrame:CGRectMake(0, TGMetricBorderWidth,
 			kTitleWidth, TGMetricLineRow)];
-	BOOL isSaved = self.chatId == [[TGClient shared] savedMessagesChatId];
+	BOOL isSaved = self.chatId == [[TGMessageStore shared] savedMessagesChatId];
 	name.text = isSaved ? TGLocalized(@"Saved Messages") : (self.chatTitle ?: @"Chat");
 	name.font = TGFontHeader();
 	name.textColor = [[TGTheme shared] barTitleColour];
@@ -342,7 +347,7 @@ static int64_t sActiveChatId = 0;
 			name:TGConnectionStateChangedNotification object:nil];
 	[nc addObserver:self selector:@selector(titleSubtitleOwnerChanged:)
 			name:TGUserStatusChangedNotification object:nil];
-	[TGClient shared].onChatAction = ^(int64_t chatId, NSString *action){
+	[TGMessageStore shared].onChatAction = ^(int64_t chatId, NSString *action){
 		if (chatId != weakSelf.chatId)
 			return;
 		[weakSelf showChatAction:action resting:weakSelf.restingSubtitle];
@@ -356,13 +361,13 @@ static int64_t sActiveChatId = 0;
 
 	// A secret chat's state is its header, and it can change while you
 	// watch: the key exchange answers, or the other side closes the chat.
-	[[TGClient shared] secretChatIdForChat:self.chatId completion:^(NSInteger secretId){
+	[[TGMessageStore shared] secretChatIdForChat:self.chatId completion:^(NSInteger secretId){
 		if (!secretId)
 			return;
 		weakSelf.secretChatId = secretId;
 		[weakSelf refreshSecretState];
 	}];
-	[TGClient shared].onSecretChat = ^(NSInteger secretChatId, NSString *state){
+	[TGMessageStore shared].onSecretChat = ^(NSInteger secretChatId, NSString *state){
 		if (secretChatId != weakSelf.secretChatId)
 			return;
 		[weakSelf refreshSecretState];
@@ -370,7 +375,7 @@ static int64_t sActiveChatId = 0;
 
 	[self loadPinnedMessage];
 
-	if (self.chatId == [[TGClient shared] savedMessagesChatId])
+	if (self.chatId == [[TGMessageStore shared] savedMessagesChatId])
 		subtitle.hidden = YES;
 }
 
@@ -450,21 +455,21 @@ FOUNDATION_EXPORT void TGBubbleFlushCache(void);
 		// filled with "Need administrator rights in the channel chat" for
 		// drafts nobody had typed.
 		NSString *typed = self.input.text ?: @"";
-		NSString *stored = [[TGClient shared] draftForChat:self.chatId] ?: @"";
+		NSString *stored = [[TGMessageStore shared] draftForChat:self.chatId] ?: @"";
 		if (self.editingId == 0 && ![typed isEqualToString:stored])
-			[[TGClient shared] setDraft:typed
+			[[TGMessageStore shared] setDraft:typed
 								 inChat:self.chatId
 								 thread:self.threadId
 								replyTo:self.replyToId];
 		if (!TGIsDevChat(self.chatId)) {
-			[[TGClient shared] cancelTypingInChat:self.chatId thread:self.threadId];
-			[[TGClient shared] closeChat:self.chatId];
+			[[TGMessageStore shared] cancelTypingInChat:self.chatId thread:self.threadId];
+			[[TGMessageStore shared] closeChat:self.chatId];
 		}
-		[TGClient shared].onMessage = nil;
-		[TGClient shared].onChatAction = nil;
-		[TGClient shared].onSecretChat = nil;
+		[TGMessageStore shared].onMessage = nil;
+		[TGMessageStore shared].onChatAction = nil;
+		[TGMessageStore shared].onSecretChat = nil;
 		[self stopChrome];
-		[TGClient shared].onFileProgress = nil;
+		[TGMessageStore shared].onFileProgress = nil;
 		[self.images removeAllObjects];
 		[self.imagesRequested removeAllObjects];
 		[self.senderAvatars removeAllObjects];

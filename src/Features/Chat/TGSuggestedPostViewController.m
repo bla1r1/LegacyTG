@@ -2,7 +2,7 @@
 // TGSuggestedPostViewController.m
 //
 #import "TGSuggestedPostViewController.h"
-#import "TGClient.h"
+#import "TGMessageStore.h"
 #import "TGAlertSheet.h"
 
 @interface TGSuggestedPostViewController ()
@@ -36,7 +36,7 @@
 
 - (void)loadPost {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] suggestedPostForMessage:self.messageId inChat:self.chatId
+	[[TGMessageStore shared] suggestedPostForMessage:self.messageId inChat:self.chatId
 									completion:^(NSDictionary *post, NSString *error){
 		TGSuggestedPostViewController *me = weakSelf;
 		if (!me)
@@ -99,7 +99,7 @@
 				   destructive:NO
 						inView:self.view
 					 onConfirm:^{
-		[[TGClient shared] approveSuggestedPost:weakSelf.messageId
+		[[TGMessageStore shared] approveSuggestedPost:weakSelf.messageId
 										 inChat:weakSelf.chatId
 									   sendDate:sendDate
 									 completion:^(BOOL ok, NSString *error){
@@ -141,7 +141,7 @@
 
 - (void)sendDecline:(NSString *)comment {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] declineSuggestedPost:self.messageId
+	[[TGMessageStore shared] declineSuggestedPost:self.messageId
 									 inChat:self.chatId
 									comment:comment
 								 completion:^(BOOL ok, NSString *error){

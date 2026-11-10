@@ -33,7 +33,7 @@
 	__weak typeof(self) weakSelf = self;
 
 	if ([kind isEqualToString:@"callback"]) {
-		[[TGClient shared] pressCallbackButton:button inChat:chatId messageId:messageId
+		[[TGMessageStore shared] pressCallbackButton:button inChat:chatId messageId:messageId
 									completion:^(NSString *text, BOOL alert, NSString *url, NSString *error){
 			TGChatViewController *me = weakSelf;
 			if (error)
@@ -48,7 +48,7 @@
 	} else if ([kind isEqualToString:@"url"]) {
 		[self handleOpenLink:button[@"url"]];
 	} else if ([kind isEqualToString:@"login"]) {
-		[[TGClient shared] loginURLForButton:button inChat:chatId messageId:messageId
+		[[TGMessageStore shared] loginURLForButton:button inChat:chatId messageId:messageId
 								  completion:^(NSString *url, NSString *domain, NSString *error){
 			TGChatViewController *me = weakSelf;
 			if (url.length) {
@@ -63,7 +63,7 @@
 						  destructive:NO
 							   inView:me.view
 							onConfirm:^{
-				[[TGClient shared] confirmLoginButton:button inChat:chatId messageId:messageId
+				[[TGMessageStore shared] confirmLoginButton:button inChat:chatId messageId:messageId
 										   completion:^(NSString *link, NSString *refused){
 					if (link.length)
 						[weakSelf handleOpenLink:link];
@@ -74,7 +74,7 @@
 		}];
 	} else if ([kind isEqualToString:@"switch"]) {
 		// Inline mode is typed into the composer: "@bot query".
-		[[TGClient shared] userInfo:[m[@"senderId"] longLongValue] completion:^(NSDictionary *user){
+		[[TGMessageStore shared] userInfo:[m[@"senderId"] longLongValue] completion:^(NSDictionary *user){
 			TGChatViewController *me = weakSelf;
 			NSArray *names = user[@"usernames"][@"active_usernames"];
 			NSString *bot = names.count ? [@"@" stringByAppendingString:names[0]] : @"";
@@ -135,7 +135,7 @@
 		return;
 	}
 #endif
-	[[TGClient shared] replyKeyboardForChat:self.chatId completion:apply];
+	[[TGMessageStore shared] replyKeyboardForChat:self.chatId completion:apply];
 }
 
 - (void)replyMarkupChanged:(NSNotification *)note {
@@ -217,11 +217,11 @@
 	NSString *text = key.currentTitle;
 	if (!text.length)
 		return;
-	[[TGClient shared] sendText:text toChat:self.chatId thread:self.threadId];
+	[[TGSendStore shared] sendText:text toChat:self.chatId thread:self.threadId];
 	if ([self.replyKeyboard[@"oneTime"] boolValue]){
 		// A one-time keyboard is spent; TDLib wants the markup dropped so a
 		// reload of the chat does not bring the dead keys back.
-		[[TGClient shared] dismissReplyMarkupInChat:self.chatId];
+		[[TGMessageStore shared] dismissReplyMarkupInChat:self.chatId];
 		[self hideBotKeyboard];
 	}
 }
