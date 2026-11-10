@@ -7,7 +7,8 @@
 // one list, so the words in the rows are the messages themselves.
 #import "TGScheduledViewController.h"
 #import "TGAlertSheet.h"
-#import "TGClient.h"
+#import "TGMessageStore.h"
+#import "TGSendStore.h"
 #import "TGEmptyView.h"
 #import "TGIcons.h"
 #import "TGSheet.h"
@@ -64,7 +65,7 @@
 
 - (void)reload {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] scheduledMessagesInChat:self.chatId completion:^(NSArray *messages){
+	[[TGMessageStore shared] scheduledMessagesInChat:self.chatId completion:^(NSArray *messages){
 		TGScheduledViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -117,7 +118,7 @@
 			[weakSelf reload];
 		};
 		if (index == 0)
-			[[TGClient shared] setSchedulingState:nil forMessage:messageId
+			[[TGSendStore shared] setSchedulingState:nil forMessage:messageId
 										   inChat:weakSelf.chatId completion:done];
 		else if (index == 1)
 			[weakSelf pickDateFor:messageId];
@@ -128,7 +129,7 @@
 						  destructive:YES
 							   inView:weakSelf.navigationController.view ?: weakSelf.view
 						   onConfirm:^{
-				[[TGClient shared] deleteMessages:@[@(messageId)] inChat:weakSelf.chatId];
+				[[TGSendStore shared] deleteMessages:@[@(messageId)] inChat:weakSelf.chatId revoke:YES];
 				[weakSelf reload];
 			}];
 		}
@@ -156,7 +157,7 @@
 				  destructive:YES
 					   inView:self.navigationController.view ?: self.view
 				   onConfirm:^{
-		[[TGClient shared] deleteMessages:@[@(messageId)] inChat:weakSelf.chatId];
+		[[TGSendStore shared] deleteMessages:@[@(messageId)] inChat:weakSelf.chatId revoke:YES];
 		[weakSelf reload];
 	}];
 }
@@ -208,7 +209,7 @@
 	self.pickerSheet = nil;
 
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] setSchedulingState:[TGClient scheduledAtDate:date]
+	[[TGSendStore shared] setSchedulingState:[TGMessageStore scheduledAtDate:date]
 							   forMessage:self.pickerMessageId
 								   inChat:self.chatId
 							   completion:^(BOOL ok){

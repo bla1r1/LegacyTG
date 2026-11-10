@@ -16,7 +16,7 @@
 		"callMissed", "callOutgoing", "chat", "chats", "checkboxSelected",
 		"checkboxUnselected", "chevronDown", "chevronUp", "close",
 		"compose", "contacts", "contactsOutline", "copy", "data", "delete",
-		"devices", "document", "edit", "endcall", "eye", "faq", "fileDisc",
+		"devices", "document", "edit", "endcall", "error", "eye", "faq", "fileDisc",
 		"flash", "flashOff", "flip", "folder", "forward", "gallery", "gift",
 		"language", "lock", "logout", "mapPinBadge", "mediaDiscPause",
 		"mediaDiscPlay", "mention", "microphone", "more", "music", "mute",

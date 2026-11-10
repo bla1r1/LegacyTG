@@ -89,7 +89,7 @@ static const CGFloat kActionBarCloseSide = TGMetricButtonLargeH;
 /// The chat dict row of the open chat, read fresh: the bar follows the chat,
 /// so its kind and words are re-derived on every pass rather than stored.
 - (NSDictionary *)actionBarRow {
-	for (NSDictionary *chat in [TGClient shared].chats)
+	for (NSDictionary *chat in [TGMessageStore shared].chats)
 		if ([chat[@"id"] longLongValue] == self.chatId)
 			return chat;
 	return nil;
@@ -257,11 +257,11 @@ static const CGFloat kActionBarCloseSide = TGMetricButtonLargeH;
 	// Not a hiding: Telegram keeps offering the bar until it is told no.
 	NSString *kind = [self actionBarRow][@"actionBarKind"] ?: @"";
 	if (kind.length)
-		[[TGClient shared] removeActionBarInChat:self.chatId];
+		[[TGMessageStore shared] removeActionBarInChat:self.chatId];
 	[self refreshActionBar];
 	// The dictionary still holds the kind until the update lands; say so
 	// locally too, because the bar must not sit over an already-dismissed one.
-	for (NSDictionary *chat in [TGClient shared].chats)
+	for (NSDictionary *chat in [TGMessageStore shared].chats)
 		if ([chat[@"id"] longLongValue] == self.chatId){
 			[self refreshActionBar];
 			break;
@@ -295,7 +295,7 @@ static const CGFloat kActionBarCloseSide = TGMetricButtonLargeH;
 						   inView:self.view
 						onConfirm:^{
 			int64_t userId = weakSelf.isGroup ? 0 : weakSelf.chatId;
-			[[TGClient shared] sharePhoneNumberWithUser:userId];
+			[[TGMessageStore shared] sharePhoneNumberWithUser:userId];
 		}];
 		return;
 	}
@@ -309,7 +309,7 @@ static const CGFloat kActionBarCloseSide = TGMetricButtonLargeH;
 						title:@"Report" action:@"Report" destructive:NO
 					   inView:self.view
 					onConfirm:^{
-		[[TGClient shared] reportChat:weakSelf.chatId
+		[[TGMessageStore shared] reportChat:weakSelf.chatId
 							   optionId:nil
 								  text:@""
 							completion:^(NSString *title, NSArray *options, BOOL done){
@@ -334,7 +334,7 @@ static const CGFloat kActionBarCloseSide = TGMetricButtonLargeH;
 									title:@"Report" inView:me.view];
 				return;
 			}
-			[[TGClient shared] reportChat:me.chatId optionId:spamOption text:@""
+			[[TGMessageStore shared] reportChat:me.chatId optionId:spamOption text:@""
 							   completion:^(NSString *t, NSArray *o, BOOL d){
 				if (d && weakSelf)
 					[weakSelf actionBarClosed];
@@ -361,7 +361,7 @@ static const CGFloat kActionBarCloseSide = TGMetricButtonLargeH;
 						title:@"Block" action:TGLocalized(@"Block User") destructive:YES
 					   inView:self.view
 					onConfirm:^{
-		[[TGClient shared] blockUserWithUserId:userId];
+		[[TGMessageStore shared] blockUserWithUserId:userId];
 		[weakSelf actionBarClosed];
 	}];
 }
@@ -743,7 +743,7 @@ static const CGFloat kReplyPull = TGMetricReplyPull;   // how far a bubble trave
 /// used to sit at its captured status and never say "Waiting for network".
 - (void)titleSubtitleOwnerChanged:(NSNotification *)note {
 	[self updateTitleEmojiStatus];
-	if ([TGClient shared].connectionState == TGConnectionStateWaitingForNetwork){
+	if ([TGMessageStore shared].connectionState == TGConnectionStateWaitingForNetwork){
 		NSString *network = TGNetworkSubtitleForState(TGConnectionStateWaitingForNetwork, nil);
 		self.networkSubtitle = network;
 		self.titleSubtitleLabel.text = network;
@@ -758,7 +758,7 @@ static const CGFloat kReplyPull = TGMetricReplyPull;   // how far a bubble trave
 	if (note && TGChatStatusNotificationRefreshesPresence(note.name,
 			self.isGroup, self.secretChatId != 0)){
 		__weak typeof(self) weakSelf = self;
-		[[TGClient shared] statusForUser:self.chatId completion:^(NSString *status){
+		[[TGMessageStore shared] statusForUser:self.chatId completion:^(NSString *status){
 			TGChatViewController *me = weakSelf;
 			if (!me || !status.length)
 				return;
@@ -787,7 +787,7 @@ static const CGFloat kReplyPull = TGMetricReplyPull;   // how far a bubble trave
 	NSInteger secretId = self.secretChatId;
 	if (!secretId)
 		return;
-	[[TGClient shared] secretChatState:secretId completion:^(NSString *state, BOOL outgoing){
+	[[TGMessageStore shared] secretChatState:secretId completion:^(NSString *state, BOOL outgoing){
 		TGChatViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -856,15 +856,15 @@ static const CGFloat kReplyPull = TGMetricReplyPull;   // how far a bubble trave
 				   destructive:YES
 						inView:self.navigationController.view ?: self.view
 				   onConfirm:^{
-		[[TGClient shared] closeSecretChat:secretId];
+		[[TGMessageStore shared] closeSecretChat:secretId];
 		[weakSelf.navigationController popViewControllerAnimated:YES];
-		[[TGClient shared] closeChat:chatId];
+		[[TGMessageStore shared] closeChat:chatId];
 	}];
 }
 
 - (void)showChatStatistics {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] chatStatisticsForChat:self.chatId completion:^(NSArray *rows, NSString *kind){
+	[[TGMessageStore shared] chatStatisticsForChat:self.chatId completion:^(NSArray *rows, NSString *kind){
 		TGChatViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -932,13 +932,13 @@ static UIImage *TGChatLockImage(CGFloat side, UIColor *colour) {
 		self.titleStatusIcon.hidden = YES;
 	}
 
-	BOOL isSaved = (self.chatId == [[TGClient shared] savedMessagesChatId]) ||
-			[[TGClient shared] chatIsSavedMessages:self.chatId];
+	BOOL isSaved = (self.chatId == [[TGMessageStore shared] savedMessagesChatId]) ||
+			[[TGMessageStore shared] chatIsSavedMessages:self.chatId];
 	BOOL isPrivate = !self.isGroup && (self.chatId > 0) && !isSaved;
 
 	int64_t statusId = 0;
 	if (isPrivate){
-		for (NSDictionary *chat in [TGClient shared].chats){
+		for (NSDictionary *chat in [TGMessageStore shared].chats){
 			if ([chat[@"id"] longLongValue] == self.chatId){
 				if (![chat[@"isSaved"] boolValue])
 					statusId = [chat[@"emojiStatusId"] longLongValue];
@@ -946,12 +946,12 @@ static UIImage *TGChatLockImage(CGFloat side, UIColor *colour) {
 			}
 		}
 		if (statusId == 0)
-			statusId = [[TGClient shared] emojiStatusIdForUser:self.chatId];
+			statusId = [[TGMessageStore shared] emojiStatusIdForUser:self.chatId];
 	} else if (!isSaved) {
-		statusId = [[TGClient shared] emojiStatusIdForChat:self.chatId];
+		statusId = [[TGMessageStore shared] emojiStatusIdForChat:self.chatId];
 	}
 
-	NSString *liveTitle = [[TGClient shared] titleForChat:self.chatId];
+	NSString *liveTitle = [[TGMessageStore shared] titleForChat:self.chatId];
 	NSString *rawTitle = liveTitle.length ? liveTitle
 			: (self.chatTitle ?: (self.titleNameLabel.text ?: @""));
 	if (rawTitle.length && ![rawTitle isEqualToString:self.chatTitle])

@@ -7,7 +7,7 @@
 #import "TGReactionPicker.h"
 #import "TGDateFormat.h"
 #import "TGOptions.h"
-#import "TGClientInternal.h"
+#import "TGMessageStore.h"
 #import "TGInstantViewController.h"
 #import "TGMessageAudienceViewController.h"
 #import "TGChecklistViewController.h"
@@ -272,7 +272,7 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 	context.mine = mine;
 	context.isGroup = self.isGroup;
 	context.isChannel = self.isChannel;
-	context.isSavedMessages = [[TGClient shared] chatIsSavedMessages:self.chatId];
+	context.isSavedMessages = [[TGMessageStore shared] chatIsSavedMessages:self.chatId];
 	context.isPinned = (heldId != 0 && heldId == self.pinnedMessageId);
 	context.canReply = ![m[@"service"] boolValue] && ![m[@"failed"] boolValue];
 	context.canEdit = mine;
@@ -288,8 +288,8 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 	context.canEditFactCheck = self.isChannel;
 #if TG_DEV
 	context.hasMessageEffects = [m[@"effectId"] longLongValue] > 0 ||
-			[TGClient shared].availableMessageEffectIds.count ||
-			[TGClient shared].availableStickerEffectIds.count;
+			[TGMessageStore shared].availableMessageEffectIds.count ||
+			[TGMessageStore shared].availableStickerEffectIds.count;
 #endif
 	return context;
 }
@@ -331,7 +331,7 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 		int64_t messageId = [m[@"id"] longLongValue];
 		int64_t chatId = self.chatId;
 		__weak TGReadSummaryHeaderView *weakHeader = header;
-		[[TGClient shared] viewersOfMessage:messageId inChat:chatId
+		[[TGMessageStore shared] viewersOfMessage:messageId inChat:chatId
 								completion:^(NSArray *list){
 			TGReadSummaryHeaderView *strongHeader = weakHeader;
 			if (!strongHeader || ![list isKindOfClass:NSArray.class])
@@ -379,7 +379,7 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 		// is the server's word on it, and opening a composer that would be
 		// refused is worse than one line saying so.
 		__weak typeof(self) weakSelf = self;
-		[[TGClient shared] messagePropertiesForChat:self.chatId
+		[[TGMessageStore shared] messagePropertiesForChat:self.chatId
 										  messageId:messageId
 										 completion:^(NSDictionary *properties){
 			TGChatViewController *me = weakSelf;
@@ -393,7 +393,7 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 			me.replyToId = messageId;
 			me.editingId = 0;
 			NSString *who = [m[@"outgoing"] boolValue] ? TGLocalized(@"You")
-					: ([[TGClient shared] nameForUserId:
+					: ([[TGMessageStore shared] nameForUserId:
 							[m[@"senderId"] longLongValue]] ?: self.chatTitle ?: TGLocalized(@"Reply"));
 			[me showComposeBanner:who subtitle:TGComposePreview(m)];
 			[me.input becomeFirstResponder];
@@ -404,7 +404,7 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 		picker.sourceChatId = self.chatId;
 		__weak typeof(self) weakSelf = self;
 		picker.onPicked = ^(int64_t targetChatId){
-			[[TGClient shared] forwardMessages:@[@(messageId)]
+			[[TGMessageStore shared] forwardMessages:@[@(messageId)]
 									  fromChat:weakSelf.chatId
 										toChat:targetChatId];
 		};
@@ -417,7 +417,7 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 		[self toggleMessageSelection:messageId];
 
 	} else if ([action isEqualToString:@"Retry"]){
-		[[TGClient shared] resendMessages:@[@(messageId)] inChat:self.chatId];
+		[[TGSendStore shared] retryMessageId:messageId inChat:self.chatId];
 
 	} else if ([action isEqualToString:@"Checklist"]){
 		TGChecklistViewController *checklist = [[TGChecklistViewController alloc]
@@ -443,7 +443,7 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 						 action:@"Save"
 						 inView:self.view
 					   onSubmit:^(NSString *text){
-			[[TGClient shared] setMessageFactCheck:messageId
+			[[TGMessageStore shared] setMessageFactCheck:messageId
 											 inChat:chatId
 											   text:text
 										 completion:^(BOOL ok, NSString *error){
@@ -465,7 +465,7 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 		[self openCommentsForMessage:m];
 
 	} else if ([action hasPrefix:@"Remove "]){
-		[[TGClient shared] removeReaction:m[@"myReaction"]
+		[[TGMessageStore shared] removeReaction:m[@"myReaction"]
 							  fromMessage:messageId
 								   inChat:self.chatId];
 		[self.layoutCache removeLayoutForMessageId:messageId];
@@ -475,11 +475,11 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 		[self askReactionForMessage:messageId];
 
 	} else if ([action isEqualToString:@"Pin"]){
-		[[TGClient shared] pinMessage:messageId inChat:self.chatId notify:NO];
+		[[TGMessageStore shared] pinMessage:messageId inChat:self.chatId notify:NO];
 		[self performSelector:@selector(loadPinnedMessage) withObject:nil afterDelay:0.6];
 
 	} else if ([action isEqualToString:@"Unpin"]){
-		[[TGClient shared] unpinMessage:messageId inChat:self.chatId];
+		[[TGMessageStore shared] unpinMessage:messageId inChat:self.chatId];
 		self.pinnedMessageId = 0;
 		[self hidePinnedBanner];
 
@@ -491,13 +491,13 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 					  destructive:YES
 						   inView:self.view
 						onConfirm:^{
-			[[TGClient shared] stopPoll:messageId inChat:weakSelf.chatId];
+			[[TGMessageStore shared] stopPoll:messageId inChat:weakSelf.chatId];
 		}];
 
 	} else if ([action isEqualToString:@"Retract Vote"]){
 		// The empty answer set is how TDLib takes a vote back; the updated
 		// message follows, and the row re-reads a second later.
-		[[TGClient shared] votePoll:messageId inChat:self.chatId options:@[]];
+		[[TGMessageStore shared] votePoll:messageId inChat:self.chatId options:@[]];
 		[self.layoutCache removeLayoutForMessageId:messageId];
 		__weak typeof(self) weakSelf = self;
 		dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
@@ -516,7 +516,7 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 					  destructive:YES
 						   inView:self.view
 						onConfirm:^{
-			[[TGClient shared] editLiveLocationOfMessage:messageId
+			[[TGMessageStore shared] editLiveLocationOfMessage:messageId
 												  inChat:chatId
 												latitude:0.0
 											   longitude:0.0
@@ -552,7 +552,7 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 				 destructiveIndex:-1
 						   inView:self.view
 						 onChoice:^(NSInteger index){
-			[[TGClient shared] pollVotersOfOption:index ofMessage:messageId inChat:chatId
+			[[TGMessageStore shared] pollVotersOfOption:index ofMessage:messageId inChat:chatId
 									   completion:^(NSArray *voters, BOOL end){
 				TGChatViewController *me = weakSelf;
 				if (!me)
@@ -583,7 +583,7 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 		// sentence instead of a chart.
 		int64_t pollChatId = self.chatId;
 		__weak typeof(self) weakSelf = self;
-		[[TGClient shared] pollVoteStatisticsOfMessage:messageId
+		[[TGMessageStore shared] pollVoteStatisticsOfMessage:messageId
 												inChat:pollChatId
 											completion:^(NSDictionary *graph){
 			TGChatViewController *me = weakSelf;
@@ -619,7 +619,7 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 					   onSubmit:^(NSString *text){
 			NSString *what = [text stringByTrimmingCharactersInSet:
 					[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-			[[TGClient shared] addPollOption:what toMessage:messageId inChat:chatId
+			[[TGMessageStore shared] addPollOption:what toMessage:messageId inChat:chatId
 								  completion:^(BOOL ok){
 				TGChatViewController *me = weakSelf;
 				if (!ok)
@@ -654,7 +654,7 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 						  destructive:YES
 							   inView:weakSelf.view
 							onConfirm:^{
-				[[TGClient shared] deletePollOption:optionId
+				[[TGMessageStore shared] deletePollOption:optionId
 										  ofMessage:messageId
 											 inChat:chatId
 										 completion:^(BOOL ok){
@@ -677,10 +677,10 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 						 onChoice:^(NSInteger index){
 			TGChatViewController *me = weakSelf;
 			if (index == 1)
-				[[TGClient shared] blockSenderOfMessage:messageId
+				[[TGMessageStore shared] blockSenderOfMessage:messageId
 										 deleteMessages:YES
 											 reportSpam:YES];
-			[[TGClient shared] reportSpamMessages:@[@(messageId)]
+			[[TGMessageStore shared] reportSpamMessages:@[@(messageId)]
 										   inChat:chatId
 									   completion:^(BOOL ok){
 				[TGSnackbar showInView:me.view
@@ -703,7 +703,7 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 					  destructive:YES
 						   inView:self.view
 						onConfirm:^{
-			[[TGClient shared] reportReactionBySender:choice[@"sender"]
+			[[TGMessageStore shared] reportReactionBySender:choice[@"sender"]
 											ofMessage:messageId
 												inChat:reactionChatId
 										 completion:^(BOOL ok){
@@ -720,7 +720,7 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 	} else if ([action isEqualToString:@"Click Emoji"]){
 		int64_t chatId = self.chatId;
 		__weak typeof(self) weakSelf = self;
-		[[TGClient shared] clickAnimatedEmojiMessage:messageId inChat:chatId
+		[[TGMessageStore shared] clickAnimatedEmojiMessage:messageId inChat:chatId
 										 completion:^(NSString *emoji){
 			TGChatViewController *me = weakSelf;
 			if (!me)
@@ -741,7 +741,7 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 	} else if ([action isEqualToString:@"Clear Buttons"]){
 		int64_t chatId = self.chatId;
 		__weak typeof(self) weakSelf = self;
-		[[TGClient shared] clearReplyMarkupOfMessage:messageId inChat:chatId
+		[[TGMessageStore shared] clearReplyMarkupOfMessage:messageId inChat:chatId
 										 completion:^(BOOL ok){
 			TGChatViewController *me = weakSelf;
 			if (!me)
@@ -766,7 +766,7 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 					(long long)currentEffect]];
 			[seen addObject:@(currentEffect)];
 		}
-		for (NSNumber *effectId in [TGClient shared].availableMessageEffectIds){
+		for (NSNumber *effectId in [TGMessageStore shared].availableMessageEffectIds){
 			if ([seen containsObject:effectId])
 				continue;
 			[seen addObject:effectId];
@@ -774,7 +774,7 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 			[titles addObject:[NSString stringWithFormat:@"Reaction effect %lld",
 					(long long)[effectId longLongValue]]];
 		}
-		for (NSNumber *effectId in [TGClient shared].availableStickerEffectIds){
+		for (NSNumber *effectId in [TGMessageStore shared].availableStickerEffectIds){
 			if ([seen containsObject:effectId])
 				continue;
 			[seen addObject:effectId];
@@ -796,7 +796,7 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 				if (index < 0 || (NSUInteger)index >= effectIds.count)
 					return;
 				int64_t effectId = [effectIds[(NSUInteger)index] longLongValue];
-				[[TGClient shared] messageEffectWithId:effectId
+				[[TGMessageStore shared] messageEffectWithId:effectId
 											completion:^(NSDictionary *effect){
 					TGChatViewController *me = weakSelf;
 					if (!me)
@@ -814,7 +814,7 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 
 	} else if ([action isEqualToString:@"Copy Link"]){
 		__weak typeof(self) weakSelf = self;
-		[[TGClient shared] linkToMessage:messageId inChat:self.chatId
+		[[TGMessageStore shared] linkToMessage:messageId inChat:self.chatId
 							  completion:^(NSString *link){
 			TGChatViewController *me = weakSelf;
 			if (!link.length){
@@ -877,7 +877,7 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 			return;
 		}
 		__weak typeof(self) weakSelf = self;
-		[[TGClient shared] currentWeatherAtLatitude:latitude.doubleValue
+		[[TGMessageStore shared] currentWeatherAtLatitude:latitude.doubleValue
 										  longitude:longitude.doubleValue
 										 completion:^(NSDictionary *weather, NSString *error){
 			TGChatViewController *me = weakSelf;
@@ -890,7 +890,7 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 
 	} else if ([action isEqualToString:@"Transcribe"]){
 		__weak typeof(self) weakSelf = self;
-		[[TGClient shared] recognizeSpeechInChat:self.chatId message:messageId
+		[[TGMessageStore shared] recognizeSpeechInChat:self.chatId message:messageId
 									  completion:^(BOOL ok, NSString *error){
 			if (ok) return;   // the bubble says "Transcribing..." until the text lands
 			TGChatViewController *me = weakSelf;
@@ -905,7 +905,7 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 		[TGAlertSheet showChoices:@[@"Thumbs Up", @"Thumbs Down"]
 							title:@"Rate Transcription" destructiveIndex:-1
 						   inView:self.view onChoice:^(NSInteger index){
-			[[TGClient shared] rateSpeechInChat:weakSelf.chatId message:messageId
+			[[TGMessageStore shared] rateSpeechInChat:weakSelf.chatId message:messageId
 										 isGood:(index == 0)
 									 completion:^(BOOL ok, NSString *error){
 				NSString *text = ok ? @"Done"
@@ -934,7 +934,7 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 	} else if ([action isEqualToString:@"Copy Embed Code"]){
 		int64_t chatId = self.chatId;
 		__weak typeof(self) weakSelf = self;
-		[[TGClient shared] embeddingCodeOfMessage:messageId inChat:chatId
+		[[TGMessageStore shared] embeddingCodeOfMessage:messageId inChat:chatId
 											album:[m[@"isAlbum"] boolValue]
 									   completion:^(NSString *code){
 			TGChatViewController *me = weakSelf;
@@ -969,7 +969,7 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 			@"text" : text,
 			@"entities" : entities
 		};
-		NSDictionary *ft = [[TGClient shared] markdownForEditing:inFt];
+		NSDictionary *ft = [[TGMessageStore shared] markdownForEditing:inFt];
 		NSString *editText = [ft[@"text"] isKindOfClass:NSString.class] ? ft[@"text"] : text;
 		NSArray *editEntities = [ft[@"entities"] isKindOfClass:NSArray.class] ? ft[@"entities"] : entities;
 		self.input.text = editText;
@@ -979,7 +979,7 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 		[self inputChanged];
 
 	} else if ([action isEqualToString:@"Add to Favourites"]){
-		[[TGClient shared] setSticker:TGStickerFileId(m) favourite:YES];
+		[[TGMessageStore shared] setSticker:TGStickerFileId(m) favourite:YES];
 		[TGSnackbar showInView:self.navigationController.view ?: self.view
 						  text:@"Done" seconds:2 onCommit:nil];
 
@@ -1064,7 +1064,7 @@ static NSString *TGStatGraphLine(NSDictionary *graph, NSString *label) {
 	__weak typeof(self) weakSelf = self;
 
 	dispatch_group_enter(group);
-	[[TGClient shared] localMessageWithId:messageId inChat:chatId
+	[[TGMessageStore shared] localMessageWithId:messageId inChat:chatId
 							   completion:^(NSDictionary *local){
 		if (local){
 			NSString *text = local[@"text"];
@@ -1076,7 +1076,7 @@ static NSString *TGStatGraphLine(NSDictionary *graph, NSString *label) {
 	}];
 
 	dispatch_group_enter(group);
-	[[TGClient shared] positionOfMessage:messageId inChat:chatId
+	[[TGMessageStore shared] positionOfMessage:messageId inChat:chatId
 								  thread:self.threadId
 							  completion:^(NSInteger found){
 		position = found;
@@ -1084,7 +1084,7 @@ static NSString *TGStatGraphLine(NSDictionary *graph, NSString *label) {
 	}];
 
 	dispatch_group_enter(group);
-	[[TGClient shared] statisticsOfMessage:messageId inChat:chatId
+	[[TGMessageStore shared] statisticsOfMessage:messageId inChat:chatId
 								completion:^(NSDictionary *found){
 		statistics = found;
 		dispatch_group_leave(group);
@@ -1092,7 +1092,7 @@ static NSString *TGStatGraphLine(NSDictionary *graph, NSString *label) {
 
 	if (effectId > 0){
 		dispatch_group_enter(group);
-		[[TGClient shared] messageEffectWithId:effectId
+		[[TGMessageStore shared] messageEffectWithId:effectId
 									completion:^(NSDictionary *effect){
 			if (effect)
 				effectLine = [NSString stringWithFormat:@"Effect: %@%@",
@@ -1105,7 +1105,7 @@ static NSString *TGStatGraphLine(NSDictionary *graph, NSString *label) {
 	// The message is on screen while its menu is open, which is the thing
 	// this report is for; one second is TDLib's own floor for counting it.
 	// It does not hold the sheet open: the report is a side effect.
-	[[TGClient shared] reportViewOfMessage:messageId inChat:chatId
+	[[TGMessageStore shared] reportViewOfMessage:messageId inChat:chatId
 							  timeInViewMs:1000
 						activeTimeInViewMs:1000
 							   heightRatio:heightPerMille
@@ -1150,7 +1150,7 @@ static NSString *TGStatGraphLine(NSDictionary *graph, NSString *label) {
 		return;
 	int64_t chatId = self.chatId;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] sparsePositionsInChat:chatId fromMessageId:messageId
+	[[TGMessageStore shared] sparsePositionsInChat:chatId fromMessageId:messageId
 									  thread:self.threadId limit:200
 								  completion:^(NSArray *ids){
 		TGChatViewController *me = weakSelf;
@@ -1185,7 +1185,7 @@ static NSString *TGStatGraphLine(NSDictionary *graph, NSString *label) {
 	// The chat sets what may be reacted with, and getMessageAvailableReactions
 	// says which of those this message itself offers; the fixed six are only
 	// what answers a chat that allows everything.
-	[[TGClient shared] availableReactionsForMessage:messageId
+	[[TGMessageStore shared] availableReactionsForMessage:messageId
 											 inChat:self.chatId
 										 completion:^(NSArray *offered){
 		TGChatViewController *me = weakSelf;
@@ -1198,7 +1198,7 @@ static NSString *TGStatGraphLine(NSDictionary *graph, NSString *label) {
 				 destructiveIndex:-1
 						   inView:me.view
 						 onChoice:^(NSInteger index){
-			[[TGClient shared] reactTo:messageId inChat:me.chatId emoji:emoji[index]];
+			[[TGMessageStore shared] reactTo:messageId inChat:me.chatId emoji:emoji[index]];
 			[me reload];
 		}];
 	}];

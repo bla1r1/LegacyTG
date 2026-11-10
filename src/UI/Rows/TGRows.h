@@ -392,6 +392,7 @@ extern NSString *const TGRowChatOnline;         // NSNumber BOOL
 extern NSString *const TGRowChatSaved;          // NSNumber BOOL, Saved Messages
 extern NSString *const TGRowChatOutgoing;       // NSNumber BOOL, your last message
 extern NSString *const TGRowChatRead;           // NSNumber BOOL, read outbox
+extern NSString *const TGRowChatFailed;         // NSNumber BOOL, last message refused
 extern NSString *const TGRowChatAction;         // NSString, typing/recording phrase
 extern NSString *const TGRowChatDraft;          // NSString, draft text
 extern NSString *const TGRowChatStatusEmojiId;  // NSNumber, emoji status

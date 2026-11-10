@@ -6,7 +6,7 @@
 #import "TGIcons.h"
 #import "TGPopupMenu.h"
 #import "TGStickerStore.h"
-#import "TGClientNotifications.h"
+#import "TGMessageStore.h"
 #import "UIImage+WebP.h"
 #import <QuartzCore/QuartzCore.h>
 #import "TGStyle.h"

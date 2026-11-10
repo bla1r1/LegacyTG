@@ -1,6 +1,6 @@
 #import "TGForwardPicker.h"
 #import "TGLocalization.h"
-#import "TGClient.h"
+#import "TGMessageStore.h"
 #import "TGIcons.h"
 #import "TGTheme.h"
 #import "TGUIFormat.h"
@@ -40,7 +40,7 @@ static const CGFloat kPickerPanelHeight = TGMetricRow;
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
-	self.chats = [TGClient shared].chats ?: @[];
+	self.chats = [TGMessageStore shared].chats ?: @[];
 	self.recentChats = @[];
 	self.avatars = [NSMutableDictionary dictionary];
 	self.avatarsRequested = [NSMutableSet set];
@@ -94,7 +94,7 @@ static const CGFloat kPickerPanelHeight = TGMetricRow;
 	[self updateSendItem];
 	[self rebuildSections];
 
-	[[TGClient shared] topChatsWithCompletion:^(NSArray *chats){
+	[[TGMessageStore shared] topChatsWithCompletion:^(NSArray *chats){
 		TGForwardPicker *me = weakSelf;
 		if (!me)
 			return;
@@ -194,7 +194,7 @@ static const CGFloat kPickerPanelHeight = TGMetricRow;
 	NSArray *base = self.query.length
 			? self.chats
 			: (self.recentChats.count ? self.recentChats : self.chats);
-	int64_t saved = [[TGClient shared] savedMessagesChatId];
+	int64_t saved = [[TGMessageStore shared] savedMessagesChatId];
 	NSMutableArray *matches = [NSMutableArray array];
 	for (NSDictionary *chat in base) {
 		int64_t chatId = [chat[@"id"] longLongValue];
@@ -257,7 +257,7 @@ static const CGFloat kPickerPanelHeight = TGMetricRow;
 			continue;
 		[self.avatarsRequested addObject:fileId];
 
-		[[TGClient shared] downloadFile:[fileId integerValue] completion:^(NSString *path){
+		[[TGMessageStore shared] downloadFile:[fileId integerValue] completion:^(NSString *path){
 			if (!path.length) return;
 			dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_BACKGROUND, 0), ^{
 				UIImage *photo = [UIImage imageWithContentsOfFile:path];

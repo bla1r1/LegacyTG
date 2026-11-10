@@ -8,8 +8,8 @@
 #import "TGSavedTopicsViewController.h"
 #import "TGAlertSheet.h"
 #import "TGChatViewController.h"
-#import "TGClient.h"
-#import "TGClientInternal.h"
+#import "TGMessageStore.h"
+#import "TGMessageStore.h"
 #import "TGEmptyView.h"
 #import "TGDateFormat.h"
 #import "TGIcons.h"
@@ -64,7 +64,7 @@ static NSString *TGSavedTopicDateText(NSNumber *stamp) {
 
 	// Topic rows stream from TDLib through the update the client keeps;
 	// loading once is what starts the stream, an update is what continues it.
-	[[TGClient shared] loadSavedMessagesTopics];
+	[[TGMessageStore shared] loadSavedMessagesTopics];
 
 	[[NSNotificationCenter defaultCenter] addObserver:self
 			selector:@selector(topicsChanged:)
@@ -98,7 +98,7 @@ static NSString *TGSavedTopicDateText(NSNumber *stamp) {
 - (void)viewWillAppear:(BOOL)animated {
 	[super viewWillAppear:animated];
 	[self applyTheme];
-	[[TGClient shared] loadSavedMessagesTopics];
+	[[TGMessageStore shared] loadSavedMessagesTopics];
 	[self reloadRows];
 	// TDLib answers through updates, not a completion, so an account with no
 	// topics is only known to be empty after the first stream had a moment.
@@ -140,7 +140,7 @@ static NSString *TGSavedTopicDateText(NSNumber *stamp) {
 
 - (void)openTopicWithId:(int64_t)topicId title:(NSString *)title {
 	TGChatViewController *vc = [[TGChatViewController alloc] init];
-	vc.chatId = [TGClient shared].savedMessagesChatId;
+	vc.chatId = [TGMessageStore shared].savedMessagesChatId;
 	vc.threadId = topicId;
 	vc.chatTitle = title ?: @"Saved";
 	vc.isGroup = NO;
@@ -173,7 +173,7 @@ static NSString *TGSavedTopicDateText(NSNumber *stamp) {
 }
 
 - (NSArray *)topics {
-	return [TGClient shared].savedTopics;
+	return [TGMessageStore shared].savedTopics;
 }
 
 /// The hold lands wherever the finger is, so the row is found from the
@@ -206,7 +206,7 @@ static NSString *TGSavedTopicDateText(NSNumber *stamp) {
 					 onChoice:^(NSInteger index){
 		NSString *what = items[(NSUInteger)index];
 		if ([what isEqualToString:@"Pin"] || [what isEqualToString:@"Unpin"]){
-			[[TGClient shared] toggleSavedTopicPinned:topicId pinned:!pinned];
+			[[TGMessageStore shared] toggleSavedTopicPinned:topicId pinned:!pinned];
 			[weakSelf reloadRows];
 			return;
 		}
@@ -227,7 +227,7 @@ static NSString *TGSavedTopicDateText(NSNumber *stamp) {
 						  destructive:NO
 							   inView:weakSelf.view
 							onConfirm:^{
-				[[TGClient shared] setPinnedSavedTopics:@[]];
+				[[TGMessageStore shared] setPinnedSavedTopics:@[]];
 				[weakSelf reloadRows];
 			}];
 			return;
@@ -241,7 +241,7 @@ static NSString *TGSavedTopicDateText(NSNumber *stamp) {
 						  destructive:YES
 							   inView:weakSelf.view
 							onConfirm:^{
-				[[TGClient shared] deleteSavedTopicHistory:topicId];
+				[[TGMessageStore shared] deleteSavedTopicHistory:topicId];
 				[weakSelf reloadRows];
 			}];
 			return;
@@ -256,7 +256,7 @@ static NSString *TGSavedTopicDateText(NSNumber *stamp) {
 			// From the start of the boundary day: "before today" keeps today.
 			NSInteger days = [what isEqualToString:@"Clear Before Today"] ? 1
 					: ([what isEqualToString:@"Clear Before Week"] ? 7 : 30);
-			[[TGClient shared] clearSavedTopicMessagesBefore:topicId
+			[[TGMessageStore shared] clearSavedTopicMessagesBefore:topicId
 													minDate:(NSInteger)(now - days * 86400)
 													maxDate:(NSInteger)now];
 			[weakSelf reloadRows];
@@ -279,7 +279,7 @@ static NSString *TGSavedTopicDateText(NSNumber *stamp) {
 		NSInteger ago = index == 0 ? 0 : (index == 1 ? 7 : (index == 2 ? 30 : 365));
 		NSInteger when = (NSInteger)[[NSDate date] timeIntervalSince1970]
 				- ago * 86400;
-		[[TGClient shared] savedTopicMessageAtDate:topicId
+		[[TGMessageStore shared] savedTopicMessageAtDate:topicId
 											 date:when
 									   completion:^(NSDictionary *message){
 			TGSavedTopicsViewController *me = weakSelf;
@@ -293,7 +293,7 @@ static NSString *TGSavedTopicDateText(NSNumber *stamp) {
 				return;
 			}
 			TGChatViewController *vc = [[TGChatViewController alloc] init];
-			vc.chatId = [TGClient shared].savedMessagesChatId;
+			vc.chatId = [TGMessageStore shared].savedMessagesChatId;
 			vc.threadId = topicId;
 			vc.chatTitle = name.length ? name : @"Saved";
 			vc.isGroup = NO;
@@ -308,7 +308,7 @@ static NSString *TGSavedTopicDateText(NSNumber *stamp) {
 /// is the only writable half.
 - (void)showTagsOfTopic:(int64_t)topicId named:(NSString *)name {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] savedTopicsTags:topicId completion:^(NSArray *tags){
+	[[TGMessageStore shared] savedTopicsTags:topicId completion:^(NSArray *tags){
 		TGSavedTopicsViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -339,7 +339,7 @@ static NSString *TGSavedTopicDateText(NSNumber *stamp) {
 							 action:@"Save"
 							 inView:me.view
 						 onSubmit:^(NSString *typed){
-				[[TGClient shared] labelSavedTag:tag label:typed];
+				[[TGMessageStore shared] labelSavedTag:tag label:typed];
 			}];
 		}];
 	}];

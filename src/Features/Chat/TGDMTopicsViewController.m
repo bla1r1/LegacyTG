@@ -1,7 +1,7 @@
 #import "TGDMTopicsViewController.h"
 #import "TGLocalization.h"
 #import "TGAlertSheet.h"
-#import "TGClient.h"
+#import "TGMessageStore.h"
 #import "TGDMTopicViewController.h"
 #import "TGRows.h"
 
@@ -18,7 +18,7 @@
 			? [NSString stringWithFormat:@"%@ · %@", self.chatTitle,
 					TGLocalized(@"Direct")]
 			: TGLocalized(@"Direct Messages");
-	self.topics = [[TGClient shared] directMessagesChatTopicsForChat:self.chatId]
+	self.topics = [[TGMessageStore shared] directMessagesChatTopicsForChat:self.chatId]
 			?: @[];
 	[self rebuildSections];
 	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
@@ -30,11 +30,11 @@
 	[self loadMore];
 	if (self.chatId != 0) {
 		__weak typeof(self) weakSelf = self;
-		[[TGClient shared] chatProfile:self.chatId completion:^(NSDictionary *info){
+		[[TGMessageStore shared] chatProfile:self.chatId completion:^(NSDictionary *info){
 			int64_t dmId = [info[@"directMessagesChatId"] longLongValue];
 			if (dmId != 0 && dmId != weakSelf.chatId) {
 				weakSelf.chatId = dmId;
-				weakSelf.topics = [[TGClient shared] directMessagesChatTopicsForChat:dmId] ?: @[];
+				weakSelf.topics = [[TGMessageStore shared] directMessagesChatTopicsForChat:dmId] ?: @[];
 				[weakSelf rebuildSections];
 				[weakSelf loadMore];
 			}
@@ -44,7 +44,7 @@
 
 - (void)viewWillAppear:(BOOL)animated {
 	[super viewWillAppear:animated];
-	self.topics = [[TGClient shared] directMessagesChatTopicsForChat:self.chatId]
+	self.topics = [[TGMessageStore shared] directMessagesChatTopicsForChat:self.chatId]
 			?: @[];
 	[self rebuildSections];
 }
@@ -53,20 +53,20 @@
 	NSNumber *chatId = note.userInfo[@"chatId"];
 	if (chatId && [chatId longLongValue] != self.chatId)
 		return;
-	self.topics = [[TGClient shared] directMessagesChatTopicsForChat:self.chatId]
+	self.topics = [[TGMessageStore shared] directMessagesChatTopicsForChat:self.chatId]
 			?: @[];
 	[self rebuildSections];
 }
 
 - (void)loadMore {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] loadDirectMessagesChatTopicsInChat:self.chatId limit:20
+	[[TGMessageStore shared] loadDirectMessagesChatTopicsInChat:self.chatId limit:20
 											   completion:^(BOOL ok, NSString *error){
 		TGDMTopicsViewController *me = weakSelf;
 		if (!me)
 			return;
 		me.loaded = YES;
-		me.topics = [[TGClient shared] directMessagesChatTopicsForChat:me.chatId]
+		me.topics = [[TGMessageStore shared] directMessagesChatTopicsForChat:me.chatId]
 				?: @[];
 		[me rebuildSections];
 		if (!ok && error.length)

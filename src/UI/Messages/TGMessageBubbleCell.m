@@ -130,6 +130,7 @@ static const NSUInteger kMaxCustomEmojiViews = 3;
 	[self.contentView addSubview:self.senderAvatar];
 
 	self.ticks = [[UIImageView alloc] init];
+	self.ticks.contentMode = UIViewContentModeScaleAspectFit;
 	self.ticks.hidden = YES;
 	[self.bubble addSubview:self.ticks];
 

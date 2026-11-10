@@ -7,7 +7,7 @@
 // the one bottom action is Apply. Nothing here sends a message.
 //
 #import "TGAiComposeViewController.h"
-#import "TGClient.h"
+#import "TGMessageStore.h"
 #import "TGAlertSheet.h"
 #import "TGChatActionMenuModel.h"
 #import "TGLocalization.h"
@@ -332,7 +332,7 @@ static const CGFloat kAiTextAreaHeight = 118.0f;
 	NSString *body = self.initialText ?: @"";
 	switch (self.mode) {
 		case TGAiComposeModeTranslate: {
-			[[TGClient shared] composeTextWithAi:body
+			[[TGMessageStore shared] composeTextWithAi:body
 									 translateTo:self.targetLanguage
 										   style:@""
 									   addEmojis:self.addEmojis
@@ -342,7 +342,7 @@ static const CGFloat kAiTextAreaHeight = 118.0f;
 			break;
 		}
 		case TGAiComposeModeStyle: {
-			[[TGClient shared] composeTextWithAi:body
+			[[TGMessageStore shared] composeTextWithAi:body
 									 translateTo:@""
 										   style:self.styleKey
 									   addEmojis:self.addEmojis
@@ -352,7 +352,7 @@ static const CGFloat kAiTextAreaHeight = 118.0f;
 			break;
 		}
 		case TGAiComposeModeFix: {
-			[[TGClient shared] fixTextWithAi:body
+			[[TGMessageStore shared] fixTextWithAi:body
 								  completion:^(NSString *answer, NSString *diff,
 										  NSString *error){
 				finish(answer, error);

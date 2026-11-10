@@ -15,6 +15,7 @@
 #import "TGPasscode.h"
 #import "TGPasscodeViewController.h"
 #import "TGChatListRowGeometry.h"
+#import "TGSendStore.h"
 
 
 // Height of the folder pill strip above the chat list (official-style tabs).
@@ -184,6 +185,15 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 		[NSObject cancelPreviousPerformRequestsWithTarget:me
 				selector:@selector(reloadVisibleRows) object:nil];
 		[me performSelector:@selector(reloadVisibleRows) withObject:nil afterDelay:0.3];
+	}];
+	// A send was refused or retried: the last-message mark on that chat's row
+	// changes, and TGChatRow rebuilds it from the store.
+	[[NSNotificationCenter defaultCenter] addObserverForName:TGSendStoreMessageStateChangedNotification
+			object:nil queue:[NSOperationQueue mainQueue]
+		usingBlock:^(NSNotification *note){
+		TGChatListViewController *me = weakSelf;
+		if (me)
+			[me reloadVisibleRows];
 	}];
 	[[NSNotificationCenter defaultCenter] addObserverForName:TGStoriesChangedNotification
 			object:nil queue:[NSOperationQueue mainQueue]

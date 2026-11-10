@@ -74,6 +74,8 @@
 #import "TGChatListRowGeometryTests.m"
 #import "TGChatListRowsTests.m"
 #import "TGUpdateStoreTests.m"
+#import "TGSendStoreTests.m"
+#import "TGMessageStoreTests.m"
 #import "TGPeerStoreTests.m"
 #import "TGParitySettingsTests.m"
 #import "TGSettingsPageModelsTests.m"

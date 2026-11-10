@@ -2,7 +2,8 @@
 // TGChecklistViewController.m
 //
 #import "TGChecklistViewController.h"
-#import "TGClient.h"
+#import "TGMessageStore.h"
+#import "TGSendStore.h"
 #import "TGAlertSheet.h"
 
 @interface TGChecklistViewController ()
@@ -55,7 +56,7 @@
 
 - (void)loadChecklist {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] checklistForMessage:self.messageId inChat:self.chatId
+	[[TGMessageStore shared] checklistForMessage:self.messageId inChat:self.chatId
 								completion:^(NSDictionary *checklist, NSString *error){
 		TGChecklistViewController *me = weakSelf;
 		if (!me)
@@ -162,7 +163,7 @@
 			[weakSelf rebuild];
 			return;
 		}
-		[[TGClient shared] addChecklistTasks:@[task]
+		[[TGMessageStore shared] addChecklistTasks:@[task]
 								   toMessage:weakSelf.messageId
 									  inChat:weakSelf.chatId
 								  completion:^(BOOL ok, NSString *error){
@@ -227,7 +228,7 @@
 	__weak typeof(self) weakSelf = self;
 	NSArray *done = isDone ? @[] : @[ident];
 	NSArray *notDone = isDone ? @[ident] : @[];
-	[[TGClient shared] markChecklistTasksAsDone:done
+	[[TGMessageStore shared] markChecklistTasksAsDone:done
 								  notDoneTaskIds:notDone
 									   onMessage:self.messageId
 										  inChat:self.chatId
@@ -247,7 +248,7 @@
 
 - (void)saveWholeChecklist {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] editMessageChecklist:self.messageId
+	[[TGMessageStore shared] editMessageChecklist:self.messageId
 									 inChat:self.chatId
 									  title:self.checklistTitle
 									  tasks:self.tasks
@@ -264,7 +265,7 @@
 
 - (void)sendNewChecklist {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] sendChecklist:self.checklistTitle
+	[[TGSendStore shared] sendChecklist:self.checklistTitle
 							   tasks:self.tasks
 							  toChat:self.chatId
 						  completion:^(BOOL ok, NSString *error){

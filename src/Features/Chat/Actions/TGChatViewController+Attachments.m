@@ -6,7 +6,7 @@
 #import "TGReactionPicker.h"
 #import "TGDateFormat.h"
 #import "TGOptions.h"
-#import "TGClientInternal.h"
+#import "TGMessageStore.h"
 #import "TGInstantViewController.h"
 #import "TGMessageAudienceViewController.h"
 #import "TGSponsoredMessagesViewController.h"
@@ -107,7 +107,7 @@
 			remaining = 0;
 		__weak typeof(self) weakSelf = self;
 		if (self.liveLocationMessageId){
-			[[TGClient shared] editLiveLocationOfMessage:self.liveLocationMessageId
+			[[TGMessageStore shared] editLiveLocationOfMessage:self.liveLocationMessageId
 												  inChat:chatId
 												latitude:lat
 											   longitude:lon
@@ -123,7 +123,7 @@
 			return;
 		}
 		self.liveLocationSince = [[NSDate date] timeIntervalSince1970];
-		[[TGClient shared] sendLiveLocation:self.liveLocationSeconds
+		[[TGSendStore shared] sendLiveLocation:self.liveLocationSeconds
 								   latitude:lat
 								  longitude:lon
 									 toChat:chatId
@@ -139,7 +139,7 @@
 
 	// Fixed: one fix is the pin, and the manager is done.
 	[manager stopUpdatingLocation];
-	[[TGClient shared] sendLocation:lat longitude:lon toChat:self.chatId];
+	[[TGSendStore shared] sendLocation:lat longitude:lon toChat:self.chatId];
 }
 
 - (void)locationManager:(CLLocationManager *)manager didFailWithError:(NSError *)error {
@@ -166,7 +166,7 @@
 
 	[picker dismissViewControllerAnimated:YES completion:nil];
 	if (phone.length)
-		[[TGClient shared] sendContactNamed:name phone:phone toChat:self.chatId];
+		[[TGSendStore shared] sendContactNamed:name phone:phone toChat:self.chatId];
 	return NO;
 }
 
@@ -215,7 +215,7 @@
 	NSString *caption = self.replacingPhotoCaption ?: @"";
 	self.replacingPhotoCaption = nil;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] editPhotoAtPath:path
+	[[TGMessageStore shared] editPhotoAtPath:path
 							   caption:caption
 							 ofMessage:messageId
 								inChat:self.chatId
@@ -270,7 +270,7 @@
 - (void)sendVideoAtPath:(NSString *)path viewOnce:(BOOL)viewOnce {
 	if (!path.length)
 		return;
-	[[TGClient shared] sendVideoAtPath:path viewOnce:viewOnce toChat:self.chatId];
+	[[TGSendStore shared] sendVideoAtPath:path viewOnce:viewOnce toChat:self.chatId];
 }
 
 /// TDLib wants a path, so the picture is written to a temporary file first -
@@ -292,7 +292,7 @@
 		NSLog(@"cannot stage the picked image");
 		return;
 	}
-	[[TGClient shared] sendPhotoAtPath:path viewOnce:viewOnce toChat:self.chatId];
+	[[TGSendStore shared] sendPhotoAtPath:path viewOnce:viewOnce toChat:self.chatId];
 }
 
 /// Several pictures as one message. Each is staged on disk the way a single
@@ -325,7 +325,7 @@
 		self.input.text = @"";
 		[self inputChanged];
 	}
-	[[TGClient shared] sendPhotoAlbumAtPaths:paths
+	[[TGSendStore shared] sendPhotoAlbumAtPaths:paths
 									 caption:caption
 									  toChat:self.chatId
 									  thread:self.threadId];
@@ -475,7 +475,7 @@
 - (void)openChatWithUsername:(NSString *)username {
 	if (!username.length) return;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] chatWithUsername:username completion:^(int64_t chatId, NSString *title){
+	[[TGMessageStore shared] chatWithUsername:username completion:^(int64_t chatId, NSString *title){
 		TGChatViewController *me = weakSelf;
 		if (!me) return;
 		if (!chatId) {
@@ -497,7 +497,7 @@
 - (void)openMessageLink:(NSString *)link {
 	if (!link.length) return;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] messageLinkInfo:link completion:^(int64_t chatId, int64_t messageId){
+	[[TGMessageStore shared] messageLinkInfo:link completion:^(int64_t chatId, int64_t messageId){
 		TGChatViewController *me = weakSelf;
 		if (!me) return;
 		if (!chatId){
@@ -508,7 +508,7 @@
 		}
 		TGChatViewController *chatVC = [[TGChatViewController alloc] init];
 		chatVC.chatId = chatId;
-		NSString *title = [[TGClient shared] titleForChat:chatId];
+		NSString *title = [[TGMessageStore shared] titleForChat:chatId];
 		chatVC.chatTitle = title.length ? title : @"Chat";
 		chatVC.hidesBottomBarWhenPushed = YES;
 		chatVC.initialMessageId = messageId;
@@ -544,7 +544,7 @@
 		// "addstickers". The guess is still the fallback, because an answer
 		// takes a round trip and some links genuinely have no kind.
 		__weak typeof(self) weakSelf = self;
-		[[TGClient shared] internalLinkKind:clean
+		[[TGMessageStore shared] internalLinkKind:clean
 								 completion:^(NSString *kind, NSString *value){
 			TGChatViewController *me = weakSelf;
 			if (!me)
@@ -604,7 +604,7 @@
 	}
 
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] internalLinkForType:type http:YES completion:^(NSString *link){
+	[[TGMessageStore shared] internalLinkForType:type http:YES completion:^(NSString *link){
 		TGChatViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -682,7 +682,7 @@
 /// Joining by a link, with the snackbar the tap used to get inline.
 - (void)joinChatByInviteLink:(NSString *)link {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] joinChatByInviteLink:link completion:^(int64_t chatId,
+	[[TGMessageStore shared] joinChatByInviteLink:link completion:^(int64_t chatId,
 															 NSString *title){
 		TGChatViewController *me = weakSelf;
 		if (!me) return;
@@ -703,7 +703,7 @@
 /// counted, and installed on one confirm.
 - (void)askForStickerSet:(NSString *)shortName {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] stickerSetByShortName:shortName completion:^(NSDictionary *set){
+	[[TGMessageStore shared] stickerSetByShortName:shortName completion:^(NSDictionary *set){
 		TGChatViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -729,7 +729,7 @@
 							inView:me.navigationController.view ?: me.view
 						  onChoice:^(NSInteger index){
 			TGChatViewController *me = weakSelf;
-			[[TGClient shared] setStickerSet:set[@"id"] installed:YES archived:NO];
+			[[TGMessageStore shared] setStickerSet:set[@"id"] installed:YES archived:NO];
 			[TGSnackbar showInView:me ? (me.navigationController.view ?: me.view) : nil
 							  text:@"Done"
 						   seconds:2 onCommit:nil];
@@ -741,7 +741,7 @@
 /// username.
 - (void)openChatWithPhoneNumber:(NSString *)phone {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] userForPhone:phone completion:^(NSDictionary *user){
+	[[TGMessageStore shared] userForPhone:phone completion:^(NSDictionary *user){
 		TGChatViewController *me = weakSelf;
 		int64_t userId = [user[@"id"] longLongValue];
 		if (!me || !userId){
@@ -750,12 +750,12 @@
 						   seconds:2 onCommit:nil];
 			return;
 		}
-		[[TGClient shared] privateChatWithUser:userId completion:^(int64_t chatId){
+		[[TGMessageStore shared] privateChatWithUser:userId completion:^(int64_t chatId){
 			if (!chatId)
 				return;
 			TGChatViewController *chatVC = [[TGChatViewController alloc] init];
 			chatVC.chatId = chatId;
-			chatVC.chatTitle = [[TGClient shared] nameForUserId:userId] ?: phone;
+			chatVC.chatTitle = [[TGMessageStore shared] nameForUserId:userId] ?: phone;
 			chatVC.hidesBottomBarWhenPushed = YES;
 			[me.navigationController pushViewController:chatVC animated:YES];
 		}];
@@ -767,7 +767,7 @@
 /// it into a name; a refusal is the server's words, not a guessed chat.
 - (void)openChatWithUserToken:(NSString *)token {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] searchUserByToken:token completion:^(NSDictionary *user,
+	[[TGMessageStore shared] searchUserByToken:token completion:^(NSDictionary *user,
 															NSString *error){
 		TGChatViewController *me = weakSelf;
 		if (!me)
@@ -779,7 +779,7 @@
 						   seconds:2 onCommit:nil];
 			return;
 		}
-		[[TGClient shared] privateChatWithUser:userId completion:^(int64_t chatId){
+		[[TGMessageStore shared] privateChatWithUser:userId completion:^(int64_t chatId){
 			if (!chatId)
 				return;
 			TGChatViewController *chatVC = [[TGChatViewController alloc] init];
@@ -861,8 +861,8 @@
 /// exposes getExternalLinkInfo.
 - (void)presentExternalLink:(NSString *)link {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] webBrowserTypeForURL:link completion:^(NSString *browser){
-		[[TGClient shared] externalLinkInfoForURL:link completion:^(NSDictionary *info){
+	[[TGMessageStore shared] webBrowserTypeForURL:link completion:^(NSString *browser){
+		[[TGMessageStore shared] externalLinkInfoForURL:link completion:^(NSDictionary *info){
 			TGChatViewController *me = weakSelf;
 			if (!me)
 				return;
@@ -883,7 +883,7 @@
 	// A page Telegram already knows how to read opens in the reader, with no
 	// sheet in between; the sheet is for links that leave the app.
 	if (!write){
-		[[TGClient shared] instantViewForURL:link onlyLocal:YES completion:^(NSDictionary *view){
+		[[TGMessageStore shared] instantViewForURL:link onlyLocal:YES completion:^(NSDictionary *view){
 			TGChatViewController *me = weakSelf;
 			if (!me)
 				return;
@@ -914,7 +914,7 @@
 		if (!me)
 			return;
 		if (index == 0){
-			[[TGClient shared] externalLinkForURL:link
+			[[TGMessageStore shared] externalLinkForURL:link
 								 allowWriteAccess:write
 									  completion:^(NSString *resolved){
 				NSString *target = resolved.length ? resolved : link;
@@ -935,7 +935,7 @@
 /// in Safari instead.
 - (void)openInstantViewForLink:(NSString *)link {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] instantViewForURL:link onlyLocal:NO
+	[[TGMessageStore shared] instantViewForURL:link onlyLocal:NO
 							  completion:^(NSDictionary *view){
 		TGChatViewController *me = weakSelf;
 		if (!me)
@@ -960,7 +960,7 @@
 		// TDLib's instant view does not carry the site name; the link preview
 		// does. Ask for it rather than titling every reader with the host.
 		__weak typeof(self) weakSelf = self;
-		[[TGClient shared] linkPreviewForText:link completion:^(NSDictionary *preview){
+		[[TGMessageStore shared] linkPreviewForText:link completion:^(NSDictionary *preview){
 			TGChatViewController *me = weakSelf;
 			if (!me)
 				return;

@@ -1,6 +1,7 @@
 #import "TGChatViewControllerInternal.h"
 #import "TGAlertSheet.h"
-#import "TGClientInternal.h"
+#import "TGMessageStore.h"
+#import "TGMessageFlatten.h"
 #import "TGLocalization.h"
 
 @implementation TGChatViewController (Search)
@@ -102,8 +103,8 @@
 	// owns those searches: in Saved Messages the tag answers from this
 	// account's notes; everywhere else it is the public wall.
 	if ([clean hasPrefix:@"#"]){
-		if ([TGClient shared].savedMessagesChatId == self.chatId && self.threadId){
-			[[TGClient shared] searchSavedMessagesInTopic:self.threadId
+		if ([TGMessageStore shared].savedMessagesChatId == self.chatId && self.threadId){
+			[[TGMessageStore shared] searchSavedMessagesInTopic:self.threadId
 													  query:@""
 														tag:@{@"@type" : @"reactionTypeEmoji",
 															  @"emoji" : flatTag ?: @""}
@@ -112,7 +113,7 @@
 				takeAnswer(found);
 			}];
 		} else {
-			[[TGClient shared] publicMessagesByTag:flatTag ?: @""
+			[[TGMessageStore shared] publicMessagesByTag:flatTag ?: @""
 											offset:nil
 										completion:^(NSArray *found, NSString *next){
 				takeAnswer(found);
@@ -121,7 +122,7 @@
 		return;
 	}
 
-	[[TGClient shared] searchInChat:self.chatId query:query completion:^(NSArray *found){
+	[[TGMessageStore shared] searchInChat:self.chatId query:query completion:^(NSArray *found){
 		TGChatViewController *me = weakSelf;
 		if (!me || ![me.chatSearchBar.text isEqualToString:query])
 			return;   // a stale answer must not replace a newer query

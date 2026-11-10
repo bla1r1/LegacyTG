@@ -19,7 +19,7 @@ CGFloat TGPollOptionRowHeight(NSDictionary *option, CGFloat rowWidth) {
 UIColor *TGSenderColour(int64_t userId) {
 	// The colour the person picked in their own profile, as Telegram draws it;
 	// the id-based slot of their placeholder avatar until their record is here.
-	return [[TGClient shared] nameColourForUser:userId];
+	return [[TGMessageStore shared] nameColourForUser:userId];
 }
 
 @implementation TGChatViewController (Layout)
@@ -90,7 +90,7 @@ UIColor *TGSenderColour(int64_t userId) {
 		return nil;
 	if ([original[@"outgoing"] boolValue])
 		return TGLocalized(@"You");
-	return [[TGClient shared] nameForUserId:[original[@"senderId"] longLongValue]];
+	return [[TGMessageStore shared] nameForUserId:[original[@"senderId"] longLongValue]];
 }
 
 - (int64_t)quoteAuthorStatusIdFor:(NSDictionary *)m {
@@ -101,7 +101,7 @@ UIColor *TGSenderColour(int64_t userId) {
 	if (!original || [original[@"outgoing"] boolValue])
 		return 0;
 	int64_t senderId = [original[@"senderId"] longLongValue];
-	return [[TGClient shared] emojiStatusIdForUser:senderId];
+	return [[TGMessageStore shared] emojiStatusIdForUser:senderId];
 }
 
 - (CGFloat)decorationHeightFor:(NSDictionary *)m {
@@ -205,12 +205,12 @@ UIColor *TGSenderColour(int64_t userId) {
 	int64_t forwardStatusId = 0;
 	id forwardUid = m[@"forwardUserId"] ?: m[@"forwardSenderId"];
 	if ([forwardUid respondsToSelector:@selector(longLongValue)]) {
-		forwardStatusId = [[TGClient shared] emojiStatusIdForUser:[forwardUid longLongValue]];
+		forwardStatusId = [[TGMessageStore shared] emojiStatusIdForUser:[forwardUid longLongValue]];
 	}
 	if (forwardStatusId == 0) {
 		id forwardCid = m[@"forwardChatId"];
 		if ([forwardCid respondsToSelector:@selector(longLongValue)]) {
-			forwardStatusId = [[TGClient shared] emojiStatusIdForChat:[forwardCid longLongValue]];
+			forwardStatusId = [[TGMessageStore shared] emojiStatusIdForChat:[forwardCid longLongValue]];
 		}
 	}
 	if ([cell.forwardLabel respondsToSelector:@selector(setAttributedText:)]){
@@ -325,7 +325,7 @@ UIColor *TGSenderColour(int64_t userId) {
 - (NSString *)serviceLineForMessage:(NSDictionary *)m {
 	NSString *separator = m[@"separator"];
 	NSString *who = separator ? nil
-			: [[TGClient shared] nameForUserId:[m[@"senderId"] longLongValue]];
+			: [[TGMessageStore shared] nameForUserId:[m[@"senderId"] longLongValue]];
 	id rawText = m[@"text"];
 	NSString *text = [rawText isKindOfClass:NSString.class] ? rawText : @"";
 	NSString *line = text;
@@ -475,7 +475,7 @@ static UIImage *TGImageFromMinithumbnail(id mini) {
 - (CGFloat)placeGroupSender:(TGMessageLayout *)layout message:(NSDictionary *)m
 					   mine:(BOOL)mine width:(CGFloat)width height:(CGFloat)height x:(CGFloat *)x {
 	NSString *senderName = (self.isGroup && !mine)
-			? [[TGClient shared] nameForUserId:[m[@"senderId"] longLongValue]] : nil;
+			? [[TGMessageStore shared] nameForUserId:[m[@"senderId"] longLongValue]] : nil;
 	if (!senderName.length)
 		return height;
 	height += TGMetricSenderLineHeight;
@@ -771,7 +771,7 @@ static UIImage *TGImageFromMinithumbnail(id mini) {
 	}
 
 	int64_t senderId = [m[@"senderId"] longLongValue];
-	NSString *senderName = (self.isGroup && !mine) ? [[TGClient shared] nameForUserId:senderId] : nil;
+	NSString *senderName = (self.isGroup && !mine) ? [[TGMessageStore shared] nameForUserId:senderId] : nil;
 	NSString *senderTag = m[@"senderTag"];
 	if (senderName.length && [senderTag isKindOfClass:NSString.class] && senderTag.length)
 		senderName = [NSString stringWithFormat:@"%@ · %@", senderName, senderTag];
@@ -834,7 +834,7 @@ static UIImage *TGImageFromMinithumbnail(id mini) {
 		contentW = kBubbleMaxW;
 	CGFloat senderH = senderName.length ? TGMetricSenderLineHeight : TGMetricZero;
 	if (senderName.length) {
-		int64_t statusId = [[TGClient shared] emojiStatusIdForUser:senderId];
+		int64_t statusId = [[TGMessageStore shared] emojiStatusIdForUser:senderId];
 		NSAttributedString *senderAttr = TGNameWithStatus(senderName, statusId, TGFontMetaStrong(), nil);
 		CGFloat senderW = TGTextSize(senderName, TGFontMetaStrong(), 0).width;
 		if (senderAttr.length > 0 && [senderAttr respondsToSelector:@selector(boundingRectWithSize:options:context:)]) {

@@ -1,6 +1,6 @@
 #import "TGDiceViewController.h"
 #import "TGAlertSheet.h"
-#import "TGClient.h"
+#import "TGMessageStore.h"
 #import "TGRows.h"
 
 @interface TGDiceViewController ()
@@ -38,7 +38,7 @@
 
 - (void)refresh {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] stakeDiceStateWithCompletion:^(NSDictionary *state,
+	[[TGMessageStore shared] stakeDiceStateWithCompletion:^(NSDictionary *state,
 													  NSString *error){
 		TGDiceViewController *me = weakSelf;
 		if (!me)

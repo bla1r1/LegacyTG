@@ -1,6 +1,6 @@
 #import "TGPerf.h"
 #import "TGChatViewController.h"
-#import "TGClient.h"
+#import "TGMessageStore.h"
 #import "TGTheme.h"
 #import "TGIcons.h"
 #import "TGForwardPicker.h"
@@ -172,6 +172,16 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 	}
 	NSString *kind = m[@"kind"];
 
+	// A message Telegram refused: the tap is the retry. The hold menu's Retry
+	// row stays for anyone who looks for it there.
+	int64_t failedId = [m[@"id"] longLongValue];
+	TGSendState sendState = [[TGSendStore shared] stateForMessageId:failedId
+															 inChat:self.chatId];
+	if (sendState == TGSendStateFailed || [m[@"failed"] boolValue]){
+		[[TGSendStore shared] retryMessageId:failedId inChat:self.chatId];
+		return;
+	}
+
 	// A message still going out has an X on its disc: the tap takes it back
 	// rather than opening something that is not there yet.
 	if ([m[@"sending"] boolValue]){
@@ -291,7 +301,7 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 	// then swaps the content for "expired"; the viewer keeps the file it has.
 	if (([kind isEqualToString:@"messagePhoto"] || [kind isEqualToString:@"messageVideo"]) &&
 		([m[@"viewOnce"] boolValue] || [m[@"destructSeconds"] integerValue] > 0)){
-		[[TGClient shared] openContentOfMessage:[m[@"id"] longLongValue] inChat:self.chatId];
+		[[TGMessageStore shared] openContentOfMessage:[m[@"id"] longLongValue] inChat:self.chatId];
 		[TGMediaViewer presentItems:@[m] startAt:0 inChat:self.chatId isAlbum:NO];
 		return;
 	}
@@ -381,7 +391,7 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 		return;
 
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] downloadFile:docId.integerValue priority:TGDownloadPriorityOnScreen completion:^(NSString *path){
+	[[TGMessageStore shared] downloadFile:docId.integerValue priority:TGDownloadPriorityOnScreen completion:^(NSString *path){
 		dispatch_async(dispatch_get_main_queue(), ^{
 			TGChatViewController *me = weakSelf;
 			if (!me || !path.length)

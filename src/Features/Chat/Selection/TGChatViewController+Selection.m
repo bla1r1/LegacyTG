@@ -190,7 +190,7 @@ static void TGAnimateSelectionCheckbox(TGChatViewController *chat, int64_t messa
 /// chat may clear for both sides (TDLib ignores revoke elsewhere); groups,
 /// channels and Saved Messages clear for this account only.
 - (void)clearHistoryFromSelection {
-	BOOL isSaved = (self.chatId == [[TGClient shared] savedMessagesChatId]);
+	BOOL isSaved = (self.chatId == [[TGMessageStore shared] savedMessagesChatId]);
 	BOOL canRevoke = !isSaved && !self.isGroup && !self.isChannel;
 	NSArray *choices = canRevoke
 			? @[TGLocalized(@"Delete for Everyone"), TGLocalized(@"Delete for me")]
@@ -205,7 +205,7 @@ static void TGAnimateSelectionCheckbox(TGChatViewController *chat, int64_t messa
 		if (!me)
 			return;
 		[me exitEditMode];
-		[[TGClient shared] clearHistoryInChat:me.chatId revoke:(canRevoke && index == 0)];
+		[[TGMessageStore shared] clearHistoryInChat:me.chatId revoke:(canRevoke && index == 0)];
 		[me reload];
 	}];
 }
@@ -274,7 +274,7 @@ static void TGAnimateSelectionCheckbox(TGChatViewController *chat, int64_t messa
 
 	// Saved Messages has nobody else to revoke from, so there is one choice
 	// there and two everywhere else. Either way the first one revokes.
-	BOOL isSaved = (self.chatId == [[TGClient shared] savedMessagesChatId]);
+	BOOL isSaved = (self.chatId == [[TGMessageStore shared] savedMessagesChatId]);
 	NSString *forBoth = self.isGroup ? TGLocalized(@"Delete for All")
 									 : TGLocalized(@"Delete for Everyone");
 	NSArray *choices = isSaved ? @[TGLocalized(@"Delete")]
@@ -322,7 +322,7 @@ static void TGAnimateSelectionCheckbox(TGChatViewController *chat, int64_t messa
 		// list, and nothing is sent until the plate commits. UNDO removes
 		// the plate without a request and a reload brings the rows back.
 		[TGSnackbar showInView:self.view text:text seconds:3 onCommit:^{
-			[[TGClient shared] deleteMessages:ids inChat:chatId revoke:NO];
+			[[TGSendStore shared] deleteMessages:ids inChat:chatId revoke:NO];
 		}];
 		__weak typeof(self) weakSelf = self;
 		dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.0 * NSEC_PER_SEC)),
@@ -330,7 +330,7 @@ static void TGAnimateSelectionCheckbox(TGChatViewController *chat, int64_t messa
 	} else {
 		// Delete for everyone cannot be undone once it has left, so it is
 		// sent at once and the plate is only a notice.
-		[[TGClient shared] deleteMessages:ids inChat:chatId revoke:YES];
+		[[TGSendStore shared] deleteMessages:ids inChat:chatId revoke:YES];
 		[TGSnackbar showInView:self.view text:text seconds:3 onCommit:nil];
 		__weak typeof(self) weakSelf = self;
 		dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.0 * NSEC_PER_SEC)),
@@ -347,11 +347,11 @@ static void TGAnimateSelectionCheckbox(TGChatViewController *chat, int64_t messa
 	picker.sourceChatId = chatId;
 	__weak typeof(self) weakSelf = self;
 	picker.onPicked = ^(int64_t targetChatId){
-		[[TGClient shared] forwardMessages:ids
+		[[TGMessageStore shared] forwardMessages:ids
 								  fromChat:chatId
 									toChat:targetChatId];
 		[weakSelf exitEditMode];
-		NSString *title = [[TGClient shared] titleForChat:targetChatId] ?: @"";
+		NSString *title = [[TGMessageStore shared] titleForChat:targetChatId] ?: @"";
 		NSString *text = TGLocalizedPluralValue(@"Message forwarded to **%@**.",
 				@"Messages forwarded to **%@**.", title, (NSInteger)ids.count);
 		text = [text stringByReplacingOccurrencesOfString:@"**" withString:@""];

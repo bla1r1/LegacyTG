@@ -85,7 +85,7 @@
 	[self.imagesRequested addObject:coverId];
 
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] downloadFile:coverId.integerValue completion:^(NSString *path){
+	[[TGMessageStore shared] downloadFile:coverId.integerValue completion:^(NSString *path){
 		TGChatViewController *me = weakSelf;
 		UIImage *cover = path.length ? [UIImage imageWithContentsOfFile:path] : nil;
 		if (!me || !cover)
@@ -114,7 +114,7 @@
 		[self.mapsRequested addObject:key];
 
 		__weak typeof(self) weakSelf = self;
-		[[TGClient shared] mapThumbnailForLatitude:lat.doubleValue
+		[[TGMessageStore shared] mapThumbnailForLatitude:lat.doubleValue
 										 longitude:lon.doubleValue
 											 width:220
 											height:130
@@ -137,12 +137,12 @@
 	NSMutableSet *wanted = [NSMutableSet set];
 	for (NSDictionary *m in self.messages){
 		int64_t sender = [m[@"senderId"] longLongValue];
-		if (sender != 0 && ![[TGClient shared] nameForUserId:sender])
+		if (sender != 0 && ![[TGMessageStore shared] nameForUserId:sender])
 			[wanted addObject:@(sender)];
 	}
 
 	for (NSNumber *uid in wanted){
-		[[TGClient shared] ensureUserName:uid.longLongValue completion:^{
+		[[TGMessageStore shared] ensureUserName:uid.longLongValue completion:^{
 			[weakSelf reloadTableDebounced];
 		}];
 	}
@@ -169,7 +169,7 @@
 	// One getMessages for the whole window. A chat with a dozen replies in
 	// view used to send a dozen separate getMessage requests for the same
 	// screen, which is most of what a slow connection noticed.
-	[[TGClient shared] messagesInChat:self.chatId messageIds:wanted
+	[[TGMessageStore shared] messagesInChat:self.chatId messageIds:wanted
 						   completion:^(NSArray *messages){
 		TGChatViewController *me = weakSelf;
 		if (!me)
@@ -218,7 +218,7 @@
 				continue;
 			[self.imagesRequested addObject:docId];
 
-			[[TGClient shared] downloadFile:[docId integerValue] priority:TGDownloadPriorityOnScreen completion:^(NSString *path){
+			[[TGMessageStore shared] downloadFile:[docId integerValue] priority:TGDownloadPriorityOnScreen completion:^(NSString *path){
 				TGChatViewController *me = weakSelf;
 				if (!me)
 					return;
@@ -257,7 +257,7 @@
 	CGFloat screenScale = [UIScreen mainScreen].scale;   // read here, used off-thread
 	[self.imagesRequested addObject:fileId];
 
-	[[TGClient shared] downloadFile:[fileId integerValue] completion:^(NSString *path){
+	[[TGMessageStore shared] downloadFile:[fileId integerValue] completion:^(NSString *path){
 		if (!path) {
 			[weakSelf.imagesRequested removeObject:fileId];
 			return;
@@ -413,7 +413,7 @@
 	self.downloadHUD.hidden = NO;
 
 	__weak typeof(self) weakSelf = self;
-	[TGClient shared].onFileProgress = ^(NSInteger updatedId, float progress){
+	[TGMessageStore shared].onFileProgress = ^(NSInteger updatedId, float progress){
 		TGChatViewController *me = weakSelf;
 		if (!me || updatedId != me.downloadingFileId)
 			return;
@@ -440,7 +440,7 @@
 	if (!fileId)
 		return;
 	[self endDownloadHUD];
-	[[TGClient shared] cancelDownloadOfFile:fileId onlyIfPending:NO];
+	[[TGMessageStore shared] cancelDownloadOfFile:fileId onlyIfPending:NO];
 }
 
 /// Copy the received file into Documents first: TDLib owns its cache and can
@@ -452,7 +452,7 @@
 
 	NSString *name = m[@"docName"] ?: @"theme.tgios-theme";
 	[self beginDownloadHUDForFile:[docId integerValue]];
-	[[TGClient shared] downloadFile:[docId integerValue] completion:^(NSString *path){
+	[[TGMessageStore shared] downloadFile:[docId integerValue] completion:^(NSString *path){
 		[self endDownloadHUD];
 		if (!path)
 			return;

@@ -1,6 +1,6 @@
 #import "TGPerf.h"
 #import "TGChatViewController.h"
-#import "TGClient.h"
+#import "TGMessageStore.h"
 #import "TGTheme.h"
 #import "TGIcons.h"
 #import "TGForwardPicker.h"
@@ -175,7 +175,7 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
         }
 
         __weak typeof(self) weakScroll = self;
-        [[TGClient shared] historyForChat:self.chatId fromMessageId:fromMessageId limit:60 completion:^(NSArray *older) {
+        [[TGMessageStore shared] historyForChat:self.chatId fromMessageId:fromMessageId limit:60 completion:^(NSArray *older) {
             dispatch_async(dispatch_get_main_queue(), ^{
                 TGChatViewController *me = weakScroll;
                 if (!me) return;
@@ -220,7 +220,7 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
         }
 
         __weak typeof(self) weakScroll = self;
-        [[TGClient shared] newerHistoryForChat:self.chatId fromMessageId:fromMessageId limit:60 completion:^(NSArray *newer) {
+        [[TGMessageStore shared] newerHistoryForChat:self.chatId fromMessageId:fromMessageId limit:60 completion:^(NSArray *newer) {
             dispatch_async(dispatch_get_main_queue(), ^{
                 TGChatViewController *me = weakScroll;
                 if (!me) return;
@@ -260,7 +260,7 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 		return;
 #if TG_DEV
 	NSDictionary *community = nil;
-	for (NSDictionary *c in [TGClient shared].communities)
+	for (NSDictionary *c in [TGMessageStore shared].communities)
 		if ([c[@"id"] longLongValue] == communityId)
 			community = c;
 	TGCommunityViewController *screen = [[TGCommunityViewController alloc]
@@ -271,7 +271,7 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 	// The community screen is an admin harness; a reader needs its chats.
 	__weak UINavigationController *weakNav = navigation;
 	__weak UIView *weakView = view;
-	[[TGClient shared] communityFullInfo:communityId completion:^(NSDictionary *info, NSString *error){
+	[[TGMessageStore shared] communityFullInfo:communityId completion:^(NSDictionary *info, NSString *error){
 		dispatch_async(dispatch_get_main_queue(), ^{
 			UIView *host = weakView;
 			if (!host)
@@ -291,7 +291,7 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 			for (NSDictionary *chat in chats){
 				NSString *title = chat[@"title"];
 				if (!title.length)
-					title = [[TGClient shared] titleForChat:[chat[@"chatId"] longLongValue]];
+					title = [[TGMessageStore shared] titleForChat:[chat[@"chatId"] longLongValue]];
 				[titles addObject:title.length ? title : @"Chat"];
 			}
 			[TGAlertSheet showChoices:titles title:@"Community" destructiveIndex:-1 inView:host

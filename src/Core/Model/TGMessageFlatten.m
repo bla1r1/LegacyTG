@@ -884,6 +884,23 @@ NSDictionary *TGFlattenMessage(NSDictionary *m) {
 		}
 	}
 
+	NSDictionary *sendingState = [m[@"sending_state"] isKindOfClass:NSDictionary.class]
+			? m[@"sending_state"] : nil;
+	BOOL failed = [sendingState[@"@type"]
+			isEqualToString:@"messageSendingStateFailed"];
+	NSString *sendError = @"";
+	BOOL canRetrySend = NO;
+	if (failed){
+		id record = sendingState[@"error"];
+		if ([record isKindOfClass:NSDictionary.class])
+			sendError = [record[@"message"] isKindOfClass:NSString.class]
+					? record[@"message"] : @"";
+		if (!sendError.length && [sendingState[@"error_message"] isKindOfClass:NSString.class])
+			sendError = sendingState[@"error_message"];
+		id retry = sendingState[@"can_retry"];
+		canRetrySend = retry ? [retry boolValue] : YES;
+	}
+
 	NSDictionary *row = @{
 		@"id"        : m[@"id"] ?: @(0),
 		@"caption"   : caption    ?: @"",
@@ -950,8 +967,11 @@ NSDictionary *TGFlattenMessage(NSDictionary *m) {
 		@"reactionReport" : reactionReport ?: [NSNull null],
 		// A message TDLib could not get out. It stays in the history with a
 		// sending state that says so, and it is the only kind worth resending.
-		@"failed"    : @([m[@"sending_state"][@"@type"]
-				isEqualToString:@"messageSendingStateFailed"]),
+		// The reason and can_retry ride along: the bubble has room for the
+		// mark, the store keeps the sentence for the retry path.
+		@"failed"    : @(failed),
+		@"errorMessage" : sendError,
+		@"canRetry"  : @(canRetrySend),
 		// Options of a poll, so tapping one can vote, and the parts the chat
 		// draws around them.
 		@"pollOptions"  : m[@"content"][@"poll"][@"options"] ?: @[],

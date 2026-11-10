@@ -1,6 +1,6 @@
 #import "TGPerf.h"
 #import "TGChatViewController.h"
-#import "TGClient.h"
+#import "TGMessageStore.h"
 #import "TGTheme.h"
 #import "TGIcons.h"
 #import "TGForwardPicker.h"

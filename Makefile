@@ -345,6 +345,8 @@ APP_SRC_M := \
 	src/Core/Stores/TGBackgroundStore.m \
 	src/Core/Stores/TGUpdateStore.m \
 	src/Core/Stores/TGChatThemeStore.m \
+	src/Core/Stores/TGMessageStore.m \
+	src/Core/Stores/TGMessageStore+History.m \
 	src/Core/Style/TGThemeFile.m \
 	src/Views/Icons/TGIcons.m \
 	src/Views/Icons/TGIconPaths.m \
@@ -659,6 +661,7 @@ APP_SRC_MM := \
 	src/Core/Support/TGJson.mm \
 	src/Core/Stores/TGOptions.mm \
 	src/Core/Stores/TGMessageStreamStore.mm \
+	src/Core/Stores/TGSendStore.mm \
 	src/Core/Support/TGUpdateBatcher.mm \
 	src/Features/Chat/Views/TGMessageLayout.mm \
 	src/Features/Media/TGLottieView.mm

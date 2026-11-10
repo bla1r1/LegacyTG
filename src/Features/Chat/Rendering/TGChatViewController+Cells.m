@@ -96,7 +96,7 @@ static char kTGReactionChipInfoKey;
 		cell.senderAvatar.frame = layout.senderAvatarFrame;
 
 		cell.sender.hidden = NO;
-		int64_t statusId = [[TGClient shared] emojiStatusIdForUser:senderId];
+		int64_t statusId = [[TGMessageStore shared] emojiStatusIdForUser:senderId];
 		cell.sender.attributedText = TGNameWithStatus(layout.senderName, statusId, cell.sender.font, TGSenderColour(senderId));
 		cell.sender.frame = layout.senderFrame;
 	}
@@ -417,9 +417,23 @@ static char kTGReactionChipInfoKey;
 #pragma mark - ticks
 
 - (UIImage *)ticksForMessage:(NSDictionary *)m white:(BOOL)white {
+	// A message TDLib refused gets the mark the retry path explains, and the
+	// tap on it resends. The store is the live answer; the history's own
+	// "failed" flag covers a chat reopened before the store saw the update.
+	int64_t messageId = [m[@"id"] longLongValue];
+	TGSendState sendState = [[TGSendStore shared] stateForMessageId:messageId
+															 inChat:self.chatId];
+	BOOL failed = sendState == TGSendStateFailed || [m[@"failed"] boolValue];
+	if (failed){
+		TGTheme *theme = [TGTheme shared];
+		return [TGIcons glyphNamed:@"error"
+						   colour:(white ? [theme onMediaColour]
+										 : [theme destructiveColour])
+							 side:TGMetricTicksHeight];
+	}
 	// Until Telegram has the message there is nothing to tick: their clients
 	// put a clock in the same place, on notes and voice alike.
-	if ([m[@"sending"] boolValue])
+	if (sendState == TGSendStateSending || [m[@"sending"] boolValue])
 		return [TGIcons clockTicksWhite:white];
 	NSString *state = m[@"state"];
 	if ([state isEqualToString:@"read"]) {
@@ -483,7 +497,7 @@ static char kTGReactionChipInfoKey;
 			if (![self.imagesRequested containsObject:fileId]) {
 				[self.imagesRequested addObject:fileId];
 				__weak typeof(self) weakSelf = self;
-				[[TGClient shared] downloadFile:fileId.integerValue
+				[[TGMessageStore shared] downloadFile:fileId.integerValue
 									   priority:TGDownloadPriorityOnScreen
 									 completion:^(NSString *path) {
 					TGChatViewController *me = weakSelf;

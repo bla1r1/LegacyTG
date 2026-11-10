@@ -1,6 +1,7 @@
 #import "TGClient+AITools.h"
 #import "TGClientInternal.h"
 #import "TGClient+FeatureSupport.h"
+#import "TGMessageStore.h"
 
 @implementation TGClient (AITools)
 
@@ -259,18 +260,7 @@
                      inChat:(int64_t)chatId
                        text:(NSString *)text
                  completion:(void (^)(BOOL, NSString *))completion {
-	NSString *clean = [text stringByTrimmingCharactersInSet:
-			[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-	[self request:@{
-		@"@type"      : @"setMessageFactCheck",
-		@"chat_id"    : @(chatId),
-		@"message_id" : @(messageId),
-		@"text"       : clean.length ? TGFormattedText(clean) : [NSNull null],
-	} completion:^(NSDictionary *result){
-		BOOL ok = TGFeatureOK(result);
-		if (completion)
-			completion(ok, ok ? nil : TGFeatureErrorText(result));
-	}];
+	[[TGMessageStore shared] setMessageFactCheck:messageId inChat:chatId text:text completion:completion];
 }
 
 

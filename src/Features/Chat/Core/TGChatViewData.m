@@ -1,7 +1,7 @@
 #import "TGPerf.h"
 #import "TGLocalization.h"
 #import "TGChatViewController.h"
-#import "TGClient.h"
+#import "TGMessageStore.h"
 #import "TGTheme.h"
 #import "TGIcons.h"
 #import "TGForwardPicker.h"
@@ -76,6 +76,21 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 - (void)readOutboxChanged:(NSNotification *)note {
 	if ([note.userInfo[@"chatId"] longLongValue] == self.chatId)
 		[self reloadTableDebounced];
+}
+
+/// The store moved a message between sending, sent and failed. Only this
+/// chat's rows need redrawing; the store has the reason the bubble's mark and
+/// the retry path both read.
+- (void)sendStateChanged:(NSNotification *)note {
+	if ([note.userInfo[TGSendStoreChatIdKey] longLongValue] != self.chatId)
+		return;
+	int64_t messageId = [note.userInfo[TGSendStoreMessageIdKey] longLongValue];
+	if (messageId > 0)
+		[self.layoutCache removeLayoutForMessageId:messageId];
+	int64_t oldId = [note.userInfo[TGSendStoreOldMessageIdKey] longLongValue];
+	if (oldId > 0)
+		[self.layoutCache removeLayoutForMessageId:oldId];
+	[self reloadTableDebounced];
 }
 
 /// updateStopMessageDraft names the chat, topic and draft. The composer only
@@ -252,7 +267,7 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 
 	__weak typeof(self) weakSelf = self;
 	double chatStart = TGPerfNow();
-	[[TGClient shared] historyForChat:self.chatId thread:self.threadId limit:60 completion:^(NSArray *messages){
+	[[TGMessageStore shared] historyForChat:self.chatId thread:self.threadId limit:60 completion:^(NSArray *messages){
 		TGChatViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -261,6 +276,9 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 		[me noteFirstUnreadIn:messages];
 		NSArray *oldRaw = me.rawMessages ?: @[];
 		[me.streamStore resetWithMessages:messages];
+		// A failed send from before this screen opened is already in the
+		// history; seed the store so the bubble's mark and its retry agree.
+		[[TGSendStore shared] adoptMessages:messages inChat:me.chatId];
 		me.rawMessages = [me.streamStore messages];
 		me.messages = [me groupedMessagesFromMessages:me.rawMessages];
 		me.atChatEnd = YES;
@@ -309,7 +327,7 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 		NSMutableArray *ids = [NSMutableArray array];
 		for (NSDictionary *m in messages)
 			[ids addObject:m[@"id"]];
-		[[TGClient shared] markRead:ids inChat:me.chatId];
+		[[TGMessageStore shared] markRead:ids inChat:me.chatId];
 	}];
 }
 
@@ -339,7 +357,7 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 	[button addGestureRecognizer:avatarHold];
 
 	NSString *title = self.chatTitle ?: @"";
-	BOOL isSaved = (self.chatId == [[TGClient shared] savedMessagesChatId]);
+	BOOL isSaved = (self.chatId == [[TGMessageStore shared] savedMessagesChatId]);
 	TGPeer *peer = isSaved ? nil : [[TGPeerStore shared] peerForId:self.chatId];
 	if (!title.length && peer.title.length)
 		title = peer.title;
@@ -355,10 +373,10 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 
 	// Your own peer and a forum get a second right item: search is reachable
 	// from the bar, not only from the title hold.
-	int64_t selfUserId = [[TGClient shared].me[@"id"] longLongValue];
+	int64_t selfUserId = [[TGMessageStore shared].me[@"id"] longLongValue];
 	BOOL ownPeer = selfUserId != 0 && self.chatId == selfUserId;
 	BOOL forum = NO;
-	for (NSDictionary *row in [TGClient shared].chats){
+	for (NSDictionary *row in [TGMessageStore shared].chats){
 		if ([row[@"id"] longLongValue] == self.chatId){
 			forum = [row[@"isForum"] boolValue];
 			break;
@@ -456,7 +474,7 @@ static NSMutableDictionary *TGChatProfileMemo(void) {
 	}
 	NSDictionary *known = TGChatKindMemo()[@(self.chatId)];
 	if (!known){
-		for (NSDictionary *row in [TGClient shared].chats){
+		for (NSDictionary *row in [TGMessageStore shared].chats){
 			if ([row[@"id"] longLongValue] == self.chatId){
 				if ([row[@"isGroup"] boolValue])
 					known = @{@"isGroup" : @YES, @"isMember" : @YES,
@@ -485,7 +503,7 @@ static NSMutableDictionary *TGChatProfileMemo(void) {
 	}
 	__weak typeof(self) weakSelf = self;
 	int64_t memoChatId = self.chatId;
-	[[TGClient shared] chatKindForChat:self.chatId completion:^(NSDictionary *kind){
+	[[TGMessageStore shared] chatKindForChat:self.chatId completion:^(NSDictionary *kind){
 		TGChatViewController *me = weakSelf;
 		if (kind)
 			TGChatKindMemo()[@(memoChatId)] = kind;
@@ -520,7 +538,7 @@ static NSMutableDictionary *TGChatProfileMemo(void) {
 					? TGLocalizedPlural(@"%d subscriber", @"%d subscribers", count)
 					: TGLocalizedPlural(@"%d member", @"%d members", count);
 			NSInteger onlineCount = 0;
-			for (NSDictionary *row in [TGClient shared].chats){
+			for (NSDictionary *row in [TGMessageStore shared].chats){
 				if ([row[@"id"] longLongValue] == me.chatId){
 					onlineCount = [row[@"onlineMembers"] integerValue];
 					break;
@@ -538,7 +556,7 @@ static NSMutableDictionary *TGChatProfileMemo(void) {
 		[me applyPostingRightsForGroup:isGroup channel:isChannel member:isMember];
 
 		if (isChannel){
-			[[TGClient shared] chatProfile:me.chatId completion:^(NSDictionary *info){
+			[[TGMessageStore shared] chatProfile:me.chatId completion:^(NSDictionary *info){
 				TGChatViewController *again = weakSelf;
 				if (!again || !info) return;
 				TGChatProfileMemo()[@(again.chatId)] = info;
@@ -597,7 +615,7 @@ static NSMutableDictionary *TGChatProfileMemo(void) {
 	}
 	__weak typeof(self) weakSelf = self;
 	int64_t memoChatId = self.chatId;
-	[[TGClient shared] canSendInChat:self.chatId completion:^(BOOL canSend, BOOL channel){
+	[[TGMessageStore shared] canSendInChat:self.chatId completion:^(BOOL canSend, BOOL channel){
 		TGChatCanSendMemo()[@(memoChatId)] = @(canSend);
 		TGChatViewController *me = weakSelf;
 		if (!me)
@@ -612,7 +630,7 @@ static NSMutableDictionary *TGChatProfileMemo(void) {
 			return;
 		}
 		// An unwritable private chat is blocked or restricted, not muted.
-		[[TGClient shared] isUserBlocked:me.chatId completion:^(BOOL blocked){
+		[[TGMessageStore shared] isUserBlocked:me.chatId completion:^(BOOL blocked){
 			TGChatViewController *again = weakSelf;
 			if (!again)
 				return;
@@ -700,7 +718,7 @@ static NSMutableDictionary *TGChatProfileMemo(void) {
 		[centre addTarget:self action:@selector(joinFromChat:) forControlEvents:UIControlEventTouchUpInside];
 	} else {
 		centre.tag = kChatMuteBarTag;
-		BOOL muted = [[TGClient shared] isChatMuted:self.chatId];
+		BOOL muted = [[TGMessageStore shared] isChatMuted:self.chatId];
 		[centre setTitle:TGChatChannelMuteTitle(muted) forState:UIControlStateNormal];
 		[centre addTarget:self action:@selector(muteFromChat:) forControlEvents:UIControlEventTouchUpInside];
 	}
@@ -792,7 +810,7 @@ static NSMutableDictionary *TGChatProfileMemo(void) {
 	BOOL isChannel = button.tag == kChatJoinChannelBarTag;
 	button.enabled = NO;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] joinChat:self.chatId completion:^(BOOL ok, BOOL requestSent){
+	[[TGMessageStore shared] joinChat:self.chatId completion:^(BOOL ok, BOOL requestSent){
 		TGChatViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -813,7 +831,7 @@ static NSMutableDictionary *TGChatProfileMemo(void) {
 - (void)unblockFromChat:(UIButton *)button {
 	button.enabled = NO;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] setUser:self.chatId blocked:NO];
+	[[TGMessageStore shared] setUser:self.chatId blocked:NO];
 	[weakSelf applyPostingRightsForGroup:weakSelf.isGroup
 								channel:weakSelf.isChannel member:YES];
 }
@@ -821,8 +839,8 @@ static NSMutableDictionary *TGChatProfileMemo(void) {
 - (void)muteFromChat:(UIButton *)button {
 	// The state, not the button's English title: a translated title never
 	// started with "Mute", so the bar could only ever unmute.
-	BOOL muting = ![[TGClient shared] isChatMuted:self.chatId];
-	[[TGClient shared] setChat:self.chatId muted:muting];
+	BOOL muting = ![[TGMessageStore shared] isChatMuted:self.chatId];
+	[[TGMessageStore shared] setChat:self.chatId muted:muting];
 	[button setTitle:TGChatChannelMuteTitle(muting) forState:UIControlStateNormal];
 }
 
@@ -858,7 +876,7 @@ static NSMutableDictionary *TGChatProfileMemo(void) {
 	if ([self scrollToMessageId:messageId])
 		return;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] historyForChat:self.chatId
+	[[TGMessageStore shared] historyForChat:self.chatId
 					   aroundMessageId:messageId
 								 limit:(NSInteger)TGMetricHistoryPageAroundPinned
 							completion:^(NSArray *messages){
@@ -889,7 +907,7 @@ static NSMutableDictionary *TGChatProfileMemo(void) {
 				  destructive:YES
 					   inView:self.view
 					onConfirm:^{
-		[[TGClient shared] unpinAllMessagesInChat:chatId thread:threadId];
+		[[TGMessageStore shared] unpinAllMessagesInChat:chatId thread:threadId];
 		weakSelf.pinnedMessageId = 0;
 		[weakSelf hidePinnedBanner];
 	}];
@@ -929,7 +947,7 @@ static NSMutableDictionary *TGChatProfileMemo(void) {
 	// folder applies its own answer, so the chat itself is asked.
 	NSString *line = self.chatTitle ?: @"This chat";
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] messageCountInChat:self.chatId thread:self.threadId
+	[[TGMessageStore shared] messageCountInChat:self.chatId thread:self.threadId
 			completion:^(NSInteger count){
 		NSString *say = count > 0
 				? [NSString stringWithFormat:@"%@: %ld messages total",
@@ -956,7 +974,7 @@ static NSMutableDictionary *TGChatProfileMemo(void) {
 	__weak typeof(self) weakSelf = self;
 	// One stop instead of two: the calendar answers both the message to
 	// land on and how many the chat has carried all along.
-	[[TGClient shared] calendarJumpForChat:self.chatId
+	[[TGMessageStore shared] calendarJumpForChat:self.chatId
 									endDate:(NSInteger)end
 								completion:^(int64_t messageId, NSInteger total){
 		TGChatViewController *me = weakSelf;
@@ -969,7 +987,7 @@ static NSMutableDictionary *TGChatProfileMemo(void) {
 		// The calendar query is a search and can answer nothing while the
 		// day still holds a message; getChatMessageByDate is the direct
 		// lookup for exactly that day.
-		[[TGClient shared] messageAtDate:end inChat:me.chatId
+		[[TGMessageStore shared] messageAtDate:end inChat:me.chatId
 							  completion:^(NSDictionary *found){
 			int64_t foundId = [found[@"id"] longLongValue];
 			if (!foundId){
@@ -987,7 +1005,7 @@ static NSMutableDictionary *TGChatProfileMemo(void) {
 /// chat of its own the way forum topics are.
 - (void)openCommentsForMessage:(NSDictionary *)m {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] commentThreadForChat:self.chatId messageId:[m[@"id"] longLongValue]
+	[[TGMessageStore shared] commentThreadForChat:self.chatId messageId:[m[@"id"] longLongValue]
 								 completion:^(int64_t discussionChatId, int64_t threadId, NSString *error){
 		TGChatViewController *me = weakSelf;
 		if (!me)
@@ -1041,7 +1059,7 @@ static NSMutableDictionary *TGChatProfileMemo(void) {
 		return;
 
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] historyForChat:self.chatId
+	[[TGMessageStore shared] historyForChat:self.chatId
 					  aroundMessageId:replyId
 								limit:(NSInteger)TGMetricHistoryPageAroundPinned
 						   completion:^(NSArray *messages){
@@ -1059,14 +1077,14 @@ static NSMutableDictionary *TGChatProfileMemo(void) {
 				return;
 		}
 		// Not in this chat's history: ask TDLib what the reply names.
-		[[TGClient shared] repliedMessageTo:replyId inChat:me.chatId
+		[[TGMessageStore shared] repliedMessageTo:replyId inChat:me.chatId
 								 completion:^(NSDictionary *reply){
 			TGChatViewController *inner = weakSelf;
 			if (!inner)
 				return;
 			int64_t otherChat = reply ? [reply[@"chatId"] longLongValue] : 0;
 			if (otherChat && otherChat != inner.chatId){
-				NSString *title = [[TGClient shared] titleForChat:otherChat] ?: @"Chat";
+				NSString *title = [[TGMessageStore shared] titleForChat:otherChat] ?: @"Chat";
 				TGChatViewController *other = [[TGChatViewController alloc] init];
 				other.chatId = otherChat;
 				other.chatTitle = title;
@@ -1118,7 +1136,7 @@ static NSMutableDictionary *TGChatProfileMemo(void) {
 	__weak typeof(self) weakSelf = self;
 
 	if (![poll[@"allowsMultiple"] boolValue]){
-		[[TGClient shared] votePoll:messageId inChat:chatId options:@[@(index)]];
+		[[TGMessageStore shared] votePoll:messageId inChat:chatId options:@[@(index)]];
 		// TDLib answers with an updated message; re-read so the shares move.
 		dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
 				(int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
@@ -1190,7 +1208,7 @@ static NSMutableDictionary *TGChatProfileMemo(void) {
 	int64_t chatId = self.chatId;
 	BOOL done = TGChecklistTaskDone(task);
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] markChecklistTask:taskId done:!done inMessage:messageId chat:chatId];
+	[[TGMessageStore shared] markChecklistTask:taskId done:!done inMessage:messageId chat:chatId];
 	dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
 			(int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
 		[weakSelf reload];
@@ -1256,7 +1274,7 @@ static NSMutableDictionary *TGChatProfileMemo(void) {
 	case TGMessageCardActionPlayGame: {
 		// A game is a web page the bot hands out for this message.
 		NSDictionary *game = [m[@"game"] isKindOfClass:NSDictionary.class] ? m[@"game"] : @{};
-		[[TGClient shared] pressCallbackButton:@{@"gameShortName" : game[@"shortName"] ?: @""}
+		[[TGMessageStore shared] pressCallbackButton:@{@"gameShortName" : game[@"shortName"] ?: @""}
 										inChat:self.chatId messageId:messageId
 									completion:^(NSString *text, BOOL alert, NSString *url, NSString *error){
 			dispatch_async(dispatch_get_main_queue(), ^{
@@ -1272,7 +1290,7 @@ static NSMutableDictionary *TGChatProfileMemo(void) {
 	}
 	case TGMessageCardActionOpenGiveaway: {
 		int64_t giveawayId = card.actionTargetId ?: messageId;
-		[[TGClient shared] giveawayInfoForChat:self.chatId message:giveawayId
+		[[TGMessageStore shared] giveawayInfoForChat:self.chatId message:giveawayId
 									completion:^(NSDictionary *info, NSString *error){
 			dispatch_async(dispatch_get_main_queue(), ^{
 				TGChatViewController *me = weakSelf;
@@ -1325,7 +1343,7 @@ static NSMutableDictionary *TGChatProfileMemo(void) {
 		return;
 	[self.pendingPollVotes removeObjectForKey:key];
 
-	[[TGClient shared] votePoll:messageId inChat:self.chatId options:indexes];
+	[[TGMessageStore shared] votePoll:messageId inChat:self.chatId options:indexes];
 	[self.layoutCache removeLayoutForMessageId:messageId];
 	NSIndexPath *path = [self.table indexPathForCell:cell];
 	if (path)

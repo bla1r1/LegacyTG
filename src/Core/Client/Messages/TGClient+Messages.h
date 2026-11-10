@@ -55,6 +55,13 @@
 - (void)sendFormattedText:(NSDictionary *)formattedText toChat:(int64_t)chatId
 				   thread:(int64_t)threadId replyTo:(int64_t)replyToId;
 
+/// The same send, with TDLib's pending message handed back. The store uses it
+/// to remember the temporary id that updateMessageSendSucceeded later renames.
+- (void)sendFormattedText:(NSDictionary *)formattedText toChat:(int64_t)chatId
+				   thread:(int64_t)threadId replyTo:(int64_t)replyToId
+		  schedulingState:(NSDictionary *)schedulingState
+			   completion:(void (^)(NSDictionary *message))completion;
+
 /// editMessageText with this formattedText as is.
 - (void)editMessage:(int64_t)messageId inChat:(int64_t)chatId formattedText:(NSDictionary *)formattedText;
 
@@ -75,6 +82,12 @@
 - (void)sendText:(NSString *)text toChat:(int64_t)chatId
           thread:(int64_t)threadId replyTo:(int64_t)replyToId
         scheduled:(NSDictionary *)schedulingState;
+
+/// The same held-back send, answering with TDLib's pending message.
+- (void)sendText:(NSString *)text toChat:(int64_t)chatId
+          thread:(int64_t)threadId replyTo:(int64_t)replyToId
+        scheduled:(NSDictionary *)schedulingState
+      completion:(void (^)(NSDictionary *message))completion;
 
 /// What a chat has waiting. Flattened like the history is.
 - (void)scheduledMessagesInChat:(int64_t)chatId

@@ -3,7 +3,7 @@
 //
 #import "TGChatToolsViewController.h"
 #import "TGLocalization.h"
-#import "TGClient.h"
+#import "TGMessageStore.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
@@ -69,7 +69,7 @@ static NSString *TGWriteBackground(UIColor *colour) {
 
 - (void)loadChat {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] chatRecordForChat:self.chatId completion:^(NSDictionary *chat){
+	[[TGMessageStore shared] chatRecordForChat:self.chatId completion:^(NSDictionary *chat){
 		TGChatToolsViewController *me = weakSelf;
 		if (!me || !chat)
 			return;
@@ -88,7 +88,7 @@ static NSString *TGWriteBackground(UIColor *colour) {
 		[me rebuild];
 	}];
 
-	[[TGClient shared] groupFullInfoForChat:self.chatId completion:^(NSDictionary *info){
+	[[TGMessageStore shared] groupFullInfoForChat:self.chatId completion:^(NSDictionary *info){
 		TGChatToolsViewController *me = weakSelf;
 		if (!me || !info)
 			return;
@@ -198,7 +198,7 @@ static NSString *TGWriteBackground(UIColor *colour) {
 
 - (void)showRecommendedChats {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] recommendedChatsWithCompletion:^(NSArray *chats){
+	[[TGMessageStore shared] recommendedChatsWithCompletion:^(NSArray *chats){
 		TGChatToolsViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -242,7 +242,7 @@ static NSString *TGWriteBackground(UIColor *colour) {
 	__weak typeof(self) weakSelf = self;
 	[TGAlertSheet showChoices:titles title:@"Slow Mode" destructiveIndex:-1
 			inView:self.view onChoice:^(NSInteger index){
-		[[TGClient shared] setSlowModeDelayForChat:weakSelf.chatId
+		[[TGMessageStore shared] setSlowModeDelayForChat:weakSelf.chatId
 				seconds:seconds[index] completion:^(BOOL ok){
 			TGChatToolsViewController *me = weakSelf;
 			if (!ok){
@@ -262,7 +262,7 @@ static NSString *TGWriteBackground(UIColor *colour) {
 						title:@"Available Reactions"
 			 destructiveIndex:-1 inView:self.view onChoice:^(NSInteger index){
 		NSString *mode = index == 0 ? @"all" : @"some";
-		[[TGClient shared] setAvailableReactionsForChat:weakSelf.chatId
+		[[TGMessageStore shared] setAvailableReactionsForChat:weakSelf.chatId
 				mode:mode completion:^(BOOL ok){
 			TGChatToolsViewController *me = weakSelf;
 			if (!ok){
@@ -279,7 +279,7 @@ static NSString *TGWriteBackground(UIColor *colour) {
 - (void)toggleProtected {
 	__weak typeof(self) weakSelf = self;
 	BOOL next = !self.protectedContent;
-	[[TGClient shared] toggleProtectedContentForChat:self.chatId on:next
+	[[TGMessageStore shared] toggleProtectedContentForChat:self.chatId on:next
 			completion:^(BOOL ok){
 		TGChatToolsViewController *me = weakSelf;
 		if (!ok){
@@ -294,13 +294,13 @@ static NSString *TGWriteBackground(UIColor *colour) {
 
 - (void)toggleTranslatable {
 	self.translatable = !self.translatable;
-	[[TGClient shared] toggleTranslatableForChat:self.chatId on:self.translatable];
+	[[TGMessageStore shared] toggleTranslatableForChat:self.chatId on:self.translatable];
 	[self rebuild];
 }
 
 - (void)toggleDefaultSilent {
 	self.defaultSilent = !self.defaultSilent;
-	[[TGClient shared] toggleDefaultSilentForChat:self.chatId on:self.defaultSilent];
+	[[TGMessageStore shared] toggleDefaultSilentForChat:self.chatId on:self.defaultSilent];
 	[self rebuild];
 }
 
@@ -313,10 +313,10 @@ static NSString *TGWriteBackground(UIColor *colour) {
 						title:(profile ? @"Change Profile Color" : @"Accent Color")
 			 destructiveIndex:-1 inView:self.view onChoice:^(NSInteger index){
 		if (profile){
-			[[TGClient shared] setChatProfileAccentColour:weakSelf.chatId colourId:index];
+			[[TGMessageStore shared] setChatProfileAccentColour:weakSelf.chatId colourId:index];
 			weakSelf.profileAccentId = index;
 		} else {
-			[[TGClient shared] setChatAccentColour:weakSelf.chatId colourId:index];
+			[[TGMessageStore shared] setChatAccentColour:weakSelf.chatId colourId:index];
 			weakSelf.accentId = index;
 		}
 		[weakSelf rebuild];
@@ -329,7 +329,7 @@ static NSString *TGWriteBackground(UIColor *colour) {
 	[TGAlertSheet showChoices:themes title:@"Color Theme" destructiveIndex:-1
 			inView:self.view onChoice:^(NSInteger index){
 		NSString *name = index == 0 ? @"" : themes[index];
-		[[TGClient shared] setChatTheme:weakSelf.chatId name:name completion:^(BOOL ok){
+		[[TGMessageStore shared] setChatTheme:weakSelf.chatId name:name completion:^(BOOL ok){
 			TGChatToolsViewController *me = weakSelf;
 			if (!ok){
 				[TGAlertSheet showMessage:@"An error occurred."
@@ -360,7 +360,7 @@ static NSString *TGWriteBackground(UIColor *colour) {
 								title:@"Wallpaper" inView:weakSelf.view];
 			return;
 		}
-		[[TGClient shared] setChatBackground:weakSelf.chatId imagePath:path
+		[[TGMessageStore shared] setChatBackground:weakSelf.chatId imagePath:path
 				colour:TGRGB(colour) onlyForSelf:!weakSelf.isGroup
 				completion:^(BOOL ok){
 			[TGAlertSheet showMessage:(ok ? @"Done"
@@ -375,7 +375,7 @@ static NSString *TGWriteBackground(UIColor *colour) {
 	[TGAlertSheet showConfirm:nil
 						title:@"Reset Chat Wallpapers" action:@"Reset"
 				  destructive:YES inView:self.view onConfirm:^{
-		[[TGClient shared] deleteChatBackground:weakSelf.chatId restorePrevious:YES];
+		[[TGMessageStore shared] deleteChatBackground:weakSelf.chatId restorePrevious:YES];
 	}];
 }
 
@@ -383,7 +383,7 @@ static NSString *TGWriteBackground(UIColor *colour) {
 
 - (void)chooseDiscussionGroup {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] suitableDiscussionChatsWithCompletion:^(NSArray *chats){
+	[[TGMessageStore shared] suitableDiscussionChatsWithCompletion:^(NSArray *chats){
 		TGChatToolsViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -397,7 +397,7 @@ static NSString *TGWriteBackground(UIColor *colour) {
 				destructiveIndex:-1 inView:me.view onChoice:^(NSInteger index){
 			NSDictionary *chat = all[index];
 			int64_t discussionId = [chat[@"id"] longLongValue];
-			[[TGClient shared] setDiscussionGroup:discussionId forChat:weakSelf.chatId
+			[[TGMessageStore shared] setDiscussionGroup:discussionId forChat:weakSelf.chatId
 					completion:^(BOOL ok){
 				if (ok){
 					weakSelf.discussionChatId = discussionId;
@@ -416,7 +416,7 @@ static NSString *TGWriteBackground(UIColor *colour) {
 	[TGAlertSheet showInput:@"Location" message:nil placeholder:@"Address"
 					   text:nil action:@"Save" inView:self.view
 				   onSubmit:^(NSString *address){
-		[[TGClient shared] setLocationAddress:address forChat:weakSelf.chatId
+		[[TGMessageStore shared] setLocationAddress:address forChat:weakSelf.chatId
 				completion:^(BOOL ok){
 			[TGAlertSheet showMessage:(ok ? @"Done"
 										   : @"An error occurred.")
@@ -432,7 +432,7 @@ static NSString *TGWriteBackground(UIColor *colour) {
 				placeholder:@"Note"
 					   text:self.note action:@"Save" inView:self.view
 				 onSubmit:^(NSString *note){
-		[[TGClient shared] setClientNote:note forChat:weakSelf.chatId
+		[[TGMessageStore shared] setClientNote:note forChat:weakSelf.chatId
 				completion:^(BOOL ok){
 			if (!ok)
 				return;
@@ -444,7 +444,7 @@ static NSString *TGWriteBackground(UIColor *colour) {
 
 - (void)showOwnerAfterLeaving {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] ownerAfterLeavingChat:self.chatId completion:^(NSDictionary *user){
+	[[TGMessageStore shared] ownerAfterLeavingChat:self.chatId completion:^(NSDictionary *user){
 		TGChatToolsViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -457,7 +457,7 @@ static NSString *TGWriteBackground(UIColor *colour) {
 
 - (void)chooseEmojiPhoto {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] defaultChatPhotoEmojiStickersWithCompletion:^(NSArray *stickers){
+	[[TGMessageStore shared] defaultChatPhotoEmojiStickersWithCompletion:^(NSArray *stickers){
 		TGChatToolsViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -473,7 +473,7 @@ static NSString *TGWriteBackground(UIColor *colour) {
 				destructiveIndex:-1 inView:me.view onChoice:^(NSInteger index){
 			NSDictionary *sticker = stickers[index];
 			UIColor *colour = [[TGTheme shared] accentColour];
-			[[TGClient shared] setEmojiPhotoForChat:weakSelf.chatId
+			[[TGMessageStore shared] setEmojiPhotoForChat:weakSelf.chatId
 					customEmojiId:[sticker[@"customEmojiId"] longLongValue]
 					colour:TGRGB(colour) completion:^(BOOL ok){
 				[TGAlertSheet showMessage:(ok ? @"Done"
@@ -495,7 +495,7 @@ static NSString *TGWriteBackground(UIColor *colour) {
 		[TGAlertSheet showConfirm:nil
 							title:@"Report Profile Photo" action:@"Report"
 					  destructive:YES inView:weakSelf.view onConfirm:^{
-			[[TGClient shared] reportChatPhotoInChat:weakSelf.chatId
+			[[TGMessageStore shared] reportChatPhotoInChat:weakSelf.chatId
 					reason:reasons[index] detail:@""
 					completion:^(BOOL ok){
 				[TGAlertSheet showMessage:(ok
@@ -515,7 +515,7 @@ static NSString *TGWriteBackground(UIColor *colour) {
 	[TGAlertSheet showConfirm:nil
 						title:@"Join Requests" action:action
 				  destructive:!approve inView:self.view onConfirm:^{
-		[[TGClient shared] processAllJoinRequests:weakSelf.chatId link:@""
+		[[TGMessageStore shared] processAllJoinRequests:weakSelf.chatId link:@""
 				approve:approve completion:^(BOOL ok){
 			[TGAlertSheet showMessage:(ok ? @"Done"
 										   : @"An error occurred.")
@@ -526,7 +526,7 @@ static NSString *TGWriteBackground(UIColor *colour) {
 
 - (void)answerJoinRequestQuery {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] joinRequestsForChat:self.chatId completion:^(NSArray *requests){
+	[[TGMessageStore shared] joinRequestsForChat:self.chatId completion:^(NSArray *requests){
 		TGChatToolsViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -552,7 +552,7 @@ static NSString *TGWriteBackground(UIColor *colour) {
 					 destructiveIndex:1
 							   inView:weakSelf.view
 							 onChoice:^(NSInteger answer){
-				[[TGClient shared] processJoinRequest:userId inChat:weakSelf.chatId
+				[[TGMessageStore shared] processJoinRequest:userId inChat:weakSelf.chatId
 											 approve:(answer == 0)];
 			}];
 		}];
@@ -561,7 +561,7 @@ static NSString *TGWriteBackground(UIColor *colour) {
 
 - (void)addToChatList {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] chatListsForChat:self.chatId completion:^(NSArray *lists){
+	[[TGMessageStore shared] chatListsForChat:self.chatId completion:^(NSArray *lists){
 		TGChatToolsViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -580,7 +580,7 @@ static NSString *TGWriteBackground(UIColor *colour) {
 			else if ([kind isEqualToString:@"chatListFolder"]){
 				NSInteger folderId = [list[@"chat_folder_id"] integerValue];
 				NSString *name = nil;
-				for (NSDictionary *folder in [TGClient shared].folders)
+				for (NSDictionary *folder in [TGMessageStore shared].folders)
 					if ([folder[@"id"] integerValue] == folderId)
 						name = folder[@"title"];
 				[titles addObject:name.length ? name
@@ -591,7 +591,7 @@ static NSString *TGWriteBackground(UIColor *colour) {
 		}
 		[TGAlertSheet showChoices:titles title:@"Add to Folder"
 				destructiveIndex:-1 inView:me.view onChoice:^(NSInteger index){
-			[[TGClient shared] addChat:weakSelf.chatId toList:lists[index]
+			[[TGMessageStore shared] addChat:weakSelf.chatId toList:lists[index]
 					completion:^(BOOL ok){
 				[TGAlertSheet showMessage:(ok ? @"Done"
 											   : @"An error occurred.")

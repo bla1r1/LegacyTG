@@ -1,7 +1,8 @@
 #import "TGEphemeralViewController.h"
 #import "TGLocalization.h"
 #import "TGAlertSheet.h"
-#import "TGClient.h"
+#import "TGMessageStore.h"
+#import "TGSendStore.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGRows.h"
@@ -169,7 +170,7 @@
 		return;
 	}
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] sendEphemeralText:text
+	[[TGSendStore shared] sendEphemeralText:text
 								  toChat:self.chatId
 						  receiverUserId:self.receiverUserId
 						 ephemeralReplyId:self.replyId
@@ -202,7 +203,7 @@
 				placeholder:TGLocalized(@"Message") text:self.composer.text
 				action:TGLocalized(@"Save")
 					 inView:self.view onSubmit:^(NSString *text){
-		[[TGClient shared] editEphemeralMessage:messageId text:text
+		[[TGMessageStore shared] editEphemeralMessage:messageId text:text
 									   receiver:weakSelf.receiverUserId
 										 inChat:weakSelf.chatId
 									 completion:^(BOOL ok, NSString *error){
@@ -221,7 +222,7 @@
 				placeholder:TGLocalized(@"Caption") text:nil
 				action:TGLocalized(@"Save")
 					 inView:self.view onSubmit:^(NSString *caption){
-		[[TGClient shared] editEphemeralMessageCaption:messageId caption:caption
+		[[TGMessageStore shared] editEphemeralMessageCaption:messageId caption:caption
 											  receiver:weakSelf.receiverUserId
 												inChat:weakSelf.chatId
 											completion:^(BOOL ok, NSString *error){
@@ -240,7 +241,7 @@
 						title:TGLocalized(@"Delete Message")
 					   action:TGLocalized(@"Delete")
 				  destructive:YES inView:self.view onConfirm:^{
-		[[TGClient shared] deleteEphemeralMessage:messageId
+		[[TGMessageStore shared] deleteEphemeralMessage:messageId
 										 receiver:weakSelf.receiverUserId
 										   inChat:weakSelf.chatId
 									   completion:^(BOOL ok, NSString *error){
@@ -270,7 +271,7 @@
 		return;
 	}
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] deleteMessageEphemeralContent:messageId inChat:self.chatId
+	[[TGMessageStore shared] deleteMessageEphemeralContent:messageId inChat:self.chatId
 										  completion:^(BOOL ok, NSString *error){
 		[weakSelf setResult:(ok ? TGLocalized(@"Message Deleted")
 								: (error ?: TGLocalized(@"An error occurred.")))];

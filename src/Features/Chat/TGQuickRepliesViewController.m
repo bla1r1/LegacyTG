@@ -4,7 +4,8 @@
 #import "TGQuickRepliesViewController.h"
 #import "TGLocalization.h"
 #import "TGQuickReplyMessagesViewController.h"
-#import "TGClient.h"
+#import "TGMessageStore.h"
+#import "TGSendStore.h"
 #import "TGTheme.h"
 #import "TGAlertSheet.h"
 
@@ -44,7 +45,7 @@
 
 - (void)loadShortcuts {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] loadQuickReplyShortcutsWithCompletion:^(NSArray *shortcuts){
+	[[TGMessageStore shared] loadQuickReplyShortcutsWithCompletion:^(NSArray *shortcuts){
 		TGQuickRepliesViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -58,7 +59,7 @@
 	// A write may have added or removed a shortcut while the manager is open;
 	// the client's list is the truth, but the local copy preserves a drag the
 	// server has not echoed yet.
-	NSArray *fromClient = [TGClient shared].quickReplyShortcuts;
+	NSArray *fromClient = [TGMessageStore shared].quickReplyShortcuts;
 	// While Edit is up the local copy is the drag in progress; every other
 	// time the client's list carries the counts and order Telegram holds.
 	if (!self.tableView.editing || !self.shortcuts.count ||
@@ -119,7 +120,7 @@
 					 action:@"Next"
 					 inView:self.view
 				   onSubmit:^(NSString *name){
-		[[TGClient shared] checkQuickReplyShortcutName:name
+		[[TGMessageStore shared] checkQuickReplyShortcutName:name
 											completion:^(BOOL ok, NSString *error){
 			if (!ok){
 				[weakSelf toast:error ?: @"An error occurred."];
@@ -132,7 +133,7 @@
 							 action:@"Save"
 							 inView:weakSelf.view
 						   onSubmit:^(NSString *text){
-				[[TGClient shared] addQuickReplyShortcutMessage:name text:text
+				[[TGMessageStore shared] addQuickReplyShortcutMessage:name text:text
 													 completion:^(NSDictionary *message,
 																  NSString *error){
 					if (!message){
@@ -148,7 +149,7 @@
 
 - (void)sendShortcut:(NSInteger)shortcutId name:(NSString *)name {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] sendQuickReplyShortcutMessages:shortcutId
+	[[TGSendStore shared] sendQuickReplyShortcutMessages:shortcutId
 											   toChat:self.sendChatId
 											sendingId:(int32_t)arc4random()
 										   completion:^(NSArray *messages, NSString *error){
@@ -189,7 +190,7 @@
 	for (NSDictionary *shortcut in self.shortcuts)
 		[ids addObject:shortcut[@"id"]];
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] reorderQuickReplyShortcuts:ids completion:^(BOOL ok, NSString *error){
+	[[TGMessageStore shared] reorderQuickReplyShortcuts:ids completion:^(BOOL ok, NSString *error){
 		if (!ok)
 			[weakSelf toast:error ?: @"An error occurred."];
 	}];
@@ -211,7 +212,7 @@
 				   destructive:YES
 						inView:self.view
 					 onConfirm:^{
-		[[TGClient shared] deleteQuickReplyShortcut:shortcutId
+		[[TGMessageStore shared] deleteQuickReplyShortcut:shortcutId
 										completion:^(BOOL ok, NSString *error){
 			if (!ok){
 				[weakSelf toast:error ?: @"An error occurred."];

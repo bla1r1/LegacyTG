@@ -10,7 +10,7 @@
 #import "TGMessageAudienceViewController.h"
 #import "TGLocalization.h"
 #import "TGAlertSheet.h"
-#import "TGClient.h"
+#import "TGMessageStore.h"
 #import "TGCustomEmojiStore.h"
 #import "TGDateFormat.h"
 #import "TGOptions.h"
@@ -128,7 +128,7 @@ static NSString *TGAudienceDate(NSTimeInterval unix) {
 					@"custom_emoji_id" : @(self.customEmojiId)}
 				: @{@"@type" : @"reactionTypeEmoji", @"emoji" : self.emoji ?: @""};
 		__weak typeof(self) weakSelf = self;
-		[[TGClient shared] addedReactionsOfMessage:self.messageId
+		[[TGMessageStore shared] addedReactionsOfMessage:self.messageId
 											inChat:self.chatId
 									  reactionType:type
 											offset:nil
@@ -148,7 +148,7 @@ static NSString *TGAudienceDate(NSTimeInterval unix) {
 	}
 
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] viewersOfMessage:self.messageId inChat:self.chatId
+	[[TGMessageStore shared] viewersOfMessage:self.messageId inChat:self.chatId
 							completion:^(NSArray *viewers){
 		TGMessageAudienceViewController *me = weakSelf;
 		if (!me)
@@ -160,7 +160,7 @@ static NSString *TGAudienceDate(NSTimeInterval unix) {
 		// No viewer list is what a private chat answers. The read date is
 		// still Telegram's answer, and its reason is the honest sentence
 		// when there is no date either.
-		[[TGClient shared] readDateOfMessage:me.messageId inChat:me.chatId
+		[[TGMessageStore shared] readDateOfMessage:me.messageId inChat:me.chatId
 								  completion:^(NSTimeInterval date, NSString *reason){
 			TGMessageAudienceViewController *again = weakSelf;
 			if (!again)
@@ -183,7 +183,7 @@ static NSString *TGAudienceDate(NSTimeInterval unix) {
 		int64_t userId = [sender[@"user_id"] longLongValue];
 		int64_t chatId = [sender[@"chat_id"] longLongValue];
 		NSString *name = userId
-				? ([[TGClient shared] nameForUserId:userId] ?: TGLocalized(@"User"))
+				? ([[TGMessageStore shared] nameForUserId:userId] ?: TGLocalized(@"User"))
 				: (chatId ? TGLocalized(@"Another chat") : TGLocalized(@"User"));
 		if ([r[@"mine"] boolValue])
 			name = [NSString stringWithFormat:TGLocalized(@"%@ (you)"), name];
@@ -211,7 +211,7 @@ static NSString *TGAudienceDate(NSTimeInterval unix) {
 	NSMutableArray *people = [NSMutableArray arrayWithCapacity:viewers.count];
 	for (NSDictionary *v in viewers){
 		int64_t userId = [v[@"user_id"] longLongValue];
-		NSString *name = [[TGClient shared] nameForUserId:userId]
+		NSString *name = [[TGMessageStore shared] nameForUserId:userId]
 				?: TGLocalized(@"User");
 		NSString *when = TGAudienceDate([v[@"view_date"] doubleValue]);
 		[people addObject:@{
@@ -238,9 +238,9 @@ static NSString *TGAudienceDate(NSTimeInterval unix) {
 	__weak typeof(self) weakSelf = self;
 	for (NSDictionary *row in self.people){
 		int64_t userId = [row[@"userId"] longLongValue];
-		if (!userId || [[TGClient shared] nameForUserId:userId].length)
+		if (!userId || [[TGMessageStore shared] nameForUserId:userId].length)
 			continue;
-		[[TGClient shared] ensureUserName:userId completion:^{
+		[[TGMessageStore shared] ensureUserName:userId completion:^{
 			TGMessageAudienceViewController *me = weakSelf;
 			if (!me)
 				return;
@@ -266,8 +266,8 @@ static NSString *TGAudienceDate(NSTimeInterval unix) {
 		int64_t userId = [person[@"userId"] longLongValue];
 		int64_t chatId = [person[@"chatId"] longLongValue];
 		int64_t statusId = userId
-				? [[TGClient shared] emojiStatusIdForUser:userId]
-				: (chatId ? [[TGClient shared] emojiStatusIdForChat:chatId] : 0);
+				? [[TGMessageStore shared] emojiStatusIdForUser:userId]
+				: (chatId ? [[TGMessageStore shared] emojiStatusIdForChat:chatId] : 0);
 		int64_t peerId = userId ?: chatId;
 		NSMutableDictionary *row = TGPeerRow(@(peerId),
 				person[@"name"] ?: TGLocalized(@"User"),
@@ -320,10 +320,10 @@ static NSString *TGAudienceDate(NSTimeInterval unix) {
 		TGMessageAudienceViewController *me = weakSelf;
 		if (!me)
 			return;
-		[[TGClient shared] deleteReactionsOfSender:sender
+		[[TGMessageStore shared] deleteReactionsOfSender:sender
 										ofMessage:me.messageId
 										   inChat:me.chatId];
-		[[TGClient shared] deleteAllReactionsOfSender:sender
+		[[TGMessageStore shared] deleteAllReactionsOfSender:sender
 											   inChat:me.chatId];
 	}];
 }

@@ -486,7 +486,7 @@ static NSString *TGFirstLinkIn(NSString *text) {
 	[self showComposeBanner:link subtitle:TGLocalized(@"Loading...")];
 
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] linkPreviewForText:self.input.text
+	[[TGMessageStore shared] linkPreviewForText:self.input.text
 							   completion:^(NSDictionary *preview){
 		TGChatViewController *me = weakSelf;
 		if (!me || ![TGFirstLinkIn(me.input.text ?: @"") isEqualToString:link])
@@ -515,7 +515,7 @@ static NSString *TGFirstLinkIn(NSString *text) {
 	if (now - self.lastTypingReport < 4.0)
 		return;
 	self.lastTypingReport = now;
-	[[TGClient shared] sendTypingToChat:self.chatId thread:self.threadId];
+	[[TGMessageStore shared] sendTypingToChat:self.chatId thread:self.threadId];
 }
 
 #pragma mark - compose banner
@@ -707,7 +707,7 @@ static void TGTextFieldSetSelectedRange(UITextView *tf, NSRange range) {
 
 	if (self.editingId != 0 && self.editingIsCaption){
 		__weak typeof(self) weakSelf = self;
-		[[TGClient shared] editCaption:text
+		[[TGMessageStore shared] editCaption:text
 							 ofMessage:self.editingId
 								inChat:self.chatId
 							completion:^(BOOL ok){
@@ -723,12 +723,17 @@ static void TGTextFieldSetSelectedRange(UITextView *tf, NSRange range) {
 		} else if (![self.composerText.text isEqualToString:self.input.text ?: @""]) {
 			[self.composerText resetText:self.input.text ?: @""];
 		}
-		NSDictionary *ft = [[TGClient shared] markdownParsed:[self.composerText formattedText]];
+		NSDictionary *ft = [[TGMessageStore shared] markdownParsed:[self.composerText formattedText]];
 		if (self.editingId != 0) {
-			[[TGClient shared] editMessage:self.editingId inChat:self.chatId formattedText:ft];
+			[[TGSendStore shared] editMessageText:self.editingId
+										   inChat:self.chatId
+									formattedText:ft];
 		} else {
-			[[TGClient shared] sendFormattedText:ft toChat:self.chatId
-										  thread:self.threadId replyTo:self.replyToId];
+			[[TGSendStore shared] sendFormattedText:ft
+											toChat:self.chatId
+											thread:self.threadId
+										   replyTo:self.replyToId
+								   schedulingState:nil];
 		}
 	}
 
@@ -738,8 +743,8 @@ static void TGTextFieldSetSelectedRange(UITextView *tf, NSRange range) {
 	self.composerText = [[TGComposerText alloc] initWithText:@"" entities:@[]];
 	[self clearComposeState];
 	// The draft was this text; it has been sent, so it is not a draft now.
-	[[TGClient shared] setDraft:@"" inChat:self.chatId thread:self.threadId replyTo:0];
-	[[TGClient shared] cancelTypingInChat:self.chatId thread:self.threadId];
+	[[TGMessageStore shared] setDraft:@"" inChat:self.chatId thread:self.threadId replyTo:0];
+	[[TGMessageStore shared] cancelTypingInChat:self.chatId thread:self.threadId];
 
 	// TDLib echoes the message back as an update; refresh shortly after.
 	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
@@ -835,7 +840,7 @@ static void TGTextFieldSetSelectedRange(UITextView *tf, NSRange range) {
 		} else if (index == 2)
 			[weakSelf holdScheduledSheet];
 		else if (index == 3)
-			[weakSelf sendHeldText:[TGClient scheduledWhenOnline]];
+			[weakSelf sendHeldText:[TGMessageStore scheduledWhenOnline]];
 		else
 			[weakSelf previewFormattingOfText:text];
 	}];
@@ -853,8 +858,8 @@ static void TGTextFieldSetSelectedRange(UITextView *tf, NSRange range) {
 /// same answer the send path gets rather than a second grammar.
 - (void)previewFormattingOfText:(NSString *)text {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] parseMarkdownText:text completion:^(NSDictionary *formatted){
-		[[TGClient shared] textEntitiesInText:text completion:^(NSArray *entities){
+	[[TGMessageStore shared] parseMarkdownText:text completion:^(NSDictionary *formatted){
+		[[TGMessageStore shared] textEntitiesInText:text completion:^(NSArray *entities){
 			TGChatViewController *me = weakSelf;
 			if (!me)
 				return;
@@ -876,14 +881,14 @@ static void TGTextFieldSetSelectedRange(UITextView *tf, NSRange range) {
 			[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 	if (!text.length)
 		return;
-	[[TGClient shared] sendText:text toChat:self.chatId
-						 thread:self.threadId replyTo:self.replyToId
-					  scheduled:state];
+	[[TGSendStore shared] sendText:text toChat:self.chatId
+							thread:self.threadId replyTo:self.replyToId
+					schedulingState:state];
 	self.input.text = @"";
 	self.composerText = [[TGComposerText alloc] initWithText:@"" entities:@[]];
 	[self clearComposeState];
-	[[TGClient shared] setDraft:@"" inChat:self.chatId thread:self.threadId replyTo:0];
-	[[TGClient shared] cancelTypingInChat:self.chatId thread:self.threadId];
+	[[TGMessageStore shared] setDraft:@"" inChat:self.chatId thread:self.threadId replyTo:0];
+	[[TGMessageStore shared] cancelTypingInChat:self.chatId thread:self.threadId];
 }
 
 /// The X on the compose strip. A link preview is its own thing: closing it
@@ -987,7 +992,7 @@ static void TGTextFieldSetSelectedRange(UITextView *tf, NSRange range) {
 	self.pickSheet = nil;
 	self.pickPicker = nil;
 	self.schedulePrimaryButton = nil;
-	[self sendHeldText:[TGClient scheduledWhenOnline]];
+	[self sendHeldText:[TGMessageStore scheduledWhenOnline]];
 	self.scheduledCount++;
 	[self openScheduledMessages];
 }
@@ -1000,7 +1005,7 @@ static void TGTextFieldSetSelectedRange(UITextView *tf, NSRange range) {
 	self.pickSheet = nil;
 	self.pickPicker = nil;
 	self.schedulePrimaryButton = nil;
-	[self sendHeldText:[TGClient scheduledAtDate:date]];
+	[self sendHeldText:[TGMessageStore scheduledAtDate:date]];
 	// The queue has one more in it than the menu last said.
 	self.scheduledCount++;
 	// Official lands the user on the queue so the result is visible.
@@ -1149,11 +1154,11 @@ static void TGTextFieldSetSelectedRange(UITextView *tf, NSRange range) {
 	NSInteger fileId = [sticker[@"fileId"] integerValue];
 	if (fileId <= 0)
 		return;
-	[[TGClient shared] sendStickerWithFileId:fileId toChat:self.chatId thread:self.threadId];
+	[[TGSendStore shared] sendStickerWithFileId:fileId toChat:self.chatId thread:self.threadId];
 }
 
 - (void)emojiPanel:(TGEmojiPanel *)panel didPickAnimation:(NSDictionary *)animation {
-	[[TGClient shared] sendAnimation:animation toChat:self.chatId thread:self.threadId];
+	[[TGSendStore shared] sendAnimation:animation toChat:self.chatId thread:self.threadId];
 }
 
 #pragma mark - attachments

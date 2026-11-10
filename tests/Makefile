@@ -112,6 +112,9 @@ CLIENT_OBJC_SRCS := \
     src/Core/Client/Chats/TGClient+ChatFolders.mm \
     src/Core/Client/TGClient+ChatTools.m \
     src/Core/Stores/TGMessageStreamStore.mm \
+    src/Core/Stores/TGMessageStore.m \
+    src/Core/Stores/TGMessageStore+History.m \
+    src/Core/Stores/TGSendStore.mm \
     src/Core/Support/TGUpdateBatcher.mm \
     src/Core/Client/Messages/TGClient+MessagesUpload.m \
     src/Core/Client/Messages/TGClient+Messages.m \
@@ -333,6 +336,8 @@ CLIENT_TEST_SRCS := \
     $(TESTS)/TGChatListRowGeometryTests.m \
     $(TESTS)/TGChatListRowsTests.m \
     $(TESTS)/TGUpdateStoreTests.m \
+    $(TESTS)/TGSendStoreTests.m \
+    $(TESTS)/TGMessageStoreTests.m \
     $(TESTS)/TGPeerStoreTests.m \
     $(TESTS)/TGParitySettingsTests.m \
     $(TESTS)/TGSettingsPageModelsTests.m \

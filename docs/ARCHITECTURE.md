@@ -6,11 +6,19 @@ users by id, chats by id, photo file ids, stories, folders.
 Screens do not read those caches. `src/Core/Stores` is the layer between them:
 
 ```
-TDLib -> TGClient -> TGPeerStore / TGStickerStore / TGMediaStore / TGUpdateStore -> screens
+TDLib -> TGClient -> TGPeerStore / TGStickerStore / TGMediaStore / TGUpdateStore / TGSendStore / TGMessageStore -> screens
 ```
 
 `TGClient+Peers` is the small seam `TGPeerStore` reads through; it is not a
 screen header.
+
+`TGSendStore` owns outbound messages and their `sending -> sent / failed`
+state. `TGMessageStore` is the rest of the Chat message surface: actions,
+history, tools and the chat callbacks. `TGMessageStore+History.m` owns the
+history requests and page flattening. Both stores write their methods out
+explicitly; the message send/action/history bodies live there, and the
+remaining chat-tool, topic and cache methods delegate to `TGClient`. A Chat
+screen imports those headers and never a `TGClient` header.
 
 # What a store owns
 
@@ -43,9 +51,9 @@ event. A screen re-reads the peers it draws; it does not patch records itself.
 
 # The remaining domains
 
-1. Messages: stream/history reads, send, media download records. The store
-   should keep the deduped file-id and message-id rules `TGChatViewController`
-   and `TGMessageStreamStore` already carry.
+1. Messages: the Chat feature now talks only to `TGSendStore` and
+   `TGMessageStore`. What remains inside those stores is the transport body of
+   each request and the history/pagination math; the boundary itself is done.
 2. Settings: account, privacy, notifications and appearance. These are mostly
    request-write screens, so the store is a narrow command surface.
 3. Calls: call state and group-call participants, the last domain because the
@@ -56,8 +64,9 @@ settings or call store can land without touching either.
 
 # Counts at the end of this step
 
-- `src/Features` + `src/UI` files importing `TGClient*`: 122 before, 122 after
-  (the avatar/name/status call sites moved out, but these files still use the
-  client for actions and navigation).
-- `[TGClient shared]` occurrences in `src/Features`: 1,555 -> 1,524.
-- `scripts/lint_client.sh` allow list: 122 files.
+- `src/Features/Chat` files importing `TGClient*`: 0 (was 345 direct
+  `[TGClient shared]` calls across 38 files).
+- `scripts/lint_client.sh` allow list: 98 files (was 122); all 23 Chat entries
+  are gone.
+- `TGMessageStore.h`: 227 selectors and 14 properties, the whole surface the
+  Chat feature actually asks for.

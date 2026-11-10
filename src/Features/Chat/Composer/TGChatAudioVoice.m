@@ -541,7 +541,7 @@ static const NSTimeInterval kRecordHintSeconds = 1.6;
 		if (!me || !path || seconds < 0.5)
 			return;   // a stray tap is not a message (me == nil after the send)
 		[me clearComposeState];
-		[[TGClient shared] sendVoiceAtPath:path
+		[[TGSendStore shared] sendVoiceAtPath:path
 								  duration:(NSInteger)seconds
 									toChat:me.chatId
 									thread:me.threadId
@@ -573,7 +573,7 @@ static const NSTimeInterval kRecordHintSeconds = 1.6;
 	NSDictionary *row = @{
 		@"id"        : @(rowId),
 		@"chatId"    : @(self.chatId),
-		@"senderId"  : @([[TGClient shared].me[@"id"] longLongValue]),
+		@"senderId"  : @([[TGMessageStore shared].me[@"id"] longLongValue]),
 		@"outgoing"  : @YES,
 		@"date"      : @((NSInteger)[[NSDate date] timeIntervalSince1970]),
 		@"kind"      : @"messageVideoNote",
@@ -644,7 +644,7 @@ static const NSTimeInterval kRecordHintSeconds = 1.6;
 			[self refreshSendRings];
 			return;
 		}
-		[[TGClient shared] sendVideoNoteAtPath:path
+		[[TGSendStore shared] sendVideoNoteAtPath:path
 									  duration:(NSInteger)ceil(seconds)
 										length:recorder.noteSide
 										toChat:self.chatId
@@ -666,7 +666,7 @@ static const NSTimeInterval kRecordHintSeconds = 1.6;
 				self.pendingNoteRealId = messageId;
 				__weak typeof(self) weakChat = self;
 				dispatch_async(dispatch_get_main_queue(), ^{
-					[[TGClient shared] cancelSendingMessage:messageId
+					[[TGSendStore shared] cancelSendingMessage:messageId
 													inChat:weakChat.chatId];
 				});
 				return;
@@ -737,7 +737,7 @@ static const NSTimeInterval kRecordHintSeconds = 1.6;
 		return self.pendingNoteProgress;
 
 	int64_t messageId = [m[@"id"] longLongValue];
-	CGFloat fraction = [[TGClient shared] sendProgressForMessage:messageId];
+	CGFloat fraction = [[TGSendStore shared] sendProgressForMessage:messageId];
 	// A voice note is upload only; a round note spends the first half of the
 	// same line being transcoded.
 	if ([m[@"kind"] isEqualToString:@"messageVoiceNote"])
@@ -768,7 +768,7 @@ static const NSTimeInterval kRecordHintSeconds = 1.6;
 		self.pendingNoteRealId = 0;
 		self.pendingNoteProgress = 0;
 	}
-	[[TGClient shared] cancelSendingMessage:messageId inChat:self.chatId];
+	[[TGSendStore shared] cancelSendingMessage:messageId inChat:self.chatId];
 }
 
 /// The one-time choice from above the record lock acts on what is being

@@ -2,7 +2,7 @@
 // TGQuickReplyMessagesViewController.m
 //
 #import "TGQuickReplyMessagesViewController.h"
-#import "TGClient.h"
+#import "TGMessageStore.h"
 #import "TGAlertSheet.h"
 
 @interface TGQuickReplyMessagesViewController ()
@@ -39,7 +39,7 @@
 
 - (void)loadMessages {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] loadQuickReplyMessagesForShortcut:self.shortcutId
+	[[TGMessageStore shared] loadQuickReplyMessagesForShortcut:self.shortcutId
 											  completion:^(NSArray *messages){
 		TGQuickReplyMessagesViewController *me = weakSelf;
 		if (!me)
@@ -116,7 +116,7 @@
 					 action:@"Add"
 					 inView:self.view
 				   onSubmit:^(NSString *text){
-		[[TGClient shared] addQuickReplyShortcutMessage:weakSelf.shortcutName
+		[[TGMessageStore shared] addQuickReplyShortcutMessage:weakSelf.shortcutName
 												   text:text
 											 completion:^(NSDictionary *message,
 														  NSString *error){
@@ -145,7 +145,7 @@
 						 action:@"Add"
 						 inView:weakSelf.view
 					   onSubmit:^(NSString *second){
-			[[TGClient shared] addQuickReplyShortcutMessageAlbum:weakSelf.shortcutName
+			[[TGMessageStore shared] addQuickReplyShortcutMessageAlbum:weakSelf.shortcutName
 														   texts:@[first, second]
 													  completion:^(NSArray *messages,
 																   NSString *error){
@@ -182,7 +182,7 @@
 					 action:@"Save"
 					 inView:self.view
 				   onSubmit:^(NSString *text){
-		[[TGClient shared] editQuickReplyMessage:ident.longLongValue
+		[[TGMessageStore shared] editQuickReplyMessage:ident.longLongValue
 									  shortcutId:weakSelf.shortcutId
 											text:text
 									  completion:^(BOOL ok, NSString *error){
@@ -208,7 +208,7 @@
 				   destructive:YES
 						inView:self.view
 					 onConfirm:^{
-		[[TGClient shared] deleteQuickReplyShortcutMessages:ids
+		[[TGMessageStore shared] deleteQuickReplyShortcutMessages:ids
 												shortcutId:weakSelf.shortcutId
 												completion:^(BOOL ok, NSString *error){
 			if (!ok){
@@ -223,7 +223,7 @@
 
 - (void)readdRemovedMessages {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] readdQuickReplyShortcutMessages:self.removedIds
+	[[TGMessageStore shared] readdQuickReplyShortcutMessages:self.removedIds
 										  shortcutName:self.shortcutName
 											completion:^(NSArray *messages, NSString *error){
 		if (!messages.count && error.length){
@@ -244,13 +244,13 @@
 					 action:@"Save"
 					 inView:self.view
 				   onSubmit:^(NSString *name){
-		[[TGClient shared] checkQuickReplyShortcutName:name
+		[[TGMessageStore shared] checkQuickReplyShortcutName:name
 											completion:^(BOOL ok, NSString *error){
 			if (!ok){
 				[weakSelf toast:error ?: @"An error occurred."];
 				return;
 			}
-			[[TGClient shared] setQuickReplyShortcutName:weakSelf.shortcutId
+			[[TGMessageStore shared] setQuickReplyShortcutName:weakSelf.shortcutId
 												   name:name
 											 completion:^(BOOL saved, NSString *why){
 				if (!saved){
@@ -273,7 +273,7 @@
 				   destructive:YES
 						inView:self.view
 					 onConfirm:^{
-		[[TGClient shared] deleteQuickReplyShortcut:weakSelf.shortcutId
+		[[TGMessageStore shared] deleteQuickReplyShortcut:weakSelf.shortcutId
 										completion:^(BOOL ok, NSString *error){
 			if (!ok){
 				[weakSelf toast:error ?: @"An error occurred."];

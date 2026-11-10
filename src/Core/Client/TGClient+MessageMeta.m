@@ -6,6 +6,7 @@
  // a message and answers with context rather than content.
 //
 #import "TGClientInternal.h"
+#import "TGMessageStore.h"
 
 @implementation TGClient (MessageMeta)
 #pragma mark - facts a screen asks for
@@ -16,21 +17,7 @@
 /// private-place message answers as an error, said as a zero chat id.
 - (void)messageLinkInfo:(NSString *)link
 			 completion:(void (^)(int64_t chatId, int64_t messageId))completion {
-	if (!link.length){
-		if (completion) completion(0, 0);
-		return;
-	}
-	[self request:@{@"@type" : @"getMessageLinkInfo", @"url" : link}
-	   completion:^(NSDictionary *result){
-		if (!completion)
-			return;
-		if (![result[@"@type"] isEqualToString:@"messageLinkInfo"]){
-			completion(0, 0);
-			return;
-		}
-		completion([result[@"chat_id"] longLongValue],
-				   [result[@"message"][@"id"] longLongValue]);
-	}];
+	[[TGMessageStore shared] messageLinkInfo:link completion:completion];
 }
 
 /// Every chat's draft, dropped at once - the ones typed here and the ones
@@ -69,17 +56,7 @@
 - (void)viewersOfMessage:(int64_t)messageId
 				  inChat:(int64_t)chatId
 			  completion:(void (^)(NSArray *viewers))completion {
-	[self request:@{@"@type" : @"getMessageViewers",
-					@"chat_id" : @(chatId), @"message_id" : @(messageId)}
-	   completion:^(NSDictionary *result){
-		if (!completion)
-			return;
-		if (![result[@"@type"] isEqualToString:@"messageViewers"]){
-			completion(nil);
-			return;
-		}
-		completion(result[@"viewers"]);
-	}];
+	[[TGMessageStore shared] viewersOfMessage:messageId inChat:chatId completion:completion];
 }
 
 /// When exactly the other side read this message - or why the answer is not
@@ -88,26 +65,7 @@
 - (void)readDateOfMessage:(int64_t)messageId
 				   inChat:(int64_t)chatId
 			   completion:(void (^)(NSTimeInterval date, NSString *reason))completion {
-	[self request:@{@"@type" : @"getMessageReadDate",
-					@"chat_id" : @(chatId), @"message_id" : @(messageId)}
-	   completion:^(NSDictionary *result){
-		if (!completion)
-			return;
-		NSString *kind = result[@"@type"] ?: @"";
-		if ([kind isEqualToString:@"messageReadDateRead"]){
-			completion([result[@"read_date"] doubleValue], nil);
-		} else if ([kind isEqualToString:@"messageReadDateUnread"]){
-			completion(0, @"Not read yet");
-		} else if ([kind isEqualToString:@"messageReadDateTooOld"]){
-			completion(0, @"Read too long ago for Telegram to say when");
-		} else if ([kind isEqualToString:@"messageReadDateUserPrivacyRestricted"]){
-			completion(0, @"They hide their read receipts");
-		} else if ([kind isEqualToString:@"messageReadDateMyPrivacyRestricted"]){
-			completion(0, @"This account hides its own read receipts");
-		} else {
-			completion(0, @"Not available");
-		}
-	}];
+	[[TGMessageStore shared] readDateOfMessage:messageId inChat:chatId completion:completion];
 }
 
 /// Who a channel actually posted as, when the bubble says "Channel Admin".
@@ -115,12 +73,7 @@
 - (void)authorOfMessage:(int64_t)messageId
 				 inChat:(int64_t)chatId
 			 completion:(void (^)(NSDictionary *user))completion {
-	[self request:@{@"@type" : @"getMessageAuthor",
-					@"chat_id" : @(chatId), @"message_id" : @(messageId)}
-	   completion:^(NSDictionary *result){
-		if (completion)
-			completion([result[@"@type"] isEqualToString:@"user"] ? result : nil);
-	}];
+	[[TGMessageStore shared] authorOfMessage:messageId inChat:chatId completion:completion];
 }
 
 /// The HTML this message is pasted with into a blog post. Only messages
@@ -130,18 +83,7 @@
 						inChat:(int64_t)chatId
 					 album:(BOOL)album
 					completion:(void (^)(NSString *code))completion {
-	[self request:@{@"@type" : @"getMessageEmbeddingCode",
-					@"chat_id" : @(chatId), @"message_id" : @(messageId),
-					@"for_album" : @(album)}
-	   completion:^(NSDictionary *result){
-		if (!completion)
-			return;
-		if (![result[@"@type"] isEqualToString:@"text"]){
-			completion(@"");
-			return;
-		}
-		completion(result[@"text"]);
-	}];
+	[[TGMessageStore shared] embeddingCodeOfMessage:messageId inChat:chatId album:album completion:completion];
 }
 
 /// Public channels and walls this post was forwarded to, as message dicts -
@@ -149,18 +91,7 @@
 - (void)publicForwardsOfMessage:(int64_t)messageId
 						 inChat:(int64_t)chatId
 					 completion:(void (^)(NSArray *messages))completion {
-	[self request:@{@"@type" : @"getMessagePublicForwards",
-					@"chat_id" : @(chatId), @"message_id" : @(messageId),
-					@"offset" : @"", @"limit" : @(50)}
-	   completion:^(NSDictionary *result){
-		if (!completion)
-			return;
-		if (![result[@"@type"] isEqualToString:@"publicForwards"]){
-			completion(nil);
-			return;
-		}
-		completion(result[@"messages"]);
-	}];
+	[[TGMessageStore shared] publicForwardsOfMessage:messageId inChat:chatId completion:completion];
 }
 
 /// The reactions that may be added to this message right now: the chat's
@@ -170,30 +101,7 @@
 - (void)availableReactionsForMessage:(int64_t)messageId
 							  inChat:(int64_t)chatId
 					   completion:(void (^)(NSArray *emojis))completion {
-	[self request:@{@"@type" : @"getMessageAvailableReactions",
-					@"chat_id" : @(chatId), @"message_id" : @(messageId),
-					@"row_size" : @(8)}
-	   completion:^(NSDictionary *result){
-		if (!completion)
-			return;
-		if (![result[@"@type"] isEqualToString:@"availableReactions"] ||
-				[result[@"unavailability_reason"] isKindOfClass:NSDictionary.class]){
-			completion(nil);
-			return;
-		}
-		NSArray *top = result[@"top_reactions"];
-		NSMutableArray *out = [NSMutableArray array];
-		for (NSDictionary *r in top){
-			// Live TDLib nests the glyph under reactionTypeEmoji; the flat
-			// spelling is what older fixtures answer, and both are read.
-			NSString *emoji = r[@"type"][@"emoji"] ?: r[@"emoji"];
-			if (emoji.length)
-				[out addObject:emoji];
-		}
-		// No explicit top list: the chat allows everything, the app's own
-		// default bar answers it.
-		completion(out.count ? out : nil);
-	}];
+	[[TGMessageStore shared] availableReactionsForMessage:messageId inChat:chatId completion:completion];
 }
 
 /// Every reaction this message carries and who put it, for the reactor
@@ -263,26 +171,13 @@
 - (void)deleteReactionsOfSender:(NSDictionary *)sender
 					 ofMessage:(int64_t)messageId
 						 inChat:(int64_t)chatId {
-	if (!sender)
-		return;
-	[self send:@{
-		@"@type"     : @"deleteMessageReactionsFromSender",
-		@"chat_id"   : @(chatId),
-		@"message_id": @(messageId),
-		@"sender_id" : sender,
-	}];
+	[[TGMessageStore shared] deleteReactionsOfSender:sender ofMessage:messageId inChat:chatId];
 }
 
 /// The same, chat-wide: everything this sender ever reacted with in this
 /// chat, gone. That is the strongest undo an admin sheet has.
 - (void)deleteAllReactionsOfSender:(NSDictionary *)sender inChat:(int64_t)chatId {
-	if (!sender)
-		return;
-	[self send:@{
-		@"@type"   : @"deleteAllRecentMessageReactionsFromSender",
-		@"chat_id" : @(chatId),
-		@"sender_id" : sender,
-	}];
+	[[TGMessageStore shared] deleteAllReactionsOfSender:sender inChat:chatId];
 }
 
 /// How many messages a chat (or one of its topics) carries. `thread` selects
@@ -290,22 +185,7 @@
 - (void)messageCountInChat:(int64_t)chatId
 					thread:(int64_t)threadId
 				completion:(void (^)(NSInteger count))completion {
-	NSMutableDictionary *ask = [@{@"@type" : @"getChatMessageCount",
-								  @"chat_id" : @(chatId),
-								  @"filter" : @{@"@type" : @"searchMessagesFilterEmpty"},
-								  @"return_local" : @NO} mutableCopy];
-	// The whole chat is no topic at all: td_api.tl has no "main" topic type.
-	if (threadId)
-		ask[@"topic_id"] = @{@"@type" : @"messageTopicThread", @"message_thread_id" : @(threadId)};
-	[self request:ask
-	   completion:^(NSDictionary *result){
-		if (!completion)
-			return;
-		if ([result[@"@type"] isEqualToString:@"count"])
-			completion([result[@"count"] integerValue]);
-		else
-			completion(0);
-	}];
+	[[TGMessageStore shared] messageCountInChat:chatId thread:threadId completion:completion];
 }
 
 - (void)messageCountInChat:(int64_t)chatId
@@ -400,18 +280,7 @@
 /// locations" sheet: message dicts, each a location bubble the map opens.
 - (void)recentLocationsInChat:(int64_t)chatId
 				   completion:(void (^)(NSArray *messages))completion {
-	[self request:@{@"@type" : @"searchChatRecentLocationMessages",
-					@"chat_id" : @(chatId),
-					@"limit" : @(20)}
-	   completion:^(NSDictionary *result){
-		if (!completion)
-			return;
-		if (![result[@"@type"] isEqualToString:@"messages"]){
-			completion(nil);
-			return;
-		}
-		completion(result[@"messages"]);
-	}];
+	[[TGMessageStore shared] recentLocationsInChat:chatId completion:completion];
 }
 
 /// This message's text, translated by Telegram into `languageCode`. The
@@ -420,43 +289,14 @@
 				  inChat:(int64_t)chatId
 				   toCode:(NSString *)languageCode
 			  completion:(void (^)(NSString *text))completion {
-	if (!languageCode.length)
-		languageCode = [[NSLocale currentLocale] objectForKey:
-				NSLocaleLanguageCode] ?: @"en";
-	[self request:@{@"@type"   : @"translateMessageText",
-					@"chat_id" : @(chatId),
-					@"message_id" : @(messageId),
-					@"to_language_code" : languageCode,
-					@"tone" : @""}
-	   completion:^(NSDictionary *result){
-		if (!completion)
-			return;
-		if (![result[@"@type"] isEqualToString:@"formattedText"]){
-			completion(@"");
-			return;
-		}
-		completion(result[@"text"]);
-	}];
+	[[TGMessageStore shared] translateMessage:messageId inChat:chatId toCode:languageCode completion:completion];
 }
 
 #pragma mark - effects, import, prepared messages
 
 - (void)messageEffectWithId:(int64_t)effectId
 				 completion:(void (^)(NSDictionary *effect))completion {
-	[self request:@{@"@type" : @"getMessageEffect", @"effect_id" : @(effectId)}
-	   completion:^(NSDictionary *result){
-		if (!completion)
-			return;
-		if (![result[@"@type"] isEqualToString:@"messageEffect"]){
-			completion(nil);
-			return;
-		}
-		completion(@{
-			@"emoji"   : result[@"emoji"] ?: @"",
-			@"premium" : result[@"is_premium"] ?: @NO,
-			@"kind"    : result[@"type"][@"@type"] ?: @"",
-		});
-	}];
+	[[TGMessageStore shared] messageEffectWithId:effectId completion:completion];
 }
 
 - (void)messageFileTypeForHead:(NSString *)head
