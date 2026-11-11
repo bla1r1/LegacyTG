@@ -593,7 +593,6 @@ static const NSTimeInterval kRecordHintSeconds = 1.6;
 	[self.streamStore appendNewerMessages:@[row]];
 	self.rawMessages = [self.streamStore messages];
 	self.messages = [self groupedMessagesFromMessages:self.rawMessages];
-	self.atChatEnd = YES;
 	[self.table reloadData];
 	[self scrollToBottomAnimated:YES];
 

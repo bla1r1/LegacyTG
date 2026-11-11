@@ -249,7 +249,6 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 		self.messages = [self groupedMessagesFromMessages:self.rawMessages];
 		double buildStart = TGPerfNow();
 		TGPerfReport("chat dev", "grouping", buildStart, 50.0);
-		self.atChatEnd = YES;
 		self.anchorToBottom = NO;
 
 		NSString *tgsPath = [TGDevShowcase devStickerPath];
@@ -287,7 +286,6 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 		[[TGSendStore shared] adoptMessages:messages inChat:me.chatId];
 		me.rawMessages = [me.streamStore messages];
 		me.messages = [me groupedMessagesFromMessages:me.rawMessages];
-		me.atChatEnd = YES;
 		NSInteger unreadRow = firstLoad ? [me unreadSeparatorRow] : NSNotFound;
 		// hold the bottom until the media has settled - unless the chat opens
 		// at what you have not read yet
@@ -892,8 +890,6 @@ static NSMutableDictionary *TGChatProfileMemo(void) {
 		[me.streamStore resetWithMessages:messages];
 		me.rawMessages = [me.streamStore messages];
 		me.messages = [me groupedMessagesFromMessages:me.rawMessages];
-		me.atChatEnd = NO;
-		me.atChatStart = NO;
 		[me.table reloadData];
 		if (![me scrollToMessageId:messageId])
 			[TGSnackbar showInView:me.view text:gone seconds:2 onCommit:nil];
@@ -1076,8 +1072,6 @@ static NSMutableDictionary *TGChatProfileMemo(void) {
 			[me.streamStore resetWithMessages:messages];
 			me.rawMessages = [me.streamStore messages];
 			me.messages = [me groupedMessagesFromMessages:me.rawMessages];
-			me.atChatEnd = NO;
-			me.atChatStart = NO;
 			[me.table reloadData];
 			if ([me scrollToMessageId:replyId])
 				return;
