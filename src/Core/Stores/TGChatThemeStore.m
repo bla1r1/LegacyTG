@@ -12,6 +12,7 @@
 #import "TGDownloadPriority.h"
 #import "TGPatternImage.h"
 #import "TGStylePalette.h"
+#import "TGDownloadStore.h"
 
 
 NSString *const TGChatThemeStoreChangedNotification = @"TGChatThemeStoreChanged";
@@ -442,7 +443,7 @@ static NSNumber *TGStoreFileIdFromDocument(NSDictionary *document) {
 		return nil;
 	[_requestedPatterns addObject:fileId];
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] downloadFile:fileId.integerValue
+	[[TGDownloadStore shared] downloadFile:fileId.integerValue
 			priority:TGDownloadPriorityOnScreen
 			completion:^(NSString *path){
 		TGChatThemeStore *me = weakSelf;

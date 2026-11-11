@@ -14,6 +14,7 @@
 #import "TGDownloadPriority.h"
 #import <math.h>
 #import <TargetConditionals.h>
+#import "TGDownloadStore.h"
 
 NSString *const TGPeerStoreChangedNotification = @"TGPeerStoreChangedNotification";
 
@@ -539,7 +540,7 @@ static void (^TGPeerStoreAvatarLoader)(NSInteger fileId,
 		TGPeerStoreAvatarLoader(fileId.integerValue, done);
 		return;
 	}
-	[[TGClient shared] downloadFile:fileId.integerValue
+	[[TGDownloadStore shared] downloadFile:fileId.integerValue
 						   priority:TGDownloadPriorityAvatar
 						 completion:done];
 }

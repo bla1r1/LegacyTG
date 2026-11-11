@@ -169,45 +169,6 @@
 ///
 /// `scale` is left at 1 deliberately. A retina plate is four times the bytes
 /// for a card 220 points wide on a screen that has 320 of them.
-- (void)mapThumbnailForLatitude:(double)latitude
-					  longitude:(double)longitude
-						  width:(NSInteger)width
-						 height:(NSInteger)height
-						 inChat:(int64_t)chatId
-					 completion:(void (^)(NSString *path))completion {
-	// Their own bounds; a request outside them is refused rather than clamped.
-	NSInteger wanted = MAX(16, MIN(1024, width));
-	NSInteger tall   = MAX(16, MIN(1024, height));
-
-	__weak typeof(self) weakSelf = self;
-	[self request:@{
-		@"@type"    : @"getMapThumbnailFile",
-		@"location" : @{@"@type"     : @"location",
-						@"latitude"  : @(latitude),
-						@"longitude" : @(longitude)},
-		@"zoom"     : @(16),
-		@"width"    : @(wanted),
-		@"height"   : @(tall),
-		@"scale"    : @(1),
-		@"chat_id"  : @(chatId),
-	} completion:^(NSDictionary *result){
-		TGClient *me = weakSelf;
-		NSNumber *fileId = result[@"id"];
-		if (!me || ![fileId isKindOfClass:NSNumber.class]){
-			if (completion) completion(nil);
-			return;
-		}
-		// The answer is a file record, not the picture: it still has to come
-		// down, and a thumbnail already in the cache answers at once.
-		NSString *local = result[@"local"][@"path"];
-		if ([result[@"local"][@"is_downloading_completed"] boolValue] && local.length){
-			if (completion) completion(local);
-			return;
-		}
-		[me downloadFile:fileId.integerValue completion:completion];
-	}];
-}
-
 /// What Telegram makes of a link: the site, a title, a description and the
 /// picture, which is the card their clients draw under a message. Answers nil
 /// when the link has no preview, which is most links.

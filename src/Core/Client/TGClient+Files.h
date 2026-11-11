@@ -10,9 +10,7 @@
 /// How eagerly TDLib downloads: see the priorities in TGDownloadPriority.h.
 /// A file asked again at a higher rank than its standing request re-raises it
 /// on the wire, so an avatar can overtake a photo grid that started earlier.
-- (void)downloadFile:(NSInteger)fileId completion:(void (^)(NSString *path))completion;
 
-- (void)downloadFile:(NSInteger)fileId priority:(NSInteger)priority completion:(void (^)(NSString *path))completion;
 
 /// Bytes over the wire since TDLib last reset its counters.
 /// Whether media downloads itself, per network. TDLib cannot read the setting

@@ -8,20 +8,14 @@
 // Telegram keeps of everything this account has pulled down.
 //
 #import "TGClientInternal.h"
+#import "TGDownloadStore.h"
 
 @implementation TGSettingsStore (Downloads)
 
 /// Stops a download. `onlyIfPending` leaves one that has already started
 /// alone, which is what a list sweep wants; a user's Cancel does not.
 - (void)cancelDownloadOfFile:(NSInteger)fileId onlyIfPending:(BOOL)onlyIfPending {
-	[[TGClient shared] send:@{
-		@"@type"           : @"cancelDownloadFile",
-		@"file_id"         : @(fileId),
-		@"only_if_pending" : @(onlyIfPending),
-	}];
-	// The waiter records in +Files outlive the request otherwise, and every
-	// caller of downloadFile: would sit there until the watchdog fired.
-	[[TGClient shared] releaseFileWaiters:fileId];
+	[[TGDownloadStore shared] cancelDownloadOfFile:fileId onlyIfPending:onlyIfPending];
 }
 
 /// Deletes the local copy. The file stays on Telegram and can be fetched

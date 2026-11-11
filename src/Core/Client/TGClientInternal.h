@@ -207,17 +207,9 @@ NSArray *TGMediaPageAppending(NSArray *existing, NSArray *more);
 - (void)flushPendingPhoneNumber;
 // The download waiter table lives in C++ behind its own mutex (see
 // TGClient+Files.mm); these are the only ways in.
-- (void)notifyFileWaiters:(NSInteger)fileId path:(NSString *)path;
-- (void)expireFileWaiters:(NSInteger)fileId;
-- (void)sweepFileWaiters:(NSInteger)fileId;
-- (void)releaseFileWaiters:(NSInteger)fileId;
-- (void)removeAllFileWaiters;
 /// The preliminary-upload/generation records keyed by original path. Cleared
 /// on an account switch: the file ids they track belong to the old client.
 - (void)removeAllPendingGenerations;
-- (NSUInteger)fileWaiterCount:(NSInteger)fileId;
-- (BOOL)hasFileWaiterRecord:(NSInteger)fileId;
-- (NSInteger)fileWaiterPriority:(NSInteger)fileId;
 /// A TDLib generation request. The file-generation flow lives in +Files,
 /// because the reply is sent with writeGeneratedFilePart and the pending
 /// request is the record it finishes.
@@ -230,6 +222,8 @@ NSArray *TGMediaPageAppending(NSArray *existing, NSArray *more);
 // The download watchdog timeout, 45 s in production; the host tests shrink
 // it so the timer fires inside a test runtime.
 extern double TGFileWaiterTimeoutSeconds;
+FOUNDATION_EXPORT NSString *const TGFileDownloadedNotification;
+FOUNDATION_EXPORT NSString *const TGCallUpdateNotification;
 - (void)cacheProfilePhoto:(NSDictionary *)user;
 - (void)mergeChat:(NSDictionary *)chat;
 - (void)applyChatUpdate:(NSDictionary *)update;
@@ -255,19 +249,6 @@ extern double TGFileWaiterTimeoutSeconds;
 - (void)applyTextCompositionStylesUpdate:(NSDictionary *)update;
 /// updateStakeDiceState carries the state a roll must quote.
 - (void)applyStakeDiceStateUpdate:(NSDictionary *)update;
-/// Group call updates: the call record, one participant, a batch of ids, a
-/// new message, a deletion, and a send failure. Kept in TGClient+GroupCalls
-/// beside the flattening the call screens read.
-- (void)applyGroupCallUpdate:(NSDictionary *)update;
-/// Drops every group call, participant and message the client cached. Called
-/// on an account switch so the next account's call screens do not read the
-/// previous account's call ids and senders.
-- (void)resetGroupCallState;
-- (void)applyGroupCallParticipantUpdate:(NSDictionary *)update;
-- (void)applyGroupCallParticipantsUpdate:(NSDictionary *)update;
-- (void)applyNewGroupCallMessage:(NSDictionary *)update;
-- (void)applyGroupCallMessagesDeleted:(NSDictionary *)update;
-- (void)applyGroupCallMessageSendFailed:(NSDictionary *)update;
 /// The communities, quick replies and suggested actions have no list request.
 /// The Communities, QuickReplies and SuggestedPosts categories own the
 /// caches these fill.

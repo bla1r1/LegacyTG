@@ -206,7 +206,6 @@ CLIENT_OBJC_SRCS := \
     src/Core/Stores/TGGroupStore+Community.m \
     src/Core/Stores/TGGroupStore+Tools.m \
     src/Core/Stores/TGGroupStore+Invites.m \
-    src/Core/Client/TGClient+GroupCalls.m \
     src/Core/Client/TGClient+Usernames.m \
     src/Core/Client/TGClient+Payments.m \
     src/Core/Client/TGClient+Calls.m \
@@ -255,7 +254,6 @@ CLIENT_OBJC_SRCS := \
     src/Core/Client/Audit/TGClient+Discovery.m \
     src/Core/Client/Audit/TGClient+Stars.m \
     src/Core/Client/Audit/TGClient+Gifts.m \
-    src/Core/Client/TGClient+Downloads.m \
     src/Core/Client/TGClient+Secret.m \
     src/Core/Client/Account/TGClient+AccountContacts.m \
     src/Core/Client/Account/TGClient+AccountPeople.m \
@@ -286,6 +284,7 @@ CLIENT_OBJC_SRCS := \
     src/Core/Stores/TGPeerStore.m \
     src/Core/Stores/TGChatListStore.m \
     src/Core/Stores/TGMediaStore.m \
+    src/Core/Stores/TGDownloadStore.mm \
     src/Core/Stores/TGProfileStore.m \
     src/Core/Stores/TGProfileStore+Profile.m \
     src/Core/Stores/TGProfileStore+EmojiStatus.m \

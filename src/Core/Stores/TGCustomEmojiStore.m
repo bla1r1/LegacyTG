@@ -9,6 +9,7 @@
 #if TARGET_OS_IPHONE
 #import "TGIcons.h"
 #import "UIImage+WebP.h"
+#import "TGDownloadStore.h"
 #endif
 
 NSString *const TGCustomEmojiLoadedNotification = @"TGCustomEmojiLoadedNotification";
@@ -257,7 +258,7 @@ static NSString *TGPictureKey(int64_t emojiId, CGFloat side) {
 		}
 
 		__weak typeof(self) weakSelf = self;
-		[[TGClient shared] downloadFile:thumb.integerValue
+		[[TGDownloadStore shared] downloadFile:thumb.integerValue
 							   priority:TGDownloadPriorityOnScreen
 							 completion:^(NSString *path){
 			dispatch_async(dispatch_get_main_queue(), ^{

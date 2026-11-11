@@ -7,6 +7,7 @@
 #import "TGMessageStore.h"
 #import "TGLocalization.h"
 #import "TGImageLruCache.h"
+#import "TGDownloadStore.h"
 
 NSString *const TGChatListStoreChangedNotification = @"TGChatListStoreChangedNotification";
 NSString *const TGChatListPreviewImageLoadedNotification = @"TGChatListPreviewImageLoadedNotification";
@@ -282,7 +283,7 @@ NSString *const TGChatListPreviewImageLoadedNotification = @"TGChatListPreviewIm
 		return;
 	[_previewRequests addObject:fileId];
 	__weak __typeof__(self) weakSelf = self;
-	[[TGClient shared] downloadFile:fileId.integerValue completion:^(NSString *path){
+	[[TGDownloadStore shared] downloadFile:fileId.integerValue completion:^(NSString *path){
 		dispatch_async(dispatch_get_main_queue(), ^{
 			TGChatListStore *me = weakSelf;
 			if (!me)

@@ -398,7 +398,6 @@
 	- (void)linkPreviewForText:(NSString *)text completion:(void (^)(NSDictionary *preview))completion;
 	- (void)internalLinkKind:(NSString *)link completion:(void (^)(NSString *kind, NSString *value))completion;
 	- (void)markdownOfMessage:(int64_t)messageId inChat:(int64_t)chatId completion:(void (^)(NSString *markdown))completion;
-	- (void)mapThumbnailForLatitude:(double)latitude longitude:(double)longitude width:(NSInteger)width height:(NSInteger)height inChat:(int64_t)chatId completion:(void (^)(NSString *path))completion;
 	- (void)reportSpamMessages:(NSArray *)messageIds inChat:(int64_t)chatId completion:(void (^)(BOOL ok))completion;
 	- (void)blockSenderOfMessage:(int64_t)messageId deleteMessages:(BOOL)deleteMessages reportSpam:(BOOL)reportSpam;
 	- (void)stopPoll:(int64_t)messageId inChat:(int64_t)chatId;

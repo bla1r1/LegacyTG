@@ -2,11 +2,14 @@
 // TGMediaStore - forwards the media display's four questions to the client.
 //
 #import "TGMediaStore.h"
+#import "TGDownloadStore.h"
 #import "TGClient.h"
 #import "TGMessageStore.h"
 #import "TGProfileStore.h"
 #import "TGClientInternal.h"
 #import "TGMediaSupport.h"
+
+
 
 @implementation TGMediaStore {
 	NSCache *_buffers;
@@ -32,14 +35,6 @@
 	return [[TGProfileStore shared] photoFileIdForUserId:userId];
 }
 
-- (void)downloadFile:(NSInteger)fileId completion:(void (^)(NSString *path))completion {
-	[[TGClient shared] downloadFile:fileId completion:completion];
-}
-
-- (void)downloadFile:(NSInteger)fileId priority:(NSInteger)priority
-          completion:(void (^)(NSString *path))completion {
-	[[TGClient shared] downloadFile:fileId priority:priority completion:completion];
-}
 
 - (void)fileInfo:(NSInteger)fileId completion:(void (^)(NSDictionary *))completion {
 if (fileId <= 0){
@@ -145,13 +140,7 @@ NSString *value = name ?: @"";
 	}];
 }
 - (void)cancelDownloadOfFile:(NSInteger)fileId onlyIfPending:(BOOL)onlyIfPending {
-[[TGClient shared] send:@{
-		@"@type"           : @"cancelDownloadFile",
-		@"file_id"         : @(fileId),
-		@"only_if_pending" : @(onlyIfPending),
-	}];
-
-	[[TGClient shared] releaseFileWaiters:fileId];
+	[[TGDownloadStore shared] cancelDownloadOfFile:fileId onlyIfPending:onlyIfPending];
 }
 - (NSData *)cachedBufferForFileId:(NSInteger)fileId {
 	return [_buffers objectForKey:@(fileId)];
@@ -159,6 +148,16 @@ NSString *value = name ?: @"";
 - (void)cacheBuffer:(NSData *)data forFileId:(NSInteger)fileId {
 	if (data)
 		[_buffers setObject:data forKey:@(fileId) cost:data.length];
+}
+
+
+- (void)downloadFile:(NSInteger)fileId completion:(void (^)(NSString *path))completion {
+	[[TGDownloadStore shared] downloadFile:fileId completion:completion];
+}
+
+- (void)downloadFile:(NSInteger)fileId priority:(NSInteger)priority
+          completion:(void (^)(NSString *path))completion {
+	[[TGDownloadStore shared] downloadFile:fileId priority:priority completion:completion];
 }
 
 @end

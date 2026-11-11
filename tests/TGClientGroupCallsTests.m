@@ -11,6 +11,7 @@
 #import "TGBase64.h"
 #import "TGCallStore.h"
 #import "TGStoreTestSupport.h"
+#import "TGDownloadStore.h"
 
 @interface TGClientGroupCallsTests : XCTestCase @end
 
@@ -18,7 +19,7 @@ static TGClient *GCClient(void) {
 	TGClient *c = TGClient.shared;
 	[c.outbox removeAllObjects];
 	[c.pendingRequests removeAllObjects];
-	[c removeAllFileWaiters];
+	[[TGDownloadStore shared] removeAllFileWaiters];
 	c.me = @{@"id" : @(1001), @"first_name" : @"Legacy"};
 	c.chats = @[];
 	c.chatsById = [NSMutableDictionary dictionary];
@@ -608,7 +609,7 @@ static NSDictionary *GCCallAnswer(long long callId) {
 - (void)testUpdateGroupCall_ReplacesTheSnapshot {
 	TGClient *c = GCClient();
 	[c handleUpdate:@{@"@type" : @"updateGroupCall", @"group_call" : GCCallAnswer(77)}];
-	XCTAssertEqualObjects([c groupCallSnapshot:77][@"title"], @"Standup");
+	XCTAssertEqualObjects([[TGCallStore shared] groupCallSnapshot:77][@"title"], @"Standup");
 }
 
 - (void)testUpdateParticipant_AddsSortsAndRemoves {
@@ -617,7 +618,7 @@ static NSDictionary *GCCallAnswer(long long callId) {
 					  @"participant" : GCParticipantAnswer(12, YES, @"2")}];
 	[c handleUpdate:@{@"@type" : @"updateGroupCallParticipant", @"group_call_id" : @(310),
 					  @"participant" : GCParticipantAnswer(13, NO, @"5")}];
-	NSArray *rows = [c groupCallParticipantSnapshot:310];
+	NSArray *rows = [[TGCallStore shared] groupCallParticipantSnapshot:310];
 	XCTAssertEqual(rows.count, (NSUInteger)2);
 	// Order 5 is higher than 2, so user 13 leads.
 	XCTAssertEqualObjects(rows[0][@"userId"], @(13));
@@ -625,14 +626,14 @@ static NSDictionary *GCCallAnswer(long long callId) {
 
 	[c handleUpdate:@{@"@type" : @"updateGroupCallParticipant", @"group_call_id" : @(310),
 					  @"participant" : GCParticipantAnswer(12, NO, @"")}];
-	XCTAssertEqual([c groupCallParticipantSnapshot:310].count, (NSUInteger)1);
+	XCTAssertEqual([[TGCallStore shared] groupCallParticipantSnapshot:310].count, (NSUInteger)1);
 }
 
 - (void)testCurrentParticipant_IsTheOneWithIsCurrentUser {
 	TGClient *c = GCClient();
 	[c handleUpdate:@{@"@type" : @"updateGroupCallParticipant", @"group_call_id" : @(311),
 					  @"participant" : GCParticipantAnswer(1001, NO, @"1")}];
-	XCTAssertEqualObjects([c currentGroupCallParticipant:311][@"userId"], @(1001));
+	XCTAssertEqualObjects([[TGCallStore shared] currentGroupCallParticipant:311][@"userId"], @(1001));
 }
 
 - (void)testNewAndDeletedCallMessages_MoveTheSnapshot {
@@ -647,12 +648,12 @@ static NSDictionary *GCCallAnswer(long long callId) {
 									 @"paid_message_star_count" : @(0),
 									 @"is_from_owner" : @NO,
 									 @"can_be_deleted" : @YES}}];
-	XCTAssertEqual([c groupCallMessageSnapshot:312].count, (NSUInteger)1);
-	XCTAssertEqualObjects([c groupCallMessageSnapshot:312][0][@"text"], @"hi");
+	XCTAssertEqual([[TGCallStore shared] groupCallMessageSnapshot:312].count, (NSUInteger)1);
+	XCTAssertEqualObjects([[TGCallStore shared] groupCallMessageSnapshot:312][0][@"text"], @"hi");
 
 	[c handleUpdate:@{@"@type" : @"updateGroupCallMessagesDeleted",
 					  @"group_call_id" : @(312), @"message_ids" : @[@5]}];
-	XCTAssertEqual([c groupCallMessageSnapshot:312].count, (NSUInteger)0);
+	XCTAssertEqual([[TGCallStore shared] groupCallMessageSnapshot:312].count, (NSUInteger)0);
 }
 
 @end

@@ -31,12 +31,6 @@
 /// Telegram's own static map of a place, as a PNG, answered as a local path
 /// once it is down - or nil, which on this device is ordinary. The drawn card
 /// is what a caller falls back to.
-- (void)mapThumbnailForLatitude:(double)latitude
-					  longitude:(double)longitude
-						  width:(NSInteger)width
-						 height:(NSInteger)height
-						 inChat:(int64_t)chatId
-					 completion:(void (^)(NSString *path))completion;
 
 /// Reports messages in a supergroup as spam. Reads the chat first: the
 /// request wants the supergroup's own id, which a chat id is not.
