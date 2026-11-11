@@ -1,4 +1,6 @@
 #import "TGAccountStore.h"
+#import "TGCallStore.h"
+#import "TGDownloadStore.h"
 //
 // TGClient+Accounts.m
 //
@@ -252,7 +254,7 @@ NSString *TGAccountStoreDefaultsKey(NSString *base) {
 	[TGClient shared].connectionState = TGConnectionStateUnknown;
 	[[TGTransport shared] reset];
 	[[TGClient shared].updateCoalescer reset];
-	[[TGClient shared] removeAllFileWaiters];
+	[[TGDownloadStore shared] removeAllFileWaiters];
 
 	// Server options (updateOption) are account-scoped too; the next account
 	// re-fetches them and a stale value would otherwise be read as its own.
@@ -260,7 +262,7 @@ NSString *TGAccountStoreDefaultsKey(NSString *base) {
 
 	// The stores and players that hold this account's ids are the app's to
 	// reset, on TGAccountDidSwitchNotification.
-	[[TGClient shared] resetGroupCallState];
+	[[TGCallStore shared] resetGroupCallState];
 	[[TGClient shared] removeAllPendingGenerations];
 }
 

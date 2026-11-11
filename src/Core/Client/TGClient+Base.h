@@ -121,8 +121,6 @@
 
 #pragma mark - stickers, searching rather than browsing (TGClient+Stickers)
 
-#pragma mark - downloads (TGClient+Downloads)
-
 #pragma mark - secret chats (TGClient+Secret)
 
 #pragma mark - groups and invite links (TGClient+Groups)

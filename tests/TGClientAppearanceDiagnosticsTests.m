@@ -13,6 +13,7 @@
 #import "TGBase64.h"
 #import "TGStoreTestSupport.h"
 #import "TGSettingsStore.h"
+#import "TGDownloadStore.h"
 
 @interface TGClientAppearanceDiagnosticsTests : XCTestCase @end
 
@@ -20,7 +21,7 @@ static TGClient *ADClient(void) {
 	TGClient *c = TGClient.shared;
 	[c.outbox removeAllObjects];
 	[c.pendingRequests removeAllObjects];
-	[c removeAllFileWaiters];
+	[[TGDownloadStore shared] removeAllFileWaiters];
 	[TGDatabaseKey storeKey:nil error:nil];
 	c.me = @{@"id" : @(1001)};
 	return c;

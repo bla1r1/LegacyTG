@@ -5,6 +5,7 @@
 #import "TGClient.h"
 #import "TGDownloadPriority.h"
 #import "TGPatternImage.h"
+#import "TGDownloadStore.h"
 
 NSString *const TGBackgroundStoreChangedNotification =
 		@"TGBackgroundStoreChanged";
@@ -159,7 +160,7 @@ static NSNumber *TGBackgroundStorePatternFileId(NSDictionary *background) {
 			completion(nil);
 		return;
 	}
-	[[TGClient shared] downloadFile:fileId.integerValue
+	[[TGDownloadStore shared] downloadFile:fileId.integerValue
 			priority:TGDownloadPriorityOnScreen
 			completion:^(NSString *path){
 		UIImage *image = path.length
@@ -191,7 +192,7 @@ static NSNumber *TGBackgroundStorePatternFileId(NSDictionary *background) {
 		if (![_requested containsObject:fileId]){
 			[_requested addObject:fileId];
 			__weak typeof(self) weakSelf = self;
-			[[TGClient shared] downloadFile:fileId.integerValue
+			[[TGDownloadStore shared] downloadFile:fileId.integerValue
 					priority:TGDownloadPriorityOnScreen
 					completion:^(NSString *path){
 				TGBackgroundStore *me = weakSelf;

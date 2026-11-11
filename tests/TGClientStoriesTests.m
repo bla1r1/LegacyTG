@@ -10,6 +10,7 @@
 #import "TGClientInternal.h"
 #import "TGStoreTestSupport.h"
 #import "TGStoryStore.h"
+#import "TGDownloadStore.h"
 
 @interface TGClientStoriesTests : XCTestCase @end
 
@@ -17,7 +18,7 @@ static TGClient *StoriesClient(void) {
 	TGClient *c = TGClient.shared;
 	[c.outbox removeAllObjects];
 	[c.pendingRequests removeAllObjects];
-	[c removeAllFileWaiters];
+	[[TGDownloadStore shared] removeAllFileWaiters];
 	c.me = @{@"id" : @(1001)};
 	c.chats = @[];
 	return c;

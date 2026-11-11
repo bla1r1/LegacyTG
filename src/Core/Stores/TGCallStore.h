@@ -18,6 +18,7 @@ extern NSString *const TGGroupCallChangedNotification;
 extern NSString *const TGGroupCallParticipantsChangedNotification;
 extern NSString *const TGGroupCallMessagesChangedNotification;
 extern NSString *const TGGroupCallIdKey;
+extern NSString *const TGGroupCallValueKey;
 extern NSString *const TGGroupCallErrorKey;
 
 @interface TGCallStore : NSObject

@@ -15,6 +15,7 @@
 #import "TGGroupStore.h"
 #import "TGProfileStore.h"
 #import "TGSettingsStore.h"
+#import "TGDownloadStore.h"
 
 @interface TGClientUsernamesTests : XCTestCase @end
 
@@ -22,7 +23,7 @@ static TGClient *UsernamesClient(void) {
 	TGClient *c = TGClient.shared;
 	[c.outbox removeAllObjects];
 	[c.pendingRequests removeAllObjects];
-	[c removeAllFileWaiters];
+	[[TGDownloadStore shared] removeAllFileWaiters];
 	c.me = @{@"id" : @(1001)};
 	return c;
 }

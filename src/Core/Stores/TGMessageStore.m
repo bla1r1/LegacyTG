@@ -9,6 +9,7 @@
 #import "TGClient.h"
 #import "TGClientInternal.h"
 #import "TGUpdateRouter.h"
+#import "TGDownloadStore.h"
 
 NSString *const TGMessageStoreChangedNotification = @"TGMessageStoreChangedNotification";
 
@@ -150,7 +151,7 @@ NSString *const TGMessageStoreChangedNotification = @"TGMessageStoreChangedNotif
 }
 
 - (void)cancelDownloadOfFile:(NSInteger)fileId onlyIfPending:(BOOL)onlyIfPending {
-	[[TGClient shared] cancelDownloadOfFile:fileId onlyIfPending:onlyIfPending];
+	[[TGDownloadStore shared] cancelDownloadOfFile:fileId onlyIfPending:onlyIfPending];
 }
 
 
@@ -390,11 +391,11 @@ NSString *const TGMessageStoreChangedNotification = @"TGMessageStoreChangedNotif
 }
 
 - (void)downloadFile:(NSInteger)fileId completion:(void (^)(NSString *path))completion {
-	[[TGClient shared] downloadFile:fileId completion:completion];
+	[[TGDownloadStore shared] downloadFile:fileId completion:completion];
 }
 
 - (void)downloadFile:(NSInteger)fileId priority:(NSInteger)priority completion:(void (^)(NSString *path))completion {
-	[[TGClient shared] downloadFile:fileId priority:priority completion:completion];
+	[[TGDownloadStore shared] downloadFile:fileId priority:priority completion:completion];
 }
 
 - (NSString *)draftForChat:(int64_t)chatId {
@@ -635,7 +636,31 @@ NSString *const TGMessageStoreChangedNotification = @"TGMessageStoreChangedNotif
 }
 
 - (void)mapThumbnailForLatitude:(double)latitude longitude:(double)longitude width:(NSInteger)width height:(NSInteger)height inChat:(int64_t)chatId completion:(void (^)(NSString *path))completion {
-	[[TGClient shared] mapThumbnailForLatitude:latitude longitude:longitude width:width height:height inChat:chatId completion:completion];
+	NSInteger wanted = MAX(16, MIN(1024, width));
+	NSInteger tall   = MAX(16, MIN(1024, height));
+	[[TGClient shared] request:@{
+		@"@type"    : @"getMapThumbnailFile",
+		@"location" : @{@"@type"     : @"location",
+						@"latitude"  : @(latitude),
+						@"longitude" : @(longitude)},
+		@"zoom"     : @(16),
+		@"width"    : @(wanted),
+		@"height"   : @(tall),
+		@"scale"    : @(1),
+		@"chat_id"  : @(chatId),
+	} completion:^(NSDictionary *result){
+		NSNumber *fileId = result[@"id"];
+		if (![fileId isKindOfClass:NSNumber.class]){
+			if (completion) completion(nil);
+			return;
+		}
+		NSString *local = result[@"local"][@"path"];
+		if ([result[@"local"][@"is_downloading_completed"] boolValue] && local.length){
+			if (completion) completion(local);
+			return;
+		}
+		[[TGDownloadStore shared] downloadFile:fileId.integerValue completion:completion];
+	}];
 }
 
 - (void)markChecklistTask:(int64_t)taskId done:(BOOL)done inMessage:(int64_t)messageId chat:(int64_t)chatId {

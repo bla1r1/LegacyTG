@@ -319,7 +319,6 @@ APP_SRC_M := \
 	src/Core/Client/TGClient+TestHarness.m \
 	src/Core/Client/TGClient+Proxy.m \
 	src/Core/Client/TGClient+Groups.m \
-	src/Core/Client/TGClient+GroupCalls.m \
 	src/Core/Client/TGClient+Usernames.m \
 	src/Core/Client/TGClient+Payments.m \
 	src/Core/Client/TGClient+Calls.m \
@@ -359,7 +358,6 @@ APP_SRC_M := \
 	src/Core/Client/Audit/TGClient+Stars.m \
 	src/Core/Client/Audit/TGClient+Gifts.m \
 	src/Core/Client/TGClient+ChatTools.m \
-	src/Core/Client/TGClient+Downloads.m \
 	src/Core/Client/TGClient+Secret.m \
 	src/Core/Client/TGClient+Stickers.m \
 	src/Core/Client/TGClient+Updates.m \
@@ -743,6 +741,7 @@ APP_SRC_MM := \
 	src/CallEngine/Media/TGCallVideoEngine.mm \
 	src/CallEngine/TGCall.mm \
 	src/Core/Stores/TGImageLruCache.mm \
+	src/Core/Stores/TGDownloadStore.mm \
 	src/Core/Client/Chats/TGClient+ChatsSupport.mm \
 	src/Core/Client/Chats/TGClient+Chats.mm \
 	src/Core/Client/Chats/TGClient+ChatMembers.mm \

@@ -8,6 +8,7 @@
 #import <MediaPlayer/MediaPlayer.h>
 #import <UIKit/UIKit.h>
 #import "TGStarsStore.h"
+#import "TGDownloadStore.h"
 
 NSString *const TGMusicPlayerChangedNotification = @"TGMusicPlayerChanged";
 
@@ -96,7 +97,7 @@ NSString *const TGMusicPlayerChangedNotification = @"TGMusicPlayerChanged";
 	}
 
 	if (self.pendingFileId && self.pendingFileId != docId.integerValue)
-		[[TGClient shared] cancelDownloadOfFile:self.pendingFileId onlyIfPending:NO];
+		[[TGDownloadStore shared] cancelDownloadOfFile:self.pendingFileId onlyIfPending:NO];
 	self.pendingFileId = docId.integerValue;
 
 	__weak typeof(self) weakSelf = self;
@@ -108,7 +109,7 @@ NSString *const TGMusicPlayerChangedNotification = @"TGMusicPlayerChanged";
 	[self startStreamingFileId:docId.integerValue];
 
 	CFAbsoluteTime asked = CFAbsoluteTimeGetCurrent();
-	[[TGClient shared] downloadFile:docId.integerValue priority:TGDownloadPriorityOnScreen
+	[[TGDownloadStore shared] downloadFile:docId.integerValue priority:TGDownloadPriorityOnScreen
 						 completion:^(NSString *path){
 		TGMusicPlayer *me = weakSelf;
 		// The user may have skipped on while this was downloading.
@@ -265,7 +266,7 @@ NSString *const TGMusicPlayerChangedNotification = @"TGMusicPlayerChanged";
 	NSNumber *following = TGTrackToPrefetch(self.tracks, self.index, self.shuffle,
 			self.repeatMode == TGMusicRepeatAll);
 	if (following)
-		[[TGClient shared] downloadFile:following.integerValue
+		[[TGDownloadStore shared] downloadFile:following.integerValue
 							   priority:TGDownloadPriorityBackground
 							 completion:^(NSString *ignored){}];
 }
@@ -464,7 +465,7 @@ NSString *const TGMusicPlayerChangedNotification = @"TGMusicPlayerChanged";
 	if ([coverId isKindOfClass:NSNumber.class]){
 		__weak typeof(self) weakSelf = self;
 		int64_t forMessage = self.currentMessageId;
-		[[TGClient shared] downloadFile:coverId.integerValue completion:^(NSString *path){
+		[[TGDownloadStore shared] downloadFile:coverId.integerValue completion:^(NSString *path){
 			TGMusicPlayer *me = weakSelf;
 			if (!me || me.currentMessageId != forMessage || !path.length)
 				return;

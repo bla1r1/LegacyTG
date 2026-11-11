@@ -5,6 +5,8 @@
 #import "TGUpdateHandlersSupport.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
+
+NSString *const TGCallUpdateNotification = @"TGCallUpdateNotification";
 #import "TGState.h"
 #import "TGTransport.h"
 #import "TGUpdateRouter.h"
@@ -45,7 +47,10 @@
 		BOOL done = [local[@"is_downloading_completed"] boolValue];
 		NSString *path = local[@"path"];
 		if (done && path.length){
-			[self.client notifyFileWaiters:fid path:path];
+			[[NSNotificationCenter defaultCenter]
+					postNotificationName:TGFileDownloadedNotification
+								  object:self
+								userInfo:@{@"fileId" : @(fid), @"path" : path}];
 		}
 		return YES;
 	}
@@ -187,22 +192,34 @@
 		return YES;
 	}
 	case TGUpdateGroupCall:
-		[self.client applyGroupCallUpdate:obj];
+		[[NSNotificationCenter defaultCenter]
+			postNotificationName:TGCallUpdateNotification object:self
+						  userInfo:@{@"update" : obj}];
 		return YES;
 	case TGUpdateGroupCallParticipant:
-		[self.client applyGroupCallParticipantUpdate:obj];
+		[[NSNotificationCenter defaultCenter]
+			postNotificationName:TGCallUpdateNotification object:self
+						  userInfo:@{@"update" : obj}];
 		return YES;
 	case TGUpdateGroupCallParticipants:
-		[self.client applyGroupCallParticipantsUpdate:obj];
+		[[NSNotificationCenter defaultCenter]
+			postNotificationName:TGCallUpdateNotification object:self
+						  userInfo:@{@"update" : obj}];
 		return YES;
 	case TGUpdateNewGroupCallMessage:
-		[self.client applyNewGroupCallMessage:obj];
+		[[NSNotificationCenter defaultCenter]
+			postNotificationName:TGCallUpdateNotification object:self
+						  userInfo:@{@"update" : obj}];
 		return YES;
 	case TGUpdateGroupCallMessagesDeleted:
-		[self.client applyGroupCallMessagesDeleted:obj];
+		[[NSNotificationCenter defaultCenter]
+			postNotificationName:TGCallUpdateNotification object:self
+						  userInfo:@{@"update" : obj}];
 		return YES;
 	case TGUpdateGroupCallMessageSendFailed:
-		[self.client applyGroupCallMessageSendFailed:obj];
+		[[NSNotificationCenter defaultCenter]
+			postNotificationName:TGCallUpdateNotification object:self
+						  userInfo:@{@"update" : obj}];
 		return YES;
 	case TGUpdateDirectMessagesChatTopic:
 		[self.client applyDirectMessagesChatTopic:obj[@"topic"]];

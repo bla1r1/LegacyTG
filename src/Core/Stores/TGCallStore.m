@@ -5,17 +5,6 @@
 #import "TGClient.h"
 #import "TGClientInternal.h"
 
-//
-// TGClient+GroupCalls.m - group calls and video chats on the wire.
-//
-// Every request here names a group call id or the chat a video chat belongs
-// to. TDLib answers a whole groupCall record, an opaque join payload, or
-// bytes; the flattening below turns the record into the keys the two call
-// screens read. Participants arrive as updates, so they are kept per call and
-// handed to the screen through one notification instead of a polling loop.
-//
-#import "TGClient+GroupCalls.h"
-#import "TGClientInternal.h"
 #import "TGBase64.h"
 #import <objc/runtime.h>
 
@@ -1172,7 +1161,7 @@ static NSDictionary *TGGCFlattenMessage(TGClient *client, NSDictionary *message)
 }
 
 - (NSDictionary *)currentGroupCallParticipant:(int32_t)groupCallId {
-	for (NSDictionary *row in [[TGClient shared] groupCallParticipantSnapshot:groupCallId])
+	for (NSDictionary *row in [self groupCallParticipantSnapshot:groupCallId])
 		if ([row[@"isCurrentUser"] boolValue])
 			return row;
 	return nil;
@@ -1197,7 +1186,7 @@ static NSDictionary *TGGCFlattenMessage(TGClient *client, NSDictionary *message)
 	if (!callId || !raw.count)
 		return;
 	NSMutableDictionary *rows = TGGCParticipants(self, callId);
-	NSDictionary *flat = TGGCFlattenParticipant(self, raw);
+	NSDictionary *flat = TGGCFlattenParticipant([TGClient shared], raw);
 	NSString *key = flat[@"senderKey"];
 	BOOL removed = ![(NSString *)flat[@"order"] length];
 	if (removed)
@@ -1248,7 +1237,7 @@ static NSDictionary *TGGCFlattenMessage(TGClient *client, NSDictionary *message)
 	if (!callId || !message.count)
 		return;
 	NSMutableArray *rows = TGGCMessages(self, callId);
-	NSDictionary *flat = TGGCFlattenMessage(self, message);
+	NSDictionary *flat = TGGCFlattenMessage([TGClient shared], message);
 	int32_t messageId = [flat[@"messageId"] intValue];
 	if (!messageId)
 		return;
@@ -1287,6 +1276,32 @@ static NSDictionary *TGGCFlattenMessage(TGClient *client, NSDictionary *message)
 
 // vim:ft=objc
 
+NSDictionary *TGGroupCallJoinParameters(int32_t audioSourceId, NSString *payload,
+		BOOL muted, BOOL videoEnabled) {
+	return @{
+		@"@type" : @"groupCallJoinParameters",
+		@"audio_source_id" : @(audioSourceId),
+		@"payload" : payload ?: @"",
+		@"is_muted" : @(muted),
+		@"is_my_video_enabled" : @(videoEnabled),
+	};
+}
+
+NSDictionary *TGGroupCallInput(int32_t groupCallId, int64_t accessHash) {
+	return @{
+		@"@type" : @"inputGroupCall",
+		@"id" : @(groupCallId),
+		@"access_hash" : @(accessHash),
+	};
+}
+
+NSString *const TGGroupCallChangedNotification = @"TGGroupCallChanged";
+NSString *const TGGroupCallParticipantsChangedNotification = @"TGGroupCallParticipantsChanged";
+NSString *const TGGroupCallMessagesChangedNotification = @"TGGroupCallMessagesChanged";
+NSString *const TGGroupCallIdKey = @"groupCallId";
+NSString *const TGGroupCallValueKey = @"value";
+NSString *const TGGroupCallErrorKey = @"error";
+
 @implementation TGCallStore
 
 + (instancetype)shared {
@@ -1294,6 +1309,30 @@ static NSDictionary *TGGCFlattenMessage(TGClient *client, NSDictionary *message)
 	static dispatch_once_t once;
 	dispatch_once(&once, ^{ store = [[TGCallStore alloc] init]; });
 	return store;
+}
+
++ (void)load {
+	[[NSNotificationCenter defaultCenter] addObserver:[self shared]
+			selector:@selector(callUpdate:) name:TGCallUpdateNotification object:nil];
+}
+
+- (void)callUpdate:(NSNotification *)note {
+	NSDictionary *update = note.userInfo[@"update"];
+	if (![update isKindOfClass:NSDictionary.class])
+		return;
+	NSString *type = update[@"@type"];
+	if ([type isEqualToString:@"updateGroupCall"])
+		[self applyGroupCallUpdate:update];
+	else if ([type isEqualToString:@"updateGroupCallParticipant"])
+		[self applyGroupCallParticipantUpdate:update];
+	else if ([type isEqualToString:@"updateGroupCallParticipants"])
+		[self applyGroupCallParticipantsUpdate:update];
+	else if ([type isEqualToString:@"updateNewGroupCallMessage"])
+		[self applyNewGroupCallMessage:update];
+	else if ([type isEqualToString:@"updateGroupCallMessagesDeleted"])
+		[self applyGroupCallMessagesDeleted:update];
+	else if ([type isEqualToString:@"updateGroupCallMessageSendFailed"])
+		[self applyGroupCallMessageSendFailed:update];
 }
 
 @end

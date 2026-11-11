@@ -5,6 +5,7 @@
 //
 #import "TGStickerStore.h"
 #import "TGClient.h"
+#import "TGDownloadStore.h"
 
 @implementation TGStickerStore
 
@@ -109,12 +110,12 @@
 #pragma mark - files
 
 - (void)downloadFile:(NSInteger)fileId completion:(void (^)(NSString *path))completion {
-	[[TGClient shared] downloadFile:fileId completion:completion];
+	[[TGDownloadStore shared] downloadFile:fileId completion:completion];
 }
 
 - (void)downloadFile:(NSInteger)fileId priority:(NSInteger)priority
           completion:(void (^)(NSString *path))completion {
-	[[TGClient shared] downloadFile:fileId priority:priority completion:completion];
+	[[TGDownloadStore shared] downloadFile:fileId priority:priority completion:completion];
 }
 
 

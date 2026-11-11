@@ -8,12 +8,13 @@
 #import "TGClientInternal.h"
 #import "TGStoreTestSupport.h"
 #import "TGSettingsStore.h"
+#import "TGDownloadStore.h"
 
 static TGClient *F(void) {
 	TGClient *c = TGClient.shared;
 	// Only the waiters and the outbox matter here; the chat tables belong
 	// to the dialogs suite and a wipe here would be their loss.
-	[c removeAllFileWaiters];
+	[[TGDownloadStore shared] removeAllFileWaiters];
 	return c;
 }
 
@@ -45,7 +46,7 @@ static NSDictionary *requestMentioning(TGClient *c, NSString *fragment){
 
 - (void)testDownloadFile_DefaultPriorityIsBackground {
 	TGClient *c = F();
-	[c downloadFile:871 completion:^(NSString *p){ (void)p; }];
+	[[TGDownloadStore shared] downloadFile:871 completion:^(NSString *p){ (void)p; }];
 	NSDictionary *asked = requestMentioning(c, @"\"file_id\":871");
 	XCTAssertNotNil(asked, @"downloadFile must reach the outbox");
 	if (!asked) return;
@@ -55,7 +56,7 @@ static NSDictionary *requestMentioning(TGClient *c, NSString *fragment){
 
 - (void)testDownloadFile_AvatarAsksForHighestRank {
 	TGClient *c = F();
-	[c downloadFile:872 priority:TGDownloadPriorityAvatar
+	[[TGDownloadStore shared] downloadFile:872 priority:TGDownloadPriorityAvatar
 		 completion:^(NSString *p){ (void)p; }];
 	NSDictionary *asked = requestMentioning(c, @"\"file_id\":872");
 	XCTAssertNotNil(asked);
@@ -70,7 +71,7 @@ static NSDictionary *requestMentioning(TGClient *c, NSString *fragment){
 	TGFileWaiterTimeoutSeconds = 0.05;
 
 	__block NSString *served = @"unset";
-	[c downloadFile:873 completion:^(NSString *path){ served = path; }];
+	[[TGDownloadStore shared] downloadFile:873 completion:^(NSString *path){ served = path; }];
 
 	pumpFor(0.4);
 	XCTAssertNil(served, @"the watchdog must serve nil after the timeout");
@@ -78,7 +79,7 @@ static NSDictionary *requestMentioning(TGClient *c, NSString *fragment){
 	// The whole point (B2): a file that finished downloading after the
 	// timeout still reaches the callback. Before the fix the watchdog
 	// destroyed the record and a late updateFile notified nobody.
-	[c notifyFileWaiters:873 path:@"/var/tmp/story.webp"];
+	[[TGDownloadStore shared] notifyFileWaiters:873 path:@"/var/tmp/story.webp"];
 	pumpFor(0.1);   // the delivery runs on the main queue
 	XCTAssertEqualObjects(served, @"/var/tmp/story.webp",
 						  @"an expired record must survive late completion");
@@ -91,13 +92,13 @@ static NSDictionary *requestMentioning(TGClient *c, NSString *fragment){
 	double savedTimeout = TGFileWaiterTimeoutSeconds;
 	TGFileWaiterTimeoutSeconds = 0.05;
 
-	[c downloadFile:874 completion:^(NSString *p){ (void)p; }];
+	[[TGDownloadStore shared] downloadFile:874 completion:^(NSString *p){ (void)p; }];
 	pumpFor(0.3);
 
 	// The consumer the chat list performs on its next pass: ask again.
 	__block NSString *late = @"unset";
-	[c downloadFile:874 completion:^(NSString *path){ late = path; }];
-	[c notifyFileWaiters:874 path:@"/var/tmp/avatar.png"];
+	[[TGDownloadStore shared] downloadFile:874 completion:^(NSString *path){ late = path; }];
+	[[TGDownloadStore shared] notifyFileWaiters:874 path:@"/var/tmp/avatar.png"];
 	pumpFor(0.1);   // the delivery runs on the main queue
 	XCTAssertEqualObjects(late, @"/var/tmp/avatar.png");
 
@@ -107,19 +108,19 @@ static NSDictionary *requestMentioning(TGClient *c, NSString *fragment){
 - (void)testSweep_KeepsARecordWithLiveWaiters {
 	TGClient *c = F();
 	const NSInteger id = 875;
-	[c downloadFile:id completion:^(NSString *path){ (void)path; }];
-	[c sweepFileWaiters:id];
-	XCTAssertTrue([c hasFileWaiterRecord:id],
+	[[TGDownloadStore shared] downloadFile:id completion:^(NSString *path){ (void)path; }];
+	[[TGDownloadStore shared] sweepFileWaiters:id];
+	XCTAssertTrue([[TGDownloadStore shared] hasFileWaiterRecord:id],
 		@"a live waiter keeps the record - late updateFile is still owed");
 }
 
 - (void)testSweep_RetiresFullyExpiredRecords {
 	TGClient *c = F();
 	const NSInteger id = 876;
-	[c downloadFile:id completion:^(NSString *path){ (void)path; }];
-	[c expireFileWaiters:id];
-	[c sweepFileWaiters:id];
-	XCTAssertFalse([c hasFileWaiterRecord:id],
+	[[TGDownloadStore shared] downloadFile:id completion:^(NSString *path){ (void)path; }];
+	[[TGDownloadStore shared] expireFileWaiters:id];
+	[[TGDownloadStore shared] sweepFileWaiters:id];
+	XCTAssertFalse([[TGDownloadStore shared] hasFileWaiterRecord:id],
 		@"a record whose waiters have all been told nil gets retired");
 }
 
@@ -128,17 +129,17 @@ static NSDictionary *requestMentioning(TGClient *c, NSString *fragment){
 - (void)testWaiterTable_CountsWaitersAndKeepsTheHighestPriority {
 	TGClient *c = F();
 	const NSInteger id = 877;
-	[c downloadFile:id priority:1 completion:^(NSString *path){ (void)path; }];
-	[c downloadFile:id priority:9 completion:^(NSString *path){ (void)path; }];
-	[c downloadFile:id priority:4 completion:^(NSString *path){ (void)path; }];
-	XCTAssertEqual([c fileWaiterCount:id], (NSUInteger)3,
+	[[TGDownloadStore shared] downloadFile:id priority:1 completion:^(NSString *path){ (void)path; }];
+	[[TGDownloadStore shared] downloadFile:id priority:9 completion:^(NSString *path){ (void)path; }];
+	[[TGDownloadStore shared] downloadFile:id priority:4 completion:^(NSString *path){ (void)path; }];
+	XCTAssertEqual([[TGDownloadStore shared] fileWaiterCount:id], (NSUInteger)3,
 		@"each caller is its own waiter on the one record");
-	XCTAssertEqual([c fileWaiterPriority:id], (NSInteger)9,
+	XCTAssertEqual([[TGDownloadStore shared] fileWaiterPriority:id], (NSInteger)9,
 		@"a lower rank afterwards must not demote the request");
 
-	[c releaseFileWaiters:id];
-	XCTAssertFalse([c hasFileWaiterRecord:id]);
-	XCTAssertEqual([c fileWaiterCount:id], (NSUInteger)0);
+	[[TGDownloadStore shared] releaseFileWaiters:id];
+	XCTAssertFalse([[TGDownloadStore shared] hasFileWaiterRecord:id]);
+	XCTAssertEqual([[TGDownloadStore shared] fileWaiterCount:id], (NSUInteger)0);
 }
 
 @end

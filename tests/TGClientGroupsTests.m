@@ -19,6 +19,7 @@
 #import "TGSessionsStore.h"
 #import "TGSettingsStore.h"
 #import "TGStickerStore.h"
+#import "TGDownloadStore.h"
 
 @interface TGClientGroupsTests : XCTestCase @end
 
@@ -26,7 +27,7 @@ static TGClient *G(void) {
 	TGClient *c = TGClient.shared;
 	[c.outbox removeAllObjects];
 	[c.pendingRequests removeAllObjects];
-	[c removeAllFileWaiters];
+	[[TGDownloadStore shared] removeAllFileWaiters];
 	c.me = @{@"id" : @(1001)};
 	return c;
 }
@@ -436,15 +437,15 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 - (void)testCancelDownload_ReleasesTheWaiterItWouldHaveStranded {
 	TGClient *c = G();
 	__block BOOL served = NO;
-	[c downloadFile:42 completion:^(NSString *path){ served = YES; }];
-	XCTAssertTrue([c hasFileWaiterRecord:42], @"the waiter must exist to be released");
+	[[TGDownloadStore shared] downloadFile:42 completion:^(NSString *path){ served = YES; }];
+	XCTAssertTrue([[TGDownloadStore shared] hasFileWaiterRecord:42], @"the waiter must exist to be released");
 
-	[c cancelDownloadOfFile:42 onlyIfPending:NO];
+	[[TGDownloadStore shared] cancelDownloadOfFile:42 onlyIfPending:NO];
 	NSDictionary *r = lastG(c, @"cancelDownloadFile");
 	XCTAssertEqual([r[@"file_id"] integerValue], (NSInteger)42);
 	XCTAssertFalse([r[@"only_if_pending"] boolValue]);
-	XCTAssertFalse([c hasFileWaiterRecord:42]);
-	XCTAssertEqual([c fileWaiterPriority:42], (NSInteger)0);
+	XCTAssertFalse([[TGDownloadStore shared] hasFileWaiterRecord:42]);
+	XCTAssertEqual([[TGDownloadStore shared] fileWaiterPriority:42], (NSInteger)0);
 	(void)served;
 }
 

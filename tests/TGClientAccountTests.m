@@ -399,7 +399,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 - (void)testMapThumbnail_ACachedOneAnswersWithoutADownload {
 	TGClient *c = A();
 	__block NSString *path = @"unset";
-	[c mapThumbnailForLatitude:50.45 longitude:30.52 width:220 height:130
+	[[TGMessageStore shared] mapThumbnailForLatitude:50.45 longitude:30.52 width:220 height:130
 						inChat:7 completion:^(NSString *local){ path = local; }];
 
 	NSDictionary *r = lastA(c, @"getMapThumbnailFile");
@@ -417,7 +417,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 
 - (void)testMapThumbnail_AnUndownloadedOneGoesThroughTheQueue {
 	TGClient *c = A();
-	[c mapThumbnailForLatitude:50.45 longitude:30.52 width:220 height:130
+	[[TGMessageStore shared] mapThumbnailForLatitude:50.45 longitude:30.52 width:220 height:130
 						inChat:7 completion:nil];
 	answerA(c, @{@"@type" : @"file", @"id" : @(55),
 				 @"local" : @{@"is_downloading_completed" : @NO}});
@@ -428,7 +428,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 /// than clamped, so the clamping has to happen here.
 - (void)testMapThumbnail_SizeIsClampedToWhatTelegramAccepts {
 	TGClient *c = A();
-	[c mapThumbnailForLatitude:0 longitude:0 width:4000 height:2
+	[[TGMessageStore shared] mapThumbnailForLatitude:0 longitude:0 width:4000 height:2
 						inChat:0 completion:nil];
 	NSDictionary *r = lastA(c, @"getMapThumbnailFile");
 	XCTAssertEqual([r[@"width"] integerValue], (NSInteger)1024);
@@ -441,7 +441,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 - (void)testMapThumbnail_NoAnswerIsNilRatherThanAnEmptyPath {
 	TGClient *c = A();
 	__block NSString *path = @"unset";
-	[c mapThumbnailForLatitude:0 longitude:0 width:220 height:130
+	[[TGMessageStore shared] mapThumbnailForLatitude:0 longitude:0 width:220 height:130
 						inChat:0 completion:^(NSString *local){ path = local; }];
 	answerA(c, @{@"@type" : @"error", @"code" : @(400), @"message" : @"Nope"});
 	XCTAssertNil(path);
