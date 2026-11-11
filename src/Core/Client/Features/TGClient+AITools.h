@@ -61,6 +61,4 @@
                   keepOnStop:(BOOL)keepOnStop
                   completion:(void (^)(BOOL ok, NSString *error))completion;
 
-/// Sets or clears the fact-check line under a channel post. A nil or empty
-/// `text` removes it, which TDLib spells as a null formattedText.
 @end

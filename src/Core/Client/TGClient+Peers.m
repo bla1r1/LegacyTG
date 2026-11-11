@@ -67,11 +67,6 @@
 	[self statusForUser:userId completion:completion];
 }
 
-- (NSString *)peerUsernameForUserId:(int64_t)userId {
-	NSDictionary *user = [self peerUserRecordForId:userId];
-	return TGFirstUsername(user);
-}
-
 - (void)peerMemberCountForChatId:(int64_t)chatId
                       completion:(void (^)(NSInteger))completion {
 	[self memberCountForChat:chatId completion:completion];

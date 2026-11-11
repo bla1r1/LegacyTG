@@ -49,55 +49,6 @@ static NSString *TGStatValue(NSDictionary *value, NSString *suffix) {
 	return [NSString stringWithFormat:@"%@ (%+.1f%%)", base, growth];
 }
 
-/// One service action in words. The event id and actor are added by the
-/// caller; this is only the sentence, and an unknown kind falls back to its
-/// own type name rather than disappearing.
-static NSString *TGChatEventText(NSDictionary *action) {
-	NSString *kind = action[@"@type"] ?: @"";
-	if ([kind isEqualToString:@"chatEventMessageEdited"])     return @"edited a message";
-	if ([kind isEqualToString:@"chatEventMessageDeleted"])    return @"deleted a message";
-	if ([kind isEqualToString:@"chatEventMessagePinned"])     return @"pinned a message";
-	if ([kind isEqualToString:@"chatEventMessageUnpinned"])   return @"unpinned a message";
-	if ([kind isEqualToString:@"chatEventMemberJoined"])      return @"joined the chat";
-	if ([kind isEqualToString:@"chatEventMemberLeft"])        return @"left the chat";
-	if ([kind isEqualToString:@"chatEventMemberInvited"])     return @"invited a member";
-	if ([kind isEqualToString:@"chatEventMemberPromoted"])    return @"changed an administrator";
-	if ([kind isEqualToString:@"chatEventMemberRestricted"])  return @"restricted a member";
-	if ([kind isEqualToString:@"chatEventMemberTagChanged"])  return @"changed a member tag";
-	if ([kind isEqualToString:@"chatEventTitleChanged"])      return @"changed the title";
-	if ([kind isEqualToString:@"chatEventDescriptionChanged"]) return @"changed the description";
-	if ([kind isEqualToString:@"chatEventPhotoChanged"])      return @"changed the photo";
-	if ([kind isEqualToString:@"chatEventLocationChanged"])   return @"changed the location";
-	if ([kind isEqualToString:@"chatEventSlowModeDelayChanged"]) return @"changed slow mode";
-	if ([kind isEqualToString:@"chatEventPermissionsChanged"]) return @"changed permissions";
-	if ([kind isEqualToString:@"chatEventSettingChanged"])    return @"changed a setting";
-	if ([kind isEqualToString:@"chatEventInviteLinkEdited"])  return @"edited an invite link";
-	if ([kind isEqualToString:@"chatEventInviteLinkRevoked"]) return @"revoked an invite link";
-	if ([kind isEqualToString:@"chatEventInviteLinkDeleted"]) return @"deleted an invite link";
-	if ([kind isEqualToString:@"chatEventIsAllHistoryAvailableToggled"]) return @"changed history visibility";
-	if ([kind isEqualToString:@"chatEventForumTopicCreated"]) return @"created a topic";
-	if ([kind isEqualToString:@"chatEventForumTopicEdited"])  return @"edited a topic";
-	if ([kind isEqualToString:@"chatEventForumTopicDeleted"]) return @"deleted a topic";
-	if ([kind isEqualToString:@"chatEventForumTopicPinned"])  return @"pinned a topic";
-	if ([kind isEqualToString:@"chatEventVideoChatCreated"])  return @"started a video chat";
-	if ([kind isEqualToString:@"chatEventVideoChatEnded"])    return @"ended a video chat";
-	return TGPhraseFromTypeName(kind);
-}
-
-static NSDictionary *TGEventFilterAll(void) {
-	return @{
-		@"@type" : @"chatEventLogFilters",
-		@"message_edits" : @YES, @"message_deletions" : @YES,
-		@"message_pins" : @YES, @"member_joins" : @YES,
-		@"member_leaves" : @YES, @"member_invites" : @YES,
-		@"member_promotions" : @YES, @"member_restrictions" : @YES,
-		@"member_tag_changes" : @YES, @"info_changes" : @YES,
-		@"setting_changes" : @YES, @"invite_link_changes" : @YES,
-		@"video_chat_changes" : @YES, @"forum_changes" : @YES,
-		@"subscription_extensions" : @YES,
-	};
-}
-
 static NSDictionary *TGFilterFromName(NSString *name) {
 	NSString *type = @"searchMessagesFilterEmpty";
 	if ([name isEqualToString:@"photo"])       type = @"searchMessagesFilterPhoto";
@@ -696,41 +647,6 @@ static NSDictionary *TGFilterFromName(NSString *name) {
 
 #pragma mark - account-level chat preferences
 
-- (void)newChatPrivacySettingsWithCompletion:
-		(void (^)(NSDictionary *settings))completion {
-	[self request:@{@"@type" : @"getNewChatPrivacySettings"}
-	   completion:^(NSDictionary *result){
-		if (completion)
-			completion([result isKindOfClass:NSDictionary.class] ? result : @{});
-	}];
-}
-
-- (void)setNewChatPrivacyAllowUnknown:(BOOL)allowUnknown
-						   completion:(void (^)(BOOL ok))completion {
-	// The paid-message count is part of the same object and setting it to
-	// zero would silently turn paid messages off, so read it first.
-	__weak typeof(self) weakSelf = self;
-	[self newChatPrivacySettingsWithCompletion:^(NSDictionary *current){
-		TGClient *me = weakSelf;
-		if (!me){
-			if (completion) completion(NO);
-			return;
-		}
-		[me request:@{
-			@"@type" : @"setNewChatPrivacySettings",
-			@"settings" : @{
-				@"@type" : @"newChatPrivacySettings",
-				@"allow_new_chats_from_unknown_users" : @(allowUnknown),
-				@"incoming_paid_message_star_count" :
-						current[@"incoming_paid_message_star_count"] ?: @(0),
-			},
-		} completion:^(NSDictionary *result){
-			if (completion)
-				completion(![result[@"@type"] isEqualToString:@"error"]);
-		}];
-	}];
-}
-
 - (void)notificationExceptionsWithCompletion:
 		(void (^)(NSArray *chats))completion {
 	[self request:@{@"@type" : @"getChatNotificationSettingsExceptions",
@@ -849,38 +765,6 @@ static NSDictionary *TGFilterFromName(NSString *name) {
 		}
 		if (completion)
 			completion(rows, kind);
-	}];
-}
-
-- (void)eventLogForChat:(int64_t)chatId
-			 completion:(void (^)(NSArray *events))completion {
-	__weak typeof(self) weakSelf = self;
-	[self request:@{
-		@"@type" : @"getChatEventLog",
-		@"chat_id" : @(chatId),
-		@"query" : @"",
-		@"from_event_id" : @(0),
-		@"limit" : @(100),
-		@"filters" : TGEventFilterAll(),
-		@"user_ids" : @[],
-	} completion:^(NSDictionary *result){
-		TGClient *me = weakSelf;
-		NSMutableArray *out = [NSMutableArray array];
-		for (NSDictionary *event in result[@"events"]){
-			if (![event isKindOfClass:NSDictionary.class])
-				continue;
-			NSDictionary *sender = event[@"member_id"];
-			int64_t userId = [sender[@"user_id"] longLongValue];
-			NSString *actor = userId ? ([me nameForUserId:userId] ?: @"Someone")
-									 : @"Someone";
-			[out addObject:@{
-				@"date"   : event[@"date"] ?: @(0),
-				@"actor"  : actor,
-				@"text"   : TGChatEventText(event[@"action"]),
-			}];
-		}
-		if (completion)
-			completion(out);
 	}];
 }
 
@@ -1144,20 +1028,6 @@ static NSDictionary *TGFilterFromName(NSString *name) {
 	}];
 }
 
-- (void)processProtectedContentDisableRequestInChat:(int64_t)chatId
-										  messageId:(int64_t)messageId
-											approve:(BOOL)approve
-										 completion:(void (^)(BOOL ok))completion {
-	[self request:@{@"@type" : @"processChatHasProtectedContentDisableRequest",
-					@"chat_id" : @(chatId),
-					@"request_message_id" : @(messageId),
-					@"approve" : @(approve)}
-	   completion:^(NSDictionary *result){
-		if (completion)
-			completion(![result[@"@type"] isEqualToString:@"error"]);
-	}];
-}
-
 #pragma mark - positions
 
 - (void)sparsePositionsInChat:(int64_t)chatId
@@ -1184,22 +1054,6 @@ static NSDictionary *TGFilterFromName(NSString *name) {
 		}
 		if (completion)
 			completion([result[@"total_count"] integerValue], out);
-	}];
-}
-
-- (void)messagePosition:(int64_t)messageId
-				 inChat:(int64_t)chatId
-				 filter:(NSString *)filter
-			 completion:(void (^)(NSInteger position, NSInteger total))completion {
-	[self request:@{
-		@"@type" : @"getChatMessagePosition",
-		@"chat_id" : @(chatId),
-		@"topic_id" : [NSNull null],
-		@"filter" : TGFilterFromName(filter),
-		@"message_id" : @(messageId),
-	} completion:^(NSDictionary *result){
-		if (completion)
-			completion([result[@"count"] integerValue], 0);
 	}];
 }
 

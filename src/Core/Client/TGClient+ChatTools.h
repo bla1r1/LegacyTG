@@ -188,12 +188,6 @@
 
 #pragma mark - account-level chat preferences
 
-- (void)newChatPrivacySettingsWithCompletion:
-		(void (^)(NSDictionary *settings))completion;
-
-- (void)setNewChatPrivacyAllowUnknown:(BOOL)allowUnknown
-						   completion:(void (^)(BOOL ok))completion;
-
 - (void)notificationExceptionsWithCompletion:
 		(void (^)(NSArray *chats))completion;
 
@@ -221,9 +215,6 @@
 
 /// Service actions in a supergroup or channel, newest first. Each entry is
 /// "date", "actor" and "text".
-- (void)eventLogForChat:(int64_t)chatId
-			 completion:(void (^)(NSArray *events))completion;
-
 /// The largest chat-photo file id, which is what reportChatPhoto accepts.
 - (void)reportChatPhotoInChat:(int64_t)chatId
 					   reason:(NSString *)reason
@@ -292,11 +283,6 @@
 		   completion:(void (^)(BOOL ok))completion;
 
 /// Approves or rejects a pending request to turn protected content off.
-- (void)processProtectedContentDisableRequestInChat:(int64_t)chatId
-										  messageId:(int64_t)messageId
-											approve:(BOOL)approve
-										 completion:(void (^)(BOOL ok))completion;
-
 #pragma mark - chat positions
 
 /// Sparse positions for a media tab: entries are "position", "messageId"
@@ -307,11 +293,6 @@
 					completion:(void (^)(NSInteger total, NSArray *positions))completion;
 
 /// The 1-based position of one message among the same filter's matches.
-- (void)messagePosition:(int64_t)messageId
-				 inChat:(int64_t)chatId
-				 filter:(NSString *)filter
-			 completion:(void (^)(NSInteger position, NSInteger total))completion;
-
 #pragma mark - sessions
 
 - (void)toggleSession:(int64_t)sessionId canAcceptSecretChats:(BOOL)can;

@@ -95,5 +95,4 @@
 - (void)textEntitiesInText:(NSString *)text
 				completion:(void (^)(NSArray *entities))completion;
 
-/// Translate one piece of text into `languageCode`, keeping its formatting.
 @end

@@ -166,21 +166,11 @@
 		self.storyMainListChatCount = count;
 }
 
-- (NSInteger)storyListChatCountForList:(NSString *)list {
-	if ([list isEqualToString:@"archive"])
-		return self.storyArchiveListChatCount;
-	return self.storyMainListChatCount;
-}
-
 - (void)applyStoryStealthModeUpdate:(NSDictionary *)update {
 	self.storyStealthModeValue = @{
 		@"activeUntilDate"   : update[@"active_until_date"] ?: @(0),
 		@"cooldownUntilDate" : update[@"cooldown_until_date"] ?: @(0),
 	};
-}
-
-- (NSDictionary *)storyStealthMode {
-	return self.storyStealthModeValue;
 }
 
 - (void)activeStoryRowForChat:(int64_t)chatId

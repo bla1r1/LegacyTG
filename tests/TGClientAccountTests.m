@@ -14,6 +14,7 @@
 #import "TGClient.h"
 #import "TGClientInternal.h"
 #import "TGStyle.h"
+#import "TGSessionsStore.h"
 
 @interface TGClientAccountTests : XCTestCase @end
 
@@ -705,7 +706,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 - (void)testSessions_UnconfirmedIsReadFromTheRecord {
 	TGClient *c = A();
 	__block NSArray *got = nil;
-	[c sessionsWithCompletion:^(NSArray *sessions){ got = sessions; }];
+	[[TGSessionsStore shared] sessionsWithCompletion:^(NSArray *sessions){ got = sessions; }];
 	answerA(c, @{@"@type" : @"sessions", @"sessions" : @[
 			@{@"@type" : @"session", @"id" : @"5", @"application_name" : @"Phone",
 			  @"platform" : @"iOS", @"system_version" : @"9.3",

@@ -13,6 +13,7 @@
 #import "TGSendStore.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
+#import "TGSettingsStore.h"
 
 @interface TGClientComposeTests : XCTestCase @end
 
@@ -443,7 +444,7 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 	TGClient *c = C();
 	[[TGTransport shared] testSetExecute:NULL];
 	__block NSString *md = nil;
-	[c markdownOfMessage:9 inChat:7 completion:^(NSString *m){ md = m; }];
+	[[TGSettingsStore shared] markdownOfMessage:9 inChat:7 completion:^(NSString *m){ md = m; }];
 	XCTAssertNil(md);
 	answerTyped(c, @"getMessage",
 			@{@"@type" : @"message",
@@ -465,7 +466,7 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 	TGClient *c = C();
 	[[TGTransport shared] testSetExecute:NULL];
 	__block NSString *md = nil;
-	[c markdownOfMessage:9 inChat:7 completion:^(NSString *m){ md = m; }];
+	[[TGSettingsStore shared] markdownOfMessage:9 inChat:7 completion:^(NSString *m){ md = m; }];
 	answerTyped(c, @"getMessage",
 			@{@"@type" : @"message",
 			  @"content" : @{@"@type" : @"messageText",

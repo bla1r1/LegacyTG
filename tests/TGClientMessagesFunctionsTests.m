@@ -12,6 +12,7 @@
 #import "TGClient.h"
 #import "TGClientInternal.h"
 #import "TGBase64.h"
+#import "TGSettingsStore.h"
 
 @interface TGClientMessagesFunctionsTests : XCTestCase @end
 
@@ -170,7 +171,7 @@ static const char *ctFakeTdExecMarkdown(void *client, const char *request) {
 
 - (void)testClearAllDraftMessages_SendsAndNeedsNoExtra {
 	TGClient *c = M();
-	[c clearAllDraftMessages];
+	[[TGSettingsStore shared] clearAllDraftMessages];
 	NSDictionary *r = lastM(c, @"clearAllDraftMessages");
 	XCTAssertNotNil(r);
 	// No completion was handed in, so no @extra rides along: one-shot.
@@ -594,7 +595,7 @@ static NSDictionary *altV(int side, NSString *codec, int fileId) {
 	answerM(c, answer);
 	XCTAssertEqual(docs.count, (NSUInteger)1);
 	[c.outbox removeAllObjects];
-	[c clearAllCallMessages];
+	[[TGSettingsStore shared] clearAllCallMessages];
 	XCTAssertNotNil(lastM(c, @"deleteAllCallMessages"));
 }
 
@@ -750,13 +751,13 @@ static NSDictionary *altV(int side, NSString *codec, int fileId) {
 - (void)testAddLocalMessage_KeepsTheNoteInTheChat {
 	TGClient *c = M();
 	__block int64_t made = -1;
-	[c addLocalTextMessage:@"" toChat:41 completion:^(int64_t messageId){
+	[[TGSettingsStore shared] addLocalTextMessage:@"" toChat:41 completion:^(int64_t messageId){
 		made = messageId;
 	}];
 	XCTAssertEqual(countM(c, @"addLocalMessage"), (NSUInteger)0);
 	XCTAssertEqual(made, 0LL);
 
-	[c addLocalTextMessage:@"remember this" toChat:41
+	[[TGSettingsStore shared] addLocalTextMessage:@"remember this" toChat:41
 				completion:^(int64_t messageId){ made = messageId; }];
 	NSDictionary *r = lastM(c, @"addLocalMessage");
 	XCTAssertEqualObjects(r[@"chat_id"], @(41));

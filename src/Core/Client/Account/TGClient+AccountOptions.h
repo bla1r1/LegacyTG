@@ -12,17 +12,12 @@
 - (void)setOption:(NSString *)name boolValue:(BOOL)value;
 - (void)setOption:(NSString *)name integerValue:(int64_t)value;
 /// Drop the phone contacts this account uploaded to Telegram.
-- (void)clearImportedContacts;
 /// How many contacts this account has uploaded from a device's address book.
 - (void)importedContactCountWithCompletion:(void (^)(NSInteger count))completion;
 /// Replaces the uploaded contact list with `contacts` (each "phone_number",
 /// "first_name", "last_name"). `importerCount` is how many of the supplied
 /// rows Telegram accepted; `userIds` is its answer, one id per row.
-- (void)changeImportedContacts:(NSArray *)contacts
-					completion:(void (^)(NSInteger importerCount,
-										NSArray *userIds))completion;
 /// The official client download page for this platform.
-- (void)applicationDownloadLinkWithCompletion:(void (^)(NSString *url))completion;
 /// Set the signed-in account's own picture from a local file.
 - (void)setProfilePhotoAtPath:(NSString *)path completion:(void (^)(BOOL ok))completion;
 /// The account's own birthday. Day 0 means it is not set; year 0 means it is

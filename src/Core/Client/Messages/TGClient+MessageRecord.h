@@ -4,10 +4,6 @@
 
 /// Adds a note to the chat without sending it to anyone: TDLib stores it in
 /// the history like any other message. The completion gets its id, or 0.
-- (void)addLocalTextMessage:(NSString *)text
-					 toChat:(int64_t)chatId
-				 completion:(void (^)(int64_t messageId))completion;
-
 /// A tap on a message with an animated emoji (a dice, a ball). TDLib answers
 /// with the sticker to play, whose emoji is what the sheet shows; nil when
 /// the ordinary animation is the answer.

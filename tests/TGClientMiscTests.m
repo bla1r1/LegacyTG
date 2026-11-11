@@ -11,6 +11,7 @@
 #import "TGTestRunner.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
+#import "TGSettingsStore.h"
 
 @interface TGClientMiscTests : XCTestCase @end
 
@@ -445,7 +446,7 @@ static void answerMisc(TGClient *c, NSString *type, NSDictionary *answer) {
 - (void)testPollOptionProperties_ReadsEveryFlag {
 	TGClient *c = MiscClient();
 	__block NSDictionary *properties = nil;
-	[c pollOptionProperties:@"opt-1" ofMessage:600 inChat:-1009
+	[[TGSettingsStore shared] pollOptionProperties:@"opt-1" ofMessage:600 inChat:-1009
 				 completion:^(NSDictionary *result, NSString *error){
 		properties = result;
 	}];
@@ -465,7 +466,7 @@ static void answerMisc(TGClient *c, NSString *type, NSDictionary *answer) {
 - (void)testPollOptionProperties_RefusalIsTheServersSentence {
 	TGClient *c = MiscClient();
 	__block NSString *failure = nil;
-	[c pollOptionProperties:@"opt-1" ofMessage:600 inChat:-1009
+	[[TGSettingsStore shared] pollOptionProperties:@"opt-1" ofMessage:600 inChat:-1009
 				 completion:^(NSDictionary *result, NSString *error){
 		failure = error;
 	}];

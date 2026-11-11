@@ -87,28 +87,6 @@ NSString *TGBusinessLinkName(NSString *link) {
 
 #pragma mark - features and connection
 
-- (void)businessFeaturesForSource:(NSString *)source
-					   completion:(void (^)(NSArray *, NSString *))completion {
-	id sourceObject = source.length
-			? @{@"@type" : source} : [NSNull null];
-	[self request:@{@"@type" : @"getBusinessFeatures", @"source" : sourceObject}
-	   completion:^(NSDictionary *result){
-		if (!TGBusinessSucceeded(result)){
-			if (completion) completion(nil, TGBusinessError(result));
-			return;
-		}
-		NSArray *features = [result[@"features"] isKindOfClass:NSArray.class]
-				? result[@"features"] : @[];
-		NSMutableArray *names = [NSMutableArray arrayWithCapacity:features.count];
-		for (NSDictionary *feature in features){
-			NSString *type = feature[@"@type"];
-			if (type.length)
-				[names addObject:type];
-		}
-		if (completion) completion(names, nil);
-	}];
-}
-
 - (void)businessInfoWithCompletion:(void (^)(NSDictionary *, NSString *))completion {
 	int64_t userId = [[self me][@"id"] longLongValue];
 	if (!userId){

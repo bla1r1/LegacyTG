@@ -8,6 +8,8 @@
 #import "TGTestRunner.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
+#import "TGBusinessStore.h"
+#import "TGGroupStore.h"
 
 @interface TGClientBusinessTests : XCTestCase @end
 
@@ -82,7 +84,7 @@ static void replySupergroupChat(TGClient *c, long long chatId, long long supergr
 - (void)testGetBusinessFeatures_AsksWithNullSourceAndReadsTheList {
 	TGClient *c = BizClient();
 	__block NSArray *got = nil;
-	[c businessFeaturesForSource:nil completion:^(NSArray *features, NSString *error){
+	[[TGBusinessStore shared] businessFeaturesForSource:nil completion:^(NSArray *features, NSString *error){
 		got = features;
 	}];
 	NSDictionary *r = lastBiz(c, @"getBusinessFeatures");
@@ -522,7 +524,7 @@ static void replySupergroupChat(TGClient *c, long long chatId, long long supergr
 - (void)testAggressiveAntiSpam_ReadsTheFullGroupRecord {
 	TGClient *c = BizClient();
 	__block BOOL enabled = NO, canToggle = NO;
-	[c aggressiveAntiSpamForChat:-77 completion:^(BOOL on, BOOL can, NSString *error){
+	[[TGGroupStore shared] aggressiveAntiSpamForChat:-77 completion:^(BOOL on, BOOL can, NSString *error){
 		enabled = on;
 		canToggle = can;
 	}];

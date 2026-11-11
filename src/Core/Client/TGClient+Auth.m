@@ -309,17 +309,6 @@ static NSString *TGAuthError(NSDictionary *result) {
 /// its own words for why. Both are handed on rather than flattened into a
 /// bare flag, because "you must set one" and "Telegram refused to answer"
 /// are different things for the screen to say.
-- (void)loginEmailAddressRequiredWithCompletion:
-		(void (^)(BOOL required, NSString *error))completion {
-	[self request:@{@"@type" : @"isLoginEmailAddressRequired"}
-	   completion:^(NSDictionary *result){
-		if (!completion)
-			return;
-		BOOL ok = [result[@"@type"] isEqualToString:@"ok"];
-		completion(ok, ok ? nil : TGAuthError(result));
-	}];
-}
-
 - (void)setLoginEmailAddress:(NSString *)email
 				  completion:(void (^)(NSString *pattern, NSString *error))completion {
 	[self request:@{@"@type" : @"setLoginEmailAddress",
@@ -687,15 +676,6 @@ static void TGAnswerTemporaryPasswordState(NSDictionary *result,
 					@"valid_for" : @((int32_t)seconds)}
 	   completion:^(NSDictionary *result){
 		TGAnswerTemporaryPasswordState(result, completion);
-	}];
-}
-
-- (void)deleteSavedCredentialsWithCompletion:
-		(void (^)(NSString *error))completion {
-	[self request:@{@"@type" : @"deleteSavedCredentials"}
-	   completion:^(NSDictionary *result){
-		if (completion)
-			completion(TGAuthError(result));
 	}];
 }
 

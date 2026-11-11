@@ -29,8 +29,6 @@
                  completion:(void (^)(NSString *text))completion;
 
 /// "ada" from the account's active usernames, or nil.
-- (NSString *)peerUsernameForUserId:(int64_t)userId;
-
 /// Members in a group or channel; completion gets 0 for anything else.
 - (void)peerMemberCountForChatId:(int64_t)chatId
                       completion:(void (^)(NSInteger count))completion;

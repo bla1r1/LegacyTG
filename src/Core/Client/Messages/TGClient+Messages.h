@@ -101,10 +101,6 @@
 /// Only the first carries the caption; TDLib refuses an album where more
 /// than one does.
 /// One message by id, flattened. Used to show what a reply is answering.
-- (void)messageWithId:(int64_t)messageId
-               inChat:(int64_t)chatId
-           completion:(void (^)(NSDictionary *message))completion;
-
 /// Stickers the user reached for lately: "fileId", "emoji", "isAnimated".
 - (void)recentStickersWithCompletion:(void (^)(NSArray *stickers))completion;
 

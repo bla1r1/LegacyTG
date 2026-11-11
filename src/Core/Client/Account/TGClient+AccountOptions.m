@@ -176,10 +176,6 @@ static NSArray *TGPacksFrom(NSDictionary *target) {
 	}];
 }
 
-- (void)clearImportedContacts {
-	[self send:@{@"@type" : @"clearImportedContacts"}];
-}
-
 - (void)importedContactCountWithCompletion:(void (^)(NSInteger))completion {
 	[self request:@{@"@type" : @"getImportedContactCount"}
 	   completion:^(NSDictionary *result){
@@ -190,43 +186,5 @@ static NSArray *TGPacksFrom(NSDictionary *target) {
 		if (completion) completion(count);
 	}];
 }
-
-- (void)changeImportedContacts:(NSArray *)contacts
-					completion:(void (^)(NSInteger, NSArray *))completion {
-	NSMutableArray *rows = [NSMutableArray array];
-	for (NSDictionary *contact in contacts){
-		if (![contact isKindOfClass:NSDictionary.class])
-			continue;
-		NSString *phone = contact[@"phone_number"] ?: @"";
-		if (!phone.length)
-			continue;
-		[rows addObject:@{
-			@"@type"        : @"importedContact",
-			@"phone_number" : phone,
-			@"first_name"   : contact[@"first_name"] ?: @"",
-			@"last_name"    : contact[@"last_name"] ?: @"",
-			@"note"         : [NSNull null],
-		}];
-	}
-	[self request:@{@"@type" : @"changeImportedContacts", @"contacts" : rows}
-	   completion:^(NSDictionary *result){
-		NSArray *userIds = result[@"user_ids"];
-		if (![userIds isKindOfClass:NSArray.class])
-			userIds = @[];
-		if (completion) completion((NSInteger)userIds.count, userIds);
-	}];
-}
-
-- (void)applicationDownloadLinkWithCompletion:(void (^)(NSString *))completion {
-	[self request:@{@"@type" : @"getApplicationDownloadLink"}
-	   completion:^(NSDictionary *result){
-		NSString *url = @"";
-		if ([result isKindOfClass:NSDictionary.class] &&
-			![result[@"@type"] isEqualToString:@"error"])
-			url = [result[@"url"] isKindOfClass:NSString.class] ? result[@"url"] : @"";
-		if (completion) completion(url);
-	}];
-}
-
 
 @end

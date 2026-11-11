@@ -38,10 +38,6 @@ FOUNDATION_EXPORT NSString *TGMemberStatusName(NSDictionary *status);
 /// Aggressive anti-spam is a supergroup-only switch, and TDLib says whether
 /// this group may carry it at all. `canToggle` is read from the same full
 /// info the switch writes through.
-- (void)aggressiveAntiSpamForChat:(int64_t)chatId
-					   completion:(void (^)(BOOL enabled, BOOL canToggle,
-											 NSString *error))completion;
-
 - (void)setChat:(int64_t)chatId
 	aggressiveAntiSpam:(BOOL)on
 			 completion:(void (^)(BOOL ok, NSString *error))completion;
@@ -183,10 +179,6 @@ FOUNDATION_EXPORT NSString *TGMemberStatusName(NSDictionary *status);
 			  completion:(void (^)(BOOL ok))completion;
 
 /// What is behind a link before joining it.
-- (void)checkInviteLink:(NSString *)link
-			 completion:(void (^)(NSString *title, NSInteger members,
-								  BOOL alreadyMember))completion;
-
 /// People waiting at a link that creates join requests: "id", "name", "date".
 - (void)joinRequestsForChat:(int64_t)chatId
 				 completion:(void (^)(NSArray *requests))completion;

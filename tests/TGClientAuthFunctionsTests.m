@@ -10,6 +10,7 @@
 #import "TGTransport.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
+#import "TGAccountStore.h"
 #include <string.h>
 
 @interface TGClientAuthFunctionsTests : XCTestCase @end
@@ -79,7 +80,7 @@ static NSDictionary *plainF(NSDictionary *d) {
 	TGClient *c = AF();
 	__block BOOL required = NO;
 	__block NSString *error = @"x";
-	[c loginEmailAddressRequiredWithCompletion:^(BOOL yes, NSString *why){
+	[[TGAccountStore shared] loginEmailAddressRequiredWithCompletion:^(BOOL yes, NSString *why){
 		required = yes; error = why;
 	}];
 	XCTAssertNotNil(lastF(c, @"isLoginEmailAddressRequired"));
@@ -92,7 +93,7 @@ static NSDictionary *plainF(NSDictionary *d) {
 	TGClient *c = AF();
 	__block BOOL required = YES;
 	__block NSString *error = nil;
-	[c loginEmailAddressRequiredWithCompletion:^(BOOL yes, NSString *why){
+	[[TGAccountStore shared] loginEmailAddressRequiredWithCompletion:^(BOOL yes, NSString *why){
 		required = yes; error = why;
 	}];
 	answerF(c, @{@"@type" : @"error", @"code" : @(400),
@@ -552,7 +553,7 @@ static const char *FakeExec(void *client, const char *request) {
 - (void)testDeleteSavedCredentials_SendsTheRequest {
 	TGClient *c = AF();
 	__block BOOL done = NO;
-	[c deleteSavedCredentialsWithCompletion:^(NSString *error){
+	[[TGAccountStore shared] deleteSavedCredentialsWithCompletion:^(NSString *error){
 		done = (error == nil);
 	}];
 	XCTAssertNotNil(lastF(c, @"deleteSavedCredentials"));

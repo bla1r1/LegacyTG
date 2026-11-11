@@ -2,8 +2,6 @@
 
 @interface TGClient (ChatFolders)
 
-- (int64_t)lastReadOutboxForChat:(int64_t)chatId;
-
 /// The newest incoming message you have read in a chat; 0 when unknown.
 - (int64_t)lastReadInboxForChat:(int64_t)chatId;
 
@@ -81,8 +79,6 @@ FOUNDATION_EXPORT NSDictionary *TGMemberRowForMember(NSDictionary *member,
 
 /// Marks every chat of one chat list read: the folder's badge clears because
 /// the list was read as a whole, not chat by chat. folderId 0 = "All chats".
-- (void)readChatListOfFolder:(NSInteger)folderId archived:(BOOL)archived;
-
 /// Asks TDLib for the archive settings again and swaps the local copy under
 /// the completion; the block runs whether the answer is good or bad, because
 /// a page built on the old copy must not wait for one.

@@ -94,28 +94,6 @@ static NSArray *TGAccentIdsOrDefault(NSArray *ids) {
 
 #pragma mark - read-date privacy
 
-- (void)readDatePrivacySettingsWithCompletion:(void (^)(BOOL))completion {
-	[self request:@{@"@type" : @"getReadDatePrivacySettings"}
-	   completion:^(NSDictionary *result){
-		if (completion)
-			completion([result[@"show_read_date"] boolValue]);
-	}];
-}
-
-- (void)setReadDateShown:(BOOL)shown
-			  completion:(void (^)(BOOL, NSString *))completion {
-	[self request:@{
-		@"@type"    : @"setReadDatePrivacySettings",
-		@"settings" : @{
-			@"@type"          : @"readDatePrivacySettings",
-			@"show_read_date" : @(shown),
-		},
-	} completion:^(NSDictionary *result){
-		if (completion)
-			completion(TGProfileError(result) == nil, TGProfileError(result));
-	}];
-}
-
 #pragma mark - suggestions
 
 - (void)suggestBirthdateDay:(NSInteger)day
@@ -207,10 +185,6 @@ static NSArray *TGAccentIdsOrDefault(NSArray *ids) {
 		if (completion)
 			completion(ok, TGProfileError(result));
 	}];
-}
-
-- (NSArray *)contactCloseBirthdayUsers {
-	return self.contactCloseBirthdays ?: @[];
 }
 
 - (void)supportUserWithCompletion:(void (^)(NSDictionary *, NSString *))completion {

@@ -525,28 +525,6 @@ static NSDictionary *TGGCFlattenMessage(TGClient *client, NSDictionary *message)
 	}];
 }
 
-- (void)setGroupCallParticipant:(NSDictionary *)participant
-						 inCall:(int32_t)groupCallId
-					volumeLevel:(NSInteger)volumeLevel
-					 completion:(void (^)(BOOL, NSString *))completion {
-	if (![participant isKindOfClass:NSDictionary.class] || !groupCallId){
-		if (completion) completion(NO, @"Name the participant and the call.");
-		return;
-	}
-	// TDLib's range is 1-20000 in hundredths of a percent. Clamping here
-	// keeps a bad slider value from becoming a server-side error sentence.
-	NSInteger level = MAX(1, MIN(20000, volumeLevel));
-	[self request:@{
-		@"@type" : @"setGroupCallParticipantVolumeLevel",
-		@"group_call_id" : @(groupCallId),
-		@"participant_id" : participant,
-		@"volume_level" : @(level),
-	} completion:^(NSDictionary *result){
-		BOOL ok = TGGCSucceeded(result);
-		if (completion) completion(ok, ok ? nil : TGGCErrorText(result));
-	}];
-}
-
 - (void)toggleGroupCallParticipant:(NSDictionary *)participant
 							inCall:(int32_t)groupCallId
 					  isHandRaised:(BOOL)raised
@@ -655,23 +633,6 @@ static NSDictionary *TGGCFlattenMessage(TGClient *client, NSDictionary *message)
 		@"@type" : @"banGroupCallParticipants",
 		@"group_call_id" : @(groupCallId),
 		@"user_ids" : userIds,
-	} completion:^(NSDictionary *result){
-		BOOL ok = TGGCSucceeded(result);
-		if (completion) completion(ok, ok ? nil : TGGCErrorText(result));
-	}];
-}
-
-- (void)declineGroupCallInvitationInChat:(int64_t)chatId
-							   messageId:(int64_t)messageId
-							  completion:(void (^)(BOOL, NSString *))completion {
-	if (!chatId || !messageId){
-		if (completion) completion(NO, @"An error occurred.");
-		return;
-	}
-	[self request:@{
-		@"@type" : @"declineGroupCallInvitation",
-		@"chat_id" : @(chatId),
-		@"message_id" : @(messageId),
 	} completion:^(NSDictionary *result){
 		BOOL ok = TGGCSucceeded(result);
 		if (completion) completion(ok, ok ? nil : TGGCErrorText(result));

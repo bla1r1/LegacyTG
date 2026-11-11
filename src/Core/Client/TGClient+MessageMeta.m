@@ -16,10 +16,6 @@
 /// private-place message answers as an error, said as a zero chat id.
 /// Every chat's draft, dropped at once - the ones typed here and the ones
 /// typed on another device: TDLib owns all of them.
-- (void)clearAllDraftMessages {
-	[self request:@{@"@type" : @"clearAllDraftMessages"} completion:nil];
-}
-
 /// The lifetime new chats start with when nobody has picked one. Zero means
 /// Telegram's "off" - messages live until deleted by hand.
 - (void)defaultMessageAutoDeleteTimeWithCompletion:
@@ -147,10 +143,6 @@
 }
 
 /// Every call history entry on this account, gone from everywhere.
-- (void)clearAllCallMessages {
-	[self request:@{@"@type" : @"deleteAllCallMessages"} completion:nil];
-}
-
 /// The calendar answer for one day: the message id to jump to and how many
 /// messages the chat carries, from the same search the jump sheet used to
 /// make two round trips for.

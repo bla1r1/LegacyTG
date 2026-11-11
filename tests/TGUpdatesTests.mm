@@ -9,6 +9,7 @@
 #import "TGClientInternal.h"
 #import "TGOptions.h"
 #import "TGOptionStore.hpp"
+#import "TGSettingsStore.h"
 
 @interface TGUpdatesTests : XCTestCase @end
 
@@ -74,10 +75,10 @@ static NSMutableDictionary *info(TGClient *c, int64_t chatId) {
 	[c handleUpdate:@{@"@type" : @"updateChatPhoto", @"chat_id" : @(7),
 					  @"photo" : @{@"@type" : @"chatPhotoInfo",
 								   @"small" : @{@"@type" : @"file", @"id" : @(42)}}}];
-	XCTAssertEqualObjects([c photoFileIdForChat:7], @(42));
+	XCTAssertEqualObjects([[TGSettingsStore shared] photoFileIdForChat:7], @(42));
 
 	[c handleUpdate:@{@"@type" : @"updateChatPhoto", @"chat_id" : @(7)}];
-	XCTAssertNil([c photoFileIdForChat:7]);
+	XCTAssertNil([[TGSettingsStore shared] photoFileIdForChat:7]);
 }
 
 - (void)testChatUnreadMentionCount_IsKeptApartFromUnread {

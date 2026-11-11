@@ -11,6 +11,7 @@
 #import "TGSendStore.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
+#import "TGGroupStore.h"
 
 @interface TGClientGroupsTests : XCTestCase @end
 
@@ -330,7 +331,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 	__block BOOL already = NO;
 	__block NSInteger members = 0;
 	__block NSString *title = nil;
-	[c checkInviteLink:@"https://t.me/+abc"
+	[[TGGroupStore shared] checkInviteLink:@"https://t.me/+abc"
 			completion:^(NSString *name, NSInteger count, BOOL isMember){
 		title = name; members = count; already = isMember;
 	}];
@@ -345,7 +346,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 - (void)testCheckInviteLink_ABadLinkAnswersWithNothingRatherThanThrowing {
 	TGClient *c = G();
 	__block NSString *title = @"unset";
-	[c checkInviteLink:@"nonsense"
+	[[TGGroupStore shared] checkInviteLink:@"nonsense"
 			completion:^(NSString *name, NSInteger count, BOOL isMember){ title = name; }];
 	answerG(c, @{@"@type" : @"error", @"code" : @(400),
 				 @"message" : @"INVITE_HASH_INVALID"});

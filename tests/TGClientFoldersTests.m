@@ -10,6 +10,7 @@
 #import "TGMessageStore.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
+#import "TGSettingsStore.h"
 
 @interface TGClientFoldersTests : XCTestCase @end
 
@@ -451,11 +452,11 @@ static void answerLastRequest(TGClient *c, NSDictionary *answer) {
 - (void)testReadChatList_ThePillSaysWhichListItMeans {
 	TGClient *c = F2();
 
-	[c readChatListOfFolder:0 archived:NO];
+	[[TGSettingsStore shared] readChatListOfFolder:0 archived:NO];
 	NSDictionary *main = lastOfType(c, @"readChatList");
 	XCTAssertEqualObjects(main[@"chat_list"][@"@type"], @"chatListMain");
 
-	[c readChatListOfFolder:7 archived:NO];
+	[[TGSettingsStore shared] readChatListOfFolder:7 archived:NO];
 	NSDictionary *folder = lastOfType(c, @"readChatList");
 	XCTAssertEqualObjects(folder[@"chat_list"][@"@type"], @"chatListFolder");
 	XCTAssertEqual([folder[@"chat_list"][@"chat_folder_id"] integerValue], 7);
@@ -466,7 +467,7 @@ static void answerLastRequest(TGClient *c, NSDictionary *answer) {
 - (void)testReadChatList_TheArchiveIsAListOfItsOwn {
 	TGClient *c = F2();
 
-	[c readChatListOfFolder:0 archived:YES];
+	[[TGSettingsStore shared] readChatListOfFolder:0 archived:YES];
 	NSDictionary *archive = lastOfType(c, @"readChatList");
 	XCTAssertEqualObjects(archive[@"chat_list"][@"@type"], @"chatListArchive");
 }

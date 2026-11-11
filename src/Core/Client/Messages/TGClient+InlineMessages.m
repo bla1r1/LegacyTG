@@ -231,37 +231,6 @@
 /// What one answer still allows. TDLib answers with a record of four flags;
 /// the card names each one instead of showing the raw object, because a
 /// client that only prints JSON has not told the user anything.
-- (void)pollOptionProperties:(NSString *)optionId
-				   ofMessage:(int64_t)messageId
-					  inChat:(int64_t)chatId
-				  completion:(void (^)(NSDictionary *, NSString *))completion {
-	optionId = [optionId isKindOfClass:NSString.class] ? optionId : @"";
-	if (!optionId.length){
-		if (completion) completion(nil, @"This answer has no id to look up.");
-		return;
-	}
-	[self request:@{
-		@"@type"        : @"getPollOptionProperties",
-		@"chat_id"      : @(chatId),
-		@"message_id"   : @(messageId),
-		@"poll_option_id" : optionId,
-	} completion:^(NSDictionary *result){
-		if ([result[@"@type"] isEqualToString:@"error"]){
-			NSString *message = [result[@"message"] isKindOfClass:NSString.class]
-					? result[@"message"] : @"An error occurred.";
-			if (completion) completion(nil, message);
-			return;
-		}
-		if (completion)
-			completion(@{
-				@"canBeDeleted"             : result[@"can_be_deleted"] ?: @NO,
-				@"canBeReplied"             : result[@"can_be_replied"] ?: @NO,
-				@"canBeRepliedInAnotherChat": result[@"can_be_replied_in_another_chat"] ?: @NO,
-				@"canGetLink"               : result[@"can_get_link"] ?: @NO,
-			}, nil);
-	}];
-}
-
 /// Every poll in the chat read up on: the votes are no longer new once the
 /// chat has been seen, which is what a badge on the answer options is.
 - (void)readAllChatPollVotes:(int64_t)chatId {
@@ -456,33 +425,4 @@
 /// `code` come back out of the entities their client stored - so Edit edits
 /// the origin rather than the render. A message with no entities is not
 /// worth the round trip: the plain text goes back as it is.
-- (void)markdownOfMessage:(int64_t)messageId
-				   inChat:(int64_t)chatId
-				completion:(void (^)(NSString *markdown))completion {
-	[self request:@{@"@type" : @"getMessage",
-					@"chat_id"    : @(chatId),
-					@"message_id" : @(messageId)}
-		completion:^(NSDictionary *result){
-			if (!completion)
-				return;
-			NSString *plain = result[@"content"][@"text"][@"text"] ?: @"";
-			NSDictionary *formatted = result[@"content"][@"text"];
-			if (![formatted[@"@type"] isEqualToString:@"formattedText"] ||
-					![formatted[@"entities"] isKindOfClass:NSArray.class] ||
-					!((NSArray *)formatted[@"entities"]).count){
-				completion(plain);
-				return;
-			}
-			[self request:@{@"@type" : @"getMarkdownText", @"text" : formatted}
-				completion:^(NSDictionary *answer){
-				NSString *text = answer[@"text"];
-				if ([answer[@"@type"] isEqualToString:@"formattedText"] &&
-						text.length)
-					completion(text);
-				else
-					completion(plain);
-			}];
-		}];
-}
-
 @end

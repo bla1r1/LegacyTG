@@ -292,44 +292,6 @@ std::unordered_map<int32_t, int32_t> gPriorities;
 /// TDLib only offers presets through getAutoDownloadSettingsPresets; what is
 /// actually in force is not readable back, so the app keeps the answer it
 /// wrote. Off over mobile by default: this is a 3G phone with a small disk.
-- (BOOL)autoDownloadOverMobile {
-	NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-	return [defaults objectForKey:@"TGAutoDownloadMobile"]
-			? [defaults boolForKey:@"TGAutoDownloadMobile"] : NO;
-}
-
-- (BOOL)autoDownloadOverWifi {
-	NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-	return [defaults objectForKey:@"TGAutoDownloadWifi"]
-			? [defaults boolForKey:@"TGAutoDownloadWifi"] : YES;
-}
-
-- (void)setAutoDownloadOverMobile:(BOOL)mobile wifi:(BOOL)wifi {
-	NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-	[defaults setBool:mobile forKey:@"TGAutoDownloadMobile"];
-	[defaults setBool:wifi forKey:@"TGAutoDownloadWifi"];
-	[defaults synchronize];
-
-	// "Off" here means off in TDLib too, not merely hidden in the interface.
-	NSDictionary *(^settingsFor)(BOOL) = ^NSDictionary *(BOOL enabled){
-		return @{
-			@"@type"                    : @"autoDownloadSettings",
-			@"is_auto_download_enabled" : @(enabled),
-			@"max_photo_file_size"      : @(10 * 1024 * 1024),
-			@"max_video_file_size"      : @(10 * 1024 * 1024),
-			@"max_other_file_size"      : @(10 * 1024 * 1024),
-			@"video_upload_bitrate"     : @(0),
-			@"preload_large_videos"     : @NO,
-			@"preload_next_audio"       : @NO,
-			@"use_less_data_for_calls"  : @YES,
-		};
-	};
-	[self send:@{@"@type" : @"setAutoDownloadSettings", @"settings" : settingsFor(mobile),
-				 @"type"  : @{@"@type" : @"networkTypeMobile"}}];
-	[self send:@{@"@type" : @"setAutoDownloadSettings", @"settings" : settingsFor(wifi),
-				 @"type"  : @{@"@type" : @"networkTypeWiFi"}}];
-}
-
 #pragma mark - storage
 
 - (void)storageStatsWithCompletion:(void (^)(long long, NSInteger))completion {
@@ -419,13 +381,6 @@ std::unordered_map<int32_t, int32_t> gPriorities;
 		}];
 		if (completion) completion(out, total);
 	}];
-}
-
-- (void)clearLocalDatabase {
-	// Wipes cached chats/messages but keeps the session.
-	[self send:@{@"@type" : @"optimizeStorage", @"chat_limit" : @(0)}];
-	[self.chatsById removeAllObjects];
-	[self rebuildChats];
 }
 
 #pragma mark - file records, names and bytes

@@ -70,15 +70,6 @@ static NSArray *TGPacksFrom(NSDictionary *target) {
 	}];
 }
 
-- (void)giftsForUser:(int64_t)userId completion:(void (^)(NSArray *))completion {
-	[self giftsForOwner:@{@"@type" : @"messageSenderUser", @"user_id" : @(userId)}
-				 offset:@""
-			 completion:^(NSArray *gifts, NSString *nextOffset, NSInteger totalCount){
-		if (completion)
-			completion(gifts);
-	}];
-}
-
 - (void)giftsForOwner:(NSDictionary *)ownerId
 			   offset:(NSString *)offset
 		   completion:(void (^)(NSArray *gifts, NSString *nextOffset, NSInteger totalCount))completion {

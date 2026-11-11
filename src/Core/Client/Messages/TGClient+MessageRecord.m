@@ -6,33 +6,6 @@
 
 #pragma mark - the message as a record
 
-- (void)addLocalTextMessage:(NSString *)text
-					 toChat:(int64_t)chatId
-				 completion:(void (^)(int64_t messageId))completion {
-	if (!text.length){
-		if (completion) completion(0);
-		return;
-	}
-	int64_t userId = [self.me[@"id"] longLongValue];
-	if (!userId){
-		if (completion) completion(0);
-		return;
-	}
-	[self request:@{
-		@"@type"                  : @"addLocalMessage",
-		@"chat_id"                : @(chatId),
-		@"sender_id"              : @{@"@type" : @"messageSenderUser",
-									  @"user_id" : @(userId)},
-		@"reply_to"               : [NSNull null],
-		@"disable_notification"   : @YES,
-		@"input_message_content"  : @{@"@type" : @"inputMessageText",
-									  @"text" : TGFormattedText(text)},
-	} completion:^(NSDictionary *result){
-		if (completion)
-			completion([result[@"id"] longLongValue]);
-	}];
-}
-
 - (void)callbackQueryMessage:(int64_t)messageId
 					  inChat:(int64_t)chatId
 			 callbackQueryId:(int64_t)callbackQueryId

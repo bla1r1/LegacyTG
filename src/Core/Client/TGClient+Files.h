@@ -21,12 +21,6 @@
 
 /// Whether media downloads itself, per network. TDLib cannot read the setting
 /// back, so these answer with what the app last wrote.
-- (BOOL)autoDownloadOverMobile;
-
-- (BOOL)autoDownloadOverWifi;
-
-- (void)setAutoDownloadOverMobile:(BOOL)mobile wifi:(BOOL)wifi;
-
 /// Cache size on disk, in bytes, and the file count. TDLib's fast variant:
 /// the full one walks every file and takes seconds on this hardware.
 - (void)storageStatsWithCompletion:(void (^)(long long bytes, NSInteger files))completion;
@@ -41,8 +35,6 @@
                                                  long long total))completion;
 
 /// Drop TDLib's local database. The session stays.
-- (void)clearLocalDatabase;
-
 #pragma mark - file records, names and bytes
 
 /// One file's record as the File Info screen reads it: "fileId", "size",
