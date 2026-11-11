@@ -57,17 +57,18 @@ static void TGDrawImageFillingRectAlpha(UIImage *image, CGRect rect,
 /// dark theme so white doodles do not turn into a light card.
 static void TGDrawAppearanceWallpaper(UIImage *paper, UIColor *paperColour,
 									  CGRect rect, BOOL dark) {
-	UIImage *pattern = TGAppearancePatternImage();
 	if (paper && paper.size.width > 0){
 		TGDrawImageFillingRect(paper, rect, kCGBlendModeNormal);
 		return;
 	}
 	[paperColour setFill];
 	UIRectFill(rect);
+	if (dark)
+		return;
+	UIImage *pattern = TGAppearancePatternImage();
 	if (!pattern)
 		return;
-	TGDrawImageFillingRect(pattern, rect,
-			dark ? kCGBlendModeScreen : kCGBlendModeNormal);
+	TGDrawImageFillingRect(pattern, rect, kCGBlendModeNormal);
 }
 
 /// A theme background fill: a solid colour, a two-stop gradient, or the

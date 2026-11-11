@@ -150,6 +150,7 @@ CGFloat TGInlineStampY(CGRect bodyFrame);
 @property (nonatomic, assign) BOOL runEnd;
 @property (nonatomic, strong) NSArray *entities;
 @property (nonatomic, strong) NSAttributedString *attributedBody;
+@property (nonatomic, strong) NSArray *customEmojiRects;
 @end
 
 @interface TGMessageLayoutCache : NSObject

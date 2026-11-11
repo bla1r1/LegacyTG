@@ -99,6 +99,14 @@ static BOOL TGTestOldFonts(UTF32Char c) {
 	XCTAssertTrue([out attribute:@"TGCustomEmojiId" atIndex:5 effectiveRange:NULL] == nil);
 }
 
+- (void)testMessageLayout_CachesCustomEmojiRects {
+	TGMessageLayout *layout = [[TGMessageLayout alloc] init];
+	XCTAssertNil(layout.customEmojiRects);
+	NSArray *rects = @[@{@"id": @123}];
+	layout.customEmojiRects = rects;
+	XCTAssertEqualObjects(layout.customEmojiRects, rects);
+}
+
 - (void)testTextSize_EmptyTextIsZero {
 	CGSize empty = TGTextSize(@"", nil, 246);
 	XCTAssertEqual(empty.width,  0.0);

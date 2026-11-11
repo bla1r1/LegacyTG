@@ -1506,6 +1506,7 @@ static NSInteger const kTGRepeatPeriods[] = {0, 86400, 604800, 2592000};
 
 			iv.image = (UIImage *)imgObj;
 			iv.frame = imgFrame;
+			iv.backgroundColor = self.input.backgroundColor ?: [[TGTheme shared] inputFieldColour];
 			if (CGRectIsEmpty(imgFrame) || !CGRectIntersectsRect(self.input.bounds, imgFrame)) {
 				iv.hidden = YES;
 			} else {

@@ -6,6 +6,18 @@
 
 #pragma mark - communities
 
+- (NSArray *)communities {
+	if (!self.communityOrder.count)
+		return @[];
+	NSMutableArray *list = [NSMutableArray arrayWithCapacity:self.communityOrder.count];
+	for (NSNumber *ident in self.communityOrder) {
+		NSDictionary *row = self.communitiesById[ident];
+		if (row)
+			[list addObject:row];
+	}
+	return list;
+}
+
 - (void)communityFullInfo:(int64_t)communityId
                completion:(void (^)(NSDictionary *, NSString *))completion {
 	if (!communityId){

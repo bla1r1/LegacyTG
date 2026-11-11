@@ -213,6 +213,21 @@ static UIImage *TGBackspaceImage(UIColor *colour) {
 	[self syncStripToScroll];
 }
 
+static NSUInteger TGEmojiPanelFirstVisibleIndex(NSArray *frames, CGFloat minY) {
+	NSUInteger low = 0;
+	NSUInteger high = frames.count;
+	while (low < high) {
+		NSUInteger mid = low + ((high - low) >> 1);
+		CGRect r = [frames[mid] CGRectValue];
+		if (CGRectGetMaxY(r) < minY) {
+			low = mid + 1;
+		} else {
+			high = mid;
+		}
+	}
+	return low;
+}
+
 /// Build what is on screen and one screen beyond, hand the rest back to the
 /// pool. Called on every scroll, so it only ever touches the few cells that
 /// crossed the edge.
@@ -238,8 +253,11 @@ static UIImage *TGBackspaceImage(UIColor *colour) {
 		[self.cells removeObjectForKey:key];
 	}
 
-	for (NSUInteger i = 0; i < self.frames.count; i++){
+	NSUInteger start = TGEmojiPanelFirstVisibleIndex(self.frames, CGRectGetMinY(visible));
+	for (NSUInteger i = start; i < self.frames.count; i++){
 		CGRect frame = [self.frames[i] CGRectValue];
+		if (CGRectGetMinY(frame) > CGRectGetMaxY(visible))
+			break;
 		if (!CGRectIntersectsRect(frame, visible))
 			continue;
 		if (self.cells[@(i)])

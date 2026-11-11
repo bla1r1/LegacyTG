@@ -255,9 +255,6 @@ static NSString *TGChatDate(NSTimeInterval unix) {
 
 	row[TGRowChatLayout] = [TGChatRowCell accessoriesValueForRow:row
 														   width:tableView.bounds.size.width];
-	NSNumber *previewFileId = row[TGRowChatPreviewFileId];
-	if (previewFileId)
-		[[TGChatListStore shared] loadPreviewImageForFileId:previewFileId];
 	UITableViewCell *cell = [TGChatRowCell cellForTableView:tableView row:row];
 	TGPerfReport("list cell", [c[@"title"] UTF8String] ?: "", cellStart, 33.0);
 	return cell;

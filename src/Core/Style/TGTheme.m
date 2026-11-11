@@ -83,9 +83,7 @@ static UIImage *TGThemeWallpaperImage(UIColor *colour, BOOL dark) {
 			target:self selector:@selector(refreshAutoNightMode)
 			userInfo:nil repeats:YES];
 	[[NSRunLoop mainRunLoop] addTimer:timer forMode:NSRunLoopCommonModes];
-	dispatch_async(dispatch_get_main_queue(), ^{
-		[self refreshAutoNightMode];
-	});
+	[self refreshAutoNightMode];
 	return self;
 }
 
@@ -127,6 +125,8 @@ static UIImage *TGThemeWallpaperImage(UIColor *colour, BOOL dark) {
 }
 
 - (void)chatThemeStoreChanged {
+	if (![TGChatThemeStore shared].currentThemeName.length)
+		return;
 	_themeWallpaper = nil;
 	[self themeChanged];
 }
@@ -503,21 +503,28 @@ static char kTabOffMaskKey;
 	UIColor *on = [self isDark] ? [self accentColour] : [UIColor whiteColor];
 	UIColor *off = [UIColor colorWithWhite:1.0f alpha:TGAlphaSecondary];
 
-	// iOS 6 tints the system bar slate blue; iOS 7+ sets barTintColor.
+	// iOS <= 6 keeps the native skeuomorphic glossy tab bar tinted to the theme; iOS 7+ sets barTintColor.
 	if ([TGTheme drawsSkeuomorphicChrome]) {
 		bar.tintColor = barBg;
+		if ([bar respondsToSelector:@selector(setBackgroundImage:)])
+			bar.backgroundImage = nil;
+		if ([bar respondsToSelector:@selector(setSelectionIndicatorImage:)])
+			bar.selectionIndicatorImage = nil;
+		if ([bar respondsToSelector:@selector(setSelectedImageTintColor:)])
+			bar.selectedImageTintColor = [self accentColour];
 	} else if ([bar respondsToSelector:@selector(setBarTintColor:)]) {
 		bar.translucent = NO;      // see -styleNavigationBar:
 		bar.barTintColor = barBg;
 		bar.tintColor = on;
+		if ([bar respondsToSelector:@selector(setBackgroundImage:)])
+			bar.backgroundImage = nil;
+		if ([bar respondsToSelector:@selector(setSelectionIndicatorImage:)])
+			bar.selectionIndicatorImage = nil;
 	} else {
 		bar.tintColor = barBg;
+		if ([bar respondsToSelector:@selector(setBackgroundImage:)])
+			bar.backgroundImage = nil;
 	}
-
-	if ([bar respondsToSelector:@selector(setBackgroundImage:)])
-		bar.backgroundImage = nil;
-	if ([bar respondsToSelector:@selector(setSelectionIndicatorImage:)])
-		bar.selectionIndicatorImage = nil;
 
 	// On the tinted bar the system's grey glyphs went dark/gray; they are drawn
 	// white instead - full for the selected tab, faded for the rest.
@@ -529,11 +536,25 @@ static char kTabOffMaskKey;
 		UIImage *onMask = objc_getAssociatedObject(item, &kTabOnMaskKey);
 		UIImage *offMask = objc_getAssociatedObject(item, &kTabOffMaskKey);
 		if (!onMask && !offMask) {
-			if ([item respondsToSelector:@selector(selectedImage)])
-				onMask = item.selectedImage;
-			if (!onMask)
-				onMask = item.image;
-			offMask = item.image ?: onMask;
+			if (item.tag == 0) {
+				onMask = [TGIcons chats];
+				offMask = [TGIcons chatsOutline];
+			} else if (item.tag == 1) {
+				onMask = [TGIcons contacts];
+				offMask = [TGIcons contactsOutline];
+			} else if (item.tag == 2) {
+				onMask = [TGIcons settings];
+				offMask = [TGIcons settingsOutline];
+			} else if (item.tag == 3) {
+				onMask = [TGIcons calls];
+				offMask = [TGIcons calls];
+			} else {
+				if ([item respondsToSelector:@selector(selectedImage)])
+					onMask = item.selectedImage;
+				if (!onMask)
+					onMask = item.image;
+				offMask = item.image ?: onMask;
+			}
 			if (onMask)
 				objc_setAssociatedObject(item, &kTabOnMaskKey, onMask,
 						OBJC_ASSOCIATION_RETAIN_NONATOMIC);
@@ -542,7 +563,13 @@ static char kTabOffMaskKey;
 						OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 		}
 
-		if (onMask || offMask) {
+		if ([TGTheme drawsSkeuomorphicChrome]) {
+			// iOS <= 6: native UIKit skeuomorphic tab item with embossed gradient and shadow.
+			if ([item respondsToSelector:@selector(setFinishedSelectedImage:withFinishedUnselectedImage:)]) {
+				[item setFinishedSelectedImage:nil withFinishedUnselectedImage:nil];
+			}
+			item.image = onMask ?: offMask;
+		} else if (onMask || offMask) {
 			UIImage *onImg = [TGIcons image:(onMask ?: offMask) filledWith:on];
 			UIImage *offImg = [TGIcons image:(offMask ?: onMask) filledWith:off];
 
@@ -556,17 +583,24 @@ static char kTabOffMaskKey;
 			}
 		}
 
-		NSDictionary *normalAttrs = @{
-			UITextAttributeTextColor : off,
-			NSForegroundColorAttributeName : off
-		};
-		NSDictionary *selectedAttrs = @{
-			UITextAttributeTextColor : on,
-			NSForegroundColorAttributeName : on
-		};
-		[item setTitleTextAttributes:normalAttrs forState:UIControlStateNormal];
-		[item setTitleTextAttributes:selectedAttrs forState:UIControlStateSelected];
+		if (![TGTheme drawsSkeuomorphicChrome]) {
+			NSDictionary *normalAttrs = @{
+				UITextAttributeTextColor : off,
+				NSForegroundColorAttributeName : off
+			};
+			NSDictionary *selectedAttrs = @{
+				UITextAttributeTextColor : on,
+				NSForegroundColorAttributeName : on
+			};
+			[item setTitleTextAttributes:normalAttrs forState:UIControlStateNormal];
+			[item setTitleTextAttributes:selectedAttrs forState:UIControlStateSelected];
+		} else {
+			[item setTitleTextAttributes:nil forState:UIControlStateNormal];
+			[item setTitleTextAttributes:nil forState:UIControlStateSelected];
+		}
 	}
+	[bar setNeedsDisplay];
+	[bar setNeedsLayout];
 }
 
 #pragma mark - wallpaper
@@ -640,7 +674,9 @@ static char kTabOffMaskKey;
 	}
 	UIColor *colour = [self importedColour:@"wallpaper"];
 	if (colour)
-		_themeWallpaper = TGThemeWallpaperImage(colour, [self isDark]);
+		return nil;
+	if ([self isDark])
+		return nil;
 	if (!_themeWallpaper)
 		_themeWallpaper = [UIImage imageNamed:@"builtin-wallpaper-0.jpg"];
 	return _themeWallpaper;
@@ -679,20 +715,21 @@ static char kTabOffMaskKey;
 	if (!bar)
 		return;
 
-	bar.barStyle = UIBarStyleDefault;
+	bar.barStyle = [self isDark] ? UIBarStyleBlack : UIBarStyleDefault;
 
 	// iOS 6 draws its own bar: tinted, it is the real gloss, edge and shadow,
 	// and its Back and Done buttons match it because they come from the same
-	// place. The procedural imitation below was close, never the same.
+	// place.
 	if ([TGTheme drawsSkeuomorphicChrome]) {
 		if ([bar respondsToSelector:@selector(setBackgroundImage:forBarMetrics:)])
 			[bar setBackgroundImage:nil forBarMetrics:UIBarMetricsDefault];
 		if ([bar respondsToSelector:@selector(setShadowImage:)])
 			[bar setShadowImage:nil];
-		bar.tintColor = [self importedColour:@"bar"] ?: nil;
-		bar.titleTextAttributes = [self importedColour:@"barTitle"]
-				? @{ UITextAttributeTextColor : [self barTitleColour] }
-				: nil;
+		bar.tintColor = [self barColour];
+		bar.titleTextAttributes = @{
+			UITextAttributeTextColor : [self barTitleColour],
+			UITextAttributeTextShadowColor : [UIColor clearColor]
+		};
 		return;
 	}
 
