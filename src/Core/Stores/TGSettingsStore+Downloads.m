@@ -3,7 +3,7 @@
 // TGClient+Downloads.m - the download manager, and the two things a download
 // could not do: stop, and go away.
 //
-// Downloading worked from the first day (TGClient+Files). What had no request
+// Downloading worked from the first day. What had no request
 // at all was cancelling one, deleting the file afterwards, and the list
 // Telegram keeps of everything this account has pulled down.
 //

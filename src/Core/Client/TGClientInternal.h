@@ -206,23 +206,21 @@ NSArray *TGMediaPageAppending(NSArray *existing, NSArray *more);
 - (void)sendTdlibParameters;
 - (void)flushPendingPhoneNumber;
 // The download waiter table lives in C++ behind its own mutex (see
-// TGClient+Files.mm); these are the only ways in.
+// TGDownloadStore.mm); these are the only ways in.
 /// The preliminary-upload/generation records keyed by original path. Cleared
 /// on an account switch: the file ids they track belong to the old client.
-- (void)removeAllPendingGenerations;
 /// A TDLib generation request. The file-generation flow lives in +Files,
 /// because the reply is sent with writeGeneratedFilePart and the pending
 /// request is the record it finishes.
-- (void)handleFileGenerationStart:(NSDictionary *)update;
-- (void)handleFileGenerationStop:(NSDictionary *)update;
 /// Upload progress on a file this client is generating; forwarded to the
 /// pending generation's progress block.
-- (void)handleFileUploadProgress:(NSInteger)fileId file:(NSDictionary *)file;
 
 // The download watchdog timeout, 45 s in production; the host tests shrink
 // it so the timer fires inside a test runtime.
 extern double TGFileWaiterTimeoutSeconds;
 FOUNDATION_EXPORT NSString *const TGFileDownloadedNotification;
+FOUNDATION_EXPORT NSString *const TGFileUploadProgressNotification;
+FOUNDATION_EXPORT NSString *const TGFileGenerationUpdateNotification;
 FOUNDATION_EXPORT NSString *const TGCallUpdateNotification;
 - (void)cacheProfilePhoto:(NSDictionary *)user;
 - (void)mergeChat:(NSDictionary *)chat;

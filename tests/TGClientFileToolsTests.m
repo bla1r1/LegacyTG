@@ -7,6 +7,7 @@
 #import "TGTestRunner.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
+#import "TGDownloadStore.h"
 #import "TGBase64.h"
 #import "TGStoreTestSupport.h"
 #import "TGDevStore.h"
@@ -198,7 +199,7 @@ static NSDictionary *FTError(void) {
 	__block NSError *doneError = nil;
 	__block NSMutableArray *stages = [NSMutableArray array];
 
-	[c generateTextFileNamed:@"note.txt" contents:contents
+	[[TGDownloadStore shared] generateTextFileNamed:@"note.txt" contents:contents
 			progress:^(NSInteger fileId, float progress, NSString *stage){
 		[stages addObject:stage ?: @""];
 	} completion:^(NSInteger fileId, NSString *path, NSError *error){
@@ -261,7 +262,7 @@ static NSDictionary *FTError(void) {
 	TGClient *c = FTClient();
 	__block NSError *doneError = nil;
 	__block NSString *donePath = nil;
-	[c generateTextFileNamed:@"note.txt" contents:@"race" progress:nil
+	[[TGDownloadStore shared] generateTextFileNamed:@"note.txt" contents:@"race" progress:nil
 				   completion:^(NSInteger fileId, NSString *path, NSError *error){
 		doneError = error;
 		donePath = path;
@@ -295,7 +296,7 @@ static NSDictionary *FTError(void) {
 - (void)testGenerateTextFile_AnUploadErrorReachesTheCompletion {
 	TGClient *c = FTClient();
 	__block NSError *doneError = nil;
-	[c generateTextFileNamed:@"note.txt" contents:@"x" progress:nil
+	[[TGDownloadStore shared] generateTextFileNamed:@"note.txt" contents:@"x" progress:nil
 				   completion:^(NSInteger fileId, NSString *path, NSError *error){
 		doneError = error;
 	}];
@@ -306,7 +307,7 @@ static NSDictionary *FTError(void) {
 
 - (void)testCancelPreliminaryUpload_SendsTheFileId {
 	TGClient *c = FTClient();
-	[c cancelPreliminaryUploadOfFile:700];
+	[[TGDownloadStore shared] cancelPreliminaryUploadOfFile:700];
 	NSDictionary *asked = FTLast(c, @"cancelPreliminaryUploadFile");
 	XCTAssertEqualObjects(asked[@"file_id"], @(700));
 }

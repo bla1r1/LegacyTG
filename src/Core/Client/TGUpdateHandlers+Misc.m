@@ -7,6 +7,9 @@
 #import "TGClientInternal.h"
 
 NSString *const TGCallUpdateNotification = @"TGCallUpdateNotification";
+NSString *const TGFileDownloadedNotification = @"TGFileDownloadedNotification";
+NSString *const TGFileUploadProgressNotification = @"TGFileUploadProgressNotification";
+NSString *const TGFileGenerationUpdateNotification = @"TGFileGenerationUpdateNotification";
 #import "TGState.h"
 #import "TGTransport.h"
 #import "TGUpdateRouter.h"
@@ -40,7 +43,9 @@ NSString *const TGCallUpdateNotification = @"TGCallUpdateNotification";
 			double uploaded = [file[@"remote"][@"uploaded_size"] doubleValue];
 			if (self.client.onFileUploadProgress && expected > 0)
 				self.client.onFileUploadProgress(fid, (float)(uploaded / expected));
-			[self.client handleFileUploadProgress:fid file:file];
+			[[NSNotificationCenter defaultCenter]
+					postNotificationName:TGFileUploadProgressNotification object:self
+								  userInfo:@{@"fileId" : @(fid), @"file" : file}];
 			if (expected > 0)
 				[self.client noteUploadProgress:fid fraction:(float)(uploaded / expected)];
 		}
@@ -58,14 +63,18 @@ NSString *const TGCallUpdateNotification = @"TGCallUpdateNotification";
 	case TGUpdateFileGenerationStart: {
 		// TDLib asks the app to produce a file. +Files owns the pending
 		// request, writes the parts and finishes the generation.
-		[self.client handleFileGenerationStart:obj];
+		[[NSNotificationCenter defaultCenter]
+				postNotificationName:TGFileGenerationUpdateNotification object:self
+						  userInfo:@{@"update" : obj}];
 		return YES;
 	}
 
 	case TGUpdateFileGenerationStop: {
 		// The generation is no longer needed: drop the pending blocks so a
 		// screen waiting on it learns it stopped rather than hangs.
-		[self.client handleFileGenerationStop:obj];
+		[[NSNotificationCenter defaultCenter]
+				postNotificationName:TGFileGenerationUpdateNotification object:self
+						  userInfo:@{@"update" : obj}];
 		return YES;
 	}
 

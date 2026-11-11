@@ -263,7 +263,7 @@ NSString *TGAccountStoreDefaultsKey(NSString *base) {
 	// The stores and players that hold this account's ids are the app's to
 	// reset, on TGAccountDidSwitchNotification.
 	[[TGCallStore shared] resetGroupCallState];
-	[[TGClient shared] removeAllPendingGenerations];
+	[[TGDownloadStore shared] removeAllPendingGenerations];
 }
 
 @end

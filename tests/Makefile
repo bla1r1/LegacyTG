@@ -186,6 +186,7 @@ CLIENT_OBJC_SRCS := \
     src/Core/Model/TGLiveLocation.m \
     src/Core/Model/TGComposerText.m \
     src/Core/Model/TGGiftFlatten.m \
+    src/Core/Model/TGMediaSupport.m \
     src/Core/Model/TGPinnedLine.m \
     src/Core/Client/TGClient+MessageMeta.m \
     src/Core/Client/TGClient+SavedMessages.m \
@@ -193,7 +194,6 @@ CLIENT_OBJC_SRCS := \
     src/Core/Client/TGClient+Stickers.m \
     src/Core/Client/TGClient+Updates.m \
     src/Core/Stores/TGUpdateStore.m \
-    src/Core/Client/TGClient+Files.mm \
     src/Core/Stores/TGStickerPack.mm \
     $(SRC)/Media/TGStickerImage.m \
     src/Core/Model/TGStatusText.m \
