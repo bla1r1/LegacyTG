@@ -7,10 +7,6 @@
 #define TGRawUserCacheCap 1000
 #import <UIKit/UIKit.h>
 
-typedef void *(*td_create_fn)(void);
-typedef void  (*td_send_fn)(void *client, const char *request);
-typedef const char *(*td_recv_fn)(void *client, double timeout);
-typedef const char *(*td_exec_fn)(void *client, const char *request);
 
 #ifdef __cplusplus
 extern "C" {
@@ -47,21 +43,15 @@ NSArray *TGMediaPageAppending(NSArray *existing, NSArray *more);
 #endif
 
 @interface TGClient ()
-@property (nonatomic, assign) void *handle;
-@property (nonatomic, assign) void *client;
-@property (nonatomic, assign) td_send_fn td_send;
-@property (nonatomic, assign) td_recv_fn td_recv;
 /// td_json_client_execute, for the handful of td_api functions that answer
 /// without a round trip. Null when the dylib is missing the symbol, which
 /// every caller has to survive.
-@property (nonatomic, assign) td_exec_fn td_exec;
 /// The terms Telegram sent with the registration state, kept for the screen
 /// that has to show them before an account is made.
 @property (nonatomic, copy) NSString *registrationTermsText;
 @property (nonatomic, assign) TGAuthState authState;
 @property (nonatomic, assign) NSTimeInterval readyAt;
-@property (nonatomic, assign) BOOL available;
-@property (nonatomic, assign) BOOL running;
+@property (nonatomic, readonly) BOOL running;
 /// The background close: asked for, finished, and a return that came first.
 @property (nonatomic, assign) BOOL pausing;
 @property (nonatomic, assign) BOOL paused;
@@ -113,11 +103,10 @@ NSArray *TGMediaPageAppending(NSArray *existing, NSArray *more);
 @property (nonatomic, strong) NSArray *chats;
 @property (nonatomic, assign) BOOL batchingUpdates;
 @property (nonatomic, assign) BOOL chatsNeedRebuild;
-@property (nonatomic, strong) TGUpdateCoalescer *updateCoalescer;
-@property (nonatomic, strong) NSMutableArray *outbox;   // JSON strings awaiting send
-@property (nonatomic, strong) NSLock *outboxLock;
+@property (nonatomic, readonly) TGUpdateCoalescer *updateCoalescer;
+@property (nonatomic, readonly) NSMutableArray *outbox;
+@property (nonatomic, readonly) NSMutableDictionary *pendingRequests;
 /// Wakes the idle receive thread as soon as there is something to send.
-@property (nonatomic, strong) dispatch_semaphore_t outboxSignal;
 @property (nonatomic, assign) NSUInteger chatsAtLastLoad;
 @property (nonatomic, assign) BOOL chatListComplete;
 @property (nonatomic, assign) NSUInteger loadChatsAttempts;
@@ -204,8 +193,6 @@ NSArray *TGMediaPageAppending(NSArray *existing, NSArray *more);
 /// drops its entry so the editor asks again rather than drawing a stale box.
 @property (nonatomic, strong) NSMutableDictionary *checklistCache;
 @property (nonatomic, assign) TGConnectionState connectionState;
-@property (nonatomic, strong) NSMutableDictionary *pendingRequests;  // @extra -> completion
-@property (nonatomic, assign) NSUInteger requestSeq;
 @property (nonatomic, strong) NSDictionary *codeInfo;
 @property (nonatomic, strong) NSDictionary *loginPasswordInfo;
 @property (nonatomic, strong) NSDictionary *emailCodeInfo;
@@ -215,7 +202,6 @@ NSArray *TGMediaPageAppending(NSArray *existing, NSArray *more);
 - (void)request:(NSDictionary *)request completion:(void (^)(NSDictionary *))completion;
 - (void)drainOutbox;
 - (void)handleUpdate:(NSDictionary *)obj;
-- (void)handleUpdateBatch:(NSArray *)batch;
 - (void)handleAuthState:(NSDictionary *)state;
 - (void)sendTdlibParameters;
 - (void)flushPendingPhoneNumber;

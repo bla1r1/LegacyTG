@@ -446,6 +446,38 @@ NSString *TGErrorMessage(NSDictionary *message, NSDictionary *fallback) {
 	}];
 }
 
+- (void)sendPhotoAtPath:(NSString *)path toChat:(int64_t)chatId {
+	[self sendPhotoAtPath:path viewOnce:NO toChat:chatId];
+}
+
+- (void)sendVideoAtPath:(NSString *)path toChat:(int64_t)chatId {
+	[self sendVideoAtPath:path viewOnce:NO toChat:chatId];
+}
+
+- (void)sendVoiceAtPath:(NSString *)path duration:(NSInteger)seconds
+				 toChat:(int64_t)chatId thread:(int64_t)threadId viewOnce:(BOOL)viewOnce {
+	[self sendVoiceAtPath:path duration:seconds toChat:chatId thread:threadId
+				 viewOnce:viewOnce progress:nil accepted:nil completion:nil];
+}
+
+- (void)sendVideoNoteAtPath:(NSString *)path duration:(NSInteger)seconds
+					 length:(NSInteger)length toChat:(int64_t)chatId thread:(int64_t)threadId
+				   viewOnce:(BOOL)viewOnce {
+	[self sendVideoNoteAtPath:path duration:seconds length:length toChat:chatId
+					   thread:threadId viewOnce:viewOnce thumbnail:nil
+					 progress:nil accepted:nil completion:nil];
+}
+
+- (void)sendVideoNoteAtPath:(NSString *)path duration:(NSInteger)seconds
+					 length:(NSInteger)length toChat:(int64_t)chatId thread:(int64_t)threadId
+				   viewOnce:(BOOL)viewOnce
+				   progress:(void (^)(CGFloat progress))progress
+				 completion:(void (^)(BOOL sent))completion {
+	[self sendVideoNoteAtPath:path duration:seconds length:length toChat:chatId
+					   thread:threadId viewOnce:viewOnce thumbnail:nil
+					 progress:progress accepted:nil completion:completion];
+}
+
 - (void)sendVideoNoteAtPath:(NSString *)path duration:(NSInteger)seconds
 					 length:(NSInteger)length toChat:(int64_t)chatId thread:(int64_t)threadId
 				   viewOnce:(BOOL)viewOnce thumbnail:(NSString *)thumbnailPath

@@ -5,6 +5,7 @@
 // wire shape is pinned down before a screen is wired to them. They do not
 // make the names reachable: only a call from src/ does that.
 #import "TGTestRunner.h"
+#import "TGMessageStore.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
 #import "TGGhostMode.h"
@@ -145,7 +146,7 @@ static NSDictionary *plainB(NSDictionary *d) {
 - (void)testAvailableReactions_ReturnsTheTopEmoji {
 	TGClient *c = B();
 	__block NSArray *got = @[];
-	[c availableReactionsForMessage:55 inChat:77 completion:^(NSArray *emojis){ got = emojis; }];
+	[[TGMessageStore shared] availableReactionsForMessage:55 inChat:77 completion:^(NSArray *emojis){ got = emojis; }];
 
 	NSDictionary *r = lastB(c, @"getMessageAvailableReactions");
 	XCTAssertEqualObjects(r[@"chat_id"], @(77));
@@ -164,7 +165,7 @@ static NSDictionary *plainB(NSDictionary *d) {
 - (void)testAvailableReactions_AnUnavailableMessageHasNoBar {
 	TGClient *c = B();
 	__block NSArray *got = @[];
-	[c availableReactionsForMessage:55 inChat:77 completion:^(NSArray *emojis){ got = emojis; }];
+	[[TGMessageStore shared] availableReactionsForMessage:55 inChat:77 completion:^(NSArray *emojis){ got = emojis; }];
 
 	answerB(c, plainB(@{@"@type" : @"availableReactions",
 						@"top_reactions" : @[],
@@ -178,7 +179,7 @@ static NSDictionary *plainB(NSDictionary *d) {
 - (void)testEmbeddingCode_TextIsReturnedAsWritten {
 	TGClient *c = B();
 	__block NSString *got = nil;
-	[c embeddingCodeOfMessage:55 inChat:77 album:YES completion:^(NSString *code){ got = code; }];
+	[[TGMessageStore shared] embeddingCodeOfMessage:55 inChat:77 album:YES completion:^(NSString *code){ got = code; }];
 
 	NSDictionary *r = lastB(c, @"getMessageEmbeddingCode");
 	XCTAssertEqualObjects(r[@"chat_id"], @(77));
@@ -192,7 +193,7 @@ static NSDictionary *plainB(NSDictionary *d) {
 - (void)testEmbeddingCode_ANonTextAnswerIsAnEmptyString {
 	TGClient *c = B();
 	__block NSString *got = nil;
-	[c embeddingCodeOfMessage:55 inChat:77 album:NO completion:^(NSString *code){ got = code; }];
+	[[TGMessageStore shared] embeddingCodeOfMessage:55 inChat:77 album:NO completion:^(NSString *code){ got = code; }];
 	answerB(c, @{@"@type" : @"error", @"code" : @(400), @"message" : @"NO_EMBED"});
 	XCTAssertEqualObjects(got, @"");
 }

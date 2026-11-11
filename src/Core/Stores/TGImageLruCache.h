@@ -7,17 +7,17 @@
 // TGObjectLruCache for anything else held by integer id. Both evict the least
 // recently used entry one at a time rather than flushing everything.
 //
-#import <UIKit/UIKit.h>
 
+#import <Foundation/Foundation.h>
 @interface TGImageLruCache : NSObject
 
 - (instancetype)initWithCapacity:(NSUInteger)capacity;
 
-- (UIImage *)objectForKeyedSubscript:(id)key;
-- (void)setObject:(UIImage *)image forKeyedSubscript:(id)key;
+- (id)objectForKeyedSubscript:(id)key;
+- (void)setObject:(id)image forKeyedSubscript:(id)key;
 
-- (UIImage *)objectForKey:(id)key;
-- (void)setObject:(UIImage *)image forKey:(id)key;
+- (id)objectForKey:(id)key;
+- (void)setObject:(id)image forKey:(id)key;
 - (void)removeObjectForKey:(id)key;
 - (void)removeAllObjects;
 

@@ -6,7 +6,6 @@
 // stay behind it.
 //
 #import <Foundation/Foundation.h>
-#import <UIKit/UIKit.h>
 #import "TGClientTypes.h"
 #import "TGClientNotifications.h"
 
@@ -80,7 +79,7 @@ extern NSString *const TGChatListPreviewImageLoadedNotification;
 - (NSString *)compactBadgeTextForCount:(NSInteger)count;
 
 /// A preview thumbnail already decoded, or nil until it lands.
-- (UIImage *)cachedPreviewImageForFileId:(NSNumber *)fileId;
+- (id)cachedPreviewImageForFileId:(NSNumber *)fileId;
 /// Ask for one; the image notification follows on the main queue.
 - (void)loadPreviewImageForFileId:(NSNumber *)fileId;
 

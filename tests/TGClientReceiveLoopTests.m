@@ -5,11 +5,8 @@
 #import "TGTestRunner.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
+#import "TGTransport.h"
 #include <libkern/OSAtomic.h>
-
-@interface TGClient (ReceiveLoopTests)
-- (void)receiveLoop;
-@end
 
 @interface TGClientReceiveLoopTests : XCTestCase @end
 
@@ -23,24 +20,16 @@ static const char *countingRecv(void *client, double timeout) {
 @implementation TGClientReceiveLoopTests
 
 - (void)testIdleLoopDoesNotSpin {
-	TGClient *c = TGClient.shared;
-	td_recv_fn savedRecv = c.td_recv;
-	BOOL savedAvailable = c.available;
-
+	TGTransport *transport = TGTransport.shared;
 	recvCalls = 0;
-	c.td_recv = countingRecv;
-	c.available = NO;
-	c.running = YES;
-	[NSThread detachNewThreadSelector:@selector(receiveLoop) toTarget:c withObject:nil];
+	[transport testSetReceive:countingRecv running:YES available:NO];
+	[NSThread detachNewThreadSelector:@selector(receiveLoop) toTarget:transport withObject:nil];
 	[NSThread sleepForTimeInterval:0.2];
-	c.running = NO;
+	[transport testStop];
 	[NSThread sleepForTimeInterval:0.05];
 
 	// 0.2 s at 20 ms is 10 rounds; a spinning loop makes millions.
 	XCTAssertTrue(recvCalls < 30, "the idle loop polled too often");
-
-	c.td_recv = savedRecv;
-	c.available = savedAvailable;
 }
 
 @end

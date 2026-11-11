@@ -4,6 +4,7 @@
 //
 #import "TGClient+Accounts.h"
 #import "TGClientInternal.h"
+#import "TGTransport.h"
 #import "TGOptions.h"
 
 extern NSString *const TGAccountDidSwitchNotification;
@@ -249,11 +250,7 @@ NSString *TGAccountStoreDefaultsKey(NSString *base) {
 
 	// Connection, requests and the outbox.
 	[TGClient shared].connectionState = TGConnectionStateUnknown;
-	[[TGClient shared].pendingRequests removeAllObjects];
-	[TGClient shared].requestSeq = 0;
-	[[TGClient shared].outboxLock lock];
-	[[TGClient shared].outbox removeAllObjects];
-	[[TGClient shared].outboxLock unlock];
+	[[TGTransport shared] reset];
 	[[TGClient shared].updateCoalescer reset];
 	[[TGClient shared] removeAllFileWaiters];
 

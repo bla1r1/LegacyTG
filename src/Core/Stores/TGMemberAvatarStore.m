@@ -5,6 +5,7 @@
 // owns that cache now; this keeps the two callers that still say "user" from
 // carrying a second copy of the download and decode rules.
 //
+#import <UIKit/UIKit.h>
 #import "TGMemberAvatarStore.h"
 #import "TGPeerStore.h"
 

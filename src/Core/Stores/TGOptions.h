@@ -4,6 +4,7 @@
 // handleUpdate is a .m file and stays one; it hands the three option shapes
 // td_api has over as scalars and never sees the store.
 //
+#import <Foundation/Foundation.h>
 #pragma once
 #include <stddef.h>
 

@@ -13,9 +13,6 @@
 #import "TGPatternImage.h"
 #import "TGStylePalette.h"
 
-#if TARGET_OS_IPHONE
-#import "TGLottieView.h"
-#endif
 
 NSString *const TGChatThemeStoreChangedNotification = @"TGChatThemeStoreChanged";
 
@@ -194,7 +191,6 @@ static NSNumber *TGStoreFileIdFromDocument(NSDictionary *document) {
 	NSMutableSet *_requestedPatterns;
 	NSMutableSet *_pendingWallpapers;
 #if TARGET_OS_IPHONE
-	NSMutableDictionary *_pendingPatternViews;
 #endif
 }
 
@@ -518,41 +514,19 @@ static BOOL TGStoreDataIsTGPattern(NSData *data) {
 		if (![path.pathExtension.lowercaseString isEqualToString:@"tgs"])
 			return;
 
+		void (^render)(NSString *, CGFloat, void (^)(UIImage *)) = me.tgsPatternRenderer;
+		if (!render)
+			return;
 		dispatch_async(dispatch_get_main_queue(), ^{
-			if (!me->_pendingPatternViews)
-				me->_pendingPatternViews = [NSMutableDictionary dictionary];
-			TGLottieView *view = [[TGLottieView alloc] initWithFrame:CGRectMake(0, 0,
-					TGStorePatternSide, TGStorePatternSide)];
-			me->_pendingPatternViews[fileId] = view;
-			__weak TGChatThemeStore *weakStore = me;
-			__weak TGLottieView *weakView = view;
-			void (^ready)(void) = ^{
-				TGChatThemeStore *store = weakStore;
-				TGLottieView *strongView = weakView;
-				if (!store || !strongView)
-					return;
-				UIImage *snapshot = [store snapshotPatternView:strongView];
-				[store->_pendingPatternViews removeObjectForKey:fileId];
+			render(path, TGStorePatternSide, ^(UIImage *snapshot){
 				if (snapshot)
-					[store cachePattern:snapshot fileId:fileId];
-			};
-			view.onStickerReady = ready;
-			if ([view loadStickerFile:path])
-				ready();
+					[me cachePattern:snapshot fileId:fileId];
+			});
 		});
 	});
 }
 
-- (UIImage *)snapshotPatternView:(UIView *)view {
-	CGImageRef content = (__bridge CGImageRef)view.layer.contents;
-	if (content && CFGetTypeID(content) == CGImageGetTypeID())
-		return [UIImage imageWithCGImage:content];
-	UIGraphicsBeginImageContextWithOptions(view.bounds.size, NO, 1);
-	[view.layer renderInContext:UIGraphicsGetCurrentContext()];
-	UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
-	UIGraphicsEndImageContext();
-	return image;
-}
+
 
 /// The fill alone, for the first frame before the pattern mask is ready and
 /// for a theme that has no pattern document at all.

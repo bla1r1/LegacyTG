@@ -7,6 +7,7 @@
 // it, reportChat answers before it accepts — so what the tests hold is the
 // shape going out and the branch taken on the way back.
 #import "TGTestRunner.h"
+#import "TGMessageStore.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
 
@@ -366,7 +367,7 @@ static void answerLastRequest(TGClient *c, NSDictionary *answer) {
 
 - (void)testStopPoll_NamesTheMessage {
 	TGClient *c = F2();
-	[c stopPoll:15 inChat:7];
+	[[TGMessageStore shared] stopPoll:15 inChat:7];
 	NSDictionary *r = lastOfType(c, @"stopPoll");
 	XCTAssertEqual([r[@"message_id"] longLongValue], 15LL);
 	XCTAssertEqual([r[@"chat_id"] longLongValue], 7LL);

@@ -1,19 +1,10 @@
 #import "TGClient+Messages.h"
 #import "TGClient+MessagesInternal.h"
 #import "TGClientInternal.h"
-#import "TGSendStore.h"
-#import "TGMessageStore.h"
 
 @implementation TGClient (Messages)
 
 #pragma mark - messages
-
-- (void)historyForChat:(int64_t)chatId
-                thread:(int64_t)threadId
-                 limit:(NSInteger)limit
-            completion:(void (^)(NSArray *))completion {
-	[[TGMessageStore shared] historyForChat:chatId thread:threadId limit:limit completion:completion];
-}
 
 /// Presses a callback button. The bot answers with a line to show
 /// ("text", as an alert when "alert"), a link to open ("url"), or nothing.
@@ -189,33 +180,6 @@
 		if ([c[@"id"] longLongValue] == chatId)
 			return c[@"title"];
 	return nil;
-}
-
-- (void)historyForChat:(int64_t)chatId
-                 limit:(NSInteger)limit
-            completion:(void (^)(NSArray *))completion {
-    [self historyForChat:chatId fromMessageId:0 limit:limit completion:completion];
-}
-
-- (void)historyForChat:(int64_t)chatId
-         fromMessageId:(int64_t)fromMessageId
-                 limit:(NSInteger)limit
-            completion:(void (^)(NSArray *))completion {
-	[[TGMessageStore shared] historyForChat:chatId fromMessageId:fromMessageId limit:limit completion:completion];
-}
-
-- (void)historyForChat:(int64_t)chatId
-       aroundMessageId:(int64_t)messageId
-                 limit:(NSInteger)limit
-            completion:(void (^)(NSArray *))completion {
-	[[TGMessageStore shared] historyForChat:chatId aroundMessageId:messageId limit:limit completion:completion];
-}
-
-- (void)newerHistoryForChat:(int64_t)chatId
-              fromMessageId:(int64_t)fromMessageId
-                      limit:(NSInteger)limit
-                 completion:(void (^)(NSArray *))completion {
-	[[TGMessageStore shared] newerHistoryForChat:chatId fromMessageId:fromMessageId limit:limit completion:completion];
 }
 
 - (void)historyForChat:(int64_t)chatId
@@ -429,19 +393,6 @@
 
 /// A scheduling state can change while there is nothing to send yet: null
 /// sends it now - TDLib's own meaning of the field - and a state moves it.
-- (void)setSchedulingState:(NSDictionary *)state
-			 forMessage:(int64_t)messageId
-					inChat:(int64_t)chatId
-				completion:(void (^)(BOOL ok))completion {
-	[[TGSendStore shared] setSchedulingState:state forMessage:messageId inChat:chatId completion:completion];
-}
-
-- (void)forwardMessages:(NSArray *)messageIds
-               fromChat:(int64_t)fromChatId
-                 toChat:(int64_t)toChatId {
-	[[TGMessageStore shared] forwardMessages:messageIds fromChat:fromChatId toChat:toChatId];
-}
-
 - (NSDictionary *)markdownParsed:(NSDictionary *)formattedText {
 	if (![formattedText isKindOfClass:[NSDictionary class]])
 		return formattedText;
@@ -549,39 +500,15 @@
 
 /// The caption under a picture, a video or a file. A separate request from
 /// editing text, which is why only text could be edited before.
-- (void)editCaption:(NSString *)caption
-		  ofMessage:(int64_t)messageId
-			 inChat:(int64_t)chatId
-		 completion:(void (^)(BOOL ok))completion {
-	[[TGMessageStore shared] editCaption:caption ofMessage:messageId
-								  inChat:chatId completion:completion];
-}
-
 /// Replaces the picture itself, keeping the message where it is in the
 /// history. The caption travels with it: editMessageMedia takes the whole
 /// content, so leaving the caption out would clear it.
-- (void)editPhotoAtPath:(NSString *)path
-				caption:(NSString *)caption
-			  ofMessage:(int64_t)messageId
-				 inChat:(int64_t)chatId
-			 completion:(void (^)(BOOL ok))completion {
-	[[TGMessageStore shared] editPhotoAtPath:path caption:caption ofMessage:messageId inChat:chatId completion:completion];
-}
-
 /// Several pictures as one message. Their own client sends up to ten; the
 /// album is one request, so the pictures arrive together rather than as a
 /// run of separate messages that happen to be next to each other.
 ///
 /// Only the first picture carries the caption - TDLib refuses an album where
 /// more than one does.
-- (void)sendPhotoAlbumAtPaths:(NSArray *)paths
-					  caption:(NSString *)caption
-					   toChat:(int64_t)chatId
-					   thread:(int64_t)threadId {
-	[[TGSendStore shared] sendPhotoAlbumAtPaths:paths caption:caption
-										 toChat:chatId thread:threadId];
-}
-
 - (void)messageWithId:(int64_t)messageId
                inChat:(int64_t)chatId
            completion:(void (^)(NSDictionary *))completion {
@@ -608,123 +535,11 @@
 	}];
 }
 
-- (void)sendStickerWithFileId:(NSInteger)fileId toChat:(int64_t)chatId thread:(int64_t)threadId {
-	[[TGSendStore shared] sendStickerWithFileId:fileId toChat:chatId thread:threadId];
-}
-
-- (void)sendVoiceAtPath:(NSString *)path duration:(NSInteger)seconds
-                 toChat:(int64_t)chatId thread:(int64_t)threadId {
-	[self sendVoiceAtPath:path duration:seconds toChat:chatId thread:threadId
-				 viewOnce:NO];
-}
-
-- (void)sendVoiceAtPath:(NSString *)path duration:(NSInteger)seconds
-				 toChat:(int64_t)chatId thread:(int64_t)threadId
-			   viewOnce:(BOOL)viewOnce {
-	[self sendVoiceAtPath:path duration:seconds toChat:chatId thread:threadId
-				 viewOnce:viewOnce progress:nil accepted:nil completion:nil];
-}
-
-- (void)sendVoiceAtPath:(NSString *)path duration:(NSInteger)seconds
-				 toChat:(int64_t)chatId thread:(int64_t)threadId
-			   viewOnce:(BOOL)viewOnce
-			   progress:(void (^)(CGFloat))progress
-			   accepted:(void (^)(int64_t))accepted
-			 completion:(void (^)(BOOL))completion {
-	[[TGSendStore shared] sendVoiceAtPath:path duration:seconds toChat:chatId thread:threadId viewOnce:viewOnce progress:progress accepted:accepted completion:completion];
-}
-
-- (void)sendVideoNoteAtPath:(NSString *)path duration:(NSInteger)seconds
-					 length:(NSInteger)length
-					 toChat:(int64_t)chatId thread:(int64_t)threadId
-				   viewOnce:(BOOL)viewOnce {
-	// The fire-and-forget shape the older callers and their tests use.
-	[self sendVideoNoteAtPath:path duration:seconds length:length toChat:chatId
-					   thread:threadId viewOnce:viewOnce progress:nil completion:nil];
-}
-
-- (void)sendVideoNoteAtPath:(NSString *)path duration:(NSInteger)seconds
-					 length:(NSInteger)length
-					 toChat:(int64_t)chatId thread:(int64_t)threadId
-				   viewOnce:(BOOL)viewOnce
-				   progress:(void (^)(CGFloat))progress
-				 completion:(void (^)(BOOL))completion {
-	[self sendVideoNoteAtPath:path duration:seconds length:length toChat:chatId
-					   thread:threadId viewOnce:viewOnce thumbnail:nil
-					 progress:progress accepted:nil completion:completion];
-}
-
-- (void)sendVideoNoteAtPath:(NSString *)path duration:(NSInteger)seconds
-					 length:(NSInteger)length
-					 toChat:(int64_t)chatId thread:(int64_t)threadId
-				   viewOnce:(BOOL)viewOnce
-				thumbnail:(NSString *)thumbnailPath
-				   progress:(void (^)(CGFloat))progress
-				   accepted:(void (^)(int64_t))accepted
-				 completion:(void (^)(BOOL))completion {
-	[[TGSendStore shared] sendVideoNoteAtPath:path duration:seconds length:length toChat:chatId thread:threadId viewOnce:viewOnce thumbnail:thumbnailPath progress:progress accepted:accepted completion:completion];
-}
-
-- (void)cancelSendingMessage:(int64_t)messageId inChat:(int64_t)chatId {
-	[[TGSendStore shared] cancelSendingMessage:messageId inChat:chatId];
-}
-
-- (void)sendVideoAtPath:(NSString *)path toChat:(int64_t)chatId {
-	[self sendVideoAtPath:path viewOnce:NO toChat:chatId];
-}
-
-- (void)sendVideoAtPath:(NSString *)path viewOnce:(BOOL)viewOnce toChat:(int64_t)chatId {
-	[[TGSendStore shared] sendVideoAtPath:path viewOnce:viewOnce toChat:chatId];
-}
-
-- (void)sendLocation:(double)latitude longitude:(double)longitude toChat:(int64_t)chatId {
-	[[TGSendStore shared] sendLocation:latitude longitude:longitude toChat:chatId];
-}
-
 /// A place that keeps changing, for `seconds` more. The send is answered
 /// with the message itself, whose id is what every later edit answers
 /// through - the one misstep here is a fire-and-forget send, which leaves
 /// the live location orphaned, editable by nobody.
-- (void)sendLiveLocation:(NSInteger)seconds
-			latitude:(double)latitude
-			longitude:(double)longitude
-				  toChat:(int64_t)chatId
-			 completion:(void (^)(int64_t messageId))completion {
-	[[TGSendStore shared] sendLiveLocation:seconds latitude:latitude
-								  longitude:longitude toChat:chatId
-								 completion:completion];
-}
-
 /// The moving pin, moved again, for `seconds` more of its period - and 0 is
 /// the stop that takes it off the map. Without the id the edit is refused,
 /// because a pin nobody can move is a lie on the map.
-- (void)editLiveLocationOfMessage:(int64_t)messageId
-						   inChat:(int64_t)chatId
-						 latitude:(double)latitude
-						longitude:(double)longitude
-					   livePeriod:(NSInteger)seconds
-					   completion:(void (^)(BOOL ok))completion {
-	[[TGMessageStore shared] editLiveLocationOfMessage:messageId inChat:chatId latitude:latitude longitude:longitude livePeriod:seconds completion:completion];
-}
-
-- (void)sendContactNamed:(NSString *)name phone:(NSString *)phone toChat:(int64_t)chatId {
-	[[TGSendStore shared] sendContactNamed:name phone:phone toChat:chatId];
-}
-
-- (void)sendPhotoAtPath:(NSString *)path toChat:(int64_t)chatId {
-	[self sendPhotoAtPath:path viewOnce:NO toChat:chatId];
-}
-
-- (void)sendPhotoAtPath:(NSString *)path viewOnce:(BOOL)viewOnce toChat:(int64_t)chatId {
-	[[TGSendStore shared] sendPhotoAtPath:path viewOnce:viewOnce toChat:chatId];
-}
-
-- (void)votePoll:(int64_t)messageId inChat:(int64_t)chatId options:(NSArray *)optionIds {
-	[[TGMessageStore shared] votePoll:messageId inChat:chatId options:optionIds];
-}
-
-- (void)markChecklistTask:(int64_t)taskId done:(BOOL)done inMessage:(int64_t)messageId chat:(int64_t)chatId {
-	[[TGMessageStore shared] markChecklistTask:taskId done:done inMessage:messageId chat:chatId];
-}
-
 @end

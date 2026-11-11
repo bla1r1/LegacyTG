@@ -4,7 +4,6 @@
 //
 #import "TGClientInternal.h"
 #import "TGStickerPack.h"
-#import "TGSendStore.h"
 
 /// One sticker as the panel wants it: what to send, and what to draw in the
 /// grid. The thumbnail is drawn only when it is a still picture; a .tgs or
@@ -401,10 +400,6 @@ NSArray *TGFlattenStickerSets(NSArray *sets) {
 			if (completion) completion(out);
 		}];
 	}];
-}
-
-- (void)sendAnimation:(NSDictionary *)animation toChat:(int64_t)chatId thread:(int64_t)threadId {
-	[[TGSendStore shared] sendAnimation:animation toChat:chatId thread:threadId];
 }
 
 #pragma mark - authoring a pack

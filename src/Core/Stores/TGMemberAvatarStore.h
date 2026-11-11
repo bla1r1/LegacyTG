@@ -6,14 +6,15 @@
 // decode live here once: a screen asks for a user at the size its row uses
 // and gets the picture back, or nil while it is on its way.
 //
-#import <UIKit/UIKit.h>
 
+#import <Foundation/Foundation.h>
+#import <CoreGraphics/CoreGraphics.h>
 @interface TGMemberAvatarStore : NSObject
 
 + (instancetype)shared;
 
 /// The picture if it has already been decoded at this size.
-- (UIImage *)cachedAvatarForUser:(int64_t)userId side:(CGFloat)side;
+- (id)cachedAvatarForUser:(int64_t)userId side:(CGFloat)side;
 
 /// Empties the decoded-photo cache and the in-flight downloads. Called when
 /// the running account changes: a user id means a different user after a
@@ -27,6 +28,6 @@
 /// the download failed - the caller keeps its initials.
 - (void)loadAvatarForUser:(int64_t)userId
 					 side:(CGFloat)side
-			   completion:(void (^)(UIImage *image))completion;
+			   completion:(void (^)(id image))completion;
 
 @end

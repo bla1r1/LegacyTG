@@ -8,6 +8,9 @@
 // caption edited as text, which is a different request and leaves the
 // caption alone).
 #import "TGTestRunner.h"
+#import "TGTransport.h"
+#import "TGMessageStore.h"
+#import "TGSendStore.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
 
@@ -72,7 +75,7 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 /// than not at all.
 - (void)testFormattedText_FallsBackToTheTextAsWritten {
 	TGClient *c = C();
-	c.td_exec = NULL;
+	[[TGTransport shared] testSetExecute:NULL];
 
 	NSDictionary *formatted = TGFormattedText(@"*bold* and plain");
 	XCTAssertEqualObjects(formatted[@"@type"], @"formattedText");
@@ -82,7 +85,7 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 
 - (void)testFormattedText_EmptyAndNilAreStillAFormattedText {
 	TGClient *c = C();
-	c.td_exec = NULL;
+	[[TGTransport shared] testSetExecute:NULL];
 	XCTAssertEqualObjects(TGFormattedText(nil)[@"text"], @"");
 	XCTAssertEqualObjects(TGFormattedText(@"")[@"text"], @"");
 }
@@ -91,7 +94,7 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 /// what lets bold and italic leave this device at all.
 - (void)testSendText_CarriesAFormattedTextRatherThanAPlainString {
 	TGClient *c = C();
-	c.td_exec = NULL;
+	[[TGTransport shared] testSetExecute:NULL];
 	[c sendText:@"hello" toChat:7 thread:0 replyTo:0];
 
 	NSDictionary *content = lastC(c, @"sendMessage")[@"input_message_content"];
@@ -106,8 +109,8 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 /// request, and that is why media with a caption had no Edit at all.
 - (void)testEditCaption_IsItsOwnRequestAndNotEditMessageText {
 	TGClient *c = C();
-	c.td_exec = NULL;
-	[c editCaption:@"the slides" ofMessage:5 inChat:7 completion:nil];
+	[[TGTransport shared] testSetExecute:NULL];
+	[[TGMessageStore shared] editCaption:@"the slides" ofMessage:5 inChat:7 completion:nil];
 
 	NSDictionary *r = lastC(c, @"editMessageCaption");
 	XCTAssertNotNil(r);
@@ -118,9 +121,9 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 
 - (void)testEditCaption_AnErrorIsNotSuccess {
 	TGClient *c = C();
-	c.td_exec = NULL;
+	[[TGTransport shared] testSetExecute:NULL];
 	__block BOOL ok = YES;
-	[c editCaption:@"x" ofMessage:5 inChat:7 completion:^(BOOL good){ ok = good; }];
+	[[TGMessageStore shared] editCaption:@"x" ofMessage:5 inChat:7 completion:^(BOOL good){ ok = good; }];
 	answerTyped(c, @"editMessageCaption",
 			@{@"@type" : @"error", @"message" : @"MESSAGE_NOT_MODIFIED"});
 	XCTAssertFalse(ok);
@@ -130,8 +133,8 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 /// travel with it or editing the picture wipes the words under it.
 - (void)testEditPhoto_CarriesTheCaptionAlongWithTheNewPicture {
 	TGClient *c = C();
-	c.td_exec = NULL;
-	[c editPhotoAtPath:@"/tmp/new.jpg" caption:@"still the slides"
+	[[TGTransport shared] testSetExecute:NULL];
+	[[TGMessageStore shared] editPhotoAtPath:@"/tmp/new.jpg" caption:@"still the slides"
 			 ofMessage:5 inChat:7 completion:nil];
 
 	NSDictionary *content = lastC(c, @"editMessageMedia")[@"input_message_content"];
@@ -142,9 +145,9 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 
 - (void)testEditPhoto_RefusesAnEmptyPathRatherThanSendingOne {
 	TGClient *c = C();
-	c.td_exec = NULL;
+	[[TGTransport shared] testSetExecute:NULL];
 	__block BOOL ok = YES;
-	[c editPhotoAtPath:@"" caption:nil ofMessage:5 inChat:7
+	[[TGMessageStore shared] editPhotoAtPath:@"" caption:nil ofMessage:5 inChat:7
 			completion:^(BOOL good){ ok = good; }];
 	XCTAssertEqual(countC(c, @"editMessageMedia"), (NSUInteger)0);
 	XCTAssertFalse(ok);
@@ -156,8 +159,8 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 /// run of pictures that happen to be next to each other.
 - (void)testAlbum_IsOneRequestWithEveryPictureInIt {
 	TGClient *c = C();
-	c.td_exec = NULL;
-	[c sendPhotoAlbumAtPaths:@[@"/tmp/a.jpg", @"/tmp/b.jpg", @"/tmp/c.jpg"]
+	[[TGTransport shared] testSetExecute:NULL];
+	[[TGSendStore shared] sendPhotoAlbumAtPaths:@[@"/tmp/a.jpg", @"/tmp/b.jpg", @"/tmp/c.jpg"]
 					 caption:@"three of them" toChat:7 thread:0];
 
 	XCTAssertEqual(countC(c, @"sendMessageAlbum"), (NSUInteger)1);
@@ -171,8 +174,8 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 /// only the first may.
 - (void)testAlbum_OnlyTheFirstPictureCarriesTheCaption {
 	TGClient *c = C();
-	c.td_exec = NULL;
-	[c sendPhotoAlbumAtPaths:@[@"/tmp/a.jpg", @"/tmp/b.jpg"]
+	[[TGTransport shared] testSetExecute:NULL];
+	[[TGSendStore shared] sendPhotoAlbumAtPaths:@[@"/tmp/a.jpg", @"/tmp/b.jpg"]
 					 caption:@"the caption" toChat:7 thread:0];
 
 	NSArray *contents = lastC(c, @"sendMessageAlbum")[@"input_message_contents"];
@@ -184,11 +187,11 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 /// rather than trimmed.
 - (void)testAlbum_StopsAtTen {
 	TGClient *c = C();
-	c.td_exec = NULL;
+	[[TGTransport shared] testSetExecute:NULL];
 	NSMutableArray *paths = [NSMutableArray array];
 	for (NSUInteger i = 0; i < 14; i++)
 		[paths addObject:[NSString stringWithFormat:@"/tmp/%lu.jpg", (unsigned long)i]];
-	[c sendPhotoAlbumAtPaths:paths caption:nil toChat:7 thread:0];
+	[[TGSendStore shared] sendPhotoAlbumAtPaths:paths caption:nil toChat:7 thread:0];
 
 	NSArray *contents = lastC(c, @"sendMessageAlbum")[@"input_message_contents"];
 	XCTAssertEqual(contents.count, (NSUInteger)10);
@@ -196,9 +199,9 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 
 - (void)testAlbum_NothingToSendIsNoRequest {
 	TGClient *c = C();
-	c.td_exec = NULL;
-	[c sendPhotoAlbumAtPaths:@[] caption:@"x" toChat:7 thread:0];
-	[c sendPhotoAlbumAtPaths:@[@"", [NSNull null]] caption:nil toChat:7 thread:0];
+	[[TGTransport shared] testSetExecute:NULL];
+	[[TGSendStore shared] sendPhotoAlbumAtPaths:@[] caption:@"x" toChat:7 thread:0];
+	[[TGSendStore shared] sendPhotoAlbumAtPaths:@[@"", [NSNull null]] caption:nil toChat:7 thread:0];
 	XCTAssertEqual(countC(c, @"sendMessageAlbum"), (NSUInteger)0);
 }
 
@@ -302,7 +305,7 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 /// error.
 - (void)testLinkPreview_FlattensWhatACardDraws {
 	TGClient *c = C();
-	c.td_exec = NULL;
+	[[TGTransport shared] testSetExecute:NULL];
 	__block NSDictionary *preview = nil;
 	[c linkPreviewForText:@"look at https://example.com"
 			   completion:^(NSDictionary *found){ preview = found; }];
@@ -329,7 +332,7 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 
 - (void)testLinkPreview_NoPreviewIsNilAndNotAnEmptyCard {
 	TGClient *c = C();
-	c.td_exec = NULL;
+	[[TGTransport shared] testSetExecute:NULL];
 	__block NSDictionary *preview = @{};
 	[c linkPreviewForText:@"nothing here"
 			   completion:^(NSDictionary *found){ preview = found; }];
@@ -340,7 +343,7 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 
 - (void)testLinkPreview_EmptyTextIsNoRequest {
 	TGClient *c = C();
-	c.td_exec = NULL;
+	[[TGTransport shared] testSetExecute:NULL];
 	__block BOOL called = NO;
 	[c linkPreviewForText:@"" completion:^(NSDictionary *found){ called = YES; }];
 	XCTAssertEqual(countC(c, @"getLinkPreview"), (NSUInteger)0);
@@ -352,7 +355,7 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 /// own links mean.
 - (void)testInternalLink_KindsAreReadRatherThanGuessed {
 	TGClient *c = C();
-	c.td_exec = NULL;
+	[[TGTransport shared] testSetExecute:NULL];
 
 	__block NSString *kind = nil;
 	__block NSString *value = nil;
@@ -383,7 +386,7 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 /// the paths it matches by hand rather than doing nothing.
 - (void)testInternalLink_AnUnhandledKindAsksTelegramWhatTheLinkMeans {
 	TGClient *c = C();
-	c.td_exec = NULL;
+	[[TGTransport shared] testSetExecute:NULL];
 	__block NSString *kind = nil;
 	[c internalLinkKind:@"https://t.me/proxy?server=x"
 			 completion:^(NSString *k, NSString *v){ kind = k; }];
@@ -399,7 +402,7 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 /// path.
 - (void)testInternalLink_ADeepLinkNoteIsTheMeaning {
 	TGClient *c = C();
-	c.td_exec = NULL;
+	[[TGTransport shared] testSetExecute:NULL];
 	__block NSString *kind = nil;
 	__block NSString *note = nil;
 	[c internalLinkKind:@"https://t.me/something"
@@ -418,7 +421,7 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 /// because its copy is stale. None the wiser, the tap falls back.
 - (void)testInternalLink_ADeepLinkAndUpdatePromptIsNotAMeaning {
 	TGClient *c = C();
-	c.td_exec = NULL;
+	[[TGTransport shared] testSetExecute:NULL];
 	__block NSString *kind = nil;
 	[c internalLinkKind:@"https://t.me/something"
 			 completion:^(NSString *k, NSString *v){ kind = k; }];
@@ -438,7 +441,7 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 /// of it, rather than the render.
 - (void)testMarkdownOfMessage_AFormattedTextComesBackAsItsMarkdown {
 	TGClient *c = C();
-	c.td_exec = NULL;
+	[[TGTransport shared] testSetExecute:NULL];
 	__block NSString *md = nil;
 	[c markdownOfMessage:9 inChat:7 completion:^(NSString *m){ md = m; }];
 	XCTAssertNil(md);
@@ -460,7 +463,7 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 /// a getMarkdownText asked about it would be a question with one answer.
 - (void)testMarkdownOfMessage_APlainMessageIsNotWorthARoundTrip {
 	TGClient *c = C();
-	c.td_exec = NULL;
+	[[TGTransport shared] testSetExecute:NULL];
 	__block NSString *md = nil;
 	[c markdownOfMessage:9 inChat:7 completion:^(NSString *m){ md = m; }];
 	answerTyped(c, @"getMessage",
@@ -481,7 +484,7 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 /// all, so a code entered on a new number left the code screen up forever.
 - (void)testRegisterUser_CarriesTheNameAndRefusesAnEmptyOne {
 	TGClient *c = C();
-	c.td_exec = NULL;
+	[[TGTransport shared] testSetExecute:NULL];
 	__block BOOL ok = YES;
 	[c registerWithFirstName:@"" lastName:nil
 				  completion:^(BOOL good, NSString *error){ ok = good; }];
@@ -511,7 +514,7 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 /// the picker can use.
 - (void)testCountries_FlattenToWhatThePickerNeeds {
 	TGClient *c = C();
-	c.td_exec = NULL;
+	[[TGTransport shared] testSetExecute:NULL];
 	__block NSArray *countries = nil;
 	[c countriesWithCompletion:^(NSArray *found){ countries = found; }];
 	answerTyped(c, @"getCountries", @{@"@type" : @"countries", @"countries" : @[
@@ -533,7 +536,7 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 /// so the flag has to travel exactly as given.
 - (void)testPushToken_CarriesTheTokenAndTheSandboxFlag {
 	TGClient *c = C();
-	c.td_exec = NULL;
+	[[TGTransport shared] testSetExecute:NULL];
 	[c registerPushToken:@"deadbeef" sandbox:YES completion:nil];
 	NSDictionary *token = lastC(c, @"registerDevice")[@"device_token"];
 	XCTAssertEqualObjects(token[@"@type"], @"deviceTokenApplePush");
@@ -547,7 +550,7 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 
 - (void)testPushToken_NoTokenIsNoRequest {
 	TGClient *c = C();
-	c.td_exec = NULL;
+	[[TGTransport shared] testSetExecute:NULL];
 	__block BOOL ok = YES;
 	[c registerPushToken:@"" sandbox:NO completion:^(BOOL good){ ok = good; }];
 	XCTAssertEqual(countC(c, @"registerDevice"), (NSUInteger)0);
@@ -558,7 +561,7 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 /// will not arrive and the log should say so.
 - (void)testPushToken_OnlyAReceiverIdCounts {
 	TGClient *c = C();
-	c.td_exec = NULL;
+	[[TGTransport shared] testSetExecute:NULL];
 	__block BOOL ok = NO;
 	[c registerPushToken:@"deadbeef" sandbox:NO completion:^(BOOL good){ ok = good; }];
 	answerTyped(c, @"registerDevice", @{@"@type" : @"pushReceiverId", @"id" : @"7"});
@@ -575,7 +578,7 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 /// it came as, so the chat list moves without waiting for a poll.
 - (void)testPushPayload_GoesThroughAsJson {
 	TGClient *c = C();
-	c.td_exec = NULL;
+	[[TGTransport shared] testSetExecute:NULL];
 	[c processPushPayload:@{@"p" : @"payload"}];
 	NSDictionary *r = lastC(c, @"processPushNotification");
 	XCTAssertNotNil(r);
@@ -589,7 +592,7 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 
 - (void)testImportContact_SendsImportContactsWithFormattedFields {
 	TGClient *c = C();
-	c.td_exec = NULL;
+	[[TGTransport shared] testSetExecute:NULL];
 	__block int64_t gotUserId = 0;
 	[c importContactNamed:@"Alice" lastName:@"Smith" phone:@"+1 234 567" completion:^(int64_t uid){
 		gotUserId = uid;
@@ -607,7 +610,7 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 
 - (void)testAddContact_SendsAddContactWithUserIdAndContact {
 	TGClient *c = C();
-	c.td_exec = NULL;
+	[[TGTransport shared] testSetExecute:NULL];
 	__block BOOL finished = NO;
 	[c addContactWithUserId:4242 firstName:@"Alice" lastName:@"Smith" phone:@"+1234567" completion:^(BOOL ok){
 		finished = ok;
@@ -659,9 +662,9 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 
 - (void)testRepliedMessage_FetchesAndIncludesChatId {
 	TGClient *c = C();
-	c.td_exec = NULL;
+	[[TGTransport shared] testSetExecute:NULL];
 	__block NSDictionary *gotMsg = nil;
-	[c repliedMessageTo:100 inChat:200 completion:^(NSDictionary *m){
+	[[TGMessageStore shared] repliedMessageTo:100 inChat:200 completion:^(NSDictionary *m){
 		gotMsg = m;
 	}];
 	NSDictionary *sent = lastC(c, @"getRepliedMessage");
@@ -685,9 +688,9 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 
 - (void)testGetMessages_FetchesMultipleAndFlattens {
 	TGClient *c = C();
-	c.td_exec = NULL;
+	[[TGTransport shared] testSetExecute:NULL];
 	__block NSArray *got = nil;
-	[c messagesInChat:50 messageIds:@[@(1), @(2)] completion:^(NSArray *msgs){
+	[[TGMessageStore shared] messagesInChat:50 messageIds:@[@(1), @(2)] completion:^(NSArray *msgs){
 		got = msgs;
 	}];
 	NSDictionary *sent = lastC(c, @"getMessages");
@@ -712,9 +715,9 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 
 - (void)testGetMessageProperties_PassesThroughResponse {
 	TGClient *c = C();
-	c.td_exec = NULL;
+	[[TGTransport shared] testSetExecute:NULL];
 	__block NSDictionary *props = nil;
-	[c messagePropertiesForChat:50 messageId:1 completion:^(NSDictionary *p){
+	[[TGMessageStore shared] messagePropertiesForChat:50 messageId:1 completion:^(NSDictionary *p){
 		props = p;
 	}];
 	NSDictionary *sent = lastC(c, @"getMessageProperties");

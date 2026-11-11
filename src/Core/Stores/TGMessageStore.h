@@ -7,7 +7,6 @@
 // TGClient header. Forwarding lives in TGMessageStore.m.
 //
 #import <Foundation/Foundation.h>
-#import <UIKit/UIKit.h>
 #import "TGClientTypes.h"
 #import "TGDownloadPriority.h"
 #import "TGClientNotifications.h"
@@ -455,7 +454,7 @@
 			messageIds:(NSArray *)messageIds
 			completion:(void (^)(NSArray *messages))completion;
 
-- (UIColor *)nameColourForUser:(int64_t)userId;
+- (id)nameColourForUser:(int64_t)userId;
 
 - (NSString *)nameForUserId:(int64_t)userId;
 

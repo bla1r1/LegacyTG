@@ -96,9 +96,4 @@
 				completion:(void (^)(NSArray *entities))completion;
 
 /// Translate one piece of text into `languageCode`, keeping its formatting.
-- (void)translateText:(NSString *)text
-	   toLanguageCode:(NSString *)languageCode
-				 tone:(NSString *)tone
-		   completion:(void (^)(NSString *text))completion;
-
 @end

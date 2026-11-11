@@ -7,6 +7,8 @@
 // a ban that is forever rather than until epoch, a cancelled download that
 // has to release its waiter.
 #import "TGTestRunner.h"
+#import "TGMessageStore.h"
+#import "TGSendStore.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
 
@@ -723,7 +725,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 - (void)testScheduled_MovingACarrierPhrase {
 	TGClient *c = G();
 	__block BOOL ok = NO;
-	[c setSchedulingState:nil forMessage:140 inChat:-70 completion:^(BOOL good){ ok = good; }];
+	[[TGSendStore shared] setSchedulingState:nil forMessage:140 inChat:-70 completion:^(BOOL good){ ok = good; }];
 	NSDictionary *r = lastG(c, @"editMessageSchedulingState");
 	XCTAssertTrue(r[@"scheduling_state"] == (id)kCFNull,
 				  @"absent is the JSON null TDLib reads as send at once");
@@ -731,7 +733,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 	answerG(c, @{@"@type" : @"ok"});
 	XCTAssertTrue(ok);
 
-	[c setSchedulingState:[TGClient scheduledWhenOnline] forMessage:140
+	[[TGSendStore shared] setSchedulingState:[TGClient scheduledWhenOnline] forMessage:140
 					inChat:-70 completion:nil];
 	XCTAssertEqualObjects(lastG(c, @"editMessageSchedulingState")[@"scheduling_state"][@"@type"],
 						  @"messageSchedulingStateSendWhenOnline");
@@ -1046,12 +1048,12 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 - (void)testAddPollOption_AnEmptyLineSendsNothing {
 	TGClient *c = G();
 	__block NSInteger calls = 0;
-	[c addPollOption:@"" toMessage:140 inChat:-70 completion:^(BOOL ok){
+	[[TGMessageStore shared] addPollOption:@"" toMessage:140 inChat:-70 completion:^(BOOL ok){
 		calls++; XCTAssertFalse(ok);
 	}];
 	XCTAssertEqual(countG(c, @"addPollOption"), (NSUInteger)0);
 
-	[c addPollOption:@"New answer" toMessage:140 inChat:-70 completion:nil];
+	[[TGMessageStore shared] addPollOption:@"New answer" toMessage:140 inChat:-70 completion:nil];
 	NSDictionary *r = lastG(c, @"addPollOption");
 	XCTAssertEqual([r[@"message_id"] longLongValue], 140LL);
 	XCTAssertEqualObjects(r[@"option"][@"@type"], @"inputPollOption");
@@ -1061,13 +1063,13 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 - (void)testDeletePollOption_TheStringIdAndItsRefusal {
 	TGClient *c = G();
 	__block BOOL ok = NO;
-	[c deletePollOption:@"" ofMessage:140 inChat:-70 completion:^(BOOL good){
+	[[TGMessageStore shared] deletePollOption:@"" ofMessage:140 inChat:-70 completion:^(BOOL good){
 		ok = good;
 	}];
 	XCTAssertFalse(ok);
 	XCTAssertEqual(countG(c, @"deletePollOption"), (NSUInteger)0);
 
-	[c deletePollOption:@"op1" ofMessage:140 inChat:-70 completion:^(BOOL good){
+	[[TGMessageStore shared] deletePollOption:@"op1" ofMessage:140 inChat:-70 completion:^(BOOL good){
 		ok = good;
 	}];
 	NSDictionary *r = lastG(c, @"deletePollOption");
@@ -1121,7 +1123,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 - (void)testSendLiveLocation_TheIdIsWhatTheAnswerCarries {
 	TGClient *c = G();
 	__block int64_t messageId = 0;
-	[c sendLiveLocation:3600 latitude:50.45 longitude:30.52 toChat:-70
+	[[TGSendStore shared] sendLiveLocation:3600 latitude:50.45 longitude:30.52 toChat:-70
 			 completion:^(int64_t made){ messageId = made; }];
 	NSDictionary *r = lastG(c, @"sendMessage");
 	XCTAssertEqualObjects(r[@"input_message_content"][@"@type"],
@@ -1141,12 +1143,12 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 - (void)testEditLiveLocation_ShapedLikeTheSendAndZeroIsTheStop {
 	TGClient *c = G();
 	__block BOOL ok = NO;
-	[c editLiveLocationOfMessage:0 inChat:-70 latitude:1 longitude:2
+	[[TGMessageStore shared] editLiveLocationOfMessage:0 inChat:-70 latitude:1 longitude:2
 					  livePeriod:600 completion:^(BOOL good){ ok = good; }];
 	XCTAssertFalse(ok);
 	XCTAssertEqual(countG(c, @"editMessageLiveLocation"), (NSUInteger)0);
 
-	[c editLiveLocationOfMessage:140 inChat:-70 latitude:50.45 longitude:30.52
+	[[TGMessageStore shared] editLiveLocationOfMessage:140 inChat:-70 latitude:50.45 longitude:30.52
 					  livePeriod:600 completion:^(BOOL good){ ok = good; }];
 	NSDictionary *r = lastG(c, @"editMessageLiveLocation");
 	XCTAssertEqual([r[@"message_id"] longLongValue], 140LL);
@@ -1154,7 +1156,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 	answerG(c, @{@"@type" : @"message", @"id" : @(140)});
 	XCTAssertTrue(ok);
 
-	[c editLiveLocationOfMessage:140 inChat:-70 latitude:1 longitude:2
+	[[TGMessageStore shared] editLiveLocationOfMessage:140 inChat:-70 latitude:1 longitude:2
 					  livePeriod:0 completion:nil];
 	// The stop is the same request whose period says zero - TDLib keeps no
 	// separate stop for a live location.
@@ -1450,7 +1452,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 	NSDictionary *sender = @{@"@type" : @"messageSenderUser",
 							 @"user_id" : @(6)};
 	__block BOOL ok = NO;
-	[c reportReactionBySender:sender
+	[[TGMessageStore shared] reportReactionBySender:sender
 					ofMessage:140
 						 inChat:-70
 				   completion:^(BOOL done){ ok = done; }];
@@ -1461,7 +1463,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 	XCTAssertEqual([r[@"sender_id"][@"user_id"] integerValue], 6);
 
 	// A sender nobody decided on fires nothing: there is no who to name.
-	[c reportReactionBySender:nil ofMessage:140 inChat:-70
+	[[TGMessageStore shared] reportReactionBySender:nil ofMessage:140 inChat:-70
 		 completion:^(BOOL done){}];
 	XCTAssertEqual(countG(c, @"reportMessageReactions"), (NSUInteger)1);
 }

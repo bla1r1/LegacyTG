@@ -6,7 +6,6 @@
  // a message and answers with context rather than content.
 //
 #import "TGClientInternal.h"
-#import "TGMessageStore.h"
 
 @implementation TGClient (MessageMeta)
 #pragma mark - facts a screen asks for
@@ -15,11 +14,6 @@
 /// to the chat and the exact message inside it. The link type itself is
 /// decided by Telegram, at internalLinkKind:; a link to a nonexistent or a
 /// private-place message answers as an error, said as a zero chat id.
-- (void)messageLinkInfo:(NSString *)link
-			 completion:(void (^)(int64_t chatId, int64_t messageId))completion {
-	[[TGMessageStore shared] messageLinkInfo:link completion:completion];
-}
-
 /// Every chat's draft, dropped at once - the ones typed here and the ones
 /// typed on another device: TDLib owns all of them.
 - (void)clearAllDraftMessages {
@@ -53,57 +47,20 @@
 /// Members who opened the voice note, watched the round video or otherwise
 /// read this own message in a group. messageViewer carries the user id and
 /// when they did it; names resolve out of the client's user records.
-- (void)viewersOfMessage:(int64_t)messageId
-				  inChat:(int64_t)chatId
-			  completion:(void (^)(NSArray *viewers))completion {
-	[[TGMessageStore shared] viewersOfMessage:messageId inChat:chatId completion:completion];
-}
-
 /// When exactly the other side read this message - or why the answer is not
 /// a timestamp: "unread", "tooOld", or their and our own privacy settings.
 /// A nil date with a reason word is the honest sheet line.
-- (void)readDateOfMessage:(int64_t)messageId
-				   inChat:(int64_t)chatId
-			   completion:(void (^)(NSTimeInterval date, NSString *reason))completion {
-	[[TGMessageStore shared] readDateOfMessage:messageId inChat:chatId completion:completion];
-}
-
 /// Who a channel actually posted as, when the bubble says "Channel Admin".
 /// The server answers a full user record.
-- (void)authorOfMessage:(int64_t)messageId
-				 inChat:(int64_t)chatId
-			 completion:(void (^)(NSDictionary *user))completion {
-	[[TGMessageStore shared] authorOfMessage:messageId inChat:chatId completion:completion];
-}
-
 /// The HTML this message is pasted with into a blog post. Only messages
 /// carrying a web page preview answer it, which is what the server says to
 /// anything else - passed on as an empty string.
-- (void)embeddingCodeOfMessage:(int64_t)messageId
-						inChat:(int64_t)chatId
-					 album:(BOOL)album
-					completion:(void (^)(NSString *code))completion {
-	[[TGMessageStore shared] embeddingCodeOfMessage:messageId inChat:chatId album:album completion:completion];
-}
-
 /// Public channels and walls this post was forwarded to, as message dicts -
 /// only public places answer, so a short list is the worst case.
-- (void)publicForwardsOfMessage:(int64_t)messageId
-						 inChat:(int64_t)chatId
-					 completion:(void (^)(NSArray *messages))completion {
-	[[TGMessageStore shared] publicForwardsOfMessage:messageId inChat:chatId completion:completion];
-}
-
 /// The reactions that may be added to this message right now: the chat's
 /// configured set filtered by per-message rules, from which the picker bar
 /// is drawn instead of the app's hard defaults. "all" in the emoji list
 /// means the chat allows everything and the defaults are the honest set.
-- (void)availableReactionsForMessage:(int64_t)messageId
-							  inChat:(int64_t)chatId
-					   completion:(void (^)(NSArray *emojis))completion {
-	[[TGMessageStore shared] availableReactionsForMessage:messageId inChat:chatId completion:completion];
-}
-
 /// Every reaction this message carries and who put it, for the reactor
 /// sheet. `offset` iterates; an empty answer on the first call is a message
 /// without reactors or a chat that does not hand these out.
@@ -168,26 +125,10 @@
 }
 
 /// An administrator taking somebody's reaction off this message.
-- (void)deleteReactionsOfSender:(NSDictionary *)sender
-					 ofMessage:(int64_t)messageId
-						 inChat:(int64_t)chatId {
-	[[TGMessageStore shared] deleteReactionsOfSender:sender ofMessage:messageId inChat:chatId];
-}
-
 /// The same, chat-wide: everything this sender ever reacted with in this
 /// chat, gone. That is the strongest undo an admin sheet has.
-- (void)deleteAllReactionsOfSender:(NSDictionary *)sender inChat:(int64_t)chatId {
-	[[TGMessageStore shared] deleteAllReactionsOfSender:sender inChat:chatId];
-}
-
 /// How many messages a chat (or one of its topics) carries. `thread` selects
 /// a forum topic; zero is the whole chat.
-- (void)messageCountInChat:(int64_t)chatId
-					thread:(int64_t)threadId
-				completion:(void (^)(NSInteger count))completion {
-	[[TGMessageStore shared] messageCountInChat:chatId thread:threadId completion:completion];
-}
-
 - (void)messageCountInChat:(int64_t)chatId
 					filter:(NSString *)filterType
 				completion:(void (^)(NSInteger count))completion {
@@ -278,26 +219,9 @@
 
 /// Where this chat's live pins have been, newest first, for the "recent
 /// locations" sheet: message dicts, each a location bubble the map opens.
-- (void)recentLocationsInChat:(int64_t)chatId
-				   completion:(void (^)(NSArray *messages))completion {
-	[[TGMessageStore shared] recentLocationsInChat:chatId completion:completion];
-}
-
 /// This message's text, translated by Telegram into `languageCode`. The
 /// answer is the same formattedText the composer already knows how to show.
-- (void)translateMessage:(int64_t)messageId
-				  inChat:(int64_t)chatId
-				   toCode:(NSString *)languageCode
-			  completion:(void (^)(NSString *text))completion {
-	[[TGMessageStore shared] translateMessage:messageId inChat:chatId toCode:languageCode completion:completion];
-}
-
 #pragma mark - effects, import, prepared messages
-
-- (void)messageEffectWithId:(int64_t)effectId
-				 completion:(void (^)(NSDictionary *effect))completion {
-	[[TGMessageStore shared] messageEffectWithId:effectId completion:completion];
-}
 
 - (void)messageFileTypeForHead:(NSString *)head
 					completion:(void (^)(NSDictionary *fileType))completion {

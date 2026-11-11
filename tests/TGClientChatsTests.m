@@ -9,6 +9,7 @@
 // the host), and answers are pushed in through the same parsing entry
 // points the receive loop uses.
 #import "TGTestRunner.h"
+#import "TGUpdateRouter.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
 
@@ -632,7 +633,7 @@ static void joinTestReply(TGClient *c, NSDictionary *request, NSDictionary *answ
 		}];
 	}
 
-	[c handleUpdateBatch:batch];
+	[[TGUpdateRouter shared] routeBatch:batch];
 
 	XCTAssertEqual((NSInteger)c.chats.count, 20);
 	XCTAssertEqual(chatsChangedCount, 1, @"a batch of 20 updates must rebuild chats exactly once");

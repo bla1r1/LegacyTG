@@ -2,7 +2,6 @@
 // TGProfileStore.h - the Profile feature's store surface.
 //
 #import <Foundation/Foundation.h>
-#import <UIKit/UIKit.h>
 #import "TGClientTypes.h"
 #import "TGClientNotifications.h"
 #import "TGDownloadPriority.h"
@@ -18,7 +17,7 @@
 @property (nonatomic, readonly) NSArray *communities;
 @property (nonatomic, readonly) TGConnectionState connectionState;
 
-- (UIColor *)accentColourForId:(NSInteger)colourId profile:(BOOL)profile;
+- (id)accentColourForId:(NSInteger)colourId profile:(BOOL)profile;
 
 - (void)addProfileAudioAtPath:(NSString *)path
                         title:(NSString *)title

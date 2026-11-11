@@ -7,6 +7,7 @@
 // policy, not UI metrics: they come from the device tier, and they must obey
 // the invariant that a full-length loop fits the NSCache's totalCostLimit.
 //
+#import <Foundation/Foundation.h>
 #pragma once
 #include <stddef.h>
 

@@ -1,8 +1,6 @@
 #import "TGClient+InlineMessages.h"
 #import "TGClient+MessagesInternal.h"
 #import "TGClientInternal.h"
-#import "TGMessageStore.h"
-#import "TGSendStore.h"
 
 @implementation TGClient (InlineMessages)
 
@@ -124,60 +122,14 @@
 	}];
 }
 
-- (void)reactTo:(int64_t)messageId inChat:(int64_t)chatId emoji:(NSString *)emoji {
-	[[TGMessageStore shared] reactTo:messageId inChat:chatId emoji:emoji];
-}
-
-- (void)deleteMessage:(int64_t)messageId inChat:(int64_t)chatId {
-	[self deleteMessages:@[@(messageId)] inChat:chatId revoke:YES];
-}
-
-- (void)deleteMessages:(NSArray *)messageIds inChat:(int64_t)chatId {
-	[[TGSendStore shared] deleteMessages:messageIds inChat:chatId revoke:YES];
-}
-
-- (void)deleteMessages:(NSArray *)messageIds inChat:(int64_t)chatId revoke:(BOOL)revoke {
-	[[TGSendStore shared] deleteMessages:messageIds inChat:chatId revoke:revoke];
-}
-
 /// "typing...", as the other side shows it. TDLib expects this repeated while
 /// typing goes on; it expires on its own a few seconds after the last one.
-- (void)sendTypingToChat:(int64_t)chatId thread:(int64_t)threadId {
-	[[TGMessageStore shared] sendTypingToChat:chatId thread:threadId];
-}
-
 /// Stops it at once rather than waiting for it to expire - sent when the
 /// message goes or the field is emptied.
-- (void)cancelTypingInChat:(int64_t)chatId thread:(int64_t)threadId {
-	[[TGMessageStore shared] cancelTypingInChat:chatId thread:threadId];
-}
-
-- (void)removeReaction:(NSString *)emoji
-			 fromMessage:(int64_t)messageId
-				  inChat:(int64_t)chatId {
-	[[TGMessageStore shared] removeReaction:emoji fromMessage:messageId inChat:chatId];
-}
-
 /// Marks a voice note, a video note or a one-time picture as opened. Without
 /// it the sender never sees it played and a self-destructing message never
 /// starts its clock.
-- (void)openContentOfMessage:(int64_t)messageId inChat:(int64_t)chatId {
-	[[TGMessageStore shared] openContentOfMessage:messageId inChat:chatId];
-}
-
-- (void)pinMessage:(int64_t)messageId inChat:(int64_t)chatId notify:(BOOL)notify {
-	[[TGMessageStore shared] pinMessage:messageId inChat:chatId notify:notify];
-}
-
-- (void)unpinMessage:(int64_t)messageId inChat:(int64_t)chatId {
-	[[TGMessageStore shared] unpinMessage:messageId inChat:chatId];
-}
-
 /// Every pinned message down at once - in a forum topic, only that topic's.
-- (void)unpinAllMessagesInChat:(int64_t)chatId thread:(int64_t)threadId {
-	[[TGMessageStore shared] unpinAllMessagesInChat:chatId thread:threadId];
-}
-
 /// The last message sent on or before `date` (unix seconds), for jumping to
 /// a day; nil when the chat has nothing that old.
 - (void)messageAtDate:(NSTimeInterval)date inChat:(int64_t)chatId
@@ -194,26 +146,8 @@
 /// The message a reply points at. The history may not hold it - a reply to
 /// something far above, or to a message in another chat - so this asks the
 /// server rather than searching what is loaded.
-- (void)repliedMessageTo:(int64_t)messageId
-				  inChat:(int64_t)chatId
-			  completion:(void (^)(NSDictionary *message))completion {
-	[[TGMessageStore shared] repliedMessageTo:messageId inChat:chatId completion:completion];
-}
-
 /// Returns messages by their ids in a chat. Missing messages are returned as NSNull.
-- (void)messagesInChat:(int64_t)chatId
-			messageIds:(NSArray *)messageIds
-			completion:(void (^)(NSArray *messages))completion {
-	[[TGMessageStore shared] messagesInChat:chatId messageIds:messageIds completion:completion];
-}
-
 /// Returns properties of a message (e.g. can_be_replied, can_get_message_thread).
-- (void)messagePropertiesForChat:(int64_t)chatId
-					   messageId:(int64_t)messageId
-					  completion:(void (^)(NSDictionary *properties))completion {
-	[[TGMessageStore shared] messagePropertiesForChat:chatId messageId:messageId completion:completion];
-}
-
 /// A t.me link to one message, for Copy Link. Only public chats have one;
 /// the completion gets nil for the rest.
 - (void)linkToMessage:(int64_t)messageId
@@ -231,15 +165,7 @@
 
 /// Sends failed messages again. TDLib keeps them in the history with their
 /// own ids until they go or are deleted.
-- (void)resendMessages:(NSArray *)messageIds inChat:(int64_t)chatId {
-	[[TGSendStore shared] resendMessages:messageIds inChat:chatId];
-}
-
 /// Closes a poll you sent. Nobody can vote afterwards and the result stands.
-- (void)stopPoll:(int64_t)messageId inChat:(int64_t)chatId {
-	[[TGMessageStore shared] stopPoll:messageId inChat:chatId];
-}
-
 /// Who voted for one answer. `optionIndex` is the 0-based index the answer
 /// sits at; the voters come back as senders, flattened into ids and names
 /// the menu shows.
@@ -300,22 +226,8 @@
 /// An option added after the poll went out, for polls that allow it. The
 /// option is a line of text in the same shaped envelope an input poll
 /// carries.
-- (void)addPollOption:(NSString *)text
-			toMessage:(int64_t)messageId
-				 inChat:(int64_t)chatId
-			completion:(void (^)(BOOL ok))completion {
-	[[TGMessageStore shared] addPollOption:text toMessage:messageId inChat:chatId completion:completion];
-}
-
 /// An option taken out again; `optionId` is the string id pollOption
 /// carries, not an index.
-- (void)deletePollOption:(NSString *)optionId
-			   ofMessage:(int64_t)messageId
-				  inChat:(int64_t)chatId
-			  completion:(void (^)(BOOL ok))completion {
-	[[TGMessageStore shared] deletePollOption:optionId ofMessage:messageId inChat:chatId completion:completion];
-}
-
 /// What one answer still allows. TDLib answers with a record of four flags;
 /// the card names each one instead of showing the raw object, because a
 /// client that only prints JSON has not told the user anything.
@@ -362,13 +274,6 @@
 /// Reports a reaction as harassment: TDLib names the sender, not the
 /// message alone - the fire brigade wants to know who lit the fire.
 /// `sender` is the MessageSender the flattening carried up untouched.
-- (void)reportReactionBySender:(NSDictionary *)sender
-					 ofMessage:(int64_t)messageId
-						 inChat:(int64_t)chatId
-					 completion:(void (^)(BOOL ok))completion {
-	[[TGMessageStore shared] reportReactionBySender:sender ofMessage:messageId inChat:chatId completion:completion];
-}
-
 /// Reports messages in a supergroup as spam. It takes the supergroup's own
 /// id, not the chat id - a chat id for a supergroup is the negative of it
 /// with a prefix, so this reads the chat first rather than doing arithmetic
@@ -404,12 +309,6 @@
 /// Blocks whoever sent a message from replying again, and optionally takes
 /// what they wrote with them. Only for messages in the chats a reply reaches
 /// this account through.
-- (void)blockSenderOfMessage:(int64_t)messageId
-			  deleteMessages:(BOOL)deleteMessages
-				  reportSpam:(BOOL)reportSpam {
-	[[TGMessageStore shared] blockSenderOfMessage:messageId deleteMessages:deleteMessages reportSpam:reportSpam];
-}
-
 /// Telegram's own static map of a place, as a PNG. The completion gets a
 /// local path, or nil when there is no answer - which on this device is
 /// ordinary: the thumbnail is a download like any other, and a chat opened
@@ -584,10 +483,6 @@
 					completion(plain);
 			}];
 		}];
-}
-
-- (void)markRead:(NSArray *)messageIds inChat:(int64_t)chatId {
-	[[TGMessageStore shared] markRead:messageIds inChat:chatId];
 }
 
 @end
