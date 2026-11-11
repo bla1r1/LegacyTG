@@ -30,13 +30,6 @@ static const CGFloat kPinGlyph      = 16.0f;
 static const CGFloat kBadgePad      = TGMetricPadMedium + TGMetricPadTiny;
 /// Three buttons fit beside a 320 pt row without clipping.
 static const CGFloat kSwipeActionWidth = 76.0f;
-/// M24: a preview glyph/thumbnail and its compact trailing badge.
-static const CGFloat kPreviewIconSide = 32.0f;
-static const CGFloat kPreviewIconRoom = 36.0f;
-static const CGFloat kPreviewBadgeMax = 88.0f;
-static const CGFloat kPreviewBadgePad = 12.0f;
-static const CGFloat kPreviewBadgeHeight = 16.0f;
-static const CGFloat kPreviewGlyphSide = 18.0f;
 
 @interface TGChatRowCell ()
 @property (nonatomic, strong) UIImageView *avatar;
@@ -50,8 +43,6 @@ static const CGFloat kPreviewGlyphSide = 18.0f;
 @property (nonatomic, strong) UIImageView *pin;   // pinned to the top
 @property (nonatomic, strong) UIImageView *statusIcon; // the emoji status after the title
 @property (nonatomic, strong) UIImageView *muteIcon;   // beside the title of a muted chat
-@property (nonatomic, strong) UIImageView *previewIcon;  // media kind or thumbnail
-@property (nonatomic, strong) UILabel *previewBadge;     // folder/reaction/poll
 @property (nonatomic, strong) UIView *separator;   // starts under the text, not the picture
 
 @property (nonatomic, strong) NSMutableArray *trailingActionButtons;
@@ -85,25 +76,6 @@ static UIFont *TGChatRowCellTitleFont(void) {
 }
 
 /// The unread count occupies the badge slot; compact counts stop at 99+.
-
-/// The glyph a media preview kind gets when no thumbnail is cached yet.
-static NSString *TGChatPreviewGlyphName(NSString *kind) {
-	if ([kind isEqualToString:@"photo"]) return @"gallery";
-	if ([kind isEqualToString:@"video"] || [kind isEqualToString:@"videoNote"]) return @"video";
-	if ([kind isEqualToString:@"gif"]) return @"gallery";
-	if ([kind isEqualToString:@"voice"]) return @"microphone";
-	if ([kind isEqualToString:@"sticker"]) return @"sticker";
-	if ([kind isEqualToString:@"file"] || [kind isEqualToString:@"media"]) return @"document";
-	if ([kind isEqualToString:@"audio"]) return @"music";
-	if ([kind isEqualToString:@"poll"]) return @"chat";
-	if ([kind isEqualToString:@"location"]) return @"mapPinBadge";
-	if ([kind isEqualToString:@"contact"]) return @"contacts";
-	if ([kind isEqualToString:@"game"] || [kind isEqualToString:@"dice"]) return @"play";
-	if ([kind isEqualToString:@"call"]) return @"phoneCall";
-	if ([kind isEqualToString:@"checklist"]) return @"select";
-	if ([kind isEqualToString:@"gift"]) return @"gift";
-	return nil;
-}
 
 /// The unread count occupies the badge slot.
 static NSString *TGChatRowCellBadgeText(NSDictionary *row) {
@@ -143,17 +115,6 @@ static TGChatRowAccessories TGChatRowCellAccessories(NSDictionary *row,
 		CGFloat side = TGMetricChatBadgeHeight;
 		CGFloat x = previewRight - side;
 		a.mentionFrame = CGRectMake(x, TGMetricChatBadgeTop, side, side);
-		previewRight = x - TGMetricPadSmall;
-	}
-	NSString *previewBadge = row[TGRowChatPreviewBadge];
-	if ([previewBadge isKindOfClass:NSString.class] && previewBadge.length){
-		CGSize size = TGChatRowCellTextSize(previewBadge, TGFontCaption());
-		CGFloat w = MIN(kPreviewBadgeMax, ceilf(size.width) + kPreviewBadgePad);
-		CGFloat x = previewRight - w;
-		a.previewBadgeFrame = CGRectMake(x, kSecondLineTop + 1.0f, w,
-				kPreviewBadgeHeight);
-		a.previewBadgeWidth = w;
-		a.hasPreviewBadge = YES;
 		previewRight = x - TGMetricPadSmall;
 	}
 	a.previewRight = previewRight;
@@ -217,23 +178,6 @@ static TGChatRowAccessories TGChatRowCellAccessories(NSDictionary *row,
 	self.previewLabel.numberOfLines = 2;
 	self.previewLabel.lineBreakMode = NSLineBreakByTruncatingTail;
 	[self.contentView addSubview:self.previewLabel];
-
-	self.previewIcon = [[UIImageView alloc] init];
-	self.previewIcon.contentMode = UIViewContentModeCenter;
-	self.previewIcon.layer.cornerRadius = TGMetricCornerSmall;
-	self.previewIcon.clipsToBounds = YES;
-	self.previewIcon.hidden = YES;
-	[self.contentView addSubview:self.previewIcon];
-
-	self.previewBadge = [[UILabel alloc] init];
-	self.previewBadge.font = TGFontCaptionStrong();
-	self.previewBadge.textColor = [theme secondaryTextColour];
-	self.previewBadge.backgroundColor = [theme cardBackgroundColour];
-	self.previewBadge.textAlignment = NSTextAlignmentCenter;
-	self.previewBadge.layer.cornerRadius = TGHalf(kPreviewBadgeHeight);
-	self.previewBadge.clipsToBounds = YES;
-	self.previewBadge.hidden = YES;
-	[self.contentView addSubview:self.previewBadge];
 
 	self.dateLabel = [[UILabel alloc] init];
 	self.dateLabel.font = TGFontSubhead();
@@ -352,10 +296,6 @@ static TGChatRowAccessories TGChatRowCellAccessories(NSDictionary *row,
 	self.avatar.image = nil;
 	self.avatar.opaque = NO;
 	self.avatar.backgroundColor = [UIColor clearColor];
-	self.previewIcon.hidden = YES;
-	self.previewIcon.image = nil;
-	self.previewBadge.hidden = YES;
-	self.previewBadge.text = @"";
 
 	NSString *title = row[TGRowTitle];
 	if (![title isKindOfClass:NSString.class])
@@ -380,30 +320,6 @@ static TGChatRowAccessories TGChatRowCellAccessories(NSDictionary *row,
 		[self setPreview:row[TGRowChatPreview]
 				  author:row[TGRowChatAuthor]
 			 customEmoji:row[TGRowChatCustomEmoji]];
-	}
-
-	// M24: a thumbnail when the picture is already cached, else the kind glyph.
-	UIImage *previewImage = row[TGRowChatPreviewImage];
-	NSString *previewKind = row[TGRowChatPreviewKind];
-	if ([previewImage isKindOfClass:UIImage.class]){
-		self.previewIcon.image = previewImage;
-		self.previewIcon.contentMode = UIViewContentModeScaleAspectFill;
-		self.previewIcon.backgroundColor = [theme cardBackgroundColour];
-		self.previewIcon.hidden = NO;
-	} else if ([previewKind isKindOfClass:NSString.class] && previewKind.length){
-		NSString *glyph = TGChatPreviewGlyphName(previewKind);
-		if (glyph.length){
-			self.previewIcon.image = [TGIcons glyphNamed:glyph
-					colour:[theme secondaryTextColour] side:kPreviewGlyphSide];
-			self.previewIcon.contentMode = UIViewContentModeCenter;
-			self.previewIcon.backgroundColor = [theme cardBackgroundColour];
-			self.previewIcon.hidden = NO;
-		}
-	}
-	NSString *previewBadge = row[TGRowChatPreviewBadge];
-	if ([previewBadge isKindOfClass:NSString.class] && previewBadge.length){
-		self.previewBadge.text = previewBadge;
-		self.previewBadge.hidden = NO;
 	}
 
 	self.onlineDot.hidden = ![row[TGRowChatOnline] boolValue];
@@ -674,15 +590,9 @@ static TGChatRowAccessories TGChatRowCellAccessories(NSDictionary *row,
 		self.mentionBadge.frame = accessories.mentionFrame;
 	CGFloat previewRight = accessories.previewRight;
 
-	BOOL hasPreviewIcon = !self.previewIcon.hidden;
-	CGFloat previewLeft = kTextLeft + (hasPreviewIcon ? kPreviewIconRoom : 0);
-	if (hasPreviewIcon)
-		self.previewIcon.frame = CGRectMake(kTextLeft, kSecondLineTop,
-				kPreviewIconSide, kPreviewIconSide);
-	self.previewBadge.frame = accessories.previewBadgeFrame;
-	CGFloat previewW = MAX(0, previewRight - previewLeft);
+	CGFloat previewW = MAX(0, previewRight - kTextLeft);
 	CGSize fit = [self.previewLabel sizeThatFits:CGSizeMake(previewW, kPreviewMax)];
-	self.previewLabel.frame = CGRectMake(previewLeft, kSecondLineTop, previewW,
+	self.previewLabel.frame = CGRectMake(kTextLeft, kSecondLineTop, previewW,
 			MIN(ceilf(fit.height), kPreviewMax - TGMetricPadTiny));
 
 	CGFloat hair = TGMetricHairline;
@@ -720,8 +630,6 @@ static TGChatRowAccessories TGChatRowCellAccessories(NSDictionary *row,
 	self.dateLabel.backgroundColor = bg;
 	self.titleLabel.textColor = [theme primaryTextColour];
 	self.previewLabel.textColor = [theme secondaryTextColour];
-	self.previewBadge.textColor = [theme secondaryTextColour];
-	self.previewBadge.backgroundColor = [theme cardBackgroundColour];
 	self.dateLabel.textColor = [theme listDateColour];
 	self.badge.backgroundColor = [theme badgeColour];
 	self.mentionBadge.backgroundColor = [theme accentColour];

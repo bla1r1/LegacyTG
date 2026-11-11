@@ -112,8 +112,16 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 
 - (void)redrawVisibleRows {
 	NSArray *visible = [self.table indexPathsForVisibleRows];
-	if (visible.count)
+	if (visible.count) {
+		for (NSIndexPath *ip in visible) {
+			if (ip.row < (NSInteger)self.messages.count) {
+				NSDictionary *m = self.messages[ip.row];
+				NSNumber *msgId = m[@"id"];
+				if (msgId) [self.layoutCache removeLayoutForMessageId:msgId.longLongValue];
+			}
+		}
 		[self.table reloadRowsAtIndexPaths:visible withRowAnimation:UITableViewRowAnimationNone];
+	}
 }
 
 - (void)draftStopped:(NSNotification *)note {

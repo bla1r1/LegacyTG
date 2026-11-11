@@ -617,24 +617,18 @@ NSAttributedString *TGAttributedMessageTextRevealing(NSString *text, NSArray *en
 				[str replaceCharactersInRange:range withAttributedString:glyph];
 			}
 		} else {
-			// iOS 6: attachments have no bounds there, so an inline picture
-			// comes out at its own size and moves the text. Keep the fallback
-			// characters, mark their ranges and ask the store for the picture;
-			// the bubble draws it over the glyph from the rects of
-			// TGCustomEmojiRectsInText. Until the picture is in, the fallback
-			// emoji shows, the way the empty stand-in works on iOS 7.
+			// iOS 6: attachments have no bounds, so replace the fallback color emoji
+			// with an em-space spacer. This completely prevents the AppleColorEmoji
+			// bitmap glyph from drawing underneath or overlapping the custom emoji view.
 			for (NSArray *entry in customEmoji) {
 				NSRange range = NSMakeRange([entry[0] unsignedIntegerValue], [entry[1] unsignedIntegerValue]);
 				int64_t emojiId = [entry[2] longLongValue];
-				UIImage *picture = sCustomEmojiProvider ? sCustomEmojiProvider(emojiId, side) : nil;
-				if (!picture)
-					continue;
-				[str addAttribute:@"TGCustomEmojiId" value:@(emojiId) range:range];
-				// The overlay square the picture was decoded at; the rects
-				// pass reads it back on iOS 6, where no attachment carries it.
-				[str addAttribute:@"TGCustomEmojiSide" value:@(side) range:range];
-				// The overlay picture draws over the glyph, so the glyph hides.
-				[str addAttribute:NSForegroundColorAttributeName value:[UIColor clearColor] range:range];
+				NSMutableAttributedString *spacer = [[NSMutableAttributedString alloc] initWithString:@"\u2003"];
+				[spacer addAttribute:@"TGCustomEmojiId" value:@(emojiId) range:NSMakeRange(0, 1)];
+				[spacer addAttribute:@"TGCustomEmojiSide" value:@(side) range:NSMakeRange(0, 1)];
+				[spacer addAttribute:NSFontAttributeName value:baseFont range:NSMakeRange(0, 1)];
+				[spacer addAttribute:NSForegroundColorAttributeName value:[UIColor clearColor] range:NSMakeRange(0, 1)];
+				[str replaceCharactersInRange:range withAttributedString:spacer];
 			}
 		}
 	}

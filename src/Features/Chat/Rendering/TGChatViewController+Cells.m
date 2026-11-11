@@ -449,7 +449,11 @@ static char kTGReactionChipInfoKey;
 		return;
 	}
 
-	NSArray *emojiRects = TGCustomEmojiRectsInText(cell.body.attributedText, layout.bodyFrame.size.width);
+	NSArray *emojiRects = layout.customEmojiRects;
+	if (!emojiRects) {
+		emojiRects = TGCustomEmojiRectsInText(cell.body.attributedText, layout.bodyFrame.size.width);
+		layout.customEmojiRects = emojiRects ?: @[];
+	}
 	if (!emojiRects.count) {
 		[cell stopCustomEmojiAnimations];
 		[cell hideStaticCustomEmojiViewsFromIndex:0];

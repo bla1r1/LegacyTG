@@ -132,18 +132,20 @@ static int64_t sActiveChatId = 0;
 	self.wallpaperView.clipsToBounds = YES;
 	self.wallpaperView.autoresizingMask = UIViewAutoresizingFlexibleWidth |
 										  UIViewAutoresizingFlexibleHeight;
+	self.wallpaperView.backgroundColor = [[TGTheme shared] chatBackgroundColour];
 	if ([TGCapabilities canShowWallpaper]) {
 		// The pattern takes about a frame to render on the A4, and the chat
 		// open paid for it inside the push: the tint shows at once, the
 		// texture lands when the background thread finishes.
 		__weak UIImageView *weakWallpaper = self.wallpaperView;
-		self.wallpaperView.backgroundColor = [[TGTheme shared] chatBackgroundColour];
 		dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
 			UIImage *image = [[TGTheme shared] wallpaper];
 			dispatch_async(dispatch_get_main_queue(), ^{
 				weakWallpaper.image = image;
 			});
 		});
+	} else {
+		self.wallpaperView.image = nil;
 	}
 	[self.view addSubview:self.wallpaperView];
 
@@ -401,7 +403,8 @@ FOUNDATION_EXPORT void TGBubbleFlushCache(void);
 	// Repaint the composer plate and its placeholder in the new theme.
 	[self updateComposerHeightAnimated:NO];
 	self.sendButton.backgroundColor = [theme accentColour];
-	self.wallpaperView.image = [theme wallpaper];
+	self.wallpaperView.backgroundColor = [theme chatBackgroundColour];
+	self.wallpaperView.image = [TGCapabilities canShowWallpaper] ? [theme wallpaper] : nil;
 	self.titleNameLabel.textColor = [theme barTitleColour];
 	self.titleSubtitleLabel.textColor = [theme barSubtitleColour];
 	if (self.pinnedBannerView) {

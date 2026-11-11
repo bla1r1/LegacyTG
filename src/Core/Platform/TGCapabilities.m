@@ -206,7 +206,7 @@ static BOOL TGEmojiFontHasGlyphs(CTFontRef font, NSString *s) {
 		@[@"Chat wallpaper",          @([self canShowWallpaper]),      @"every device, off by default on the oldest"],
 		@[@"GIF autoplay",            @([self canAutoplayGIFs]),       @"every device, one at a time on the oldest"],
 		@[@"Multiple accounts",       @([self canHoldMultipleAccounts]), @"every device, one active at a time"],
-		@[@"Custom emoji",            @NO,   @"shown as their plain emoji for now"],
+		@[@"Custom emoji",            @YES,  @"every device, static on Vintage"],
 		@[@"Mini apps",               @([self canRunWebApps]),         @"iOS 9 or later"],
 		@[@"H.264 High video",        @([TGDevice tier] > TGDeviceTierVintage), @"Legacy - the A4's decoder stops at Main Profile, 720p, 30 fps"],
 #if TG_DEV
