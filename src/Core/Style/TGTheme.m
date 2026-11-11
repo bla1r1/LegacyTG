@@ -444,12 +444,13 @@ static UIImage *TGThemeWallpaperImage(UIColor *colour, BOOL dark) {
 		bg.backgroundColor = [self listBackgroundColour];
 		table.backgroundView = bg;
 		table.separatorColor = [self separatorColour];
-		if ([table respondsToSelector:@selector(setSectionIndexColor:)]) {
+		if ([table respondsToSelector:@selector(setSectionIndexColor:)])
 			table.sectionIndexColor = [self accentColour];
+		// iOS 6 has sectionIndexColor but not the background/tracking pair.
+		if ([table respondsToSelector:@selector(setSectionIndexBackgroundColor:)])
 			table.sectionIndexBackgroundColor = [UIColor clearColor];
-			if ([table respondsToSelector:@selector(setSectionIndexTrackingBackgroundColor:)])
-				table.sectionIndexTrackingBackgroundColor = [self listBackgroundColour];
-		}
+		if ([table respondsToSelector:@selector(setSectionIndexTrackingBackgroundColor:)])
+			table.sectionIndexTrackingBackgroundColor = [self listBackgroundColour];
 	} else {
 		table.backgroundColor = [self listBackgroundColour];
 		table.backgroundView = nil;
