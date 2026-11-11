@@ -128,15 +128,5 @@
 
 /// Opening a chat from search puts it in the recently-found list, which is
 /// what their search shows before anything is typed.
-- (void)rememberFoundChat:(int64_t)chatId {
-	[self send:@{@"@type" : @"addRecentlyFoundChat", @"chat_id" : @(chatId)}];
-}
-
 /// Takes someone out of the frequent-contacts ranking.
-- (void)forgetTopChat:(int64_t)chatId {
-	[self send:@{@"@type" : @"removeTopChat",
-				 @"category" : @{@"@type" : @"topChatCategoryUsers"},
-				 @"chat_id"  : @(chatId)}];
-}
-
 @end

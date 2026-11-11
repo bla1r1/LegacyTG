@@ -15,25 +15,14 @@
 - (void)downloadFile:(NSInteger)fileId priority:(NSInteger)priority completion:(void (^)(NSString *path))completion;
 
 /// Bytes over the wire since TDLib last reset its counters.
-- (void)networkStatsWithCompletion:(void (^)(long long sent, long long received))completion;
-
-- (void)resetNetworkStats;
-
 /// Whether media downloads itself, per network. TDLib cannot read the setting
 /// back, so these answer with what the app last wrote.
 /// Cache size on disk, in bytes, and the file count. TDLib's fast variant:
 /// the full one walks every file and takes seconds on this hardware.
-- (void)storageStatsWithCompletion:(void (^)(long long bytes, NSInteger files))completion;
-
 /// Delete cached media. `kinds` are TDLib FileType names, or nil for all of
 /// them; `completion` gets the number of bytes freed.
-- (void)clearCacheOfTypes:(NSArray *)kinds completion:(void (^)(long long freed))completion;
-
 /// What the cache is made of, largest first: "name", "bytes", "kinds". Walks
 /// the database, so it takes a moment on this hardware - ask once per screen.
-- (void)storageBreakdownWithCompletion:(void (^)(NSArray *categories,
-                                                 long long total))completion;
-
 /// Drop TDLib's local database. The session stays.
 #pragma mark - file records, names and bytes
 
@@ -42,31 +31,13 @@
 /// "remoteId", "remoteUniqueId", "remoteUploading" and "remoteUploadedSize".
 /// The remote half comes from getRemoteFile, so the answer also proves the
 /// remote copy still resolves.
-- (void)fileInfo:(NSInteger)fileId completion:(void (^)(NSDictionary *info))completion;
-
 /// Bytes already on disk from `offset` onward - what the File Info screen
 /// shows beside the total.
-- (void)fileDownloadedPrefixSize:(NSInteger)fileId
-						  offset:(long long)offset
-					  completion:(void (^)(long long bytes))completion;
-
 /// MIME type, extension and the cleaned file name for `name`, asked in the
 /// order TDLib expects: MIME from the name, extension from the MIME, and the
 /// safe name from the original. Keys: "mime", "extension", "cleanName".
-- (void)fileNameInfo:(NSString *)name
-		  completion:(void (^)(NSDictionary *info))completion;
-
 /// The name Telegram suggests saving this file under in `directory`.
-- (void)suggestedFileNameForFile:(NSInteger)fileId
-					   directory:(NSString *)directory
-					  completion:(void (^)(NSString *name))completion;
-
 /// Reads a slice out of TDLib's cache. `count` 0 means everything left.
-- (void)readFilePartOfFile:(NSInteger)fileId
-					offset:(long long)offset
-					 count:(NSInteger)count
-				completion:(void (^)(NSData *data))completion;
-
 #pragma mark - preliminary upload and file generation
 
 /// Stops a file started by preliminaryUploadFile. Also abandons a generation
@@ -91,13 +62,6 @@
 /// Telegram's Low, Medium and High presets, flattened to "low", "medium" and
 /// "high" dictionaries with "enabled", "maxPhotoSize", "maxVideoSize",
 /// "maxOtherSize", "preloadVideos", "preloadAudio" and "lessDataForCalls".
-- (void)autoDownloadSettingsPresetsWithCompletion:
-		(void (^)(NSDictionary *presets))completion;
-
 /// Writes one of those presets for a network type. `network` is "wifi",
 /// "mobile" or "roaming"; the low preset is the roaming one.
-- (void)applyAutoDownloadPreset:(NSDictionary *)preset
-					 forNetwork:(NSString *)network
-					 completion:(void (^)(BOOL ok))completion;
-
 @end

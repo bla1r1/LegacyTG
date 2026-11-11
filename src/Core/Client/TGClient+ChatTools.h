@@ -14,122 +14,35 @@
 #pragma mark - chat folders, the shared half
 
 /// Approximate number of chats a not-yet-created folder would hold.
-- (void)chatCountForFolder:(NSDictionary *)folder
-				completion:(void (^)(NSInteger count))completion;
-
 /// Pinned or always-included chats a folder suggests leaving when it is
 /// deleted. The delete confirmation offers them; deleteFolder takes the ids.
-- (void)chatsToLeaveForFolder:(NSInteger)folderId
-				   completion:(void (^)(NSArray *chatIds))completion;
-
 /// The icon Telegram would draw for a folder that did not name one. Read
 /// synchronously, so a folder row can show it without a round trip.
-- (void)defaultIconNameForFolder:(NSDictionary *)folder
-					  completion:(void (^)(NSString *name))completion;
-
 /// Invite links created for a shareable folder, flattened to "link", "name"
 /// and "chatIds".
-- (void)inviteLinksForFolder:(NSInteger)folderId
-				  completion:(void (^)(NSArray *links))completion;
-
 /// Chats from a folder that may be named in a folder invite link.
-- (void)chatsForFolderInviteLink:(NSInteger)folderId
-					  completion:(void (^)(NSArray *chatIds))completion;
-
-- (void)createInviteLinkForFolder:(NSInteger)folderId
-							 name:(NSString *)name
-						  chatIds:(NSArray *)chatIds
-					   completion:(void (^)(NSString *link))completion;
-
-- (void)editInviteLinkForFolder:(NSInteger)folderId
-						   link:(NSString *)link
-						   name:(NSString *)name
-						chatIds:(NSArray *)chatIds
-					 completion:(void (^)(BOOL ok))completion;
-
-- (void)deleteInviteLinkForFolder:(NSInteger)folderId
-							 link:(NSString *)link
-					   completion:(void (^)(BOOL ok))completion;
-
 /// What a folder invite link points at: "name", "id", "missing" and "added"
 /// chat id arrays. `folder` is nil when the link is dead.
-- (void)checkFolderInviteLink:(NSString *)link
-				   completion:(void (^)(NSDictionary *folder))completion;
-
 /// Adopts a folder from a link. `chatIds` is the subset of the link's chats
 /// the user chose to add; an empty array adds all of them.
-- (void)addFolderByInviteLink:(NSString *)link
-					  chatIds:(NSArray *)chatIds
-				   completion:(void (^)(BOOL ok))completion;
-
 /// Chats the owner of a shared folder has added since this account last
 /// processed them.
-- (void)newChatsForFolder:(NSInteger)folderId
-			   completion:(void (^)(NSArray *chatIds))completion;
-
-- (void)processNewChats:(NSArray *)chatIds forFolder:(NSInteger)folderId
-			 completion:(void (^)(BOOL ok))completion;
-
 /// The chat lists a chat may be moved into: main, archive and each folder.
 /// Entries are carried as raw chatList dictionaries.
 - (void)chatListsForChat:(int64_t)chatId
 			  completion:(void (^)(NSArray *lists))completion;
 
-- (void)toggleFolderTags:(BOOL)on;
-
 #pragma mark - invite links, the administrator's half
 
 /// One link, with every field the edit sheet needs.
-- (void)inviteLink:(NSString *)link
-			inChat:(int64_t)chatId
-		completion:(void (^)(NSDictionary *info))completion;
-
 /// Administrators and how many active and revoked links each made.
-- (void)inviteLinkCountsForChat:(int64_t)chatId
-					 completion:(void (^)(NSArray *counts))completion;
-
 /// Members who joined through one link: "id", "name", "date", "approver".
-- (void)membersOfInviteLink:(NSString *)link
-					 inChat:(int64_t)chatId
-				 completion:(void (^)(NSArray *members))completion;
-
 /// A subscription link. `stars` is the price per period, `period` one of
 /// 2592000, 60 or 300 seconds.
-- (void)createSubscriptionInviteLink:(int64_t)chatId
-								name:(NSString *)name
-							   stars:(NSInteger)stars
-							  period:(NSInteger)period
-						  completion:(void (^)(NSString *link))completion;
-
-- (void)editSubscriptionInviteLink:(NSString *)link
-							inChat:(int64_t)chatId
-							  name:(NSString *)name
-						completion:(void (^)(BOOL ok))completion;
-
-- (void)editInviteLink:(NSString *)link
-				inChat:(int64_t)chatId
-				  name:(NSString *)name
-			expiration:(NSInteger)expiration
-		   memberLimit:(NSInteger)memberLimit
-		   joinRequest:(BOOL)joinRequest
-			completion:(void (^)(BOOL ok))completion;
-
-- (void)deleteRevokedInviteLink:(NSString *)link
-						 inChat:(int64_t)chatId
-					 completion:(void (^)(BOOL ok))completion;
-
-- (void)deleteAllRevokedInviteLinks:(int64_t)chatId
-							creator:(int64_t)creatorId
-						 completion:(void (^)(BOOL ok))completion;
-
 #pragma mark - join requests and bot seams
 
 /// Answers an updateNewChatJoinRequest query (bots only, but this app still
 /// carries the button in case a guard bot ever hands one over).
-- (void)answerJoinRequestQuery:(int64_t)queryId
-						approve:(BOOL)approve
-					 completion:(void (^)(BOOL ok))completion;
-
 /// Every pending request at one link, or at all links when `link` is empty.
 - (void)processAllJoinRequests:(int64_t)chatId
 						  link:(NSString *)link
@@ -149,47 +62,19 @@
 - (void)searchRecentlyFoundChats:(NSString *)query
 					  completion:(void (^)(NSArray *chats))completion;
 
-- (void)forgetRecentlyFoundChat:(int64_t)chatId;
-
-- (void)clearRecentlyFoundChats;
-
 #pragma mark - discovery
 
 /// Similar channels and the approximate total Telegram knows. Entries carry
 /// "id", "title" and "members".
-- (void)similarChatsForChat:(int64_t)chatId
-				 completion:(void (^)(NSArray *chats, NSInteger total))completion;
-
 /// Tells Telegram a similar chat was opened from the list of another chat.
-- (void)openSimilarChat:(int64_t)openedChatId fromChat:(int64_t)chatId;
-
 - (void)recommendedChatsWithCompletion:(void (^)(NSArray *chats))completion;
 
 - (void)suitableDiscussionChatsWithCompletion:(void (^)(NSArray *chats))completion;
 
-- (void)suitablePersonalChatsWithCompletion:(void (^)(NSArray *chats))completion;
-
-- (void)setPersonalChat:(int64_t)chatId completion:(void (^)(BOOL ok))completion;
-
-- (void)inactiveSupergroupChatsWithCompletion:(void (^)(NSArray *chats))completion;
-
 #pragma mark - public chats and usernames
 
 /// `publicChatTypeHasUsername` or `publicChatTypeIsLocationBased`.
-- (void)createdPublicChatsOfType:(NSString *)type
-					  completion:(void (^)(NSArray *chats))completion;
-
-- (void)checkCreatedPublicChatsLimitForType:(NSString *)type
-								 completion:(void (^)(BOOL ok, NSString *reason))completion;
-
-- (void)checkUsername:(NSString *)username
-			   forChat:(int64_t)chatId
-			completion:(void (^)(NSString *result))completion;
-
 #pragma mark - account-level chat preferences
-
-- (void)notificationExceptionsWithCompletion:
-		(void (^)(NSArray *chats))completion;
 
 #pragma mark - the chat itself, read and changed
 
@@ -277,11 +162,6 @@
 				   forChat:(int64_t)chatId
 				completion:(void (^)(BOOL ok))completion;
 
-- (void)setMemberTag:(NSString *)tag
-			  forUser:(int64_t)userId
-			   inChat:(int64_t)chatId
-		   completion:(void (^)(BOOL ok))completion;
-
 /// Approves or rejects a pending request to turn protected content off.
 #pragma mark - chat positions
 
@@ -295,18 +175,9 @@
 /// The 1-based position of one message among the same filter's matches.
 #pragma mark - sessions
 
-- (void)toggleSession:(int64_t)sessionId canAcceptSecretChats:(BOOL)can;
-
 #pragma mark - compatibility resolvers
 
 /// TDLib's older spellings of "open the chat for this internal id". The app
 /// addresses chats by chat id, so these exist for the admin tool that has to
 /// turn a basic-group, supergroup or secret-chat id back into a chat.
-- (void)chatForBasicGroup:(int64_t)basicGroupId
-			   completion:(void (^)(int64_t chatId))completion;
-- (void)chatForSupergroup:(int64_t)supergroupId
-			   completion:(void (^)(int64_t chatId))completion;
-- (void)chatForSecretChat:(int32_t)secretChatId
-			   completion:(void (^)(int64_t chatId))completion;
-
 @end

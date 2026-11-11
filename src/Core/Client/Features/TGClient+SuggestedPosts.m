@@ -70,38 +70,6 @@
 	}];
 }
 
-- (NSArray *)suggestedActions {
-	return self.suggestedActionsValue ?: @[];
-}
-
-- (void)hideSuggestedAction:(NSDictionary *)action
-                 completion:(void (^)(BOOL, NSString *))completion {
-	NSDictionary *object = TGFeatureDict(action[@"action"]);
-	if (!object.count){
-		if (completion)
-			completion(NO, @"No suggested action was chosen.");
-		return;
-	}
-	[self request:@{
-		@"@type"  : @"hideSuggestedAction",
-		@"action" : object,
-	} completion:^(NSDictionary *result){
-		BOOL ok = TGFeatureOK(result);
-		if (ok){
-			NSString *key = TGFeatureActionKey(object);
-			NSMutableArray *kept = [NSMutableArray array];
-			for (NSDictionary *row in self.suggestedActionsValue){
-				if (![TGFeatureActionKey(TGFeatureDict(row[@"action"])) isEqualToString:key])
-					[kept addObject:row];
-			}
-			self.suggestedActionsValue = kept;
-		}
-		if (completion)
-			completion(ok, ok ? nil : TGFeatureErrorText(result));
-	}];
-}
-
-
 - (void)applySuggestedActionsUpdate:(NSDictionary *)update {
 	NSMutableArray *rows = [NSMutableArray array];
 	NSMutableSet *removed = [NSMutableSet set];

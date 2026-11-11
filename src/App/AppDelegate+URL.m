@@ -37,6 +37,7 @@ static const CGFloat kIconDumpSide = 52.0f;
 #import "TGUpdateInfoViewController.h"
 #import "TGNavController.h"
 #import <QuartzCore/QuartzCore.h>
+#import "TGAccountStore.h"
 #include <dlfcn.h>
 
 @implementation AppDelegate (URL)
@@ -215,7 +216,7 @@ static NSUInteger TGChatsIndex(UITabBarController *tabs) {
 
 	if ([host isEqualToString:@"phone"] && arg.length){
 		self.currentPhoneNumber = arg;
-		[[TGClient shared] sendPhoneNumber:arg];
+		[[TGAccountStore shared] sendPhoneNumber:arg];
 		return YES;
 	}
 
@@ -348,7 +349,7 @@ static NSUInteger TGChatsIndex(UITabBarController *tabs) {
 	// that a client closes and reopens on another database.
 	if ([host isEqualToString:@"account"] && arg.length){
 		dispatch_async(dispatch_get_main_queue(), ^{
-			[[TGClient shared] switchToAccountSlot:[arg integerValue]];
+			[[TGAccountStore shared] switchToAccountSlot:[arg integerValue]];
 		});
 		return YES;
 	}
@@ -366,7 +367,7 @@ static NSUInteger TGChatsIndex(UITabBarController *tabs) {
 
 	if ([host isEqualToString:@"code"] && arg.length){
 		NSLog(@"code received (%lu chars)", (unsigned long)arg.length);
-		[[TGClient shared] sendCode:arg];
+		[[TGAccountStore shared] sendCode:arg];
 		return YES;
 	}
 
@@ -397,7 +398,7 @@ static NSUInteger TGChatsIndex(UITabBarController *tabs) {
 
 	if ([host isEqualToString:@"password"] && arg.length){
 		NSLog(@"password received (%lu chars)", (unsigned long)arg.length);
-		[[TGClient shared] sendPassword:arg];
+		[[TGAccountStore shared] sendPassword:arg];
 		return YES;
 	}
 

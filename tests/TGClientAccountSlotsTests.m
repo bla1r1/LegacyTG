@@ -70,11 +70,11 @@ static TGClient *SlotsClient(void) {
 	[[NSUserDefaults standardUserDefaults] setInteger:0 forKey:@"TGActiveAccountSlot"];
 	// An install that signed out of slot 0 leaves an empty list; the active
 	// slot still counts as taken, so the new account lands in slot 1.
-	NSInteger slot = [TGClient addAccount];
+	NSInteger slot = [TGAccountStore addAccount];
 	XCTAssertEqual(slot, 1);
 
 	// The active slot was not in the list, so addAccount recorded it too.
-	NSArray *slots = [TGClient accountSlots];
+	NSArray *slots = [TGAccountStore accountSlots];
 	BOOL has0 = NO, has1 = NO;
 	for (NSDictionary *entry in slots){
 		NSInteger s = [entry[@"slot"] integerValue];
@@ -90,7 +90,7 @@ static TGClient *SlotsClient(void) {
 	[[NSUserDefaults standardUserDefaults] setObject:@[
 		@{@"slot" : @0}, @{@"slot" : @1}, @{@"slot" : @2},
 	] forKey:@"TGAccountSlots"];
-	XCTAssertEqual([TGClient addAccount], (NSInteger)-1);
+	XCTAssertEqual([TGAccountStore addAccount], (NSInteger)-1);
 }
 
 // ─── recordActiveAccountFromMe ───────────────────────────────────────────────
@@ -107,7 +107,7 @@ static TGClient *SlotsClient(void) {
 	[c recordActiveAccountFromMe:
 			@{@"first_name" : @"Alice", @"username" : @"alice", @"phone" : @"+100"}];
 
-	NSArray *slots = [TGClient accountSlots];
+	NSArray *slots = [TGAccountStore accountSlots];
 	for (NSDictionary *entry in slots){
 		NSInteger s = [entry[@"slot"] integerValue];
 		if (s == 0){

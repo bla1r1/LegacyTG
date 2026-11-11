@@ -7,6 +7,7 @@
 #import <AVFoundation/AVFoundation.h>
 #import <MediaPlayer/MediaPlayer.h>
 #import <UIKit/UIKit.h>
+#import "TGStarsStore.h"
 
 NSString *const TGMusicPlayerChangedNotification = @"TGMusicPlayerChanged";
 
@@ -186,7 +187,7 @@ NSString *const TGMusicPlayerChangedNotification = @"TGMusicPlayerChanged";
 	NSNumber *fileId = self.current[@"docId"];
 	if ([fileId isKindOfClass:NSNumber.class] && fileId.intValue > 0 &&
 		streamer.duration > 0){
-		[[TGClient shared] markAudioListened:fileId.intValue
+		[[TGStarsStore shared] markAudioListened:fileId.intValue
 									duration:(int32_t)streamer.duration
 								  completion:nil];
 	}
@@ -393,7 +394,7 @@ NSString *const TGMusicPlayerChangedNotification = @"TGMusicPlayerChanged";
 	// file id here is the listened mark and its recommendations.
 	NSNumber *fileId = self.current[@"docId"];
 	if ([fileId isKindOfClass:NSNumber.class] && fileId.intValue > 0){
-		[[TGClient shared] markAudioListened:fileId.intValue
+		[[TGStarsStore shared] markAudioListened:fileId.intValue
 									duration:(int32_t)MAX(0.0, player.duration)
 								  completion:nil];
 	}

@@ -20,9 +20,5 @@
 - (void)recentlyOpenedChatsWithCompletion:(void (^)(NSArray *chats))completion;
 
 /// Opening a chat from search puts it in the recently-found list.
-- (void)rememberFoundChat:(int64_t)chatId;
-
 /// Takes someone out of the frequent-contacts ranking.
-- (void)forgetTopChat:(int64_t)chatId;
-
 @end

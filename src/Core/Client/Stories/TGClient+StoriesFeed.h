@@ -32,26 +32,10 @@ NSUInteger TGStoryRowProbeLimit(TGDeviceTier tier);
 
 /// The stories pinned to a chat's profile page, in order. Every id must
 /// already be posted to the chat page.
-- (void)setPinnedStoryIds:(NSArray *)storyIds
-				   inChat:(int64_t)chatId
-			   completion:(void (^)(BOOL ok, NSString *error))completion;
-
 /// All stories a chat has ever posted; requires can_edit_stories in a group
 /// or channel. Only the ids Telegram returns are new: the archive screen
 /// converts them with -story:fromChat:completion:.
 /// The archive as tiles, the same rows storiesForChat: gives: first 60.
-- (void)archivedStoriesForChat:(int64_t)chatId
-					completion:(void (^)(NSArray *))completion;
-
-- (void)archivedStoryIdsForChat:(int64_t)chatId
-					 fromStoryId:(int32_t)fromStoryId
-						  limit:(NSInteger)limit
-					 completion:(void (^)(NSArray *storyIds, NSString *error))completion;
-
 /// A story by id, flattened. The viewer asks for this rather than re-reading
 /// the whole chat every time the user swipes.
-- (void)story:(int32_t)storyId
-	  fromChat:(int64_t)chatId
-  completion:(void (^)(NSDictionary *story))completion;
-
 @end

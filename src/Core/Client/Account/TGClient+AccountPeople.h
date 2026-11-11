@@ -14,10 +14,5 @@
 - (void)isUserBlocked:(int64_t)userId completion:(void (^)(BOOL blocked))completion;
 /// Gifts a user has received and kept on their profile: "title", "starCount".
 /// Gifts an owner (user or chat sender) has received, paged by offset.
-- (void)giftsForOwner:(NSDictionary *)ownerId
-			   offset:(NSString *)offset
-		   completion:(void (^)(NSArray *gifts, NSString *nextOffset, NSInteger totalCount))completion;
 /// Premium state of the signed-in account: nil when it is not active.
-- (void)premiumStateWithCompletion:(void (^)(NSString *summary))completion;
-
 @end

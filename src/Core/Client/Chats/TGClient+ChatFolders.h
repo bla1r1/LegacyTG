@@ -8,7 +8,6 @@
 /// Profile photo file id of a chat we already know about, or nil. Groups and
 /// channels have no user record, so this is where their picture comes from.
 - (NSNumber *)photoFileIdForChat:(int64_t)chatId;
-
 /// Writes the action bar over an unknown chat - its kind, a join request's
 /// words, the account details to add a contact by - into a chat dict.
 - (void)mergeActionBar:(NSDictionary *)bar intoChatRow:(NSMutableDictionary *)row;
@@ -39,31 +38,14 @@ FOUNDATION_EXPORT NSDictionary *TGMemberRowForMember(NSDictionary *member,
 
 /// Makes a folder holding `chatIds`. `icon` is one of Telegram's own icon
 /// names and may be nil. The completion gets the new folder's id, or 0.
-- (void)createFolderNamed:(NSString *)name
-					 icon:(NSString *)icon
-				withChats:(NSArray *)chatIds
-			   completion:(void (^)(NSInteger folderId))completion;
-
 /// The folder as it stands - its chats, its flags - or nil if it is gone.
-- (void)folderDetails:(NSInteger)folderId
-		   completion:(void (^)(NSDictionary *folder))completion;
-
 /// Renames a folder, or changes which chats it holds, or both: a nil leaves
 /// that part as it was. An edit replaces the whole folder on Telegram's side,
 /// so this reads it first.
-- (void)editFolder:(NSInteger)folderId
-			  name:(NSString *)name
-			 chats:(NSArray *)chatIds
-		completion:(void (^)(BOOL ok))completion;
-
 /// Drops the folder. The chats in it stay; `leaveChatIds` is for the ones
 /// you also want out of, and is usually empty.
-- (void)deleteFolder:(NSInteger)folderId leavingChats:(NSArray *)leaveChatIds;
-
 /// The order of the pill strip. "All chats" is a position in that order
 /// rather than a folder of its own.
-- (void)reorderFolderIds:(NSArray *)folderIds mainListAt:(NSInteger)position;
-
 /// The pill strip's drag result: the local order is written first so the
 /// strip holds it while the wire request is still in flight, then the same
 /// order is sent.
@@ -72,11 +54,6 @@ FOUNDATION_EXPORT NSDictionary *TGMemberRowForMember(NSDictionary *member,
 
 /// Telegram's own suggestions, each with the sentence their client shows
 /// under it: "title", "description", and "folder" ready to be created.
-- (void)recommendedFoldersWithCompletion:(void (^)(NSArray *folders))completion;
-
-- (void)createRecommendedFolder:(NSDictionary *)folder
-					 completion:(void (^)(NSInteger folderId))completion;
-
 /// Marks every chat of one chat list read: the folder's badge clears because
 /// the list was read as a whole, not chat by chat. folderId 0 = "All chats".
 /// Asks TDLib for the archive settings again and swaps the local copy under
@@ -86,8 +63,4 @@ FOUNDATION_EXPORT NSDictionary *TGMemberRowForMember(NSDictionary *member,
 
 /// Sets all three at once - the archive settings are one object in TDLib,
 /// not three unrelated switches.
-- (void)setArchiveSettingsArchiveAndMute:(BOOL)archiveAndMute
-					 keepUnmutedArchived:(BOOL)keepUnmuted
-				   keepFolderChatsArchived:(BOOL)keepFolders;
-
 @end

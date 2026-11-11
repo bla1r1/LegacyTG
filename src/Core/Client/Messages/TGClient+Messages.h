@@ -8,12 +8,6 @@
 /// Newest `limit` messages of a chat, oldest first. Each entry has "id",
 /// "text", "date", "outgoing" (NSNumber BOOL), "senderId", "photoId"
 /// (NSNumber file id or nil).
-- (void)historyForChat:(int64_t)chatId
-         fromMessageId:(int64_t)fromMessageId
-                offset:(NSInteger)offset
-                 limit:(NSInteger)limit
-            completion:(void (^)(NSArray *messages))completion;
-
 /// A page with the message itself in the middle, for jumping to it.
 /// History of one forum topic. `threadId` is the topic's message_thread_id.
 - (void)sendText:(NSString *)text toChat:(int64_t)chatId;

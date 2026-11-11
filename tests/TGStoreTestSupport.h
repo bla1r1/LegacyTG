@@ -185,5 +185,6 @@
 @end
 
 @interface TGGroupStore (TGTestSupport)
++ (NSDictionary *)chatPermissionsForPreset:(NSString *)preset;
 @property (nonatomic, readonly) NSArray *communities;
 @end

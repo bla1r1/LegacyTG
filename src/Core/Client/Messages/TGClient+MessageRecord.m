@@ -6,25 +6,6 @@
 
 #pragma mark - the message as a record
 
-- (void)callbackQueryMessage:(int64_t)messageId
-					  inChat:(int64_t)chatId
-			 callbackQueryId:(int64_t)callbackQueryId
-				  completion:(void (^)(NSDictionary *message))completion {
-	[self request:@{
-		@"@type"             : @"getCallbackQueryMessage",
-		@"chat_id"           : @(chatId),
-		@"message_id"        : @(messageId),
-		@"callback_query_id" : @(callbackQueryId),
-	} completion:^(NSDictionary *result){
-		if (!completion)
-			return;
-		if ([result[@"@type"] isEqualToString:@"message"])
-			completion(TGFlattenMessage(result));
-		else
-			completion(nil);
-	}];
-}
-
 - (void)localMessageWithId:(int64_t)messageId
 					inChat:(int64_t)chatId
 				completion:(void (^)(NSDictionary *message))completion {
@@ -95,47 +76,6 @@ static id TGMessageTopicForThread(TGClient *client, int64_t chatId, int64_t thre
 		NSArray *positions = [result[@"positions"] isKindOfClass:NSArray.class]
 				? result[@"positions"] : @[];
 		completion(positions);
-	}];
-}
-
-- (void)setReactions:(NSArray *)emojis
-		   onMessage:(int64_t)messageId
-			  inChat:(int64_t)chatId
-		  completion:(void (^)(BOOL ok))completion {
-	NSMutableArray *types = [NSMutableArray array];
-	for (NSString *emoji in emojis)
-		if ([emoji isKindOfClass:NSString.class] && emoji.length)
-			[types addObject:@{@"@type" : @"reactionTypeEmoji",
-							   @"emoji" : emoji}];
-	[self request:@{
-		@"@type"          : @"setMessageReactions",
-		@"chat_id"        : @(chatId),
-		@"message_id"     : @(messageId),
-		@"reaction_types" : types,
-		@"is_big"         : @NO,
-	} completion:^(NSDictionary *result){
-		if (completion)
-			completion(![result[@"@type"] isEqualToString:@"error"]);
-	}];
-}
-
-- (void)personalChatHistoryForUser:(int64_t)userId
-							 limit:(NSInteger)limit
-						completion:(void (^)(NSArray *messages))completion {
-	[self request:@{
-		@"@type"   : @"getPersonalChatHistory",
-		@"user_id" : @(userId),
-		@"limit"   : @(MAX((NSInteger)1, MIN(limit, (NSInteger)20))),
-	} completion:^(NSDictionary *result){
-		NSArray *msgs = result[@"messages"];
-		if (![msgs isKindOfClass:NSArray.class]){
-			if (completion) completion(@[]);
-			return;
-		}
-		NSMutableArray *out = [NSMutableArray arrayWithCapacity:msgs.count];
-		for (NSDictionary *m in msgs)
-			[out addObject:TGFlattenMessage(m)];
-		if (completion) completion(out);
 	}];
 }
 

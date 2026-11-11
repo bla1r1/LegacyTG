@@ -6,14 +6,4 @@
 
 #pragma mark - stealth
 
-- (void)activateStoryStealthModeWithCompletion:
-		(void (^)(BOOL, NSString *))completion {
-	[self request:@{@"@type" : @"activateStoryStealthMode"}
-	   completion:^(NSDictionary *result){
-		BOOL ok = TGStorySucceeded(result);
-		if (completion)
-			completion(ok, ok ? nil : TGStoryErrorText(result));
-	}];
-}
-
 @end

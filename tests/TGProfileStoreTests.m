@@ -48,8 +48,9 @@ static NSDictionary *TPSLastRequest(NSString *type) {
 }
 
 - (void)testAccentIdsComeFromTheClient {
+	[TGClient shared].accentColorIds = @[ @1, @2 ];
 	XCTAssertEqualObjects([TGProfileStore shared].availableAccentColorIds,
-						  [[TGClient shared] availableAccentColorIds]);
+						  (@[ @1, @2 ]));
 }
 
 @end

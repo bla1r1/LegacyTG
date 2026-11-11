@@ -9,14 +9,6 @@
 /// Telegram's gallery autosave settings. "private", "groups" and "channels"
 /// each carry "photos", "videos" and "maxVideoSize"; "exceptions" is an array
 /// of per-chat overrides with "chatId" and the same three fields.
-- (void)autosaveSettingsWithCompletion:(void (^)(NSDictionary *settings))completion;
 /// Writes one scope's settings. `scope` is "private", "groups" or "channels".
-- (void)setAutosaveSettingsForScope:(NSString *)scope
-							 photos:(BOOL)photos
-							 videos:(BOOL)videos
-					   maxVideoSize:(long long)maxVideoSize
-						 completion:(void (^)(BOOL ok))completion;
 /// Drops every per-chat exception; the three scope defaults stay.
-- (void)clearAutosaveSettingsExceptionsWithCompletion:(void (^)(BOOL ok))completion;
-
 @end
