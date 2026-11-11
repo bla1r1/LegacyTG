@@ -30,40 +30,6 @@ NSString *TGPlainTitle(id value){
 	return [value isKindOfClass:NSString.class] ? value : nil;
 }
 
-static NSString *TGFolderTitle(NSDictionary *f){
-	NSString *answer = TGPlainTitle(f[@"title"]) ?: TGPlainTitle(f[@"name"]);
-	if (!answer.length)
-		answer = @"";
-	return answer;
-}
-
-/// An account can have no active username at all. Subscripting [0] on that
-/// empty vector throws, which took the profile down; firstObject is the safe
-/// spelling and also survives TDLib sending null.
-static NSString *TGFirstActiveUsername(NSDictionary *user){
-	id usernames = user[@"usernames"];
-	if (![usernames isKindOfClass:NSDictionary.class])
-		return nil;
-	id names = usernames[@"active_usernames"];
-	return [names isKindOfClass:NSArray.class] ? [names firstObject] : nil;
-}
-
-/// Effect ids arrive as a vector<int64>; over JSON that is either a number or
-/// a decimal string. Both are reduced to NSNumber here so every reader can
-/// pass one straight back to getMessageEffect.
-static NSArray *TGEffectIdList(id value){
-	if (![value isKindOfClass:NSArray.class])
-		return @[];
-	NSMutableArray *ids = [NSMutableArray array];
-	for (id raw in value){
-		if (![raw isKindOfClass:NSNumber.class] &&
-			![raw isKindOfClass:NSString.class])
-			continue;
-		[ids addObject:@([raw longLongValue])];
-	}
-	return ids;
-}
-
 NSString *const TGChatReadOutboxChangedNotification = @"TGChatReadOutboxChangedNotification";
 NSString *const TGMessageSendStateChangedNotification = @"TGMessageSendStateChangedNotification";
 NSString *const TGChatsChangedNotification = @"TGChatsChangedNotification";
