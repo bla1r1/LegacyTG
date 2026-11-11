@@ -2,9 +2,9 @@
 // TGDevStore.m - the Dev screens' store surface.
 //
 #import "TGDevStore.h"
+#import "TGDownloadStore.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
-#import "TGClient+Files.h"
 #import "TGClient+FeatureSupport.h"
 #import "TGBase64.h"
 
@@ -95,14 +95,14 @@
 /// so the store lets it finish the flow rather than starting a second one
 /// that no update would ever reach.
 - (void)cancelPreliminaryUploadOfFile:(NSInteger)fileId {
-	[[TGClient shared] cancelPreliminaryUploadOfFile:fileId];
+	[[TGDownloadStore shared] cancelPreliminaryUploadOfFile:fileId];
 }
 
 - (void)generateTextFileNamed:(NSString *)name
 					 contents:(NSString *)contents
 					 progress:(void (^)(NSInteger, float, NSString *))progress
 				   completion:(void (^)(NSInteger, NSString *, NSError *))completion {
-	[[TGClient shared] generateTextFileNamed:name contents:contents
+	[[TGDownloadStore shared] generateTextFileNamed:name contents:contents
 									progress:progress completion:completion];
 }
 

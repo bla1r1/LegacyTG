@@ -47,7 +47,6 @@
 #import "TGClient+ChatSearch.h"
 #import "TGClient+ChatFolders.h"
 #import "TGClient+ChatTools.h"
-#import "TGClient+Files.h"
 #import "TGClient+Groups.h"
 #import "TGClient+Language.h"
 #import "TGClient+MessageMeta.h"

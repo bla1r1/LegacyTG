@@ -271,6 +271,7 @@ APP_SRC_M := \
 	src/Core/Model/TGLiveLocation.m \
 	src/Core/Model/TGComposerText.m \
 	src/Core/Model/TGGiftFlatten.m \
+	src/Core/Model/TGMediaSupport.m \
 	src/Core/Model/TGPinnedLine.m \
 	src/Core/Stores/TGCustomEmojiStore.m \
 	src/Core/Stores/TGMediaStore.m \
@@ -750,7 +751,6 @@ APP_SRC_MM := \
 	src/Core/Client/Chats/TGClient+Recents.mm \
 	src/Core/Client/Chats/TGClient+ChatSearch.mm \
 	src/Core/Client/Chats/TGClient+ChatFolders.mm \
-	src/Core/Client/TGClient+Files.mm \
 	src/Core/Stores/TGStickerPack.mm \
 	src/Core/Support/TGJson.mm \
 	src/Core/Stores/TGOptions.mm \

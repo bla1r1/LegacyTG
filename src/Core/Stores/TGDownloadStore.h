@@ -19,6 +19,15 @@ extern double TGFileWaiterTimeoutSeconds;
 - (void)expireFileWaiters:(NSInteger)fileId;
 - (void)sweepFileWaiters:(NSInteger)fileId;
 - (void)releaseFileWaiters:(NSInteger)fileId;
+- (void)removeAllPendingGenerations;
+- (void)handleFileGenerationStart:(NSDictionary *)update;
+- (void)handleFileGenerationStop:(NSDictionary *)update;
+- (void)handleFileUploadProgress:(NSInteger)fileId file:(NSDictionary *)file;
+- (void)generateTextFileNamed:(NSString *)name
+					 contents:(NSString *)contents
+					 progress:(void (^)(NSInteger, float, NSString *))progress
+				   completion:(void (^)(NSInteger, NSString *, NSError *))completion;
+- (void)cancelPreliminaryUploadOfFile:(NSInteger)fileId;
 - (void)removeAllFileWaiters;
 - (NSUInteger)fileWaiterCount:(NSInteger)fileId;
 - (BOOL)hasFileWaiterRecord:(NSInteger)fileId;
