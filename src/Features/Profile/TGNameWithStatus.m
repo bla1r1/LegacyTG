@@ -37,7 +37,11 @@ NSAttributedString *TGNameWithStatus(NSString *name, int64_t statusEmojiId, UIFo
 	}
 
 	Class attachmentClass = NSClassFromString(@"NSTextAttachment");
-	if (!attachmentClass || ![NSAttributedString respondsToSelector:@selector(attributedStringWithAttachment:)]) {
+	// iOS 6's private NSTextAttachment has no -setBounds:, so the picture
+	// would be laid out at its own size; the name alone reads better.
+	if (!attachmentClass ||
+		![attachmentClass instancesRespondToSelector:@selector(setBounds:)] ||
+		![NSAttributedString respondsToSelector:@selector(attributedStringWithAttachment:)]) {
 		return [[NSAttributedString alloc] initWithString:name attributes:baseAttrs];
 	}
 

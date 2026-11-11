@@ -54,6 +54,11 @@ CGFloat TGCustomEmojiSide(UIFont *font);
 /// Rects and custom emoji IDs for attachments in attributed text laid out at `width`.
 /// Returns an array of dictionaries: @{ @"id": @(emojiId), @"rect": [NSValue valueWithCGRect:rect] }.
 NSArray *TGCustomEmojiRectsInText(NSAttributedString *text, CGFloat width);
+/// YES when the OS draws an inline attachment glyph itself (iOS 7+ TextKit).
+/// On iOS 6 the private NSTextAttachment has no bounds, so an inline picture
+/// would come out at its own size and move the text; there the fallback
+/// characters stay in the string and the bubble draws the picture over them.
+BOOL TGCustomEmojiInlineSupported(void);
 NSAttributedString *TGAttributedMessageText(NSString *text, NSArray *entities, UIFont *baseFont, UIColor *textColor);
 /// The same text with spoiler runs either drawn under an opaque plate or, once
 /// the reader has tapped the bubble, left as plain text. The plain call above

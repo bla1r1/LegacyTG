@@ -83,7 +83,7 @@ static const CGFloat kRecordCancelH = 32.0f;
 				TGCenteredOrigin(height, TGMetricCallControlSide),
 				TGMetricCallControlSide, TGMetricCallControlSide);
 		[self.pauseButton setImage:[TGIcons pause] forState:UIControlStateNormal];
-		self.pauseButton.tintColor = [theme primaryTextColour];
+		[TGIcons tintButton:self.pauseButton colour:[theme primaryTextColour]];
 		self.pauseButton.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin;
 		[self addSubview:self.pauseButton];
 

@@ -85,8 +85,13 @@
 		BOOL isCurrent = [TGMusicPlayer shared].currentMessageId ==
 						 [m[@"id"] longLongValue];
 		cell.disc.hidden = NO;
-		cell.disc.image = (isCurrent && [TGMusicPlayer shared].playing)
+		UIImage *trackGlyph = (isCurrent && [TGMusicPlayer shared].playing)
 				? [TGIcons pause] : [TGIcons play];
+		// iOS 6 tints nothing here: the glyph is filled with the theme.
+		if ([TGTheme drawsSkeuomorphicChrome])
+			trackGlyph = [TGIcons image:trackGlyph
+						   filledWith:[cardTheme primaryTextColour]] ?: trackGlyph;
+		cell.disc.image = trackGlyph;
 		cell.disc.frame = CGRectMake(kPadH + TGCenteredOrigin(kTrackArt, kTrackDisc),
 									 artY + TGCenteredOrigin(kTrackArt, kTrackDisc),
 									 kTrackDisc, kTrackDisc);

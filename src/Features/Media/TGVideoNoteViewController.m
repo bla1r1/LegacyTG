@@ -432,10 +432,12 @@ static const CGFloat kStageScaleOver = 1.03f;
 		if (recorder.paused)
 			return;   // the last segment is still closing; the tap did nothing
 		[self.bar.pauseButton setImage:[TGIcons pause] forState:UIControlStateNormal];
+		[TGIcons tintButton:self.bar.pauseButton colour:[[TGTheme shared] primaryTextColour]];
 		[self startRingFrom:recorder.duration];
 	} else {
 		[recorder pause];
 		[self.bar.pauseButton setImage:[TGIcons play] forState:UIControlStateNormal];
+		[TGIcons tintButton:self.bar.pauseButton colour:[[TGTheme shared] primaryTextColour]];
 		[self freezeRingAt:recorder.duration];
 	}
 }

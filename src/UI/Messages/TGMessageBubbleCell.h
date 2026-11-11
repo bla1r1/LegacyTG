@@ -39,6 +39,11 @@
 - (TGLottieView *)customEmojiViewAtIndex:(NSUInteger)index;
 - (void)hideCustomEmojiViewsFromIndex:(NSUInteger)startIndex;
 - (void)stopCustomEmojiAnimations;
+/// Overlay picture views for still custom emoji on iOS 6, where no inline
+/// attachment draws: the picture sits over the marked fallback characters.
+@property (nonatomic, strong) NSMutableArray *staticCustomEmojiViews;
+- (UIImageView *)staticCustomEmojiViewAtIndex:(NSUInteger)index;
+- (void)hideStaticCustomEmojiViewsFromIndex:(NSUInteger)startIndex;
 @property (nonatomic, strong) UILabel *icon;
 @property (nonatomic, strong) UILabel *subtitle;
 @property (nonatomic, strong) UILabel *sender;

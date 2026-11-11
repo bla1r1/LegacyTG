@@ -400,7 +400,10 @@ static void TGPeerRowAppendVerified(NSMutableAttributedString *name, UIFont *fon
 /// the tick is simply absent there.
 static void TGPeerRowAppendVerified(NSMutableAttributedString *name, UIFont *font) {
 	Class attachmentClass = NSClassFromString(@"NSTextAttachment");
-	if (!attachmentClass || !name)
+	// iOS 6 has a private NSTextAttachment without -setBounds:, so the name
+	// stays readable and the tick is simply absent there.
+	if (!attachmentClass || !name ||
+		![attachmentClass instancesRespondToSelector:@selector(setBounds:)])
 		return;
 	UIImage *badge = [TGIcons verifiedBadge];
 	if (!badge)

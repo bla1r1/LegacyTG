@@ -119,6 +119,10 @@
 
 	self.plateView.backgroundColor = [theme fileTileColour];
 	self.pictureView.hidden = ![picture isKindOfClass:UIImage.class];
+	// A black glyph on the file plate disappears in a dark theme on iOS 6,
+	// where nothing tints it: the colour goes straight into the bitmap.
+	if (!self.pictureView.hidden && [TGTheme drawsSkeuomorphicChrome])
+		picture = [TGIcons image:picture filledWith:glyphColour] ?: picture;
 	self.pictureView.image = self.pictureView.hidden ? nil : picture;
 	self.glyphView.hidden = self.pictureView.hidden
 			? !(glyph.length > 0) : YES;

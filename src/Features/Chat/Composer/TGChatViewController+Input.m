@@ -167,7 +167,7 @@
 	UIButton *attach = [UIButton buttonWithType:UIButtonTypeCustom];
 	attach.frame = CGRectMake(kComposerInset, sendY, kAttachWidth, kSendSide);
 	[attach setImage:[TGIcons attach] forState:UIControlStateNormal];
-	attach.tintColor = [[TGTheme shared] accentColour];
+	[TGIcons tintButton:attach colour:[[TGTheme shared] accentColour]];
 	[attach addTarget:self action:@selector(attachTapped)
 			forControlEvents:UIControlEventTouchUpInside];
 	[self.inputBar addSubview:attach];
@@ -245,7 +245,7 @@
 	// retired it as "no extra glyph" and the panel lost its only button.
 	self.stickerButton = [UIButton buttonWithType:UIButtonTypeCustom];
 	[self.stickerButton setImage:[TGIcons sticker] forState:UIControlStateNormal];
-	self.stickerButton.tintColor = [[TGTheme shared] secondaryTextColour];
+	[TGIcons tintButton:self.stickerButton colour:[[TGTheme shared] secondaryTextColour]];
 	self.stickerButton.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin;
 	[self.stickerButton addTarget:self action:@selector(toggleStickerPanel)
 			forControlEvents:UIControlEventTouchUpInside];
@@ -259,7 +259,7 @@
 	self.micButton = [UIButton buttonWithType:UIButtonTypeCustom];
 	self.micButton.frame = sendFrame;
 	[self.micButton setImage:[TGIcons microphone] forState:UIControlStateNormal];
-	self.micButton.tintColor = [[TGTheme shared] secondaryTextColour];
+	[TGIcons tintButton:self.micButton colour:[[TGTheme shared] secondaryTextColour]];
 	self.micButton.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin;
 	[self.micButton addTarget:self action:@selector(recordTouchDown:withEvent:)
 			 forControlEvents:UIControlEventTouchDown];

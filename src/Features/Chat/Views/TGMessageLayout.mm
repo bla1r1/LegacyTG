@@ -598,30 +598,146 @@ NSAttributedString *TGAttributedMessageTextRevealing(NSString *text, NSArray *en
 	// Custom emoji last, from the end backwards: each one turns its fallback
 	// characters into a single attachment, which moves everything after it.
 	// No NSTextAttachment before iOS 7, so there the fallback emoji stays.
-	Class attachmentClass = NSClassFromString(@"NSTextAttachment");
-	if (customEmoji.count && attachmentClass) {
+	if (customEmoji.count) {
 		[customEmoji sortUsingComparator:^NSComparisonResult(NSArray *a, NSArray *b){
 			return [b[0] compare:a[0]];
 		}];
 		CGFloat side = TGCustomEmojiSide(baseFont);
-		for (NSArray *entry in customEmoji) {
-			NSRange range = NSMakeRange([entry[0] unsignedIntegerValue], [entry[1] unsignedIntegerValue]);
-			int64_t emojiId = [entry[2] longLongValue];
-			UIImage *picture = sCustomEmojiProvider ? sCustomEmojiProvider(emojiId, side) : nil;
-			NSTextAttachment *attachment = [[attachmentClass alloc] init];
-			attachment.image = picture ?: TGEmptyPicture();
-			// Sat on the baseline like a glyph, its bottom at the descender.
-			// -setBounds: is iOS 7 and later; before that the attachment keeps
-			// its own size, and asking for bounds here is an unknown selector.
-			if ([attachment respondsToSelector:@selector(setBounds:)])
+		if (TGCustomEmojiInlineSupported()) {
+			for (NSArray *entry in customEmoji) {
+				NSRange range = NSMakeRange([entry[0] unsignedIntegerValue], [entry[1] unsignedIntegerValue]);
+				int64_t emojiId = [entry[2] longLongValue];
+				UIImage *picture = sCustomEmojiProvider ? sCustomEmojiProvider(emojiId, side) : nil;
+				NSTextAttachment *attachment = [[NSClassFromString(@"NSTextAttachment") alloc] init];
+				attachment.image = picture ?: TGEmptyPicture();
+				// Sat on the baseline like a glyph, its bottom at the descender.
 				attachment.bounds = CGRectMake(0, baseFont.descender, side, side);
-			NSMutableAttributedString *glyph = [[NSAttributedString attributedStringWithAttachment:attachment] mutableCopy];
-			[glyph addAttribute:@"TGCustomEmojiId" value:@(emojiId) range:NSMakeRange(0, glyph.length)];
-			[str replaceCharactersInRange:range withAttributedString:glyph];
+				NSMutableAttributedString *glyph = [[NSAttributedString attributedStringWithAttachment:attachment] mutableCopy];
+				[glyph addAttribute:@"TGCustomEmojiId" value:@(emojiId) range:NSMakeRange(0, glyph.length)];
+				[str replaceCharactersInRange:range withAttributedString:glyph];
+			}
+		} else {
+			// iOS 6: attachments have no bounds there, so an inline picture
+			// comes out at its own size and moves the text. Keep the fallback
+			// characters, mark their ranges and ask the store for the picture;
+			// the bubble draws it over the glyph from the rects of
+			// TGCustomEmojiRectsInText. Until the picture is in, the fallback
+			// emoji shows, the way the empty stand-in works on iOS 7.
+			for (NSArray *entry in customEmoji) {
+				NSRange range = NSMakeRange([entry[0] unsignedIntegerValue], [entry[1] unsignedIntegerValue]);
+				int64_t emojiId = [entry[2] longLongValue];
+				UIImage *picture = sCustomEmojiProvider ? sCustomEmojiProvider(emojiId, side) : nil;
+				if (!picture)
+					continue;
+				[str addAttribute:@"TGCustomEmojiId" value:@(emojiId) range:range];
+				// The overlay square the picture was decoded at; the rects
+				// pass reads it back on iOS 6, where no attachment carries it.
+				[str addAttribute:@"TGCustomEmojiSide" value:@(side) range:range];
+				// The overlay picture draws over the glyph, so the glyph hides.
+				[str addAttribute:NSForegroundColorAttributeName value:[UIColor clearColor] range:range];
+			}
 		}
 	}
 
 	return str;
+}
+
+BOOL TGCustomEmojiInlineSupported(void) {
+	static BOOL sSupported = NO;
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{
+		// The whole attachment story is iOS 7 and later: iOS 6 has a private
+		// NSTextAttachment without -setBounds:, and its UIKit string drawing
+		// lays the picture out at its own size. Ask about the methods
+		// themselves rather than trusting the class lookup, the way
+		// TGCustomEmojiRectsInText asks about the TextKit stack.
+		Class attachmentClass = NSClassFromString(@"NSTextAttachment");
+		sSupported = attachmentClass &&
+				[attachmentClass instancesRespondToSelector:@selector(setBounds:)] &&
+				[attachmentClass instancesRespondToSelector:@selector(setImage:)] &&
+				[NSAttributedString respondsToSelector:
+						@selector(attributedStringWithAttachment:)];
+	});
+	return sSupported;
+}
+
+// iOS 6 has no TextKit, so the rects come from CoreText, whose framesetter
+// the bubble's tap hit-testing already runs on that OS. CoreText counts y
+// upward from the frame's bottom while the label draws downward, so a line's
+// top sits at frameH - origin.y - ascent; the frame is made tall enough that
+// the first line still lands at the top.
+static NSArray *TGCustomEmojiRectsCoreText(NSAttributedString *text, CGFloat width) {
+	CTFramesetterRef framesetter = CTFramesetterCreateWithAttributedString(
+			(__bridge CFAttributedStringRef)text);
+	if (!framesetter)
+		return @[];
+	CGFloat frameHeight = 10000.0f;
+	CGPathRef path = CGPathCreateWithRect(
+			CGRectMake(0.0f, 0.0f, width, frameHeight), NULL);
+	CTFrameRef frame = CTFramesetterCreateFrame(
+			framesetter, CFRangeMake(0, 0), path, NULL);
+
+	NSMutableArray *results = [NSMutableArray array];
+	CFArrayRef lines = CTFrameGetLines(frame);
+	NSInteger lineCount = lines ? CFArrayGetCount(lines) : 0;
+	if (lineCount > 0) {
+		CGPoint origins[lineCount];
+		CTFrameGetLineOrigins(frame, CFRangeMake(0, lineCount), origins);
+		for (NSInteger i = 0; i < lineCount; i++) {
+			CTLineRef line = (CTLineRef)CFArrayGetValueAtIndex(lines, i);
+			CFArrayRef runs = CTLineGetGlyphRuns(line);
+			NSInteger runCount = runs ? CFArrayGetCount(runs) : 0;
+			if (!runCount)
+				continue;
+			CGFloat ascent = 0.0f, descent = 0.0f, leading = 0.0f;
+			CTLineGetTypographicBounds(line, &ascent, &descent, &leading);
+			CGFloat lineTop = frameHeight - origins[i].y - ascent;
+			CGFloat lineHeight = ascent + descent;
+			for (NSInteger j = 0; j < runCount; j++) {
+				CTRunRef run = (CTRunRef)CFArrayGetValueAtIndex(runs, j);
+				NSDictionary *attributes = (__bridge NSDictionary *)CTRunGetAttributes(run);
+				NSNumber *emojiId = attributes[@"TGCustomEmojiId"];
+				if (![emojiId isKindOfClass:[NSNumber class]] || [emojiId longLongValue] == 0)
+					continue;
+				CFRange runRange = CTRunGetStringRange(run);
+				if (runRange.length <= 0)
+					continue;
+				CGFloat runAscent = 0.0f, runDescent = 0.0f, runLeading = 0.0f;
+				CGFloat runWidth = CTRunGetTypographicBounds(run,
+						CFRangeMake(0, CTRunGetGlyphCount(run)),
+						&runAscent, &runDescent, &runLeading);
+				if (runWidth <= 0)
+					continue;
+				// The picture was decoded at the square the string builder
+				// asked for; centre it over the fallback glyph's run.
+				CGFloat side = runAscent + runDescent;
+				NSNumber *sideAttr = attributes[@"TGCustomEmojiSide"];
+				if ([sideAttr isKindOfClass:[NSNumber class]] && [sideAttr doubleValue] > 0)
+					side = [sideAttr doubleValue];
+				CGFloat x = CTLineGetOffsetForStringIndex(line, runRange.location, NULL);
+				CGRect emojiRect = CGRectMake(x + TGHalf(runWidth - side),
+											  lineTop + TGHalf(lineHeight - side),
+											  side, side);
+				emojiRect = CGRectIntegral(emojiRect);
+
+				NSValue *rectVal = nil;
+#if TARGET_OS_IPHONE
+				rectVal = [NSValue valueWithCGRect:emojiRect];
+#else
+				rectVal = [NSValue valueWithBytes:&emojiRect objCType:@encode(CGRect)];
+#endif
+				[results addObject:@{
+					@"id"   : emojiId,
+					@"rect" : rectVal
+				}];
+			}
+		}
+	}
+
+	CFRelease(frame);
+	CGPathRelease(path);
+	CFRelease(framesetter);
+	return results;
 }
 
 NSArray *TGCustomEmojiRectsInText(NSAttributedString *text, CGFloat width) {
@@ -638,7 +754,7 @@ NSArray *TGCustomEmojiRectsInText(NSAttributedString *text, CGFloat width) {
 		![tcClass instancesRespondToSelector:@selector(initWithSize:)] ||
 		![lmClass instancesRespondToSelector:@selector(addTextContainer:)] ||
 		![tsClass instancesRespondToSelector:@selector(addLayoutManager:)])
-		return @[];
+		return TGCustomEmojiRectsCoreText(text, width);
 
 	NSTextStorage *storage = [[tsClass alloc] initWithAttributedString:text];
 	NSLayoutManager *layoutManager = [[lmClass alloc] init];

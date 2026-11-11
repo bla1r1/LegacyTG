@@ -495,6 +495,28 @@ static void TGDrawTabPath(CGContextRef ctx, UIBezierPath *path, BOOL filled) {
 		view.image = tinted;
 }
 
++ (void)tintButton:(UIButton *)button colour:(UIColor *)colour {
+	if (!button || !colour)
+		return;
+	if (NSFoundationVersionNumber > NSFoundationVersionNumber_iOS_6_1) {
+		button.tintColor = colour;
+		return;
+	}
+	// iOS 6 ignores a tint on a custom button's image, so the colour is
+	// baked into every state that carries one. Filling again on a theme
+	// change just recolours: the fill keeps the glyph's alpha mask.
+	UIControlState states[] = { UIControlStateNormal, UIControlStateHighlighted,
+			UIControlStateDisabled, UIControlStateSelected };
+	for (NSUInteger i = 0; i < sizeof(states) / sizeof(states[0]); i++) {
+		UIImage *image = [button imageForState:states[i]];
+		if (!image)
+			continue;
+		UIImage *tinted = [self image:image filledWith:colour];
+		if (tinted)
+			[button setImage:tinted forState:states[i]];
+	}
+}
+
 + (UIImage *)image:(UIImage *)image filledWith:(UIColor *)colour {
 	if (!image.CGImage || !colour)
 		return nil;
