@@ -28,7 +28,6 @@
 /// Other devices signed into this account: "id", "name", "platform", "ip",
 /// "isCurrent", "isUnconfirmed", "acceptSecretChats", "canAcceptCalls",
 /// "lastActive".
-- (void)sessionsWithCompletion:(void (^)(NSArray *sessions))completion;
 /// The same list plus the idle timeout Telegram stores for the account.
 - (void)sessionsWithInactiveTtlCompletion:(void (^)(NSArray *sessions,
 												  NSInteger ttlDays))completion;

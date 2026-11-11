@@ -288,6 +288,14 @@
 - (void)userProfilePhotos:(int64_t)userId
 			   completion:(void (^)(NSArray *photos))completion;
 
+/// "Last seen" as a date rather than a phrase, and the switch that shows it.
+- (void)readDatePrivacySettingsWithCompletion:(void (^)(BOOL shown))completion;
+- (void)setReadDateShown:(BOOL)shown
+			  completion:(void (^)(BOOL ok, NSString *error))completion;
+
+/// Contacts whose birthday is close enough to surface on the profile.
+- (NSArray *)contactCloseBirthdayUsers;
+
 /// How many contacts have a birthday nearby, and hides them from the profile.
 - (void)hideContactCloseBirthdaysWithCompletion:(void (^)(BOOL ok,
 														 NSString *error))completion;

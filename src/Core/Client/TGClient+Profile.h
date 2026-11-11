@@ -23,11 +23,6 @@
 			 completion:(void (^)(BOOL ok, NSString *error))completion;
 
 /// Whether other people see when this account has read their messages.
-- (void)readDatePrivacySettingsWithCompletion:(void (^)(BOOL showReadDate))completion;
-
-- (void)setReadDateShown:(BOOL)shown
-			  completion:(void (^)(BOOL ok, NSString *error))completion;
-
 /// Suggests a birthday the other person may accept; it does not change the
 /// profile until they do.
 - (void)suggestBirthdateDay:(NSInteger)day
@@ -59,8 +54,6 @@
 
 /// Contacts Telegram says have a birthday nearby. Kept live by
 /// updateContactCloseBirthdays.
-- (NSArray *)contactCloseBirthdayUsers;
-
 /// The account Telegram names as support, with the server's refusal when it
 /// cannot.
 - (void)supportUserWithCompletion:(void (^)(NSDictionary *user, NSString *error))completion;

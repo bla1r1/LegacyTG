@@ -100,11 +100,6 @@ FOUNDATION_EXPORT NSDictionary *TGGroupCallInput(int32_t groupCallId,
 							isMuted:(BOOL)muted
 						completion:(void (^)(BOOL ok, NSString *error))completion;
 
-- (void)setGroupCallParticipant:(NSDictionary *)participant
-						 inCall:(int32_t)groupCallId
-					volumeLevel:(NSInteger)volumeLevel
-					 completion:(void (^)(BOOL ok, NSString *error))completion;
-
 - (void)toggleGroupCallParticipant:(NSDictionary *)participant
 							inCall:(int32_t)groupCallId
 					  isHandRaised:(BOOL)raised
@@ -129,11 +124,6 @@ FOUNDATION_EXPORT NSDictionary *TGGroupCallInput(int32_t groupCallId,
 - (void)banGroupCallParticipants:(NSArray *)userIds
 						  inCall:(int32_t)groupCallId
 					  completion:(void (^)(BOOL ok, NSString *error))completion;
-
-/// declineGroupCallInvitation, named by the service message it came with.
-- (void)declineGroupCallInvitationInChat:(int64_t)chatId
-							   messageId:(int64_t)messageId
-							  completion:(void (^)(BOOL ok, NSString *error))completion;
 
 #pragma mark - the call's own settings
 

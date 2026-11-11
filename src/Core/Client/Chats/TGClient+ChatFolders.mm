@@ -224,16 +224,6 @@ static NSDictionary *TGFolderObject(NSString *name, NSString *icon,
 /// way a chat's own unread count zeroes behind readChat. folderId 0 is the
 /// main list, which is what the strip's "All chats" stands for; archived
 /// asks for the Archive list on its own, which the archive screen shows.
-- (void)readChatListOfFolder:(NSInteger)folderId archived:(BOOL)archived {
-	NSDictionary *list = archived
-			? @{@"@type" : @"chatListArchive"}
-			: folderId
-				? @{@"@type" : @"chatListFolder",
-					@"chat_folder_id" : @(folderId)}
-				: @{@"@type" : @"chatListMain"};
-	[self send:@{@"@type" : @"readChatList", @"chat_list" : list}];
-}
-
 - (void)refreshArchiveChatListSettings:(void (^)(void))completion {
 	[self request:@{@"@type" : @"getArchiveChatListSettings"}
 	   completion:^(NSDictionary *result){
@@ -359,15 +349,6 @@ static NSDictionary *TGChatNotificationSettingsRecord(NSDictionary *current, BOO
 		@"notification_settings" :
 				TGChatNotificationSettingsRecord(current, muted),
 	}];
-}
-
-- (NSNumber *)photoFileIdForChat:(int64_t)chatId {
-	// The cache is the source of truth: the wrapper lists (.chats holding
-	// only the un-foldered portion, archive the pulled-up one) came and went
-	// with the active folder, and a chat opened through a folder used to
-	// lose its photo to a nil lookup and render as initials.
-	NSDictionary *info = self.chatsById[@(chatId)];
-	return info[@"photoFileId"];
 }
 
 /// Member count for a group, so the chat header can carry a subtitle.
@@ -782,10 +763,6 @@ static BOOL TGGroupStatusIsMember(NSDictionary *status) {
 	return [NSString stringWithFormat:@"%@: %@", who, text];
 }
 
-- (int64_t)lastReadOutboxForChat:(int64_t)chatId {
-	return [self.chatsById[@(chatId)][@"readOutbox"] longLongValue];
-}
-
 - (int64_t)lastReadInboxForChat:(int64_t)chatId {
 	return [self.chatsById[@(chatId)][@"readInbox"] longLongValue];
 }
@@ -1027,6 +1004,15 @@ static BOOL TGGroupStatusIsMember(NSDictionary *status) {
 	[self chatsChanged];
 	if (self.onArchiveChanged)
 		self.onArchiveChanged();
+}
+
+- (NSNumber *)photoFileIdForChat:(int64_t)chatId {
+	// The cache is the source of truth: the wrapper lists (.chats holding
+	// only the un-foldered portion, archive the pulled-up one) came and went
+	// with the active folder, and a chat opened through a folder used to
+	// lose its photo to a nil lookup and render as initials.
+	NSDictionary *info = self.chatsById[@(chatId)];
+	return info[@"photoFileId"];
 }
 
 @end

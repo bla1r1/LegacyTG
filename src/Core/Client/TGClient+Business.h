@@ -19,9 +19,6 @@ FOUNDATION_EXPORT NSString *TGBusinessLinkName(NSString *link);
 
 /// getBusinessFeatures. `source` is a businessFeature* type name or nil for
 /// the Settings page; the answer is the feature type names Telegram lists.
-- (void)businessFeaturesForSource:(NSString *)source
-					   completion:(void (^)(NSArray *features, NSString *error))completion;
-
 /// The business_info half of this account's getUserFullInfo. Empty until a
 /// Business subscription fills it in.
 - (void)businessInfoWithCompletion:(void (^)(NSDictionary *info, NSString *error))completion;

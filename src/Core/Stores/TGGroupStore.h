@@ -224,6 +224,13 @@ FOUNDATION_EXPORT NSString *TGGroupMemberStatusName(NSDictionary *status);
 - (void)setChat:(int64_t)chatId
 	aggressiveAntiSpam:(BOOL)on
 			 completion:(void (^)(BOOL, NSString *))completion;
+- (void)aggressiveAntiSpamForChat:(int64_t)chatId
+					   completion:(void (^)(BOOL on, BOOL canToggle,
+											NSString *error))completion;
+/// Details behind an invite link before joining it.
+- (void)checkInviteLink:(NSString *)link
+			 completion:(void (^)(NSString *title, NSInteger members,
+								  BOOL alreadyMember))completion;
 - (void)setSupergroupHiddenMembersInChat:(int64_t)chatId
 									 on:(BOOL)on
 							 completion:(void (^)(BOOL ok, NSString *error))completion;

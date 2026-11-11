@@ -8,6 +8,8 @@
 #import "TGTestRunner.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
+#import "TGAccountStore.h"
+#import "TGProfileStore.h"
 
 @interface TGClientProfileTests : XCTestCase @end
 
@@ -131,7 +133,7 @@ static NSDictionary *plainP(NSDictionary *d) {
 - (void)testReadDateSettings_ReadsTheFlag {
 	TGClient *c = P();
 	__block BOOL show = NO;
-	[c readDatePrivacySettingsWithCompletion:^(BOOL value){ show = value; }];
+	[[TGProfileStore shared] readDatePrivacySettingsWithCompletion:^(BOOL value){ show = value; }];
 	answerP(c, plainP(@{@"@type" : @"readDatePrivacySettings",
 						@"show_read_date" : @YES}));
 	XCTAssertTrue(show);
@@ -139,7 +141,7 @@ static NSDictionary *plainP(NSDictionary *d) {
 
 - (void)testReadDateSettings_WritesTheWholeRecord {
 	TGClient *c = P();
-	[c setReadDateShown:NO completion:nil];
+	[[TGProfileStore shared] setReadDateShown:NO completion:nil];
 	NSDictionary *r = lastP(c, @"setReadDatePrivacySettings");
 	XCTAssertEqualObjects(r[@"settings"][@"@type"], @"readDatePrivacySettings");
 	XCTAssertEqualObjects(r[@"settings"][@"show_read_date"], @NO);
@@ -218,7 +220,7 @@ static NSDictionary *plainP(NSDictionary *d) {
 	XCTAssertNotNil(lastP(c, @"hideContactCloseBirthdays"));
 	answerP(c, @{@"@type" : @"ok"});
 	XCTAssertTrue(ok);
-	XCTAssertEqualObjects(c.contactCloseBirthdayUsers, @[]);
+	XCTAssertEqualObjects([TGProfileStore shared].contactCloseBirthdayUsers, @[]);
 }
 
 - (void)testSupportUser_AnswersWithTheAccountTelegramNames {
@@ -523,8 +525,8 @@ static void P_assertColour(UIColor *colour, int rgb) {
 													@"day" : @(3),
 													@"month" : @(4),
 													@"year" : @(0)}}]})];
-	XCTAssertEqual(c.contactCloseBirthdayUsers.count, 1);
-	XCTAssertEqualObjects(c.contactCloseBirthdayUsers[0][@"userId"], @(7));
+	XCTAssertEqual([TGProfileStore shared].contactCloseBirthdayUsers.count, 1);
+	XCTAssertEqualObjects([TGProfileStore shared].contactCloseBirthdayUsers[0][@"userId"], @(7));
 }
 
 #pragma mark - profile full info (wave 1)
@@ -792,7 +794,7 @@ static NSDate *PGDate(NSInteger year, NSInteger month, NSInteger day) {
 - (void)testGiftsForUser_ForwardsToUserSender {
 	TGClient *c = P();
 	__block NSArray *receivedGifts = nil;
-	[c giftsForUser:77 completion:^(NSArray *gifts){
+	[[TGAccountStore shared] giftsForUser:77 completion:^(NSArray *gifts){
 		receivedGifts = gifts;
 	}];
 	NSDictionary *r = lastP(c, @"getReceivedGifts");

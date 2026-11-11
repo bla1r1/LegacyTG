@@ -701,27 +701,6 @@ static NSDictionary *TGFlattenInviteLink(NSDictionary *link) {
 
 /// What is behind a link before joining it: the name, how many are in, and
 /// whether this account is already one of them.
-- (void)checkInviteLink:(NSString *)link
-			 completion:(void (^)(NSString *title, NSInteger members,
-								  BOOL alreadyMember))completion {
-	if (!link.length){
-		if (completion) completion(nil, 0, NO);
-		return;
-	}
-	[self request:@{@"@type" : @"checkChatInviteLink", @"invite_link" : link}
-	   completion:^(NSDictionary *result){
-		if (!completion)
-			return;
-		if (![result[@"@type"] isEqualToString:@"chatInviteLinkInfo"]){
-			completion(nil, 0, NO);
-			return;
-		}
-		completion(result[@"title"],
-				   [result[@"member_count"] integerValue],
-				   [result[@"chat_id"] longLongValue] != 0);
-	}];
-}
-
 /// People waiting at a link that creates join requests. Entries carry "id",
 /// "name" and "date".
 - (void)joinRequestsForChat:(int64_t)chatId
@@ -808,32 +787,6 @@ static NSDictionary *TGFlattenInviteLink(NSDictionary *link) {
 }
 
 #pragma mark - aggressive anti-spam
-
-- (void)aggressiveAntiSpamForChat:(int64_t)chatId
-					   completion:(void (^)(BOOL, BOOL, NSString *))completion {
-	__weak typeof(self) weakSelf = self;
-	[self supergroupIdForChat:chatId completion:^(int64_t supergroupId){
-		if (!supergroupId){
-			if (completion)
-				completion(NO, NO, @"Telegram reports anti-spam for supergroups only.");
-			return;
-		}
-		[weakSelf request:@{@"@type" : @"getSupergroupFullInfo",
-							@"supergroup_id" : @(supergroupId)}
-			   completion:^(NSDictionary *full){
-			if ([full[@"@type"] isEqualToString:@"error"]){
-				NSString *message = full[@"message"];
-				if (completion)
-					completion(NO, NO, [message isKindOfClass:NSString.class]
-							? message : @"Telegram did not return the group record.");
-				return;
-			}
-			if (completion)
-				completion([full[@"has_aggressive_anti_spam_enabled"] boolValue],
-						   [full[@"can_toggle_aggressive_anti_spam"] boolValue], nil);
-		}];
-	}];
-}
 
 - (void)setChat:(int64_t)chatId
 	aggressiveAntiSpam:(BOOL)on

@@ -10,6 +10,7 @@
 #import "TGTestRunner.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
+#import "TGStoryStore.h"
 
 @interface TGUpdatesCatchUpTests : XCTestCase @end
 
@@ -138,9 +139,9 @@ static NSDictionary *CatchUpStory(long long storyId, long long chatId) {
 					  @"story_list" : @{@"@type" : @"storyListArchive"},
 					  @"chat_count" : @(7)}];
 
-	XCTAssertEqual([c storyListChatCountForList:@"main"], (NSInteger)3);
-	XCTAssertEqual([c storyListChatCountForList:@"archive"], (NSInteger)7);
-	XCTAssertEqual([c storyListChatCountForList:@"anything"], (NSInteger)3);
+	XCTAssertEqual([[TGStoryStore shared] storyListChatCountForList:@"main"], (NSInteger)3);
+	XCTAssertEqual([[TGStoryStore shared] storyListChatCountForList:@"archive"], (NSInteger)7);
+	XCTAssertEqual([[TGStoryStore shared] storyListChatCountForList:@"anything"], (NSInteger)3);
 }
 
 - (void)testStoryStealthMode_KeepsBothDates {
@@ -149,8 +150,8 @@ static NSDictionary *CatchUpStory(long long storyId, long long chatId) {
 					  @"active_until_date" : @(1700000000),
 					  @"cooldown_until_date" : @(1700003600)}];
 
-	XCTAssertEqualObjects([c storyStealthMode][@"activeUntilDate"], @(1700000000));
-	XCTAssertEqualObjects([c storyStealthMode][@"cooldownUntilDate"], @(1700003600));
+	XCTAssertEqualObjects([[TGStoryStore shared] storyStealthMode][@"activeUntilDate"], @(1700000000));
+	XCTAssertEqualObjects([[TGStoryStore shared] storyStealthMode][@"cooldownUntilDate"], @(1700003600));
 }
 
 #pragma mark - messages

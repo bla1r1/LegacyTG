@@ -7,6 +7,7 @@
 #import "TGTestRunner.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
+#import "TGSettingsStore.h"
 
 @interface TGClientChatToolsTests : XCTestCase @end
 
@@ -418,14 +419,14 @@ static NSDictionary *ctPlain(NSDictionary *d) {
 - (void)testNewChatPrivacy_ReadThenWriteKeepingThePaidCount {
 	TGClient *c = CT();
 	__block NSDictionary *settings = nil;
-	[c newChatPrivacySettingsWithCompletion:^(NSDictionary *s){ settings = s; }];
+	[[TGSettingsStore shared] newChatPrivacySettingsWithCompletion:^(NSDictionary *s){ settings = s; }];
 	ctAnswer(c, ctPlain(@{@"@type" : @"newChatPrivacySettings",
 						  @"allow_new_chats_from_unknown_users" : @YES,
 						  @"incoming_paid_message_star_count" : @(2)}));
 	XCTAssertEqualObjects(settings[@"allow_new_chats_from_unknown_users"], @YES);
 
 	__block BOOL ok = NO;
-	[c setNewChatPrivacyAllowUnknown:NO completion:^(BOOL o){ ok = o; }];
+	[[TGSettingsStore shared] setNewChatPrivacyAllowUnknown:NO completion:^(BOOL o){ ok = o; }];
 	ctAnswer(c, @{@"@type" : @"newChatPrivacySettings",
 				  @"allow_new_chats_from_unknown_users" : @YES,
 				  @"incoming_paid_message_star_count" : @(2)});
@@ -507,7 +508,7 @@ static NSDictionary *ctPlain(NSDictionary *d) {
 - (void)testEventLog_AsksEveryFilterAndReadsTheAction {
 	TGClient *c = CT();
 	__block NSArray *events = nil;
-	[c eventLogForChat:77 completion:^(NSArray *e){ events = e; }];
+	[[TGSettingsStore shared] eventLogForChat:77 completion:^(NSArray *e){ events = e; }];
 	NSDictionary *r = ctLast(c, @"getChatEventLog");
 	XCTAssertEqualObjects(r[@"filters"][@"member_tag_changes"], @YES);
 	XCTAssertEqualObjects(r[@"limit"], @(100));
@@ -645,7 +646,7 @@ static NSDictionary *ctPlain(NSDictionary *d) {
 	XCTAssertTrue(tag);
 
 	__block BOOL answered = NO;
-	[c processProtectedContentDisableRequestInChat:77 messageId:55 approve:NO
+	[[TGSettingsStore shared] processProtectedContentDisableRequestInChat:77 messageId:55 approve:NO
 										completion:^(BOOL ok){ answered = ok; }];
 	XCTAssertEqualObjects(ctLast(c, @"processChatHasProtectedContentDisableRequest")[@"approve"], @NO);
 	ctAnswer(c, @{@"@type" : @"ok"});
@@ -668,7 +669,7 @@ static NSDictionary *ctPlain(NSDictionary *d) {
 	XCTAssertEqualObjects(positions[0][@"messageId"], @(55));
 
 	__block NSInteger position = -1;
-	[c messagePosition:55 inChat:77 filter:@"photo"
+	[[TGSettingsStore shared] messagePosition:55 inChat:77 filter:@"photo"
 			 completion:^(NSInteger p, NSInteger t){ position = p; }];
 	XCTAssertTrue(ctLast(c, @"getChatMessagePosition")[@"topic_id"] == [NSNull null]);
 	ctAnswer(c, @{@"@type" : @"count", @"count" : @(3)});

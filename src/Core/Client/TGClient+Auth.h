@@ -96,9 +96,6 @@
 /// Whether Telegram insists this account carries a login email before it can
 /// sign in again. The request answers "ok" for a yes and an error for a no,
 /// so the two are split here into a flag and the server's words.
-- (void)loginEmailAddressRequiredWithCompletion:
-		(void (^)(BOOL required, NSString *error))completion;
-
 /// Point the login email somewhere else. The address is not in force until
 /// the code Telegram mails it is checked; `pattern` is the masked address to
 /// show while that code is outstanding.
@@ -215,9 +212,6 @@
 
 /// Forget every payment provider's saved credentials, as the privacy page's
 /// delete row does.
-- (void)deleteSavedCredentialsWithCompletion:
-		(void (^)(NSString *error))completion;
-
 #pragma mark - recovery email and email verification
 
 /// Abandons a change of the two-step recovery address: the old address, or

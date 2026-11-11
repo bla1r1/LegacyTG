@@ -6,6 +6,7 @@
 #import "TGTestRunner.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
+#import "TGSettingsStore.h"
 
 @interface TGClientAutosaveContactsTests : XCTestCase @end
 
@@ -157,7 +158,7 @@ static NSDictionary *ACPlain(NSDictionary *dictionary) {
 	TGClient *c = ACClient();
 	__block NSInteger imported = -1;
 	__block NSArray *userIds = nil;
-	[c changeImportedContacts:@[
+	[[TGSettingsStore shared] changeImportedContacts:@[
 		@{@"phone_number" : @"+15550001111", @"first_name" : @"Jane", @"last_name" : @"Doe"},
 		@{@"phone_number" : @"+15550002222", @"first_name" : @"Richard", @"last_name" : @"Roe"},
 		@{@"phone_number" : @"", @"first_name" : @"No", @"last_name" : @"Phone"},
@@ -187,7 +188,7 @@ static NSDictionary *ACPlain(NSDictionary *dictionary) {
 - (void)testApplicationDownloadLink_ReadsTheUrl {
 	TGClient *c = ACClient();
 	__block NSString *got = nil;
-	[c applicationDownloadLinkWithCompletion:^(NSString *url){ got = url; }];
+	[[TGSettingsStore shared] applicationDownloadLinkWithCompletion:^(NSString *url){ got = url; }];
 	XCTAssertNotNil(ACLast(c, @"getApplicationDownloadLink"));
 	ACAnswer(c, ACPlain(@{@"@type" : @"httpUrl",
 						  @"url" : @"https://telegram.org/dl/desktop"}));

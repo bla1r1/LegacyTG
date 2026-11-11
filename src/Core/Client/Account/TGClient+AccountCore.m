@@ -41,12 +41,6 @@ static NSArray *TGPacksFrom(NSDictionary *target) {
 
 #pragma mark - account
 
-- (void)sessionsWithCompletion:(void (^)(NSArray *))completion {
-	[self sessionsWithInactiveTtlCompletion:^(NSArray *sessions, NSInteger ttlDays){
-		if (completion) completion(sessions);
-	}];
-}
-
 - (void)sessionsWithInactiveTtlCompletion:(void (^)(NSArray *, NSInteger))completion {
 	[self request:@{@"@type" : @"getActiveSessions"} completion:^(NSDictionary *result){
 		if ([result[@"@type"] isEqualToString:@"error"]){

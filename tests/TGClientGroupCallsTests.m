@@ -9,6 +9,7 @@
 #import "TGClient.h"
 #import "TGClientInternal.h"
 #import "TGBase64.h"
+#import "TGCallStore.h"
 
 @interface TGClientGroupCallsTests : XCTestCase @end
 
@@ -280,11 +281,11 @@ static NSDictionary *GCCallAnswer(long long callId) {
 - (void)testSetParticipantVolume_ClampsToTelegramsRange {
 	TGClient *c = GCClient();
 	NSDictionary *sender = @{@"@type" : @"messageSenderUser", @"user_id" : @(12)};
-	[c setGroupCallParticipant:sender inCall:77 volumeLevel:30000
+	[[TGCallStore shared] setGroupCallParticipant:sender inCall:77 volumeLevel:30000
 					completion:^(BOOL ok, NSString *error){}];
 	XCTAssertEqualObjects(GCLast(c, @"setGroupCallParticipantVolumeLevel")[@"volume_level"],
 						   @(20000));
-	[c setGroupCallParticipant:sender inCall:77 volumeLevel:0
+	[[TGCallStore shared] setGroupCallParticipant:sender inCall:77 volumeLevel:0
 					completion:^(BOOL ok, NSString *error){}];
 	XCTAssertEqualObjects(GCLast(c, @"setGroupCallParticipantVolumeLevel")[@"volume_level"],
 						   @(1));
@@ -355,7 +356,7 @@ static NSDictionary *GCCallAnswer(long long callId) {
 - (void)testDeclineInvitation_SendsTheMessageItCameWith {
 	TGClient *c = GCClient();
 	__block BOOL ok = NO;
-	[c declineGroupCallInvitationInChat:77 messageId:123
+	[[TGCallStore shared] declineGroupCallInvitationInChat:77 messageId:123
 							 completion:^(BOOL good, NSString *error){ ok = good; }];
 	NSDictionary *r = GCLast(c, @"declineGroupCallInvitation");
 	XCTAssertEqualObjects(r[@"chat_id"], @(77));

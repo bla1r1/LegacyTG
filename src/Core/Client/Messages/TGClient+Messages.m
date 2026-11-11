@@ -509,19 +509,6 @@
 ///
 /// Only the first picture carries the caption - TDLib refuses an album where
 /// more than one does.
-- (void)messageWithId:(int64_t)messageId
-               inChat:(int64_t)chatId
-           completion:(void (^)(NSDictionary *))completion {
-	[self request:@{@"@type" : @"getMessage",
-					@"chat_id" : @(chatId),
-					@"message_id" : @(messageId)}
-	   completion:^(NSDictionary *m){
-		if (completion)
-			completion([m[@"@type"] isEqualToString:@"message"]
-					? TGFlattenMessage(m) : nil);
-	}];
-}
-
 - (void)recentStickersWithCompletion:(void (^)(NSArray *))completion {
 	[self request:@{@"@type" : @"getRecentStickers", @"is_attached" : @NO}
 	   completion:^(NSDictionary *result){

@@ -12,8 +12,6 @@
 /// The chat and the exact message a "message"-kind link resolves to: a
 /// t.me/name/12345 landed on. The chat id is 0 when Telegram refused.
 /// Every cache's draft dropped at once, on every device.
-- (void)clearAllDraftMessages;
-
 /// The lifetime new chats carry when nobody chose one. Zero is off.
 - (void)defaultMessageAutoDeleteTimeWithCompletion:
 		(void (^)(NSInteger seconds))completion;
@@ -48,8 +46,6 @@
 - (void)calendarJumpForChat:(int64_t)chatId
 					 endDate:(NSInteger)end
 				  completion:(void (^)(int64_t messageId, NSInteger total))completion;
-
-- (void)clearAllCallMessages;
 
 - (void)sentDocuments:(NSString *)query
 			 completion:(void (^)(NSArray *messages))completion;

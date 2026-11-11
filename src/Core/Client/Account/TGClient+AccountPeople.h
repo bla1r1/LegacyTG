@@ -13,7 +13,6 @@
 /// Whether a user is blocked right now.
 - (void)isUserBlocked:(int64_t)userId completion:(void (^)(BOOL blocked))completion;
 /// Gifts a user has received and kept on their profile: "title", "starCount".
-- (void)giftsForUser:(int64_t)userId completion:(void (^)(NSArray *gifts))completion;
 /// Gifts an owner (user or chat sender) has received, paged by offset.
 - (void)giftsForOwner:(NSDictionary *)ownerId
 			   offset:(NSString *)offset

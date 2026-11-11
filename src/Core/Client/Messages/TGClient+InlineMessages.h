@@ -49,10 +49,6 @@
 /// A received formatted message handed back as the markdown its sender
 /// typed: *bold*, `_italic_`, `code` - so Edit edits the origin, not the
 /// render. A message with no markup comes back as its plain text.
-- (void)markdownOfMessage:(int64_t)messageId
-				   inChat:(int64_t)chatId
-				completion:(void (^)(NSString *markdown))completion;
-
 /// Telegram's own static map of a place, as a PNG, answered as a local path
 /// once it is down - or nil, which on this device is ordinary. The drawn card
 /// is what a caller falls back to.
@@ -93,12 +89,6 @@
 /// "canBeRepliedInAnotherChat" and "canGetLink". `optionId` is pollOption's
 /// string id. Nil with `error` when the poll has no such option or Telegram
 /// refuses the read, which is what the answer card shows.
-- (void)pollOptionProperties:(NSString *)optionId
-				   ofMessage:(int64_t)messageId
-					  inChat:(int64_t)chatId
-				  completion:(void (^)(NSDictionary *properties,
-									   NSString *error))completion;
-
 /// Every poll in the chat read up on, so the fresh-vote badge is gone.
 - (void)readAllChatPollVotes:(int64_t)chatId;
 
