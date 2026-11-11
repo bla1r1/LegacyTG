@@ -59,7 +59,7 @@ static const NSTimeInterval kRecordHintSeconds = 1.6;
 		[self.playerBar addSubview:self.playerArtwork];
 
 		self.playerToggle = [UIButton buttonWithType:UIButtonTypeCustom];
-		self.playerToggle.tintColor = [theme accentColour];
+		[TGIcons tintButton:self.playerToggle colour:[theme accentColour]];
 		[self.playerToggle addTarget:self action:@selector(togglePlayback)
 					forControlEvents:UIControlEventTouchUpInside];
 		[self.playerBar addSubview:self.playerToggle];
@@ -92,14 +92,14 @@ static const NSTimeInterval kRecordHintSeconds = 1.6;
 		[self.playerBar addSubview:self.playerClock];
 
 		self.musicPrevious = [UIButton buttonWithType:UIButtonTypeCustom];
-		self.musicPrevious.tintColor = [theme accentColour];
+		[TGIcons tintButton:self.musicPrevious colour:[theme accentColour]];
 		self.musicPrevious.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin;
 		[self.musicPrevious addTarget:self action:@selector(musicPreviousTapped)
 					 forControlEvents:UIControlEventTouchUpInside];
 		[self.playerBar addSubview:self.musicPrevious];
 
 		self.musicNext = [UIButton buttonWithType:UIButtonTypeCustom];
-		self.musicNext.tintColor = [theme accentColour];
+		[TGIcons tintButton:self.musicNext colour:[theme accentColour]];
 		self.musicNext.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin;
 		[self.musicNext addTarget:self action:@selector(musicNextTapped)
 				 forControlEvents:UIControlEventTouchUpInside];
@@ -164,6 +164,7 @@ static const NSTimeInterval kRecordHintSeconds = 1.6;
 	self.playerProgress.frame = CGRectMake(0, kPlayerBarHeight - kPlayerProgressH,
 			0, kPlayerProgressH);
 	[self.playerToggle setImage:[TGIcons pause] forState:UIControlStateNormal];
+	[TGIcons tintButton:self.playerToggle colour:[[TGTheme shared] accentColour]];
 	[self showPlaybackRate];
 	[self.view addSubview:self.playerBar];
 
@@ -354,6 +355,7 @@ static NSString *TGClockText(NSTimeInterval position, NSTimeInterval duration) {
 
 	[self.playerToggle setImage:(music.playing ? [TGIcons pause] : [TGIcons play])
 					   forState:UIControlStateNormal];
+	[TGIcons tintButton:self.playerToggle colour:[[TGTheme shared] accentColour]];
 	[self.table reloadData];
 }
 
@@ -478,10 +480,12 @@ static NSString *TGClockText(NSTimeInterval position, NSTimeInterval duration) {
             [self.playbackTimer invalidate];
             self.playbackTimer = nil;
             [self.playerToggle setImage:[TGIcons play] forState:UIControlStateNormal];
+            [TGIcons tintButton:self.playerToggle colour:[[TGTheme shared] accentColour]];
         } else {
             [self.voicePlayer play];
             [self startPlaybackTimer];
             [self.playerToggle setImage:[TGIcons pause] forState:UIControlStateNormal];
+            [TGIcons tintButton:self.playerToggle colour:[[TGTheme shared] accentColour]];
         }
         [self.table reloadData];
     } else if (self.videoNotePlayer) {
@@ -490,11 +494,13 @@ static NSString *TGClockText(NSTimeInterval position, NSTimeInterval duration) {
             [self.playbackTimer invalidate];
             self.playbackTimer = nil;
             [self.playerToggle setImage:[TGIcons play] forState:UIControlStateNormal];
+            [TGIcons tintButton:self.playerToggle colour:[[TGTheme shared] accentColour]];
         } else {
             [self.videoNotePlayer play];
             [self applyVideoNoteRate];
             [self startPlaybackTimer];
             [self.playerToggle setImage:[TGIcons pause] forState:UIControlStateNormal];
+            [TGIcons tintButton:self.playerToggle colour:[[TGTheme shared] accentColour]];
         }
     }
 }

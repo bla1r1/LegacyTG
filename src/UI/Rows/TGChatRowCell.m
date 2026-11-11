@@ -481,7 +481,11 @@ static TGChatRowAccessories TGChatRowCellAccessories(NSDictionary *row,
 	text = text ?: @"";
 
 	Class attachmentClass = NSClassFromString(@"NSTextAttachment");
-	BOOL canUseAttachments = (attachmentClass != nil && [NSAttributedString respondsToSelector:@selector(attributedStringWithAttachment:)]);
+	// iOS 6 has a private NSTextAttachment without -setBounds:, so the
+	// picture would be laid out at its own size and move the line.
+	BOOL canUseAttachments = (attachmentClass != nil &&
+			[attachmentClass instancesRespondToSelector:@selector(setBounds:)] &&
+			[NSAttributedString respondsToSelector:@selector(attributedStringWithAttachment:)]);
 
 	if (![self.previewLabel respondsToSelector:@selector(setAttributedText:)]) {
 		self.previewLabel.text = author.length ? [NSString stringWithFormat:@"%@: %@", author, text] : text;

@@ -235,6 +235,7 @@ static const NSUInteger kMaxCustomEmojiViews = 3;
 	[self.bubble addSubview:self.lottie];
 
 	self.customEmojiViews = [[NSMutableArray alloc] initWithCapacity:kMaxCustomEmojiViews];
+	self.staticCustomEmojiViews = [[NSMutableArray alloc] initWithCapacity:kMaxCustomEmojiViews];
 
 	self.forwardLabel = [[UILabel alloc] init];
 	self.forwardLabel.font = TGFontMeta();
@@ -780,6 +781,7 @@ static const NSUInteger kMaxCustomEmojiViews = 3;
 	self.lottie.hidden = YES;
 	[self.lottie stop];
 	[self stopCustomEmojiAnimations];
+	[self hideStaticCustomEmojiViewsFromIndex:0];
 
 	self.collageView.hidden = YES;
 	self.collageMoreLabel.hidden = YES;
@@ -827,6 +829,30 @@ static const NSUInteger kMaxCustomEmojiViews = 3;
 	for (TGLottieView *view in self.customEmojiViews) {
 		view.hidden = YES;
 		[view stop];
+	}
+}
+
+- (UIImageView *)staticCustomEmojiViewAtIndex:(NSUInteger)index {
+	if (!self.staticCustomEmojiViews)
+		self.staticCustomEmojiViews = [[NSMutableArray alloc] initWithCapacity:kMaxCustomEmojiViews];
+	while (self.staticCustomEmojiViews.count <= index) {
+		UIImageView *view = [[UIImageView alloc] initWithFrame:CGRectZero];
+		view.hidden = YES;
+		view.backgroundColor = [UIColor clearColor];
+		// The decoded picture is exactly one line square; aspect fit keeps it
+		// honest if a rounded-off rect lands a hair off that size.
+		view.contentMode = UIViewContentModeScaleAspectFit;
+		[self.body addSubview:view];
+		[self.staticCustomEmojiViews addObject:view];
+	}
+	return self.staticCustomEmojiViews[index];
+}
+
+- (void)hideStaticCustomEmojiViewsFromIndex:(NSUInteger)startIndex {
+	for (NSUInteger i = startIndex; i < self.staticCustomEmojiViews.count; i++) {
+		UIImageView *view = self.staticCustomEmojiViews[i];
+		view.hidden = YES;
+		view.image = nil;
 	}
 }
 

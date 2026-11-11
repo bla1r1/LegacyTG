@@ -117,7 +117,7 @@
 			UIButton *toggle = [UIButton buttonWithType:UIButtonTypeCustom];
 			toggle.frame = CGRectMake(0, 0, TGMetricRow - TGMetricPadMedium, me.input.bounds.size.height);
 			[toggle setImage:[TGIcons botKeyboard] forState:UIControlStateNormal];
-			toggle.tintColor = [[TGTheme shared] secondaryTextColour];
+			[TGIcons tintButton:toggle colour:[[TGTheme shared] secondaryTextColour]];
 			[toggle addTarget:me action:@selector(toggleBotKeyboard)
 			 forControlEvents:UIControlEventTouchUpInside];
 			me.botKeyboardToggle = toggle;

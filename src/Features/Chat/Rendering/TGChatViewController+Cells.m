@@ -443,25 +443,24 @@ static char kTGReactionChipInfoKey;
 }
 
 - (void)configureCustomEmojiInCell:(TGBubbleCell *)cell message:(NSDictionary *)m layout:(TGMessageLayout *)layout {
-	if (![TGCapabilities canPlayAnimatedStickers] || ![TGCapabilities animatedStickersWanted]) {
-		[cell stopCustomEmojiAnimations];
-		return;
-	}
 	if (cell.body.hidden || !cell.body.attributedText.length) {
 		[cell stopCustomEmojiAnimations];
-		return;
-	}
-
-	TGStickerBudget budget = TGStickerBudgetForMemory([TGCapabilities memoryMB]);
-	if (budget.frameCap <= 0) {
-		[cell stopCustomEmojiAnimations];
+		[cell hideStaticCustomEmojiViewsFromIndex:0];
 		return;
 	}
 
 	NSArray *emojiRects = TGCustomEmojiRectsInText(cell.body.attributedText, layout.bodyFrame.size.width);
 	if (!emojiRects.count) {
 		[cell stopCustomEmojiAnimations];
+		[cell hideStaticCustomEmojiViewsFromIndex:0];
 		return;
+	}
+
+	// Still emoji draw on every OS; only the animations obey the budget.
+	BOOL animatedAllowed = [TGCapabilities canPlayAnimatedStickers] && [TGCapabilities animatedStickersWanted];
+	if (animatedAllowed) {
+		TGStickerBudget budget = TGStickerBudgetForMemory([TGCapabilities memoryMB]);
+		animatedAllowed = budget.frameCap > 0;
 	}
 
 	// On single-core hardware the decode must not contend with the drag.
@@ -469,7 +468,8 @@ static char kTGReactionChipInfoKey;
 			!(self.table.isDragging || self.table.isDecelerating);
 
 	NSUInteger maxEmoji = MIN(kMaxCustomEmojiPerBubble, emojiRects.count);
-	NSUInteger activeCount = 0;
+	NSUInteger lottieCount = 0;
+	NSUInteger staticCount = 0;
 
 	for (NSUInteger i = 0; i < maxEmoji; i++) {
 		NSDictionary *entry = emojiRects[i];
@@ -482,47 +482,61 @@ static char kTGReactionChipInfoKey;
 		if (CGRectIsEmpty(rect))
 			continue;
 
-		NSDictionary *anim = [[TGCustomEmojiStore shared] animationForId:emojiId];
-		if (!anim) {
-			// Static WebP or still resolving: the inline glyph underneath serves as fallback.
-			continue;
-		}
+		NSDictionary *anim = animatedAllowed
+				? [[TGCustomEmojiStore shared] animationForId:emojiId] : nil;
+		if (anim) {
+			NSNumber *fileId = anim[@"fileId"];
+			if ([fileId isKindOfClass:NSNumber.class] && fileId.longLongValue > 0) {
+				NSString *animPath = self.lottiePaths[fileId];
+				if (!animPath.length) {
+					if (![self.imagesRequested containsObject:fileId]) {
+						[self.imagesRequested addObject:fileId];
+						__weak typeof(self) weakSelf = self;
+						[[TGMessageStore shared] downloadFile:fileId.integerValue
+												   priority:TGDownloadPriorityOnScreen
+												completion:^(NSString *path) {
+							TGChatViewController *me = weakSelf;
+							if (!me) return;
+							if (path) me.lottiePaths[fileId] = path;
+							[me.imagesRequested removeObject:fileId];
+							[me reloadTableDebounced];
+						}];
+					}
+					continue;
+				}
 
-		NSNumber *fileId = anim[@"fileId"];
-		if (![fileId isKindOfClass:NSNumber.class] || fileId.longLongValue <= 0)
-			continue;
-
-		NSString *animPath = self.lottiePaths[fileId];
-		if (!animPath.length) {
-			if (![self.imagesRequested containsObject:fileId]) {
-				[self.imagesRequested addObject:fileId];
+				TGLottieView *view = [cell customEmojiViewAtIndex:lottieCount];
+				view.frame = rect;
 				__weak typeof(self) weakSelf = self;
-				[[TGMessageStore shared] downloadFile:fileId.integerValue
-									   priority:TGDownloadPriorityOnScreen
-									 completion:^(NSString *path) {
-					TGChatViewController *me = weakSelf;
-					if (!me) return;
-					if (path) me.lottiePaths[fileId] = path;
-					[me.imagesRequested removeObject:fileId];
-					[me reloadTableDebounced];
-				}];
+				view.onStickerReady = ^{ [weakSelf reloadTableDebounced]; };
+				BOOL playable = [view loadStickerFile:animPath];
+				view.hidden = !playable;
+				if (playable && scrollSettled) {
+					[view play];
+				}
+				if (playable)
+					lottieCount++;
+				continue;
 			}
-			continue;
 		}
 
-		TGLottieView *view = [cell customEmojiViewAtIndex:activeCount];
-		view.frame = rect;
-		__weak typeof(self) weakSelf = self;
-		view.onStickerReady = ^{ [weakSelf reloadTableDebounced]; };
-		BOOL playable = [view loadStickerFile:animPath];
-		view.hidden = !playable;
-		if (playable && scrollSettled) {
-			[view play];
+		if (TGCustomEmojiInlineSupported()) {
+			// Still WebP or animation still resolving: the inline attachment
+			// glyph underneath already shows the picture.
+			continue;
 		}
-		activeCount++;
+		// iOS 6 draws no inline attachment: the still picture sits over the
+		// hidden fallback characters instead, from the same rects.
+		UIImageView *view = [cell staticCustomEmojiViewAtIndex:staticCount];
+		view.frame = rect;
+		view.image = [[TGCustomEmojiStore shared] imageForId:emojiId side:rect.size.width];
+		view.hidden = view.image == nil;
+		if (view.image)
+			staticCount++;
 	}
 
-	[cell hideCustomEmojiViewsFromIndex:activeCount];
+	[cell hideCustomEmojiViewsFromIndex:lottieCount];
+	[cell hideStaticCustomEmojiViewsFromIndex:staticCount];
 }
 
 - (void)tableView:(UITableView *)tableView didEndDisplayingCell:(UITableViewCell *)tableCell forRowAtIndexPath:(NSIndexPath *)indexPath {

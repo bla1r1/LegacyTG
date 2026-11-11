@@ -46,6 +46,11 @@ FOUNDATION_EXPORT dispatch_semaphore_t TGIconsDecodeGate(void);
 /// snackbar, every popup menu, the profile tiles and empty states did), so
 /// there the view gets a copy of its image already filled with `colour`.
 + (void)tintImageView:(UIImageView *)view colour:(UIColor *)colour;
+/// Colours a custom button's glyph the same way: on iOS 7+ through
+/// tintColor, on 6 by baking `colour` into each state's bitmap, because a
+/// custom UIButton's image ignores tint there (the composer, the record bar
+/// and the music player went black on a dark theme).
++ (void)tintButton:(UIButton *)button colour:(UIColor *)colour;
 /// `image` with every opaque pixel filled with `colour`.
 + (UIImage *)image:(UIImage *)image filledWith:(UIColor *)colour;
 /// A bot's keyboard: six keys in two rows.

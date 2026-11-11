@@ -204,7 +204,7 @@ static NSString *TGPlayerFormatTime(NSTimeInterval seconds) {
 
 	UIImage *playImg = player.playing ? [TGIcons pause] : [TGIcons play];
 	[_playPauseBtn setImage:playImg forState:UIControlStateNormal];
-	[_playPauseBtn setTintColor:[[TGTheme shared] accentColour]];
+	[TGIcons tintButton:_playPauseBtn colour:[[TGTheme shared] accentColour]];
 
 	[self tick];
 }
@@ -315,7 +315,7 @@ static NSString *TGPlayerFormatTime(NSTimeInterval seconds) {
 	_dismissBtn = [UIButton buttonWithType:UIButtonTypeCustom];
 	_dismissBtn.frame = CGRectMake(TGMetricPadSmall, 0, kModalHeaderH, kModalHeaderH);
 	[_dismissBtn setImage:[TGIcons chevronDown] forState:UIControlStateNormal];
-	[_dismissBtn setTintColor:[theme barButtonColour]];
+	[TGIcons tintButton:_dismissBtn colour:[theme barButtonColour]];
 	[_dismissBtn addTarget:self action:@selector(dismissTapped) forControlEvents:UIControlEventTouchUpInside];
 	[_navBarView addSubview:_dismissBtn];
 
@@ -335,7 +335,7 @@ static NSString *TGPlayerFormatTime(NSTimeInterval seconds) {
 	_queueToggleBtn.frame = CGRectMake(screenW - kModalHeaderH - TGMetricPadSmall, 0, kModalHeaderH, kModalHeaderH);
 	_queueToggleBtn.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin;
 	[_queueToggleBtn setImage:[TGIcons queueList] forState:UIControlStateNormal];
-	[_queueToggleBtn setTintColor:[theme barButtonColour]];
+	[TGIcons tintButton:_queueToggleBtn colour:[theme barButtonColour]];
 	[_queueToggleBtn addTarget:self action:@selector(toggleQueueTapped) forControlEvents:UIControlEventTouchUpInside];
 	[_navBarView addSubview:_queueToggleBtn];
 
@@ -488,6 +488,10 @@ static NSString *TGPlayerFormatTime(NSTimeInterval seconds) {
 	_prevBtn.frame = CGRectMake(prevX, mainBtnY + TGCenteredOrigin(kModalMainBtnSide, kModalSideBtnSide), kModalSideBtnSide, kModalSideBtnSide);
 	[TGTheme applySkeuomorphicStyleToButton:_prevBtn style:TGButtonStyleSilver];
 	[_prevBtn setImage:[TGIcons previousTrack] forState:UIControlStateNormal];
+	// The silver plate keeps its colour whatever the theme says, so the glyph
+	// bakes in dark on iOS 6 instead of the theme's text colour.
+	if ([TGTheme drawsSkeuomorphicChrome])
+		[TGIcons tintButton:_prevBtn colour:[UIColor darkGrayColor]];
 	[_prevBtn addTarget:self action:@selector(prevTapped) forControlEvents:UIControlEventTouchUpInside];
 	[_deckView addSubview:_prevBtn];
 
@@ -496,6 +500,8 @@ static NSString *TGPlayerFormatTime(NSTimeInterval seconds) {
 	_nextBtn.frame = CGRectMake(nextX, mainBtnY + TGCenteredOrigin(kModalMainBtnSide, kModalSideBtnSide), kModalSideBtnSide, kModalSideBtnSide);
 	[TGTheme applySkeuomorphicStyleToButton:_nextBtn style:TGButtonStyleSilver];
 	[_nextBtn setImage:[TGIcons nextTrack] forState:UIControlStateNormal];
+	if ([TGTheme drawsSkeuomorphicChrome])
+		[TGIcons tintButton:_nextBtn colour:[UIColor darkGrayColor]];
 	[_nextBtn addTarget:self action:@selector(nextTapped) forControlEvents:UIControlEventTouchUpInside];
 	[_deckView addSubview:_nextBtn];
 
@@ -507,12 +513,14 @@ static NSString *TGPlayerFormatTime(NSTimeInterval seconds) {
 
 	_repeatBtn = [UIButton buttonWithType:UIButtonTypeCustom];
 	_repeatBtn.frame = CGRectMake(scrubMargin, secY, secSide, secSide);
+	[TGIcons tintButton:_repeatBtn colour:[[TGTheme shared] secondaryTextColour]];
 	[_repeatBtn addTarget:self action:@selector(repeatTapped) forControlEvents:UIControlEventTouchUpInside];
 	[_deckView addSubview:_repeatBtn];
 
 	_shuffleBtn = [UIButton buttonWithType:UIButtonTypeCustom];
 	_shuffleBtn.frame = CGRectMake(width - scrubMargin - secSide, secY, secSide, secSide);
 	_shuffleBtn.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin;
+	[TGIcons tintButton:_shuffleBtn colour:[[TGTheme shared] secondaryTextColour]];
 	[_shuffleBtn addTarget:self action:@selector(shuffleTapped) forControlEvents:UIControlEventTouchUpInside];
 	[_deckView addSubview:_shuffleBtn];
 
@@ -520,8 +528,15 @@ static NSString *TGPlayerFormatTime(NSTimeInterval seconds) {
 	CGFloat volW = width - TGDoubled(volX);
 	_volumeSlider = [[UISlider alloc] initWithFrame:CGRectMake(volX, secY + TGCenteredOrigin(secSide, TGMetricPadLarge), volW, TGMetricPadLarge)];
 	_volumeSlider.autoresizingMask = UIViewAutoresizingFlexibleWidth;
-	_volumeSlider.minimumValueImage = [TGIcons volumeMin];
-	_volumeSlider.maximumValueImage = [TGIcons volumeMax];
+	// Slider images are never tinted, on any iOS: the colour goes in here.
+	UIColor *volColour = [TGTheme drawsSkeuomorphicChrome]
+			? [[TGTheme shared] primaryTextColour] : nil;
+	_volumeSlider.minimumValueImage = volColour
+			? [TGIcons image:[TGIcons volumeMin] filledWith:volColour] ?: [TGIcons volumeMin]
+			: [TGIcons volumeMin];
+	_volumeSlider.maximumValueImage = volColour
+			? [TGIcons image:[TGIcons volumeMax] filledWith:volColour] ?: [TGIcons volumeMax]
+			: [TGIcons volumeMax];
 	_volumeSlider.value = [TGMusicPlayer shared].volume;
 	[_volumeSlider setThumbImage:[TGTheme skeuomorphicSliderThumbWithRadius:TGMetricPad] forState:UIControlStateNormal];
 	[_volumeSlider addTarget:self action:@selector(volumeChanged:) forControlEvents:UIControlEventValueChanged];
@@ -595,12 +610,17 @@ static NSString *TGPlayerFormatTime(NSTimeInterval seconds) {
 
 	UIImage *playIcon = player.playing ? [TGIcons pause] : [TGIcons play];
 	[_playPauseBtn setImage:playIcon forState:UIControlStateNormal];
+	[TGIcons tintButton:_playPauseBtn colour:[[TGTheme shared] accentColour]];
 
 	[_repeatBtn setImage:[TGIcons repeatModeIcon:player.repeatMode] forState:UIControlStateNormal];
-	[_repeatBtn setTintColor:(player.repeatMode != TGMusicRepeatOff) ? [[TGTheme shared] accentColour] : [[TGTheme shared] secondaryTextColour]];
+	[TGIcons tintButton:_repeatBtn colour:(player.repeatMode != TGMusicRepeatOff)
+							? [[TGTheme shared] accentColour]
+							: [[TGTheme shared] secondaryTextColour]];
 
 	[_shuffleBtn setImage:[TGIcons shuffleIconActive:player.shuffle] forState:UIControlStateNormal];
-	[_shuffleBtn setTintColor:player.shuffle ? [[TGTheme shared] accentColour] : [[TGTheme shared] secondaryTextColour]];
+	[TGIcons tintButton:_shuffleBtn colour:player.shuffle
+							? [[TGTheme shared] accentColour]
+							: [[TGTheme shared] secondaryTextColour]];
 
 	[self reloadQueue];
 	[self tick];

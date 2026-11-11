@@ -23,10 +23,16 @@ static const CGFloat kSettingsQRTopOffset = 30.0f;
 
 /// The bar button's QR glyph, from TGIconPaths.
 static UIImage *TGSettingsQRIcon(void) {
-	UIImage *image = [TGIcons glyphNamed:@"qr" colour:[UIColor blackColor]
-									side:kSettingsQRIconSide];
+	// iOS 6 bar items are never tinted, so on a dark bar the glyph gets the
+	// bar's own colour baked in instead of black.
+	BOOL skeuomorphic = [TGTheme drawsSkeuomorphicChrome];
+	UIImage *image = [TGIcons glyphNamed:@"qr"
+							   colour:skeuomorphic
+										  ? [[TGTheme shared] barButtonColour]
+										  : [UIColor blackColor]
+								 side:kSettingsQRIconSide];
 	// Template rendering is iOS 7+; iOS 6 bar items tint the glyph anyway.
-	if ([image respondsToSelector:@selector(imageWithRenderingMode:)])
+	if (!skeuomorphic && [image respondsToSelector:@selector(imageWithRenderingMode:)])
 		image = [image imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
 	return image;
 }
