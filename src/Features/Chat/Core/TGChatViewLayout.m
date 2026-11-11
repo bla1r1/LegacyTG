@@ -215,7 +215,6 @@ static int64_t sActiveChatId = 0;
 			me.messages = [me groupedMessagesFromMessages:me.rawMessages];
 			[me.table reloadData];
 			if (follow) {
-				me.atChatEnd = YES;
 				[me scrollToBottomAnimated:YES];
 			} else {
 				[me noteArrivedWhileAway];
