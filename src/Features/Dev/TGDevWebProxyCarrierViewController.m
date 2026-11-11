@@ -8,7 +8,7 @@
 // it. When the id is not an open carrier, TDLib's refusal is the answer.
 //
 #import "TGDevWebProxyCarrierViewController.h"
-#import "TGClient.h"
+#import "TGDevStore.h"
 #import "TGAlertSheet.h"
 #import "TGStyle.h"
 
@@ -97,13 +97,13 @@
 			[weakSelf rebuildSections];
 		}];
 	} else if ([action isEqualToString:@"passText"]){
-		[[TGClient shared] processWebProxyCarrierMessage:self.carrierId
+		[[TGDevStore shared] processWebProxyCarrierMessage:self.carrierId
 													text:self.messageText
 											  completion:^(BOOL ok, NSString *error){
 			[weakSelf finish:ok error:error title:@"Carrier Message"];
 		}];
 	} else if ([action isEqualToString:@"passBinary"]){
-		[[TGClient shared] processWebProxyCarrierMessage:self.carrierId
+		[[TGDevStore shared] processWebProxyCarrierMessage:self.carrierId
 												  base64:self.messageText
 											  completion:^(BOOL ok, NSString *error){
 			[weakSelf finish:ok error:error title:@"Carrier Message"];
@@ -128,7 +128,7 @@
 			[weakSelf rebuildSections];
 		}];
 	} else if ([action isEqualToString:@"reportError"]){
-		[[TGClient shared] reportWebProxyCarrierError:self.carrierId
+		[[TGDevStore shared] reportWebProxyCarrierError:self.carrierId
 												 kind:self.errorKind
 											  message:self.errorMessage
 										   completion:^(BOOL ok, NSString *error){

@@ -7,7 +7,7 @@
 // printed as code + message, not as a failure of the request.
 //
 #import "TGDevTestHarnessViewController.h"
-#import "TGClient.h"
+#import "TGDevStore.h"
 
 @interface TGDevTestHarnessViewController ()
 @property (nonatomic, copy) NSString *text;
@@ -154,11 +154,11 @@
 	}
 
 	if ([action isEqualToString:@"callEmpty"]){
-		[[TGClient shared] testCallEmptyWithCompletion:^(BOOL ok, NSString *error){
+		[[TGDevStore shared] testCallEmptyWithCompletion:^(BOOL ok, NSString *error){
 			[weakSelf finish:ok error:error title:@"testCallEmpty"];
 		}];
 	} else if ([action isEqualToString:@"callString"]){
-		[[TGClient shared] testCallString:self.text
+		[[TGDevStore shared] testCallString:self.text
 							   completion:^(NSString *value, NSString *error){
 			if (error) [weakSelf finish:NO error:error title:@"testCallString"];
 			else [weakSelf showAnswer:value title:@"testCallString"];
@@ -168,13 +168,13 @@
 			[self showMessage:@"A base64 byte string is needed." title:@"testCallBytes"];
 			return;
 		}
-		[[TGClient shared] testCallBytes:self.bytes
+		[[TGDevStore shared] testCallBytes:self.bytes
 							  completion:^(NSString *value, NSString *error){
 			if (error) [weakSelf finish:NO error:error title:@"testCallBytes"];
 			else [weakSelf showAnswer:value title:@"testCallBytes"];
 		}];
 	} else if ([action isEqualToString:@"vectorInt"]){
-		[[TGClient shared] testCallVectorInt:[self numbersFrom:self.intVector]
+		[[TGDevStore shared] testCallVectorInt:[self numbersFrom:self.intVector]
 								  completion:^(NSArray *result, NSString *error){
 			if (error){
 				[weakSelf finish:NO error:error title:@"testCallVectorInt"];
@@ -187,7 +187,7 @@
 						   title:@"testCallVectorInt"];
 		}];
 	} else if ([action isEqualToString:@"vectorIntObject"]){
-		[[TGClient shared] testCallVectorIntObject:[self numbersFrom:self.intVector]
+		[[TGDevStore shared] testCallVectorIntObject:[self numbersFrom:self.intVector]
 										completion:^(NSArray *result, NSString *error){
 			if (error){
 				[weakSelf finish:NO error:error title:@"testCallVectorIntObject"];
@@ -200,7 +200,7 @@
 						   title:@"testCallVectorIntObject"];
 		}];
 	} else if ([action isEqualToString:@"vectorString"]){
-		[[TGClient shared] testCallVectorString:[self stringsFrom:self.stringVector]
+		[[TGDevStore shared] testCallVectorString:[self stringsFrom:self.stringVector]
 									 completion:^(NSArray *result, NSString *error){
 			if (error){
 				[weakSelf finish:NO error:error title:@"testCallVectorString"];
@@ -210,7 +210,7 @@
 						   title:@"testCallVectorString"];
 		}];
 	} else if ([action isEqualToString:@"vectorStringObject"]){
-		[[TGClient shared] testCallVectorStringObject:[self stringsFrom:self.stringVector]
+		[[TGDevStore shared] testCallVectorStringObject:[self stringsFrom:self.stringVector]
 										   completion:^(NSArray *result, NSString *error){
 			if (error){
 				[weakSelf finish:NO error:error title:@"testCallVectorStringObject"];
@@ -220,7 +220,7 @@
 						   title:@"testCallVectorStringObject"];
 		}];
 	} else if ([action isEqualToString:@"squareInt"]){
-		[[TGClient shared] testSquareInt:self.number.intValue
+		[[TGDevStore shared] testSquareInt:self.number.intValue
 							  completion:^(int32_t result, NSString *error){
 			if (error){
 				[weakSelf finish:NO error:error title:@"testSquareInt"];
@@ -230,7 +230,7 @@
 						   title:@"testSquareInt"];
 		}];
 	} else if ([action isEqualToString:@"returnError"]){
-		[[TGClient shared] testReturnErrorCode:self.errorCode.intValue
+		[[TGDevStore shared] testReturnErrorCode:self.errorCode.intValue
 									  message:self.errorMessage
 								   completion:^(int32_t code, NSString *message,
 												NSString *error){
@@ -242,15 +242,15 @@
 					(int)code, message ?: @""] title:@"testReturnError"];
 		}];
 	} else if ([action isEqualToString:@"getDifference"]){
-		[[TGClient shared] testGetDifferenceWithCompletion:^(BOOL ok, NSString *error){
+		[[TGDevStore shared] testGetDifferenceWithCompletion:^(BOOL ok, NSString *error){
 			[weakSelf finish:ok error:error title:@"testGetDifference"];
 		}];
 	} else if ([action isEqualToString:@"network"]){
-		[[TGClient shared] testNetworkWithCompletion:^(BOOL ok, NSString *error){
+		[[TGDevStore shared] testNetworkWithCompletion:^(BOOL ok, NSString *error){
 			[weakSelf finish:ok error:error title:@"testNetwork"];
 		}];
 	} else if ([action isEqualToString:@"useUpdate"]){
-		[[TGClient shared] testUseUpdateWithCompletion:^(NSDictionary *update,
+		[[TGDevStore shared] testUseUpdateWithCompletion:^(NSDictionary *update,
 														 NSString *error){
 			if (error){
 				[weakSelf finish:NO error:error title:@"testUseUpdate"];

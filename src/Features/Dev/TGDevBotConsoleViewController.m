@@ -8,7 +8,7 @@
 // request whose `can_be_edited` guard the *user* satisfies.
 //
 #import "TGDevBotConsoleViewController.h"
-#import "TGClient.h"
+#import "TGDevStore.h"
 #import "TGAlertSheet.h"
 #import "TGStyle.h"
 
@@ -389,12 +389,12 @@
 	}
 
 	if ([action isEqualToString:@"connectBot"]){
-		[[TGClient shared] checkAuthenticationBotToken:self.botToken
+		[[TGDevStore shared] checkAuthenticationBotToken:self.botToken
 											completion:^(BOOL ok, NSString *error){
 			[weakSelf finish:ok error:error title:@"Connect As Bot"];
 		}];
 	} else if ([action isEqualToString:@"getCommands"]){
-		[[TGClient shared] commandsForScope:(self.commandScopeChat ? @"chat" : @"default")
+		[[TGDevStore shared] commandsForScope:(self.commandScopeChat ? @"chat" : @"default")
 									 chatId:self.botChatId language:self.language
 								   completion:^(NSDictionary *commands, NSString *error){
 			if (error){
@@ -417,21 +417,21 @@
 						title:@"Set Commands"];
 			return;
 		}
-		[[TGClient shared] setCommands:@[self.payload]
+		[[TGDevStore shared] setCommands:@[self.payload]
 								 scope:(self.commandScopeChat ? @"chat" : @"default")
 								chatId:self.botChatId language:self.language
 							  completion:^(BOOL ok, NSString *error){
 			[weakSelf finish:ok error:error title:@"Set Commands"];
 		}];
 	} else if ([action isEqualToString:@"deleteCommands"]){
-		[[TGClient shared] deleteCommandsForScope:(self.commandScopeChat ? @"chat" : @"default")
+		[[TGDevStore shared] deleteCommandsForScope:(self.commandScopeChat ? @"chat" : @"default")
 										   chatId:self.botChatId
 										 language:self.language
 									   completion:^(BOOL ok, NSString *error){
 			[weakSelf finish:ok error:error title:@"Delete Commands"];
 		}];
 	} else if ([action isEqualToString:@"getMenuButton"]){
-		[[TGClient shared] menuButtonForBot:self.botUserId
+		[[TGDevStore shared] menuButtonForBot:self.botUserId
 								 completion:^(NSDictionary *button, NSString *error){
 			if (error){
 				[weakSelf finish:NO error:error title:@"Menu Button"];
@@ -446,7 +446,7 @@
 				 text:self.payload action:@"Next" completion:^(NSString *text){
 			[weakSelf askText:@"Menu Button URL" message:nil placeholder:@"https://"
 					 text:self.requestId action:@"Save" completion:^(NSString *url){
-				[[TGClient shared] setMenuButtonForBot:weakSelf.botUserId text:text
+				[[TGDevStore shared] setMenuButtonForBot:weakSelf.botUserId text:text
 												   url:url
 											completion:^(BOOL ok, NSString *error){
 					[weakSelf finish:ok error:error title:@"Menu Button"];
@@ -457,7 +457,7 @@
 		[TGAlertSheet showChoices:@[@"Read The Token", @"Revoke And Read"]
 						   title:@"Managed Bot Token" destructiveIndex:1
 						   inView:self.view onChoice:^(NSInteger index){
-			[[TGClient shared] managedBotTokenForBot:weakSelf.botUserId
+			[[TGDevStore shared] managedBotTokenForBot:weakSelf.botUserId
 											  revoke:(index == 1)
 										  completion:^(NSString *token, NSString *error){
 				if (error){
@@ -468,7 +468,7 @@
 			}];
 		}];
 	} else if ([action isEqualToString:@"managedGet"]){
-		[[TGClient shared] managedBotAccessSettingsForBot:self.botUserId
+		[[TGDevStore shared] managedBotAccessSettingsForBot:self.botUserId
 											   completion:^(NSDictionary *settings,
 															 NSString *error){
 			if (error){
@@ -490,7 +490,7 @@
 		[TGAlertSheet showChoices:@[@"Everyone", @"Only The Added Users"]
 						   title:@"Managed Bot Access" destructiveIndex:-1
 						   inView:self.view onChoice:^(NSInteger index){
-			[[TGClient shared] setManagedBotAccessSettingsForBot:weakSelf.botUserId
+			[[TGDevStore shared] setManagedBotAccessSettingsForBot:weakSelf.botUserId
 													 restricted:(index == 1)
 													 addedUserIds:ids
 													 completion:^(BOOL ok, NSString *error){
@@ -498,13 +498,13 @@
 			}];
 		}];
 	} else if ([action isEqualToString:@"updatesStatus"]){
-		[[TGClient shared] setBotUpdatesStatus:self.pendingUpdateCount
+		[[TGDevStore shared] setBotUpdatesStatus:self.pendingUpdateCount
 								  errorMessage:self.payload
 									completion:^(BOOL ok, NSString *error){
 			[weakSelf finish:ok error:error title:@"Bot Updates Status"];
 		}];
 	} else if ([action isEqualToString:@"answerInline"]){
-		[[TGClient shared] answerInlineQuery:self.queryId isPersonal:YES
+		[[TGDevStore shared] answerInlineQuery:self.queryId isPersonal:YES
 								 resultTitle:self.payload
 									resultId:self.requestId url:@"" cacheTime:0
 								  nextOffset:@""
@@ -512,18 +512,18 @@
 			[weakSelf finish:ok error:error title:@"Answer Inline Query"];
 		}];
 	} else if ([action isEqualToString:@"answerCallback"]){
-		[[TGClient shared] answerCallbackQuery:self.queryId text:self.payload
+		[[TGDevStore shared] answerCallbackQuery:self.queryId text:self.payload
 									 showAlert:YES url:@"" cacheTime:0
 									completion:^(BOOL ok, NSString *error){
 			[weakSelf finish:ok error:error title:@"Answer Callback Query"];
 		}];
 	} else if ([action isEqualToString:@"answerCustom"]){
-		[[TGClient shared] answerCustomQuery:self.queryId data:self.payload
+		[[TGDevStore shared] answerCustomQuery:self.queryId data:self.payload
 								  completion:^(BOOL ok, NSString *error){
 			[weakSelf finish:ok error:error title:@"Answer Custom Query"];
 		}];
 	} else if ([action isEqualToString:@"answerGuest"]){
-		[[TGClient shared] answerGuestQuery:self.queryId resultTitle:self.payload
+		[[TGDevStore shared] answerGuestQuery:self.queryId resultTitle:self.payload
 								   resultId:self.requestId url:@""
 								 completion:^(NSString *inlineMessageId, NSString *error){
 			if (error){
@@ -534,7 +534,7 @@
 					: @"Telegram accepted the answer.") title:@"Answer Guest Query"];
 		}];
 	} else if ([action isEqualToString:@"answerWebApp"]){
-		[[TGClient shared] answerWebAppQuery:self.requestId resultTitle:self.payload
+		[[TGDevStore shared] answerWebAppQuery:self.requestId resultTitle:self.payload
 									resultId:self.requestId url:@""
 								  completion:^(NSString *inlineMessageId, NSString *error){
 			if (error){
@@ -545,19 +545,19 @@
 					: @"Telegram accepted the answer.") title:@"Answer Web App Query"];
 		}];
 	} else if ([action isEqualToString:@"answerPreCheckout"]){
-		[[TGClient shared] answerPreCheckoutQuery:self.queryId
+		[[TGDevStore shared] answerPreCheckoutQuery:self.queryId
 									 errorMessage:self.payload
 									   completion:^(BOOL ok, NSString *error){
 			[weakSelf finish:ok error:error title:@"Answer PreCheckout Query"];
 		}];
 	} else if ([action isEqualToString:@"answerShipping"]){
-		[[TGClient shared] answerShippingQuery:self.queryId
+		[[TGDevStore shared] answerShippingQuery:self.queryId
 								  errorMessage:self.payload
 									completion:^(BOOL ok, NSString *error){
 			[weakSelf finish:ok error:error title:@"Answer Shipping Query"];
 		}];
 	} else if ([action isEqualToString:@"answerEphemeral"]){
-		[[TGClient shared] replyToCallbackQueryWithEphemeralMessage:self.queryId
+		[[TGDevStore shared] replyToCallbackQueryWithEphemeralMessage:self.queryId
 															 text:self.payload
 										   replaceCallbackMessage:NO
 													protectContent:NO
@@ -565,7 +565,7 @@
 			[weakSelf finish:ok error:error title:@"Ephemeral Reply"];
 		}];
 	} else if ([action isEqualToString:@"getPasskeys"]){
-		[[TGClient shared] loginPasskeysWithCompletion:^(NSArray *passkeys,
+		[[TGDevStore shared] loginPasskeysWithCompletion:^(NSArray *passkeys,
 														  NSString *error){
 			if (error){
 				[weakSelf finish:NO error:error title:@"Login Passkeys"];
@@ -580,13 +580,13 @@
 					: @"This account has no passkeys.") title:@"Login Passkeys"];
 		}];
 	} else if ([action isEqualToString:@"passkeyParameters"]){
-		[[TGClient shared] passkeyParametersWithCompletion:^(NSString *text,
+		[[TGDevStore shared] passkeyParametersWithCompletion:^(NSString *text,
 															 NSString *error){
 			if (error) [weakSelf finish:NO error:error title:@"Passkey Parameters"];
 			else [weakSelf showText:text title:@"Passkey Parameters"];
 		}];
 	} else if ([action isEqualToString:@"authPasskeyParameters"]){
-		[[TGClient shared] authenticationPasskeyParametersWithCompletion:
+		[[TGDevStore shared] authenticationPasskeyParametersWithCompletion:
 				^(NSString *text, NSString *error){
 			if (error) [weakSelf finish:NO error:error
 								  title:@"Authentication Passkey Parameters"];
@@ -594,7 +594,7 @@
 							  title:@"Authentication Passkey Parameters"];
 		}];
 	} else if ([action isEqualToString:@"addPasskey"]){
-		[[TGClient shared] addLoginPasskey:self.passkeyClientData
+		[[TGDevStore shared] addLoginPasskey:self.passkeyClientData
 						 attestationObject:self.passkeyAttestation
 								completion:^(NSDictionary *passkey, NSString *error){
 			if (error){
@@ -606,12 +606,12 @@
 						 title:@"Add Login Passkey"];
 		}];
 	} else if ([action isEqualToString:@"removePasskey"]){
-		[[TGClient shared] removeLoginPasskey:self.requestId
+		[[TGDevStore shared] removeLoginPasskey:self.requestId
 								   completion:^(BOOL ok, NSString *error){
 			[weakSelf finish:ok error:error title:@"Remove Login Passkey"];
 		}];
 	} else if ([action isEqualToString:@"checkPasskey"]){
-		[[TGClient shared] checkAuthenticationPasskey:self.requestId
+		[[TGDevStore shared] checkAuthenticationPasskey:self.requestId
 										   clientData:self.passkeyClientData
 								  authenticatorData:self.passkeyAttestation
 										  signature:self.payload
@@ -620,7 +620,7 @@
 			[weakSelf finish:ok error:error title:@"Authentication Passkey"];
 		}];
 	} else if ([action isEqualToString:@"openWebApp"]){
-		[[TGClient shared] openWebAppInChat:self.botChatId bot:self.botUserId
+		[[TGDevStore shared] openWebAppInChat:self.botChatId bot:self.botUserId
 										url:self.payload mode:self.webAppMode
 								 completion:^(NSDictionary *info, NSString *error){
 			if (error){
@@ -632,19 +632,19 @@
 						 title:@"Open Web App"];
 		}];
 	} else if ([action isEqualToString:@"closeWebApp"]){
-		[[TGClient shared] closeWebApp:self.queryId
+		[[TGDevStore shared] closeWebApp:self.queryId
 							completion:^(BOOL ok, NSString *error){
 			[weakSelf finish:ok error:error title:@"Close Web App"];
 		}];
 	} else if ([action isEqualToString:@"checkWebAppFile"]){
-		[[TGClient shared] checkWebAppFileDownload:self.botUserId
+		[[TGDevStore shared] checkWebAppFileDownload:self.botUserId
 										  fileName:self.requestId
 											   url:self.payload
 										completion:^(BOOL ok, NSString *error){
 			[weakSelf finish:ok error:error title:@"Check Web App File"];
 		}];
 	} else if ([action isEqualToString:@"guardWebApp"]){
-		[[TGClient shared] guardBotWebAppURLForQuery:self.queryId
+		[[TGDevStore shared] guardBotWebAppURLForQuery:self.queryId
 												mode:self.webAppMode
 										  completion:^(NSString *link, NSString *error){
 			if (error){
@@ -654,13 +654,13 @@
 			[weakSelf showText:link title:@"Guard Bot Web App URL"];
 		}];
 	} else if ([action isEqualToString:@"sendWebData"]){
-		[[TGClient shared] sendWebAppData:self.botUserId buttonText:self.payload
+		[[TGDevStore shared] sendWebAppData:self.botUserId buttonText:self.payload
 									 data:self.requestId
 							   completion:^(BOOL ok, NSString *error){
 			[weakSelf finish:ok error:error title:@"Send Web App Data"];
 		}];
 	} else if ([action isEqualToString:@"sendWebCustom"]){
-		[[TGClient shared] sendWebAppCustomRequest:self.botUserId
+		[[TGDevStore shared] sendWebAppCustomRequest:self.botUserId
 											method:self.requestId
 										parameters:self.payload
 										completion:^(NSString *result, NSString *error){
@@ -679,7 +679,7 @@
 			[weakSelf rebuildSections];
 		}];
 	} else if ([action isEqualToString:@"owned"]){
-		[[TGClient shared] ownedBotsWithCompletion:^(NSArray *bots, NSString *error){
+		[[TGDevStore shared] ownedBotsWithCompletion:^(NSArray *bots, NSString *error){
 			if (error){
 				[weakSelf finish:NO error:error title:@"Owned Bots"];
 				return;
@@ -693,7 +693,7 @@
 		}];
 	} else if ([action isEqualToString:@"readName"]){
 		[self askBotId:@"Read Bot Name" action:^(int64_t botId){
-			[[TGClient shared] botNameForBot:botId language:weakSelf.language
+			[[TGDevStore shared] botNameForBot:botId language:weakSelf.language
 								  completion:^(NSString *name, NSString *error){
 				[weakSelf finish:error == nil error:error title:@"Bot Name"];
 				if (!error) [weakSelf showText:name title:@"Bot Name"];
@@ -703,7 +703,7 @@
 		[self askBotId:@"Set Bot Name" action:^(int64_t botId){
 			[weakSelf askText:@"Set Bot Name" message:nil placeholder:@"My Bot"
 						 text:nil action:@"Save" completion:^(NSString *text){
-				[[TGClient shared] setBotName:text forBot:botId
+				[[TGDevStore shared] setBotName:text forBot:botId
 									 language:weakSelf.language
 								   completion:^(BOOL ok, NSString *error){
 					[weakSelf finish:ok error:error title:@"Bot Name"];
@@ -712,7 +712,7 @@
 		}];
 	} else if ([action isEqualToString:@"readDescription"]){
 		[self askBotId:@"Read Description" action:^(int64_t botId){
-			[[TGClient shared] botDescriptionForBot:botId language:weakSelf.language
+			[[TGDevStore shared] botDescriptionForBot:botId language:weakSelf.language
 										 completion:^(NSString *text, NSString *error){
 				[weakSelf finish:error == nil error:error title:@"Bot Description"];
 				if (!error) [weakSelf showText:text title:@"Bot Description"];
@@ -723,7 +723,7 @@
 			[weakSelf askText:@"Set Description" message:@"Shown in an empty chat"
 						 placeholder:@"What the bot does" text:nil
 					   action:@"Save" completion:^(NSString *text){
-				[[TGClient shared] setBotDescription:text forBot:botId
+				[[TGDevStore shared] setBotDescription:text forBot:botId
 										   language:weakSelf.language
 										 completion:^(BOOL ok, NSString *error){
 					[weakSelf finish:ok error:error title:@"Bot Description"];
@@ -732,7 +732,7 @@
 		}];
 	} else if ([action isEqualToString:@"readShort"]){
 		[self askBotId:@"Read Short Description" action:^(int64_t botId){
-			[[TGClient shared] botShortDescriptionForBot:botId
+			[[TGDevStore shared] botShortDescriptionForBot:botId
 												language:weakSelf.language
 											  completion:^(NSString *text, NSString *error){
 				[weakSelf finish:error == nil error:error title:@"Short Description"];
@@ -744,7 +744,7 @@
 			[weakSelf askText:@"Set Short Description" message:@"Shown on the profile"
 						 placeholder:@"A one-line summary" text:nil action:@"Save"
 				   completion:^(NSString *text){
-				[[TGClient shared] setBotShortDescription:text forBot:botId
+				[[TGDevStore shared] setBotShortDescription:text forBot:botId
 												language:weakSelf.language
 											  completion:^(BOOL ok, NSString *error){
 					[weakSelf finish:ok error:error title:@"Short Description"];
@@ -753,7 +753,7 @@
 		}];
 	} else if ([action isEqualToString:@"removePhoto"]){
 		[self askBotId:@"Remove Bot Photo" action:^(int64_t botId){
-			[[TGClient shared] removeBotProfilePhoto:botId
+			[[TGDevStore shared] removeBotProfilePhoto:botId
 										  completion:^(BOOL ok, NSString *error){
 				[weakSelf finish:ok error:error title:@"Bot Photo"];
 			}];
@@ -765,7 +765,7 @@
 			[TGAlertSheet showChoices:@[@"As a new bot name", @"As a secondary name"]
 								title:@"Check Bot Username" destructiveIndex:-1
 							   inView:weakSelf.view onChoice:^(NSInteger index){
-				[[TGClient shared] checkBotUsername:text isSecondary:(index == 1)
+				[[TGDevStore shared] checkBotUsername:text isSecondary:(index == 1)
 										 completion:^(NSString *result, NSString *error){
 					[weakSelf finish:error == nil error:error title:@"Bot Username"];
 					if (!error) [weakSelf showText:result title:@"Bot Username"];
@@ -776,7 +776,7 @@
 		[self askBotId:@"Add Secondary Username" action:^(int64_t botId){
 			[weakSelf askText:@"Add Secondary Username" message:nil placeholder:@"mybot2"
 						 text:nil action:@"Add" completion:^(NSString *text){
-				[[TGClient shared] addBotSecondaryUsername:text forBot:botId
+				[[TGDevStore shared] addBotSecondaryUsername:text forBot:botId
 												completion:^(BOOL ok, NSString *error){
 					[weakSelf finish:ok error:error title:@"Bot Username"];
 				}];
@@ -784,7 +784,7 @@
 		}];
 	} else if ([action isEqualToString:@"deleteSecondary"]){
 		[self askBotId:@"Delete Secondary Username" action:^(int64_t botId){
-			[[TGClient shared] deleteBotSecondaryUsernameForBot:botId
+			[[TGDevStore shared] deleteBotSecondaryUsernameForBot:botId
 													 completion:^(BOOL ok, NSString *error){
 				[weakSelf finish:ok error:error title:@"Bot Username"];
 			}];
@@ -796,7 +796,7 @@
 			   action:^(int64_t botId){
 			[weakSelf askText:@"Bot Username" message:nil placeholder:@"mybot"
 						 text:nil action:@"Send" completion:^(NSString *text){
-				[[TGClient shared] setBotUsername:text active:active forBot:botId
+				[[TGDevStore shared] setBotUsername:text active:active forBot:botId
 									   completion:^(BOOL ok, NSString *error){
 					[weakSelf finish:ok error:error title:@"Bot Username"];
 				}];
@@ -813,7 +813,7 @@
 							[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 					if (name.length) [names addObject:name];
 				}
-				[[TGClient shared] reorderBotActiveUsernames:names forBot:botId
+				[[TGDevStore shared] reorderBotActiveUsernames:names forBot:botId
 												  completion:^(BOOL ok, NSString *error){
 					[weakSelf finish:ok error:error title:@"Bot Usernames"];
 				}];
@@ -821,7 +821,7 @@
 		}];
 	} else if ([action isEqualToString:@"loadPreviews"]){
 		[self askBotId:@"Media Previews" action:^(int64_t botId){
-			[[TGClient shared] botMediaPreviewsForBot:botId
+			[[TGDevStore shared] botMediaPreviewsForBot:botId
 										   completion:^(NSArray *previews, NSString *error){
 				if (error){
 					[weakSelf finish:NO error:error title:@"Media Previews"];
@@ -838,7 +838,7 @@
 		}];
 	} else if ([action isEqualToString:@"previewInfo"]){
 		[self askBotId:@"Preview Info" action:^(int64_t botId){
-			[[TGClient shared] botMediaPreviewInfoForBot:botId
+			[[TGDevStore shared] botMediaPreviewInfoForBot:botId
 												language:weakSelf.language
 											  completion:^(NSDictionary *info, NSString *error){
 				if (error){
@@ -856,7 +856,7 @@
 			[weakSelf askText:@"Preview File ID" message:@"A file TDLib already knows"
 						 placeholder:@"123" text:nil action:@"Add"
 				   completion:^(NSString *file){
-				[[TGClient shared] addBotMediaPreviewForBot:botId
+				[[TGDevStore shared] addBotMediaPreviewForBot:botId
 												   language:weakSelf.language
 													 fileId:file.intValue
 													  video:NO
@@ -872,7 +872,7 @@
 					   action:@"Next" completion:^(NSString *oldFile){
 				[weakSelf askText:@"New File ID" message:nil placeholder:@"456" text:nil
 						   action:@"Replace" completion:^(NSString *newFile){
-					[[TGClient shared] editBotMediaPreviewForBot:botId
+					[[TGDevStore shared] editBotMediaPreviewForBot:botId
 														language:weakSelf.language
 														  fileId:oldFile.intValue
 													   newFileId:newFile.intValue
@@ -892,7 +892,7 @@
 					NSInteger value = part.intValue;
 					if (value > 0) [ids addObject:@(value)];
 				}
-				[[TGClient shared] deleteBotMediaPreviewsForBot:botId
+				[[TGDevStore shared] deleteBotMediaPreviewsForBot:botId
 													   language:weakSelf.language
 														fileIds:ids
 													 completion:^(BOOL ok, NSString *error){
@@ -908,7 +908,7 @@
 					NSInteger value = part.intValue;
 					if (value > 0) [ids addObject:@(value)];
 				}
-				[[TGClient shared] reorderBotMediaPreviewsForBot:botId
+				[[TGDevStore shared] reorderBotMediaPreviewsForBot:botId
 														language:weakSelf.language
 														 fileIds:ids
 													  completion:^(BOOL ok, NSString *error){
@@ -918,7 +918,7 @@
 		}];
 	} else if ([action isEqualToString:@"similarCount"]){
 		[self askBotId:@"Similar Bots" action:^(int64_t botId){
-			[[TGClient shared] similarBotCountForBot:botId local:YES
+			[[TGDevStore shared] similarBotCountForBot:botId local:YES
 										  completion:^(int32_t count, NSString *error){
 				[weakSelf finish:error == nil error:error title:@"Similar Bots"];
 				if (!error) [weakSelf showText:[NSString stringWithFormat:
@@ -927,7 +927,7 @@
 		}];
 	} else if ([action isEqualToString:@"similarBots"]){
 		[self askBotId:@"Similar Bots" action:^(int64_t botId){
-			[[TGClient shared] similarBotsForBot:botId
+			[[TGDevStore shared] similarBotsForBot:botId
 									  completion:^(NSArray *bots, NSString *error){
 				if (error){
 					[weakSelf finish:NO error:error title:@"Similar Bots"];
@@ -945,7 +945,7 @@
 		[self askBotId:@"Open Similar Bot" action:^(int64_t botId){
 			[weakSelf askText:@"Opened Bot ID" message:nil placeholder:@"456" text:nil
 					   action:@"Open" completion:^(NSString *text){
-				[[TGClient shared] openSimilarBot:text.longLongValue fromBot:botId
+				[[TGDevStore shared] openSimilarBot:text.longLongValue fromBot:botId
 									   completion:^(BOOL ok, NSString *error){
 					[weakSelf finish:ok error:error title:@"Similar Bots"];
 				}];
@@ -957,14 +957,14 @@
 								title:@"Let This Bot Manage My Emoji Status"
 					   destructiveIndex:-1 inView:weakSelf.view
 							 onChoice:^(NSInteger index){
-				[[TGClient shared] setBotCanManageEmojiStatus:(index == 0) forBot:botId
+				[[TGDevStore shared] setBotCanManageEmojiStatus:(index == 0) forBot:botId
 												   completion:^(BOOL ok, NSString *error){
 					[weakSelf finish:ok error:error title:@"Emoji Status Permission"];
 				}];
 			}];
 		}];
 	} else if ([action isEqualToString:@"recentInline"]){
-		[[TGClient shared] recentInlineBotsWithCompletion:^(NSArray *bots, NSString *error){
+		[[TGDevStore shared] recentInlineBotsWithCompletion:^(NSArray *bots, NSString *error){
 			if (error){
 				[weakSelf finish:NO error:error title:@"Inline Bots"];
 				return;
@@ -979,7 +979,7 @@
 		}];
 	} else if ([action isEqualToString:@"attachment"]){
 		[self askBotId:@"Attachment Menu Bot" action:^(int64_t botId){
-			[[TGClient shared] attachmentMenuBot:botId
+			[[TGDevStore shared] attachmentMenuBot:botId
 									  completion:^(NSDictionary *bot, NSString *error){
 				if (error){
 					[weakSelf finish:NO error:error title:@"Attachment Menu"];
@@ -1004,7 +1004,7 @@
 			[TGAlertSheet showChoices:@[@"Without write access", @"With write access"]
 								title:@"Attachment Menu" destructiveIndex:-1
 							   inView:weakSelf.view onChoice:^(NSInteger index){
-				[[TGClient shared] setBotOnAttachmentMenu:botId added:add
+				[[TGDevStore shared] setBotOnAttachmentMenu:botId added:add
 										 allowWriteAccess:(index == 1)
 											   completion:^(BOOL ok, NSString *error){
 					[weakSelf finish:ok error:error title:@"Attachment Menu"];
@@ -1013,7 +1013,7 @@
 		}];
 	} else if ([action isEqualToString:@"canSend"]){
 		[self askBotId:@"Bot Messaging" action:^(int64_t botId){
-			[[TGClient shared] canBotSendMessages:botId
+			[[TGDevStore shared] canBotSendMessages:botId
 									   completion:^(BOOL can, NSString *error){
 				[weakSelf finish:error == nil error:error title:@"Bot Messaging"];
 				if (!error) [weakSelf showText:(can ? @"This bot may message you."
@@ -1023,7 +1023,7 @@
 		}];
 	} else if ([action isEqualToString:@"allowSend"]){
 		[self askBotId:@"Allow Bot" action:^(int64_t botId){
-			[[TGClient shared] allowBotToSendMessages:botId
+			[[TGDevStore shared] allowBotToSendMessages:botId
 										   completion:^(BOOL ok, NSString *error){
 				[weakSelf finish:ok error:error title:@"Bot Messaging"];
 			}];
@@ -1034,7 +1034,7 @@
 				 text:nil action:@"Next" completion:^(NSString *chat){
 				[weakSelf askText:@"Start Parameter" message:@"Empty for none" placeholder:@"deep-link"
 					 text:nil action:@"Start" completion:^(NSString *parameter){
-					[[TGClient shared] startBot:botId inChat:chat.longLongValue
+					[[TGDevStore shared] startBot:botId inChat:chat.longLongValue
 									  parameter:parameter
 									 completion:^(NSDictionary *message, NSString *error){
 						[weakSelf finish:error == nil error:error title:@"Start Bot"];
@@ -1051,7 +1051,7 @@
 					   action:@"Next" completion:^(NSString *query){
 				[weakSelf askText:@"Result ID" message:nil placeholder:@"result-1" text:nil
 						   action:@"Add" completion:^(NSString *result){
-					[[TGClient shared] addInlineResultToQuickReply:shortcut
+					[[TGDevStore shared] addInlineResultToQuickReply:shortcut
 														 replyToId:0
 														   queryId:query.longLongValue
 														  resultId:result
@@ -1070,7 +1070,7 @@
 		[TGAlertSheet showChoices:@[@"In the system browser", @"In an in-app browser"]
 							title:@"Open Links" destructiveIndex:-1 inView:self.view
 						 onChoice:^(NSInteger index){
-			[[TGClient shared] setWebBrowserSettingsOpenExternal:(index == 0)
+			[[TGDevStore shared] setWebBrowserSettingsOpenExternal:(index == 0)
 											  displayCloseButton:NO
 													 completion:^(BOOL ok, NSString *error){
 				[weakSelf finish:ok error:error title:@"Open Links"];
@@ -1083,7 +1083,7 @@
 			[TGAlertSheet showChoices:@[@"Open externally", @"Open in-app"]
 								title:@"Browser Exception" destructiveIndex:-1
 							   inView:weakSelf.view onChoice:^(NSInteger index){
-				[[TGClient shared] addWebBrowserException:url openExternal:(index == 0)
+				[[TGDevStore shared] addWebBrowserException:url openExternal:(index == 0)
 											   completion:^(BOOL ok, NSString *error){
 					[weakSelf finish:ok error:error title:@"Browser Exception"];
 				}];
@@ -1093,18 +1093,18 @@
 		[self askText:@"Remove Browser Exception" message:@"URL" placeholder:@"https://example.com"
 			 text:nil action:@"Remove"
 		   completion:^(NSString *url){
-			[[TGClient shared] removeWebBrowserException:url
+			[[TGDevStore shared] removeWebBrowserException:url
 											  completion:^(BOOL ok, NSString *error){
 				[weakSelf finish:ok error:error title:@"Browser Exception"];
 			}];
 		}];
 	} else if ([action isEqualToString:@"browserRemoveAll"]){
-		[[TGClient shared] removeAllWebBrowserExceptionsWithCompletion:
+		[[TGDevStore shared] removeAllWebBrowserExceptionsWithCompletion:
 				^(BOOL ok, NSString *error){
 			[weakSelf finish:ok error:error title:@"Browser Exceptions"];
 		}];
 	} else if ([action isEqualToString:@"grossing"]){
-		[[TGClient shared] grossingWebAppBotsOffset:@"" limit:20
+		[[TGDevStore shared] grossingWebAppBotsOffset:@"" limit:20
 										 completion:^(NSArray *bots, NSString *error){
 			if (error){
 				[weakSelf finish:NO error:error title:@"Web App Bots"];
@@ -1121,7 +1121,7 @@
 		[self askBotId:@"Search Web App" action:^(int64_t botId){
 			[weakSelf askText:@"Web App Short Name" message:nil placeholder:@"app"
 				 text:nil action:@"Search" completion:^(NSString *name){
-				[[TGClient shared] searchWebAppForBot:botId shortName:name
+				[[TGDevStore shared] searchWebAppForBot:botId shortName:name
 										   completion:^(NSDictionary *app, NSString *error){
 					if (error){
 						[weakSelf finish:NO error:error title:@"Web App"];
@@ -1135,7 +1135,7 @@
 		}];
 	} else if ([action isEqualToString:@"placeholder"]){
 		[self askBotId:@"Web App Placeholder" action:^(int64_t botId){
-			[[TGClient shared] webAppPlaceholderForBot:botId
+			[[TGDevStore shared] webAppPlaceholderForBot:botId
 											completion:^(NSString *outline, NSString *error){
 				[weakSelf finish:error == nil error:error title:@"Placeholder"];
 				if (!error) [weakSelf showText:outline title:@"Placeholder"];
@@ -1146,7 +1146,7 @@
 			[weakSelf askText:@"Web App URL" message:@"Empty for the menu"
 					 placeholder:@"https://" text:nil action:@"Read"
 				   completion:^(NSString *url){
-				[[TGClient shared] webAppURLForBot:botId url:url mode:@"compact"
+				[[TGDevStore shared] webAppURLForBot:botId url:url mode:@"compact"
 										completion:^(NSString *link, NSString *error){
 					[weakSelf finish:error == nil error:error title:@"Web App URL"];
 					if (link.length){
@@ -1162,7 +1162,7 @@
 				 text:nil action:@"Next" completion:^(NSString *chat){
 				[weakSelf askText:@"Start Parameter" message:@"Empty for none" placeholder:@"start"
 					 text:nil action:@"Read" completion:^(NSString *start){
-					[[TGClient shared] mainWebAppForBot:botId chatId:chat.longLongValue
+					[[TGDevStore shared] mainWebAppForBot:botId chatId:chat.longLongValue
 										startParameter:start mode:@"compact"
 										  completion:^(NSString *link, NSString *error){
 						[weakSelf finish:error == nil error:error title:@"Main Web App"];
@@ -1180,7 +1180,7 @@
 					   action:@"Next" completion:^(NSString *shortName){
 				[weakSelf askText:@"Start Parameter" message:@"Empty for none" placeholder:@"start"
 					 text:nil action:@"Read" completion:^(NSString *start){
-					[[TGClient shared] webAppLinkURLForBot:botId chatId:0
+					[[TGDevStore shared] webAppLinkURLForBot:botId chatId:0
 												shortName:shortName
 										   startParameter:start allowWrite:NO
 													 mode:@"compact"
@@ -1205,7 +1205,7 @@
 							   action:@"Next" completion:^(NSString *button){
 						[weakSelf askText:@"Shared Chat ID" message:nil placeholder:@"789"
 							 text:nil action:@"Share" completion:^(NSString *shared){
-							[[TGClient shared] shareChatWithBot:botId
+							[[TGDevStore shared] shareChatWithBot:botId
 													 sourceChat:sourceChat.longLongValue
 												  sourceMessage:sourceMessage.longLongValue
 													   buttonId:button.intValue
@@ -1235,7 +1235,7 @@
 								NSInteger value = part.intValue;
 								if (value > 0) [ids addObject:@(value)];
 							}
-							[[TGClient shared] shareUsersWithBot:botId
+							[[TGDevStore shared] shareUsersWithBot:botId
 													  sourceChat:sourceChat.longLongValue
 												   sourceMessage:sourceMessage.longLongValue
 														buttonId:button.intValue
@@ -1260,7 +1260,7 @@
 				[weakSelf askText:@"Account ID" message:nil placeholder:@"123" text:nil
 						   action:@"Next" completion:^(NSString *account){
 					if (remove){
-						[[TGClient shared] removeBotVerification:botId
+						[[TGDevStore shared] removeBotVerification:botId
 												   verifiedKind:kind
 													   verifiedId:account.longLongValue
 													 completion:^(BOOL ok, NSString *error){
@@ -1271,7 +1271,7 @@
 					[weakSelf askText:@"Reason" message:@"Empty for Telegram's wording"
 								 placeholder:@"Verified organisation" text:nil
 							   action:@"Verify" completion:^(NSString *reason){
-						[[TGClient shared] setBotVerification:botId
+						[[TGDevStore shared] setBotVerification:botId
 												 verifiedKind:kind
 													 verifiedId:account.longLongValue
 													description:reason
@@ -1294,7 +1294,7 @@
 					[weakSelf askText:@"Bot Username" message:@"Must end in bot"
 								 placeholder:@"mybot" text:nil action:@"Create"
 						   completion:^(NSString *username){
-						[[TGClient shared] createBotNamed:name username:username
+						[[TGDevStore shared] createBotNamed:name username:username
 												 manager:manager.longLongValue
 											  completion:^(NSDictionary *bot,
 														   NSString *error){
@@ -1317,7 +1317,7 @@
 			[weakSelf rebuildSections];
 		}];
 	} else if ([action isEqualToString:@"oauthInfo"]){
-		[[TGClient shared] oauthLinkInfo:self.oauthURL origin:@""
+		[[TGDevStore shared] oauthLinkInfo:self.oauthURL origin:@""
 							  completion:^(NSDictionary *info, NSString *error){
 			if (error){
 				[weakSelf finish:NO error:error title:@"OAuth"];
@@ -1329,7 +1329,7 @@
 			[weakSelf showText:line title:@"OAuth"];
 		}];
 	} else if ([action isEqualToString:@"oauthCheck"]){
-		[[TGClient shared] checkOauthMatchCode:self.oauthCode forURL:self.oauthURL
+		[[TGDevStore shared] checkOauthMatchCode:self.oauthCode forURL:self.oauthURL
 									completion:^(BOOL ok, NSString *error){
 			[weakSelf finish:ok error:error title:@"OAuth"];
 		}];
@@ -1339,7 +1339,7 @@
 									@"Let it message me and read my phone number"]
 							title:@"Accept OAuth" destructiveIndex:-1 inView:self.view
 						 onChoice:^(NSInteger index){
-			[[TGClient shared] acceptOauthRequest:weakSelf.oauthURL
+			[[TGDevStore shared] acceptOauthRequest:weakSelf.oauthURL
 										matchCode:weakSelf.oauthCode
 								   allowWriteAccess:(index >= 1)
 							allowPhoneNumberAccess:(index >= 2)
@@ -1353,12 +1353,12 @@
 			}];
 		}];
 	} else if ([action isEqualToString:@"oauthDecline"]){
-		[[TGClient shared] declineOauthRequest:self.oauthURL
+		[[TGDevStore shared] declineOauthRequest:self.oauthURL
 									completion:^(BOOL ok, NSString *error){
 			[weakSelf finish:ok error:error title:@"OAuth"];
 		}];
 	} else if ([action isEqualToString:@"businessRead"]){
-		[[TGClient shared] businessConnectedBotWithCompletion:^(NSDictionary *bot,
+		[[TGDevStore shared] businessConnectedBotWithCompletion:^(NSDictionary *bot,
 																 NSString *error){
 			if (error){
 				[weakSelf finish:NO error:error title:@"Business Bot"];
@@ -1371,7 +1371,7 @@
 		}];
 	} else if ([action isEqualToString:@"businessSet"]){
 		[self askBotId:@"Connect Business Bot" action:^(int64_t botId){
-			[[TGClient shared] setBusinessConnectedBot:botId
+			[[TGDevStore shared] setBusinessConnectedBot:botId
 											recipients:@{@"existing" : @YES,
 														 @"new" : @YES,
 														 @"contacts" : @YES,
@@ -1382,14 +1382,14 @@
 		}];
 	} else if ([action isEqualToString:@"businessConfirm"]){
 		[self askBotId:@"Confirm Business Bot" action:^(int64_t botId){
-			[[TGClient shared] confirmBusinessConnectedBot:botId
+			[[TGDevStore shared] confirmBusinessConnectedBot:botId
 												completion:^(BOOL ok, NSString *error){
 				[weakSelf finish:ok error:error title:@"Business Bot"];
 			}];
 		}];
 	} else if ([action isEqualToString:@"businessDelete"]){
 		[self askBotId:@"Delete Business Bot" action:^(int64_t botId){
-			[[TGClient shared] deleteBusinessConnectedBot:botId
+			[[TGDevStore shared] deleteBusinessConnectedBot:botId
 											   completion:^(BOOL ok, NSString *error){
 				[weakSelf finish:ok error:error title:@"Business Bot"];
 			}];
@@ -1401,12 +1401,12 @@
 			   action:(pause ? @"Pause" : @"Remove") completion:^(NSString *chat){
 			int64_t chatId = chat.longLongValue;
 			if (pause){
-				[[TGClient shared] pauseBusinessConnectedBotInChat:chatId paused:YES
+				[[TGDevStore shared] pauseBusinessConnectedBotInChat:chatId paused:YES
 														completion:^(BOOL ok, NSString *error){
 					[weakSelf finish:ok error:error title:@"Business Bot"];
 				}];
 			} else {
-				[[TGClient shared] removeBusinessConnectedBotFromChat:chatId
+				[[TGDevStore shared] removeBusinessConnectedBotFromChat:chatId
 														   completion:^(BOOL ok, NSString *error){
 					[weakSelf finish:ok error:error title:@"Business Bot"];
 				}];

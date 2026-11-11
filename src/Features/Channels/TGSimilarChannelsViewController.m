@@ -3,7 +3,7 @@
 //
 #import "TGSimilarChannelsViewController.h"
 #import "TGLocalization.h"
-#import "TGClient.h"
+#import "TGChannelStore.h"
 #import "TGStyle.h"
 #import "TGChatViewController.h"
 #import "TGRows.h"
@@ -36,11 +36,9 @@
 		int64_t chatId = [self chatIdAtIndex:i];
 		if (!chatId) continue;
 		__weak typeof(self) weakSelf = self;
-		[[TGClient shared] request:@{
-			@"@type"   : @"getChat",
-			@"chat_id" : @(chatId),
-		} completion:^(NSDictionary *chat){
-			if (![chat isKindOfClass:[NSDictionary class]] || [chat[@"@type"] isEqualToString:@"error"])
+		[[TGChannelStore shared] chatInfoForId:chatId
+									completion:^(NSDictionary *chat){
+			if (![chat isKindOfClass:[NSDictionary class]])
 				return;
 			dispatch_async(dispatch_get_main_queue(), ^{
 				TGSimilarChannelsViewController *me = weakSelf;
@@ -85,7 +83,7 @@
 	if (index < 0 || index >= (NSInteger)self.channelChatIds.count)
 		return;
 	int64_t chatId = [self chatIdAtIndex:index];
-	[[TGClient shared] openSimilarChat:chatId fromChat:self.originalChatId];
+	[[TGChannelStore shared] openSimilarChat:chatId fromChat:self.originalChatId];
 
 	id rawItem = self.channelChatIds[(NSUInteger)index];
 	NSDictionary *itemDict = [rawItem isKindOfClass:[NSDictionary class]]

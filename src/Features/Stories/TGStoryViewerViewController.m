@@ -1,6 +1,5 @@
 #import "TGStoryViewerViewController.h"
 #import "TGLocalization.h"
-#import "TGClient.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
@@ -15,6 +14,9 @@
 #import "TGPopupMenu.h"
 #import <AVFoundation/AVFoundation.h>
 #import <QuartzCore/QuartzCore.h>
+#import "TGMediaStore.h"
+#import "TGProfileStore.h"
+#import "TGStoryStore.h"
 
 /// How long a still story stays up. Videos use their own duration when TDLib
 /// knows it; a story without a duration falls back to the same five seconds.
@@ -257,7 +259,7 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 	}];
 
 	__weak typeof(self) weakViewer = self;
-	[[TGClient shared] chatRecordForChat:self.chatId completion:^(NSDictionary *chat){
+	[[TGProfileStore shared]chatRecordForChat:self.chatId completion:^(NSDictionary *chat){
 		NSDictionary *type = [chat[@"type"] isKindOfClass:NSDictionary.class]
 				? chat[@"type"] : nil;
 		NSArray *names = type[@"supergroup"][@"usernames"][@"active_usernames"];
@@ -463,7 +465,7 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 
 - (void)loadStoryId:(int32_t)storyId {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] story:storyId fromChat:self.chatId completion:^(NSDictionary *story){
+	[[TGStoryStore shared]story:storyId fromChat:self.chatId completion:^(NSDictionary *story){
 		TGStoryViewerViewController *me = weakSelf;
 		if (!me || me.closed)
 			return;
@@ -516,7 +518,7 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 		photoId = story[@"thumbPhotoId"];
 	if ([photoId isKindOfClass:NSNumber.class] && photoId.integerValue > 0){
 		__weak typeof(self) weakSelf = self;
-		[[TGClient shared] downloadFile:photoId.integerValue
+		[[TGMediaStore shared]downloadFile:photoId.integerValue
 							   priority:TGDownloadPriorityOnScreen
 							 completion:^(NSString *path){
 			TGStoryViewerViewController *me = weakSelf;
@@ -538,7 +540,7 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 
 - (void)playVideoId:(NSInteger)videoId {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] downloadFile:videoId completion:^(NSString *path){
+	[[TGMediaStore shared]downloadFile:videoId completion:^(NSString *path){
 		TGStoryViewerViewController *me = weakSelf;
 		if (!me || !path.length || me.closed)
 			return;
@@ -645,7 +647,7 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 
 - (void)loadReactions {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] storyAvailableReactionsWithCompletion:^(NSDictionary *reactions){
+	[[TGStoryStore shared]storyAvailableReactionsWithCompletion:^(NSDictionary *reactions){
 		TGStoryViewerViewController *me = weakSelf;
 		if (!me || !reactions)
 			return;
@@ -718,7 +720,7 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 	if ([story[@"isLive"] boolValue]){
 		int32_t callId = [story[@"groupCallId"] intValue];
 		__weak typeof(self) weakSelf = self;
-		[[TGClient shared] addPendingLiveStoryReactionInCall:callId stars:1
+		[[TGStoryStore shared]addPendingLiveStoryReactionInCall:callId stars:1
 				completion:^(BOOL ok, NSString *error){
 			TGStoryViewerViewController *me = weakSelf;
 			if (!me)
@@ -738,7 +740,7 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 	NSString *chosen = story[@"chosenReaction"];
 	BOOL remove = [chosen isEqualToString:emoji];
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] setStoryReaction:remove ? nil : emoji
+	[[TGStoryStore shared]setStoryReaction:remove ? nil : emoji
 								onStory:[story[@"storyId"] intValue]
 							   fromChat:self.chatId
 							   completion:^(BOOL ok, NSString *error){
@@ -765,7 +767,7 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 	if (![story[@"isLive"] boolValue])
 		return;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] removePendingLiveStoryReactionsInCall:
+	[[TGStoryStore shared]removePendingLiveStoryReactionsInCall:
 			[story[@"groupCallId"] intValue]
 			completion:^(BOOL ok, NSString *error){
 		TGStoryViewerViewController *me = weakSelf;
@@ -780,7 +782,7 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 
 - (void)commitLiveReaction:(NSNumber *)callId {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] commitPendingLiveStoryReactionsInCall:callId.intValue
+	[[TGStoryStore shared]commitPendingLiveStoryReactionsInCall:callId.intValue
 			completion:^(BOOL ok, NSString *error){
 		TGStoryViewerViewController *me = weakSelf;
 		if (!me || !ok)
@@ -803,7 +805,7 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 	NSInteger next = self.index + delta;
 	NSDictionary *current = self.currentStory;
 	if (current[@"storyId"]){
-		[[TGClient shared] closeStory:[current[@"storyId"] intValue]
+		[[TGStoryStore shared]closeStory:[current[@"storyId"] intValue]
 							 fromChat:self.chatId completion:nil];
 	}
 	if (next < 0){
@@ -822,7 +824,7 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 	NSDictionary *story = self.currentStory;
 	if (!story[@"storyId"])
 		return;
-	[[TGClient shared] openStory:[story[@"storyId"] intValue]
+	[[TGStoryStore shared]openStory:[story[@"storyId"] intValue]
 						fromChat:self.chatId completion:nil];
 }
 
@@ -927,7 +929,7 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 	[self stopVideo];
 	NSDictionary *story = self.currentStory;
 	if (story[@"storyId"])
-		[[TGClient shared] closeStory:[story[@"storyId"] intValue]
+		[[TGStoryStore shared]closeStory:[story[@"storyId"] intValue]
 							 fromChat:self.chatId completion:nil];
 	if (self.onStoriesChanged)
 		self.onStoriesChanged();
@@ -1038,7 +1040,7 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 	if (kind == TGStorySaveKindNone || !fileId)
 		return;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] downloadFile:fileId.integerValue
+	[[TGMediaStore shared]downloadFile:fileId.integerValue
 						   completion:^(NSString *path){
 		TGStoryViewerViewController *me = weakSelf;
 		if (!me)
@@ -1087,12 +1089,10 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 	// The peer address is only the fallback for a public story, which is the
 	// only case the menu offers this action.
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] request:@{@"@type" : @"getStoryLink",
-			@"chat_id" : @(self.chatId),
-			@"story_id" : story[@"storyId"] ?: @(0)}
-				   completion:^(NSDictionary *result){
-		NSString *exported = result[@"link"] ?: result[@"url"];
-		if ([exported isKindOfClass:NSString.class] && exported.length){
+	[[TGStoryStore shared] storyLinkForStory:[story[@"storyId"] intValue]
+									  inChat:self.chatId
+								  completion:^(NSString *exported){
+		if (exported.length){
 			finish(exported);
 			return;
 		}
@@ -1156,7 +1156,7 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 		TGStoryViewerViewController *me = weakSelf;
 		if (!me)
 			return;
-		[[TGClient shared] editStory:[story[@"storyId"] intValue]
+		[[TGStoryStore shared]editStory:[story[@"storyId"] intValue]
 							fromChat:me.chatId
 								path:nil
 							 isVideo:NO
@@ -1186,7 +1186,7 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 		if (!me)
 			return;
 		double stamp = text.doubleValue;
-		[[TGClient shared] editStoryCover:[story[@"storyId"] intValue]
+		[[TGStoryStore shared]editStoryCover:[story[@"storyId"] intValue]
 								 fromChat:me.chatId
 						  coverTimestamp:stamp
 							  completion:^(BOOL ok, NSString *error){
@@ -1222,10 +1222,10 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 		// A business story goes through the peer-aware delete; a user story
 		// goes through the ordinary one.
 		if ([story[@"isBusiness"] boolValue])
-			[[TGClient shared] deleteBusinessStory:[story[@"storyId"] intValue]
+			[[TGStoryStore shared]deleteBusinessStory:[story[@"storyId"] intValue]
 									  fromChat:me.chatId completion:done];
 		else
-			[[TGClient shared] deleteStory:[story[@"storyId"] intValue]
+			[[TGStoryStore shared]deleteStory:[story[@"storyId"] intValue]
 								  fromChat:me.chatId completion:done];
 	}];
 }
@@ -1233,7 +1233,7 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 - (void)toggleProfile:(BOOL)posted {
 	NSDictionary *story = self.currentStory;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] toggleStory:[story[@"storyId"] intValue]
+	[[TGStoryStore shared]toggleStory:[story[@"storyId"] intValue]
 						  fromChat:self.chatId
 				   postedToChatPage:posted
 					   completion:^(BOOL ok, NSString *error){
@@ -1256,7 +1256,7 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 - (void)pinToChatPage {
 	NSDictionary *story = self.currentStory;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] setPinnedStoryIds:@[story[@"storyId"] ?: @(0)]
+	[[TGStoryStore shared]setPinnedStoryIds:@[story[@"storyId"] ?: @(0)]
 								  inChat:self.chatId
 							  completion:^(BOOL ok, NSString *error){
 		TGStoryViewerViewController *me = weakSelf;
@@ -1306,7 +1306,7 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 - (void)applyPrivacy:(NSString *)mode userIds:(NSArray *)userIds {
 	NSDictionary *story = self.currentStory;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] setStoryPrivacySettings:[story[@"storyId"] intValue]
+	[[TGStoryStore shared]setStoryPrivacySettings:[story[@"storyId"] intValue]
 									   privacy:mode
 									   userIds:userIds
 									completion:^(BOOL ok, NSString *error){
@@ -1325,7 +1325,7 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 	NSDictionary *story = self.currentStory;
 	NSInteger storyId = [story[@"storyId"] intValue];
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] storyAlbumsForChat:self.chatId completion:^(NSArray *albums){
+	[[TGStoryStore shared]storyAlbumsForChat:self.chatId completion:^(NSArray *albums){
 		TGStoryViewerViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -1353,7 +1353,7 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 			}
 			int32_t albumId = [album[@"albumId"] intValue];
 			if (adding){
-				[[TGClient shared] addStories:@[@(storyId)]
+				[[TGStoryStore shared]addStories:@[@(storyId)]
 									  toAlbum:albumId
 									   inChat:viewer.chatId
 								   completion:^(NSDictionary *changed,
@@ -1364,7 +1364,7 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 				}];
 				return;
 			}
-			[[TGClient shared] storiesInAlbum:albumId inChat:viewer.chatId
+			[[TGStoryStore shared]storiesInAlbum:albumId inChat:viewer.chatId
 										 offset:0 limit:60
 								   completion:^(NSArray *stories, NSString *error){
 				NSMutableArray *ids = [NSMutableArray array];
@@ -1393,7 +1393,7 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 		if (!me)
 			return;
 		NSArray *ids = storyId > 0 ? @[@(storyId)] : @[];
-		[[TGClient shared] createStoryAlbumNamed:name inChat:me.chatId
+		[[TGStoryStore shared]createStoryAlbumNamed:name inChat:me.chatId
 										storyIds:ids
 									  completion:^(NSDictionary *album,
 												   NSString *error){
@@ -1425,7 +1425,7 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 		TGStoryViewerViewController *me = weakSelf;
 		if (!me)
 			return;
-		[[TGClient shared] editBusinessStory:[story[@"storyId"] intValue]
+		[[TGStoryStore shared]editBusinessStory:[story[@"storyId"] intValue]
 									fromChat:me.chatId
 										path:nil
 									 isVideo:NO
@@ -1451,7 +1451,7 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 		TGStoryViewerViewController *me = weakSelf;
 		if (!me)
 			return;
-		[[TGClient shared] deleteBusinessStory:[story[@"storyId"] intValue]
+		[[TGStoryStore shared]deleteBusinessStory:[story[@"storyId"] intValue]
 									  fromChat:me.chatId
 									completion:^(BOOL ok, NSString *error){
 			[TGAlertSheet showMessage:ok ? @"Saved"
@@ -1485,7 +1485,7 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 	if (!story[@"storyId"])
 		return;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] story:[story[@"storyId"] intValue]
+	[[TGStoryStore shared]story:[story[@"storyId"] intValue]
 					fromChat:self.chatId
 				  completion:^(NSDictionary *fresh){
 		TGStoryViewerViewController *me = weakSelf;

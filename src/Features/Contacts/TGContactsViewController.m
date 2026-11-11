@@ -2,7 +2,9 @@
 #import "TGLocalization.h"
 #import "TGNewContactViewController.h"
 #import "TGChatViewController.h"
-#import "TGClient.h"
+#import "TGContactsStore.h"
+#import "TGMessageStore.h"
+#import "TGProfileStore.h"
 #import "TGCustomEmojiStore.h"
 #import "TGIcons.h"
 #import "TGTheme.h"
@@ -208,7 +210,7 @@ static NSArray *TGContactSections(NSArray *users) {
 	NSString *name = TGContactName(u);
 	NSNumber *userId = u[@"id"];
 	int64_t uid = [userId longLongValue];
-	int64_t statusEmojiId = [[TGClient shared] emojiStatusIdForUser:uid];
+	int64_t statusEmojiId = [[TGProfileStore shared] emojiStatusIdForUser:uid];
 
 	NSString *subtitle = @"";
 	BOOL online = NO;
@@ -264,14 +266,14 @@ static NSArray *TGContactSections(NSArray *users) {
 
 - (void)loadContacts {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] importedContactCountWithCompletion:^(NSInteger count){
+	[[TGContactsStore shared] importedContactCountWithCompletion:^(NSInteger count){
 		TGContactsViewController *me = weakSelf;
 		if (!me)
 			return;
 		me.importedCount = count;
 		[me updateImportedFooter];
 	}];
-	[[TGClient shared] contactsWithCompletion:^(NSArray *users){
+	[[TGContactsStore shared] contactsWithCompletion:^(NSArray *users){
 		TGContactsViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -411,7 +413,7 @@ static NSString *TGContactName(NSDictionary *u) {
 	}
 	NSString *name = TGContactName(u);
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] privateChatWithUser:[u[@"id"] longLongValue]
+	[[TGMessageStore shared] privateChatWithUser:[u[@"id"] longLongValue]
 								completion:^(int64_t chatId){
 		TGContactsViewController *me = weakSelf;
 		if (!me || chatId == 0)
@@ -456,7 +458,7 @@ static NSString *TGContactName(NSDictionary *u) {
 		// form is for the picker's many. Same answer either way.
 		if (userIds.count == 1){
 			NSNumber *only = userIds.firstObject;
-			[[TGClient shared] addUser:only.longLongValue
+			[[TGContactsStore shared] addUser:only.longLongValue
 								toChat:chatId
 							completion:^(BOOL ok, NSArray *refused){
 				TGContactsViewController *me = weakSelf;
@@ -470,7 +472,7 @@ static NSString *TGContactName(NSDictionary *u) {
 		// One request for the whole pick: the N-request loop this replaced
 		// answered the server once per contact and could strand half of the
 		// batch on a slow connection.
-		[[TGClient shared] addUsers:userIds toChat:chatId completion:^(BOOL ok, NSArray *refused){
+		[[TGContactsStore shared] addUsers:userIds toChat:chatId completion:^(BOOL ok, NSArray *refused){
 			TGContactsViewController *me = weakSelf;
 			if (refused.count)
 				[TGAlertSheet showMessage:@"An error occurred."
@@ -488,7 +490,7 @@ static NSString *TGContactName(NSDictionary *u) {
 					 action:@"Create"
 					 inView:self.view
 				   onSubmit:^(NSString *title){
-		[[TGClient shared] createGroupNamed:title withUsers:userIds
+		[[TGContactsStore shared] createGroupNamed:title withUsers:userIds
 								 completion:^(int64_t chatId, NSArray *failed){
 			TGContactsViewController *me = weakSelf;
 			if (!chatId){

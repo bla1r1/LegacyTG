@@ -1,11 +1,12 @@
 #import "TGStoryComposerViewController.h"
 #import "TGStoryCameraViewController.h"
-#import "TGClient.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
 #import "TGLocalization.h"
 #import "TGRows.h"
+#import "TGProfileStore.h"
+#import "TGStoryStore.h"
 
 /// Telegram accepts a 1080x1920 photo and a 720x1280 video. This client only
 /// re-sizes the photo; a picked video is sent as recorded.
@@ -27,7 +28,7 @@ static NSString *TGStoryRefusalText(NSDictionary *answer) {
 }
 
 static BOOL TGStoryAccountHasPremium(void) {
-	return [[TGClient shared].me[@"is_premium"] boolValue];
+	return [[TGProfileStore shared].me[@"is_premium"] boolValue];
 }
 
 /// Opens at most one flow at a time: the answer from Telegram takes a moment,
@@ -78,7 +79,7 @@ static BOOL sStoryFlowOpening = NO;
 		return;
 	sStoryFlowOpening = YES;
 	__weak UIViewController *weakController = controller;
-	[[TGClient shared] canPostStoryInChat:chatId completion:^(NSDictionary *answer){
+	[[TGStoryStore shared]canPostStoryInChat:chatId completion:^(NSDictionary *answer){
 		sStoryFlowOpening = NO;
 		UIViewController *host = weakController;
 		if (!host)
@@ -147,7 +148,7 @@ static BOOL sStoryFlowOpening = NO;
 /// a channel that is not in the answer yet must not hide it.
 - (void)loadPostChats {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] chatsToPostStoriesWithCompletion:^(NSArray *chats){
+	[[TGStoryStore shared]chatsToPostStoriesWithCompletion:^(NSArray *chats){
 		TGStoryComposerViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -397,7 +398,7 @@ static BOOL sStoryFlowOpening = NO;
 	[self rebuildSections];
 	[self reloadRows];
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] canPostStoryInChat:self.targetChatId
+	[[TGStoryStore shared]canPostStoryInChat:self.targetChatId
 							   completion:^(NSDictionary *answer){
 		TGStoryComposerViewController *me = weakSelf;
 		if (!me || !me.posting)
@@ -410,7 +411,7 @@ static BOOL sStoryFlowOpening = NO;
 								title:@"New Story" inView:me.view];
 			return;
 		}
-		[[TGClient shared] postStoryToChat:me.targetChatId
+		[[TGStoryStore shared]postStoryToChat:me.targetChatId
 									  path:me.mediaPath
 								   isVideo:me.isVideo
 								  duration:me.videoDuration

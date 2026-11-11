@@ -1,5 +1,4 @@
 #import "TGStoriesMenuViewController.h"
-#import "TGClient.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
@@ -10,6 +9,8 @@
 #import "TGStoryViewerViewController.h"
 #import "TGPublicStoriesViewController.h"
 #import "TGLiveStoryViewController.h"
+#import "TGProfileStore.h"
+#import "TGStoryStore.h"
 
 @interface TGStoriesMenuViewController ()
 @property (nonatomic, assign) int64_t chatId;
@@ -77,7 +78,7 @@
 
 - (void)openMyStory {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] activeStoryRowForChat:self.chatId completion:^(NSDictionary *row){
+	[[TGStoryStore shared]activeStoryRowForChat:self.chatId completion:^(NSDictionary *row){
 		TGStoriesMenuViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -142,7 +143,7 @@
 
 - (void)activateStealth {
 	// Stealth mode is a Premium feature; asking first would end in a refusal.
-	if (![[TGClient shared].me[@"is_premium"] boolValue]){
+	if (![[TGProfileStore shared].me[@"is_premium"] boolValue]){
 		[TGAlertSheet showMessage:@"Premium Needed"
 							title:@"Stealth Mode" inView:self.view];
 		return;
@@ -157,7 +158,7 @@
 		TGStoriesMenuViewController *me = weakSelf;
 		if (!me)
 			return;
-		[[TGClient shared] activateStoryStealthModeWithCompletion:^(BOOL ok, NSString *error){
+		[[TGStoryStore shared]activateStoryStealthModeWithCompletion:^(BOOL ok, NSString *error){
 			[TGAlertSheet showMessage:ok
 					? @"Stealth Mode On"
 					: (error ?: @"An error occurred.")

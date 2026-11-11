@@ -1,8 +1,9 @@
 #import "TGVideoChatStreamViewController.h"
-#import "TGClient.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
+#import "TGCallStore.h"
+#import "TGProfileStore.h"
 
 @interface TGVideoChatStreamViewController ()
 @property (nonatomic, strong) NSArray *streams;
@@ -88,7 +89,7 @@
 		return;
 	}
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] groupCallStreams:self.groupCallId
+	[[TGCallStore shared]groupCallStreams:self.groupCallId
 							 completion:^(NSArray *streams, NSString *error){
 		TGVideoChatStreamViewController *me = weakSelf;
 		if (!me)
@@ -120,7 +121,7 @@
 		return;
 	self.busy = YES;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] groupCallStreamSegment:self.groupCallId
+	[[TGCallStore shared]groupCallStreamSegment:self.groupCallId
 			timeOffset:[stream[@"timeOffset"] longLongValue]
 				 scale:[stream[@"scale"] integerValue]
 			 channelId:[stream[@"channelId"] integerValue]
@@ -151,12 +152,12 @@
 #pragma mark - speaking
 
 - (void)setSpeaking:(BOOL)speaking {
-	NSDictionary *participant = [[TGClient shared] currentGroupCallParticipant:self.groupCallId];
+	NSDictionary *participant = [[TGCallStore shared]currentGroupCallParticipant:self.groupCallId];
 	NSNumber *source = participant[@"audioSourceId"];
 	if (!source)
 		source = @(0);
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] setGroupCallParticipantSpeaking:[source intValue]
+	[[TGCallStore shared]setGroupCallParticipantSpeaking:[source intValue]
 												inCall:self.groupCallId
 											 isSpeaking:speaking
 											 completion:^(NSDictionary *sender, NSString *error){
@@ -185,7 +186,7 @@
 	}
 	self.busy = YES;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] encryptGroupCallData:self.sample inCall:self.groupCallId
+	[[TGCallStore shared]encryptGroupCallData:self.sample inCall:self.groupCallId
 									channel:@"main" unencryptedPrefixSize:0
 								 completion:^(NSData *encrypted, NSString *error){
 		TGVideoChatStreamViewController *me = weakSelf;
@@ -207,15 +208,15 @@
 - (void)decryptLast {
 	if (self.busy || !self.lastEncrypted.length)
 		return;
-	NSDictionary *participant = [[TGClient shared] currentGroupCallParticipant:self.groupCallId];
+	NSDictionary *participant = [[TGCallStore shared]currentGroupCallParticipant:self.groupCallId];
 	NSDictionary *sender = participant[@"sender"];
 	if (!sender){
-		int64_t meId = [[TGClient shared].me[@"id"] longLongValue];
+		int64_t meId = [[TGProfileStore shared].me[@"id"] longLongValue];
 		sender = @{@"@type" : @"messageSenderUser", @"user_id" : @(meId)};
 	}
 	self.busy = YES;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] decryptGroupCallData:self.lastEncrypted fromParticipant:sender
+	[[TGCallStore shared]decryptGroupCallData:self.lastEncrypted fromParticipant:sender
 									 inCall:self.groupCallId channel:@"main"
 								 completion:^(NSData *decrypted, NSString *error){
 		TGVideoChatStreamViewController *me = weakSelf;

@@ -1,10 +1,11 @@
 #import "TGSessionsViewController.h"
 #import "TGLocalization.h"
-#import "TGClient.h"
 #import "TGAlertSheet.h"
 #import "TGQRViewController.h"
 #import "TGWebsitesViewController.h"
 #import "TGRows.h"
+#import "TGSessionsStore.h"
+
 
 @interface TGSessionsViewController ()
 @property (nonatomic, strong) NSArray *sessions;
@@ -39,7 +40,7 @@
 
 - (void)refresh {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] sessionsWithInactiveTtlCompletion:^(NSArray *sessions, NSInteger ttlDays){
+	[[TGSessionsStore shared] sessionsWithInactiveTtlCompletion:^(NSArray *sessions, NSInteger ttlDays){
 		weakSelf.sessions = sessions;
 		weakSelf.inactiveTtl = ttlDays;
 		weakSelf.ttlLoaded = YES;
@@ -103,7 +104,7 @@
 	if (indexPath.row >= (NSInteger)others.count)
 		return;
 	int64_t sessionId = [others[(NSUInteger)indexPath.row][@"id"] longLongValue];
-	[[TGClient shared] terminateSession:sessionId];
+	[[TGSessionsStore shared] terminateSession:sessionId];
 	[self performSelector:@selector(refresh) withObject:nil afterDelay:1.0];
 }
 
@@ -203,7 +204,7 @@
 				  destructive:YES
 					   inView:self.view
 					onConfirm:^{
-		[[TGClient shared] terminateAllOtherSessions:^(BOOL ok){
+		[[TGSessionsStore shared] terminateAllOtherSessions:^(BOOL ok){
 			TGSessionsViewController *me = weakSelf;
 			if (!ok){
 				[TGAlertSheet showMessage:@"An error occurred."
@@ -234,7 +235,7 @@
 			 destructiveIndex:-1
 					   inView:self.view
 					 onChoice:^(NSInteger index){
-		[[TGClient shared] setInactiveSessionTtlDays:[days[(NSUInteger)index] integerValue]
+		[[TGSessionsStore shared] setInactiveSessionTtlDays:[days[(NSUInteger)index] integerValue]
 										 completion:^(BOOL ok, NSString *error){
 			if (!ok){
 				[TGAlertSheet showMessage:(error ?: @"An error occurred.")
@@ -261,7 +262,7 @@
 					  destructive:YES
 						   inView:weakSelf.view
 						onConfirm:^{
-			[[TGClient shared] terminateSession:sessionId];
+			[[TGSessionsStore shared] terminateSession:sessionId];
 			// The server needs a moment before the list reflects it.
 			[weakSelf performSelector:@selector(refresh) withObject:nil afterDelay:1.0];
 		}];
@@ -294,17 +295,17 @@
 					 onChoice:^(NSInteger index){
 		NSString *choice = choices[(NSUInteger)index];
 		if ([choice isEqualToString:@"Confirm"]){
-			[[TGClient shared] confirmSession:sessionId];
+			[[TGSessionsStore shared] confirmSession:sessionId];
 			[weakSelf performSelector:@selector(refresh) withObject:nil afterDelay:1.0];
 			return;
 		}
 		if ([choice isEqualToString:secretTitle]){
-			[[TGClient shared] toggleSession:sessionId canAcceptSecretChats:!canAccept];
+			[[TGSessionsStore shared] toggleSession:sessionId canAcceptSecretChats:!canAccept];
 			[weakSelf performSelector:@selector(refresh) withObject:nil afterDelay:0.5];
 			return;
 		}
 		if ([choice isEqualToString:callsTitle]){
-			[[TGClient shared] toggleSession:sessionId
+			[[TGSessionsStore shared] toggleSession:sessionId
 							   canAcceptCalls:!canAcceptCalls
 								   completion:^(BOOL ok, NSString *error){
 				if (!ok){

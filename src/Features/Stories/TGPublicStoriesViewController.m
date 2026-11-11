@@ -1,9 +1,9 @@
 #import "TGPublicStoriesViewController.h"
-#import "TGClient.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
 #import "TGStoryViewerViewController.h"
+#import "TGStoryStore.h"
 
 @interface TGPublicStoriesViewController ()
 @property (nonatomic, copy) NSString *mode;
@@ -136,7 +136,7 @@
 								title:@"Stories" inView:me.view];
 	};
 	if ([mode isEqualToString:@"tag"]){
-		[[TGClient shared] searchPublicStoriesByTag:query offset:offset limit:20
+		[[TGStoryStore shared]searchPublicStoriesByTag:query offset:offset limit:20
 										 completion:done];
 		return;
 	}
@@ -148,7 +148,7 @@
 		NSString *venueId = parts.count > 1
 				? [parts[1] stringByTrimmingCharactersInSet:
 						[NSCharacterSet whitespaceCharacterSet]] : @"";
-		[[TGClient shared] searchPublicStoriesByVenue:provider venueId:venueId
+		[[TGStoryStore shared]searchPublicStoriesByVenue:provider venueId:venueId
 											   offset:offset limit:20 completion:done];
 		return;
 	}
@@ -169,7 +169,7 @@
 	} else if (fields.count >= 4){
 		country = fields[0]; state = fields[1]; city = fields[2]; street = fields[3];
 	}
-	[[TGClient shared] searchPublicStoriesByLocation:
+	[[TGStoryStore shared]searchPublicStoriesByLocation:
 			@{@"countryCode" : country, @"state" : state,
 			  @"city" : city, @"street" : street}
 											  offset:offset limit:20 completion:done];

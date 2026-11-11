@@ -1,5 +1,4 @@
 #import "TGStoryInfoViewController.h"
-#import "TGClient.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
@@ -7,6 +6,8 @@
 #import "TGLocalization.h"
 #import "TGStoryText.h"
 #import "TGRows.h"
+#import "TGStoryStore.h"
+#import "TGMessageStore.h"
 
 /// The mappings live in TGStoryText.h so the host tests exercise the same
 /// function the screen calls.
@@ -94,7 +95,7 @@
 }
 
 - (void)loadInteractions {
-	int64_t ownChat = [[TGClient shared] savedMessagesChatId];
+	int64_t ownChat = [[TGMessageStore shared]savedMessagesChatId];
 	__weak typeof(self) weakSelf = self;
 	void (^done)(NSDictionary *, NSString *) = ^(NSDictionary *page, NSString *error){
 		TGStoryInfoViewController *me = weakSelf;
@@ -108,7 +109,7 @@
 		[me appendPage:page];
 	};
 	if (self.chatId == ownChat)
-		[[TGClient shared] storyInteractionsForStory:self.storyId
+		[[TGStoryStore shared]storyInteractionsForStory:self.storyId
 											   query:@""
 										onlyContacts:NO
 									   preferForwards:NO
@@ -117,7 +118,7 @@
 												limit:20
 										  completion:done];
 	else
-		[[TGClient shared] chatStoryInteractionsForStory:self.storyId
+		[[TGStoryStore shared]chatStoryInteractionsForStory:self.storyId
 												fromChat:self.chatId
 										   reactionEmoji:nil
 										  preferForwards:NO
@@ -151,7 +152,7 @@
 
 - (void)loadPublicForwards {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] storyPublicForwards:self.storyId
+	[[TGStoryStore shared]storyPublicForwards:self.storyId
 								  fromChat:self.chatId
 									offset:@""
 									 limit:20
@@ -187,7 +188,7 @@
 	__weak typeof(self) weakSelf = self;
 	CGFloat white = 0;
 	[[[TGTheme shared] listBackgroundColour] getWhite:&white alpha:NULL];
-	[[TGClient shared] storyStatistics:self.storyId
+	[[TGStoryStore shared]storyStatistics:self.storyId
 							  fromChat:self.chatId
 								isDark:white < 0.5
 							completion:^(NSDictionary *statistics, NSString *error){
@@ -219,7 +220,7 @@
 
 - (void)startReport {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] reportStory:self.storyId
+	[[TGStoryStore shared]reportStory:self.storyId
 						  fromChat:self.chatId
 						  optionId:@""
 							  text:@""
@@ -252,7 +253,7 @@
 			if (!me || choice < 0 || choice >= (NSInteger)options.count)
 				return;
 			NSDictionary *option = options[choice];
-			[[TGClient shared] reportStory:me.storyId
+			[[TGStoryStore shared]reportStory:me.storyId
 								  fromChat:me.chatId
 								  optionId:option[@"id"] ?: @""
 									  text:@""
@@ -276,7 +277,7 @@
 			TGStoryInfoViewController *me = weakSelf;
 			if (!me)
 				return;
-			[[TGClient shared] reportStory:me.storyId
+			[[TGStoryStore shared]reportStory:me.storyId
 								  fromChat:me.chatId
 								  optionId:optionId
 									  text:text

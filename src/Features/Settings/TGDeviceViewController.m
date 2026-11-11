@@ -1,13 +1,14 @@
 #import "TGDeviceViewController.h"
 #import "TGDevice.h"
 #import "TGCapabilities.h"
-#import "TGClient.h"
 #import "TGAlertSheet.h"
 #import "TGLocalization.h"
 #import "TGSettingsFormatting.h"
 #import "TGTheme.h"
 #import "TGRows.h"
 #import "TGRowCell.h"
+#import "TGAccountStore.h"
+
 
 @interface TGDeviceViewController ()
 @property (nonatomic, strong) NSArray *capabilities;
@@ -69,7 +70,7 @@
 							   action:TGLocalized(@"Log out")
 						  destructive:YES
 							   inView:weakSelf.view
-							onConfirm:^{ [[TGClient shared] logOut]; }];
+							onConfirm:^{ [[TGAccountStore shared] logOut]; }];
 		}),
 	])];
 

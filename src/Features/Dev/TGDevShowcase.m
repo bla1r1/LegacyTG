@@ -2,8 +2,7 @@
 // TGDevShowcase.m - Test harness providing placeholder fixtures for all TDLib message types.
 //
 #import "TGDevShowcase.h"
-#import "TGClient.h"
-#import "TGClientInternal.h"
+#import "TGDevStore.h"
 #import "TGStyle.h"
 #import "TGTheme.h"
 #import "TGIcons.h"
@@ -95,7 +94,7 @@
 	int64_t senderPeer = 20002;
 	int64_t senderMe = 10001;
 
-	[TGClient shared].usersById[@(senderPeer)] = @"Pavel Durov";
+	[[TGDevStore shared] setDisplayName:@"Pavel Durov" forUserId:senderPeer];
 
 	NSMutableArray *list = [NSMutableArray array];
 	[list addObject:@{
@@ -171,7 +170,7 @@
 	double baseTime = now - 600.0;
 	int64_t senderBot = 10001;
 
-	[TGClient shared].usersById[@(senderBot)] = @"Dev Bot";
+	[[TGDevStore shared] setDisplayName:@"Dev Bot" forUserId:senderBot];
 
 	NSMutableArray *list = [NSMutableArray array];
 	[list addObject:@{
@@ -277,8 +276,8 @@ static NSData *TGShowcaseWaveform(void) {
 	int64_t senderPeer = 20002;
 
 	// Register peer names so headers and service messages render properly
-	[TGClient shared].usersById[@(senderBot)] = @"Dev Bot";
-	[TGClient shared].usersById[@(senderPeer)] = @"Pavel Durov";
+	[[TGDevStore shared] setDisplayName:@"Dev Bot" forUserId:senderBot];
+	[[TGDevStore shared] setDisplayName:@"Pavel Durov" forUserId:senderPeer];
 
 	NSMutableArray *list = [NSMutableArray array];
 

@@ -115,6 +115,52 @@ CLIENT_OBJC_SRCS := \
     src/Core/Stores/TGMessageStore.m \
     src/Core/Stores/TGMessageStore+History.m \
     src/Core/Stores/TGSendStore.mm \
+    src/Core/Stores/TGSettingsStore.m \
+    src/Core/Stores/TGSettingsStore+Options.m \
+    src/Core/Stores/TGSettingsStore+Autosave.m \
+    src/Core/Stores/TGSettingsStore+Notifications.m \
+    src/Core/Stores/TGSettingsStore+Privacy.m \
+    src/Core/Stores/TGSettingsStore+Diagnostics.m \
+    src/Core/Stores/TGSettingsStore+Language.m \
+    src/Core/Stores/TGSettingsStore+Proxy.m \
+    src/Core/Stores/TGSettingsStore+SystemNotifications.m \
+    src/Core/Stores/TGSettingsStore+Tools.m \
+    src/Core/Stores/TGSettingsStore+Downloads.m \
+    src/Core/Stores/TGSettingsStore+Payments.m \
+    src/Core/Stores/TGSettingsStore+MessageMeta.m \
+    src/Core/Stores/TGSettingsStore+MessageRecord.m \
+    src/Core/Stores/TGSettingsStore+InlineMessages.m \
+    src/Core/Stores/TGSettingsStore+Reactions.m \
+    src/Core/Stores/TGSettingsStore+ReactionDefaults.m \
+    src/Core/Stores/TGSettingsStore+BotTools.m \
+    src/Core/Stores/TGSettingsStore+Calls.m \
+    src/Core/Stores/TGSettingsStore+BasicGroups.m \
+    src/Core/Stores/TGSettingsStore+State.m \
+    src/Core/Stores/TGSettingsStore+Storage.mm \
+    src/Core/Stores/TGSettingsStore+Folders.mm \
+    src/Core/Stores/TGSessionsStore.m \
+    src/Core/Stores/TGAccountStore.m \
+    src/Core/Stores/TGAccountStore+Auth.m \
+    src/Core/Stores/TGAccountStore+Accounts.m \
+    src/Core/Stores/TGAccountStore+People.m \
+    src/Core/Stores/TGAccountStore+TwoStep.m \
+    src/Core/Stores/TGAccountStore+Usernames.m \
+    src/Core/Stores/TGAccountStore+Websites.m \
+    src/Core/Stores/TGAccountStore+Support.m \
+    src/Core/Stores/TGAccountStore+Contacts.m \
+    src/Core/Stores/TGAccountStore+State.m \
+    src/Core/Stores/TGStarsStore.m \
+    src/Core/Stores/TGStarsStore+Affiliate.m \
+    src/Core/Stores/TGStarsStore+Ads.m \
+    src/Core/Stores/TGStarsStore+Speech.m \
+    src/Core/Stores/TGStarsStore+Premium.m \
+    src/Core/Stores/TGStarsStore+Stars.m \
+    src/Core/Stores/TGStarsStore+Gifts.m \
+    src/Core/Stores/TGStarsStore+Boosts.m \
+    src/Core/Stores/TGStarsStore+Revenue.m \
+    src/Core/Stores/TGStarsStore+Discovery.m \
+    src/Core/Stores/TGTextStylesStore.m \
+    src/Core/Stores/TGTextStylesStore+Styles.m \
     src/Core/Support/TGUpdateBatcher.mm \
     src/Core/Client/Messages/TGClient+MessagesUpload.m \
     src/Core/Client/Messages/TGClient+Messages.m \
@@ -233,6 +279,29 @@ CLIENT_OBJC_SRCS := \
     src/Core/Stores/TGProfileStore+EmojiStatus.m \
     src/Core/Stores/TGProfileStore+ProfileAudio.m \
     src/Core/Stores/TGProfileStore+AccountProfileMedia.m \
+    src/Core/Stores/TGBusinessStore.m \
+    src/Core/Stores/TGCallStore.m \
+    src/Core/Stores/TGStoryStore.m \
+    src/Core/Stores/TGStoryStore+Albums.m \
+    src/Core/Stores/TGStoryStore+Discovery.m \
+    src/Core/Stores/TGStoryStore+Feed.m \
+    src/Core/Stores/TGStoryStore+Interactions.m \
+    src/Core/Stores/TGStoryStore+Live.m \
+    src/Core/Stores/TGStoryStore+Notifications.m \
+    src/Core/Stores/TGStoryStore+Posting.m \
+    src/Core/Stores/TGStoryStore+Stealth.m \
+    src/Core/Stores/TGStoryStore+Viewer.m \
+    src/Core/Stores/TGContactsStore.m \
+    src/Core/Stores/TGChannelStore.m \
+    src/Core/Stores/TGDevStore.m \
+    src/Core/Stores/TGDevStore+BotSession.m \
+    src/Core/Stores/TGDevStore+OwnedBots.m \
+    src/Core/Stores/TGDevStore+WebApps.m \
+    src/Core/Stores/TGDevStore+OAuth.m \
+    src/Core/Stores/TGDevStore+BusinessBot.m \
+    src/Core/Stores/TGDevStore+Environment.m \
+    src/Core/Stores/TGDevStore+TestHarness.m \
+    src/Core/Stores/TGDevStore+ProxyCarrier.m \
     src/Core/Stores/TGSearchStore.m \
     src/Core/Stores/TGStickerBudget.m \
     src/Core/Platform/TGPerf.m \
@@ -353,8 +422,17 @@ CLIENT_TEST_SRCS := \
     $(TESTS)/TGChatListStoreTests.m \
     $(TESTS)/TGSearchStoreTests.m \
     $(TESTS)/TGProfileStoreTests.m \
+    $(TESTS)/TGCallStoreTests.m \
+    $(TESTS)/TGStoryStoreTests.m \
+    $(TESTS)/TGBusinessStoreTests.m \
+    $(TESTS)/TGContactsStoreTests.m \
+    $(TESTS)/TGChannelStoreTests.m \
+    $(TESTS)/TGDevStoreTests.m \
     $(TESTS)/TGUpdateStoreTests.m \
     $(TESTS)/TGSendStoreTests.m \
+    $(TESTS)/TGStarsStoreTests.m \
+    $(TESTS)/TGAuthStoreTests.m \
+    $(TESTS)/TGSettingsStoreTests.m \
     $(TESTS)/TGGroupStoreTests.m \
     $(TESTS)/TGMessageStoreTests.m \
     $(TESTS)/TGPeerStoreTests.m \

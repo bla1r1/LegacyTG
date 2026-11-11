@@ -3,8 +3,9 @@
 //
 #import "TGUserPickerViewController.h"
 #import "TGLocalization.h"
-#import "TGClient.h"
 #import "TGRows.h"
+#import "TGAccountStore.h"
+
 
 @interface TGUserPickerViewController ()
 @property (nonatomic, strong) NSMutableSet *selectedIds;
@@ -38,7 +39,7 @@
 
 - (void)loadContacts {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] contactsWithCompletion:^(NSArray *contacts){
+	[[TGAccountStore shared] contactsWithCompletion:^(NSArray *contacts){
 		dispatch_async(dispatch_get_main_queue(), ^{
 			weakSelf.contacts = contacts ?: @[];
 			[weakSelf rebuildSections];

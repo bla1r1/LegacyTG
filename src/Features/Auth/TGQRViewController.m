@@ -1,12 +1,13 @@
 #import "TGQRViewController.h"
 #import "TGChatViewController.h"
-#import "TGClient.h"
 #import "TGTheme.h"
 #import <AVFoundation/AVFoundation.h>
 #import <QuartzCore/QuartzCore.h>
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
 #import "TGQRCodeLink.h"
+#import "TGAccountStore.h"
+#import "TGSearchStore.h"
 
 /// The four corner brackets Telegram draws around the aiming window. A full
 /// border rectangle reads as a frame; the broken one reads as a target.
@@ -301,7 +302,7 @@ static const CGFloat kQRTextInset = 24.0f;
 - (void)actOn:(NSString *)text {
 	if ([self isAuthTransferLink:text]){
 		__weak typeof(self) weakSelf = self;
-		[[TGClient shared] confirmQrCodeAuthenticationLink:text
+		[[TGAccountStore shared] confirmQrCodeAuthenticationLink:text
 											   completion:^(NSString *error){
 			TGQRViewController *me = weakSelf;
 			if (!me)
@@ -325,7 +326,7 @@ static const CGFloat kQRTextInset = 24.0f;
 	}
 
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] chatWithUsername:username completion:^(int64_t chatId,
+	[[TGSearchStore shared] chatWithUsername:username completion:^(int64_t chatId,
 															 NSString *title){
 		TGQRViewController *me = weakSelf;
 		if (!me)

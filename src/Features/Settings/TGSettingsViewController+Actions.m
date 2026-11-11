@@ -6,6 +6,13 @@
 #import "TGInstantViewController.h"
 #import "TGUsernameSettingsViewController.h"
 #import "TGQRCode.h"
+#import "TGAccountStore.h"
+#import "TGChatListStore.h"
+#import "TGMessageStore.h"
+#import "TGProfileStore.h"
+#import "TGSessionsStore.h"
+#import "TGSettingsStore.h"
+
 #include <time.h>
 
 /// The bar button's QR glyph: three finder squares and a centre dot, drawn at
@@ -162,12 +169,12 @@ static UIImage *TGSettingsQRIcon(void) {
 }
 
 - (void)openMyProfileOnTab:(NSString *)tab {
-	int64_t userId = [[TGClient shared].me[@"id"] longLongValue];
+	int64_t userId = [[TGProfileStore shared].me[@"id"] longLongValue];
 	if (!userId)
 		return;
 	TGProfileViewController *profile = [[TGProfileViewController alloc]
 			initWithChatId:userId userId:userId
-					 title:[TGClient shared].me[@"first_name"] ?: @"Profile"];
+					 title:[TGProfileStore shared].me[@"first_name"] ?: @"Profile"];
 	profile.storedMediaKind = tab;
 	profile.hidesBottomBarWhenPushed = YES;
 	[self.navigationController pushViewController:profile animated:YES];
@@ -191,7 +198,7 @@ static UIImage *TGSettingsQRIcon(void) {
 }
 
 - (void)openQRCode {
-	NSDictionary *me = [TGClient shared].me;
+	NSDictionary *me = [TGProfileStore shared].me;
 	NSString *username = me[@"username"];
 	NSString *code = username.length
 			? [NSString stringWithFormat:@"https://t.me/%@", username]
@@ -209,8 +216,8 @@ static UIImage *TGSettingsQRIcon(void) {
 /// so an empty slot lands on the login screen.
 - (void)showAccountChoices {
 	__weak typeof(self) weakSelf = self;
-	NSArray *slots = [TGClient accountSlots];
-	NSInteger active = [TGClient activeAccountSlot];
+	NSArray *slots = [TGAccountStore accountSlots];
+	NSInteger active = [TGAccountStore activeAccountSlot];
 
 	NSMutableArray *choices = [NSMutableArray arrayWithCapacity:slots.count + 1];
 	NSMutableArray *choiceSlots = [NSMutableArray arrayWithCapacity:slots.count];
@@ -237,13 +244,13 @@ static UIImage *TGSettingsQRIcon(void) {
 		if (index < (NSInteger)choiceSlots.count){
 			NSInteger slot = [choiceSlots[index] integerValue];
 			if (slot != active)
-				[[TGClient shared] switchToAccountSlot:slot];
+				[[TGAccountStore shared] switchToAccountSlot:slot];
 			return;
 		}
 		// The one row after the accounts is Add Account.
-		NSInteger newSlot = [TGClient addAccount];
+		NSInteger newSlot = [TGAccountStore addAccount];
 		if (newSlot >= 0)
-			[[TGClient shared] switchToAccountSlot:newSlot];
+			[[TGAccountStore shared] switchToAccountSlot:newSlot];
 	}];
 }
 
@@ -272,7 +279,7 @@ static UIImage *TGSettingsQRIcon(void) {
 /// Saved Messages is a real chat - your own - so it opens as one rather than
 /// as a page saying the feature is missing.
 - (void)openSavedMessages {
-	int64_t chatId = [[TGClient shared] savedMessagesChatId];
+	int64_t chatId = [[TGChatListStore shared] savedMessagesChatId];
 	if (!chatId){
 		// The id arrives with the account record shortly after login. Wait
 		// for it instead of putting a "Loading..." alert in the user's way.
@@ -304,7 +311,7 @@ static UIImage *TGSettingsQRIcon(void) {
 
 - (void)showPremiumState {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] premiumStateWithCompletion:^(NSString *summary){
+	[[TGAccountStore shared] premiumStateWithCompletion:^(NSString *summary){
 		[TGAlertSheet showMessage:(summary.length ? summary
 						: @"Telegram Premium")
 							title:@"Telegram Premium" inView:weakSelf.view];
@@ -316,7 +323,7 @@ static UIImage *TGSettingsQRIcon(void) {
 /// request carries the one just typed and nothing keeps it afterwards.
 - (void)showTwoStepState {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] hasPasswordWithCompletion:^(BOOL has, NSString *email){
+	[[TGAccountStore shared] hasPasswordWithCompletion:^(BOOL has, NSString *email){
 		TGSettingsViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -391,7 +398,7 @@ static UIImage *TGSettingsQRIcon(void) {
 - (void)commitPassword:(NSString *)new replacing:(NSString *)current
 				  hint:(NSString *)hint {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] setPassword:current
+	[[TGAccountStore shared] setPassword:current
 							   new:new
 							  hint:hint
 				   setEmailAddress:NO
@@ -423,7 +430,7 @@ static UIImage *TGSettingsQRIcon(void) {
 					onConfirm:^{
 		TGSettingsViewController *me = weakSelf;
 		[me askCurrentPasswordThen:^(NSString *current){
-			[[TGClient shared] setPassword:current
+			[[TGAccountStore shared] setPassword:current
 									   new:@""
 									  hint:@""
 						   setEmailAddress:NO
@@ -450,7 +457,7 @@ static UIImage *TGSettingsQRIcon(void) {
 	__weak typeof(self) weakSelf = self;
 	[self askCurrentPasswordThen:^(NSString *current){
 		TGSettingsViewController *me = weakSelf;
-		[[TGClient shared] recoveryEmailAddress:current completionWithError:^(NSString *email,
+		[[TGAccountStore shared] recoveryEmailAddress:current completionWithError:^(NSString *email,
 																	  NSString *error){
 			if (error.length){
 				[TGAlertSheet showMessage:error title:@"Recovery Email"
@@ -470,7 +477,7 @@ static UIImage *TGSettingsQRIcon(void) {
 								 action:@"Save"
 								 inView:me.view
 							   onSubmit:^(NSString *address){
-					[[TGClient shared] setRecoveryEmailAddress:current
+					[[TGAccountStore shared] setRecoveryEmailAddress:current
 															to:address
 													completion:^(BOOL ok){
 						if (!ok){
@@ -503,7 +510,7 @@ static UIImage *TGSettingsQRIcon(void) {
 					 onChoice:^(NSInteger index){
 		TGSettingsViewController *me = weakSelf;
 		if (index == 1){
-			[[TGClient shared] cancelRecoveryEmailAddressVerificationWithCompletion:
+			[[TGAccountStore shared] cancelRecoveryEmailAddressVerificationWithCompletion:
 					^(NSDictionary *state, NSString *error){
 				NSString *said = error;
 				if (!said){
@@ -524,7 +531,7 @@ static UIImage *TGSettingsQRIcon(void) {
 						 action:@"Confirm"
 						 inView:me.view
 					   onSubmit:^(NSString *code){
-			[[TGClient shared] checkRecoveryEmailCode:code completion:^(BOOL ok){
+			[[TGSettingsStore shared] checkRecoveryEmailCode:code completion:^(BOOL ok){
 				if (ok){
 					[TGAlertSheet showMessage:@"Done"
 										title:@"Recovery Email" inView:me.view];
@@ -540,7 +547,7 @@ static UIImage *TGSettingsQRIcon(void) {
 						[me askRecoveryEmailCodeFor:address];
 						return;
 					}
-					[[TGClient shared] resendRecoveryEmailCode];
+					[[TGSettingsStore shared] resendRecoveryEmailCode];
 					[me askRecoveryEmailCodeFor:address];
 				}];
 			}];
@@ -567,7 +574,7 @@ static UIImage *TGSettingsQRIcon(void) {
 						 inView:me.view
 					   onSubmit:^(NSString *reason){
 			void (^finish)(NSString *) = ^(NSString *password){
-				[[TGClient shared] deleteAccountWithReason:reason
+				[[TGSettingsStore shared] deleteAccountWithReason:reason
 												  password:password
 												completion:^(BOOL ok){
 					if (!ok)
@@ -591,14 +598,14 @@ static UIImage *TGSettingsQRIcon(void) {
 	// alert has only those two buttons, no Cancel.
 	__weak typeof(self) weakSelf = self;
 	void (^openSupportChat)(void) = ^{
-		[[TGClient shared] supportUserWithCompletion:^(NSDictionary *user, NSString *error){
+		[[TGProfileStore shared] supportUserWithCompletion:^(NSDictionary *user, NSString *error){
 			if (!user){
 				[TGAlertSheet showMessage:(error ?: @"An error occurred.")
 									title:@"Support" inView:weakSelf.view];
 				return;
 			}
 			int64_t userId = [user[@"id"] longLongValue];
-			[[TGClient shared] privateChatWithUser:userId completion:^(int64_t chatId){
+			[[TGAccountStore shared] privateChatWithUser:userId completion:^(int64_t chatId){
 				if (!chatId){
 					[TGAlertSheet showMessage:@"An error occurred."
 										title:@"Support" inView:weakSelf.view];
@@ -626,7 +633,7 @@ static UIImage *TGSettingsQRIcon(void) {
 /// page it already has on the device.
 - (void)openFAQ {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] instantViewForURL:@"https://telegram.org/faq"
+	[[TGMessageStore shared] instantViewForURL:@"https://telegram.org/faq"
 							   onlyLocal:YES
 							  completion:^(NSDictionary *view){
 		if (!view){
@@ -646,7 +653,7 @@ static UIImage *TGSettingsQRIcon(void) {
 /// "Telegram Features" is the @TelegramTips chat, not the blog in Safari.
 - (void)openTelegramTips {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] chatWithUsername:@"TelegramTips"
+	[[TGMessageStore shared] chatWithUsername:@"TelegramTips"
 							completion:^(int64_t chatId, NSString *title){
 		if (!chatId){
 			[TGAlertSheet showMessage:@"An error occurred."
@@ -744,7 +751,7 @@ static UIImage *TGSettingsQRIcon(void) {
 	}
 
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] setProfilePhotoAtPath:path completion:^(BOOL ok){
+	[[TGSettingsStore shared] setProfilePhotoAtPath:path completion:^(BOOL ok){
 		if (!ok){
 			[weakSelf toast:@"An error occurred."];
 			return;
@@ -785,7 +792,7 @@ static NSString *TGSettingsDateString(double stamp) {
 			[me askResetPassword];
 			return;
 		}
-		[[TGClient shared] requestAccountPasswordRecoveryWithCompletion:
+		[[TGAccountStore shared] requestAccountPasswordRecoveryWithCompletion:
 				^(NSString *pattern, NSString *error){
 			if (error){
 				[TGAlertSheet showChoices:@[@"Reset Account"]
@@ -813,7 +820,7 @@ static NSString *TGSettingsDateString(double stamp) {
 					 inView:self.view
 				   onSubmit:^(NSString *code){
 		TGSettingsViewController *me = weakSelf;
-		[[TGClient shared] checkAccountPasswordRecoveryCode:code completion:^(NSString *error){
+		[[TGAccountStore shared] checkAccountPasswordRecoveryCode:code completion:^(NSString *error){
 			if (error){
 				[TGAlertSheet showChoices:@[@"Enter Code"]
 									title:@"Email Code"
@@ -838,7 +845,7 @@ static NSString *TGSettingsDateString(double stamp) {
 								 action:@"Save"
 								 inView:me.view
 							   onSubmit:^(NSString *hint){
-					[[TGClient shared] recoverAccountPasswordWithCode:code
+					[[TGAccountStore shared] recoverAccountPasswordWithCode:code
 														   newPassword:password
 																  hint:hint
 															completion:^(NSDictionary *state,
@@ -875,7 +882,7 @@ static NSString *TGSettingsDateString(double stamp) {
 					   inView:self.view
 					onConfirm:^{
 		TGSettingsViewController *me = weakSelf;
-		[[TGClient shared] resetAccountPasswordWithCompletion:
+		[[TGAccountStore shared] resetAccountPasswordWithCompletion:
 				^(NSString *result, double date, NSString *error){
 			if ([result isEqualToString:@"ok"]){
 				me.hasPassword = NO;
@@ -892,7 +899,7 @@ static NSString *TGSettingsDateString(double stamp) {
 						 destructiveIndex:1
 								   inView:me.view
 								 onChoice:^(NSInteger ignored){
-					[[TGClient shared] cancelAccountPasswordResetWithCompletion:
+					[[TGAccountStore shared] cancelAccountPasswordResetWithCompletion:
 							^(NSString *cancelError){
 						[TGAlertSheet showMessage:(cancelError ?: @"Done")
 											title:@"Reset Account"
@@ -927,7 +934,7 @@ static NSString *TGSettingsDateString(double stamp) {
 					 action:@"Send"
 					 inView:self.view
 				   onSubmit:^(NSString *email){
-		[[TGClient shared] setLoginEmailAddress:email
+		[[TGAccountStore shared] setLoginEmailAddress:email
 									completion:^(NSString *pattern,
 												  NSString *setError){
 			if (setError){
@@ -953,7 +960,7 @@ static NSString *TGSettingsDateString(double stamp) {
 					 onChoice:^(NSInteger index){
 		TGSettingsViewController *me = weakSelf;
 		if (index == 1){
-			[[TGClient shared] resendLoginEmailAddressCodeWithCompletion:
+			[[TGAccountStore shared] resendLoginEmailAddressCodeWithCompletion:
 					^(NSString *resent, NSString *error){
 				[TGAlertSheet showMessage:(error ?: @"Done")
 									title:@"Login Email" inView:me.view];
@@ -968,7 +975,7 @@ static NSString *TGSettingsDateString(double stamp) {
 						 action:@"Confirm"
 						 inView:me.view
 					   onSubmit:^(NSString *code){
-			[[TGClient shared] checkLoginEmailAddressCode:code
+			[[TGAccountStore shared] checkLoginEmailAddressCode:code
 											   completion:^(NSString *error){
 				if (error){
 					[TGAlertSheet showMessage:error
@@ -1001,7 +1008,7 @@ static NSString *TGSettingsDateString(double stamp) {
 		TGSettingsViewController *me = weakSelf;
 		// The synchronous answer is what a sheet needs before it can name the
 		// country and the way Telegram would write the number.
-		NSDictionary *info = [[TGClient shared] phoneNumberInfoForPrefixSync:number];
+		NSDictionary *info = [[TGAccountStore shared] phoneNumberInfoForPrefixSync:number];
 		NSString *said = info
 				? [NSString stringWithFormat:@"%@ %@\n%@",
 						info[@"flag"] ?: @"", info[@"name"] ?: @"",
@@ -1013,7 +1020,7 @@ static NSString *TGSettingsDateString(double stamp) {
 					  destructive:NO
 						   inView:me.view
 						onConfirm:^{
-			[[TGClient shared] sendPhoneNumberChangeCode:number
+			[[TGAccountStore shared] sendPhoneNumberChangeCode:number
 											  completion:^(NSDictionary *codeInfo,
 														   NSString *error){
 				if (error){
@@ -1044,7 +1051,7 @@ static NSString *TGSettingsDateString(double stamp) {
 					 onChoice:^(NSInteger index){
 		TGSettingsViewController *me = weakSelf;
 		if (index == 1){
-			[[TGClient shared] resendPhoneNumberChangeCodeWithCompletion:
+			[[TGAccountStore shared] resendPhoneNumberChangeCodeWithCompletion:
 					^(NSDictionary *resent, NSString *error){
 				if (error){
 					[TGAlertSheet showMessage:error
@@ -1056,7 +1063,7 @@ static NSString *TGSettingsDateString(double stamp) {
 			return;
 		}
 		if (index == 2){
-			[[TGClient shared] reportPhoneNumberCodeMissingWithCompletion:
+			[[TGAccountStore shared] reportPhoneNumberCodeMissingWithCompletion:
 					^(NSString *error){
 				[TGAlertSheet showMessage:(error ?: @"Done")
 									title:@"Change Phone Number" inView:me.view];
@@ -1072,7 +1079,7 @@ static NSString *TGSettingsDateString(double stamp) {
 							 action:@"Send"
 							 inView:me.view
 						   onSubmit:^(NSString *token){
-				[[TGClient shared] sendPhoneNumberFirebaseSms:token
+				[[TGAccountStore shared] sendPhoneNumberFirebaseSms:token
 												   completion:^(NSString *error){
 					[TGAlertSheet showMessage:(error ?: @"Done")
 												title:@"Change Phone Number"
@@ -1089,7 +1096,7 @@ static NSString *TGSettingsDateString(double stamp) {
 						 action:@"Confirm"
 						 inView:me.view
 					   onSubmit:^(NSString *code){
-			[[TGClient shared] checkPhoneNumberChangeCode:code
+			[[TGAccountStore shared] checkPhoneNumberChangeCode:code
 											   completion:^(NSString *error){
 				if (error){
 					[TGAlertSheet showMessage:error
@@ -1111,7 +1118,7 @@ static NSString *TGSettingsDateString(double stamp) {
 /// sheet can always say whether one exists and for how long.
 - (void)showTemporaryPasswordFlow {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] temporaryPasswordStateWithCompletion:
+	[[TGAccountStore shared] temporaryPasswordStateWithCompletion:
 			^(BOOL has, NSInteger validFor, NSString *error){
 		TGSettingsViewController *me = weakSelf;
 		NSString *said;
@@ -1137,7 +1144,7 @@ static NSString *TGSettingsDateString(double stamp) {
 								   inView:me.view
 								 onChoice:^(NSInteger index){
 					static const NSInteger seconds[2] = {3600, 86400};
-					[[TGClient shared] createTemporaryPassword:current
+					[[TGAccountStore shared] createTemporaryPassword:current
 													  validFor:seconds[index]
 													completion:^(BOOL created,
 																 NSInteger left,
@@ -1170,7 +1177,7 @@ static NSString *TGSettingsDateString(double stamp) {
 					 inView:self.view
 				   onSubmit:^(NSString *email){
 		TGSettingsViewController *me = weakSelf;
-		[[TGClient shared] sendEmailAddressVerificationCodeTo:email
+		[[TGAccountStore shared] sendEmailAddressVerificationCodeTo:email
 												  completion:^(NSString *pattern,
 															   NSString *error){
 			if (error){
@@ -1194,7 +1201,7 @@ static NSString *TGSettingsDateString(double stamp) {
 					 onChoice:^(NSInteger index){
 		TGSettingsViewController *me = weakSelf;
 		if (index == 1){
-			[[TGClient shared] resendEmailAddressVerificationCodeWithCompletion:
+			[[TGAccountStore shared] resendEmailAddressVerificationCodeWithCompletion:
 					^(NSString *resent, NSString *error){
 				[TGAlertSheet showMessage:(error ?: @"Done")
 									title:@"Email Address"
@@ -1210,7 +1217,7 @@ static NSString *TGSettingsDateString(double stamp) {
 						 action:@"Verify"
 						 inView:me.view
 					   onSubmit:^(NSString *code){
-			[[TGClient shared] checkEmailAddressVerificationCode:code
+			[[TGAccountStore shared] checkEmailAddressVerificationCode:code
 													  completion:^(NSString *error){
 				if (error){
 					[TGAlertSheet showMessage:error
@@ -1234,13 +1241,13 @@ static NSString *TGSettingsDateString(double stamp) {
 /// service's token back and shows whether the server accepted it.
 - (void)showApplicationVerification {
 	__weak typeof(self) weakSelf = self;
-	int64_t verificationId = [TGClient shared].pendingApplicationVerificationId;
+	int64_t verificationId = [TGAccountStore shared].pendingApplicationVerificationId;
 	if (!verificationId){
 		[TGAlertSheet showMessage:@"Empty"
 							title:@"Verify" inView:self.view];
 		return;
 	}
-	NSString *nonce = [TGClient shared].pendingApplicationVerificationNonce;
+	NSString *nonce = [TGAccountStore shared].pendingApplicationVerificationNonce;
 	[TGAlertSheet showInput:@"Verify"
 					message:[NSString stringWithFormat:
 							@"Request %lld waits for the verification service's "
@@ -1253,7 +1260,7 @@ static NSString *TGSettingsDateString(double stamp) {
 					 inView:self.view
 				   onSubmit:^(NSString *token){
 		TGSettingsViewController *me = weakSelf;
-		[[TGClient shared] setApplicationVerificationToken:token
+		[[TGAccountStore shared] setApplicationVerificationToken:token
 											verificationId:verificationId
 												completion:^(NSString *error){
 			[TGAlertSheet showMessage:(error ?: @"Done")

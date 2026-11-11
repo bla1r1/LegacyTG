@@ -2,7 +2,8 @@
 // TGDevHubViewController.m
 //
 #import "TGDevHubViewController.h"
-#import "TGClient.h"
+#import "TGDevStore.h"
+#import "TGMessageStore.h"
 #import "TGTheme.h"
 #import "TGCommunitiesViewController.h"
 #import "TGQuickRepliesViewController.h"
@@ -40,13 +41,12 @@
 
 - (void)rebuild {
 	__weak typeof(self) weakSelf = self;
-	TGClient *client = [TGClient shared];
 
-	NSString *communityDetail = client.communities.count
-			? [NSString stringWithFormat:@"%lu", (unsigned long)client.communities.count]
+	NSString *communityDetail = [TGMessageStore shared].communities.count
+			? [NSString stringWithFormat:@"%lu", (unsigned long)[TGMessageStore shared].communities.count]
 			: nil;
-	NSString *replyDetail = client.quickReplyShortcuts.count
-			? [NSString stringWithFormat:@"%lu", (unsigned long)client.quickReplyShortcuts.count]
+	NSString *replyDetail = [TGMessageStore shared].quickReplyShortcuts.count
+			? [NSString stringWithFormat:@"%lu", (unsigned long)[TGMessageStore shared].quickReplyShortcuts.count]
 			: nil;
 
 	NSMutableArray *toolRows = [NSMutableArray array];
@@ -71,7 +71,7 @@
 	[toolRows addObject:TGFeatureOpenRow(@"Message Tools", nil, ^{
 		TGMessageToolsViewController *screen =
 				[[TGMessageToolsViewController alloc] init];
-		screen.chatId = [TGClient shared].savedMessagesChatId;
+		screen.chatId = [TGMessageStore shared].savedMessagesChatId;
 		screen.chatTitle = @"Saved Messages";
 		screen.hidesBottomBarWhenPushed = YES;
 		[weakSelf.navigationController pushViewController:screen animated:YES];
@@ -84,7 +84,7 @@
 			@"Saved replies are the messages a shortcut sends.",
 			toolRows)];
 
-	NSArray *actions = client.suggestedActions;
+	NSArray *actions = [TGDevStore shared].suggestedActions;
 	NSMutableArray *actionRows = [NSMutableArray array];
 	for (NSDictionary *row in actions){
 		NSString *title = row[@"title"] ?: @"Suggested Action";
@@ -103,7 +103,7 @@
 
 - (void)hideAction:(NSDictionary *)action name:(NSString *)name {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] hideSuggestedAction:action completion:^(BOOL ok, NSString *error){
+	[[TGDevStore shared] hideSuggestedAction:action completion:^(BOOL ok, NSString *error){
 		if (!ok){
 			[weakSelf toast:error ?: @"An error occurred."];
 			return;

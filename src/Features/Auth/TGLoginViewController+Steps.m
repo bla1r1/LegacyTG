@@ -1,12 +1,13 @@
 #import "TGTextDraw.h"
 #import "TGLocalization.h"
 #import "TGLoginViewControllerInternal.h"
-#import "TGClient.h"
 #import "TGStyle.h"
 #import "TGUIFormat.h"
 #import "TGIcons.h"
 #import "TGPhoneNumberRules.h"
 #import "TGQRCode.h"
+#import "TGAccountStore.h"
+#import "TGSettingsStore.h"
 
 /// The code step is a row of digit boxes, as official draws it. The real text
 /// field stays behind them so the number pad and the paste menu keep working;
@@ -416,7 +417,7 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
         return;
     NSInteger generation = self.countryGuessGeneration;
     __weak typeof(self) weakSelf = self;
-    [[TGClient shared] countryInfoForCode:iso completion:^(NSDictionary *country){
+    [[TGSettingsStore shared] countryInfoForCode:iso completion:^(NSDictionary *country){
         TGLoginViewController *me = weakSelf;
         if (!me || me.currentStep != TGLoginStepPhone ||
             !TGCountryGuessCanApply(generation, me.countryGuessGeneration,
@@ -431,14 +432,14 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
                           forState:UIControlStateNormal];
         [me refreshPhoneNumberInfo];
     }];
-    [[TGClient shared] countryCodeWithCompletion:^(NSString *code){
+    [[TGAccountStore shared] countryCodeWithCompletion:^(NSString *code){
         TGLoginViewController *me = weakSelf;
         if (!me || me.currentStep != TGLoginStepPhone ||
             !code.length ||
             !TGCountryGuessCanApply(generation, me.countryGuessGeneration,
                     me.prefixEdited, me.countryGuessResolvedByNetwork, YES))
             return;
-        [[TGClient shared] countryInfoForCode:code completion:^(NSDictionary *country){
+        [[TGSettingsStore shared] countryInfoForCode:code completion:^(NSDictionary *country){
             if (!me || me.currentStep != TGLoginStepPhone ||
                 !TGCountryGuessCanApply(generation, me.countryGuessGeneration,
                         me.prefixEdited, me.countryGuessResolvedByNetwork, YES))
@@ -586,7 +587,7 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
     }
     NSString *displayNumber = self.savedPhoneNumber ?: phoneNumber ?: @"";
 
-    NSDictionary *info = [TGClient shared].codeInfo;
+    NSDictionary *info = [TGAccountStore shared].codeInfo;
     NSString *codeType = info[@"type"][@"@type"];
     NSString *sentence = nil;
     if ([codeType isEqualToString:@"authenticationCodeTypeSms"]) {
@@ -882,7 +883,7 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
 }
 
 - (void)signUpTermsTapped {
-    NSString *terms = [[TGClient shared] registrationTerms];
+    NSString *terms = [[TGAccountStore shared] registrationTerms];
     __weak typeof(self) weakSelf = self;
     [TGAlertSheet showChoices:@[TGLocalized(@"Agree"), TGLocalized(@"Decline")]
                         title:TGLocalized(@"Terms of Service")
@@ -906,7 +907,7 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
 }
 
 - (void)showPasswordStep {
-    NSDictionary *info = [TGClient shared].loginPasswordInfo;
+    NSDictionary *info = [TGAccountStore shared].loginPasswordInfo;
     NSString *hint = info[@"password_hint"];
     // The hint is the field's placeholder, as official uses it; it used to be
     // a second paragraph under the instructions.
@@ -926,7 +927,7 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
 - (void)forgotPasswordTapped {
     [self setBusy:YES];
     __weak typeof(self) weakSelf = self;
-    [[TGClient shared] requestPasswordRecoveryWithCompletion:^(NSString *error){
+    [[TGAccountStore shared] requestPasswordRecoveryWithCompletion:^(NSString *error){
         TGLoginViewController *me = weakSelf;
         [me setBusy:NO];
         if (error) {
@@ -938,7 +939,7 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
 }
 
 - (void)showRecoveryCodeStep {
-    NSString *pattern = [TGClient shared].loginPasswordInfo[@"recovery_email_address_pattern"];
+    NSString *pattern = [TGAccountStore shared].loginPasswordInfo[@"recovery_email_address_pattern"];
     NSString *subtitle = pattern.length
             ? TGLocalizedFormat(@"Please enter the code we just emailed to %@", pattern)
             : TGLocalized(@"The code has been sent. Please check your email. Be sure to check the spam folder as well.");
@@ -959,7 +960,7 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
 }
 
 - (void)showEmailCodeStep {
-    NSDictionary *info = [TGClient shared].emailCodeInfo;
+    NSDictionary *info = [TGAccountStore shared].emailCodeInfo;
     NSString *pattern = info[@"code_info"][@"email_address_pattern"];
     NSString *subtitle = pattern.length
             ? TGLocalizedFormat(@"Please enter the code we have sent to your email %@.", pattern)
@@ -977,12 +978,12 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
 - (void)resetEmailTapped {
     // The reset has no completion; the next authorization state replaces this
     // step. Releasing here keeps the button usable if the answer never comes.
-    [[TGClient shared] resetAuthenticationEmailAddress];
+    [[TGAccountStore shared] resetAuthenticationEmailAddress];
     [self setBusy:NO];
 }
 
 - (void)codeMissingTapped {
-    [[TGClient shared] reportAuthenticationCodeMissing];
+    [[TGAccountStore shared] reportAuthenticationCodeMissing];
     [TGAlertSheet showMessage:@"Done"
                         title:@"Code" inView:self.view];
 }
@@ -1006,7 +1007,7 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
                            inView:me.view
                          onChoice:^(NSInteger index){
             if (index == 1){
-                [[TGClient shared] dismissWebToken:token completion:^(NSString *error){
+                [[TGAccountStore shared] dismissWebToken:token completion:^(NSString *error){
                     [TGAlertSheet showMessage:(error
                             ?: @"Done")
                                         title:@"Web Login Token" inView:me.view];
@@ -1023,7 +1024,7 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
                 NSInteger dcId = [dc integerValue];
                 if (dcId <= 0)
                     dcId = 2;
-                [[TGClient shared] checkAuthenticationWebToken:token dcId:dcId
+                [[TGAccountStore shared] checkAuthenticationWebToken:token dcId:dcId
                                                     completion:^(NSString *error){
                     [TGAlertSheet showMessage:(error
                             ?: @"Done")
@@ -1047,7 +1048,7 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
                      inView:self.view
                    onSubmit:^(NSString *link){
         TGLoginViewController *me = weakSelf;
-        [[TGClient shared] confirmQrCodeAuthenticationLink:link completion:^(NSString *error){
+        [[TGAccountStore shared] confirmQrCodeAuthenticationLink:link completion:^(NSString *error){
             [TGAlertSheet showMessage:(error
                     ?: @"Done")
                                 title:@"QR Code" inView:me.view];
@@ -1068,7 +1069,7 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
                      inView:self.view
                    onSubmit:^(NSString *token){
         TGLoginViewController *me = weakSelf;
-        [[TGClient shared] sendAuthenticationFirebaseSms:token completion:^(NSString *error){
+        [[TGAccountStore shared] sendAuthenticationFirebaseSms:token completion:^(NSString *error){
             [TGAlertSheet showMessage:(error
                     ?: @"Done")
                                 title:@"Verify" inView:me.view];

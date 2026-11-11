@@ -25,6 +25,11 @@
 #import "TGAffiliateProgramsViewController.h"
 #import "TGSupportInfoViewController.h"
 #import "TGCallViewController.h"
+#import "TGAccountStore.h"
+#import "TGProfileStore.h"
+#import "TGSessionsStore.h"
+#import "TGSettingsStore.h"
+
 
 
 /// A custom method's answer is a string the app has no schema for. When it is
@@ -107,7 +112,7 @@ static BOOL TGNotificationsWarning(void) {
 
 - (NSArray *)rootSections {
 	__weak typeof(self) weakSelf = self;
-	NSDictionary *me = [TGClient shared].me;
+	NSDictionary *me = [TGProfileStore shared].me;
 
 	// The values Telegram shows on the right of these rows. They stay nil
 	// until the client answers, so a slow network leaves the row exactly as
@@ -128,7 +133,7 @@ static BOOL TGNotificationsWarning(void) {
 	NSMutableArray *accountRows = [NSMutableArray array];
 	// Logged out or still connecting there is no account to show or edit;
 	// the one useful row is the way back in.
-	if ([TGClient shared].authState != TGAuthStateReady){
+	if ([TGAccountStore shared].authState != TGAuthStateReady){
 		[accountRows addObject:TGIconRow(@"Log in to Telegram", @"privacy", TGIconTileAzure(), ^{
 			[[AppDelegate sharedDelegate] showLoginUI];
 		})];
@@ -150,7 +155,7 @@ static BOOL TGNotificationsWarning(void) {
 			TGEmojiStatusViewController *status =
 					[[TGEmojiStatusViewController alloc] init];
 			status.target = TGEmojiStatusTargetSelf;
-			status.userId = [[TGClient shared].me[@"id"] longLongValue];
+			status.userId = [[TGProfileStore shared].me[@"id"] longLongValue];
 			status.subjectTitle = TGLocalized(@"Emoji Status");
 			status.hidesBottomBarWhenPushed = YES;
 			[weakSelf.navigationController pushViewController:status animated:YES];
@@ -215,7 +220,7 @@ static BOOL TGNotificationsWarning(void) {
 			[weakSelf showPremiumState];
 		}),
 		TGIconTapOpenRow(TGLocalized(@"Telegram Stars"), [NSString stringWithFormat:@"%lld",
-				(long long)[TGClient shared].ownedStarCount], @"star", TGIconTileGold(), ^{
+				(long long)[TGAccountStore shared].ownedStarCount], @"star", TGIconTileGold(), ^{
 			TGStarsGiftsViewController *stars = [[TGStarsGiftsViewController alloc] init];
 			stars.hidesBottomBarWhenPushed = YES;
 			[weakSelf.navigationController pushViewController:stars animated:YES];
@@ -245,7 +250,7 @@ static BOOL TGNotificationsWarning(void) {
 							   action:TGLocalized(@"Log out")
 						  destructive:YES
 							   inView:weakSelf.view
-							onConfirm:^{ [[TGClient shared] logOut]; }];
+							onConfirm:^{ [[TGAccountStore shared] logOut]; }];
 		}),
 	])];
 	return sections;
@@ -266,7 +271,7 @@ static BOOL TGNotificationsWarning(void) {
 		[rows addObject:TGCheckRow(@"System", nil, TGAppLanguageIsSystem(), ^{
 			TGSetAppLanguage(nil);
 			TGSetTelegramLanguageLookup(nil);
-			[[TGClient shared] loadAppLanguagePack:TGAppLanguage() completion:^(BOOL ok){
+			[[TGSettingsStore shared] loadAppLanguagePack:TGAppLanguage() completion:^(BOOL ok){
 				[TGAlertSheet showMessage:@"Restart"
 									title:@"Interface Language" inView:weakSelf.view];
 			}];
@@ -288,9 +293,9 @@ static BOOL TGNotificationsWarning(void) {
 			TGSetTelegramLanguageLookup(nil);
 			// One choice sets both the UI pack and TDLib's language, as the
 			// official list does.
-			[[TGClient shared] setLanguage:packId];
+			[[TGSettingsStore shared] setLanguage:packId];
 			weakSelf.currentLanguage = packId;
-			[[TGClient shared] loadAppLanguagePack:packId completion:^(BOOL ok){
+			[[TGSettingsStore shared] loadAppLanguagePack:packId completion:^(BOOL ok){
 				[TGAlertSheet showMessage:@"Restart"
 									title:@"Interface Language" inView:weakSelf.view];
 			}];
@@ -389,16 +394,16 @@ static BOOL TGNotificationsWarning(void) {
 				 onSubmit:^(NSString *text){
 		NSString *code = text.uppercaseString;
 		weakSelf.countryCode = code;
-		[[TGClient shared] countryInfoForCode:code completion:^(NSDictionary *country){
+		[[TGSettingsStore shared] countryInfoForCode:code completion:^(NSDictionary *country){
 			weakSelf.countryInfo = country;
 			[weakSelf rebuild];
 		}];
-		[[TGClient shared] preferredCountryLanguageForCode:code
+		[[TGSettingsStore shared] preferredCountryLanguageForCode:code
 												completion:^(NSString *language){
 			weakSelf.preferredCountryLanguage = language;
 			[weakSelf rebuild];
 		}];
-		[[TGClient shared] countryFlagEmojiForCode:code completion:^(NSString *emoji){
+		[[TGSettingsStore shared] countryFlagEmojiForCode:code completion:^(NSString *emoji){
 			weakSelf.countryFlag = emoji;
 			[weakSelf rebuild];
 		}];
@@ -408,7 +413,7 @@ static BOOL TGNotificationsWarning(void) {
 - (void)showLanguagePackInfo {
 	NSString *packId = self.currentLanguage ?: @"en";
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] languagePackInfo:packId completion:^(NSDictionary *info){
+	[[TGSettingsStore shared] languagePackInfo:packId completion:^(NSDictionary *info){
 		weakSelf.languageInfo = info;
 		[weakSelf rebuild];
 		if (!info){
@@ -436,7 +441,7 @@ static BOOL TGNotificationsWarning(void) {
 - (void)showLanguagePackStrings {
 	NSString *packId = self.currentLanguage ?: @"en";
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] languagePackStrings:packId keys:@[] completion:^(NSArray *strings){
+	[[TGSettingsStore shared] languagePackStrings:packId keys:@[] completion:^(NSArray *strings){
 		if (!weakSelf)
 			return;
 		weakSelf.languagePackStrings = strings;
@@ -471,7 +476,7 @@ static BOOL TGNotificationsWarning(void) {
 					 action:@"Read"
 					 inView:self.view
 				 onSubmit:^(NSString *key){
-		[[TGClient shared] languagePackString:key pack:packId
+		[[TGSettingsStore shared] languagePackString:key pack:packId
 								   completion:^(NSString *value, NSString *kind){
 			if (!weakSelf)
 				return;
@@ -499,7 +504,7 @@ static BOOL TGNotificationsWarning(void) {
 						 action:@"Create"
 						 inView:weakSelf.view
 					 onSubmit:^(NSString *name){
-			[[TGClient shared] setCustomLanguagePack:packId name:name
+			[[TGSettingsStore shared] setCustomLanguagePack:packId name:name
 										  nativeName:name strings:@[]
 										  completion:^(BOOL ok){
 				if (!weakSelf)
@@ -508,8 +513,8 @@ static BOOL TGNotificationsWarning(void) {
 					NSString *customId = [packId hasPrefix:@"X"] ? packId
 							: [@"X" stringByAppendingString:packId];
 					weakSelf.currentLanguage = customId;
-					[[TGClient shared] setLanguage:customId];
-					[[TGClient shared] languagePackInfo:customId
+					[[TGSettingsStore shared] setLanguage:customId];
+					[[TGSettingsStore shared] languagePackInfo:customId
 											completion:^(NSDictionary *info){
 						weakSelf.languageInfo = info;
 						[weakSelf rebuild];
@@ -544,7 +549,7 @@ static BOOL TGNotificationsWarning(void) {
 			NSMutableDictionary *changed = [info mutableCopy];
 			changed[@"name"] = name;
 			changed[@"nativeName"] = name;
-			[[TGClient shared] editCustomLanguagePackInfo:changed completion:^(BOOL ok){
+			[[TGSettingsStore shared] editCustomLanguagePackInfo:changed completion:^(BOOL ok){
 				if (!weakSelf)
 					return;
 				[weakSelf toast:ok ? @"Pack renamed" : @"An error occurred."];
@@ -555,7 +560,7 @@ static BOOL TGNotificationsWarning(void) {
 	if (self.languageInfo)
 		ask(self.languageInfo);
 	else
-		[[TGClient shared] languagePackInfo:packId completion:^(NSDictionary *info){
+		[[TGSettingsStore shared] languagePackInfo:packId completion:^(NSDictionary *info){
 			ask(info);
 		}];
 }
@@ -577,7 +582,7 @@ static BOOL TGNotificationsWarning(void) {
 						 action:@"Save"
 						 inView:weakSelf.view
 					 onSubmit:^(NSString *value){
-			[[TGClient shared] setCustomLanguagePackString:key value:value
+			[[TGSettingsStore shared] setCustomLanguagePackString:key value:value
 													 pack:packId
 											   completion:^(BOOL ok){
 				if (!weakSelf)
@@ -599,7 +604,7 @@ static BOOL TGNotificationsWarning(void) {
 					 action:@"Delete"
 					 inView:self.view
 				 onSubmit:^(NSString *key){
-		[[TGClient shared] setCustomLanguagePackString:key value:nil
+		[[TGSettingsStore shared] setCustomLanguagePackString:key value:nil
 												 pack:packId
 										   completion:^(BOOL ok){
 			if (!weakSelf)
@@ -619,7 +624,7 @@ static BOOL TGNotificationsWarning(void) {
 					 action:@"Install"
 					 inView:self.view
 				 onSubmit:^(NSString *packId){
-		[[TGClient shared] addCustomServerLanguagePack:packId completion:^(BOOL ok){
+		[[TGSettingsStore shared] addCustomServerLanguagePack:packId completion:^(BOOL ok){
 			if (!weakSelf)
 				return;
 			[weakSelf toast:ok ? @"Pack installed" : @"An error occurred."];
@@ -631,7 +636,7 @@ static BOOL TGNotificationsWarning(void) {
 - (void)synchronizeCurrentLanguagePack {
 	NSString *packId = self.currentLanguage ?: @"en";
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] synchronizeLanguagePack:packId completion:^(BOOL ok){
+	[[TGSettingsStore shared] synchronizeLanguagePack:packId completion:^(BOOL ok){
 		if (!weakSelf)
 			return;
 		[weakSelf toast:ok ? @"Strings synchronized" : @"An error occurred."];
@@ -648,7 +653,7 @@ static BOOL TGNotificationsWarning(void) {
 				  destructive:YES
 					   inView:self.view
 					onConfirm:^{
-		[[TGClient shared] deleteLanguagePack:packId completion:^(BOOL ok){
+		[[TGSettingsStore shared] deleteLanguagePack:packId completion:^(BOOL ok){
 			if (!weakSelf)
 				return;
 			[weakSelf toast:ok ? @"Pack deleted" : @"An error occurred."];
@@ -742,7 +747,7 @@ static NSString *TGCallDebugText(NSDictionary *call) {
 	if (!self.languagePackStrings.count)
 		return;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] languagePackStrings:packId keys:@[]
+	[[TGSettingsStore shared] languagePackStrings:packId keys:@[]
 								completion:^(NSArray *strings){
 		weakSelf.languagePackStrings = strings;
 		[weakSelf rebuild];
@@ -864,7 +869,7 @@ static NSString *TGCallDebugText(NSDictionary *call) {
 		}
 		if (index == 0){
 			NSString *log = TGCallLogText(call);
-			[[TGClient shared] sendCallLog:log forMessage:messageId inChat:chatId
+			[[TGSettingsStore shared] sendCallLog:log forMessage:messageId inChat:chatId
 								completion:^(BOOL ok, NSString *error){
 				if (ok)
 					[weakSelf noteCallDiagnostic:@"log" forCall:call];
@@ -880,7 +885,7 @@ static NSString *TGCallDebugText(NSDictionary *call) {
 								title:name inView:weakSelf.view];
 			return;
 		}
-		[[TGClient shared] sendCallDebugInformation:debug
+		[[TGSettingsStore shared] sendCallDebugInformation:debug
 										forMessage:messageId
 											inChat:chatId
 										completion:^(BOOL ok, NSString *error){

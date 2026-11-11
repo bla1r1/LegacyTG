@@ -10,6 +10,8 @@
 #import "TGStickerPacksViewController.h"
 #import "TGChatThemeStore.h"
 #import "TGStyle.h"
+#import "TGSettingsStore.h"
+
 
 static NSString *TGDefaultBackgroundDetail(NSDictionary *state) {
 	if (![state isKindOfClass:NSDictionary.class])
@@ -219,7 +221,7 @@ static NSString *TGDefaultBackgroundDetail(NSDictionary *state) {
 /// side of the theme it belongs to, and its type. A background not received
 /// yet says so rather than drawing a made-up one.
 - (void)showDefaultBackground {
-	NSDictionary *state = [TGClient shared].defaultBackground;
+	NSDictionary *state = [TGSettingsStore shared].defaultBackground;
 	if (![state isKindOfClass:NSDictionary.class]){
 		[TGAlertSheet showMessage:@"Empty"
 							title:@"Chat Wallpaper" inView:self.view];

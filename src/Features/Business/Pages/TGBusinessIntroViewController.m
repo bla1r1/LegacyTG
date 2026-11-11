@@ -1,6 +1,5 @@
 #import "TGBusinessViewController.h"
 #import "TGBusinessMessagesViewController.h"
-#import "TGClient.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
@@ -14,6 +13,8 @@
 #import "TGBusinessAwayViewController.h"
 #import "TGBusinessHoursViewController.h"
 #import "TGBusinessLocationViewController.h"
+#import "TGBusinessStore.h"
+#import "TGProfileStore.h"
 
 @interface TGBusinessIntroViewController () <UIImagePickerControllerDelegate,
 		UINavigationControllerDelegate>
@@ -82,7 +83,7 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 	[super viewDidLoad];
 	self.title = @"Start Page";
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] businessInfoWithCompletion:^(NSDictionary *info, NSString *error){
+	[[TGBusinessStore shared] businessInfoWithCompletion:^(NSDictionary *info, NSString *error){
 		TGBusinessIntroViewController *page = weakSelf;
 		if (!page)
 			return;
@@ -136,14 +137,14 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 			[self showMessage:@"An error occurred." title:@"Start Page"];
 			return;
 		}
-		[[TGClient shared] setBusinessStartPageTitle:self.introTitle
+		[[TGBusinessStore shared] setBusinessStartPageTitle:self.introTitle
 											 message:self.introMessage
 										 stickerPath:self.stickerPath
 										  completion:^(BOOL ok, NSString *error){
 			[weakSelf showResult:ok error:error title:@"Start Page"];
 		}];
 	} else if ([action isEqualToString:@"reset"]){
-		[[TGClient shared] setBusinessStartPageTitle:nil message:nil stickerPath:nil
+		[[TGBusinessStore shared] setBusinessStartPageTitle:nil message:nil stickerPath:nil
 										  completion:^(BOOL ok, NSString *error){
 			TGBusinessIntroViewController *page = weakSelf;
 			if (!ok){

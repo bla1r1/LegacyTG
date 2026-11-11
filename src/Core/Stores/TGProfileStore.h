@@ -9,6 +9,9 @@
 
 @interface TGProfileStore : NSObject
 
+- (void)closeFriendsWithCompletion:(void (^)(NSArray *userIds))completion;
+- (void)setCloseFriends:(NSArray *)userIds completion:(void (^)(BOOL ok, NSString *error))completion;
+
 + (instancetype)shared;
 
 @property (nonatomic, readonly) NSDictionary *me;
@@ -285,5 +288,18 @@
 
 - (void)userProfilePhotos:(int64_t)userId
 			   completion:(void (^)(NSArray *photos))completion;
+
+/// How many contacts have a birthday nearby, and hides them from the profile.
+- (void)hideContactCloseBirthdaysWithCompletion:(void (^)(BOOL ok,
+														 NSString *error))completion;
+
+/// Telegram's support account, resolved to a user record for the support page.
+- (void)supportUserWithCompletion:(void (^)(NSDictionary *user,
+											NSString *error))completion;
+
+/// The two accent colours this account has selected. -1 is the profile's
+/// "none", which is a real value Telegram sends.
+- (void)myAccentColorsWithCompletion:(void (^)(NSInteger accentId,
+											   NSInteger profileAccentId))completion;
 
 @end

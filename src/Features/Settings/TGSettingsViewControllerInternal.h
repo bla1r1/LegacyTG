@@ -6,7 +6,6 @@
 
 #import "TGSettingsViewController.h"
 #import "TGUI.h"
-#import "TGClient.h"
 #import "TGLocalization.h"
 #import "TGSettingsFormatting.h"
 #import "TGTheme.h"

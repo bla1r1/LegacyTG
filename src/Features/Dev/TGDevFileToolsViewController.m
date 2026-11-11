@@ -1,5 +1,5 @@
 #import "TGDevFileToolsViewController.h"
-#import "TGClient.h"
+#import "TGDevStore.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
@@ -36,7 +36,7 @@
 	// The generation has its own progress block, but an upload that continues
 	// past the generated file answering is only visible through updateFile.
 	__weak typeof(self) weakSelf = self;
-	[TGClient shared].onFileUploadProgress = ^(NSInteger fileId, float progress){
+	[TGDevStore shared].onFileUploadProgress = ^(NSInteger fileId, float progress){
 		TGDevFileToolsViewController *me = weakSelf;
 		if (!me || me.fileId != fileId)
 			return;
@@ -48,7 +48,7 @@
 
 - (void)viewWillDisappear:(BOOL)animated {
 	[super viewWillDisappear:animated];
-	[TGClient shared].onFileUploadProgress = nil;
+	[TGDevStore shared].onFileUploadProgress = nil;
 }
 
 - (void)applyTheme {
@@ -137,7 +137,7 @@
 
 - (void)cancelOrClear {
 	if (self.busy){
-		[[TGClient shared] cancelPreliminaryUploadOfFile:self.fileId];
+		[[TGDevStore shared] cancelPreliminaryUploadOfFile:self.fileId];
 		self.busy = NO;
 		self.stage = TGLocalized(@"Cancelled");
 		self.progress = 0;
@@ -177,7 +177,7 @@
 	[self rebuildSections];
 
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] generateTextFileNamed:name contents:contents
+	[[TGDevStore shared] generateTextFileNamed:name contents:contents
 			progress:^(NSInteger fileId, float progress, NSString *stage){
 		TGDevFileToolsViewController *me = weakSelf;
 		if (!me)
@@ -216,7 +216,7 @@
 	if (self.fileId <= 0)
 		return;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] readFilePartOfFile:self.fileId offset:0 count:320
+	[[TGDevStore shared] readFilePartOfFile:self.fileId offset:0 count:320
 							   completion:^(NSData *data){
 		TGDevFileToolsViewController *me = weakSelf;
 		if (!me)

@@ -1,7 +1,7 @@
 #import "TGCallViewController.h"
+#import "TGClientNotifications.h"
 #import "TGLocalization.h"
 #import "TGCall.h"
-#import "TGClient.h"
 #import "TGTheme.h"
 #import "TGIcons.h"
 #import "TGCapabilities.h"

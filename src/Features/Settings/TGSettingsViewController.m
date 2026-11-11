@@ -1,5 +1,4 @@
 #import "TGSettingsViewController.h"
-#import "TGClient.h"
 #import "TGTheme.h"
 #import "TGThemeFile.h"
 #import "TGStorageViewController.h"
@@ -18,6 +17,12 @@
 #import "TGChatThemeStore.h"
 #import "TGStyle.h"
 #import "TGLocalization.h"
+#import "TGAccountStore.h"
+#import "TGChatListStore.h"
+#import "TGProfileStore.h"
+#import "TGSessionsStore.h"
+#import "TGSettingsStore.h"
+
 
 static const CGFloat kSettingsSearchWidth = 200.0f;
 static const CGFloat kSettingsSearchHeight = 44.0f;
@@ -45,7 +50,7 @@ static const CGFloat kSettingsSearchHeight = 44.0f;
 - (void)setProfileCell:(UITableViewCell *)profileCell {
 	_profileCell = profileCell;
 	if (!profileCell){
-		int64_t uid = [[TGClient shared].me[@"id"] longLongValue];
+		int64_t uid = [[TGProfileStore shared].me[@"id"] longLongValue];
 		__weak typeof(self) weakSelf = self;
 		if (uid)
 			[[TGPeerStore shared] refreshPeerForId:uid completion:^(TGPeer *peer){
@@ -242,7 +247,7 @@ static const CGFloat kSettingsSearchHeight = 44.0f;
 	// The Archive switches are the one page that reads copy TDLib holds:
 	// the cached copy answers the first draw, the network refresh redraws.
 	if (self.page == TGSettingsPageData)
-		[[TGClient shared] refreshArchiveChatListSettings:^{ [self rebuild]; }];
+		[[TGSettingsStore shared] refreshArchiveChatListSettings:^{ [self rebuild]; }];
 }
 
 - (void)viewWillDisappear:(BOOL)animated {
@@ -262,14 +267,14 @@ static const CGFloat kSettingsSearchHeight = 44.0f;
 		canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
 	return self.page == TGSettingsPageFolders &&
 		   indexPath.section == 0 &&
-		   indexPath.row < (NSInteger)[TGClient shared].folders.count;
+		   indexPath.row < (NSInteger)[TGChatListStore shared].folders.count;
 }
 
 - (void)tableView:(UITableView *)tableView
 		moveRowAtIndexPath:(NSIndexPath *)from
 			   toIndexPath:(NSIndexPath *)to {
 	NSMutableArray *order = [NSMutableArray array];
-	for (NSDictionary *folder in [TGClient shared].folders)
+	for (NSDictionary *folder in [TGChatListStore shared].folders)
 		if ([folder[@"id"] integerValue])
 			[order addObject:folder[@"id"]];
 	if (from.row >= (NSInteger)order.count || to.row >= (NSInteger)order.count)
@@ -281,7 +286,7 @@ static const CGFloat kSettingsSearchHeight = 44.0f;
 
 	// All Chats stays first: this app's strip draws it as the leading pill and
 	// has nowhere to put it in the middle.
-	[[TGClient shared] reorderFolderIds:order mainListAt:0];
+	[[TGSettingsStore shared] reorderFolderIds:order mainListAt:0];
 }
 
 /// Only the pages whose categories can delete rows get a delete control.
@@ -331,7 +336,7 @@ static const CGFloat kSettingsSearchHeight = 44.0f;
 /// builder; the shared profile-header row is built here from the same account
 /// record, so the page keeps describing a header and the cell stays generic.
 - (NSMutableDictionary *)profileHeaderRow {
-	NSDictionary *me = [TGClient shared].me;
+	NSDictionary *me = [TGProfileStore shared].me;
 	NSString *name = [me[@"first_name"] length] ? me[@"first_name"]
 			: ([me[@"username"] length] ? me[@"username"] : @"Telegram");
 	if ([me[@"last_name"] length])
@@ -465,13 +470,13 @@ static const CGFloat kSettingsSearchHeight = 44.0f;
 		// four answers are cached by the client or cheap to ask for; none of
 		// them blocks the first draw, and a failed answer leaves the row as
 		// it was rather than inventing a value.
-		[[TGClient shared] storageStatsWithCompletion:^(long long bytes, NSInteger files){
+		[[TGSettingsStore shared] storageStatsWithCompletion:^(long long bytes, NSInteger files){
 			(void)files;
 			weakSelf.rootCacheBytes = bytes;
 			weakSelf.rootCacheLoaded = YES;
 			[weakSelf rebuild];
 		}];
-		[[TGClient shared] sessionsWithInactiveTtlCompletion:^(NSArray *sessions,
+		[[TGSessionsStore shared] sessionsWithInactiveTtlCompletion:^(NSArray *sessions,
 															  NSInteger ttlDays){
 			(void)ttlDays;
 			NSInteger others = 0;
@@ -486,7 +491,7 @@ static const CGFloat kSettingsSearchHeight = 44.0f;
 			weakSelf.rootSessionCount = others;
 			[weakSelf rebuild];
 		}];
-		[[TGClient shared] languagesWithCompletion:^(NSArray *languages,
+		[[TGSettingsStore shared] languagesWithCompletion:^(NSArray *languages,
 													 NSString *current){
 			NSString *name = current;
 			for (NSDictionary *language in languages)
@@ -497,7 +502,7 @@ static const CGFloat kSettingsSearchHeight = 44.0f;
 			weakSelf.rootLanguageName = name;
 			[weakSelf rebuild];
 		}];
-		[[TGClient shared] proxiesWithCompletion:^(NSArray *proxies){
+		[[TGSettingsStore shared] proxiesWithCompletion:^(NSArray *proxies){
 			if (!proxies.count){
 				weakSelf.rootProxyDetail = nil;
 			} else {
@@ -524,7 +529,7 @@ static const CGFloat kSettingsSearchHeight = 44.0f;
 		// client; the selection is a field of the account record, so it takes
 		// one getMe. A page opened before the update still draws 0-6, which
 		// the schema promises are valid.
-		[[TGClient shared] myAccentColorsWithCompletion:^(NSInteger accent,
+		[[TGProfileStore shared] myAccentColorsWithCompletion:^(NSInteger accent,
 														  NSInteger profile){
 			weakSelf.accentColorId = accent;
 			weakSelf.profileAccentColorId = profile;
@@ -536,21 +541,21 @@ static const CGFloat kSettingsSearchHeight = 44.0f;
 
 	if (self.page == TGSettingsPageFolders){
 		// Nothing to reorder until there are two.
-		if ([TGClient shared].folders.count > 1)
+		if ([TGChatListStore shared].folders.count > 1)
 			self.navigationItem.rightBarButtonItem = self.editButtonItem;
 		// The folders themselves arrive through updateChatFolders, which the
 		// client already keeps; only the suggestions have to be asked for.
-		[[TGClient shared] recommendedFoldersWithCompletion:^(NSArray *folders){
+		[[TGSettingsStore shared] recommendedFoldersWithCompletion:^(NSArray *folders){
 			weakSelf.recommendedFolders = folders;
 			[weakSelf rebuild];
 		}];
 		if (!weakSelf.folderChatCounts)
 			weakSelf.folderChatCounts = [NSMutableDictionary dictionary];
-		for (NSDictionary *folder in [TGClient shared].folders){
+		for (NSDictionary *folder in [TGChatListStore shared].folders){
 			NSInteger folderId = [folder[@"id"] integerValue];
 			if (!folderId)
 				continue;
-			[[TGClient shared] chatCountForFolder:folder
+			[[TGSettingsStore shared] chatCountForFolder:folder
 									   completion:^(NSInteger count){
 				weakSelf.folderChatCounts[@(folderId)] = @(count);
 				if (weakSelf.page == TGSettingsPageFolders)
@@ -571,7 +576,7 @@ static const CGFloat kSettingsSearchHeight = 44.0f;
 		[[NSNotificationCenter defaultCenter] addObserver:self
 				selector:@selector(downloadsChanged)
 					name:TGDownloadsChangedNotification object:nil];
-		[[TGClient shared] fileDownloadsMatching:nil activeOnly:NO
+		[[TGSettingsStore shared] fileDownloadsMatching:nil activeOnly:NO
 									  completion:^(NSArray *downloads, NSInteger active){
 			weakSelf.downloads = downloads;
 			weakSelf.activeDownloads = active;
@@ -581,7 +586,7 @@ static const CGFloat kSettingsSearchHeight = 44.0f;
 	}
 
 	if (self.page == TGSettingsPageProxy){
-		[[TGClient shared] proxiesWithCompletion:^(NSArray *proxies){
+		[[TGSettingsStore shared] proxiesWithCompletion:^(NSArray *proxies){
 			weakSelf.proxies = proxies;
 			[weakSelf rebuild];
 		}];
@@ -595,12 +600,12 @@ static const CGFloat kSettingsSearchHeight = 44.0f;
 				selector:@selector(notificationSettingsChanged)
 					name:TGNotificationSettingsChangedNotification object:nil];
 		for (NSString *scope in @[@"private", @"groups", @"channels"]){
-			[[TGClient shared] notificationsMutedForScope:scope
+			[[TGSettingsStore shared] notificationsMutedForScope:scope
 											   completion:^(BOOL muted){
 				weakSelf.muted[scope] = @(muted);
 				[weakSelf rebuild];
 			}];
-			[[TGClient shared] notificationPreviewForScope:scope
+			[[TGSettingsStore shared] notificationPreviewForScope:scope
 												completion:^(BOOL show){
 				weakSelf.previews[scope] = @(show);
 				[weakSelf rebuild];
@@ -608,7 +613,7 @@ static const CGFloat kSettingsSearchHeight = 44.0f;
 		}
 		// The Notifications page used to read savedSounds before the Sound page
 		// had ever loaded them. Load them here so the summary is not blank.
-		[[TGClient shared] savedNotificationSoundsWithCompletion:^(NSArray *sounds){
+		[[TGSettingsStore shared] savedNotificationSoundsWithCompletion:^(NSArray *sounds){
 			weakSelf.savedSounds = sounds;
 			weakSelf.savedSoundsLoaded = YES;
 			[weakSelf rebuild];
@@ -624,7 +629,7 @@ static const CGFloat kSettingsSearchHeight = 44.0f;
 		[[NSNotificationCenter defaultCenter] addObserver:self
 				selector:@selector(notificationSettingsChanged)
 					name:TGNotificationSettingsChangedNotification object:nil];
-		[[TGClient shared] savedNotificationSoundsWithCompletion:^(NSArray *sounds){
+		[[TGSettingsStore shared] savedNotificationSoundsWithCompletion:^(NSArray *sounds){
 			weakSelf.savedSounds = sounds;
 			weakSelf.savedSoundsLoaded = YES;
 			[weakSelf rebuild];
@@ -649,22 +654,22 @@ static const CGFloat kSettingsSearchHeight = 44.0f;
 					initWithCustomView:spinner];
 		}
 		for (NSString *setting in [TGSettingsViewController privacySettings])
-			[[TGClient shared] privacyRule:setting completion:^(NSString *value){
+			[[TGSettingsStore shared] privacyRule:setting completion:^(NSString *value){
 				weakSelf.privacy[setting] = value;
 				[weakSelf rebuild];
 				[weakSelf updatePrivacySpinner];
 			}];
-		[[TGClient shared] accountTtlWithCompletion:^(NSInteger days){
+		[[TGSettingsStore shared] accountTtlWithCompletion:^(NSInteger days){
 			weakSelf.accountTtl = days;
 			weakSelf.accountTtlLoaded = YES;
 			[weakSelf rebuild];
 			[weakSelf updatePrivacySpinner];
 		}];
-		[[TGClient shared] defaultMessageAutoDeleteTimeWithCompletion:^(NSInteger seconds){
+		[[TGSettingsStore shared] defaultMessageAutoDeleteTimeWithCompletion:^(NSInteger seconds){
 			weakSelf.autoDeleteDefault = seconds;
 			[weakSelf rebuild];
 		}];
-		[[TGClient shared] hasPasswordWithCompletion:^(BOOL has, NSString *email){
+		[[TGAccountStore shared] hasPasswordWithCompletion:^(BOOL has, NSString *email){
 			weakSelf.hasPassword = has;
 			weakSelf.passwordKnown = YES;
 			[weakSelf rebuild];
@@ -672,11 +677,11 @@ static const CGFloat kSettingsSearchHeight = 44.0f;
 		}];
 		NSNumber *savedPersonal =
 				[NSUserDefaults.standardUserDefaults objectForKey:
-						TGAccountDefaultsKey(@"TGPersonalChatId")];
+						TGAccountStoreDefaultsKey(@"TGPersonalChatId")];
 		if (savedPersonal)
 			weakSelf.personalChatId = savedPersonal.longLongValue;
 		// TDLib stores the negative, so the row and the option are opposites.
-		[[TGClient shared] optionValue:@"disable_top_chats" completion:^(id value){
+		[[TGSettingsStore shared] optionValue:@"disable_top_chats" completion:^(id value){
 			weakSelf.suggestFrequent = ![value boolValue];
 			[weakSelf rebuild];
 		}];
@@ -684,25 +689,25 @@ static const CGFloat kSettingsSearchHeight = 44.0f;
 	}
 
 	if (self.page == TGSettingsPageData){
-		[[TGClient shared] storageStatsWithCompletion:^(long long bytes, NSInteger files){
+		[[TGSettingsStore shared] storageStatsWithCompletion:^(long long bytes, NSInteger files){
 			(void)files;
 			weakSelf.rootCacheBytes = bytes;
 			weakSelf.rootCacheLoaded = YES;
 			[weakSelf rebuild];
 		}];
-		[[TGClient shared] networkStatsWithCompletion:^(long long sent, long long got){
+		[[TGSettingsStore shared] networkStatsWithCompletion:^(long long sent, long long got){
 			weakSelf.networkSent = sent;
 			weakSelf.networkReceived = got;
 			[weakSelf rebuild];
 		}];
-		[[TGClient shared] autoDownloadSettingsPresetsWithCompletion:^(NSDictionary *presets){
+		[[TGSettingsStore shared] autoDownloadSettingsPresetsWithCompletion:^(NSDictionary *presets){
 			weakSelf.autoDownloadPresets = presets;
 			[weakSelf rebuild];
 		}];
 		// The Autosave row's detail is the exception count; reading the
 		// settings once here also satisfies TDLib's rule that set/clear work
 		// only after getAutosaveSettings has answered.
-		[[TGClient shared] autosaveSettingsWithCompletion:^(NSDictionary *settings){
+		[[TGSettingsStore shared] autosaveSettingsWithCompletion:^(NSDictionary *settings){
 			weakSelf.autosaveSettings = settings;
 			[weakSelf rebuild];
 		}];
@@ -710,7 +715,7 @@ static const CGFloat kSettingsSearchHeight = 44.0f;
 	}
 
 	if (self.page == TGSettingsPageAutosave){
-		[[TGClient shared] autosaveSettingsWithCompletion:^(NSDictionary *settings){
+		[[TGSettingsStore shared] autosaveSettingsWithCompletion:^(NSDictionary *settings){
 			weakSelf.autosaveSettings = settings;
 			[weakSelf rebuild];
 		}];
@@ -718,13 +723,13 @@ static const CGFloat kSettingsSearchHeight = 44.0f;
 	}
 
 	if (self.page == TGSettingsPageLanguage || self.page == TGSettingsPageLanguageDev){
-		[[TGClient shared] languagesWithCompletion:^(NSArray *languages,
+		[[TGSettingsStore shared] languagesWithCompletion:^(NSArray *languages,
 													NSString *current){
 			weakSelf.languages = languages;
 			weakSelf.currentLanguage = current;
 			[weakSelf rebuild];
 			if (current.length)
-				[[TGClient shared] languagePackInfo:current
+				[[TGSettingsStore shared] languagePackInfo:current
 										 completion:^(NSDictionary *info){
 					weakSelf.languageInfo = info;
 					[weakSelf rebuild];
@@ -733,16 +738,16 @@ static const CGFloat kSettingsSearchHeight = 44.0f;
 		NSString *code = [[NSLocale currentLocale] objectForKey:NSLocaleCountryCode]
 				?: weakSelf.countryCode ?: @"US";
 		weakSelf.countryCode = code;
-		[[TGClient shared] countryInfoForCode:code completion:^(NSDictionary *country){
+		[[TGSettingsStore shared] countryInfoForCode:code completion:^(NSDictionary *country){
 			weakSelf.countryInfo = country;
 			[weakSelf rebuild];
 		}];
-		[[TGClient shared] preferredCountryLanguageForCode:code
+		[[TGSettingsStore shared] preferredCountryLanguageForCode:code
 												completion:^(NSString *language){
 			weakSelf.preferredCountryLanguage = language;
 			[weakSelf rebuild];
 		}];
-		[[TGClient shared] countryFlagEmojiForCode:code completion:^(NSString *emoji){
+		[[TGSettingsStore shared] countryFlagEmojiForCode:code completion:^(NSString *emoji){
 			weakSelf.countryFlag = emoji;
 			[weakSelf rebuild];
 		}];
@@ -750,7 +755,7 @@ static const CGFloat kSettingsSearchHeight = 44.0f;
 	}
 
 	if (self.page == TGSettingsPageBlocked){
-		[[TGClient shared] blockedUsersWithCompletion:^(NSArray *users){
+		[[TGSettingsStore shared] blockedUsersWithCompletion:^(NSArray *users){
 			weakSelf.blocked = users;
 			[weakSelf rebuild];
 		}];
@@ -758,7 +763,7 @@ static const CGFloat kSettingsSearchHeight = 44.0f;
 	}
 
 	if (self.page == TGSettingsPageRecentCalls){
-		[[TGClient shared] recentCallsWithCompletion:^(NSArray *calls){
+		[[TGSettingsStore shared] recentCallsWithCompletion:^(NSArray *calls){
 			weakSelf.calls = calls;
 			[weakSelf rebuild];
 		}];
@@ -766,7 +771,7 @@ static const CGFloat kSettingsSearchHeight = 44.0f;
 	}
 
 	if (self.page == TGSettingsPagePaymentData){
-		[[TGClient shared] savedOrderInfoWithCompletion:^(NSDictionary *order,
+		[[TGSettingsStore shared] savedOrderInfoWithCompletion:^(NSDictionary *order,
 														  NSString *error){
 			weakSelf.savedOrder = order;
 			weakSelf.savedOrderError = error;
@@ -780,7 +785,7 @@ static const CGFloat kSettingsSearchHeight = 44.0f;
 		// optionValue: hands back the value itself, not the option object.
 		// Subscripting it again asked an NSString for objectForKeyedSubscript:,
 		// which took the app down every time this page opened.
-		[[TGClient shared] optionValue:@"version" completion:^(id value){
+		[[TGSettingsStore shared] optionValue:@"version" completion:^(id value){
 			weakSelf.tdlibVersion = [value isKindOfClass:NSString.class]
 					? value : @"unavailable";
 			[weakSelf rebuild];

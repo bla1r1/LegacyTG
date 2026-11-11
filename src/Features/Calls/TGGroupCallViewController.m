@@ -1,6 +1,5 @@
 #import "TGGroupCallViewController.h"
 #import "TGLocalization.h"
-#import "TGClient.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
@@ -12,6 +11,8 @@
 #import "TGVideoChatSetupViewController.h"
 #import "TGCallMessagesViewController.h"
 #import "TGVideoChatStreamViewController.h"
+#import "TGCallStore.h"
+#import "TGProfileStore.h"
 
 /// The header carries the title and the one line of state; the table below
 /// is the controls and the first people in the call.
@@ -206,7 +207,7 @@ static const CGFloat kGCCallNoteHeight = TGMetricLineCaption;
 		return;
 	}
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] chatRecordForChat:self.chatId completion:^(NSDictionary *chat){
+	[[TGProfileStore shared]chatRecordForChat:self.chatId completion:^(NSDictionary *chat){
 		TGGroupCallViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -226,7 +227,7 @@ static const CGFloat kGCCallNoteHeight = TGMetricLineCaption;
 		return;
 	}
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] groupCall:self.groupCallId completion:^(NSDictionary *call, NSString *error){
+	[[TGCallStore shared]groupCall:self.groupCallId completion:^(NSDictionary *call, NSString *error){
 		TGGroupCallViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -238,7 +239,7 @@ static const CGFloat kGCCallNoteHeight = TGMetricLineCaption;
 			return;
 		}
 		if ([call[@"isJoined"] boolValue]){
-			[[TGClient shared] loadGroupCallParticipants:me.groupCallId limit:100
+			[[TGCallStore shared]loadGroupCallParticipants:me.groupCallId limit:100
 					completion:^(BOOL ok, NSString *why){ [weakSelf reload]; }];
 		}
 		[me reload];
@@ -246,7 +247,7 @@ static const CGFloat kGCCallNoteHeight = TGMetricLineCaption;
 }
 
 - (void)reload {
-	self.participants = [[TGClient shared] groupCallParticipantSnapshot:self.groupCallId];
+	self.participants = [[TGCallStore shared]groupCallParticipantSnapshot:self.groupCallId];
 	if (!self.openedAt && self.call)
 		self.openedAt = [NSDate date];
 	[self updateHeader];
@@ -435,7 +436,7 @@ static NSString *TGGroupCallStartsText(int32_t stamp) {
 				detail:nil tap:^{ [weakSelf startScheduled]; }]];
 	}
 	if (joined){
-		NSDictionary *me = [[TGClient shared] currentGroupCallParticipant:self.groupCallId];
+		NSDictionary *me = [[TGCallStore shared]currentGroupCallParticipant:self.groupCallId];
 		BOOL muted = [me[@"isMutedForAllUsers"] boolValue] ||
 					 [me[@"isMutedForCurrentUser"] boolValue];
 		[callRows addObject:[self row:(muted ? @"Unmute" : @"Mute Yourself")
@@ -475,7 +476,7 @@ static NSString *TGGroupCallStartsText(int32_t stamp) {
 	[sections addObject:TGSection(@"People", nil, people)];
 
 	NSMutableArray *messages = [NSMutableArray array];
-	NSArray *callMessages = [[TGClient shared] groupCallMessageSnapshot:self.groupCallId];
+	NSArray *callMessages = [[TGCallStore shared]groupCallMessageSnapshot:self.groupCallId];
 	NSInteger first = MAX(0, (NSInteger)callMessages.count - 3);
 	for (NSInteger i = first; i < (NSInteger)callMessages.count; i++){
 		NSDictionary *message = callMessages[(NSUInteger)i];
@@ -547,7 +548,7 @@ static NSString *TGGroupCallStartsText(int32_t stamp) {
 	};
 	NSDictionary *parameters = TGGroupCallJoinParameters(0, @"", NO, NO);
 	if ([self.call[@"isVideoChat"] boolValue] || [self.call[@"isLiveStory"] boolValue]){
-		[[TGClient shared] joinVideoChat:self.groupCallId participant:nil
+		[[TGCallStore shared]joinVideoChat:self.groupCallId participant:nil
 							   parameters:parameters inviteHash:@""
 							   completion:^(NSString *payload, NSString *error){
 			if (payload)
@@ -555,7 +556,7 @@ static NSString *TGGroupCallStartsText(int32_t stamp) {
 			done(error.length == 0, error);
 		}];
 	} else {
-		[[TGClient shared] joinGroupCallWithInput:TGGroupCallInput(self.groupCallId, 0)
+		[[TGCallStore shared]joinGroupCallWithInput:TGGroupCallInput(self.groupCallId, 0)
 									   parameters:parameters
 									   completion:^(NSDictionary *info, NSString *error){
 			if (info[@"joinPayload"])
@@ -570,7 +571,7 @@ static NSString *TGGroupCallStartsText(int32_t stamp) {
 		return;
 	self.busy = YES;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] leaveGroupCall:self.groupCallId completion:^(BOOL ok, NSString *error){
+	[[TGCallStore shared]leaveGroupCall:self.groupCallId completion:^(BOOL ok, NSString *error){
 		TGGroupCallViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -597,7 +598,7 @@ static NSString *TGGroupCallStartsText(int32_t stamp) {
 		TGGroupCallViewController *me = weakSelf;
 		if (!me)
 			return;
-		[[TGClient shared] endGroupCall:me.groupCallId completion:^(BOOL ok, NSString *error){
+		[[TGCallStore shared]endGroupCall:me.groupCallId completion:^(BOOL ok, NSString *error){
 			if (!ok)
 				[TGAlertSheet showMessage:error ?: @"An error occurred."
 									title:title inView:me.view];
@@ -607,21 +608,21 @@ static NSString *TGGroupCallStartsText(int32_t stamp) {
 }
 
 - (NSDictionary *)selfSender {
-	NSDictionary *participant = [[TGClient shared] currentGroupCallParticipant:self.groupCallId];
+	NSDictionary *participant = [[TGCallStore shared]currentGroupCallParticipant:self.groupCallId];
 	if (participant[@"sender"])
 		return participant[@"sender"];
-	int64_t meId = [[TGClient shared].me[@"id"] longLongValue];
+	int64_t meId = [[TGProfileStore shared].me[@"id"] longLongValue];
 	return @{@"@type" : @"messageSenderUser", @"user_id" : @(meId)};
 }
 
 - (void)toggleSelfMuted {
 	if (!self.busy){
 		self.busy = YES;
-		NSDictionary *participant = [[TGClient shared] currentGroupCallParticipant:self.groupCallId];
+		NSDictionary *participant = [[TGCallStore shared]currentGroupCallParticipant:self.groupCallId];
 		BOOL muted = [participant[@"isMutedForAllUsers"] boolValue] ||
 					 [participant[@"isMutedForCurrentUser"] boolValue];
 		__weak typeof(self) weakSelf = self;
-		[[TGClient shared] toggleGroupCallParticipant:[self selfSender]
+		[[TGCallStore shared]toggleGroupCallParticipant:[self selfSender]
 											   inCall:self.groupCallId isMuted:!muted
 											completion:^(BOOL ok, NSString *error){
 			TGGroupCallViewController *me = weakSelf;
@@ -637,10 +638,10 @@ static NSString *TGGroupCallStartsText(int32_t stamp) {
 }
 
 - (void)toggleSelfHand {
-	NSDictionary *participant = [[TGClient shared] currentGroupCallParticipant:self.groupCallId];
+	NSDictionary *participant = [[TGCallStore shared]currentGroupCallParticipant:self.groupCallId];
 	BOOL raised = [participant[@"isHandRaised"] boolValue];
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] toggleGroupCallParticipant:[self selfSender]
+	[[TGCallStore shared]toggleGroupCallParticipant:[self selfSender]
 										   inCall:self.groupCallId
 									 isHandRaised:!raised
 									   completion:^(BOOL ok, NSString *error){
@@ -655,11 +656,11 @@ static NSString *TGGroupCallStartsText(int32_t stamp) {
 }
 
 - (void)toggleSelfSpeaking {
-	NSDictionary *participant = [[TGClient shared] currentGroupCallParticipant:self.groupCallId];
+	NSDictionary *participant = [[TGCallStore shared]currentGroupCallParticipant:self.groupCallId];
 	BOOL speaking = [participant[@"isSpeaking"] boolValue];
 	int32_t source = [participant[@"audioSourceId"] intValue];
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] setGroupCallParticipantSpeaking:source inCall:self.groupCallId
+	[[TGCallStore shared]setGroupCallParticipantSpeaking:source inCall:self.groupCallId
 											isSpeaking:!speaking
 											completion:^(NSDictionary *sender, NSString *error){
 		TGGroupCallViewController *me = weakSelf;
@@ -674,7 +675,7 @@ static NSString *TGGroupCallStartsText(int32_t stamp) {
 - (void)toggleMyVideo {
 	BOOL on = [self.call[@"isMyVideoEnabled"] boolValue];
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] toggleGroupCallMyVideoEnabled:self.groupCallId enabled:!on
+	[[TGCallStore shared]toggleGroupCallMyVideoEnabled:self.groupCallId enabled:!on
 										  completion:^(BOOL ok, NSString *error){
 		TGGroupCallViewController *me = weakSelf;
 		if (!me)
@@ -689,7 +690,7 @@ static NSString *TGGroupCallStartsText(int32_t stamp) {
 - (void)toggleMyVideoPaused {
 	BOOL paused = [self.call[@"isMyVideoPaused"] boolValue];
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] toggleGroupCallMyVideoPaused:self.groupCallId paused:!paused
+	[[TGCallStore shared]toggleGroupCallMyVideoPaused:self.groupCallId paused:!paused
 										 completion:^(BOOL ok, NSString *error){
 		TGGroupCallViewController *me = weakSelf;
 		if (!me)
@@ -703,7 +704,7 @@ static NSString *TGGroupCallStartsText(int32_t stamp) {
 
 - (void)startScheduled {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] startScheduledVideoChat:self.groupCallId
+	[[TGCallStore shared]startScheduledVideoChat:self.groupCallId
 									completion:^(BOOL ok, NSString *error){
 		TGGroupCallViewController *me = weakSelf;
 		if (!me)
@@ -729,12 +730,12 @@ static NSString *TGGroupCallStartsText(int32_t stamp) {
 		if (userId <= 0)
 			return;
 		if ([me.call[@"isVideoChat"] boolValue]){
-			[[TGClient shared] inviteVideoChatParticipants:@[@(userId)]
+			[[TGCallStore shared]inviteVideoChatParticipants:@[@(userId)]
 					toCall:me.groupCallId completion:^(BOOL ok, NSString *error){
 				[me reportInvite:ok error:error];
 			}];
 		} else {
-			[[TGClient shared] inviteGroupCallParticipant:userId toCall:me.groupCallId
+			[[TGCallStore shared]inviteGroupCallParticipant:userId toCall:me.groupCallId
 					isVideo:NO completion:^(NSDictionary *answer, NSString *error){
 				NSString *outcome = answer[@"outcome"];
 				NSString *sentence = error;
@@ -763,7 +764,7 @@ static NSString *TGGroupCallStartsText(int32_t stamp) {
 - (void)copyInviteLink {
 	NSString *link = self.call[@"inviteLink"];
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] videoChatInviteLink:self.groupCallId canSelfUnmute:YES
+	[[TGCallStore shared]videoChatInviteLink:self.groupCallId canSelfUnmute:YES
 								completion:^(NSString *url, NSString *error){
 		TGGroupCallViewController *me = weakSelf;
 		if (!me)

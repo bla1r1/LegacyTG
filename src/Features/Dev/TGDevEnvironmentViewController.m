@@ -9,7 +9,7 @@
 // pretending the JSON parsed.
 //
 #import "TGDevEnvironmentViewController.h"
-#import "TGClient.h"
+#import "TGDevStore.h"
 #import "TGAlertSheet.h"
 #import "TGStyle.h"
 
@@ -128,7 +128,7 @@
 			[weakSelf rebuildSections];
 		}];
 	} else if ([action isEqualToString:@"parseJson"]){
-		[[TGClient shared] jsonValueForText:self.jsonText
+		[[TGDevStore shared] jsonValueForText:self.jsonText
 								 completion:^(NSDictionary *value, NSString *error){
 			if (!value){
 				[weakSelf finish:NO error:error title:@"JSON"];
@@ -147,7 +147,7 @@
 						title:@"JSON"];
 			return;
 		}
-		[[TGClient shared] jsonTextForValue:@{@"@type" : @"jsonValueString",
+		[[TGDevStore shared] jsonTextForValue:@{@"@type" : @"jsonValueString",
 											 @"value" : self.jsonText}
 								 completion:^(NSString *text, NSString *error){
 			if (!text){
@@ -176,7 +176,7 @@
 			@"buttonColor" : @((int32_t)0xff3d95d4),
 			@"buttonTextColor" : @((int32_t)0xffffffff),
 		};
-		[[TGClient shared] themeParametersJSONString:colours
+		[[TGDevStore shared] themeParametersJSONString:colours
 										  completion:^(NSString *text, NSString *error){
 			if (!text){
 				[weakSelf finish:NO error:error title:@"Theme JSON"];
@@ -187,7 +187,7 @@
 			[weakSelf showMessage:text title:@"Theme Parameters"];
 		}];
 	} else if ([action isEqualToString:@"timeZones"]){
-		[[TGClient shared] timeZonesWithCompletion:^(NSArray *zones, NSString *error){
+		[[TGDevStore shared] timeZonesWithCompletion:^(NSArray *zones, NSString *error){
 			if (error){
 				[weakSelf finish:NO error:error title:@"Time Zones"];
 				return;
@@ -208,7 +208,7 @@
 							title:@"Time Zones"];
 		}];
 	} else if ([action isEqualToString:@"currency"]){
-		[[TGClient shared] currencyExchangeRatesWithCompletion:^(NSArray *rates,
+		[[TGDevStore shared] currencyExchangeRatesWithCompletion:^(NSArray *rates,
 																 NSString *error){
 			if (error){
 				[weakSelf finish:NO error:error title:@"Exchange Rates"];
@@ -244,7 +244,7 @@
 			[weakSelf rebuildSections];
 		}];
 	} else if ([action isEqualToString:@"weather"]){
-		[[TGClient shared] currentWeatherAtLatitude:self.latitude
+		[[TGDevStore shared] currentWeatherAtLatitude:self.latitude
 										  longitude:self.longitude
 										 completion:^(NSDictionary *weather, NSString *error){
 			if (error){
@@ -258,7 +258,7 @@
 			[weakSelf showMessage:line title:@"Current Weather"];
 		}];
 	} else if ([action isEqualToString:@"logLevel"]){
-		[[TGClient shared] logVerbosityLevelWithCompletion:^(int32_t level, NSString *error){
+		[[TGDevStore shared] logVerbosityLevelWithCompletion:^(int32_t level, NSString *error){
 			if (error){
 				[weakSelf finish:NO error:error title:@"Log Verbosity"];
 				return;
@@ -269,7 +269,7 @@
 			[weakSelf showMessage:line title:@"Log Verbosity"];
 		}];
 	} else if ([action isEqualToString:@"logTags"]){
-		[[TGClient shared] logTagsWithCompletion:^(NSArray *tags, NSString *error){
+		[[TGDevStore shared] logTagsWithCompletion:^(NSArray *tags, NSString *error){
 			if (error){
 				[weakSelf finish:NO error:error title:@"Log Tags"];
 				return;
@@ -295,7 +295,7 @@
 			[weakSelf rebuildSections];
 		}];
 	} else if ([action isEqualToString:@"readTagLevel"]){
-		[[TGClient shared] logVerbosityForTag:self.tag
+		[[TGDevStore shared] logVerbosityForTag:self.tag
 								   completion:^(int32_t level, NSString *error){
 			if (error){
 				[weakSelf finish:NO error:error title:@"Tag Verbosity"];
@@ -308,12 +308,12 @@
 			[weakSelf showMessage:line title:@"Tag Verbosity"];
 		}];
 	} else if ([action isEqualToString:@"writeTagLevel"]){
-		[[TGClient shared] setLogVerbosityForTag:self.tag level:self.tagLevel
+		[[TGDevStore shared] setLogVerbosityForTag:self.tag level:self.tagLevel
 									  completion:^(BOOL ok, NSString *error){
 			[weakSelf finish:ok error:error title:@"Tag Verbosity"];
 		}];
 	} else if ([action isEqualToString:@"logStream"]){
-		[[TGClient shared] logStreamWithCompletion:^(NSDictionary *stream, NSString *error){
+		[[TGDevStore shared] logStreamWithCompletion:^(NSDictionary *stream, NSString *error){
 			if (error){
 				[weakSelf finish:NO error:error title:@"Log Stream"];
 				return;
@@ -326,7 +326,7 @@
 			[weakSelf showMessage:line title:@"Log Stream"];
 		}];
 	} else if ([action isEqualToString:@"defaultStream"]){
-		[[TGClient shared] setLogStreamKind:@"default" path:nil
+		[[TGDevStore shared] setLogStreamKind:@"default" path:nil
 								 completion:^(BOOL ok, NSString *error){
 			[weakSelf finish:ok error:error title:@"Log Stream"];
 		}];
@@ -334,7 +334,7 @@
 		[weakSelf askText:@"Log File" message:@"A path inside the app container."
 			   placeholder:@"Documents/legacytg.log" text:nil action:@"Use"
 			   completion:^(NSString *path){
-			[[TGClient shared] setLogStreamKind:@"file" path:path
+			[[TGDevStore shared] setLogStreamKind:@"file" path:path
 									 completion:^(BOOL ok, NSString *error){
 				[weakSelf finish:ok error:error title:@"Log Stream"];
 			}];
@@ -346,18 +346,18 @@
 			[weakSelf rebuildSections];
 		}];
 	} else if ([action isEqualToString:@"addLog"]){
-		[[TGClient shared] addLogMessage:self.logText level:1
+		[[TGDevStore shared] addLogMessage:self.logText level:1
 							  completion:^(BOOL ok, NSString *error){
 			[weakSelf finish:ok error:error title:@"Log Message"];
 		}];
 	} else if ([action isEqualToString:@"saveEvent"]){
-		[[TGClient shared] saveApplicationLogEvent:@"legacytg_environment"
+		[[TGDevStore shared] saveApplicationLogEvent:@"legacytg_environment"
 											chatId:0 data:self.jsonText
 										completion:^(BOOL ok, NSString *error){
 			[weakSelf finish:ok error:error title:@"Application Log Event"];
 		}];
 	} else if ([action isEqualToString:@"alarm"]){
-		[[TGClient shared] alarmAfterSeconds:3.0 completion:^(BOOL ok, NSString *error){
+		[[TGDevStore shared] alarmAfterSeconds:3.0 completion:^(BOOL ok, NSString *error){
 			[weakSelf finish:ok error:error title:@"Alarm"];
 		}];
 	}
