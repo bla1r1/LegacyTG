@@ -4,9 +4,10 @@
 #import "TGPrivacyRuleViewController.h"
 #import "TGUserPickerViewController.h"
 #import "TGLocalization.h"
-#import "TGClient.h"
 #import "TGAlertSheet.h"
 #import "TGRows.h"
+#import "TGSettingsStore.h"
+
 
 @interface TGPrivacyRuleViewController ()
 @property (nonatomic, copy) NSString *setting;
@@ -56,7 +57,7 @@ static NSString *TGPrivacyRuleFooterText(NSString *setting) {
 
 - (void)loadDetails {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] privacyRuleDetails:self.setting
+	[[TGSettingsStore shared] privacyRuleDetails:self.setting
 							   completion:^(NSString *ruleType, NSArray *allowUserIds, NSArray *restrictUserIds){
 		dispatch_async(dispatch_get_main_queue(), ^{
 			weakSelf.ruleType = ruleType.length ? ruleType : @"everybody";
@@ -70,7 +71,7 @@ static NSString *TGPrivacyRuleFooterText(NSString *setting) {
 
 - (void)saveRule {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] setPrivacyRule:self.setting
+	[[TGSettingsStore shared] setPrivacyRule:self.setting
 								 type:self.ruleType
 						 allowUserIds:self.allowUserIds
 					  restrictUserIds:self.restrictUserIds

@@ -7,13 +7,14 @@
 // refusal; none of it is a local guess.
 //
 #import "TGNetworkViewController.h"
-#import "TGClient.h"
 #import "TGAlertSheet.h"
 #import "TGStorageViewController.h"
 #import "TGListViewController.h"
 #import "TGStyle.h"
 #import "TGTheme.h"
 #import "TGRows.h"
+#import "TGSettingsStore.h"
+
 
 static NSMutableDictionary *TGNetRow(NSString *title, NSString *detail,
 									 void (^tap)(void)) {
@@ -161,7 +162,7 @@ static NSDictionary *TGNetSection(NSString *header, NSString *footer, NSArray *r
 		if (index < 0 || index >= (NSInteger)names.count)
 			return;
 		NSString *type = names[(NSUInteger)index];
-		[[TGClient shared] setNetworkType:type completion:^(BOOL ok, NSString *error){
+		[[TGSettingsStore shared] setNetworkType:type completion:^(BOOL ok, NSString *error){
 			if (!ok){
 				[weakSelf showError:error title:@"Network Type"];
 				return;
@@ -179,7 +180,7 @@ static NSDictionary *TGNetSection(NSString *header, NSString *footer, NSArray *r
 
 - (void)loadState {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] currentStateWithCompletion:^(NSArray *updates, NSString *error){
+	[[TGSettingsStore shared] currentStateWithCompletion:^(NSArray *updates, NSString *error){
 		weakSelf.stateRows = updates ?: @[];
 		weakSelf.stateError = error;
 		weakSelf.stateLoaded = YES;
@@ -208,7 +209,7 @@ static NSDictionary *TGNetSection(NSString *header, NSString *footer, NSArray *r
 	if (self.stateLoaded)
 		show(self.stateRows, self.stateError);
 	else
-		[[TGClient shared] currentStateWithCompletion:^(NSArray *updates, NSString *error){
+		[[TGSettingsStore shared] currentStateWithCompletion:^(NSArray *updates, NSString *error){
 			weakSelf.stateRows = updates ?: @[];
 			weakSelf.stateError = error;
 			weakSelf.stateLoaded = YES;
@@ -221,7 +222,7 @@ static NSDictionary *TGNetSection(NSString *header, NSString *footer, NSArray *r
 
 - (void)showApplicationConfig {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] applicationConfigWithCompletion:^(NSDictionary *config,
+	[[TGSettingsStore shared] applicationConfigWithCompletion:^(NSDictionary *config,
 														  NSString *error){
 		if (!config){
 			[weakSelf showError:error title:@"Application Config"];
@@ -244,7 +245,7 @@ static NSDictionary *TGNetSection(NSString *header, NSString *footer, NSArray *r
 
 - (void)showDatabaseStatistics {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] databaseStatisticsWithCompletion:^(NSString *statistics,
+	[[TGSettingsStore shared] databaseStatisticsWithCompletion:^(NSString *statistics,
 														   NSString *error){
 		if (!statistics.length){
 			[weakSelf showError:(error ?: @"An error occurred.")
@@ -269,7 +270,7 @@ static NSDictionary *TGNetSection(NSString *header, NSString *footer, NSArray *r
 
 - (void)loadTotals {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] networkStatsWithCompletion:^(long long sent, long long received){
+	[[TGSettingsStore shared] networkStatsWithCompletion:^(long long sent, long long received){
 		weakSelf.sent = sent;
 		weakSelf.received = received;
 		[weakSelf rebuild];
@@ -308,7 +309,7 @@ static NSDictionary *TGNetSection(NSString *header, NSString *footer, NSArray *r
 							placeholder:@"0"
 								   text:@"0" action:@"Add" inView:weakSelf.view
 							   onSubmit:^(NSString *durationText){
-					[[TGClient shared] addNetworkStatisticsForNetworkType:type
+					[[TGSettingsStore shared] addNetworkStatisticsForNetworkType:type
 							sentBytes:[sentText longLongValue]
 							receivedBytes:[receivedText longLongValue]
 								 duration:[durationText doubleValue]
@@ -349,7 +350,7 @@ static NSDictionary *TGNetSection(NSString *header, NSString *footer, NSArray *r
 						placeholder:@"0"
 							   text:@"0" action:@"Render" inView:weakSelf.view
 						   onSubmit:^(NSString *xText){
-				[[TGClient shared] statisticalGraphForChat:chatId
+				[[TGSettingsStore shared] statisticalGraphForChat:chatId
 													token:token
 														x:(NSInteger)xText.longLongValue
 											   completion:^(NSDictionary *graph, NSString *error){

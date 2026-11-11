@@ -30,7 +30,7 @@ Phase 1 itself moved only the outbound text path; the off-plan section below ext
 ### Off-plan: chat list store and M24 (done)
 - [x] `done` `TGChatListStore` owns the list data seam: chats, archive, folders, unread total, list callbacks, chat actions and story-list calls. Main `src/Features/ChatList` files import the store, not `TGClient`.
 - [x] `done` M24 row facts: preview kind and thumbnail file, reaction/poll/folder trailing badge, compact `99+` counts, Chats-tab badge, typing sender, Saved Messages row, pinned tint and scalar stripping.
-- [x] `done` `TGChatListStoreTests` covers compact counts, folder tag mapping, the row-model keys and the group typing sender; `make -f tests/Makefile test` is 2,271 passed, 0 failed.
+- [x] `done` `TGChatListStoreTests` covers compact counts, folder tag mapping, the row-model keys and the group typing sender; `make -f tests/Makefile test` is 2,313 passed, 0 failed.
 - [x] `done` `TGSearchStore` owns the search screen; `TGSearchViewController` no longer imports `TGClient` and the ChatList allow entries are gone.
 
 
@@ -38,7 +38,7 @@ Phase 1 itself moved only the outbound text path; the off-plan section below ext
 - [x] `done` `TGProfileStore` owns the Profile feature's 92 methods: profile/full-info reads, edit name/bio/birthday/username, photos, emoji status, audio, appearance, gifts, media tabs, blocks and chat actions.
 - [x] `done` All 148 `TGClient` calls in 15 Profile files moved behind the store; `src/Features/Profile` no longer mentions the client.
 - [x] `done` `TGProfileSupport.h` carries the two C helpers the screens still share (`TGFirstUsername`, `TGMediaPageAppending`).
-- [x] `done` `TGProfileStoreTests` covers properties, `setBio`, blocking and accent ids; `make -f tests/Makefile test` is 2,271 passed, 0 failed.
+- [x] `done` `TGProfileStoreTests` covers properties, `setBio`, blocking and accent ids; `make -f tests/Makefile test` is 2,313 passed, 0 failed.
 - [x] `done` Request bodies for edit/photo/audio/action methods moved into `TGProfileStore` and its categories. Only `send:`, `request:` and the `supergroupIdForChat:` helper remain in the store.
 
 
@@ -46,8 +46,13 @@ Phase 1 itself moved only the outbound text path; the off-plan section below ext
 - [x] `done` `TGMediaStore` owns file facts, local deletion, Downloads registration, cancel and the 16 MB decoded-buffer cache (32 MB on 64-bit). `TGStickerStore+Stickers.m` owns the sticker shelf and authoring bodies; Media feature allow-list is empty.
 - [x] `done` M23 file and music picker: `UIDocumentPicker` on iOS 8+, `MPMediaPickerController` with .m4a export, both sending through `TGSendStore`; GIF caption and view-once timer choices included.
 - [x] `done` `TGSendStore` owns `inputMessageDocument` and `inputMessageAudio` shapes; `TGFileInfoViewController` and the media viewer save/add-download paths use `TGMediaStore`.
-- [x] `done` `make -f tests/Makefile test`: 2,271 passed, 0 failed.
+- [x] `done` `make -f tests/Makefile test`: 2,313 passed, 0 failed.
 - [x] `done` M23 remainder: `TGMusicStreamer` streams the growing file through `AudioFileStream`/`AudioQueue`; `TGSendStore` silent sends and `TGMessageStore scheduledAtDate:repeatPeriod:` are wired through `messageSendOptions`.
+- [x] `done` `TGStarsStore` owns the stars, gifts, ads, boosts, affiliate and Premium request bodies; Auth routes through `TGAccountStore`. The allow list is now **0** (8 -> 0).
+- [x] `done` `TGCallStore` and `TGStoryStore` own the group-call and story request bodies; all 16 Calls/Stories allow-list entries are gone (24 -> 8).
+- [x] `done` `TGSettingsStore`, `TGSessionsStore`, `TGAccountStore` and `TGTextStylesStore` own the settings, sessions, account and text-style request bodies; all 14 Settings allow-list entries and TGClient in the Settings category files are gone (38 -> 24).
+- [x] `done` `TGBusinessStore` owns the business profile, links, away/greeting/hours and business-message requests; the 9 Business allow-list entries are gone (47 -> 38).
+- [x] `done` `TGContactsStore`, `TGChannelStore` and `TGDevStore` own the contacts, similar-channels and developer-tool request bodies; 11 allow-list entries removed (58 -> 47).
 - [x] `done` `TGGroupStore` owns the group request bodies (`+Groups`, `+Topics`, `+Invites`, `+Usernames`, `+Community`, `+Tools`); all 19 `src/Features/Groups` allow-list entries are gone, the list is down to 58 files, and `TGGroupStoreTests` checks the request shapes.
 
 ### Phase 2: Attachment pipeline and file cache (`TGMediaStore`)

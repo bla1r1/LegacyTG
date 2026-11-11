@@ -1,6 +1,5 @@
 #import "TGBusinessViewController.h"
 #import "TGBusinessMessagesViewController.h"
-#import "TGClient.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
@@ -14,6 +13,8 @@
 #import "TGBusinessAwayViewController.h"
 #import "TGBusinessHoursViewController.h"
 #import "TGBusinessIntroViewController.h"
+#import "TGBusinessStore.h"
+#import "TGProfileStore.h"
 
 @interface TGBusinessLocationViewController ()
 @property (nonatomic, copy) NSString *address;
@@ -80,7 +81,7 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 	[super viewDidLoad];
 	self.title = @"Location";
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] businessInfoWithCompletion:^(NSDictionary *info, NSString *error){
+	[[TGBusinessStore shared] businessInfoWithCompletion:^(NSDictionary *info, NSString *error){
 		TGBusinessLocationViewController *page = weakSelf;
 		if (!page)
 			return;
@@ -147,14 +148,14 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 						 title:@"Location"];
 			return;
 		}
-		[[TGClient shared] setBusinessLocationLatitude:self.latitude
+		[[TGBusinessStore shared] setBusinessLocationLatitude:self.latitude
 											 longitude:self.longitude
 											   address:self.address
 											completion:^(BOOL ok, NSString *error){
 			[weakSelf showResult:ok error:error title:@"Location"];
 		}];
 	} else if ([action isEqualToString:@"delete"]){
-		[[TGClient shared] setBusinessLocationLatitude:nil longitude:nil address:nil
+		[[TGBusinessStore shared] setBusinessLocationLatitude:nil longitude:nil address:nil
 											completion:^(BOOL ok, NSString *error){
 			TGBusinessLocationViewController *page = weakSelf;
 			if (!ok){

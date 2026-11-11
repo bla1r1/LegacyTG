@@ -14,6 +14,12 @@
 #import "TGAdminRightsViewController.h"
 #import "TGNotificationCategoryViewController.h"
 #import "TGUpdateStore.h"
+#import "TGAccountStore.h"
+#import "TGMessageStore.h"
+#import "TGProfileStore.h"
+#import "TGSessionsStore.h"
+#import "TGSettingsStore.h"
+
 
 static NSString *TGFreezeDetail(NSDictionary *state) {
 	if (![state isKindOfClass:NSDictionary.class])
@@ -103,7 +109,7 @@ static NSString *TGNotificationGroupLabel(NSString *type) {
 		TGSwitchRow(@"In-App Preview", preview, ^(BOOL on){
 			for (NSString *scope in scopes){
 				weakSelf.previews[scope] = @(on);
-				[[TGClient shared] setScope:scope showPreview:on];
+				[[TGSettingsStore shared] setScope:scope showPreview:on];
 			}
 			[weakSelf rebuild];
 		}),
@@ -112,11 +118,11 @@ static NSString *TGNotificationGroupLabel(NSString *type) {
 	// Reactions are their own settings record in TDLib, not a scope. The
 	// switch writes one field of it; the default and the recent list are the
 	// two things the reaction bar reads before it draws.
-	NSString *defaultEmoji = [TGClient shared].defaultReactionEmoji ?: @"\U0001F44D";
+	NSString *defaultEmoji = [TGMessageStore shared].defaultReactionEmoji ?: @"\U0001F44D";
 	NSArray *reactionRows = @[
-		TGSwitchRow(@"Reactions", [TGClient shared].reactionNotificationsEnabled,
+		TGSwitchRow(@"Reactions", [TGSettingsStore shared].reactionNotificationsEnabled,
 				^(BOOL on){
-			[[TGClient shared] setReactionNotificationsEnabled:on completion:^(BOOL ok){
+			[[TGSettingsStore shared] setReactionNotificationsEnabled:on completion:^(BOOL ok){
 				if (!ok)
 					[TGAlertSheet showMessage:@"An error occurred."
 										 title:@"Reactions"
@@ -133,7 +139,7 @@ static NSString *TGNotificationGroupLabel(NSString *type) {
 							   inView:weakSelf.view
 							 onChoice:^(NSInteger index){
 				NSString *emoji = choices[(NSUInteger)index];
-				[[TGClient shared] setDefaultReactionEmoji:emoji completion:^(BOOL ok){
+				[[TGMessageStore shared] setDefaultReactionEmoji:emoji completion:^(BOOL ok){
 					if (!ok)
 						[TGAlertSheet showMessage:@"An error occurred."
 											 title:@"Reactions"
@@ -149,7 +155,7 @@ static NSString *TGNotificationGroupLabel(NSString *type) {
 						  destructive:YES
 							   inView:weakSelf.view
 							onConfirm:^{
-				[[TGClient shared] clearRecentReactionsWithCompletion:^(BOOL ok){
+				[[TGSettingsStore shared] clearRecentReactionsWithCompletion:^(BOOL ok){
 					if (ok)
 						[TGAlertSheet showMessage:@"Done"
 											 title:@"Reactions"
@@ -159,7 +165,7 @@ static NSString *TGNotificationGroupLabel(NSString *type) {
 		}),
 	];
 
-	NSUInteger activeGroups = [TGClient shared].activeNotificationGroups.count;
+	NSUInteger activeGroups = [TGSettingsStore shared].activeNotificationGroups.count;
 	(void)activeGroups;
 
 	return @[
@@ -177,7 +183,7 @@ static NSString *TGNotificationGroupLabel(NSString *type) {
 						  destructive:YES
 							   inView:weakSelf.view
 							onConfirm:^{
-				[[TGClient shared] resetAllNotificationSettings];
+				[[TGSettingsStore shared] resetAllNotificationSettings];
 				[weakSelf loadForPage];
 			}];
 		})]),
@@ -273,7 +279,7 @@ static NSString *TGNotificationGroupLabel(NSString *type) {
 
 - (void)addSavedSoundAtPath:(NSString *)path {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] addSavedNotificationSoundAtPath:path
+	[[TGSettingsStore shared] addSavedNotificationSoundAtPath:path
 											completion:^(NSDictionary *sound,
 														 NSString *error){
 		if (error || !sound){
@@ -299,7 +305,7 @@ static NSString *TGNotificationGroupLabel(NSString *type) {
 			[weakSelf removeSavedSound:sound];
 			return;
 		}
-		[[TGClient shared] savedNotificationSound:[sound[@"id"] longLongValue]
+		[[TGSettingsStore shared] savedNotificationSound:[sound[@"id"] longLongValue]
 									   completion:^(NSDictionary *fresh){
 			if (!fresh){
 				[TGAlertSheet showMessage:@"An error occurred."
@@ -331,7 +337,7 @@ static NSString *TGNotificationGroupLabel(NSString *type) {
 				 destructive:YES
 					   inView:self.view
 					onConfirm:^{
-		[[TGClient shared] removeSavedNotificationSound:[sound[@"id"] longLongValue]
+		[[TGSettingsStore shared] removeSavedNotificationSound:[sound[@"id"] longLongValue]
 										   completion:^(BOOL ok, NSString *error){
 			if (!ok){
 				[TGAlertSheet showMessage:(error ?: @"An error occurred.")
@@ -346,7 +352,7 @@ static NSString *TGNotificationGroupLabel(NSString *type) {
 }
 
 - (NSArray *)activeNotificationSections {
-	NSArray *groups = [TGClient shared].activeNotificationGroups;
+	NSArray *groups = [TGSettingsStore shared].activeNotificationGroups;
 	if (!groups.count){
 		return @[TGSection(nil, nil,
 				@[TGRow(TGKindPlain, @"None")])];
@@ -393,7 +399,7 @@ static NSString *TGNotificationGroupLabel(NSString *type) {
 				 destructive:YES
 					   inView:self.view
 					onConfirm:^{
-		[[TGClient shared] removeNotification:[notification[@"id"] intValue]
+		[[TGSettingsStore shared] removeNotification:[notification[@"id"] intValue]
 									  inGroup:[group[@"id"] intValue]
 								   completion:^(BOOL ok, NSString *error){
 			if (!ok){
@@ -418,7 +424,7 @@ static NSString *TGNotificationGroupLabel(NSString *type) {
 				 destructive:YES
 					   inView:self.view
 					onConfirm:^{
-		[[TGClient shared] removeNotificationGroup:[group[@"id"] intValue]
+		[[TGSettingsStore shared] removeNotificationGroup:[group[@"id"] intValue]
 								maxNotificationId:maxId
 									   completion:^(BOOL ok, NSString *error){
 			if (!ok){
@@ -493,7 +499,7 @@ static NSString *TGNotificationGroupLabel(NSString *type) {
 								   inView:weakSelf.view
 								 onChoice:^(NSInteger index){
 					static const NSInteger seconds[4] = {0, 86400, 604800, 2592000};
-					[[TGClient shared] setDefaultMessageAutoDeleteTime:seconds[index]];
+					[[TGSettingsStore shared] setDefaultMessageAutoDeleteTime:seconds[index]];
 					weakSelf.autoDeleteDefault = seconds[index];
 					[weakSelf rebuild];
 				}];
@@ -519,10 +525,10 @@ static NSString *TGNotificationGroupLabel(NSString *type) {
 			// Official's auto-archive row is a switch, and its section has
 			// no icon tile.
 			TGSwitchRow(@"Automatically Archive",
-					[[TGClient shared].archiveSettings[@"archive_and_mute_new_chats_from_unknown_users"] boolValue],
+					[[TGSettingsStore shared].archiveSettings[@"archive_and_mute_new_chats_from_unknown_users"] boolValue],
 					^(BOOL on){
-				NSDictionary *settings = [TGClient shared].archiveSettings ?: @{};
-				[[TGClient shared] setArchiveSettingsArchiveAndMute:on
+				NSDictionary *settings = [TGSettingsStore shared].archiveSettings ?: @{};
+				[[TGSettingsStore shared] setArchiveSettingsArchiveAndMute:on
 												keepUnmutedArchived:
 						[settings[@"keep_unmuted_chats_archived"] boolValue]
 											  keepFolderChatsArchived:
@@ -554,7 +560,7 @@ static NSString *TGNotificationGroupLabel(NSString *type) {
 					}
 					static const NSInteger months[6] = {1, 3, 6, 12, 18, 24};
 					NSInteger days = TGSettingsAccountTtlDaysForMonths(months[index]);
-					[[TGClient shared] setAccountTtlDays:days];
+					[[TGSettingsStore shared] setAccountTtlDays:days];
 					weakSelf.accountTtl = days;
 					[weakSelf rebuild];
 				}];
@@ -629,7 +635,7 @@ static NSString *TGNotificationGroupLabel(NSString *type) {
 		indexPath.row >= (NSInteger)self.blocked.count)
 		return;
 	NSDictionary *user = self.blocked[(NSUInteger)indexPath.row];
-	[[TGClient shared] setUser:[user[@"id"] longLongValue] blocked:NO];
+	[[TGAccountStore shared] setUser:[user[@"id"] longLongValue] blocked:NO];
 	NSMutableArray *rest = [self.blocked mutableCopy];
 	[rest removeObject:user];
 	self.blocked = rest;
@@ -644,7 +650,7 @@ static NSString *TGNotificationGroupLabel(NSString *type) {
 /// is on; the sheet says until when and where the appeal goes, and offers the
 /// link the update named rather than only printing it.
 - (void)showFreezeState {
-	NSDictionary *state = [TGClient shared].freezeState;
+	NSDictionary *state = [TGAccountStore shared].freezeState;
 	if (![state isKindOfClass:NSDictionary.class]){
 		[TGAlertSheet showMessage:@"Empty"
 							title:@"Your Account is Frozen" inView:self.view];
@@ -668,8 +674,8 @@ static NSString *TGNotificationGroupLabel(NSString *type) {
 }
 
 - (void)showSubscriptionState {
-	NSDictionary *record = [[TGClient shared] subscriptionForUserId:
-			[[TGClient shared].me[@"id"] longLongValue]];
+	NSDictionary *record = [[TGAccountStore shared] subscriptionForUserId:
+			[[TGProfileStore shared].me[@"id"] longLongValue]];
 	if (![record isKindOfClass:NSDictionary.class]){
 		[TGAlertSheet showMessage:@"Empty"
 							title:@"Subscription" inView:self.view];
@@ -683,7 +689,7 @@ static NSString *TGNotificationGroupLabel(NSString *type) {
 /// bot is the action the protocol names; there is no td_api call that solves
 /// it on the app's behalf.
 - (void)showAgeVerificationState {
-	NSDictionary *parameters = [TGClient shared].ageVerificationParameters;
+	NSDictionary *parameters = [TGAccountStore shared].ageVerificationParameters;
 	if (![parameters isKindOfClass:NSDictionary.class]){
 		[TGAlertSheet showMessage:@"Empty"
 							title:@"Age Verification" inView:self.view];
@@ -711,7 +717,7 @@ static NSString *TGNotificationGroupLabel(NSString *type) {
 /// (action, site key, verification id) and can copy the key for an official
 /// client, instead of pretending the request was handled.
 - (void)showRecaptchaVerification {
-	NSDictionary *request = [TGClient shared].recaptchaVerificationRequest;
+	NSDictionary *request = [TGAccountStore shared].recaptchaVerificationRequest;
 	if (![request isKindOfClass:NSDictionary.class]){
 		[TGAlertSheet showMessage:@"Empty"
 							title:@"Verify" inView:self.view];
@@ -744,7 +750,7 @@ static NSString *TGNotificationGroupLabel(NSString *type) {
 
 - (void)choosePersonalChat {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] suitablePersonalChatsWithCompletion:^(NSArray *chats){
+	[[TGSettingsStore shared] suitablePersonalChatsWithCompletion:^(NSArray *chats){
 		TGSettingsViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -759,7 +765,7 @@ static NSString *TGNotificationGroupLabel(NSString *type) {
 		[TGAlertSheet showChoices:titles title:@"Chat"
 				destructiveIndex:-1 inView:me.view onChoice:^(NSInteger index){
 			int64_t chatId = index == 0 ? 0 : [chats[index - 1][@"id"] longLongValue];
-			[[TGClient shared] setPersonalChat:chatId completion:^(BOOL ok){
+			[[TGSettingsStore shared] setPersonalChat:chatId completion:^(BOOL ok){
 				if (!ok){
 					[TGAlertSheet showMessage:@"An error occurred."
 										title:@"Chat" inView:me.view];
@@ -767,7 +773,7 @@ static NSString *TGNotificationGroupLabel(NSString *type) {
 				}
 				me.personalChatId = chatId;
 				[NSUserDefaults.standardUserDefaults setObject:@(chatId)
-													   forKey:TGAccountDefaultsKey(@"TGPersonalChatId")];
+													   forKey:TGAccountStoreDefaultsKey(@"TGPersonalChatId")];
 				[me rebuild];
 			}];
 		}];
@@ -776,7 +782,7 @@ static NSString *TGNotificationGroupLabel(NSString *type) {
 
 - (void)showInactiveGroups {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] inactiveSupergroupChatsWithCompletion:^(NSArray *chats){
+	[[TGSettingsStore shared] inactiveSupergroupChatsWithCompletion:^(NSArray *chats){
 		TGSettingsViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -806,11 +812,11 @@ static NSString *TGNotificationGroupLabel(NSString *type) {
 
 - (void)showPublicChats {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] createdPublicChatsOfType:@"username" completion:^(NSArray *chats){
+	[[TGSettingsStore shared] createdPublicChatsOfType:@"username" completion:^(NSArray *chats){
 		TGSettingsViewController *me = weakSelf;
 		if (!me)
 			return;
-		[[TGClient shared] checkCreatedPublicChatsLimitForType:@"username"
+		[[TGSettingsStore shared] checkCreatedPublicChatsLimitForType:@"username"
 				completion:^(BOOL ok, NSString *reason){
 			NSMutableArray *rows = [NSMutableArray arrayWithObject:@{
 				@"title" : @"Username",
@@ -838,7 +844,7 @@ static NSString *TGNotificationGroupLabel(NSString *type) {
 					message:nil
 				placeholder:@"username" text:nil action:@"Check"
 					 inView:self.view onSubmit:^(NSString *username){
-		[[TGClient shared] checkUsername:username forChat:chatId
+		[[TGSettingsStore shared] checkUsername:username forChat:chatId
 							  completion:^(NSString *result){
 			NSString *say = nil;
 			if ([result isEqualToString:@"ok"])
@@ -857,7 +863,7 @@ static NSString *TGNotificationGroupLabel(NSString *type) {
 
 - (void)hideCloseBirthdays {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] hideContactCloseBirthdaysWithCompletion:^(BOOL ok, NSString *error){
+	[[TGProfileStore shared] hideContactCloseBirthdaysWithCompletion:^(BOOL ok, NSString *error){
 		if (!ok){
 			[TGAlertSheet showMessage:(error ?: @"An error occurred.")
 								title:@"Birthday" inView:weakSelf.view];

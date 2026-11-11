@@ -15,6 +15,11 @@
 #import "TGRows.h"
 #import "TGRowCell.h"
 #import <objc/runtime.h>
+#import "TGChatListStore.h"
+#import "TGMessageStore.h"
+#import "TGProfileStore.h"
+#import "TGSettingsStore.h"
+
 
 static char TGAutoDownloadBaselineKey;
 
@@ -62,8 +67,8 @@ static NSArray *TGPageSectionsFromModel(NSArray *model, NSArray *rows) {
 }
 
 static NSString *TGChatNameForId(NSNumber *chatId) {
-	for (NSArray *list in @[[TGClient shared].chats ?: @[],
-							[TGClient shared].archivedChats ?: @[]])
+	for (NSArray *list in @[[TGChatListStore shared].chats ?: @[],
+							[TGChatListStore shared].archivedChats ?: @[]])
 		for (NSDictionary *chat in list)
 			if ([chat[@"id"] longLongValue] == chatId.longLongValue){
 				NSString *title = chat[@"title"];
@@ -122,7 +127,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 	next[@"enabled"] = @(enabled);
 	self.preset = next;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] applyAutoDownloadPreset:next forNetwork:self.network
+	[[TGSettingsStore shared] applyAutoDownloadPreset:next forNetwork:self.network
 									completion:^(BOOL ok){
 		if (ok && weakSelf.onChanged)
 			weakSelf.onChanged();
@@ -164,7 +169,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 	self.title = TGLocalized(@"Data Usage");
 	[self rebuildSections];
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] networkStatsWithCompletion:^(long long sent, long long received){
+	[[TGSettingsStore shared] networkStatsWithCompletion:^(long long sent, long long received){
 		weakSelf.sent = sent;
 		weakSelf.received = received;
 		weakSelf.sentText = TGBytes(sent);
@@ -201,7 +206,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 				  destructive:YES
 					   inView:self.view
 					onConfirm:^{
-		[[TGClient shared] resetNetworkStats];
+		[[TGSettingsStore shared] resetNetworkStats];
 		weakSelf.sent = 0;
 		weakSelf.received = 0;
 		weakSelf.sentText = TGBytes(0);
@@ -311,9 +316,9 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 		NSMutableDictionary *reset = [TGActionRow(@"Reset", ^{
 			NSDictionary *mobile = (baseline ?: weakSelf.autoDownloadPresets)[@"medium"];
 			NSDictionary *wifi = (baseline ?: weakSelf.autoDownloadPresets)[@"high"];
-			[[TGClient shared] applyAutoDownloadPreset:mobile forNetwork:@"mobile"
+			[[TGSettingsStore shared] applyAutoDownloadPreset:mobile forNetwork:@"mobile"
 											completion:^(BOOL ok){
-				[[TGClient shared] applyAutoDownloadPreset:wifi forNetwork:@"wifi"
+				[[TGSettingsStore shared] applyAutoDownloadPreset:wifi forNetwork:@"wifi"
 												completion:^(BOOL ok2){
 					if (ok && ok2 && baseline)
 						weakSelf.autoDownloadPresets = baseline;
@@ -404,7 +409,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 
 - (NSArray *)folderSections {
 	__weak typeof(self) weakSelf = self;
-	NSArray *folders = [TGClient shared].folders;
+	NSArray *folders = [TGChatListStore shared].folders;
 
 	if (!weakSelf.folderTagsLoaded){
 		weakSelf.folderTagsEnabled = YES;
@@ -433,7 +438,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 									 action:@"Create"
 									 inView:weakSelf.view
 								   onSubmit:^(NSString *name){
-						[[TGClient shared] createFolderNamed:name icon:nil withChats:@[]
+						[[TGSettingsStore shared] createFolderNamed:name icon:nil withChats:@[]
 												  completion:^(NSInteger folderId){
 							if (!folderId){
 								[weakSelf toast:@"An error occurred."];
@@ -461,7 +466,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 					continue;
 				NSDictionary *entry = recommended[(NSUInteger)index];
 				row[TGRowTap] = [^{
-					[[TGClient shared] createRecommendedFolder:entry[@"folder"]
+					[[TGSettingsStore shared] createRecommendedFolder:entry[@"folder"]
 													completion:^(NSInteger folderId){
 						[weakSelf toast:folderId ? @"Done" : @"An error occurred."];
 					}];
@@ -469,7 +474,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 			} else if ([action isEqualToString:@"toggleTags"]){
 				row[TGRowToggle] = [^(BOOL on){
 					weakSelf.folderTagsEnabled = on;
-					[[TGClient shared] toggleFolderTags:on];
+					[[TGSettingsStore shared] toggleFolderTags:on];
 				} copy];
 			}
 			[rows addObject:row];
@@ -499,7 +504,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 			[TGAlertSheet showInput:@"Edit Folder" message:nil
 						placeholder:@"Name" text:title action:@"Save"
 							 inView:me.view onSubmit:^(NSString *name){
-				[[TGClient shared] editFolder:folderId name:name chats:nil
+				[[TGSettingsStore shared] editFolder:folderId name:name chats:nil
 								   completion:^(BOOL ok){
 					if (!ok)
 						[me toast:@"An error occurred."];
@@ -528,12 +533,12 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 /// readings rather than assuming either.
 - (void)confirmDeleteFolder:(NSInteger)folderId named:(NSString *)title {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] chatsToLeaveForFolder:folderId completion:^(NSArray *suggested){
+	[[TGSettingsStore shared] chatsToLeaveForFolder:folderId completion:^(NSArray *suggested){
 		TGSettingsViewController *me = weakSelf;
 		if (!me)
 			return;
 		void (^remove)(NSArray *) = ^(NSArray *leave){
-			[[TGClient shared] deleteFolder:folderId leavingChats:leave];
+			[[TGSettingsStore shared] deleteFolder:folderId leavingChats:leave];
 			[me toast:@"Done"];
 		};
 		if (!suggested.count){
@@ -555,13 +560,13 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 
 - (void)showDefaultIconForFolder:(NSDictionary *)folder {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] folderDetails:[folder[@"id"] integerValue]
+	[[TGSettingsStore shared] folderDetails:[folder[@"id"] integerValue]
 							 completion:^(NSDictionary *current){
 		if (!current){
 			[weakSelf toast:@"An error occurred."];
 			return;
 		}
-		[[TGClient shared] defaultIconNameForFolder:current
+		[[TGSettingsStore shared] defaultIconNameForFolder:current
 										 completion:^(NSString *name){
 			(void)name;
 			[TGAlertSheet showMessage:@"Done"
@@ -572,13 +577,13 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 
 - (void)showChatCountForFolder:(NSDictionary *)folder {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] folderDetails:[folder[@"id"] integerValue]
+	[[TGSettingsStore shared] folderDetails:[folder[@"id"] integerValue]
 							 completion:^(NSDictionary *current){
 		if (!current){
 			[weakSelf toast:@"An error occurred."];
 			return;
 		}
-		[[TGClient shared] chatCountForFolder:current completion:^(NSInteger count){
+		[[TGSettingsStore shared] chatCountForFolder:current completion:^(NSInteger count){
 			[TGAlertSheet showMessage:[NSString stringWithFormat:@"%ld", (long)count]
 								title:@"Chats" inView:weakSelf.view];
 		}];
@@ -587,7 +592,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 
 - (void)showNewChatsForFolder:(NSInteger)folderId named:(NSString *)title {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] newChatsForFolder:folderId completion:^(NSArray *chatIds){
+	[[TGSettingsStore shared] newChatsForFolder:folderId completion:^(NSArray *chatIds){
 		TGSettingsViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -599,7 +604,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 		[TGAlertSheet showConfirm:nil
 							title:@"New Chats" action:@"Add"
 					  destructive:NO inView:me.view onConfirm:^{
-			[[TGClient shared] processNewChats:chatIds forFolder:folderId
+			[[TGSettingsStore shared] processNewChats:chatIds forFolder:folderId
 									completion:^(BOOL ok){
 				[me toast:(ok ? @"Done" : @"An error occurred.")];
 			}];
@@ -609,7 +614,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 
 - (void)showInviteLinksForFolder:(NSInteger)folderId named:(NSString *)title {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] inviteLinksForFolder:folderId completion:^(NSArray *links){
+	[[TGSettingsStore shared] inviteLinksForFolder:folderId completion:^(NSArray *links){
 		TGSettingsViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -632,8 +637,8 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 
 - (void)createInviteLinkForFolder:(NSInteger)folderId named:(NSString *)title {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] chatsForFolderInviteLink:folderId completion:^(NSArray *chatIds){
-		[[TGClient shared] createInviteLinkForFolder:folderId name:title
+	[[TGSettingsStore shared] chatsForFolderInviteLink:folderId completion:^(NSArray *chatIds){
+		[[TGSettingsStore shared] createInviteLinkForFolder:folderId name:title
 											chatIds:chatIds
 										 completion:^(NSString *link){
 			[TGAlertSheet showMessage:(link.length ? link
@@ -662,9 +667,9 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 						placeholder:@"Name" text:link[@"name"] ?: @""
 							 action:@"Save" inView:weakSelf.view
 						 onSubmit:^(NSString *name){
-				[[TGClient shared] chatsForFolderInviteLink:folderId
+				[[TGSettingsStore shared] chatsForFolderInviteLink:folderId
 						completion:^(NSArray *chatIds){
-					[[TGClient shared] editInviteLinkForFolder:folderId link:url
+					[[TGSettingsStore shared] editInviteLinkForFolder:folderId link:url
 							name:name chatIds:chatIds completion:^(BOOL ok){
 						[weakSelf toast:(ok ? @"Done"
 											: @"An error occurred.")];
@@ -676,7 +681,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 		[TGAlertSheet showConfirm:nil
 							title:title action:@"Delete" destructive:YES
 						   inView:weakSelf.view onConfirm:^{
-			[[TGClient shared] deleteInviteLinkForFolder:folderId link:url
+			[[TGSettingsStore shared] deleteInviteLinkForFolder:folderId link:url
 					completion:^(BOOL ok){
 				[weakSelf toast:(ok ? @"Done"
 									: @"An error occurred.")];
@@ -694,7 +699,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 				 onSubmit:^(NSString *link){
 		NSString *url = [link hasPrefix:@"http"] ? link
 				: [@"https://" stringByAppendingString:link];
-		[[TGClient shared] checkFolderInviteLink:url completion:^(NSDictionary *folder){
+		[[TGSettingsStore shared] checkFolderInviteLink:url completion:^(NSDictionary *folder){
 			TGSettingsViewController *me = weakSelf;
 			if (!me)
 				return;
@@ -706,7 +711,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 			NSArray *missing = folder[@"missing"] ?: @[];
 			[TGAlertSheet showConfirm:nil title:@"Add Folder" action:@"Add"
 						  destructive:NO inView:me.view onConfirm:^{
-				[[TGClient shared] addFolderByInviteLink:url chatIds:missing
+				[[TGSettingsStore shared] addFolderByInviteLink:url chatIds:missing
 											 completion:^(BOOL ok){
 					[me toast:(ok ? @"Done" : @"An error occurred.")];
 				}];
@@ -719,7 +724,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 	TGForwardPicker *picker = [[TGForwardPicker alloc] init];
 	__weak typeof(self) weakSelf = self;
 	picker.onPicked = ^(int64_t chatId){
-		[[TGClient shared] folderDetails:folderId completion:^(NSDictionary *current){
+		[[TGSettingsStore shared] folderDetails:folderId completion:^(NSDictionary *current){
 			TGSettingsViewController *me = weakSelf;
 			if (!current){
 				[me toast:@"An error occurred."];
@@ -731,7 +736,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 				[me toast:@"Done"];
 				return;
 			}
-			[[TGClient shared] editFolder:folderId
+			[[TGSettingsStore shared] editFolder:folderId
 									 name:nil
 									chats:[included arrayByAddingObject:@(chatId)]
 							   completion:^(BOOL ok){
@@ -746,7 +751,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 
 - (void)removeChatFromFolder:(NSInteger)folderId named:(NSString *)title {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] folderDetails:folderId completion:^(NSDictionary *current){
+	[[TGSettingsStore shared] folderDetails:folderId completion:^(NSDictionary *current){
 		TGSettingsViewController *me = weakSelf;
 		NSArray *included = current[@"included_chat_ids"] ?: @[];
 		if (!included.count){
@@ -765,7 +770,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 						 onChoice:^(NSInteger index){
 			NSMutableArray *left = [included mutableCopy];
 			[left removeObjectAtIndex:(NSUInteger)index];
-			[[TGClient shared] editFolder:folderId name:nil chats:left
+			[[TGSettingsStore shared] editFolder:folderId name:nil chats:left
 							   completion:^(BOOL ok){
 				(void)title;
 				[me toast:ok ? @"Done" : @"An error occurred."];
@@ -800,7 +805,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 	if (self.downloads.count)
 		[sections addObject:TGSection(nil, nil, @[
 			TGActionRow(self.activeDownloads > 0 ? @"Pause All" : @"Resume All", ^{
-				[[TGClient shared] setAllDownloadsPaused:
+				[[TGSettingsStore shared] setAllDownloadsPaused:
 						weakSelf.activeDownloads > 0];
 				[weakSelf loadForPage];
 			}),
@@ -811,7 +816,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 							  destructive:YES
 								   inView:weakSelf.view
 								onConfirm:^{
-					[[TGClient shared] clearDownloadsDeletingFromCache:YES];
+					[[TGSettingsStore shared] clearDownloadsDeletingFromCache:YES];
 					[weakSelf loadForPage];
 				}];
 			}),
@@ -840,7 +845,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 					 onChoice:^(NSInteger index){
 		NSString *choice = choices[(NSUInteger)index];
 		if ([choice isEqualToString:@"Pause"] || [choice isEqualToString:@"Resume"]){
-			[[TGClient shared] setDownloadOfFile:fileId
+			[[TGSettingsStore shared] setDownloadOfFile:fileId
 										  paused:[choice isEqualToString:@"Pause"]];
 			[weakSelf loadForPage];
 		} else if ([choice isEqualToString:@"File Info"]){
@@ -850,10 +855,10 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 				[TGFileInfoViewController presentForFile:fileId fromView:weakSelf.view];
 			});
 		} else if ([choice isEqualToString:@"Remove"]){
-			[[TGClient shared] removeFileFromDownloads:fileId deleteFromCache:NO];
+			[[TGSettingsStore shared] removeFileFromDownloads:fileId deleteFromCache:NO];
 			[weakSelf loadForPage];
 		} else {
-			[[TGClient shared] removeFileFromDownloads:fileId deleteFromCache:YES];
+			[[TGSettingsStore shared] removeFileFromDownloads:fileId deleteFromCache:YES];
 			[weakSelf loadForPage];
 		}
 	}];
@@ -886,7 +891,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 			NSString *server = proxy[@"server"];
 			NSInteger port = [proxy[@"port"] integerValue];
 			NSString *kind = proxy[@"kind"];
-			[[TGClient shared] pingProxyAtServer:server port:port kind:kind
+			[[TGSettingsStore shared] pingProxyAtServer:server port:port kind:kind
 										username:nil password:nil secret:nil
 									  completion:^(double seconds){
 				proxy[@"pingState"] = @"done";
@@ -897,7 +902,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 		}
 	}
 
-	BOOL connected = [TGClient shared].connectionState == TGConnectionStateReady;
+	BOOL connected = [TGProfileStore shared].connectionState == TGConnectionStateReady;
 	NSArray *model = TGProxyPageModel(self.proxies, anyEnabled, connected, NO);
 	NSMutableArray *sectionRows = [NSMutableArray array];
 	for (NSDictionary *section in model){
@@ -908,12 +913,12 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 			if ([action isEqualToString:@"useProxy"]){
 				row[TGRowToggle] = [^(BOOL on){
 					if (!on){
-						[[TGClient shared] disableProxy];
+						[[TGSettingsStore shared] disableProxy];
 						[weakSelf loadForPage];
 						return;
 					}
 					for (NSDictionary *proxy in weakSelf.proxies){
-						[[TGClient shared] enableProxy:[proxy[@"id"] integerValue]];
+						[[TGSettingsStore shared] enableProxy:[proxy[@"id"] integerValue]];
 						break;
 					}
 					[weakSelf loadForPage];
@@ -957,7 +962,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 				(NSInteger)self.proxies.count))
 		return;
 	NSInteger index = indexPath.row - 1;
-	[[TGClient shared] removeProxy:[self.proxies[(NSUInteger)index][@"id"] integerValue]];
+	[[TGSettingsStore shared] removeProxy:[self.proxies[(NSUInteger)index][@"id"] integerValue]];
 	[self loadForPage];
 }
 
@@ -981,7 +986,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 
 		if ([text rangeOfString:@"proxy"].location != NSNotFound &&
 			[text rangeOfString:@"?"].location != NSNotFound){
-			if (![[TGClient shared] addProxyFromLink:text completion:added])
+			if (![[TGSettingsStore shared] addProxyFromLink:text completion:added])
 				[me toast:@"An error occurred."];
 			return;
 		}
@@ -992,7 +997,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 			[me toast:@"An error occurred."];
 			return;
 		}
-		[[TGClient shared] addProxyAtServer:parts[0] port:port kind:@"socks5"
+		[[TGSettingsStore shared] addProxyAtServer:parts[0] port:port kind:@"socks5"
 								   username:nil password:nil secret:nil
 									 enable:YES completion:added];
 	}];
@@ -1012,14 +1017,14 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 					 onChoice:^(NSInteger index){
 		TGSettingsViewController *me = weakSelf;
 		if (index == 0){
-			[[TGClient shared] enableProxy:proxyId];
+			[[TGSettingsStore shared] enableProxy:proxyId];
 			[me loadForPage];
 		} else if (index == 1){
 			[me checkProxy:proxy named:name];
 		} else if (index == 2){
 			[me editProxyAddress:proxy named:name];
 		} else {
-			[[TGClient shared] removeProxy:proxyId];
+			[[TGSettingsStore shared] removeProxy:proxyId];
 			[me loadForPage];
 		}
 	}];
@@ -1031,7 +1036,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 	NSInteger port = [proxy[@"port"] integerValue];
 	NSString *kind = proxy[@"kind"];
 
-	[[TGClient shared] testProxyAtServer:server port:port kind:kind
+	[[TGSettingsStore shared] testProxyAtServer:server port:port kind:kind
 								username:nil password:nil secret:nil
 							  completion:^(BOOL works){
 		TGSettingsViewController *me = weakSelf;
@@ -1040,7 +1045,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 					@"%@ will not carry Telegram.", name]];
 			return;
 		}
-		[[TGClient shared] pingProxyAtServer:server port:port kind:kind
+		[[TGSettingsStore shared] pingProxyAtServer:server port:port kind:kind
 									username:nil password:nil secret:nil
 								  completion:^(double seconds){
 			[me toast:seconds >= 0
@@ -1071,7 +1076,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 			[me toast:@"An error occurred."];
 			return;
 		}
-		[[TGClient shared] editProxy:proxyId
+		[[TGSettingsStore shared] editProxy:proxyId
 							  server:parts[0]
 								port:port
 								kind:kind
@@ -1103,7 +1108,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 /// day, and the chat it lives in if the list knows it.
 - (void)showSentFilesSheet {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] sentDocuments:nil completion:^(NSArray *messages){
+	[[TGSettingsStore shared] sentDocuments:nil completion:^(NSArray *messages){
 		TGSettingsViewController *me = weakSelf;
 		if (!me) return;
 		if (!messages.count){
@@ -1114,7 +1119,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 		for (NSDictionary *m in messages){
 			NSString *name = (m[@"content"] ?: @{})[@"document"][@"file_name"];
 			NSString *line = name.length ? name : @"File";
-			NSString *chat = [[TGClient shared] titleForChat:
+			NSString *chat = [[TGMessageStore shared] titleForChat:
 					[m[@"chat_id"] longLongValue]];
 			if (chat.length)
 				line = [line stringByAppendingFormat:@" — %@", chat];
@@ -1128,7 +1133,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 			if (index >= (NSInteger)messages.count)
 				return;
 			NSDictionary *m = messages[index];
-			NSString *title = [[TGClient shared] titleForChat:
+			NSString *title = [[TGMessageStore shared] titleForChat:
 					[m[@"chat_id"] longLongValue]] ?: @"Chat";
 			Class chatClass = NSClassFromString(@"TGChatViewController");
 			UIViewController *chat = [[chatClass alloc] init];
@@ -1167,7 +1172,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 			return;
 		NSDictionary *preset = me.autoDownloadPresets[keys[(NSUInteger)index]];
 		NSString *network = @[@"roaming", @"mobile", @"wifi"][(NSUInteger)index];
-		[[TGClient shared] applyAutoDownloadPreset:preset forNetwork:network
+		[[TGSettingsStore shared] applyAutoDownloadPreset:preset forNetwork:network
 										completion:^(BOOL ok){
 			if (!ok){
 				[me toast:@"An error occurred."];
@@ -1259,7 +1264,7 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 	[self rebuild];
 
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] setAutosaveSettingsForScope:scope
+	[[TGSettingsStore shared] setAutosaveSettingsForScope:scope
 											 photos:photos
 											 videos:videos
 									   maxVideoSize:maxVideo
@@ -1277,12 +1282,12 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 				  destructive:YES
 					   inView:self.view
 					onConfirm:^{
-		[[TGClient shared] clearAutosaveSettingsExceptionsWithCompletion:^(BOOL ok){
+		[[TGSettingsStore shared] clearAutosaveSettingsExceptionsWithCompletion:^(BOOL ok){
 			if (!ok){
 				[weakSelf toast:@"An error occurred."];
 				return;
 			}
-			[[TGClient shared] autosaveSettingsWithCompletion:^(NSDictionary *settings){
+			[[TGSettingsStore shared] autosaveSettingsWithCompletion:^(NSDictionary *settings){
 				weakSelf.autosaveSettings = settings;
 				[weakSelf rebuild];
 			}];

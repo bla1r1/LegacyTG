@@ -3,7 +3,6 @@
 //
 #import "TGGiftViewController.h"
 #import "TGLocalization.h"
-#import "TGClient.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGLottieView.h"
@@ -12,6 +11,8 @@
 #import "TGMessageLayout.h"
 #import "TGGiftText.h"
 #import "TGRows.h"
+#import "TGMessageStore.h"
+#import "TGDownloadPriority.h"
 
 static const CGFloat kArtSide = TGMetricProfilePhotoSide;
 static const CGFloat kHeaderPadTop = TGMetricPadLarge;
@@ -250,7 +251,7 @@ static UIImage *TGGiftRadialGradient(int32_t centerColor, int32_t edgeColor, CGF
 	NSString *giftId = [self currentGiftId];
 
 	if ([stillId isKindOfClass:[NSNumber class]] && [stillId integerValue] > 0) {
-		[[TGClient shared] downloadFile:stillId.integerValue
+		[[TGMessageStore shared] downloadFile:stillId.integerValue
 							   priority:TGDownloadPriorityOnScreen
 							 completion:^(NSString *path){
 			if (!path.length) return;
@@ -270,7 +271,7 @@ static UIImage *TGGiftRadialGradient(int32_t centerColor, int32_t edgeColor, CGF
 	}
 
 	if ([stickerId isKindOfClass:[NSNumber class]] && [stickerId integerValue] > 0) {
-		[[TGClient shared] downloadFile:stickerId.integerValue
+		[[TGMessageStore shared] downloadFile:stickerId.integerValue
 							   priority:TGDownloadPriorityOnScreen
 							 completion:^(NSString *path){
 			if (!path.length) return;
@@ -332,7 +333,7 @@ static UIImage *TGGiftRadialGradient(int32_t centerColor, int32_t edgeColor, CGF
 		return;
 	self.requestedUserId = userId;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] ensureUserName:userId completion:^{
+	[[TGMessageStore shared] ensureUserName:userId completion:^{
 		dispatch_async(dispatch_get_main_queue(), ^{
 			TGGiftViewController *me = weakSelf;
 			if (!me) return;
@@ -350,7 +351,7 @@ static UIImage *TGGiftRadialGradient(int32_t centerColor, int32_t edgeColor, CGF
 
 	int64_t userId = [self.gift[@"senderUserId"] longLongValue];
 	if (userId > 0) {
-		NSString *userName = [[TGClient shared] nameForUserId:userId];
+		NSString *userName = [[TGMessageStore shared] nameForUserId:userId];
 		if (userName.length > 0) {
 			return userName;
 		}
@@ -360,7 +361,7 @@ static UIImage *TGGiftRadialGradient(int32_t centerColor, int32_t edgeColor, CGF
 
 	int64_t chatId = [self.gift[@"senderChatId"] longLongValue];
 	if (chatId != 0) {
-		NSString *chatTitle = [[TGClient shared] titleForChat:chatId];
+		NSString *chatTitle = [[TGMessageStore shared] titleForChat:chatId];
 		if (chatTitle.length > 0) {
 			return chatTitle;
 		}

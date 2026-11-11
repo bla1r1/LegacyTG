@@ -8,10 +8,10 @@
 // report that Telegram wants a reason for opens its own option list.
 //
 #import "TGSponsoredMessagesViewController.h"
-#import "TGClient.h"
 #import "TGAlertSheet.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
+#import "TGStarsStore.h"
 
 @interface TGSponsoredMessagesViewController ()
 @property (nonatomic, assign) BOOL myAdsEnabled;
@@ -122,7 +122,7 @@
 					 onChoice:^(NSInteger index){
 		if (index == 0){
 			if (chatAd){
-				[[TGClient shared] clickSponsoredMessage:[ad[@"messageId"] longLongValue]
+				[[TGStarsStore shared] clickSponsoredMessage:[ad[@"messageId"] longLongValue]
 												  inChat:weakSelf.chatId
 											   mediaClick:NO
 											 fromFullscreen:NO
@@ -130,12 +130,12 @@
 					[weakSelf finish:ok error:error title:title];
 				}];
 			} else if (videoAd){
-				[[TGClient shared] clickVideoAdvertisement:[ad[@"uniqueId"] longLongValue]
+				[[TGStarsStore shared] clickVideoAdvertisement:[ad[@"uniqueId"] longLongValue]
 											   completion:^(BOOL ok, NSString *error){
 					[weakSelf finish:ok error:error title:title];
 				}];
 			} else {
-				[[TGClient shared] openSponsoredChat:[ad[@"uniqueId"] longLongValue]
+				[[TGStarsStore shared] openSponsoredChat:[ad[@"uniqueId"] longLongValue]
 										  completion:^(BOOL ok, NSString *error){
 					[weakSelf finish:ok error:error title:title];
 				}];
@@ -145,12 +145,12 @@
 				[self showMessage:@"A channel advertisement has no separate view call; "
 								  @"opening it is the click." title:title];
 			} else if (videoAd){
-				[[TGClient shared] viewVideoAdvertisement:[ad[@"uniqueId"] longLongValue]
+				[[TGStarsStore shared] viewVideoAdvertisement:[ad[@"uniqueId"] longLongValue]
 											  completion:^(BOOL ok, NSString *error){
 					[weakSelf finish:ok error:error title:title];
 				}];
 			} else {
-				[[TGClient shared] viewSponsoredChat:[ad[@"uniqueId"] longLongValue]
+				[[TGStarsStore shared] viewSponsoredChat:[ad[@"uniqueId"] longLongValue]
 										  completion:^(BOOL ok, NSString *error){
 					[weakSelf finish:ok error:error title:title];
 				}];
@@ -185,15 +185,15 @@
 				result[@"type"] ?: @"received"] title:title];
 	};
 	if ([ad[@"kind"] isEqualToString:@"chat"]){
-		[[TGClient shared] reportSponsoredMessage:[ad[@"messageId"] longLongValue]
+		[[TGStarsStore shared] reportSponsoredMessage:[ad[@"messageId"] longLongValue]
 										   inChat:weakSelf.chatId option:@""
 									   completion:done];
 	} else if ([ad[@"kind"] isEqualToString:@"video"]){
-		[[TGClient shared] reportVideoAdvertisement:[ad[@"uniqueId"] longLongValue]
+		[[TGStarsStore shared] reportVideoAdvertisement:[ad[@"uniqueId"] longLongValue]
 											option:@""
 										completion:done];
 	} else {
-		[[TGClient shared] reportSponsoredChat:[ad[@"uniqueId"] longLongValue]
+		[[TGStarsStore shared] reportSponsoredChat:[ad[@"uniqueId"] longLongValue]
 										option:@""
 									completion:done];
 	}
@@ -205,14 +205,14 @@
 		[weakSelf finish:error == nil error:error title:title];
 	};
 	if ([ad[@"kind"] isEqualToString:@"chat"]){
-		[[TGClient shared] reportSponsoredMessage:[ad[@"messageId"] longLongValue]
+		[[TGStarsStore shared] reportSponsoredMessage:[ad[@"messageId"] longLongValue]
 										   inChat:weakSelf.chatId option:optionId
 									   completion:done];
 	} else if ([ad[@"kind"] isEqualToString:@"video"]){
-		[[TGClient shared] reportVideoAdvertisement:[ad[@"uniqueId"] longLongValue]
+		[[TGStarsStore shared] reportVideoAdvertisement:[ad[@"uniqueId"] longLongValue]
 											option:optionId completion:done];
 	} else {
-		[[TGClient shared] reportSponsoredChat:[ad[@"uniqueId"] longLongValue]
+		[[TGStarsStore shared] reportSponsoredChat:[ad[@"uniqueId"] longLongValue]
 										option:optionId completion:done];
 	}
 }
@@ -228,7 +228,7 @@
 			[weakSelf rebuildSections];
 		}];
 	} else if ([action isEqualToString:@"load"]){
-		[[TGClient shared] sponsoredMessagesForChat:self.chatId
+		[[TGStarsStore shared] sponsoredMessagesForChat:self.chatId
 										 completion:^(NSArray *messages, NSString *error){
 			if (error){
 				[weakSelf finish:NO error:error title:@"Telegram Ads"];
@@ -243,7 +243,7 @@
 		}];
 	} else if ([action isEqualToString:@"toggleMine"]){
 		weakSelf.myAdsEnabled = !weakSelf.myAdsEnabled;
-		[[TGClient shared] setSponsoredMessagesEnabled:weakSelf.myAdsEnabled
+		[[TGStarsStore shared] setSponsoredMessagesEnabled:weakSelf.myAdsEnabled
 											completion:^(BOOL ok, NSString *error){
 			[weakSelf finish:ok error:error title:@"Telegram Ads"];
 		}];
@@ -252,7 +252,7 @@
 			  placeholder:@"123" text:nil action:@"Next" completion:^(NSString *text){
 			int64_t supergroupId = text.longLongValue;
 			weakSelf.channelAdsEnabled = !weakSelf.channelAdsEnabled;
-			[[TGClient shared] setChannelSponsoredMessagesEnabled:weakSelf.channelAdsEnabled
+			[[TGStarsStore shared] setChannelSponsoredMessagesEnabled:weakSelf.channelAdsEnabled
 													 supergroupId:supergroupId
 													  completion:^(BOOL ok, NSString *error){
 				[weakSelf finish:ok error:error title:@"Channel"];
@@ -270,7 +270,7 @@
 			[weakSelf rebuildSections];
 		}];
 	} else if ([action isEqualToString:@"search"]){
-		[[TGClient shared] searchSponsoredChats:self.searchQuery
+		[[TGStarsStore shared] searchSponsoredChats:self.searchQuery
 									 completion:^(NSArray *chats, NSString *error){
 			if (error){
 				[weakSelf finish:NO error:error title:@"Search"];
@@ -290,7 +290,7 @@
 			[weakSelf rebuildSections];
 		}];
 	} else if ([action isEqualToString:@"loadVideo"]){
-		[[TGClient shared] videoAdvertisementsForChat:self.chatId
+		[[TGStarsStore shared] videoAdvertisementsForChat:self.chatId
 											  message:self.messageId
 										   completion:^(NSArray *ads, NSString *error){
 			if (error){
@@ -303,13 +303,13 @@
 			[weakSelf showAds:ads title:@"Video"];
 		}];
 	} else if ([action isEqualToString:@"transcribe"]){
-		[[TGClient shared] recognizeSpeechInChat:self.chatId message:self.messageId
+		[[TGStarsStore shared] recognizeSpeechInChat:self.chatId message:self.messageId
 									  completion:^(BOOL ok, NSString *error){
 			[weakSelf finish:ok error:error title:@"Voice Message"];
 		}];
 	} else if ([action isEqualToString:@"speechGood"] || [action isEqualToString:@"speechBad"]){
 		BOOL good = [action isEqualToString:@"speechGood"];
-		[[TGClient shared] rateSpeechInChat:self.chatId message:self.messageId
+		[[TGStarsStore shared] rateSpeechInChat:self.chatId message:self.messageId
 									 isGood:good completion:^(BOOL ok, NSString *error){
 			[weakSelf finish:ok error:error title:@"Rate Transcription"];
 		}];

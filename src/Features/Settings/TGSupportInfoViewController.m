@@ -6,7 +6,8 @@
 // sentence instead of pretending the note was saved.
 //
 #import "TGSupportInfoViewController.h"
-#import "TGClient.h"
+#import "TGAccountStore.h"
+
 
 @interface TGSupportInfoViewController ()
 @property (nonatomic, assign) int64_t userId;
@@ -85,7 +86,7 @@
 		return;
 	}
 	if ([action isEqualToString:@"name"]){
-		[[TGClient shared] supportNameWithCompletion:^(NSString *name, NSString *error){
+		[[TGAccountStore shared] supportNameWithCompletion:^(NSString *name, NSString *error){
 			if (error){
 				[weakSelf finish:NO error:error title:@"Support Name"];
 				return;
@@ -93,7 +94,7 @@
 			[weakSelf showAnswer:name title:@"Support Name"];
 		}];
 	} else if ([action isEqualToString:@"read"]){
-		[[TGClient shared] supportInfoForUser:self.userId
+		[[TGAccountStore shared] supportInfoForUser:self.userId
 								  completion:^(NSDictionary *info, NSString *error){
 			if (error){
 				[weakSelf finish:NO error:error title:@"User Support Info"];
@@ -104,7 +105,7 @@
 			[weakSelf showAnswer:body title:@"User Support Info"];
 		}];
 	} else if ([action isEqualToString:@"write"]){
-		[[TGClient shared] setSupportInfo:self.message forUser:self.userId
+		[[TGAccountStore shared] setSupportInfo:self.message forUser:self.userId
 							   completion:^(NSDictionary *info, NSString *error){
 			if (error){
 				[weakSelf finish:NO error:error title:@"Set Support Info"];

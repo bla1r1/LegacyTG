@@ -1,6 +1,5 @@
 #import "TGCallViewController.h"
 #import "TGCall.h"
-#import "TGClient.h"
 #import "TGTheme.h"
 #import "TGIcons.h"
 #import "TGCapabilities.h"
@@ -12,6 +11,7 @@
 #import "TGCallVideoEngine.h"
 #import "TGCallViewController.h"
 #import "TGCallMiniBar.h"
+#import "TGMessageStore.h"
 
 @interface TGCallViewController ()
 @property (nonatomic, assign) int64_t userId;
@@ -278,7 +278,7 @@ static UIImage *TGCallCircleImage(CGFloat side, UIColor *colour, TGCallCircleSty
 
     self.nameLabel = [[UILabel alloc] initWithFrame:CGRectZero];
     self.nameLabel.text = self.peerName.length ? self.peerName
-            : ([[TGClient shared] nameForUserId:self.userId] ?: @"Call");
+            : ([[TGMessageStore shared]nameForUserId:self.userId] ?: @"Call");
     self.nameLabel.font = TGFontHero();
     self.nameLabel.textColor = [[TGTheme shared] onAccentColour];
     self.nameLabel.textAlignment = NSTextAlignmentCenter;

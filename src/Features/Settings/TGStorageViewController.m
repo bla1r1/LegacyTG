@@ -1,5 +1,4 @@
 #import "TGStorageViewController.h"
-#import "TGClient.h"
 #import "TGTheme.h"
 #import <QuartzCore/QuartzCore.h>
 #import "TGStyle.h"
@@ -8,6 +7,8 @@
 #import "TGSettingsFormatting.h"
 #import "TGRows.h"
 #import "TGRowCell.h"
+#import "TGSettingsStore.h"
+
 
 // Their storage page opens with a ring: the total in the middle, one arc per
 // kind of file, the same colours in the list underneath. A column of numbers
@@ -64,7 +65,7 @@ static UIColor *TGSliceColour(NSUInteger index);
 
 - (void)loadStorageOptions {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] optionValue:@"storage_max_time_from_last_access" completion:^(id val){
+	[[TGSettingsStore shared] optionValue:@"storage_max_time_from_last_access" completion:^(id val){
 		if ([val isKindOfClass:[NSNumber class]]) {
 			int64_t sec = [val longLongValue];
 			NSInteger idx = 3; // Forever
@@ -77,7 +78,7 @@ static UIColor *TGSliceColour(NSUInteger index);
 			});
 		}
 	}];
-	[[TGClient shared] optionValue:@"storage_max_files_size" completion:^(id val){
+	[[TGSettingsStore shared] optionValue:@"storage_max_files_size" completion:^(id val){
 		if ([val isKindOfClass:[NSNumber class]]) {
 			int64_t bytes = [val longLongValue];
 			NSInteger idx = 3; // No limit
@@ -102,14 +103,14 @@ static UIColor *TGSliceColour(NSUInteger index);
 	// The fast count is the one TDLib keeps in memory: it answers at once,
 	// so the ring has a figure in it while the per-type walk - which reads
 	// the database - is still going. On this hardware that walk is seconds.
-	[[TGClient shared] storageStatsWithCompletion:^(long long bytes, NSInteger files){
+	[[TGSettingsStore shared] storageStatsWithCompletion:^(long long bytes, NSInteger files){
 		weakSelf.total = bytes;
 		weakSelf.fileCount = files;
 		weakSelf.loaded = YES;
 		weakSelf.totalText = TGBytes(bytes);
 		[weakSelf rebuildSections];
 	}];
-	[[TGClient shared] storageBreakdownWithCompletion:^(NSArray *categories,
+	[[TGSettingsStore shared] storageBreakdownWithCompletion:^(NSArray *categories,
 														long long total){
 		weakSelf.categories = categories;
 		weakSelf.total = total;
@@ -368,7 +369,7 @@ static UIColor *TGSliceColour(NSUInteger index) {
 		if (index < 0 || index > 3)
 			return;
 		weakSelf.keepMediaIndex = index;
-		[[TGClient shared] setOption:@"storage_max_time_from_last_access"
+		[[TGSettingsStore shared] setOption:@"storage_max_time_from_last_access"
 						integerValue:seconds[index]];
 		[[NSUserDefaults standardUserDefaults] setInteger:index
 				forKey:@"TGStorageKeepMedia"];
@@ -389,7 +390,7 @@ static UIColor *TGSliceColour(NSUInteger index) {
 		if (index < 0 || index > 3)
 			return;
 		weakSelf.maxCacheIndex = index;
-		[[TGClient shared] setOption:@"storage_max_files_size"
+		[[TGSettingsStore shared] setOption:@"storage_max_files_size"
 						integerValue:bytes[index]];
 		[[NSUserDefaults standardUserDefaults] setInteger:index
 				forKey:@"TGStorageMaxCache"];
@@ -408,7 +409,7 @@ static UIColor *TGSliceColour(NSUInteger index) {
 	[self rebuildSections];
 
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] clearCacheOfTypes:kinds completion:^(long long freed){
+	[[TGSettingsStore shared] clearCacheOfTypes:kinds completion:^(long long freed){
 		weakSelf.working = NO;
 		[weakSelf.selectedKinds removeAllObjects];
 		weakSelf.selectedBytes = 0;

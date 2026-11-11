@@ -8,10 +8,11 @@
 // account overrides today.
 //
 #import "TGNotificationCategoryViewController.h"
-#import "TGClient.h"
 #import "TGLocalization.h"
 #import "TGRows.h"
 #import "TGSettingsFormatting.h"
+#import "TGSettingsStore.h"
+
 
 @interface TGNotificationCategoryViewController ()
 @property (nonatomic, copy) NSString *scope;
@@ -60,7 +61,7 @@
 
 - (void)load {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] notificationsMutedForScope:self.scope
+	[[TGSettingsStore shared] notificationsMutedForScope:self.scope
 									   completion:^(BOOL muted){
 		TGNotificationCategoryViewController *me = weakSelf;
 		if (!me)
@@ -68,7 +69,7 @@
 		me.enabled = !muted;
 		[me rebuildSections];
 	}];
-	[[TGClient shared] notificationPreviewForScope:self.scope
+	[[TGSettingsStore shared] notificationPreviewForScope:self.scope
 										completion:^(BOOL show){
 		TGNotificationCategoryViewController *me = weakSelf;
 		if (!me)
@@ -76,7 +77,7 @@
 		me.preview = show;
 		[me rebuildSections];
 	}];
-	[[TGClient shared] notificationExceptionsWithCompletion:^(NSArray *chats){
+	[[TGSettingsStore shared] notificationExceptionsWithCompletion:^(NSArray *chats){
 		TGNotificationCategoryViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -95,7 +96,7 @@
 	[sections addObject:TGSection(nil, nil, @[
 		TGSwitchRow(TGLocalized(@"Notifications"), self.enabled, ^(BOOL on){
 			weakSelf.enabled = on;
-			[[TGClient shared] setScope:weakSelf.scope muted:!on];
+			[[TGSettingsStore shared] setScope:weakSelf.scope muted:!on];
 			[weakSelf rebuildSections];
 		}),
 	])];
@@ -104,7 +105,7 @@
 		[sections addObject:TGSection(TGLocalized(@"Options"), nil, @[
 			TGSwitchRow(TGLocalized(@"Message Preview"), self.preview, ^(BOOL on){
 				weakSelf.preview = on;
-				[[TGClient shared] setScope:weakSelf.scope showPreview:on];
+				[[TGSettingsStore shared] setScope:weakSelf.scope showPreview:on];
 				[weakSelf rebuildSections];
 			}),
 			// The scope record's sound id is not exposed by the client's

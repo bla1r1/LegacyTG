@@ -6,7 +6,7 @@ users by id, chats by id, photo file ids, stories, folders.
 Screens do not read those caches. `src/Core/Stores` is the layer between them:
 
 ```
-TDLib -> TGClient -> TGPeerStore / TGStickerStore / TGMediaStore / TGUpdateStore / TGSendStore / TGMessageStore / TGChatListStore / TGSearchStore / TGProfileStore / TGGroupStore -> screens
+TDLib -> TGClient -> TGPeerStore / TGStickerStore / TGMediaStore / TGUpdateStore / TGSendStore / TGMessageStore / TGChatListStore / TGSearchStore / TGProfileStore / TGGroupStore / TGContactsStore / TGChannelStore / TGDevStore / TGBusinessStore / TGCallStore / TGStoryStore / TGStarsStore -> screens
 ```
 
 `TGClient+Peers` is the small seam `TGPeerStore` reads through; it is not a
@@ -71,7 +71,9 @@ settings or call store can land without touching either.
 
 - `src/Features/Chat` files importing `TGClient*`: 0 (was 345 direct
   `[TGClient shared]` calls across 38 files).
-- `scripts/lint_client.sh` allow list: 58 files (was 122); Chat, ChatList,
-  Profile, Groups and every Media entry are gone.
+- `scripts/lint_client.sh` allow list: 0 files (was 122). Every Feature and UI
+  file now goes through a store, including Chat, ChatList, Profile, Groups,
+  Settings, Media, Contacts, Channels, Dev, Business, Calls, Stories, Auth and
+  BotsPayments.
 - `TGMessageStore.h`: 227 selectors and 14 properties, the whole surface the
   Chat feature actually asks for.

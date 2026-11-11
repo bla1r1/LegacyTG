@@ -1,6 +1,5 @@
 #import "TGBusinessViewController.h"
 #import "TGBusinessMessagesViewController.h"
-#import "TGClient.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
@@ -14,6 +13,8 @@
 #import "TGBusinessHoursViewController.h"
 #import "TGBusinessLocationViewController.h"
 #import "TGBusinessIntroViewController.h"
+#import "TGBusinessStore.h"
+#import "TGProfileStore.h"
 
 @interface TGBusinessProfileViewController () <UIImagePickerControllerDelegate,
 		UINavigationControllerDelegate>
@@ -83,15 +84,13 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 - (void)viewDidLoad {
 	[super viewDidLoad];
 	self.title = @"Business";
-	NSDictionary *me = [TGClient shared].me;
+	NSDictionary *me = [TGProfileStore shared].me;
 	self.firstName = me[@"first_name"] ?: @"";
 	self.lastName = me[@"last_name"] ?: @"";
 	self.username = me[@"username"] ?: @"";
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] request:@{
-		@"@type" : @"getUserFullInfo",
-		@"user_id" : me[@"id"] ?: @(0),
-	} completion:^(NSDictionary *full){
+	[[TGBusinessStore shared] businessProfileForUser:[me[@"id"] longLongValue]
+										 completion:^(NSDictionary *full){
 		TGBusinessProfileViewController *page = weakSelf;
 		if (!page)
 			return;
@@ -145,7 +144,7 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 		[self askText:@"Bio" message:nil placeholder:@"Add Bio"
 				 text:self.bio action:@"Save"
 		   completion:^(NSString *text){
-			[[TGClient shared] setBusinessAccountBio:text
+			[[TGBusinessStore shared] setBusinessAccountBio:text
 										connectionId:TGBusinessStoredConnectionId()
 										  completion:^(BOOL ok, NSString *error){
 				[weakSelf finishProfileChange:ok error:error title:@"Bio"];
@@ -158,7 +157,7 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 			placeholder:@"username" text:current action:@"Save"
 		   completion:^(NSString *text){
 			NSString *username = [text stringByReplacingOccurrencesOfString:@"@" withString:@""];
-			[[TGClient shared] setBusinessAccountUsername:username
+			[[TGBusinessStore shared] setBusinessAccountUsername:username
 											 connectionId:TGBusinessStoredConnectionId()
 											   completion:^(BOOL ok, NSString *error){
 				if (ok)
@@ -169,7 +168,7 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 	} else if ([action isEqualToString:@"photo"]){
 		[self pickPhoto];
 	} else if ([action isEqualToString:@"removePhoto"]){
-		[[TGClient shared] setBusinessAccountProfilePhotoAtPath:nil
+		[[TGBusinessStore shared] setBusinessAccountProfilePhotoAtPath:nil
 													   public:self.isPublic
 												   connectionId:TGBusinessStoredConnectionId()
 													 completion:^(BOOL ok, NSString *error){
@@ -180,7 +179,7 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 
 - (void)saveName {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] setBusinessAccountName:self.firstName
+	[[TGBusinessStore shared] setBusinessAccountName:self.firstName
 										 last:self.lastName
 								 connectionId:TGBusinessStoredConnectionId()
 								   completion:^(BOOL ok, NSString *error){
@@ -236,7 +235,7 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 		return;
 	}
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] setBusinessAccountProfilePhotoAtPath:path
+	[[TGBusinessStore shared] setBusinessAccountProfilePhotoAtPath:path
 													 public:self.isPublic
 												 connectionId:TGBusinessStoredConnectionId()
 												   completion:^(BOOL ok, NSString *error){

@@ -7,12 +7,14 @@
 // to do about the rest. This is the screen behind that row.
 //
 #import "TGUsernameSettingsViewController.h"
-#import "TGClient.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
 #import "TGSettingsFormatting.h"
 #import "TGRows.h"
+#import "TGAccountStore.h"
+#import "TGSettingsStore.h"
+
 
 @interface TGUsernameSettingsViewController ()
 @property (nonatomic, strong) NSDictionary *usernames;
@@ -57,7 +59,7 @@
 
 - (void)load {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] accountUsernamesWithCompletion:^(NSDictionary *usernames){
+	[[TGAccountStore shared] accountUsernamesWithCompletion:^(NSDictionary *usernames){
 		TGUsernameSettingsViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -177,7 +179,7 @@
 - (void)saveOrderRestoring:(NSArray *)before {
 	self.busy = YES;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] reorderActiveUsernames:self.active
+	[[TGAccountStore shared] reorderActiveUsernames:self.active
 			completion:^(BOOL ok, NSString *error){
 		TGUsernameSettingsViewController *me = weakSelf;
 		if (!me)
@@ -203,7 +205,7 @@
 	}
 	self.busy = YES;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] toggleUsernameIsActive:username isActive:on
+	[[TGAccountStore shared] toggleUsernameIsActive:username isActive:on
 			completion:^(BOOL ok, NSString *error){
 		TGUsernameSettingsViewController *me = weakSelf;
 		if (!me)
@@ -279,7 +281,7 @@
 		return;
 	__weak typeof(self) weakSelf = self;
 	// A user account checks its own name, which TDLib spells as chat_id 0.
-	[[TGClient shared] checkUsername:typed forChat:0 completion:^(NSString *result){
+	[[TGSettingsStore shared] checkUsername:typed forChat:0 completion:^(NSString *result){
 		TGUsernameSettingsViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -300,7 +302,7 @@
 	if (!TGUsernameShouldCheck(typed, self.editable))
 		return;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] setUsername:typed completion:^(BOOL ok){
+	[[TGAccountStore shared] setUsername:typed completion:^(BOOL ok){
 		if (!ok){
 			[TGAlertSheet showMessage:@"An error occurred."
 								title:@"Username" inView:weakSelf.view];
@@ -320,7 +322,7 @@
 				  destructive:YES
 					   inView:self.view
 					onConfirm:^{
-		[[TGClient shared] setUsername:@"" completion:^(BOOL ok){
+		[[TGAccountStore shared] setUsername:@"" completion:^(BOOL ok){
 			if (!ok){
 				[TGAlertSheet showMessage:@"An error occurred."
 									title:@"Remove" inView:weakSelf.view];

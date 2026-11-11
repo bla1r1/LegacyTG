@@ -1,6 +1,5 @@
 #import "TGBusinessViewController.h"
 #import "TGBusinessMessagesViewController.h"
-#import "TGClient.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
@@ -14,6 +13,8 @@
 #import "TGBusinessAwayViewController.h"
 #import "TGBusinessLocationViewController.h"
 #import "TGBusinessIntroViewController.h"
+#import "TGBusinessStore.h"
+#import "TGProfileStore.h"
 
 @interface TGBusinessHoursViewController ()
 @property (nonatomic, assign) BOOL enabled;
@@ -88,7 +89,7 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 
 - (void)load {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] businessInfoWithCompletion:^(NSDictionary *info, NSString *error){
+	[[TGBusinessStore shared] businessInfoWithCompletion:^(NSDictionary *info, NSString *error){
 		TGBusinessHoursViewController *page = weakSelf;
 		if (!page)
 			return;
@@ -160,7 +161,7 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 - (void)save {
 	NSDictionary *object = [self openingHours];
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] setBusinessOpeningHoursTimeZone:object[@"timeZone"]
+	[[TGBusinessStore shared] setBusinessOpeningHoursTimeZone:object[@"timeZone"]
 											 intervals:self.enabled ? object[@"intervals"] : nil
 											completion:^(BOOL ok, NSString *error){
 		TGBusinessHoursViewController *page = weakSelf;

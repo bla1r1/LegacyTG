@@ -1,8 +1,8 @@
 #import "TGCallMessagesViewController.h"
-#import "TGClient.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
+#import "TGCallStore.h"
 
 @interface TGCallMessagesViewController ()
 @property (nonatomic, strong) NSDictionary *call;
@@ -63,7 +63,7 @@
 		return;
 	}
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] groupCall:self.groupCallId completion:^(NSDictionary *call, NSString *error){
+	[[TGCallStore shared]groupCall:self.groupCallId completion:^(NSDictionary *call, NSString *error){
 		TGCallMessagesViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -94,7 +94,7 @@
 						  @"detail" : @"Message",
 						  @"tap" : ^{ [weakSelf compose]; }}];
 	}
-	for (NSDictionary *message in [[TGClient shared] groupCallMessageSnapshot:self.groupCallId]){
+	for (NSDictionary *message in [[TGCallStore shared]groupCallMessageSnapshot:self.groupCallId]){
 		NSString *text = message[@"text"];
 		NSString *sender = message[@"senderName"];
 		[rows addObject:@{@"title" : sender.length ? sender : @"Participants",
@@ -116,7 +116,7 @@
 		TGCallMessagesViewController *me = weakSelf;
 		if (!me)
 			return;
-		[[TGClient shared] sendGroupCallMessage:text inCall:me.groupCallId
+		[[TGCallStore shared]sendGroupCallMessage:text inCall:me.groupCallId
 								 paidStarCount:0
 									completion:^(BOOL ok, NSString *error){
 			TGCallMessagesViewController *again = weakSelf;
@@ -172,7 +172,7 @@
 
 - (void)deleteMessage:(NSDictionary *)message report:(BOOL)report {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] deleteGroupCallMessages:@[message[@"messageId"] ?: @(0)]
+	[[TGCallStore shared]deleteGroupCallMessages:@[message[@"messageId"] ?: @(0)]
 										inCall:self.groupCallId reportSpam:report
 									completion:^(BOOL ok, NSString *error){
 		TGCallMessagesViewController *me = weakSelf;
@@ -187,7 +187,7 @@
 	if (![sender isKindOfClass:NSDictionary.class])
 		return;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] deleteGroupCallMessagesBySender:sender inCall:self.groupCallId
+	[[TGCallStore shared]deleteGroupCallMessagesBySender:sender inCall:self.groupCallId
 											reportSpam:NO
 											completion:^(BOOL ok, NSString *error){
 		TGCallMessagesViewController *me = weakSelf;

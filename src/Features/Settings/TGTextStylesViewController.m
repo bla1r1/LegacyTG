@@ -1,9 +1,11 @@
 #import "TGTextStylesViewController.h"
 #import "TGAlertSheet.h"
-#import "TGClient.h"
 #import "TGForwardPicker.h"
 #import "TGListViewController.h"
 #import "TGRows.h"
+#import "TGSendStore.h"
+#import "TGTextStylesStore.h"
+
 
 @interface TGTextStylesViewController ()
 @property (nonatomic, strong) NSArray *styles;
@@ -14,7 +16,7 @@
 - (void)viewDidLoad {
 	[super viewDidLoad];
 	self.title = @"Text Styles";
-	self.styles = [TGClient shared].textCompositionStyles ?: @[];
+	self.styles = [TGTextStylesStore shared].textCompositionStyles ?: @[];
 	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
 			initWithBarButtonSystemItem:UIBarButtonSystemItemAdd
 								 target:self action:@selector(createTapped)];
@@ -30,12 +32,12 @@
 
 - (void)viewWillAppear:(BOOL)animated {
 	[super viewWillAppear:animated];
-	self.styles = [TGClient shared].textCompositionStyles ?: @[];
+	self.styles = [TGTextStylesStore shared].textCompositionStyles ?: @[];
 	[self rebuildSections];
 }
 
 - (void)stylesChanged:(NSNotification *)note {
-	self.styles = [TGClient shared].textCompositionStyles ?: @[];
+	self.styles = [TGTextStylesStore shared].textCompositionStyles ?: @[];
 	[self rebuildSections];
 }
 
@@ -85,7 +87,7 @@
 
 - (void)addStyle:(NSDictionary *)style {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] addTextCompositionStyleNamed:style[@"name"]
+	[[TGTextStylesStore shared] addTextCompositionStyleNamed:style[@"name"]
 										 completion:^(BOOL ok, NSString *error){
 		[weakSelf report:ok error:error title:@"Add to Composer"];
 	}];
@@ -93,7 +95,7 @@
 
 - (void)removeStyle:(NSDictionary *)style {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] removeTextCompositionStyleNamed:style[@"name"]
+	[[TGTextStylesStore shared] removeTextCompositionStyleNamed:style[@"name"]
 											completion:^(BOOL ok, NSString *error){
 		[weakSelf report:ok error:error title:@"Remove from Composer"];
 	}];
@@ -107,7 +109,7 @@
 				  destructive:YES
 					   inView:self.view
 					onConfirm:^{
-		[[TGClient shared] deleteTextCompositionStyleNamed:style[@"name"]
+		[[TGTextStylesStore shared] deleteTextCompositionStyleNamed:style[@"name"]
 												completion:^(BOOL ok, NSString *error){
 			[weakSelf report:ok error:error title:@"Delete Style"];
 		}];
@@ -131,7 +133,7 @@
 						message:nil
 					placeholder:@"Prompt" text:nil action:@"Create"
 						 inView:weakSelf.view onSubmit:^(NSString *prompt){
-			[[TGClient shared] createTextCompositionStyle:title emojiId:0
+			[[TGTextStylesStore shared] createTextCompositionStyle:title emojiId:0
 												 prompt:prompt showCreator:YES
 											  completion:^(NSDictionary *style,
 														   NSString *error){
@@ -157,7 +159,7 @@
 						 action:@"Save"
 						 inView:weakSelf.view
 					   onSubmit:^(NSString *prompt){
-			[[TGClient shared] editTextCompositionStyleNamed:style[@"name"]
+			[[TGTextStylesStore shared] editTextCompositionStyleNamed:style[@"name"]
 													  title:title
 													emojiId:[style[@"emojiId"] longLongValue]
 													 prompt:prompt
@@ -196,7 +198,12 @@
 							  @"tap" : ^{
 				TGForwardPicker *picker = [[TGForwardPicker alloc] init];
 				picker.onPicked = ^(int64_t targetChatId){
-					[[TGClient shared] sendText:firstResult toChat:targetChatId];
+					[[TGSendStore shared] sendText:firstResult
+										   toChat:targetChatId
+										   thread:0
+										  replyTo:0
+								  schedulingState:nil
+										   silent:NO];
 				};
 				[me.navigationController pushViewController:picker animated:YES];
 			}}];
@@ -220,7 +227,7 @@
 		return;
 	}
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] textCompositionStyleExampleNamed:name number:number
+	[[TGTextStylesStore shared] textCompositionStyleExampleNamed:name number:number
 											completion:^(NSDictionary *example,
 														 NSString *error){
 		TGTextStylesViewController *me = weakSelf;
@@ -244,7 +251,7 @@
 					message:nil
 				placeholder:@"name" text:nil action:@"Search"
 					 inView:self.view onSubmit:^(NSString *name){
-		[[TGClient shared] searchTextCompositionStyleNamed:name
+		[[TGTextStylesStore shared] searchTextCompositionStyleNamed:name
 												completion:^(NSDictionary *style,
 															 NSString *error){
 			[weakSelf report:(style != nil) error:error title:@"Search"];

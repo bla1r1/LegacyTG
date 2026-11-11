@@ -1,5 +1,4 @@
 #import "TGStoryAlbumsViewController.h"
-#import "TGClient.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
@@ -8,6 +7,7 @@
 #import "TGIcons.h"
 #import "TGLocalization.h"
 #import "TGRows.h"
+#import "TGStoryStore.h"
 
 /// Album story dates use the app language, not the device locale.
 static NSString *TGStoryAlbumDateText(NSNumber *unixTime) {
@@ -89,7 +89,7 @@ static UIImage *TGStoryAlbumPicture(NSString *path, NSNumber *albumId) {
 
 - (void)reloadAlbums {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] storyAlbumsForChat:self.chatId completion:^(NSArray *albums){
+	[[TGStoryStore shared]storyAlbumsForChat:self.chatId completion:^(NSArray *albums){
 		TGStoryAlbumsViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -110,7 +110,7 @@ static UIImage *TGStoryAlbumPicture(NSString *path, NSNumber *albumId) {
 		TGStoryAlbumsViewController *me = weakSelf;
 		if (!me)
 			return;
-		[[TGClient shared] createStoryAlbumNamed:name
+		[[TGStoryStore shared]createStoryAlbumNamed:name
 										  inChat:me.chatId
 										storyIds:@[]
 									  completion:^(NSDictionary *album, NSString *error){
@@ -198,7 +198,7 @@ static UIImage *TGStoryAlbumPicture(NSString *path, NSNumber *albumId) {
 			TGStoryAlbumsViewController *me = weakSelf;
 			if (!me)
 				return;
-			[[TGClient shared] addStories:@[@(me.storyToAdd)]
+			[[TGStoryStore shared]addStories:@[@(me.storyToAdd)]
 								toAlbum:albumId
 								 inChat:me.chatId
 							 completion:^(NSDictionary *changed, NSString *error){
@@ -238,7 +238,7 @@ static UIImage *TGStoryAlbumPicture(NSString *path, NSNumber *albumId) {
 		[ids addObject:item[@"albumId"] ?: @(0)];
 	[self rebuildSections];
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] reorderStoryAlbums:ids inChat:self.chatId
+	[[TGStoryStore shared]reorderStoryAlbums:ids inChat:self.chatId
 							   completion:^(BOOL ok, NSString *error){
 		if (!ok){
 			TGStoryAlbumsViewController *me = weakSelf;
@@ -257,7 +257,7 @@ static UIImage *TGStoryAlbumPicture(NSString *path, NSNumber *albumId) {
 		return;
 	NSDictionary *album = self.albums[(NSUInteger)indexPath.row];
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] deleteStoryAlbum:[album[@"albumId"] intValue]
+	[[TGStoryStore shared]deleteStoryAlbum:[album[@"albumId"] intValue]
 								 inChat:self.chatId
 							 completion:^(BOOL ok, NSString *error){
 		TGStoryAlbumsViewController *me = weakSelf;
@@ -317,7 +317,7 @@ static UIImage *TGStoryAlbumPicture(NSString *path, NSNumber *albumId) {
 
 - (void)reloadStories {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] storiesInAlbum:self.albumId inChat:self.chatId
+	[[TGStoryStore shared]storiesInAlbum:self.albumId inChat:self.chatId
 								offset:0 limit:60
 							completion:^(NSArray *stories, NSString *error){
 		TGStoryAlbumDetailViewController *me = weakSelf;
@@ -350,7 +350,7 @@ static UIImage *TGStoryAlbumPicture(NSString *path, NSNumber *albumId) {
 					  destructive:YES
 						   inView:me.view
 						onConfirm:^{
-			[[TGClient shared] deleteStoryAlbum:me.albumId
+			[[TGStoryStore shared]deleteStoryAlbum:me.albumId
 										 inChat:me.chatId
 									 completion:^(BOOL ok, NSString *error){
 				if (!ok){
@@ -376,7 +376,7 @@ static UIImage *TGStoryAlbumPicture(NSString *path, NSNumber *albumId) {
 		TGStoryAlbumDetailViewController *me = weakSelf;
 		if (!me)
 			return;
-		[[TGClient shared] setStoryAlbumName:name
+		[[TGStoryStore shared]setStoryAlbumName:name
 									 albumId:me.albumId
 									  inChat:me.chatId
 								  completion:^(NSDictionary *album, NSString *error){
@@ -394,7 +394,7 @@ static UIImage *TGStoryAlbumPicture(NSString *path, NSNumber *albumId) {
 
 - (void)addStory {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] archivedStoryIdsForChat:self.chatId fromStoryId:0 limit:30
+	[[TGStoryStore shared]archivedStoryIdsForChat:self.chatId fromStoryId:0 limit:30
 								   completion:^(NSArray *storyIds, NSString *error){
 		TGStoryAlbumDetailViewController *me = weakSelf;
 		if (!me)
@@ -428,7 +428,7 @@ static UIImage *TGStoryAlbumPicture(NSString *path, NSNumber *albumId) {
 				destructiveIndex:-1 inView:me.view onChoice:^(NSInteger choice){
 			if (choice < 0 || choice >= (NSInteger)wanted.count)
 				return;
-			[[TGClient shared] addStories:@[wanted[(NSUInteger)choice]]
+			[[TGStoryStore shared]addStories:@[wanted[(NSUInteger)choice]]
 								toAlbum:me.albumId
 								 inChat:me.chatId
 							 completion:^(NSDictionary *album, NSString *error){
@@ -537,7 +537,7 @@ static UIImage *TGStoryAlbumPicture(NSString *path, NSNumber *albumId) {
 		[ids addObject:item[@"storyId"] ?: @(0)];
 	[self rebuildSections];
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] reorderStories:ids inAlbum:self.albumId inChat:self.chatId
+	[[TGStoryStore shared]reorderStories:ids inAlbum:self.albumId inChat:self.chatId
 						   completion:^(NSDictionary *album, NSString *error){
 		TGStoryAlbumDetailViewController *me = weakSelf;
 		if (!album){
@@ -556,7 +556,7 @@ static UIImage *TGStoryAlbumPicture(NSString *path, NSNumber *albumId) {
 		return;
 	NSDictionary *story = self.stories[(NSUInteger)indexPath.row];
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] removeStories:@[story[@"storyId"] ?: @(0)]
+	[[TGStoryStore shared]removeStories:@[story[@"storyId"] ?: @(0)]
 						   fromAlbum:self.albumId
 							  inChat:self.chatId
 						  completion:^(NSDictionary *album, NSString *error){

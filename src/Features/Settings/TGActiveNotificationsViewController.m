@@ -1,8 +1,11 @@
 #import "TGActiveNotificationsViewController.h"
-#import "TGClient.h"
 #import "TGAlertSheet.h"
 #import "TGLocalization.h"
 #import "TGRows.h"
+#import "TGMessageStore.h"
+#import "TGSessionsStore.h"
+#import "TGSettingsStore.h"
+
 
 /// One date format for every row; creating one per cell was the usual
 /// reason a notification list scrolls badly on an A5.
@@ -45,11 +48,11 @@ static NSString *TGNotificationDateText(NSNumber *timestamp) {
 }
 
 - (NSArray *)groups {
-	return [TGClient shared].activeNotificationGroups ?: @[];
+	return [TGSettingsStore shared].activeNotificationGroups ?: @[];
 }
 
 - (BOOL)pending {
-	return [TGClient shared].havePendingNotifications;
+	return [TGSettingsStore shared].havePendingNotifications;
 }
 
 - (void)reloadList {
@@ -74,7 +77,7 @@ static NSString *TGNotificationDateText(NSNumber *timestamp) {
 		])];
 	} else {
 		for (NSDictionary *group in groups){
-			NSString *title = [[TGClient shared] titleForChat:
+			NSString *title = [[TGMessageStore shared] titleForChat:
 					[group[@"chatId"] longLongValue]] ?: TGLocalized(@"Notifications");
 			NSString *header = [NSString stringWithFormat:@"%@ · %@ · %@",
 					title, group[@"type"] ?: TGLocalized(@"Messages"),
@@ -107,7 +110,7 @@ static NSString *TGNotificationDateText(NSNumber *timestamp) {
 			 destructiveIndex:0
 					   inView:self.view
 					 onChoice:^(NSInteger choice){
-		[[TGClient shared] removeNotification:notificationId inGroup:groupId
+		[[TGSettingsStore shared] removeNotification:notificationId inGroup:groupId
 								   completion:^(BOOL ok, NSString *error){
 			if (!ok)
 				[TGAlertSheet showMessage:(error ?: TGLocalized(@"An error occurred."))
@@ -133,7 +136,7 @@ static NSString *TGNotificationDateText(NSNumber *timestamp) {
 			int32_t maxId = 0;
 			for (NSDictionary *row in group[@"notifications"])
 				maxId = MAX(maxId, (int32_t)[row[@"id"] intValue]);
-			[[TGClient shared] removeNotificationGroup:(int32_t)[group[@"id"] intValue]
+			[[TGSettingsStore shared] removeNotificationGroup:(int32_t)[group[@"id"] intValue]
 									  maxNotificationId:maxId
 											 completion:^(BOOL ok, NSString *error){
 				(void)error;

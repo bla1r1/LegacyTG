@@ -1,11 +1,12 @@
 #import "TGBusinessViewController.h"
 #import "TGBusinessMessagesViewController.h"
-#import "TGClient.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
 #import "TGIcons.h"
 #import "TGBusinessBaseViewController.h"
+#import "TGBusinessStore.h"
+#import "TGProfileStore.h"
 
 //
 // TGBusinessViewController.m - Telegram Business settings, the profile

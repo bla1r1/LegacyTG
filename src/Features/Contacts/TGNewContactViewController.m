@@ -7,7 +7,7 @@
 #import <UIKit/UIKit.h>
 #import "TGNewContactViewController.h"
 
-#import "TGClient.h"
+#import "TGContactsStore.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
@@ -187,7 +187,7 @@
 	// the user id the profile already knows. Importing by phone would create a
 	// second contact instead.
 	if (self.userId){
-		[[TGClient shared] addContactWithUserId:self.userId
+		[[TGContactsStore shared] addContactWithUserId:self.userId
 									  firstName:first
 									   lastName:last
 										  phone:phone
@@ -197,7 +197,7 @@
 		return;
 	}
 
-	[[TGClient shared] importContactNamed:first lastName:last phone:phone
+	[[TGContactsStore shared] importContactNamed:first lastName:last phone:phone
 							   completion:^(int64_t userId){
 		TGNewContactViewController *me = weakSelf;
 		if (!me)
@@ -211,7 +211,7 @@
 								title:screenTitle inView:me.view];
 			return;
 		}
-		[[TGClient shared] addContactWithUserId:userId
+		[[TGContactsStore shared] addContactWithUserId:userId
 									  firstName:first
 									   lastName:last
 										  phone:phone

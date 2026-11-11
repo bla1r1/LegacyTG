@@ -1,7 +1,7 @@
 #import "TGLoginViewControllerInternal.h"
 #import "TGAlertSheet.h"
-#import "TGClient.h"
 #import "TGPhoneNumberRules.h"
+#import "TGAccountStore.h"
 
 @implementation TGLoginViewController (Phone)
 
@@ -12,7 +12,7 @@
     if (self.currentStep != TGLoginStepPhone)
         return;
     __weak typeof(self) weakSelf = self;
-    [[TGClient shared] countriesWithCompletion:^(NSArray *countries){
+    [[TGAccountStore shared] countriesWithCompletion:^(NSArray *countries){
         TGLoginViewController *me = weakSelf;
         if (!me || me.currentStep != TGLoginStepPhone)
             return;
@@ -132,7 +132,7 @@
 
     NSString *full = [prefix stringByAppendingString:local];
     __weak typeof(self) weakSelf = self;
-    [[TGClient shared] phoneNumberInfoForPrefix:full completion:^(NSDictionary *info){
+    [[TGAccountStore shared] phoneNumberInfoForPrefix:full completion:^(NSDictionary *info){
         TGLoginViewController *me = weakSelf;
         if (!me || me.currentStep != TGLoginStepPhone || !info)
             return;

@@ -7,10 +7,11 @@
 // the site itself loses its token on its next request, not on this tap.
 //
 #import "TGWebsitesViewController.h"
-#import "TGClient.h"
 #import "TGAlertSheet.h"
 #import "TGStyle.h"
 #import "TGRows.h"
+#import "TGAccountStore.h"
+
 
 @interface TGWebsitesViewController ()
 @property (nonatomic, strong) NSArray *sites;
@@ -28,7 +29,7 @@
 
 - (void)refresh {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] connectedWebsitesWithCompletion:^(NSArray *sites, NSString *error){
+	[[TGAccountStore shared] connectedWebsitesWithCompletion:^(NSArray *sites, NSString *error){
 		weakSelf.sites = sites ?: @[];
 		weakSelf.readError = error;
 		weakSelf.loaded = YES;
@@ -78,7 +79,7 @@
 				  destructive:YES
 					   inView:self.view
 					onConfirm:^{
-		[[TGClient shared] disconnectAllWebsitesWithCompletion:^(BOOL ok,
+		[[TGAccountStore shared] disconnectAllWebsitesWithCompletion:^(BOOL ok,
 																 NSString *error){
 			[weakSelf answer:ok error:error title:@"Active Websites"];
 		}];
@@ -104,7 +105,7 @@
 					  destructive:YES
 						   inView:weakSelf.view
 						onConfirm:^{
-			[[TGClient shared] disconnectWebsite:websiteId
+			[[TGAccountStore shared] disconnectWebsite:websiteId
 									 completion:^(BOOL ok, NSString *error){
 				[weakSelf answer:ok error:error title:domain];
 			}];

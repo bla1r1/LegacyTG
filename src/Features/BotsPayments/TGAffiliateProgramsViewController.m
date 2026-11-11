@@ -7,8 +7,8 @@
 // instead of promising money.
 //
 #import "TGAffiliateProgramsViewController.h"
-#import "TGClient.h"
 #import "TGAlertSheet.h"
+#import "TGStarsStore.h"
 
 @interface TGAffiliateProgramsViewController ()
 @property (nonatomic, copy) NSString *offset;
@@ -218,7 +218,7 @@
 	}
 
 	if ([action isEqualToString:@"search"]){
-		[[TGClient shared] searchAffiliateProgramsForKind:self.kind
+		[[TGStarsStore shared] searchAffiliateProgramsForKind:self.kind
 											   botUserId:self.botUserId
 												  chatId:self.chatId
 												sortOrder:self.sort
@@ -233,7 +233,7 @@
 			[weakSelf showPage:page title:@"Affiliate Programs"];
 		}];
 	} else if ([action isEqualToString:@"connected"]){
-		[[TGClient shared] connectedAffiliateProgramsForKind:self.kind
+		[[TGStarsStore shared] connectedAffiliateProgramsForKind:self.kind
 												   botUserId:self.botUserId
 													  chatId:self.chatId
 													  offset:self.offset
@@ -247,7 +247,7 @@
 			[weakSelf showPage:page title:@"Connected"];
 		}];
 	} else if ([action isEqualToString:@"one"]){
-		[[TGClient shared] connectedAffiliateProgramForKind:self.kind
+		[[TGStarsStore shared] connectedAffiliateProgramForKind:self.kind
 												  botUserId:self.botUserId
 													 chatId:self.chatId
 										   programBotUserId:self.programBotId
@@ -260,7 +260,7 @@
 			[weakSelf showProgram:program title:@"Connection"];
 		}];
 	} else if ([action isEqualToString:@"connect"]){
-		[[TGClient shared] connectAffiliateProgramForKind:self.kind
+		[[TGStarsStore shared] connectAffiliateProgramForKind:self.kind
 												botUserId:self.botUserId
 												   chatId:self.chatId
 										 programBotUserId:self.programBotId
@@ -278,7 +278,7 @@
 						title:@"Disconnect"];
 			return;
 		}
-		[[TGClient shared] disconnectAffiliateProgramForKind:self.kind
+		[[TGStarsStore shared] disconnectAffiliateProgramForKind:self.kind
 												   botUserId:self.botUserId
 													  chatId:self.chatId
 														 url:self.connectionURL
@@ -303,7 +303,7 @@
 		screen.hidesBottomBarWhenPushed = YES;
 		[self.navigationController pushViewController:screen animated:YES];
 	} else if ([action isEqualToString:@"setChannel"]){
-		[[TGClient shared] setChatAffiliateProgram:self.chatId
+		[[TGStarsStore shared] setChatAffiliateProgram:self.chatId
 							   commissionPerMille:self.commission
 									   monthCount:self.months
 									   completion:^(BOOL ok, NSString *error){
@@ -394,7 +394,7 @@
 		return;
 	}
 	if ([action isEqualToString:@"search"]){
-		[[TGClient shared] searchChatAffiliateProgram:self.username
+		[[TGStarsStore shared] searchChatAffiliateProgram:self.username
 											referrer:self.referrer
 										  completion:^(NSDictionary *chat,
 													   NSString *error){
@@ -411,7 +411,7 @@
 			[weakSelf showMessage:line title:@"Search"];
 		}];
 	} else if ([action isEqualToString:@"set"]){
-		[[TGClient shared] setChatAffiliateProgram:self.chatId
+		[[TGStarsStore shared] setChatAffiliateProgram:self.chatId
 							   commissionPerMille:self.commission
 									   monthCount:self.months
 									   completion:^(BOOL ok, NSString *error){

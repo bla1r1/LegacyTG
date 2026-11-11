@@ -1,9 +1,9 @@
 #import "TGStorySettingsViewController.h"
-#import "TGClient.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
 #import "TGChatViewController.h"
+#import "TGStoryStore.h"
 
 @interface TGStorySettingsViewController ()
 @property (nonatomic, strong) NSArray *exceptions;
@@ -28,7 +28,7 @@
 
 - (void)reloadExceptions {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] storyNotificationExceptionsWithCompletion:^(NSArray *chats){
+	[[TGStoryStore shared]storyNotificationExceptionsWithCompletion:^(NSArray *chats){
 		TGStorySettingsViewController *me = weakSelf;
 		if (!me)
 			return;

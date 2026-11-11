@@ -1,6 +1,5 @@
 #import "TGBusinessViewController.h"
 #import "TGBusinessMessagesViewController.h"
-#import "TGClient.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
@@ -14,6 +13,8 @@
 #import "TGBusinessHoursViewController.h"
 #import "TGBusinessLocationViewController.h"
 #import "TGBusinessIntroViewController.h"
+#import "TGBusinessStore.h"
+#import "TGProfileStore.h"
 
 @interface TGBusinessChatLinksViewController ()
 @property (nonatomic, strong) NSArray *links;
@@ -83,7 +84,7 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 
 - (void)load {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] businessChatLinksWithCompletion:^(NSArray *links, NSString *error){
+	[[TGBusinessStore shared] businessChatLinksWithCompletion:^(NSArray *links, NSString *error){
 		TGBusinessChatLinksViewController *page = weakSelf;
 		if (!page)
 			return;
@@ -139,7 +140,7 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 				  message:@"Add a message that will be entered in the message input field for anyone who starts a chat with you using this link:"
 			  placeholder:@"Add a preset message..." text:nil action:@"Create"
 			   completion:^(NSString *text){
-			[[TGClient shared] createBusinessChatLinkWithText:text title:title
+			[[TGBusinessStore shared] createBusinessChatLinkWithText:text title:title
 					completion:^(NSDictionary *link, NSString *error){
 				TGBusinessChatLinksViewController *page = weakSelf;
 				if (!page)
@@ -181,7 +182,7 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 		[weakSelf askText:@"Edit Link" message:nil
 			  placeholder:@"Add a preset message..." text:text action:@"Save"
 			   completion:^(NSString *newText){
-			[[TGClient shared] editBusinessChatLink:link[@"link"]
+			[[TGBusinessStore shared] editBusinessChatLink:link[@"link"]
 											   text:newText title:newTitle
 										 completion:^(NSDictionary *edited, NSString *error){
 				TGBusinessChatLinksViewController *page = weakSelf;
@@ -197,7 +198,7 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 
 - (void)showInfoForLink:(NSDictionary *)link {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] businessChatLinkInfoForName:TGBusinessLinkName(link[@"link"])
+	[[TGBusinessStore shared] businessChatLinkInfoForName:TGBusinessLinkName(link[@"link"])
 										 completion:^(NSDictionary *info, NSString *error){
 		TGBusinessChatLinksViewController *page = weakSelf;
 		if (!page)
@@ -219,7 +220,7 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 				  destructive:YES
 					   inView:self.view
 					onConfirm:^{
-		[[TGClient shared] deleteBusinessChatLink:link[@"link"]
+		[[TGBusinessStore shared] deleteBusinessChatLink:link[@"link"]
 										completion:^(BOOL ok, NSString *error){
 			TGBusinessChatLinksViewController *page = weakSelf;
 			if (!page)

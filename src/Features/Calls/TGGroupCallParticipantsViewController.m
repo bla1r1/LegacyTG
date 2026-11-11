@@ -1,10 +1,12 @@
 #import "TGGroupCallParticipantsViewController.h"
-#import "TGClient.h"
 #import "TGLocalization.h"
 #import "TGAlertSheet.h"
 #import "TGRows.h"
 #import "TGTheme.h"
 #import "TGGroupCallParticipantCell.h"
+#import "TGMessageStore.h"
+#import "TGCallStore.h"
+#import "TGProfileStore.h"
 
 @interface TGGroupCallParticipantsViewController ()
 @property (nonatomic, strong) NSArray *participants;
@@ -68,7 +70,7 @@
 		return;
 	self.loading = YES;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] groupCall:self.groupCallId completion:^(NSDictionary *call, NSString *error){
+	[[TGCallStore shared]groupCall:self.groupCallId completion:^(NSDictionary *call, NSString *error){
 		TGGroupCallParticipantsViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -80,7 +82,7 @@
 			return;
 		}
 		if ([call[@"isJoined"] boolValue]){
-			[[TGClient shared] loadGroupCallParticipants:me.groupCallId limit:100
+			[[TGCallStore shared]loadGroupCallParticipants:me.groupCallId limit:100
 					completion:^(BOOL ok, NSString *why){
 				TGGroupCallParticipantsViewController *again = weakSelf;
 				if (!again)
@@ -94,7 +96,7 @@
 			// of its own: getGroupCallParticipants takes the inputGroupCall
 			// and answers ids. A video chat has no such request until this
 			// account joins it.
-			[[TGClient shared] groupCallParticipantsWithInput:
+			[[TGCallStore shared]groupCallParticipantsWithInput:
 					TGGroupCallInput(me.groupCallId, 0) limit:100
 					completion:^(NSDictionary *answer, NSString *why){
 				TGGroupCallParticipantsViewController *again = weakSelf;
@@ -117,7 +119,7 @@
 }
 
 - (void)refresh {
-	NSArray *rows = [[TGClient shared] groupCallParticipantSnapshot:self.groupCallId];
+	NSArray *rows = [[TGCallStore shared]groupCallParticipantSnapshot:self.groupCallId];
 	if (!rows.count && self.listedSenders.count)
 		rows = [self rowsFromSenders:self.listedSenders];
 	self.participants = rows;
@@ -132,15 +134,15 @@
 
 - (NSArray *)rowsFromSenders:(NSArray *)senders {
 	NSMutableArray *rows = [NSMutableArray array];
-	int64_t meId = [[TGClient shared].me[@"id"] longLongValue];
+	int64_t meId = [[TGProfileStore shared].me[@"id"] longLongValue];
 	for (NSDictionary *sender in senders){
 		if (![sender isKindOfClass:NSDictionary.class])
 			continue;
 		BOOL chat = [sender[@"@type"] isEqualToString:@"messageSenderChat"];
 		int64_t userId = [sender[@"user_id"] longLongValue];
 		int64_t chatId = [sender[@"chat_id"] longLongValue];
-		NSString *name = chat ? [[TGClient shared] titleForChat:chatId]
-							  : [[TGClient shared] nameForUserId:userId];
+		NSString *name = chat ? [[TGMessageStore shared]titleForChat:chatId]
+							  : [[TGMessageStore shared]nameForUserId:userId];
 		NSMutableDictionary *row = [NSMutableDictionary dictionary];
 		row[@"sender"] = sender;
 		row[@"name"] = name ?: @"";
@@ -233,7 +235,7 @@
 	BOOL muted = forAll ? [participant[@"isMutedForAllUsers"] boolValue]
 						: [participant[@"isMutedForCurrentUser"] boolValue];
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] toggleGroupCallParticipant:participant[@"sender"]
+	[[TGCallStore shared]toggleGroupCallParticipant:participant[@"sender"]
 										   inCall:self.groupCallId
 										  isMuted:!muted
 									   completion:^(BOOL ok, NSString *error){
@@ -258,7 +260,7 @@
 		TGGroupCallParticipantsViewController *me = weakSelf;
 		if (!me)
 			return;
-		[[TGClient shared] banGroupCallParticipants:
+		[[TGCallStore shared]banGroupCallParticipants:
 				@[participant[@"userId"] ?: @(0)] inCall:me.groupCallId
 				completion:^(BOOL ok, NSString *error){
 			if (!ok)

@@ -1,5 +1,4 @@
 #import "TGStoryArchiveViewController.h"
-#import "TGClient.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
@@ -8,6 +7,7 @@
 #import "TGIcons.h"
 #import "TGLocalization.h"
 #import "TGRows.h"
+#import "TGStoryStore.h"
 
 /// The archive list's date uses the app language, not the device locale.
 static NSString *TGStoryArchiveDateText(NSNumber *unixTime) {
@@ -64,7 +64,7 @@ static NSString *TGStoryArchiveDateText(NSNumber *unixTime) {
 		return;
 	self.loading = YES;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] archivedStoryIdsForChat:self.chatId
+	[[TGStoryStore shared]archivedStoryIdsForChat:self.chatId
 								   fromStoryId:self.lastStoryId
 										   limit:30
 								   completion:^(NSArray *storyIds, NSString *error){
@@ -96,7 +96,7 @@ static NSString *TGStoryArchiveDateText(NSNumber *unixTime) {
 		return;
 	}
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] story:[ids[(NSUInteger)index] intValue] fromChat:self.chatId
+	[[TGStoryStore shared]story:[ids[(NSUInteger)index] intValue] fromChat:self.chatId
 				  completion:^(NSDictionary *story){
 		TGStoryArchiveViewController *me = weakSelf;
 		if (!me)

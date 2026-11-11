@@ -1,8 +1,8 @@
 #import "TGLiveStoryViewController.h"
-#import "TGClient.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
+#import "TGStoryStore.h"
 
 @interface TGLiveStoryViewController ()
 @property (nonatomic, assign) int64_t chatId;
@@ -97,7 +97,7 @@
 		if (!me)
 			return;
 		BOOL rtmp = choice == 0;
-		[[TGClient shared] startLiveStoryInChat:me.chatId
+		[[TGStoryStore shared]startLiveStoryInChat:me.chatId
 										privacy:@"everyone"
 										userIds:@[]
 								 protectContent:NO
@@ -127,7 +127,7 @@
 
 - (void)joinLiveStory {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] joinLiveStoryCall:self.groupCallId
+	[[TGStoryStore shared]joinLiveStoryCall:self.groupCallId
 							  completion:^(NSString *payload, NSString *error){
 		TGLiveStoryViewController *me = weakSelf;
 		if (!me)
@@ -149,7 +149,7 @@
 
 - (void)loadStreamer {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] liveStoryStreamerForCall:self.groupCallId
+	[[TGStoryStore shared]liveStoryStreamerForCall:self.groupCallId
 									completion:^(NSDictionary *streamer, NSString *error){
 		TGLiveStoryViewController *me = weakSelf;
 		if (!me)
@@ -169,7 +169,7 @@
 
 - (void)loadRtmpUrl {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] liveStoryRtmpUrlForChat:self.chatId
+	[[TGStoryStore shared]liveStoryRtmpUrlForChat:self.chatId
 									completion:^(NSDictionary *url, NSString *error){
 		TGLiveStoryViewController *me = weakSelf;
 		if (!me)
@@ -195,7 +195,7 @@
 		TGLiveStoryViewController *me = weakSelf;
 		if (!me)
 			return;
-		[[TGClient shared] replaceLiveStoryRtmpUrlForChat:me.chatId
+		[[TGStoryStore shared]replaceLiveStoryRtmpUrlForChat:me.chatId
 											   completion:^(NSDictionary *url, NSString *error){
 			if (!url){
 				[TGAlertSheet showMessage:error ?: @"An error occurred."
@@ -218,7 +218,7 @@
 
 - (void)loadMessageSenders {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] liveStoryAvailableMessageSendersForCall:self.groupCallId
+	[[TGStoryStore shared]liveStoryAvailableMessageSendersForCall:self.groupCallId
 												   completion:^(NSArray *senders, NSString *error){
 		TGLiveStoryViewController *me = weakSelf;
 		if (!me)
@@ -238,7 +238,7 @@
 			if (choice < 0 || choice >= (NSInteger)senders.count)
 				return;
 			NSDictionary *sender = senders[choice];
-			[[TGClient shared] setLiveStoryMessageSender:sender
+			[[TGStoryStore shared]setLiveStoryMessageSender:sender
 												 forCall:me.groupCallId
 											  completion:^(BOOL ok, NSString *why){
 				[TGAlertSheet showMessage:ok
@@ -252,7 +252,7 @@
 
 - (void)loadTopDonors {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] liveStoryTopDonorsForCall:self.groupCallId
+	[[TGStoryStore shared]liveStoryTopDonorsForCall:self.groupCallId
 									 completion:^(NSDictionary *donors, NSString *error){
 		TGLiveStoryViewController *me = weakSelf;
 		if (!me)
@@ -279,7 +279,7 @@
 
 - (void)addPendingReaction {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] addPendingLiveStoryReactionInCall:self.groupCallId
+	[[TGStoryStore shared]addPendingLiveStoryReactionInCall:self.groupCallId
 												   stars:1
 											  completion:^(BOOL ok, NSString *error){
 		TGLiveStoryViewController *me = weakSelf;
@@ -294,7 +294,7 @@
 
 - (void)commitPendingReactions {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] commitPendingLiveStoryReactionsInCall:self.groupCallId
+	[[TGStoryStore shared]commitPendingLiveStoryReactionsInCall:self.groupCallId
 												  completion:^(BOOL ok, NSString *error){
 		TGLiveStoryViewController *me = weakSelf;
 		if (!ok){
@@ -308,7 +308,7 @@
 
 - (void)removePendingReactions {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] removePendingLiveStoryReactionsInCall:self.groupCallId
+	[[TGStoryStore shared]removePendingLiveStoryReactionsInCall:self.groupCallId
 												  completion:^(BOOL ok, NSString *error){
 		TGLiveStoryViewController *me = weakSelf;
 		if (!ok){

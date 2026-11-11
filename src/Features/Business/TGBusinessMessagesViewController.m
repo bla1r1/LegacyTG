@@ -8,10 +8,11 @@
 // real one and every refusal is printed in the Answer section.
 //
 #import "TGBusinessMessagesViewController.h"
-#import "TGClient.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
+#import "TGBusinessStore.h"
+#import "TGProfileStore.h"
 
 #pragma mark - the connection
 
@@ -34,7 +35,7 @@
 
 - (void)readConnection {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] businessConnectionWithId:self.connectionId
+	[[TGBusinessStore shared] businessConnectionWithId:self.connectionId
 									 completion:^(NSDictionary *connection, NSString *error){
 		TGBusinessConnectionViewController *page = weakSelf;
 		if (!page)
@@ -246,7 +247,7 @@
 			[weakSelf rebuildSections];
 		}];
 	} else if ([action isEqualToString:@"send"]){
-		[[TGClient shared] sendBusinessMessageWithConnectionId:self.connectionId
+		[[TGBusinessStore shared] sendBusinessMessageWithConnectionId:self.connectionId
 													   chatId:self.chatId
 														 text:self.text
 										  disableNotification:self.disableNotification
@@ -255,7 +256,7 @@
 			[weakSelf finishMessage:message error:error title:@"Send Message"];
 		}];
 	} else if ([action isEqualToString:@"sendAlbum"]){
-		[[TGClient shared] sendBusinessMessageAlbumWithConnectionId:self.connectionId
+		[[TGBusinessStore shared] sendBusinessMessageAlbumWithConnectionId:self.connectionId
 														   chatId:self.chatId
 															paths:[self albumPathList]
 														  caption:self.text
@@ -270,7 +271,7 @@
 			[weakSelf rebuildSections];
 		}];
 	} else if ([action isEqualToString:@"editText"]){
-		[[TGClient shared] editBusinessMessageTextWithConnectionId:self.connectionId
+		[[TGBusinessStore shared] editBusinessMessageTextWithConnectionId:self.connectionId
 														   chatId:self.chatId
 														messageId:self.messageId
 															 text:self.text
@@ -278,7 +279,7 @@
 			[weakSelf finishMessage:message error:error title:@"Edit"];
 		}];
 	} else if ([action isEqualToString:@"editCaption"]){
-		[[TGClient shared] editBusinessMessageCaptionWithConnectionId:self.connectionId
+		[[TGBusinessStore shared] editBusinessMessageCaptionWithConnectionId:self.connectionId
 															  chatId:self.chatId
 														   messageId:self.messageId
 															 caption:self.text
@@ -290,7 +291,7 @@
 			[self showMessage:@"An error occurred." title:@"Edit"];
 			return;
 		}
-		[[TGClient shared] editBusinessMessageMediaWithConnectionId:self.connectionId
+		[[TGBusinessStore shared] editBusinessMessageMediaWithConnectionId:self.connectionId
 															chatId:self.chatId
 														 messageId:self.messageId
 															  path:self.mediaPath
@@ -307,7 +308,7 @@
 				  placeholder:nil text:nil action:@"Save"
 				   completion:^(NSString *tasks){
 				NSArray *parts = [tasks componentsSeparatedByString:@","];
-				[[TGClient shared] editBusinessMessageChecklistWithConnectionId:weakSelf.connectionId
+				[[TGBusinessStore shared] editBusinessMessageChecklistWithConnectionId:weakSelf.connectionId
 																	  chatId:weakSelf.chatId
 																   messageId:weakSelf.messageId
 																	   title:title
@@ -327,7 +328,7 @@
 				[weakSelf askText:@"Live Location" message:nil
 					  placeholder:@"900" text:@"900" action:@"Save"
 					   completion:^(NSString *seconds){
-					[[TGClient shared] editBusinessMessageLiveLocationWithConnectionId:weakSelf.connectionId
+					[[TGBusinessStore shared] editBusinessMessageLiveLocationWithConnectionId:weakSelf.connectionId
 																			  chatId:weakSelf.chatId
 																		   messageId:weakSelf.messageId
 																			latitude:latitude
@@ -340,21 +341,21 @@
 			}];
 		}];
 	} else if ([action isEqualToString:@"clearMarkup"]){
-		[[TGClient shared] editBusinessMessageReplyMarkupWithConnectionId:self.connectionId
+		[[TGBusinessStore shared] editBusinessMessageReplyMarkupWithConnectionId:self.connectionId
 																 chatId:self.chatId
 															  messageId:self.messageId
 															 completion:^(NSDictionary *message, NSString *error){
 			[weakSelf finishMessage:message error:error title:@"Business Reply Markup"];
 		}];
 	} else if ([action isEqualToString:@"stopPoll"]){
-		[[TGClient shared] stopBusinessPollWithConnectionId:self.connectionId
+		[[TGBusinessStore shared] stopBusinessPollWithConnectionId:self.connectionId
 													chatId:self.chatId
 												 messageId:self.messageId
 												completion:^(NSDictionary *message, NSString *error){
 			[weakSelf finishMessage:message error:error title:@"Stop Poll"];
 		}];
 	} else if ([action isEqualToString:@"read"]){
-		[[TGClient shared] readBusinessMessageWithConnectionId:self.connectionId
+		[[TGBusinessStore shared] readBusinessMessageWithConnectionId:self.connectionId
 													   chatId:self.chatId
 													messageId:self.messageId
 												   completion:^(BOOL ok, NSString *error){
@@ -362,7 +363,7 @@
 		}];
 	} else if ([action isEqualToString:@"pin"] || [action isEqualToString:@"unpin"]){
 		BOOL pinned = [action isEqualToString:@"pin"];
-		[[TGClient shared] setBusinessMessagePinnedWithConnectionId:self.connectionId
+		[[TGBusinessStore shared] setBusinessMessagePinnedWithConnectionId:self.connectionId
 															 chatId:self.chatId
 														  messageId:self.messageId
 															 pinned:pinned
@@ -383,7 +384,7 @@
 			}
 			if (!ids.count && weakSelf.messageId)
 				[ids addObject:@(weakSelf.messageId)];
-			[[TGClient shared] deleteBusinessMessagesWithConnectionId:weakSelf.connectionId
+			[[TGBusinessStore shared] deleteBusinessMessagesWithConnectionId:weakSelf.connectionId
 														   messageIds:ids
 														   completion:^(BOOL ok, NSString *error){
 				[weakSelf finishOK:ok error:error title:@"Delete Messages"];

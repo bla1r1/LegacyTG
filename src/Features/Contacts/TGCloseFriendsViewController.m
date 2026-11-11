@@ -1,6 +1,7 @@
 #import "TGCloseFriendsViewController.h"
 #import "TGLocalization.h"
-#import "TGClient.h"
+#import "TGContactsStore.h"
+#import "TGProfileStore.h"
 #import "TGAlertSheet.h"
 #import "TGRows.h"
 
@@ -28,12 +29,12 @@
 	self.title = TGLocalized(@"Close Friends");
 
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] closeFriendsWithCompletion:^(NSArray *ids){
+	[[TGProfileStore shared] closeFriendsWithCompletion:^(NSArray *ids){
 		TGCloseFriendsViewController *me = weakSelf;
 		if (!me)
 			return;
 		[me.selected setSet:[NSSet setWithArray:ids]];
-		[[TGClient shared] contactsWithCompletion:^(NSArray *contacts){
+		[[TGContactsStore shared] contactsWithCompletion:^(NSArray *contacts){
 			TGCloseFriendsViewController *again = weakSelf;
 			if (!again)
 				return;
@@ -105,7 +106,7 @@
 	[self.tableView reloadData];
 
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] setCloseFriends:self.selected.allObjects
+	[[TGProfileStore shared] setCloseFriends:self.selected.allObjects
 							completion:^(BOOL ok, NSString *error){
 		TGCloseFriendsViewController *me = weakSelf;
 		if (!me)

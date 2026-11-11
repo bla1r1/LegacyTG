@@ -1,6 +1,5 @@
 #import "TGBusinessViewController.h"
 #import "TGBusinessMessagesViewController.h"
-#import "TGClient.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
@@ -14,6 +13,8 @@
 #import "TGBusinessHoursViewController.h"
 #import "TGBusinessLocationViewController.h"
 #import "TGBusinessIntroViewController.h"
+#import "TGBusinessStore.h"
+#import "TGProfileStore.h"
 
 @interface TGBusinessAwayViewController ()
 @property (nonatomic, assign) BOOL enabled;
@@ -99,7 +100,7 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 
 - (void)load {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] businessInfoWithCompletion:^(NSDictionary *info, NSString *error){
+	[[TGBusinessStore shared] businessInfoWithCompletion:^(NSDictionary *info, NSString *error){
 		TGBusinessAwayViewController *page = weakSelf;
 		if (!page)
 			return;
@@ -171,7 +172,7 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 
 - (void)save {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] setBusinessAwayMessageEnabled:self.enabled
+	[[TGBusinessStore shared] setBusinessAwayMessageEnabled:self.enabled
 										 shortcutId:self.shortcutId
 										   schedule:self.schedule
 										  startDate:self.startDate

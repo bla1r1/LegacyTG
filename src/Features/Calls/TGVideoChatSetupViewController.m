@@ -1,10 +1,12 @@
 #import "TGVideoChatSetupViewController.h"
-#import "TGClient.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
 #import "TGVideoChatStreamViewController.h"
 #import "TGGroupCallViewController.h"
+#import "TGProfileStore.h"
+#import "TGCallStore.h"
+#import "TGMessageStore.h"
 
 @interface TGVideoChatSetupViewController ()
 @property (nonatomic, strong) NSDictionary *call;
@@ -38,7 +40,7 @@
 - (void)reload {
 	__weak typeof(self) weakSelf = self;
 	if (self.chatId){
-		[[TGClient shared] chatRecordForChat:self.chatId completion:^(NSDictionary *chat){
+		[[TGProfileStore shared]chatRecordForChat:self.chatId completion:^(NSDictionary *chat){
 			TGVideoChatSetupViewController *me = weakSelf;
 			if (!me)
 				return;
@@ -60,7 +62,7 @@
 		return;
 	}
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] groupCall:self.groupCallId completion:^(NSDictionary *call, NSString *error){
+	[[TGCallStore shared]groupCall:self.groupCallId completion:^(NSDictionary *call, NSString *error){
 		TGVideoChatSetupViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -204,7 +206,7 @@
 				return;
 			int32_t start = scheduled
 					? (int32_t)([[NSDate date] timeIntervalSince1970] + 3600) : 0;
-			[[TGClient shared] createVideoChatInChat:again.chatId title:text
+			[[TGCallStore shared]createVideoChatInChat:again.chatId title:text
 					startDate:start isRtmp:rtmp completion:^(int32_t callId, NSString *error){
 				TGVideoChatSetupViewController *got = weakSelf;
 				if (!got)
@@ -224,7 +226,7 @@
 
 - (void)createStandaloneGroupCall {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] createGroupCallWithParameters:TGGroupCallJoinParameters(0, @"", NO, NO)
+	[[TGCallStore shared]createGroupCallWithParameters:TGGroupCallJoinParameters(0, @"", NO, NO)
 			completion:^(NSDictionary *info, NSString *error){
 		TGVideoChatSetupViewController *me = weakSelf;
 		if (!me)
@@ -254,7 +256,7 @@
 		[me loadCall];
 	};
 	if ([self.call[@"isVideoChat"] boolValue] || [self.call[@"isLiveStory"] boolValue]){
-		[[TGClient shared] joinVideoChat:self.groupCallId participant:nil
+		[[TGCallStore shared]joinVideoChat:self.groupCallId participant:nil
 							   parameters:parameters inviteHash:@""
 							   completion:^(NSString *payload, NSString *error){
 			TGVideoChatSetupViewController *me = weakSelf;
@@ -263,7 +265,7 @@
 			done(error.length == 0, error);
 		}];
 	} else {
-		[[TGClient shared] joinGroupCallWithInput:TGGroupCallInput(self.groupCallId, 0)
+		[[TGCallStore shared]joinGroupCallWithInput:TGGroupCallInput(self.groupCallId, 0)
 									   parameters:parameters
 									   completion:^(NSDictionary *info, NSString *error){
 			TGVideoChatSetupViewController *me = weakSelf;
@@ -276,7 +278,7 @@
 
 - (void)startScheduled {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] startScheduledVideoChat:self.groupCallId
+	[[TGCallStore shared]startScheduledVideoChat:self.groupCallId
 									completion:^(BOOL ok, NSString *error){
 		[weakSelf setStatus:(ok ? @"Done"
 				: (error ?: @"An error occurred."))];
@@ -293,7 +295,7 @@
 		TGVideoChatSetupViewController *me = weakSelf;
 		if (!me)
 			return;
-		[[TGClient shared] setVideoChatTitle:text inCall:me.groupCallId
+		[[TGCallStore shared]setVideoChatTitle:text inCall:me.groupCallId
 								  completion:^(BOOL ok, NSString *error){
 			[me setStatus:(ok ? @"Done" : (error ?: @"An error occurred."))];
 			[me loadCall];
@@ -305,7 +307,7 @@
 
 - (void)loadAvailableSenders:(void (^)(void))done {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] videoChatAvailableParticipantsForChat:self.chatId
+	[[TGCallStore shared]videoChatAvailableParticipantsForChat:self.chatId
 			completion:^(NSDictionary *answer, NSString *error){
 		TGVideoChatSetupViewController *me = weakSelf;
 		if (!me)
@@ -320,8 +322,8 @@
 
 - (NSString *)labelForSender:(NSDictionary *)sender {
 	if ([sender[@"@type"] isEqualToString:@"messageSenderChat"])
-		return [[TGClient shared] titleForChat:[sender[@"chat_id"] longLongValue]] ?: @"Chat";
-	return [[TGClient shared] nameForUserId:[sender[@"user_id"] longLongValue]] ?: @"User";
+		return [[TGMessageStore shared]titleForChat:[sender[@"chat_id"] longLongValue]] ?: @"Chat";
+	return [[TGMessageStore shared]nameForUserId:[sender[@"user_id"] longLongValue]] ?: @"User";
 }
 
 - (void)chooseDefaultParticipant {
@@ -342,7 +344,7 @@
 			if (index < 0 || index >= (NSInteger)me.availableSenders.count)
 				return;
 			NSDictionary *sender = me.availableSenders[(NSUInteger)index];
-			[[TGClient shared] setVideoChatDefaultParticipant:sender forChat:me.chatId
+			[[TGCallStore shared]setVideoChatDefaultParticipant:sender forChat:me.chatId
 					completion:^(BOOL ok, NSString *error){
 				[me setStatus:(ok ? @"Done"
 						: (error ?: @"An error occurred."))];
@@ -368,7 +370,7 @@
 				int64_t userId = text.longLongValue;
 				if (userId <= 0)
 					return;
-				[[TGClient shared] inviteVideoChatParticipants:@[@(userId)]
+				[[TGCallStore shared]inviteVideoChatParticipants:@[@(userId)]
 						toCall:me.groupCallId completion:^(BOOL ok, NSString *error){
 					[me setStatus:(ok ? @"Done" : (error ?: @"An error occurred."))];
 				}];
@@ -382,7 +384,7 @@
 			int64_t userId = [me.availableSenders[(NSUInteger)index][@"user_id"] longLongValue];
 			if (!userId)
 				return;
-			[[TGClient shared] inviteVideoChatParticipants:@[@(userId)]
+			[[TGCallStore shared]inviteVideoChatParticipants:@[@(userId)]
 					toCall:me.groupCallId completion:^(BOOL ok, NSString *error){
 				[me setStatus:(ok ? @"Done" : (error ?: @"An error occurred."))];
 			}];
@@ -400,7 +402,7 @@
 		TGVideoChatSetupViewController *me = weakSelf;
 		if (!me)
 			return;
-		[[TGClient shared] videoChatInviteLink:me.groupCallId canSelfUnmute:index == 0
+		[[TGCallStore shared]videoChatInviteLink:me.groupCallId canSelfUnmute:index == 0
 									completion:^(NSString *link, NSString *error){
 			if (!link.length){
 				[me setStatus:error ?: @"An error occurred."];
@@ -420,7 +422,7 @@
 		TGVideoChatSetupViewController *me = weakSelf;
 		if (!me)
 			return;
-		[[TGClient shared] revokeGroupCallInviteLink:me.groupCallId
+		[[TGCallStore shared]revokeGroupCallInviteLink:me.groupCallId
 										  completion:^(BOOL ok, NSString *error){
 			[me setStatus:(ok ? @"Done"
 					: (error ?: @"An error occurred."))];
@@ -431,7 +433,7 @@
 
 - (void)fetchRtmpUrl {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] videoChatRtmpUrlForChat:self.chatId
+	[[TGCallStore shared]videoChatRtmpUrlForChat:self.chatId
 									completion:^(NSDictionary *answer, NSString *error){
 		TGVideoChatSetupViewController *me = weakSelf;
 		if (!me)
@@ -456,7 +458,7 @@
 		TGVideoChatSetupViewController *me = weakSelf;
 		if (!me)
 			return;
-		[[TGClient shared] replaceVideoChatRtmpUrlForChat:me.chatId
+		[[TGCallStore shared]replaceVideoChatRtmpUrlForChat:me.chatId
 				completion:^(NSDictionary *answer, NSString *error){
 			if (!answer){
 				[me setStatus:error ?: @"An error occurred."];
@@ -482,7 +484,7 @@
 		[TGAlertSheet showInput:@"Title" message:nil
 					placeholder:@"Title" text:nil action:@"Start"
 						   inView:me.view onSubmit:^(NSString *text){
-			[[TGClient shared] startGroupCallRecording:me.groupCallId title:text
+			[[TGCallStore shared]startGroupCallRecording:me.groupCallId title:text
 					recordVideo:index > 0 portrait:index == 2
 					completion:^(BOOL ok, NSString *error){
 				[me setStatus:(ok ? @"Done"
@@ -495,7 +497,7 @@
 
 - (void)endRecording {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] endGroupCallRecording:self.groupCallId
+	[[TGCallStore shared]endGroupCallRecording:self.groupCallId
 								  completion:^(BOOL ok, NSString *error){
 		TGVideoChatSetupViewController *me = weakSelf;
 		if (!me)
@@ -516,7 +518,7 @@
 		TGVideoChatSetupViewController *me = weakSelf;
 		if (!me)
 			return;
-		[[TGClient shared] startGroupCallScreenSharing:me.groupCallId
+		[[TGCallStore shared]startGroupCallScreenSharing:me.groupCallId
 				audioSourceId:0 payload:text completion:^(NSString *answer, NSString *error){
 			if (error.length){
 				[me setStatus:error];
@@ -532,7 +534,7 @@
 
 - (void)pauseScreenSharing {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] toggleGroupCallScreenSharingPaused:self.groupCallId paused:YES
+	[[TGCallStore shared]toggleGroupCallScreenSharingPaused:self.groupCallId paused:YES
 											   completion:^(BOOL ok, NSString *error){
 		[weakSelf setStatus:(ok ? @"Done"
 				: (error ?: @"An error occurred."))];
@@ -541,7 +543,7 @@
 
 - (void)resumeScreenSharing {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] toggleGroupCallScreenSharingPaused:self.groupCallId paused:NO
+	[[TGCallStore shared]toggleGroupCallScreenSharingPaused:self.groupCallId paused:NO
 											   completion:^(BOOL ok, NSString *error){
 		[weakSelf setStatus:(ok ? @"Done"
 				: (error ?: @"An error occurred."))];
@@ -550,7 +552,7 @@
 
 - (void)stopScreenSharing {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] endGroupCallScreenSharing:self.groupCallId
+	[[TGCallStore shared]endGroupCallScreenSharing:self.groupCallId
 									  completion:^(BOOL ok, NSString *error){
 		[weakSelf setStatus:(ok ? @"Done"
 				: (error ?: @"An error occurred."))];
@@ -563,7 +565,7 @@
 - (void)toggleMessagesAllowed {
 	BOOL on = [self.call[@"areMessagesAllowed"] boolValue];
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] toggleGroupCallMessagesAllowed:self.groupCallId allowed:!on
+	[[TGCallStore shared]toggleGroupCallMessagesAllowed:self.groupCallId allowed:!on
 										   completion:^(BOOL ok, NSString *error){
 		TGVideoChatSetupViewController *me = weakSelf;
 		if (!me)
@@ -577,7 +579,7 @@
 - (void)toggleMuteNewParticipants {
 	BOOL on = [self.call[@"muteNewParticipants"] boolValue];
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] toggleVideoChatMuteNewParticipants:self.groupCallId muted:!on
+	[[TGCallStore shared]toggleVideoChatMuteNewParticipants:self.groupCallId muted:!on
 											   completion:^(BOOL ok, NSString *error){
 		TGVideoChatSetupViewController *me = weakSelf;
 		if (!me)
@@ -591,7 +593,7 @@
 - (void)toggleStartNotification {
 	BOOL on = [self.call[@"enabledStartNotification"] boolValue];
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] toggleVideoChatStartNotification:self.groupCallId enabled:!on
+	[[TGCallStore shared]toggleVideoChatStartNotification:self.groupCallId enabled:!on
 											 completion:^(BOOL ok, NSString *error){
 		TGVideoChatSetupViewController *me = weakSelf;
 		if (!me)
@@ -610,7 +612,7 @@
 		TGVideoChatSetupViewController *me = weakSelf;
 		if (!me)
 			return;
-		[[TGClient shared] endGroupCall:me.groupCallId completion:^(BOOL ok, NSString *error){
+		[[TGCallStore shared]endGroupCall:me.groupCallId completion:^(BOOL ok, NSString *error){
 			[me setStatus:(ok ? @"Call Ended" : (error ?: @"An error occurred."))];
 			[me loadCall];
 		}];

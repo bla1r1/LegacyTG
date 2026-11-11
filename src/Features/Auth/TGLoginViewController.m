@@ -1,10 +1,11 @@
 #import "TGLoginViewControllerInternal.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
-#import "TGClient.h"
 #import "TGIcons.h"
 #import "TGUIFormat.h"
 #import "TGLocalization.h"
+#import "TGAccountStore.h"
+#import "TGProfileStore.h"
 
 @implementation TGLoginViewController
 
@@ -353,12 +354,12 @@
             self.onPasswordSubmitted(text);
         }
     } else if (self.currentStep == TGLoginStepEmail) {
-        [[TGClient shared] sendEmailAddress:text];
+        [[TGAccountStore shared] sendEmailAddress:text];
     } else if (self.currentStep == TGLoginStepEmailCode) {
-        [[TGClient shared] sendEmailCode:text];
+        [[TGAccountStore shared] sendEmailCode:text];
     } else if (self.currentStep == TGLoginStepRecoveryCode) {
         __weak typeof(self) weakSelf = self;
-        [[TGClient shared] recoverPasswordWithCode:text completion:^(NSString *error){
+        [[TGAccountStore shared] recoverPasswordWithCode:text completion:^(NSString *error){
             TGLoginViewController *me = weakSelf;
             [me setBusy:NO];
             if (error)    // success moves on by the authorization state
@@ -366,7 +367,7 @@
         }];
     } else if (self.currentStep == TGLoginStepRegister) {
         __weak typeof(self) weakSelf = self;
-        [[TGClient shared] registerWithFirstName:text
+        [[TGAccountStore shared] registerWithFirstName:text
                                         lastName:self.registrationLastName
                                       completion:^(BOOL ok, NSString *error){
             TGLoginViewController *me = weakSelf;
@@ -376,7 +377,7 @@
                 // account exists; the authorization state carries the screen
                 // on, and a failed upload is not worth blocking it.
                 if (me.registrationPhotoPath.length)
-                    [[TGClient shared] setProfilePhotoAtPath:me.registrationPhotoPath
+                    [[TGProfileStore shared] setProfilePhotoAtPath:me.registrationPhotoPath
                                                   completion:nil];
                 return;
             }
