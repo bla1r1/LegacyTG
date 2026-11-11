@@ -88,6 +88,7 @@
 		// already does. Nothing to merge into the chat row.
 		if (self.client.onMessage)
 			self.client.onMessage([obj[@"chat_id"] longLongValue], nil, 0);
+		[[TGUpdateRouter shared] noteMessagesChangedInChat:[obj[@"chat_id"] longLongValue]];
 		return YES;
 	}
 	case TGUpdateMessageFactCheck:
@@ -98,6 +99,7 @@
 		// the tools sheet then sees the same flags the server just changed.
 		if (self.client.onMessage)
 			self.client.onMessage([obj[@"chat_id"] longLongValue], nil, 0);
+		[[TGUpdateRouter shared] noteMessagesChangedInChat:[obj[@"chat_id"] longLongValue]];
 		return YES;
 	}
 	case TGUpdateMessageInteractionInfo: {
@@ -107,6 +109,7 @@
 		if (self.client.updateCoalescer)
 			[self.client.updateCoalescer markMessageDirty:[obj[@"message_id"] longLongValue]
 											inChat:[obj[@"chat_id"] longLongValue]];
+		[[TGUpdateRouter shared] noteMessagesChangedInChat:[obj[@"chat_id"] longLongValue]];
 		return YES;
 	}
 	case TGUpdateInstalledStickerSets:

@@ -68,6 +68,8 @@
 		}
 		if (self.client.onMessage && m)
 			self.client.onMessage([m[@"chat_id"] longLongValue], TGFlattenMessage(m), 0);
+		if (m[@"chat_id"])
+			[[TGUpdateRouter shared] noteMessagesChangedInChat:[m[@"chat_id"] longLongValue]];
 		[self.client handleInAppNotificationForNewMessage:m];
 		return YES;
 	}
@@ -104,12 +106,14 @@
 		[[NSNotificationCenter defaultCenter]
 				postNotificationName:TGMessageSendStateChangedNotification
 							  object:self userInfo:info];
+		[[TGUpdateRouter shared] noteMessagesChangedInChat:chatId];
 		return YES;
 	}
 	case TGUpdateMessageContent: {
 		// Content changed in place (a photo finished uploading, a text edited).
 		if (self.client.onMessage)
 			self.client.onMessage([obj[@"chat_id"] longLongValue], nil, 0);
+		[[TGUpdateRouter shared] noteMessagesChangedInChat:[obj[@"chat_id"] longLongValue]];
 		return YES;
 	}
 	case TGUpdateDeleteMessages: {
@@ -121,6 +125,7 @@
 				[self.client noteSendFinished:[mid longLongValue] sent:YES];
 				self.client.onMessage(chatId, nil, [mid longLongValue]);
 			}
+			[[TGUpdateRouter shared] noteMessagesChangedInChat:chatId];
 		}
 		return YES;
 	}

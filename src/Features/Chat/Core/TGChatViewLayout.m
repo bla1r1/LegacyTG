@@ -192,6 +192,12 @@ static int64_t sActiveChatId = 0;
 	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(keyboardWillHide:)
 			name:UIKeyboardWillHideNotification object:nil];
 
+	// Coalesced "messages in this chat changed" batches; the immediate
+	// onMessage path below still appends a single new message.
+	[[NSNotificationCenter defaultCenter] addObserver:self
+			selector:@selector(messageStoreChanged:)
+				name:TGMessageStoreChangedNotification object:nil];
+
 	// Live updates: append instead of waiting for the screen to be reopened.
 	__weak typeof(self) weakSelf = self;
 	[TGMessageStore shared].onMessage = ^(int64_t chatId, NSDictionary *message, int64_t deletedId){
@@ -465,6 +471,8 @@ FOUNDATION_EXPORT void TGBubbleFlushCache(void);
 			[[TGMessageStore shared] cancelTypingInChat:self.chatId thread:self.threadId];
 			[[TGMessageStore shared] closeChat:self.chatId];
 		}
+		[[NSNotificationCenter defaultCenter] removeObserver:self
+				name:TGMessageStoreChangedNotification object:nil];
 		[TGMessageStore shared].onMessage = nil;
 		[TGMessageStore shared].onChatAction = nil;
 		[TGMessageStore shared].onSecretChat = nil;

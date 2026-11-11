@@ -1,6 +1,6 @@
 ## Release 1.3: Unified Message Core & Essential Gaps
 
-Status: `in progress`; Phase 1 done, plus the whole Chat message boundary (off-plan).
+Status: `done`; Phases 1–4, the whole Chat message boundary and the core/store migration are complete.
 
 Consolidates the 351 direct `TGClient` calls across `src/Features/Chat` into domain stores (`TGSendStore`, `TGMessageStreamStore`, `TGMediaStore`), enforces the 16 MB memory ceiling on 32-bit devices, and lands the top messaging gaps (M27, M23, M24) on top of the unified core.
 
@@ -58,22 +58,22 @@ Phase 1 itself moved only the outbound text path; the off-plan section below ext
 - [x] `done` `TGContactsStore`, `TGChannelStore` and `TGDevStore` own the contacts, similar-channels and developer-tool request bodies; 11 allow-list entries removed (58 -> 47).
 - [x] `done` `TGGroupStore` owns the group request bodies (`+Groups`, `+Topics`, `+Invites`, `+Usernames`, `+Community`, `+Tools`); all 19 `src/Features/Groups` allow-list entries are gone, the list is down to 58 files, and `TGGroupStoreTests` checks the request shapes.
 
-### Phase 2: Attachment pipeline and file cache (`TGMediaStore`)
-- [ ] `planned` Move all direct `downloadFile:` / `cancelDownloadFile:` invocations from `TGChatViewController+Attachments.m` and `TGChatViewDocumentDelegate.m` to `TGMediaStore`.
-- [ ] `planned` Enforce strict 16 MB LRU eviction ceiling on 32-bit devices for media and document buffers.
-- [ ] `planned` Wire M23: implement `inputMessageDocument` and `inputMessageAudio` in `TGSendStore` / `TGMediaStore`, connecting the system document/audio picker.
-- [ ] `planned` Drop `TGChatViewController+Attachments.m` from `scripts/lint_client.sh` allow list.
+### Phase 2: Attachment pipeline and file cache (`TGMediaStore`) — done
+- [x] `done` `TGChatViewController+Attachments.m` and `TGChatViewDocumentDelegate.m` reach files through `TGMediaStore`; neither imports `TGClient`.
+- [x] `done` `TGMediaStore` caps decoded buffers at 16 MB on 32-bit, 32 MB on 64-bit (`TGMediaStore.m:22`).
+- [x] `done` M23 document and audio pickers send `inputMessageDocument` / `inputMessageAudio` through `TGSendStore`.
+- [x] `done` The allow list is 0: no `src/Features` file imports `TGClient`.
 
-### Phase 3: History stream and pagination (`TGMessageStreamStore`)
-- [ ] `planned` Migrate paging, window offset math, and history loading from `TGChatViewData.m` and `TGChatViewPagination.m` into `TGMessageStreamStore`.
-- [ ] `planned` Maintain deduplicated message indices in C++, eliminating intermediate `NSDictionary` allocations during scrolling.
-- [ ] `planned` Screens observe coalesced `TGMessageStoreChangedNotification` batches.
+### Phase 3: History stream and pagination (`TGMessageStreamStore`) — done
+- [x] `done` `loadOlderInChat:limit:completion:` and `loadNewerInChat:limit:completion:` own the history request, the duplicate filter, the `loadingOlder/Newer` and `reachedStart/End` flags. `TGChatViewPagination.m` only keeps the table offset around the inserted rows.
+- [x] `done` `TGMessageStreamStore.mm` keeps a `std::vector<TGFlattenedMessage>` index beside the dictionaries and a `std::unordered_set<int64_t>` of ids, so bounds, de-duplication and the scalar accessors do not touch `NSDictionary`.
+- [x] `done` `TGMessagesChangedNotification` is posted by `TGUpdateRouter` once per 100 ms batch; `TGMessageStore` reposts it as `TGMessageStoreChangedNotification`, and the chat observes it and reloads the coalesced rows.
 
-### Phase 4: Chat-list integration (`TGChatListStore`)
-- [ ] `planned` Decouple `src/Features/ChatList` (86 calls) from direct `TGClient` polling; consume cached store state.
-- [ ] `planned` Wire M24: content-type glyphs, compact counts, reaction/poll badges, and update `badgeValue` on the root Chats tab.
+### Phase 4: Chat-list integration (`TGChatListStore`) — done
+- [x] `done` `src/Features/ChatList` talks to `TGChatListStore`/`TGSearchStore`; no file imports `TGClient` (allow-list 0).
+- [x] `done` M24 is done: content-type glyphs and thumbnails, compact `99+` counts, reaction/poll/folder badges and the Chats-tab badge.
 
 **Blocked by:** nothing. Pure domain store contracts over existing TDLib methods.
 
 **Closes:** M27 (Failed-send mark) — `chat.md` failed delivery mark and
-`chat-list.md` delivery ticks. M23 and M24 close with Phases 2 and 4.
+`chat-list.md` delivery ticks. M23 and M24 are closed (Phases 2 and 4). All four phases are done.

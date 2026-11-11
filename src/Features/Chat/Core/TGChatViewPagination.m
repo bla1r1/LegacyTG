@@ -158,98 +158,53 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 }
 
 - (void)scrollViewDidScroll:(UIScrollView *)scrollView {
-    if (scrollView == self.table) {
-        [self chromeDidScroll];
-        [self scheduleGifAutoplayAfterScrolling];
-    }
-    if (scrollView != self.table || !self.messages.count)
-        return;
+	if (scrollView == self.table) {
+		[self chromeDidScroll];
+		[self scheduleGifAutoplayAfterScrolling];
+	}
+	if (scrollView != self.table || !self.messages.count)
+		return;
 
-    // 1. Load older messages when scrolled near the top
-    if (scrollView.contentOffset.y < (CGFloat)TGMetricHistoryTopGate && !self.isLoadingMoreHistory && !self.atChatStart) {
-        self.isLoadingMoreHistory = YES;
-        int64_t fromMessageId = self.streamStore.oldestMessageId;
-        if (!fromMessageId) {
-            NSArray *pool = self.rawMessages.count ? self.rawMessages : self.messages;
-            fromMessageId = [pool.firstObject[@"id"] longLongValue];
-        }
+	// Older: the stream owns the request, the "is there more" flag and the
+	// duplicate filter; the table only keeps its offset around the insert.
+	if (scrollView.contentOffset.y < (CGFloat)TGMetricHistoryTopGate &&
+		!self.streamStore.loadingOlder && !self.streamStore.reachedStart){
+		CGFloat oldHeight = self.table.contentSize.height;
+		CGFloat oldOffset = self.table.contentOffset.y;
+		__weak typeof(self) weakScroll = self;
+		[self.streamStore loadOlderInChat:self.chatId limit:60 completion:^(BOOL added){
+			TGChatViewController *me = weakScroll;
+			if (!me || !added)
+				return;
+			me.rawMessages = [me.streamStore messages];
+			me.messages = [me groupedMessagesFromMessages:me.rawMessages];
+			[UIView setAnimationsEnabled:NO];
+			[me.table reloadData];
+			me.table.contentOffset = CGPointMake(0,
+					oldOffset + (me.table.contentSize.height - oldHeight));
+			[UIView setAnimationsEnabled:YES];
+			[me fetchMissingImages];
+		}];
+	}
 
-        __weak typeof(self) weakScroll = self;
-        [[TGMessageStore shared] historyForChat:self.chatId fromMessageId:fromMessageId limit:60 completion:^(NSArray *older) {
-            dispatch_async(dispatch_get_main_queue(), ^{
-                TGChatViewController *me = weakScroll;
-                if (!me) return;
-                me.isLoadingMoreHistory = NO;
-                // Without this the next scroll event asks again, and a chat
-                // that has nothing older - a local one above all - answers
-                // an empty list a hundred times a second.
-                if (older.count == 0) {
-                    me.atChatStart = YES;
-                    return;
-                }
-
-                CGFloat oldHeight = me.table.contentSize.height;
-                CGFloat oldOffset = me.table.contentOffset.y;
-
-                NSUInteger added = [me.streamStore prependOlderMessages:older];
-                if (!added) {
-                    me.atChatStart = YES;
-                    return;
-                }
-
-                me.rawMessages = [me.streamStore messages];
-                me.messages = [me groupedMessagesFromMessages:me.rawMessages];
-
-                [UIView setAnimationsEnabled:NO];
-                [me.table reloadData];
-                me.table.contentOffset = CGPointMake(0, oldOffset + (me.table.contentSize.height - oldHeight));
-                [UIView setAnimationsEnabled:YES];
-                [me fetchMissingImages];
-            });
-        }];
-    }
-
-    // 2. Load newer messages when scrolled near the bottom
-    CGFloat distanceFromBottom = scrollView.contentSize.height - (scrollView.contentOffset.y + scrollView.bounds.size.height);
-    if (distanceFromBottom < (CGFloat)TGMetricHistoryTopGate && !self.isLoadingNewerHistory && !self.atChatEnd) {
-        self.isLoadingNewerHistory = YES;
-        int64_t fromMessageId = self.streamStore.newestMessageId;
-        if (!fromMessageId) {
-            NSArray *pool = self.rawMessages.count ? self.rawMessages : self.messages;
-            fromMessageId = [pool.lastObject[@"id"] longLongValue];
-        }
-
-        __weak typeof(self) weakScroll = self;
-        [[TGMessageStore shared] newerHistoryForChat:self.chatId fromMessageId:fromMessageId limit:60 completion:^(NSArray *newer) {
-            dispatch_async(dispatch_get_main_queue(), ^{
-                TGChatViewController *me = weakScroll;
-                if (!me) return;
-                me.isLoadingNewerHistory = NO;
-                if (newer.count == 0) {
-                    me.atChatEnd = YES;
-                    return;
-                }
-
-                NSUInteger added = [me.streamStore appendNewerMessages:newer];
-                if (!added) {
-                    me.atChatEnd = YES;
-                    return;
-                }
-
-                me.rawMessages = [me.streamStore messages];
-                me.messages = [me groupedMessagesFromMessages:me.rawMessages];
-
-                [UIView setAnimationsEnabled:NO];
-                [me.table reloadData];
-                [UIView setAnimationsEnabled:YES];
-                [me fetchMissingImages];
-
-                if (newer.count < 60) {
-                    me.atChatEnd = YES;
-                }
-            });
-        }];
-    }
+	// Newer: same deal at the bottom edge.
+	CGFloat distanceFromBottom = scrollView.contentSize.height -
+			(scrollView.contentOffset.y + scrollView.bounds.size.height);
+	if (distanceFromBottom < (CGFloat)TGMetricHistoryTopGate &&
+		!self.streamStore.loadingNewer && !self.streamStore.reachedEnd){
+		__weak typeof(self) weakScroll = self;
+		[self.streamStore loadNewerInChat:self.chatId limit:60 completion:^(BOOL added){
+			TGChatViewController *me = weakScroll;
+			if (!me || !added)
+				return;
+			me.rawMessages = [me.streamStore messages];
+			me.messages = [me groupedMessagesFromMessages:me.rawMessages];
+			[UIView setAnimationsEnabled:NO];
+			[me.table reloadData];
+			[UIView setAnimationsEnabled:YES];
+			[me fetchMissingImages];
+		}];
+	}
 }
 
 

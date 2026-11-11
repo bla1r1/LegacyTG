@@ -8,8 +8,19 @@
 #import "TGMessageStore.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
+#import "TGUpdateRouter.h"
+
+NSString *const TGMessageStoreChangedNotification = @"TGMessageStoreChangedNotification";
 
 @implementation TGMessageStore
+
+- (void)messageStoreChanged:(NSNotification *)note {
+	NSArray *chatIds = note.userInfo[@"chatIds"];
+	[[NSNotificationCenter defaultCenter]
+			postNotificationName:TGMessageStoreChangedNotification
+						  object:self userInfo:@{@"chatIds" : chatIds ?: @[]}];
+}
+
 
 + (instancetype)shared {
 	static TGMessageStore *store = nil;

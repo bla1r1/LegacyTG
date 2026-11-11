@@ -162,8 +162,6 @@ FOUNDATION_EXPORT CGFloat TGPollOptionRowHeight(NSDictionary *option, CGFloat ro
 @property (nonatomic, strong) UIButton *recordOnceButton;
 @property (nonatomic, strong) UILabel *recordCancelSlideLabel;
 @property (nonatomic, assign) int64_t playingMessageId;
-@property (nonatomic, assign) BOOL isLoadingMoreHistory;
-@property (nonatomic, assign) BOOL isLoadingNewerHistory;
 @property (nonatomic, assign) BOOL atChatEnd;
 /// The other end of the same thing: the history is open to its first message
 /// and asking for more only costs a round trip.
