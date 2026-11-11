@@ -28,6 +28,14 @@
 @property (nonatomic, assign) BOOL batchingUpdates;
 @property (nonatomic, assign) BOOL chatsNeedRebuild;
 
+/// Coalesced (100 ms) "messages in these chats changed" batch. userInfo
+/// "chatIds" is an NSArray of NSNumber chat ids. Posted from the client side;
+/// the message store reposts it under its own name for the screens.
+FOUNDATION_EXPORT NSString *const TGMessagesChangedNotification;
+
+/// Marks a chat dirty; one notification per 100 ms batch.
+- (void)noteMessagesChangedInChat:(int64_t)chatId;
+
 - (void)reset;
 
 @end

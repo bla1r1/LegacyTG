@@ -112,6 +112,7 @@
 		if (self.client.updateCoalescer)
 			[self.client.updateCoalescer markMessageDirty:[obj[@"message_id"] longLongValue]
 											inChat:[obj[@"chat_id"] longLongValue]];
+		[[TGUpdateRouter shared] noteMessagesChangedInChat:[obj[@"chat_id"] longLongValue]];
 		return YES;
 	}
 	case TGUpdateActiveLiveLocationMessages: {

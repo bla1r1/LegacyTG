@@ -33,6 +33,27 @@
 /// Clear the entire stream.
 - (void)clear;
 
+// ─── paging ──────────────────────────────────────────────────────────────────
+// The stream owns the "is there more" state and the history request; the chat
+// view only keeps the table offset around the inserted rows.
+
+@property (nonatomic, readonly) BOOL loadingOlder;
+@property (nonatomic, readonly) BOOL reachedStart;
+@property (nonatomic, readonly) BOOL loadingNewer;
+@property (nonatomic, readonly) BOOL reachedEnd;
+
+/// Fetches the page before `oldestMessageId`, prepends it and answers whether
+/// the stream grew. Runs the completion on the main queue.
+- (void)loadOlderInChat:(int64_t)chatId limit:(NSInteger)limit
+			 completion:(void (^)(BOOL added))completion;
+
+/// The same at the other end, after `newestMessageId`.
+- (void)loadNewerInChat:(int64_t)chatId limit:(NSInteger)limit
+			 completion:(void (^)(BOOL added))completion;
+
+/// Forgets the boundary flags, e.g. when the chat is opened again.
+- (void)resetPaging;
+
 // ─── the flat scalar index ───────────────────────────────────────────────────
 // Answered from a contiguous buffer of 88-byte PODs rather than from the
 // message dictionaries: no NSNumber unboxing, no objc_msgSend per field.

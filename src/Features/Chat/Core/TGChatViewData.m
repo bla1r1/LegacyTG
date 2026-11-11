@@ -73,6 +73,12 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 
 #pragma mark - data
 
+- (void)messageStoreChanged:(NSNotification *)note {
+	NSArray *chatIds = note.userInfo[@"chatIds"];
+	if ([chatIds containsObject:@(self.chatId)])
+		[self reloadTableDebounced];
+}
+
 - (void)readOutboxChanged:(NSNotification *)note {
 	if ([note.userInfo[@"chatId"] longLongValue] == self.chatId)
 		[self reloadTableDebounced];

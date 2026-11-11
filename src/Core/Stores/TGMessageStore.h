@@ -11,6 +11,10 @@
 #import "TGDownloadPriority.h"
 #import "TGClientNotifications.h"
 
+/// Coalesced (100 ms) "messages in these chats changed" batch. userInfo
+/// "chatIds" is an NSArray of NSNumber chat ids.
+FOUNDATION_EXPORT NSString *const TGMessageStoreChangedNotification;
+
 @interface TGMessageStore : NSObject
 
 + (instancetype)shared;

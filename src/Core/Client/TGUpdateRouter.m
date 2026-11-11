@@ -8,6 +8,8 @@
 @property (nonatomic, strong) TGUpdateCoalescer *coalescer;
 @end
 
+NSString *const TGMessagesChangedNotification = @"TGMessagesChangedNotification";
+
 @implementation TGUpdateRouter
 
 + (instancetype)shared {
@@ -72,6 +74,34 @@
 	[[TGTransport shared].pendingRequests removeObjectForKey:extra];
 	completion(obj);
 	return YES;
+}
+
+- (void)noteMessagesChangedInChat:(int64_t)chatId {
+	if (chatId == 0)
+		return;
+	static NSMutableSet *dirty = nil;
+	static BOOL scheduled = NO;
+	@synchronized (self){
+		if (!dirty)
+			dirty = [NSMutableSet set];
+		[dirty addObject:@(chatId)];
+		if (scheduled)
+			return;
+		scheduled = YES;
+	}
+	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)),
+			dispatch_get_main_queue(), ^{
+		NSArray *chatIds = nil;
+		@synchronized (self){
+			chatIds = dirty.allObjects;
+			[dirty removeAllObjects];
+			scheduled = NO;
+		}
+		[[NSNotificationCenter defaultCenter]
+				postNotificationName:TGMessagesChangedNotification
+							  object:self
+							userInfo:@{@"chatIds" : chatIds ?: @[]}];
+	});
 }
 
 - (void)reset {

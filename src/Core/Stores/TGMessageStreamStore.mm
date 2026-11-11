@@ -3,6 +3,7 @@
 //
 #import "TGMessageStreamStore.h"
 #import "TGFlattenedMessage.hpp"
+#import "TGMessageStore.h"
 #include <vector>
 #include <unordered_set>
 
@@ -36,6 +37,10 @@ static TGFlattenedMessage TGIndexFromDictionary(NSDictionary *m) {
 	std::vector<id> _messagesVector;
 	std::vector<TGFlattenedMessage> _index;
 	std::unordered_set<int64_t> _messageIds;
+	BOOL _loadingOlder;
+	BOOL _reachedStart;
+	BOOL _loadingNewer;
+	BOOL _reachedEnd;
 }
 @end
 
@@ -54,6 +59,19 @@ static TGFlattenedMessage TGIndexFromDictionary(NSDictionary *m) {
 	_messagesVector.clear();
 	_index.clear();
 	_messageIds.clear();
+	[self resetPaging];
+}
+
+- (BOOL)loadingOlder { return _loadingOlder; }
+- (BOOL)reachedStart { return _reachedStart; }
+- (BOOL)loadingNewer { return _loadingNewer; }
+- (BOOL)reachedEnd { return _reachedEnd; }
+
+- (void)resetPaging {
+	_loadingOlder = NO;
+	_reachedStart = NO;
+	_loadingNewer = NO;
+	_reachedEnd = NO;
 }
 
 - (NSUInteger)count {
@@ -207,6 +225,65 @@ static TGFlattenedMessage TGIndexFromDictionary(NSDictionary *m) {
 		[out addObject:item];
 	}
 	return out;
+}
+
+
+- (void)loadOlderInChat:(int64_t)chatId limit:(NSInteger)limit
+			 completion:(void (^)(BOOL added))completion {
+	if (_loadingOlder || _reachedStart){
+		if (completion) completion(NO);
+		return;
+	}
+	int64_t from = self.oldestMessageId;
+	if (!from){
+		_reachedStart = YES;
+		if (completion) completion(NO);
+		return;
+	}
+	_loadingOlder = YES;
+	[[TGMessageStore shared] historyForChat:chatId fromMessageId:from limit:limit
+								 completion:^(NSArray *older){
+		dispatch_async(dispatch_get_main_queue(), ^{
+			_loadingOlder = NO;
+			if (!older.count){
+				_reachedStart = YES;
+				if (completion) completion(NO);
+				return;
+			}
+			NSUInteger added = [self prependOlderMessages:older];
+			if (!added) _reachedStart = YES;
+			if (completion) completion(added > 0);
+		});
+	}];
+}
+
+- (void)loadNewerInChat:(int64_t)chatId limit:(NSInteger)limit
+			 completion:(void (^)(BOOL added))completion {
+	if (_loadingNewer || _reachedEnd){
+		if (completion) completion(NO);
+		return;
+	}
+	int64_t from = self.newestMessageId;
+	if (!from){
+		_reachedEnd = YES;
+		if (completion) completion(NO);
+		return;
+	}
+	_loadingNewer = YES;
+	[[TGMessageStore shared] newerHistoryForChat:chatId fromMessageId:from limit:limit
+									  completion:^(NSArray *newer){
+		dispatch_async(dispatch_get_main_queue(), ^{
+			_loadingNewer = NO;
+			if (!newer.count){
+				_reachedEnd = YES;
+				if (completion) completion(NO);
+				return;
+			}
+			NSUInteger added = [self appendNewerMessages:newer];
+			if (!added || newer.count < (NSUInteger)limit) _reachedEnd = YES;
+			if (completion) completion(added > 0);
+		});
+	}];
 }
 
 @end
