@@ -81,24 +81,6 @@ static NSArray *TGHashtagsFrom(NSDictionary *result) {
 	[self searchedForTagsWithPrefix:@"" limit:20 completion:completion];
 }
 
-- (void)removeRecentHashtag:(NSString *)hashtag {
-	if (!hashtag.length)
-		return;
-	[self send:@{@"@type" : @"removeRecentHashtag",
-				 @"hashtag" : hashtag}];
-}
-
-- (void)removeSearchedForTag:(NSString *)tag {
-	if (!tag.length)
-		return;
-	[self send:@{@"@type" : @"removeSearchedForTag",
-				 @"tag" : tag}];
-}
-
-- (void)clearSearchedForTags {
-	[self send:@{@"@type" : @"clearSearchedForTags"}];
-}
-
 #pragma mark - public post search
 
 - (void)publicPostSearchLimitsForQuery:(NSString *)query

@@ -72,123 +72,14 @@ static NSNumber *TGChatPreviewFileId(NSDictionary *last) {
 
 #pragma mark - chat folders, the writing half
 
-/// A folder as TDLib wants one back. Every field of chatFolder has to be
-/// present on an edit - it replaces the folder rather than patching it - so
-/// this builds a whole one and the callers change what they mean to change.
-static NSDictionary *TGFolderObject(NSString *name, NSString *icon,
-									NSArray *chatIds, NSDictionary *basedOn) {
-	NSMutableDictionary *folder = [(basedOn ?: @{}) mutableCopy];
-	folder[@"@type"] = @"chatFolder";
-	if (name.length)
-		folder[@"name"] = @{@"@type" : @"chatFolderName",
-							@"text"  : @{@"@type" : @"formattedText",
-										 @"text"  : name},
-							@"animate_custom_emoji" : @NO};
-	if (icon.length)
-		folder[@"icon"] = @{@"@type" : @"chatFolderIcon", @"name" : icon};
-	if (chatIds)
-		folder[@"included_chat_ids"] = chatIds;
-
-	// Defaults for whatever a new folder did not say. A folder with every
-	// include_* off and no chats in it is one TDLib rejects.
-	NSDictionary *defaults = @{
-		@"color_id"             : @(-1),
-		@"is_shareable"         : @NO,
-		@"pinned_chat_ids"      : @[],
-		@"included_chat_ids"    : @[],
-		@"excluded_chat_ids"    : @[],
-		@"exclude_muted"        : @NO,
-		@"exclude_read"         : @NO,
-		@"exclude_archived"     : @NO,
-		@"include_contacts"     : @NO,
-		@"include_non_contacts" : @NO,
-		@"include_bots"         : @NO,
-		@"include_groups"       : @NO,
-		@"include_channels"     : @NO,
-	};
-	for (NSString *key in defaults)
-		if (!folder[key])
-			folder[key] = defaults[key];
-
-	// chatFolderInfo carries an id and chatFolder does not; an edit built on
-	// what getChatFolder answered would otherwise send it back.
-	[folder removeObjectForKey:@"id"];
-	[folder removeObjectForKey:@"has_my_invite_links"];
-	return folder;
-}
-
-- (void)createFolderNamed:(NSString *)name
-					 icon:(NSString *)icon
-				withChats:(NSArray *)chatIds
-			   completion:(void (^)(NSInteger folderId))completion {
-	if (!name.length){
-		if (completion) completion(0);
-		return;
-	}
-	[self request:@{@"@type"  : @"createChatFolder",
-					@"folder" : TGFolderObject(name, icon, chatIds ?: @[], nil)}
-	   completion:^(NSDictionary *result){
-		if (completion)
-			completion([result[@"id"] integerValue]);
-	}];
-}
-
 /// The folder as it stands, so an edit can be built on it rather than
 /// replacing the parts it was not asked about.
-- (void)folderDetails:(NSInteger)folderId
-		   completion:(void (^)(NSDictionary *folder))completion {
-	[self request:@{@"@type" : @"getChatFolder", @"chat_folder_id" : @(folderId)}
-	   completion:^(NSDictionary *result){
-		if (completion)
-			completion([result[@"@type"] isEqualToString:@"chatFolder"] ? result : nil);
-	}];
-}
-
 /// Reads the folder, changes the one thing, sends the whole of it back -
 /// which is the only way editChatFolder works.
-- (void)editFolder:(NSInteger)folderId
-			  name:(NSString *)name
-			 chats:(NSArray *)chatIds
-		completion:(void (^)(BOOL ok))completion {
-	__weak typeof(self) weakSelf = self;
-	[self folderDetails:folderId completion:^(NSDictionary *current){
-		TGClient *me = weakSelf;
-		if (!me || !current){
-			if (completion) completion(NO);
-			return;
-		}
-		[me request:@{@"@type"          : @"editChatFolder",
-					  @"chat_folder_id" : @(folderId),
-					  @"folder"         : TGFolderObject(name, nil, chatIds, current)}
-		completion:^(NSDictionary *result){
-			if (completion)
-				completion([result[@"@type"] isEqualToString:@"chatFolderInfo"]);
-		}];
-	}];
-}
-
 /// Deleting a folder does not leave the chats in it; `leaveChatIds` is for
 /// the ones you also want out of, and is usually empty.
-- (void)deleteFolder:(NSInteger)folderId leavingChats:(NSArray *)leaveChatIds {
-	[self send:@{
-		@"@type"          : @"deleteChatFolder",
-		@"chat_folder_id" : @(folderId),
-		@"leave_chat_ids" : leaveChatIds ?: @[],
-	}];
-}
-
 /// The order of the pill strip. "All chats" is a position in that order
 /// rather than a folder, which is what main_chat_list_position is.
-- (void)reorderFolderIds:(NSArray *)folderIds mainListAt:(NSInteger)position {
-	if (!folderIds.count)
-		return;
-	[self send:@{
-		@"@type"                  : @"reorderChatFolders",
-		@"chat_folder_ids"        : folderIds,
-		@"main_chat_list_position": @(position),
-	}];
-}
-
 /// The strip was dragged into a new order. Local first, wire second: the
 /// strip re-renders from self.folders, so the drag must land there before
 /// anything else happens - and the wire request answers only later, which
@@ -238,60 +129,10 @@ static NSDictionary *TGFolderObject(NSString *name, NSString *icon,
 /// One TDLib object holds all three, so one call sets all three: flipping a
 /// switch on the page reads the page's copy, flips its bit and sends the
 /// whole object again.
-- (void)setArchiveSettingsArchiveAndMute:(BOOL)archiveAndMute
-					 keepUnmutedArchived:(BOOL)keepUnmuted
-				   keepFolderChatsArchived:(BOOL)keepFolders {
-	NSDictionary *settings = @{
-		@"@type" : @"archiveChatListSettings",
-		@"archive_and_mute_new_chats_from_unknown_users" : @(archiveAndMute),
-		@"keep_unmuted_chats_archived"                   : @(keepUnmuted),
-		@"keep_chats_from_folders_archived"              : @(keepFolders),
-	};
-	// The local copy moves first: the switches re-render off
-	// archiveSettings, so a change that only goes out on the wire would
-	// flicker back while the round trip is still in the air.
-	self.archiveSettings = settings;
-	[self send:@{@"@type" : @"setArchiveChatListSettings",
-				 @"settings" : settings}];
-}
-
 /// Telegram's own suggestions - Unread, Personal, Groups and so on - each
 /// with the sentence their client shows under it. Entries carry "title",
 /// "description" and "folder", the last being ready for createChatFolder.
-- (void)recommendedFoldersWithCompletion:(void (^)(NSArray *folders))completion {
-	[self request:@{@"@type" : @"getRecommendedChatFolders"}
-	   completion:^(NSDictionary *result){
-		NSMutableArray *out = [NSMutableArray array];
-		for (NSDictionary *entry in result[@"chat_folders"]){
-			NSDictionary *folder = entry[@"folder"];
-			if (![folder isKindOfClass:NSDictionary.class])
-				continue;
-			[out addObject:@{
-				@"title"       : TGPlainTitle(folder[@"name"]) ?: @"",
-				@"description" : entry[@"description"] ?: @"",
-				@"folder"      : folder,
-			}];
-		}
-		if (completion)
-			completion(out);
-	}];
-}
-
 /// Adopts one of those suggestions as it stands.
-- (void)createRecommendedFolder:(NSDictionary *)folder
-					 completion:(void (^)(NSInteger folderId))completion {
-	if (![folder isKindOfClass:NSDictionary.class]){
-		if (completion) completion(0);
-		return;
-	}
-	[self request:@{@"@type"  : @"createChatFolder",
-					@"folder" : TGFolderObject(nil, nil, nil, folder)}
-	   completion:^(NSDictionary *result){
-		if (completion)
-			completion([result[@"id"] integerValue]);
-	}];
-}
-
 - (void)closeChat:(int64_t)chatId {
 	[self send:@{
 		@"@type"   : @"closeChat",
@@ -1005,6 +846,7 @@ static BOOL TGGroupStatusIsMember(NSDictionary *status) {
 	if (self.onArchiveChanged)
 		self.onArchiveChanged();
 }
+
 
 - (NSNumber *)photoFileIdForChat:(int64_t)chatId {
 	// The cache is the source of truth: the wrapper lists (.chats holding

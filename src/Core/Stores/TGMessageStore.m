@@ -1478,7 +1478,13 @@ NSString *const TGMessageStoreChangedNotification = @"TGMessageStoreChangedNotif
 }
 
 - (NSArray *)quickReplyShortcuts {
-	return [TGClient shared].quickReplyShortcuts;
+	NSMutableArray *out = [NSMutableArray array];
+	for (NSNumber *ident in [TGClient shared].quickReplyShortcutOrder){
+		NSDictionary *row = [TGClient shared].quickReplyShortcutsById[ident];
+		if (row)
+			[out addObject:row];
+	}
+	return out;
 }
 
 - (NSDictionary *)me {

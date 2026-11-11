@@ -21,35 +21,6 @@ static NSString *TGSecretStateName(NSString *type) {
 /// Starts one with someone. The chat exists at once but stays "pending" until
 /// their device comes online and answers the key exchange - nothing can be
 /// sent before that, and the screen has to say so rather than look broken.
-- (void)createSecretChatWithUser:(int64_t)userId
-					  completion:(void (^)(int64_t chatId))completion {
-	if (!userId){
-		if (completion) completion(0);
-		return;
-	}
-	[self request:@{@"@type" : @"createNewSecretChat", @"user_id" : @(userId)}
-	   completion:^(NSDictionary *result){
-		int64_t chatId = [result[@"id"] longLongValue];
-		NSNumber *secretChatId = result[@"type"][@"secret_chat_id"];
-		// The compatibility path travels with creation: createSecretChat is
-		// the older spelling that turns the inner id back into the chat, and
-		// running it here means a caller on an older layer still gets a chat
-		// id even when createNewSecretChat's answer is the other shape.
-		if (secretChatId && chatId){
-			[self request:@{@"@type" : @"createSecretChat",
-							@"secret_chat_id" : secretChatId}
-			   completion:^(NSDictionary *resolved){
-				int64_t resolvedId = [resolved[@"id"] longLongValue];
-				if (completion)
-					completion(resolvedId ? resolvedId : chatId);
-			}];
-			return;
-		}
-		if (completion)
-			completion(chatId);
-	}];
-}
-
 /// The state of one, by the secret chat's own id - which is not the chat id.
 /// A chat's type carries it: chatTypeSecret{secret_chat_id, user_id}.
 - (void)secretChatState:(NSInteger)secretChatId

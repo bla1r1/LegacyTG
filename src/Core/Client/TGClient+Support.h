@@ -10,20 +10,8 @@
 
 @interface TGClient (Support)
 
-- (void)supportNameWithCompletion:(void (^)(NSString *name,
-											NSString *error))completion;
-
 /// "message", "author" and "date" for one user's support note.
-- (void)supportInfoForUser:(int64_t)userId
-				completion:(void (^)(NSDictionary *info,
-									 NSString *error))completion;
-
 /// Sets the note; the answer is the updated UserSupportInfo.
-- (void)setSupportInfo:(NSString *)message
-				forUser:(int64_t)userId
-			 completion:(void (^)(NSDictionary *info,
-								  NSString *error))completion;
-
 @end
 
 // vim:ft=objc

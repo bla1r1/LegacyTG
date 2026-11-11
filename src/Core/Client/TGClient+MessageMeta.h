@@ -13,11 +13,6 @@
 /// t.me/name/12345 landed on. The chat id is 0 when Telegram refused.
 /// Every cache's draft dropped at once, on every device.
 /// The lifetime new chats carry when nobody chose one. Zero is off.
-- (void)defaultMessageAutoDeleteTimeWithCompletion:
-		(void (^)(NSInteger seconds))completion;
-
-- (void)setDefaultMessageAutoDeleteTime:(NSInteger)seconds;
-
 /// A nil date with the reason word is the honest sheet line.
 /// The reactions this message offers, top row first. nil when the message
 /// cannot be reacted to or has no explicit top list.
@@ -47,9 +42,6 @@
 					 endDate:(NSInteger)end
 				  completion:(void (^)(int64_t messageId, NSInteger total))completion;
 
-- (void)sentDocuments:(NSString *)query
-			 completion:(void (^)(NSArray *messages))completion;
-
 - (void)publicMessagesByTag:(NSString *)tag
 					 offset:(NSString *)offset
 				completion:(void (^)(NSArray *messages, NSString *next))completion;
@@ -58,46 +50,13 @@
 /// effect's kind. nil when Telegram has no such effect.
 /// What kind of export file a message file is, read from its first lines, so
 /// the import sheet can name it before importing. nil for an unknown file.
-- (void)messageFileTypeForHead:(NSString *)head
-					completion:(void (^)(NSDictionary *fileType))completion;
-
 /// The sentence Telegram wants shown before it starts importing into a chat.
-- (void)importConfirmationTextForChat:(int64_t)chatId
-						   completion:(void (^)(NSString *text))completion;
-
 /// Imports an exported history file into a chat. `path` is a local file;
 /// `attachedPaths` are the media files the export refers to.
-- (void)importMessagesFromFile:(NSString *)path
-				 attachedFiles:(NSArray *)attachedPaths
-					  intoChat:(int64_t)chatId
-					completion:(void (^)(BOOL ok))completion;
-
 /// An inline message a bot prepared for this user, ready to be sent.
-- (void)preparedInlineMessageFromBot:(int64_t)botUserId
-				   preparedMessageId:(NSString *)preparedMessageId
-						  completion:(void (^)(NSDictionary *prepared))completion;
-
 /// Saves an inline result for another user to send; bots own the request, so
 /// a user account gets nil back with the server's refusal.
-- (void)savePreparedInlineMessageForUser:(int64_t)userId
-									text:(NSString *)text
-								   title:(NSString *)title
-							  completion:(void (^)(NSString *preparedMessageId))completion;
-
 /// A bot's streaming draft for a chat. `draftId` names the stream so stop
 /// knows which one to stop; `canStop` shows the user a stop button.
-- (void)sendTextDraft:(NSString *)text
-			   toChat:(int64_t)chatId
-				topic:(int64_t)topicId
-			  draftId:(int64_t)draftId
-			   canStop:(BOOL)canStop
-				  keep:(BOOL)keepOnStop
-		   completion:(void (^)(BOOL ok))completion;
-
 /// Stops the draft stream `draftId` in a chat.
-- (void)stopTextDraft:(int64_t)draftId
-			   inChat:(int64_t)chatId
-				topic:(int64_t)topicId
-		   completion:(void (^)(BOOL ok))completion;
-
 @end

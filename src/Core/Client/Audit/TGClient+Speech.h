@@ -18,8 +18,4 @@
 
 /// Informs TDLib that a music file was listened to for `duration` seconds.
 /// Telegram uses it for the "listened" mark and for recommendations.
-- (void)markAudioListened:(int32_t)fileId
-				 duration:(int32_t)duration
-			   completion:(void (^)(BOOL ok, NSString *error))completion;
-
 @end

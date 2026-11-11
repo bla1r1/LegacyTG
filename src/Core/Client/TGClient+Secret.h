@@ -7,9 +7,6 @@
 
 /// Starts one. The chat exists at once but stays "pending" until the other
 /// device answers the key exchange, and nothing can be sent before that.
-- (void)createSecretChatWithUser:(int64_t)userId
-					  completion:(void (^)(int64_t chatId))completion;
-
 /// "pending", "ready" or "closed", by the secret chat's own id.
 - (void)secretChatState:(NSInteger)secretChatId
 			 completion:(void (^)(NSString *state, BOOL outgoing))completion;

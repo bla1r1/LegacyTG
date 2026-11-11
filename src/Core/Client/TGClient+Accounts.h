@@ -31,18 +31,12 @@ FOUNDATION_EXPORT NSString *TGAccountDefaultsKey(NSString *base);
 
 /// Adds a new account in the next free slot (0, 1 or 2) and returns that
 /// slot, or -1 when all three are taken. The new slot is not made active.
-+ (NSInteger)addAccount;
-
 /// Makes `slot` the running account: pauses (closing TDLib safely), then sets
 /// the active slot, clears the per-account state and resumes, so the next
 /// client asks for parameters again with the new slot's directory.
-- (void)switchToAccountSlot:(NSInteger)slot;
-
 /// Clears every in-memory value that belongs to one account - chats, users,
 /// folders, unread totals, me, the auth state, pending requests, the outbox
 /// and the rest - so the account that resumes starts clean.
-- (void)resetStateForAccountSwitch;
-
 /// Records the active account's title and phone in accountSlots. Called when
 /// TDLib answers getMe, which is the first moment both are known.
 - (void)recordActiveAccountFromMe:(NSDictionary *)me;

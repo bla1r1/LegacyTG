@@ -40,20 +40,4 @@
 	}];
 }
 
-- (void)markAudioListened:(int32_t)fileId
-				 duration:(int32_t)duration
-			   completion:(void (^)(BOOL, NSString *))completion {
-	if (fileId <= 0){
-		if (completion) completion(NO, @"An audio file id is needed.");
-		return;
-	}
-	[self request:@{@"@type" : @"listenToAudio",
-					@"audio_file_id" : @(fileId),
-					@"duration" : @(MAX((int32_t)0, duration))}
-	   completion:^(NSDictionary *result){
-		BOOL failed = TGAuditFailed(result);
-		if (completion) completion(!failed, failed ? TGAuditError(result) : nil);
-	}];
-}
-
 @end

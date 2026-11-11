@@ -12,11 +12,6 @@
 /// the server's refusal back as NO.
 /// The message a callback query belongs to. Bots receive the query, so a
 /// user account can only read back one it already owns.
-- (void)callbackQueryMessage:(int64_t)messageId
-					  inChat:(int64_t)chatId
-			 callbackQueryId:(int64_t)callbackQueryId
-				  completion:(void (^)(NSDictionary *message))completion;
-
 /// The message as it sits in the local database, without asking the server.
 /// nil when it is not cached.
 - (void)localMessageWithId:(int64_t)messageId
@@ -46,15 +41,6 @@
 /// post's view count is made of.
 /// Sets the reactions on a message by name. Bot accounts own this request;
 /// a user gets the refusal back as NO.
-- (void)setReactions:(NSArray *)emojis
-		   onMessage:(int64_t)messageId
-			  inChat:(int64_t)chatId
-		  completion:(void (^)(BOOL ok))completion;
-
 /// The messages in a user's personal chat, newest first. Bots own the
 /// request, so a user account gets an empty list back.
-- (void)personalChatHistoryForUser:(int64_t)userId
-							 limit:(NSInteger)limit
-						completion:(void (^)(NSArray *messages))completion;
-
 @end

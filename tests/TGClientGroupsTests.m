@@ -804,7 +804,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 /// "all" opens every posting right, "read" closes even the plain text, and
 /// "text" is the middle - messages, previews and invites without the media.
 - (void)testChatPermissions_ThePresetsSpellTheSixteenBooleans {
-	NSDictionary *all = [TGClient chatPermissionsForPreset:@"all"];
+	NSDictionary *all = [TGGroupStore chatPermissionsForPreset:@"all"];
 	NSArray *adminLike = @[@"can_change_info", @"can_pin_messages",
 						   @"can_create_topics", @"can_edit_tag"];
 	[all enumerateKeysAndObjectsUsingBlock:^(NSString *key, id value, BOOL *stop){
@@ -817,7 +817,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 	}];
 	XCTAssertEqual(all.count, (NSUInteger)17, @"the type word plus sixteen booleans");
 
-	NSDictionary *text = [TGClient chatPermissionsForPreset:@"text"];
+	NSDictionary *text = [TGGroupStore chatPermissionsForPreset:@"text"];
 	XCTAssertTrue([text[@"can_send_basic_messages"] boolValue]);
 	XCTAssertFalse([text[@"can_send_photos"] boolValue]);
 	XCTAssertFalse([text[@"can_send_videos"] boolValue]);
@@ -828,7 +828,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 	XCTAssertTrue([text[@"can_add_link_previews"] boolValue]);
 	XCTAssertTrue([text[@"can_invite_users"] boolValue]);
 
-	NSDictionary *read = [TGClient chatPermissionsForPreset:@"read"];
+	NSDictionary *read = [TGGroupStore chatPermissionsForPreset:@"read"];
 	[read enumerateKeysAndObjectsUsingBlock:^(NSString *key, id value, BOOL *stop){
 		if (![key isEqualToString:@"@type"])
 			XCTAssertFalse([value boolValue], @"%@ open in the read preset", key);

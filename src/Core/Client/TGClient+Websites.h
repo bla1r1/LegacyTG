@@ -14,15 +14,6 @@
 /// "domain", "botUserId", "browser", "platform", "ip", "location",
 /// "loginDate" and "lastActive" (unix seconds). Nil with `error` when
 /// Telegram refuses the read.
-- (void)connectedWebsitesWithCompletion:(void (^)(NSArray *sites,
-												  NSString *error))completion;
-
 /// Signs one site out. The site loses the token on its next request, not
 /// when this call returns, so the screen re-reads the list after a moment.
-- (void)disconnectWebsite:(int64_t)websiteId
-			   completion:(void (^)(BOOL ok, NSString *error))completion;
-
-- (void)disconnectAllWebsitesWithCompletion:(void (^)(BOOL ok,
-													  NSString *error))completion;
-
 @end

@@ -18,7 +18,7 @@
 }
 
 - (int64_t)ownedStarCount {
-	return [TGClient shared].ownedStarCount;
+	return [TGClient shared].ownedStarCountValue;
 }
 
 - (NSDictionary *)freezeState {

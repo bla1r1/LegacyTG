@@ -27,12 +27,7 @@
 
 /// Drop one tag out of the recent-hashtag log the composer's suggestions
 /// read, and out of the searched-for list the search screen shows.
-- (void)removeRecentHashtag:(NSString *)hashtag;
-- (void)removeSearchedForTag:(NSString *)tag;
-
 /// Forget every searched-for tag in one request.
-- (void)clearSearchedForTags;
-
 #pragma mark - public post search
 
 /// What Telegram will charge for a public post search, and how many free

@@ -24,35 +24,17 @@
 /// Everything a profile shows that the plain user record does not carry:
 /// "bio", "commonGroups" (NSNumber), "birthday" (NSString, empty when unset),
 /// "canCall" and "canVideoCall" (NSNumber BOOL).
-- (void)userProfile:(int64_t)userId completion:(void (^)(NSDictionary *info))completion;
 /// Other devices signed into this account: "id", "name", "platform", "ip",
 /// "isCurrent", "isUnconfirmed", "acceptSecretChats", "canAcceptCalls",
 /// "lastActive".
 /// The same list plus the idle timeout Telegram stores for the account.
-- (void)sessionsWithInactiveTtlCompletion:(void (^)(NSArray *sessions,
-												  NSInteger ttlDays))completion;
-- (void)terminateSession:(long long)sessionId;
 /// Confirms a login Telegram flagged as unconfirmed, which is what the
 /// updateUnconfirmedSession row in Devices is for.
-- (void)confirmSession:(long long)sessionId;
 /// A device that should not ring can be told so without signing it out.
-- (void)toggleSession:(long long)sessionId
-	   canAcceptCalls:(BOOL)canAccept
-		   completion:(void (^)(BOOL ok, NSString *error))completion;
 /// How many idle days a session gets before it is signed out, 1-366. The
 /// screen re-reads the list because the server owns the stored value.
-- (void)setInactiveSessionTtlDays:(NSInteger)days
-					   completion:(void (^)(BOOL ok, NSString *error))completion;
 /// Change the signed-in user's own name and bio. The completion answers so the
 /// edit form can stay put and report a refusal instead of popping optimistically.
-- (void)setName:(NSString *)firstName
-			last:(NSString *)lastName
-	  completion:(void (^)(BOOL ok, NSString *error))completion;
-- (void)setBio:(NSString *)bio
-	completion:(void (^)(BOOL ok, NSString *error))completion;
 /// The server's limit for a bio, in characters, read with getOption. 0 means
 /// the answer has not arrived; the form hides the count then.
-- (void)bioLengthMaxWithCompletion:(void (^)(NSInteger maxLength))completion;
-- (void)setUsername:(NSString *)username completion:(void (^)(BOOL ok))completion;
-
 @end

@@ -36,6 +36,8 @@
 #import "TGDevFeedback.h"
 #import "TGUpdateStore.h"
 #import "TGUpdateInfoViewController.h"
+#import "TGAccountStore.h"
+#import "TGSettingsStore.h"
 #include <stdio.h>
 
 @interface AppDelegate ()
@@ -413,7 +415,7 @@ static UIImage *TGCustomEmojiFromStore(int64_t emojiId, CGFloat side) {
 				case TGAuthStateReady:
 					// Telegram only takes a token for a signed-in account, so
 					// the ask waits until there is one.
-					[[TGClient shared] loadAppLanguagePack:TGAppLanguage() completion:nil];
+					[[TGSettingsStore shared] loadAppLanguagePack:TGAppLanguage() completion:nil];
 					[me askForPushToken];
 					TGSetAuthorizedSession(YES);
 					[me.loginVC setBusy:NO];
@@ -488,16 +490,16 @@ static UIImage *TGCustomEmojiFromStore(int64_t emojiId, CGFloat side) {
 	__weak typeof(self) weakSelf = self;
 	loginVC.onPhoneSubmitted = ^(NSString *phoneNumber) {
 		weakSelf.currentPhoneNumber = phoneNumber;
-		[[TGClient shared] sendPhoneNumber:phoneNumber];
+		[[TGAccountStore shared] sendPhoneNumber:phoneNumber];
 	};
 	loginVC.onCodeSubmitted = ^(NSString *code) {
-		[[TGClient shared] sendCode:code];
+		[[TGAccountStore shared] sendCode:code];
 	};
 	loginVC.onPasswordSubmitted = ^(NSString *password) {
-		[[TGClient shared] sendPassword:password];
+		[[TGAccountStore shared] sendPassword:password];
 	};
 	loginVC.onResendCode = ^{
-		[[TGClient shared] resendAuthenticationCode];
+		[[TGAccountStore shared] resendAuthenticationCode];
 	};
 	loginVC.onRequestQRCode = ^{
 		// Already waiting on a scan: TDLib refuses a second request with
@@ -507,11 +509,11 @@ static UIImage *TGCustomEmojiFromStore(int64_t emojiId, CGFloat side) {
 			[weakSelf.loginVC showQRCodeStepWithLink:tg.qrCodeLink];
 			return;
 		}
-		[tg requestQrCodeAuthentication];
+		[[TGAccountStore shared] requestQrCodeAuthentication];
 	};
 	loginVC.onResetSession = ^{
 		weakSelf.currentPhoneNumber = nil;
-		[[TGClient shared] destroySession];
+		[[TGAccountStore shared] destroySession];
 	};
 
 	UINavigationController *nav =
@@ -558,7 +560,7 @@ static UIImage *TGCustomEmojiFromStore(int64_t emojiId, CGFloat side) {
 #endif
 	NSLog(@"[LegacyTG] push token %lu bytes, sandbox=%d",
 			(unsigned long)deviceToken.length, sandbox);
-	[[TGClient shared] registerPushToken:hex sandbox:sandbox completion:^(BOOL ok){
+	[[TGAccountStore shared] registerPushToken:hex sandbox:sandbox completion:^(BOOL ok){
 		NSLog(@"[LegacyTG] registerDevice %@", ok ? @"accepted" : @"refused");
 	}];
 }
@@ -578,14 +580,14 @@ static UIImage *TGCustomEmojiFromStore(int64_t emojiId, CGFloat side) {
 	// The blob names the account it was addressed to. One signed in on this
 	// phone handles the notification; a payload for another account is not
 	// this client's to process, and the id says so before the updates land.
-	[[TGClient shared] pushReceiverOfPayload:userInfo
+	[[TGAccountStore shared] pushReceiverOfPayload:userInfo
 								  completion:^(BOOL ok, int64_t receiverId){
 		int64_t mine = [TGClient shared].pushReceiverId;
 		// Only a definite answer for a different account skips the payload;
 		// an id TDLib could not read is still worth handing over.
 		if (ok && mine && receiverId && mine != receiverId)
 			return;
-		[[TGClient shared] processPushPayload:userInfo];
+		[[TGAccountStore shared] processPushPayload:userInfo];
 	}];
 }
 

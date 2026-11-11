@@ -12,27 +12,6 @@
 /// Bot-side edits of a message sent through an inline bot. The id is the
 /// bot's own inline message id; every call passes null markup, leaving the
 /// buttons as they were unless the buttons are the thing being changed.
-- (void)editInlineMessageText:(NSString *)inlineMessageId
-						 text:(NSString *)text
-				   completion:(void (^)(BOOL ok))completion;
-
-- (void)editInlineMessageCaption:(NSString *)inlineMessageId
-						 caption:(NSString *)caption
-					  completion:(void (^)(BOOL ok))completion;
-
-- (void)clearInlineMessageReplyMarkup:(NSString *)inlineMessageId
-						   completion:(void (^)(BOOL ok))completion;
-
-- (void)editInlineMessagePhoto:(NSString *)inlineMessageId
-					   photoId:(int64_t)photoId
-					   caption:(NSString *)caption
-					completion:(void (^)(BOOL ok))completion;
-
-- (void)editInlineMessageLiveLocation:(NSString *)inlineMessageId
-							 latitude:(double)latitude
-							longitude:(double)longitude
-						   completion:(void (^)(BOOL ok))completion;
-
 /// What Telegram makes of a link: "url", "site", "title", "description",
 /// "photoId" and "instantView". nil when the link has no preview, which is
 /// most links.

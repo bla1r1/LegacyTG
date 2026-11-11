@@ -24,8 +24,4 @@
 /// object under "action" and add a readable "title".
 @property (nonatomic, readonly) NSArray *suggestedActions;
 
-- (void)hideSuggestedAction:(NSDictionary *)action
-                 completion:(void (^)(BOOL ok, NSString *error))completion;
-
-
 @end

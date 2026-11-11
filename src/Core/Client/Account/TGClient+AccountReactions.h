@@ -15,7 +15,4 @@
 /// Turn message-reaction notifications on or off without disturbing the
 /// story and poll sources or the chosen sound. Answered so the switch can
 /// put itself back if Telegram refuses.
-- (void)setReactionNotificationsEnabled:(BOOL)enabled
-                             completion:(void (^)(BOOL ok))completion;
-
 @end
