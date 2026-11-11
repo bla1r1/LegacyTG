@@ -13,6 +13,9 @@
 #import "TGClientInternal.h"
 #import "TGBase64.h"
 #import "TGSettingsStore.h"
+#import "TGStoreTestSupport.h"
+#import "TGGroupStore.h"
+#import "TGProfileStore.h"
 
 @interface TGClientMessagesFunctionsTests : XCTestCase @end
 
@@ -134,14 +137,14 @@ static const char *ctFakeTdExecMarkdown(void *client, const char *request) {
 	TGClient *c = M();
 	__block NSString *got = nil;
 
-	[[TGClient shared] canSendMessageToUser:5 completion:^(NSString *r){ got = r; }];
+	[[TGProfileStore shared] canSendMessageToUser:5 completion:^(NSString *r){ got = r; }];
 	XCTAssertEqualObjects(lastM(c, @"canSendMessageToUser")[@"user_id"], @(5));
 	answerM(c, @{@"@type" : @"canSendMessageToUserResultOk"});
 	XCTAssertEqualObjects(got, @"ok");
 
 	[c.outbox removeAllObjects];
 	got = nil;
-	[[TGClient shared] canSendMessageToUser:5 completion:^(NSString *r){ got = r; }];
+	[[TGProfileStore shared] canSendMessageToUser:5 completion:^(NSString *r){ got = r; }];
 	answerM(c, @{@"@type" : @"canSendMessageToUserResultUserHasPaidMessages",
 				 @"outgoing_paid_message_star_count" : @(25)});
 	// Paying is not free, but it is a go - the caller names the price.
@@ -149,20 +152,20 @@ static const char *ctFakeTdExecMarkdown(void *client, const char *request) {
 
 	[c.outbox removeAllObjects];
 	got = nil;
-	[[TGClient shared] canSendMessageToUser:5 completion:^(NSString *r){ got = r; }];
+	[[TGProfileStore shared] canSendMessageToUser:5 completion:^(NSString *r){ got = r; }];
 	answerM(c, @{@"@type" : @"canSendMessageToUserResultUserRestrictsNewChats"});
 	XCTAssertEqualObjects(got, @"userRestrictsNewChats");
 
 	[c.outbox removeAllObjects];
 	got = nil;
-	[[TGClient shared] canSendMessageToUser:5 completion:^(NSString *r){ got = r; }];
+	[[TGProfileStore shared] canSendMessageToUser:5 completion:^(NSString *r){ got = r; }];
 	answerM(c, @{@"@type" : @"canSendMessageToUserResultUserIsDeleted"});
 	XCTAssertEqualObjects(got, @"userDeleted");
 
 	// A zero user asks nothing and answers the refuse word.
 	[c.outbox removeAllObjects];
 	got = nil;
-	[[TGClient shared] canSendMessageToUser:0 completion:^(NSString *r){ got = r; }];
+	[[TGProfileStore shared] canSendMessageToUser:0 completion:^(NSString *r){ got = r; }];
 	XCTAssertEqualObjects(got, @"userDeleted");
 	XCTAssertNil(lastM(c, @"canSendMessageToUser"));
 }
@@ -181,14 +184,14 @@ static const char *ctFakeTdExecMarkdown(void *client, const char *request) {
 - (void)testDefaultAutoDelete_OffAndWeekReadBack {
 	TGClient *c = M();
 	__block NSInteger got = -99;
-	[[TGClient shared] defaultMessageAutoDeleteTimeWithCompletion:^(NSInteger seconds){
+	[[TGSettingsStore shared] defaultMessageAutoDeleteTimeWithCompletion:^(NSInteger seconds){
 		got = seconds;
 	}];
 	answerM(c, @{@"@type" : @"messageAutoDeleteTime", @"time" : @(604800)});
 	XCTAssertEqual(got, 604800);
 
 	[c.outbox removeAllObjects];
-	[c setDefaultMessageAutoDeleteTime:0];
+	[[TGSettingsStore shared] setDefaultMessageAutoDeleteTime:0];
 	NSDictionary *r = lastM(c, @"setDefaultMessageAutoDeleteTime");
 	// Zero is the answer for "off": the timer lives until set again.
 	XCTAssertEqual([r[@"auto_delete_seconds"] integerValue], 0);
@@ -199,7 +202,7 @@ static const char *ctFakeTdExecMarkdown(void *client, const char *request) {
 - (void)testSupergroupFlags_TheRecordCarriesBothSwitches {
 	TGClient *c = M();
 	__block BOOL sign = NO, join = NO, all = NO, ok = NO;
-	[c supergroupFlagsForChat:77 completion:^(BOOL s, BOOL j, BOOL a, BOOL o){
+	[[TGGroupStore shared] supergroupFlagsForChat:77 completion:^(BOOL s, BOOL j, BOOL a, BOOL o){
 		sign = s; join = j; all = a; ok = o;
 	}];
 	NSDictionary *chat = lastM(c, @"getChat");
@@ -224,7 +227,7 @@ static const char *ctFakeTdExecMarkdown(void *client, const char *request) {
 	TGClient *c = M();
 	[c.chatsById removeObjectForKey:@(77)];
 	__block BOOL ok = YES;
-	[c supergroupFlagsForChat:77 completion:^(BOOL s, BOOL j, BOOL a, BOOL o){ ok = o; }];
+	[[TGGroupStore shared] supergroupFlagsForChat:77 completion:^(BOOL s, BOOL j, BOOL a, BOOL o){ ok = o; }];
 	answerM(c, @{@"@type" : @"chat",
 				 @"type" : @{@"@type" : @"chatTypeBasicGroup", @"basic_group_id" : @"17"}});
 	XCTAssertFalse(ok);
@@ -234,7 +237,7 @@ static const char *ctFakeTdExecMarkdown(void *client, const char *request) {
 
 - (void)testAllHistory_TheToggleNamesTheSupergroupAndTheFlag {
 	TGClient *c = M();
-	[c setSupergroupAllHistoryAvailable:77 on:NO completion:nil];
+	[[TGGroupStore shared] setSupergroupAllHistoryAvailable:77 on:NO completion:nil];
 	answerM(c, @{@"@type" : @"chat",
 				 @"type" : @{@"@type" : @"chatTypeSupergroup", @"supergroup_id" : @"9001"}});
 	NSDictionary *r = lastM(c, @"toggleSupergroupIsAllHistoryAvailable");
@@ -244,7 +247,7 @@ static const char *ctFakeTdExecMarkdown(void *client, const char *request) {
 
 - (void)testSignMessages_TheToggleNamesTheSupergroupAndKeepsSenderLine {
 	TGClient *c = M();
-	[c setChatSignMessages:77 on:YES completion:nil];
+	[[TGGroupStore shared] setChatSignMessages:77 on:YES completion:nil];
 
 	// The chat id alone is not the toggle's key: getChat resolves the
 	// supergroup first, and the toggle names the supergroup.
@@ -266,7 +269,7 @@ static const char *ctFakeTdExecMarkdown(void *client, const char *request) {
 
 - (void)testJoinToSend_CachedRowKeyServesWhenTheTypeIsGone {
 	TGClient *c = M();
-	[c setChatJoinToSendMessages:77 on:YES completion:nil];
+	[[TGGroupStore shared] setChatJoinToSendMessages:77 on:YES completion:nil];
 	// The chat is a basic group on TDLib's side, but the list's row knows it
 	// became a supergroup moments ago: the cached key is the toggle's key.
 	answerM(c, @{@"@type" : @"chat",
@@ -280,7 +283,7 @@ static const char *ctFakeTdExecMarkdown(void *client, const char *request) {
 - (void)testSignMessages_RefusalsSaidNotPassedThrough {
 	TGClient *c = M();
 	__block BOOL ok = YES;
-	[c setChatSignMessages:77 on:YES completion:^(BOOL done){ ok = done; }];
+	[[TGGroupStore shared] setChatSignMessages:77 on:YES completion:^(BOOL done){ ok = done; }];
 	answerM(c, @{@"@type" : @"chat",
 				 @"type" : @{@"@type" : @"chatTypeSupergroup", @"supergroup_id" : @"9001"}});
 	answerM(c, @{@"@type" : @"supergroup", @"sign_messages" : @NO,
@@ -532,12 +535,12 @@ static NSDictionary *altV(int side, NSString *codec, int fileId) {
 
 - (void)testClearByDateAndBySender_CarryTheirRanges {
 	TGClient *c = M();
-	[c deleteChatMessagesByDate:33 minDate:0 maxDate:1000 revoke:YES];
+	[[TGGroupStore shared] deleteChatMessagesByDate:33 minDate:0 maxDate:1000 revoke:YES];
 	NSDictionary *r = lastM(c, @"deleteChatMessagesByDate");
 	XCTAssertTrue([r[@"revoke"] boolValue]);
 
 	[c.outbox removeAllObjects];
-	[c deleteChatMessagesBySender:@{@"@type" : @"messageSenderUser", @"user_id" : @(9)}
+	[[TGGroupStore shared] deleteChatMessagesBySender:@{@"@type" : @"messageSenderUser", @"user_id" : @(9)}
 							 inChat:33 revoke:YES];
 	NSDictionary *bySender = lastM(c, @"deleteChatMessagesBySender");
 	XCTAssertEqualObjects(bySender[@"sender_id"][@"user_id"], @(9));
@@ -546,7 +549,7 @@ static NSDictionary *altV(int side, NSString *codec, int fileId) {
 - (void)testWelcomeMessages_TheRoundTripOfOne {
 	TGClient *c = M();
 	__block NSArray *welcomes = nil;
-	[c welcomeMessagesOfChat:40 completion:^(NSArray *got){ welcomes = got; }];
+	[[TGGroupStore shared] welcomeMessagesOfChat:40 completion:^(NSArray *got){ welcomes = got; }];
 	// The load answers nothing; the rows arrive on the update, the chat row
 	// takes them through applyChatUpdate, and the wrapper hears the
 	// full-info announcement that rides it.
@@ -564,25 +567,25 @@ static NSDictionary *altV(int side, NSString *codec, int fileId) {
 	XCTAssertEqualObjects(welcomes[0][@"text"], @"Welcome aboard");
 
 	[c.outbox removeAllObjects];
-	[c addWelcomeMessageToChat:40 text:@"Hello!" completion:nil];
+	[[TGGroupStore shared] addWelcomeMessageToChat:40 text:@"Hello!" completion:nil];
 	XCTAssertEqualObjects(lastM(c, @"addChatWelcomeMessage")[@"input_message_content"][@"@type"], @"inputMessageText");
 
 	[c.outbox removeAllObjects];
-	[c setWelcomeMessage:3 inChat:40 text:@"New text" completion:nil];
+	[[TGGroupStore shared] setWelcomeMessage:3 inChat:40 text:@"New text" completion:nil];
 	XCTAssertEqual([lastM(c, @"editChatWelcomeMessage")[@"welcome_message_id"] integerValue], 3);
 
 	[c.outbox removeAllObjects];
-	[c deleteWelcomeMessage:3 inChat:40];
+	[[TGGroupStore shared] deleteWelcomeMessage:3 inChat:40];
 	XCTAssertNotNil(lastM(c, @"deleteChatWelcomeMessage"));
 	[c.outbox removeAllObjects];
-	[c clearAllWelcomeMessagesInChat:40];
+	[[TGGroupStore shared] clearAllWelcomeMessagesInChat:40];
 	XCTAssertNotNil(lastM(c, @"deleteAllChatWelcomeMessages"));
 }
 
 - (void)testSentFilesAndCallHistory_TheDataPagePair {
 	TGClient *c = M();
 	__block NSArray *docs = nil;
-	[c sentDocuments:nil completion:^(NSArray *got){ docs = got; }];
+	[[TGSettingsStore shared] sentDocuments:nil completion:^(NSArray *got){ docs = got; }];
 	NSMutableDictionary *doc = [@{} mutableCopy];
 	doc[@"@type"] = @"message";
 	doc[@"id"] = @(7);
@@ -602,7 +605,7 @@ static NSDictionary *altV(int side, NSString *codec, int fileId) {
 - (void)testSendAs_ListAndSet {
 	TGClient *c = M();
 	__block NSArray *senders = nil;
-	[c availableMessageSendersInChat:41 completion:^(NSArray *got){ senders = got; }];
+	[[TGGroupStore shared] availableMessageSendersInChat:41 completion:^(NSArray *got){ senders = got; }];
 	NSMutableDictionary *sender = [@{} mutableCopy];
 	sender[@"@type"] = @"messageSenderUser";
 	sender[@"user_id"] = @(1001);
@@ -612,7 +615,7 @@ static NSDictionary *altV(int side, NSString *codec, int fileId) {
 	answerM(c, answer);
 	XCTAssertEqual(senders.count, (NSUInteger)1);
 	[c.outbox removeAllObjects];
-	[c setMessageSender:senders[0] inChat:41 completion:nil];
+	[[TGGroupStore shared] setMessageSender:senders[0] inChat:41 completion:nil];
 	NSDictionary *r = lastM(c, @"setChatMessageSender");
 	XCTAssertTrue([r[@"message_sender_id"][@"user_id"] longLongValue] == 1001LL);
 }
@@ -818,7 +821,7 @@ static NSDictionary *altV(int side, NSString *codec, int fileId) {
 - (void)testCallbackQueryMessage_NamesAllThreeIdsAndFlattens {
 	TGClient *c = M();
 	__block NSDictionary *got = nil;
-	[c callbackQueryMessage:55 inChat:41 callbackQueryId:9001
+	[[TGSettingsStore shared] callbackQueryMessage:55 inChat:41 callbackQueryId:9001
 				 completion:^(NSDictionary *message){ got = message; }];
 	NSDictionary *r = lastM(c, @"getCallbackQueryMessage");
 	XCTAssertEqualObjects(r[@"chat_id"], @(41));
@@ -830,7 +833,7 @@ static NSDictionary *altV(int side, NSString *codec, int fileId) {
 												   @"text" : @"from the bot"}}}));
 	XCTAssertEqualObjects(got[@"text"], @"from the bot");
 
-	[c callbackQueryMessage:55 inChat:41 callbackQueryId:9001
+	[[TGSettingsStore shared] callbackQueryMessage:55 inChat:41 callbackQueryId:9001
 				 completion:^(NSDictionary *message){ got = message; }];
 	answerM(c, @{@"@type" : @"error", @"code" : @(400),
 				 @"message" : @"QUERY_ID_INVALID"});
@@ -962,7 +965,7 @@ static NSDictionary *altV(int side, NSString *codec, int fileId) {
 - (void)testSetReactions_NamesTheEmojiAndIsABotRequest {
 	TGClient *c = M();
 	__block BOOL ok = NO;
-	[c setReactions:@[@"👍", @""] onMessage:55 inChat:41
+	[[TGSettingsStore shared] setReactions:@[@"👍", @""] onMessage:55 inChat:41
 		 completion:^(BOOL made){ ok = made; }];
 	NSDictionary *r = lastM(c, @"setMessageReactions");
 	NSArray *types = r[@"reaction_types"];
@@ -972,7 +975,7 @@ static NSDictionary *altV(int side, NSString *codec, int fileId) {
 	answerM(c, plain(@{@"@type" : @"ok"}));
 	XCTAssertTrue(ok);
 
-	[c setReactions:@[@"👍"] onMessage:55 inChat:41 completion:^(BOOL made){ ok = made; }];
+	[[TGSettingsStore shared] setReactions:@[@"👍"] onMessage:55 inChat:41 completion:^(BOOL made){ ok = made; }];
 	answerM(c, @{@"@type" : @"error", @"code" : @(400),
 				 @"message" : @"BOT_METHOD_INVALID"});
 	XCTAssertFalse(ok);
@@ -998,11 +1001,11 @@ static NSDictionary *altV(int side, NSString *codec, int fileId) {
 - (void)testMessageFileType_NamesPrivateGroupAndUnknown {
 	TGClient *c = M();
 	__block NSDictionary *type = nil;
-	[c messageFileTypeForHead:@"" completion:^(NSDictionary *found){ type = found; }];
+	[[TGGroupStore shared] messageFileTypeForHead:@"" completion:^(NSDictionary *found){ type = found; }];
 	XCTAssertEqual(countM(c, @"getMessageFileType"), (NSUInteger)0);
 	XCTAssertNil(type);
 
-	[c messageFileTypeForHead:@"{\"name\":\"Alex\"}" completion:^(NSDictionary *found){
+	[[TGGroupStore shared] messageFileTypeForHead:@"{\"name\":\"Alex\"}" completion:^(NSDictionary *found){
 		type = found;
 	}];
 	XCTAssertEqualObjects(lastM(c, @"getMessageFileType")[@"message_file_head"],
@@ -1011,13 +1014,13 @@ static NSDictionary *altV(int side, NSString *codec, int fileId) {
 	XCTAssertEqualObjects(type[@"kind"], @"private");
 	XCTAssertEqualObjects(type[@"title"], @"Alex");
 
-	[c messageFileTypeForHead:@"{\"name\":\"Club\"}" completion:^(NSDictionary *found){
+	[[TGGroupStore shared] messageFileTypeForHead:@"{\"name\":\"Club\"}" completion:^(NSDictionary *found){
 		type = found;
 	}];
 	answerM(c, plain(@{@"@type" : @"messageFileTypeGroup", @"title" : @"Club"}));
 	XCTAssertEqualObjects(type[@"kind"], @"group");
 
-	[c messageFileTypeForHead:@"what" completion:^(NSDictionary *found){ type = found; }];
+	[[TGGroupStore shared] messageFileTypeForHead:@"what" completion:^(NSDictionary *found){ type = found; }];
 	answerM(c, plain(@{@"@type" : @"messageFileTypeUnknown"}));
 	XCTAssertEqualObjects(type[@"kind"], @"unknown");
 }
@@ -1025,13 +1028,13 @@ static NSDictionary *altV(int side, NSString *codec, int fileId) {
 - (void)testImportConfirmation_AndTheImportItself {
 	TGClient *c = M();
 	__block NSString *said = nil;
-	[c importConfirmationTextForChat:41 completion:^(NSString *text){ said = text; }];
+	[[TGGroupStore shared] importConfirmationTextForChat:41 completion:^(NSString *text){ said = text; }];
 	XCTAssertEqualObjects(lastM(c, @"getMessageImportConfirmationText")[@"chat_id"], @(41));
 	answerM(c, plain(@{@"@type" : @"text", @"text" : @"Import 10 messages?"}));
 	XCTAssertEqualObjects(said, @"Import 10 messages?");
 
 	__block BOOL ok = NO;
-	[c importMessagesFromFile:@"/tmp/export.json"
+	[[TGGroupStore shared] importMessagesFromFile:@"/tmp/export.json"
 				attachedFiles:@[@"/tmp/1.jpg"]
 					 intoChat:41
 				   completion:^(BOOL made){ ok = made; }];
@@ -1046,7 +1049,7 @@ static NSDictionary *altV(int side, NSString *codec, int fileId) {
 - (void)testPreparedInlineMessage_ReadsTheBotResult {
 	TGClient *c = M();
 	__block NSDictionary *prepared = nil;
-	[c preparedInlineMessageFromBot:1001 preparedMessageId:@"p-1"
+	[[TGSettingsStore shared] preparedInlineMessageFromBot:1001 preparedMessageId:@"p-1"
 						 completion:^(NSDictionary *found){ prepared = found; }];
 	NSDictionary *r = lastM(c, @"getPreparedInlineMessage");
 	XCTAssertEqualObjects(r[@"bot_user_id"], @(1001));
@@ -1064,7 +1067,7 @@ static NSDictionary *altV(int side, NSString *codec, int fileId) {
 - (void)testSavePreparedInlineMessage_BuildsAnArticle {
 	TGClient *c = M();
 	__block NSString *preparedId = nil;
-	[c savePreparedInlineMessageForUser:7 text:@"Hello" title:@"Greeting"
+	[[TGSettingsStore shared] savePreparedInlineMessageForUser:7 text:@"Hello" title:@"Greeting"
 							 completion:^(NSString *found){ preparedId = found; }];
 	NSDictionary *r = lastM(c, @"savePreparedInlineMessage");
 	XCTAssertEqualObjects(r[@"user_id"], @(7));
@@ -1076,7 +1079,7 @@ static NSDictionary *altV(int side, NSString *codec, int fileId) {
 						@"id" : @"p-2", @"expiration_date" : @(0)}));
 	XCTAssertEqualObjects(preparedId, @"p-2");
 
-	[c savePreparedInlineMessageForUser:7 text:@"" title:@"Greeting"
+	[[TGSettingsStore shared] savePreparedInlineMessageForUser:7 text:@"" title:@"Greeting"
 							 completion:^(NSString *found){ preparedId = found; }];
 	XCTAssertNil(preparedId);
 }
@@ -1084,7 +1087,7 @@ static NSDictionary *altV(int side, NSString *codec, int fileId) {
 - (void)testTextDraft_SendsAndStopsTheStream {
 	TGClient *c = M();
 	__block BOOL ok = NO;
-	[c sendTextDraft:@"Thinking" toChat:41 topic:0 draftId:777 canStop:YES
+	[[TGSettingsStore shared] sendTextDraft:@"Thinking" toChat:41 topic:0 draftId:777 canStop:YES
 				keep:NO completion:^(BOOL made){ ok = made; }];
 	NSDictionary *r = lastM(c, @"sendTextMessageDraft");
 	XCTAssertEqualObjects(r[@"chat_id"], @(41));
@@ -1096,7 +1099,7 @@ static NSDictionary *altV(int side, NSString *codec, int fileId) {
 	answerM(c, plain(@{@"@type" : @"ok"}));
 	XCTAssertTrue(ok);
 
-	[c stopTextDraft:777 inChat:41 topic:0 completion:^(BOOL made){ ok = made; }];
+	[[TGSettingsStore shared] stopTextDraft:777 inChat:41 topic:0 completion:^(BOOL made){ ok = made; }];
 	r = lastM(c, @"stopPendingMessage");
 	XCTAssertEqualObjects(r[@"draft_id"], @(777));
 	XCTAssertTrue(r[@"topic_id"] == [NSNull null]);
@@ -1107,7 +1110,7 @@ static NSDictionary *altV(int side, NSString *codec, int fileId) {
 - (void)testDirectMessagesGroup_CarriesTheSwitchAndPrice {
 	TGClient *c = M();
 	__block BOOL ok = NO;
-	[c setDirectMessagesEnabled:YES paidStars:1 inChat:41
+	[[TGGroupStore shared] setDirectMessagesEnabled:YES paidStars:1 inChat:41
 					 completion:^(BOOL made){ ok = made; }];
 	NSDictionary *r = lastM(c, @"setChatDirectMessagesGroup");
 	XCTAssertEqualObjects(r[@"chat_id"], @(41));
@@ -1117,7 +1120,7 @@ static NSDictionary *altV(int side, NSString *codec, int fileId) {
 	XCTAssertTrue(ok);
 
 	// Off says zero stars, whatever the old price was.
-	[c setDirectMessagesEnabled:NO paidStars:5 inChat:41 completion:nil];
+	[[TGGroupStore shared] setDirectMessagesEnabled:NO paidStars:5 inChat:41 completion:nil];
 	r = lastM(c, @"setChatDirectMessagesGroup");
 	XCTAssertEqualObjects(r[@"is_enabled"], @NO);
 	XCTAssertEqualObjects(r[@"paid_message_star_count"], @(0));
@@ -1185,7 +1188,7 @@ static NSDictionary *altV(int side, NSString *codec, int fileId) {
 - (void)testPersonalChatHistory_ClampsTheLimit {
 	TGClient *c = M();
 	__block NSArray *got = nil;
-	[c personalChatHistoryForUser:7 limit:99 completion:^(NSArray *messages){
+	[[TGSettingsStore shared] personalChatHistoryForUser:7 limit:99 completion:^(NSArray *messages){
 		got = messages;
 	}];
 	NSDictionary *r = lastM(c, @"getPersonalChatHistory");
@@ -1203,7 +1206,7 @@ static NSDictionary *altV(int side, NSString *codec, int fileId) {
 	TGClient *c = M();
 	__block BOOL ok = NO;
 
-	[c editInlineMessageText:@"AAH" text:@"new words"
+	[[TGSettingsStore shared] editInlineMessageText:@"AAH" text:@"new words"
 				  completion:^(BOOL made){ ok = made; }];
 	NSDictionary *r = lastM(c, @"editInlineMessageText");
 	XCTAssertEqualObjects(r[@"inline_message_id"], @"AAH");
@@ -1211,20 +1214,20 @@ static NSDictionary *altV(int side, NSString *codec, int fileId) {
 	answerM(c, plain(@{@"@type" : @"ok"}));
 	XCTAssertTrue(ok);
 
-	[c editInlineMessageCaption:@"AAH" caption:@"new caption"
+	[[TGSettingsStore shared] editInlineMessageCaption:@"AAH" caption:@"new caption"
 					 completion:^(BOOL made){ ok = made; }];
 	r = lastM(c, @"editInlineMessageCaption");
 	XCTAssertEqualObjects(r[@"caption"][@"text"], @"new caption");
 	answerM(c, plain(@{@"@type" : @"ok"}));
 	XCTAssertTrue(ok);
 
-	[c clearInlineMessageReplyMarkup:@"AAH" completion:^(BOOL made){ ok = made; }];
+	[[TGSettingsStore shared] clearInlineMessageReplyMarkup:@"AAH" completion:^(BOOL made){ ok = made; }];
 	r = lastM(c, @"editInlineMessageReplyMarkup");
 	XCTAssertEqualObjects(r[@"reply_markup"][@"@type"], @"replyMarkupInlineKeyboard");
 	answerM(c, plain(@{@"@type" : @"ok"}));
 	XCTAssertTrue(ok);
 
-	[c editInlineMessagePhoto:@"AAH" photoId:55 caption:@"shot"
+	[[TGSettingsStore shared] editInlineMessagePhoto:@"AAH" photoId:55 caption:@"shot"
 				   completion:^(BOOL made){ ok = made; }];
 	r = lastM(c, @"editInlineMessageMedia");
 	XCTAssertEqualObjects(r[@"input_message_content"][@"@type"], @"inputMessagePhoto");
@@ -1232,7 +1235,7 @@ static NSDictionary *altV(int side, NSString *codec, int fileId) {
 	answerM(c, plain(@{@"@type" : @"ok"}));
 	XCTAssertTrue(ok);
 
-	[c editInlineMessageLiveLocation:@"AAH" latitude:1.5 longitude:2.5
+	[[TGSettingsStore shared] editInlineMessageLiveLocation:@"AAH" latitude:1.5 longitude:2.5
 						  completion:^(BOOL made){ ok = made; }];
 	r = lastM(c, @"editInlineMessageLiveLocation");
 	XCTAssertEqualObjects(r[@"location"][@"location"][@"latitude"], @(1.5));
@@ -1242,7 +1245,7 @@ static NSDictionary *altV(int side, NSString *codec, int fileId) {
 
 	// An empty id is not worth a request; the sheet never sends one, and
 	// the guard keeps a malformed one from reaching the wire.
-	[c editInlineMessageText:@"" text:@"x" completion:^(BOOL made){ ok = made; }];
+	[[TGSettingsStore shared] editInlineMessageText:@"" text:@"x" completion:^(BOOL made){ ok = made; }];
 	XCTAssertFalse(ok);
 }
 

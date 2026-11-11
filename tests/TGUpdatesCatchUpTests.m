@@ -11,6 +11,7 @@
 #import "TGClient.h"
 #import "TGClientInternal.h"
 #import "TGStoryStore.h"
+#import "TGAccountStore.h"
 
 @interface TGUpdatesCatchUpTests : XCTestCase @end
 
@@ -197,7 +198,7 @@ static NSDictionary *CatchUpStory(long long storyId, long long chatId) {
 	TGClient *c = CatchUpClient();
 	[c handleUpdate:@{@"@type" : @"updateOwnedStarCount", @"star_count" : @"250"}];
 
-	XCTAssertEqual(c.ownedStarCount, 250LL);
+	XCTAssertEqual([TGAccountStore shared].ownedStarCount, 250LL);
 }
 
 - (void)testChatRevenueAmount_IsKeptAndAnnouncesTheChat {

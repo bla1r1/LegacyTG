@@ -8,6 +8,9 @@
 #import "TGTestRunner.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
+#import "TGStoreTestSupport.h"
+#import "TGGroupStore.h"
+#import "TGStickerStore.h"
 
 @interface TGClientStickerAuthoringTests : XCTestCase @end
 
@@ -74,7 +77,7 @@ static NSDictionary *newStickerS(NSInteger fileId) {
 
 - (void)testNewSticker_CarriesTheFileAndItsTags {
 	TGClient *c = S();
-	NSDictionary *sticker = [[TGClient shared] newStickerWithFileId:77
+	NSDictionary *sticker = [[TGStickerStore shared] newStickerWithFileId:77
 			format:@"webp" emojis:@"\U0001F431" keywords:@[@"cat", @"pet"]
 			maskPosition:nil];
 	XCTAssertEqualObjects(sticker[@"@type"], @"newSticker");
@@ -89,7 +92,7 @@ static NSDictionary *newStickerS(NSInteger fileId) {
 - (void)testCheckStickerSetName_AnswersThreeWords {
 	TGClient *c = S();
 	__block NSString *status = nil;
-	[c checkStickerSetName:@"ducks" completion:^(NSString *s, NSString *message){
+	[[TGStickerStore shared] checkStickerSetName:@"ducks" completion:^(NSString *s, NSString *message){
 		status = s;
 		XCTAssertEqualObjects(message, @"This name is free.");
 	}];
@@ -98,11 +101,11 @@ static NSDictionary *newStickerS(NSInteger fileId) {
 	answerS(c, @{@"@type" : @"checkStickerSetNameResultOk"});
 	XCTAssertEqualObjects(status, @"ok");
 
-	[c checkStickerSetName:@"taken" completion:^(NSString *s, NSString *m){ status = s; }];
+	[[TGStickerStore shared] checkStickerSetName:@"taken" completion:^(NSString *s, NSString *m){ status = s; }];
 	answerS(c, @{@"@type" : @"checkStickerSetNameResultNameOccupied"});
 	XCTAssertEqualObjects(status, @"occupied");
 
-	[c checkStickerSetName:@"" completion:^(NSString *s, NSString *m){ status = s; }];
+	[[TGStickerStore shared] checkStickerSetName:@"" completion:^(NSString *s, NSString *m){ status = s; }];
 	XCTAssertEqualObjects(status, @"invalid");
 	XCTAssertEqual(countS(c, @"checkStickerSetName"), (NSUInteger)2);
 }
@@ -110,7 +113,7 @@ static NSDictionary *newStickerS(NSInteger fileId) {
 - (void)testSuggestedSetName_IsTheServersWord {
 	TGClient *c = S();
 	__block NSString *suggested = nil;
-	[c suggestStickerSetNameForTitle:@"My Cats" completion:^(NSString *name){
+	[[TGStickerStore shared] suggestStickerSetNameForTitle:@"My Cats" completion:^(NSString *name){
 		suggested = name;
 	}];
 	NSDictionary *r = lastS(c, @"getSuggestedStickerSetName");
@@ -122,7 +125,7 @@ static NSDictionary *newStickerS(NSInteger fileId) {
 - (void)testSetNameForId_ReturnsTheShortName {
 	TGClient *c = S();
 	__block NSString *name = nil;
-	[c stickerSetNameForId:91 completion:^(NSString *n){ name = n; }];
+	[[TGStickerStore shared] stickerSetNameForId:91 completion:^(NSString *n){ name = n; }];
 	XCTAssertEqualObjects(lastS(c, @"getStickerSetName")[@"set_id"], @(91));
 	answerS(c, @{@"@type" : @"text", @"text" : @"cats"});
 	XCTAssertEqualObjects(name, @"cats");
@@ -131,7 +134,7 @@ static NSDictionary *newStickerS(NSInteger fileId) {
 - (void)testCreateSet_SendsTheFirstStickerAndTheOwner {
 	TGClient *c = S();
 	__block NSDictionary *made = nil;
-	[c createStickerSetNamed:@"my_cats" title:@"My Cats" stickerType:@"regular"
+	[[TGStickerStore shared] createStickerSetNamed:@"my_cats" title:@"My Cats" stickerType:@"regular"
 			stickers:@[newStickerS(77)] completion:^(NSDictionary *set){ made = set; }];
 
 	NSDictionary *r = lastS(c, @"createNewStickerSet");
@@ -159,7 +162,7 @@ static NSDictionary *newStickerS(NSInteger fileId) {
 - (void)testCreateSet_NoTitleMeansNoRequest {
 	TGClient *c = S();
 	__block BOOL answered = NO;
-	[c createStickerSetNamed:@"x" title:@"" stickerType:@"regular" stickers:@[]
+	[[TGStickerStore shared] createStickerSetNamed:@"x" title:@"" stickerType:@"regular" stickers:@[]
 			completion:^(NSDictionary *set){ answered = YES; XCTAssertNil(set); }];
 	XCTAssertTrue(answered);
 	XCTAssertEqual(countS(c, @"createNewStickerSet"), (NSUInteger)0);
@@ -168,7 +171,7 @@ static NSDictionary *newStickerS(NSInteger fileId) {
 - (void)testDeleteSet_NamesThePack {
 	TGClient *c = S();
 	__block BOOL ok = NO;
-	[c deleteStickerSetNamed:@"my_cats" completion:^(BOOL value){ ok = value; }];
+	[[TGStickerStore shared] deleteStickerSetNamed:@"my_cats" completion:^(BOOL value){ ok = value; }];
 	XCTAssertEqualObjects(lastS(c, @"deleteStickerSet")[@"name"], @"my_cats");
 	answerS(c, @{@"@type" : @"ok"});
 	XCTAssertTrue(ok);
@@ -179,7 +182,7 @@ static NSDictionary *newStickerS(NSInteger fileId) {
 - (void)testAddSticker_IsAnInputFileIdNotAPath {
 	TGClient *c = S();
 	__block BOOL ok = NO;
-	[c addStickerToSetNamed:@"my_cats" sticker:newStickerS(77)
+	[[TGStickerStore shared] addStickerToSetNamed:@"my_cats" sticker:newStickerS(77)
 			completion:^(BOOL value){ ok = value; }];
 	NSDictionary *r = lastS(c, @"addStickerToSet");
 	XCTAssertEqualObjects(r[@"user_id"], @(1001));
@@ -192,18 +195,18 @@ static NSDictionary *newStickerS(NSInteger fileId) {
 - (void)testRemoveSticker_NamesTheFile {
 	TGClient *c = S();
 	__block BOOL ok = NO;
-	[c removeStickerFileId:77 completion:^(BOOL value){ ok = value; }];
+	[[TGStickerStore shared] removeStickerFileId:77 completion:^(BOOL value){ ok = value; }];
 	XCTAssertEqualObjects(lastS(c, @"removeStickerFromSet")[@"sticker"][@"id"], @(77));
 	answerS(c, @{@"@type" : @"ok"});
 	XCTAssertTrue(ok);
-	[c removeStickerFileId:0 completion:^(BOOL value){ ok = value; }];
+	[[TGStickerStore shared] removeStickerFileId:0 completion:^(BOOL value){ ok = value; }];
 	XCTAssertFalse(ok);
 }
 
 - (void)testReplaceSticker_SendsOldAndNewTogether {
 	TGClient *c = S();
 	__block BOOL ok = NO;
-	[c replaceStickerInSetNamed:@"my_cats" oldFileId:70 newSticker:newStickerS(77)
+	[[TGStickerStore shared] replaceStickerInSetNamed:@"my_cats" oldFileId:70 newSticker:newStickerS(77)
 			completion:^(BOOL value){ ok = value; }];
 	NSDictionary *r = lastS(c, @"replaceStickerInSet");
 	XCTAssertEqualObjects(r[@"old_sticker"][@"@type"], @"inputFileId");
@@ -216,14 +219,14 @@ static NSDictionary *newStickerS(NSInteger fileId) {
 - (void)testPositionInSet_IsZeroBasedAndRefusedBelowZero {
 	TGClient *c = S();
 	__block BOOL ok = NO;
-	[c setStickerFileId:77 positionInSet:2 completion:^(BOOL value){ ok = value; }];
+	[[TGStickerStore shared] setStickerFileId:77 positionInSet:2 completion:^(BOOL value){ ok = value; }];
 	NSDictionary *r = lastS(c, @"setStickerPositionInSet");
 	XCTAssertEqualObjects(r[@"position"], @(2));
 	XCTAssertEqualObjects(r[@"sticker"][@"id"], @(77));
 	answerS(c, @{@"@type" : @"ok"});
 	XCTAssertTrue(ok);
 
-	[c setStickerFileId:77 positionInSet:-1 completion:^(BOOL value){ ok = value; }];
+	[[TGStickerStore shared] setStickerFileId:77 positionInSet:-1 completion:^(BOOL value){ ok = value; }];
 	XCTAssertFalse(ok);
 	XCTAssertEqual(countS(c, @"setStickerPositionInSet"), (NSUInteger)1);
 }
@@ -231,12 +234,12 @@ static NSDictionary *newStickerS(NSInteger fileId) {
 - (void)testStickerEmojis_AndKeywords_AndMaskPosition {
 	TGClient *c = S();
 	__block BOOL ok = NO;
-	[c setStickerFileId:77 emojis:@"\U0001F431" completion:^(BOOL value){ ok = value; }];
+	[[TGStickerStore shared] setStickerFileId:77 emojis:@"\U0001F431" completion:^(BOOL value){ ok = value; }];
 	XCTAssertEqualObjects(lastS(c, @"setStickerEmojis")[@"emojis"], @"\U0001F431");
 	answerS(c, @{@"@type" : @"ok"});
 	XCTAssertTrue(ok);
 
-	[c setStickerFileId:77 keywords:@[@"cat", @"pet"] completion:^(BOOL value){ ok = value; }];
+	[[TGStickerStore shared] setStickerFileId:77 keywords:@[@"cat", @"pet"] completion:^(BOOL value){ ok = value; }];
 	XCTAssertEqualObjects(lastS(c, @"setStickerKeywords")[@"keywords"], (@[@"cat", @"pet"]));
 	answerS(c, @{@"@type" : @"ok"});
 	XCTAssertTrue(ok);
@@ -244,7 +247,7 @@ static NSDictionary *newStickerS(NSInteger fileId) {
 	NSDictionary *mask = @{@"@type" : @"maskPosition",
 						   @"point" : @{@"@type" : @"maskPointEyes"},
 						   @"x_shift" : @0, @"y_shift" : @0, @"scale" : @1};
-	[c setStickerFileId:77 maskPosition:mask completion:^(BOOL value){ ok = value; }];
+	[[TGStickerStore shared] setStickerFileId:77 maskPosition:mask completion:^(BOOL value){ ok = value; }];
 	XCTAssertEqualObjects(lastS(c, @"setStickerMaskPosition")[@"mask_position"], mask);
 	answerS(c, @{@"@type" : @"ok"});
 	XCTAssertTrue(ok);
@@ -255,7 +258,7 @@ static NSDictionary *newStickerS(NSInteger fileId) {
 - (void)testRemoveMaskPosition_SendsNullNotAMissingField {
 	TGClient *c = S();
 	__block BOOL ok = NO;
-	[c setStickerFileId:77 maskPosition:nil completion:^(BOOL value){ ok = value; }];
+	[[TGStickerStore shared] setStickerFileId:77 maskPosition:nil completion:^(BOOL value){ ok = value; }];
 	NSDictionary *r = lastS(c, @"setStickerMaskPosition");
 	XCTAssertEqualObjects(r[@"mask_position"], [NSNull null]);
 	answerS(c, @{@"@type" : @"ok"});
@@ -265,14 +268,14 @@ static NSDictionary *newStickerS(NSInteger fileId) {
 - (void)testSetTitleAndThumbnail {
 	TGClient *c = S();
 	__block BOOL ok = NO;
-	[c setStickerSetNamed:@"my_cats" title:@"Red Cats" completion:^(BOOL value){ ok = value; }];
+	[[TGStickerStore shared] setStickerSetNamed:@"my_cats" title:@"Red Cats" completion:^(BOOL value){ ok = value; }];
 	NSDictionary *title = lastS(c, @"setStickerSetTitle");
 	XCTAssertEqualObjects(title[@"name"], @"my_cats");
 	XCTAssertEqualObjects(title[@"title"], @"Red Cats");
 	answerS(c, @{@"@type" : @"ok"});
 	XCTAssertTrue(ok);
 
-	[c setStickerSetNamed:@"my_cats" thumbnailAtPath:@"/tmp/cat.png" format:@"webp"
+	[[TGStickerStore shared] setStickerSetNamed:@"my_cats" thumbnailAtPath:@"/tmp/cat.png" format:@"webp"
 			completion:^(BOOL value){ ok = value; }];
 	NSDictionary *thumb = lastS(c, @"setStickerSetThumbnail");
 	XCTAssertEqualObjects(thumb[@"user_id"], @(1001));
@@ -286,7 +289,7 @@ static NSDictionary *newStickerS(NSInteger fileId) {
 - (void)testUploadSticker_ReturnsTheUploadedFileId {
 	TGClient *c = S();
 	__block NSInteger fileId = -1;
-	[c uploadStickerAtPath:@"/tmp/cat.png" format:@"webp"
+	[[TGStickerStore shared] uploadStickerAtPath:@"/tmp/cat.png" format:@"webp"
 			completion:^(NSInteger value){ fileId = value; }];
 	NSDictionary *r = lastS(c, @"uploadStickerFile");
 	XCTAssertEqualObjects(r[@"user_id"], @(1001));
@@ -295,7 +298,7 @@ static NSDictionary *newStickerS(NSInteger fileId) {
 	answerS(c, @{@"@type" : @"file", @"id" : @(812)});
 	XCTAssertEqual(fileId, 812);
 
-	[c uploadStickerAtPath:@"" format:@"webp" completion:^(NSInteger value){ fileId = value; }];
+	[[TGStickerStore shared] uploadStickerAtPath:@"" format:@"webp" completion:^(NSInteger value){ fileId = value; }];
 	XCTAssertEqual(fileId, 0);
 	XCTAssertEqual(countS(c, @"uploadStickerFile"), (NSUInteger)1);
 }
@@ -305,7 +308,7 @@ static NSDictionary *newStickerS(NSInteger fileId) {
 - (void)testOwnedStickerSets_KeepsTheTypeAndShortName {
 	TGClient *c = S();
 	__block NSArray *sets = nil;
-	[c ownedStickerSetsWithCompletion:^(NSArray *value){ sets = value; }];
+	[[TGStickerStore shared] ownedStickerSetsWithCompletion:^(NSArray *value){ sets = value; }];
 	NSDictionary *r = lastS(c, @"getOwnedStickerSets");
 	XCTAssertEqualObjects(r[@"offset_sticker_set_id"], @(0));
 	XCTAssertEqualObjects(r[@"limit"], @(100));
@@ -323,7 +326,7 @@ static NSDictionary *newStickerS(NSInteger fileId) {
 - (void)testSearchStickerSet_ReturnsThePackAndItsStickers {
 	TGClient *c = S();
 	__block NSDictionary *set = nil;
-	[c searchStickerSetNamed:@"cats" ignoreCache:YES completion:^(NSDictionary *value){
+	[[TGStickerStore shared] searchStickerSetNamed:@"cats" ignoreCache:YES completion:^(NSDictionary *value){
 		set = value;
 	}];
 	NSDictionary *r = lastS(c, @"searchStickerSet");
@@ -343,7 +346,7 @@ static NSDictionary *newStickerS(NSInteger fileId) {
 - (void)testStickerEmojis_ReadsTheOwnTags {
 	TGClient *c = S();
 	__block NSArray *emojis = nil;
-	[c stickerEmojisForFileId:77 completion:^(NSArray *value){ emojis = value; }];
+	[[TGStickerStore shared] stickerEmojisForFileId:77 completion:^(NSArray *value){ emojis = value; }];
 	XCTAssertEqualObjects(lastS(c, @"getStickerEmojis")[@"sticker"][@"id"], @(77));
 	answerS(c, @{@"@type" : @"emojis", @"emojis" : @[@"\U0001F431", @"\U0001F408"]});
 	XCTAssertEqualObjects(emojis, (@[@"\U0001F431", @"\U0001F408"]));
@@ -367,7 +370,7 @@ static NSDictionary *newStickerS(NSInteger fileId) {
 	TGClient *c = S();
 	__block NSArray *paths = nil;
 	__block NSInteger points = -1;
-	[c stickerOutlineForFileId:77 completion:^(NSArray *p, NSInteger n){
+	[[TGStickerStore shared] stickerOutlineForFileId:77 completion:^(NSArray *p, NSInteger n){
 		paths = p; points = n;
 	}];
 	NSDictionary *r = lastS(c, @"getStickerOutline");
@@ -387,7 +390,7 @@ static NSDictionary *newStickerS(NSInteger fileId) {
 - (void)testOutlineSvgPath_IsTheServersText {
 	TGClient *c = S();
 	__block NSString *path = nil;
-	[c stickerOutlineSvgPathForFileId:77 completion:^(NSString *value){ path = value; }];
+	[[TGStickerStore shared] stickerOutlineSvgPathForFileId:77 completion:^(NSString *value){ path = value; }];
 	XCTAssertEqualObjects(lastS(c, @"getStickerOutlineSvgPath")[@"sticker_file_id"], @(77));
 	answerS(c, @{@"@type" : @"text", @"text" : @"M0 0H10V10Z"});
 	XCTAssertEqualObjects(path, @"M0 0H10V10Z");
@@ -421,17 +424,17 @@ static NSDictionary *newStickerS(NSInteger fileId) {
 		calls++;
 		XCTAssertEqual(stickers.count, (NSUInteger)1);
 	};
-	[c defaultProfilePhotoCustomEmojiStickersWithCompletion:got];
+	[[TGStickerStore shared] defaultProfilePhotoCustomEmojiStickersWithCompletion:got];
 	XCTAssertNotNil(lastS(c, @"getDefaultProfilePhotoCustomEmojiStickers"));
 	answerS(c, plainS(@{@"@type" : @"stickers", @"stickers" : @[
 			@{@"@type" : @"sticker", @"sticker" : @{@"@type" : @"file", @"id" : @(1)}}]}));
 
-	[c defaultChatPhotoCustomEmojiStickersWithCompletion:got];
+	[[TGStickerStore shared] defaultChatPhotoCustomEmojiStickersWithCompletion:got];
 	XCTAssertNotNil(lastS(c, @"getDefaultChatPhotoCustomEmojiStickers"));
 	answerS(c, plainS(@{@"@type" : @"stickers", @"stickers" : @[
 			@{@"@type" : @"sticker", @"sticker" : @{@"@type" : @"file", @"id" : @(2)}}]}));
 
-	[c defaultBackgroundCustomEmojiStickersWithCompletion:got];
+	[[TGStickerStore shared] defaultBackgroundCustomEmojiStickersWithCompletion:got];
 	XCTAssertNotNil(lastS(c, @"getDefaultBackgroundCustomEmojiStickers"));
 	answerS(c, plainS(@{@"@type" : @"stickers", @"stickers" : @[
 			@{@"@type" : @"sticker", @"sticker" : @{@"@type" : @"file", @"id" : @(3)}}]}));
@@ -441,7 +444,7 @@ static NSDictionary *newStickerS(NSInteger fileId) {
 - (void)testGreetingStickers_AreAStickerList {
 	TGClient *c = S();
 	__block NSArray *stickers = nil;
-	[c greetingStickersWithCompletion:^(NSArray *value){ stickers = value; }];
+	[[TGStickerStore shared] greetingStickersWithCompletion:^(NSArray *value){ stickers = value; }];
 	XCTAssertNotNil(lastS(c, @"getGreetingStickers"));
 	answerS(c, plainS(@{@"@type" : @"stickers", @"stickers" : @[
 			@{@"@type" : @"sticker", @"sticker" : @{@"@type" : @"file", @"id" : @(7)},
@@ -452,7 +455,7 @@ static NSDictionary *newStickerS(NSInteger fileId) {
 - (void)testCustomEmojiThumbnail_NamesThePackAndTheEmoji {
 	TGClient *c = S();
 	__block BOOL ok = NO;
-	[c setCustomEmojiStickerSetNamed:@"cats" thumbnailCustomEmojiId:55
+	[[TGStickerStore shared] setCustomEmojiStickerSetNamed:@"cats" thumbnailCustomEmojiId:55
 			completion:^(BOOL value){ ok = value; }];
 	NSDictionary *r = lastS(c, @"setCustomEmojiStickerSetThumbnail");
 	XCTAssertEqualObjects(r[@"name"], @"cats");
@@ -461,7 +464,7 @@ static NSDictionary *newStickerS(NSInteger fileId) {
 	XCTAssertTrue(ok);
 
 	// 0 is td_api's "remove the thumbnail", not a missing argument.
-	[c setCustomEmojiStickerSetNamed:@"cats" thumbnailCustomEmojiId:0
+	[[TGStickerStore shared] setCustomEmojiStickerSetNamed:@"cats" thumbnailCustomEmojiId:0
 			completion:^(BOOL value){ ok = value; }];
 	XCTAssertEqualObjects(lastS(c, @"setCustomEmojiStickerSetThumbnail")
 						   [@"custom_emoji_id"], @(0));
@@ -473,10 +476,10 @@ static NSDictionary *newStickerS(NSInteger fileId) {
 
 - (void)testViewTrendingNamesTheIdsAndDoesNotAskTwice {
 	TGClient *c = S();
-	[c viewTrendingStickerSets:@[@(1), @(2)]];
+	[[TGStickerStore shared] viewTrendingStickerSets:@[@(1), @(2)]];
 	XCTAssertEqualObjects(lastS(c, @"viewTrendingStickerSets")[@"sticker_set_ids"],
 						   (@[@(1), @(2)]));
-	[c viewTrendingStickerSets:@[]];
+	[[TGStickerStore shared] viewTrendingStickerSets:@[]];
 	XCTAssertEqual(countS(c, @"viewTrendingStickerSets"), (NSUInteger)1);
 }
 
@@ -493,7 +496,7 @@ static NSDictionary *newStickerS(NSInteger fileId) {
 - (void)testSupergroupStickerSet_ResolvesTheSupergroupIdFirst {
 	TGClient *c = S();
 	__block BOOL ok = NO;
-	[c setSupergroupStickerSet:900 inChat:-1001 completion:^(BOOL value){ ok = value; }];
+	[[TGGroupStore shared] setSupergroupStickerSet:900 inChat:-1001 completion:^(BOOL value){ ok = value; }];
 	NSDictionary *chat = lastS(c, @"getChat");
 	XCTAssertEqualObjects(chat[@"chat_id"], @(-1001));
 	answerS(c, @{@"@type" : @"chat", @"id" : @(-1001),
@@ -510,7 +513,7 @@ static NSDictionary *newStickerS(NSInteger fileId) {
 - (void)testSupergroupCustomEmojiSet_IsItsOwnRequest {
 	TGClient *c = S();
 	__block BOOL ok = NO;
-	[c setSupergroupCustomEmojiStickerSet:901 inChat:-1001
+	[[TGGroupStore shared] setSupergroupCustomEmojiStickerSet:901 inChat:-1001
 			completion:^(BOOL value){ ok = value; }];
 	answerS(c, @{@"@type" : @"chat", @"id" : @(-1001),
 				 @"type" : @{@"@type" : @"chatTypeSupergroup",
@@ -526,7 +529,7 @@ static NSDictionary *newStickerS(NSInteger fileId) {
 	TGClient *c = S();
 	__block BOOL answered = NO;
 	__block BOOL ok = YES;
-	[c setSupergroupStickerSet:900 inChat:-5 completion:^(BOOL value){
+	[[TGGroupStore shared] setSupergroupStickerSet:900 inChat:-5 completion:^(BOOL value){
 		answered = YES; ok = value;
 	}];
 	answerS(c, @{@"@type" : @"chat", @"id" : @(-5),
@@ -632,7 +635,7 @@ static NSDictionary *cpCustomEmojiSetRaw(id setId, NSString *title, NSArray *sti
 	TGClient *c = S();
 	__block BOOL done = NO;
 	__block NSArray *received = nil;
-	[c installedCustomEmojiSetsWithCompletion:^(NSArray *sets){
+	[[TGStickerStore shared] installedCustomEmojiSetsWithCompletion:^(NSArray *sets){
 		done = YES;
 		received = sets;
 	}];
@@ -647,7 +650,7 @@ static NSDictionary *cpCustomEmojiSetRaw(id setId, NSString *title, NSArray *sti
 	TGClient *c = S();
 	__block BOOL done = NO;
 	__block NSArray *received = nil;
-	[c installedCustomEmojiSetsWithCompletion:^(NSArray *sets){
+	[[TGStickerStore shared] installedCustomEmojiSetsWithCompletion:^(NSArray *sets){
 		done = YES;
 		received = sets;
 	}];

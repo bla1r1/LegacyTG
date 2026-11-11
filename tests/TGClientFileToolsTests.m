@@ -8,6 +8,10 @@
 #import "TGClient.h"
 #import "TGClientInternal.h"
 #import "TGBase64.h"
+#import "TGStoreTestSupport.h"
+#import "TGDevStore.h"
+#import "TGMediaStore.h"
+#import "TGSettingsStore.h"
 
 @interface TGClientFileToolsTests : XCTestCase @end
 
@@ -69,7 +73,7 @@ static NSDictionary *FTError(void) {
 - (void)testFileInfo_ReadsTheRecordThenResolvesItsRemoteCopy {
 	TGClient *c = FTClient();
 	__block NSDictionary *got = nil;
-	[c fileInfo:41 completion:^(NSDictionary *info){ got = info; }];
+	[[TGMediaStore shared] fileInfo:41 completion:^(NSDictionary *info){ got = info; }];
 
 	NSDictionary *asked = FTLast(c, @"getFile");
 	XCTAssertEqualObjects(asked[@"file_id"], @(41));
@@ -118,7 +122,7 @@ static NSDictionary *FTError(void) {
 - (void)testFileInfo_AnErrorAnswersNil {
 	TGClient *c = FTClient();
 	__block NSDictionary *got = @{};
-	[c fileInfo:41 completion:^(NSDictionary *info){ got = info; }];
+	[[TGMediaStore shared] fileInfo:41 completion:^(NSDictionary *info){ got = info; }];
 	XCTAssertNotNil(FTLast(c, @"getFile"));
 	FTAnswer(c, FTError());
 	XCTAssertNil(got);
@@ -127,7 +131,7 @@ static NSDictionary *FTError(void) {
 - (void)testDownloadedPrefix_ReturnsTheByteCount {
 	TGClient *c = FTClient();
 	__block long long bytes = -1;
-	[c fileDownloadedPrefixSize:41 offset:100 completion:^(long long n){ bytes = n; }];
+	[[TGMediaStore shared] fileDownloadedPrefixSize:41 offset:100 completion:^(long long n){ bytes = n; }];
 
 	NSDictionary *asked = FTLast(c, @"getFileDownloadedPrefixSize");
 	XCTAssertEqualObjects(asked[@"file_id"], @(41));
@@ -142,7 +146,7 @@ static NSDictionary *FTError(void) {
 - (void)testFileNameInfo_ChainsMimeExtensionAndCleanName {
 	TGClient *c = FTClient();
 	__block NSDictionary *got = nil;
-	[c fileNameInfo:@"Photo.JPG" completion:^(NSDictionary *info){ got = info; }];
+	[[TGMediaStore shared] fileNameInfo:@"Photo.JPG" completion:^(NSDictionary *info){ got = info; }];
 
 	XCTAssertEqualObjects(FTLast(c, @"getFileMimeType")[@"file_name"], @"Photo.JPG");
 	FTAnswer(c, FTPlain(@{@"@type" : @"text", @"text" : @"image/jpeg"}));
@@ -161,7 +165,7 @@ static NSDictionary *FTError(void) {
 - (void)testSuggestedFileName_SendsTheFileAndDirectory {
 	TGClient *c = FTClient();
 	__block NSString *got = nil;
-	[c suggestedFileNameForFile:41 directory:@"/var/tmp" completion:^(NSString *name){ got = name; }];
+	[[TGMediaStore shared] suggestedFileNameForFile:41 directory:@"/var/tmp" completion:^(NSString *name){ got = name; }];
 
 	NSDictionary *asked = FTLast(c, @"getSuggestedFileName");
 	XCTAssertEqualObjects(asked[@"file_id"], @(41));
@@ -173,7 +177,7 @@ static NSDictionary *FTError(void) {
 - (void)testReadFilePart_DecodesTheBytes {
 	TGClient *c = FTClient();
 	__block NSData *got = nil;
-	[c readFilePartOfFile:41 offset:0 count:3 completion:^(NSData *data){ got = data; }];
+	[[TGDevStore shared] readFilePartOfFile:41 offset:0 count:3 completion:^(NSData *data){ got = data; }];
 
 	NSDictionary *asked = FTLast(c, @"readFilePart");
 	XCTAssertEqualObjects(asked[@"file_id"], @(41));
@@ -312,7 +316,7 @@ static NSDictionary *FTError(void) {
 - (void)testAutoDownloadPresets_FlattensAllThree {
 	TGClient *c = FTClient();
 	__block NSDictionary *got = nil;
-	[c autoDownloadSettingsPresetsWithCompletion:^(NSDictionary *p){ got = p; }];
+	[[TGSettingsStore shared] autoDownloadSettingsPresetsWithCompletion:^(NSDictionary *p){ got = p; }];
 
 	XCTAssertNotNil(FTLast(c, @"getAutoDownloadSettingsPresets"));
 	NSDictionary *preset = @{
@@ -341,7 +345,7 @@ static NSDictionary *FTError(void) {
 - (void)testApplyPreset_WritesThePresetForTheNamedNetwork {
 	TGClient *c = FTClient();
 	__block BOOL ok = NO;
-	[c applyAutoDownloadPreset:@{
+	[[TGSettingsStore shared] applyAutoDownloadPreset:@{
 		@"enabled" : @YES,
 		@"maxPhotoSize" : @(1024),
 		@"maxVideoSize" : @(2048),

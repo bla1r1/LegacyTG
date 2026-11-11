@@ -316,6 +316,10 @@ CLIENT_OBJC_SRCS := \
     src/Core/Stores/TGDevStore+ProxyCarrier.m \
     src/Core/Stores/TGSearchStore.m \
     src/Core/Stores/TGStickerBudget.m \
+    src/Core/Stores/TGStickerStore.m \
+    src/Core/Stores/TGStickerStore+Stickers.m \
+    src/Core/Stores/TGEmojiStore.m \
+    src/Core/Stores/TGMemberAvatarStore.m \
     src/Core/Platform/TGPerf.m \
     src/UI/Format/TGUIFormat.m \
     src/UI/Rows/TGRows.m \

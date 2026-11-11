@@ -14,6 +14,9 @@
 #import "TGClient.h"
 #import "TGClientInternal.h"
 #import "TGSettingsStore.h"
+#import "TGStoreTestSupport.h"
+#import "TGAccountStore.h"
+#import "TGContactsStore.h"
 
 @interface TGClientComposeTests : XCTestCase @end
 
@@ -487,12 +490,12 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 	TGClient *c = C();
 	[[TGTransport shared] testSetExecute:NULL];
 	__block BOOL ok = YES;
-	[c registerWithFirstName:@"" lastName:nil
+	[[TGAccountStore shared] registerWithFirstName:@"" lastName:nil
 				  completion:^(BOOL good, NSString *error){ ok = good; }];
 	XCTAssertEqual(countC(c, @"registerUser"), (NSUInteger)0);
 	XCTAssertFalse(ok);
 
-	[c registerWithFirstName:@"Pat" lastName:@"Walker" completion:nil];
+	[[TGAccountStore shared] registerWithFirstName:@"Pat" lastName:@"Walker" completion:nil];
 	NSDictionary *r = lastC(c, @"registerUser");
 	XCTAssertEqualObjects(r[@"first_name"], @"Pat");
 	XCTAssertEqualObjects(r[@"last_name"], @"Walker");
@@ -507,7 +510,7 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 					@"@type" : @"authorizationStateWaitRegistration",
 					@"terms_of_service" : @{
 							@"text" : @{@"text" : @"Be nice to each other."}}}}];
-	XCTAssertEqualObjects([c registrationTerms], @"Be nice to each other.");
+	XCTAssertEqualObjects([[TGAccountStore shared] registrationTerms], @"Be nice to each other.");
 	XCTAssertEqual(c.authState, TGAuthStateWaitRegistration);
 }
 
@@ -517,7 +520,7 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 	TGClient *c = C();
 	[[TGTransport shared] testSetExecute:NULL];
 	__block NSArray *countries = nil;
-	[c countriesWithCompletion:^(NSArray *found){ countries = found; }];
+	[[TGAccountStore shared] countriesWithCompletion:^(NSArray *found){ countries = found; }];
 	answerTyped(c, @"getCountries", @{@"@type" : @"countries", @"countries" : @[
 			@{@"country_code" : @"UA", @"name" : @"Ukraine",
 			  @"flag_emoji" : @"🇺🇦", @"calling_codes" : @[@"380"]},
@@ -538,13 +541,13 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 - (void)testPushToken_CarriesTheTokenAndTheSandboxFlag {
 	TGClient *c = C();
 	[[TGTransport shared] testSetExecute:NULL];
-	[c registerPushToken:@"deadbeef" sandbox:YES completion:nil];
+	[[TGAccountStore shared] registerPushToken:@"deadbeef" sandbox:YES completion:nil];
 	NSDictionary *token = lastC(c, @"registerDevice")[@"device_token"];
 	XCTAssertEqualObjects(token[@"@type"], @"deviceTokenApplePush");
 	XCTAssertEqualObjects(token[@"device_token"], @"deadbeef");
 	XCTAssertTrue([token[@"is_app_sandbox"] boolValue]);
 
-	[c registerPushToken:@"deadbeef" sandbox:NO completion:nil];
+	[[TGAccountStore shared] registerPushToken:@"deadbeef" sandbox:NO completion:nil];
 	XCTAssertFalse([lastC(c, @"registerDevice")[@"device_token"]
 			[@"is_app_sandbox"] boolValue]);
 }
@@ -553,7 +556,7 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 	TGClient *c = C();
 	[[TGTransport shared] testSetExecute:NULL];
 	__block BOOL ok = YES;
-	[c registerPushToken:@"" sandbox:NO completion:^(BOOL good){ ok = good; }];
+	[[TGAccountStore shared] registerPushToken:@"" sandbox:NO completion:^(BOOL good){ ok = good; }];
 	XCTAssertEqual(countC(c, @"registerDevice"), (NSUInteger)0);
 	XCTAssertFalse(ok);
 }
@@ -564,12 +567,12 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 	TGClient *c = C();
 	[[TGTransport shared] testSetExecute:NULL];
 	__block BOOL ok = NO;
-	[c registerPushToken:@"deadbeef" sandbox:NO completion:^(BOOL good){ ok = good; }];
+	[[TGAccountStore shared] registerPushToken:@"deadbeef" sandbox:NO completion:^(BOOL good){ ok = good; }];
 	answerTyped(c, @"registerDevice", @{@"@type" : @"pushReceiverId", @"id" : @"7"});
 	XCTAssertTrue(ok);
-	XCTAssertEqual(c.pushReceiverId, (int64_t)7);
+	XCTAssertEqual([[TGAccountStore shared] pushReceiverId], (int64_t)7);
 
-	[c registerPushToken:@"deadbeef" sandbox:NO completion:^(BOOL good){ ok = good; }];
+	[[TGAccountStore shared] registerPushToken:@"deadbeef" sandbox:NO completion:^(BOOL good){ ok = good; }];
 	answerTyped(c, @"registerDevice",
 			@{@"@type" : @"error", @"message" : @"Invalid token"});
 	XCTAssertFalse(ok);
@@ -580,12 +583,12 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 - (void)testPushPayload_GoesThroughAsJson {
 	TGClient *c = C();
 	[[TGTransport shared] testSetExecute:NULL];
-	[c processPushPayload:@{@"p" : @"payload"}];
+	[[TGAccountStore shared] processPushPayload:@{@"p" : @"payload"}];
 	NSDictionary *r = lastC(c, @"processPushNotification");
 	XCTAssertNotNil(r);
 	XCTAssertTrue([r[@"payload"] rangeOfString:@"payload"].location != NSNotFound);
 
-	[c processPushPayload:nil];
+	[[TGAccountStore shared] processPushPayload:nil];
 	XCTAssertEqual(countC(c, @"processPushNotification"), (NSUInteger)1);
 }
 
@@ -595,7 +598,7 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 	TGClient *c = C();
 	[[TGTransport shared] testSetExecute:NULL];
 	__block int64_t gotUserId = 0;
-	[c importContactNamed:@"Alice" lastName:@"Smith" phone:@"+1 234 567" completion:^(int64_t uid){
+	[[TGContactsStore shared] importContactNamed:@"Alice" lastName:@"Smith" phone:@"+1 234 567" completion:^(int64_t uid){
 		gotUserId = uid;
 	}];
 	NSDictionary *sent = lastC(c, @"importContacts");
@@ -613,7 +616,7 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 	TGClient *c = C();
 	[[TGTransport shared] testSetExecute:NULL];
 	__block BOOL finished = NO;
-	[c addContactWithUserId:4242 firstName:@"Alice" lastName:@"Smith" phone:@"+1234567" completion:^(BOOL ok){
+	[[TGContactsStore shared] addContactWithUserId:4242 firstName:@"Alice" lastName:@"Smith" phone:@"+1234567" completion:^(BOOL ok){
 		finished = ok;
 	}];
 	NSDictionary *sent = lastC(c, @"addContact");

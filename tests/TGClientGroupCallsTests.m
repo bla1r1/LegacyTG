@@ -10,6 +10,7 @@
 #import "TGClientInternal.h"
 #import "TGBase64.h"
 #import "TGCallStore.h"
+#import "TGStoreTestSupport.h"
 
 @interface TGClientGroupCallsTests : XCTestCase @end
 
@@ -129,7 +130,7 @@ static NSDictionary *GCCallAnswer(long long callId) {
 - (void)testCreateVideoChat_SendsTheChatTitleDateAndRtmp {
 	TGClient *c = GCClient();
 	__block int32_t got = 0;
-	[c createVideoChatInChat:77 title:@"Planning" startDate:0 isRtmp:YES
+	[[TGCallStore shared] createVideoChatInChat:77 title:@"Planning" startDate:0 isRtmp:YES
 				  completion:^(int32_t callId, NSString *error){ got = callId; }];
 	NSDictionary *r = GCLast(c, @"createVideoChat");
 	XCTAssertEqualObjects(r[@"chat_id"], @(77));
@@ -143,7 +144,7 @@ static NSDictionary *GCCallAnswer(long long callId) {
 - (void)testCreateVideoChat_RejectsAScheduleOutsideTelegramWindow {
 	TGClient *c = GCClient();
 	__block NSString *error = nil;
-	[c createVideoChatInChat:77 title:@"" startDate:5 isRtmp:NO
+	[[TGCallStore shared] createVideoChatInChat:77 title:@"" startDate:5 isRtmp:NO
 				  completion:^(int32_t callId, NSString *why){ error = why; }];
 	XCTAssertNil(GCLast(c, @"createVideoChat"));
 	XCTAssertNotNil(error);
@@ -152,7 +153,7 @@ static NSDictionary *GCCallAnswer(long long callId) {
 - (void)testCreateGroupCall_SendsTheJoinParametersAndReadsThePayload {
 	TGClient *c = GCClient();
 	__block NSDictionary *info = nil;
-	[c createGroupCallWithParameters:TGGroupCallJoinParameters(0, @"", NO, NO)
+	[[TGCallStore shared] createGroupCallWithParameters:TGGroupCallJoinParameters(0, @"", NO, NO)
 						  completion:^(NSDictionary *got, NSString *error){ info = got; }];
 	NSDictionary *r = GCLast(c, @"createGroupCall");
 	XCTAssertEqualObjects(r[@"join_parameters"][@"@type"], @"groupCallJoinParameters");
@@ -167,7 +168,7 @@ static NSDictionary *GCCallAnswer(long long callId) {
 	TGClient *c = GCClient();
 	__block NSDictionary *info = nil;
 	NSDictionary *input = TGGroupCallInput(21, 0);
-	[c joinGroupCallWithInput:input
+	[[TGCallStore shared] joinGroupCallWithInput:input
 				   parameters:TGGroupCallJoinParameters(3, @"payload", YES, NO)
 				   completion:^(NSDictionary *got, NSString *error){ info = got; }];
 	NSDictionary *r = GCLast(c, @"joinGroupCall");
@@ -183,7 +184,7 @@ static NSDictionary *GCCallAnswer(long long callId) {
 - (void)testJoinVideoChat_SendsTheParticipantAndReturnsThePayload {
 	TGClient *c = GCClient();
 	__block NSString *payload = nil;
-	[c joinVideoChat:77 participant:nil
+	[[TGCallStore shared] joinVideoChat:77 participant:nil
 		   parameters:TGGroupCallJoinParameters(0, @"p", NO, YES)
 		   inviteHash:@"hash"
 		   completion:^(NSString *text, NSString *error){ payload = text; }];
@@ -198,12 +199,12 @@ static NSDictionary *GCCallAnswer(long long callId) {
 - (void)testLeaveAndEndGroupCall_SendTheCallId {
 	TGClient *c = GCClient();
 	__block BOOL left = NO, ended = NO;
-	[c leaveGroupCall:77 completion:^(BOOL ok, NSString *error){ left = ok; }];
+	[[TGCallStore shared] leaveGroupCall:77 completion:^(BOOL ok, NSString *error){ left = ok; }];
 	XCTAssertEqualObjects(GCLast(c, @"leaveGroupCall")[@"group_call_id"], @(77));
 	GCReply(c, @"leaveGroupCall", @{@"@type" : @"ok"});
 	XCTAssertTrue(left);
 
-	[c endGroupCall:77 completion:^(BOOL ok, NSString *error){ ended = ok; }];
+	[[TGCallStore shared] endGroupCall:77 completion:^(BOOL ok, NSString *error){ ended = ok; }];
 	XCTAssertEqualObjects(GCLast(c, @"endGroupCall")[@"group_call_id"], @(77));
 	GCReply(c, @"endGroupCall", @{@"@type" : @"ok"});
 	XCTAssertTrue(ended);
@@ -212,7 +213,7 @@ static NSDictionary *GCCallAnswer(long long callId) {
 - (void)testStartScheduledVideoChat_SendsTheCallId {
 	TGClient *c = GCClient();
 	__block BOOL ok = NO;
-	[c startScheduledVideoChat:77 completion:^(BOOL good, NSString *error){ ok = good; }];
+	[[TGCallStore shared] startScheduledVideoChat:77 completion:^(BOOL good, NSString *error){ ok = good; }];
 	XCTAssertEqualObjects(GCLast(c, @"startScheduledVideoChat")[@"group_call_id"], @(77));
 	GCReply(c, @"startScheduledVideoChat", @{@"@type" : @"ok"});
 	XCTAssertTrue(ok);
@@ -223,7 +224,7 @@ static NSDictionary *GCCallAnswer(long long callId) {
 - (void)testGetGroupCall_FlattensTheRecordAndKeepsASnapshot {
 	TGClient *c = GCClient();
 	__block NSDictionary *call = nil;
-	[c groupCall:77 completion:^(NSDictionary *got, NSString *error){ call = got; }];
+	[[TGCallStore shared] groupCall:77 completion:^(NSDictionary *got, NSString *error){ call = got; }];
 	XCTAssertEqualObjects(GCLast(c, @"getGroupCall")[@"group_call_id"], @(77));
 	GCReply(c, @"getGroupCall", GCCallAnswer(77));
 	XCTAssertEqualObjects(call[@"title"], @"Standup");
@@ -232,13 +233,13 @@ static NSDictionary *GCCallAnswer(long long callId) {
 	XCTAssertEqualObjects(call[@"isVideoChat"], @YES);
 	XCTAssertEqualObjects(call[@"canToggleAreMessagesAllowed"], @YES);
 	XCTAssertEqual([(NSArray *)call[@"recentSpeakers"] count], (NSUInteger)1);
-	XCTAssertEqualObjects([c groupCallSnapshot:77][@"callId"], @(77));
+	XCTAssertEqualObjects([[TGCallStore shared] groupCallSnapshot:77][@"callId"], @(77));
 }
 
 - (void)testGetGroupCallParticipants_SendsTheInputAndReadsSenders {
 	TGClient *c = GCClient();
 	__block NSDictionary *answer = nil;
-	[c groupCallParticipantsWithInput:TGGroupCallInput(21, 0) limit:0
+	[[TGCallStore shared] groupCallParticipantsWithInput:TGGroupCallInput(21, 0) limit:0
 						   completion:^(NSDictionary *got, NSString *error){ answer = got; }];
 	NSDictionary *r = GCLast(c, @"getGroupCallParticipants");
 	XCTAssertEqualObjects(r[@"input_group_call"][@"id"], @(21));
@@ -253,7 +254,7 @@ static NSDictionary *GCCallAnswer(long long callId) {
 - (void)testLoadGroupCallParticipants_ClampsTheLimit {
 	TGClient *c = GCClient();
 	__block BOOL ok = NO;
-	[c loadGroupCallParticipants:77 limit:500
+	[[TGCallStore shared] loadGroupCallParticipants:77 limit:500
 					  completion:^(BOOL good, NSString *error){ ok = good; }];
 	NSDictionary *r = GCLast(c, @"loadGroupCallParticipants");
 	XCTAssertEqualObjects(r[@"group_call_id"], @(77));
@@ -268,7 +269,7 @@ static NSDictionary *GCCallAnswer(long long callId) {
 	TGClient *c = GCClient();
 	NSDictionary *sender = @{@"@type" : @"messageSenderUser", @"user_id" : @(12)};
 	__block BOOL ok = NO;
-	[c toggleGroupCallParticipant:sender inCall:77 isMuted:YES
+	[[TGCallStore shared] toggleGroupCallParticipant:sender inCall:77 isMuted:YES
 					   completion:^(BOOL good, NSString *error){ ok = good; }];
 	NSDictionary *r = GCLast(c, @"toggleGroupCallParticipantIsMuted");
 	XCTAssertEqualObjects(r[@"group_call_id"], @(77));
@@ -295,7 +296,7 @@ static NSDictionary *GCCallAnswer(long long callId) {
 	TGClient *c = GCClient();
 	NSDictionary *sender = @{@"@type" : @"messageSenderUser", @"user_id" : @(1001)};
 	__block BOOL ok = NO;
-	[c toggleGroupCallParticipant:sender inCall:77 isHandRaised:YES
+	[[TGCallStore shared] toggleGroupCallParticipant:sender inCall:77 isHandRaised:YES
 					   completion:^(BOOL good, NSString *error){ ok = good; }];
 	NSDictionary *r = GCLast(c, @"toggleGroupCallParticipantIsHandRaised");
 	XCTAssertEqualObjects(r[@"is_hand_raised"], @YES);
@@ -307,7 +308,7 @@ static NSDictionary *GCCallAnswer(long long callId) {
 - (void)testSetSpeaking_SendsTheAudioSourceAndReadsTheParticipant {
 	TGClient *c = GCClient();
 	__block NSDictionary *sender = nil;
-	[c setGroupCallParticipantSpeaking:0 inCall:77 isSpeaking:YES
+	[[TGCallStore shared] setGroupCallParticipantSpeaking:0 inCall:77 isSpeaking:YES
 							completion:^(NSDictionary *got, NSString *error){ sender = got; }];
 	NSDictionary *r = GCLast(c, @"setGroupCallParticipantIsSpeaking");
 	XCTAssertEqualObjects(r[@"audio_source"], @(0));
@@ -320,7 +321,7 @@ static NSDictionary *GCCallAnswer(long long callId) {
 - (void)testInviteGroupCallParticipant_ReadsTheInviteOutcome {
 	TGClient *c = GCClient();
 	__block NSDictionary *answer = nil;
-	[c inviteGroupCallParticipant:12 toCall:77 isVideo:YES
+	[[TGCallStore shared] inviteGroupCallParticipant:12 toCall:77 isVideo:YES
 						completion:^(NSDictionary *got, NSString *error){ answer = got; }];
 	NSDictionary *r = GCLast(c, @"inviteGroupCallParticipant");
 	XCTAssertEqualObjects(r[@"user_id"], @(12));
@@ -333,7 +334,7 @@ static NSDictionary *GCCallAnswer(long long callId) {
 - (void)testInviteVideoChatParticipants_SendsTheUserIds {
 	TGClient *c = GCClient();
 	__block BOOL ok = NO;
-	[c inviteVideoChatParticipants:@[@12, @13] toCall:77
+	[[TGCallStore shared] inviteVideoChatParticipants:@[@12, @13] toCall:77
 						completion:^(BOOL good, NSString *error){ ok = good; }];
 	NSDictionary *r = GCLast(c, @"inviteVideoChatParticipants");
 	XCTAssertEqualObjects(r[@"user_ids"], (@[@12, @13]));
@@ -344,7 +345,7 @@ static NSDictionary *GCCallAnswer(long long callId) {
 - (void)testBanParticipants_SendsEveryId {
 	TGClient *c = GCClient();
 	__block BOOL ok = NO;
-	[c banGroupCallParticipants:@[@12, @13] inCall:77
+	[[TGCallStore shared] banGroupCallParticipants:@[@12, @13] inCall:77
 					 completion:^(BOOL good, NSString *error){ ok = good; }];
 	NSDictionary *r = GCLast(c, @"banGroupCallParticipants");
 	XCTAssertEqualObjects(r[@"group_call_id"], @(77));
@@ -370,16 +371,16 @@ static NSDictionary *GCCallAnswer(long long callId) {
 - (void)testVideoChatTitle_RejectsAnEmptyOrLongOne {
 	TGClient *c = GCClient();
 	__block NSString *error = nil;
-	[c setVideoChatTitle:@"" inCall:77 completion:^(BOOL ok, NSString *why){ error = why; }];
+	[[TGCallStore shared] setVideoChatTitle:@"" inCall:77 completion:^(BOOL ok, NSString *why){ error = why; }];
 	XCTAssertNil(GCLast(c, @"setVideoChatTitle"));
 	XCTAssertNotNil(error);
-	[c setVideoChatTitle:@"Standup" inCall:77 completion:^(BOOL ok, NSString *why){}];
+	[[TGCallStore shared] setVideoChatTitle:@"Standup" inCall:77 completion:^(BOOL ok, NSString *why){}];
 	XCTAssertEqualObjects(GCLast(c, @"setVideoChatTitle")[@"title"], @"Standup");
 }
 
 - (void)testToggleMuteNewParticipants_SendsTheFlag {
 	TGClient *c = GCClient();
-	[c toggleVideoChatMuteNewParticipants:77 muted:YES
+	[[TGCallStore shared] toggleVideoChatMuteNewParticipants:77 muted:YES
 							   completion:^(BOOL ok, NSString *error){}];
 	NSDictionary *r = GCLast(c, @"toggleVideoChatMuteNewParticipants");
 	XCTAssertEqualObjects(r[@"group_call_id"], @(77));
@@ -388,7 +389,7 @@ static NSDictionary *GCCallAnswer(long long callId) {
 
 - (void)testToggleMessagesAllowed_SendsTheFlag {
 	TGClient *c = GCClient();
-	[c toggleGroupCallMessagesAllowed:77 allowed:NO
+	[[TGCallStore shared] toggleGroupCallMessagesAllowed:77 allowed:NO
 						   completion:^(BOOL ok, NSString *error){}];
 	NSDictionary *r = GCLast(c, @"toggleGroupCallAreMessagesAllowed");
 	XCTAssertEqualObjects(r[@"are_messages_allowed"], @NO);
@@ -396,7 +397,7 @@ static NSDictionary *GCCallAnswer(long long callId) {
 
 - (void)testToggleStartNotification_SendsTheFlag {
 	TGClient *c = GCClient();
-	[c toggleVideoChatStartNotification:77 enabled:YES
+	[[TGCallStore shared] toggleVideoChatStartNotification:77 enabled:YES
 							 completion:^(BOOL ok, NSString *error){}];
 	NSDictionary *r = GCLast(c, @"toggleVideoChatEnabledStartNotification");
 	XCTAssertEqualObjects(r[@"enabled_start_notification"], @YES);
@@ -404,11 +405,11 @@ static NSDictionary *GCCallAnswer(long long callId) {
 
 - (void)testToggleMyVideo_SendsEnabledAndPaused {
 	TGClient *c = GCClient();
-	[c toggleGroupCallMyVideoEnabled:77 enabled:YES
+	[[TGCallStore shared] toggleGroupCallMyVideoEnabled:77 enabled:YES
 						  completion:^(BOOL ok, NSString *error){}];
 	XCTAssertEqualObjects(GCLast(c, @"toggleGroupCallIsMyVideoEnabled")[@"is_my_video_enabled"],
 						   @YES);
-	[c toggleGroupCallMyVideoPaused:77 paused:YES
+	[[TGCallStore shared] toggleGroupCallMyVideoPaused:77 paused:YES
 						 completion:^(BOOL ok, NSString *error){}];
 	XCTAssertEqualObjects(GCLast(c, @"toggleGroupCallIsMyVideoPaused")[@"is_my_video_paused"],
 						   @YES);
@@ -418,7 +419,7 @@ static NSDictionary *GCCallAnswer(long long callId) {
 
 - (void)testStartRecording_SendsTitleAndMode {
 	TGClient *c = GCClient();
-	[c startGroupCallRecording:77 title:@"Weekly" recordVideo:YES portrait:YES
+	[[TGCallStore shared] startGroupCallRecording:77 title:@"Weekly" recordVideo:YES portrait:YES
 					completion:^(BOOL ok, NSString *error){}];
 	NSDictionary *r = GCLast(c, @"startGroupCallRecording");
 	XCTAssertEqualObjects(r[@"title"], @"Weekly");
@@ -428,14 +429,14 @@ static NSDictionary *GCCallAnswer(long long callId) {
 
 - (void)testEndRecording_SendsTheCallId {
 	TGClient *c = GCClient();
-	[c endGroupCallRecording:77 completion:^(BOOL ok, NSString *error){}];
+	[[TGCallStore shared] endGroupCallRecording:77 completion:^(BOOL ok, NSString *error){}];
 	XCTAssertEqualObjects(GCLast(c, @"endGroupCallRecording")[@"group_call_id"], @(77));
 }
 
 - (void)testScreenSharing_StartPauseAndEnd {
 	TGClient *c = GCClient();
 	__block NSString *answer = nil;
-	[c startGroupCallScreenSharing:77 audioSourceId:42 payload:@"payload"
+	[[TGCallStore shared] startGroupCallScreenSharing:77 audioSourceId:42 payload:@"payload"
 						completion:^(NSString *text, NSString *error){ answer = text; }];
 	NSDictionary *r = GCLast(c, @"startGroupCallScreenSharing");
 	XCTAssertEqualObjects(r[@"audio_source_id"], @(42));
@@ -443,10 +444,10 @@ static NSDictionary *GCCallAnswer(long long callId) {
 	GCReply(c, @"startGroupCallScreenSharing", @{@"@type" : @"text", @"text" : @"share"});
 	XCTAssertEqualObjects(answer, @"share");
 
-	[c toggleGroupCallScreenSharingPaused:77 paused:YES
+	[[TGCallStore shared] toggleGroupCallScreenSharingPaused:77 paused:YES
 								completion:^(BOOL ok, NSString *error){}];
 	XCTAssertEqualObjects(GCLast(c, @"toggleGroupCallScreenSharingIsPaused")[@"is_paused"], @YES);
-	[c endGroupCallScreenSharing:77 completion:^(BOOL ok, NSString *error){}];
+	[[TGCallStore shared] endGroupCallScreenSharing:77 completion:^(BOOL ok, NSString *error){}];
 	XCTAssertEqualObjects(GCLast(c, @"endGroupCallScreenSharing")[@"group_call_id"], @(77));
 }
 
@@ -455,7 +456,7 @@ static NSDictionary *GCCallAnswer(long long callId) {
 - (void)testInviteLink_SendsCanSelfUnmuteAndReadsTheUrl {
 	TGClient *c = GCClient();
 	__block NSString *link = nil;
-	[c videoChatInviteLink:77 canSelfUnmute:YES
+	[[TGCallStore shared] videoChatInviteLink:77 canSelfUnmute:YES
 				completion:^(NSString *url, NSString *error){ link = url; }];
 	XCTAssertEqualObjects(GCLast(c, @"getVideoChatInviteLink")[@"can_self_unmute"], @YES);
 	GCReply(c, @"getVideoChatInviteLink", @{@"@type" : @"httpUrl", @"url" : @"https://t.me/x"});
@@ -464,21 +465,21 @@ static NSDictionary *GCCallAnswer(long long callId) {
 
 - (void)testRevokeInviteLink_SendsTheCallId {
 	TGClient *c = GCClient();
-	[c revokeGroupCallInviteLink:77 completion:^(BOOL ok, NSString *error){}];
+	[[TGCallStore shared] revokeGroupCallInviteLink:77 completion:^(BOOL ok, NSString *error){}];
 	XCTAssertEqualObjects(GCLast(c, @"revokeGroupCallInviteLink")[@"group_call_id"], @(77));
 }
 
 - (void)testRtmpUrl_GetAndReplaceReadTheUrlAndKey {
 	TGClient *c = GCClient();
 	__block NSDictionary *got = nil;
-	[c videoChatRtmpUrlForChat:77 completion:^(NSDictionary *answer, NSString *error){ got = answer; }];
+	[[TGCallStore shared] videoChatRtmpUrlForChat:77 completion:^(NSDictionary *answer, NSString *error){ got = answer; }];
 	XCTAssertEqualObjects(GCLast(c, @"getVideoChatRtmpUrl")[@"chat_id"], @(77));
 	GCReply(c, @"getVideoChatRtmpUrl",
 			@{@"@type" : @"rtmpUrl", @"url" : @"rtmp://a", @"stream_key" : @"key"});
 	XCTAssertEqualObjects(got[@"url"], @"rtmp://a");
 	XCTAssertEqualObjects(got[@"streamKey"], @"key");
 
-	[c replaceVideoChatRtmpUrlForChat:77
+	[[TGCallStore shared] replaceVideoChatRtmpUrlForChat:77
 						   completion:^(NSDictionary *answer, NSString *error){ got = answer; }];
 	XCTAssertEqualObjects(GCLast(c, @"replaceVideoChatRtmpUrl")[@"chat_id"], @(77));
 	GCReply(c, @"replaceVideoChatRtmpUrl",
@@ -491,7 +492,7 @@ static NSDictionary *GCCallAnswer(long long callId) {
 - (void)testAvailableParticipants_ReadsSenders {
 	TGClient *c = GCClient();
 	__block NSDictionary *answer = nil;
-	[c videoChatAvailableParticipantsForChat:77
+	[[TGCallStore shared] videoChatAvailableParticipantsForChat:77
 								  completion:^(NSDictionary *got, NSString *error){ answer = got; }];
 	XCTAssertEqualObjects(GCLast(c, @"getVideoChatAvailableParticipants")[@"chat_id"], @(77));
 	GCReply(c, @"getVideoChatAvailableParticipants",
@@ -504,7 +505,7 @@ static NSDictionary *GCCallAnswer(long long callId) {
 - (void)testDefaultParticipant_SendsTheSender {
 	TGClient *c = GCClient();
 	NSDictionary *sender = @{@"@type" : @"messageSenderChat", @"chat_id" : @(55)};
-	[c setVideoChatDefaultParticipant:sender forChat:77
+	[[TGCallStore shared] setVideoChatDefaultParticipant:sender forChat:77
 						   completion:^(BOOL ok, NSString *error){}];
 	NSDictionary *r = GCLast(c, @"setVideoChatDefaultParticipant");
 	XCTAssertEqualObjects(r[@"chat_id"], @(77));
@@ -516,7 +517,7 @@ static NSDictionary *GCCallAnswer(long long callId) {
 - (void)testSendMessage_SendsFormattedTextAndStars {
 	TGClient *c = GCClient();
 	__block BOOL ok = NO;
-	[c sendGroupCallMessage:@"  hello  " inCall:77 paidStarCount:0
+	[[TGCallStore shared] sendGroupCallMessage:@"  hello  " inCall:77 paidStarCount:0
 				 completion:^(BOOL good, NSString *error){ ok = good; }];
 	NSDictionary *r = GCLast(c, @"sendGroupCallMessage");
 	XCTAssertEqualObjects(r[@"text"][@"@type"], @"formattedText");
@@ -528,7 +529,7 @@ static NSDictionary *GCCallAnswer(long long callId) {
 
 - (void)testDeleteMessages_SendsIdsAndSpamFlag {
 	TGClient *c = GCClient();
-	[c deleteGroupCallMessages:@[@5, @6] inCall:77 reportSpam:YES
+	[[TGCallStore shared] deleteGroupCallMessages:@[@5, @6] inCall:77 reportSpam:YES
 					completion:^(BOOL ok, NSString *error){}];
 	NSDictionary *r = GCLast(c, @"deleteGroupCallMessages");
 	XCTAssertEqualObjects(r[@"message_ids"], (@[@5, @6]));
@@ -538,7 +539,7 @@ static NSDictionary *GCCallAnswer(long long callId) {
 - (void)testDeleteBySender_SendsTheSenderObject {
 	TGClient *c = GCClient();
 	NSDictionary *sender = @{@"@type" : @"messageSenderUser", @"user_id" : @(12)};
-	[c deleteGroupCallMessagesBySender:sender inCall:77 reportSpam:NO
+	[[TGCallStore shared] deleteGroupCallMessagesBySender:sender inCall:77 reportSpam:NO
 							completion:^(BOOL ok, NSString *error){}];
 	NSDictionary *r = GCLast(c, @"deleteGroupCallMessagesBySender");
 	XCTAssertEqualObjects(r[@"sender_id"][@"user_id"], @(12));
@@ -550,7 +551,7 @@ static NSDictionary *GCCallAnswer(long long callId) {
 - (void)testGroupCallStreams_FlattensEveryChannel {
 	TGClient *c = GCClient();
 	__block NSArray *streams = nil;
-	[c groupCallStreams:77 completion:^(NSArray *got, NSString *error){ streams = got; }];
+	[[TGCallStore shared] groupCallStreams:77 completion:^(NSArray *got, NSString *error){ streams = got; }];
 	XCTAssertEqualObjects(GCLast(c, @"getGroupCallStreams")[@"group_call_id"], @(77));
 	GCReply(c, @"getGroupCallStreams",
 			@{@"@type" : @"groupCallStreams",
@@ -564,7 +565,7 @@ static NSDictionary *GCCallAnswer(long long callId) {
 	TGClient *c = GCClient();
 	NSData *bytes = [@"segment" dataUsingEncoding:NSUTF8StringEncoding];
 	__block NSData *got = nil;
-	[c groupCallStreamSegment:77 timeOffset:1700000000000 scale:1 channelId:3
+	[[TGCallStore shared] groupCallStreamSegment:77 timeOffset:1700000000000 scale:1 channelId:3
 					  quality:@"medium"
 				   completion:^(NSData *data, NSString *error){ got = data; }];
 	NSDictionary *r = GCLast(c, @"getGroupCallStreamSegment");
@@ -582,7 +583,7 @@ static NSDictionary *GCCallAnswer(long long callId) {
 	NSData *sealed = [@"SEALED" dataUsingEncoding:NSUTF8StringEncoding];
 	__block NSData *encrypted = nil, *decrypted = nil;
 
-	[c encryptGroupCallData:plain inCall:77 channel:@"screenSharing"
+	[[TGCallStore shared] encryptGroupCallData:plain inCall:77 channel:@"screenSharing"
 	   unencryptedPrefixSize:2 completion:^(NSData *data, NSString *error){ encrypted = data; }];
 	NSDictionary *r = GCLast(c, @"encryptGroupCallData");
 	XCTAssertEqualObjects(r[@"data"], TGBase64Encode(plain));
@@ -592,7 +593,7 @@ static NSDictionary *GCCallAnswer(long long callId) {
 	XCTAssertEqualObjects(encrypted, sealed);
 
 	NSDictionary *sender = @{@"@type" : @"messageSenderUser", @"user_id" : @(12)};
-	[c decryptGroupCallData:sealed fromParticipant:sender inCall:77 channel:nil
+	[[TGCallStore shared] decryptGroupCallData:sealed fromParticipant:sender inCall:77 channel:nil
 				 completion:^(NSData *data, NSString *error){ decrypted = data; }];
 	NSDictionary *d = GCLast(c, @"decryptGroupCallData");
 	XCTAssertEqualObjects(d[@"data"], TGBase64Encode(sealed));

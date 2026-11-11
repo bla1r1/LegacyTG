@@ -12,6 +12,13 @@
 #import "TGClient.h"
 #import "TGClientInternal.h"
 #import "TGGroupStore.h"
+#import "TGStoreTestSupport.h"
+#import "TGAccountStore.h"
+#import "TGContactsStore.h"
+#import "TGProfileStore.h"
+#import "TGSessionsStore.h"
+#import "TGSettingsStore.h"
+#import "TGStickerStore.h"
 
 @interface TGClientGroupsTests : XCTestCase @end
 
@@ -65,7 +72,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 
 - (void)testCreateGroup_CarriesTheMembersAndTheName {
 	TGClient *c = G();
-	[c createGroupNamed:@"Walkers" withUsers:@[@(5), @(6)] completion:nil];
+	[[TGContactsStore shared] createGroupNamed:@"Walkers" withUsers:@[@(5), @(6)] completion:nil];
 
 	NSDictionary *r = lastG(c, @"createNewBasicGroupChat");
 	XCTAssertEqualObjects(r[@"title"], @"Walkers");
@@ -77,11 +84,11 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 - (void)testCreateGroup_RefusesAnEmptyNameOrAnEmptyMemberList {
 	TGClient *c = G();
 	__block NSInteger calls = 0;
-    [c createGroupNamed:@"" withUsers:@[@(5)] completion:^(int64_t chatId, NSArray *failed){
+    [[TGContactsStore shared] createGroupNamed:@"" withUsers:@[@(5)] completion:^(int64_t chatId, NSArray *failed){
 		calls++;
 		XCTAssertEqual(chatId, 0LL);
 	}];
-	[c createGroupNamed:@"Walkers" withUsers:@[] completion:^(int64_t chatId, NSArray *failed){
+	[[TGContactsStore shared] createGroupNamed:@"Walkers" withUsers:@[] completion:^(int64_t chatId, NSArray *failed){
 		calls++;
 		XCTAssertEqual(chatId, 0LL);
 	}];
@@ -95,7 +102,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 	TGClient *c = G();
 	__block NSArray *failed = nil;
 	__block int64_t chatId = 0;
-	[c createGroupNamed:@"Walkers" withUsers:@[@(5), @(6)]
+	[[TGContactsStore shared] createGroupNamed:@"Walkers" withUsers:@[@(5), @(6)]
 			 completion:^(int64_t newChatId, NSArray *refused){
 		chatId = newChatId; failed = refused;
 	}];
@@ -125,7 +132,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 - (void)testUpgradeGroup_AnswersWithTheNewChatId {
 	TGClient *c = G();
 	__block int64_t newId = 0;
-	[c upgradeGroupToSupergroup:-70 completion:^(int64_t chatId){ newId = chatId; }];
+	[[TGGroupStore shared] upgradeGroupToSupergroup:-70 completion:^(int64_t chatId){ newId = chatId; }];
 	answerG(c, @{@"@type" : @"chat", @"id" : @(-1001)});
 	XCTAssertEqual(newId, -1001LL);
 }
@@ -136,7 +143,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 	TGClient *c = G();
 	__block BOOL ok = YES;
 	__block NSArray *failed = nil;
-	[c addUser:6 toChat:-70 completion:^(BOOL good, NSArray *refused){
+	[[TGContactsStore shared] addUser:6 toChat:-70 completion:^(BOOL good, NSArray *refused){
 		ok = good; failed = refused;
 	}];
 	XCTAssertEqual([lastG(c, @"addChatMember")[@"user_id"] longLongValue], 6LL);
@@ -150,7 +157,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 - (void)testAddUser_AnEmptyFailureListMeansItWorked {
 	TGClient *c = G();
 	__block BOOL ok = NO;
-	[c addUser:6 toChat:-70 completion:^(BOOL good, NSArray *refused){ ok = good; }];
+	[[TGContactsStore shared] addUser:6 toChat:-70 completion:^(BOOL good, NSArray *refused){ ok = good; }];
 	answerG(c, @{@"@type" : @"failedToAddMembers", @"failed_to_add_members" : @[]});
 	XCTAssertTrue(ok);
 }
@@ -159,7 +166,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 /// shape setChatMemberStatus takes.
 - (void)testSetMemberStatus_NamesTheMemberAsASender {
 	TGClient *c = G();
-	[c setMember:6 inChat:-70 status:@"administrator" completion:nil];
+	[[TGGroupStore shared] setMember:6 inChat:-70 status:@"administrator" completion:nil];
 
 	NSDictionary *r = lastG(c, @"setChatMemberStatus");
 	XCTAssertEqualObjects(r[@"member_id"][@"@type"], @"messageSenderUser");
@@ -170,11 +177,11 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 
 - (void)testSetMemberStatus_DemoteAndRemoveAreTheirOwnStatuses {
 	TGClient *c = G();
-	[c setMember:6 inChat:-70 status:@"member" completion:nil];
+	[[TGGroupStore shared] setMember:6 inChat:-70 status:@"member" completion:nil];
 	XCTAssertEqualObjects(lastG(c, @"setChatMemberStatus")[@"status"][@"@type"],
 						  @"chatMemberStatusMember");
 
-	[c setMember:6 inChat:-70 status:@"left" completion:nil];
+	[[TGGroupStore shared] setMember:6 inChat:-70 status:@"left" completion:nil];
 	XCTAssertEqualObjects(lastG(c, @"setChatMemberStatus")[@"status"][@"@type"],
 						  @"chatMemberStatusLeft");
 }
@@ -184,8 +191,8 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 - (void)testSetMemberStatus_AnUnknownWordSendsNothing {
 	TGClient *c = G();
 	__block BOOL ok = YES;
-	[c setMember:6 inChat:-70 status:@"banned" completion:^(BOOL good){ ok = good; }];
-	[c setMember:6 inChat:-70 status:nil completion:nil];
+	[[TGGroupStore shared] setMember:6 inChat:-70 status:@"banned" completion:^(BOOL good){ ok = good; }];
+	[[TGGroupStore shared] setMember:6 inChat:-70 status:nil completion:nil];
 	XCTAssertEqual(countG(c, @"setChatMemberStatus"), (NSUInteger)0);
 	XCTAssertFalse(ok);
 }
@@ -194,7 +201,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 /// can hand the group away.
 - (void)testSetMemberStatus_APromotedAdminCannotPromoteOrHide {
 	TGClient *c = G();
-	[c setMember:6 inChat:-70 status:@"administrator" completion:nil];
+	[[TGGroupStore shared] setMember:6 inChat:-70 status:@"administrator" completion:nil];
 	NSDictionary *rights = lastG(c, @"setChatMemberStatus")[@"status"][@"rights"];
 	XCTAssertFalse([rights[@"can_promote_members"] boolValue]);
 	XCTAssertFalse([rights[@"is_anonymous"] boolValue]);
@@ -205,7 +212,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 /// Zero is forever. A date in the past would unban them on the spot.
 - (void)testBanMember_IsForeverAndKeepsTheirMessagesByDefault {
 	TGClient *c = G();
-	[c banMember:6 inChat:-70 revokeMessages:NO completion:nil];
+	[[TGGroupStore shared] banMember:6 inChat:-70 revokeMessages:NO completion:nil];
 	NSDictionary *r = lastG(c, @"banChatMember");
 	XCTAssertEqual([r[@"banned_until_date"] integerValue], (NSInteger)0);
 	XCTAssertFalse([r[@"revoke_messages"] boolValue]);
@@ -216,7 +223,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 	TGClient *c = G();
 	c.usersById[@(6)] = @"Pat";
 	__block NSArray *members = nil;
-	[c searchMembersInChat:-70 query:nil completion:^(NSArray *found){ members = found; }];
+	[[TGGroupStore shared] searchMembersInChat:-70 query:nil completion:^(NSArray *found){ members = found; }];
 	XCTAssertEqualObjects(lastG(c, @"searchChatMembers")[@"query"], @"");
 
 	answerG(c, @{@"@type" : @"chatMembers", @"total_count" : @(2), @"members" : @[
@@ -236,7 +243,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 - (void)testSearchMembers_SkipsAMemberThatIsNotAUser {
 	TGClient *c = G();
 	__block NSArray *members = nil;
-	[c searchMembersInChat:-70 query:nil completion:^(NSArray *found){ members = found; }];
+	[[TGGroupStore shared] searchMembersInChat:-70 query:nil completion:^(NSArray *found){ members = found; }];
 	answerG(c, @{@"@type" : @"chatMembers", @"members" : @[
 			@{@"member_id" : @{@"@type" : @"messageSenderChat", @"chat_id" : @(-5)},
 			  @"status" : @{@"@type" : @"chatMemberStatusMember"}}]});
@@ -248,7 +255,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 - (void)testAdministrators_CarryOwnerAndWhetherTheyCanBeEdited {
 	TGClient *c = G();
 	__block NSArray *admins = nil;
-	[c administratorsOfChat:-70 completion:^(NSArray *found){ admins = found; }];
+	[[TGGroupStore shared] administratorsOfChat:-70 completion:^(NSArray *found){ admins = found; }];
 	answerG(c, @{@"@type" : @"chatAdministrators", @"administrators" : @[
 			@{@"user_id" : @(1001), @"is_owner" : @YES, @"can_be_edited" : @NO},
 			@{@"user_id" : @(6), @"is_owner" : @NO, @"can_be_edited" : @YES}]});
@@ -286,7 +293,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 - (void)testInviteLinks_FlattenToWhatARowShows {
 	TGClient *c = G();
 	__block NSArray *links = nil;
-	[c inviteLinksForChat:-70 completion:^(NSArray *found){ links = found; }];
+	[[TGGroupStore shared] inviteLinksForChat:-70 completion:^(NSArray *found){ links = found; }];
 	XCTAssertEqual([lastG(c, @"getChatInviteLinks")[@"creator_user_id"]
 			longLongValue], 1001LL);
 
@@ -304,7 +311,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 
 - (void)testCreateInviteLink_ANegativeLimitBecomesNoLimit {
 	TGClient *c = G();
-	[c createInviteLinkForChat:-70 name:@"Friends" memberLimit:-5 completion:nil];
+	[[TGGroupStore shared] createInviteLinkForChat:-70 name:@"Friends" memberLimit:-5 completion:nil];
 	NSDictionary *r = lastG(c, @"createChatInviteLink");
 	XCTAssertEqual([r[@"member_limit"] integerValue], (NSInteger)0);
 	XCTAssertEqualObjects(r[@"name"], @"Friends");
@@ -314,11 +321,11 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 - (void)testRevokeInviteLink_RefusesAnEmptyLinkAndReadsTheAnswer {
 	TGClient *c = G();
 	__block BOOL ok = YES;
-	[c revokeInviteLink:@"" inChat:-70 completion:^(BOOL good){ ok = good; }];
+	[[TGGroupStore shared] revokeInviteLink:@"" inChat:-70 completion:^(BOOL good){ ok = good; }];
 	XCTAssertEqual(countG(c, @"revokeChatInviteLink"), (NSUInteger)0);
 	XCTAssertFalse(ok);
 
-	[c revokeInviteLink:@"https://t.me/+abc" inChat:-70
+	[[TGGroupStore shared] revokeInviteLink:@"https://t.me/+abc" inChat:-70
 			 completion:^(BOOL good){ ok = good; }];
 	answerG(c, @{@"@type" : @"chatInviteLinks", @"invite_links" : @[]});
 	XCTAssertTrue(ok);
@@ -367,11 +374,11 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 - (void)testSecretChat_CreatesWithAUserAndRefusesNobody {
 	TGClient *c = G();
 	__block int64_t chatId = -1;
-	[c createSecretChatWithUser:0 completion:^(int64_t newId){ chatId = newId; }];
+	[[TGProfileStore shared] createSecretChatWithUser:0 completion:^(int64_t newId){ chatId = newId; }];
 	XCTAssertEqual(countG(c, @"createNewSecretChat"), (NSUInteger)0);
 	XCTAssertEqual(chatId, 0LL);
 
-	[c createSecretChatWithUser:6 completion:^(int64_t newId){ chatId = newId; }];
+	[[TGProfileStore shared] createSecretChatWithUser:6 completion:^(int64_t newId){ chatId = newId; }];
 	answerG(c, @{@"@type" : @"chat", @"id" : @(-900)});
 	XCTAssertEqual(chatId, -900LL);
 }
@@ -445,7 +452,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 	TGClient *c = G();
 	__block NSArray *downloads = nil;
 	__block NSInteger active = -1;
-	[c fileDownloadsMatching:nil activeOnly:NO
+	[[TGSettingsStore shared] fileDownloadsMatching:nil activeOnly:NO
 				  completion:^(NSArray *found, NSInteger running){
 		downloads = found; active = running;
 	}];
@@ -474,19 +481,19 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 /// the only difference.
 - (void)testRemoveDownload_CacheDeletionIsTheFlag {
 	TGClient *c = G();
-	[c removeFileFromDownloads:42 deleteFromCache:NO];
+	[[TGSettingsStore shared] removeFileFromDownloads:42 deleteFromCache:NO];
 	XCTAssertFalse([lastG(c, @"removeFileFromDownloads")[@"delete_from_cache"] boolValue]);
 
-	[c removeFileFromDownloads:42 deleteFromCache:YES];
+	[[TGSettingsStore shared] removeFileFromDownloads:42 deleteFromCache:YES];
 	XCTAssertTrue([lastG(c, @"removeFileFromDownloads")[@"delete_from_cache"] boolValue]);
 }
 
 - (void)testPauseDownloads_OneAndAll {
 	TGClient *c = G();
-	[c setDownloadOfFile:42 paused:YES];
+	[[TGSettingsStore shared] setDownloadOfFile:42 paused:YES];
 	XCTAssertTrue([lastG(c, @"toggleDownloadIsPaused")[@"is_paused"] boolValue]);
 
-	[c setAllDownloadsPaused:NO];
+	[[TGSettingsStore shared] setAllDownloadsPaused:NO];
 	XCTAssertFalse([lastG(c, @"toggleAllDownloadsArePaused")[@"are_paused"] boolValue]);
 }
 
@@ -496,25 +503,25 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 /// the installed sets and everything public.
 - (void)testStickerSearch_InstalledAndPublicAreTwoRequests {
 	TGClient *c = G();
-	[c stickersForEmoji:@"\U0001F603" completion:nil];
+	[[TGStickerStore shared] stickersForEmoji:@"\U0001F603" completion:nil];
 	NSDictionary *mine = lastG(c, @"getStickers");
 	XCTAssertEqualObjects(mine[@"query"], @"\U0001F603");
 	XCTAssertEqualObjects(mine[@"sticker_type"][@"@type"], @"stickerTypeRegular");
 
-	[c searchStickersForEmoji:@"\U0001F603" completion:nil];
+	[[TGStickerStore shared] searchStickersForEmoji:@"\U0001F603" completion:nil];
 	XCTAssertEqualObjects(lastG(c, @"searchStickers")[@"emojis"], @"\U0001F603");
 }
 
 - (void)testStickerSearch_AnEmptyQuerySendsNothingAndAnswersEmpty {
 	TGClient *c = G();
 	__block NSInteger calls = 0;
-	[c stickersForEmoji:@"" completion:^(NSArray *stickers){
+	[[TGStickerStore shared] stickersForEmoji:@"" completion:^(NSArray *stickers){
 		calls++; XCTAssertEqual(stickers.count, (NSUInteger)0);
 	}];
-	[c searchStickersForEmoji:nil completion:^(NSArray *stickers){
+	[[TGStickerStore shared] searchStickersForEmoji:nil completion:^(NSArray *stickers){
 		calls++; XCTAssertEqual(stickers.count, (NSUInteger)0);
 	}];
-	[c searchStickerSetsNamed:@"" completion:^(NSArray *sets){
+	[[TGStickerStore shared] searchStickerSetsNamed:@"" completion:^(NSArray *sets){
 		calls++; XCTAssertEqual(sets.count, (NSUInteger)0);
 	}];
 	XCTAssertEqual(countG(c, @"getStickers"), (NSUInteger)0);
@@ -603,12 +610,12 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 - (void)testStickerSets_SearchingInstalledNeedsAWord {
 	TGClient *c = G();
 	__block NSInteger calls = 0;
-	[c installedStickerSetsNamed:@"" completion:^(NSArray *sets){
+	[[TGStickerStore shared] installedStickerSetsNamed:@"" completion:^(NSArray *sets){
 		calls++; XCTAssertEqual(sets.count, (NSUInteger)0);
 	}];
 	XCTAssertEqual(countG(c, @"searchInstalledStickerSets"), (NSUInteger)0);
 
-	[c installedStickerSetsNamed:@"c" completion:nil];
+	[[TGStickerStore shared] installedStickerSetsNamed:@"c" completion:nil];
 	NSDictionary *r = lastG(c, @"searchInstalledStickerSets");
 	XCTAssertEqualObjects(r[@"query"], @"c");
 	XCTAssertEqual([r[@"limit"] integerValue], 40);
@@ -618,7 +625,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 - (void)testStickerSets_TheArchivedShelfAnswersLikeTheInstalled {
 	TGClient *c = G();
 	__block NSArray *sets = nil;
-	[c archivedStickerSetsWithCompletion:^(NSArray *found){ sets = found; }];
+	[[TGStickerStore shared] archivedStickerSetsWithCompletion:^(NSArray *found){ sets = found; }];
 	answerG(c, @{@"@type" : @"stickerSets", @"sets" : @[
 			@{@"id" : @"51", @"title" : @"Archived cats",
 			  @"covers" : @[@{@"@type" : @"sticker",
@@ -632,12 +639,12 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 - (void)testStickerSets_AttachedBelongsToAFile {
 	TGClient *c = G();
 	__block NSInteger calls = 0;
-	[c attachedStickerSetsOfFile:0 completion:^(NSArray *sets){
+	[[TGStickerStore shared] attachedStickerSetsOfFile:0 completion:^(NSArray *sets){
 		calls++; XCTAssertEqual(sets.count, (NSUInteger)0);
 	}];
 	XCTAssertEqual(countG(c, @"getAttachedStickerSets"), (NSUInteger)0);
 
-	[c attachedStickerSetsOfFile:99 completion:nil];
+	[[TGStickerStore shared] attachedStickerSetsOfFile:99 completion:nil];
 	NSDictionary *r = lastG(c, @"getAttachedStickerSets");
 	XCTAssertEqual([r[@"file_id"] longLongValue], 99LL);
 }
@@ -645,29 +652,29 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 /// One set has nothing to be ordered against, so the request is never made.
 - (void)testReorderInstalledStickerSets_TwoOrMoreSetsMakeAnOrder {
 	TGClient *c = G();
-	[c reorderInstalledStickerSets:nil];
-	[c reorderInstalledStickerSets:@[@"500"]];
+	[[TGStickerStore shared] reorderInstalledStickerSets:nil];
+	[[TGStickerStore shared] reorderInstalledStickerSets:@[@"500"]];
 	XCTAssertEqual(countG(c, @"reorderInstalledStickerSets"), (NSUInteger)0);
 
-	[c reorderInstalledStickerSets:@[@"500", @"77"]];
+	[[TGStickerStore shared] reorderInstalledStickerSets:@[@"500", @"77"]];
 	NSDictionary *r = lastG(c, @"reorderInstalledStickerSets");
 	XCTAssertEqualObjects(r[@"set_ids"], (@[@"500", @"77"]));
 	XCTAssertEqualObjects(r[@"sticker_type"][@"@type"], @"stickerTypeRegular");
 }
 
 - (void)testSavedAnimations_AnAnimationInAndOutOfTheShelf {	TGClient *c = G();
-	[c saveAnimationFileId:4 saved:YES];
+	[[TGStickerStore shared] saveAnimationFileId:4 saved:YES];
 	NSDictionary *add = lastG(c, @"addSavedAnimation");
 	XCTAssertEqualObjects(add[@"animation"][@"@type"], @"inputFileId");
 	XCTAssertEqual([add[@"animation"][@"id"] integerValue], 4);
 
-	[c saveAnimationFileId:4 saved:NO];
+	[[TGStickerStore shared] saveAnimationFileId:4 saved:NO];
 	XCTAssertEqualObjects(lastG(c, @"removeSavedAnimation")[@"animation"][@"@type"],
 						  @"inputFileId");
 
 	NSUInteger sent = countG(c, @"addSavedAnimation") + countG(c, @"removeSavedAnimation");
-	[c saveAnimationFileId:0 saved:YES];
-	[c saveAnimationFileId:-1 saved:NO];
+	[[TGStickerStore shared] saveAnimationFileId:0 saved:YES];
+	[[TGStickerStore shared] saveAnimationFileId:-1 saved:NO];
 	XCTAssertTrue(sent == countG(c, @"addSavedAnimation") + countG(c, @"removeSavedAnimation"),
 				  @"a file id that cannot exist sends nothing");
 }
@@ -745,12 +752,12 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 - (void)testAddMembers_TheBatchIsOneRequestAndAnEmptyPickSendsNone {
 	TGClient *c = G();
 	__block NSInteger calls = 0;
-	[c addUsers:@[] toChat:-70 completion:^(BOOL ok, NSArray *refused){
+	[[TGContactsStore shared] addUsers:@[] toChat:-70 completion:^(BOOL ok, NSArray *refused){
 		calls++; XCTAssertFalse(ok); XCTAssertEqual(refused.count, (NSUInteger)0);
 	}];
 	XCTAssertEqual(countG(c, @"addChatMembers"), (NSUInteger)0);
 
-	[c addUsers:@[@(5), @(6)] toChat:-70 completion:nil];
+	[[TGContactsStore shared] addUsers:@[@(5), @(6)] toChat:-70 completion:nil];
 	NSDictionary *r = lastG(c, @"addChatMembers");
 	XCTAssertEqualObjects(r[@"user_ids"], (@[@(5), @(6)]));
 	XCTAssertEqual([r[@"chat_id"] longLongValue], -70LL);
@@ -762,7 +769,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 	// call does, and an error is refused rather than called success.
 	__block BOOL ok = NO;
 	__block NSArray *refusedIds = nil;
-	[c addUsers:@[@(5), @(6)] toChat:-70 completion:^(BOOL good, NSArray *failed){
+	[[TGContactsStore shared] addUsers:@[@(5), @(6)] toChat:-70 completion:^(BOOL good, NSArray *failed){
 		ok = good; refusedIds = failed;
 	}];
 	answerG(c, @{@"@type" : @"failedToAddMembers",
@@ -776,19 +783,19 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 - (void)testChatMember_AskedBySenderAndNilForNobody {
 	TGClient *c = G();
 	__block NSInteger calls = 0;
-	[c chatMember:0 inChat:-70 completion:^(NSDictionary *member){
+	[[TGProfileStore shared] chatMember:0 inChat:-70 completion:^(NSDictionary *member){
 		calls++; XCTAssertNil(member);
 	}];
 	XCTAssertEqual(countG(c, @"getChatMember"), (NSUInteger)0);
 
-	[c chatMember:6 inChat:-70 completion:nil];
+	[[TGProfileStore shared] chatMember:6 inChat:-70 completion:nil];
 	NSDictionary *r = lastG(c, @"getChatMember");
 	XCTAssertEqualObjects(r[@"member_id"], (@{@"@type" : @"messageSenderUser",
 											  @"user_id" : @(6)}));
 	XCTAssertEqual([r[@"chat_id"] longLongValue], -70LL);
 
 	__block NSDictionary *member = @{};
-	[c chatMember:6 inChat:-70 completion:^(NSDictionary *found){ member = found; }];
+	[[TGProfileStore shared] chatMember:6 inChat:-70 completion:^(NSDictionary *found){ member = found; }];
 	answerG(c, @{@"@type" : @"error", @"message" : @"MEMBER_NOT_FOUND"});
 	XCTAssertNil(member);
 }
@@ -831,7 +838,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 - (void)testSetChatPermissions_ThePresetRidesAsThePermissionsField {
 	TGClient *c = G();
 	[c.chatsById removeObjectForKey:@(-70)];
-	[c setChatPermissionsFromPreset:@"read" inChat:-70 completion:nil];
+	[[TGGroupStore shared] setChatPermissionsFromPreset:@"read" inChat:-70 completion:nil];
 	NSDictionary *r = lastG(c, @"setChatPermissions");
 	XCTAssertEqual([r[@"chat_id"] longLongValue], -70LL);
 	XCTAssertEqualObjects(r[@"permissions"][@"@type"], @"chatPermissions");
@@ -851,7 +858,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 			@"can_edit_tag" : @NO,
 		},
 	} mutableCopy];
-	[c setChatPermissionsFromPreset:@"all" inChat:-70 completion:nil];
+	[[TGGroupStore shared] setChatPermissionsFromPreset:@"all" inChat:-70 completion:nil];
 	NSDictionary *permissions = lastG(c, @"setChatPermissions")[@"permissions"];
 	XCTAssertTrue([permissions[@"can_send_photos"] boolValue]);
 	XCTAssertTrue([permissions[@"can_change_info"] boolValue]);
@@ -865,7 +872,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 /// server owns the verdict, not a guess here.
 - (void)testTransferOwnership_ThePasswordRidesWithTheRequest {
 	TGClient *c = G();
-	[c transferOwnershipOfChat:-70 toUser:6 password:@"s3cret" completion:nil];
+	[[TGGroupStore shared] transferOwnershipOfChat:-70 toUser:6 password:@"s3cret" completion:nil];
 	NSDictionary *r = lastG(c, @"transferChatOwnership");
 	XCTAssertEqual([r[@"chat_id"] longLongValue], -70LL);
 	XCTAssertEqual([r[@"user_id"] longLongValue], 6LL);
@@ -877,13 +884,13 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 - (void)testCreateForumTopic_TheNameHueAndOptionalEmoji {
 	TGClient *c = G();
 	__block NSInteger calls = 0;
-	[c createForumTopicInChat:-70 name:@"" iconColour:3 iconEmojiId:0
+	[[TGGroupStore shared] createForumTopicInChat:-70 name:@"" iconColour:3 iconEmojiId:0
 				   completion:^(int64_t threadId, NSString *name){
 		calls++; XCTAssertEqual(threadId, 0LL);
 	}];
 	XCTAssertEqual(countG(c, @"createForumTopic"), (NSUInteger)0);
 
-	[c createForumTopicInChat:-70 name:@"Ideas" iconColour:0 iconEmojiId:0
+	[[TGGroupStore shared] createForumTopicInChat:-70 name:@"Ideas" iconColour:0 iconEmojiId:0
 				   completion:nil];
 	NSDictionary *r = lastG(c, @"createForumTopic");
 	XCTAssertEqual([r[@"chat_id"] longLongValue], -70LL);
@@ -896,7 +903,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 	XCTAssertEqual([r[@"icon"][@"color"] integerValue], 0x6FB9F0);
 	XCTAssertEqual([r[@"icon"][@"custom_emoji_id"] longLongValue], 0LL);
 
-	[c createForumTopicInChat:-70 name:@"Ideas" iconColour:11 iconEmojiId:501
+	[[TGGroupStore shared] createForumTopicInChat:-70 name:@"Ideas" iconColour:11 iconEmojiId:501
 				   completion:nil];
 	r = lastG(c, @"createForumTopic");
 	XCTAssertEqual([r[@"icon"][@"color"] integerValue], 0xFB6F5F);
@@ -905,7 +912,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 	// The answer is the topic's own record: its thread id is what every
 	// later edit answers through.
 	__block int64_t threadId = 0;
-	[c createForumTopicInChat:-70 name:@"Ideas" iconColour:1 iconEmojiId:0
+	[[TGGroupStore shared] createForumTopicInChat:-70 name:@"Ideas" iconColour:1 iconEmojiId:0
 				   completion:^(int64_t made, NSString *name){
 		threadId = made;
 	}];
@@ -920,7 +927,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 - (void)testForumTopicDefaultIcons_ReadsTheEmojiAndItsId {
 	TGClient *c = G();
 	__block NSArray *got = nil;
-	[c forumTopicDefaultIconsWithCompletion:^(NSArray *icons){ got = icons; }];
+	[[TGGroupStore shared] forumTopicDefaultIconsWithCompletion:^(NSArray *icons){ got = icons; }];
 	XCTAssertEqual(countG(c, @"getForumTopicDefaultIcons"), (NSUInteger)1);
 	answerG(c, @{@"@type" : @"stickers", @"stickers" : @[
 		@{@"@type" : @"sticker", @"emoji" : @"👍",
@@ -940,7 +947,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 - (void)testSetForumTopicIcon_EditsOnlyTheIcon {
 	TGClient *c = G();
 	__block BOOL ok = NO;
-	[c setForumTopicIcon:501 threadId:42 inChat:-70 completion:^(BOOL made){
+	[[TGGroupStore shared] setForumTopicIcon:501 threadId:42 inChat:-70 completion:^(BOOL made){
 		ok = made;
 	}];
 	NSDictionary *r = lastG(c, @"editForumTopic");
@@ -952,7 +959,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 	answerG(c, @{@"@type" : @"ok"});
 	XCTAssertTrue(ok);
 
-	[c setForumTopicIcon:0 threadId:42 inChat:-70 completion:nil];
+	[[TGGroupStore shared] setForumTopicIcon:0 threadId:42 inChat:-70 completion:nil];
 	r = lastG(c, @"editForumTopic");
 	XCTAssertTrue([r[@"edit_icon_custom_emoji"] boolValue]);
 	XCTAssertEqual([r[@"icon_custom_emoji_id"] longLongValue], 0LL);
@@ -960,10 +967,10 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 
 - (void)testRenameForumTopic_TheIconRidesOnlyWhenItChanges {
 	TGClient *c = G();
-	[c renameForumTopic:42 inChat:-70 name:@"" iconEmojiId:0 completion:nil];
+	[[TGGroupStore shared] renameForumTopic:42 inChat:-70 name:@"" iconEmojiId:0 completion:nil];
 	XCTAssertEqual(countG(c, @"editForumTopic"), (NSUInteger)0);
 
-	[c renameForumTopic:42 inChat:-70 name:@"Renamed" iconEmojiId:0
+	[[TGGroupStore shared] renameForumTopic:42 inChat:-70 name:@"Renamed" iconEmojiId:0
 			 completion:nil];
 	NSDictionary *r = lastG(c, @"editForumTopic");
 	XCTAssertEqual([r[@"forum_topic_id"] integerValue], 42);
@@ -971,7 +978,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 	XCTAssertFalse([r[@"edit_icon_custom_emoji"] boolValue]);
 	XCTAssertEqual([r[@"icon_custom_emoji_id"] longLongValue], 0LL);
 
-	[c renameForumTopic:42 inChat:-70 name:@"Renamed" iconEmojiId:9 completion:nil];
+	[[TGGroupStore shared] renameForumTopic:42 inChat:-70 name:@"Renamed" iconEmojiId:9 completion:nil];
 	r = lastG(c, @"editForumTopic");
 	XCTAssertTrue([r[@"edit_icon_custom_emoji"] boolValue]);
 	XCTAssertEqual([r[@"icon_custom_emoji_id"] longLongValue], 9LL);
@@ -980,17 +987,17 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 /// Closed, pinned, deleted: three sends, each naming the one topic.
 - (void)testForumTopic_TheThreeSendsNameTheirTopic {
 	TGClient *c = G();
-	[c toggleForumTopic:42 inChat:-70 closed:YES];
+	[[TGGroupStore shared] toggleForumTopic:42 inChat:-70 closed:YES];
 	NSDictionary *closed = lastG(c, @"toggleForumTopicIsClosed");
 	XCTAssertEqual([closed[@"forum_topic_id"] integerValue], 42);
 	XCTAssertTrue([closed[@"is_closed"] boolValue]);
 
-	[c toggleForumTopic:42 inChat:-70 pinned:YES];
+	[[TGGroupStore shared] toggleForumTopic:42 inChat:-70 pinned:YES];
 	NSDictionary *pinned = lastG(c, @"toggleForumTopicIsPinned");
 	XCTAssertEqual([pinned[@"forum_topic_id"] integerValue], 42);
 	XCTAssertTrue([pinned[@"is_pinned"] boolValue]);
 
-	[c deleteForumTopic:42 inChat:-70];
+	[[TGGroupStore shared] deleteForumTopic:42 inChat:-70];
 	NSDictionary *gone = lastG(c, @"deleteForumTopic");
 	XCTAssertEqual([gone[@"forum_topic_id"] integerValue], 42);
 	XCTAssertEqual([gone[@"chat_id"] longLongValue], -70LL);
@@ -998,14 +1005,14 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 
 - (void)testViewAsTopics_TheFlipCarriesTheNewBool {
 	TGClient *c = G();
-	[c setChatViewAsTopics:-70 viewAsTopics:NO completion:nil];
+	[[TGProfileStore shared] setChatViewAsTopics:-70 viewAsTopics:NO completion:nil];
 	NSDictionary *r = lastG(c, @"toggleChatViewAsTopics");
 	XCTAssertEqual([r[@"chat_id"] longLongValue], -70LL);
 	XCTAssertFalse([r[@"view_as_topics"] boolValue]);
 
 	// What it is now reads straight off the chat.
 	__block BOOL yes = NO;
-	[c chatWithViewAsTopics:-70 completion:^(BOOL viewAsTopics){ yes = viewAsTopics; }];
+	[[TGProfileStore shared] chatWithViewAsTopics:-70 completion:^(BOOL viewAsTopics){ yes = viewAsTopics; }];
 	answerG(c, @{@"@type" : @"chat", @"view_as_topics" : @YES});
 	XCTAssertTrue(yes);
 }
@@ -1199,18 +1206,18 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 	__block BOOL ok = YES;
 
 	// Without an id there is nothing to name, and TDLib never hears it.
-	[c deleteProfilePhoto:0 completion:^(BOOL good){ ok = good; }];
+	[[TGProfileStore shared] deleteProfilePhoto:0 completion:^(BOOL good){ ok = good; }];
 	XCTAssertFalse(ok);
 	XCTAssertEqual(countG(c, @"deleteProfilePhoto"), (NSUInteger)0);
 
-	[c deleteProfilePhoto:77 completion:^(BOOL good){ ok = good; }];
+	[[TGProfileStore shared] deleteProfilePhoto:77 completion:^(BOOL good){ ok = good; }];
 	NSDictionary *r = lastG(c, @"deleteProfilePhoto");
 	XCTAssertEqual([r[@"profile_photo_id"] longLongValue], 77LL);
 	answerG(c, @{@"@type" : @"ok"});
 	XCTAssertTrue(ok);
 
 	// Telegram refusing an id is not this app's lie to hide.
-	[c deleteProfilePhoto:78 completion:^(BOOL good){ ok = good; }];
+	[[TGProfileStore shared] deleteProfilePhoto:78 completion:^(BOOL good){ ok = good; }];
 	answerG(c, @{@"@type" : @"error", @"message" : @"PHOTO_ID_INVALID"});
 	XCTAssertFalse(ok);
 }
@@ -1218,7 +1225,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 - (void)testUserProfilePhotos_RowsCarryTheIdAndTheSmallFile {
 	TGClient *c = G();
 	__block NSArray *photos = nil;
-	[c userProfilePhotos:1001 completion:^(NSArray *found){ photos = found; }];
+	[[TGProfileStore shared] userProfilePhotos:1001 completion:^(NSArray *found){ photos = found; }];
 	NSDictionary *r = lastG(c, @"getUserProfilePhotos");
 	XCTAssertEqualObjects(r[@"@type"], @"getUserProfilePhotos");
 	XCTAssertEqual([r[@"user_id"] longLongValue], 1001LL);
@@ -1242,7 +1249,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 - (void)testMyUserLink_OnlyTheCurrentUsersLinkIsAskedFor {
 	TGClient *c = G();
 	__block NSString *link = nil;
-	[c myUserLink:^(NSString *found){ link = found; }];
+	[[TGProfileStore shared] myUserLink:^(NSString *found){ link = found; }];
 	NSDictionary *r = lastG(c, @"getUserLink");
 	// The permanent link, without revoking the ones handed out before and
 	// without charging anyone for messages across it.
@@ -1258,7 +1265,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 - (void)testGroupsInCommon_RowsThatOpenLikeChatRows {
 	TGClient *c = G();
 	__block NSArray *chats = nil;
-	[c groupsInCommonWithUser:555 completion:^(NSArray *found){ chats = found; }];
+	[[TGProfileStore shared] groupsInCommonWithUser:555 completion:^(NSArray *found){ chats = found; }];
 	NSDictionary *r = lastG(c, @"getGroupsInCommon");
 	XCTAssertEqual([r[@"user_id"] longLongValue], 555LL);
 	XCTAssertEqual([r[@"offset_chat_id"] longLongValue], 0LL);
@@ -1279,7 +1286,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 - (void)testSetPassword_WholeWriteInOneRequest {
 	TGClient *c = G();
 	__block BOOL ok = NO;
-	[c setPassword:@"old" new:@"fresh" hint:@"camp" setEmailAddress:NO email:nil
+	[[TGAccountStore shared] setPassword:@"old" new:@"fresh" hint:@"camp" setEmailAddress:NO email:nil
 		  completion:^(BOOL good){ ok = good; }];
 	NSDictionary *r = lastG(c, @"setPassword");
 	XCTAssertEqualObjects(r[@"old_password"], @"old");
@@ -1292,7 +1299,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 
 	// An empty new password is the request that takes the password off, not
 	// a refusal to write one.
-	[c setPassword:@"old" new:@"" hint:@"" setEmailAddress:YES
+	[[TGAccountStore shared] setPassword:@"old" new:@"" hint:@"" setEmailAddress:YES
 			  email:@"e@example.com" completion:nil];
 	r = lastG(c, @"setPassword");
 	XCTAssertEqualObjects(r[@"new_password"], @"");
@@ -1303,7 +1310,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 - (void)testRecoveryEmailAddress_ThePasswordThatOpensTheDoor {
 	TGClient *c = G();
 	__block NSString *email = nil;
-	[c recoveryEmailAddress:@"wrong" completion:^(NSString *found){ email = found; }];
+	[[TGAccountStore shared] recoveryEmailAddress:@"wrong" completion:^(NSString *found){ email = found; }];
 	NSDictionary *r = lastG(c, @"getRecoveryEmailAddress");
 	XCTAssertEqualObjects(r[@"password"], @"wrong");
 	// A wrong password is not the class with the address in it, and the
@@ -1311,7 +1318,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 	answerG(c, @{@"@type" : @"error", @"message" : @"PASSWORD_HASH_INVALID"});
 	XCTAssertEqualObjects(email, @"");
 
-	[c recoveryEmailAddress:@"right" completion:^(NSString *found){ email = found; }];
+	[[TGAccountStore shared] recoveryEmailAddress:@"right" completion:^(NSString *found){ email = found; }];
 	answerG(c, @{@"@type" : @"recoveryEmailAddress",
 				 @"recovery_email_address" : @"recovery@telegram.example"});
 	XCTAssertEqualObjects(email, @"recovery@telegram.example");
@@ -1320,7 +1327,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 - (void)testSetRecoveryEmailAddress_TheTwoFieldsItAnswersTo {
 	TGClient *c = G();
 	__block BOOL ok = NO;
-	[c setRecoveryEmailAddress:@"pw" to:@"recovery@telegram.example"
+	[[TGAccountStore shared] setRecoveryEmailAddress:@"pw" to:@"recovery@telegram.example"
 					completion:^(BOOL good){ ok = good; }];
 	NSDictionary *r = lastG(c, @"setRecoveryEmailAddress");
 	XCTAssertEqualObjects(r[@"password"], @"pw");
@@ -1335,7 +1342,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 - (void)testTerminateAllOtherSessions_OneRequestThenOk {
 	TGClient *c = G();
 	__block BOOL ok = NO;
-	[c terminateAllOtherSessions:^(BOOL good){ ok = good; }];
+	[[TGSessionsStore shared] terminateAllOtherSessions:^(BOOL good){ ok = good; }];
 	XCTAssertEqualObjects(lastG(c, @"terminateAllOtherSessions")[@"@type"],
 						  @"terminateAllOtherSessions");
 	answerG(c, @{@"@type" : @"ok"});
@@ -1347,7 +1354,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 	__block BOOL ok = NO;
 
 	// Two-step verification is on, so the password rides the last request.
-	[c deleteAccountWithReason:@"unused phone" password:@"pw"
+	[[TGSettingsStore shared] deleteAccountWithReason:@"unused phone" password:@"pw"
 					completion:^(BOOL good){ ok = good; }];
 	NSDictionary *r = lastG(c, @"deleteAccount");
 	XCTAssertEqualObjects(r[@"reason"], @"unused phone");
@@ -1356,7 +1363,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 	XCTAssertTrue(ok);
 
 	// Without a password, the field still says so, rather than being absent.
-	[c deleteAccountWithReason:nil password:nil completion:nil];
+	[[TGSettingsStore shared] deleteAccountWithReason:nil password:nil completion:nil];
 	r = lastG(c, @"deleteAccount");
 	XCTAssertEqualObjects(r[@"reason"], @"");
 	XCTAssertEqualObjects(r[@"password"], @"");
@@ -1579,7 +1586,7 @@ static NSDictionary *memberWithTag(int64_t userId, NSString *status, NSString *t
 	c.usersById[@(8)] = @"Bohdan";
 	c.usersById[@(9)] = @"Ihor";
 	__block NSArray *rows = nil;
-	[c membersOfChat:4242 completion:^(NSArray *members){ rows = members; }];
+	[[TGProfileStore shared] membersOfChat:4242 completion:^(NSArray *members){ rows = members; }];
 
 	answerG(c, @{@"@type" : @"chat",
 			@"id" : @(4242),
@@ -1613,7 +1620,7 @@ static NSDictionary *memberWithTag(int64_t userId, NSString *status, NSString *t
 	TGClient *c = G();
 	c.usersById[@(21)] = @"Nazar";
 	__block NSArray *rows = nil;
-	[c membersOfChat:-70 completion:^(NSArray *members){ rows = members; }];
+	[[TGProfileStore shared] membersOfChat:-70 completion:^(NSArray *members){ rows = members; }];
 
 	answerG(c, @{@"@type" : @"chat",
 			@"id" : @(-70),
@@ -1633,7 +1640,7 @@ static NSDictionary *memberWithTag(int64_t userId, NSString *status, NSString *t
 - (void)testMembersOfChat_APrivateChatAnswersEmpty {
 	TGClient *c = G();
 	__block NSArray *rows = @[@1];
-	[c membersOfChat:77 completion:^(NSArray *members){ rows = members; }];
+	[[TGProfileStore shared] membersOfChat:77 completion:^(NSArray *members){ rows = members; }];
 	answerG(c, @{@"@type" : @"chat",
 			@"id" : @(77),
 			@"type" : @{@"@type" : @"chatTypePrivate",

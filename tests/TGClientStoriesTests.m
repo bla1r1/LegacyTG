@@ -8,6 +8,8 @@
 #import "TGTestRunner.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
+#import "TGStoreTestSupport.h"
+#import "TGStoryStore.h"
 
 @interface TGClientStoriesTests : XCTestCase @end
 
@@ -185,7 +187,7 @@ static NSDictionary *albumAnswer(long long albumId) {
 - (void)testSetPinnedStories_SendsEveryId {
 	TGClient *c = StoriesClient();
 	__block BOOL ok = NO;
-	[c setPinnedStoryIds:@[@5, @4] inChat:-71
+	[[TGStoryStore shared] setPinnedStoryIds:@[@5, @4] inChat:-71
 			  completion:^(BOOL good, NSString *error){ ok = good; }];
 	NSDictionary *r = lastStoryRequest(c, @"setChatPinnedStories");
 	XCTAssertEqualObjects(r[@"chat_id"], @(-71));
@@ -197,7 +199,7 @@ static NSDictionary *albumAnswer(long long albumId) {
 - (void)testArchivedStoryIds_SendsThePagingAndReturnsIds {
 	TGClient *c = StoriesClient();
 	__block NSArray *ids = nil;
-	[c archivedStoryIdsForChat:-71 fromStoryId:42 limit:10
+	[[TGStoryStore shared] archivedStoryIdsForChat:-71 fromStoryId:42 limit:10
 				   completion:^(NSArray *got, NSString *error){ ids = got; }];
 	NSDictionary *r = lastStoryRequest(c, @"getChatArchivedStories");
 	XCTAssertEqualObjects(r[@"from_story_id"], @(42));
@@ -211,7 +213,7 @@ static NSDictionary *albumAnswer(long long albumId) {
 - (void)testStoryById_FlattensTheContentAndTheFlags {
 	TGClient *c = StoriesClient();
 	__block NSDictionary *story = nil;
-	[c story:5 fromChat:-71 completion:^(NSDictionary *got){ story = got; }];
+	[[TGStoryStore shared] story:5 fromChat:-71 completion:^(NSDictionary *got){ story = got; }];
 	NSDictionary *r = lastStoryRequest(c, @"getStory");
 	XCTAssertEqualObjects(r[@"story_poster_chat_id"], @(-71));
 	XCTAssertEqualObjects(r[@"story_id"], @(5));
@@ -229,7 +231,7 @@ static NSDictionary *albumAnswer(long long albumId) {
 - (void)testStoryById_FlattensCaptionEntities {
 	TGClient *c = StoriesClient();
 	__block NSDictionary *story = nil;
-	[c story:5 fromChat:-71 completion:^(NSDictionary *got){ story = got; }];
+	[[TGStoryStore shared] story:5 fromChat:-71 completion:^(NSDictionary *got){ story = got; }];
 	NSArray *entities = @[@{
 		@"@type"  : @"textEntity",
 		@"offset" : @0,
@@ -266,7 +268,7 @@ static NSDictionary *albumAnswer(long long albumId) {
 - (void)testOpenStory_SendsBothIds {
 	TGClient *c = StoriesClient();
 	__block BOOL ok = NO;
-	[c openStory:5 fromChat:-71 completion:^(BOOL good, NSString *error){ ok = good; }];
+	[[TGStoryStore shared] openStory:5 fromChat:-71 completion:^(BOOL good, NSString *error){ ok = good; }];
 	NSDictionary *r = lastStoryRequest(c, @"openStory");
 	XCTAssertEqualObjects(r[@"story_poster_chat_id"], @(-71));
 	XCTAssertEqualObjects(r[@"story_id"], @(5));
@@ -277,7 +279,7 @@ static NSDictionary *albumAnswer(long long albumId) {
 - (void)testCloseStory_SendsBothIds {
 	TGClient *c = StoriesClient();
 	__block BOOL ok = NO;
-	[c closeStory:5 fromChat:-71 completion:^(BOOL good, NSString *error){ ok = good; }];
+	[[TGStoryStore shared] closeStory:5 fromChat:-71 completion:^(BOOL good, NSString *error){ ok = good; }];
 	NSDictionary *r = lastStoryRequest(c, @"closeStory");
 	XCTAssertEqualObjects(r[@"story_id"], @(5));
 	replyStoryRequest(c, @"closeStory", @{@"@type" : @"ok"});
@@ -287,7 +289,7 @@ static NSDictionary *albumAnswer(long long albumId) {
 - (void)testAvailableStoryReactions_SendsTheRowSizeAndReadsTheEmojis {
 	TGClient *c = StoriesClient();
 	__block NSDictionary *reactions = nil;
-	[c storyAvailableReactionsWithCompletion:^(NSDictionary *got){ reactions = got; }];
+	[[TGStoryStore shared] storyAvailableReactionsWithCompletion:^(NSDictionary *got){ reactions = got; }];
 	NSDictionary *r = lastStoryRequest(c, @"getStoryAvailableReactions");
 	XCTAssertEqualObjects(r[@"row_size"], @(25));
 	replyStoryRequest(c, @"getStoryAvailableReactions",
@@ -305,7 +307,7 @@ static NSDictionary *albumAnswer(long long albumId) {
 - (void)testSetStoryReaction_SendsTheEmoji {
 	TGClient *c = StoriesClient();
 	__block BOOL ok = NO;
-	[c setStoryReaction:@"🔥" onStory:5 fromChat:-71
+	[[TGStoryStore shared] setStoryReaction:@"🔥" onStory:5 fromChat:-71
 			 completion:^(BOOL good, NSString *error){ ok = good; }];
 	NSDictionary *r = lastStoryRequest(c, @"setStoryReaction");
 	XCTAssertEqualObjects(r[@"story_id"], @(5));
@@ -316,7 +318,7 @@ static NSDictionary *albumAnswer(long long albumId) {
 
 - (void)testSetStoryReaction_NilRemovesItWithANull {
 	TGClient *c = StoriesClient();
-	[c setStoryReaction:nil onStory:5 fromChat:-71 completion:nil];
+	[[TGStoryStore shared] setStoryReaction:nil onStory:5 fromChat:-71 completion:nil];
 	NSDictionary *r = lastStoryRequest(c, @"setStoryReaction");
 	XCTAssertEqual(r[@"reaction_type"], [NSNull null]);
 }
@@ -326,7 +328,7 @@ static NSDictionary *albumAnswer(long long albumId) {
 - (void)testCanPostStory_ReadsTheOkAndTheRefusal {
 	TGClient *c = StoriesClient();
 	__block NSDictionary *answer = nil;
-	[c canPostStoryInChat:-71 completion:^(NSDictionary *got){ answer = got; }];
+	[[TGStoryStore shared] canPostStoryInChat:-71 completion:^(NSDictionary *got){ answer = got; }];
 	XCTAssertEqualObjects(lastStoryRequest(c, @"canPostStory")[@"chat_id"], @(-71));
 	replyStoryRequest(c, @"canPostStory",
 			@{@"@type" : @"canPostStoryResultWeeklyLimitExceeded", @"retry_after" : @(99)});
@@ -338,7 +340,7 @@ static NSDictionary *albumAnswer(long long albumId) {
 - (void)testChatsToPostStories_ReadsTheIdsThenEachChat {
 	TGClient *c = StoriesClient();
 	__block NSArray *chats = nil;
-	[c chatsToPostStoriesWithCompletion:^(NSArray *got){ chats = got; }];
+	[[TGStoryStore shared] chatsToPostStoriesWithCompletion:^(NSArray *got){ chats = got; }];
 	replyStoryRequest(c, @"getChatsToPostStories",
 			@{@"@type" : @"chats", @"total_count" : @(1), @"chat_ids" : @[@(-100)]});
 	replyStoryRequest(c, @"getChat",
@@ -352,7 +354,7 @@ static NSDictionary *albumAnswer(long long albumId) {
 - (void)testPostStory_SendsTheContentPrivacyAndPeriod {
 	TGClient *c = StoriesClient();
 	__block NSDictionary *story = nil;
-	[c postStoryToChat:-71 path:@"/tmp/story.jpg" isVideo:NO duration:0
+	[[TGStoryStore shared] postStoryToChat:-71 path:@"/tmp/story.jpg" isVideo:NO duration:0
 			   caption:@"Hello" privacy:@"selected" userIds:@[@5]
 		  activePeriod:172800 postedToChatPage:YES protectContent:YES
 			  albumIds:@[@3] completion:^(NSDictionary *got, NSString *error){
@@ -376,7 +378,7 @@ static NSDictionary *albumAnswer(long long albumId) {
 - (void)testPostStory_AnEmptyPathSendsNothing {
 	TGClient *c = StoriesClient();
 	__block NSString *error = nil;
-	[c postStoryToChat:-71 path:@"" isVideo:NO duration:0 caption:nil
+	[[TGStoryStore shared] postStoryToChat:-71 path:@"" isVideo:NO duration:0 caption:nil
 			   privacy:@"everyone" userIds:@[] activePeriod:86400
 	  postedToChatPage:NO protectContent:NO albumIds:@[]
 			completion:^(NSDictionary *story, NSString *why){ error = why; }];
@@ -387,7 +389,7 @@ static NSDictionary *albumAnswer(long long albumId) {
 - (void)testEditStory_KeepsContentWhenOnlyTheCaptionChanges {
 	TGClient *c = StoriesClient();
 	__block BOOL ok = NO;
-	[c editStory:5 fromChat:-71 path:nil isVideo:NO duration:0 caption:@"New"
+	[[TGStoryStore shared] editStory:5 fromChat:-71 path:nil isVideo:NO duration:0 caption:@"New"
 	  completion:^(BOOL good, NSString *error){ ok = good; }];
 	NSDictionary *r = lastStoryRequest(c, @"editStory");
 	XCTAssertEqual(r[@"content"], [NSNull null]);
@@ -399,7 +401,7 @@ static NSDictionary *albumAnswer(long long albumId) {
 - (void)testEditStoryCover_SendsTheTimestamp {
 	TGClient *c = StoriesClient();
 	__block BOOL ok = NO;
-	[c editStoryCover:5 fromChat:-71 coverTimestamp:2.5
+	[[TGStoryStore shared] editStoryCover:5 fromChat:-71 coverTimestamp:2.5
 		  completion:^(BOOL good, NSString *error){ ok = good; }];
 	NSDictionary *r = lastStoryRequest(c, @"editStoryCover");
 	XCTAssertEqualObjects(r[@"cover_frame_timestamp"], @(2.5));
@@ -410,7 +412,7 @@ static NSDictionary *albumAnswer(long long albumId) {
 - (void)testDeleteStory_SendsBothIds {
 	TGClient *c = StoriesClient();
 	__block BOOL ok = NO;
-	[c deleteStory:5 fromChat:-71 completion:^(BOOL good, NSString *error){ ok = good; }];
+	[[TGStoryStore shared] deleteStory:5 fromChat:-71 completion:^(BOOL good, NSString *error){ ok = good; }];
 	NSDictionary *r = lastStoryRequest(c, @"deleteStory");
 	XCTAssertEqualObjects(r[@"story_id"], @(5));
 	replyStoryRequest(c, @"deleteStory", @{@"@type" : @"ok"});
@@ -420,7 +422,7 @@ static NSDictionary *albumAnswer(long long albumId) {
 - (void)testToggleStoryPostedToChatPage_SendsTheFlag {
 	TGClient *c = StoriesClient();
 	__block BOOL ok = NO;
-	[c toggleStory:5 fromChat:-71 postedToChatPage:NO
+	[[TGStoryStore shared] toggleStory:5 fromChat:-71 postedToChatPage:NO
 		completion:^(BOOL good, NSString *error){ ok = good; }];
 	NSDictionary *r = lastStoryRequest(c, @"toggleStoryIsPostedToChatPage");
 	XCTAssertFalse([r[@"is_posted_to_chat_page"] boolValue]);
@@ -431,7 +433,7 @@ static NSDictionary *albumAnswer(long long albumId) {
 - (void)testSetStoryPrivacySettings_SendsTheSelectedUsers {
 	TGClient *c = StoriesClient();
 	__block BOOL ok = NO;
-	[c setStoryPrivacySettings:5 privacy:@"selected" userIds:@[@7, @8]
+	[[TGStoryStore shared] setStoryPrivacySettings:5 privacy:@"selected" userIds:@[@7, @8]
 					completion:^(BOOL good, NSString *error){ ok = good; }];
 	NSDictionary *r = lastStoryRequest(c, @"setStoryPrivacySettings");
 	XCTAssertEqualObjects(r[@"story_id"], @(5));
@@ -443,7 +445,7 @@ static NSDictionary *albumAnswer(long long albumId) {
 - (void)testDeleteBusinessStory_IsTheBusinessRequest {
 	TGClient *c = StoriesClient();
 	__block NSString *error = nil;
-	[c deleteBusinessStory:5 fromChat:-71 completion:^(BOOL ok, NSString *why){ error = why; }];
+	[[TGStoryStore shared] deleteBusinessStory:5 fromChat:-71 completion:^(BOOL ok, NSString *why){ error = why; }];
 	XCTAssertEqual(countStoryRequests(c, @"deleteBusinessStory"), (NSUInteger)1);
 	replyStoryRequest(c, @"deleteBusinessStory",
 			@{@"@type" : @"error", @"code" : @(400),
@@ -453,7 +455,7 @@ static NSDictionary *albumAnswer(long long albumId) {
 
 - (void)testEditBusinessStory_SendsTheBusinessRequest {
 	TGClient *c = StoriesClient();
-	[c editBusinessStory:5 fromChat:-71 path:nil isVideo:NO duration:0
+	[[TGStoryStore shared] editBusinessStory:5 fromChat:-71 path:nil isVideo:NO duration:0
 				  caption:@"Business" completion:nil];
 	NSDictionary *r = lastStoryRequest(c, @"editBusinessStory");
 	XCTAssertEqualObjects(r[@"caption"][@"text"], @"Business");
@@ -464,7 +466,7 @@ static NSDictionary *albumAnswer(long long albumId) {
 - (void)testStoryAlbums_FlattenTheIconsAndNames {
 	TGClient *c = StoriesClient();
 	__block NSArray *albums = nil;
-	[c storyAlbumsForChat:-71 completion:^(NSArray *got){ albums = got; }];
+	[[TGStoryStore shared] storyAlbumsForChat:-71 completion:^(NSArray *got){ albums = got; }];
 	replyStoryRequest(c, @"getChatStoryAlbums",
 			@{@"@type" : @"storyAlbums",
 			  @"albums" : @[@{@"@type" : @"storyAlbum", @"id" : @(9),
@@ -479,7 +481,7 @@ static NSDictionary *albumAnswer(long long albumId) {
 - (void)testCreateStoryAlbum_SendsTheNameAndStories {
 	TGClient *c = StoriesClient();
 	__block NSDictionary *album = nil;
-	[c createStoryAlbumNamed:@"Trip" inChat:-71 storyIds:@[@5]
+	[[TGStoryStore shared] createStoryAlbumNamed:@"Trip" inChat:-71 storyIds:@[@5]
 				   completion:^(NSDictionary *got, NSString *error){ album = got; }];
 	NSDictionary *r = lastStoryRequest(c, @"createStoryAlbum");
 	XCTAssertEqualObjects(r[@"name"], @"Trip");
@@ -490,7 +492,7 @@ static NSDictionary *albumAnswer(long long albumId) {
 
 - (void)testDeleteStoryAlbum_SendsTheAlbumAndChat {
 	TGClient *c = StoriesClient();
-	[c deleteStoryAlbum:9 inChat:-71 completion:nil];
+	[[TGStoryStore shared] deleteStoryAlbum:9 inChat:-71 completion:nil];
 	NSDictionary *r = lastStoryRequest(c, @"deleteStoryAlbum");
 	XCTAssertEqualObjects(r[@"chat_id"], @(-71));
 	XCTAssertEqualObjects(r[@"story_album_id"], @(9));
@@ -499,7 +501,7 @@ static NSDictionary *albumAnswer(long long albumId) {
 - (void)testSetStoryAlbumName_ReadsTheChangedAlbum {
 	TGClient *c = StoriesClient();
 	__block NSDictionary *album = nil;
-	[c setStoryAlbumName:@"New" albumId:9 inChat:-71
+	[[TGStoryStore shared] setStoryAlbumName:@"New" albumId:9 inChat:-71
 			   completion:^(NSDictionary *got, NSString *error){ album = got; }];
 	NSDictionary *r = lastStoryRequest(c, @"setStoryAlbumName");
 	XCTAssertEqualObjects(r[@"name"], @"New");
@@ -509,7 +511,7 @@ static NSDictionary *albumAnswer(long long albumId) {
 
 - (void)testReorderStoryAlbums_SendsTheWholeOrder {
 	TGClient *c = StoriesClient();
-	[c reorderStoryAlbums:@[@9, @8] inChat:-71 completion:nil];
+	[[TGStoryStore shared] reorderStoryAlbums:@[@9, @8] inChat:-71 completion:nil];
 	XCTAssertEqualObjects(lastStoryRequest(c, @"reorderStoryAlbums")[@"story_album_ids"],
 			(@[@9, @8]));
 }
@@ -517,7 +519,7 @@ static NSDictionary *albumAnswer(long long albumId) {
 - (void)testStoriesInAlbum_FlattensTheStories {
 	TGClient *c = StoriesClient();
 	__block NSArray *stories = nil;
-	[c storiesInAlbum:9 inChat:-71 offset:0 limit:20
+	[[TGStoryStore shared] storiesInAlbum:9 inChat:-71 offset:0 limit:20
 			completion:^(NSArray *got, NSString *error){ stories = got; }];
 	NSDictionary *r = lastStoryRequest(c, @"getStoryAlbumStories");
 	XCTAssertEqualObjects(r[@"story_album_id"], @(9));
@@ -528,21 +530,21 @@ static NSDictionary *albumAnswer(long long albumId) {
 
 - (void)testAddStoriesToAlbum_SendsTheIds {
 	TGClient *c = StoriesClient();
-	[c addStories:@[@5] toAlbum:9 inChat:-71 completion:nil];
+	[[TGStoryStore shared] addStories:@[@5] toAlbum:9 inChat:-71 completion:nil];
 	NSDictionary *r = lastStoryRequest(c, @"addStoryAlbumStories");
 	XCTAssertEqualObjects(r[@"story_ids"], (@[@5]));
 }
 
 - (void)testRemoveStoriesFromAlbum_SendsTheIds {
 	TGClient *c = StoriesClient();
-	[c removeStories:@[@5] fromAlbum:9 inChat:-71 completion:nil];
+	[[TGStoryStore shared] removeStories:@[@5] fromAlbum:9 inChat:-71 completion:nil];
 	NSDictionary *r = lastStoryRequest(c, @"removeStoryAlbumStories");
 	XCTAssertEqualObjects(r[@"story_ids"], (@[@5]));
 }
 
 - (void)testReorderStoriesInAlbum_SendsTheOrder {
 	TGClient *c = StoriesClient();
-	[c reorderStories:@[@5, @4] inAlbum:9 inChat:-71 completion:nil];
+	[[TGStoryStore shared] reorderStories:@[@5, @4] inAlbum:9 inChat:-71 completion:nil];
 	NSDictionary *r = lastStoryRequest(c, @"reorderStoryAlbumStories");
 	XCTAssertEqualObjects(r[@"story_ids"], (@[@5, @4]));
 }
@@ -552,7 +554,7 @@ static NSDictionary *albumAnswer(long long albumId) {
 - (void)testStoryInteractions_SendsTheFiltersAndRows {
 	TGClient *c = StoriesClient();
 	__block NSDictionary *page = nil;
-	[c storyInteractionsForStory:5 query:@"ann" onlyContacts:YES
+	[[TGStoryStore shared] storyInteractionsForStory:5 query:@"ann" onlyContacts:YES
 					preferForwards:YES preferWithReaction:NO offset:@"" limit:20
 						 completion:^(NSDictionary *got, NSString *error){ page = got; }];
 	NSDictionary *r = lastStoryRequest(c, @"getStoryInteractions");
@@ -574,7 +576,7 @@ static NSDictionary *albumAnswer(long long albumId) {
 
 - (void)testChatStoryInteractions_SendsANullReactionForAll {
 	TGClient *c = StoriesClient();
-	[c chatStoryInteractionsForStory:5 fromChat:-71 reactionEmoji:nil
+	[[TGStoryStore shared] chatStoryInteractionsForStory:5 fromChat:-71 reactionEmoji:nil
 					  preferForwards:NO offset:@"" limit:20 completion:nil];
 	NSDictionary *r = lastStoryRequest(c, @"getChatStoryInteractions");
 	XCTAssertEqual(r[@"reaction_type"], [NSNull null]);
@@ -584,7 +586,7 @@ static NSDictionary *albumAnswer(long long albumId) {
 - (void)testStoryPublicForwards_ReadsMessagesAndReposts {
 	TGClient *c = StoriesClient();
 	__block NSDictionary *page = nil;
-	[c storyPublicForwards:5 fromChat:-71 offset:@"" limit:20
+	[[TGStoryStore shared] storyPublicForwards:5 fromChat:-71 offset:@"" limit:20
 				completion:^(NSDictionary *got, NSString *error){ page = got; }];
 	replyStoryRequest(c, @"getStoryPublicForwards",
 			@{@"@type" : @"publicForwards", @"total_count" : @(2),
@@ -605,7 +607,7 @@ static NSDictionary *albumAnswer(long long albumId) {
 - (void)testStoryStatistics_FlattensTheGraphPoints {
 	TGClient *c = StoriesClient();
 	__block NSDictionary *stats = nil;
-	[c storyStatistics:5 fromChat:-71 isDark:NO
+	[[TGStoryStore shared] storyStatistics:5 fromChat:-71 isDark:NO
 			 completion:^(NSDictionary *got, NSString *error){ stats = got; }];
 	replyStoryRequest(c, @"getStoryStatistics",
 			@{@"@type" : @"storyStatistics",
@@ -621,7 +623,7 @@ static NSDictionary *albumAnswer(long long albumId) {
 - (void)testReportStory_FirstAnswerIsTheOptionList {
 	TGClient *c = StoriesClient();
 	__block NSDictionary *result = nil;
-	[c reportStory:5 fromChat:-71 optionId:@"" text:@""
+	[[TGStoryStore shared] reportStory:5 fromChat:-71 optionId:@"" text:@""
 		completion:^(NSDictionary *got, NSString *error){ result = got; }];
 	NSDictionary *r = lastStoryRequest(c, @"reportStory");
 	XCTAssertEqualObjects(r[@"option_id"], @"");
@@ -634,7 +636,7 @@ static NSDictionary *albumAnswer(long long albumId) {
 
 - (void)testReportStory_ChosenOptionAndTextReachTheServer {
 	TGClient *c = StoriesClient();
-	[c reportStory:5 fromChat:-71 optionId:@"b3B0" text:@"details" completion:nil];
+	[[TGStoryStore shared] reportStory:5 fromChat:-71 optionId:@"b3B0" text:@"details" completion:nil];
 	NSDictionary *r = lastStoryRequest(c, @"reportStory");
 	XCTAssertEqualObjects(r[@"option_id"], @"b3B0");
 	XCTAssertEqualObjects(r[@"text"], @"details");
@@ -645,7 +647,7 @@ static NSDictionary *albumAnswer(long long albumId) {
 - (void)testStoryNotificationExceptions_ReadsEachChat {
 	TGClient *c = StoriesClient();
 	__block NSArray *rows = nil;
-	[c storyNotificationExceptionsWithCompletion:^(NSArray *got){ rows = got; }];
+	[[TGStoryStore shared] storyNotificationExceptionsWithCompletion:^(NSArray *got){ rows = got; }];
 	replyStoryRequest(c, @"getStoryNotificationSettingsExceptions",
 			@{@"@type" : @"chats", @"total_count" : @(1), @"chat_ids" : @[@(-71)]});
 	replyStoryRequest(c, @"getChat",
@@ -661,7 +663,7 @@ static NSDictionary *albumAnswer(long long albumId) {
 - (void)testSearchPublicStoriesByTag_SendsTheTagOffsetAndLimit {
 	TGClient *c = StoriesClient();
 	__block NSDictionary *page = nil;
-	[c searchPublicStoriesByTag:@"#kyiv" offset:@"" limit:20
+	[[TGStoryStore shared] searchPublicStoriesByTag:@"#kyiv" offset:@"" limit:20
 					 completion:^(NSDictionary *got, NSString *error){ page = got; }];
 	NSDictionary *r = lastStoryRequest(c, @"searchPublicStoriesByTag");
 	XCTAssertEqualObjects(r[@"story_tag"], @"kyiv");
@@ -673,7 +675,7 @@ static NSDictionary *albumAnswer(long long albumId) {
 
 - (void)testSearchPublicStoriesByLocation_SendsTheAddressFields {
 	TGClient *c = StoriesClient();
-	[c searchPublicStoriesByLocation:@{@"countryCode" : @"UA", @"state" : @"",
+	[[TGStoryStore shared] searchPublicStoriesByLocation:@{@"countryCode" : @"UA", @"state" : @"",
 									   @"city" : @"Kyiv", @"street" : @""}
 							  offset:@"" limit:20 completion:nil];
 	NSDictionary *r = lastStoryRequest(c, @"searchPublicStoriesByLocation");
@@ -683,7 +685,7 @@ static NSDictionary *albumAnswer(long long albumId) {
 
 - (void)testSearchPublicStoriesByVenue_SendsProviderAndId {
 	TGClient *c = StoriesClient();
-	[c searchPublicStoriesByVenue:@"foursquare" venueId:@"123" offset:@"" limit:20
+	[[TGStoryStore shared] searchPublicStoriesByVenue:@"foursquare" venueId:@"123" offset:@"" limit:20
 					   completion:nil];
 	NSDictionary *r = lastStoryRequest(c, @"searchPublicStoriesByVenue");
 	XCTAssertEqualObjects(r[@"venue_provider"], @"foursquare");
@@ -695,7 +697,7 @@ static NSDictionary *albumAnswer(long long albumId) {
 - (void)testActivateStealthMode_SendsAndKeepsTheServerWord {
 	TGClient *c = StoriesClient();
 	__block NSString *error = nil;
-	[c activateStoryStealthModeWithCompletion:^(BOOL ok, NSString *why){ error = why; }];
+	[[TGStoryStore shared] activateStoryStealthModeWithCompletion:^(BOOL ok, NSString *why){ error = why; }];
 	XCTAssertEqual(countStoryRequests(c, @"activateStoryStealthMode"), (NSUInteger)1);
 	replyStoryRequest(c, @"activateStoryStealthMode",
 			@{@"@type" : @"error", @"code" : @(400),
@@ -708,7 +710,7 @@ static NSDictionary *albumAnswer(long long albumId) {
 - (void)testStartLiveStory_SendsTheShapeAndReadsTheGroupCall {
 	TGClient *c = StoriesClient();
 	__block NSDictionary *answer = nil;
-	[c startLiveStoryInChat:-71 privacy:@"everyone" userIds:@[]
+	[[TGStoryStore shared] startLiveStoryInChat:-71 privacy:@"everyone" userIds:@[]
 			 protectContent:YES rtmp:YES enableMessages:YES
 			  paidMessageStars:5 completion:^(NSDictionary *got){ answer = got; }];
 	NSDictionary *r = lastStoryRequest(c, @"startLiveStory");
@@ -726,7 +728,7 @@ static NSDictionary *albumAnswer(long long albumId) {
 - (void)testJoinLiveStory_SendsTheCallAndReturnsThePayload {
 	TGClient *c = StoriesClient();
 	__block NSString *payload = nil;
-	[c joinLiveStoryCall:77 completion:^(NSString *text, NSString *error){ payload = text; }];
+	[[TGStoryStore shared] joinLiveStoryCall:77 completion:^(NSString *text, NSString *error){ payload = text; }];
 	NSDictionary *r = lastStoryRequest(c, @"joinLiveStory");
 	XCTAssertEqualObjects(r[@"group_call_id"], @(77));
 	XCTAssertEqualObjects(r[@"join_parameters"][@"@type"],
@@ -739,7 +741,7 @@ static NSDictionary *albumAnswer(long long albumId) {
 - (void)testLiveStoryStreamer_FlattensTheParticipant {
 	TGClient *c = StoriesClient();
 	__block NSDictionary *streamer = nil;
-	[c liveStoryStreamerForCall:77 completion:^(NSDictionary *got, NSString *error){
+	[[TGStoryStore shared] liveStoryStreamerForCall:77 completion:^(NSDictionary *got, NSString *error){
 		streamer = got;
 	}];
 	replyStoryRequest(c, @"getLiveStoryStreamer",
@@ -755,7 +757,7 @@ static NSDictionary *albumAnswer(long long albumId) {
 - (void)testLiveStoryRtmpUrl_ReadsUrlAndKey {
 	TGClient *c = StoriesClient();
 	__block NSDictionary *url = nil;
-	[c liveStoryRtmpUrlForChat:-71 completion:^(NSDictionary *got, NSString *error){
+	[[TGStoryStore shared] liveStoryRtmpUrlForChat:-71 completion:^(NSDictionary *got, NSString *error){
 		url = got;
 	}];
 	XCTAssertEqualObjects(lastStoryRequest(c, @"getLiveStoryRtmpUrl")[@"chat_id"], @(-71));
@@ -767,14 +769,14 @@ static NSDictionary *albumAnswer(long long albumId) {
 
 - (void)testReplaceLiveStoryRtmpUrl_IsItsOwnRequest {
 	TGClient *c = StoriesClient();
-	[c replaceLiveStoryRtmpUrlForChat:-71 completion:nil];
+	[[TGStoryStore shared] replaceLiveStoryRtmpUrlForChat:-71 completion:nil];
 	XCTAssertEqual(countStoryRequests(c, @"replaceLiveStoryRtmpUrl"), (NSUInteger)1);
 }
 
 - (void)testLiveStoryMessageSenders_FlattenPremiumAndSender {
 	TGClient *c = StoriesClient();
 	__block NSArray *senders = nil;
-	[c liveStoryAvailableMessageSendersForCall:77
+	[[TGStoryStore shared] liveStoryAvailableMessageSendersForCall:77
 									completion:^(NSArray *got, NSString *error){
 		senders = got;
 	}];
@@ -788,7 +790,7 @@ static NSDictionary *albumAnswer(long long albumId) {
 
 - (void)testSetLiveStoryMessageSender_BuildsTheSenderObject {
 	TGClient *c = StoriesClient();
-	[c setLiveStoryMessageSender:@{@"kind" : @"chat", @"id" : @(-72)}
+	[[TGStoryStore shared] setLiveStoryMessageSender:@{@"kind" : @"chat", @"id" : @(-72)}
 						 forCall:77 completion:nil];
 	NSDictionary *r = lastStoryRequest(c, @"setLiveStoryMessageSender");
 	XCTAssertEqualObjects(r[@"message_sender_id"][@"@type"], @"messageSenderChat");
@@ -798,7 +800,7 @@ static NSDictionary *albumAnswer(long long albumId) {
 - (void)testLiveStoryTopDonors_ReadsTheTotalAndRows {
 	TGClient *c = StoriesClient();
 	__block NSDictionary *donors = nil;
-	[c liveStoryTopDonorsForCall:77 completion:^(NSDictionary *got, NSString *error){
+	[[TGStoryStore shared] liveStoryTopDonorsForCall:77 completion:^(NSDictionary *got, NSString *error){
 		donors = got;
 	}];
 	replyStoryRequest(c, @"getLiveStoryTopDonors",
@@ -813,12 +815,12 @@ static NSDictionary *albumAnswer(long long albumId) {
 
 - (void)testPendingLiveStoryReactions_SendAddCommitAndRemove {
 	TGClient *c = StoriesClient();
-	[c addPendingLiveStoryReactionInCall:77 stars:2 completion:nil];
+	[[TGStoryStore shared] addPendingLiveStoryReactionInCall:77 stars:2 completion:nil];
 	NSDictionary *add = lastStoryRequest(c, @"addPendingLiveStoryReaction");
 	XCTAssertEqualObjects(add[@"group_call_id"], @(77));
 	XCTAssertEqualObjects(add[@"star_count"], @(2));
-	[c commitPendingLiveStoryReactionsInCall:77 completion:nil];
-	[c removePendingLiveStoryReactionsInCall:77 completion:nil];
+	[[TGStoryStore shared] commitPendingLiveStoryReactionsInCall:77 completion:nil];
+	[[TGStoryStore shared] removePendingLiveStoryReactionsInCall:77 completion:nil];
 	XCTAssertEqual(countStoryRequests(c, @"commitPendingLiveStoryReactions"), (NSUInteger)1);
 	XCTAssertEqual(countStoryRequests(c, @"removePendingLiveStoryReactions"), (NSUInteger)1);
 }

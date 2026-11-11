@@ -11,6 +11,8 @@
 #import "TGClientInternal.h"
 #import "TGDatabaseKey.h"
 #import "TGBase64.h"
+#import "TGStoreTestSupport.h"
+#import "TGSettingsStore.h"
 
 @interface TGClientAppearanceDiagnosticsTests : XCTestCase @end
 
@@ -276,7 +278,7 @@ static NSDictionary *ADBackground(void) {
 - (void)testCurrentState_FlattensAuthorizationConnectionAndOptions {
 	TGClient *c = ADClient();
 	__block NSArray *got = nil;
-	[c currentStateWithCompletion:^(NSArray *updates, NSString *error){ got = updates; }];
+	[[TGSettingsStore shared] currentStateWithCompletion:^(NSArray *updates, NSString *error){ got = updates; }];
 	XCTAssertNotNil(ADLast(c, @"getCurrentState"));
 	ADAnswer(c, @"getCurrentState", @{@"@type" : @"updates", @"updates" : @[
 			@{@"@type" : @"authorizationStateReady"},
@@ -295,7 +297,7 @@ static NSDictionary *ADBackground(void) {
 	TGClient *c = ADClient();
 	__block NSArray *got = @[];
 	__block NSString *error = nil;
-	[c currentStateWithCompletion:^(NSArray *updates, NSString *why){
+	[[TGSettingsStore shared] currentStateWithCompletion:^(NSArray *updates, NSString *why){
 		got = updates; error = why;
 	}];
 	ADAnswer(c, @"getCurrentState", @{@"@type" : @"error",
@@ -307,7 +309,7 @@ static NSDictionary *ADBackground(void) {
 - (void)testApplicationConfig_UnwrapsNestedJsonValues {
 	TGClient *c = ADClient();
 	__block NSDictionary *got = nil;
-	[c applicationConfigWithCompletion:^(NSDictionary *config, NSString *error){
+	[[TGSettingsStore shared] applicationConfigWithCompletion:^(NSDictionary *config, NSString *error){
 		got = config;
 	}];
 	XCTAssertNotNil(ADLast(c, @"getApplicationConfig"));
@@ -329,7 +331,7 @@ static NSDictionary *ADBackground(void) {
 	TGClient *c = ADClient();
 	__block NSDictionary *got = @{};
 	__block NSString *error = nil;
-	[c applicationConfigWithCompletion:^(NSDictionary *config, NSString *why){
+	[[TGSettingsStore shared] applicationConfigWithCompletion:^(NSDictionary *config, NSString *why){
 		got = config; error = why;
 	}];
 	ADAnswer(c, @"getApplicationConfig", @{@"@type" : @"error",
@@ -341,7 +343,7 @@ static NSDictionary *ADBackground(void) {
 - (void)testDatabaseStatistics_ReturnsTheServersReport {
 	TGClient *c = ADClient();
 	__block NSString *got = nil;
-	[c databaseStatisticsWithCompletion:^(NSString *statistics, NSString *error){
+	[[TGSettingsStore shared] databaseStatisticsWithCompletion:^(NSString *statistics, NSString *error){
 		got = statistics;
 	}];
 	XCTAssertNotNil(ADLast(c, @"getDatabaseStatistics"));
@@ -354,7 +356,7 @@ static NSDictionary *ADBackground(void) {
 	TGClient *c = ADClient();
 	__block NSString *got = @"";
 	__block NSString *error = nil;
-	[c databaseStatisticsWithCompletion:^(NSString *statistics, NSString *why){
+	[[TGSettingsStore shared] databaseStatisticsWithCompletion:^(NSString *statistics, NSString *why){
 		got = statistics; error = why;
 	}];
 	ADAnswer(c, @"getDatabaseStatistics", @{@"@type" : @"error",
@@ -368,14 +370,14 @@ static NSDictionary *ADBackground(void) {
 - (void)testSetNetworkType_SendsTheObjectAndKeepsTheRefusal {
 	TGClient *c = ADClient();
 	__block BOOL ok = NO;
-	[c setNetworkType:@"wifi" completion:^(BOOL good, NSString *error){ ok = good; }];
+	[[TGSettingsStore shared] setNetworkType:@"wifi" completion:^(BOOL good, NSString *error){ ok = good; }];
 	XCTAssertEqualObjects(ADLast(c, @"setNetworkType")[@"type"][@"@type"],
 			@"networkTypeWiFi");
 	ADAnswer(c, @"setNetworkType", @{@"@type" : @"ok"});
 	XCTAssertTrue(ok);
 
 	__block NSString *error = nil;
-	[c setNetworkType:@"mobile" completion:^(BOOL good, NSString *why){ error = why; }];
+	[[TGSettingsStore shared] setNetworkType:@"mobile" completion:^(BOOL good, NSString *why){ error = why; }];
 	ADAnswer(c, @"setNetworkType", @{@"@type" : @"error",
 			@"message" : @"NETWORK_TYPE_INVALID"});
 	XCTAssertEqualObjects(error, @"NETWORK_TYPE_INVALID");
@@ -384,7 +386,7 @@ static NSDictionary *ADBackground(void) {
 - (void)testSetNetworkType_AnUnknownNameSendsNothing {
 	TGClient *c = ADClient();
 	__block NSString *error = nil;
-	[c setNetworkType:@"carrier-pigeon" completion:^(BOOL ok, NSString *why){
+	[[TGSettingsStore shared] setNetworkType:@"carrier-pigeon" completion:^(BOOL ok, NSString *why){
 		error = why;
 	}];
 	XCTAssertEqual(ADCount(c, @"setNetworkType"), (NSUInteger)0);
@@ -394,7 +396,7 @@ static NSDictionary *ADBackground(void) {
 - (void)testAddNetworkStatistics_SendsACallEntry {
 	TGClient *c = ADClient();
 	__block BOOL ok = NO;
-	[c addNetworkStatisticsForNetworkType:@"roaming" sentBytes:100
+	[[TGSettingsStore shared] addNetworkStatisticsForNetworkType:@"roaming" sentBytes:100
 			receivedBytes:200 duration:3.5 completion:^(BOOL good, NSString *error){
 		ok = good;
 	}];
@@ -412,7 +414,7 @@ static NSDictionary *ADBackground(void) {
 - (void)testAddNetworkStatistics_AnErrorKeepsTheRefusal {
 	TGClient *c = ADClient();
 	__block NSString *error = nil;
-	[c addNetworkStatisticsForNetworkType:@"wifi" sentBytes:1 receivedBytes:2
+	[[TGSettingsStore shared] addNetworkStatisticsForNetworkType:@"wifi" sentBytes:1 receivedBytes:2
 			duration:0.5 completion:^(BOOL ok, NSString *why){ error = why; }];
 	ADAnswer(c, @"addNetworkStatistics", @{@"@type" : @"error",
 			@"message" : @"STATS_REFUSED"});
@@ -424,7 +426,7 @@ static NSDictionary *ADBackground(void) {
 - (void)testStatisticalGraph_ParsesPointsIntoLines {
 	TGClient *c = ADClient();
 	__block NSDictionary *got = nil;
-	[c statisticalGraphForChat:-100 token:@"token" x:0
+	[[TGSettingsStore shared] statisticalGraphForChat:-100 token:@"token" x:0
 			completion:^(NSDictionary *graph, NSString *error){ got = graph; }];
 	NSDictionary *request = ADLast(c, @"getStatisticalGraph");
 	XCTAssertEqualObjects(request[@"chat_id"], @(-100));
@@ -447,7 +449,7 @@ static NSDictionary *ADBackground(void) {
 - (void)testStatisticalGraph_FollowsAnAsyncToken {
 	TGClient *c = ADClient();
 	__block NSDictionary *got = nil;
-	[c statisticalGraphForChat:-100 token:@"first" x:0
+	[[TGSettingsStore shared] statisticalGraphForChat:-100 token:@"first" x:0
 			completion:^(NSDictionary *graph, NSString *error){ got = graph; }];
 	ADAnswer(c, @"getStatisticalGraph", @{@"@type" : @"statisticalGraphAsync",
 			@"token" : @"second"});
@@ -463,7 +465,7 @@ static NSDictionary *ADBackground(void) {
 - (void)testStatisticalGraph_AnErrorKeepsTheMessage {
 	TGClient *c = ADClient();
 	__block NSString *error = nil;
-	[c statisticalGraphForChat:-100 token:@"token" x:0
+	[[TGSettingsStore shared] statisticalGraphForChat:-100 token:@"token" x:0
 			completion:^(NSDictionary *graph, NSString *why){ error = why; }];
 	ADAnswer(c, @"getStatisticalGraph", @{@"@type" : @"statisticalGraphError",
 			@"error_message" : @"STATISTICS_TOO_OLD"});
@@ -473,7 +475,7 @@ static NSDictionary *ADBackground(void) {
 - (void)testStatisticalGraph_WithoutATokenSendsNothing {
 	TGClient *c = ADClient();
 	__block NSString *error = nil;
-	[c statisticalGraphForChat:-100 token:@"" x:0
+	[[TGSettingsStore shared] statisticalGraphForChat:-100 token:@"" x:0
 			completion:^(NSDictionary *graph, NSString *why){ error = why; }];
 	XCTAssertEqual(ADCount(c, @"getStatisticalGraph"), (NSUInteger)0);
 	XCTAssertNotNil(error);
@@ -484,7 +486,7 @@ static NSDictionary *ADBackground(void) {
 - (void)testSendCustomRequest_CarriesMethodAndParameters {
 	TGClient *c = ADClient();
 	__block NSString *got = nil;
-	[c sendCustomRequestMethod:@"getOption"
+	[[TGSettingsStore shared] sendCustomRequestMethod:@"getOption"
 					parameters:@"{\"name\":\"version\"}"
 					completion:^(NSString *result, NSString *error){ got = result; }];
 	NSDictionary *request = ADLast(c, @"sendCustomRequest");
@@ -498,7 +500,7 @@ static NSDictionary *ADBackground(void) {
 - (void)testSendCustomRequest_AnEmptyMethodSendsNothing {
 	TGClient *c = ADClient();
 	__block NSString *error = nil;
-	[c sendCustomRequestMethod:@"" parameters:@"{}"
+	[[TGSettingsStore shared] sendCustomRequestMethod:@"" parameters:@"{}"
 					completion:^(NSString *result, NSString *why){ error = why; }];
 	XCTAssertEqual(ADCount(c, @"sendCustomRequest"), (NSUInteger)0);
 	XCTAssertNotNil(error);
@@ -510,19 +512,19 @@ static NSDictionary *ADBackground(void) {
 	TGClient *c = ADClient();
 	NSData *key = [@"secret" dataUsingEncoding:NSUTF8StringEncoding];
 	__block BOOL ok = NO;
-	[c setDatabaseEncryptionKey:key completion:^(BOOL good, NSString *error){ ok = good; }];
+	[[TGSettingsStore shared] setDatabaseEncryptionKey:key completion:^(BOOL good, NSString *error){ ok = good; }];
 	NSDictionary *request = ADLast(c, @"setDatabaseEncryptionKey");
 	XCTAssertEqualObjects(request[@"new_encryption_key"], TGBase64Encode(key));
 	ADAnswer(c, @"setDatabaseEncryptionKey", @{@"@type" : @"ok"});
 	XCTAssertTrue(ok);
 	XCTAssertEqualObjects([TGDatabaseKey currentKey], key);
-	XCTAssertTrue([c databaseEncryptionKeyIsSet]);
+	XCTAssertTrue([[TGSettingsStore shared] databaseEncryptionKeyIsSet]);
 }
 
 - (void)testSetDatabaseEncryptionKey_AnEmptyKeySendsNothing {
 	TGClient *c = ADClient();
 	__block NSString *error = nil;
-	[c setDatabaseEncryptionKey:[NSData data] completion:^(BOOL ok, NSString *why){
+	[[TGSettingsStore shared] setDatabaseEncryptionKey:[NSData data] completion:^(BOOL ok, NSString *why){
 		error = why;
 	}];
 	XCTAssertEqual(ADCount(c, @"setDatabaseEncryptionKey"), (NSUInteger)0);
@@ -535,7 +537,7 @@ static NSDictionary *ADBackground(void) {
 	[TGDatabaseKey storeKey:old error:nil];
 	NSData *changed = [@"new-key" dataUsingEncoding:NSUTF8StringEncoding];
 	__block NSString *error = nil;
-	[c setDatabaseEncryptionKey:changed completion:^(BOOL ok, NSString *why){
+	[[TGSettingsStore shared] setDatabaseEncryptionKey:changed completion:^(BOOL ok, NSString *why){
 		error = why;
 	}];
 	ADAnswer(c, @"setDatabaseEncryptionKey", @{@"@type" : @"error",

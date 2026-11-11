@@ -8,6 +8,10 @@
 #import "TGTransport.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
+#import "TGStoreTestSupport.h"
+#import "TGAccountStore.h"
+#import "TGDevStore.h"
+#import "TGStarsStore.h"
 
 @interface TGClientTier3BotsTests : XCTestCase @end
 
@@ -66,7 +70,7 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 - (void)testAddLoginPasskey_SendsClientDataAndAttestation {
 	TGClient *c = TG3BClient();
 	__block NSDictionary *passkey = nil;
-	[c addLoginPasskey:@"{\"challenge\":\"x\"}" attestationObject:@"AQID"
+	[[TGDevStore shared] addLoginPasskey:@"{\"challenge\":\"x\"}" attestationObject:@"AQID"
 			completion:^(NSDictionary *value, NSString *error){ passkey = value; }];
 	NSDictionary *r = TG3BLast(c, @"addLoginPasskey");
 	XCTAssertEqualObjects(r[@"client_data"], @"{\"challenge\":\"x\"}");
@@ -80,7 +84,7 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 
 - (void)testAnswerCallbackQuery_SendsEveryField {
 	TGClient *c = TG3BClient();
-	[c answerCallbackQuery:55 text:@"Done" showAlert:YES url:@"https://t.me/x"
+	[[TGDevStore shared] answerCallbackQuery:55 text:@"Done" showAlert:YES url:@"https://t.me/x"
 				 cacheTime:10 completion:nil];
 	NSDictionary *r = TG3BLast(c, @"answerCallbackQuery");
 	XCTAssertEqualObjects(r[@"callback_query_id"], @(55));
@@ -92,7 +96,7 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 
 - (void)testAnswerCustomQuery_SendsTheData {
 	TGClient *c = TG3BClient();
-	[c answerCustomQuery:61 data:@"{\"ok\":true}" completion:nil];
+	[[TGDevStore shared] answerCustomQuery:61 data:@"{\"ok\":true}" completion:nil];
 	NSDictionary *r = TG3BLast(c, @"answerCustomQuery");
 	XCTAssertEqualObjects(r[@"custom_query_id"], @(61));
 	XCTAssertEqualObjects(r[@"data"], @"{\"ok\":true}");
@@ -101,7 +105,7 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 - (void)testAnswerGuestQuery_SendsAnInlineArticleAndReadsTheId {
 	TGClient *c = TG3BClient();
 	__block NSString *identifier = nil;
-	[c answerGuestQuery:62 resultTitle:@"Guest" resultId:@"r1" url:@"https://x"
+	[[TGDevStore shared] answerGuestQuery:62 resultTitle:@"Guest" resultId:@"r1" url:@"https://x"
 			 completion:^(NSString *value, NSString *error){ identifier = value; }];
 	NSDictionary *r = TG3BLast(c, @"answerGuestQuery");
 	XCTAssertEqualObjects(r[@"guest_query_id"], @(62));
@@ -113,7 +117,7 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 
 - (void)testAnswerInlineQuery_SendsTheResultVectorAndCacheTime {
 	TGClient *c = TG3BClient();
-	[c answerInlineQuery:63 isPersonal:YES resultTitle:@"Pick" resultId:@"r2"
+	[[TGDevStore shared] answerInlineQuery:63 isPersonal:YES resultTitle:@"Pick" resultId:@"r2"
 					 url:@"" cacheTime:30 nextOffset:@"next" completion:nil];
 	NSDictionary *r = TG3BLast(c, @"answerInlineQuery");
 	XCTAssertEqualObjects(r[@"inline_query_id"], @(63));
@@ -127,7 +131,7 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 
 - (void)testAnswerPreCheckoutQuery_SendsTheErrorMessage {
 	TGClient *c = TG3BClient();
-	[c answerPreCheckoutQuery:64 errorMessage:@"No card" completion:nil];
+	[[TGDevStore shared] answerPreCheckoutQuery:64 errorMessage:@"No card" completion:nil];
 	NSDictionary *r = TG3BLast(c, @"answerPreCheckoutQuery");
 	XCTAssertEqualObjects(r[@"pre_checkout_query_id"], @(64));
 	XCTAssertEqualObjects(r[@"error_message"], @"No card");
@@ -135,7 +139,7 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 
 - (void)testAnswerShippingQuery_SendsAnEmptyOptionList {
 	TGClient *c = TG3BClient();
-	[c answerShippingQuery:65 errorMessage:@"Cannot ship" completion:nil];
+	[[TGDevStore shared] answerShippingQuery:65 errorMessage:@"Cannot ship" completion:nil];
 	NSDictionary *r = TG3BLast(c, @"answerShippingQuery");
 	XCTAssertEqualObjects(r[@"shipping_query_id"], @(65));
 	XCTAssertEqualObjects(r[@"error_message"], @"Cannot ship");
@@ -144,7 +148,7 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 
 - (void)testAnswerWebAppQuery_SendsTheQueryString {
 	TGClient *c = TG3BClient();
-	[c answerWebAppQuery:@"waq1" resultTitle:@"Web" resultId:@"r3" url:@""
+	[[TGDevStore shared] answerWebAppQuery:@"waq1" resultTitle:@"Web" resultId:@"r3" url:@""
 			  completion:nil];
 	NSDictionary *r = TG3BLast(c, @"answerWebAppQuery");
 	XCTAssertEqualObjects(r[@"web_app_query_id"], @"waq1");
@@ -154,7 +158,7 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 - (void)testCheckAuthenticationBotToken_SendsTheToken {
 	TGClient *c = TG3BClient();
 	__block NSString *error = nil;
-	[c checkAuthenticationBotToken:@"123:abc" completion:^(BOOL ok, NSString *text){
+	[[TGDevStore shared] checkAuthenticationBotToken:@"123:abc" completion:^(BOOL ok, NSString *text){
 		error = text;
 	}];
 	NSDictionary *r = TG3BLast(c, @"checkAuthenticationBotToken");
@@ -167,7 +171,7 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 
 - (void)testCheckAuthenticationPasskey_SendsAllFiveFields {
 	TGClient *c = TG3BClient();
-	[c checkAuthenticationPasskey:@"cred" clientData:@"{}" authenticatorData:@"AA"
+	[[TGDevStore shared] checkAuthenticationPasskey:@"cred" clientData:@"{}" authenticatorData:@"AA"
 						signature:@"BB" userHandle:@"CC" completion:nil];
 	NSDictionary *r = TG3BLast(c, @"checkAuthenticationPasskey");
 	XCTAssertEqualObjects(r[@"credential_id"], @"cred");
@@ -179,7 +183,7 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 
 - (void)testCheckWebAppFileDownload_SendsNameAndURL {
 	TGClient *c = TG3BClient();
-	[c checkWebAppFileDownload:66 fileName:@"doc.pdf" url:@"https://x/doc"
+	[[TGDevStore shared] checkWebAppFileDownload:66 fileName:@"doc.pdf" url:@"https://x/doc"
 					completion:nil];
 	NSDictionary *r = TG3BLast(c, @"checkWebAppFileDownload");
 	XCTAssertEqualObjects(r[@"bot_user_id"], @(66));
@@ -189,13 +193,13 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 
 - (void)testCloseWebApp_SendsTheLaunchId {
 	TGClient *c = TG3BClient();
-	[c closeWebApp:77 completion:nil];
+	[[TGDevStore shared] closeWebApp:77 completion:nil];
 	XCTAssertEqualObjects(TG3BLast(c, @"closeWebApp")[@"web_app_launch_id"], @(77));
 }
 
 - (void)testDeleteCommands_SendsTheScopeAndLanguage {
 	TGClient *c = TG3BClient();
-	[c deleteCommandsForScope:@"chat" chatId:88 language:@"en" completion:nil];
+	[[TGDevStore shared] deleteCommandsForScope:@"chat" chatId:88 language:@"en" completion:nil];
 	NSDictionary *r = TG3BLast(c, @"deleteCommands");
 	XCTAssertEqualObjects(r[@"scope"][@"@type"], @"botCommandScopeChat");
 	XCTAssertEqualObjects(r[@"scope"][@"chat_id"], @(88));
@@ -205,7 +209,7 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 - (void)testGetAuthenticationPasskeyParameters_ReadsTheText {
 	TGClient *c = TG3BClient();
 	__block NSString *text = nil;
-	[c authenticationPasskeyParametersWithCompletion:
+	[[TGDevStore shared] authenticationPasskeyParametersWithCompletion:
 			^(NSString *value, NSString *error){ text = value; }];
 	XCTAssertEqualObjects(TG3BLast(c, @"getAuthenticationPasskeyParameters")[@"@type"],
 						  @"getAuthenticationPasskeyParameters");
@@ -216,7 +220,7 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 - (void)testGetCommands_SendsDefaultScopeAndFlattensCommands {
 	TGClient *c = TG3BClient();
 	__block NSDictionary *answer = nil;
-	[c commandsForScope:@"default" chatId:0 language:@"en"
+	[[TGDevStore shared] commandsForScope:@"default" chatId:0 language:@"en"
 			  completion:^(NSDictionary *value, NSString *error){ answer = value; }];
 	NSDictionary *r = TG3BLast(c, @"getCommands");
 	XCTAssertEqualObjects(r[@"scope"][@"@type"], @"botCommandScopeDefault");
@@ -230,7 +234,7 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 - (void)testGetGuardBotWebAppUrl_SendsTheParameters {
 	TGClient *c = TG3BClient();
 	__block NSString *link = nil;
-	[c guardBotWebAppURLForQuery:101 mode:@"fullSize"
+	[[TGDevStore shared] guardBotWebAppURLForQuery:101 mode:@"fullSize"
 					  completion:^(NSString *value, NSString *error){ link = value; }];
 	NSDictionary *r = TG3BLast(c, @"getGuardBotWebAppUrl");
 	XCTAssertEqualObjects(r[@"query_id"], @(101));
@@ -244,7 +248,7 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 - (void)testGetLoginPasskeys_FlattensTheList {
 	TGClient *c = TG3BClient();
 	__block NSArray *rows = nil;
-	[c loginPasskeysWithCompletion:^(NSArray *value, NSString *error){ rows = value; }];
+	[[TGDevStore shared] loginPasskeysWithCompletion:^(NSArray *value, NSString *error){ rows = value; }];
 	XCTAssertEqualObjects(TG3BLast(c, @"getLoginPasskeys")[@"@type"],
 						  @"getLoginPasskeys");
 	TG3BAnswer(c, TG3BPlain(@{@"@type" : @"passkeys", @"passkeys" : @[
@@ -258,7 +262,7 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 - (void)testGetManagedBotAccessSettings_FlattensTheFlags {
 	TGClient *c = TG3BClient();
 	__block NSDictionary *settings = nil;
-	[c managedBotAccessSettingsForBot:102
+	[[TGDevStore shared] managedBotAccessSettingsForBot:102
 						   completion:^(NSDictionary *value, NSString *error){
 		settings = value;
 	}];
@@ -273,7 +277,7 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 - (void)testGetManagedBotToken_SendsTheRevokeFlag {
 	TGClient *c = TG3BClient();
 	__block NSString *token = nil;
-	[c managedBotTokenForBot:103 revoke:YES
+	[[TGDevStore shared] managedBotTokenForBot:103 revoke:YES
 				  completion:^(NSString *value, NSString *error){ token = value; }];
 	NSDictionary *r = TG3BLast(c, @"getManagedBotToken");
 	XCTAssertEqualObjects(r[@"bot_user_id"], @(103));
@@ -285,7 +289,7 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 - (void)testGetMenuButton_ReadsTheTextVariant {
 	TGClient *c = TG3BClient();
 	__block NSDictionary *button = nil;
-	[c menuButtonForBot:104 completion:^(NSDictionary *value, NSString *error){
+	[[TGDevStore shared] menuButtonForBot:104 completion:^(NSDictionary *value, NSString *error){
 		button = value;
 	}];
 	XCTAssertEqualObjects(TG3BLast(c, @"getMenuButton")[@"user_id"], @(104));
@@ -298,7 +302,7 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 - (void)testGetPasskeyParameters_ReadsTheText {
 	TGClient *c = TG3BClient();
 	__block NSString *text = nil;
-	[c passkeyParametersWithCompletion:^(NSString *value, NSString *error){
+	[[TGDevStore shared] passkeyParametersWithCompletion:^(NSString *value, NSString *error){
 		text = value;
 	}];
 	XCTAssertEqualObjects(TG3BLast(c, @"getPasskeyParameters")[@"@type"],
@@ -310,7 +314,7 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 - (void)testOpenWebApp_SendsChatBotURLAndMode {
 	TGClient *c = TG3BClient();
 	__block NSDictionary *info = nil;
-	[c openWebAppInChat:105 bot:106 url:@"https://app" mode:@"fullScreen"
+	[[TGDevStore shared] openWebAppInChat:105 bot:106 url:@"https://app" mode:@"fullScreen"
 			 completion:^(NSDictionary *value, NSString *error){ info = value; }];
 	NSDictionary *r = TG3BLast(c, @"openWebApp");
 	XCTAssertEqualObjects(r[@"chat_id"], @(105));
@@ -325,13 +329,13 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 
 - (void)testRemoveLoginPasskey_SendsTheId {
 	TGClient *c = TG3BClient();
-	[c removeLoginPasskey:@"pk9" completion:nil];
+	[[TGDevStore shared] removeLoginPasskey:@"pk9" completion:nil];
 	XCTAssertEqualObjects(TG3BLast(c, @"removeLoginPasskey")[@"passkey_id"], @"pk9");
 }
 
 - (void)testReplyToCallbackQueryWithEphemeralMessage_SendsContentAndFlags {
 	TGClient *c = TG3BClient();
-	[c replyToCallbackQueryWithEphemeralMessage:107 text:@"Only you"
+	[[TGDevStore shared] replyToCallbackQueryWithEphemeralMessage:107 text:@"Only you"
 					   replaceCallbackMessage:YES protectContent:NO completion:nil];
 	NSDictionary *r = TG3BLast(c, @"replyToCallbackQueryWithEphemeralMessage");
 	XCTAssertEqualObjects(r[@"callback_query_id"], @(107));
@@ -345,7 +349,7 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 - (void)testSendWebAppCustomRequest_SendsMethodAndParameters {
 	TGClient *c = TG3BClient();
 	__block NSString *result = nil;
-	[c sendWebAppCustomRequest:108 method:@"get_data" parameters:@"{\"a\":1}"
+	[[TGDevStore shared] sendWebAppCustomRequest:108 method:@"get_data" parameters:@"{\"a\":1}"
 					completion:^(NSString *value, NSString *error){ result = value; }];
 	NSDictionary *r = TG3BLast(c, @"sendWebAppCustomRequest");
 	XCTAssertEqualObjects(r[@"bot_user_id"], @(108));
@@ -358,7 +362,7 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 
 - (void)testSendWebAppData_SendsButtonTextAndData {
 	TGClient *c = TG3BClient();
-	[c sendWebAppData:109 buttonText:@"Send" data:@"payload" completion:nil];
+	[[TGDevStore shared] sendWebAppData:109 buttonText:@"Send" data:@"payload" completion:nil];
 	NSDictionary *r = TG3BLast(c, @"sendWebAppData");
 	XCTAssertEqualObjects(r[@"bot_user_id"], @(109));
 	XCTAssertEqualObjects(r[@"button_text"], @"Send");
@@ -367,7 +371,7 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 
 - (void)testSetBotUpdatesStatus_SendsCountAndError {
 	TGClient *c = TG3BClient();
-	[c setBotUpdatesStatus:3 errorMessage:@"timeout" completion:nil];
+	[[TGDevStore shared] setBotUpdatesStatus:3 errorMessage:@"timeout" completion:nil];
 	NSDictionary *r = TG3BLast(c, @"setBotUpdatesStatus");
 	XCTAssertEqualObjects(r[@"pending_update_count"], @(3));
 	XCTAssertEqualObjects(r[@"error_message"], @"timeout");
@@ -375,7 +379,7 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 
 - (void)testSetCommands_SendsCommandObjects {
 	TGClient *c = TG3BClient();
-	[c setCommands:@[@{@"command" : @"start", @"description" : @"Begin"},
+	[[TGDevStore shared] setCommands:@[@{@"command" : @"start", @"description" : @"Begin"},
 					 @"help"]
 			  scope:@"default" chatId:0 language:@"en" completion:nil];
 	NSDictionary *r = TG3BLast(c, @"setCommands");
@@ -388,7 +392,7 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 
 - (void)testSetManagedBotAccessSettings_SendsTheSettingsObject {
 	TGClient *c = TG3BClient();
-	[c setManagedBotAccessSettingsForBot:110 restricted:YES
+	[[TGDevStore shared] setManagedBotAccessSettingsForBot:110 restricted:YES
 							 addedUserIds:@[@(7), @(8)] completion:nil];
 	NSDictionary *r = TG3BLast(c, @"setManagedBotAccessSettings");
 	XCTAssertEqualObjects(r[@"bot_user_id"], @(110));
@@ -399,7 +403,7 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 
 - (void)testSetMenuButton_SendsTheTextVariant {
 	TGClient *c = TG3BClient();
-	[c setMenuButtonForBot:111 text:@"Open" url:@"https://x" completion:nil];
+	[[TGDevStore shared] setMenuButtonForBot:111 text:@"Open" url:@"https://x" completion:nil];
 	NSDictionary *r = TG3BLast(c, @"setMenuButton");
 	XCTAssertEqualObjects(r[@"user_id"], @(111));
 	XCTAssertEqualObjects(r[@"menu_button"][@"@type"], @"botMenuButton");
@@ -412,7 +416,7 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 - (void)testCallBytes_SendsBase64 {
 	TGClient *c = TG3BClient();
 	__block NSString *value = nil;
-	[c testCallBytes:@"AQID" completion:^(NSString *text, NSString *error){
+	[[TGDevStore shared] testCallBytes:@"AQID" completion:^(NSString *text, NSString *error){
 		value = text;
 	}];
 	XCTAssertEqualObjects(TG3BLast(c, @"testCallBytes")[@"x"], @"AQID");
@@ -422,14 +426,14 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 
 - (void)testCallEmpty_SendsTheMethod {
 	TGClient *c = TG3BClient();
-	[c testCallEmptyWithCompletion:nil];
+	[[TGDevStore shared] testCallEmptyWithCompletion:nil];
 	XCTAssertEqualObjects(TG3BLast(c, @"testCallEmpty")[@"@type"], @"testCallEmpty");
 }
 
 - (void)testCallString_SendsTheString {
 	TGClient *c = TG3BClient();
 	__block NSString *value = nil;
-	[c testCallString:@"hi" completion:^(NSString *text, NSString *error){
+	[[TGDevStore shared] testCallString:@"hi" completion:^(NSString *text, NSString *error){
 		value = text;
 	}];
 	XCTAssertEqualObjects(TG3BLast(c, @"testCallString")[@"x"], @"hi");
@@ -439,13 +443,13 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 
 - (void)testCallVectorInt_SendsNumbers {
 	TGClient *c = TG3BClient();
-	[c testCallVectorInt:@[@(1), @(2)] completion:nil];
+	[[TGDevStore shared] testCallVectorInt:@[@(1), @(2)] completion:nil];
 	XCTAssertEqualObjects(TG3BLast(c, @"testCallVectorInt")[@"x"], (@[@(1), @(2)]));
 }
 
 - (void)testCallVectorIntObject_SendsTestIntObjects {
 	TGClient *c = TG3BClient();
-	[c testCallVectorIntObject:@[@(3)] completion:nil];
+	[[TGDevStore shared] testCallVectorIntObject:@[@(3)] completion:nil];
 	NSDictionary *r = TG3BLast(c, @"testCallVectorIntObject");
 	XCTAssertEqualObjects(r[@"x"][0][@"@type"], @"testInt");
 	XCTAssertEqualObjects(r[@"x"][0][@"value"], @(3));
@@ -453,13 +457,13 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 
 - (void)testCallVectorString_SendsStrings {
 	TGClient *c = TG3BClient();
-	[c testCallVectorString:@[@"a", @"b"] completion:nil];
+	[[TGDevStore shared] testCallVectorString:@[@"a", @"b"] completion:nil];
 	XCTAssertEqualObjects(TG3BLast(c, @"testCallVectorString")[@"x"], (@[@"a", @"b"]));
 }
 
 - (void)testCallVectorStringObject_SendsTestStringObjects {
 	TGClient *c = TG3BClient();
-	[c testCallVectorStringObject:@[@"z"] completion:nil];
+	[[TGDevStore shared] testCallVectorStringObject:@[@"z"] completion:nil];
 	NSDictionary *r = TG3BLast(c, @"testCallVectorStringObject");
 	XCTAssertEqualObjects(r[@"x"][0][@"@type"], @"testString");
 	XCTAssertEqualObjects(r[@"x"][0][@"value"], @"z");
@@ -467,14 +471,14 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 
 - (void)testGetDifference_SendsTheMethod {
 	TGClient *c = TG3BClient();
-	[c testGetDifferenceWithCompletion:nil];
+	[[TGDevStore shared] testGetDifferenceWithCompletion:nil];
 	XCTAssertEqualObjects(TG3BLast(c, @"testGetDifference")[@"@type"],
 						  @"testGetDifference");
 }
 
 - (void)testNetwork_SendsTheMethod {
 	TGClient *c = TG3BClient();
-	[c testNetworkWithCompletion:nil];
+	[[TGDevStore shared] testNetworkWithCompletion:nil];
 	XCTAssertEqualObjects(TG3BLast(c, @"testNetwork")[@"@type"], @"testNetwork");
 }
 
@@ -482,7 +486,7 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 	TGClient *c = TG3BClient();
 	__block int32_t code = 0;
 	__block NSString *message = nil;
-	[c testReturnErrorCode:400 message:@"Test error"
+	[[TGDevStore shared] testReturnErrorCode:400 message:@"Test error"
 				 completion:^(int32_t value, NSString *text, NSString *error){
 		code = value;
 		message = text;
@@ -499,7 +503,7 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 - (void)testSquareInt_SendsTheNumber {
 	TGClient *c = TG3BClient();
 	__block int32_t result = 0;
-	[c testSquareInt:12 completion:^(int32_t value, NSString *error){ result = value; }];
+	[[TGDevStore shared] testSquareInt:12 completion:^(int32_t value, NSString *error){ result = value; }];
 	XCTAssertEqualObjects(TG3BLast(c, @"testSquareInt")[@"x"], @(12));
 	TG3BAnswer(c, TG3BPlain(@{@"@type" : @"testInt", @"value" : @(144)}));
 	XCTAssertEqual(result, 144);
@@ -508,7 +512,7 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 - (void)testUseUpdate_SendsTheMethodAndReturnsTheUpdate {
 	TGClient *c = TG3BClient();
 	__block NSDictionary *update = nil;
-	[c testUseUpdateWithCompletion:^(NSDictionary *value, NSString *error){
+	[[TGDevStore shared] testUseUpdateWithCompletion:^(NSDictionary *value, NSString *error){
 		update = value;
 	}];
 	XCTAssertEqualObjects(TG3BLast(c, @"testUseUpdate")[@"@type"], @"testUseUpdate");
@@ -522,7 +526,7 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 - (void)testConnectAffiliateProgram_SendsAffiliateAndBot {
 	TGClient *c = TG3BClient();
 	__block NSDictionary *program = nil;
-	[c connectAffiliateProgramForKind:@"user" botUserId:0 chatId:0
+	[[TGStarsStore shared] connectAffiliateProgramForKind:@"user" botUserId:0 chatId:0
 					 programBotUserId:201 completion:^(NSDictionary *value,
 													   NSString *error){
 		program = value;
@@ -542,7 +546,7 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 
 - (void)testDisconnectAffiliateProgram_SendsTheURL {
 	TGClient *c = TG3BClient();
-	[c disconnectAffiliateProgramForKind:@"bot" botUserId:202 chatId:0
+	[[TGStarsStore shared] disconnectAffiliateProgramForKind:@"bot" botUserId:202 chatId:0
 									 url:@"https://t.me/x" completion:nil];
 	NSDictionary *r = TG3BLast(c, @"disconnectAffiliateProgram");
 	XCTAssertEqualObjects(r[@"affiliate"][@"@type"], @"affiliateTypeBot");
@@ -552,7 +556,7 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 
 - (void)testGetConnectedAffiliateProgram_SendsTheProgramBot {
 	TGClient *c = TG3BClient();
-	[c connectedAffiliateProgramForKind:@"channel" botUserId:0 chatId:203
+	[[TGStarsStore shared] connectedAffiliateProgramForKind:@"channel" botUserId:0 chatId:203
 						programBotUserId:204 completion:nil];
 	NSDictionary *r = TG3BLast(c, @"getConnectedAffiliateProgram");
 	XCTAssertEqualObjects(r[@"affiliate"][@"@type"], @"affiliateTypeChannel");
@@ -563,7 +567,7 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 - (void)testGetConnectedAffiliatePrograms_SendsOffsetAndLimit {
 	TGClient *c = TG3BClient();
 	__block NSDictionary *page = nil;
-	[c connectedAffiliateProgramsForKind:@"user" botUserId:0 chatId:0
+	[[TGStarsStore shared] connectedAffiliateProgramsForKind:@"user" botUserId:0 chatId:0
 								  offset:@"o1" limit:5
 							  completion:^(NSDictionary *value, NSString *error){
 		page = value;
@@ -586,7 +590,7 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 - (void)testSearchAffiliatePrograms_SendsSortAndFlattensFoundRows {
 	TGClient *c = TG3BClient();
 	__block NSDictionary *page = nil;
-	[c searchAffiliateProgramsForKind:@"user" botUserId:0 chatId:0
+	[[TGStarsStore shared] searchAffiliateProgramsForKind:@"user" botUserId:0 chatId:0
 							sortOrder:@"revenue" offset:@"" limit:10
 						   completion:^(NSDictionary *value, NSString *error){
 		page = value;
@@ -611,7 +615,7 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 - (void)testSearchChatAffiliateProgram_SendsUsernameAndReferrer {
 	TGClient *c = TG3BClient();
 	__block NSDictionary *chat = nil;
-	[c searchChatAffiliateProgram:@"news" referrer:@"ref"
+	[[TGStarsStore shared] searchChatAffiliateProgram:@"news" referrer:@"ref"
 					   completion:^(NSDictionary *value, NSString *error){
 		chat = value;
 	}];
@@ -625,7 +629,7 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 
 - (void)testSetChatAffiliateProgram_SendsParameters {
 	TGClient *c = TG3BClient();
-	[c setChatAffiliateProgram:302 commissionPerMille:40 monthCount:12
+	[[TGStarsStore shared] setChatAffiliateProgram:302 commissionPerMille:40 monthCount:12
 					completion:nil];
 	NSDictionary *r = TG3BLast(c, @"setChatAffiliateProgram");
 	XCTAssertEqualObjects(r[@"chat_id"], @(302));
@@ -694,7 +698,7 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 - (void)testGetSupportName_ReadsTheText {
 	TGClient *c = TG3BClient();
 	__block NSString *name = nil;
-	[c supportNameWithCompletion:^(NSString *value, NSString *error){ name = value; }];
+	[[TGAccountStore shared] supportNameWithCompletion:^(NSString *value, NSString *error){ name = value; }];
 	XCTAssertEqualObjects(TG3BLast(c, @"getSupportName")[@"@type"], @"getSupportName");
 	TG3BAnswer(c, TG3BPlain(@{@"@type" : @"text", @"text" : @"Telegram Support"}));
 	XCTAssertEqualObjects(name, @"Telegram Support");
@@ -703,7 +707,7 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 - (void)testGetUserSupportInfo_SendsTheUserAndFlattens {
 	TGClient *c = TG3BClient();
 	__block NSDictionary *info = nil;
-	[c supportInfoForUser:501 completion:^(NSDictionary *value, NSString *error){
+	[[TGAccountStore shared] supportInfoForUser:501 completion:^(NSDictionary *value, NSString *error){
 		info = value;
 	}];
 	XCTAssertEqualObjects(TG3BLast(c, @"getUserSupportInfo")[@"user_id"], @(501));
@@ -717,7 +721,7 @@ static NSDictionary *TG3BPlain(NSDictionary *dictionary) {
 
 - (void)testSetUserSupportInfo_SendsFormattedText {
 	TGClient *c = TG3BClient();
-	[c setSupportInfo:@"Need help" forUser:502 completion:nil];
+	[[TGAccountStore shared] setSupportInfo:@"Need help" forUser:502 completion:nil];
 	NSDictionary *r = TG3BLast(c, @"setUserSupportInfo");
 	XCTAssertEqualObjects(r[@"user_id"], @(502));
 	XCTAssertEqualObjects(r[@"message"][@"@type"], @"formattedText");

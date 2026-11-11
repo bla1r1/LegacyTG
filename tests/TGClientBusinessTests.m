@@ -10,6 +10,8 @@
 #import "TGClientInternal.h"
 #import "TGBusinessStore.h"
 #import "TGGroupStore.h"
+#import "TGStoreTestSupport.h"
+#import "TGDevStore.h"
 
 @interface TGClientBusinessTests : XCTestCase @end
 
@@ -100,7 +102,7 @@ static void replySupergroupChat(TGClient *c, long long chatId, long long supergr
 - (void)testGetBusinessConnection_SendsTheIdAndKeepsTheRecord {
 	TGClient *c = BizClient();
 	__block NSDictionary *got = nil;
-	[c businessConnectionWithId:@"conn-7" completion:^(NSDictionary *connection,
+	[[TGBusinessStore shared] businessConnectionWithId:@"conn-7" completion:^(NSDictionary *connection,
 													   NSString *error){
 		got = connection;
 	}];
@@ -116,7 +118,7 @@ static void replySupergroupChat(TGClient *c, long long chatId, long long supergr
 - (void)testGetBusinessConnection_RefusalIsTheMessage {
 	TGClient *c = BizClient();
 	__block NSString *gotError = nil;
-	[c businessConnectionWithId:@"" completion:^(NSDictionary *connection,
+	[[TGBusinessStore shared] businessConnectionWithId:@"" completion:^(NSDictionary *connection,
 												 NSString *error){
 		gotError = error;
 	}];
@@ -128,7 +130,7 @@ static void replySupergroupChat(TGClient *c, long long chatId, long long supergr
 - (void)testGetBusinessChatLinks_ReturnsEveryLink {
 	TGClient *c = BizClient();
 	__block NSArray *got = nil;
-	[c businessChatLinksWithCompletion:^(NSArray *links, NSString *error){ got = links; }];
+	[[TGBusinessStore shared] businessChatLinksWithCompletion:^(NSArray *links, NSString *error){ got = links; }];
 	XCTAssertEqualObjects(lastBiz(c, @"getBusinessChatLinks")[@"@type"],
 						   @"getBusinessChatLinks");
 	replyBiz(c, @"getBusinessChatLinks", plainBiz(@{
@@ -145,7 +147,7 @@ static void replySupergroupChat(TGClient *c, long long chatId, long long supergr
 - (void)testCreateBusinessChatLink_SendsTitleAndPresetText {
 	TGClient *c = BizClient();
 	__block NSDictionary *got = nil;
-	[c createBusinessChatLinkWithText:@"Hello" title:@"Shop"
+	[[TGBusinessStore shared] createBusinessChatLinkWithText:@"Hello" title:@"Shop"
 						   completion:^(NSDictionary *link, NSString *error){
 		got = link;
 	}];
@@ -162,7 +164,7 @@ static void replySupergroupChat(TGClient *c, long long chatId, long long supergr
 - (void)testEditBusinessChatLink_NamesTheLinkAndTheNewInfo {
 	TGClient *c = BizClient();
 	__block NSDictionary *got = nil;
-	[c editBusinessChatLink:@"https://t.me/m/abc" text:@"New text" title:@"Renamed"
+	[[TGBusinessStore shared] editBusinessChatLink:@"https://t.me/m/abc" text:@"New text" title:@"Renamed"
 				 completion:^(NSDictionary *edited, NSString *error){ got = edited; }];
 	NSDictionary *r = lastBiz(c, @"editBusinessChatLink");
 	XCTAssertEqualObjects(r[@"link"], @"https://t.me/m/abc");
@@ -177,7 +179,7 @@ static void replySupergroupChat(TGClient *c, long long chatId, long long supergr
 - (void)testDeleteBusinessChatLink_SendsTheUrl {
 	TGClient *c = BizClient();
 	__block BOOL got = NO;
-	[c deleteBusinessChatLink:@"https://t.me/m/abc"
+	[[TGBusinessStore shared] deleteBusinessChatLink:@"https://t.me/m/abc"
 				   completion:^(BOOL ok, NSString *error){ got = ok; }];
 	XCTAssertEqualObjects(lastBiz(c, @"deleteBusinessChatLink")[@"link"],
 						   @"https://t.me/m/abc");
@@ -188,7 +190,7 @@ static void replySupergroupChat(TGClient *c, long long chatId, long long supergr
 - (void)testGetBusinessChatLinkInfo_AsksByNameAndReadsTheChat {
 	TGClient *c = BizClient();
 	__block NSDictionary *got = nil;
-	[c businessChatLinkInfoForName:@"abc"
+	[[TGBusinessStore shared] businessChatLinkInfoForName:@"abc"
 						completion:^(NSDictionary *info, NSString *error){ got = info; }];
 	XCTAssertEqualObjects(lastBiz(c, @"getBusinessChatLinkInfo")[@"link_name"], @"abc");
 	replyBiz(c, @"getBusinessChatLinkInfo", plainBiz(@{
@@ -209,7 +211,7 @@ static void replySupergroupChat(TGClient *c, long long chatId, long long supergr
 - (void)testSetBusinessAccountName_SendsFirstAndLast {
 	TGClient *c = BizClient();
 	__block BOOL got = NO;
-	[c setBusinessAccountName:@"Ada" last:@"Lovelace" connectionId:@"conn"
+	[[TGBusinessStore shared] setBusinessAccountName:@"Ada" last:@"Lovelace" connectionId:@"conn"
 				   completion:^(BOOL ok, NSString *error){ got = ok; }];
 	NSDictionary *r = lastBiz(c, @"setBusinessAccountName");
 	XCTAssertEqualObjects(r[@"business_connection_id"], @"conn");
@@ -221,7 +223,7 @@ static void replySupergroupChat(TGClient *c, long long chatId, long long supergr
 
 - (void)testSetBusinessAccountBio_SendsTheBio {
 	TGClient *c = BizClient();
-	[c setBusinessAccountBio:@"A shop" connectionId:@"conn" completion:nil];
+	[[TGBusinessStore shared] setBusinessAccountBio:@"A shop" connectionId:@"conn" completion:nil];
 	NSDictionary *r = lastBiz(c, @"setBusinessAccountBio");
 	XCTAssertEqualObjects(r[@"bio"], @"A shop");
 	XCTAssertEqualObjects(r[@"business_connection_id"], @"conn");
@@ -229,14 +231,14 @@ static void replySupergroupChat(TGClient *c, long long chatId, long long supergr
 
 - (void)testSetBusinessAccountUsername_SendsTheName {
 	TGClient *c = BizClient();
-	[c setBusinessAccountUsername:@"shop" connectionId:@"conn" completion:nil];
+	[[TGBusinessStore shared] setBusinessAccountUsername:@"shop" connectionId:@"conn" completion:nil];
 	NSDictionary *r = lastBiz(c, @"setBusinessAccountUsername");
 	XCTAssertEqualObjects(r[@"username"], @"shop");
 }
 
 - (void)testSetBusinessAccountProfilePhoto_LocalPathIsStaticPhoto {
 	TGClient *c = BizClient();
-	[c setBusinessAccountProfilePhotoAtPath:@"/tmp/a.jpg" public:YES
+	[[TGBusinessStore shared] setBusinessAccountProfilePhotoAtPath:@"/tmp/a.jpg" public:YES
 							   connectionId:@"conn" completion:nil];
 	NSDictionary *r = lastBiz(c, @"setBusinessAccountProfilePhoto");
 	XCTAssertEqualObjects(r[@"photo"][@"@type"], @"inputChatPhotoStatic");
@@ -246,7 +248,7 @@ static void replySupergroupChat(TGClient *c, long long chatId, long long supergr
 
 - (void)testSetBusinessAccountProfilePhoto_NilRemovesIt {
 	TGClient *c = BizClient();
-	[c setBusinessAccountProfilePhotoAtPath:nil public:NO
+	[[TGBusinessStore shared] setBusinessAccountProfilePhotoAtPath:nil public:NO
 							   connectionId:@"conn" completion:nil];
 	XCTAssertEqualObjects(lastBiz(c, @"setBusinessAccountProfilePhoto")[@"photo"],
 						   [NSNull null]);
@@ -257,7 +259,7 @@ static void replySupergroupChat(TGClient *c, long long chatId, long long supergr
 - (void)testSetBusinessLocation_SendsAddressAndPoint {
 	TGClient *c = BizClient();
 	__block BOOL got = NO;
-	[c setBusinessLocationLatitude:@(50.45) longitude:@(30.52) address:@"Kyiv"
+	[[TGBusinessStore shared] setBusinessLocationLatitude:@(50.45) longitude:@(30.52) address:@"Kyiv"
 						completion:^(BOOL ok, NSString *error){ got = ok; }];
 	NSDictionary *r = lastBiz(c, @"setBusinessLocation");
 	XCTAssertEqualObjects(r[@"location"][@"address"], @"Kyiv");
@@ -269,14 +271,14 @@ static void replySupergroupChat(TGClient *c, long long chatId, long long supergr
 
 - (void)testSetBusinessLocation_NilRemovesIt {
 	TGClient *c = BizClient();
-	[c setBusinessLocationLatitude:nil longitude:nil address:nil completion:nil];
+	[[TGBusinessStore shared] setBusinessLocationLatitude:nil longitude:nil address:nil completion:nil];
 	XCTAssertEqualObjects(lastBiz(c, @"setBusinessLocation")[@"location"],
 						   [NSNull null]);
 }
 
 - (void)testSetBusinessOpeningHours_SendsEachInterval {
 	TGClient *c = BizClient();
-	[c setBusinessOpeningHoursTimeZone:@"Europe/Kyiv"
+	[[TGBusinessStore shared] setBusinessOpeningHoursTimeZone:@"Europe/Kyiv"
 							 intervals:@[@{@"@type" : @"businessOpeningHoursInterval",
 										   @"start_minute" : @(540),
 										   @"end_minute" : @(1080)}]
@@ -290,7 +292,7 @@ static void replySupergroupChat(TGClient *c, long long chatId, long long supergr
 
 - (void)testSetBusinessGreetingMessage_SendsShortcutRecipientsAndDays {
 	TGClient *c = BizClient();
-	[c setBusinessGreetingMessageEnabled:YES shortcutId:4 inactivityDays:7
+	[[TGBusinessStore shared] setBusinessGreetingMessageEnabled:YES shortcutId:4 inactivityDays:7
 							  recipients:@{@"existing" : @YES, @"new" : @NO}
 							  completion:nil];
 	NSDictionary *r = lastBiz(c, @"setBusinessGreetingMessageSettings");
@@ -306,7 +308,7 @@ static void replySupergroupChat(TGClient *c, long long chatId, long long supergr
 
 - (void)testSetBusinessGreetingMessage_OffSendsNull {
 	TGClient *c = BizClient();
-	[c setBusinessGreetingMessageEnabled:NO shortcutId:0 inactivityDays:0
+	[[TGBusinessStore shared] setBusinessGreetingMessageEnabled:NO shortcutId:0 inactivityDays:0
 							  recipients:nil completion:nil];
 	XCTAssertEqualObjects(lastBiz(c, @"setBusinessGreetingMessageSettings")
 			[@"greeting_message_settings"], [NSNull null]);
@@ -314,7 +316,7 @@ static void replySupergroupChat(TGClient *c, long long chatId, long long supergr
 
 - (void)testSetBusinessAwayMessage_CustomScheduleCarriesBothDates {
 	TGClient *c = BizClient();
-	[c setBusinessAwayMessageEnabled:YES shortcutId:2 schedule:@"custom"
+	[[TGBusinessStore shared] setBusinessAwayMessageEnabled:YES shortcutId:2 schedule:@"custom"
 						   startDate:1700000000 endDate:1700086400
 						 offlineOnly:YES recipients:nil completion:nil];
 	NSDictionary *r = lastBiz(c, @"setBusinessAwayMessageSettings");
@@ -328,7 +330,7 @@ static void replySupergroupChat(TGClient *c, long long chatId, long long supergr
 
 - (void)testSetBusinessAwayMessage_OutsideHoursType {
 	TGClient *c = BizClient();
-	[c setBusinessAwayMessageEnabled:YES shortcutId:2 schedule:@"outside"
+	[[TGBusinessStore shared] setBusinessAwayMessageEnabled:YES shortcutId:2 schedule:@"outside"
 						   startDate:0 endDate:0 offlineOnly:NO
 						   recipients:nil completion:nil];
 	XCTAssertEqualObjects(lastBiz(c, @"setBusinessAwayMessageSettings")
@@ -338,7 +340,7 @@ static void replySupergroupChat(TGClient *c, long long chatId, long long supergr
 
 - (void)testSetBusinessStartPage_SendsTitleMessageAndSticker {
 	TGClient *c = BizClient();
-	[c setBusinessStartPageTitle:@"Hi" message:@"Welcome" stickerPath:@"/tmp/s.jpg"
+	[[TGBusinessStore shared] setBusinessStartPageTitle:@"Hi" message:@"Welcome" stickerPath:@"/tmp/s.jpg"
 					  completion:nil];
 	NSDictionary *r = lastBiz(c, @"setBusinessStartPage");
 	XCTAssertEqualObjects(r[@"start_page"][@"title"], @"Hi");
@@ -348,7 +350,7 @@ static void replySupergroupChat(TGClient *c, long long chatId, long long supergr
 
 - (void)testSetBusinessStartPage_EmptyRemovesIt {
 	TGClient *c = BizClient();
-	[c setBusinessStartPageTitle:@"" message:@"" stickerPath:nil completion:nil];
+	[[TGBusinessStore shared] setBusinessStartPageTitle:@"" message:@"" stickerPath:nil completion:nil];
 	XCTAssertEqualObjects(lastBiz(c, @"setBusinessStartPage")[@"start_page"],
 						   [NSNull null]);
 }
@@ -358,7 +360,7 @@ static void replySupergroupChat(TGClient *c, long long chatId, long long supergr
 - (void)testSendBusinessMessage_SendsTextAndFlags {
 	TGClient *c = BizClient();
 	__block NSDictionary *got = nil;
-	[c sendBusinessMessageWithConnectionId:@"conn" chatId:77 text:@"Hello"
+	[[TGBusinessStore shared] sendBusinessMessageWithConnectionId:@"conn" chatId:77 text:@"Hello"
 					  disableNotification:YES protectContent:YES
 								completion:^(NSDictionary *message, NSString *error){
 		got = message;
@@ -377,7 +379,7 @@ static void replySupergroupChat(TGClient *c, long long chatId, long long supergr
 - (void)testSendBusinessMessageAlbum_SendsEveryPhoto {
 	TGClient *c = BizClient();
 	__block NSArray *got = nil;
-	[c sendBusinessMessageAlbumWithConnectionId:@"conn" chatId:77
+	[[TGBusinessStore shared] sendBusinessMessageAlbumWithConnectionId:@"conn" chatId:77
 										 paths:@[@"/tmp/a.jpg", @"/tmp/b.jpg"]
 									   caption:@"Two"
 						   disableNotification:NO protectContent:NO
@@ -399,7 +401,7 @@ static void replySupergroupChat(TGClient *c, long long chatId, long long supergr
 
 - (void)testEditBusinessMessageText_SendsTheNewText {
 	TGClient *c = BizClient();
-	[c editBusinessMessageTextWithConnectionId:@"conn" chatId:77 messageId:91
+	[[TGBusinessStore shared] editBusinessMessageTextWithConnectionId:@"conn" chatId:77 messageId:91
 										 text:@"Edited"
 									completion:nil];
 	NSDictionary *r = lastBiz(c, @"editBusinessMessageText");
@@ -409,7 +411,7 @@ static void replySupergroupChat(TGClient *c, long long chatId, long long supergr
 
 - (void)testEditBusinessMessageCaption_SendsCaptionAndPlacement {
 	TGClient *c = BizClient();
-	[c editBusinessMessageCaptionWithConnectionId:@"conn" chatId:77 messageId:91
+	[[TGBusinessStore shared] editBusinessMessageCaptionWithConnectionId:@"conn" chatId:77 messageId:91
 										  caption:@"Caption" completion:nil];
 	NSDictionary *r = lastBiz(c, @"editBusinessMessageCaption");
 	XCTAssertEqualObjects(r[@"caption"][@"text"], @"Caption");
@@ -418,7 +420,7 @@ static void replySupergroupChat(TGClient *c, long long chatId, long long supergr
 
 - (void)testEditBusinessMessageMedia_SendsPhotoContent {
 	TGClient *c = BizClient();
-	[c editBusinessMessageMediaWithConnectionId:@"conn" chatId:77 messageId:91
+	[[TGBusinessStore shared] editBusinessMessageMediaWithConnectionId:@"conn" chatId:77 messageId:91
 										   path:@"/tmp/a.jpg" isVideo:NO caption:@"New"
 									 completion:nil];
 	NSDictionary *r = lastBiz(c, @"editBusinessMessageMedia");
@@ -428,7 +430,7 @@ static void replySupergroupChat(TGClient *c, long long chatId, long long supergr
 
 - (void)testEditBusinessMessageLiveLocation_SendsThePointAndPeriod {
 	TGClient *c = BizClient();
-	[c editBusinessMessageLiveLocationWithConnectionId:@"conn" chatId:77 messageId:91
+	[[TGBusinessStore shared] editBusinessMessageLiveLocationWithConnectionId:@"conn" chatId:77 messageId:91
 											  latitude:50.45 longitude:30.52
 											livePeriod:900 completion:nil];
 	NSDictionary *r = lastBiz(c, @"editBusinessMessageLiveLocation");
@@ -438,7 +440,7 @@ static void replySupergroupChat(TGClient *c, long long chatId, long long supergr
 
 - (void)testEditBusinessMessageLiveLocation_ZeroStopsSharing {
 	TGClient *c = BizClient();
-	[c editBusinessMessageLiveLocationWithConnectionId:@"conn" chatId:77 messageId:91
+	[[TGBusinessStore shared] editBusinessMessageLiveLocationWithConnectionId:@"conn" chatId:77 messageId:91
 											  latitude:0 longitude:0
 											livePeriod:0 completion:nil];
 	XCTAssertEqualObjects(lastBiz(c, @"editBusinessMessageLiveLocation")[@"location"],
@@ -447,7 +449,7 @@ static void replySupergroupChat(TGClient *c, long long chatId, long long supergr
 
 - (void)testEditBusinessMessageChecklist_SendsTasks {
 	TGClient *c = BizClient();
-	[c editBusinessMessageChecklistWithConnectionId:@"conn" chatId:77 messageId:91
+	[[TGBusinessStore shared] editBusinessMessageChecklistWithConnectionId:@"conn" chatId:77 messageId:91
 											 title:@"Tasks" tasks:@[@"One", @"Two"]
 										completion:nil];
 	NSDictionary *r = lastBiz(c, @"editBusinessMessageChecklist");
@@ -458,7 +460,7 @@ static void replySupergroupChat(TGClient *c, long long chatId, long long supergr
 
 - (void)testEditBusinessMessageReplyMarkup_ClearsIt {
 	TGClient *c = BizClient();
-	[c editBusinessMessageReplyMarkupWithConnectionId:@"conn" chatId:77 messageId:91
+	[[TGBusinessStore shared] editBusinessMessageReplyMarkupWithConnectionId:@"conn" chatId:77 messageId:91
 										   completion:nil];
 	XCTAssertEqualObjects(lastBiz(c, @"editBusinessMessageReplyMarkup")
 			[@"reply_markup"], [NSNull null]);
@@ -466,7 +468,7 @@ static void replySupergroupChat(TGClient *c, long long chatId, long long supergr
 
 - (void)testStopBusinessPoll_SendsTheMessage {
 	TGClient *c = BizClient();
-	[c stopBusinessPollWithConnectionId:@"conn" chatId:77 messageId:91
+	[[TGBusinessStore shared] stopBusinessPollWithConnectionId:@"conn" chatId:77 messageId:91
 							 completion:nil];
 	NSDictionary *r = lastBiz(c, @"stopBusinessPoll");
 	XCTAssertEqualObjects(r[@"message_id"], @(91));
@@ -476,7 +478,7 @@ static void replySupergroupChat(TGClient *c, long long chatId, long long supergr
 - (void)testReadBusinessMessage_SendsTheMessage {
 	TGClient *c = BizClient();
 	__block BOOL got = NO;
-	[c readBusinessMessageWithConnectionId:@"conn" chatId:77 messageId:91
+	[[TGBusinessStore shared] readBusinessMessageWithConnectionId:@"conn" chatId:77 messageId:91
 								completion:^(BOOL ok, NSString *error){ got = ok; }];
 	NSDictionary *r = lastBiz(c, @"readBusinessMessage");
 	XCTAssertEqualObjects(r[@"chat_id"], @(77));
@@ -487,11 +489,11 @@ static void replySupergroupChat(TGClient *c, long long chatId, long long supergr
 
 - (void)testSetBusinessMessagePinned_TrueAndFalse {
 	TGClient *c = BizClient();
-	[c setBusinessMessagePinnedWithConnectionId:@"conn" chatId:77 messageId:91
+	[[TGBusinessStore shared] setBusinessMessagePinnedWithConnectionId:@"conn" chatId:77 messageId:91
 										 pinned:YES completion:nil];
 	XCTAssertEqualObjects(lastBiz(c, @"setBusinessMessageIsPinned")[@"is_pinned"], @YES);
 	[c.outbox removeAllObjects];
-	[c setBusinessMessagePinnedWithConnectionId:@"conn" chatId:77 messageId:91
+	[[TGBusinessStore shared] setBusinessMessagePinnedWithConnectionId:@"conn" chatId:77 messageId:91
 										 pinned:NO completion:nil];
 	XCTAssertEqualObjects(lastBiz(c, @"setBusinessMessageIsPinned")[@"is_pinned"], @NO);
 }
@@ -499,7 +501,7 @@ static void replySupergroupChat(TGClient *c, long long chatId, long long supergr
 - (void)testDeleteBusinessMessages_SendsEveryId {
 	TGClient *c = BizClient();
 	__block BOOL got = NO;
-	[c deleteBusinessMessagesWithConnectionId:@"conn" messageIds:@[@(91), @(92)]
+	[[TGBusinessStore shared] deleteBusinessMessagesWithConnectionId:@"conn" messageIds:@[@(91), @(92)]
 								   completion:^(BOOL ok, NSString *error){ got = ok; }];
 	NSDictionary *r = lastBiz(c, @"deleteBusinessMessages");
 	XCTAssertEqualObjects(r[@"business_connection_id"], @"conn");
@@ -511,7 +513,7 @@ static void replySupergroupChat(TGClient *c, long long chatId, long long supergr
 - (void)testDeleteBusinessMessages_EmptyListIsRefusedBeforeSending {
 	TGClient *c = BizClient();
 	__block NSString *gotError = nil;
-	[c deleteBusinessMessagesWithConnectionId:@"conn" messageIds:@[]
+	[[TGBusinessStore shared] deleteBusinessMessagesWithConnectionId:@"conn" messageIds:@[]
 								   completion:^(BOOL ok, NSString *error){
 		gotError = error;
 	}];
@@ -554,7 +556,7 @@ static void replySupergroupChat(TGClient *c, long long chatId, long long supergr
 - (void)testAntiSpamCandidates_KeepsOnlyReportableDeletions {
 	TGClient *c = BizClient();
 	__block NSArray *got = nil;
-	[c antiSpamFalsePositiveCandidatesForChat:-77 completion:^(NSArray *rows,
+	[[TGGroupStore shared] antiSpamFalsePositiveCandidatesForChat:-77 completion:^(NSArray *rows,
 															   NSString *error){
 		got = rows;
 	}];
@@ -585,7 +587,7 @@ static void replySupergroupChat(TGClient *c, long long chatId, long long supergr
 - (void)testReportAntiSpamFalsePositive_SendsSupergroupIdAndMessage {
 	TGClient *c = BizClient();
 	__block BOOL got = NO;
-	[c reportAntiSpamFalsePositiveInChat:-77 messageId:91
+	[[TGGroupStore shared] reportAntiSpamFalsePositiveInChat:-77 messageId:91
 							  completion:^(BOOL ok, NSString *error){ got = ok; }];
 	replySupergroupChat(c, -77, 55);
 	NSDictionary *r = lastBiz(c, @"reportSupergroupAntiSpamFalsePositive");
@@ -600,7 +602,7 @@ static void replySupergroupChat(TGClient *c, long long chatId, long long supergr
 - (void)testProcessWebProxyCarrierText_SendsTheTextMessage {
 	TGClient *c = BizClient();
 	__block BOOL got = NO;
-	[c processWebProxyCarrierMessage:5 text:@"{hello:1}"
+	[[TGDevStore shared] processWebProxyCarrierMessage:5 text:@"{hello:1}"
 						  completion:^(BOOL ok, NSString *error){ got = ok; }];
 	NSDictionary *r = lastBiz(c, @"processWebProxyCarrierMessage");
 	XCTAssertEqualObjects(r[@"carrier_id"], @(5));
@@ -612,7 +614,7 @@ static void replySupergroupChat(TGClient *c, long long chatId, long long supergr
 
 - (void)testProcessWebProxyCarrierBinary_SendsBase64Data {
 	TGClient *c = BizClient();
-	[c processWebProxyCarrierMessage:5 base64:@"AAECAw==" completion:nil];
+	[[TGDevStore shared] processWebProxyCarrierMessage:5 base64:@"AAECAw==" completion:nil];
 	NSDictionary *r = lastBiz(c, @"processWebProxyCarrierMessage");
 	XCTAssertEqualObjects(r[@"message"][@"@type"], @"webProxyCarrierMessageBinary");
 	XCTAssertEqualObjects(r[@"message"][@"data"], @"AAECAw==");
@@ -621,7 +623,7 @@ static void replySupergroupChat(TGClient *c, long long chatId, long long supergr
 - (void)testReportWebProxyCarrierError_LoadFailedCarriesTheSentence {
 	TGClient *c = BizClient();
 	__block BOOL got = NO;
-	[c reportWebProxyCarrierError:5 kind:@"loadFailed" message:@"404"
+	[[TGDevStore shared] reportWebProxyCarrierError:5 kind:@"loadFailed" message:@"404"
 					   completion:^(BOOL ok, NSString *error){ got = ok; }];
 	NSDictionary *r = lastBiz(c, @"reportWebProxyCarrierError");
 	XCTAssertEqualObjects(r[@"carrier_id"], @(5));
@@ -633,7 +635,7 @@ static void replySupergroupChat(TGClient *c, long long chatId, long long supergr
 
 - (void)testReportWebProxyCarrierError_UnsupportedHasNoSentence {
 	TGClient *c = BizClient();
-	[c reportWebProxyCarrierError:5 kind:@"unsupported" message:nil completion:nil];
+	[[TGDevStore shared] reportWebProxyCarrierError:5 kind:@"unsupported" message:nil completion:nil];
 	XCTAssertEqualObjects(lastBiz(c, @"reportWebProxyCarrierError")
 			[@"error"][@"@type"], @"webProxyCarrierErrorUnsupported");
 }

@@ -11,6 +11,8 @@
 #import "TGClient.h"
 #import "TGClientInternal.h"
 #import "TGSettingsStore.h"
+#import "TGStoreTestSupport.h"
+#import "TGSearchStore.h"
 
 @interface TGClientFoldersTests : XCTestCase @end
 
@@ -70,7 +72,7 @@ static void answerLastRequest(TGClient *c, NSDictionary *answer) {
 /// the ones this app cares about.
 - (void)testCreateFolder_SendsAWholeFolderObject {
 	TGClient *c = F2();
-	[c createFolderNamed:@"Work" icon:nil withChats:@[@(5), @(6)] completion:nil];
+	[[TGSettingsStore shared] createFolderNamed:@"Work" icon:nil withChats:@[@(5), @(6)] completion:nil];
 
 	NSDictionary *folder = lastOfType(c, @"createChatFolder")[@"folder"];
 	XCTAssertNotNil(folder, @"createChatFolder must reach the outbox");
@@ -90,7 +92,7 @@ static void answerLastRequest(TGClient *c, NSDictionary *answer) {
 	TGClient *c = F2();
 	__block BOOL called = NO;
 	__block NSInteger got = -1;
-	[c createFolderNamed:@"" icon:nil withChats:@[] completion:^(NSInteger folderId){
+	[[TGSettingsStore shared] createFolderNamed:@"" icon:nil withChats:@[] completion:^(NSInteger folderId){
 		called = YES; got = folderId;
 	}];
 	XCTAssertEqual(countOfType(c, @"createChatFolder"), (NSUInteger)0);
@@ -102,7 +104,7 @@ static void answerLastRequest(TGClient *c, NSDictionary *answer) {
 /// touching — otherwise renaming a folder emptied it.
 - (void)testEditFolder_RenameKeepsTheChatsItWasNotAskedAbout {
 	TGClient *c = F2();
-	[c editFolder:3 name:@"Renamed" chats:nil completion:nil];
+	[[TGSettingsStore shared] editFolder:3 name:@"Renamed" chats:nil completion:nil];
 
 	// It reads the folder first.
 	XCTAssertNotNil(lastOfType(c, @"getChatFolder"));
@@ -123,7 +125,7 @@ static void answerLastRequest(TGClient *c, NSDictionary *answer) {
 /// The other way round: changing the chats must not lose the name.
 - (void)testEditFolder_ChangingChatsKeepsTheName {
 	TGClient *c = F2();
-	[c editFolder:3 name:nil chats:@[@(9)] completion:nil];
+	[[TGSettingsStore shared] editFolder:3 name:nil chats:@[@(9)] completion:nil];
 	answerLastRequest(c, @{@"@type" : @"chatFolder",
 			@"name" : @{@"@type" : @"chatFolderName",
 						@"text" : @{@"@type" : @"formattedText", @"text" : @"Work"}},
@@ -138,7 +140,7 @@ static void answerLastRequest(TGClient *c, NSDictionary *answer) {
 /// inside the folder is rejected.
 - (void)testEditFolder_DoesNotSendTheIdBackInsideTheFolder {
 	TGClient *c = F2();
-	[c editFolder:3 name:@"Renamed" chats:nil completion:nil];
+	[[TGSettingsStore shared] editFolder:3 name:@"Renamed" chats:nil completion:nil];
 	answerLastRequest(c, @{@"@type" : @"chatFolder", @"id" : @(3),
 						   @"has_my_invite_links" : @NO,
 						   @"included_chat_ids" : @[]});
@@ -154,7 +156,7 @@ static void answerLastRequest(TGClient *c, NSDictionary *answer) {
 - (void)testEditFolder_AGoneFolderIsNotEdited {
 	TGClient *c = F2();
 	__block BOOL ok = YES;
-	[c editFolder:3 name:@"Renamed" chats:nil completion:^(BOOL good){ ok = good; }];
+	[[TGSettingsStore shared] editFolder:3 name:@"Renamed" chats:nil completion:^(BOOL good){ ok = good; }];
 	answerLastRequest(c, @{@"@type" : @"error", @"code" : @(400),
 						   @"message" : @"CHAT_FOLDER_INVALID"});
 	XCTAssertEqual(countOfType(c, @"editChatFolder"), (NSUInteger)0);
@@ -165,7 +167,7 @@ static void answerLastRequest(TGClient *c, NSDictionary *answer) {
 /// says so.
 - (void)testDeleteFolder_LeavesNoChatsByDefault {
 	TGClient *c = F2();
-	[c deleteFolder:3 leavingChats:nil];
+	[[TGSettingsStore shared] deleteFolder:3 leavingChats:nil];
 	NSDictionary *r = lastOfType(c, @"deleteChatFolder");
 	XCTAssertEqual([r[@"chat_folder_id"] integerValue], (NSInteger)3);
 	XCTAssertEqualObjects(r[@"leave_chat_ids"], @[]);
@@ -173,10 +175,10 @@ static void answerLastRequest(TGClient *c, NSDictionary *answer) {
 
 - (void)testReorderFolders_CarriesTheMainListPositionAndSkipsAnEmptyOrder {
 	TGClient *c = F2();
-	[c reorderFolderIds:@[] mainListAt:0];
+	[[TGSettingsStore shared] reorderFolderIds:@[] mainListAt:0];
 	XCTAssertEqual(countOfType(c, @"reorderChatFolders"), (NSUInteger)0);
 
-	[c reorderFolderIds:@[@(2), @(1)] mainListAt:1];
+	[[TGSettingsStore shared] reorderFolderIds:@[@(2), @(1)] mainListAt:1];
 	NSDictionary *r = lastOfType(c, @"reorderChatFolders");
 	XCTAssertEqualObjects(r[@"chat_folder_ids"], (@[@(2), @(1)]));
 	XCTAssertEqual([r[@"main_chat_list_position"] integerValue], (NSInteger)1);
@@ -187,7 +189,7 @@ static void answerLastRequest(TGClient *c, NSDictionary *answer) {
 - (void)testRecommendedFolders_FlattenToTitleAndDescriptionAndAreAdoptedWhole {
 	TGClient *c = F2();
 	__block NSArray *got = nil;
-	[c recommendedFoldersWithCompletion:^(NSArray *folders){ got = folders; }];
+	[[TGSettingsStore shared] recommendedFoldersWithCompletion:^(NSArray *folders){ got = folders; }];
 	answerLastRequest(c, @{@"@type" : @"recommendedChatFolders",
 			@"chat_folders" : @[@{@"description" : @"Unread chats only",
 								  @"folder" : @{@"@type" : @"chatFolder",
@@ -197,7 +199,7 @@ static void answerLastRequest(TGClient *c, NSDictionary *answer) {
 	XCTAssertEqualObjects(got[0][@"title"], @"Unread");
 	XCTAssertEqualObjects(got[0][@"description"], @"Unread chats only");
 
-	[c createRecommendedFolder:got[0][@"folder"] completion:nil];
+	[[TGSettingsStore shared] createRecommendedFolder:got[0][@"folder"] completion:nil];
 	NSDictionary *folder = lastOfType(c, @"createChatFolder")[@"folder"];
 	XCTAssertEqualObjects(folder[@"name"][@"text"][@"text"], @"Unread");
 	XCTAssertTrue([folder[@"exclude_read"] boolValue]);
@@ -207,7 +209,7 @@ static void answerLastRequest(TGClient *c, NSDictionary *answer) {
 
 - (void)testAddProxy_Socks5CarriesTheCredentialsAndEnablesAtOnce {
 	TGClient *c = F2();
-	[c addProxyAtServer:@"1.2.3.4" port:1080 kind:@"socks5"
+	[[TGSettingsStore shared] addProxyAtServer:@"1.2.3.4" port:1080 kind:@"socks5"
 			   username:@"u" password:@"p" secret:nil enable:YES completion:nil];
 
 	NSDictionary *r = lastOfType(c, @"addProxy");
@@ -220,7 +222,7 @@ static void answerLastRequest(TGClient *c, NSDictionary *answer) {
 
 - (void)testAddProxy_MtprotoCarriesTheSecretInsteadOfCredentials {
 	TGClient *c = F2();
-	[c addProxyAtServer:@"host" port:443 kind:@"mtproto"
+	[[TGSettingsStore shared] addProxyAtServer:@"host" port:443 kind:@"mtproto"
 			   username:nil password:nil secret:@"deadbeef" enable:NO completion:nil];
 
 	NSDictionary *type = lastOfType(c, @"addProxy")[@"proxy"][@"type"];
@@ -233,11 +235,11 @@ static void answerLastRequest(TGClient *c, NSDictionary *answer) {
 /// it; catching it here keeps the page's message useful.
 - (void)testAddProxy_RefusesAnImpossibleServerOrPort {
 	TGClient *c = F2();
-	[c addProxyAtServer:@"" port:1080 kind:@"socks5" username:nil password:nil
+	[[TGSettingsStore shared] addProxyAtServer:@"" port:1080 kind:@"socks5" username:nil password:nil
 				 secret:nil enable:YES completion:nil];
-	[c addProxyAtServer:@"host" port:0 kind:@"socks5" username:nil password:nil
+	[[TGSettingsStore shared] addProxyAtServer:@"host" port:0 kind:@"socks5" username:nil password:nil
 				 secret:nil enable:YES completion:nil];
-	[c addProxyAtServer:@"host" port:70000 kind:@"socks5" username:nil password:nil
+	[[TGSettingsStore shared] addProxyAtServer:@"host" port:70000 kind:@"socks5" username:nil password:nil
 				 secret:nil enable:YES completion:nil];
 	XCTAssertEqual(countOfType(c, @"addProxy"), (NSUInteger)0);
 }
@@ -246,7 +248,7 @@ static void answerLastRequest(TGClient *c, NSDictionary *answer) {
 /// MTProto, a user name means SOCKS5.
 - (void)testAddProxy_FromAnMtprotoLink {
 	TGClient *c = F2();
-	XCTAssertTrue([c addProxyFromLink:
+	XCTAssertTrue([[TGSettingsStore shared] addProxyFromLink:
 			@"https://t.me/proxy?server=1.2.3.4&port=443&secret=ee00" completion:nil]);
 
 	NSDictionary *proxy = lastOfType(c, @"addProxy")[@"proxy"];
@@ -258,7 +260,7 @@ static void answerLastRequest(TGClient *c, NSDictionary *answer) {
 
 - (void)testAddProxy_FromASocksLinkWithCredentials {
 	TGClient *c = F2();
-	XCTAssertTrue([c addProxyFromLink:
+	XCTAssertTrue([[TGSettingsStore shared] addProxyFromLink:
 			@"tg://socks?server=h.example&port=1080&user=me&pass=secret" completion:nil]);
 
 	NSDictionary *type = lastOfType(c, @"addProxy")[@"proxy"][@"type"];
@@ -269,8 +271,8 @@ static void answerLastRequest(TGClient *c, NSDictionary *answer) {
 
 - (void)testAddProxy_ALinkWithNoServerIsRefusedRatherThanSent {
 	TGClient *c = F2();
-	XCTAssertFalse([c addProxyFromLink:@"https://t.me/proxy?port=443" completion:nil]);
-	XCTAssertFalse([c addProxyFromLink:@"not a link at all" completion:nil]);
+	XCTAssertFalse([[TGSettingsStore shared] addProxyFromLink:@"https://t.me/proxy?port=443" completion:nil]);
+	XCTAssertFalse([[TGSettingsStore shared] addProxyFromLink:@"not a link at all" completion:nil]);
 	XCTAssertEqual(countOfType(c, @"addProxy"), (NSUInteger)0);
 }
 
@@ -279,7 +281,7 @@ static void answerLastRequest(TGClient *c, NSDictionary *answer) {
 - (void)testProxies_FlattenToWhatARowNeeds {
 	TGClient *c = F2();
 	__block NSArray *got = nil;
-	[c proxiesWithCompletion:^(NSArray *proxies){ got = proxies; }];
+	[[TGSettingsStore shared] proxiesWithCompletion:^(NSArray *proxies){ got = proxies; }];
 	answerLastRequest(c, @{@"@type" : @"addedProxies", @"proxies" : @[
 			@{@"id" : @(2), @"is_enabled" : @YES, @"last_used_date" : @(99),
 			  @"proxy" : @{@"server" : @"h", @"port" : @(1080),
@@ -294,7 +296,7 @@ static void answerLastRequest(TGClient *c, NSDictionary *answer) {
 /// Off carries no id: TDLib disables whichever one is on.
 - (void)testDisableProxy_CarriesNoId {
 	TGClient *c = F2();
-	[c disableProxy];
+	[[TGSettingsStore shared] disableProxy];
 	NSDictionary *r = lastOfType(c, @"disableProxy");
 	XCTAssertNotNil(r);
 	XCTAssertNil(r[@"proxy_id"]);
@@ -303,7 +305,7 @@ static void answerLastRequest(TGClient *c, NSDictionary *answer) {
 - (void)testPingProxy_NegativeWhenItDoesNotAnswer {
 	TGClient *c = F2();
 	__block double seconds = 0;
-	[c pingProxyAtServer:@"h" port:1080 kind:@"socks5" username:nil password:nil
+	[[TGSettingsStore shared] pingProxyAtServer:@"h" port:1080 kind:@"socks5" username:nil password:nil
 				  secret:nil completion:^(double s){ seconds = s; }];
 	answerLastRequest(c, @{@"@type" : @"error", @"code" : @(400),
 						   @"message" : @"Timeout"});
@@ -383,11 +385,11 @@ static void answerLastRequest(TGClient *c, NSDictionary *answer) {
 
 - (void)testRecents_RememberAndForgetNameTheChat {
 	TGClient *c = F2();
-	[c rememberFoundChat:7];
+	[[TGSearchStore shared] rememberFoundChat:7];
 	XCTAssertEqual([lastOfType(c, @"addRecentlyFoundChat")[@"chat_id"]
 			longLongValue], 7LL);
 
-	[c forgetTopChat:7];
+	[[TGSearchStore shared] forgetTopChat:7];
 	NSDictionary *forget = lastOfType(c, @"removeTopChat");
 	XCTAssertEqual([forget[@"chat_id"] longLongValue], 7LL);
 	XCTAssertEqualObjects(forget[@"category"][@"@type"], @"topChatCategoryUsers");
@@ -508,7 +510,7 @@ static void answerLastRequest(TGClient *c, NSDictionary *answer) {
 			@"keep_unmuted_chats_archived"                   : @NO,
 			@"keep_chats_from_folders_archived"              : @NO};
 
-	[c setArchiveSettingsArchiveAndMute:YES
+	[[TGSettingsStore shared] setArchiveSettingsArchiveAndMute:YES
 					keepUnmutedArchived:YES
 			  keepFolderChatsArchived:NO];
 

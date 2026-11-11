@@ -11,6 +11,8 @@
 #import "TGClient.h"
 #import "TGClientInternal.h"
 #import "TGAccountStore.h"
+#import "TGStoreTestSupport.h"
+#import "TGGroupStore.h"
 #include <string.h>
 
 @interface TGClientAuthFunctionsTests : XCTestCase @end
@@ -105,7 +107,7 @@ static NSDictionary *plainF(NSDictionary *d) {
 - (void)testSetLoginEmailAddress_SendsTheAddressAndAnswersItsPattern {
 	TGClient *c = AF();
 	__block NSString *pattern = nil;
-	[c setLoginEmailAddress:@"me@example.com"
+	[[TGAccountStore shared] setLoginEmailAddress:@"me@example.com"
 				 completion:^(NSString *masked, NSString *error){
 		pattern = masked;
 	}];
@@ -120,7 +122,7 @@ static NSDictionary *plainF(NSDictionary *d) {
 - (void)testSetLoginEmailAddress_ARefusalIsHandedBack {
 	TGClient *c = AF();
 	__block NSString *error = nil;
-	[c setLoginEmailAddress:@"me@example.com"
+	[[TGAccountStore shared] setLoginEmailAddress:@"me@example.com"
 				 completion:^(NSString *pattern, NSString *why){ error = why; }];
 	answerF(c, @{@"@type" : @"error", @"code" : @(400),
 				  @"message" : @"EMAIL_NOT_ALLOWED"});
@@ -130,7 +132,7 @@ static NSDictionary *plainF(NSDictionary *d) {
 - (void)testResendLoginEmailCode_AsksAndAnswersTheNewPattern {
 	TGClient *c = AF();
 	__block NSString *pattern = nil;
-	[c resendLoginEmailAddressCodeWithCompletion:^(NSString *masked, NSString *error){
+	[[TGAccountStore shared] resendLoginEmailAddressCodeWithCompletion:^(NSString *masked, NSString *error){
 		pattern = masked;
 	}];
 	XCTAssertNotNil(lastF(c, @"resendLoginEmailAddressCode"));
@@ -142,7 +144,7 @@ static NSDictionary *plainF(NSDictionary *d) {
 - (void)testCheckLoginEmailCode_WrapsTheCodeInEmailAddressAuthentication {
 	TGClient *c = AF();
 	__block NSString *error = @"x";
-	[c checkLoginEmailAddressCode:@"12345" completion:^(NSString *why){ error = why; }];
+	[[TGAccountStore shared] checkLoginEmailAddressCode:@"12345" completion:^(NSString *why){ error = why; }];
 	NSDictionary *r = lastF(c, @"checkLoginEmailAddressCode");
 	XCTAssertEqualObjects(r[@"code"][@"@type"], @"emailAddressAuthenticationCode");
 	XCTAssertEqualObjects(r[@"code"][@"code"], @"12345");
@@ -155,7 +157,7 @@ static NSDictionary *plainF(NSDictionary *d) {
 - (void)testCheckWebToken_SendsTheTokenAndDatacenter {
 	TGClient *c = AF();
 	__block NSString *error = @"x";
-	[c checkAuthenticationWebToken:@"tok" dcId:2 completion:^(NSString *why){ error = why; }];
+	[[TGAccountStore shared] checkAuthenticationWebToken:@"tok" dcId:2 completion:^(NSString *why){ error = why; }];
 	NSDictionary *r = lastF(c, @"checkAuthenticationWebToken");
 	XCTAssertEqualObjects(r[@"token"], @"tok");
 	XCTAssertEqualObjects(r[@"dc_id"], @(2));
@@ -166,7 +168,7 @@ static NSDictionary *plainF(NSDictionary *d) {
 - (void)testCheckWebToken_ARefusalIsShown {
 	TGClient *c = AF();
 	__block NSString *error = nil;
-	[c checkAuthenticationWebToken:@"bad" dcId:5 completion:^(NSString *why){ error = why; }];
+	[[TGAccountStore shared] checkAuthenticationWebToken:@"bad" dcId:5 completion:^(NSString *why){ error = why; }];
 	answerF(c, @{@"@type" : @"error", @"code" : @(400),
 				  @"message" : @"INVALID_TOKEN"});
 	XCTAssertEqualObjects(error, @"INVALID_TOKEN");
@@ -175,7 +177,7 @@ static NSDictionary *plainF(NSDictionary *d) {
 - (void)testDismissWebToken_SendsOnlyTheToken {
 	TGClient *c = AF();
 	__block BOOL done = NO;
-	[c dismissWebToken:@"tok" completion:^(NSString *error){ done = (error == nil); }];
+	[[TGAccountStore shared] dismissWebToken:@"tok" completion:^(NSString *error){ done = (error == nil); }];
 	NSDictionary *r = lastF(c, @"dismissWebToken");
 	XCTAssertEqualObjects(r[@"token"], @"tok");
 	answerF(c, @{@"@type" : @"ok"});
@@ -185,7 +187,7 @@ static NSDictionary *plainF(NSDictionary *d) {
 - (void)testConfirmQrLink_ASessionIsSuccess {
 	TGClient *c = AF();
 	__block NSString *error = @"x";
-	[c confirmQrCodeAuthenticationLink:@"tg://login?token=abc"
+	[[TGAccountStore shared] confirmQrCodeAuthenticationLink:@"tg://login?token=abc"
 							completion:^(NSString *why){ error = why; }];
 	NSDictionary *r = lastF(c, @"confirmQrCodeAuthentication");
 	XCTAssertEqualObjects(r[@"link"], @"tg://login?token=abc");
@@ -197,7 +199,7 @@ static NSDictionary *plainF(NSDictionary *d) {
 - (void)testConfirmQrLink_AnythingElseIsTheRefusal {
 	TGClient *c = AF();
 	__block NSString *error = nil;
-	[c confirmQrCodeAuthenticationLink:@"tg://login?token=stale"
+	[[TGAccountStore shared] confirmQrCodeAuthenticationLink:@"tg://login?token=stale"
 							completion:^(NSString *why){ error = why; }];
 	answerF(c, @{@"@type" : @"error", @"code" : @(400),
 				  @"message" : @"LINK_EXPIRED"});
@@ -253,7 +255,7 @@ static NSDictionary *plainF(NSDictionary *d) {
 - (void)testPhoneNumberInfo_FlattensCountryAndFormatting {
 	TGClient *c = AF();
 	__block NSDictionary *info = nil;
-	[c phoneNumberInfoForPrefix:@"+380441" completion:^(NSDictionary *found){
+	[[TGAccountStore shared] phoneNumberInfoForPrefix:@"+380441" completion:^(NSDictionary *found){
 		info = found;
 	}];
 	XCTAssertEqualObjects(lastF(c, @"getPhoneNumberInfo")[@"phone_number_prefix"],
@@ -274,7 +276,7 @@ static NSDictionary *plainF(NSDictionary *d) {
 - (void)testPhoneNumberInfo_AnErrorAnswersNil {
 	TGClient *c = AF();
 	__block NSDictionary *info = @{};
-	[c phoneNumberInfoForPrefix:@"+999" completion:^(NSDictionary *found){ info = found; }];
+	[[TGAccountStore shared] phoneNumberInfoForPrefix:@"+999" completion:^(NSDictionary *found){ info = found; }];
 	answerF(c, @{@"@type" : @"error", @"code" : @(400),
 				  @"message" : @"PHONE_NUMBER_INVALID"});
 	XCTAssertNil(info);
@@ -299,7 +301,7 @@ static const char *FakeExec(void *client, const char *request) {
 			"\"formatted_phone_number\":\"+380 44 123 4567\","
 			"\"is_anonymous\":false}");
 	[[TGTransport shared] testSetExecute:FakeExec];
-	NSDictionary *info = [c phoneNumberInfoForPrefixSync:@"+38044"];
+	NSDictionary *info = [[TGAccountStore shared] phoneNumberInfoForPrefixSync:@"+38044"];
 	[[TGTransport shared] testSetExecute:NULL];
 
 	XCTAssertTrue(strstr(gFakeExecRequest, "\"getPhoneNumberInfoSync\"") != NULL);
@@ -310,13 +312,13 @@ static const char *FakeExec(void *client, const char *request) {
 
 - (void)testPhoneNumberInfoSync_WithoutTheEngineIsNil {
 	TGClient *c = AF();
-	XCTAssertNil([c phoneNumberInfoForPrefixSync:@"+38044"]);
+	XCTAssertNil([[TGAccountStore shared] phoneNumberInfoForPrefixSync:@"+38044"]);
 }
 
 - (void)testSendPhoneNumberCode_IsAChangeRequestWithNullSettings {
 	TGClient *c = AF();
 	__block NSDictionary *info = nil;
-	[c sendPhoneNumberChangeCode:@"+380441234567"
+	[[TGAccountStore shared] sendPhoneNumberChangeCode:@"+380441234567"
 					  completion:^(NSDictionary *found, NSString *error){ info = found; }];
 	NSDictionary *r = lastF(c, @"sendPhoneNumberCode");
 	XCTAssertEqualObjects(r[@"phone_number"], @"+380441234567");
@@ -334,7 +336,7 @@ static const char *FakeExec(void *client, const char *request) {
 - (void)testSendPhoneNumberCode_ARefusalNamesTheReason {
 	TGClient *c = AF();
 	__block NSString *error = nil;
-	[c sendPhoneNumberChangeCode:@"+1" completion:^(NSDictionary *info, NSString *why){
+	[[TGAccountStore shared] sendPhoneNumberChangeCode:@"+1" completion:^(NSDictionary *info, NSString *why){
 		error = why;
 	}];
 	answerF(c, @{@"@type" : @"error", @"code" : @(400),
@@ -345,7 +347,7 @@ static const char *FakeExec(void *client, const char *request) {
 - (void)testCheckPhoneNumberCode_SendsOnlyTheCode {
 	TGClient *c = AF();
 	__block BOOL done = NO;
-	[c checkPhoneNumberChangeCode:@"12345" completion:^(NSString *error){
+	[[TGAccountStore shared] checkPhoneNumberChangeCode:@"12345" completion:^(NSString *error){
 		done = (error == nil);
 	}];
 	XCTAssertEqualObjects(lastF(c, @"checkPhoneNumberCode")[@"code"], @"12345");
@@ -356,7 +358,7 @@ static const char *FakeExec(void *client, const char *request) {
 - (void)testResendPhoneNumberCode_SaysWhyItIsResent {
 	TGClient *c = AF();
 	__block NSInteger timeout = 0;
-	[c resendPhoneNumberChangeCodeWithCompletion:^(NSDictionary *info, NSString *error){
+	[[TGAccountStore shared] resendPhoneNumberChangeCodeWithCompletion:^(NSDictionary *info, NSString *error){
 		timeout = [info[@"timeout"] integerValue];
 	}];
 	NSDictionary *r = lastF(c, @"resendPhoneNumberCode");
@@ -370,7 +372,7 @@ static const char *FakeExec(void *client, const char *request) {
 - (void)testReportPhoneNumberCodeMissing_SendsAnEmptyNetworkCode {
 	TGClient *c = AF();
 	__block BOOL done = NO;
-	[c reportPhoneNumberCodeMissingWithCompletion:^(NSString *error){
+	[[TGAccountStore shared] reportPhoneNumberCodeMissingWithCompletion:^(NSString *error){
 		done = (error == nil);
 	}];
 	NSDictionary *r = lastF(c, @"reportPhoneNumberCodeMissing");
@@ -382,7 +384,7 @@ static const char *FakeExec(void *client, const char *request) {
 - (void)testSendAuthenticationFirebaseSms_CarriesTheSecret {
 	TGClient *c = AF();
 	__block NSString *error = @"x";
-	[c sendAuthenticationFirebaseSms:@"secret" completion:^(NSString *why){ error = why; }];
+	[[TGAccountStore shared] sendAuthenticationFirebaseSms:@"secret" completion:^(NSString *why){ error = why; }];
 	XCTAssertEqualObjects(lastF(c, @"sendAuthenticationFirebaseSms")[@"token"], @"secret");
 	answerF(c, @{@"@type" : @"ok"});
 	XCTAssertNil(error);
@@ -391,7 +393,7 @@ static const char *FakeExec(void *client, const char *request) {
 - (void)testSendPhoneNumberFirebaseSms_CarriesTheSecret {
 	TGClient *c = AF();
 	__block NSString *error = @"x";
-	[c sendPhoneNumberFirebaseSms:@"secret" completion:^(NSString *why){ error = why; }];
+	[[TGAccountStore shared] sendPhoneNumberFirebaseSms:@"secret" completion:^(NSString *why){ error = why; }];
 	XCTAssertEqualObjects(lastF(c, @"sendPhoneNumberFirebaseSms")[@"token"], @"secret");
 	answerF(c, @{@"@type" : @"ok"});
 	XCTAssertNil(error);
@@ -402,7 +404,7 @@ static const char *FakeExec(void *client, const char *request) {
 - (void)testRequestPasswordRecovery_AnswersTheMaskedAddress {
 	TGClient *c = AF();
 	__block NSString *pattern = nil;
-	[c requestAccountPasswordRecoveryWithCompletion:^(NSString *masked, NSString *error){
+	[[TGAccountStore shared] requestAccountPasswordRecoveryWithCompletion:^(NSString *masked, NSString *error){
 		pattern = masked;
 	}];
 	XCTAssertNotNil(lastF(c, @"requestPasswordRecovery"));
@@ -414,7 +416,7 @@ static const char *FakeExec(void *client, const char *request) {
 - (void)testRequestPasswordRecovery_NoAddressIsTheServersRefusal {
 	TGClient *c = AF();
 	__block NSString *error = nil;
-	[c requestAccountPasswordRecoveryWithCompletion:^(NSString *pattern, NSString *why){
+	[[TGAccountStore shared] requestAccountPasswordRecoveryWithCompletion:^(NSString *pattern, NSString *why){
 		error = why;
 	}];
 	answerF(c, @{@"@type" : @"error", @"code" : @(400),
@@ -425,7 +427,7 @@ static const char *FakeExec(void *client, const char *request) {
 - (void)testCheckPasswordRecoveryCode_SendsTheCode {
 	TGClient *c = AF();
 	__block BOOL done = NO;
-	[c checkAccountPasswordRecoveryCode:@"123456" completion:^(NSString *error){
+	[[TGAccountStore shared] checkAccountPasswordRecoveryCode:@"123456" completion:^(NSString *error){
 		done = (error == nil);
 	}];
 	XCTAssertEqualObjects(lastF(c, @"checkPasswordRecoveryCode")[@"recovery_code"],
@@ -437,7 +439,7 @@ static const char *FakeExec(void *client, const char *request) {
 - (void)testRecoverPassword_SetsTheNewPasswordAndHint {
 	TGClient *c = AF();
 	__block NSDictionary *state = nil;
-	[c recoverAccountPasswordWithCode:@"123456" newPassword:@"newpass" hint:@"a clue"
+	[[TGAccountStore shared] recoverAccountPasswordWithCode:@"123456" newPassword:@"newpass" hint:@"a clue"
 						   completion:^(NSDictionary *result, NSString *error){
 		state = result;
 	}];
@@ -455,7 +457,7 @@ static const char *FakeExec(void *client, const char *request) {
 - (void)testRecoverPassword_AnEmptyNewPasswordReadsAsRemoved {
 	TGClient *c = AF();
 	__block NSDictionary *state = nil;
-	[c recoverAccountPasswordWithCode:@"1" newPassword:@"" hint:@""
+	[[TGAccountStore shared] recoverAccountPasswordWithCode:@"1" newPassword:@"" hint:@""
 						   completion:^(NSDictionary *result, NSString *error){
 		state = result;
 	}];
@@ -466,7 +468,7 @@ static const char *FakeExec(void *client, const char *request) {
 - (void)testResetPassword_OkClearsThePassword {
 	TGClient *c = AF();
 	__block NSString *result = nil;
-	[c resetAccountPasswordWithCompletion:^(NSString *what, double date, NSString *error){
+	[[TGAccountStore shared] resetAccountPasswordWithCompletion:^(NSString *what, double date, NSString *error){
 		result = what;
 	}];
 	XCTAssertNotNil(lastF(c, @"resetPassword"));
@@ -478,7 +480,7 @@ static const char *FakeExec(void *client, const char *request) {
 	TGClient *c = AF();
 	__block double date = 0;
 	__block NSString *result = nil;
-	[c resetAccountPasswordWithCompletion:^(NSString *what, double when, NSString *error){
+	[[TGAccountStore shared] resetAccountPasswordWithCompletion:^(NSString *what, double when, NSString *error){
 		result = what; date = when;
 	}];
 	answerF(c, @{@"@type" : @"resetPasswordResultPending",
@@ -491,7 +493,7 @@ static const char *FakeExec(void *client, const char *request) {
 	TGClient *c = AF();
 	__block double date = 0;
 	__block NSString *result = nil;
-	[c resetAccountPasswordWithCompletion:^(NSString *what, double when, NSString *error){
+	[[TGAccountStore shared] resetAccountPasswordWithCompletion:^(NSString *what, double when, NSString *error){
 		result = what; date = when;
 	}];
 	answerF(c, @{@"@type" : @"resetPasswordResultDeclined",
@@ -503,7 +505,7 @@ static const char *FakeExec(void *client, const char *request) {
 - (void)testCancelPasswordReset_SendsTheRequest {
 	TGClient *c = AF();
 	__block BOOL done = NO;
-	[c cancelAccountPasswordResetWithCompletion:^(NSString *error){
+	[[TGAccountStore shared] cancelAccountPasswordResetWithCompletion:^(NSString *error){
 		done = (error == nil);
 	}];
 	XCTAssertNotNil(lastF(c, @"cancelPasswordReset"));
@@ -515,7 +517,7 @@ static const char *FakeExec(void *client, const char *request) {
 	TGClient *c = AF();
 	__block BOOL has = NO;
 	__block NSInteger validFor = 0;
-	[c temporaryPasswordStateWithCompletion:^(BOOL yes, NSInteger left, NSString *error){
+	[[TGAccountStore shared] temporaryPasswordStateWithCompletion:^(BOOL yes, NSInteger left, NSString *error){
 		has = yes; validFor = left;
 	}];
 	XCTAssertNotNil(lastF(c, @"getTemporaryPasswordState"));
@@ -528,7 +530,7 @@ static const char *FakeExec(void *client, const char *request) {
 - (void)testCreateTemporaryPassword_CarriesPasswordAndLifetime {
 	TGClient *c = AF();
 	__block NSInteger validFor = 0;
-	[c createTemporaryPassword:@"secret" validFor:3600
+	[[TGAccountStore shared] createTemporaryPassword:@"secret" validFor:3600
 					completion:^(BOOL has, NSInteger left, NSString *error){
 		validFor = left;
 	}];
@@ -543,7 +545,7 @@ static const char *FakeExec(void *client, const char *request) {
 - (void)testCreateTemporaryPassword_AWrongPasswordIsAServerError {
 	TGClient *c = AF();
 	__block NSString *error = nil;
-	[c createTemporaryPassword:@"wrong" validFor:3600
+	[[TGAccountStore shared] createTemporaryPassword:@"wrong" validFor:3600
 					completion:^(BOOL has, NSInteger left, NSString *why){ error = why; }];
 	answerF(c, @{@"@type" : @"error", @"code" : @(400),
 				  @"message" : @"PASSWORD_HASH_INVALID"});
@@ -566,7 +568,7 @@ static const char *FakeExec(void *client, const char *request) {
 - (void)testCancelRecoveryEmailVerification_AnswersTheStateItLeaves {
 	TGClient *c = AF();
 	__block NSDictionary *state = nil;
-	[c cancelRecoveryEmailAddressVerificationWithCompletion:
+	[[TGAccountStore shared] cancelRecoveryEmailAddressVerificationWithCompletion:
 			^(NSDictionary *result, NSString *error){ state = result; }];
 	XCTAssertNotNil(lastF(c, @"cancelRecoveryEmailAddressVerification"));
 	answerF(c, plainF(@{@"@type" : @"passwordState", @"has_password" : @YES,
@@ -579,7 +581,7 @@ static const char *FakeExec(void *client, const char *request) {
 - (void)testSendEmailVerificationCode_AnswersThePattern {
 	TGClient *c = AF();
 	__block NSString *pattern = nil;
-	[c sendEmailAddressVerificationCodeTo:@"me@example.com"
+	[[TGAccountStore shared] sendEmailAddressVerificationCodeTo:@"me@example.com"
 								completion:^(NSString *masked, NSString *error){
 		pattern = masked;
 	}];
@@ -593,7 +595,7 @@ static const char *FakeExec(void *client, const char *request) {
 - (void)testResendEmailVerificationCode_AnswersThePattern {
 	TGClient *c = AF();
 	__block NSString *pattern = nil;
-	[c resendEmailAddressVerificationCodeWithCompletion:^(NSString *masked, NSString *error){
+	[[TGAccountStore shared] resendEmailAddressVerificationCodeWithCompletion:^(NSString *masked, NSString *error){
 		pattern = masked;
 	}];
 	XCTAssertNotNil(lastF(c, @"resendEmailAddressVerificationCode"));
@@ -605,7 +607,7 @@ static const char *FakeExec(void *client, const char *request) {
 - (void)testCheckEmailVerificationCode_SendsTheCode {
 	TGClient *c = AF();
 	__block BOOL done = NO;
-	[c checkEmailAddressVerificationCode:@"1234" completion:^(NSString *error){
+	[[TGAccountStore shared] checkEmailAddressVerificationCode:@"1234" completion:^(NSString *error){
 		done = (error == nil);
 	}];
 	XCTAssertEqualObjects(lastF(c, @"checkEmailAddressVerificationCode")[@"code"],
@@ -619,7 +621,7 @@ static const char *FakeExec(void *client, const char *request) {
 - (void)testCanTransferOwnership_OkMeansAllowed {
 	TGClient *c = AF();
 	__block NSString *result = nil;
-	[c canTransferOwnershipWithCompletion:^(NSString *what, NSInteger retry,
+	[[TGGroupStore shared] canTransferOwnershipWithCompletion:^(NSString *what, NSInteger retry,
 											NSString *error){ result = what; }];
 	XCTAssertNotNil(lastF(c, @"canTransferOwnership"));
 	answerF(c, @{@"@type" : @"canTransferOwnershipResultOk"});
@@ -629,7 +631,7 @@ static const char *FakeExec(void *client, const char *request) {
 - (void)testCanTransferOwnership_PasswordNeeded {
 	TGClient *c = AF();
 	__block NSString *result = nil;
-	[c canTransferOwnershipWithCompletion:^(NSString *what, NSInteger retry,
+	[[TGGroupStore shared] canTransferOwnershipWithCompletion:^(NSString *what, NSInteger retry,
 											NSString *error){ result = what; }];
 	answerF(c, @{@"@type" : @"canTransferOwnershipResultPasswordNeeded"});
 	XCTAssertEqualObjects(result, @"passwordNeeded");
@@ -638,7 +640,7 @@ static const char *FakeExec(void *client, const char *request) {
 - (void)testCanTransferOwnership_SessionTooFreshCarriesTheWait {
 	TGClient *c = AF();
 	__block NSInteger retry = 0;
-	[c canTransferOwnershipWithCompletion:^(NSString *what, NSInteger wait,
+	[[TGGroupStore shared] canTransferOwnershipWithCompletion:^(NSString *what, NSInteger wait,
 											NSString *error){ retry = wait; }];
 	answerF(c, @{@"@type" : @"canTransferOwnershipResultSessionTooFresh",
 				  @"retry_after" : @(3600)});
@@ -649,7 +651,7 @@ static const char *FakeExec(void *client, const char *request) {
 	TGClient *c = AF();
 	__block NSString *result = nil;
 	__block NSInteger retry = 0;
-	[c canTransferOwnershipWithCompletion:^(NSString *what, NSInteger wait,
+	[[TGGroupStore shared] canTransferOwnershipWithCompletion:^(NSString *what, NSInteger wait,
 											NSString *error){
 		result = what; retry = wait;
 	}];
@@ -662,7 +664,7 @@ static const char *FakeExec(void *client, const char *request) {
 - (void)testCanTransferOwnership_AnErrorIsHandedBack {
 	TGClient *c = AF();
 	__block NSString *error = nil;
-	[c canTransferOwnershipWithCompletion:^(NSString *what, NSInteger wait,
+	[[TGGroupStore shared] canTransferOwnershipWithCompletion:^(NSString *what, NSInteger wait,
 											NSString *why){ error = why; }];
 	answerF(c, @{@"@type" : @"error", @"code" : @(400),
 				  @"message" : @"Not an owner"});
@@ -673,14 +675,14 @@ static const char *FakeExec(void *client, const char *request) {
 	TGClient *c = AF();
 	[c noteApplicationVerificationWithId:77 nonce:@"nonce"];
 	__block NSString *error = @"x";
-	[c setApplicationVerificationToken:@"token" verificationId:77
+	[[TGAccountStore shared] setApplicationVerificationToken:@"token" verificationId:77
 							completion:^(NSString *why){ error = why; }];
 	NSDictionary *r = lastF(c, @"setApplicationVerificationToken");
 	XCTAssertEqualObjects(r[@"verification_id"], @(77));
 	XCTAssertEqualObjects(r[@"token"], @"token");
 	answerF(c, @{@"@type" : @"ok"});
 	XCTAssertNil(error);
-	XCTAssertEqual(c.pendingApplicationVerificationId, 0);
+	XCTAssertEqual([[TGAccountStore shared] pendingApplicationVerificationId], 0);
 }
 
 - (void)testApplicationVerificationUpdate_KeepsThePendingRequest {
@@ -688,8 +690,8 @@ static const char *FakeExec(void *client, const char *request) {
 	[c handleUpdate:@{@"@type" : @"updateApplicationVerificationRequired",
 					  @"verification_id" : @(99),
 					  @"nonce" : @"abc"}];
-	XCTAssertEqual(c.pendingApplicationVerificationId, 99);
-	XCTAssertEqualObjects(c.pendingApplicationVerificationNonce, @"abc");
+	XCTAssertEqual([[TGAccountStore shared] pendingApplicationVerificationId], 99);
+	XCTAssertEqualObjects([[TGAccountStore shared] pendingApplicationVerificationNonce], @"abc");
 }
 
 @end

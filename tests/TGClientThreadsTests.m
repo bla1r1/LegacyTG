@@ -9,6 +9,9 @@
 #import "TGMessageStore.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
+#import "TGStoreTestSupport.h"
+#import "TGChatListStore.h"
+#import "TGProfileStore.h"
 
 @interface TGClientThreadsTests : XCTestCase @end
 
@@ -105,7 +108,7 @@ static NSDictionary *post(BOOL channelPost, NSDictionary *replyInfo) {
 - (void)testRemoveContact {
 	TGClient *c = H();
 	__block BOOL ok = NO;
-	[c removeContactWithUserId:42 completion:^(BOOL done){ ok = done; }];
+	[[TGProfileStore shared] removeContactWithUserId:42 completion:^(BOOL done){ ok = done; }];
 	XCTAssertEqualObjects(lastH(c, @"removeContacts")[@"user_ids"], (@[@42]));
 	answerH(c, @{@"@type" : @"ok"});
 	XCTAssertTrue(ok);
@@ -136,7 +139,7 @@ static NSDictionary *post(BOOL channelPost, NSDictionary *replyInfo) {
 
 - (void)testPinnedOrder_WholeListInOrder {
 	TGClient *c = H();
-	[c setPinnedChatIds:@[@3, @1, @2]];
+	[[TGChatListStore shared] setPinnedChatIds:@[@3, @1, @2]];
 	NSDictionary *sent = lastH(c, @"setPinnedChats");
 	XCTAssertEqualObjects(sent[@"chat_ids"], (@[@3, @1, @2]));
 	XCTAssertEqualObjects(sent[@"chat_list"][@"@type"], @"chatListMain");
