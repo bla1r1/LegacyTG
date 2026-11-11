@@ -2,13 +2,17 @@
 // TGCommunityViewController.m
 //
 #import "TGCommunityViewController.h"
-#import "TGClient.h"
+#import "TGProfileStore.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
 #import "TGIcons.h"
 #import "TGChatViewController.h"
 #import <QuartzCore/QuartzCore.h>
+#import "TGMediaStore.h"
+#import "TGGroupStore.h"
+#import "TGProfileStore.h"
+#import "TGMessageStore.h"
 
 static const CGFloat kCommunityPhotoSide = 72.0f;
 static const CGFloat kCommunityPhotoBar  = 92.0f;
@@ -93,7 +97,7 @@ static const CGFloat kCommunityPhotoBar  = 92.0f;
 		return;
 	}
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] downloadFile:fileId.integerValue completion:^(NSString *path){
+	[[TGMediaStore shared] downloadFile:fileId.integerValue completion:^(NSString *path){
 		TGCommunityViewController *me = weakSelf;
 		if (!me || !path.length)
 			return;
@@ -105,7 +109,7 @@ static const CGFloat kCommunityPhotoBar  = 92.0f;
 
 - (void)loadFullInfo {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] communityFullInfo:self.communityId
+	[[TGProfileStore shared] communityFullInfo:self.communityId
 							  completion:^(NSDictionary *info, NSString *error){
 		TGCommunityViewController *me = weakSelf;
 		if (!me)
@@ -129,7 +133,7 @@ static const CGFloat kCommunityPhotoBar  = 92.0f;
 		int64_t chatId = [chat[@"chatId"] longLongValue];
 		NSString *title = chat[@"title"];
 		if (!title.length || [title hasPrefix:@"Chat -"]) {
-			[[TGClient shared] request:@{@"@type" : @"getChat", @"chat_id" : @(chatId)} completion:^(NSDictionary *cObj){
+			[[TGProfileStore shared] chatRecordForChat:chatId completion:^(NSDictionary *cObj){
 				TGCommunityViewController *me = weakSelf;
 				if (!me) return;
 				NSString *resolved = cObj[@"title"];
@@ -144,7 +148,7 @@ static const CGFloat kCommunityPhotoBar  = 92.0f;
 
 - (void)rebuild {
 	__weak typeof(self) weakSelf = self;
-	NSDictionary *info = self.fullInfo ?: [[TGClient shared] cachedCommunityFullInfo:self.communityId];
+	NSDictionary *info = self.fullInfo ?: [[TGProfileStore shared] cachedCommunityFullInfo:self.communityId];
 	NSArray *chats = info[@"chats"] ?: @[];
 
 	NSMutableArray *sections = [NSMutableArray array];
@@ -162,7 +166,7 @@ static const CGFloat kCommunityPhotoBar  = 92.0f;
 		int64_t chatId = [chat[@"chatId"] longLongValue];
 		NSString *title = chat[@"title"];
 		if (!title.length || [title hasPrefix:@"Chat -"]) {
-			NSString *known = [[TGClient shared] titleForChat:chatId];
+			NSString *known = [[TGMessageStore shared] titleForChat:chatId];
 			if (known.length) {
 				title = known;
 			}
@@ -196,7 +200,7 @@ static const CGFloat kCommunityPhotoBar  = 92.0f;
 					 action:@"Save"
 					 inView:self.view
 				   onSubmit:^(NSString *name){
-		[[TGClient shared] setCommunityName:weakSelf.communityId name:name
+		[[TGGroupStore shared] setCommunityName:weakSelf.communityId name:name
 								 completion:^(BOOL ok, NSString *error){
 			if (!ok){
 				[weakSelf toast:error ?: @"An error occurred."];
@@ -223,7 +227,7 @@ static const CGFloat kCommunityPhotoBar  = 92.0f;
 		BOOL allowed = (index == 0);
 		if (allowed == current)
 			return;
-		[[TGClient shared] setCommunityPermissions:weakSelf.communityId
+		[[TGGroupStore shared] setCommunityPermissions:weakSelf.communityId
 									 canEditChatList:allowed
 										 completion:^(BOOL ok, NSString *error){
 			if (!ok){
@@ -264,7 +268,7 @@ static const CGFloat kCommunityPhotoBar  = 92.0f;
 	self.pickedPhoto = scaled;
 	[self loadPhoto];
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] setCommunityPhoto:self.communityId path:path
+	[[TGGroupStore shared] setCommunityPhoto:self.communityId path:path
 							  completion:^(BOOL ok, NSString *error){
 		if (!ok){
 			[weakSelf toast:error ?: @"An error occurred."];
@@ -286,7 +290,7 @@ static const CGFloat kCommunityPhotoBar  = 92.0f;
 				   destructive:YES
 						inView:self.view
 					 onConfirm:^{
-		[[TGClient shared] deleteCommunity:weakSelf.communityId
+		[[TGGroupStore shared] deleteCommunity:weakSelf.communityId
 								completion:^(BOOL ok, NSString *error){
 			if (!ok){
 				[weakSelf toast:error ?: @"An error occurred."];

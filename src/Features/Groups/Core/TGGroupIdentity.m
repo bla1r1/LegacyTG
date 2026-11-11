@@ -1,5 +1,4 @@
 #import "TGGroupSettingsViewController.h"
-#import "TGClient.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
@@ -16,6 +15,8 @@
 #import "TGGroupSettingsViewController.h"
 #import "TGGroupSwitch.h"
 #import "TGGroupSettingsViewControllerInternal.h"
+#import "TGGroupStore.h"
+#import "TGProfileStore.h"
 
 
 
@@ -136,7 +137,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 
 - (void)openGroupCall {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] chatRecordForChat:self.chatId completion:^(NSDictionary *chat){
+	[[TGProfileStore shared] chatRecordForChat:self.chatId completion:^(NSDictionary *chat){
 		TGGroupSettingsViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -150,7 +151,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 
 - (void)openVideoChatSetup {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] chatRecordForChat:self.chatId completion:^(NSDictionary *chat){
+	[[TGProfileStore shared] chatRecordForChat:self.chatId completion:^(NSDictionary *chat){
 		TGGroupSettingsViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -167,7 +168,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 	[TGAlertSheet showInput:@"Group Name" message:nil placeholder:@"Name"
 					   text:self.chatTitle action:@"Save" inView:self.view
 				 onSubmit:^(NSString *name){
-		[[TGClient shared] setChat:weakSelf.chatId title:name completion:^(BOOL ok){
+		[[TGGroupStore shared] setChat:weakSelf.chatId title:name completion:^(BOOL ok){
 			TGGroupSettingsViewController *me = weakSelf;
 			if (!ok){
 				[TGAlertSheet showMessage:@"An error occurred."
@@ -191,7 +192,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 					 action:@"Save"
 					 inView:self.view
 				 onSubmit:^(NSString *text){
-		[[TGClient shared] setChat:weakSelf.chatId description:text
+		[[TGGroupStore shared] setChat:weakSelf.chatId description:text
 						completion:^(BOOL ok){
 			TGGroupSettingsViewController *me = weakSelf;
 			if (!ok){
@@ -241,7 +242,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 		return;
 	}
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] setChat:self.chatId photoAtPath:path completion:^(BOOL ok){
+	[[TGGroupStore shared] setChat:self.chatId photoAtPath:path completion:^(BOOL ok){
 		TGGroupSettingsViewController *me = weakSelf;
 		if (!ok){
 			[TGAlertSheet showMessage:@"An error occurred."
@@ -269,7 +270,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 	[TGAlertSheet showChoices:titles title:@"Set as Main Tab" destructiveIndex:-1
 					   inView:self.view onChoice:^(NSInteger index){
 		NSString *tab = names[(NSUInteger)index];
-		[[TGClient shared] setSupergroupMainProfileTab:tab inChat:weakSelf.chatId
+		[[TGProfileStore shared] setSupergroupMainProfileTab:tab inChat:weakSelf.chatId
 				completion:^(BOOL ok, NSString *error){
 			TGGroupSettingsViewController *me = weakSelf;
 			if (!ok){
@@ -292,7 +293,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 				   destructive:NO
 						inView:self.view
 					 onConfirm:^{
-		[[TGClient shared] upgradeGroupToSupergroup:weakSelf.chatId
+		[[TGGroupStore shared] upgradeGroupToSupergroup:weakSelf.chatId
 										 completion:^(int64_t newChatId){
 			TGGroupSettingsViewController *me = weakSelf;
 			if (!newChatId){

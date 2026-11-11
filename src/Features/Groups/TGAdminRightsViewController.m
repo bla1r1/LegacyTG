@@ -9,9 +9,9 @@
 // see the refusal, which is the server answering the button.
 //
 #import "TGAdminRightsViewController.h"
-#import "TGClient.h"
 #import "TGAlertSheet.h"
 #import "TGRows.h"
+#import "TGGroupStore.h"
 
 static NSString *const kGroupPresetKey   = @"TGDefaultGroupAdminRights";
 static NSString *const kChannelPresetKey = @"TGDefaultChannelAdminRights";
@@ -87,10 +87,10 @@ static NSString *const kChannelPresetKey = @"TGDefaultChannelAdminRights";
 			[me rebuildSections];
 		};
 		if (channel)
-			[[TGClient shared] setDefaultChannelAdministratorRightsPreset:preset
+			[[TGGroupStore shared] setDefaultChannelAdministratorRightsPreset:preset
 																completion:done];
 		else
-			[[TGClient shared] setDefaultGroupAdministratorRightsPreset:preset
+			[[TGGroupStore shared] setDefaultGroupAdministratorRightsPreset:preset
 															  completion:done];
 	}];
 }

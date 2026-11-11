@@ -1,6 +1,5 @@
 #import "TGGroupSettingsViewController.h"
 #import "TGLocalization.h"
-#import "TGClient.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
@@ -19,6 +18,10 @@
 #import "TGGroupSettingsViewControllerInternal.h"
 #import "TGGroupLogic.h"
 #import "TGChatViewController.h"
+#import "TGGroupStore.h"
+#import "TGStickerStore.h"
+#import "TGProfileStore.h"
+#import "TGMessageStore.h"
 
 
 
@@ -150,7 +153,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 /// of the other accounts you own.
 - (void)showSendAs {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] availableMessageSendersInChat:self.chatId completion:^(NSArray *senders){
+	[[TGGroupStore shared] availableMessageSendersInChat:self.chatId completion:^(NSArray *senders){
 		TGGroupSettingsViewController *me = weakSelf;
 		if (!senders.count){
 			[TGAlertSheet showMessage:@"An error occurred."
@@ -162,9 +165,9 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 			NSString *who = nil;
 			NSString *userId = sender[@"user_id"];
 			if (userId)
-				who = [[TGClient shared] nameForUserId:[userId longLongValue]];
+				who = [[TGMessageStore shared] nameForUserId:[userId longLongValue]];
 			if (!who.length && sender[@"chat_id"])
-				who = [[TGClient shared] titleForChat:
+				who = [[TGMessageStore shared] titleForChat:
 						[sender[@"chat_id"] longLongValue]];
 			NSString *line = who.length ? who : @"chat";
 			NSString *current = [sender[@"is_current"] boolValue] ? @" — now" : @"";
@@ -175,7 +178,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 				 destructiveIndex:-1 inView:me.view
 						 onChoice:^(NSInteger index){
 			NSDictionary *sender = senders[(NSUInteger)index];
-			[[TGClient shared] setMessageSender:sender inChat:me.chatId
+			[[TGGroupStore shared] setMessageSender:sender inChat:me.chatId
 									 completion:^(BOOL ok){
 				if (!ok)
 					[TGAlertSheet showMessage:@"An error occurred."
@@ -189,7 +192,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 /// monoforum's own setup, not the first thing this row asks.
 - (void)chooseDirectMessages {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] chatProfile:self.chatId completion:^(NSDictionary *info){
+	[[TGProfileStore shared] chatProfile:self.chatId completion:^(NSDictionary *info){
 		TGGroupSettingsViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -208,7 +211,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 								title:@"Direct Messages" inView:me.view];
 			return;
 		}
-		[[TGClient shared] setDirectMessagesEnabled:YES paidStars:0
+		[[TGGroupStore shared] setDirectMessagesEnabled:YES paidStars:0
 											 inChat:me.chatId
 										 completion:^(BOOL ok){
 			TGGroupSettingsViewController *again = weakSelf;
@@ -243,7 +246,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 					  destructive:YES
 						   inView:me.view
 						onConfirm:^{
-			[[TGClient shared] deleteChatMessagesByDate:weakSelf.chatId
+			[[TGGroupStore shared] deleteChatMessagesByDate:weakSelf.chatId
 												 minDate:minDate
 												 maxDate:maxDate
 												  revoke:YES];
@@ -255,7 +258,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 /// supergroup, chosen from the packs this account owns.
 - (void)chooseStickerSet:(BOOL)customEmoji {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] ownedStickerSetsWithCompletion:^(NSArray *sets){
+	[[TGStickerStore shared] ownedStickerSetsWithCompletion:^(NSArray *sets){
 		TGGroupSettingsViewController *me = weakSelf;
 		NSMutableArray *titles = [NSMutableArray arrayWithObject:@"None"];
 		NSMutableArray *ids = [NSMutableArray arrayWithObject:@(0)];
@@ -292,10 +295,10 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 								  title:title inView:me.view];
 			};
 			if (customEmoji)
-				[[TGClient shared] setSupergroupCustomEmojiStickerSet:setId
+				[[TGGroupStore shared] setSupergroupCustomEmojiStickerSet:setId
 						inChat:me.chatId completion:done];
 			else
-				[[TGClient shared] setSupergroupStickerSet:setId
+				[[TGGroupStore shared] setSupergroupStickerSet:setId
 						inChat:me.chatId completion:done];
 		}];
 	}];
@@ -352,10 +355,10 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 			componentsJoinedByString:@"\n"];
 
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] messageFileTypeForHead:head completion:^(NSDictionary *fileType){
+	[[TGGroupStore shared] messageFileTypeForHead:head completion:^(NSDictionary *fileType){
 		(void)fileType;
 		TGGroupSettingsViewController *me = weakSelf;
-		[[TGClient shared] importConfirmationTextForChat:chatId
+		[[TGGroupStore shared] importConfirmationTextForChat:chatId
 											  completion:^(NSString *text){
 			TGGroupSettingsViewController *again = weakSelf;
 			NSString *title = @"Import Messages";
@@ -363,7 +366,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 			[TGAlertSheet showConfirm:body title:title action:@"Import"
 						  destructive:YES inView:again.view
 							onConfirm:^{
-				[[TGClient shared] importMessagesFromFile:path
+				[[TGGroupStore shared] importMessagesFromFile:path
 											attachedFiles:@[]
 												 intoChat:chatId
 											   completion:^(BOOL ok){

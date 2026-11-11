@@ -3,8 +3,10 @@
 //
 #import "TGCommunitiesViewController.h"
 #import "TGCommunityViewController.h"
-#import "TGClient.h"
+#import "TGProfileStore.h"
+#import "TGChatListStore.h"
 #import "TGAlertSheet.h"
+#import "TGGroupStore.h"
 
 @implementation TGCommunitiesViewController
 
@@ -29,7 +31,7 @@
 - (void)rebuild {
 	__weak typeof(self) weakSelf = self;
 	NSMutableArray *rows = [NSMutableArray array];
-	NSArray *communities = [TGClient shared].communities;
+	NSArray *communities = [TGProfileStore shared].communities;
 	for (NSDictionary *community in communities){
 		int64_t communityId = [community[@"id"] longLongValue];
 		NSString *detail = community[@"status"];
@@ -64,7 +66,7 @@
 }
 
 - (void)createCommunity {
-	TGClient *client = [TGClient shared];
+	TGChatListStore *client = [TGChatListStore shared];
 	NSMutableArray *titles = [NSMutableArray array];
 	NSMutableArray *ids = [NSMutableArray array];
 	for (NSDictionary *chat in client.chats){
@@ -105,7 +107,7 @@
 							   inView:weakSelf.view
 							 onChoice:^(NSInteger pick){
 				BOOL hidden = (pick == 1);
-				[[TGClient shared] createCommunity:name chatId:chatId hidden:hidden
+				[[TGGroupStore shared] createCommunity:name chatId:chatId hidden:hidden
 										completion:^(int64_t communityId, NSString *error){
 					if (!communityId){
 						[weakSelf toast:error ?: @"An error occurred."];

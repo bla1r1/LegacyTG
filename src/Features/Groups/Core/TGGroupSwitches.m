@@ -1,5 +1,4 @@
 #import "TGGroupSettingsViewController.h"
-#import "TGClient.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
@@ -18,6 +17,7 @@
 #import "TGGroupSwitch.h"
 #import "TGGroupSettingsViewControllerInternal.h"
 #import "TGGroupLogic.h"
+#import "TGGroupStore.h"
 
 
 
@@ -152,7 +152,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 	self.busy = YES;
 	[self rebuild];
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] toggleSupergroupUsernameIsActive:username
+	[[TGGroupStore shared] toggleSupergroupUsernameIsActive:username
 												 inChat:self.chatId
 											   isActive:on
 											 completion:^(BOOL ok, NSString *error){
@@ -209,34 +209,34 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 	};
 
 	if ([key isEqualToString:@"sign"]){
-		[[TGClient shared] setChatSignMessages:self.chatId on:on completion:^(BOOL ok){
+		[[TGGroupStore shared] setChatSignMessages:self.chatId on:on completion:^(BOOL ok){
 			done(ok, ok ? nil : @"An error occurred.");
 		}];
 	} else if ([key isEqualToString:@"join"]){
-		[[TGClient shared] setChatJoinToSendMessages:self.chatId on:on
+		[[TGGroupStore shared] setChatJoinToSendMessages:self.chatId on:on
 										  completion:^(BOOL ok){
 			done(ok, ok ? nil : @"An error occurred.");
 		}];
 	} else if ([key isEqualToString:@"history"]){
-		[[TGClient shared] setSupergroupAllHistoryAvailable:self.chatId on:on
+		[[TGGroupStore shared] setSupergroupAllHistoryAvailable:self.chatId on:on
 												completion:^(BOOL ok){
 			done(ok, ok ? nil : @"An error occurred.");
 		}];
 	} else if ([key isEqualToString:@"antispam"]){
-		[[TGClient shared] setChat:self.chatId aggressiveAntiSpam:on
+		[[TGGroupStore shared] setChat:self.chatId aggressiveAntiSpam:on
 						completion:done];
 	} else if ([key isEqualToString:@"hidden"]){
-		[[TGClient shared] setSupergroupHiddenMembersInChat:self.chatId on:on
+		[[TGGroupStore shared] setSupergroupHiddenMembersInChat:self.chatId on:on
 												completion:done];
 	} else if ([key isEqualToString:@"forum"]){
-		[[TGClient shared] setSupergroupForumInChat:self.chatId on:on
+		[[TGGroupStore shared] setSupergroupForumInChat:self.chatId on:on
 										 completion:done];
 	} else if ([key isEqualToString:@"joinRequests"]){
-		[[TGClient shared] setSupergroupJoinByRequestInChat:self.chatId on:on
+		[[TGGroupStore shared] setSupergroupJoinByRequestInChat:self.chatId on:on
 											 guardBotUserId:[self.settings[@"guardBotUserId"] longLongValue]
 												 completion:done];
 	} else {
-		[[TGClient shared] setSupergroupAutomaticTranslationInChat:self.chatId on:on
+		[[TGGroupStore shared] setSupergroupAutomaticTranslationInChat:self.chatId on:on
 														completion:done];
 	}
 }
@@ -284,7 +284,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 		if (!me)
 			return;
 		// deleteChat removes the row and leaves in the same request pair.
-		[[TGClient shared] deleteChat:me.chatId];
+		[[TGGroupStore shared] deleteChat:me.chatId];
 		[me.navigationController popToRootViewControllerAnimated:YES];
 	}];
 }
@@ -305,7 +305,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 		TGGroupSettingsViewController *me = weakSelf;
 		if (!me)
 			return;
-		[[TGClient shared] deleteChatForEveryone:me.chatId completion:^(NSString *error){
+		[[TGGroupStore shared] deleteChatForEveryone:me.chatId completion:^(NSString *error){
 			TGGroupSettingsViewController *again = weakSelf;
 			if (!again)
 				return;

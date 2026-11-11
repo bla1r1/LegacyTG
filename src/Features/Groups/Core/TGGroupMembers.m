@@ -1,5 +1,4 @@
 #import "TGGroupSettingsViewController.h"
-#import "TGClient.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
@@ -17,6 +16,7 @@
 #import "TGGroupSwitch.h"
 #import "TGGroupSettingsViewControllerInternal.h"
 #import "TGMemberListViewController.h"
+#import "TGGroupStore.h"
 
 
 
@@ -165,7 +165,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 	[TGAlertSheet showInput:@"Search Members" message:nil
 				placeholder:@"Username" text:nil action:@"Search"
 					 inView:self.view onSubmit:^(NSString *query){
-		[[TGClient shared] searchMembersInChat:weakSelf.chatId query:query
+		[[TGGroupStore shared] searchMembersInChat:weakSelf.chatId query:query
 									completion:^(NSArray *members){
 			TGGroupSettingsViewController *me = weakSelf;
 			if (!members.count){

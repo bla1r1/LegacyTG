@@ -1,5 +1,4 @@
 #import "TGGroupSettingsViewController.h"
-#import "TGClient.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
@@ -18,6 +17,8 @@
 #import "TGGroupSettingsViewControllerInternal.h"
 #import "TGGroupLogic.h"
 #import "TGLocalization.h"
+#import "TGGroupStore.h"
+#import "TGProfileStore.h"
 
 
 
@@ -139,7 +140,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 - (void)showInviteLink {
 	int64_t chatId = self.chatId;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] inviteLinksForChat:chatId completion:^(NSArray *links){
+	[[TGGroupStore shared] inviteLinksForChat:chatId completion:^(NSArray *links){
 		TGGroupSettingsViewController *me = weakSelf;
 		NSDictionary *preferred = TGInviteLinkPreferred(links);
 		NSString *primary = preferred[@"link"];
@@ -160,7 +161,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 				return;
 			}
 			if (index == 1){
-				[[TGClient shared] createInviteLinkForChat:chatId name:nil
+				[[TGGroupStore shared] createInviteLinkForChat:chatId name:nil
 											   memberLimit:0
 												completion:^(NSString *link){
 					[TGAlertSheet showMessage:(link.length ? link
@@ -185,7 +186,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 - (void)showAllInviteLinks {
 	int64_t chatId = self.chatId;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] inviteLinksForChat:chatId completion:^(NSArray *links){
+	[[TGGroupStore shared] inviteLinksForChat:chatId completion:^(NSArray *links){
 		TGGroupSettingsViewController *me = weakSelf;
 		if (!links.count){
 			[TGAlertSheet showMessage:@"An error occurred."
@@ -221,7 +222,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 	if (!url.length)
 		return;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] inviteLink:url inChat:chatId completion:^(NSDictionary *info){
+	[[TGGroupStore shared] inviteLink:url inChat:chatId completion:^(NSDictionary *info){
 		TGGroupSettingsViewController *me = weakSelf;
 		NSDictionary *fresh = info ?: link;
 		BOOL primary = [fresh[@"primary"] boolValue];
@@ -253,7 +254,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 							placeholder:@"Name" text:fresh[@"name"] ?: @""
 								 action:@"Save" inView:me.view
 							 onSubmit:^(NSString *name){
-					[[TGClient shared] editSubscriptionInviteLink:url inChat:chatId
+					[[TGGroupStore shared] editSubscriptionInviteLink:url inChat:chatId
 							name:name completion:^(BOOL ok){
 						[TGAlertSheet showMessage:(ok ? @"Link updated"
 											   : @"An error occurred while updating the link")
@@ -278,7 +279,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 									placeholder:@"No Limit" text:@"0"
 										 action:@"Save" inView:me.view
 									 onSubmit:^(NSString *limitText){
-							[[TGClient shared] editInviteLink:url inChat:chatId
+							[[TGGroupStore shared] editInviteLink:url inChat:chatId
 									name:name expiration:0
 									memberLimit:limitText.integerValue
 									joinRequest:NO completion:^(BOOL ok){
@@ -292,7 +293,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 				return;
 			}
 			if ([action isEqualToString:@"Delete Link"]){
-				[[TGClient shared] deleteRevokedInviteLink:url inChat:chatId
+				[[TGGroupStore shared] deleteRevokedInviteLink:url inChat:chatId
 											 completion:^(BOOL ok){
 					[TGAlertSheet showMessage:(ok ? @"The invite link has been revoked."
 												   : @"An error occurred.")
@@ -308,7 +309,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 							   action:(primary ? @"Replace" : @"Revoke")
 						  destructive:YES inView:me.view onConfirm:^{
 				if (primary){
-					[[TGClient shared] replacePrimaryInviteLinkForChat:chatId
+					[[TGGroupStore shared] replacePrimaryInviteLinkForChat:chatId
 														 completion:^(NSString *made){
 						[TGAlertSheet showMessage:(made.length ? made
 								: @"An error occurred.")
@@ -316,7 +317,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 					}];
 					return;
 				}
-				[[TGClient shared] revokeInviteLink:url inChat:chatId
+				[[TGGroupStore shared] revokeInviteLink:url inChat:chatId
 										 completion:^(BOOL ok){
 					if (!ok)
 						[TGAlertSheet showMessage:@"An error occurred."
@@ -347,7 +348,7 @@ static NSString *TGInviteLinkDateText(NSDate *date) {
 
 - (void)showMembersOfInviteLink:(NSString *)url inChat:(int64_t)chatId {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] membersOfInviteLink:url inChat:chatId
+	[[TGGroupStore shared] membersOfInviteLink:url inChat:chatId
 								completion:^(NSArray *members){
 		TGGroupSettingsViewController *me = weakSelf;
 		if (!members.count){
@@ -376,7 +377,7 @@ static NSString *TGInviteLinkDateText(NSDate *date) {
 
 - (void)showInviteLinkCounts {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] inviteLinkCountsForChat:self.chatId completion:^(NSArray *counts){
+	[[TGGroupStore shared] inviteLinkCountsForChat:self.chatId completion:^(NSArray *counts){
 		TGGroupSettingsViewController *me = weakSelf;
 		if (!counts.count){
 			[TGAlertSheet showMessage:@"An error occurred."
@@ -407,7 +408,7 @@ static NSString *TGInviteLinkDateText(NSDate *date) {
 		[TGAlertSheet showInput:@"Subscription Fee" message:nil
 					placeholder:@"1" text:@"1" action:@"Create"
 					 inView:weakSelf.view onSubmit:^(NSString *stars){
-			[[TGClient shared] createSubscriptionInviteLink:chatId name:name
+			[[TGGroupStore shared] createSubscriptionInviteLink:chatId name:name
 					stars:MAX(stars.integerValue, 1) period:2592000
 					completion:^(NSString *link){
 				[TGAlertSheet showMessage:(link.length ? link
@@ -419,13 +420,13 @@ static NSString *TGInviteLinkDateText(NSDate *date) {
 }
 
 - (void)deleteAllRevokedLinks {
-	int64_t myId = [[TGClient shared].me[@"id"] longLongValue];
+	int64_t myId = [[TGProfileStore shared].me[@"id"] longLongValue];
 	__weak typeof(self) weakSelf = self;
 	[TGAlertSheet showConfirm:@"This will delete all revoked links."
 						title:@"Delete All Revoked Links"
 					   action:@"Delete" destructive:YES inView:self.view
 					onConfirm:^{
-		[[TGClient shared] deleteAllRevokedInviteLinks:weakSelf.chatId creator:myId
+		[[TGGroupStore shared] deleteAllRevokedInviteLinks:weakSelf.chatId creator:myId
 				completion:^(BOOL ok){
 			[TGAlertSheet showMessage:(ok ? @"The invite link has been revoked."
 										   : @"An error occurred.")
