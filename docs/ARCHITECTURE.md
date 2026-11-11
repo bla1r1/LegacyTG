@@ -1,7 +1,10 @@
 # Layers
 
-TDLib speaks JSON updates. `TGClient` owns that socket and keeps the caches:
-users by id, chats by id, photo file ids, stories, folders.
+See [ARCHITECTURE_CORE.md](ARCHITECTURE_CORE.md) for the current core diagram.
+
+TDLib speaks JSON updates. `TGTransport` owns the socket and the receive loop;
+`TGClient`, `TGUpdateRouter`, `TGUpdateHandlers` and `TGState` turn those
+updates into the caches and notifications the stores read.
 
 Screens do not read those caches. `src/Core/Stores` is the layer between them:
 
@@ -71,6 +74,32 @@ settings or call store can land without touching either.
 
 - `src/Features/Chat` files importing `TGClient*`: 0 (was 345 direct
   `[TGClient shared]` calls across 38 files).
+- `scripts/lint_layers.sh` enforces the direction
+  `Features/UI -> Stores -> Client -> TDLib`: screens never import the client,
+  Core never imports a view, store headers import no UIKit/AVFoundation/
+  MediaPlayer, stores never import a feature screen, and the client never
+  imports a store. The old Client->Store forwarders are gone.
+- `Core/Client/TGTransport.m` is the only file that loads libtdjson and calls
+  `td_json_client_*`: one client, one receive thread, outbox and `@extra`
+  correlation.
+- `Core/Client/TGUpdateRouter.m` decides what an incoming object is: a request
+  reply goes to its completion, a real update is batched on the main queue and
+  handed to `TGClient.handleUpdate:`, with the 100 ms coalescer owned here.
+- `Core/Client/TGUpdateHandlers.m` owns the whole `update*` switch (authorization,
+  users, chats, messages, files, stories, calls, business, stars). `TGClient`
+  keeps only the dispatcher and its caches accessors.
+- `Core/Client/TGState.m` owns the account caches (chats, users, photos,
+  communities, folders, quick replies, checklists, revenue, saved topics).
+  `TGClient` keeps forwarding accessors so the update handlers and categories
+  read one shared state object.
+- `Core/Client/TGAccountSession.m` owns `authState`, the auth facts
+  (code/password/email/QR/phone) and the background close/restart state
+  machine. Close and restart are two blocks installed by `TGClient`.
+- `TGClient` keeps the caches and the update handlers; it forwards transport,
+  routing and session calls to the modules above.
+- `make -f tests/Makefile corekit` links the client and stores as a headless
+  macOS binary with no feature screen. It sends one text request and prints the
+  resulting `sendMessage` shape; this is the CoreKit smoke test for a second UI.
 - `scripts/lint_client.sh` allow list: 0 files (was 122). Every Feature and UI
   file now goes through a store, including Chat, ChatList, Profile, Groups,
   Settings, Media, Contacts, Channels, Dev, Business, Calls, Stories, Auth and

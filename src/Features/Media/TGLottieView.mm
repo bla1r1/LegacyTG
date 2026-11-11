@@ -7,6 +7,7 @@
 #import "TGWebMDecoder.h"
 #import "TGCapabilities.h"
 #import "TGStickerBudget.h"
+#import "TGChatThemeStore.h"
 #import "TGPerf.h"
 #include <zlib.h>
 #include <vector>
@@ -785,6 +786,41 @@ static dispatch_queue_t TGLottiePlayerQueue(void) {
 @property (nonatomic, strong) NSTimer *timer;
 @property (nonatomic, assign) BOOL loaded;
 @property (nonatomic, assign) BOOL isPlaying;
+@end
+
+
+@implementation TGLottieView (ChatTheme)
+/// Snapshots a .tgs file at `side` points and hands the still to `completion`.
+/// The store installs this on +load; the store itself never builds a view.
++ (void)load {
+	[TGChatThemeStore shared].tgsPatternRenderer =
+			^(NSString *path, CGFloat side, void (^completion)(id image)){
+		TGLottieView *view = [[TGLottieView alloc] initWithFrame:
+				CGRectMake(0, 0, side, side)];
+		__weak TGLottieView *weakView = view;
+		void (^ready)(void) = ^{
+			TGLottieView *strongView = weakView;
+			UIImage *image = nil;
+			if (strongView){
+				CGImageRef content = (__bridge CGImageRef)strongView.layer.contents;
+				if (content && CFGetTypeID(content) == CGImageGetTypeID()){
+					image = [UIImage imageWithCGImage:content];
+				} else {
+					UIGraphicsBeginImageContextWithOptions(strongView.bounds.size, NO, 1);
+					[strongView.layer renderInContext:UIGraphicsGetCurrentContext()];
+					image = UIGraphicsGetImageFromCurrentImageContext();
+					UIGraphicsEndImageContext();
+				}
+				strongView.onStickerReady = nil;
+			}
+			if (completion)
+				completion(image);
+		};
+		view.onStickerReady = ready;
+		if ([view loadStickerFile:path])
+			ready();
+	};
+}
 @end
 
 @implementation TGLottieView

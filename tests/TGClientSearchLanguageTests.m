@@ -7,6 +7,7 @@
 // here is that every row has a request behind it and every answer lands in a
 // field the row shows.
 #import "TGTestRunner.h"
+#import "TGMessageStore.h"
 #import "TGLocalization.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
@@ -356,7 +357,7 @@ static NSDictionary *plainSL(NSDictionary *d) {
 - (void)testTranslateText_AsksForTheLocaleAndKeepsTheText {
 	TGClient *c = SL();
 	__block NSString *got = nil;
-	[c translateText:@"hello" toLanguageCode:@"de" tone:@"" completion:^(NSString *t){ got = t; }];
+	[[TGMessageStore shared] translateText:@"hello" toLanguageCode:@"de" tone:@"" completion:^(NSString *t){ got = t; }];
 	NSDictionary *r = lastSL(c, @"translateText");
 	XCTAssertEqualObjects(r[@"text"][@"text"], @"hello");
 	XCTAssertEqualObjects(r[@"to_language_code"], @"de");

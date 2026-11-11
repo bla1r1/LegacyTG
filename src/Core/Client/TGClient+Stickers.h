@@ -64,8 +64,6 @@
 				  inChat:(int64_t)chatId
 			  completion:(void (^)(NSArray *animations))completion;
 
-- (void)sendAnimation:(NSDictionary *)animation toChat:(int64_t)chatId thread:(int64_t)threadId;
-
 /// Stickers for an emoji, out of the sets this account has installed.
 - (void)stickersForEmoji:(NSString *)emoji
 			  completion:(void (^)(NSArray *stickers))completion;

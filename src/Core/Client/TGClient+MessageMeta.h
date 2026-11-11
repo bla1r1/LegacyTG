@@ -11,9 +11,6 @@
 
 /// The chat and the exact message a "message"-kind link resolves to: a
 /// t.me/name/12345 landed on. The chat id is 0 when Telegram refused.
-- (void)messageLinkInfo:(NSString *)link
-			 completion:(void (^)(int64_t chatId, int64_t messageId))completion;
-
 /// Every cache's draft dropped at once, on every device.
 - (void)clearAllDraftMessages;
 
@@ -23,34 +20,9 @@
 
 - (void)setDefaultMessageAutoDeleteTime:(NSInteger)seconds;
 
-- (void)viewersOfMessage:(int64_t)messageId
-				  inChat:(int64_t)chatId
-			  completion:(void (^)(NSArray *viewers))completion;
-
 /// A nil date with the reason word is the honest sheet line.
-- (void)readDateOfMessage:(int64_t)messageId
-				   inChat:(int64_t)chatId
-			   completion:(void (^)(NSTimeInterval date, NSString *reason))completion;
-
-- (void)authorOfMessage:(int64_t)messageId
-				inChat:(int64_t)chatId
-			 completion:(void (^)(NSDictionary *user))completion;
-
-- (void)embeddingCodeOfMessage:(int64_t)messageId
-						inChat:(int64_t)chatId
-						 album:(BOOL)album
-					completion:(void (^)(NSString *code))completion;
-
-- (void)publicForwardsOfMessage:(int64_t)messageId
-						 inChat:(int64_t)chatId
-					 completion:(void (^)(NSArray *messages))completion;
-
 /// The reactions this message offers, top row first. nil when the message
 /// cannot be reacted to or has no explicit top list.
-- (void)availableReactionsForMessage:(int64_t)messageId
-							  inChat:(int64_t)chatId
-						  completion:(void (^)(NSArray *emojis))completion;
-
 - (void)addedReactionsOfMessage:(int64_t)messageId
 						 inChat:(int64_t)chatId
 						  emoji:(NSString *)emoji
@@ -64,16 +36,6 @@
 				   reactionType:(NSDictionary *)reactionType
 						 offset:(NSString *)offset
 					 completion:(void (^)(NSArray *rows, NSString *next))completion;
-
-- (void)deleteReactionsOfSender:(NSDictionary *)sender
-					  ofMessage:(int64_t)messageId
-						 inChat:(int64_t)chatId;
-
-- (void)deleteAllReactionsOfSender:(NSDictionary *)sender inChat:(int64_t)chatId;
-
-- (void)messageCountInChat:(int64_t)chatId
-					thread:(int64_t)threadId
-				completion:(void (^)(NSInteger count))completion;
 
 /// How many messages a chat carries under one SearchMessagesFilter, which is
 /// the number a profile tab shows in its subtitle. `filterType` is a TDLib
@@ -96,19 +58,8 @@
 					 offset:(NSString *)offset
 				completion:(void (^)(NSArray *messages, NSString *next))completion;
 
-- (void)recentLocationsInChat:(int64_t)chatId
-				   completion:(void (^)(NSArray *messages))completion;
-
-- (void)translateMessage:(int64_t)messageId
-				  inChat:(int64_t)chatId
-				 toCode:(NSString *)languageCode
-			  completion:(void (^)(NSString *text))completion;
-
 /// The description of a message effect by id: "emoji", "premium" and the
 /// effect's kind. nil when Telegram has no such effect.
-- (void)messageEffectWithId:(int64_t)effectId
-				 completion:(void (^)(NSDictionary *effect))completion;
-
 /// What kind of export file a message file is, read from its first lines, so
 /// the import sheet can name it before importing. nil for an unknown file.
 - (void)messageFileTypeForHead:(NSString *)head

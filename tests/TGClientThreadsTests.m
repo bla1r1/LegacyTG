@@ -6,6 +6,7 @@
 // where a chat id goes, a pinned list that drops chats), so the tests read
 // the outbox and answer through handleUpdate the way the receive loop does.
 #import "TGTestRunner.h"
+#import "TGMessageStore.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
 
@@ -126,9 +127,9 @@ static NSDictionary *post(BOOL channelPost, NSDictionary *replyInfo) {
 
 - (void)testUnpinAll_ChatOrTopic {
 	TGClient *c = H();
-	[c unpinAllMessagesInChat:-100 thread:0];
+	[[TGMessageStore shared] unpinAllMessagesInChat:-100 thread:0];
 	XCTAssertEqual([lastH(c, @"unpinAllChatMessages")[@"chat_id"] longLongValue], -100LL);
-	[c unpinAllMessagesInChat:-100 thread:9];
+	[[TGMessageStore shared] unpinAllMessagesInChat:-100 thread:9];
 	NSDictionary *topic = lastH(c, @"unpinAllForumTopicMessages");
 	XCTAssertEqual([topic[@"forum_topic_id"] longLongValue], 9LL);
 }
@@ -264,7 +265,7 @@ static NSDictionary *inlineMarkup(void) {
 
 - (void)testChecklists_MarkDoneSendsTheTaskInTheDoneList {
 	TGClient *c = H();
-	[c markChecklistTask:41 done:YES inMessage:12 chat:-5];
+	[[TGMessageStore shared] markChecklistTask:41 done:YES inMessage:12 chat:-5];
 	NSDictionary *sent = lastH(c, @"markChecklistTasksAsDone");
 	XCTAssertEqual([sent[@"chat_id"] longLongValue], -5LL);
 	XCTAssertEqual([sent[@"message_id"] longLongValue], 12LL);
@@ -274,7 +275,7 @@ static NSDictionary *inlineMarkup(void) {
 
 - (void)testChecklists_MarkNotDoneSendsTheTaskInTheNotDoneList {
 	TGClient *c = H();
-	[c markChecklistTask:42 done:NO inMessage:13 chat:-6];
+	[[TGMessageStore shared] markChecklistTask:42 done:NO inMessage:13 chat:-6];
 	NSDictionary *sent = lastH(c, @"markChecklistTasksAsDone");
 	XCTAssertEqual([sent[@"chat_id"] longLongValue], -6LL);
 	XCTAssertEqual([sent[@"message_id"] longLongValue], 13LL);

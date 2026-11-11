@@ -1,7 +1,6 @@
 #import "TGClient+MessageRecord.h"
 #import "TGClient+MessagesInternal.h"
 #import "TGClientInternal.h"
-#import "TGMessageStore.h"
 
 @implementation TGClient (MessageRecord)
 
@@ -32,18 +31,6 @@
 		if (completion)
 			completion([result[@"id"] longLongValue]);
 	}];
-}
-
-- (void)clickAnimatedEmojiMessage:(int64_t)messageId
-						   inChat:(int64_t)chatId
-					   completion:(void (^)(NSString *emoji))completion {
-	[[TGMessageStore shared] clickAnimatedEmojiMessage:messageId inChat:chatId completion:completion];
-}
-
-- (void)clearReplyMarkupOfMessage:(int64_t)messageId
-						   inChat:(int64_t)chatId
-					   completion:(void (^)(BOOL ok))completion {
-	[[TGMessageStore shared] clearReplyMarkupOfMessage:messageId inChat:chatId completion:completion];
 }
 
 - (void)callbackQueryMessage:(int64_t)messageId
@@ -136,22 +123,6 @@ static id TGMessageTopicForThread(TGClient *client, int64_t chatId, int64_t thre
 				? result[@"positions"] : @[];
 		completion(positions);
 	}];
-}
-
-- (void)statisticsOfMessage:(int64_t)messageId
-					 inChat:(int64_t)chatId
-				 completion:(void (^)(NSDictionary *statistics))completion {
-	[[TGMessageStore shared] statisticsOfMessage:messageId inChat:chatId completion:completion];
-}
-
-- (void)reportViewOfMessage:(int64_t)messageId
-					 inChat:(int64_t)chatId
-				timeInViewMs:(NSInteger)timeInViewMs
-		  activeTimeInViewMs:(NSInteger)activeTimeInViewMs
-				 heightRatio:(NSInteger)heightPerMille
-			   seenRangeRatio:(NSInteger)seenPerMille
-				 completion:(void (^)(BOOL ok))completion {
-	[[TGMessageStore shared] reportViewOfMessage:messageId inChat:chatId timeInViewMs:timeInViewMs activeTimeInViewMs:activeTimeInViewMs heightRatio:heightPerMille seenRangeRatio:seenPerMille completion:completion];
 }
 
 - (void)setReactions:(NSArray *)emojis

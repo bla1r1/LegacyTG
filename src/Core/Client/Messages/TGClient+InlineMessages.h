@@ -4,13 +4,7 @@
 
 /// Pin a message to the top of the chat, or take it down again. `notify`
 /// posts the "pinned a message" service message the way their clients do.
-- (void)pinMessage:(int64_t)messageId inChat:(int64_t)chatId notify:(BOOL)notify;
-
-- (void)unpinMessage:(int64_t)messageId inChat:(int64_t)chatId;
-
 /// Every pinned message down at once; `threadId` limits it to a forum topic.
-- (void)unpinAllMessagesInChat:(int64_t)chatId thread:(int64_t)threadId;
-
 /// The last message on or before `date` (unix seconds), or nil.
 - (void)messageAtDate:(NSTimeInterval)date inChat:(int64_t)chatId
 		   completion:(void (^)(NSDictionary *message))completion;
@@ -77,13 +71,7 @@
 
 /// Blocks whoever sent a message from replying again, optionally deleting
 /// what they wrote and reporting it.
-- (void)blockSenderOfMessage:(int64_t)messageId
-			  deleteMessages:(BOOL)deleteMessages
-				  reportSpam:(BOOL)reportSpam;
-
 /// Closes a poll you sent; nobody can vote after that.
-- (void)stopPoll:(int64_t)messageId inChat:(int64_t)chatId;
-
 /// Who voted for one answer. `optionIndex` is the 0-based one; entries
 /// carry "id", "name", "date".
 - (void)pollVotersOfOption:(NSInteger)optionIndex
@@ -99,18 +87,8 @@
 						 completion:(void (^)(NSDictionary *graph))completion;
 
 /// An option added after the poll went out, for polls that allow it.
-- (void)addPollOption:(NSString *)text
-            toMessage:(int64_t)messageId
-                 inChat:(int64_t)chatId
-            completion:(void (^)(BOOL ok))completion;
-
 /// An option taken out again; `optionId` is the string id pollOption
 /// carries, not an index.
-- (void)deletePollOption:(NSString *)optionId
-               ofMessage:(int64_t)messageId
-                  inChat:(int64_t)chatId
-              completion:(void (^)(BOOL ok))completion;
-
 /// What one answer still allows: "canBeDeleted", "canBeReplied",
 /// "canBeRepliedInAnotherChat" and "canGetLink". `optionId` is pollOption's
 /// string id. Nil with `error` when the poll has no such option or Telegram
@@ -126,58 +104,19 @@
 
 /// Reports a reaction the flattening named - `sender` is the MessageSender
 /// dict it carried, and TDLib files the report against whoever added it.
-- (void)reportReactionBySender:(NSDictionary *)sender
-					 ofMessage:(int64_t)messageId
-						 inChat:(int64_t)chatId
-					 completion:(void (^)(BOOL ok))completion;
-
 /// React to a message with an emoji, as the current user.
-- (void)reactTo:(int64_t)messageId inChat:(int64_t)chatId emoji:(NSString *)emoji;
-
 /// Takes your own reaction back off. Nothing happens if it was not there.
-- (void)removeReaction:(NSString *)emoji
-		   fromMessage:(int64_t)messageId
-				inChat:(int64_t)chatId;
-
 /// it expires a few seconds after the last one. Cancel sends the stop.
-- (void)sendTypingToChat:(int64_t)chatId thread:(int64_t)threadId;
-
-- (void)cancelTypingInChat:(int64_t)chatId thread:(int64_t)threadId;
-
 /// Marks a voice note, a video note or a one-time picture as opened, so the
 /// sender's ticks say it was played.
-- (void)openContentOfMessage:(int64_t)messageId inChat:(int64_t)chatId;
-
 /// Sends failed messages again, by the ids they kept while failing.
-- (void)resendMessages:(NSArray *)messageIds inChat:(int64_t)chatId;
-
 /// The message a reply points at, fetched from the server - the history on
 /// screen may not reach back far enough to hold it. nil when it is gone.
-- (void)repliedMessageTo:(int64_t)messageId
-				  inChat:(int64_t)chatId
-			  completion:(void (^)(NSDictionary *message))completion;
-
 /// Returns messages by their ids in a chat. Missing messages are returned as NSNull.
-- (void)messagesInChat:(int64_t)chatId
-			messageIds:(NSArray *)messageIds
-			completion:(void (^)(NSArray *messages))completion;
-
 /// Returns properties of a message (e.g. can_be_replied, can_get_message_thread).
-- (void)messagePropertiesForChat:(int64_t)chatId
-					   messageId:(int64_t)messageId
-					  completion:(void (^)(NSDictionary *properties))completion;
-
 /// A t.me link to one message, or nil for a chat that has no public link.
 - (void)linkToMessage:(int64_t)messageId
 			   inChat:(int64_t)chatId
 		   completion:(void (^)(NSString *link))completion;
-
-- (void)deleteMessage:(int64_t)messageId inChat:(int64_t)chatId;
-
-- (void)deleteMessages:(NSArray *)messageIds inChat:(int64_t)chatId;
-
-- (void)deleteMessages:(NSArray *)messageIds inChat:(int64_t)chatId revoke:(BOOL)revoke;
-
-- (void)markRead:(NSArray *)messageIds inChat:(int64_t)chatId;
 
 @end

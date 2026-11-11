@@ -7,6 +7,7 @@
 // an "ok" where the screen wanted a boolean, or a session where it wanted a
 // word - so most tests answer with a real server object rather than @{@"ok":1}.
 #import "TGTestRunner.h"
+#import "TGTransport.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
 #include <string.h>
@@ -21,7 +22,7 @@ static TGClient *AF(void) {
 	[c.usersById removeAllObjects];
 	c.me = @{@"id" : @(1001)};
 	[c noteApplicationVerificationWithId:0 nonce:@""];
-	c.td_exec = NULL;
+	[[TGTransport shared] testSetExecute:NULL];
 	return c;
 }
 
@@ -296,9 +297,9 @@ static const char *FakeExec(void *client, const char *request) {
 			"\"country_calling_code\":\"+380\","
 			"\"formatted_phone_number\":\"+380 44 123 4567\","
 			"\"is_anonymous\":false}");
-	c.td_exec = FakeExec;
+	[[TGTransport shared] testSetExecute:FakeExec];
 	NSDictionary *info = [c phoneNumberInfoForPrefixSync:@"+38044"];
-	c.td_exec = NULL;
+	[[TGTransport shared] testSetExecute:NULL];
 
 	XCTAssertTrue(strstr(gFakeExecRequest, "\"getPhoneNumberInfoSync\"") != NULL);
 	XCTAssertTrue(strstr(gFakeExecRequest, "\"language_code\":\"en\"") != NULL);

@@ -1,7 +1,6 @@
 #import "TGClient+AITools.h"
 #import "TGClientInternal.h"
 #import "TGClient+FeatureSupport.h"
-#import "TGMessageStore.h"
 
 @implementation TGClient (AITools)
 
@@ -255,13 +254,5 @@
 			completion(ok, ok ? nil : TGFeatureErrorText(result));
 	}];
 }
-
-- (void)setMessageFactCheck:(int64_t)messageId
-                     inChat:(int64_t)chatId
-                       text:(NSString *)text
-                 completion:(void (^)(BOOL, NSString *))completion {
-	[[TGMessageStore shared] setMessageFactCheck:messageId inChat:chatId text:text completion:completion];
-}
-
 
 @end

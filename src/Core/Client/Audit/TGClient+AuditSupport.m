@@ -15,8 +15,8 @@ BOOL TGAuditFailed(NSDictionary *result) {
 /// host tests can read its shape.
 void TGAuditExecute(TGClient *client, NSDictionary *request,
 						void (^completion)(NSDictionary *)) {
-	if (client.td_exec){
-		NSDictionary *answer = [client executeSynchronously:request];
+	NSDictionary *answer = [client executeSynchronously:request];
+	if (answer){
 		if (completion) completion(answer);
 		return;
 	}

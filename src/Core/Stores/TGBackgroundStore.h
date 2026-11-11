@@ -1,10 +1,11 @@
 //
 // TGBackgroundStore.h - what the Chat Wallpapers screen may ask for.
 //
-#import <UIKit/UIKit.h>
 
 /// Posted on the main queue after a server pattern finishes decoding or a
 /// baked thumbnail lands in the cache.
+#import <Foundation/Foundation.h>
+#import <CoreGraphics/CoreGraphics.h>
 extern NSString *const TGBackgroundStoreChangedNotification;
 
 @interface TGBackgroundStore : NSObject
@@ -31,12 +32,12 @@ extern NSString *const TGBackgroundStoreChangedNotification;
 
 /// Download the background's preview thumbnail and decode it once.
 - (void)loadThumbnailForBackground:(NSDictionary *)background
-						completion:(void (^)(UIImage *image))completion;
+						completion:(void (^)(id image))completion;
 
 /// The server pattern baked over its fill at `size`. Nil until the pattern
 /// document has downloaded and decoded; the caller draws the fill meanwhile
 /// and listens for TGBackgroundStoreChangedNotification.
-- (UIImage *)patternThumbnailForBackground:(NSDictionary *)background
+- (id)patternThumbnailForBackground:(NSDictionary *)background
 									 size:(CGSize)size
 									 dark:(BOOL)dark;
 

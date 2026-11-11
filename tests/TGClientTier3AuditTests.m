@@ -4,6 +4,7 @@
 // sends. The answers that change a row are round-tripped as well, so a
 // flattening bug fails here rather than on a device.
 #import "TGTestRunner.h"
+#import "TGTransport.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
 
@@ -15,7 +16,7 @@ static TGClient *T3(void) {
 	[c.pendingRequests removeAllObjects];
 	[c.chatsById removeAllObjects];
 	[c.usersById removeAllObjects];
-	c.td_exec = NULL;
+	[[TGTransport shared] testSetExecute:NULL];
 	c.me = @{@"id" : @(1001)};
 	return c;
 }

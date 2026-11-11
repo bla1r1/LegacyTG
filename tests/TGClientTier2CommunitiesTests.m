@@ -6,6 +6,7 @@
 // invisible until Telegram refuses it. Nested reads (getMessage before a
 // checklist editor) are answered in order, the way the receive loop would.
 #import "TGTestRunner.h"
+#import "TGMessageStore.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
 
@@ -632,14 +633,14 @@ static NSDictionary *t2Message(NSDictionary *content) {
 
 - (void)testSetMessageFactCheck_SetsAndClearsWithANull {
 	TGClient *c = T2();
-	[c setMessageFactCheck:55 inChat:77 text:@"Checked" completion:nil];
+	[[TGMessageStore shared] setMessageFactCheck:55 inChat:77 text:@"Checked" completion:nil];
 	NSDictionary *set = t2Last(c, @"setMessageFactCheck");
 	XCTAssertEqualObjects(set[@"chat_id"], @(77));
 	XCTAssertEqualObjects(set[@"message_id"], @(55));
 	XCTAssertEqualObjects(set[@"text"][@"text"], @"Checked");
 	t2Answer(c, @{@"@type" : @"ok"});
 
-	[c setMessageFactCheck:55 inChat:77 text:nil completion:nil];
+	[[TGMessageStore shared] setMessageFactCheck:55 inChat:77 text:nil completion:nil];
 	NSDictionary *clear = t2Last(c, @"setMessageFactCheck");
 	XCTAssertTrue(clear[@"text"] == [NSNull null]);
 }

@@ -5,6 +5,7 @@
 //
 // Requests sit in the outbox where their answer can be fed back by hand.
 #import "TGTestRunner.h"
+#import "TGSendStore.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
 
@@ -15,7 +16,6 @@ static TGClient *VS(void) {
 	[c.outbox removeAllObjects];
 	[c.pendingRequests removeAllObjects];
 	[c.noteSendWaiters removeAllObjects];
-	c.td_exec = NULL;
 	return c;
 }
 
@@ -88,7 +88,7 @@ static NSDictionary *VSPendingMessage(int64_t messageId) {
 	TGClient *c = VS();
 	__block NSInteger answers = 0;
 	__block BOOL sent = YES;
-	[c sendVideoNoteAtPath:VSPath() duration:13 length:360 toChat:42 thread:0
+	[[TGSendStore shared] sendVideoNoteAtPath:VSPath() duration:13 length:360 toChat:42 thread:0
 				  viewOnce:NO progress:nil completion:^(BOOL ok){
 		answers++;
 		sent = ok;
@@ -106,7 +106,7 @@ static NSDictionary *VSPendingMessage(int64_t messageId) {
 	TGClient *c = VS();
 	__block NSInteger answers = 0;
 	__block BOOL sent = NO;
-	[c sendVideoNoteAtPath:VSPath() duration:13 length:360 toChat:42 thread:0
+	[[TGSendStore shared] sendVideoNoteAtPath:VSPath() duration:13 length:360 toChat:42 thread:0
 				  viewOnce:NO progress:nil completion:^(BOOL ok){
 		answers++;
 		sent = ok;
@@ -132,7 +132,7 @@ static NSDictionary *VSPendingMessage(int64_t messageId) {
 	TGClient *c = VS();
 	__block NSInteger answers = 0;
 	__block BOOL sent = YES;
-	[c sendVideoNoteAtPath:VSPath() duration:13 length:360 toChat:42 thread:0
+	[[TGSendStore shared] sendVideoNoteAtPath:VSPath() duration:13 length:360 toChat:42 thread:0
 				  viewOnce:NO progress:nil completion:^(BOOL ok){
 		answers++;
 		sent = ok;
@@ -156,7 +156,7 @@ static NSDictionary *VSPendingMessage(int64_t messageId) {
 	TGClient *c = VS();
 	__block int64_t acceptedId = 0;
 	__block CGFloat progressAtAccept = -1;
-	[c sendVideoNoteAtPath:VSPath() duration:13 length:360 toChat:42 thread:0
+	[[TGSendStore shared] sendVideoNoteAtPath:VSPath() duration:13 length:360 toChat:42 thread:0
 				  viewOnce:NO thumbnail:nil progress:nil
 				  accepted:^(int64_t messageId){
 		acceptedId = messageId;
@@ -174,7 +174,7 @@ static NSDictionary *VSPendingMessage(int64_t messageId) {
 - (void)testThumbnailIsInThePayloadWhenGiven {
 	TGClient *c = VS();
 	NSString *thumb = @"/tmp/video-note-thumb.jpg";
-	[c sendVideoNoteAtPath:VSPath() duration:13 length:360 toChat:42 thread:0
+	[[TGSendStore shared] sendVideoNoteAtPath:VSPath() duration:13 length:360 toChat:42 thread:0
 				  viewOnce:NO thumbnail:thumb progress:nil accepted:nil completion:nil];
 
 	NSDictionary *sent = VSLastRequest(c, @"sendMessage");
@@ -189,7 +189,7 @@ static NSDictionary *VSPendingMessage(int64_t messageId) {
 
 - (void)testSendProgressReturnsTheLastFraction {
 	TGClient *c = VS();
-	[c sendVideoNoteAtPath:VSPath() duration:13 length:360 toChat:42 thread:0
+	[[TGSendStore shared] sendVideoNoteAtPath:VSPath() duration:13 length:360 toChat:42 thread:0
 				  viewOnce:NO progress:^(CGFloat progress){} completion:^(BOOL ok){}];
 	answerVS(c, @"sendMessage", VSPendingMessage(1048576006));
 
@@ -205,14 +205,14 @@ static NSDictionary *VSPendingMessage(int64_t messageId) {
 	TGClient *c = VS();
 	__block NSInteger answers = 0;
 	__block BOOL sent = NO;
-	[c sendVideoNoteAtPath:VSPath() duration:13 length:360 toChat:42 thread:0
+	[[TGSendStore shared] sendVideoNoteAtPath:VSPath() duration:13 length:360 toChat:42 thread:0
 				  viewOnce:NO progress:nil completion:^(BOOL ok){
 		answers++;
 		sent = ok;
 	}];
 	answerVS(c, @"sendMessage", VSPendingMessage(1048576007));
 
-	[c cancelSendingMessage:1048576007 inChat:42];
+	[[TGSendStore shared] cancelSendingMessage:1048576007 inChat:42];
 
 	NSDictionary *request = VSLastRequest(c, @"deleteMessages");
 	XCTAssertEqualObjects(request[@"chat_id"], @42);

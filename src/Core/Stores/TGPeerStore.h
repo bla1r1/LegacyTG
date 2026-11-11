@@ -6,8 +6,9 @@
 // TGClient separately for each of those; this header is the whole surface a
 // screen may use now.
 //
-#import <UIKit/UIKit.h>
 
+#import <Foundation/Foundation.h>
+#import <CoreGraphics/CoreGraphics.h>
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -64,14 +65,14 @@ extern NSString *const TGPeerStoreChangedNotification;
 #pragma mark - avatars
 
 /// The picture if it has already been decoded at this side.
-- (UIImage *)cachedAvatarForPeer:(int64_t)peerId side:(CGFloat)side;
+- (id)cachedAvatarForPeer:(int64_t)peerId side:(CGFloat)side;
 
 /// Asks for the peer's profile picture, decoded off the main thread and
 /// rounded to a square `side`. One download runs per file id however many
 /// peers or sides wait for it; every completion runs on the main queue.
 - (void)loadAvatarForPeer:(int64_t)peerId
                      side:(CGFloat)side
-               completion:(void (^)(UIImage *image))completion;
+               completion:(void (^)(id image))completion;
 
 /// Drops the decoded pictures and the waits in flight. Called when the
 /// running account changes, because the same id is another person after it.

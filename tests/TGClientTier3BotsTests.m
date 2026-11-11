@@ -5,6 +5,7 @@
 // sends. Answers that change a row are round-tripped where the flattening
 // has a decision in it; the rest only need the request to be right.
 #import "TGTestRunner.h"
+#import "TGTransport.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
 
@@ -16,7 +17,7 @@ static TGClient *TG3BClient(void) {
 	[c.pendingRequests removeAllObjects];
 	[c.chatsById removeAllObjects];
 	[c.usersById removeAllObjects];
-	c.td_exec = NULL;
+	[[TGTransport shared] testSetExecute:NULL];
 	c.me = @{@"id" : @(1001)};
 	return c;
 }

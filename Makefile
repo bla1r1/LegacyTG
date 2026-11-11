@@ -229,6 +229,18 @@ APP_SRC_M := \
 	src/Features/Dev/TGDevBench.m \
 	src/Features/Dev/TGDevFeedback.m \
 	src/Core/Client/TGClient.m \
+	src/Core/Client/TGTransport.m \
+	src/Core/Client/TGUpdateRouter.m \
+	src/Core/Client/TGAccountSession.m \
+	src/Core/Client/TGState.m \
+	src/Core/Client/TGUpdateHandlers+Core.m \
+	src/Core/Client/TGUpdateHandlers+Chats.m \
+	src/Core/Client/TGUpdateHandlers+Account.m \
+	src/Core/Client/TGUpdateHandlers+Stories.m \
+	src/Core/Client/TGUpdateHandlers+Notifications.m \
+	src/Core/Client/TGUpdateHandlers+Files.m \
+	src/Core/Client/TGUpdateHandlers+Misc.m \
+	src/Core/Client/TGUpdateHandlers.m \
 	src/Core/Client/TGClient+Peers.m \
 	src/Core/Stores/TGStickerStore.m \
 	src/Core/Stores/TGStickerStore+Stickers.m \

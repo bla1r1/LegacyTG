@@ -63,10 +63,4 @@
 
 /// Sets or clears the fact-check line under a channel post. A nil or empty
 /// `text` removes it, which TDLib spells as a null formattedText.
-- (void)setMessageFactCheck:(int64_t)messageId
-                     inChat:(int64_t)chatId
-                       text:(NSString *)text
-                 completion:(void (^)(BOOL ok, NSString *error))completion;
-
-
 @end

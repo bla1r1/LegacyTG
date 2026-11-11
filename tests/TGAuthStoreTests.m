@@ -4,6 +4,7 @@
 // step and the store builds the TDLib object. TDJSON is never loaded here, so
 // the outbox holds exactly what the server would have seen.
 #import "TGTestRunner.h"
+#import "TGTransport.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
 #import "TGAccountStore.h"
@@ -62,13 +63,13 @@ static void TGAUAnswer(TGClient *c, NSDictionary *answer) {
 
 - (void)testSendPhoneNumberRequestShape {
 	TGClient *c = TGAUClient();
-	c.available = YES;
+	[[TGTransport shared] testSetAvailable:YES];
 	c.authState = TGAuthStateWaitPhoneNumber;
 	[[TGAccountStore shared] sendPhoneNumber:@"+15551234567"];
 	NSDictionary *request = TGAURequest(c, @"setAuthenticationPhoneNumber");
 	XCTAssertNotNil(request);
 	XCTAssertEqualObjects(request[@"phone_number"], @"+15551234567");
-	c.available = NO;
+	[[TGTransport shared] testSetAvailable:NO];
 }
 
 - (void)testSendCodeRequestShape {

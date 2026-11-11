@@ -10,7 +10,6 @@
 // here too, so a screen never imports TGClient or one of its duty headers.
 //
 #import <Foundation/Foundation.h>
-#import <UIKit/UIKit.h>
 #import "TGClientTypes.h"
 #import "TGClientNotifications.h"
 

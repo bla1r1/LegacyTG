@@ -7,6 +7,8 @@
 // back in. tdjson is never loaded on the host, so requests sit in the outbox
 // where they can be read.
 #import "TGTestRunner.h"
+#import "TGSendStore.h"
+#import "TGMessageStore.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
 #import "TGPasscode.h"
@@ -113,12 +115,12 @@ static NSUInteger countRequestsOfType(TGClient *c, NSString *type) {
 
 - (void)testTyping_SendsTheActionAndCancelsWithTheSameShape {
 	TGClient *c = D();
-	[c sendTypingToChat:5 thread:3];
+	[[TGMessageStore shared] sendTypingToChat:5 thread:3];
 	NSDictionary *typing = lastRequestOfType(c, @"sendChatAction");
 	XCTAssertEqualObjects(typing[@"action"][@"@type"], @"chatActionTyping");
 	XCTAssertEqual([typing[@"message_thread_id"] longLongValue], 3LL);
 
-	[c cancelTypingInChat:5 thread:3];
+	[[TGMessageStore shared] cancelTypingInChat:5 thread:3];
 	XCTAssertEqualObjects(lastRequestOfType(c, @"sendChatAction")[@"action"][@"@type"],
 						  @"chatActionCancel");
 	XCTAssertEqual(countRequestsOfType(c, @"sendChatAction"), (NSUInteger)2);
@@ -130,7 +132,7 @@ static NSUInteger countRequestsOfType(TGClient *c, NSString *type) {
 /// a reaction could not be undone.
 - (void)testReaction_RemoveSendsTheEmojiItIsRemoving {
 	TGClient *c = D();
-	[c removeReaction:@"\U0001F44D" fromMessage:11 inChat:7];
+	[[TGMessageStore shared] removeReaction:@"\U0001F44D" fromMessage:11 inChat:7];
 
 	NSDictionary *r = lastRequestOfType(c, @"removeMessageReaction");
 	XCTAssertNotNil(r);
@@ -142,8 +144,8 @@ static NSUInteger countRequestsOfType(TGClient *c, NSString *type) {
 /// there is one, and a stray request would clear someone else's.
 - (void)testReaction_RemoveWithNoEmojiSendsNothing {
 	TGClient *c = D();
-	[c removeReaction:nil fromMessage:11 inChat:7];
-	[c removeReaction:@"" fromMessage:11 inChat:7];
+	[[TGMessageStore shared] removeReaction:nil fromMessage:11 inChat:7];
+	[[TGMessageStore shared] removeReaction:@"" fromMessage:11 inChat:7];
 	XCTAssertEqual(countRequestsOfType(c, @"removeMessageReaction"), (NSUInteger)0);
 }
 
@@ -177,10 +179,10 @@ static NSUInteger countRequestsOfType(TGClient *c, NSString *type) {
 
 - (void)testOpenContent_NamesTheMessageAndSkipsAZeroId {
 	TGClient *c = D();
-	[c openContentOfMessage:0 inChat:7];
+	[[TGMessageStore shared] openContentOfMessage:0 inChat:7];
 	XCTAssertEqual(countRequestsOfType(c, @"openMessageContent"), (NSUInteger)0);
 
-	[c openContentOfMessage:31 inChat:7];
+	[[TGMessageStore shared] openContentOfMessage:31 inChat:7];
 	NSDictionary *r = lastRequestOfType(c, @"openMessageContent");
 	XCTAssertEqual([r[@"message_id"] longLongValue], 31LL);
 	XCTAssertEqual([r[@"chat_id"] longLongValue], 7LL);
@@ -206,23 +208,23 @@ static NSUInteger countRequestsOfType(TGClient *c, NSString *type) {
 
 - (void)testResend_CarriesTheIdsAndIgnoresAnEmptyList {
 	TGClient *c = D();
-	[c resendMessages:@[] inChat:7];
+	[[TGSendStore shared] resendMessages:@[] inChat:7];
 	XCTAssertEqual(countRequestsOfType(c, @"resendMessages"), (NSUInteger)0);
 
-	[c resendMessages:@[@(5), @(6)] inChat:7];
+	[[TGSendStore shared] resendMessages:@[@(5), @(6)] inChat:7];
 	NSDictionary *r = lastRequestOfType(c, @"resendMessages");
 	XCTAssertEqualObjects(r[@"message_ids"], (@[@(5), @(6)]));
 }
 
 - (void)testPin_PinsQuietlyAndUnpinsByItself {
 	TGClient *c = D();
-	[c pinMessage:12 inChat:7 notify:NO];
+	[[TGMessageStore shared] pinMessage:12 inChat:7 notify:NO];
 	NSDictionary *pin = lastRequestOfType(c, @"pinChatMessage");
 	XCTAssertTrue([pin[@"disable_notification"] boolValue],
 				  @"notify:NO must disable the notification, not enable it");
 	XCTAssertFalse([pin[@"only_for_self"] boolValue]);
 
-	[c unpinMessage:12 inChat:7];
+	[[TGMessageStore shared] unpinMessage:12 inChat:7];
 	XCTAssertEqual([lastRequestOfType(c, @"unpinChatMessage")[@"message_id"]
 			longLongValue], 12LL);
 }

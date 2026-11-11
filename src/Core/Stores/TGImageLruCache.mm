@@ -1,6 +1,7 @@
 //
 // TGImageLruCache.mm - Objective-C bounded LRU cache adapter over C++ TGLruCache.
 //
+#import <UIKit/UIKit.h>
 #import "TGImageLruCache.h"
 #import "TGLruCache.hpp"
 

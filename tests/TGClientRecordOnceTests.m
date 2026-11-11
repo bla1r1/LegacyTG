@@ -6,6 +6,8 @@
 //
 // Requests sit in the outbox where their shape can be asserted.
 #import "TGTestRunner.h"
+#import "TGTransport.h"
+#import "TGSendStore.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
 
@@ -15,7 +17,7 @@ static TGClient *RO(void) {
 	TGClient *c = TGClient.shared;
 	[c.outbox removeAllObjects];
 	[c.pendingRequests removeAllObjects];
-	c.td_exec = NULL;
+	[[TGTransport shared] testSetExecute:NULL];
 	return c;
 }
 
@@ -52,7 +54,7 @@ static NSString *ORDocPath(void) {
 /// self destruct that fires on open. Not a ten second timer.
 - (void)testSendVoiceOnce_GetMessageSelfDestructTypeImmediately {
 	TGClient *c = RO();
-	[c sendVoiceAtPath:ORDocPath() duration:7 toChat:42 thread:0 viewOnce:YES];
+	[[TGSendStore shared] sendVoiceAtPath:ORDocPath() duration:7 toChat:42 thread:0 viewOnce:YES];
 
 	NSDictionary *content = lastRO(c, @"sendMessage")
 			[@"input_message_content"];
@@ -64,7 +66,7 @@ static NSString *ORDocPath(void) {
 /// A plain note carries no self destruct at all - TDLib's "absent" is a null.
 - (void)testSendVoicePlain_CarriesNoSelfDestruct {
 	TGClient *c = RO();
-	[c sendVoiceAtPath:ORDocPath() duration:7 toChat:42 thread:0 viewOnce:NO];
+	[[TGSendStore shared] sendVoiceAtPath:ORDocPath() duration:7 toChat:42 thread:0 viewOnce:NO];
 
 	NSDictionary *content = lastRO(c, @"sendMessage")
 			[@"input_message_content"];
@@ -79,7 +81,7 @@ static NSString *ORDocPath(void) {
 	NSString *path = [NSTemporaryDirectory() stringByAppendingPathComponent:
 			@"once-test.mov"];
 	[@"/" writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:nil];
-	[c sendVideoNoteAtPath:path duration:13 length:360 toChat:42 thread:0 viewOnce:YES];
+	[[TGSendStore shared] sendVideoNoteAtPath:path duration:13 length:360 toChat:42 thread:0 viewOnce:YES];
 
 	NSDictionary *content = lastRO(c, @"sendMessage")
 			[@"input_message_content"];

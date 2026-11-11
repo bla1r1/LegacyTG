@@ -9,6 +9,8 @@
 // Nothing here stores a password. Each call carries the one just typed, and
 // the tests use obvious stand-ins.
 #import "TGTestRunner.h"
+#import "TGTransport.h"
+#import "TGMessageStore.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
 #import "TGStyle.h"
@@ -370,14 +372,14 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 /// hand, and the other is everything else of theirs.
 - (void)testBlockFromReplies_DeletesBothTheMessageAndTheRest {
 	TGClient *c = A();
-	[c blockSenderOfMessage:5 deleteMessages:YES reportSpam:YES];
+	[[TGMessageStore shared] blockSenderOfMessage:5 deleteMessages:YES reportSpam:YES];
 	NSDictionary *r = lastA(c, @"blockMessageSenderFromReplies");
 	XCTAssertEqual([r[@"message_id"] longLongValue], 5LL);
 	XCTAssertTrue([r[@"delete_message"] boolValue]);
 	XCTAssertTrue([r[@"delete_all_messages"] boolValue]);
 	XCTAssertTrue([r[@"report_spam"] boolValue]);
 
-	[c blockSenderOfMessage:5 deleteMessages:NO reportSpam:NO];
+	[[TGMessageStore shared] blockSenderOfMessage:5 deleteMessages:NO reportSpam:NO];
 	NSDictionary *quiet = lastA(c, @"blockMessageSenderFromReplies");
 	XCTAssertFalse([quiet[@"delete_message"] boolValue]);
 	XCTAssertFalse([quiet[@"report_spam"] boolValue]);
@@ -536,7 +538,6 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 
 - (void)testPushReceiver_TheBlobNamesItsAccount {
 	TGClient *c = A();
-	c.td_exec = NULL;
 	__block BOOL ok = NO;
 	__block int64_t receiverId = 0;
 	[c pushReceiverOfPayload:@{@"p" : @"AoP1c2k1"}
@@ -650,7 +651,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 	void (^saved)(TGAuthState) = c.onAuthState;
 	__block NSInteger reported = 0;
 	c.onAuthState = ^(TGAuthState s){ reported++; };
-	c.running = YES;
+	[[TGTransport shared] testSetRunning:YES];
 	c.authState = TGAuthStateReady;
 
 	__block BOOL done = NO;
@@ -674,7 +675,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 /// Not running (TDLib missing, or already closed): nothing to wait for.
 - (void)testBackground_PauseWhenNotRunningFinishesAtOnce {
 	TGClient *c = A();
-	c.running = NO;
+	[[TGTransport shared] testSetRunning:NO];
 	__block BOOL done = NO;
 	[c pauseForBackground:^{ done = YES; }];
 	XCTAssertTrue(done);

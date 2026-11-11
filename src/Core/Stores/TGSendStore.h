@@ -90,6 +90,18 @@ extern NSString *const TGSendStoreCanRetryKey;
 - (void)sendAudioAtPath:(NSString *)path title:(NSString *)title
 			  performer:(NSString *)performer duration:(NSInteger)seconds
 				caption:(NSString *)caption toChat:(int64_t)chatId thread:(int64_t)threadId;
+- (void)sendPhotoAtPath:(NSString *)path toChat:(int64_t)chatId;
+- (void)sendVideoAtPath:(NSString *)path toChat:(int64_t)chatId;
+- (void)sendVoiceAtPath:(NSString *)path duration:(NSInteger)seconds
+				 toChat:(int64_t)chatId thread:(int64_t)threadId viewOnce:(BOOL)viewOnce;
+- (void)sendVideoNoteAtPath:(NSString *)path duration:(NSInteger)seconds
+					 length:(NSInteger)length toChat:(int64_t)chatId thread:(int64_t)threadId
+				   viewOnce:(BOOL)viewOnce;
+- (void)sendVideoNoteAtPath:(NSString *)path duration:(NSInteger)seconds
+					 length:(NSInteger)length toChat:(int64_t)chatId thread:(int64_t)threadId
+				   viewOnce:(BOOL)viewOnce
+				   progress:(void (^)(CGFloat progress))progress
+				 completion:(void (^)(BOOL sent))completion;
 - (void)sendVideoNoteAtPath:(NSString *)path duration:(NSInteger)seconds
 					 length:(NSInteger)length toChat:(int64_t)chatId thread:(int64_t)threadId
 				   viewOnce:(BOOL)viewOnce thumbnail:(NSString *)thumbnailPath

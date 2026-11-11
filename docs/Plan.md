@@ -48,6 +48,9 @@ Phase 1 itself moved only the outbound text path; the off-plan section below ext
 - [x] `done` `TGSendStore` owns `inputMessageDocument` and `inputMessageAudio` shapes; `TGFileInfoViewController` and the media viewer save/add-download paths use `TGMediaStore`.
 - [x] `done` `make -f tests/Makefile test`: 2,313 passed, 0 failed.
 - [x] `done` M23 remainder: `TGMusicStreamer` streams the growing file through `AudioFileStream`/`AudioQueue`; `TGSendStore` silent sends and `TGMessageStore scheduledAtDate:repeatPeriod:` are wired through `messageSendOptions`.
+- [x] `done` Store headers are UIKit-free (`UIImage`/`UIColor` are opaque `id`), `TGChatThemeStore` no longer imports a view (the UI installs a `.tgs` renderer), and `scripts/lint_layers.sh` enforces the dependency direction; the Client -> Store cycle is gone and the store headers are UIKit-free.
+- [x] `done` `TGTransport` is the single TDLib boundary (libtdjson loading, receive loop, outbox, `@extra`); `TGClient` keeps caches, auth state and update routing and forwards transport calls. Tests use transport hooks instead of touching TDLib symbols.
+- [x] `done` `make -f tests/Makefile corekit` links Client + Stores without any feature screen and runs a headless send, proving the domain layer is usable without the app UI.
 - [x] `done` `TGStarsStore` owns the stars, gifts, ads, boosts, affiliate and Premium request bodies; Auth routes through `TGAccountStore`. The allow list is now **0** (8 -> 0).
 - [x] `done` `TGCallStore` and `TGStoryStore` own the group-call and story request bodies; all 16 Calls/Stories allow-list entries are gone (24 -> 8).
 - [x] `done` `TGSettingsStore`, `TGSessionsStore`, `TGAccountStore` and `TGTextStylesStore` own the settings, sessions, account and text-style request bodies; all 14 Settings allow-list entries and TGClient in the Settings category files are gone (38 -> 24).

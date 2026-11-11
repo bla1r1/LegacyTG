@@ -11,17 +11,9 @@
 /// A tap on a message with an animated emoji (a dice, a ball). TDLib answers
 /// with the sticker to play, whose emoji is what the sheet shows; nil when
 /// the ordinary animation is the answer.
-- (void)clickAnimatedEmojiMessage:(int64_t)messageId
-						   inChat:(int64_t)chatId
-					   completion:(void (^)(NSString *emoji))completion;
-
 /// Replaces a message's buttons. An empty keyboard removes them; the rest of
 /// the message stays. Bot accounts own this request, so a user account gets
 /// the server's refusal back as NO.
-- (void)clearReplyMarkupOfMessage:(int64_t)messageId
-						   inChat:(int64_t)chatId
-					   completion:(void (^)(BOOL ok))completion;
-
 /// The message a callback query belongs to. Bots receive the query, so a
 /// user account can only read back one it already owns.
 - (void)callbackQueryMessage:(int64_t)messageId
@@ -54,20 +46,8 @@
 
 /// The channel post's interaction and reaction graphs. nil when the message
 /// is not a post whose statistics this account may read.
-- (void)statisticsOfMessage:(int64_t)messageId
-					 inChat:(int64_t)chatId
-				 completion:(void (^)(NSDictionary *statistics))completion;
-
 /// Tells TDLib how long a message stayed on screen, which is what a channel
 /// post's view count is made of.
-- (void)reportViewOfMessage:(int64_t)messageId
-					 inChat:(int64_t)chatId
-				timeInViewMs:(NSInteger)timeInViewMs
-		  activeTimeInViewMs:(NSInteger)activeTimeInViewMs
-				 heightRatio:(NSInteger)heightPerMille
-			   seenRangeRatio:(NSInteger)seenPerMille
-				 completion:(void (^)(BOOL ok))completion;
-
 /// Sets the reactions on a message by name. Bot accounts own this request;
 /// a user gets the refusal back as NO.
 - (void)setReactions:(NSArray *)emojis

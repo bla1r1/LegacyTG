@@ -101,6 +101,18 @@ CLIENT_OBJC_SRCS := \
     src/Core/Stores/TGOptions.mm \
     src/Core/Support/TGJson.mm \
     src/Core/Client/TGClient.m \
+    src/Core/Client/TGTransport.m \
+    src/Core/Client/TGUpdateRouter.m \
+    src/Core/Client/TGAccountSession.m \
+    src/Core/Client/TGState.m \
+    src/Core/Client/TGUpdateHandlers+Core.m \
+    src/Core/Client/TGUpdateHandlers+Chats.m \
+    src/Core/Client/TGUpdateHandlers+Account.m \
+    src/Core/Client/TGUpdateHandlers+Stories.m \
+    src/Core/Client/TGUpdateHandlers+Notifications.m \
+    src/Core/Client/TGUpdateHandlers+Files.m \
+    src/Core/Client/TGUpdateHandlers+Misc.m \
+    src/Core/Client/TGUpdateHandlers.m \
     src/Core/Client/TGClient+Peers.m \
     src/Core/Client/Chats/TGClient+ChatsSupport.mm \
     src/Core/Client/Chats/TGClient+Chats.mm \
@@ -515,6 +527,10 @@ tokens:
 	@echo "\n════════ Design token lint ════════"
 	@sh $(ROOT)/scripts/lint_tokens.sh
 
+layers:
+	@echo "\n════════ Layer direction lint ════════"
+	@sh $(ROOT)/scripts/lint_layers.sh
+
 sizes:
 	@echo "\n════════ File size lint ════════"
 	@sh $(ROOT)/scripts/lint_size.sh
@@ -527,7 +543,7 @@ SIM_BINARY_DEPS := $(TESTS)/call_sim.mm $(C_SRCS) $(OBJC_SRCS) $(TEST_HELPER_SRC
                 $(TESTS)/TGCallTestHelpers.h
 OFFICIAL_SIM_DEPS := $(TESTS)/official_tgvoip_sim.mm $(LIBTGVOIP_SRCS)
 
-test: tokens sizes screens $(TEST_BINARY) $(CLIENT_BINARY)
+test: tokens sizes screens layers $(TEST_BINARY) $(CLIENT_BINARY)
 	@echo "\n════════ Running call stack tests ════════"
 	$(TEST_BINARY)
 	@echo "\n════════ Running TGClient regression tests ════════"
@@ -553,6 +569,15 @@ OBJDIR := $(BUILD)/obj
 objs_of = $(patsubst /%,$(OBJDIR)/%.o,$(abspath $(1)))
 TEST_OBJS   := $(call objs_of,$(C_SRCS) $(OBJC_SRCS) $(TEST_HELPER_SRCS) $(TESTS)/main.m)
 CLIENT_OBJS := $(call objs_of,$(CLIENT_OBJC_SRCS) $(CLIENT_HELPER_SRCS) $(TESTS)/main_client.mm)
+
+COREKIT_MAIN := $(ROOT)/tools/corekit/main.m
+COREKIT_OBJS := $(filter-out $(call objs_of,$(TESTS)/main_client.mm),$(CLIENT_OBJS)) $(call objs_of,$(COREKIT_MAIN))
+
+corekit: $(COREKIT_OBJS)
+	@mkdir -p $(BUILD)
+	$(CLANG) $(CFLAGS) $(COREKIT_OBJS) $(LDFLAGS) -o $(BUILD)/corekit
+	@$(BUILD)/corekit
+
 
 # No ccache here: in depend mode with -fmodules it served a stale
 # main_client object after a test file #imported into it changed (five new

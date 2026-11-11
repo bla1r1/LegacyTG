@@ -2,8 +2,9 @@
 // TGChatThemeStore.h - the emoji chat themes Telegram serves and the one the
 // account picked. Views ask this store; they never import TGClient.h.
 //
-#import <UIKit/UIKit.h>
 
+#import <Foundation/Foundation.h>
+#import <CoreGraphics/CoreGraphics.h>
 extern NSString *const TGChatThemeStoreChangedNotification;
 
 /// The chosen theme survives a launch as its name. An emoji theme id is the
@@ -37,6 +38,11 @@ static inline NSDictionary *TGChatThemeSettingsForMode(NSDictionary *entry,
 
 @interface TGChatThemeStore : NSObject
 
+/// Renders a .tgs pattern to a still image. The UI layer installs this; when
+/// it is nil, animated patterns are skipped rather than parsed by the store.
+@property (nonatomic, copy) void (^tgsPatternRenderer)(NSString *path, CGFloat side,
+													  void (^completion)(id image));
+
 + (TGChatThemeStore *)shared;
 
 /// Emoji chat themes as entries with "id", "name", "light", "dark",
@@ -61,16 +67,16 @@ static inline NSDictionary *TGChatThemeSettingsForMode(NSDictionary *entry,
 /// The pattern document drawn over the theme's fill. The first call starts the
 /// download and answers nil; once the file is decoded the store posts
 /// TGChatThemeStoreChangedNotification and the next call answers the image.
-- (UIImage *)patternImageForThemeNamed:(NSString *)name dark:(BOOL)dark;
+- (id)patternImageForThemeNamed:(NSString *)name dark:(BOOL)dark;
 
 /// The theme's own background baked at `size`, fill plus pattern, cached.
-- (UIImage *)wallpaperForThemeNamed:(NSString *)name
+- (id)wallpaperForThemeNamed:(NSString *)name
 							   dark:(BOOL)dark
 							   size:(CGSize)size;
 
 /// The same fill plus pattern for a settings card. It composites from the
 /// already-decoded mask, so the SVG is never parsed on the main thread.
-- (UIImage *)cardWallpaperForThemeNamed:(NSString *)name
+- (id)cardWallpaperForThemeNamed:(NSString *)name
 								   dark:(BOOL)dark
 								   size:(CGSize)size;
 
