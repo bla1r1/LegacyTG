@@ -7,9 +7,9 @@
 // reads it instead of asking an administrator to type a number.
 //
 #import "TGAntiSpamViewController.h"
-#import "TGClient.h"
 #import "TGAlertSheet.h"
 #import "TGStyle.h"
+#import "TGGroupStore.h"
 
 @interface TGAntiSpamViewController ()
 @property (nonatomic, strong) NSArray *rows;
@@ -26,7 +26,7 @@
 
 - (void)load {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] antiSpamFalsePositiveCandidatesForChat:self.chatId
+	[[TGGroupStore shared] antiSpamFalsePositiveCandidatesForChat:self.chatId
 												   completion:^(NSArray *rows, NSString *error){
 		TGAntiSpamViewController *page = weakSelf;
 		if (!page)
@@ -80,7 +80,7 @@
 				  destructive:NO
 					   inView:self.view
 					onConfirm:^{
-		[[TGClient shared] reportAntiSpamFalsePositiveInChat:weakSelf.chatId
+		[[TGGroupStore shared] reportAntiSpamFalsePositiveInChat:weakSelf.chatId
 												  messageId:messageId
 												 completion:^(BOOL ok, NSString *error){
 			TGAntiSpamViewController *page = weakSelf;

@@ -33,7 +33,7 @@ FOUNDATION_EXPORT NSString *TGStripBoldMarkers(NSString *text);
 
 /// One member of the group as a TGPeerRow: face, name, role badge, emoji
 /// status and chevron. The emoji status id is passed in so the model stays
-/// pure; TGClient is asked by the screen.
+/// pure; TGGroupStore is asked by the screen.
 FOUNDATION_EXPORT NSDictionary *TGGroupMemberRowModel(NSDictionary *member,
 													  int64_t statusEmojiId);
 

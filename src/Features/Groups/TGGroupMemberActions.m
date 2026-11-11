@@ -6,11 +6,13 @@
 // owner's must not hide the handover.
 //
 #import "TGGroupMemberActions.h"
-#import "TGClient.h"
 #import "TGAlertSheet.h"
 #import "TGChatViewController.h"
 #import "TGProfileViewController.h"
 #import "TGLocalization.h"
+#import "TGGroupStore.h"
+#import "TGProfileStore.h"
+#import "TGMessageStore.h"
 
 /// Pushes `controller` when the host is on a navigation stack; otherwise
 /// wraps it in one and presents that. A profile opened from a popover or a
@@ -78,7 +80,7 @@ void TGPresentControllerFrom(UIViewController *controller, UIViewController *hos
 		return;
 	}
 	NSString *name = [member[@"name"] length] ? member[@"name"]
-			: [[TGClient shared] nameForUserId:userId];
+			: [[TGMessageStore shared] nameForUserId:userId];
 	TGProfileViewController *profile = [[TGProfileViewController alloc]
 			initWithChatId:userId userId:userId title:name ?: @""];
 	if (!profile){
@@ -98,17 +100,17 @@ void TGPresentControllerFrom(UIViewController *controller, UIViewController *hos
 		return;
 	int64_t userId = [member[@"id"] longLongValue];
 	NSString *name = [member[@"name"] length] ? member[@"name"]
-			: [[TGClient shared] nameForUserId:userId];
+			: [[TGMessageStore shared] nameForUserId:userId];
 	if (!userId)
 		return;
 
 	__weak UIViewController *weakHost = host;
-	[[TGClient shared] administratorsOfChat:chatId completion:^(NSArray *admins){
+	[[TGGroupStore shared] administratorsOfChat:chatId completion:^(NSArray *admins){
 		UIViewController *me = weakHost;
 		if (!me)
 			return;
 
-		int64_t myId = [[TGClient shared].me[@"id"] longLongValue];
+		int64_t myId = [[TGProfileStore shared].me[@"id"] longLongValue];
 		BOOL iCanEdit = NO, iAmOwner = NO, theyAreAdmin = NO;
 		for (NSDictionary *admin in admins){
 			int64_t adminId = [admin[@"id"] longLongValue];
@@ -173,12 +175,12 @@ void TGPresentControllerFrom(UIViewController *controller, UIViewController *hos
 	} else if ([action isEqualToString:@"Send Message"]){
 		// The check before the push: a user who takes no messages from
 		// non-contacts turns the composer into a doomed one.
-		[[TGClient shared] canSendMessageToUser:userId completion:^(NSString *result){
+		[[TGProfileStore shared] canSendMessageToUser:userId completion:^(NSString *result){
 			UIViewController *me = weakHost;
 			if (!me)
 				return;
 			if ([result isEqualToString:@"ok"]){
-				[[TGClient shared] privateChatWithUser:userId completion:^(int64_t privateId){
+				[[TGProfileStore shared] privateChatWithUser:userId completion:^(int64_t privateId){
 					UIViewController *again = weakHost;
 					if (!again || !privateId)
 						return;
@@ -203,11 +205,11 @@ void TGPresentControllerFrom(UIViewController *controller, UIViewController *hos
 
 	} else if ([action isEqualToString:@"Make Admin"] ||
 			   [action isEqualToString:@"Promote"]){
-		[[TGClient shared] setMember:userId inChat:chatId status:@"administrator"
+		[[TGGroupStore shared] setMember:userId inChat:chatId status:@"administrator"
 						  completion:report];
 
 	} else if ([action isEqualToString:@"Dismiss Admin"]){
-		[[TGClient shared] setMember:userId inChat:chatId status:@"member"
+		[[TGGroupStore shared] setMember:userId inChat:chatId status:@"member"
 						  completion:report];
 
 	} else if ([action isEqualToString:@"Add Member Tag"] ||
@@ -216,7 +218,7 @@ void TGPresentControllerFrom(UIViewController *controller, UIViewController *hos
 						message:nil
 					placeholder:@"Tag" text:nil action:@"Save" inView:host.view
 					 onSubmit:^(NSString *tag){
-			[[TGClient shared] setMemberTag:tag forUser:userId inChat:chatId
+			[[TGGroupStore shared] setMemberTag:tag forUser:userId inChat:chatId
 					completion:^(BOOL ok){
 				UIViewController *me = weakHost;
 				[TGAlertSheet showMessage:(ok ? @"Tag edited"
@@ -236,7 +238,7 @@ void TGPresentControllerFrom(UIViewController *controller, UIViewController *hos
 					  destructive:YES
 						   inView:host.view
 						onConfirm:^{
-			[[TGClient shared] deleteAllReactionsOfSender:sender inChat:chatId];
+			[[TGMessageStore shared] deleteAllReactionsOfSender:sender inChat:chatId];
 		}];
 
 	} else if ([action isEqualToString:@"Delete All Messages"]){
@@ -248,13 +250,13 @@ void TGPresentControllerFrom(UIViewController *controller, UIViewController *hos
 					  destructive:YES
 						   inView:host.view
 						onConfirm:^{
-			[[TGClient shared] deleteChatMessagesBySender:sender
+			[[TGGroupStore shared] deleteChatMessagesBySender:sender
 												   inChat:chatId
 												   revoke:YES];
 		}];
 
 	} else if ([action isEqualToString:@"Remove"]){
-		[[TGClient shared] setMember:userId inChat:chatId status:@"left"
+		[[TGGroupStore shared] setMember:userId inChat:chatId status:@"left"
 						  completion:report];
 
 	} else if ([action isEqualToString:@"Ban"]){
@@ -266,7 +268,7 @@ void TGPresentControllerFrom(UIViewController *controller, UIViewController *hos
 					  destructive:YES
 						   inView:host.view
 						onConfirm:^{
-			[[TGClient shared] banMember:userId inChat:chatId
+			[[TGGroupStore shared] banMember:userId inChat:chatId
 						  revokeMessages:NO completion:report];
 		}];
 
@@ -282,7 +284,7 @@ void TGPresentControllerFrom(UIViewController *controller, UIViewController *hos
 			// Telegram decides whether this session may hand a chat over at
 			// all. The pre-check is shown before the password is asked for,
 			// because a session that is too new cannot proceed either way.
-			[[TGClient shared] canTransferOwnershipWithCompletion:
+			[[TGGroupStore shared] canTransferOwnershipWithCompletion:
 					^(NSString *result, NSInteger retryAfter, NSString *error){
 				(void)retryAfter;
 				UIViewController *me = weakHost;
@@ -301,10 +303,10 @@ void TGPresentControllerFrom(UIViewController *controller, UIViewController *hos
 									   inView:me.view];
 					return;
 				}
-				[[TGClient shared] hasPasswordWithCompletion:
+				[[TGGroupStore shared] hasPasswordWithCompletion:
 						^(BOOL has, NSString *email){
 					void (^hand)(NSString *) = ^(NSString *password){
-						[[TGClient shared] transferOwnershipOfChat:chatId
+						[[TGGroupStore shared] transferOwnershipOfChat:chatId
 															 toUser:userId
 														   password:password
 														 completion:report];
@@ -335,7 +337,7 @@ void TGPresentControllerFrom(UIViewController *controller, UIViewController *hos
 			   inChat:(int64_t)chatId
 				 from:(UIViewController *)host {
 	__weak UIViewController *weakHost = host;
-	[[TGClient shared] chatMember:userId inChat:chatId completion:^(NSDictionary *member){
+	[[TGProfileStore shared] chatMember:userId inChat:chatId completion:^(NSDictionary *member){
 		UIViewController *me = weakHost;
 		if (!me)
 			return;
@@ -351,7 +353,7 @@ void TGPresentControllerFrom(UIViewController *controller, UIViewController *hos
 		NSMutableArray *lines = [NSMutableArray array];
 		[lines addObject:[NSString stringWithFormat:@"%@: %@",
 						  TGLocalized(@"Status"),
-						  TGMemberStatusName(status)]];
+						  TGGroupMemberStatusName(status)]];
 		if ([member[@"tag"] length])
 			[lines addObject:TGLocalizedFormat(@"Title: %@", member[@"tag"])];
 

@@ -232,6 +232,13 @@ APP_SRC_M := \
 	src/Core/Client/TGClient+Peers.m \
 	src/Core/Stores/TGStickerStore.m \
 	src/Core/Stores/TGStickerStore+Stickers.m \
+	src/Core/Stores/TGGroupStore.m \
+	src/Core/Stores/TGGroupStore+Groups.m \
+	src/Core/Stores/TGGroupStore+Topics.m \
+	src/Core/Stores/TGGroupStore+Usernames.m \
+	src/Core/Stores/TGGroupStore+Community.m \
+	src/Core/Stores/TGGroupStore+Tools.m \
+	src/Core/Stores/TGGroupStore+Invites.m \
 	src/Core/Stores/TGEmojiStore.m \
 	src/Core/Model/TGServiceMessageText.m \
 	src/Core/Model/TGMessageContentCommerce.m \

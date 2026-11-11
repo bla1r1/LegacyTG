@@ -1,7 +1,6 @@
 #import "TGTopicsViewController.h"
 #import "TGAlertSheet.h"
 #import "TGChatViewController.h"
-#import "TGClient.h"
 #import "TGEmptyView.h"
 #import "TGDateFormat.h"
 #import "TGIcons.h"
@@ -12,6 +11,8 @@
 #import "TGLocalization.h"
 #import "TGPeerRowCell.h"
 #import "TGRows.h"
+#import "TGGroupStore.h"
+#import "TGClientNotifications.h"
 
 /// A topic row is a chat row in miniature: a coloured icon made from the
 /// topic's own id, the name, the last message, the time and the unread count.
@@ -93,7 +94,7 @@ static NSString *TGTopicDateText(NSNumber *stamp) {
 	hold.minimumPressDuration = 0.55;
 	[self.tableView addGestureRecognizer:hold];
 
-	[[TGClient shared] forumTopicsForChat:self.chatId completion:^(NSArray *topics){
+	[[TGGroupStore shared] forumTopicsForChat:self.chatId completion:^(NSArray *topics){
 		TGTopicsViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -142,7 +143,7 @@ static NSString *TGTopicDateText(NSNumber *stamp) {
 
 - (void)reloadTopics {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] forumTopicsForChat:self.chatId completion:^(NSArray *topics){
+	[[TGGroupStore shared] forumTopicsForChat:self.chatId completion:^(NSArray *topics){
 		TGTopicsViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -214,7 +215,7 @@ static NSString *TGTopicDateText(NSNumber *stamp) {
 
 - (void)setGeneralTopicHidden:(BOOL)hidden {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] toggleGeneralForumTopicHidden:hidden
+	[[TGGroupStore shared] toggleGeneralForumTopicHidden:hidden
 											  inChat:self.chatId
 										  completion:^(BOOL ok, NSString *error){
 		if (!ok){
@@ -256,7 +257,7 @@ static NSString *TGTopicDateText(NSNumber *stamp) {
 						   inView:weakSelf.view
 						 onChoice:^(NSInteger colour){
 			[weakSelf chooseTopicIconWithCompletion:^(int64_t emojiId){
-				[[TGClient shared] createForumTopicInChat:weakSelf.chatId
+				[[TGGroupStore shared] createForumTopicInChat:weakSelf.chatId
 													 name:what
 											   iconColour:colour
 											  iconEmojiId:emojiId
@@ -278,7 +279,7 @@ static NSString *TGTopicDateText(NSNumber *stamp) {
 /// first row is a real answer: 0 keeps the colour and drops the emoji.
 - (void)chooseTopicIconWithCompletion:(void (^)(int64_t emojiId))completion {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] forumTopicDefaultIconsWithCompletion:^(NSArray *icons){
+	[[TGGroupStore shared] forumTopicDefaultIconsWithCompletion:^(NSArray *icons){
 		TGTopicsViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -331,13 +332,13 @@ static NSString *TGTopicDateText(NSNumber *stamp) {
 		else if (index == 2)
 			[weakSelf changeIconOfTopic:threadId];
 		else if (index == 3){
-			[[TGClient shared] toggleForumTopic:threadId
+			[[TGGroupStore shared] toggleForumTopic:threadId
 										 inChat:weakSelf.chatId
 										 pinned:![t[@"pinned"] boolValue]];
 			refresh();
 		}
 		else if (index == 4){
-			[[TGClient shared] toggleForumTopic:threadId
+			[[TGGroupStore shared] toggleForumTopic:threadId
 										 inChat:weakSelf.chatId
 										 closed:![t[@"closed"] boolValue]];
 			refresh();
@@ -351,7 +352,7 @@ static NSString *TGTopicDateText(NSNumber *stamp) {
 						  destructive:YES
 							   inView:self.view
 							onConfirm:^{
-				[[TGClient shared] deleteForumTopic:threadId inChat:weakSelf.chatId];
+				[[TGGroupStore shared] deleteForumTopic:threadId inChat:weakSelf.chatId];
 				refresh();
 			}];
 	}];
@@ -362,7 +363,7 @@ static NSString *TGTopicDateText(NSNumber *stamp) {
 - (void)changeIconOfTopic:(int64_t)threadId {
 	__weak typeof(self) weakSelf = self;
 	[self chooseTopicIconWithCompletion:^(int64_t emojiId){
-		[[TGClient shared] setForumTopicIcon:emojiId
+		[[TGGroupStore shared] setForumTopicIcon:emojiId
 								   threadId:threadId
 									 inChat:weakSelf.chatId
 								 completion:^(BOOL ok){
@@ -392,7 +393,7 @@ static NSString *TGTopicDateText(NSNumber *stamp) {
 				[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 		if (!what.length)
 			return;
-		[[TGClient shared] renameForumTopic:threadId
+		[[TGGroupStore shared] renameForumTopic:threadId
 									 inChat:weakSelf.chatId
 									   name:what
 							   iconEmojiId:0
@@ -498,21 +499,21 @@ static NSString *TGTopicDateText(NSNumber *stamp) {
 	}
 
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] readAllForumTopicMentionsInChat:self.chatId
+	[[TGGroupStore shared] readAllForumTopicMentionsInChat:self.chatId
 												 topic:threadId
 											completion:^(BOOL ok, NSString *error){
 		if (!ok)
 			[weakSelf showRefusal:(error ?: @"An error occurred.")
 							title:@"Mention"];
 	}];
-	[[TGClient shared] readAllForumTopicPollVotesInChat:self.chatId
+	[[TGGroupStore shared] readAllForumTopicPollVotesInChat:self.chatId
 												  topic:threadId
 											 completion:^(BOOL ok, NSString *error){
 		if (!ok)
 			[weakSelf showRefusal:(error ?: @"An error occurred.")
 							title:@"Poll Stats"];
 	}];
-	[[TGClient shared] readAllForumTopicReactionsInChat:self.chatId
+	[[TGGroupStore shared] readAllForumTopicReactionsInChat:self.chatId
 												  topic:threadId
 											 completion:^(BOOL ok){
 		if (!ok)
@@ -584,7 +585,7 @@ static NSString *TGTopicStateLine(NSDictionary *info) {
 - (void)loadTopicInfoForList:(TGListViewController *)list thread:(int64_t)threadId {
 	__weak typeof(self) weakSelf = self;
 	__weak typeof(list) weakList = list;
-	[[TGClient shared] forumTopic:threadId
+	[[TGGroupStore shared] forumTopic:threadId
 						   inChat:self.chatId
 					   completion:^(NSDictionary *info){
 		TGTopicsViewController *me = weakSelf;
@@ -629,7 +630,7 @@ static NSString *TGTopicStateLine(NSDictionary *info) {
 			  @"tap" : ^{ [me openTopic:info]; }},
 			@{@"title" : @"Copy Link", @"detail" : @"t.me",
 			  @"tap" : ^{
-				[[TGClient shared] forumTopicLinkForTopic:threadId
+				[[TGGroupStore shared] forumTopicLinkForTopic:threadId
 												   inChat:me.chatId
 											   completion:^(NSString *link){
 					if (!link.length){
@@ -652,7 +653,7 @@ static NSString *TGTopicStateLine(NSDictionary *info) {
 					[NSString stringWithFormat:@"%ld unread",
 							(long)[info[@"unreadMentions"] integerValue]],
 			  @"tap" : ^{
-				[[TGClient shared] readAllForumTopicMentionsInChat:me.chatId
+				[[TGGroupStore shared] readAllForumTopicMentionsInChat:me.chatId
 															 topic:threadId
 														completion:^(BOOL ok, NSString *error){
 					if (!ok){
@@ -668,7 +669,7 @@ static NSString *TGTopicStateLine(NSDictionary *info) {
 					[NSString stringWithFormat:@"%ld unread",
 							(long)[info[@"unreadPollVotes"] integerValue]],
 			  @"tap" : ^{
-				[[TGClient shared] readAllForumTopicPollVotesInChat:me.chatId
+				[[TGGroupStore shared] readAllForumTopicPollVotesInChat:me.chatId
 															  topic:threadId
 														 completion:^(BOOL ok, NSString *error){
 					if (!ok){
@@ -757,7 +758,7 @@ static NSString *TGTopicStateLine(NSDictionary *info) {
 			next[@"use_default_show_preview"] = @NO;
 			next[@"show_preview"] = @(index == 4);
 		}
-		[[TGClient shared] setForumTopicNotificationSettings:next
+		[[TGGroupStore shared] setForumTopicNotificationSettings:next
 													   topic:[info[@"threadId"] longLongValue]
 													  inChat:weakSelf.chatId
 												  completion:^(BOOL ok, NSString *error){
@@ -787,7 +788,7 @@ static NSString *TGTopicStateLine(NSDictionary *info) {
 - (void)loadPinnedTopicsIntoList:(TGListViewController *)list {
 	__weak typeof(self) weakSelf = self;
 	__weak typeof(list) weakList = list;
-	[[TGClient shared] forumTopicsForChat:self.chatId completion:^(NSArray *topics){
+	[[TGGroupStore shared] forumTopicsForChat:self.chatId completion:^(NSArray *topics){
 		TGTopicsViewController *me = weakSelf;
 		TGListViewController *screen = weakList;
 		if (!me || !screen)
@@ -865,7 +866,7 @@ static NSString *TGTopicStateLine(NSDictionary *info) {
 	}
 
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] setPinnedForumTopics:pinnedIds
+	[[TGGroupStore shared] setPinnedForumTopics:pinnedIds
 									 inChat:self.chatId
 								 completion:^(BOOL ok, NSString *error){
 		if (!ok){

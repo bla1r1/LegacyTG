@@ -1,6 +1,5 @@
 #import "TGGroupSettingsViewController.h"
 #import "TGLocalization.h"
-#import "TGClient.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
@@ -8,6 +7,7 @@
 #import "TGGroupLogic.h"
 #import "TGRows.h"
 #import "TGRowCell.h"
+#import "TGGroupStore.h"
 
 //
 // TGGroupSettingsViewController (TGGroupSections) - the screen's data.
@@ -97,7 +97,7 @@
 	[self.active insertObject:name atIndex:(NSUInteger)to];
 	self.busy = YES;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] reorderSupergroupActiveUsernames:self.active inChat:self.chatId
+	[[TGGroupStore shared] reorderSupergroupActiveUsernames:self.active inChat:self.chatId
 			completion:^(BOOL ok, NSString *error){
 		TGGroupSettingsViewController *me = weakSelf;
 		if (!me)

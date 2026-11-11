@@ -141,6 +141,13 @@ CLIENT_OBJC_SRCS := \
     src/Core/Model/TGStatusText.m \
     src/Core/Client/TGClient+Proxy.m \
     src/Core/Client/TGClient+Groups.m \
+    src/Core/Stores/TGGroupStore.m \
+    src/Core/Stores/TGGroupStore+Groups.m \
+    src/Core/Stores/TGGroupStore+Topics.m \
+    src/Core/Stores/TGGroupStore+Usernames.m \
+    src/Core/Stores/TGGroupStore+Community.m \
+    src/Core/Stores/TGGroupStore+Tools.m \
+    src/Core/Stores/TGGroupStore+Invites.m \
     src/Core/Client/TGClient+GroupCalls.m \
     src/Core/Client/TGClient+Usernames.m \
     src/Core/Client/TGClient+Payments.m \
@@ -348,6 +355,7 @@ CLIENT_TEST_SRCS := \
     $(TESTS)/TGProfileStoreTests.m \
     $(TESTS)/TGUpdateStoreTests.m \
     $(TESTS)/TGSendStoreTests.m \
+    $(TESTS)/TGGroupStoreTests.m \
     $(TESTS)/TGMessageStoreTests.m \
     $(TESTS)/TGPeerStoreTests.m \
     $(TESTS)/TGParitySettingsTests.m \

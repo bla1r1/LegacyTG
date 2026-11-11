@@ -78,6 +78,7 @@
 #import "TGProfileStoreTests.m"
 #import "TGUpdateStoreTests.m"
 #import "TGSendStoreTests.m"
+#import "TGGroupStoreTests.m"
 #import "TGMessageStoreTests.m"
 #import "TGPeerStoreTests.m"
 #import "TGParitySettingsTests.m"

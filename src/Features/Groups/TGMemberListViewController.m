@@ -1,11 +1,12 @@
 #import "TGMemberListViewController.h"
-#import "TGClient.h"
 #import "TGLocalization.h"
 #import "TGGroupLogic.h"
 #import "TGGroupMemberActions.h"
 #import "TGContactsViewController.h"
 #import "TGRows.h"
 #import "TGBadge.h"
+#import "TGProfileStore.h"
+#import "TGMessageStore.h"
 
 @interface TGMemberListViewController ()
 - (void)loadMembers;
@@ -44,7 +45,7 @@
 	if (!chatId)
 		return;
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] membersOfChat:chatId completion:^(NSArray *members){
+	[[TGProfileStore shared] membersOfChat:chatId completion:^(NSArray *members){
 		TGMemberListViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -58,7 +59,7 @@
 	int64_t userId = [member[@"id"] longLongValue];
 	NSString *name = TGMemberRowName(member);
 	if (!name.length)
-		name = [[TGClient shared] nameForUserId:userId];
+		name = [[TGMessageStore shared] nameForUserId:userId];
 	if (!name.length)
 		name = TGLocalized(@"Member");
 	return name;
@@ -80,7 +81,7 @@
 				[self nameForMember:member], nil, nil);
 		row[TGRowAvatarUser] = @YES;
 		row[TGRowAccessory] = TGRowAccessoryDisclosure;
-		int64_t statusEmojiId = [[TGClient shared] emojiStatusIdForUser:userId];
+		int64_t statusEmojiId = [[TGMessageStore shared] emojiStatusIdForUser:userId];
 		if (statusEmojiId > 0)
 			row[TGRowStatusEmojiId] = @(statusEmojiId);
 

@@ -6,7 +6,7 @@ users by id, chats by id, photo file ids, stories, folders.
 Screens do not read those caches. `src/Core/Stores` is the layer between them:
 
 ```
-TDLib -> TGClient -> TGPeerStore / TGStickerStore / TGMediaStore / TGUpdateStore / TGSendStore / TGMessageStore / TGChatListStore / TGSearchStore / TGProfileStore -> screens
+TDLib -> TGClient -> TGPeerStore / TGStickerStore / TGMediaStore / TGUpdateStore / TGSendStore / TGMessageStore / TGChatListStore / TGSearchStore / TGProfileStore / TGGroupStore -> screens
 ```
 
 `TGClient+Peers` is the small seam `TGPeerStore` reads through; it is not a
@@ -17,7 +17,7 @@ state. `TGMessageStore` is the rest of the Chat message surface: actions,
 history, tools and the chat callbacks. `TGMessageStore+History.m` owns the
 history requests and page flattening. `TGChatListStore` owns the list data,
 folders, unread total, tab badge and the M24 preview/row facts; `TGSearchStore`
-owns the search screen; `TGProfileStore` owns the profile, edit, photo, emoji-status and appearance surfaces; its categories hold the request bodies, with only `send:`/`request:` left as transport. Both stores write their methods out
+owns the search screen; `TGProfileStore` owns the profile, edit, photo, emoji-status and appearance surfaces; `TGGroupStore` owns members, invites, forum topics, permissions, usernames, communities, welcomes and import. The categories hold the request bodies, with only `send:`/`request:` left as transport. All stores write their methods out
 explicitly; the message send/action/history bodies live there, and the
 remaining chat-tool, topic and cache methods delegate to `TGClient`. A Chat
 screen imports those headers and never a `TGClient` header.
@@ -56,9 +56,12 @@ event. A screen re-reads the peers it draws; it does not patch records itself.
 1. Messages: the Chat feature now talks only to `TGSendStore` and
    `TGMessageStore`. What remains inside those stores is the transport body of
    each request and the history/pagination math; the boundary itself is done.
-2. Settings: account, privacy, notifications and appearance. These are mostly
+2. Groups: `TGGroupStore` now owns members, invites, forum topics,
+   permissions, usernames, communities, welcomes and import. All 19 Groups
+   allow-list entries are gone; only `send:`/`request:` remain as transport.
+3. Settings: account, privacy, notifications and appearance. These are mostly
    request-write screens, so the store is a narrow command surface.
-3. Calls: call state and group-call participants, the last domain because the
+4. Calls: call state and group-call participants, the last domain because the
    call screen keeps its current design on purpose.
 
 Order matters because messages feed the chat list and chats feed people; a
@@ -68,7 +71,7 @@ settings or call store can land without touching either.
 
 - `src/Features/Chat` files importing `TGClient*`: 0 (was 345 direct
   `[TGClient shared]` calls across 38 files).
-- `scripts/lint_client.sh` allow list: 77 files (was 122); Chat, ChatList,
-  Profile and every Media entry are gone.
+- `scripts/lint_client.sh` allow list: 58 files (was 122); Chat, ChatList,
+  Profile, Groups and every Media entry are gone.
 - `TGMessageStore.h`: 227 selectors and 14 properties, the whole surface the
   Chat feature actually asks for.

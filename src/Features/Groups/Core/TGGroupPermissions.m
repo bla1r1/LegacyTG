@@ -1,6 +1,5 @@
 #import "TGGroupSettingsViewController.h"
 #import "TGLocalization.h"
-#import "TGClient.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
@@ -17,6 +16,8 @@
 #import "TGGroupSettingsViewController.h"
 #import "TGGroupSwitch.h"
 #import "TGGroupSettingsViewControllerInternal.h"
+#import "TGGroupStore.h"
+#import "TGMessageStore.h"
 
 
 
@@ -143,7 +144,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 					   inView:self.view
 					 onChoice:^(NSInteger index){
 		NSString *preset = index == 0 ? @"all" : (index == 1 ? @"text" : @"read");
-		[[TGClient shared] setChatPermissionsFromPreset:preset
+		[[TGGroupStore shared] setChatPermissionsFromPreset:preset
 												 inChat:weakSelf.chatId
 											  completion:^(BOOL ok){
 			TGGroupSettingsViewController *me = weakSelf;
@@ -170,7 +171,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 	__weak typeof(self) weakSelf = self;
 	[TGAlertSheet showChoices:titles title:@"Slow Mode" destructiveIndex:-1
 					   inView:self.view onChoice:^(NSInteger index){
-		[[TGClient shared] setSlowModeDelayForChat:weakSelf.chatId
+		[[TGMessageStore shared] setSlowModeDelayForChat:weakSelf.chatId
 										   seconds:seconds[index]
 										completion:^(BOOL ok){
 			TGGroupSettingsViewController *me = weakSelf;
@@ -195,7 +196,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 				  destructive:YES
 					   inView:self.view
 					onConfirm:^{
-		[[TGClient shared] convertSupergroupToBroadcastInChat:weakSelf.chatId
+		[[TGGroupStore shared] convertSupergroupToBroadcastInChat:weakSelf.chatId
 				completion:^(BOOL ok, NSString *error){
 			TGGroupSettingsViewController *me = weakSelf;
 			if (!ok){
@@ -212,7 +213,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 
 - (void)showJoinRequests {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] joinRequestsForChat:self.chatId completion:^(NSArray *requests){
+	[[TGMessageStore shared] joinRequestsForChat:self.chatId completion:^(NSArray *requests){
 		TGGroupSettingsViewController *me = weakSelf;
 		if (!requests.count){
 			[TGAlertSheet showMessage:@"There are no pending join requests."
@@ -231,7 +232,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 			if (index == (NSInteger)requests.count ||
 				index == (NSInteger)requests.count + 1){
 				BOOL approve = index == (NSInteger)requests.count;
-				[[TGClient shared] processAllJoinRequests:me.chatId link:@""
+				[[TGMessageStore shared] processAllJoinRequests:me.chatId link:@""
 						approve:approve completion:^(BOOL ok){
 					[TGAlertSheet showMessage:(ok ? @"Done"
 												   : @"An error occurred.")
@@ -245,7 +246,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 			[TGAlertSheet showChoices:@[@"Accept", @"Decline"] title:name
 					 destructiveIndex:1 inView:me.view
 							 onChoice:^(NSInteger pick){
-				[[TGClient shared] processJoinRequest:userId inChat:me.chatId
+				[[TGMessageStore shared] processJoinRequest:userId inChat:me.chatId
 											   approve:(pick == 0)];
 				dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
 						(int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
@@ -262,7 +263,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 	__weak typeof(self) weakSelf = self;
 	int64_t chatId = self.chatId;
 	NSString *groupTitle = self.chatTitle ?: @"Manage Welcome Messages";
-	[[TGClient shared] welcomeMessagesOfChat:chatId completion:^(NSArray *welcomes){
+	[[TGGroupStore shared] welcomeMessagesOfChat:chatId completion:^(NSArray *welcomes){
 		TGGroupSettingsViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -296,7 +297,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 							  destructive:YES
 								   inView:me.view
 								onConfirm:^{
-					[[TGClient shared] clearAllWelcomeMessagesInChat:chatId];
+					[[TGGroupStore shared] clearAllWelcomeMessagesInChat:chatId];
 					[me showWelcomeMessages];
 				}];
 				return;
@@ -318,7 +319,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 					NSString *wid = [ids[(NSUInteger)which] isKindOfClass:NSString.class]
 							? ids[(NSUInteger)which]
 							: [ids[(NSUInteger)which] stringValue];
-					[[TGClient shared] deleteWelcomeMessage:[wid longLongValue]
+					[[TGGroupStore shared] deleteWelcomeMessage:[wid longLongValue]
 													 inChat:chatId];
 					[me showWelcomeMessages];
 				}];
@@ -329,7 +330,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 							placeholder:@"Welcome Message" text:nil
 								 action:@"Add" inView:me.view
 							 onSubmit:^(NSString *typed){
-					[[TGClient shared] addWelcomeMessageToChat:chatId text:typed
+					[[TGGroupStore shared] addWelcomeMessageToChat:chatId text:typed
 													completion:^(BOOL ok){
 						if (!ok)
 							[TGAlertSheet showMessage:@"An error occurred."
@@ -347,7 +348,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 						placeholder:old ?: @"Welcome Message" text:old
 							 action:@"Save" inView:me.view
 						 onSubmit:^(NSString *typed){
-				[[TGClient shared] setWelcomeMessage:[welcomeId longLongValue]
+				[[TGGroupStore shared] setWelcomeMessage:[welcomeId longLongValue]
 											  inChat:chatId text:typed
 										  completion:^(BOOL ok){
 					if (!ok)

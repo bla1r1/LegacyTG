@@ -1,5 +1,4 @@
 #import "TGGroupSettingsViewController.h"
-#import "TGClient.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
@@ -16,6 +15,7 @@
 #import "TGGroupSettingsViewController.h"
 #import "TGGroupSwitch.h"
 #import "TGGroupSettingsViewControllerInternal.h"
+#import "TGGroupStore.h"
 
 
 
@@ -145,7 +145,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 				 onSubmit:^(NSString *text){
 		NSString *username = [text stringByReplacingOccurrencesOfString:@"@"
 															withString:@""];
-		[[TGClient shared] setSupergroupUsername:username inChat:weakSelf.chatId
+		[[TGGroupStore shared] setSupergroupUsername:username inChat:weakSelf.chatId
 				completion:^(BOOL ok, NSString *error){
 			if (!ok){
 				[weakSelf showRefusal:error title:@"Set Username"];
@@ -164,7 +164,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 				  destructive:YES
 					   inView:self.view
 					onConfirm:^{
-		[[TGClient shared] setSupergroupUsername:@"" inChat:weakSelf.chatId
+		[[TGGroupStore shared] setSupergroupUsername:@"" inChat:weakSelf.chatId
 				completion:^(BOOL ok, NSString *error){
 			if (!ok){
 				[weakSelf showRefusal:error title:@"Deactivate Username"];
@@ -183,7 +183,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 				  destructive:YES
 					   inView:self.view
 					onConfirm:^{
-		[[TGClient shared] disableAllSupergroupUsernamesInChat:weakSelf.chatId
+		[[TGGroupStore shared] disableAllSupergroupUsernamesInChat:weakSelf.chatId
 				completion:^(BOOL ok, NSString *error){
 			if (!ok){
 				[weakSelf showRefusal:error title:@"Deactivate Username"];

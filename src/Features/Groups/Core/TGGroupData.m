@@ -1,5 +1,4 @@
 #import "TGGroupSettingsViewController.h"
-#import "TGClient.h"
 #import "TGPeerStore.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
@@ -17,6 +16,9 @@
 #import "TGGroupSettingsViewController.h"
 #import "TGGroupSwitch.h"
 #import "TGGroupSettingsViewControllerInternal.h"
+#import "TGGroupStore.h"
+#import "TGProfileStore.h"
+#import "TGMessageStore.h"
 
 
 
@@ -150,7 +152,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 
 - (void)load {
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] chatRecordForChat:self.chatId completion:^(NSDictionary *chat){
+	[[TGProfileStore shared] chatRecordForChat:self.chatId completion:^(NSDictionary *chat){
 		TGGroupSettingsViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -175,7 +177,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 		[me rebuild];
 		[me loadOwnRole];
 	}];
-	[[TGClient shared] chatProfile:self.chatId completion:^(NSDictionary *info){
+	[[TGProfileStore shared] chatProfile:self.chatId completion:^(NSDictionary *info){
 		TGGroupSettingsViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -184,7 +186,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 		me.inviteLink = info[@"inviteLink"] ?: @"";
 		[me rebuild];
 	}];
-	[[TGClient shared] supergroupSettingsForChat:self.chatId completion:^(NSDictionary *settings){
+	[[TGGroupStore shared] supergroupSettingsForChat:self.chatId completion:^(NSDictionary *settings){
 		TGGroupSettingsViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -196,7 +198,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 		me.editable = settings[@"editable"] ?: @"";
 		[me rebuild];
 	}];
-	[[TGClient shared] groupFullInfoForChat:self.chatId completion:^(NSDictionary *info){
+	[[TGMessageStore shared] groupFullInfoForChat:self.chatId completion:^(NSDictionary *info){
 		TGGroupSettingsViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -205,7 +207,7 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 		me.canToggleAntiSpam = [info[@"can_toggle_aggressive_anti_spam"] boolValue];
 		[me rebuild];
 	}];
-	[[TGClient shared] supergroupFlagsForChat:self.chatId
+	[[TGGroupStore shared] supergroupFlagsForChat:self.chatId
 			completion:^(BOOL signMessages, BOOL joinToSend, BOOL allHistory, BOOL ok){
 		TGGroupSettingsViewController *me = weakSelf;
 		if (!me || !ok)
@@ -215,14 +217,14 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 		me.allHistory = allHistory;
 		[me rebuild];
 	}];
-	[[TGClient shared] membersOfChat:self.chatId completion:^(NSArray *members){
+	[[TGProfileStore shared] membersOfChat:self.chatId completion:^(NSArray *members){
 		TGGroupSettingsViewController *me = weakSelf;
 		if (!me)
 			return;
 		me.members = members ?: @[];
 		[me rebuild];
 	}];
-	[[TGClient shared] joinRequestsForChat:self.chatId
+	[[TGMessageStore shared] joinRequestsForChat:self.chatId
 								completion:^(NSArray *requests){
 		TGGroupSettingsViewController *me = weakSelf;
 		if (!me)
@@ -236,13 +238,13 @@ static NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows
 	// The member list is the aggregate; this is the one record that says
 	// what this account may actually change. Without it the screen would
 	// offer a plain member every switch and then show Telegram's refusal.
-	int64_t meId = [[TGClient shared].me[@"id"] longLongValue];
+	int64_t meId = [[TGProfileStore shared].me[@"id"] longLongValue];
 	if (!meId || !self.chatId){
 		self.canManage = NO;
 		return;
 	}
 	__weak typeof(self) weakSelf = self;
-	[[TGClient shared] chatMember:meId inChat:self.chatId
+	[[TGProfileStore shared] chatMember:meId inChat:self.chatId
 						completion:^(NSDictionary *member){
 		TGGroupSettingsViewController *me = weakSelf;
 		if (!me)
