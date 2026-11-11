@@ -11,6 +11,9 @@
 #import "TGLocalization.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
+#import "TGStoreTestSupport.h"
+#import "TGSearchStore.h"
+#import "TGSettingsStore.h"
 
 @interface TGClientSearchLanguageTests : XCTestCase @end
 
@@ -103,7 +106,7 @@ static NSDictionary *plainSL(NSDictionary *d) {
 
 - (void)testRemoveRecentHashtag_IsOneShot {
 	TGClient *c = SL();
-	[c removeRecentHashtag:@"moscow"];
+	[[TGSearchStore shared] removeRecentHashtag:@"moscow"];
 	NSDictionary *r = lastSL(c, @"removeRecentHashtag");
 	XCTAssertEqualObjects(r[@"hashtag"], @"moscow");
 	XCTAssertNil(r[@"@extra"]);
@@ -111,7 +114,7 @@ static NSDictionary *plainSL(NSDictionary *d) {
 
 - (void)testRemoveSearchedForTag_IsOneShot {
 	TGClient *c = SL();
-	[c removeSearchedForTag:@"news"];
+	[[TGSearchStore shared] removeSearchedForTag:@"news"];
 	NSDictionary *r = lastSL(c, @"removeSearchedForTag");
 	XCTAssertEqualObjects(r[@"tag"], @"news");
 	XCTAssertNil(r[@"@extra"]);
@@ -119,7 +122,7 @@ static NSDictionary *plainSL(NSDictionary *d) {
 
 - (void)testClearSearchedForTags_IsOneShot {
 	TGClient *c = SL();
-	[c clearSearchedForTags];
+	[[TGSearchStore shared] clearSearchedForTags];
 	XCTAssertNotNil(lastSL(c, @"clearSearchedForTags"));
 	XCTAssertNil(lastSL(c, @"clearSearchedForTags")[@"@extra"]);
 }
@@ -370,7 +373,7 @@ static NSDictionary *plainSL(NSDictionary *d) {
 - (void)testLanguagePackInfo_NormalizesTheRecord {
 	TGClient *c = SL();
 	__block NSDictionary *got = nil;
-	[c languagePackInfo:@"en" completion:^(NSDictionary *i){ got = i; }];
+	[[TGSettingsStore shared] languagePackInfo:@"en" completion:^(NSDictionary *i){ got = i; }];
 	XCTAssertEqualObjects(lastSL(c, @"getLanguagePackInfo")[@"language_pack_id"], @"en");
 	answerSL(c, plainSL(@{@"@type" : @"languagePackInfo",
 						  @"id" : @"en", @"base_language_pack_id" : @"",
@@ -387,7 +390,7 @@ static NSDictionary *plainSL(NSDictionary *d) {
 - (void)testLanguagePackStrings_EmptyKeysAskForAll {
 	TGClient *c = SL();
 	__block NSArray *got = nil;
-	[c languagePackStrings:@"en" keys:@[] completion:^(NSArray *s){ got = s; }];
+	[[TGSettingsStore shared] languagePackStrings:@"en" keys:@[] completion:^(NSArray *s){ got = s; }];
 	NSDictionary *r = lastSL(c, @"getLanguagePackStrings");
 	XCTAssertEqualObjects(r[@"language_pack_id"], @"en");
 	XCTAssertEqualObjects(r[@"keys"], @[]);
@@ -405,7 +408,7 @@ static NSDictionary *plainSL(NSDictionary *d) {
 - (void)testLoadAppLanguagePack_KeepsSharedEnglishPerKey {
 	TGClient *c = SL();
 	__block BOOL done = NO;
-	[c loadAppLanguagePack:@"ru" completion:^(BOOL ok){ done = ok; }];
+	[[TGSettingsStore shared] loadAppLanguagePack:@"ru" completion:^(BOOL ok){ done = ok; }];
 	NSDictionary *(^row)(NSString *, NSString *) = ^(NSString *key, NSString *value){
 		return @{@"@type" : @"languagePackString", @"key" : key,
 				 @"value" : @{@"@type" : @"languagePackStringValueOrdinary",
@@ -433,7 +436,7 @@ static NSDictionary *plainSL(NSDictionary *d) {
 	TGClient *c = SL();
 	__block NSString *value = nil;
 	__block NSString *kind = nil;
-	[c languagePackString:@"Continue" pack:@"en" completion:^(NSString *v, NSString *k){
+	[[TGSettingsStore shared] languagePackString:@"Continue" pack:@"en" completion:^(NSString *v, NSString *k){
 		value = v; kind = k;
 	}];
 	NSDictionary *option = lastSL(c, @"getOption");
@@ -456,7 +459,7 @@ static NSDictionary *plainSL(NSDictionary *d) {
 - (void)testAddCustomServerLanguagePack_SendsTheId {
 	TGClient *c = SL();
 	__block BOOL ok = NO;
-	[c addCustomServerLanguagePack:@"de" completion:^(BOOL o){ ok = o; }];
+	[[TGSettingsStore shared] addCustomServerLanguagePack:@"de" completion:^(BOOL o){ ok = o; }];
 	XCTAssertEqualObjects(lastSL(c, @"addCustomServerLanguagePack")[@"language_pack_id"], @"de");
 	answerSL(c, @{@"@type" : @"ok"});
 	XCTAssertTrue(ok);
@@ -465,7 +468,7 @@ static NSDictionary *plainSL(NSDictionary *d) {
 - (void)testSetCustomLanguagePack_PrefixesTheIdAndCarriesStrings {
 	TGClient *c = SL();
 	__block BOOL ok = NO;
-	[c setCustomLanguagePack:@"test" name:@"Test" nativeName:@"Test"
+	[[TGSettingsStore shared] setCustomLanguagePack:@"test" name:@"Test" nativeName:@"Test"
 					 strings:@[@{@"key" : @"Continue", @"value" : @"Go"}] completion:^(BOOL o){ ok = o; }];
 	NSDictionary *r = lastSL(c, @"setCustomLanguagePack");
 	XCTAssertEqualObjects(r[@"info"][@"id"], @"Xtest");
@@ -479,7 +482,7 @@ static NSDictionary *plainSL(NSDictionary *d) {
 - (void)testSetCustomLanguagePackString_NilDeletesTheOverride {
 	TGClient *c = SL();
 	__block BOOL ok = NO;
-	[c setCustomLanguagePackString:@"Continue" value:nil pack:@"Xtest" completion:^(BOOL o){ ok = o; }];
+	[[TGSettingsStore shared] setCustomLanguagePackString:@"Continue" value:nil pack:@"Xtest" completion:^(BOOL o){ ok = o; }];
 	NSDictionary *r = lastSL(c, @"setCustomLanguagePackString");
 	XCTAssertEqualObjects(r[@"language_pack_id"], @"Xtest");
 	XCTAssertEqualObjects(r[@"new_string"][@"key"], @"Continue");
@@ -492,7 +495,7 @@ static NSDictionary *plainSL(NSDictionary *d) {
 - (void)testEditCustomLanguagePackInfo_KeepsTheRecordShape {
 	TGClient *c = SL();
 	__block BOOL ok = NO;
-	[c editCustomLanguagePackInfo:@{@"id" : @"Xtest", @"name" : @"Renamed",
+	[[TGSettingsStore shared] editCustomLanguagePackInfo:@{@"id" : @"Xtest", @"name" : @"Renamed",
 									@"base" : @"en", @"nativeName" : @"Renamed"}
 					   completion:^(BOOL o){ ok = o; }];
 	NSDictionary *r = lastSL(c, @"editCustomLanguagePackInfo");
@@ -506,7 +509,7 @@ static NSDictionary *plainSL(NSDictionary *d) {
 - (void)testSynchronizeLanguagePack_SendsTheId {
 	TGClient *c = SL();
 	__block BOOL ok = NO;
-	[c synchronizeLanguagePack:@"en" completion:^(BOOL o){ ok = o; }];
+	[[TGSettingsStore shared] synchronizeLanguagePack:@"en" completion:^(BOOL o){ ok = o; }];
 	XCTAssertEqualObjects(lastSL(c, @"synchronizeLanguagePack")[@"language_pack_id"], @"en");
 	answerSL(c, @{@"@type" : @"ok"});
 	XCTAssertTrue(ok);
@@ -515,7 +518,7 @@ static NSDictionary *plainSL(NSDictionary *d) {
 - (void)testDeleteLanguagePack_SendsTheId {
 	TGClient *c = SL();
 	__block BOOL ok = NO;
-	[c deleteLanguagePack:@"Xtest" completion:^(BOOL o){ ok = o; }];
+	[[TGSettingsStore shared] deleteLanguagePack:@"Xtest" completion:^(BOOL o){ ok = o; }];
 	XCTAssertEqualObjects(lastSL(c, @"deleteLanguagePack")[@"language_pack_id"], @"Xtest");
 	answerSL(c, @{@"@type" : @"ok"});
 	XCTAssertTrue(ok);
@@ -526,7 +529,7 @@ static NSDictionary *plainSL(NSDictionary *d) {
 - (void)testCountryInfo_NormalizesTheRecord {
 	TGClient *c = SL();
 	__block NSDictionary *got = nil;
-	[c countryInfoForCode:@"de" completion:^(NSDictionary *country){ got = country; }];
+	[[TGSettingsStore shared] countryInfoForCode:@"de" completion:^(NSDictionary *country){ got = country; }];
 	XCTAssertEqualObjects(lastSL(c, @"getCountry")[@"country_code"], @"DE");
 	answerSL(c, plainSL(@{@"@type" : @"countryInfo",
 						  @"country_code" : @"DE", @"name" : @"Deutschland",
@@ -540,7 +543,7 @@ static NSDictionary *plainSL(NSDictionary *d) {
 - (void)testPreferredCountryLanguage_IsATextAnswer {
 	TGClient *c = SL();
 	__block NSString *got = nil;
-	[c preferredCountryLanguageForCode:@"de" completion:^(NSString *code){ got = code; }];
+	[[TGSettingsStore shared] preferredCountryLanguageForCode:@"de" completion:^(NSString *code){ got = code; }];
 	XCTAssertEqualObjects(lastSL(c, @"getPreferredCountryLanguage")[@"country_code"], @"DE");
 	answerSL(c, @{@"@type" : @"text", @"text" : @"de"});
 	XCTAssertEqualObjects(got, @"de");
@@ -549,7 +552,7 @@ static NSDictionary *plainSL(NSDictionary *d) {
 - (void)testCountryFlagEmoji_IsATextAnswer {
 	TGClient *c = SL();
 	__block NSString *got = nil;
-	[c countryFlagEmojiForCode:@"de" completion:^(NSString *emoji){ got = emoji; }];
+	[[TGSettingsStore shared] countryFlagEmojiForCode:@"de" completion:^(NSString *emoji){ got = emoji; }];
 	NSDictionary *r = lastRequestedSL(c);
 	XCTAssertEqualObjects(r[@"@type"], @"getCountryFlagEmoji");
 	XCTAssertEqualObjects(r[@"country_code"], @"DE");

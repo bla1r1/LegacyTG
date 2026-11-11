@@ -10,6 +10,8 @@
 #import "TGClientInternal.h"
 #import "TGAccountStore.h"
 #import "TGProfileStore.h"
+#import "TGStoreTestSupport.h"
+#import "TGSettingsStore.h"
 
 @interface TGClientProfileTests : XCTestCase @end
 
@@ -65,7 +67,7 @@ static NSDictionary *plainP(NSDictionary *d) {
 - (void)testUserNote_SendsTheTextAndTheContact {
 	TGClient *c = P();
 	__block BOOL ok = NO;
-	[c setUserNote:@"met at the conference" forUser:42
+	[[TGProfileStore shared] setUserNote:@"met at the conference" forUser:42
 		completion:^(BOOL good, NSString *error){ ok = good; }];
 	NSDictionary *r = lastP(c, @"setUserNote");
 	XCTAssertEqualObjects(r[@"user_id"], @(42));
@@ -77,7 +79,7 @@ static NSDictionary *plainP(NSDictionary *d) {
 
 - (void)testUserNote_AnEmptyNoteIsHowItIsRemoved {
 	TGClient *c = P();
-	[c setUserNote:@"" forUser:42 completion:nil];
+	[[TGProfileStore shared] setUserNote:@"" forUser:42 completion:nil];
 	NSDictionary *r = lastP(c, @"setUserNote");
 	XCTAssertEqualObjects(r[@"note"][@"text"], @"");
 	XCTAssertEqualObjects(r[@"note"][@"entities"], @[]);
@@ -87,7 +89,7 @@ static NSDictionary *plainP(NSDictionary *d) {
 	TGClient *c = P();
 	__block NSString *said = nil;
 	__block BOOL ok = YES;
-	[c setUserNote:@"hello" forUser:42 completion:^(BOOL good, NSString *error){
+	[[TGProfileStore shared] setUserNote:@"hello" forUser:42 completion:^(BOOL good, NSString *error){
 		ok = good; said = error;
 	}];
 	answerP(c, @{@"@type" : @"error", @"code" : @(400),
@@ -101,7 +103,7 @@ static NSDictionary *plainP(NSDictionary *d) {
 - (void)testCloseFriends_AnswersWithTheIdsTelegramHolds {
 	TGClient *c = P();
 	__block NSArray *ids = nil;
-	[c closeFriendsWithCompletion:^(NSArray *users){ ids = users; }];
+	[[TGProfileStore shared] closeFriendsWithCompletion:^(NSArray *users){ ids = users; }];
 	answerP(c, @{@"@type" : @"users", @"total_count" : @(2),
 				  @"user_ids" : @[@11, @12]});
 	XCTAssertEqualObjects(ids, (@[@11, @12]));
@@ -110,7 +112,7 @@ static NSDictionary *plainP(NSDictionary *d) {
 - (void)testSetCloseFriends_WritesTheWholeList {
 	TGClient *c = P();
 	__block BOOL ok = NO;
-	[c setCloseFriends:@[@11, @12] completion:^(BOOL good, NSString *error){
+	[[TGProfileStore shared] setCloseFriends:@[@11, @12] completion:^(BOOL good, NSString *error){
 		ok = good;
 	}];
 	NSDictionary *r = lastP(c, @"setCloseFriends");
@@ -122,7 +124,7 @@ static NSDictionary *plainP(NSDictionary *d) {
 - (void)testSetCloseFriends_ANonContactIsRefusedWithTheReason {
 	TGClient *c = P();
 	__block NSString *said = nil;
-	[c setCloseFriends:@[@11] completion:^(BOOL ok, NSString *error){ said = error; }];
+	[[TGProfileStore shared] setCloseFriends:@[@11] completion:^(BOOL ok, NSString *error){ said = error; }];
 	answerP(c, @{@"@type" : @"error", @"code" : @(400),
 				  @"message" : @"USERS_TOO_FEW"});
 	XCTAssertEqualObjects(said, @"USERS_TOO_FEW");
@@ -151,7 +153,7 @@ static NSDictionary *plainP(NSDictionary *d) {
 
 - (void)testSuggestBirthdate_SendsDayMonthAndOptionalYear {
 	TGClient *c = P();
-	[c suggestBirthdateDay:12 month:5 year:1990 forUser:42 completion:nil];
+	[[TGProfileStore shared] suggestBirthdateDay:12 month:5 year:1990 forUser:42 completion:nil];
 	NSDictionary *r = lastP(c, @"suggestUserBirthdate");
 	XCTAssertEqualObjects(r[@"user_id"], @(42));
 	XCTAssertEqualObjects(r[@"birthdate"][@"day"], @(12));
@@ -161,14 +163,14 @@ static NSDictionary *plainP(NSDictionary *d) {
 
 - (void)testSuggestBirthdate_AYearOfZeroIsLeftOut {
 	TGClient *c = P();
-	[c suggestBirthdateDay:12 month:5 year:0 forUser:42 completion:nil];
+	[[TGProfileStore shared] suggestBirthdateDay:12 month:5 year:0 forUser:42 completion:nil];
 	NSDictionary *r = lastP(c, @"suggestUserBirthdate");
 	XCTAssertNil(r[@"birthdate"][@"year"]);
 }
 
 - (void)testSuggestProfilePhoto_SendsALocalPicture {
 	TGClient *c = P();
-	[c suggestProfilePhotoAtPath:@"/tmp/face.jpg" forUser:42 completion:nil];
+	[[TGProfileStore shared] suggestProfilePhotoAtPath:@"/tmp/face.jpg" forUser:42 completion:nil];
 	NSDictionary *r = lastP(c, @"suggestUserProfilePhoto");
 	XCTAssertEqualObjects(r[@"user_id"], @(42));
 	XCTAssertEqualObjects(r[@"photo"][@"@type"], @"inputChatPhotoStatic");
@@ -177,7 +179,7 @@ static NSDictionary *plainP(NSDictionary *d) {
 
 - (void)testPersonalProfilePhoto_SetsThePictureOnlyThisAccountSees {
 	TGClient *c = P();
-	[c setPersonalProfilePhotoAtPath:@"/tmp/face.jpg" forUser:42 completion:nil];
+	[[TGProfileStore shared] setPersonalProfilePhotoAtPath:@"/tmp/face.jpg" forUser:42 completion:nil];
 	NSDictionary *r = lastP(c, @"setUserPersonalProfilePhoto");
 	XCTAssertEqualObjects(r[@"user_id"], @(42));
 	XCTAssertEqualObjects(r[@"photo"][@"photo"][@"path"], @"/tmp/face.jpg");
@@ -185,7 +187,7 @@ static NSDictionary *plainP(NSDictionary *d) {
 
 - (void)testPersonalProfilePhoto_ANilPathIsHowItIsRemoved {
 	TGClient *c = P();
-	[c setPersonalProfilePhotoAtPath:nil forUser:42 completion:nil];
+	[[TGProfileStore shared] setPersonalProfilePhotoAtPath:nil forUser:42 completion:nil];
 	NSDictionary *r = lastP(c, @"setUserPersonalProfilePhoto");
 	XCTAssertEqualObjects(r[@"photo"], [NSNull null]);
 }
@@ -195,7 +197,7 @@ static NSDictionary *plainP(NSDictionary *d) {
 - (void)testMainProfileTab_ReadsTheTabNameTheScreenUses {
 	TGClient *c = P();
 	__block NSString *tab = nil;
-	[c myMainProfileTabWithCompletion:^(NSString *name){ tab = name; }];
+	[[TGProfileStore shared] myMainProfileTabWithCompletion:^(NSString *name){ tab = name; }];
 	answerP(c, plainP(@{@"@type" : @"userFullInfo",
 						@"main_profile_tab" : @{@"@type" : @"profileTabMedia"}}));
 	XCTAssertEqualObjects(tab, @"media");
@@ -203,7 +205,7 @@ static NSDictionary *plainP(NSDictionary *d) {
 
 - (void)testMainProfileTab_WritesTheSchemaType {
 	TGClient *c = P();
-	[c setMainProfileTab:@"voice" completion:nil];
+	[[TGProfileStore shared] setMainProfileTab:@"voice" completion:nil];
 	NSDictionary *r = lastP(c, @"setMainProfileTab");
 	XCTAssertEqualObjects(r[@"main_profile_tab"][@"@type"], @"profileTabVoice");
 }
@@ -214,7 +216,7 @@ static NSDictionary *plainP(NSDictionary *d) {
 	TGClient *c = P();
 	c.contactCloseBirthdays = @[@{@"userId" : @7}];
 	__block BOOL ok = NO;
-	[c hideContactCloseBirthdaysWithCompletion:^(BOOL good, NSString *error){
+	[[TGProfileStore shared] hideContactCloseBirthdaysWithCompletion:^(BOOL good, NSString *error){
 		ok = good;
 	}];
 	XCTAssertNotNil(lastP(c, @"hideContactCloseBirthdays"));
@@ -226,7 +228,7 @@ static NSDictionary *plainP(NSDictionary *d) {
 - (void)testSupportUser_AnswersWithTheAccountTelegramNames {
 	TGClient *c = P();
 	__block NSDictionary *user = nil;
-	[c supportUserWithCompletion:^(NSDictionary *u, NSString *error){ user = u; }];
+	[[TGProfileStore shared] supportUserWithCompletion:^(NSDictionary *u, NSString *error){ user = u; }];
 	answerP(c, plainP(@{@"@type" : @"user",
 						@"id" : @(777000),
 						@"first_name" : @"Telegram",
@@ -240,7 +242,7 @@ static NSDictionary *plainP(NSDictionary *d) {
 	TGClient *c = P();
 	__block NSString *error = nil;
 	__block NSDictionary *user = @{};
-	[c supportUserWithCompletion:^(NSDictionary *u, NSString *e){ user = u; error = e; }];
+	[[TGProfileStore shared] supportUserWithCompletion:^(NSDictionary *u, NSString *e){ user = u; error = e; }];
 	answerP(c, @{@"@type" : @"error", @"code" : @(400),
 				  @"message" : @"SUPPORT_UNAVAILABLE"});
 	XCTAssertNil(user);
@@ -251,7 +253,7 @@ static NSDictionary *plainP(NSDictionary *d) {
 
 - (void)testAccentColors_TheSchemaPromisesZeroThroughSixBeforeAnyUpdate {
 	TGClient *c = P();
-	XCTAssertEqualObjects([c availableAccentColorIds], (@[@0, @1, @2, @3, @4, @5, @6]));
+	XCTAssertEqualObjects([[TGProfileStore shared] availableAccentColorIds], (@[@0, @1, @2, @3, @4, @5, @6]));
 }
 
 - (void)testAccentColors_AnUpdateReplacesTheOffer {
@@ -259,12 +261,12 @@ static NSDictionary *plainP(NSDictionary *d) {
 	[c handleUpdate:@{@"@type" : @"updateAccentColors",
 					  @"colors" : @[],
 					  @"available_accent_color_ids" : @[@0, @7]}];
-	XCTAssertEqualObjects([c availableAccentColorIds], (@[@0, @7]));
+	XCTAssertEqualObjects([[TGProfileStore shared] availableAccentColorIds], (@[@0, @7]));
 }
 
 - (void)testAccountAccentColor_WritesTheIdAndNoEmoji {
 	TGClient *c = P();
-	[c setAccountAccentColor:5 backgroundEmojiId:0 completion:nil];
+	[[TGProfileStore shared] setAccountAccentColor:5 backgroundEmojiId:0 completion:nil];
 	NSDictionary *r = lastP(c, @"setAccentColor");
 	XCTAssertEqualObjects(r[@"accent_color_id"], @(5));
 	XCTAssertEqualObjects(r[@"background_custom_emoji_id"], @(0));
@@ -272,7 +274,7 @@ static NSDictionary *plainP(NSDictionary *d) {
 
 - (void)testProfileAccentColor_WritesTheProfileIdAndCanTurnItOff {
 	TGClient *c = P();
-	[c setAccountProfileAccentColor:-1 backgroundEmojiId:0 completion:nil];
+	[[TGProfileStore shared] setAccountProfileAccentColor:-1 backgroundEmojiId:0 completion:nil];
 	NSDictionary *r = lastP(c, @"setProfileAccentColor");
 	XCTAssertEqualObjects(r[@"profile_accent_color_id"], @(-1));
 	XCTAssertEqualObjects(r[@"profile_background_custom_emoji_id"], @(0));
@@ -281,7 +283,7 @@ static NSDictionary *plainP(NSDictionary *d) {
 - (void)testMyAccentColors_ReadsBothIdsFromGetMe {
 	TGClient *c = P();
 	__block NSInteger accent = -99, profile = -99;
-	[c myAccentColorsWithCompletion:^(NSInteger a, NSInteger p){
+	[[TGProfileStore shared] myAccentColorsWithCompletion:^(NSInteger a, NSInteger p){
 		accent = a; profile = p;
 	}];
 	answerP(c, plainP(@{@"@type" : @"user", @"id" : @(1001),
@@ -295,7 +297,7 @@ static NSDictionary *plainP(NSDictionary *d) {
 	TGClient *c = P();
 	__block NSInteger accent = -99, profile = -99;
 	__block int64_t emoji = -1, profileEmoji = -1;
-	[c myAccentColoursWithCompletion:^(NSInteger a, NSInteger p,
+	[[TGProfileStore shared] myAccentColoursWithCompletion:^(NSInteger a, NSInteger p,
 									   int64_t e, int64_t pe){
 		accent = a; profile = p; emoji = e; profileEmoji = pe;
 	}];
@@ -313,7 +315,7 @@ static NSDictionary *plainP(NSDictionary *d) {
 
 - (void)testAccountAccentColor_ForwardsTheBackgroundEmojiId {
 	TGClient *c = P();
-	[c setAccountAccentColor:5 backgroundEmojiId:521234567890 completion:nil];
+	[[TGProfileStore shared] setAccountAccentColor:5 backgroundEmojiId:521234567890 completion:nil];
 	NSDictionary *r = lastP(c, @"setAccentColor");
 	XCTAssertEqualObjects(r[@"accent_color_id"], @(5));
 	XCTAssertEqualObjects(r[@"background_custom_emoji_id"], @(521234567890));
@@ -331,27 +333,27 @@ static void P_assertColour(UIColor *colour, int rgb) {
 - (void)testAccentColourForId_ReadsOneIntPerColour {
 	TGClient *c = P();
 	c.accentColors = @[@{@"id" : @(9), @"light_theme_colors" : @[@(0x1A2B3C), @(0x445566)]}];
-	P_assertColour([c accentColourForId:9 profile:NO], 0x1A2B3C);
-	XCTAssertNil([c accentColourForId:99 profile:NO]);
+	P_assertColour([[TGProfileStore shared] accentColourForId:9 profile:NO], 0x1A2B3C);
+	XCTAssertNil([[TGProfileStore shared] accentColourForId:99 profile:NO]);
 }
 
 - (void)testAccentColourForId_TheFirstSevenAreNotInTheList {
 	TGClient *c = P();
 	c.accentColors = @[];
-	P_assertColour([c accentColourForId:3 profile:NO], 0x7BC862);
+	P_assertColour([[TGProfileStore shared] accentColourForId:3 profile:NO], 0x7BC862);
 }
 
 - (void)testAccentColourForId_ProfileColoursAreNested {
 	TGClient *c = P();
 	c.profileAccentColors = @[@{@"id" : @(2), @"light_theme_colors" :
 			@{@"palette_colors" : @[@(0x102030)], @"background_colors" : @[@(0xFFFFFF)]}}];
-	P_assertColour([c accentColourForId:2 profile:YES], 0x102030);
-	XCTAssertNil([c accentColourForId:3 profile:YES]);
+	P_assertColour([[TGProfileStore shared] accentColourForId:2 profile:YES], 0x102030);
+	XCTAssertNil([[TGProfileStore shared] accentColourForId:3 profile:YES]);
 }
 
 - (void)testAccentChoiceKeepingEmoji_ReadsThenWritesTheSameId {
 	TGClient *c = P();
-	[c setAccountAccentColorPreservingBackgroundEmoji:5 completion:nil];
+	[[TGProfileStore shared] setAccountAccentColorPreservingBackgroundEmoji:5 completion:nil];
 	XCTAssertNotNil(lastP(c, @"getMe"));
 	answerP(c, plainP(@{@"@type" : @"user", @"id" : @(1001),
 						@"background_custom_emoji_id" : @(77),
@@ -363,7 +365,7 @@ static void P_assertColour(UIColor *colour, int rgb) {
 
 - (void)testProfileAccentChoiceKeepingEmoji_UsesTheProfileEmojiId {
 	TGClient *c = P();
-	[c setAccountProfileAccentColorPreservingBackgroundEmoji:5 completion:nil];
+	[[TGProfileStore shared] setAccountProfileAccentColorPreservingBackgroundEmoji:5 completion:nil];
 	XCTAssertNotNil(lastP(c, @"getMe"));
 	answerP(c, plainP(@{@"@type" : @"user", @"id" : @(1001),
 						@"background_custom_emoji_id" : @(77),
@@ -377,7 +379,7 @@ static void P_assertColour(UIColor *colour, int rgb) {
 
 - (void)testOwnBirthday_AYearOfZeroIsLeftOutOfSetBirthdate {
 	TGClient *c = P();
-	[c setBirthdayDay:12 month:5 year:0 completion:nil];
+	[[TGProfileStore shared] setBirthdayDay:12 month:5 year:0 completion:nil];
 	NSDictionary *r = lastP(c, @"setBirthdate");
 	XCTAssertEqualObjects(r[@"birthdate"][@"day"], @(12));
 	XCTAssertEqualObjects(r[@"birthdate"][@"month"], @(5));
@@ -387,7 +389,7 @@ static void P_assertColour(UIColor *colour, int rgb) {
 - (void)testOwnBioLength_ReadsTheServerOption {
 	TGClient *c = P();
 	__block NSInteger max = 0;
-	[c bioLengthMaxWithCompletion:^(NSInteger value){ max = value; }];
+	[[TGProfileStore shared] bioLengthMaxWithCompletion:^(NSInteger value){ max = value; }];
 	NSDictionary *r = lastP(c, @"getOption");
 	XCTAssertEqualObjects(r[@"name"], @"bio_length_max");
 	answerP(c, plainP(@{@"@type" : @"optionValueInteger", @"value" : @"70"}));
@@ -397,7 +399,7 @@ static void P_assertColour(UIColor *colour, int rgb) {
 - (void)testBirthdayPrivacy_ReadsAndWritesShowBirthdate {
 	TGClient *c = P();
 	__block NSString *rule = nil;
-	[c privacyRule:@"ShowBirthdate" completion:^(NSString *value){ rule = value; }];
+	[[TGProfileStore shared] privacyRule:@"ShowBirthdate" completion:^(NSString *value){ rule = value; }];
 	NSDictionary *asked = lastP(c, @"getUserPrivacySettingRules");
 	XCTAssertEqualObjects(asked[@"setting"][@"@type"],
 						  @"userPrivacySettingShowBirthdate");
@@ -405,7 +407,7 @@ static void P_assertColour(UIColor *colour, int rgb) {
 						@"rules" : @[@{@"@type" : @"userPrivacySettingRuleAllowContacts"}]}));
 	XCTAssertEqualObjects(rule, @"contacts");
 
-	[c setPrivacyRule:@"ShowBirthdate" to:@"everybody"];
+	[[TGSettingsStore shared] setPrivacyRule:@"ShowBirthdate" to:@"everybody"];
 	// The write reads the list first, so the exceptions survive it.
 	XCTAssertNotNil(lastP(c, @"getUserPrivacySettingRules"));
 	answerP(c, plainP(@{@"@type" : @"userPrivacySettingRules",
@@ -427,7 +429,7 @@ static void P_assertColour(UIColor *colour, int rgb) {
 - (void)testPrivacyWrite_FailedReadWritesNothing {
 	TGClient *c = P();
 	__block BOOL ok = YES;
-	[c setPrivacyRule:@"ShowStatus" to:@"nobody" completion:^(BOOL written, NSString *error){
+	[[TGSettingsStore shared] setPrivacyRule:@"ShowStatus" to:@"nobody" completion:^(BOOL written, NSString *error){
 		ok = written;
 	}];
 	XCTAssertNotNil(lastP(c, @"getUserPrivacySettingRules"));
@@ -441,7 +443,7 @@ static void P_assertColour(UIColor *colour, int rgb) {
 - (void)testBlockedUsers_AskForUnknownNamesBeforeAnswering {
 	TGClient *c = P();
 	__block NSArray *rows = nil;
-	[c blockedUsersWithCompletion:^(NSArray *users){ rows = users; }];
+	[[TGSettingsStore shared] blockedUsersWithCompletion:^(NSArray *users){ rows = users; }];
 	answerP(c, plainP(@{@"@type" : @"messageSenders", @"total_count" : @(2),
 						@"senders" : @[@{@"@type" : @"messageSenderUser", @"user_id" : @(77)},
 									   @{@"@type" : @"messageSenderUser", @"user_id" : @(78)}]}));
@@ -469,7 +471,7 @@ static void P_assertColour(UIColor *colour, int rgb) {
 - (void)testShareThemeBackdrops_ListsTheIdsAndNames {
 	TGClient *c = P();
 	__block NSArray *backdrops = nil;
-	[c profileShareThemeBackdropsWithCompletion:^(NSArray *rows, NSString *error){
+	[[TGProfileStore shared] profileShareThemeBackdropsWithCompletion:^(NSArray *rows, NSString *error){
 		backdrops = rows;
 	}];
 	answerP(c, plainP(@{@"@type" : @"profileShareThemeBackdrops",
@@ -488,7 +490,7 @@ static void P_assertColour(UIColor *colour, int rgb) {
 - (void)testShareThemeBackdrops_ARefusalCarriesTheSentence {
 	TGClient *c = P();
 	__block NSString *said = nil;
-	[c profileShareThemeBackdropsWithCompletion:^(NSArray *rows, NSString *error){
+	[[TGProfileStore shared] profileShareThemeBackdropsWithCompletion:^(NSArray *rows, NSString *error){
 		said = error;
 	}];
 	answerP(c, @{@"@type" : @"error", @"code" : @(400),
@@ -498,7 +500,7 @@ static void P_assertColour(UIColor *colour, int rgb) {
 
 - (void)testShareTheme_WritesTheBackdropAndAnEmoji {
 	TGClient *c = P();
-	[c setProfileShareThemeForChat:77 backdropId:9 useDefault:NO completion:nil];
+	[[TGProfileStore shared] setProfileShareThemeForChat:77 backdropId:9 useDefault:NO completion:nil];
 	NSDictionary *r = lastP(c, @"setProfileShareTheme");
 	XCTAssertEqualObjects(r[@"chat_id"], @(77));
 	XCTAssertEqualObjects(r[@"theme"][@"@type"], @"inputProfileShareThemeEmoji");
@@ -509,7 +511,7 @@ static void P_assertColour(UIColor *colour, int rgb) {
 
 - (void)testShareTheme_DefaultIsANullTheme {
 	TGClient *c = P();
-	[c clearProfileShareThemeForChat:77 completion:nil];
+	[[TGProfileStore shared] clearProfileShareThemeForChat:77 completion:nil];
 	NSDictionary *r = lastP(c, @"setProfileShareTheme");
 	XCTAssertEqualObjects(r[@"chat_id"], @(77));
 	XCTAssertEqualObjects(r[@"theme"], [NSNull null]);
@@ -570,7 +572,7 @@ static NSDate *PGDate(NSInteger year, NSInteger month, NSInteger day) {
 - (void)testUserProfile_CarriesTheBlockFlagSoOneRequestServesBoth {
 	TGClient *c = P();
 	__block NSDictionary *info = nil;
-	[c userProfile:42 completion:^(NSDictionary *i){ info = i; }];
+	[[TGProfileStore shared] userProfile:42 completion:^(NSDictionary *i){ info = i; }];
 	answerP(c, plainP(@{@"@type" : @"userFullInfo",
 						@"block_list" : @{@"@type" : @"blockListMain"},
 						@"bio" : @{@"@type" : @"formattedText", @"text" : @"hi"},
@@ -589,7 +591,7 @@ static NSDate *PGDate(NSInteger year, NSInteger month, NSInteger day) {
 - (void)testUserProfile_FlattensTheFirstProfileAudio {
 	TGClient *c = P();
 	__block NSDictionary *info = nil;
-	[c userProfile:42 completion:^(NSDictionary *i){ info = i; }];
+	[[TGProfileStore shared] userProfile:42 completion:^(NSDictionary *i){ info = i; }];
 	answerP(c, plainP(@{@"@type" : @"userFullInfo",
 						// td_api.tl: first_profile_audio:audio, with the file under "audio".
 						@"first_profile_audio" : @{
@@ -607,7 +609,7 @@ static NSDate *PGDate(NSInteger year, NSInteger month, NSInteger day) {
 - (void)testUserProfile_ReadsThePersonalChannelId {
 	TGClient *c = P();
 	__block NSDictionary *info = nil;
-	[c userProfile:42 completion:^(NSDictionary *i){ info = i; }];
+	[[TGProfileStore shared] userProfile:42 completion:^(NSDictionary *i){ info = i; }];
 	answerP(c, plainP(@{@"@type" : @"userFullInfo", @"personal_chat_id" : @(88)}));
 	XCTAssertEqualObjects(info[@"personalChatId"], @(88));
 }
@@ -615,7 +617,7 @@ static NSDate *PGDate(NSInteger year, NSInteger month, NSInteger day) {
 - (void)testUserProfile_NoPersonalChannelIsZero {
 	TGClient *c = P();
 	__block NSDictionary *info = nil;
-	[c userProfile:42 completion:^(NSDictionary *i){ info = i; }];
+	[[TGProfileStore shared] userProfile:42 completion:^(NSDictionary *i){ info = i; }];
 	answerP(c, plainP(@{@"@type" : @"userFullInfo"}));
 	XCTAssertEqualObjects(info[@"personalChatId"], @(0));
 }
@@ -736,7 +738,7 @@ static NSDate *PGDate(NSInteger year, NSInteger month, NSInteger day) {
 - (void)testGiftsForOwner_UserSenderRequestShape {
 	TGClient *c = P();
 	NSDictionary *owner = @{@"@type" : @"messageSenderUser", @"user_id" : @(42)};
-	[c giftsForOwner:owner offset:@"" completion:nil];
+	[[TGProfileStore shared] giftsForOwner:owner offset:@"" completion:nil];
 	NSDictionary *r = lastP(c, @"getReceivedGifts");
 	XCTAssertEqualObjects(r[@"owner_id"][@"@type"], @"messageSenderUser");
 	XCTAssertEqualObjects(r[@"owner_id"][@"user_id"], @(42));
@@ -747,7 +749,7 @@ static NSDate *PGDate(NSInteger year, NSInteger month, NSInteger day) {
 - (void)testGiftsForOwner_ChatSenderRequestShape {
 	TGClient *c = P();
 	NSDictionary *owner = @{@"@type" : @"messageSenderChat", @"chat_id" : @(-100555)};
-	[c giftsForOwner:owner offset:@"page_2" completion:nil];
+	[[TGProfileStore shared] giftsForOwner:owner offset:@"page_2" completion:nil];
 	NSDictionary *r = lastP(c, @"getReceivedGifts");
 	XCTAssertEqualObjects(r[@"owner_id"][@"@type"], @"messageSenderChat");
 	XCTAssertEqualObjects(r[@"owner_id"][@"chat_id"], @(-100555));
@@ -761,7 +763,7 @@ static NSDate *PGDate(NSInteger year, NSInteger month, NSInteger day) {
 	__block NSString *receivedNext = nil;
 	__block NSInteger receivedTotal = -1;
 	NSDictionary *owner = @{@"@type" : @"messageSenderUser", @"user_id" : @(42)};
-	[c giftsForOwner:owner offset:@"" completion:^(NSArray *gifts, NSString *nextOffset, NSInteger totalCount){
+	[[TGProfileStore shared] giftsForOwner:owner offset:@"" completion:^(NSArray *gifts, NSString *nextOffset, NSInteger totalCount){
 		receivedGifts = gifts;
 		receivedNext = nextOffset;
 		receivedTotal = totalCount;

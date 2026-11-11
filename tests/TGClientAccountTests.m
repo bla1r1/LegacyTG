@@ -15,6 +15,11 @@
 #import "TGClientInternal.h"
 #import "TGStyle.h"
 #import "TGSessionsStore.h"
+#import "TGStoreTestSupport.h"
+#import "TGAccountStore.h"
+#import "TGGroupStore.h"
+#import "TGProfileStore.h"
+#import "TGSettingsStore.h"
 
 @interface TGClientAccountTests : XCTestCase @end
 
@@ -72,7 +77,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 	TGClient *c = A();
 	__block BOOL has = NO;
 	__block NSString *email = nil;
-	[c hasPasswordWithCompletion:^(BOOL hasPassword, NSString *address){
+	[[TGAccountStore shared] hasPasswordWithCompletion:^(BOOL hasPassword, NSString *address){
 		has = hasPassword; email = address;
 	}];
 	answerA(c, @{@"@type" : @"passwordState",
@@ -88,7 +93,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 - (void)testPasswordState_APendingAddressShowsItsPattern {
 	TGClient *c = A();
 	__block NSString *email = nil;
-	[c hasPasswordWithCompletion:^(BOOL has, NSString *address){ email = address; }];
+	[[TGAccountStore shared] hasPasswordWithCompletion:^(BOOL has, NSString *address){ email = address; }];
 	answerA(c, @{@"@type" : @"passwordState",
 				 @"has_password" : @YES,
 				 @"has_recovery_email_address" : @NO,
@@ -101,7 +106,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 	TGClient *c = A();
 	__block BOOL has = YES;
 	__block NSString *email = nil;
-	[c hasPasswordWithCompletion:^(BOOL hasPassword, NSString *address){
+	[[TGAccountStore shared] hasPasswordWithCompletion:^(BOOL hasPassword, NSString *address){
 		has = hasPassword; email = address;
 	}];
 	answerA(c, @{@"@type" : @"passwordState", @"has_password" : @NO});
@@ -115,7 +120,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 /// recovery address it was not given.
 - (void)testSetPassword_FirstOneCarriesNoOldPasswordAndNoAddress {
 	TGClient *c = A();
-	[c setPassword:nil new:@"correct-horse" hint:@"the usual"
+	[[TGAccountStore shared] setPassword:nil new:@"correct-horse" hint:@"the usual"
    setEmailAddress:NO email:nil completion:nil];
 
 	NSDictionary *r = lastA(c, @"setPassword");
@@ -128,7 +133,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 
 - (void)testSetPassword_ChangingCarriesTheOldOne {
 	TGClient *c = A();
-	[c setPassword:@"old-one" new:@"new-one" hint:@"" setEmailAddress:NO
+	[[TGAccountStore shared] setPassword:@"old-one" new:@"new-one" hint:@"" setEmailAddress:NO
 			 email:nil completion:nil];
 	XCTAssertEqualObjects(lastA(c, @"setPassword")[@"old_password"], @"old-one");
 }
@@ -137,7 +142,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 /// only ever send on purpose.
 - (void)testSetPassword_AnEmptyNewPasswordIsHowOffIsSpelled {
 	TGClient *c = A();
-	[c setPassword:@"old-one" new:@"" hint:@"" setEmailAddress:NO
+	[[TGAccountStore shared] setPassword:@"old-one" new:@"" hint:@"" setEmailAddress:NO
 			 email:nil completion:nil];
 	NSDictionary *r = lastA(c, @"setPassword");
 	XCTAssertEqualObjects(r[@"new_password"], @"");
@@ -149,7 +154,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 - (void)testSetPassword_AWrongOldPasswordIsNotSuccess {
 	TGClient *c = A();
 	__block BOOL ok = YES;
-	[c setPassword:@"wrong" new:@"new-one" hint:@"" setEmailAddress:NO
+	[[TGAccountStore shared] setPassword:@"wrong" new:@"new-one" hint:@"" setEmailAddress:NO
 			 email:nil completion:^(BOOL good){ ok = good; }];
 	answerA(c, @{@"@type" : @"error", @"code" : @(400),
 				 @"message" : @"PASSWORD_HASH_INVALID"});
@@ -158,7 +163,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 
 - (void)testSetPassword_ARecoveryAddressRidesAlongOnlyWhenAsked {
 	TGClient *c = A();
-	[c setPassword:nil new:@"new-one" hint:@"" setEmailAddress:YES
+	[[TGAccountStore shared] setPassword:nil new:@"new-one" hint:@"" setEmailAddress:YES
 			 email:@"me@example.com" completion:nil];
 	NSDictionary *r = lastA(c, @"setPassword");
 	XCTAssertTrue([r[@"set_recovery_email_address"] boolValue]);
@@ -173,7 +178,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 - (void)testRecoveryAddress_ReadsBackWithTheRightPassword {
 	TGClient *c = A();
 	__block NSString *email = nil;
-	[c recoveryEmailAddress:@"correct-horse" completion:^(NSString *address){
+	[[TGAccountStore shared] recoveryEmailAddress:@"correct-horse" completion:^(NSString *address){
 		email = address;
 	}];
 	XCTAssertEqualObjects(lastA(c, @"getRecoveryEmailAddress")[@"password"],
@@ -186,14 +191,14 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 - (void)testRecoveryAddress_AWrongPasswordAnswersEmpty {
 	TGClient *c = A();
 	__block NSString *email = @"unset";
-	[c recoveryEmailAddress:@"wrong" completion:^(NSString *address){ email = address; }];
+	[[TGAccountStore shared] recoveryEmailAddress:@"wrong" completion:^(NSString *address){ email = address; }];
 	answerA(c, @{@"@type" : @"error", @"message" : @"PASSWORD_HASH_INVALID"});
 	XCTAssertEqualObjects(email, @"");
 }
 
 - (void)testRecoveryAddress_SettingOneCarriesBothTheAddressAndThePassword {
 	TGClient *c = A();
-	[c setRecoveryEmailAddress:@"correct-horse" to:@"new@example.com"
+	[[TGAccountStore shared] setRecoveryEmailAddress:@"correct-horse" to:@"new@example.com"
 					completion:nil];
 	NSDictionary *r = lastA(c, @"setRecoveryEmailAddress");
 	XCTAssertEqualObjects(r[@"password"], @"correct-horse");
@@ -206,7 +211,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 /// verification is on, so an account without one must still be deletable.
 - (void)testDeleteAccount_CarriesTheReasonAndAnEmptyPasswordWhenThereIsNone {
 	TGClient *c = A();
-	[c deleteAccountWithReason:@"moving on" password:nil completion:nil];
+	[[TGSettingsStore shared] deleteAccountWithReason:@"moving on" password:nil completion:nil];
 	NSDictionary *r = lastA(c, @"deleteAccount");
 	XCTAssertEqualObjects(r[@"reason"], @"moving on");
 	XCTAssertEqualObjects(r[@"password"], @"");
@@ -215,7 +220,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 - (void)testDeleteAccount_AnErrorIsNotSuccess {
 	TGClient *c = A();
 	__block BOOL ok = YES;
-	[c deleteAccountWithReason:@"" password:@"wrong"
+	[[TGSettingsStore shared] deleteAccountWithReason:@"" password:@"wrong"
 					completion:^(BOOL good){ ok = good; }];
 	answerA(c, @{@"@type" : @"error", @"message" : @"PASSWORD_HASH_INVALID"});
 	XCTAssertFalse(ok);
@@ -224,7 +229,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 - (void)testTerminateAllOtherSessions_IsOneRequestWithNothingInIt {
 	TGClient *c = A();
 	__block BOOL ok = NO;
-	[c terminateAllOtherSessions:^(BOOL good){ ok = good; }];
+	[[TGSessionsStore shared] terminateAllOtherSessions:^(BOOL good){ ok = good; }];
 	NSDictionary *r = lastA(c, @"terminateAllOtherSessions");
 	XCTAssertNotNil(r);
 	XCTAssertNil(r[@"session_id"], @"this one signs out every other device, not one");
@@ -239,7 +244,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 - (void)testProfilePhotos_CarryBothTheirOwnIdAndTheFileToDraw {
 	TGClient *c = A();
 	__block NSArray *photos = nil;
-	[c userProfilePhotos:1001 completion:^(NSArray *found){ photos = found; }];
+	[[TGProfileStore shared] userProfilePhotos:1001 completion:^(NSArray *found){ photos = found; }];
 	answerA(c, @{@"@type" : @"chatPhotos", @"total_count" : @(2), @"photos" : @[
 			@{@"id" : @"7788", @"small" : @{@"id" : @(31)}, @"date" : @(1600000000)},
 			@{@"id" : @"7789", @"small" : @{@"id" : @(32)}}]});
@@ -259,7 +264,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 - (void)testProfilePhotos_SkipsAnythingItCouldNotDrawOrDelete {
 	TGClient *c = A();
 	__block NSArray *photos = nil;
-	[c userProfilePhotos:1001 completion:^(NSArray *found){ photos = found; }];
+	[[TGProfileStore shared] userProfilePhotos:1001 completion:^(NSArray *found){ photos = found; }];
 	answerA(c, @{@"@type" : @"chatPhotos", @"photos" : @[
 			@{@"id" : @"7788"},
 			@{@"small" : @{@"id" : @(32)}},
@@ -271,11 +276,11 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 - (void)testDeleteProfilePhoto_RefusesAZeroIdRatherThanSendingOne {
 	TGClient *c = A();
 	__block BOOL ok = YES;
-	[c deleteProfilePhoto:0 completion:^(BOOL good){ ok = good; }];
+	[[TGProfileStore shared] deleteProfilePhoto:0 completion:^(BOOL good){ ok = good; }];
 	XCTAssertEqual(countA(c, @"deleteProfilePhoto"), (NSUInteger)0);
 	XCTAssertFalse(ok);
 
-	[c deleteProfilePhoto:7788 completion:nil];
+	[[TGProfileStore shared] deleteProfilePhoto:7788 completion:nil];
 	XCTAssertNotNil(lastA(c, @"deleteProfilePhoto"));
 }
 
@@ -284,7 +289,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 - (void)testMyLink_AsksForThePermanentOneAndRevokesNothing {
 	TGClient *c = A();
 	__block NSString *link = nil;
-	[c myUserLink:^(NSString *url){ link = url; }];
+	[[TGProfileStore shared] myUserLink:^(NSString *url){ link = url; }];
 	NSDictionary *r = lastA(c, @"getUserLink");
 	XCTAssertTrue([r[@"return_permanent_link"] boolValue]);
 	XCTAssertFalse([r[@"revoke_previous_links"] boolValue],
@@ -299,7 +304,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 - (void)testGroupsInCommon_NamedOffTheAnswerAndSkippedWhenNameless {
 	TGClient *c = A();
 	__block NSArray *groups = nil;
-	[c groupsInCommonWithUser:6 completion:^(NSArray *found){ groups = found; }];
+	[[TGProfileStore shared] groupsInCommonWithUser:6 completion:^(NSArray *found){ groups = found; }];
 	answerA(c, @{@"@type" : @"chats", @"chats" : @[
 			@{@"id" : @(-70), @"title" : @"Walkers"},
 			@{@"id" : @(-71), @"title" : @""}]});
@@ -446,7 +451,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 /// the one in use; removing and re-adding lost both.
 - (void)testEditProxy_CarriesTheIdAndKeepsItEnabled {
 	TGClient *c = A();
-	[c editProxy:3 server:@"new.host" port:1080 kind:@"socks5"
+	[[TGSettingsStore shared] editProxy:3 server:@"new.host" port:1080 kind:@"socks5"
 		username:nil password:nil secret:nil enable:YES completion:nil];
 	NSDictionary *r = lastA(c, @"editProxy");
 	XCTAssertEqual([r[@"proxy_id"] integerValue], (NSInteger)3);
@@ -458,11 +463,11 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 	TGClient *c = A();
 	__block NSInteger refusals = 0;
 	void (^count)(BOOL) = ^(BOOL ok){ if (!ok) refusals++; };
-	[c editProxy:0 server:@"h" port:1080 kind:@"socks5" username:nil
+	[[TGSettingsStore shared] editProxy:0 server:@"h" port:1080 kind:@"socks5" username:nil
 		password:nil secret:nil enable:YES completion:count];
-	[c editProxy:3 server:@"" port:1080 kind:@"socks5" username:nil
+	[[TGSettingsStore shared] editProxy:3 server:@"" port:1080 kind:@"socks5" username:nil
 		password:nil secret:nil enable:YES completion:count];
-	[c editProxy:3 server:@"h" port:0 kind:@"socks5" username:nil
+	[[TGSettingsStore shared] editProxy:3 server:@"h" port:0 kind:@"socks5" username:nil
 		password:nil secret:nil enable:YES completion:count];
 	XCTAssertEqual(countA(c, @"editProxy"), (NSUInteger)0);
 	XCTAssertEqual(refusals, (NSInteger)3);
@@ -473,7 +478,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 - (void)testTestProxy_AsksADataCentreAndReadsOkAsWorking {
 	TGClient *c = A();
 	__block BOOL works = NO;
-	[c testProxyAtServer:@"h" port:1080 kind:@"socks5" username:nil
+	[[TGSettingsStore shared] testProxyAtServer:@"h" port:1080 kind:@"socks5" username:nil
 				password:nil secret:nil completion:^(BOOL good){ works = good; }];
 	NSDictionary *r = lastA(c, @"testProxy");
 	XCTAssertEqual([r[@"dc_id"] integerValue], (NSInteger)1);
@@ -486,7 +491,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 - (void)testTestProxy_AnErrorIsNotWorking {
 	TGClient *c = A();
 	__block BOOL works = YES;
-	[c testProxyAtServer:@"h" port:1080 kind:@"socks5" username:nil
+	[[TGSettingsStore shared] testProxyAtServer:@"h" port:1080 kind:@"socks5" username:nil
 				password:nil secret:nil completion:^(BOOL good){ works = good; }];
 	answerA(c, @{@"@type" : @"error", @"message" : @"Timeout"});
 	XCTAssertFalse(works);
@@ -497,7 +502,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 - (void)testRecoveryCode_StillWaitingMeansTheCodeWasRefused {
 	TGClient *c = A();
 	__block BOOL ok = YES;
-	[c checkRecoveryEmailCode:@"12345" completion:^(BOOL good){ ok = good; }];
+	[[TGSettingsStore shared] checkRecoveryEmailCode:@"12345" completion:^(BOOL good){ ok = good; }];
 	XCTAssertEqualObjects(lastA(c, @"checkRecoveryEmailAddressCode")[@"code"], @"12345");
 
 	answerA(c, @{@"@type" : @"passwordState", @"has_password" : @YES,
@@ -509,7 +514,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 - (void)testRecoveryCode_AStateWithNoPendingPatternIsConfirmed {
 	TGClient *c = A();
 	__block BOOL ok = NO;
-	[c checkRecoveryEmailCode:@"12345" completion:^(BOOL good){ ok = good; }];
+	[[TGSettingsStore shared] checkRecoveryEmailCode:@"12345" completion:^(BOOL good){ ok = good; }];
 	answerA(c, @{@"@type" : @"passwordState", @"has_password" : @YES,
 				 @"has_recovery_email_address" : @YES});
 	XCTAssertTrue(ok);
@@ -518,7 +523,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 - (void)testRecoveryCode_AnEmptyCodeIsNotARequest {
 	TGClient *c = A();
 	__block BOOL ok = YES;
-	[c checkRecoveryEmailCode:@"" completion:^(BOOL good){ ok = good; }];
+	[[TGSettingsStore shared] checkRecoveryEmailCode:@"" completion:^(BOOL good){ ok = good; }];
 	XCTAssertEqual(countA(c, @"checkRecoveryEmailAddressCode"), (NSUInteger)0);
 	XCTAssertFalse(ok);
 }
@@ -541,7 +546,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 	TGClient *c = A();
 	__block BOOL ok = NO;
 	__block int64_t receiverId = 0;
-	[c pushReceiverOfPayload:@{@"p" : @"AoP1c2k1"}
+	[[TGAccountStore shared] pushReceiverOfPayload:@{@"p" : @"AoP1c2k1"}
 				  completion:^(BOOL o, int64_t receiver){
 		ok = o; receiverId = receiver;
 	}];
@@ -556,7 +561,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 - (void)testPushReceiver_NoBlobIsNoAnswerAtAll {
 	TGClient *c = A();
 	__block BOOL asked = NO;
-	[c pushReceiverOfPayload:@{@"aps" : @{@"alert" : @"x"}}
+	[[TGAccountStore shared] pushReceiverOfPayload:@{@"aps" : @{@"alert" : @"x"}}
 				  completion:^(BOOL ok, int64_t receiverId){
 		asked = YES;
 	}];
@@ -584,7 +589,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 
 - (void)testAuth_EmailCodeIsSentAsAnEmailAuthenticationCode {
 	TGClient *c = A();
-	[c sendEmailCode:@"123456"];
+	[[TGAccountStore shared] sendEmailCode:@"123456"];
 	NSDictionary *sent = lastA(c, @"checkAuthenticationEmailCode");
 	XCTAssertEqualObjects(sent[@"code"][@"@type"], @"emailAddressAuthenticationCode");
 	XCTAssertEqualObjects(sent[@"code"][@"code"], @"123456");
@@ -607,7 +612,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 	TGClient *c = A();
 	__block NSString *error = nil;
 	__block BOOL done = NO;
-	[c recoverPasswordWithCode:@"999" completion:^(NSString *e){ error = e; done = YES; }];
+	[[TGAccountStore shared] recoverPasswordWithCode:@"999" completion:^(NSString *e){ error = e; done = YES; }];
 	XCTAssertEqualObjects(lastA(c, @"checkAuthenticationPasswordRecoveryCode")[@"recovery_code"], @"999");
 	answerA(c, @{@"@type" : @"error", @"code" : @400, @"message" : @"PASSWORD_RECOVERY_CODE_INVALID"});
 	XCTAssertTrue(done);
@@ -618,7 +623,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 - (void)testAuth_AcceptedRecoveryCodeSignsInWithoutAPassword {
 	TGClient *c = A();
 	__block NSString *error = @"unset";
-	[c recoverPasswordWithCode:@"424242" completion:^(NSString *e){ error = e; }];
+	[[TGAccountStore shared] recoverPasswordWithCode:@"424242" completion:^(NSString *e){ error = e; }];
 	answerA(c, @{@"@type" : @"ok"});
 	NSDictionary *recover = lastA(c, @"recoverAuthenticationPassword");
 	XCTAssertEqualObjects(recover[@"recovery_code"], @"424242");
@@ -630,7 +635,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 - (void)testAuth_RecoveryRefusalIsPassedOn {
 	TGClient *c = A();
 	__block NSString *error = nil;
-	[c requestPasswordRecoveryWithCompletion:^(NSString *e){ error = e; }];
+	[[TGAccountStore shared] requestPasswordRecoveryWithCompletion:^(NSString *e){ error = e; }];
 	XCTAssertNotNil(lastA(c, @"requestAuthenticationPasswordRecovery"));
 	answerA(c, @{@"@type" : @"error", @"code" : @400, @"message" : @"PASSWORD_RECOVERY_NA"});
 	XCTAssertEqualObjects(error, @"PASSWORD_RECOVERY_NA");
@@ -638,7 +643,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 
 - (void)testAuth_MissingCodeIsReported {
 	TGClient *c = A();
-	[c reportAuthenticationCodeMissing];
+	[[TGAccountStore shared] reportAuthenticationCodeMissing];
 	XCTAssertNotNil(lastA(c, @"reportAuthenticationCodeMissing"));
 }
 
@@ -718,7 +723,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 
 - (void)testConfirmSession_NamesTheSession {
 	TGClient *c = A();
-	[c confirmSession:5];
+	[[TGSessionsStore shared] confirmSession:5];
 	NSDictionary *r = lastA(c, @"confirmSession");
 	XCTAssertEqualObjects(r[@"session_id"], @(5));
 }
@@ -834,7 +839,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 /// must carry the story flags and the sound back or they reset.
 - (void)testScopeNotifications_KeepEveryFieldTheyDidNotChange {
 	TGClient *c = A();
-	[c setScope:@"private" muted:YES];
+	[[TGSettingsStore shared] setScope:@"private" muted:YES];
 	answerA(c, @{@"@type" : @"scopeNotificationSettings",
 				 @"mute_for" : @(0),
 				 @"sound_id" : @(77),
@@ -861,7 +866,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 /// call without is_public.
 - (void)testSetProfilePhoto_IsTheMainPhotoNotThePublicOne {
 	TGClient *c = A();
-	[c setProfilePhotoAtPath:@"/tmp/me.jpg" completion:nil];
+	[[TGProfileStore shared] setProfilePhotoAtPath:@"/tmp/me.jpg" completion:nil];
 	NSDictionary *r = lastA(c, @"setProfilePhoto");
 	XCTAssertEqualObjects(r[@"is_public"], @NO);
 	XCTAssertEqualObjects(r[@"photo"][@"photo"][@"path"], @"/tmp/me.jpg");
@@ -874,7 +879,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 - (void)testPrivacyRule_ReadsTheCatchAllNotTheFirstException {
 	TGClient *c = A();
 	__block NSString *value = nil;
-	[c privacyRule:@"ShowPhoneNumber" completion:^(NSString *rule){ value = rule; }];
+	[[TGProfileStore shared] privacyRule:@"ShowPhoneNumber" completion:^(NSString *rule){ value = rule; }];
 	answerA(c, @{@"@type" : @"userPrivacySettingRules",
 				 @"rules" : @[
 					 @{@"@type" : @"userPrivacySettingRuleAllowPremiumUsers"},
@@ -888,7 +893,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 	c.usersById[@(7)] = @"Ann";
 	c.chatsById[@(-500)] = [@{@"id" : @(-500), @"title" : @"News"} mutableCopy];
 	__block NSArray *blocked = nil;
-	[c blockedUsersWithCompletion:^(NSArray *users){ blocked = users; }];
+	[[TGSettingsStore shared] blockedUsersWithCompletion:^(NSArray *users){ blocked = users; }];
 	answerA(c, @{@"@type" : @"messageSenders",
 				 @"senders" : @[
 					 @{@"@type" : @"messageSenderUser", @"user_id" : @(7)},
@@ -917,7 +922,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 - (void)testBlockedUsers_LeaveDeletedAccountsOut {
 	TGClient *c = A();
 	__block NSArray *blocked = nil;
-	[c blockedUsersWithCompletion:^(NSArray *users){ blocked = users; }];
+	[[TGSettingsStore shared] blockedUsersWithCompletion:^(NSArray *users){ blocked = users; }];
 	answerA(c, @{@"@type" : @"messageSenders",
 				 @"senders" : @[@{@"@type" : @"messageSenderUser", @"user_id" : @(9)}],
 				 @"total_count" : @(1)});
@@ -931,7 +936,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 	TGClient *c = A();
 	__block BOOL ok = YES;
 	__block NSString *said = nil;
-	[c setName:@"Ada" last:@"Lovelace" completion:^(BOOL good, NSString *error){
+	[[TGProfileStore shared] setName:@"Ada" last:@"Lovelace" completion:^(BOOL good, NSString *error){
 		ok = good; said = error;
 	}];
 	NSDictionary *r = lastA(c, @"setName");
@@ -946,7 +951,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 - (void)testSetBio_AnswersTheRefusalSoTheFormCanStay {
 	TGClient *c = A();
 	__block BOOL ok = NO;
-	[c setBio:@"Hello" completion:^(BOOL good, NSString *error){ ok = good; }];
+	[[TGProfileStore shared] setBio:@"Hello" completion:^(BOOL good, NSString *error){ ok = good; }];
 	XCTAssertEqualObjects(lastA(c, @"setBio")[@"bio"], @"Hello");
 	answerA(c, @{@"@type" : @"ok"});
 	XCTAssertTrue(ok);
@@ -954,7 +959,7 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 
 - (void)testSetBirthday_YearZeroIsLeftOut {
 	TGClient *c = A();
-	[c setBirthdayDay:5 month:3 year:0 completion:nil];
+	[[TGProfileStore shared] setBirthdayDay:5 month:3 year:0 completion:nil];
 	NSDictionary *r = lastA(c, @"setBirthdate");
 	XCTAssertEqualObjects(r[@"birthdate"][@"day"], @(5));
 	XCTAssertEqualObjects(r[@"birthdate"][@"month"], @(3));
@@ -963,14 +968,14 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 
 - (void)testSetBirthday_DayZeroIsHowItIsRemoved {
 	TGClient *c = A();
-	[c setBirthdayDay:0 month:0 year:0 completion:nil];
+	[[TGProfileStore shared] setBirthdayDay:0 month:0 year:0 completion:nil];
 	XCTAssertTrue(lastA(c, @"setBirthdate")[@"birthdate"] == [NSNull null]);
 }
 
 - (void)testBioLengthMax_ReadsTheIntegerOutOfTheOption {
 	TGClient *c = A();
 	__block NSInteger max = 0;
-	[c bioLengthMaxWithCompletion:^(NSInteger m){ max = m; }];
+	[[TGProfileStore shared] bioLengthMaxWithCompletion:^(NSInteger m){ max = m; }];
 	// The real shape: the first version read one level too deep and crashed the
 	// Edit Profile screen on the iPod as it opened.
 	answerA(c, @{@"@type" : @"optionValueInteger", @"value" : @"70"});

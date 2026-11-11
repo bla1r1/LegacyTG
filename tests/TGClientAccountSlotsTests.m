@@ -9,6 +9,8 @@
 #import "TGTestRunner.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
+#import "TGStoreTestSupport.h"
+#import "TGAccountStore.h"
 
 @interface TGClientAccountSlotsTests : XCTestCase @end
 
@@ -130,7 +132,7 @@ static TGClient *SlotsClient(void) {
 	c.usersById[@1] = @"User One";
 	c.usersById[@2] = @"User Two";
 
-	[c resetStateForAccountSwitch];
+	[[TGAccountStore shared] resetStateForAccountSwitch];
 
 	XCTAssertNil(c.me);
 	XCTAssertEqual(c.chatsById.count, (NSUInteger)0);

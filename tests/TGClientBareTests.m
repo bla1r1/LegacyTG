@@ -9,6 +9,11 @@
 #import "TGClient.h"
 #import "TGClientInternal.h"
 #import "TGGhostMode.h"
+#import "TGStoreTestSupport.h"
+#import "TGAccountStore.h"
+#import "TGMediaStore.h"
+#import "TGSettingsStore.h"
+#import "TGStickerStore.h"
 
 @interface TGClientBareTests : XCTestCase @end
 
@@ -63,7 +68,7 @@ static NSDictionary *plainB(NSDictionary *d) {
 
 - (void)testAddFileToDownloads_CarriesTheFileChatAndMessage {
 	TGClient *c = B();
-	[c addFileToDownloads:41 inChat:77 message:88];
+	[[TGMediaStore shared] addFileToDownloads:41 inChat:77 message:88];
 
 	NSDictionary *r = lastB(c, @"addFileToDownloads");
 	XCTAssertEqualObjects(r[@"file_id"], @(41));
@@ -77,7 +82,7 @@ static NSDictionary *plainB(NSDictionary *d) {
 
 - (void)testDeleteLocalFile_SendsOnlyTheFileId {
 	TGClient *c = B();
-	[c deleteLocalFile:41];
+	[[TGMediaStore shared] deleteLocalFile:41];
 
 	NSDictionary *r = lastB(c, @"deleteFile");
 	XCTAssertEqualObjects(r[@"file_id"], @(41));
@@ -203,7 +208,7 @@ static NSDictionary *plainB(NSDictionary *d) {
 - (void)testCountryCode_ReturnsTheIsoCodeOrNil {
 	TGClient *c = B();
 	__block NSString *got = nil;
-	[c countryCodeWithCompletion:^(NSString *code){ got = code; }];
+	[[TGAccountStore shared] countryCodeWithCompletion:^(NSString *code){ got = code; }];
 
 	XCTAssertNotNil(lastB(c, @"getCountryCode"));
 	answerB(c, @{@"@type" : @"text", @"text" : @"UA"});
@@ -211,7 +216,7 @@ static NSDictionary *plainB(NSDictionary *d) {
 
 	[c.outbox removeAllObjects];
 	got = nil;
-	[c countryCodeWithCompletion:^(NSString *code){ got = code; }];
+	[[TGAccountStore shared] countryCodeWithCompletion:^(NSString *code){ got = code; }];
 	answerB(c, @{@"@type" : @"text", @"text" : @""});
 	XCTAssertNil(got);
 }
@@ -222,7 +227,7 @@ static NSDictionary *plainB(NSDictionary *d) {
 	TGClient *c = B();
 	__block long long bytes = -1;
 	__block NSInteger files = -1;
-	[c storageStatsWithCompletion:^(long long b, NSInteger f){ bytes = b; files = f; }];
+	[[TGSettingsStore shared] storageStatsWithCompletion:^(long long b, NSInteger f){ bytes = b; files = f; }];
 
 	XCTAssertNotNil(lastB(c, @"getStorageStatisticsFast"));
 	answerB(c, @{@"@type" : @"storageStatisticsFast",
@@ -237,7 +242,7 @@ static NSDictionary *plainB(NSDictionary *d) {
 - (void)testInstalledStickerSets_AsksForRegularNotMasks {
 	TGClient *c = B();
 	__block NSArray *got = nil;
-	[c installedStickerSetsWithCompletion:^(NSArray *sets){ got = sets; }];
+	[[TGStickerStore shared] installedStickerSetsWithCompletion:^(NSArray *sets){ got = sets; }];
 
 	NSDictionary *r = lastB(c, @"getInstalledStickerSets");
 	XCTAssertEqualObjects(r[@"is_masks"], @NO);
@@ -261,7 +266,7 @@ static NSDictionary *plainB(NSDictionary *d) {
 - (void)testTrendingStickerSets_FlattensTheRows {
 	TGClient *c = B();
 	__block NSArray *got = nil;
-	[c trendingStickerSetsWithCompletion:^(NSArray *sets){ got = sets; }];
+	[[TGStickerStore shared] trendingStickerSetsWithCompletion:^(NSArray *sets){ got = sets; }];
 
 	NSDictionary *r = lastB(c, @"getTrendingStickerSets");
 	XCTAssertEqualObjects(r[@"sticker_type"][@"@type"], @"stickerTypeRegular");

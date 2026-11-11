@@ -8,6 +8,12 @@
 #import "TGClient.h"
 #import "TGClientInternal.h"
 #import "TGSettingsStore.h"
+#import "TGStoreTestSupport.h"
+#import "TGChannelStore.h"
+#import "TGGroupStore.h"
+#import "TGProfileStore.h"
+#import "TGSearchStore.h"
+#import "TGSessionsStore.h"
 
 @interface TGClientChatToolsTests : XCTestCase @end
 
@@ -71,7 +77,7 @@ static NSDictionary *ctPlain(NSDictionary *d) {
 - (void)testChatCountForFolder_SendsTheFolderAndReadsTheCount {
 	TGClient *c = CT();
 	__block NSInteger got = -1;
-	[c chatCountForFolder:@{@"name" : @{@"text" : @{@"text" : @"Work"}}}
+	[[TGSettingsStore shared] chatCountForFolder:@{@"name" : @{@"text" : @{@"text" : @"Work"}}}
 			   completion:^(NSInteger count){ got = count; }];
 	NSDictionary *r = ctLast(c, @"getChatFolderChatCount");
 	XCTAssertEqualObjects(r[@"folder"][@"@type"], @"chatFolder");
@@ -82,7 +88,7 @@ static NSDictionary *ctPlain(NSDictionary *d) {
 - (void)testChatsToLeaveForFolder_ReadsTheSuggestedIds {
 	TGClient *c = CT();
 	__block NSArray *got = nil;
-	[c chatsToLeaveForFolder:3 completion:^(NSArray *ids){ got = ids; }];
+	[[TGSettingsStore shared] chatsToLeaveForFolder:3 completion:^(NSArray *ids){ got = ids; }];
 	XCTAssertEqualObjects(ctLast(c, @"getChatFolderChatsToLeave")[@"chat_folder_id"], @(3));
 	ctAnswer(c, @{@"@type" : @"chats", @"chat_ids" : @[@(7), @(8)]});
 	XCTAssertEqualObjects(got, (@[@(7), @(8)]));
@@ -91,7 +97,7 @@ static NSDictionary *ctPlain(NSDictionary *d) {
 - (void)testDefaultIconNameForFolder_FallsBackToTheRequestPath {
 	TGClient *c = CT();
 	__block NSString *got = nil;
-	[c defaultIconNameForFolder:@{@"name" : @{@"text" : @{@"text" : @"Work"}}}
+	[[TGSettingsStore shared] defaultIconNameForFolder:@{@"name" : @{@"text" : @{@"text" : @"Work"}}}
 					 completion:^(NSString *name){ got = name; }];
 	XCTAssertNotNil(ctLast(c, @"getChatFolderDefaultIconName"));
 	ctAnswer(c, @{@"@type" : @"chatFolderIcon", @"name" : @"Cat"});
@@ -101,7 +107,7 @@ static NSDictionary *ctPlain(NSDictionary *d) {
 - (void)testFolderInviteLinks_CreateEditDeleteAndRead {
 	TGClient *c = CT();
 	__block NSArray *links = nil;
-	[c inviteLinksForFolder:3 completion:^(NSArray *l){ links = l; }];
+	[[TGSettingsStore shared] inviteLinksForFolder:3 completion:^(NSArray *l){ links = l; }];
 	ctAnswer(c, @{@"@type" : @"chatFolderInviteLinks",
 				  @"invite_links" : @[@{@"invite_link" : @"https://t.me/addlist/x",
 										@"name" : @"Work", @"chat_ids" : @[@(5)]}]});
@@ -109,12 +115,12 @@ static NSDictionary *ctPlain(NSDictionary *d) {
 	XCTAssertEqualObjects(links[0][@"chatIds"], (@[@(5)]));
 
 	__block NSArray *suitable = nil;
-	[c chatsForFolderInviteLink:3 completion:^(NSArray *ids){ suitable = ids; }];
+	[[TGSettingsStore shared] chatsForFolderInviteLink:3 completion:^(NSArray *ids){ suitable = ids; }];
 	ctAnswer(c, @{@"@type" : @"chats", @"chat_ids" : @[@(5), @(6)]});
 	XCTAssertEqualObjects(suitable, (@[@(5), @(6)]));
 
 	__block NSString *made = nil;
-	[c createInviteLinkForFolder:3 name:@"Work" chatIds:@[@(5)]
+	[[TGSettingsStore shared] createInviteLinkForFolder:3 name:@"Work" chatIds:@[@(5)]
 					  completion:^(NSString *link){ made = link; }];
 	NSDictionary *create = ctLast(c, @"createChatFolderInviteLink");
 	XCTAssertEqualObjects(create[@"chat_folder_id"], @(3));
@@ -124,14 +130,14 @@ static NSDictionary *ctPlain(NSDictionary *d) {
 	XCTAssertEqualObjects(made, @"https://t.me/addlist/y");
 
 	__block BOOL edited = NO;
-	[c editInviteLinkForFolder:3 link:@"https://t.me/addlist/y" name:@"New"
+	[[TGSettingsStore shared] editInviteLinkForFolder:3 link:@"https://t.me/addlist/y" name:@"New"
 						chatIds:@[@(5)] completion:^(BOOL ok){ edited = ok; }];
 	XCTAssertEqualObjects(ctLast(c, @"editChatFolderInviteLink")[@"name"], @"New");
 	ctAnswer(c, @{@"@type" : @"chatFolderInviteLink"});
 	XCTAssertTrue(edited);
 
 	__block BOOL deleted = NO;
-	[c deleteInviteLinkForFolder:3 link:@"https://t.me/addlist/y"
+	[[TGSettingsStore shared] deleteInviteLinkForFolder:3 link:@"https://t.me/addlist/y"
 					   completion:^(BOOL ok){ deleted = ok; }];
 	ctAnswer(c, @{@"@type" : @"ok"});
 	XCTAssertTrue(deleted);
@@ -140,7 +146,7 @@ static NSDictionary *ctPlain(NSDictionary *d) {
 - (void)testCheckAndAddFolderLink_FlattenTheFolder {
 	TGClient *c = CT();
 	__block NSDictionary *got = nil;
-	[c checkFolderInviteLink:@"https://t.me/addlist/x"
+	[[TGSettingsStore shared] checkFolderInviteLink:@"https://t.me/addlist/x"
 				  completion:^(NSDictionary *f){ got = f; }];
 	ctAnswer(c, ctPlain(@{@"@type" : @"chatFolderInviteLinkInfo",
 						  @"chat_folder_info" : @{
@@ -154,7 +160,7 @@ static NSDictionary *ctPlain(NSDictionary *d) {
 	XCTAssertEqualObjects(got[@"missing"], (@[@(5)]));
 
 	__block BOOL added = NO;
-	[c addFolderByInviteLink:@"https://t.me/addlist/x" chatIds:@[@(5)]
+	[[TGSettingsStore shared] addFolderByInviteLink:@"https://t.me/addlist/x" chatIds:@[@(5)]
 				  completion:^(BOOL ok){ added = ok; }];
 	NSDictionary *r = ctLast(c, @"addChatFolderByInviteLink");
 	XCTAssertEqualObjects(r[@"chat_ids"], (@[@(5)]));
@@ -165,12 +171,12 @@ static NSDictionary *ctPlain(NSDictionary *d) {
 - (void)testFolderNewChats_AndProcessThem {
 	TGClient *c = CT();
 	__block NSArray *ids = nil;
-	[c newChatsForFolder:3 completion:^(NSArray *i){ ids = i; }];
+	[[TGSettingsStore shared] newChatsForFolder:3 completion:^(NSArray *i){ ids = i; }];
 	ctAnswer(c, @{@"@type" : @"chats", @"chat_ids" : @[@(11)]});
 	XCTAssertEqualObjects(ids, (@[@(11)]));
 
 	__block BOOL ok = NO;
-	[c processNewChats:@[@(11)] forFolder:3 completion:^(BOOL o){ ok = o; }];
+	[[TGSettingsStore shared] processNewChats:@[@(11)] forFolder:3 completion:^(BOOL o){ ok = o; }];
 	XCTAssertEqualObjects(ctLast(c, @"processChatFolderNewChats")[@"added_chat_ids"],
 						  (@[@(11)]));
 	ctAnswer(c, @{@"@type" : @"ok"});
@@ -188,7 +194,7 @@ static NSDictionary *ctPlain(NSDictionary *d) {
 	XCTAssertEqual(lists.count, (NSUInteger)2);
 	XCTAssertEqualObjects(lists[1][@"@type"], @"chatListFolder");
 
-	[c toggleFolderTags:YES];
+	[[TGSettingsStore shared] toggleFolderTags:YES];
 	XCTAssertEqualObjects(ctLast(c, @"toggleChatFolderTags")[@"are_tags_enabled"], @YES);
 }
 
@@ -197,7 +203,7 @@ static NSDictionary *ctPlain(NSDictionary *d) {
 - (void)testInviteLink_ReadsTheWholeLink {
 	TGClient *c = CT();
 	__block NSDictionary *got = nil;
-	[c inviteLink:@"https://t.me/+abc" inChat:77 completion:^(NSDictionary *i){ got = i; }];
+	[[TGGroupStore shared] inviteLink:@"https://t.me/+abc" inChat:77 completion:^(NSDictionary *i){ got = i; }];
 	ctAnswer(c, ctPlain(@{@"@type" : @"chatInviteLink",
 						  @"invite_link" : @"https://t.me/+abc", @"name" : @"Crew",
 						  @"member_count" : @(4), @"member_limit" : @(10),
@@ -210,7 +216,7 @@ static NSDictionary *ctPlain(NSDictionary *d) {
 - (void)testInviteLinkCounts_AndMembers {
 	TGClient *c = CT();
 	__block NSArray *counts = nil;
-	[c inviteLinkCountsForChat:77 completion:^(NSArray *r){ counts = r; }];
+	[[TGGroupStore shared] inviteLinkCountsForChat:77 completion:^(NSArray *r){ counts = r; }];
 	ctAnswer(c, @{@"@type" : @"chatInviteLinkCounts",
 				  @"invite_link_counts" : @[@{@"user_id" : @(1001),
 											  @"invite_link_count" : @(3),
@@ -219,7 +225,7 @@ static NSDictionary *ctPlain(NSDictionary *d) {
 	XCTAssertEqualObjects(counts[0][@"revoked"], @(1));
 
 	__block NSArray *members = nil;
-	[c membersOfInviteLink:@"https://t.me/+abc" inChat:77
+	[[TGGroupStore shared] membersOfInviteLink:@"https://t.me/+abc" inChat:77
 				completion:^(NSArray *m){ members = m; }];
 	NSDictionary *r = ctLast(c, @"getChatInviteLinkMembers");
 	XCTAssertEqualObjects(r[@"limit"], @(100));
@@ -233,7 +239,7 @@ static NSDictionary *ctPlain(NSDictionary *d) {
 - (void)testSubscriptionLink_CreateAndRename {
 	TGClient *c = CT();
 	__block NSString *made = nil;
-	[c createSubscriptionInviteLink:77 name:@"Monthly" stars:5 period:2592000
+	[[TGGroupStore shared] createSubscriptionInviteLink:77 name:@"Monthly" stars:5 period:2592000
 						 completion:^(NSString *l){ made = l; }];
 	NSDictionary *r = ctLast(c, @"createChatSubscriptionInviteLink");
 	XCTAssertEqualObjects(r[@"subscription_pricing"][@"star_count"], @(5));
@@ -242,7 +248,7 @@ static NSDictionary *ctPlain(NSDictionary *d) {
 	XCTAssertEqualObjects(made, @"https://t.me/+sub");
 
 	__block BOOL renamed = NO;
-	[c editSubscriptionInviteLink:@"https://t.me/+sub" inChat:77 name:@"Yearly"
+	[[TGGroupStore shared] editSubscriptionInviteLink:@"https://t.me/+sub" inChat:77 name:@"Yearly"
 					   completion:^(BOOL ok){ renamed = ok; }];
 	XCTAssertEqualObjects(ctLast(c, @"editChatSubscriptionInviteLink")[@"name"], @"Yearly");
 	ctAnswer(c, @{@"@type" : @"chatInviteLink"});
@@ -252,7 +258,7 @@ static NSDictionary *ctPlain(NSDictionary *d) {
 - (void)testEditInviteLink_AnApprovalLinkLosesItsMemberLimit {
 	TGClient *c = CT();
 	__block BOOL ok = NO;
-	[c editInviteLink:@"https://t.me/+abc" inChat:77 name:@"Crew" expiration:0
+	[[TGGroupStore shared] editInviteLink:@"https://t.me/+abc" inChat:77 name:@"Crew" expiration:0
 			memberLimit:50 joinRequest:YES completion:^(BOOL o){ ok = o; }];
 	NSDictionary *r = ctLast(c, @"editChatInviteLink");
 	XCTAssertEqualObjects(r[@"member_limit"], @(0));
@@ -264,7 +270,7 @@ static NSDictionary *ctPlain(NSDictionary *d) {
 - (void)testDeleteRevokedLinks_BothShapes {
 	TGClient *c = CT();
 	__block BOOL one = NO;
-	[c deleteRevokedInviteLink:@"https://t.me/+old" inChat:77
+	[[TGGroupStore shared] deleteRevokedInviteLink:@"https://t.me/+old" inChat:77
 					completion:^(BOOL ok){ one = ok; }];
 	XCTAssertEqualObjects(ctLast(c, @"deleteRevokedChatInviteLink")[@"invite_link"],
 						  @"https://t.me/+old");
@@ -272,7 +278,7 @@ static NSDictionary *ctPlain(NSDictionary *d) {
 	XCTAssertTrue(one);
 
 	__block BOOL all = NO;
-	[c deleteAllRevokedInviteLinks:77 creator:1001 completion:^(BOOL ok){ all = ok; }];
+	[[TGGroupStore shared] deleteAllRevokedInviteLinks:77 creator:1001 completion:^(BOOL ok){ all = ok; }];
 	XCTAssertEqualObjects(ctLast(c, @"deleteAllRevokedChatInviteLinks")[@"creator_user_id"],
 						  @(1001));
 	ctAnswer(c, @{@"@type" : @"ok"});
@@ -284,7 +290,7 @@ static NSDictionary *ctPlain(NSDictionary *d) {
 - (void)testAnswerJoinRequestQuery_ApprovedAndDeclined {
 	TGClient *c = CT();
 	__block BOOL ok = NO;
-	[c answerJoinRequestQuery:9001 approve:YES completion:^(BOOL o){ ok = o; }];
+	[[TGSettingsStore shared] answerJoinRequestQuery:9001 approve:YES completion:^(BOOL o){ ok = o; }];
 	NSDictionary *r = ctLast(c, @"answerChatJoinRequestQuery");
 	XCTAssertEqualObjects(r[@"query_id"], @(9001));
 	XCTAssertEqualObjects(r[@"result"][@"@type"], @"chatJoinRequestResultApproved");
@@ -328,9 +334,9 @@ static NSDictionary *ctPlain(NSDictionary *d) {
 	ctAnswer(c, @{@"@type" : @"chats", @"chat_ids" : @[@(5)]});
 	XCTAssertEqualObjects(rows[0][@"title"], @"Ada");
 
-	[c forgetRecentlyFoundChat:5];
+	[[TGSearchStore shared] forgetRecentlyFoundChat:5];
 	XCTAssertEqualObjects(ctLast(c, @"removeRecentlyFoundChat")[@"chat_id"], @(5));
-	[c clearRecentlyFoundChats];
+	[[TGSearchStore shared] clearRecentlyFoundChats];
 	XCTAssertNotNil(ctLast(c, @"clearRecentlyFoundChats"));
 }
 
@@ -341,7 +347,7 @@ static NSDictionary *ctPlain(NSDictionary *d) {
 	c.chatsById[@(9)] = [@{@"id" : @(9), @"title" : @"Twin"} mutableCopy];
 	__block NSArray *rows = nil;
 	__block NSInteger total = -1;
-	[c similarChatsForChat:77 completion:^(NSArray *r, NSInteger t){
+	[[TGProfileStore shared] similarChatsForChat:77 completion:^(NSArray *r, NSInteger t){
 		rows = r; total = t;
 	}];
 	ctAnswer(c, @{@"@type" : @"count", @"count" : @(12)});
@@ -350,7 +356,7 @@ static NSDictionary *ctPlain(NSDictionary *d) {
 	XCTAssertEqual(total, (NSInteger)12);
 	XCTAssertEqualObjects(rows[0][@"title"], @"Twin");
 
-	[c openSimilarChat:9 fromChat:77];
+	[[TGChannelStore shared] openSimilarChat:9 fromChat:77];
 	NSDictionary *open = ctLast(c, @"openChatSimilarChat");
 	XCTAssertEqualObjects(open[@"chat_id"], @(77));
 	XCTAssertEqualObjects(open[@"opened_chat_id"], @(9));
@@ -371,18 +377,18 @@ static NSDictionary *ctPlain(NSDictionary *d) {
 	XCTAssertEqual(discussion.count, (NSUInteger)1);
 
 	__block NSArray *personal = nil;
-	[c suitablePersonalChatsWithCompletion:^(NSArray *r){ personal = r; }];
+	[[TGProfileStore shared] suitablePersonalChatsWithCompletion:^(NSArray *r){ personal = r; }];
 	ctAnswer(c, @{@"@type" : @"chats", @"chat_ids" : @[@(9)]});
 	XCTAssertEqual(personal.count, (NSUInteger)1);
 
 	__block BOOL set = NO;
-	[c setPersonalChat:9 completion:^(BOOL ok){ set = ok; }];
+	[[TGProfileStore shared] setPersonalChat:9 completion:^(BOOL ok){ set = ok; }];
 	XCTAssertEqualObjects(ctLast(c, @"setPersonalChat")[@"chat_id"], @(9));
 	ctAnswer(c, @{@"@type" : @"ok"});
 	XCTAssertTrue(set);
 
 	__block NSArray *inactive = nil;
-	[c inactiveSupergroupChatsWithCompletion:^(NSArray *r){ inactive = r; }];
+	[[TGSettingsStore shared] inactiveSupergroupChatsWithCompletion:^(NSArray *r){ inactive = r; }];
 	ctAnswer(c, @{@"@type" : @"chats", @"chat_ids" : @[@(9)]});
 	XCTAssertEqual(inactive.count, (NSUInteger)1);
 }
@@ -392,7 +398,7 @@ static NSDictionary *ctPlain(NSDictionary *d) {
 	c.chatsById[@(9)] = [@{@"id" : @(9), @"title" : @"Public"} mutableCopy];
 
 	__block NSArray *chats = nil;
-	[c createdPublicChatsOfType:@"username" completion:^(NSArray *r){ chats = r; }];
+	[[TGSettingsStore shared] createdPublicChatsOfType:@"username" completion:^(NSArray *r){ chats = r; }];
 	XCTAssertEqualObjects(ctLast(c, @"getCreatedPublicChats")[@"type"][@"@type"],
 						  @"publicChatTypeHasUsername");
 	ctAnswer(c, @{@"@type" : @"chats", @"chat_ids" : @[@(9)]});
@@ -400,7 +406,7 @@ static NSDictionary *ctPlain(NSDictionary *d) {
 
 	__block BOOL allowed = NO;
 	__block NSString *reason = @"x";
-	[c checkCreatedPublicChatsLimitForType:@"username"
+	[[TGSettingsStore shared] checkCreatedPublicChatsLimitForType:@"username"
 								completion:^(BOOL ok, NSString *why){
 		allowed = ok; reason = why;
 	}];
@@ -409,7 +415,7 @@ static NSDictionary *ctPlain(NSDictionary *d) {
 	XCTAssertNil(reason);
 
 	__block NSString *word = nil;
-	[c checkUsername:@"crew" forChat:9 completion:^(NSString *w){ word = w; }];
+	[[TGSettingsStore shared] checkUsername:@"crew" forChat:9 completion:^(NSString *w){ word = w; }];
 	ctAnswer(c, @{@"@type" : @"checkChatUsernameResultUsernameOccupied"});
 	XCTAssertEqualObjects(word, @"occupied");
 }
@@ -441,7 +447,7 @@ static NSDictionary *ctPlain(NSDictionary *d) {
 	TGClient *c = CT();
 	c.chatsById[@(5)] = [@{@"id" : @(5), @"title" : @"Quiet"} mutableCopy];
 	__block NSArray *rows = nil;
-	[c notificationExceptionsWithCompletion:^(NSArray *r){ rows = r; }];
+	[[TGSettingsStore shared] notificationExceptionsWithCompletion:^(NSArray *r){ rows = r; }];
 	XCTAssertTrue(ctLast(c, @"getChatNotificationSettingsExceptions")[@"scope"] ==
 				  [NSNull null]);
 	ctAnswer(c, @{@"@type" : @"chats", @"chat_ids" : @[@(5)]});
@@ -638,7 +644,7 @@ static NSDictionary *ctPlain(NSDictionary *d) {
 	XCTAssertTrue(location);
 
 	__block BOOL tag = NO;
-	[c setMemberTag:@"Lead" forUser:42 inChat:77 completion:^(BOOL ok){ tag = ok; }];
+	[[TGGroupStore shared] setMemberTag:@"Lead" forUser:42 inChat:77 completion:^(BOOL ok){ tag = ok; }];
 	NSDictionary *r = ctLast(c, @"setChatMemberTag");
 	XCTAssertEqualObjects(r[@"user_id"], @(42));
 	XCTAssertEqualObjects(r[@"tag"], @"Lead");
@@ -681,7 +687,7 @@ static NSDictionary *ctPlain(NSDictionary *d) {
 - (void)testSecretChatCreation_AlsoResolvesTheInnerId {
 	TGClient *c = CT();
 	__block int64_t got = 0;
-	[c createSecretChatWithUser:42 completion:^(int64_t chatId){ got = chatId; }];
+	[[TGProfileStore shared] createSecretChatWithUser:42 completion:^(int64_t chatId){ got = chatId; }];
 	ctAnswer(c, ctPlain(@{@"@type" : @"chat", @"id" : @(700),
 						  @"type" : @{@"@type" : @"chatTypeSecret",
 									  @"secret_chat_id" : @(12),
@@ -694,25 +700,25 @@ static NSDictionary *ctPlain(NSDictionary *d) {
 
 - (void)testSessionSecretChatSwitch_AndTheThreeResolvers {
 	TGClient *c = CT();
-	[c toggleSession:900 canAcceptSecretChats:NO];
+	[[TGSessionsStore shared] toggleSession:900 canAcceptSecretChats:NO];
 	NSDictionary *r = ctLast(c, @"toggleSessionCanAcceptSecretChats");
 	XCTAssertEqualObjects(r[@"session_id"], @(900));
 	XCTAssertEqualObjects(r[@"can_accept_secret_chats"], @NO);
 
 	__block int64_t basic = 0;
-	[c chatForBasicGroup:12 completion:^(int64_t chatId){ basic = chatId; }];
+	[[TGSettingsStore shared] chatForBasicGroup:12 completion:^(int64_t chatId){ basic = chatId; }];
 	XCTAssertEqualObjects(ctLast(c, @"createBasicGroupChat")[@"basic_group_id"], @(12));
 	ctAnswer(c, @{@"@type" : @"chat", @"id" : @(700)});
 	XCTAssertEqual(basic, (int64_t)700);
 
 	__block int64_t super = 0;
-	[c chatForSupergroup:13 completion:^(int64_t chatId){ super = chatId; }];
+	[[TGSettingsStore shared] chatForSupergroup:13 completion:^(int64_t chatId){ super = chatId; }];
 	XCTAssertEqualObjects(ctLast(c, @"createSupergroupChat")[@"supergroup_id"], @(13));
 	ctAnswer(c, @{@"@type" : @"chat", @"id" : @(701)});
 	XCTAssertEqual(super, (int64_t)701);
 
 	__block int64_t secret = 0;
-	[c chatForSecretChat:14 completion:^(int64_t chatId){ secret = chatId; }];
+	[[TGSettingsStore shared] chatForSecretChat:14 completion:^(int64_t chatId){ secret = chatId; }];
 	XCTAssertEqualObjects(ctLast(c, @"createSecretChat")[@"secret_chat_id"], @(14));
 	ctAnswer(c, @{@"@type" : @"chat", @"id" : @(702)});
 	XCTAssertEqual(secret, (int64_t)702);

@@ -348,7 +348,7 @@ __weak typeof(self) weakSelf = self;
 		NSString *kind = type[@"@type"];
 
 		void (^collect)(NSArray *) = ^(NSArray *members){
-			TGClient *me = weakSelf;
+			TGClient *me = [TGClient shared];
 			NSMutableArray *out = [NSMutableArray array];
 			for (NSDictionary *member in members){
 				NSDictionary *row = TGMemberRowForMember(member,
@@ -700,7 +700,7 @@ __weak typeof(self) weakSelf = self;
 	[[TGClient shared] request:@{@"@type" : @"getChatSimilarChatCount", @"chat_id" : @(chatId),
 					@"return_local" : @NO}
 	   completion:^(NSDictionary *countAnswer){
-		TGClient *me = weakSelf;
+		TGClient *me = [TGClient shared];
 		NSInteger total = [countAnswer[@"count"] integerValue];
 		[me request:@{@"@type" : @"getChatSimilarChats", @"chat_id" : @(chatId)}
 		 completion:^(NSDictionary *result){
@@ -771,7 +771,7 @@ __weak typeof(self) weakSelf = self;
 [[TGClient shared] request:@{@"@type" : @"getSuitablePersonalChats"}
 	   completion:^(NSDictionary *result){
 		if (completion)
-			completion(TGChatRowsForIds(self, result[@"chat_ids"]));
+			completion(TGChatRowsForIds([TGClient shared], result[@"chat_ids"]));
 	}];
 }
 
@@ -782,7 +782,7 @@ __weak typeof(self) weakSelf = self;
 			if (completion) completion(nil);
 			return;
 		}
-		TGClient *me = weakSelf;
+		TGClient *me = [TGClient shared];
 		[me request:@{@"@type" : @"getSupergroup", @"supergroup_id" : @(supergroupId)}
 		 completion:^(NSDictionary *group){
 			if ([group[@"@type"] isEqualToString:@"error"]){

@@ -6,6 +6,8 @@
 #import "TGTestRunner.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
+#import "TGStoreTestSupport.h"
+#import "TGSettingsStore.h"
 
 static TGClient *F(void) {
 	TGClient *c = TGClient.shared;

@@ -9,6 +9,10 @@
 #import "TGMessageStore.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
+#import "TGStoreTestSupport.h"
+#import "TGDevStore.h"
+#import "TGGroupStore.h"
+#import "TGProfileStore.h"
 
 @interface TGClientTier2CommunitiesTests : XCTestCase @end
 
@@ -77,7 +81,7 @@ static NSDictionary *t2Message(NSDictionary *content) {
 - (void)testCreateCommunity_SendsTheNameChatAndVisibility {
 	TGClient *c = T2();
 	__block int64_t made = 0;
-	[c createCommunity:@"Work" chatId:42 hidden:YES
+	[[TGGroupStore shared] createCommunity:@"Work" chatId:42 hidden:YES
 			completion:^(int64_t communityId, NSString *error){ made = communityId; }];
 	NSDictionary *request = t2Last(c, @"createCommunity");
 	XCTAssertEqualObjects(request[@"name"], @"Work");
@@ -105,13 +109,13 @@ static NSDictionary *t2Message(NSDictionary *content) {
 	XCTAssertEqualObjects(got[@"addChatRequestCount"], @(2));
 	XCTAssertEqualObjects(got[@"chats"][0][@"chatId"], @(77));
 	XCTAssertEqualObjects(got[@"chats"][0][@"canViewHistory"], @YES);
-	XCTAssertNotNil([c cachedCommunityFullInfo:12]);
+	XCTAssertNotNil([[TGProfileStore shared] cachedCommunityFullInfo:12]);
 }
 
 - (void)testSetCommunityName_SendsTheIdAndTheName {
 	TGClient *c = T2();
 	__block BOOL done = NO;
-	[c setCommunityName:12 name:@"Studio"
+	[[TGGroupStore shared] setCommunityName:12 name:@"Studio"
 			 completion:^(BOOL ok, NSString *error){ done = ok; }];
 	NSDictionary *request = t2Last(c, @"setCommunityName");
 	XCTAssertEqualObjects(request[@"community_id"], @(12));
@@ -122,7 +126,7 @@ static NSDictionary *t2Message(NSDictionary *content) {
 
 - (void)testSetCommunityPhoto_SendsAStaticPhotoAndHonoursRemoval {
 	TGClient *c = T2();
-	[c setCommunityPhoto:12 path:@"/tmp/photo.jpg" completion:nil];
+	[[TGGroupStore shared] setCommunityPhoto:12 path:@"/tmp/photo.jpg" completion:nil];
 	NSDictionary *request = t2Last(c, @"setCommunityPhoto");
 	XCTAssertEqualObjects(request[@"community_id"], @(12));
 	XCTAssertEqualObjects(request[@"photo"][@"@type"], @"inputChatPhotoStatic");
@@ -130,14 +134,14 @@ static NSDictionary *t2Message(NSDictionary *content) {
 	XCTAssertEqualObjects(request[@"photo"][@"photo"][@"path"], @"/tmp/photo.jpg");
 
 	t2Answer(c, @{@"@type" : @"ok"});
-	[c setCommunityPhoto:12 path:nil completion:nil];
+	[[TGGroupStore shared] setCommunityPhoto:12 path:nil completion:nil];
 	NSDictionary *clear = t2Last(c, @"setCommunityPhoto");
 	XCTAssertTrue(clear[@"photo"] == [NSNull null]);
 }
 
 - (void)testSetCommunityPermissions_CarriesTheOnePermissionObject {
 	TGClient *c = T2();
-	[c setCommunityPermissions:12 canEditChatList:YES completion:nil];
+	[[TGGroupStore shared] setCommunityPermissions:12 canEditChatList:YES completion:nil];
 	NSDictionary *request = t2Last(c, @"setCommunityPermissions");
 	XCTAssertEqualObjects(request[@"community_id"], @(12));
 	XCTAssertEqualObjects(request[@"permissions"][@"@type"], @"communityPermissions");
@@ -147,13 +151,13 @@ static NSDictionary *t2Message(NSDictionary *content) {
 - (void)testDeleteCommunity_SendsTheIdAndDropsTheCachedRow {
 	TGClient *c = T2();
 	[c applyCommunityUpdate:@{@"community" : @{@"id" : @(12), @"name" : @"Work"}}];
-	XCTAssertEqual(c.communities.count, (NSUInteger)1);
+	XCTAssertEqual([[TGGroupStore shared] communities].count, (NSUInteger)1);
 	__block BOOL done = NO;
-	[c deleteCommunity:12 completion:^(BOOL ok, NSString *error){ done = ok; }];
+	[[TGGroupStore shared] deleteCommunity:12 completion:^(BOOL ok, NSString *error){ done = ok; }];
 	XCTAssertEqualObjects(t2Last(c, @"deleteCommunity")[@"community_id"], @(12));
 	t2Answer(c, @{@"@type" : @"ok"});
 	XCTAssertTrue(done);
-	XCTAssertEqual(c.communities.count, (NSUInteger)0);
+	XCTAssertEqual([[TGGroupStore shared] communities].count, (NSUInteger)0);
 }
 
 - (void)testCommunityUpdate_KeepsTheOrderAndTheStatusWord {
@@ -162,8 +166,8 @@ static NSDictionary *t2Message(NSDictionary *content) {
 			@"have_access" : @YES, @"status" : @{@"@type" : @"communityMemberStatusCreator"}}}];
 	[c applyCommunityUpdate:@{@"community" : @{@"id" : @(2), @"name" : @"B",
 			@"have_access" : @YES, @"status" : @{@"@type" : @"communityMemberStatusMember"}}}];
-	XCTAssertEqualObjects(c.communities[0][@"name"], @"B");
-	XCTAssertEqualObjects(c.communities[1][@"status"], @"Owner");
+	XCTAssertEqualObjects([[TGGroupStore shared] communities][0][@"name"], @"B");
+	XCTAssertEqualObjects([[TGGroupStore shared] communities][1][@"status"], @"Owner");
 }
 
 #pragma mark - quick replies
@@ -214,7 +218,7 @@ static NSDictionary *t2Message(NSDictionary *content) {
 	[c deleteQuickReplyShortcut:4 completion:nil];
 	XCTAssertEqualObjects(t2Last(c, @"deleteQuickReplyShortcut")[@"shortcut_id"], @(4));
 	t2Answer(c, @{@"@type" : @"ok"});
-	XCTAssertEqual(c.quickReplyShortcuts.count, (NSUInteger)0);
+	XCTAssertEqual([[TGMessageStore shared] quickReplyShortcuts].count, (NSUInteger)0);
 }
 
 - (void)testReorderQuickReplyShortcuts_SendsTheWholeOrder {
@@ -462,15 +466,15 @@ static NSDictionary *t2Message(NSDictionary *content) {
 							@"description" : @{@"@type" : @"formattedText", @"text" : @""},
 							@"url" : @"https://t.me/x"}],
 					  @"removed_actions" : @[]}];
-	XCTAssertEqual(c.suggestedActions.count, (NSUInteger)2);
-	NSDictionary *row = c.suggestedActions[1];
+	XCTAssertEqual([[TGDevStore shared] suggestedActions].count, (NSUInteger)2);
+	NSDictionary *row = [[TGDevStore shared] suggestedActions][1];
 	XCTAssertEqualObjects(row[@"title"], @"Nickname");
-	[c hideSuggestedAction:row completion:nil];
+	[[TGDevStore shared] hideSuggestedAction:row completion:nil];
 	NSDictionary *request = t2Last(c, @"hideSuggestedAction");
 	XCTAssertEqualObjects(request[@"action"][@"@type"], @"suggestedActionCustom");
 	XCTAssertEqualObjects(request[@"action"][@"name"], @"Nickname");
 	t2Answer(c, @{@"@type" : @"ok"});
-	XCTAssertEqual(c.suggestedActions.count, (NSUInteger)1);
+	XCTAssertEqual([[TGDevStore shared] suggestedActions].count, (NSUInteger)1);
 }
 
 #pragma mark - AI text and rich messages

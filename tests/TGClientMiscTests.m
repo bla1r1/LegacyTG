@@ -12,6 +12,9 @@
 #import "TGClient.h"
 #import "TGClientInternal.h"
 #import "TGSettingsStore.h"
+#import "TGStoreTestSupport.h"
+#import "TGAccountStore.h"
+#import "TGSessionsStore.h"
 
 @interface TGClientMiscTests : XCTestCase @end
 
@@ -71,7 +74,7 @@ static void answerMisc(TGClient *c, NSString *type, NSDictionary *answer) {
 	TGClient *c = MiscClient();
 	__block NSDictionary *got = nil;
 	__block NSString *failure = nil;
-	[c savedOrderInfoWithCompletion:^(NSDictionary *order, NSString *error){
+	[[TGSettingsStore shared] savedOrderInfoWithCompletion:^(NSDictionary *order, NSString *error){
 		got = order; failure = error;
 	}];
 	XCTAssertEqualObjects(lastMisc(c, @"getSavedOrderInfo")[@"@type"],
@@ -89,7 +92,7 @@ static void answerMisc(TGClient *c, NSString *type, NSDictionary *answer) {
 	TGClient *c = MiscClient();
 	__block NSDictionary *got = @{};
 	__block NSString *failure = nil;
-	[c savedOrderInfoWithCompletion:^(NSDictionary *order, NSString *error){
+	[[TGSettingsStore shared] savedOrderInfoWithCompletion:^(NSDictionary *order, NSString *error){
 		got = order; failure = error;
 	}];
 	answerMisc(c, @"getSavedOrderInfo", @{@"@type" : @"error",
@@ -102,7 +105,7 @@ static void answerMisc(TGClient *c, NSString *type, NSDictionary *answer) {
 	TGClient *c = MiscClient();
 	__block BOOL ok = YES;
 	__block NSString *failure = nil;
-	[c deleteSavedOrderInfoWithCompletion:^(BOOL good, NSString *error){
+	[[TGSettingsStore shared] deleteSavedOrderInfoWithCompletion:^(BOOL good, NSString *error){
 		ok = good; failure = error;
 	}];
 	XCTAssertEqualObjects(lastMisc(c, @"deleteSavedOrderInfo")[@"@type"],
@@ -116,7 +119,7 @@ static void answerMisc(TGClient *c, NSString *type, NSDictionary *answer) {
 - (void)testBankCardInfo_StripsSpacesBeforeTheLookup {
 	TGClient *c = MiscClient();
 	__block NSDictionary *got = nil;
-	[c bankCardInfoForNumber:@"4111 1111 1111 1111"
+	[[TGSettingsStore shared] bankCardInfoForNumber:@"4111 1111 1111 1111"
 				  completion:^(NSDictionary *info, NSString *error){ got = info; }];
 	NSDictionary *request = lastMisc(c, @"getBankCardInfo");
 	XCTAssertEqualObjects(request[@"bank_card_number"], @"4111111111111111");
@@ -132,7 +135,7 @@ static void answerMisc(TGClient *c, NSString *type, NSDictionary *answer) {
 - (void)testBankCardInfo_AShortNumberNeverLeavesTheDevice {
 	TGClient *c = MiscClient();
 	__block NSString *failure = nil;
-	[c bankCardInfoForNumber:@"4111"
+	[[TGSettingsStore shared] bankCardInfoForNumber:@"4111"
 				  completion:^(NSDictionary *info, NSString *error){ failure = error; }];
 	XCTAssertEqual(countMisc(c, @"getBankCardInfo"), (NSUInteger)0);
 	XCTAssertTrue(failure.length > 0);
@@ -141,7 +144,7 @@ static void answerMisc(TGClient *c, NSString *type, NSDictionary *answer) {
 - (void)testAddOffer_BuildsEverySendOptionAndTheStarPrice {
 	TGClient *c = MiscClient();
 	__block NSDictionary *sent = nil;
-	[c addOfferToMessage:77 inChat:-100123 starCount:250 sendDate:0
+	[[TGSettingsStore shared] addOfferToMessage:77 inChat:-100123 starCount:250 sendDate:0
 			  completion:^(NSDictionary *message, NSString *error){ sent = message; }];
 	NSDictionary *request = lastMisc(c, @"addOffer");
 	XCTAssertEqualObjects(request[@"chat_id"], @(-100123));
@@ -164,7 +167,7 @@ static void answerMisc(TGClient *c, NSString *type, NSDictionary *answer) {
 - (void)testAddOffer_NoPriceSendsNothing {
 	TGClient *c = MiscClient();
 	__block NSString *failure = nil;
-	[c addOfferToMessage:77 inChat:-100123 starCount:0 sendDate:0
+	[[TGSettingsStore shared] addOfferToMessage:77 inChat:-100123 starCount:0 sendDate:0
 			  completion:^(NSDictionary *message, NSString *error){ failure = error; }];
 	XCTAssertEqual(countMisc(c, @"addOffer"), (NSUInteger)0);
 	XCTAssertTrue(failure.length > 0);
@@ -180,7 +183,7 @@ static void answerMisc(TGClient *c, NSString *type, NSDictionary *answer) {
 							@"city" : @"London",
 							@"postal_code" : @"SW1A 1AA",
 							@"country_code" : @"GB"};
-	[c validateOrderInfoForInvoice:@"invoice-name" order:order allowSave:YES
+	[[TGSettingsStore shared] validateOrderInfoForInvoice:@"invoice-name" order:order allowSave:YES
 						completion:^(NSDictionary *result, NSString *error){
 		validated = result;
 	}];
@@ -203,7 +206,7 @@ static void answerMisc(TGClient *c, NSString *type, NSDictionary *answer) {
 - (void)testValidateOrderInfo_NoInvoiceNameSendsNothing {
 	TGClient *c = MiscClient();
 	__block NSString *failure = nil;
-	[c validateOrderInfoForInvoice:@"  " order:@{} allowSave:NO
+	[[TGSettingsStore shared] validateOrderInfoForInvoice:@"  " order:@{} allowSave:NO
 						completion:^(NSDictionary *result, NSString *error){
 		failure = error;
 	}];
@@ -216,7 +219,7 @@ static void answerMisc(TGClient *c, NSString *type, NSDictionary *answer) {
 - (void)testSendCallLog_WritesALocalFileForTheCallMessage {
 	TGClient *c = MiscClient();
 	__block BOOL ok = NO;
-	[c sendCallLog:@"LegacyTG call log\nDuration: 12 s"
+	[[TGSettingsStore shared] sendCallLog:@"LegacyTG call log\nDuration: 12 s"
 		forMessage:55 inChat:-1007
 		completion:^(BOOL good, NSString *error){ ok = good; }];
 	NSDictionary *request = lastMisc(c, @"sendCallLog");
@@ -240,7 +243,7 @@ static void answerMisc(TGClient *c, NSString *type, NSDictionary *answer) {
 - (void)testSendCallLog_RefusalCarriesTheServersSentence {
 	TGClient *c = MiscClient();
 	__block NSString *failure = nil;
-	[c sendCallLog:@"log" forMessage:55 inChat:-1007
+	[[TGSettingsStore shared] sendCallLog:@"log" forMessage:55 inChat:-1007
 		completion:^(BOOL ok, NSString *error){ failure = error; }];
 	answerMisc(c, @"sendCallLog", @{@"@type" : @"error",
 			@"code" : @400, @"message" : @"Call log is too big"});
@@ -250,7 +253,7 @@ static void answerMisc(TGClient *c, NSString *type, NSDictionary *answer) {
 - (void)testSendCallDebugInformation_NamesTheCallAndCarriesTheJSON {
 	TGClient *c = MiscClient();
 	__block BOOL ok = NO;
-	[c sendCallDebugInformation:@"{\"duration\":12}"
+	[[TGSettingsStore shared] sendCallDebugInformation:@"{\"duration\":12}"
 					 forMessage:55
 						 inChat:-1007
 					 completion:^(BOOL good, NSString *error){ ok = good; }];
@@ -264,7 +267,7 @@ static void answerMisc(TGClient *c, NSString *type, NSDictionary *answer) {
 - (void)testSendCallDebugInformation_EmptyTextNeverLeavesTheDevice {
 	TGClient *c = MiscClient();
 	__block NSString *failure = nil;
-	[c sendCallDebugInformation:@"  " forMessage:55 inChat:-1007
+	[[TGSettingsStore shared] sendCallDebugInformation:@"  " forMessage:55 inChat:-1007
 					 completion:^(BOOL ok, NSString *error){ failure = error; }];
 	XCTAssertEqual(countMisc(c, @"sendCallDebugInformation"), (NSUInteger)0);
 	XCTAssertTrue(failure.length > 0);
@@ -276,7 +279,7 @@ static void answerMisc(TGClient *c, NSString *type, NSDictionary *answer) {
 	TGClient *c = MiscClient();
 	__block NSArray *sessions = nil;
 	__block NSInteger ttl = 0;
-	[c sessionsWithInactiveTtlCompletion:^(NSArray *list, NSInteger days){
+	[[TGSessionsStore shared] sessionsWithInactiveTtlCompletion:^(NSArray *list, NSInteger days){
 		sessions = list; ttl = days;
 	}];
 	answerMisc(c, @"getActiveSessions", @{@"@type" : @"sessions",
@@ -296,7 +299,7 @@ static void answerMisc(TGClient *c, NSString *type, NSDictionary *answer) {
 	TGClient *c = MiscClient();
 	__block BOOL ok = YES;
 	__block NSString *failure = nil;
-	[c toggleSession:5 canAcceptCalls:NO completion:^(BOOL good, NSString *error){
+	[[TGSessionsStore shared] toggleSession:5 canAcceptCalls:NO completion:^(BOOL good, NSString *error){
 		ok = good; failure = error;
 	}];
 	NSDictionary *request = lastMisc(c, @"toggleSessionCanAcceptCalls");
@@ -311,7 +314,7 @@ static void answerMisc(TGClient *c, NSString *type, NSDictionary *answer) {
 - (void)testSetInactiveSessionTtl_SendsTheDaysAndRefusesOutOfRange {
 	TGClient *c = MiscClient();
 	__block BOOL ok = NO;
-	[c setInactiveSessionTtlDays:90 completion:^(BOOL good, NSString *error){ ok = good; }];
+	[[TGSessionsStore shared] setInactiveSessionTtlDays:90 completion:^(BOOL good, NSString *error){ ok = good; }];
 	NSDictionary *request = lastMisc(c, @"setInactiveSessionTtl");
 	XCTAssertEqualObjects(request[@"inactive_session_ttl_days"], @(90));
 	answerMisc(c, @"setInactiveSessionTtl", @{@"@type" : @"ok"});
@@ -319,7 +322,7 @@ static void answerMisc(TGClient *c, NSString *type, NSDictionary *answer) {
 
 	[c.outbox removeAllObjects];
 	__block NSString *failure = nil;
-	[c setInactiveSessionTtlDays:0 completion:^(BOOL good, NSString *error){
+	[[TGSessionsStore shared] setInactiveSessionTtlDays:0 completion:^(BOOL good, NSString *error){
 		failure = error;
 	}];
 	XCTAssertEqual(countMisc(c, @"setInactiveSessionTtl"), (NSUInteger)0,
@@ -333,7 +336,7 @@ static void answerMisc(TGClient *c, NSString *type, NSDictionary *answer) {
 	TGClient *c = MiscClient();
 	__block NSArray *sites = nil;
 	__block NSString *failure = nil;
-	[c connectedWebsitesWithCompletion:^(NSArray *list, NSString *error){
+	[[TGAccountStore shared] connectedWebsitesWithCompletion:^(NSArray *list, NSString *error){
 		sites = list; failure = error;
 	}];
 	answerMisc(c, @"getConnectedWebsites", @{@"@type" : @"connectedWebsites",
@@ -352,7 +355,7 @@ static void answerMisc(TGClient *c, NSString *type, NSDictionary *answer) {
 - (void)testConnectedWebsites_RefusalIsTheServersSentence {
 	TGClient *c = MiscClient();
 	__block NSString *failure = nil;
-	[c connectedWebsitesWithCompletion:^(NSArray *list, NSString *error){
+	[[TGAccountStore shared] connectedWebsitesWithCompletion:^(NSArray *list, NSString *error){
 		failure = error;
 	}];
 	answerMisc(c, @"getConnectedWebsites", @{@"@type" : @"error",
@@ -363,7 +366,7 @@ static void answerMisc(TGClient *c, NSString *type, NSDictionary *answer) {
 - (void)testDisconnectWebsite_NamesTheWebsiteId {
 	TGClient *c = MiscClient();
 	__block BOOL ok = NO;
-	[c disconnectWebsite:9 completion:^(BOOL good, NSString *error){ ok = good; }];
+	[[TGAccountStore shared] disconnectWebsite:9 completion:^(BOOL good, NSString *error){ ok = good; }];
 	XCTAssertEqualObjects(lastMisc(c, @"disconnectWebsite")[@"website_id"], @9);
 	answerMisc(c, @"disconnectWebsite", @{@"@type" : @"ok"});
 	XCTAssertTrue(ok);
@@ -372,7 +375,7 @@ static void answerMisc(TGClient *c, NSString *type, NSDictionary *answer) {
 - (void)testDisconnectAllWebsites_SendsTheOneRequest {
 	TGClient *c = MiscClient();
 	__block BOOL ok = NO;
-	[c disconnectAllWebsitesWithCompletion:^(BOOL good, NSString *error){ ok = good; }];
+	[[TGAccountStore shared] disconnectAllWebsitesWithCompletion:^(BOOL good, NSString *error){ ok = good; }];
 	XCTAssertEqual(countMisc(c, @"disconnectAllWebsites"), (NSUInteger)1);
 	answerMisc(c, @"disconnectAllWebsites", @{@"@type" : @"ok"});
 	XCTAssertTrue(ok);
@@ -383,7 +386,7 @@ static void answerMisc(TGClient *c, NSString *type, NSDictionary *answer) {
 - (void)testPreparedKeyboardButton_ReadsTheButtonAndTheRefusal {
 	TGClient *c = MiscClient();
 	__block NSDictionary *button = nil;
-	[c preparedKeyboardButtonFromBot:42 preparedButtonId:@"prep-1"
+	[[TGSettingsStore shared] preparedKeyboardButtonFromBot:42 preparedButtonId:@"prep-1"
 						  completion:^(NSDictionary *result, NSString *error){
 		button = result;
 	}];
@@ -401,7 +404,7 @@ static void answerMisc(TGClient *c, NSString *type, NSDictionary *answer) {
 
 	[c.outbox removeAllObjects];
 	__block NSString *failure = nil;
-	[c preparedKeyboardButtonFromBot:42 preparedButtonId:@"gone"
+	[[TGSettingsStore shared] preparedKeyboardButtonFromBot:42 preparedButtonId:@"gone"
 						  completion:^(NSDictionary *result, NSString *error){
 		failure = error;
 	}];
@@ -413,7 +416,7 @@ static void answerMisc(TGClient *c, NSString *type, NSDictionary *answer) {
 - (void)testSavePreparedKeyboardButton_BuildsACompleteTextButton {
 	TGClient *c = MiscClient();
 	__block NSString *preparedId = nil;
-	[c savePreparedKeyboardButtonText:@"Send me the file" forUser:42
+	[[TGSettingsStore shared] savePreparedKeyboardButtonText:@"Send me the file" forUser:42
 						   completion:^(NSString *identifier, NSString *error){
 		preparedId = identifier;
 	}];
@@ -433,7 +436,7 @@ static void answerMisc(TGClient *c, NSString *type, NSDictionary *answer) {
 - (void)testSavePreparedKeyboardButton_NoTextSendsNothing {
 	TGClient *c = MiscClient();
 	__block NSString *failure = nil;
-	[c savePreparedKeyboardButtonText:@"  " forUser:42
+	[[TGSettingsStore shared] savePreparedKeyboardButtonText:@"  " forUser:42
 						   completion:^(NSString *identifier, NSString *error){
 		failure = error;
 	}];

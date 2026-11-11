@@ -10,6 +10,10 @@
 #import "TGClient.h"
 #import "TGClientInternal.h"
 #import "TGChatThemeStore.h"
+#import "TGStoreTestSupport.h"
+#import "TGAccountStore.h"
+#import "TGProfileStore.h"
+#import "TGSettingsStore.h"
 
 static TGClient *TPSSettingsClient(void) {
 	TGClient *c = TGClient.shared;
@@ -372,7 +376,7 @@ static void TPSAnswer(TGClient *c, NSDictionary *answer) {
 	TGClient *c = TPSSettingsClient();
 	__block NSString *error = nil;
 	__block NSString *email = @"not-called";
-	[c recoveryEmailAddress:@"wrong" completionWithError:^(NSString *address, NSString *failure){
+	[[TGAccountStore shared] recoveryEmailAddress:@"wrong" completionWithError:^(NSString *address, NSString *failure){
 		email = address;
 		error = failure;
 	}];
@@ -386,7 +390,7 @@ static void TPSAnswer(TGClient *c, NSDictionary *answer) {
 - (void)testPrivacyRule_CountsEveryAllowExceptionKind {
 	TGClient *c = TPSSettingsClient();
 	__block NSString *value = nil;
-	[c privacyRule:@"ShowPhoneNumber" completion:^(NSString *rule){ value = rule; }];
+	[[TGProfileStore shared] privacyRule:@"ShowPhoneNumber" completion:^(NSString *rule){ value = rule; }];
 	NSDictionary *read = TPSLastRequest(c, @"getUserPrivacySettingRules");
 	XCTAssertEqualObjects(read[@"setting"][@"@type"],
 						  @"userPrivacySettingShowPhoneNumber");
@@ -407,7 +411,7 @@ static void TPSAnswer(TGClient *c, NSDictionary *answer) {
 - (void)testPrivacyRule_CountsEveryRestrictExceptionKind {
 	TGClient *c = TPSSettingsClient();
 	__block NSString *value = nil;
-	[c privacyRule:@"ShowPhoneNumber" completion:^(NSString *rule){ value = rule; }];
+	[[TGProfileStore shared] privacyRule:@"ShowPhoneNumber" completion:^(NSString *rule){ value = rule; }];
 	TPSAnswer(c, @{@"@type" : @"userPrivacySettingRules",
 				   @"rules" : @[
 					   @{@"@type" : @"userPrivacySettingRuleRestrictUsers",
@@ -425,7 +429,7 @@ static void TPSAnswer(TGClient *c, NSDictionary *answer) {
 	TGClient *c = TPSSettingsClient();
 	__block BOOL finished = NO;
 	__block BOOL ok = NO;
-	[c setPrivacyRule:@"ShowStatus" to:@"nobody" completion:^(BOOL written, NSString *error){
+	[[TGSettingsStore shared] setPrivacyRule:@"ShowStatus" to:@"nobody" completion:^(BOOL written, NSString *error){
 		finished = YES;
 		ok = written;
 	}];
@@ -450,7 +454,7 @@ static void TPSAnswer(TGClient *c, NSDictionary *answer) {
 	__block NSString *type = nil;
 	__block NSArray *allows = nil;
 	__block NSArray *restricts = nil;
-	[c privacyRuleDetails:@"ShowStatus" completion:^(NSString *ruleType, NSArray *allowUserIds, NSArray *restrictUserIds){
+	[[TGSettingsStore shared] privacyRuleDetails:@"ShowStatus" completion:^(NSString *ruleType, NSArray *allowUserIds, NSArray *restrictUserIds){
 		type = ruleType;
 		allows = allowUserIds;
 		restricts = restrictUserIds;
@@ -472,7 +476,7 @@ static void TPSAnswer(TGClient *c, NSDictionary *answer) {
 - (void)testSetPrivacyRule_WithExplicitAllowAndRestrictUsers {
 	TGClient *c = TPSSettingsClient();
 	__block BOOL done = NO;
-	[c setPrivacyRule:@"ShowProfilePhoto"
+	[[TGSettingsStore shared] setPrivacyRule:@"ShowProfilePhoto"
 				 type:@"nobody"
 		 allowUserIds:@[@(501)]
 	  restrictUserIds:@[@(601), @(602)]
@@ -492,7 +496,7 @@ static void TPSAnswer(TGClient *c, NSDictionary *answer) {
 
 - (void)testSetOption_IntegerStorageOptions {
 	TGClient *c = TPSSettingsClient();
-	[c setOption:@"storage_max_files_size" integerValue:5368709120LL];
+	[[TGSettingsStore shared] setOption:@"storage_max_files_size" integerValue:5368709120LL];
 	NSDictionary *req = TPSLastRequest(c, @"setOption");
 	XCTAssertEqualObjects(req[@"name"], @"storage_max_files_size");
 	XCTAssertEqualObjects(req[@"value"][@"@type"], @"optionValueInteger");

@@ -10,6 +10,11 @@
 #import "TGTestRunner.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
+#import "TGStoreTestSupport.h"
+#import "TGAccountStore.h"
+#import "TGGroupStore.h"
+#import "TGProfileStore.h"
+#import "TGSettingsStore.h"
 
 @interface TGClientUsernamesTests : XCTestCase @end
 
@@ -77,7 +82,7 @@ static void resolveSupergroupUsernamesClient(TGClient *c, int64_t supergroupId) 
 - (void)testAccountUsernames_ReadTheThreeListsFromGetMe {
 	TGClient *c = UsernamesClient();
 	__block NSDictionary *got = nil;
-	[c accountUsernamesWithCompletion:^(NSDictionary *usernames){ got = usernames; }];
+	[[TGAccountStore shared] accountUsernamesWithCompletion:^(NSDictionary *usernames){ got = usernames; }];
 	XCTAssertEqualObjects(lastUsernamesClient(c, @"getMe")[@"@type"], @"getMe");
 
 	replyUsernamesClient(c, @"getMe", @{@"@type" : @"user", @"id" : @(1001),
@@ -94,7 +99,7 @@ static void resolveSupergroupUsernamesClient(TGClient *c, int64_t supergroupId) 
 	TGClient *c = UsernamesClient();
 	__block BOOL called = NO;
 	__block NSDictionary *got = @{};
-	[c accountUsernamesWithCompletion:^(NSDictionary *usernames){
+	[[TGAccountStore shared] accountUsernamesWithCompletion:^(NSDictionary *usernames){
 		called = YES; got = usernames;
 	}];
 	replyUsernamesClient(c, @"getMe", @{@"@type" : @"error", @"code" : @(401),
@@ -106,7 +111,7 @@ static void resolveSupergroupUsernamesClient(TGClient *c, int64_t supergroupId) 
 - (void)testToggleUsernameIsActive_SendsTheNameAndTheFlag {
 	TGClient *c = UsernamesClient();
 	__block BOOL ok = NO;
-	[c toggleUsernameIsActive:@"second" isActive:NO
+	[[TGAccountStore shared] toggleUsernameIsActive:@"second" isActive:NO
 			completion:^(BOOL good, NSString *error){ ok = good; }];
 	NSDictionary *r = lastUsernamesClient(c, @"toggleUsernameIsActive");
 	XCTAssertEqualObjects(r[@"username"], @"second");
@@ -118,7 +123,7 @@ static void resolveSupergroupUsernamesClient(TGClient *c, int64_t supergroupId) 
 - (void)testToggleUsernameIsActive_AnEmptyNameSendsNothing {
 	TGClient *c = UsernamesClient();
 	__block NSString *error = nil;
-	[c toggleUsernameIsActive:@"" isActive:YES
+	[[TGAccountStore shared] toggleUsernameIsActive:@"" isActive:YES
 			completion:^(BOOL ok, NSString *why){ error = why; }];
 	XCTAssertEqual(countUsernamesClient(c, @"toggleUsernameIsActive"), (NSUInteger)0);
 	XCTAssertNotNil(error);
@@ -127,7 +132,7 @@ static void resolveSupergroupUsernamesClient(TGClient *c, int64_t supergroupId) 
 - (void)testReorderActiveUsernames_SendsEveryActiveNameInOrder {
 	TGClient *c = UsernamesClient();
 	__block BOOL ok = NO;
-	[c reorderActiveUsernames:@[@"second", @"main"]
+	[[TGAccountStore shared] reorderActiveUsernames:@[@"second", @"main"]
 			completion:^(BOOL good, NSString *error){ ok = good; }];
 	NSDictionary *r = lastUsernamesClient(c, @"reorderActiveUsernames");
 	XCTAssertEqualObjects(r[@"usernames"], (@[@"second", @"main"]));
@@ -138,7 +143,7 @@ static void resolveSupergroupUsernamesClient(TGClient *c, int64_t supergroupId) 
 - (void)testReorderActiveUsernames_ARejectionKeepsTelegramSWords {
 	TGClient *c = UsernamesClient();
 	__block NSString *error = nil;
-	[c reorderActiveUsernames:@[@"main"]
+	[[TGAccountStore shared] reorderActiveUsernames:@[@"main"]
 			completion:^(BOOL ok, NSString *why){ error = why; }];
 	replyUsernamesClient(c, @"reorderActiveUsernames", @{@"@type" : @"error",
 			@"message" : @"USERNAMES_ACTIVE_TOO_MUCH"});
@@ -150,7 +155,7 @@ static void resolveSupergroupUsernamesClient(TGClient *c, int64_t supergroupId) 
 - (void)testSupergroupSettings_ReadBothRecordsAndFlattenTheTab {
 	TGClient *c = UsernamesClient();
 	__block NSDictionary *settings = nil;
-	[c supergroupSettingsForChat:-70 completion:^(NSDictionary *found){ settings = found; }];
+	[[TGGroupStore shared] supergroupSettingsForChat:-70 completion:^(NSDictionary *found){ settings = found; }];
 	resolveSupergroupUsernamesClient(c, 4);
 	XCTAssertEqual([lastUsernamesClient(c, @"getSupergroup")[@"supergroup_id"] longLongValue], 4LL);
 
@@ -180,7 +185,7 @@ static void resolveSupergroupUsernamesClient(TGClient *c, int64_t supergroupId) 
 	TGClient *c = UsernamesClient();
 	__block BOOL called = NO;
 	__block NSDictionary *settings = @{};
-	[c supergroupSettingsForChat:-70 completion:^(NSDictionary *found){
+	[[TGGroupStore shared] supergroupSettingsForChat:-70 completion:^(NSDictionary *found){
 		called = YES; settings = found;
 	}];
 	replyUsernamesClient(c, @"getChat", @{@"@type" : @"chat", @"id" : @(-70),
@@ -194,7 +199,7 @@ static void resolveSupergroupUsernamesClient(TGClient *c, int64_t supergroupId) 
 - (void)testSetSupergroupUsername_NamesTheSupergroupId {
 	TGClient *c = UsernamesClient();
 	__block BOOL ok = NO;
-	[c setSupergroupUsername:@"walkers" inChat:-70
+	[[TGGroupStore shared] setSupergroupUsername:@"walkers" inChat:-70
 			completion:^(BOOL good, NSString *error){ ok = good; }];
 	resolveSupergroupUsernamesClient(c, 4);
 	NSDictionary *r = lastUsernamesClient(c, @"setSupergroupUsername");
@@ -206,14 +211,14 @@ static void resolveSupergroupUsernamesClient(TGClient *c, int64_t supergroupId) 
 
 - (void)testSetSupergroupUsername_AnEmptyStringRemovesIt {
 	TGClient *c = UsernamesClient();
-	[c setSupergroupUsername:@"" inChat:-70 completion:nil];
+	[[TGGroupStore shared] setSupergroupUsername:@"" inChat:-70 completion:nil];
 	resolveSupergroupUsernamesClient(c, 4);
 	XCTAssertEqualObjects(lastUsernamesClient(c, @"setSupergroupUsername")[@"username"], @"");
 }
 
 - (void)testToggleSupergroupUsernameIsActive_CarriesTheFlag {
 	TGClient *c = UsernamesClient();
-	[c toggleSupergroupUsernameIsActive:@"old_walkers" inChat:-70 isActive:YES
+	[[TGGroupStore shared] toggleSupergroupUsernameIsActive:@"old_walkers" inChat:-70 isActive:YES
 			completion:nil];
 	resolveSupergroupUsernamesClient(c, 4);
 	NSDictionary *r = lastUsernamesClient(c, @"toggleSupergroupUsernameIsActive");
@@ -224,7 +229,7 @@ static void resolveSupergroupUsernamesClient(TGClient *c, int64_t supergroupId) 
 
 - (void)testReorderSupergroupActiveUsernames_SendsTheWholeList {
 	TGClient *c = UsernamesClient();
-	[c reorderSupergroupActiveUsernames:@[@"b", @"a"] inChat:-70 completion:nil];
+	[[TGGroupStore shared] reorderSupergroupActiveUsernames:@[@"b", @"a"] inChat:-70 completion:nil];
 	resolveSupergroupUsernamesClient(c, 4);
 	NSDictionary *r = lastUsernamesClient(c, @"reorderSupergroupActiveUsernames");
 	XCTAssertEqual([r[@"supergroup_id"] longLongValue], 4LL);
@@ -234,7 +239,7 @@ static void resolveSupergroupUsernamesClient(TGClient *c, int64_t supergroupId) 
 - (void)testDisableAllSupergroupUsernames_IsOneRequest {
 	TGClient *c = UsernamesClient();
 	__block BOOL ok = NO;
-	[c disableAllSupergroupUsernamesInChat:-70
+	[[TGGroupStore shared] disableAllSupergroupUsernamesInChat:-70
 			completion:^(BOOL good, NSString *error){ ok = good; }];
 	resolveSupergroupUsernamesClient(c, 4);
 	NSDictionary *r = lastUsernamesClient(c, @"disableAllSupergroupUsernames");
@@ -247,7 +252,7 @@ static void resolveSupergroupUsernamesClient(TGClient *c, int64_t supergroupId) 
 
 - (void)testForumMode_SendsTheFlagAndTheTabsTogether {
 	TGClient *c = UsernamesClient();
-	[c setSupergroupForumInChat:-70 on:YES completion:nil];
+	[[TGGroupStore shared] setSupergroupForumInChat:-70 on:YES completion:nil];
 	resolveSupergroupUsernamesClient(c, 4);
 	NSDictionary *r = lastUsernamesClient(c, @"toggleSupergroupIsForum");
 	XCTAssertEqual([r[@"supergroup_id"] longLongValue], 4LL);
@@ -257,7 +262,7 @@ static void resolveSupergroupUsernamesClient(TGClient *c, int64_t supergroupId) 
 
 - (void)testJoinByRequest_KeepsTheGroupsGuardBotAndAppliesToLinks {
 	TGClient *c = UsernamesClient();
-	[c setSupergroupJoinByRequestInChat:-70 on:YES guardBotUserId:42 completion:nil];
+	[[TGGroupStore shared] setSupergroupJoinByRequestInChat:-70 on:YES guardBotUserId:42 completion:nil];
 	resolveSupergroupUsernamesClient(c, 4);
 	NSDictionary *r = lastUsernamesClient(c, @"toggleSupergroupJoinByRequest");
 	XCTAssertEqual([r[@"supergroup_id"] longLongValue], 4LL);
@@ -268,7 +273,7 @@ static void resolveSupergroupUsernamesClient(TGClient *c, int64_t supergroupId) 
 
 - (void)testHiddenMembers_SendsTheFlag {
 	TGClient *c = UsernamesClient();
-	[c setSupergroupHiddenMembersInChat:-70 on:NO completion:nil];
+	[[TGGroupStore shared] setSupergroupHiddenMembersInChat:-70 on:NO completion:nil];
 	resolveSupergroupUsernamesClient(c, 4);
 	NSDictionary *r = lastUsernamesClient(c, @"toggleSupergroupHasHiddenMembers");
 	XCTAssertEqual([r[@"supergroup_id"] longLongValue], 4LL);
@@ -278,7 +283,7 @@ static void resolveSupergroupUsernamesClient(TGClient *c, int64_t supergroupId) 
 - (void)testBroadcastConversion_HasNoBooleanToSend {
 	TGClient *c = UsernamesClient();
 	__block NSString *error = nil;
-	[c convertSupergroupToBroadcastInChat:-70
+	[[TGGroupStore shared] convertSupergroupToBroadcastInChat:-70
 			completion:^(BOOL ok, NSString *why){ error = why; }];
 	resolveSupergroupUsernamesClient(c, 4);
 	NSDictionary *r = lastUsernamesClient(c, @"toggleSupergroupIsBroadcastGroup");
@@ -291,7 +296,7 @@ static void resolveSupergroupUsernamesClient(TGClient *c, int64_t supergroupId) 
 
 - (void)testAutomaticTranslation_SendsTheFlag {
 	TGClient *c = UsernamesClient();
-	[c setSupergroupAutomaticTranslationInChat:-70 on:YES completion:nil];
+	[[TGGroupStore shared] setSupergroupAutomaticTranslationInChat:-70 on:YES completion:nil];
 	resolveSupergroupUsernamesClient(c, 4);
 	NSDictionary *r = lastUsernamesClient(c, @"toggleSupergroupHasAutomaticTranslation");
 	XCTAssertEqual([r[@"supergroup_id"] longLongValue], 4LL);
@@ -300,7 +305,7 @@ static void resolveSupergroupUsernamesClient(TGClient *c, int64_t supergroupId) 
 
 - (void)testMainProfileTab_MapsTheWordToTDLibsObject {
 	TGClient *c = UsernamesClient();
-	[c setSupergroupMainProfileTab:@"media" inChat:-70 completion:nil];
+	[[TGProfileStore shared] setSupergroupMainProfileTab:@"media" inChat:-70 completion:nil];
 	resolveSupergroupUsernamesClient(c, 4);
 	NSDictionary *r = lastUsernamesClient(c, @"setSupergroupMainProfileTab");
 	XCTAssertEqual([r[@"supergroup_id"] longLongValue], 4LL);
@@ -308,7 +313,7 @@ static void resolveSupergroupUsernamesClient(TGClient *c, int64_t supergroupId) 
 
 	// An unknown word must not produce a constructor TDLib has never heard of.
 	[c.outbox removeAllObjects];
-	[c setSupergroupMainProfileTab:@"nonsense" inChat:-70 completion:nil];
+	[[TGProfileStore shared] setSupergroupMainProfileTab:@"nonsense" inChat:-70 completion:nil];
 	resolveSupergroupUsernamesClient(c, 4);
 	XCTAssertEqualObjects(lastUsernamesClient(c, @"setSupergroupMainProfileTab")[@"main_profile_tab"][@"@type"],
 						  @"profileTabPosts");
@@ -333,7 +338,7 @@ static void resolveSupergroupUsernamesClient(TGClient *c, int64_t supergroupId) 
 - (void)testDefaultGroupRights_SendsTheRightsObject {
 	TGClient *c = UsernamesClient();
 	__block BOOL ok = NO;
-	[c setDefaultGroupAdministratorRightsPreset:@"posting"
+	[[TGGroupStore shared] setDefaultGroupAdministratorRightsPreset:@"posting"
 			completion:^(BOOL good, NSString *error){ ok = good; }];
 	NSDictionary *r = lastUsernamesClient(c, @"setDefaultGroupAdministratorRights");
 	NSDictionary *rights = r[@"default_group_administrator_rights"];
@@ -347,7 +352,7 @@ static void resolveSupergroupUsernamesClient(TGClient *c, int64_t supergroupId) 
 	TGClient *c = UsernamesClient();
 	__block BOOL ok = YES;
 	__block NSString *error = nil;
-	[c setDefaultChannelAdministratorRightsPreset:@"full"
+	[[TGGroupStore shared] setDefaultChannelAdministratorRightsPreset:@"full"
 			completion:^(BOOL good, NSString *why){ ok = good; error = why; }];
 	XCTAssertNotNil(lastUsernamesClient(c, @"setDefaultChannelAdministratorRights")
 			[@"default_channel_administrator_rights"]);
@@ -362,7 +367,7 @@ static void resolveSupergroupUsernamesClient(TGClient *c, int64_t supergroupId) 
 - (void)testBasicGroupInfo_ReadsTheRecordAndTheChatName {
 	TGClient *c = UsernamesClient();
 	__block NSDictionary *info = nil;
-	[c basicGroupInfo:12 completion:^(NSDictionary *found){ info = found; }];
+	[[TGSettingsStore shared] basicGroupInfo:12 completion:^(NSDictionary *found){ info = found; }];
 	XCTAssertEqual([lastUsernamesClient(c, @"getBasicGroup")[@"basic_group_id"] longLongValue], 12LL);
 
 	replyUsernamesClient(c, @"getBasicGroup", @{@"@type" : @"basicGroup", @"id" : @(12),
@@ -382,7 +387,7 @@ static void resolveSupergroupUsernamesClient(TGClient *c, int64_t supergroupId) 
 - (void)testBasicGroupInfo_AnErrorAnswersNil {
 	TGClient *c = UsernamesClient();
 	__block BOOL called = NO;
-	[c basicGroupInfo:12 completion:^(NSDictionary *found){ called = YES; }];
+	[[TGSettingsStore shared] basicGroupInfo:12 completion:^(NSDictionary *found){ called = YES; }];
 	replyUsernamesClient(c, @"getBasicGroup", @{@"@type" : @"error",
 			@"message" : @"Basic group not found"});
 	XCTAssertTrue(called);

@@ -9,6 +9,9 @@
 #import "TGTestRunner.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
+#import "TGStoreTestSupport.h"
+#import "TGGroupStore.h"
+#import "TGSettingsStore.h"
 
 @interface TGClientNotificationsForumTests : XCTestCase @end
 
@@ -139,7 +142,7 @@ static NSDictionary *topicNF(int64_t chatId, int32_t topicId, NSString *name) {
 - (void)testSavedNotificationSounds_ReadsTheList {
 	TGClient *c = NF();
 	__block NSArray *got = nil;
-	[c savedNotificationSoundsWithCompletion:^(NSArray *sounds){ got = sounds; }];
+	[[TGSettingsStore shared] savedNotificationSoundsWithCompletion:^(NSArray *sounds){ got = sounds; }];
 
 	XCTAssertNotNil(lastNF(c, @"getSavedNotificationSounds"));
 	answerNF(c, plainNF(@{@"@type" : @"notificationSounds",
@@ -157,7 +160,7 @@ static NSDictionary *topicNF(int64_t chatId, int32_t topicId, NSString *name) {
 - (void)testSavedNotificationSounds_AnErrorReadsAsNoCustomSounds {
 	TGClient *c = NF();
 	__block NSArray *got = nil;
-	[c savedNotificationSoundsWithCompletion:^(NSArray *sounds){ got = sounds; }];
+	[[TGSettingsStore shared] savedNotificationSoundsWithCompletion:^(NSArray *sounds){ got = sounds; }];
 	answerNF(c, @{@"@type" : @"error", @"code" : @(500),
 				  @"message" : @"Internal Server Error"});
 	XCTAssertEqual(got.count, 0);
@@ -166,7 +169,7 @@ static NSDictionary *topicNF(int64_t chatId, int32_t topicId, NSString *name) {
 - (void)testSavedNotificationSound_ReadsOneById {
 	TGClient *c = NF();
 	__block NSDictionary *got = nil;
-	[c savedNotificationSound:12 completion:^(NSDictionary *sound){ got = sound; }];
+	[[TGSettingsStore shared] savedNotificationSound:12 completion:^(NSDictionary *sound){ got = sound; }];
 
 	XCTAssertEqualObjects(lastNF(c, @"getSavedNotificationSound")[@"notification_sound_id"],
 						   @(12));
@@ -177,7 +180,7 @@ static NSDictionary *topicNF(int64_t chatId, int32_t topicId, NSString *name) {
 - (void)testSavedNotificationSound_A404IsNil {
 	TGClient *c = NF();
 	__block NSDictionary *got = @{};
-	[c savedNotificationSound:99 completion:^(NSDictionary *sound){ got = sound; }];
+	[[TGSettingsStore shared] savedNotificationSound:99 completion:^(NSDictionary *sound){ got = sound; }];
 	answerNF(c, @{@"@type" : @"error", @"code" : @(404),
 				  @"message" : @"Not Found"});
 	XCTAssertNil(got);
@@ -191,7 +194,7 @@ static NSDictionary *topicNF(int64_t chatId, int32_t topicId, NSString *name) {
 										 attributes:nil];
 	__block NSDictionary *got = nil;
 	__block NSString *gotError = nil;
-	[c addSavedNotificationSoundAtPath:path
+	[[TGSettingsStore shared] addSavedNotificationSoundAtPath:path
 							completion:^(NSDictionary *sound, NSString *error){
 		got = sound;
 		gotError = error;
@@ -209,7 +212,7 @@ static NSDictionary *topicNF(int64_t chatId, int32_t topicId, NSString *name) {
 - (void)testAddSavedNotificationSound_MissingFileDoesNotAskTelegram {
 	TGClient *c = NF();
 	__block NSString *gotError = nil;
-	[c addSavedNotificationSoundAtPath:@"/no/such/tg.mp3"
+	[[TGSettingsStore shared] addSavedNotificationSoundAtPath:@"/no/such/tg.mp3"
 							completion:^(NSDictionary *sound, NSString *error){
 		gotError = error;
 	}];
@@ -224,7 +227,7 @@ static NSDictionary *topicNF(int64_t chatId, int32_t topicId, NSString *name) {
 	[[NSFileManager defaultManager] createFileAtPath:path contents:[NSData data]
 										 attributes:nil];
 	__block NSString *gotError = nil;
-	[c addSavedNotificationSoundAtPath:path
+	[[TGSettingsStore shared] addSavedNotificationSoundAtPath:path
 							completion:^(NSDictionary *sound, NSString *error){
 		gotError = error;
 	}];
@@ -238,7 +241,7 @@ static NSDictionary *topicNF(int64_t chatId, int32_t topicId, NSString *name) {
 	TGClient *c = NF();
 	__block BOOL ok = NO;
 	__block NSString *gotError = nil;
-	[c removeSavedNotificationSound:11 completion:^(BOOL done, NSString *error){
+	[[TGSettingsStore shared] removeSavedNotificationSound:11 completion:^(BOOL done, NSString *error){
 		ok = done;
 		gotError = error;
 	}];
@@ -253,7 +256,7 @@ static NSDictionary *topicNF(int64_t chatId, int32_t topicId, NSString *name) {
 	TGClient *c = NF();
 	__block BOOL ok = YES;
 	__block NSString *gotError = nil;
-	[c removeSavedNotificationSound:11 completion:^(BOOL done, NSString *error){
+	[[TGSettingsStore shared] removeSavedNotificationSound:11 completion:^(BOOL done, NSString *error){
 		ok = done;
 		gotError = error;
 	}];
@@ -271,7 +274,7 @@ static NSDictionary *topicNF(int64_t chatId, int32_t topicId, NSString *name) {
 	[c handleUpdate:plainNF(@{@"@type" : @"updateActiveNotifications",
 		@"groups" : @[groupNF(7, 77, @[notificationNF(9, @"half a sentence")])]})];
 
-	NSArray *groups = c.activeNotificationGroups;
+	NSArray *groups = [[TGSettingsStore shared] activeNotificationGroups];
 	XCTAssertEqual(groups.count, 1);
 	XCTAssertEqualObjects(groups[0][@"id"], @(7));
 	XCTAssertEqualObjects(groups[0][@"chatTitle"], @"Design");
@@ -295,7 +298,7 @@ static NSDictionary *topicNF(int64_t chatId, int32_t topicId, NSString *name) {
 		@"added_notifications" : @[notificationNF(10, @"new")],
 		@"removed_notification_ids" : @[@(9)]})];
 
-	NSArray *rows = c.activeNotificationGroups[0][@"notifications"];
+	NSArray *rows = [[TGSettingsStore shared] activeNotificationGroups][0][@"notifications"];
 	XCTAssertEqual(rows.count, 1);
 	XCTAssertEqualObjects(rows[0][@"id"], @(10));
 	XCTAssertEqualObjects(rows[0][@"text"], @"new");
@@ -312,7 +315,7 @@ static NSDictionary *topicNF(int64_t chatId, int32_t topicId, NSString *name) {
 		@"notification_group_id" : @(7),
 		@"notification" : notificationNF(10, @"edited")})];
 
-	NSArray *rows = c.activeNotificationGroups[0][@"notifications"];
+	NSArray *rows = [[TGSettingsStore shared] activeNotificationGroups][0][@"notifications"];
 	XCTAssertEqual(rows.count, 2);
 	XCTAssertEqualObjects(rows[1][@"id"], @(10));
 	XCTAssertEqualObjects(rows[1][@"text"], @"edited");
@@ -324,7 +327,7 @@ static NSDictionary *topicNF(int64_t chatId, int32_t topicId, NSString *name) {
 		@"groups" : @[groupNF(7, 77, @[notificationNF(9, @"one"),
 									   notificationNF(10, @"two")])]})];
 	__block BOOL ok = NO;
-	[c removeNotification:9 inGroup:7 completion:^(BOOL done, NSString *error){
+	[[TGSettingsStore shared] removeNotification:9 inGroup:7 completion:^(BOOL done, NSString *error){
 		ok = done;
 	}];
 	NSDictionary *request = lastNF(c, @"removeNotification");
@@ -332,10 +335,10 @@ static NSDictionary *topicNF(int64_t chatId, int32_t topicId, NSString *name) {
 	XCTAssertEqualObjects(request[@"notification_id"], @(9));
 	answerNF(c, @{@"@type" : @"ok"});
 	XCTAssertTrue(ok);
-	NSArray *rows = c.activeNotificationGroups[0][@"notifications"];
+	NSArray *rows = [[TGSettingsStore shared] activeNotificationGroups][0][@"notifications"];
 	XCTAssertEqual(rows.count, 1);
 	XCTAssertEqualObjects(rows[0][@"id"], @(10));
-	XCTAssertEqualObjects(c.activeNotificationGroups[0][@"totalCount"], @(1));
+	XCTAssertEqualObjects([[TGSettingsStore shared] activeNotificationGroups][0][@"totalCount"], @(1));
 }
 
 - (void)testRemoveNotification_RefusalKeepsTheRow {
@@ -343,13 +346,13 @@ static NSDictionary *topicNF(int64_t chatId, int32_t topicId, NSString *name) {
 	[c handleUpdate:plainNF(@{@"@type" : @"updateActiveNotifications",
 		@"groups" : @[groupNF(7, 77, @[notificationNF(9, @"one")])]})];
 	__block NSString *gotError = nil;
-	[c removeNotification:9 inGroup:7 completion:^(BOOL done, NSString *error){
+	[[TGSettingsStore shared] removeNotification:9 inGroup:7 completion:^(BOOL done, NSString *error){
 		gotError = error;
 	}];
 	answerNF(c, @{@"@type" : @"error", @"code" : @(400),
 				  @"message" : @"Notification not found"});
 	XCTAssertEqualObjects(gotError, @"Notification not found");
-	XCTAssertEqual([c.activeNotificationGroups[0][@"notifications"] count], 1);
+	XCTAssertEqual([[[TGSettingsStore shared] activeNotificationGroups][0][@"notifications"] count], 1);
 }
 
 - (void)testRemoveNotificationGroup_SendsTheHighestIdAndDropsTheGroup {
@@ -359,15 +362,15 @@ static NSDictionary *topicNF(int64_t chatId, int32_t topicId, NSString *name) {
 									   notificationNF(12, @"two")]),
 					 groupNF(8, 78, @[notificationNF(13, @"other")])]})];
 	__block BOOL ok = NO;
-	[c removeNotificationGroup:7 maxNotificationId:12
+	[[TGSettingsStore shared] removeNotificationGroup:7 maxNotificationId:12
 					completion:^(BOOL done, NSString *error){ ok = done; }];
 	NSDictionary *request = lastNF(c, @"removeNotificationGroup");
 	XCTAssertEqualObjects(request[@"notification_group_id"], @(7));
 	XCTAssertEqualObjects(request[@"max_notification_id"], @(12));
 	answerNF(c, @{@"@type" : @"ok"});
 	XCTAssertTrue(ok);
-	XCTAssertEqual(c.activeNotificationGroups.count, 1);
-	XCTAssertEqualObjects(c.activeNotificationGroups[0][@"id"], @(8));
+	XCTAssertEqual([[TGSettingsStore shared] activeNotificationGroups].count, 1);
+	XCTAssertEqualObjects([[TGSettingsStore shared] activeNotificationGroups][0][@"id"], @(8));
 }
 
 #pragma mark - forum topic read and write
@@ -375,7 +378,7 @@ static NSDictionary *topicNF(int64_t chatId, int32_t topicId, NSString *name) {
 - (void)testForumTopic_ReadsTheCountsAndNotificationRecord {
 	TGClient *c = NF();
 	__block NSDictionary *got = nil;
-	[c forumTopic:12 inChat:77 completion:^(NSDictionary *topic){ got = topic; }];
+	[[TGGroupStore shared] forumTopic:12 inChat:77 completion:^(NSDictionary *topic){ got = topic; }];
 	NSDictionary *request = lastNF(c, @"getForumTopic");
 	XCTAssertEqualObjects(request[@"chat_id"], @(77));
 	XCTAssertEqualObjects(request[@"forum_topic_id"], @(12));
@@ -396,7 +399,7 @@ static NSDictionary *topicNF(int64_t chatId, int32_t topicId, NSString *name) {
 - (void)testForumTopic_RefusalIsNil {
 	TGClient *c = NF();
 	__block NSDictionary *got = @{};
-	[c forumTopic:12 inChat:77 completion:^(NSDictionary *topic){ got = topic; }];
+	[[TGGroupStore shared] forumTopic:12 inChat:77 completion:^(NSDictionary *topic){ got = topic; }];
 	answerNF(c, @{@"@type" : @"error", @"code" : @(400),
 				  @"message" : @"Topic not found"});
 	XCTAssertNil(got);
@@ -405,7 +408,7 @@ static NSDictionary *topicNF(int64_t chatId, int32_t topicId, NSString *name) {
 - (void)testForumTopicLink_CopiesTheAnswer {
 	TGClient *c = NF();
 	__block NSString *got = nil;
-	[c forumTopicLinkForTopic:12 inChat:77 completion:^(NSString *link){ got = link; }];
+	[[TGGroupStore shared] forumTopicLinkForTopic:12 inChat:77 completion:^(NSString *link){ got = link; }];
 	XCTAssertEqualObjects(lastNF(c, @"getForumTopicLink")[@"forum_topic_id"], @(12));
 	answerNF(c, plainNF(@{@"@type" : @"messageLink",
 						  @"link" : @"https://t.me/c/77/12",
@@ -416,7 +419,7 @@ static NSDictionary *topicNF(int64_t chatId, int32_t topicId, NSString *name) {
 - (void)testReadAllForumTopicMentions_SendsThePair {
 	TGClient *c = NF();
 	__block BOOL ok = NO;
-	[c readAllForumTopicMentionsInChat:77 topic:12
+	[[TGGroupStore shared] readAllForumTopicMentionsInChat:77 topic:12
 							completion:^(BOOL done, NSString *error){ ok = done; }];
 	NSDictionary *request = lastNF(c, @"readAllForumTopicMentions");
 	XCTAssertEqualObjects(request[@"chat_id"], @(77));
@@ -429,7 +432,7 @@ static NSDictionary *topicNF(int64_t chatId, int32_t topicId, NSString *name) {
 	TGClient *c = NF();
 	__block BOOL ok = YES;
 	__block NSString *gotError = nil;
-	[c readAllForumTopicPollVotesInChat:77 topic:12
+	[[TGGroupStore shared] readAllForumTopicPollVotesInChat:77 topic:12
 							 completion:^(BOOL done, NSString *error){
 		ok = done;
 		gotError = error;
@@ -461,7 +464,7 @@ static NSDictionary *topicNF(int64_t chatId, int32_t topicId, NSString *name) {
 							   @"disable_pinned_message_notifications" : @NO,
 							   @"use_default_disable_mention_notifications" : @YES,
 							   @"disable_mention_notifications" : @NO};
-	[c setForumTopicNotificationSettings:settings topic:12 inChat:77
+	[[TGGroupStore shared] setForumTopicNotificationSettings:settings topic:12 inChat:77
 							  completion:^(BOOL done, NSString *error){ ok = done; }];
 	NSDictionary *request = lastNF(c, @"setForumTopicNotificationSettings");
 	XCTAssertEqualObjects(request[@"chat_id"], @(77));
@@ -479,7 +482,7 @@ static NSDictionary *topicNF(int64_t chatId, int32_t topicId, NSString *name) {
 - (void)testSetPinnedForumTopics_SendsTheOrder {
 	TGClient *c = NF();
 	__block BOOL ok = NO;
-	[c setPinnedForumTopics:@[@(12), @(5), @(9)] inChat:77
+	[[TGGroupStore shared] setPinnedForumTopics:@[@(12), @(5), @(9)] inChat:77
 				 completion:^(BOOL done, NSString *error){ ok = done; }];
 	NSDictionary *request = lastNF(c, @"setPinnedForumTopics");
 	XCTAssertEqualObjects(request[@"chat_id"], @(77));
@@ -491,7 +494,7 @@ static NSDictionary *topicNF(int64_t chatId, int32_t topicId, NSString *name) {
 - (void)testSetPinnedForumTopics_RefusalKeepsItsSentence {
 	TGClient *c = NF();
 	__block NSString *gotError = nil;
-	[c setPinnedForumTopics:@[@(12)] inChat:77
+	[[TGGroupStore shared] setPinnedForumTopics:@[@(12)] inChat:77
 				 completion:^(BOOL done, NSString *error){ gotError = error; }];
 	answerNF(c, @{@"@type" : @"error", @"code" : @(400),
 				  @"message" : @"Too many pinned topics"});
@@ -501,7 +504,7 @@ static NSDictionary *topicNF(int64_t chatId, int32_t topicId, NSString *name) {
 - (void)testToggleGeneralForumTopicHidden_SendsTheFlag {
 	TGClient *c = NF();
 	__block BOOL ok = NO;
-	[c toggleGeneralForumTopicHidden:YES inChat:77
+	[[TGGroupStore shared] toggleGeneralForumTopicHidden:YES inChat:77
 						  completion:^(BOOL done, NSString *error){ ok = done; }];
 	NSDictionary *request = lastNF(c, @"toggleGeneralForumTopicIsHidden");
 	XCTAssertEqualObjects(request[@"chat_id"], @(77));

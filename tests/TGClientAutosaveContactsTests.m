@@ -7,6 +7,8 @@
 #import "TGClient.h"
 #import "TGClientInternal.h"
 #import "TGSettingsStore.h"
+#import "TGStoreTestSupport.h"
+#import "TGContactsStore.h"
 
 @interface TGClientAutosaveContactsTests : XCTestCase @end
 
@@ -98,7 +100,7 @@ static NSDictionary *ACPlain(NSDictionary *dictionary) {
 - (void)testAutosaveSettings_FlattensTheThreeScopesAndExceptions {
 	TGClient *c = ACClient();
 	__block NSDictionary *got = nil;
-	[c autosaveSettingsWithCompletion:^(NSDictionary *settings){ got = settings; }];
+	[[TGSettingsStore shared] autosaveSettingsWithCompletion:^(NSDictionary *settings){ got = settings; }];
 
 	XCTAssertNotNil(ACLast(c, @"getAutosaveSettings"));
 	ACAnswer(c, ACPlain([self autosaveFixture]));
@@ -114,7 +116,7 @@ static NSDictionary *ACPlain(NSDictionary *dictionary) {
 - (void)testAutosaveSettings_AnErrorIsNil {
 	TGClient *c = ACClient();
 	__block NSDictionary *got = @{};
-	[c autosaveSettingsWithCompletion:^(NSDictionary *settings){ got = settings; }];
+	[[TGSettingsStore shared] autosaveSettingsWithCompletion:^(NSDictionary *settings){ got = settings; }];
 	ACAnswer(c, @{@"@type" : @"error", @"code" : @(400), @"message" : @"NO_AUTOSAVE"});
 	XCTAssertNil(got);
 }
@@ -122,7 +124,7 @@ static NSDictionary *ACPlain(NSDictionary *dictionary) {
 - (void)testSetAutosaveScope_SendsTheScopeSettings {
 	TGClient *c = ACClient();
 	__block BOOL ok = NO;
-	[c setAutosaveSettingsForScope:@"groups" photos:YES videos:NO
+	[[TGSettingsStore shared] setAutosaveSettingsForScope:@"groups" photos:YES videos:NO
 					  maxVideoSize:2048 completion:^(BOOL result){ ok = result; }];
 
 	NSDictionary *asked = ACLast(c, @"setAutosaveSettings");
@@ -137,7 +139,7 @@ static NSDictionary *ACPlain(NSDictionary *dictionary) {
 - (void)testClearAutosaveExceptions_SendsTheRequest {
 	TGClient *c = ACClient();
 	__block BOOL ok = NO;
-	[c clearAutosaveSettingsExceptionsWithCompletion:^(BOOL result){ ok = result; }];
+	[[TGSettingsStore shared] clearAutosaveSettingsExceptionsWithCompletion:^(BOOL result){ ok = result; }];
 	XCTAssertNotNil(ACLast(c, @"clearAutosaveSettingsExceptions"));
 	ACAnswer(c, @{@"@type" : @"ok"});
 	XCTAssertTrue(ok);
@@ -148,7 +150,7 @@ static NSDictionary *ACPlain(NSDictionary *dictionary) {
 - (void)testImportedContactCount_ReadsTheCount {
 	TGClient *c = ACClient();
 	__block NSInteger got = -1;
-	[c importedContactCountWithCompletion:^(NSInteger count){ got = count; }];
+	[[TGContactsStore shared] importedContactCountWithCompletion:^(NSInteger count){ got = count; }];
 	XCTAssertNotNil(ACLast(c, @"getImportedContactCount"));
 	ACAnswer(c, ACPlain(@{@"@type" : @"count", @"count" : @(12)}));
 	XCTAssertEqual(got, 12);

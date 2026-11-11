@@ -8,6 +8,9 @@
 #import "TGTestRunner.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
+#import "TGStoreTestSupport.h"
+#import "TGGroupStore.h"
+#import "TGSettingsStore.h"
 
 @interface TGClientEmojiReactionsTests : XCTestCase @end
 
@@ -217,7 +220,7 @@ static NSDictionary *stickerER(NSInteger fileId, NSString *emoji) {
 - (void)testClearRecentReactions_IsAnswered {
 	TGClient *c = ER();
 	__block BOOL ok = NO;
-	[c clearRecentReactionsWithCompletion:^(BOOL o){ ok = o; }];
+	[[TGSettingsStore shared] clearRecentReactionsWithCompletion:^(BOOL o){ ok = o; }];
 	XCTAssertNotNil(lastRequestedER(c));
 	XCTAssertEqualObjects(lastRequestedER(c)[@"@type"], @"clearRecentReactions");
 	answerER(c, @{@"@type" : @"ok"});
@@ -253,10 +256,10 @@ static NSDictionary *stickerER(NSInteger fileId, NSString *emoji) {
 	[c handleUpdate:@{@"@type" : @"updateReactionNotificationSettings",
 					  @"notification_settings" : record}];
 
-	XCTAssertEqualObjects(c.reactionNotificationSettings[@"message_reaction_source"][@"@type"],
+	XCTAssertEqualObjects([TGSettingsStore shared].reactionNotificationSettings[@"message_reaction_source"][@"@type"],
 						 @"reactionNotificationSourceContacts");
-	XCTAssertTrue(c.reactionNotificationsEnabled);
-	XCTAssertEqualObjects(c.reactionNotificationSettings[@"sound_id"], @(4));
+	XCTAssertTrue([[TGSettingsStore shared] reactionNotificationsEnabled]);
+	XCTAssertEqualObjects([TGSettingsStore shared].reactionNotificationSettings[@"sound_id"], @(4));
 }
 
 - (void)testReactionNotificationSettings_OffKeepsTheSourcesThisScreenDoesNotShow {
@@ -269,7 +272,7 @@ static NSDictionary *stickerER(NSInteger fileId, NSString *emoji) {
 			@"sound_id" : @(4), @"show_preview" : @NO}}];
 
 	__block BOOL ok = NO;
-	[c setReactionNotificationsEnabled:NO completion:^(BOOL o){ ok = o; }];
+	[[TGSettingsStore shared] setReactionNotificationsEnabled:NO completion:^(BOOL o){ ok = o; }];
 	NSDictionary *r = lastER(c, @"setReactionNotificationSettings");
 	XCTAssertEqualObjects(r[@"notification_settings"][@"message_reaction_source"][@"@type"],
 						 @"reactionNotificationSourceNone");
@@ -283,13 +286,13 @@ static NSDictionary *stickerER(NSInteger fileId, NSString *emoji) {
 
 	answerER(c, @{@"@type" : @"ok"});
 	XCTAssertTrue(ok);
-	XCTAssertFalse(c.reactionNotificationsEnabled);
+	XCTAssertFalse([[TGSettingsStore shared] reactionNotificationsEnabled]);
 }
 
 - (void)testReactionNotificationSettings_DefaultIsOnWithNoRecord {
 	TGClient *c = ER();
-	XCTAssertNil(c.reactionNotificationSettings);
-	XCTAssertTrue(c.reactionNotificationsEnabled);
+	XCTAssertNil([TGSettingsStore shared].reactionNotificationSettings);
+	XCTAssertTrue([[TGSettingsStore shared] reactionNotificationsEnabled]);
 }
 
 #pragma mark - forum topics
@@ -297,7 +300,7 @@ static NSDictionary *stickerER(NSInteger fileId, NSString *emoji) {
 - (void)testReadAllForumTopicReactions_SendsTheChatAndTopic {
 	TGClient *c = ER();
 	__block BOOL ok = NO;
-	[c readAllForumTopicReactionsInChat:77 topic:12 completion:^(BOOL o){ ok = o; }];
+	[[TGGroupStore shared] readAllForumTopicReactionsInChat:77 topic:12 completion:^(BOOL o){ ok = o; }];
 
 	NSDictionary *r = lastER(c, @"readAllForumTopicReactions");
 	XCTAssertEqualObjects(r[@"chat_id"], @(77));
@@ -309,7 +312,7 @@ static NSDictionary *stickerER(NSInteger fileId, NSString *emoji) {
 - (void)testForumTopics_CarryTheUnreadReactionCount {
 	TGClient *c = ER();
 	__block NSArray *got = nil;
-	[c forumTopicsForChat:77 completion:^(NSArray *t){ got = t; }];
+	[[TGGroupStore shared] forumTopicsForChat:77 completion:^(NSArray *t){ got = t; }];
 	XCTAssertNotNil(lastER(c, @"getForumTopics"));
 
 	answerER(c, plainER(@{@"@type" : @"forumTopics",

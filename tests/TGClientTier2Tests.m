@@ -8,6 +8,9 @@
 #import "TGTestRunner.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
+#import "TGStoreTestSupport.h"
+#import "TGProfileStore.h"
+#import "TGTextStylesStore.h"
 
 @interface TGClientTier2Tests : XCTestCase @end
 
@@ -76,7 +79,7 @@ static NSDictionary *plainT2(NSDictionary *d) {
 - (void)testThemedEmojiStatuses_ReadsTheCustomEmojiIds {
 	TGClient *c = T2E();
 	__block NSArray *ids = nil;
-	[c themedEmojiStatusesWithCompletion:^(NSArray *got){ ids = got; }];
+	[[TGProfileStore shared] themedEmojiStatusesWithCompletion:^(NSArray *got){ ids = got; }];
 	XCTAssertEqualObjects(lastT2(c, @"getThemedEmojiStatuses")[@"@type"],
 			@"getThemedEmojiStatuses");
 	replyT2(c, @"getThemedEmojiStatuses",
@@ -88,7 +91,7 @@ static NSDictionary *plainT2(NSDictionary *d) {
 - (void)testDefaultEmojiStatuses_IsTheAccountList {
 	TGClient *c = T2E();
 	__block NSArray *ids = nil;
-	[c defaultEmojiStatusesWithCompletion:^(NSArray *got){ ids = got; }];
+	[[TGProfileStore shared] defaultEmojiStatusesWithCompletion:^(NSArray *got){ ids = got; }];
 	XCTAssertNotNil(lastT2(c, @"getDefaultEmojiStatuses"));
 	replyT2(c, @"getDefaultEmojiStatuses",
 			@{@"@type" : @"emojiStatusCustomEmojis",
@@ -99,7 +102,7 @@ static NSDictionary *plainT2(NSDictionary *d) {
 - (void)testRecentEmojiStatuses_FlattensTypedStatuses {
 	TGClient *c = T2E();
 	__block NSArray *rows = nil;
-	[c recentEmojiStatusesWithCompletion:^(NSArray *got){ rows = got; }];
+	[[TGProfileStore shared] recentEmojiStatusesWithCompletion:^(NSArray *got){ rows = got; }];
 	XCTAssertNotNil(lastT2(c, @"getRecentEmojiStatuses"));
 	replyT2(c, @"getRecentEmojiStatuses", @{
 		@"@type" : @"emojiStatuses",
@@ -124,7 +127,7 @@ static NSDictionary *plainT2(NSDictionary *d) {
 - (void)testClearRecentEmojiStatuses_SendsTheBareRequest {
 	TGClient *c = T2E();
 	__block BOOL ok = NO;
-	[c clearRecentEmojiStatusesWithCompletion:^(BOOL good, NSString *error){
+	[[TGProfileStore shared] clearRecentEmojiStatusesWithCompletion:^(BOOL good, NSString *error){
 		ok = good;
 	}];
 	NSDictionary *r = lastT2(c, @"clearRecentEmojiStatuses");
@@ -136,20 +139,20 @@ static NSDictionary *plainT2(NSDictionary *d) {
 
 - (void)testThemedChatEmojiStatuses_UsesTheChatList {
 	TGClient *c = T2E();
-	[c themedChatEmojiStatusesWithCompletion:^(NSArray *ids){}];
+	[[TGProfileStore shared] themedChatEmojiStatusesWithCompletion:^(NSArray *ids){}];
 	XCTAssertNotNil(lastT2(c, @"getThemedChatEmojiStatuses"));
 }
 
 - (void)testDefaultChatEmojiStatuses_UsesTheChatList {
 	TGClient *c = T2E();
-	[c defaultChatEmojiStatusesWithCompletion:^(NSArray *ids){}];
+	[[TGProfileStore shared] defaultChatEmojiStatusesWithCompletion:^(NSArray *ids){}];
 	XCTAssertNotNil(lastT2(c, @"getDefaultChatEmojiStatuses"));
 }
 
 - (void)testDisallowedChatEmojiStatuses_ReadsTheRefusedIds {
 	TGClient *c = T2E();
 	__block NSArray *ids = nil;
-	[c disallowedChatEmojiStatusesWithCompletion:^(NSArray *got){ ids = got; }];
+	[[TGProfileStore shared] disallowedChatEmojiStatusesWithCompletion:^(NSArray *got){ ids = got; }];
 	XCTAssertNotNil(lastT2(c, @"getDisallowedChatEmojiStatuses"));
 	replyT2(c, @"getDisallowedChatEmojiStatuses",
 			@{@"@type" : @"emojiStatusCustomEmojis",
@@ -160,7 +163,7 @@ static NSDictionary *plainT2(NSDictionary *d) {
 - (void)testSetEmojiStatus_WrapsTheCustomEmojiId {
 	TGClient *c = T2E();
 	__block BOOL ok = NO;
-	[c setEmojiStatus:1234 expirationDate:0 completion:^(BOOL good, NSString *e){
+	[[TGProfileStore shared] setEmojiStatus:1234 expirationDate:0 completion:^(BOOL good, NSString *e){
 		ok = good;
 	}];
 	NSDictionary *r = lastT2(c, @"setEmojiStatus");
@@ -175,21 +178,21 @@ static NSDictionary *plainT2(NSDictionary *d) {
 
 - (void)testSetEmojiStatus_ZeroIsANullStatus {
 	TGClient *c = T2E();
-	[c setEmojiStatus:0 expirationDate:0 completion:^(BOOL ok, NSString *e){}];
+	[[TGProfileStore shared] setEmojiStatus:0 expirationDate:0 completion:^(BOOL ok, NSString *e){}];
 	NSDictionary *r = lastT2(c, @"setEmojiStatus");
 	XCTAssertTrue(r[@"emoji_status"] == [NSNull null]);
 }
 
 - (void)testSetEmojiStatus_ATimedStatusCarriesItsExpiry {
 	TGClient *c = T2E();
-	[c setEmojiStatus:1234 expirationDate:1767225600 completion:^(BOOL ok, NSString *e){}];
+	[[TGProfileStore shared] setEmojiStatus:1234 expirationDate:1767225600 completion:^(BOOL ok, NSString *e){}];
 	NSDictionary *r = lastT2(c, @"setEmojiStatus");
 	XCTAssertEqualObjects(r[@"emoji_status"][@"expiration_date"], @(1767225600));
 }
 
 - (void)testSetUserEmojiStatus_NamesTheUser {
 	TGClient *c = T2E();
-	[c setUserEmojiStatus:55 expirationDate:100 forUser:42
+	[[TGProfileStore shared] setUserEmojiStatus:55 expirationDate:100 forUser:42
 			   completion:^(BOOL ok, NSString *e){}];
 	NSDictionary *r = lastT2(c, @"setUserEmojiStatus");
 	XCTAssertEqualObjects(r[@"user_id"], @(42));
@@ -199,7 +202,7 @@ static NSDictionary *plainT2(NSDictionary *d) {
 
 - (void)testSetChatEmojiStatus_NamesTheChat {
 	TGClient *c = T2E();
-	[c setChatEmojiStatus:66 expirationDate:0 inChat:-77
+	[[TGProfileStore shared] setChatEmojiStatus:66 expirationDate:0 inChat:-77
 			   completion:^(BOOL ok, NSString *e){}];
 	NSDictionary *r = lastT2(c, @"setChatEmojiStatus");
 	XCTAssertEqualObjects(r[@"chat_id"], @(-77));
@@ -212,7 +215,7 @@ static NSDictionary *plainT2(NSDictionary *d) {
 	TGClient *c = T2E();
 	__block NSArray *rows = nil;
 	__block NSInteger total = 0;
-	[c profileAudiosForUser:42 offset:0 limit:100
+	[[TGProfileStore shared] profileAudiosForUser:42 offset:0 limit:100
 				 completion:^(NSArray *audios, NSInteger count, NSString *e){
 		rows = audios;
 		total = count;
@@ -240,7 +243,7 @@ static NSDictionary *plainT2(NSDictionary *d) {
 
 - (void)testProfileAudios_SecondPageAsksForTheOffsetItHas {
 	TGClient *c = T2E();
-	[c profileAudiosForUser:42 offset:100 limit:100 completion:^(NSArray *a, NSInteger n, NSString *e){}];
+	[[TGProfileStore shared] profileAudiosForUser:42 offset:100 limit:100 completion:^(NSArray *a, NSInteger n, NSString *e){}];
 	NSDictionary *r = lastT2(c, @"getUserProfileAudios");
 	XCTAssertEqualObjects(r[@"offset"], @(100));
 	XCTAssertEqualObjects(r[@"limit"], @(100));
@@ -248,7 +251,7 @@ static NSDictionary *plainT2(NSDictionary *d) {
 
 - (void)testAddProfileAudio_SendsALocalInputAudio {
 	TGClient *c = T2E();
-	[c addProfileAudioAtPath:@"/tmp/song.mp3" title:@"Song"
+	[[TGProfileStore shared] addProfileAudioAtPath:@"/tmp/song.mp3" title:@"Song"
 				   performer:@"Artist" duration:180
 				  completion:^(BOOL ok, NSString *e){}];
 	NSDictionary *r = lastT2(c, @"addProfileAudio");
@@ -263,7 +266,7 @@ static NSDictionary *plainT2(NSDictionary *d) {
 - (void)testRemoveProfileAudio_SendsTheFileId {
 	TGClient *c = T2E();
 	__block BOOL ok = NO;
-	[c removeProfileAudioFileId:501 completion:^(BOOL good, NSString *e){ ok = good; }];
+	[[TGProfileStore shared] removeProfileAudioFileId:501 completion:^(BOOL good, NSString *e){ ok = good; }];
 	XCTAssertEqualObjects(lastT2(c, @"removeProfileAudio")[@"file_id"], @(501));
 	replyT2(c, @"removeProfileAudio", @{@"@type" : @"ok"});
 	XCTAssertTrue(ok);
@@ -271,7 +274,7 @@ static NSDictionary *plainT2(NSDictionary *d) {
 
 - (void)testSetProfileAudioPosition_SendsBothIds {
 	TGClient *c = T2E();
-	[c setProfileAudioFileId:501 afterFileId:0 completion:^(BOOL ok, NSString *e){}];
+	[[TGProfileStore shared] setProfileAudioFileId:501 afterFileId:0 completion:^(BOOL ok, NSString *e){}];
 	NSDictionary *r = lastT2(c, @"setProfileAudioPosition");
 	XCTAssertEqualObjects(r[@"file_id"], @(501));
 	XCTAssertEqualObjects(r[@"after_file_id"], @(0));
@@ -280,7 +283,7 @@ static NSDictionary *plainT2(NSDictionary *d) {
 - (void)testIsProfileAudio_ReadsOkAndTheServersRefusal {
 	TGClient *c = T2E();
 	__block BOOL known = NO;
-	[c isProfileAudioFileId:501 completion:^(BOOL isAudio, NSString *e){
+	[[TGProfileStore shared] isProfileAudioFileId:501 completion:^(BOOL isAudio, NSString *e){
 		known = isAudio;
 	}];
 	XCTAssertEqualObjects(lastT2(c, @"isProfileAudio")[@"file_id"], @(501));
@@ -288,7 +291,7 @@ static NSDictionary *plainT2(NSDictionary *d) {
 	XCTAssertTrue(known);
 
 	[c.outbox removeAllObjects];
-	[c isProfileAudioFileId:502 completion:^(BOOL isAudio, NSString *e){
+	[[TGProfileStore shared] isProfileAudioFileId:502 completion:^(BOOL isAudio, NSString *e){
 		known = isAudio;
 	}];
 	replyT2(c, @"isProfileAudio",
@@ -301,7 +304,7 @@ static NSDictionary *plainT2(NSDictionary *d) {
 - (void)testCreateTextCompositionStyle_SendsThePromptAndReadsTheAnswer {
 	TGClient *c = T2E();
 	__block NSDictionary *style = nil;
-	[c createTextCompositionStyle:@"Pirate" emojiId:12 prompt:@"Talk like a pirate"
+	[[TGTextStylesStore shared] createTextCompositionStyle:@"Pirate" emojiId:12 prompt:@"Talk like a pirate"
 					 showCreator:YES completion:^(NSDictionary *made, NSString *e){
 		style = made;
 	}];
@@ -318,12 +321,12 @@ static NSDictionary *plainT2(NSDictionary *d) {
 	});
 	XCTAssertEqualObjects(style[@"name"], @"pirate");
 	XCTAssertEqualObjects(style[@"isCreator"], @YES);
-	XCTAssertEqual([[c textCompositionStyles] count], (NSUInteger)1);
+	XCTAssertEqual([[[TGTextStylesStore shared] textCompositionStyles] count], (NSUInteger)1);
 }
 
 - (void)testEditTextCompositionStyle_NamesTheStyle {
 	TGClient *c = T2E();
-	[c editTextCompositionStyleNamed:@"pirate" title:@"Captain"
+	[[TGTextStylesStore shared] editTextCompositionStyleNamed:@"pirate" title:@"Captain"
 							 emojiId:13 prompt:@"Ahoy" showCreator:NO
 						  completion:^(NSDictionary *s, NSString *e){}];
 	NSDictionary *r = lastT2(c, @"editTextCompositionStyle");
@@ -340,21 +343,21 @@ static NSDictionary *plainT2(NSDictionary *d) {
 						  @{@"@type" : @"textCompositionStyle", @"name" : @"pirate",
 							@"title" : @"Pirate", @"custom_emoji_id" : @(12)},
 					  ]}];
-	XCTAssertEqual([[c textCompositionStyles] count], (NSUInteger)1);
+	XCTAssertEqual([[[TGTextStylesStore shared] textCompositionStyles] count], (NSUInteger)1);
 	__block BOOL ok = NO;
-	[c deleteTextCompositionStyleNamed:@"pirate" completion:^(BOOL good, NSString *e){
+	[[TGTextStylesStore shared] deleteTextCompositionStyleNamed:@"pirate" completion:^(BOOL good, NSString *e){
 		ok = good;
 	}];
 	XCTAssertEqualObjects(lastT2(c, @"deleteTextCompositionStyle")[@"name"], @"pirate");
 	replyT2(c, @"deleteTextCompositionStyle", @{@"@type" : @"ok"});
 	XCTAssertTrue(ok);
-	XCTAssertEqual([[c textCompositionStyles] count], (NSUInteger)0);
+	XCTAssertEqual([[[TGTextStylesStore shared] textCompositionStyles] count], (NSUInteger)0);
 }
 
 - (void)testSearchTextCompositionStyle_SendsTheNameAndReadsTheStyle {
 	TGClient *c = T2E();
 	__block NSDictionary *style = nil;
-	[c searchTextCompositionStyleNamed:@"pirate" completion:^(NSDictionary *s, NSString *e){
+	[[TGTextStylesStore shared] searchTextCompositionStyleNamed:@"pirate" completion:^(NSDictionary *s, NSString *e){
 		style = s;
 	}];
 	XCTAssertEqualObjects(lastT2(c, @"searchTextCompositionStyle")[@"name"], @"pirate");
@@ -369,7 +372,7 @@ static NSDictionary *plainT2(NSDictionary *d) {
 - (void)testTextCompositionStyleExample_ReadsBothSides {
 	TGClient *c = T2E();
 	__block NSDictionary *example = nil;
-	[c textCompositionStyleExampleNamed:@"pirate" number:1
+	[[TGTextStylesStore shared] textCompositionStyleExampleNamed:@"pirate" number:1
 							 completion:^(NSDictionary *got, NSString *e){
 		example = got;
 	}];
@@ -387,13 +390,13 @@ static NSDictionary *plainT2(NSDictionary *d) {
 
 - (void)testAddTextCompositionStyle_SendsTheName {
 	TGClient *c = T2E();
-	[c addTextCompositionStyleNamed:@"pirate" completion:^(BOOL ok, NSString *e){}];
+	[[TGTextStylesStore shared] addTextCompositionStyleNamed:@"pirate" completion:^(BOOL ok, NSString *e){}];
 	XCTAssertEqualObjects(lastT2(c, @"addTextCompositionStyle")[@"name"], @"pirate");
 }
 
 - (void)testRemoveTextCompositionStyle_SendsTheName {
 	TGClient *c = T2E();
-	[c removeTextCompositionStyleNamed:@"pirate" completion:^(BOOL ok, NSString *e){}];
+	[[TGTextStylesStore shared] removeTextCompositionStyleNamed:@"pirate" completion:^(BOOL ok, NSString *e){}];
 	XCTAssertEqualObjects(lastT2(c, @"removeTextCompositionStyle")[@"name"], @"pirate");
 }
 
@@ -406,7 +409,7 @@ static NSDictionary *plainT2(NSDictionary *d) {
 						  @{@"@type" : @"textCompositionStyle", @"name" : @"b",
 							@"title" : @"B", @"custom_emoji_id" : @(2)},
 					  ]}];
-	NSArray *rows = [c textCompositionStyles];
+	NSArray *rows = [[TGTextStylesStore shared] textCompositionStyles];
 	XCTAssertEqual([rows count], (NSUInteger)2);
 	XCTAssertEqualObjects(rows[1][@"name"], @"b");
 }
