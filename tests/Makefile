@@ -471,7 +471,8 @@ CLIENT_TEST_SRCS := \
     $(TESTS)/TGAccountPrivacyRowsTests.m \
     $(TESTS)/TGChatToolsStickerRowsTests.m \
     $(TESTS)/TGBotsChatMediaRowsTests.m \
-    $(TESTS)/TGMessageCellFactoryTests.m
+    $(TESTS)/TGMessageCellFactoryTests.m \
+    $(TESTS)/TGThemeIOS6Tests.m
 
 TEST_BINARY := $(BUILD)/TGCallTests
 CLIENT_BINARY := $(BUILD)/TGClientTests

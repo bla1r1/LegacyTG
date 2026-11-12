@@ -77,3 +77,88 @@ typedef NSImage UIImage;
 // None needed: AppKit's NSStringDrawing.h provides the full
 // boundingRectWithSize:options:context: surface the src code calls, and a
 // shimmed duplicate of a selector AppKit owns would recurse through itself.
+
+// ─── UITableView, UINavigationBar, UITabBar, UITableViewCell ─────────────────
+// Minimal data-holding stand-ins for TGTheme styling tests (iOS 6 parity).
+// These are NOT functional UIKit widgets — they carry only the properties the
+// theme layer reads and writes so the styling methods can run on the host.
+
+typedef NS_ENUM(NSInteger, UIBarStyle) {
+    UIBarStyleDefault = 0,
+    UIBarStyleBlack   = 2,
+};
+
+typedef NS_ENUM(NSInteger, UIBarMetrics) {
+    UIBarMetricsDefault = 0,
+};
+
+typedef NS_ENUM(NSInteger, UITableViewCellSeparatorStyle) {
+    UITableViewCellSeparatorStyleNone       = 0,
+    UITableViewCellSeparatorStyleSingleLine = 1,
+};
+
+typedef NS_ENUM(NSInteger, UITableViewCellStyle) {
+    UITableViewCellStyleDefault = 0,
+    UITableViewCellStyleValue1  = 1,
+    UITableViewCellStyleValue2  = 2,
+    UITableViewCellStyleSubtitle = 3,
+};
+
+typedef NS_ENUM(NSInteger, UIControlState) {
+    UIControlStateNormal   = 0,
+    UIControlStateSelected = 1,
+};
+
+typedef NS_ENUM(NSInteger, UIImageRenderingMode) {
+    UIImageRenderingModeAlwaysOriginal = 1,
+};
+
+// UIBarButtonItem — referenced by styleNavigationBar helpers.
+@interface UIBarButtonItem : NSObject
+@property (nonatomic, strong) UIColor *tintColor;
+- (instancetype)initWithTitle:(NSString *)title style:(NSInteger)style
+                       target:(id)target action:(SEL)action;
+@end
+
+// UITabBarItem — tab glyphs, associated via objc runtime in styleTabBar:.
+@interface UITabBarItem : NSObject
+@property (nonatomic, strong) UIImage *image;
+@property (nonatomic, assign) NSInteger tag;
+- (void)setTitleTextAttributes:(NSDictionary *)attrs forState:(UIControlState)state;
+@end
+
+// UITableViewCell
+@interface UITableViewCell : UIView
+@property (nonatomic, strong) UIView *selectedBackgroundView;
+@property (nonatomic, strong) UILabel *textLabel;
+@property (nonatomic, strong) UILabel *detailTextLabel;
+- (instancetype)initWithStyle:(UITableViewCellStyle)style reuseIdentifier:(NSString *)id;
+@end
+
+// UITableView — data-holding stub for stylePlainTable: / styleGroupedTable:.
+@interface UITableView : UIView
+@property (nonatomic, assign) UITableViewCellSeparatorStyle separatorStyle;
+@property (nonatomic, strong) UIColor *separatorColor;
+@property (nonatomic, strong) UIView *backgroundView;
+@property (nonatomic, strong) NSArray *visibleCells;
+@end
+
+// UINavigationBar — stub for styleNavigationBar:.
+@interface UINavigationBar : UIView
+@property (nonatomic, assign) UIBarStyle barStyle;
+@property (nonatomic, strong) UIColor *tintColor;
+@property (nonatomic, assign) BOOL translucent;
+@property (nonatomic, strong) NSDictionary *titleTextAttributes;
+@end
+
+// UISearchBar — stub for styleSearchBar:.
+@interface UISearchBar : UIView
+@property (nonatomic, assign) UIBarStyle barStyle;
+@property (nonatomic, strong) UIColor *tintColor;
+@end
+
+// UITabBar — stub for styleTabBar:.
+@interface UITabBar : UIView
+@property (nonatomic, strong) UIColor *tintColor;
+@property (nonatomic, strong) NSArray *items;
+@end

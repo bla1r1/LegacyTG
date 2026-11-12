@@ -101,3 +101,32 @@ static CGSize TGWrappedSize(NSString *text, UIFont *font, CGSize max) {
 	return TGWrappedSize(self, font, size);
 }
 @end
+
+#pragma mark - UITableView / UINavigationBar / UITabBar stubs
+
+@implementation UIBarButtonItem
+- (instancetype)initWithTitle:(NSString *)title style:(NSInteger)style
+                       target:(id)target action:(SEL)action { return [super init]; }
+@end
+
+@implementation UITabBarItem
+- (void)setTitleTextAttributes:(NSDictionary *)attrs forState:(UIControlState)state {}
+@end
+
+@implementation UITableViewCell
+- (instancetype)initWithStyle:(UITableViewCellStyle)style reuseIdentifier:(NSString *)id {
+    return [super init];
+}
+@end
+
+@implementation UITableView
+@end
+
+@implementation UINavigationBar
+@end
+
+@implementation UISearchBar
+@end
+
+@implementation UITabBar
+@end

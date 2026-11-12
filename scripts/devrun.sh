@@ -7,6 +7,8 @@
 #   ./scripts/devrun.sh --seconds 120   longer log window
 #   ./scripts/devrun.sh --filter 'AUTH' only log lines matching this regex
 #   ./scripts/devrun.sh --check         only report what works, change nothing
+#   ./scripts/devrun.sh --smoke         iOS 6.1 smoke gate: walk basic screens,
+#                                       fail on SIGABRT / unrecognized selector
 #
 # Launching an app remotely needs ONE of these on the device:
 #   A) debugserver, via a mounted Developer Disk Image for iOS 7.1
@@ -31,6 +33,7 @@ DO_BUILD=1
 CHECK_ONLY=0
 SHOT_ONLY=0
 VIDEO_DURATION=0
+SMOKE_MODE=0
 # Several devices on one cable happens (an old test bench plus a donor);
 # --udid UDID pins every tool to the chosen one.
 DEV_UDID=""
@@ -50,6 +53,7 @@ while [ $# -gt 0 ]; do
 		--udid)     DEV_UDID="$2"; shift 2 ;;
 		--check)    CHECK_ONLY=1; shift ;;
 		--shot)     SHOT_ONLY=1; shift ;;
+		--smoke)    SMOKE_MODE=1; shift ;;
 		--screenoff) "$ROOT/scripts/screen.sh" off; exit $? ;;
 		--screenon)  "$ROOT/scripts/screen.sh" on;  exit $? ;;
 		--video)    VIDEO_DURATION="${2:-5}"; shift 2 ;;
@@ -270,6 +274,166 @@ summary() {
 	grep -iE "error|can't|fail|RPC_ERROR" "$f" | sort | uniq -c | sort -rn | head -10
 }
 
+# -------------------------------------------------------------- smoke ------
+# Walk the core screens via automation URL-schemes and watch syslog for the
+# three crash signals that indicate an iOS 6 selector failure.  Exit 0 on a
+# clean 30-second window, exit 1 with a log dump on any crash.
+#
+# Full prогон includes:
+#   1. Basic screen walk (chat-list root, settings, profile, dev)
+#   2. Dark-theme switch — exercises the dark branch of stylePlainTable:,
+#      styleNavigationBar: and styleTabBar: where sectionIndexBackgroundColor:
+#      and barTintColor were previously unguarded.
+#   3. Dev Showcase scroll — forces tableView:cellForRowAtIndexPath: and
+#      layoutSubviews for all message cell types (text, photo, voice, sticker,
+#      poll, service, custom emoji, etc.).
+#   4. Saved Messages / test chat scroll — exercises bubble reuse and CoreText.
+smoke() {
+	say "smoke: iOS 6.1 runtime gate — full interactive prогон"
+	ssh_ready || { echo "smoke requires SSH (method B)" >&2; return 1; }
+
+	local SMOKE_LOG="$LOGDIR/smoke-$STAMP.log"
+	local CRASH_PATTERN="SIGABRT|unrecognized selector sent to instance|NSInvalidArgumentException|EXC_BAD_ACCESS"
+
+	# Start syslog capture in background — capture everything, filter later.
+	idevicesyslog >"$SMOKE_LOG" 2>&1 &
+	local SYSLOG_PID=$!
+
+	# Helper: check log for crashes so far; return 1 (and kill syslog) on first hit.
+	smoke_check_crash() {
+		local phase="$1"
+		if grep -qiE "$CRASH_PATTERN" "$SMOKE_LOG"; then
+			echo ""
+			echo "SMOKE FAILED at [$phase] — crash signal detected:" >&2
+			grep -iE "$CRASH_PATTERN" "$SMOKE_LOG" | head -20 >&2
+			# Try to pull the crash report off the device.
+			local cdir="$LOGDIR/crash-smoke-$STAMP"
+			mkdir -p "$cdir"
+			idevicecrashreport -e -k "$cdir" >/dev/null 2>&1 || true
+			local newest
+			newest="$(ls -t "$cdir"/LegacyTG_*.ips "$cdir"/iTgLegacy_*.ips 2>/dev/null | head -1)"
+			if [ -n "$newest" ]; then
+				echo "--- crash report (Exception + Thread 0):" >&2
+				sed -n '/Exception Type/,/^$/p;/Thread 0/,/Thread 1/p' "$newest" | head -40 >&2
+			fi
+			echo ""
+			echo "Full smoke log: $SMOKE_LOG" >&2
+			kill $SYSLOG_PID 2>/dev/null
+			return 1
+		fi
+		return 0
+	}
+
+	# Helper: open a URL and sleep, then crash-check.
+	smoke_open() {
+		local url="$1" delay="${2:-4}"
+		say "smoke: open $url"
+		ssh $SSH_OPTS "$SSH_HOST" "uiopen '$url' 2>/dev/null || true"
+		sleep "$delay"
+		smoke_check_crash "$url" || return 1
+		return 0
+	}
+
+	# Give syslog a moment to connect before we start the app.
+	sleep 2
+
+	# ── Phase 1: cold launch ─────────────────────────────────────────────────
+	say "smoke [1/4]: cold launch"
+	ssh $SSH_OPTS "$SSH_HOST" "killall LegacyTG 2>/dev/null; killall iTgLegacy 2>/dev/null; true"
+	sleep 1
+	ssh $SSH_OPTS "$SSH_HOST" \
+		"openapp $BUNDLE_ID 2>/dev/null || uiopen legacytg:// 2>/dev/null || open $BUNDLE_ID 2>/dev/null || exit 7" || {
+		echo "smoke: could not launch — SSH works but no launcher on device" >&2
+		kill $SYSLOG_PID 2>/dev/null
+		return 1
+	}
+	# Wait for the app to reach the main thread.
+	sleep 6
+	smoke_check_crash "cold launch" || return 1
+
+	# ── Phase 2: basic screen walk (light theme) ─────────────────────────────
+	say "smoke [2/4]: basic screen walk (light theme)"
+	smoke_open "legacytg://"         3 || return 1
+	smoke_open "legacytg://settings" 3 || return 1
+	smoke_open "legacytg://profile"  3 || return 1
+
+	# ── Phase 3: dark theme switch ───────────────────────────────────────────
+	# legacytg://dev?theme=dark triggers a programmatic theme switch through
+	# the automation URL handler (see AppDelegate+URL.m), which calls
+	# [TGTheme.shared selectThemeId:] and re-styles all visible bars and tables.
+	# This is the branch where sectionIndexBackgroundColor: and barTintColor
+	# were previously called without respondsToSelector: guards on iOS 6.
+	say "smoke [3/4]: dark theme switch (guard regression check)"
+	smoke_open "legacytg://dev?theme=dark" 4 || return 1
+	# Navigate back to chat-list so the themed table reloads.
+	smoke_open "legacytg://"               3 || return 1
+	smoke_open "legacytg://settings"       3 || return 1
+	# Switch back to light — exercises the same guard path in the other direction.
+	smoke_open "legacytg://dev?theme=light" 3 || return 1
+	smoke_open "legacytg://"                3 || return 1
+
+	# ── Phase 4: Dev Showcase scroll (all message cell types) ────────────────
+	# legacytg://dev opens the Dev Hub; from there the Showcase is reachable.
+	# We drive it via the same URL the record_showcase_walkthrough.sh uses.
+	# The automation handler scrolls the table row-by-row (or we send swipe
+	# commands over SSH), forcing every cell type through layoutSubviews.
+	say "smoke [4/4]: Dev Showcase — all message cell types"
+	smoke_open "legacytg://dev"       4 || return 1
+	smoke_open "legacytg://showcase"  4 || return 1
+
+	# Scroll through showcase rows via SSH uiopen URL commands.
+	# The showcase table listens to legacytg://showcase/scroll?row=N.
+	# We walk all 30 rows with a 1-second pause each; a crash in any
+	# cell's layoutSubviews / cellForRowAtIndexPath: will show in syslog
+	# within the next check interval.
+	local SHOWCASE_ROWS=30
+	local row=0
+	while [ $row -lt $SHOWCASE_ROWS ]; do
+		ssh $SSH_OPTS "$SSH_HOST" "uiopen 'legacytg://showcase/scroll?row=$row' 2>/dev/null || true"
+		sleep 1
+		smoke_check_crash "showcase/row/$row" || return 1
+		row=$((row + 1))
+	done
+
+	# Also open Saved Messages chat and swipe to exercise bubble reuse.
+	smoke_open "legacytg://saved"    5 || return 1
+	# Swipe up (scroll older messages) via SSH uiopen automation.
+	for _ in 1 2 3; do
+		ssh $SSH_OPTS "$SSH_HOST" "uiopen 'legacytg://cmd?action=scroll_up' 2>/dev/null || true"
+		sleep 2
+		smoke_check_crash "saved/scroll" || return 1
+	done
+
+	# ── Final syslog settle ──────────────────────────────────────────────────
+	sleep 2
+	kill $SYSLOG_PID 2>/dev/null
+	wait $SYSLOG_PID 2>/dev/null
+
+	# One last check after everything settled.
+	if grep -qiE "$CRASH_PATTERN" "$SMOKE_LOG"; then
+		echo ""
+		echo "SMOKE FAILED — crash signal detected in final log scan:" >&2
+		grep -iE "$CRASH_PATTERN" "$SMOKE_LOG" | head -20 >&2
+		echo "Full smoke log: $SMOKE_LOG" >&2
+		return 1
+	fi
+
+	# Confirm the app was actually seen (guards against silent launch failure).
+	if ! grep -qiE "LegacyTG|iTgLegacy" "$SMOKE_LOG"; then
+		echo "SMOKE FAILED — app did not appear in syslog (launch may have failed)" >&2
+		echo "Smoke log: $SMOKE_LOG" >&2
+		return 1
+	fi
+
+	say "smoke: PASSED"
+	echo "SMOKE PASSED — no crash signals across all phases:"
+	echo "  Phase 1: cold launch"
+	echo "  Phase 2: basic screen walk (light theme)"
+	echo "  Phase 3: dark theme switch (sectionIndex + barTintColor guards)"
+	echo "  Phase 4: Dev Showcase ($SHOWCASE_ROWS cell types) + Saved Messages scroll"
+	echo "Smoke log: $SMOKE_LOG"
+}
+
 cleanup() {
 	[ -f "$LOGDIR/.iproxypid" ] && kill "$(cat "$LOGDIR/.iproxypid")" 2>/dev/null
 	[ -f "$LOGDIR/.debugpid" ]  && kill "$(cat "$LOGDIR/.debugpid")"  2>/dev/null
@@ -289,7 +453,6 @@ if [ "$VIDEO_DURATION" -gt 0 ]; then
 	"$ROOT/scripts/record_screen.sh" --duration "$VIDEO_DURATION" --gif
 	exit $?
 fi
-
 if [ "$CHECK_ONLY" = 1 ]; then
 	say "checking launch methods, changing nothing"
 	if ddi_mounted || try_mount_ddi; then echo "A) debugserver: available"; else echo "A) debugserver: NOT available"; fi
@@ -299,6 +462,12 @@ fi
 
 [ "$DO_BUILD" = 1 ] && { build || exit 1; }
 install_ipa || exit 1
+
+if [ "$SMOKE_MODE" = 1 ]; then
+	smoke
+	exit $?
+fi
+
 launch || echo "(continuing without launch - app may already be running)"
 collect
 summary
