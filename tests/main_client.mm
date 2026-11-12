@@ -111,6 +111,7 @@
 #import "TGSettingsProfileGroupRowsTests.m"
 #import "TGBotsChatMediaRowsTests.m"
 #import "TGMessageCellFactoryTests.m"
+#import "TGThemeIOS6Tests.m"
 
 int main(int argc, char *argv[]) {
 	@autoreleasepool {

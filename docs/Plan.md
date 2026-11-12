@@ -1,6 +1,6 @@
 ## Release 1.3: Unified Message Core & Essential Gaps
 
-Status: `done`; Phases 1–4, the whole Chat message boundary and the core/store migration are complete.
+Status: `complete`; Phases 1–5 done. Phase 5 (iOS 6.1 UI runtime parity & smoke gate) closed: 2366 host tests passing, binary selector audit green, 4-phase device smoke implemented.
 
 Consolidates the 351 direct `TGClient` calls across `src/Features/Chat` into domain stores (`TGSendStore`, `TGMessageStreamStore`, `TGMediaStore`), enforces the 16 MB memory ceiling on 32-bit devices, and lands the top messaging gaps (M27, M23, M24) on top of the unified core.
 
@@ -73,7 +73,22 @@ Phase 1 itself moved only the outbound text path; the off-plan section below ext
 - [x] `done` `src/Features/ChatList` talks to `TGChatListStore`/`TGSearchStore`; no file imports `TGClient` (allow-list 0).
 - [x] `done` M24 is done: content-type glyphs and thumbnails, compact `99+` counts, reaction/poll/folder badges and the Chats-tab badge.
 
-**Blocked by:** nothing. Pure domain store contracts over existing TDLib methods.
+### Phase 5: iOS 6.1 UI runtime parity and release smoke gate — done
+- [x] `done` Static Clang API availability gate: `-Wunguarded-availability` added to `CFLAGS_ARMV7` and `CFLAGS_ARM64` in `Makefile`; `CFLAGS_ARMV7_EXTRA` passthrough slot added for `check_release.sh`.
+  Ensures any iOS 7.0+ method (`sectionIndexBackgroundColor:`, `barTintColor:`, `interactivePopGestureRecognizer`, `edgesForExtendedLayout`) without an explicit guard triggers a build error instead of shipping to release.
+- [x] `done` Audit and isolate grouped selector guards in `src/Core/Style` and `src/UI`.
+  `barTintColor` in `-styleNavigationBar:` was the one ungated call in the iOS 7+ else-branch; fixed to `if ([bar respondsToSelector:@selector(setBarTintColor:)])`. Each of the three `UITableView` section-index selectors has its own independent guard.
+- [x] `done` Host unit tests: `tests/TGThemeIOS6Tests.m` — 12 tests.
+  NSProxy-based `TGIos6Proxy` wraps every component; `respondsToSelector:` returns NO for all 8 dangerous iOS 7+ selectors. Mock objects (`TGMockTable6`, `TGMockNavBar6`, `TGMockSearchBar6`, `TGMockTabBar6`) simulate real iOS 6 guard behaviour. 12 test methods cover sectionIndex triplet isolation, navBar/searchBar/tabBar dark+light paths, proxy blocking, exception type, and end-to-end iOS 6 simulation.
+- [x] `done` Deep device smoke in `scripts/devrun.sh` (`--smoke`): 4-phase interactive run.
+  Phase 1 cold launch → Phase 2 light-theme screen walk (`/`, `/settings`, `/profile`) → Phase 3 dark-theme switch + re-navigate → Phase 4 Dev Showcase 30-row scroll + Saved Messages. `NSInvalidArgumentException` added to crash pattern; crash report pulled from device on failure.
+- [x] `done` Binary selector audit in `scripts/check_release.sh` (gate 2 of 3).
+  `otool` extracts `__objc_methname` from the armv7 slice via `lipo -thin`; for each of 8 dangerous selectors found in the binary, grep verifies every call site in `src/` is within 5 lines of a `respondsToSelector:` guard. Script exits 1 on the first unguarded hit.
+- [x] `done` Pre-release availability gate in `scripts/check_release.sh` (gate 1 of 3).
+  Clean `-Werror=unguarded-availability` armv7 compile required; dev-symbol absence check is gate 3.
+- [x] `done` Regression: `make -f tests/Makefile test` — **2366 passed, 0 failed** (2354 prior + 12 new TGThemeIOS6Tests).
+
+**Blocked by:** nothing. Pure toolchain and test runner hardening.
 
 **Closes:** M27 (Failed-send mark) — `chat.md` failed delivery mark and
-`chat-list.md` delivery ticks. M23 and M24 are closed (Phases 2 and 4). All four phases are done.
+`chat-list.md` delivery ticks. M23 and M24 are closed (Phases 2 and 4). iOS 6.1 runtime crashes (B1/theme guards) closed by Phase 5.

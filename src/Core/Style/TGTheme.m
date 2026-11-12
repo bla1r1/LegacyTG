@@ -740,7 +740,10 @@ static char kTabOffMaskKey;
 	if ([bar respondsToSelector:@selector(setShadowImage:)])
 		[bar setShadowImage:nil];
 	bar.translucent = NO;
-	bar.barTintColor = [self barColour];
+	// barTintColor is iOS 7+; guard so -Wunguarded-availability stays clean
+	// even though drawsSkeuomorphicChrome returned early above.
+	if ([bar respondsToSelector:@selector(setBarTintColor:)])
+		bar.barTintColor = [self barColour];
 	bar.tintColor = [self barButtonColour];
 	bar.titleTextAttributes = @{ NSForegroundColorAttributeName : [self barTitleColour] };
 }

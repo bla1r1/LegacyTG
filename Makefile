@@ -826,12 +826,15 @@ ARM64_ALL_OBJS   := $(ARM64_LIBTG_OBJS) $(ARM64_APP_OBJS)
 # result crashes with unrecognized selectors at runtime (2026-10-25).
 CFLAGS_ARMV7    := -arch armv7 -mthumb -O2 -isysroot $(SDK_PATH) $(MIN_IOS) $(INCLUDES) $(ARMV7_FFMPEG_INC) $(DEFINES) -fPIC \
                    -MMD -MP \
-                   -Wno-macro-redefined -Wno-incompatible-pointer-types -Wno-deprecated-declarations
+                   -Wunguarded-availability \
+                   -Wno-macro-redefined -Wno-incompatible-pointer-types -Wno-deprecated-declarations \
+                   $(CFLAGS_ARMV7_EXTRA)
 OBJCFLAGS_ARMV7 := $(CFLAGS_ARMV7) -fobjc-arc
 CXXFLAGS_ARMV7  := $(CFLAGS_ARMV7) $(CXX_STDLIB_INC) -std=c++11 -fno-use-cxa-atexit -fno-threadsafe-statics -Wno-error
 
 CFLAGS_ARM64    := -arch arm64 -O2 -isysroot $(SDK_PATH) $(MIN_IOS) $(INCLUDES) $(DEFINES) -fPIC \
                    -MMD -MP \
+                   -Wunguarded-availability \
                    -Wno-macro-redefined -Wno-incompatible-pointer-types -Wno-deprecated-declarations
 OBJCFLAGS_ARM64 := $(CFLAGS_ARM64) -fobjc-arc
 CXXFLAGS_ARM64  := $(CFLAGS_ARM64) $(CXX_STDLIB_INC) -std=c++11 -fno-use-cxa-atexit -fno-threadsafe-statics -Wno-error
