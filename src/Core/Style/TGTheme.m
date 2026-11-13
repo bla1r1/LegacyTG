@@ -39,26 +39,6 @@ static const NSTimeInterval kAutoNightCheckInterval = 60.0;
 	return draws;
 }
 
-/// A theme's wallpaper is a colour with Telegram's doodle sheet over it. The
-/// official client bakes the same two layers; doing it once keeps the chat's
-/// scrolling layer free of blends.
-static UIImage *TGThemeWallpaperImage(UIColor *colour, BOOL dark) {
-	UIImage *pattern = [UIImage imageNamed:@"builtin-wallpaper-0.jpg"];
-	if (!pattern || pattern.size.width <= 0 || pattern.size.height <= 0)
-		return nil;
-	CGSize size = pattern.size;
-	UIGraphicsBeginImageContextWithOptions(size, YES, 1);
-	CGRect rect = CGRectMake(0, 0, size.width, size.height);
-	[colour setFill];
-	UIRectFill(rect);
-	[pattern drawInRect:rect
-			  blendMode:(dark ? kCGBlendModeScreen : kCGBlendModeNormal)
-				  alpha:TGAlphaOpaque];
-	UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
-	UIGraphicsEndImageContext();
-	return image;
-}
-
 - (id)init {
 	self = [super init];
 	if (!self)

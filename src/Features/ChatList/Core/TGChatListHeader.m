@@ -18,36 +18,12 @@
 
 // Height of the folder pill strip above the chat list (official-style tabs).
 static const CGFloat kFolderTabRow = TGMetricFolderTabRow;
-/// The mute and pin marks on a row are drawn at this side and then fitted into
-/// the smaller box the cell gives them, which is what keeps their strokes even.
-static const CGFloat kRowGlyph     = 28.0f;
-/// The title view's box: the name, then the connection line under it. 200 pt
-/// is the chat header's width on the same 320 pt bar, so neither nav button
-/// loses its target to a long folder name.
-static const CGFloat kListTitleWidth  = 150.0f;
-static const CGFloat kListTitleHeight = TGMetricRow;
-static const CGFloat kListChevronWidth = 12.0f;
-static const CGFloat kListChevronGap   = TGMetricPadTiny;
-static const CGFloat kListStorySide    = 24.0f;
-static const CGFloat kListStoryGap     = TGMetricPadSmall;
-/// The chat-list bar controls: the Edit pill, the circled add and the blue
-/// compose button. Named here because only this header stacks them.
-static const CGFloat kBarEditWidth    = 66.0f;
-static const CGFloat kBarEditHeight   = TGMetricSegmentedHeight;
-static const CGFloat kBarRightWidth   = 92.0f;
-static const CGFloat kBarControlSide  = TGMetricButtonMediumH;
-static const CGFloat kBarComposeSide  = 46.0f;
-static const CGFloat kBarComposeX     = 46.0f;
-static const CGFloat kBarControlTop   = 5.0f;
 /// The archive pill's tag, outside the folder indexes (100 + slot).
 static const NSInteger kFolderArchiveTag = 1000;
 /// A folder pill's side padding, its widest form and the gap to the next pill.
 static const CGFloat kFolderPillPad = 26.0f;
 static const CGFloat kFolderPillMax = 150.0f;
 static const CGFloat kFolderPillGap = 6.0f;
-
-/// A 3.5" screen shows six rows of 76 pt; this is two screens.
-static const NSUInteger kAvatarWindowRows = 14;
 
 /// One pill's two states. The strip rebuilds on every switch, so the old and
 /// new chosen pills are repainted here after the new header is on screen.
@@ -77,42 +53,6 @@ UIImage *TGChatListLockIcon(CGFloat side, UIColor *colour) {
 	return [TGIcons glyphNamed:@"lock" colour:colour side:side];
 }
 
-
-static NSString *TGChatSnapshotPath(void) {
-	NSString *dir = [NSSearchPathForDirectoriesInDomains(
-			NSCachesDirectory, NSUserDomainMask, YES) objectAtIndex:0];
-	// The snapshot is one account's list. Slot 0 keeps the pre-accounts name
-	// so an update does not discard the last list it saved; later slots get
-	// their own file so switching never shows another account's rows.
-	NSInteger slot = [TGChatListStore activeAccountSlot];
-	NSString *name = slot > 0
-			? [NSString stringWithFormat:@"chat-list-snapshot-%ld.plist", (long)slot]
-			: @"chat-list-snapshot.plist";
-	return [dir stringByAppendingPathComponent:name];
-}
-
-/// Only primitive fields go to the plist. chatsById also holds TDLib records
-/// (permissions, action bar, background) that are not plist values and are
-/// not read by a list row.
-static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
-	static NSArray *keys = nil;
-	static dispatch_once_t once;
-	dispatch_once(&once, ^{
-		keys = @[@"id", @"title", @"date", @"text", @"previewText", @"lastAuthor",
-				@"unread", @"unreadMentions", @"markedUnread", @"isMuted",
-				@"isPinned", @"isOnline", @"isSaved", @"lastId", @"lastOutgoing",
-				@"readOutbox", @"readInbox", @"isGroup", @"isForum",
-				@"isSecret", @"order", @"archiveOrder", @"supergroupId", @"draft",
-				@"emojiStatusId", @"previewKind", @"previewFileId", @"previewReactionSummary", @"previewPollVotes", @"unreadReactions", @"unreadPollVotes", @"folderIds", @"lastFailed"];
-	});
-	NSMutableDictionary *row = [NSMutableDictionary dictionaryWithCapacity:keys.count];
-	for (NSString *key in keys){
-		id value = chat[key];
-		if ([value isKindOfClass:NSNumber.class] || [value isKindOfClass:NSString.class] || [value isKindOfClass:NSArray.class])
-			row[key] = value;
-	}
-	return row[@"id"] ? row : nil;
-}
 
 
 

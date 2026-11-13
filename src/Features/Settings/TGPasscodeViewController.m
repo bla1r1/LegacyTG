@@ -5,6 +5,7 @@
 #import "TGPasscode.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
+#import "TGLocalization.h"
 #import <AudioToolbox/AudioToolbox.h>
 #import <QuartzCore/QuartzCore.h>
 
@@ -218,6 +219,21 @@ static const CGFloat kBorderWidth = 1.5f;
 	[self updateDots:0];
 }
 
+/// A wrong entry, or one made while the wait is running: the wait is what
+/// the line says then, because the code was not even looked at.
+- (void)showWrongCode {
+	[self shakeDots];
+	self.subtitleLabel.textColor = [[TGTheme shared] destructiveColour];
+	NSTimeInterval wait = [TGPasscode retryDelay];
+	if (wait > 0) {
+		NSInteger minutes = MAX((NSInteger)1, (NSInteger)ceil(wait / 60.0));
+		self.subtitleLabel.text = TGLocalizedPlural(@"Try again in %d minute",
+				@"Try again in %d minutes", minutes);
+	} else {
+		self.subtitleLabel.text = @"Wrong code, please try again.";
+	}
+}
+
 - (void)textDidChange:(UITextField *)field {
 	NSString *text = field.text ?: @"";
 	if (text.length > 4) {
@@ -239,9 +255,7 @@ static const CGFloat kBorderWidth = 1.5f;
 				[self.hiddenInput resignFirstResponder];
 				if (self.onSuccess) self.onSuccess();
 			} else {
-				[self shakeDots];
-				self.subtitleLabel.textColor = [[TGTheme shared] destructiveColour];
-				self.subtitleLabel.text = @"Wrong code, please try again.";
+				[self showWrongCode];
 			}
 			break;
 		}
@@ -255,9 +269,7 @@ static const CGFloat kBorderWidth = 1.5f;
 					[self.navigationController popViewControllerAnimated:YES];
 				}
 			} else {
-				[self shakeDots];
-				self.subtitleLabel.textColor = [[TGTheme shared] destructiveColour];
-				self.subtitleLabel.text = @"Wrong code, please try again.";
+				[self showWrongCode];
 			}
 			break;
 		}
@@ -296,9 +308,7 @@ static const CGFloat kBorderWidth = 1.5f;
 					[self updateDots:0];
 					[self updateStepTitle];
 				} else {
-					[self shakeDots];
-					self.subtitleLabel.textColor = [[TGTheme shared] destructiveColour];
-					self.subtitleLabel.text = @"Wrong code, please try again.";
+					[self showWrongCode];
 				}
 			} else if (self.step == 1) {
 				self.pendingPasscode = pin;

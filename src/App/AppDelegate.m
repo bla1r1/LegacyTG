@@ -37,6 +37,7 @@
 #import "TGUpdateStore.h"
 #import "TGUpdateInfoViewController.h"
 #import "TGAccountStore.h"
+#import "TGAccountSession.h"
 #import "TGSettingsStore.h"
 #include <stdio.h>
 
@@ -433,6 +434,14 @@ static UIImage *TGCustomEmojiFromStore(int64_t emojiId, CGFloat side) {
 		});
 	};
 
+	// The caches belong to the account that just signed out; the new client
+	// starts at WaitPhoneNumber and must not draw them.
+	[TGAccountSession shared].onSignedOut = ^{
+		[[TGAccountStore shared] resetStateForAccountSwitch];
+		[[NSNotificationCenter defaultCenter]
+				postNotificationName:TGAccountDidSwitchNotification object:[TGClient shared]];
+	};
+
 	tg.onError = ^(NSString *msg){
 		dispatch_async(dispatch_get_main_queue(), ^{
 			AppDelegate *me = weakSelf;
@@ -440,6 +449,18 @@ static UIImage *TGCustomEmojiFromStore(int64_t emojiId, CGFloat side) {
 			if ([msg isEqualToString:@"Unauthorized"] || [msg hasPrefix:@"Unauthorized"]) {
 				return;
 			}
+			// This channel carries errors no completion claimed. During
+			// sign-in that is the answer to the step on screen - a wrong
+			// code, a flood wait - and the alert is how the user learns it.
+			// Once signed in it is the answer to some request sent without a
+			// completion (a draft cleared in a channel, a read receipt for a
+			// deleted chat): a modal with TDLib's raw text over whatever the
+			// user was doing. It is in the log; a request whose failure
+			// matters asks with request:completion: and says so itself.
+#if !TG_DEV
+			if ([TGClient shared].authState == TGAuthStateReady)
+				return;
+#endif
 			[me showMessage:msg];
 		});
 	};

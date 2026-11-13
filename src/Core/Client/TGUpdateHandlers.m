@@ -20,13 +20,13 @@
 @end
 
 @interface TGUpdateHandlers (Families)
-- (BOOL)handleCoreUpdates:(NSString *)type obj:(NSDictionary *)obj;
-- (BOOL)handleChatsUpdates:(NSString *)type obj:(NSDictionary *)obj;
-- (BOOL)handleAccountUpdates:(NSString *)type obj:(NSDictionary *)obj;
-- (BOOL)handleStoriesUpdates:(NSString *)type obj:(NSDictionary *)obj;
-- (BOOL)handleNotificationsUpdates:(NSString *)type obj:(NSDictionary *)obj;
-- (BOOL)handleFilesUpdates:(NSString *)type obj:(NSDictionary *)obj;
-- (BOOL)handleMiscUpdates:(NSString *)type obj:(NSDictionary *)obj;
+- (BOOL)handleCoreUpdates:(NSString *)type kind:(TGUpdateType)kind obj:(NSDictionary *)obj;
+- (BOOL)handleChatsUpdates:(NSString *)type kind:(TGUpdateType)kind obj:(NSDictionary *)obj;
+- (BOOL)handleAccountUpdates:(NSString *)type kind:(TGUpdateType)kind obj:(NSDictionary *)obj;
+- (BOOL)handleStoriesUpdates:(NSString *)type kind:(TGUpdateType)kind obj:(NSDictionary *)obj;
+- (BOOL)handleNotificationsUpdates:(NSString *)type kind:(TGUpdateType)kind obj:(NSDictionary *)obj;
+- (BOOL)handleFilesUpdates:(NSString *)type kind:(TGUpdateType)kind obj:(NSDictionary *)obj;
+- (BOOL)handleMiscUpdates:(NSString *)type kind:(TGUpdateType)kind obj:(NSDictionary *)obj;
 @end
 
 @implementation TGUpdateHandlers
@@ -43,12 +43,16 @@
 	if ([[TGUpdateRouter shared] deliverResponse:obj])
 		return;
 	NSString *type = obj[@"@type"];
+	// Looked up once. Each of the seven families used to convert the name
+	// to UTF-8 and hash it again, for every update.
 	const char *typeName = type.UTF8String;
-	size_t typeLen = typeName ? strlen(typeName) : 0;
+	TGUpdateType kind = typeName ? TGUpdateTypeFor(typeName, strlen(typeName)) : TGUpdateUnknown;
 
+#if TG_DEV
 	if ([type hasPrefix:@"updateAuthorization"] || [type hasPrefix:@"authorization"] || [type isEqualToString:@"error"] || [type isEqualToString:@"ok"]) {
 		NSLog(@"TGClient: <<< RECV: %@", obj);
 	}
+#endif
 
 	// Log each response kind once - enough to see what TDLib actually sends
 	// without dumping the user's messages into the log.
@@ -80,31 +84,28 @@
 		return;
 	}
 
-		if ([self handleCoreUpdates:type obj:obj])
+	if ([self handleCoreUpdates:type kind:kind obj:obj])
 		return;
-	if ([self handleChatsUpdates:type obj:obj])
+	if ([self handleChatsUpdates:type kind:kind obj:obj])
 		return;
-	if ([self handleAccountUpdates:type obj:obj])
+	if ([self handleAccountUpdates:type kind:kind obj:obj])
 		return;
-	if ([self handleStoriesUpdates:type obj:obj])
+	if ([self handleStoriesUpdates:type kind:kind obj:obj])
 		return;
-	if ([self handleNotificationsUpdates:type obj:obj])
+	if ([self handleNotificationsUpdates:type kind:kind obj:obj])
 		return;
-	if ([self handleFilesUpdates:type obj:obj])
+	if ([self handleFilesUpdates:type kind:kind obj:obj])
 		return;
-	if ([self handleMiscUpdates:type obj:obj])
+	if ([self handleMiscUpdates:type kind:kind obj:obj])
 		return;
 
 	if ([type isEqualToString:@"error"]){
 		NSString *msg = obj[@"message"] ?: @"An error occurred.";
 		NSLog(@"TGClient: <<< ERROR code=%@ msg=%@ details: %@", obj[@"code"], msg, obj);
-		if ([obj[@"code"] intValue] == 404){
-			// loadChats answers 404 when the whole list is loaded
-			self.client.chatListComplete = YES;
-			NSLog(@"TGClient: chat list complete (%lu)",
-					(unsigned long)self.client.chatsById.count);
+		// An unclaimed 404 stays quiet, as before - but it no longer says
+		// anything about the chat list: loadChats reads its own answer now.
+		if ([obj[@"code"] intValue] == 404)
 			return;
-		}
 		if (self.client.onError)
 			self.client.onError(msg);
 		return;

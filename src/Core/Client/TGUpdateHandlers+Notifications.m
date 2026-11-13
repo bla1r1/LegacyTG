@@ -21,8 +21,8 @@
 
 @implementation TGUpdateHandlers (Notifications)
 
-- (BOOL)handleNotificationsUpdates:(NSString *)type obj:(NSDictionary *)obj {
-	switch (TGUpdateTypeFor(type.UTF8String, type.length)){
+- (BOOL)handleNotificationsUpdates:(NSString *)type kind:(TGUpdateType)kind obj:(NSDictionary *)obj {
+	switch (kind){
 	case TGUpdateAutosaveSettings: {
 		// One scope, here or on another client. The exception list is not in
 		// this update, so the page re-reads the whole record.
@@ -76,8 +76,7 @@
 		// the row's badge comes from the counter, the open chat has to drop
 		// the mark on that one message.
 		[self.client applyChatUpdate:obj];
-		if (self.client.onMessage)
-			self.client.onMessage([obj[@"chat_id"] longLongValue], nil, 0);
+		[self.client tellChat:[obj[@"chat_id"] longLongValue] message:nil deletedId:0];
 		return YES;
 	}
 	case TGUpdateMessageEdited:
@@ -86,8 +85,7 @@
 		// An edit date, a pin flag, a played voice note: the fields are on
 		// the message, so the open chat re-reads it the way a content change
 		// already does. Nothing to merge into the chat row.
-		if (self.client.onMessage)
-			self.client.onMessage([obj[@"chat_id"] longLongValue], nil, 0);
+		[self.client tellChat:[obj[@"chat_id"] longLongValue] message:nil deletedId:0];
 		[[TGUpdateRouter shared] noteMessagesChangedInChat:[obj[@"chat_id"] longLongValue]];
 		return YES;
 	}
@@ -97,8 +95,7 @@
 		// A fact check, a bot's ephemeral half or a suggested-post offer is
 		// another field on the message. The open chat re-reads that message;
 		// the tools sheet then sees the same flags the server just changed.
-		if (self.client.onMessage)
-			self.client.onMessage([obj[@"chat_id"] longLongValue], nil, 0);
+		[self.client tellChat:[obj[@"chat_id"] longLongValue] message:nil deletedId:0];
 		[[TGUpdateRouter shared] noteMessagesChangedInChat:[obj[@"chat_id"] longLongValue]];
 		return YES;
 	}

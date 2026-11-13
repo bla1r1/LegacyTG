@@ -20,14 +20,19 @@
 	self.title = @"Quick Replies";
 	[super viewDidLoad];
 	self.navigationItem.rightBarButtonItem = self.editButtonItem;
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGQuickRepliesChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note){ [self rebuild]; }];
+	// A selector observer: the block form kept self alive for good, and
+	// removeObserver:self in dealloc does not remove a block observer.
+	[[NSNotificationCenter defaultCenter] addObserver:self
+			selector:@selector(rebuildFromNotification:) name:TGQuickRepliesChangedNotification object:nil];
 	[self loadShortcuts];
 }
 
 - (void)dealloc {
 	[[NSNotificationCenter defaultCenter] removeObserver:self];
+}
+
+- (void)rebuildFromNotification:(NSNotification *)note {
+	[self rebuild];
 }
 
 - (void)viewWillAppear:(BOOL)animated {

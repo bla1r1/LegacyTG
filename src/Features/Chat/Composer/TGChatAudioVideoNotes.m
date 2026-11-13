@@ -11,21 +11,7 @@
 #import "TGPlayerView.h"
 
 
-static CGPoint sTouchStart;
-static CGFloat sDragDeltaX;
-static BOOL sIsLocked;
-static BOOL sIsCancelled;
-static BOOL sSendInFlight;
-/// The local row a note shows before TDLib knows it. Above every real and
-/// pending id, so it sorts last and cannot collide with one.
-static int64_t sLocalNoteRowCounter;
 
-/// The tap-to-toggle threshold: release before it and the touch was a mode
-/// switch, not a recording - Telegram waits the same beat before it starts
-/// writing, so a tap never produces a stray shard of audio.
-static const NSTimeInterval kRecordToggleTapSeconds = 0.25;
-/// How long the hint under a mode switch stays readable.
-static const NSTimeInterval kRecordHintSeconds = 1.6;
 
 
 @implementation TGChatViewController (TGChatAudioVideoNotes)

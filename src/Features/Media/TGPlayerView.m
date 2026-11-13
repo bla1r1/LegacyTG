@@ -20,7 +20,6 @@ static const CGFloat kProgressHeight     = 2.0f;
 static const CGFloat kModalArtSide       = TGMetricPlayerModalArtSide;
 static const CGFloat kModalMainBtnSide   = TGMetricPlayerModalButtonMain;
 static const CGFloat kModalSideBtnSide   = TGMetricPlayerModalButtonSide;
-static const CGFloat kModalVolIconSide   = 20.0f;
 static const CGFloat kModalSliderH       = TGMetricPlayerModalSliderH;
 static const CGFloat kModalTimeW         = 50.0f;
 static const CGFloat kModalHeaderH       = TGMetricRow;

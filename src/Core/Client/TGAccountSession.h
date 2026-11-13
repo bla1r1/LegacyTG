@@ -31,6 +31,10 @@
 @property (nonatomic, copy) BOOL (^isRunning)(void);
 @property (nonatomic, copy) void (^onCloseRequested)(void);
 @property (nonatomic, copy) void (^onRestartRequested)(void);
+/// TDLib closed without a pause having asked for it: logOut or destroy.
+/// Runs on the main queue before the restart, so the owner can drop the
+/// signed-out account's caches.
+@property (nonatomic, copy) void (^onSignedOut)(void);
 
 - (void)pauseForBackground:(void (^)(void))done;
 - (void)resumeFromBackground;

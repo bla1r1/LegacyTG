@@ -1528,6 +1528,24 @@ NSString *const TGMessageStoreChangedNotification = @"TGMessageStoreChangedNotif
 	return [TGClient shared].defaultReactionEmoji;
 }
 
+- (id)addListenerForChat:(int64_t)chatId
+			   onMessage:(void (^)(NSDictionary *message, int64_t deletedId))onMessage
+			onChatAction:(void (^)(NSString *action))onChatAction
+			onSecretChat:(void (^)(NSInteger secretChatId, NSString *state))onSecretChat {
+	TGChatListener *listener = [[TGChatListener alloc] init];
+	listener.chatId = chatId;
+	listener.onMessage = onMessage;
+	listener.onChatAction = onChatAction;
+	listener.onSecretChat = onSecretChat;
+	[[TGClient shared] addChatListener:listener];
+	return listener;
+}
+
+- (void)removeChatListener:(id)token {
+	if ([token isKindOfClass:TGChatListener.class])
+		[[TGClient shared] removeChatListener:token];
+}
+
 - (void)setOnMessage:(void (^)(int64_t chatId, NSDictionary *message, int64_t deletedId))block {
 	[TGClient shared].onMessage = block;
 }

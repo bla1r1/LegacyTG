@@ -65,6 +65,7 @@ Every bug is a row in [status/bugs.md](status/bugs.md) until the closing fix nam
 
 - [ ] host suite green
 - [ ] `sh scripts/lint_tokens.sh` clean
+- [ ] `sh scripts/lint_statics.sh` clean after a split
 - [ ] fix lands with its failing test
 - [ ] every claim backed by a check row or a device log
 - [ ] gated UI exercised on a Vintage/Legacy device

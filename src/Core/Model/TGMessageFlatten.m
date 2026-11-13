@@ -24,10 +24,6 @@ static BOOL TGVideoFitsLimit(NSDictionary *video, int maxSide, BOOL longSideOnly
 		   (longSideOnly || MIN(w, h) <= maxSide * 9 / 16);
 }
 
-static BOOL TGVideoFits(NSDictionary *video, int maxSide) {
-	return TGVideoFitsLimit(video, maxSide, NO);
-}
-
 static NSNumber *TGPlayableVideoFileIdLimited(NSDictionary *video, NSArray *alternatives,
 											  int maxSide, BOOL longSideOnly,
 											  NSNumber **fallback,

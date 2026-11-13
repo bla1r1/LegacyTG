@@ -17,8 +17,16 @@ Examples:
       --headers src/Core/Client/TGClient+Account.h --umbrella src/Core/Client/TGClient.h --apply
 
 The tool does not decide names for you in sections mode: pass --map
-"Section title=CategoryName" or let it derive Base+PascalCase(title). It moves
-static helpers into every section that uses them (static copies are safe).
+"Section title=CategoryName" or let it derive Base+PascalCase(title). Every
+part starts with the file's static preamble; after writing, the statics a part
+never reads are removed from it (scripts/prune_statics.py), so a part carries
+only the helpers it calls.
+
+A copy of a stateless helper is safe. A copy of state is not: a file-level
+mutable `static` variable, or a static function holding a function-local
+`static`, becomes one instance per part. When more than one part would get
+such a definition the tool stops and names it; give it one definition and a
+declaration in an internal header first, then split.
 """
 from __future__ import annotations
 
@@ -28,6 +36,46 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from prune_statics import prune_file  # noqa: E402
+
+
+def stateful_statics(pre: list[str]) -> list[str]:
+    """Names of preamble statics that hold state: mutable file-level variables
+    and static functions with a function-local `static`."""
+    names = []
+    for line in pre:
+        m = re.match(r"^static\s+(?!const\b)(?!inline\b)[^;{(=]*?[\s\*]([A-Za-z_]\w*)\s*(=[^;{(]*)?;", line)
+        if m and not re.search(r"\bconst\b", line):
+            names.append(m.group(1))
+    for name, block in function_defs(pre, static=True).items():
+        if any(re.match(r"^\s+static\s+(?!const\b)", l) for l in block[1:]):
+            names.append(name)
+    return names
+
+
+def refuse_shared_state(pre: list[str], parts: list[tuple[str, list[str]]]) -> None:
+    """Stop when a stateful static would be copied into more than one part."""
+    clashes = []
+    for name in stateful_statics(pre):
+        users = [title for title, body in parts
+                 if re.search(rf"\b{re.escape(name)}\b", "\n".join(body))]
+        if len(users) > 1:
+            clashes.append(f"  {name}: used by {', '.join(users)}")
+    if clashes:
+        sys.exit("refusing: these statics hold state and each part would get its own copy:\n" +
+                 "\n".join(clashes) +
+                 "\ngive each one definition and declare it in an internal header, then split")
+
+
+def prune_parts(paths: list[str]) -> None:
+    """Drop the preamble statics a freshly written part never reads."""
+    for p in paths:
+        if p.endswith((".m", ".mm")) and Path(p).exists():
+            removed = prune_file(p, True)
+            if removed:
+                print(f"  pruned {len(removed)} unused statics from {Path(p).name}")
 
 
 def lines(path: Path) -> list[str]:
@@ -287,6 +335,7 @@ def write_class_split(path: Path, outdir: Path, apply: bool, class_out: dict[str
     groups: dict[str, list[str]] = {}
     for name, a, b in impls:
         groups.setdefault(name, []).extend(text[a:b + 1])
+    refuse_shared_state(rest, list(groups.items()))
     new_paths, offsets = [], {}
     print(f"{path}: {len(groups)} classes")
     for name, body in groups.items():
@@ -331,6 +380,7 @@ def write_class_split(path: Path, outdir: Path, apply: bool, class_out: dict[str
             new_paths.append(str(support))
     if not apply:
         return
+    prune_parts(new_paths)
     old_rel = rel(path)
     # docs line mapping: class implementation start -> new file implementation start
     for name, a, b in impls:
@@ -419,6 +469,7 @@ def write_section_split(path: Path, base: str, outdir: Path, header: Path | None
     chunks = header_chunks(htext) if htext else []
     used_chunks = set()
     new_paths, offsets = [], {}
+    refuse_shared_state(rest, [(title, text[x:y]) for title, x, y in secs])
     print(f"{path}: {class_name}, {len(secs)} sections")
     cat_base = pascal(base.split("+")[-1])
     for title, x, y in secs:
@@ -487,6 +538,7 @@ def write_section_split(path: Path, base: str, outdir: Path, header: Path | None
             new_paths += support_paths
     if not apply:
         return
+    prune_parts(new_paths)
     if chunks and used_chunks != set(chunks):
         missing = [c for c in chunks if c not in used_chunks]
         names = [sel_of(c) for c in missing]

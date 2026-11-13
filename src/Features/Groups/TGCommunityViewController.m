@@ -42,14 +42,19 @@ static const CGFloat kCommunityPhotoBar  = 92.0f;
 	self.title = self.community[@"name"] ?: @"Community";
 	[super viewDidLoad];
 	[self buildPhotoHeader];
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGCommunitiesChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note){ [self loadFullInfo]; }];
+	// A selector observer: the block form kept self alive for good, and
+	// removeObserver:self in dealloc does not remove a block observer.
+	[[NSNotificationCenter defaultCenter] addObserver:self
+			selector:@selector(loadFullInfoFromNotification:) name:TGCommunitiesChangedNotification object:nil];
 	[self loadFullInfo];
 }
 
 - (void)dealloc {
 	[[NSNotificationCenter defaultCenter] removeObserver:self];
+}
+
+- (void)loadFullInfoFromNotification:(NSNotification *)note {
+	[self loadFullInfo];
 }
 
 - (void)viewWillAppear:(BOOL)animated {

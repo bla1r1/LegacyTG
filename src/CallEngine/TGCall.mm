@@ -1691,6 +1691,14 @@ static inline BOOL TGLooksLikeStun(const uint8_t *bytes) {
 #endif
 	// A fresh call starts its RTP sequence anywhere: a high value kept from the last
 	// call made every receiver report repeat it instead of following this one.
+	// The readers go first. -stop returns only after the reader thread has
+	// left onPacket, and that thread reads audioEngine, v2 and ice - and
+	// starts a new audio engine when it finds none. Stopped after them, a
+	// packet arriving in between brought the microphone back up on a call
+	// that had already ended.
+	for (TGCallReflector *reflector in self.reflectors)
+		[reflector stop];
+
 	_highestRtpSeqIn = 0;
 	_audioFramesIn = 0;
 	if (self.audioEngine) {
@@ -1711,8 +1719,6 @@ static inline BOOL TGLooksLikeStun(const uint8_t *bytes) {
 	self.localPwd = nil;
 	[self.ice stop];
 	self.ice = nil;
-	for (TGCallReflector *reflector in self.reflectors)
-		[reflector stop];
 	self.reflectors = nil;
 	self.reflector = nil;
 	self.currentReflector = nil;

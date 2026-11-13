@@ -10,6 +10,10 @@
 #import "TGDownloadStore.h"
 
 NSString *const TGChatListStoreChangedNotification = @"TGChatListStoreChangedNotification";
+NSString *const TGChatListStoreConnectionChangedNotification = @"TGChatListStoreConnectionChangedNotification";
+NSString *const TGChatListStoreArchiveKey = @"archive";
+NSString *const TGChatListStoreStateKey = @"state";
+NSString *const TGChatListStoreTextKey = @"text";
 NSString *const TGChatListPreviewImageLoadedNotification = @"TGChatListPreviewImageLoadedNotification";
 
 @implementation TGChatListStore {
@@ -50,19 +54,36 @@ NSString *const TGChatListPreviewImageLoadedNotification = @"TGChatListPreviewIm
 			me->_onArchiveChanged();
 		[[NSNotificationCenter defaultCenter]
 				postNotificationName:TGChatListStoreChangedNotification
-							  object:me];
+							  object:me
+							userInfo:@{TGChatListStoreArchiveKey : @YES}];
 	};
 	[TGClient shared].onConnectionState = ^(TGConnectionState state, NSString *text){
 		TGChatListStore *me = weakSelf;
-		if (me && me->_onConnectionState)
+		if (!me) return;
+		if (me->_onConnectionState)
 			me->_onConnectionState(state, text);
+		[[NSNotificationCenter defaultCenter]
+				postNotificationName:TGChatListStoreConnectionChangedNotification
+							  object:me
+							userInfo:@{TGChatListStoreStateKey : @(state),
+									   TGChatListStoreTextKey  : text ?: @""}];
 	};
 	[[NSNotificationCenter defaultCenter] addObserver:self
 			selector:@selector(unreadTotalChanged:)
 				name:TGUnreadTotalChangedNotification object:nil];
 	_previewImages = [[TGImageLruCache alloc] initWithCapacity:80];
 	_previewRequests = [NSMutableSet set];
+	// Keyed by TDLib file id, and every account's database numbers its files
+	// from the start: the same id is another picture after a switch.
+	[[NSNotificationCenter defaultCenter] addObserver:self
+			selector:@selector(accountDidSwitch:)
+				name:TGAccountDidSwitchNotification object:nil];
 	return self;
+}
+
+- (void)accountDidSwitch:(NSNotification *)note {
+	[_previewImages removeAllObjects];
+	[_previewRequests removeAllObjects];
 }
 
 - (void)unreadTotalChanged:(NSNotification *)note {

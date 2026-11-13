@@ -48,20 +48,6 @@
 
 
 
-/// The pin in the strip under the bar, and where its two lines begin after it.
-static const CGFloat kPinnedGlyph = 14.0f;
-static const CGFloat kPinnedTextX = TGMetricPadLarge + kPinnedGlyph + TGMetricPadSmall;
-/// Finds the message line when the strip already exists and only its text changes.
-static const NSInteger kPinnedBodyTag = 0x9010;
-/// The bar that stands in for the composer: mute for a channel you follow,
-/// join for one you have not joined yet. One tag per state, so a second answer
-/// replaces the bar instead of stacking another one on top.
-static const NSInteger kChatMuteBarTag = 0x9020;
-static const NSInteger kChatJoinGroupBarTag = 0x9021;
-static const NSInteger kChatJoinChannelBarTag = 0x9022;
-static const NSInteger kChatDiscussBarTag = 0x9023;
-static const NSInteger kChatChannelBottomBarTag = 0x9024;
-
 static int64_t sActiveChatId = 0;
 
 #pragma mark - controller
@@ -200,40 +186,7 @@ static int64_t sActiveChatId = 0;
 			selector:@selector(messageStoreChanged:)
 				name:TGMessageStoreChangedNotification object:nil];
 
-	// Live updates: append instead of waiting for the screen to be reopened.
-	__weak typeof(self) weakSelf = self;
-	[TGMessageStore shared].onMessage = ^(int64_t chatId, NSDictionary *message, int64_t deletedId){
-		TGChatViewController *me = weakSelf;
-		if (!me || chatId != me.chatId)
-			return;
-
-		if (message){
-			// Reading further up: leave the place alone and count it on the
-			// jump button instead. Your own message always brings you down.
-			[[TGSendStore shared] adoptMessages:@[message] inChat:chatId];
-			BOOL follow = [me isNearBottom] || [message[@"outgoing"] boolValue];
-			[me.streamStore appendNewerMessages:@[message]];
-			me.rawMessages = [me.streamStore messages];
-			me.messages = [me groupedMessagesFromMessages:me.rawMessages];
-			[me.table reloadData];
-			if (follow) {
-				[me scrollToBottomAnimated:YES];
-			} else {
-				[me noteArrivedWhileAway];
-			}
-			[me fetchMissingImages];
-			[[TGMessageStore shared] markRead:@[message[@"id"]] inChat:chatId];
-			return;
-		}
-		if (deletedId > 0 && [me.streamStore removeMessageId:deletedId]){
-			me.rawMessages = [me.streamStore messages];
-			me.messages = [me groupedMessagesFromMessages:me.rawMessages];
-			[me.table reloadData];
-			return;
-		}
-		// edited or unknown deletion - re-read
-		[me reload];
-	};
+	[self installLiveHandlers];
 
 	[[NSNotificationCenter defaultCenter] addObserver:self
 			selector:@selector(musicChanged)
@@ -354,11 +307,6 @@ static int64_t sActiveChatId = 0;
 			name:TGConnectionStateChangedNotification object:nil];
 	[nc addObserver:self selector:@selector(titleSubtitleOwnerChanged:)
 			name:TGUserStatusChangedNotification object:nil];
-	[TGMessageStore shared].onChatAction = ^(int64_t chatId, NSString *action){
-		if (chatId != weakSelf.chatId)
-			return;
-		[weakSelf showChatAction:action resting:weakSelf.restingSubtitle];
-	};
 
 	// An imported theme can arrive while a chat is open - repaint rather than
 	// wait for the screen to be pushed again.
@@ -374,11 +322,6 @@ static int64_t sActiveChatId = 0;
 		weakSelf.secretChatId = secretId;
 		[weakSelf refreshSecretState];
 	}];
-	[TGMessageStore shared].onSecretChat = ^(NSInteger secretChatId, NSString *state){
-		if (secretChatId != weakSelf.secretChatId)
-			return;
-		[weakSelf refreshSecretState];
-	};
 
 	[self loadPinnedMessage];
 
@@ -428,6 +371,72 @@ FOUNDATION_EXPORT void TGBubbleFlushCache(void);
 - (void)viewWillAppear:(BOOL)animated {
 	[super viewWillAppear:animated];
 	sActiveChatId = self.chatId;
+	[self installLiveHandlers];
+	if (self.readWhenShown.count) {
+		[[TGMessageStore shared] markRead:self.readWhenShown inChat:self.chatId];
+		[self.readWhenShown removeAllObjects];
+	}
+}
+
+/// This chat's live feed. A listener of its own, so a chat pushed on top of
+/// this one (profile > Send Message, a forwarded-from link) has its feed and
+/// this one keeps hearing. Idempotent: called on every appearance, which is
+/// also what brings the feed back after a back swipe that was cancelled.
+- (void)installLiveHandlers {
+	if (self.liveListener)
+		return;
+	__weak typeof(self) weakSelf = self;
+	self.liveListener = [[TGMessageStore shared] addListenerForChat:self.chatId
+			onMessage:^(NSDictionary *message, int64_t deletedId){
+			TGChatViewController *me = weakSelf;
+			if (!me)
+				return;
+			int64_t chatId = me.chatId;
+
+			if (message){
+				// Reading further up: leave the place alone and count it on the
+				// jump button instead. Your own message always brings you down.
+				[[TGSendStore shared] adoptMessages:@[message] inChat:chatId];
+				BOOL follow = [me isNearBottom] || [message[@"outgoing"] boolValue];
+				[me.streamStore appendNewerMessages:@[message]];
+				me.rawMessages = [me.streamStore messages];
+				me.messages = [me groupedMessagesFromMessages:me.rawMessages];
+				[me.table reloadData];
+				if (follow) {
+					[me scrollToBottomAnimated:YES];
+				} else {
+					[me noteArrivedWhileAway];
+				}
+				[me fetchMissingImages];
+				// Read means seen. Under a profile or another chat this
+				// screen still hears its messages; they are marked when it
+				// is back on top (viewWillAppear).
+				if ([TGChatViewController activeChatId] == chatId) {
+					[[TGMessageStore shared] markRead:@[message[@"id"]] inChat:chatId];
+				} else if (message[@"id"]) {
+					if (!me.readWhenShown)
+						me.readWhenShown = [NSMutableArray array];
+					[me.readWhenShown addObject:message[@"id"]];
+				}
+				return;
+			}
+			if (deletedId > 0 && [me.streamStore removeMessageId:deletedId]){
+				me.rawMessages = [me.streamStore messages];
+				me.messages = [me groupedMessagesFromMessages:me.rawMessages];
+				[me.table reloadData];
+				return;
+			}
+			// edited or unknown deletion - re-read
+			[me reload];
+		}
+		onChatAction:^(NSString *action){
+			[weakSelf showChatAction:action resting:weakSelf.restingSubtitle];
+		}
+		onSecretChat:^(NSInteger secretChatId, NSString *state){
+			if (secretChatId != weakSelf.secretChatId)
+				return;
+			[weakSelf refreshSecretState];
+		}];
 }
 
 /// A voice note going on playing after you have left the chat is the one thing
@@ -475,9 +484,8 @@ FOUNDATION_EXPORT void TGBubbleFlushCache(void);
 		}
 		[[NSNotificationCenter defaultCenter] removeObserver:self
 				name:TGMessageStoreChangedNotification object:nil];
-		[TGMessageStore shared].onMessage = nil;
-		[TGMessageStore shared].onChatAction = nil;
-		[TGMessageStore shared].onSecretChat = nil;
+		[[TGMessageStore shared] removeChatListener:self.liveListener];
+		self.liveListener = nil;
 		[self stopChrome];
 		[TGMessageStore shared].onFileProgress = nil;
 		[self.images removeAllObjects];
@@ -528,6 +536,9 @@ FOUNDATION_EXPORT void TGBubbleFlushCache(void);
 	[self.recordTimer invalidate];
 	self.recordTimer = nil;
 	[[NSNotificationCenter defaultCenter] removeObserver:self];
+	// A screen thrown away with its window (an account switch) never gets
+	// viewWillDisappear; the client must not keep its listener.
+	[[TGMessageStore shared] removeChatListener:self.liveListener];
 }
 
 

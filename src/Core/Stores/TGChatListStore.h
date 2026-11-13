@@ -11,6 +11,14 @@
 
 /// Posted when the list, the archive, the folders or the unread total changed.
 extern NSString *const TGChatListStoreChangedNotification;
+/// userInfo[TGChatListStoreArchiveKey] is @YES when it was the archive list
+/// that changed; absent for the main list.
+extern NSString *const TGChatListStoreArchiveKey;
+/// The connection state moved. userInfo: TGChatListStoreStateKey (NSNumber,
+/// TGConnectionState) and TGChatListStoreTextKey (the line to show, or @"").
+extern NSString *const TGChatListStoreConnectionChangedNotification;
+extern NSString *const TGChatListStoreStateKey;
+extern NSString *const TGChatListStoreTextKey;
 
 /// Posted on the main queue when a preview thumbnail finished downloading.
 /// userInfo "fileId" is the NSNumber that was asked for.
@@ -33,6 +41,9 @@ extern NSString *const TGChatListPreviewImageLoadedNotification;
 
 /// The screen's handlers. The store owns the client's single callback slots
 /// and calls these from them, so two list screens cannot overwrite each other.
+/// One slot each, kept for the host tests. The Archive is a second chat list
+/// screen: it took these slots and the main list stopped updating once it
+/// had been opened. Screens observe the notifications above.
 @property (nonatomic, copy) void (^onChatsChanged)(void);
 @property (nonatomic, copy) void (^onArchiveChanged)(void);
 @property (nonatomic, copy) void (^onConnectionState)(TGConnectionState state, NSString *text);

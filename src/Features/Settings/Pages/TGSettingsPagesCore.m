@@ -32,29 +32,6 @@
 
 
 
-/// A custom method's answer is a string the app has no schema for. When it is
-/// JSON, pretty-print it so the viewer reads like a response rather than one
-/// long line; otherwise show it as the lines TDLib sent.
-static NSArray *TGCustomResultRows(NSString *result) {
-	NSMutableArray *rows = [NSMutableArray array];
-	NSString *text = result.length ? result : @"Empty";
-	NSData *raw = [text dataUsingEncoding:NSUTF8StringEncoding];
-	id parsed = raw.length
-			? [NSJSONSerialization JSONObjectWithData:raw options:0 error:nil] : nil;
-	if (parsed){
-		NSData *pretty = [NSJSONSerialization dataWithJSONObject:parsed
-				options:NSJSONWritingPrettyPrinted error:nil];
-		if (pretty.length)
-			text = [[NSString alloc] initWithData:pretty encoding:NSUTF8StringEncoding]
-					?: text;
-	}
-	for (NSString *line in [text componentsSeparatedByString:@"\n"]){
-		NSMutableDictionary *row = [@{@"title" : line ?: @""} mutableCopy];
-		[rows addObject:row];
-	}
-	return rows;
-}
-
 
 /// Undenied? iOS 8+ answers with the settings the user granted, iOS 6/7 with
 /// the enabled remote types. No permission at all is the warning state.

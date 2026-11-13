@@ -21,8 +21,8 @@
 
 @implementation TGUpdateHandlers (Stories)
 
-- (BOOL)handleStoriesUpdates:(NSString *)type obj:(NSDictionary *)obj {
-	switch (TGUpdateTypeFor(type.UTF8String, type.length)){
+- (BOOL)handleStoriesUpdates:(NSString *)type kind:(TGUpdateType)kind obj:(NSDictionary *)obj {
+	switch (kind){
 	case TGUpdateChatActiveStories: {
 		[self.client applyChatActiveStoriesUpdate:obj];
 		return YES;

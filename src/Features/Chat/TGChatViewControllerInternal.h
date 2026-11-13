@@ -284,6 +284,10 @@ FOUNDATION_EXPORT CGFloat TGPollOptionRowHeight(NSDictionary *option, CGFloat ro
 /// The secret chat behind this chat, 0 when it is not one. Its state is the
 /// header subtitle, and updates to it arrive while the chat is open.
 @property (nonatomic, assign) NSInteger secretChatId;
+/// The token of this chat's live feed (TGMessageStore addListenerForChat:).
+@property (nonatomic, strong) id liveListener;
+/// Ids of messages that arrived while this screen was covered.
+@property (nonatomic, strong) NSMutableArray *readWhenShown;
 - (void)refreshSecretState;
 
 /// The scheduled queue's size, known when the send was last held, and the

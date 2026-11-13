@@ -6,6 +6,8 @@
 #import "TGStyle.h"
 #import "WebP.framework/Headers/decode.h"
 
+static const uint64_t kTGWebPMaxDecodedBytes = 16ull * 1024 * 1024;
+
 /// CGDataProvider owns the buffer once created and frees it through this.
 static void tgFreePixels(void *info, const void *data, size_t size) {
 	free((void *)data);
@@ -28,6 +30,12 @@ static void tgFreePixels(void *info, const void *data, size_t size) {
 		width <= 0 || height <= 0)
 		return nil;
 
+	// The header is the sender's claim. 16383 x 16383 is a valid WebP and a
+	// 1 GB bitmap; nothing this app draws from WebP is past 512 px, so a
+	// picture over the 16 MB cache ceiling is refused, not decoded.
+	if ((uint64_t)width * (uint64_t)height * 4 > kTGWebPMaxDecodedBytes)
+		return nil;
+
 	// RGBA, 4 bytes per pixel, straight into a buffer CGImage can own.
 	size_t stride = (size_t)width * 4;
 	size_t size = stride * (size_t)height;
@@ -44,7 +52,10 @@ static void tgFreePixels(void *info, const void *data, size_t size) {
 		CGDataProviderCreateWithData(NULL, pixels, size, tgFreePixels);
 	CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
 	CGImageRef cgImage = CGImageCreate(width, height, 8, 32, stride, space,
-			kCGBitmapByteOrderDefault | kCGImageAlphaPremultipliedLast,
+			// WebPDecodeRGBAInto writes straight alpha. Labelled premultiplied,
+			// every half-transparent edge pixel drew too bright - a pale rim
+			// round a sticker on a dark bubble.
+			kCGBitmapByteOrderDefault | kCGImageAlphaLast,
 			provider, NULL, NO, kCGRenderingIntentDefault);
 
 	UIImage *image = cgImage ? [UIImage imageWithCGImage:cgImage] : nil;

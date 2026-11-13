@@ -21,8 +21,8 @@
 
 @implementation TGUpdateHandlers (Files)
 
-- (BOOL)handleFilesUpdates:(NSString *)type obj:(NSDictionary *)obj {
-	switch (TGUpdateTypeFor(type.UTF8String, type.length)){
+- (BOOL)handleFilesUpdates:(NSString *)type kind:(TGUpdateType)kind obj:(NSDictionary *)obj {
+	switch (kind){
 	case TGUpdateFileAddedToDownloads:
 	case TGUpdateFileDownload:
 	case TGUpdateFileDownloads:
@@ -121,8 +121,7 @@
 		else if ([st isEqualToString:@"secretChatStateReady"])   word = @"ready";
 		else if ([st isEqualToString:@"secretChatStateClosed"])  word = @"closed";
 		else                                                     word = @"unknown";
-		if (self.client.onSecretChat)
-			self.client.onSecretChat([sc[@"id"] integerValue], word);
+		[self.client tellSecretChat:[sc[@"id"] integerValue] state:word];
 		return YES;
 	}
 

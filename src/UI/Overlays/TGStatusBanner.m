@@ -9,7 +9,6 @@
 #import <QuartzCore/QuartzCore.h>
 
 static const CGFloat kBannerH   = TGMetricConnectionBannerH;
-static const CGFloat kDotRadius = 3.5f;
 
 @implementation TGStatusBanner {
 	UIView *_dotView;

@@ -35,6 +35,17 @@ FOUNDATION_EXPORT NSString *const TGMessageStoreChangedNotification;
 @property (nonatomic, readonly, copy) NSArray *availableMessageEffectIds;
 @property (nonatomic, readonly, copy) NSArray *availableStickerEffectIds;
 @property (nonatomic, readonly) NSString *defaultReactionEmoji;
+/// A chat screen's live feed: new, changed and deleted messages of `chatId`,
+/// who is typing there, and secret-chat state. Any number of screens can
+/// listen at once, each to its own chat; the token goes to
+/// removeChatListener: when the screen leaves.
+- (id)addListenerForChat:(int64_t)chatId
+			   onMessage:(void (^)(NSDictionary *message, int64_t deletedId))onMessage
+			onChatAction:(void (^)(NSString *action))onChatAction
+			onSecretChat:(void (^)(NSInteger secretChatId, NSString *state))onSecretChat;
+- (void)removeChatListener:(id)token;
+
+/// One slot each, for the host tests. A screen uses addListenerForChat:.
 @property (nonatomic, copy) void (^onMessage)(int64_t chatId, NSDictionary *message, int64_t deletedId);
 @property (nonatomic, copy) void (^onChatAction)(int64_t chatId, NSString *action);
 @property (nonatomic, copy) void (^onSecretChat)(NSInteger secretChatId, NSString *state);

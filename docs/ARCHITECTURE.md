@@ -35,6 +35,15 @@ the main thread, rounded once, and kept in `TGImageLruCache` (120 entries) so a
 scrolling member list does not start a download per row. `reset` drops that
 cache when the account changes.
 
+# When the account changes
+
+`TGAccountStore resetStateForAccountSwitch` calls `[TGState reset]`, which
+empties every cache `TGState` declares; a test walks the property list, so a
+cache added later cannot be left out. A store that keeps a cache of its own
+keyed by a TDLib file id or user id observes `TGAccountDidSwitchNotification`
+and empties it: each account's database numbers its files from the start, so
+the same id is another picture after a switch.
+
 # How a screen subscribes
 
 A screen asks `TGPeerStore` for records and pictures. For changes it observes
@@ -53,6 +62,10 @@ event. A screen re-reads the peers it draws; it does not patch records itself.
   its allow entry.
 - `scripts/lint_tokens.sh` keeps sizes and colours in `TGStyle` / `TGTheme`.
 - `scripts/lint_size.sh` fails above 1800 lines.
+- `scripts/lint_statics.sh` fails on a static definition its file never reads,
+  and on the same stateful static copied word for word into two files. A
+  split copies the preamble; `scripts/prune_statics.py --apply` removes what a
+  part does not use.
 
 # The remaining domains
 

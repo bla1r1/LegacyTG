@@ -1,4 +1,5 @@
 #import "TGAccountStore.h"
+#import "TGState.h"
 #import "TGCallStore.h"
 #import "TGDownloadStore.h"
 //
@@ -174,7 +175,6 @@ NSString *TGAccountStoreDefaultsKey(NSString *base) {
 
 - (void)resetStateForAccountSwitch {
 	// Identity and the half-finished sign-in steps.
-	[TGClient shared].me = nil;
 	[TGClient shared].authState = TGAuthStateUnknown;
 	[TGClient shared].pendingPhoneNumber = nil;
 	[TGClient shared].codeInfo = nil;
@@ -185,16 +185,15 @@ NSString *TGAccountStoreDefaultsKey(NSString *base) {
 	[[TGClient shared] noteApplicationVerificationWithId:0 nonce:@""];
 	[[TGClient shared] setPushReceiverId:0];
 
-	// Chat and user caches.
-	[[TGClient shared].chatsById removeAllObjects];
-	[[TGClient shared].usersById removeAllObjects];
-	[[TGClient shared].rawUsersById removeAllObjects];
-	[[TGClient shared].userPhotosById removeAllObjects];
-	[[TGClient shared].forumSupergroups removeAllObjects];
-	[[TGClient shared].savedTopicsById removeAllObjects];
-	[TGClient shared].archivedChats = @[];
-	[TGClient shared].folders = @[];
-	[TGClient shared].chats = @[];
+	// A send still waiting on its upload is told it failed before the table
+	// that names it is emptied.
+	for (NSNumber *pending in [[TGClient shared].noteSendWaiters allKeys])
+		[[TGClient shared] noteSendFinished:pending.longLongValue sent:NO];
+	// Every cache TGState owns: chats, users, folders, communities, quick
+	// replies, revenue, the lot. One call, so a new cache cannot be missed.
+	[[TGState shared] reset];
+
+	// What the client keeps outside TGState.
 	[TGClient shared].chatListComplete = NO;
 	[TGClient shared].loadChatsAttempts = 0;
 	[TGClient shared].chatsAtLastLoad = 0;
@@ -202,38 +201,27 @@ NSString *TGAccountStoreDefaultsKey(NSString *base) {
 	[TGClient shared].batchingUpdates = NO;
 
 	// Account facts the settings and profile pages read from the client.
-	[TGClient shared].accentColorIds = @[];
-	[TGClient shared].profileAccentColorIds = @[];
-	[TGClient shared].accentColors = @[];
-	[TGClient shared].profileAccentColors = @[];
 	[TGClient shared].contactCloseBirthdays = @[];
 	[TGClient shared].freezeStateValue = nil;
 	[TGClient shared].ageVerificationParametersValue = nil;
 	[TGClient shared].recaptchaVerificationRequestValue = nil;
-	[[TGClient shared].userSubscriptionsById removeAllObjects];
 	[TGClient shared].reactionMessageEffectIds = @[];
 	[TGClient shared].stickerMessageEffectIds = @[];
 	[TGClient shared].defaultBackgroundValue = nil;
 	[TGClient shared].emojiChatThemesValue = @[];
 	[TGClient shared].stoppedMessageDraftValue = nil;
 	[TGClient shared].publishedVideoValue = nil;
-	for (NSNumber *pending in [[TGClient shared].noteSendWaiters allKeys])
-		[[TGClient shared] noteSendFinished:pending.longLongValue sent:NO];
 	[TGClient shared].storyMainListChatCount = 0;
 	[TGClient shared].storyArchiveListChatCount = 0;
 	[TGClient shared].storyStealthModeValue = nil;
 	[TGClient shared].ownedStarCountValue = 0;
-	[[TGClient shared].chatRevenueAmountByChat removeAllObjects];
-	[[TGClient shared].starRevenueStatusByOwner removeAllObjects];
 	[TGClient shared].reactionDefaultEmoji = nil;
 	[TGClient shared].reactionNotificationSettingsValue = nil;
 	[TGClient shared].gifSearchProvider = nil;
 	[TGClient shared].gifSearchEmojis = @[];
-	[TGClient shared].archiveSettings = nil;
 
 	// Tier 2, notifications and the misc caches.
 	[TGClient shared].textCompositionStylesValue = @[];
-	[[TGClient shared].directMessagesTopicsByChat removeAllObjects];
 	[TGClient shared].stakeDiceStateValue = nil;
 	[TGClient shared].activeNotificationGroupRows = @[];
 	[TGClient shared].activeNotificationGroupsValue = @[];
@@ -241,14 +229,7 @@ NSString *TGAccountStoreDefaultsKey(NSString *base) {
 	[TGClient shared].haveUnreceivedNotifications = NO;
 	[[TGClient shared].autosaveSettingsByScope removeAllObjects];
 	[TGClient shared].languagePackStringsByPack = nil;
-	[[TGClient shared].communitiesById removeAllObjects];
-	[[TGClient shared].communityOrder removeAllObjects];
-	[[TGClient shared].communityFullInfoById removeAllObjects];
-	[[TGClient shared].quickReplyShortcutsById removeAllObjects];
-	[[TGClient shared].quickReplyShortcutOrder removeAllObjects];
-	[[TGClient shared].quickReplyMessagesByShortcut removeAllObjects];
 	[TGClient shared].suggestedActionsValue = @[];
-	[[TGClient shared].checklistCache removeAllObjects];
 
 	// Connection, requests and the outbox.
 	[TGClient shared].connectionState = TGConnectionStateUnknown;

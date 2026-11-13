@@ -78,6 +78,8 @@ UIImage *TGChatListLockIcon(CGFloat side, UIColor *colour);
 /// YES once TDLib has answered with a list (even an empty one) or the
 /// connection reached ready; before that the empty state is a false claim.
 @property (nonatomic, assign) BOOL listAnswered;
+/// Tokens of the store observers; removed in dealloc.
+@property (nonatomic, strong) NSArray *storeObservers;
 @property (nonatomic, assign) NSTimeInterval snapshotWrittenAt;
 /// The stories strip's rows, newest first. Loaded from -activeStoryRowsForList:
 /// and only re-read when the last read is a few seconds old, because the

@@ -60,7 +60,6 @@ static void TGStoreDiskWrite(UIImage *image, NSString *name) {
 @end
 
 #if TARGET_OS_IPHONE
-static void TGStoreDrawFill(NSDictionary *fill, CGRect rect);
 #endif
 
 #pragma mark - colour and fill parsing

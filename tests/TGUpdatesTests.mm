@@ -202,6 +202,34 @@ static NSMutableDictionary *info(TGClient *c, int64_t chatId) {
 	TGOptionReset();
 }
 
+// ─── file progress ───────────────────────────────────────────────────────────
+
+/// updateFile arrives per network chunk. A step is passed on when it is 5 %
+/// further, 100 ms later or the end - not for every chunk.
+- (void)testFileProgress_SmallStepsInOneBurstAreNotTold {
+	TGClient *c = U();
+	void (^saved)(NSInteger, float) = c.onFileProgress;
+	NSMutableArray *told = [NSMutableArray array];
+	c.onFileProgress = ^(NSInteger fileId, float progress){
+		if (fileId == 918273)
+			[told addObject:@((int)(progress * 100 + 0.5f))];
+	};
+	NSDictionary *(^step)(NSInteger) = ^NSDictionary *(NSInteger got){
+		return @{@"@type" : @"updateFile",
+				 @"file" : @{@"id" : @(918273), @"expected_size" : @(100),
+							 @"local" : @{@"is_downloading_active" : @YES,
+										  @"downloaded_size" : @(got)}}};
+	};
+	[c handleUpdate:step(10)];
+	[c handleUpdate:step(11)];
+	[c handleUpdate:step(12)];
+	[c handleUpdate:step(20)];
+	[c handleUpdate:step(21)];
+	[c handleUpdate:step(100)];
+	c.onFileProgress = saved;
+	XCTAssertEqualObjects(told, (@[@(10), @(20), @(100)]));
+}
+
 // ─── downloads and full info ─────────────────────────────────────────────────
 
 - (void)testDownloadUpdates_EachOnePostsTheListNotification {

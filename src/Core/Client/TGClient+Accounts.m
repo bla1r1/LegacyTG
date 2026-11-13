@@ -34,6 +34,61 @@ NSString *TGAccountDatabaseDirectory(NSString *documents, NSInteger slot) {
 			[NSString stringWithFormat:@"tdlib-%ld", (long)slot]];
 }
 
+NSString *TGAccountDataRoot(void) {
+	static NSString *root = nil;
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{
+		NSString *library = [NSSearchPathForDirectoriesInDomains(
+				NSLibraryDirectory, NSUserDomainMask, YES) firstObject];
+		if (!library.length)
+			return;
+		NSString *path = [library stringByAppendingPathComponent:@"Accounts"];
+		NSError *error = nil;
+		if (![[NSFileManager defaultManager] createDirectoryAtPath:path
+				withIntermediateDirectories:YES attributes:nil error:&error]){
+			NSLog(@"TGClient: cannot create %@: %@", path, error);
+			return;
+		}
+		// The flag is inherited by everything inside: one call covers every
+		// slot's database and its files directory.
+		if (![[NSURL fileURLWithPath:path isDirectory:YES] setResourceValue:@YES
+				forKey:NSURLIsExcludedFromBackupKey error:&error])
+			NSLog(@"TGClient: cannot exclude %@ from backup: %@", path, error);
+		root = path;
+	});
+	return root;
+}
+
+NSString *TGAccountMoveDatabase(NSString *oldDirectory, NSString *newDirectory) {
+	if (!newDirectory.length)
+		return oldDirectory;
+	NSFileManager *fm = [NSFileManager defaultManager];
+	if (!oldDirectory.length || ![fm fileExistsAtPath:oldDirectory])
+		return newDirectory;
+	// Both exist only after a downgrade and a second upgrade. The new place
+	// wins and the old copy is left alone: which one is fresher cannot be
+	// told from here, and deleting a session is not this function's call.
+	if ([fm fileExistsAtPath:newDirectory])
+		return newDirectory;
+	// Same volume, so this is a rename: all of it moves or none of it does.
+	NSError *error = nil;
+	if (![fm moveItemAtPath:oldDirectory toPath:newDirectory error:&error]){
+		NSLog(@"TGClient: database stays at %@: %@", oldDirectory, error);
+		return oldDirectory;
+	}
+	return newDirectory;
+}
+
+NSString *TGAccountResolvedDatabaseDirectory(NSInteger slot) {
+	NSString *documents = [NSSearchPathForDirectoriesInDomains(
+			NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
+	NSString *old = TGAccountDatabaseDirectory(documents, slot);
+	NSString *root = TGAccountDataRoot();
+	if (!root)
+		return old;
+	return TGAccountMoveDatabase(old, TGAccountDatabaseDirectory(root, slot));
+}
+
 NSString *TGAccountDefaultsKey(NSString *base) {
 	NSInteger slot = [TGClient activeAccountSlot];
 	if (slot <= 0)

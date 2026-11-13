@@ -10,21 +10,6 @@
 #import "TGClient+Affiliate.h"
 #import "TGClientInternal.h"
 
-static NSDictionary *TGAFFDict(id value) {
-	return [value isKindOfClass:NSDictionary.class] ? value : @{};
-}
-
-static NSNumber *TGAFFNumber(id value) {
-	return [value isKindOfClass:NSNumber.class] ? value : @0;
-}
-
-static NSDictionary *TGAFFStarAmount(NSDictionary *amount) {
-	return @{
-		@"starCount" : TGAFFNumber(amount[@"star_count"]),
-		@"nanostarCount" : TGAFFNumber(amount[@"nanostar_count"]),
-	};
-}
-
 @implementation TGClient (Affiliate)
 
 @end

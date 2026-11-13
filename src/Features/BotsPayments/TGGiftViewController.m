@@ -17,7 +17,6 @@
 static const CGFloat kArtSide = TGMetricProfilePhotoSide;
 static const CGFloat kHeaderPadTop = TGMetricPadLarge;
 static const CGFloat kHeaderPadMid = TGMetricPadMedium;
-static const CGFloat kHeaderPadBottom = TGMetricPadLarge;
 static const CGFloat kTitleHeight = TGMetricLineTitle;
 static const CGFloat kHeaderHeight = TGMetricPadLarge + TGMetricProfilePhotoSide + TGMetricPadMedium + TGMetricLineTitle + TGMetricLineMicro + TGMetricPadLarge;
 static const CGFloat kRGBDivisor = 255.0f;

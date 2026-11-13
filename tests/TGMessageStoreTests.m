@@ -55,6 +55,43 @@
 	XCTAssertNil([TGClient shared].onMessage);
 }
 
+/// Chats stack (chat > profile > Send Message). With one slot the inner chat
+/// took the feed and cleared it on the way out; the outer one heard nothing
+/// after that. Each screen has a listener of its own now.
+- (void)testTwoChatListenersEachHearTheirOwnChat {
+	TGMessageStore *store = [TGMessageStore shared];
+	TGClient *c = [TGClient shared];
+	__block NSInteger outer = 0, inner = 0, typing = 0;
+	id outerToken = [store addListenerForChat:10
+			onMessage:^(NSDictionary *message, int64_t deletedId){ outer++; }
+			onChatAction:^(NSString *action){ typing++; }
+			onSecretChat:nil];
+	id innerToken = [store addListenerForChat:20
+			onMessage:^(NSDictionary *message, int64_t deletedId){ inner++; }
+			onChatAction:nil onSecretChat:nil];
+
+	[c handleUpdate:@{@"@type" : @"updateMessageContent", @"chat_id" : @(10), @"message_id" : @(1)}];
+	[c handleUpdate:@{@"@type" : @"updateMessageContent", @"chat_id" : @(20), @"message_id" : @(2)}];
+	XCTAssertEqual(outer, (NSInteger)1);
+	XCTAssertEqual(inner, (NSInteger)1);
+
+	// The inner chat is popped. The outer one goes on hearing.
+	[store removeChatListener:innerToken];
+	[c handleUpdate:@{@"@type" : @"updateMessageContent", @"chat_id" : @(10), @"message_id" : @(1)}];
+	[c handleUpdate:@{@"@type" : @"updateMessageContent", @"chat_id" : @(20), @"message_id" : @(2)}];
+	XCTAssertEqual(outer, (NSInteger)2);
+	XCTAssertEqual(inner, (NSInteger)1);
+
+	[c handleUpdate:@{@"@type" : @"updateChatAction", @"chat_id" : @(10),
+					  @"sender_id" : @{@"@type" : @"messageSenderUser", @"user_id" : @(7)},
+					  @"action" : @{@"@type" : @"chatActionTyping"}}];
+	XCTAssertEqual(typing, (NSInteger)1);
+
+	[store removeChatListener:outerToken];
+	[c handleUpdate:@{@"@type" : @"updateMessageContent", @"chat_id" : @(10), @"message_id" : @(1)}];
+	XCTAssertEqual(outer, (NSInteger)2);
+}
+
 - (void)testClassSchedulingHelpersAnswerTheSameRecords {
 	XCTAssertEqualObjects([TGMessageStore scheduledWhenOnline],
 						  [TGClient scheduledWhenOnline]);

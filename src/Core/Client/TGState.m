@@ -37,6 +37,38 @@
 	return state;
 }
 
+/// In place, not by replacing the containers: handlers and stores hold on to
+/// them across calls.
+- (void)reset {
+	[self.chatsById removeAllObjects];
+	[self.usersById removeAllObjects];
+	[self.rawUsersById removeAllObjects];
+	[self.userPhotosById removeAllObjects];
+	[self.forumSupergroups removeAllObjects];
+	[self.savedTopicsById removeAllObjects];
+	[self.userSubscriptionsById removeAllObjects];
+	[self.noteSendWaiters removeAllObjects];
+	[self.communitiesById removeAllObjects];
+	[self.communityOrder removeAllObjects];
+	[self.communityFullInfoById removeAllObjects];
+	[self.quickReplyShortcutsById removeAllObjects];
+	[self.quickReplyShortcutOrder removeAllObjects];
+	[self.quickReplyMessagesByShortcut removeAllObjects];
+	[self.directMessagesTopicsByChat removeAllObjects];
+	[self.checklistCache removeAllObjects];
+	[self.chatRevenueAmountByChat removeAllObjects];
+	[self.starRevenueStatusByOwner removeAllObjects];
+	self.archivedChats = @[];
+	self.folders = @[];
+	self.chats = @[];
+	self.accentColorIds = @[];
+	self.profileAccentColorIds = @[];
+	self.accentColors = @[];
+	self.profileAccentColors = @[];
+	self.archiveSettings = nil;
+	self.me = nil;
+}
+
 @end
 
 // vim:ft=objc

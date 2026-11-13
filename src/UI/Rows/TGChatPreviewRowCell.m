@@ -35,7 +35,8 @@ static NSUInteger TGAppearanceImageCacheLimit(void) {
 	return sizeof(void *) == 4 ? 3 * 1024 * 1024 : 32 * 1024 * 1024;
 }
 
-static UIImage *TGAppearancePatternImage(void) {
+/// Shared with the theme cards: one decoded pattern, not one per file.
+UIImage *TGAppearancePatternImage(void) {
 	static UIImage *pattern = nil;
 	static dispatch_once_t once;
 	dispatch_once(&once, ^{

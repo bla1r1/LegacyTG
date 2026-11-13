@@ -13,6 +13,13 @@
 
 + (instancetype)shared;
 
+/// Empties every cache below, in place, when the account changes. A property
+/// added here is cleared here too: the account store used to list the fields
+/// one by one, and a cache missing from that list showed one account's data
+/// under another. TGClientAccountSlotsTests walks the property list and
+/// fails on any that survives.
+- (void)reset;
+
 @property (nonatomic, strong) NSMutableDictionary *chatsById;
 @property (nonatomic, strong) NSMutableDictionary *usersById;
 @property (nonatomic, strong) TGObjectLruCache *rawUsersById;

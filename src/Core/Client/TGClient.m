@@ -72,6 +72,9 @@ NSString *const TGStarRevenueChangedNotification = @"TGStarRevenueChangedNotific
 NSString *const TGQuickRepliesChangedNotification = @"TGQuickRepliesChangedNotification";
 NSString *const TGSuggestedActionsChangedNotification = @"TGSuggestedActionsChangedNotification";
 
+@implementation TGChatListener
+@end
+
 @implementation TGClient
 
 
@@ -272,8 +275,7 @@ NSString *const TGSuggestedActionsChangedNotification = @"TGSuggestedActionsChan
 		};
 		[TGUpdateRouter shared].onMessageNudged = ^(int64_t chatId){
 			TGClient *client = weakClient;
-			if (client.onMessage)
-				client.onMessage(chatId, nil, 0);
+			[client tellChat:chatId message:nil deletedId:0];
 		};
 		[TGAccountSession shared].isRunning = ^BOOL{
 			return weakClient.running;
@@ -345,6 +347,63 @@ NSString *const TGSuggestedActionsChangedNotification = @"TGSuggestedActionsChan
 }
 
 
+
+#pragma mark - chat listeners
+
+/// Screens come and go on the main queue, and so do updates: no lock.
+static NSMutableArray *sChatListeners;
+
+- (void)addChatListener:(TGChatListener *)listener {
+	if (!listener)
+		return;
+	if (!sChatListeners)
+		sChatListeners = [NSMutableArray array];
+	if (![sChatListeners containsObject:listener])
+		[sChatListeners addObject:listener];
+}
+
+- (void)removeChatListener:(TGChatListener *)listener {
+	if (listener)
+		[sChatListeners removeObjectIdenticalTo:listener];
+}
+
+- (BOOL)hasListenerForChat:(int64_t)chatId {
+	for (TGChatListener *listener in sChatListeners)
+		if (listener.chatId == chatId)
+			return YES;
+	return NO;
+}
+
+- (void)tellChat:(int64_t)chatId message:(NSDictionary *)message deletedId:(int64_t)deletedId {
+	if (self.onMessage)
+		self.onMessage(chatId, message, deletedId);
+	if (!sChatListeners.count)
+		return;
+	// A copy: a listener may take itself off the list from inside its block.
+	for (TGChatListener *listener in [sChatListeners copy])
+		if (listener.chatId == chatId && listener.onMessage)
+			listener.onMessage(message, deletedId);
+}
+
+- (void)tellChat:(int64_t)chatId action:(NSString *)action {
+	if (self.onChatAction)
+		self.onChatAction(chatId, action);
+	if (!sChatListeners.count)
+		return;
+	for (TGChatListener *listener in [sChatListeners copy])
+		if (listener.chatId == chatId && listener.onChatAction)
+			listener.onChatAction(action);
+}
+
+- (void)tellSecretChat:(NSInteger)secretChatId state:(NSString *)state {
+	if (self.onSecretChat)
+		self.onSecretChat(secretChatId, state);
+	if (!sChatListeners.count)
+		return;
+	for (TGChatListener *listener in [sChatListeners copy])
+		if (listener.onSecretChat)
+			listener.onSecretChat(secretChatId, state);
+}
 
 #pragma mark - sending
 
@@ -422,7 +481,10 @@ NSDictionary *TGFormattedText(NSString *text) {
 
 - (void)handleAuthState:(NSDictionary *)state {
 	NSString *type = state[@"@type"];
-	NSLog(@"TGClient: <<< AUTH STATE: %@ details: %@", type, state);
+	// The type only. The body carries the phone number, the password hint,
+	// the email pattern and the QR login token, and stderr is a file in
+	// Caches (and, before iOS 7, a syslog any app can read).
+	NSLog(@"TGClient: <<< AUTH STATE: %@", type);
 
 	TGAuthState s = TGAuthStateUnknown;
 
@@ -478,11 +540,11 @@ NSDictionary *TGFormattedText(NSString *text) {
 }
 
 - (void)sendTdlibParameters {
-	NSString *docs = [NSSearchPathForDirectoriesInDomains(
-			NSDocumentDirectory, NSUserDomainMask, YES) objectAtIndex:0];
 	// Each account's database lives in its own directory so switching never
-	// opens another account's files; slot 0 keeps the pre-accounts path.
-	NSString *db = TGAccountDatabaseDirectory(docs, [TGClient activeAccountSlot]);
+	// opens another account's files. The directories sit outside Documents,
+	// out of the backup; one an older build left there is moved first. This
+	// runs on WaitTdlibParameters, before TDLib has opened anything.
+	NSString *db = TGAccountResolvedDatabaseDirectory([TGClient activeAccountSlot]);
 
 	int SETUP_API_ID(apiId)
 	char * SETUP_API_HASH(apiHash)

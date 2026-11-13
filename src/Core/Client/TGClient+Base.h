@@ -7,6 +7,22 @@
 #import "TGClientTypes.h"
 #import "TGClientNotifications.h"
 
+/// The live feed of one chat screen. A slot (`onMessage`, `onChatAction`,
+/// `onSecretChat`) has room for one screen, and chats stack: chat > profile >
+/// Send Message. The inner chat took the slots and cleared them on its way
+/// out, so the outer one stopped hearing anything. Any number of listeners
+/// can be registered; each hears its own chat only.
+@interface TGChatListener : NSObject
+@property (nonatomic, assign) int64_t chatId;
+/// `message` is the flattened form; nil with a `deletedId` is a deletion, nil
+/// with 0 means "something changed, re-read".
+@property (nonatomic, copy) void (^onMessage)(NSDictionary *message, int64_t deletedId);
+/// A phrase to show, or nil when they stopped.
+@property (nonatomic, copy) void (^onChatAction)(NSString *action);
+/// Secret chats have ids of their own, so every listener hears every one.
+@property (nonatomic, copy) void (^onSecretChat)(NSInteger secretChatId, NSString *state);
+@end
+
 @interface TGClient : NSObject
 
 + (instancetype)shared;
@@ -154,4 +170,16 @@
 /// trip. nil when the dylib has no execute symbol.
 - (NSDictionary *)executeSynchronously:(NSDictionary *)request;
 
+@end
+
+/// Main queue only, like the updates that feed it.
+@interface TGClient (ChatListeners)
+- (void)addChatListener:(TGChatListener *)listener;
+- (void)removeChatListener:(TGChatListener *)listener;
+/// Whether flattening a new message of this chat has anyone to go to.
+- (BOOL)hasListenerForChat:(int64_t)chatId;
+/// The update handlers' one way out: the slot first, then the listeners.
+- (void)tellChat:(int64_t)chatId message:(NSDictionary *)message deletedId:(int64_t)deletedId;
+- (void)tellChat:(int64_t)chatId action:(NSString *)action;
+- (void)tellSecretChat:(NSInteger)secretChatId state:(NSString *)state;
 @end

@@ -21,8 +21,8 @@
 
 @implementation TGUpdateHandlers (Account)
 
-- (BOOL)handleAccountUpdates:(NSString *)type obj:(NSDictionary *)obj {
-	switch (TGUpdateTypeFor(type.UTF8String, type.length)){
+- (BOOL)handleAccountUpdates:(NSString *)type kind:(TGUpdateType)kind obj:(NSDictionary *)obj {
+	switch (kind){
 	case TGUpdateDefaultReactionType: {
 		// The reaction their bar leads with. Kept here so the picker can put
 		// it first without asking the server again.

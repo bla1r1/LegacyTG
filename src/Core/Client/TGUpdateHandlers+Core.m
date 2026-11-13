@@ -21,8 +21,8 @@
 
 @implementation TGUpdateHandlers (Core)
 
-- (BOOL)handleCoreUpdates:(NSString *)type obj:(NSDictionary *)obj {
-	switch (TGUpdateTypeFor(type.UTF8String, type.length)){
+- (BOOL)handleCoreUpdates:(NSString *)type kind:(TGUpdateType)kind obj:(NSDictionary *)obj {
+	switch (kind){
 
 	case TGUpdateAuthorizationState: {
 		[self.client handleAuthState:obj[@"authorization_state"]];
@@ -66,8 +66,14 @@
 				}
 			}
 		}
-		if (self.client.onMessage && m)
-			self.client.onMessage([m[@"chat_id"] longLongValue], TGFlattenMessage(m), 0);
+		if (m){
+			// Flattening is the expensive half of a new message. It is done
+			// for a chat somebody has open, not for every chat that speaks
+			// while one is.
+			int64_t heardIn = [m[@"chat_id"] longLongValue];
+			if (self.client.onMessage || [self.client hasListenerForChat:heardIn])
+				[self.client tellChat:heardIn message:TGFlattenMessage(m) deletedId:0];
+		}
 		if (m[@"chat_id"])
 			[[TGUpdateRouter shared] noteMessagesChangedInChat:[m[@"chat_id"] longLongValue]];
 		[self.client handleInAppNotificationForNewMessage:m];
@@ -88,11 +94,9 @@
 			return YES;
 		int64_t chatId = [m[@"chat_id"] longLongValue];
 		NSDictionary *flat = TGFlattenMessage(m);
-		if (self.client.onMessage){
-			if (oldId)
-				self.client.onMessage(chatId, nil, oldId);
-			self.client.onMessage(chatId, flat, 0);
-		}
+		if (oldId)
+			[self.client tellChat:chatId message:nil deletedId:oldId];
+		[self.client tellChat:chatId message:flat deletedId:0];
 		// The send store keeps its own table; it hears the same update here
 		// rather than taking the chat's single onMessage slot.
 		NSMutableDictionary *info = [@{
@@ -111,19 +115,18 @@
 	}
 	case TGUpdateMessageContent: {
 		// Content changed in place (a photo finished uploading, a text edited).
-		if (self.client.onMessage)
-			self.client.onMessage([obj[@"chat_id"] longLongValue], nil, 0);
+		[self.client tellChat:[obj[@"chat_id"] longLongValue] message:nil deletedId:0];
 		[[TGUpdateRouter shared] noteMessagesChangedInChat:[obj[@"chat_id"] longLongValue]];
 		return YES;
 	}
 	case TGUpdateDeleteMessages: {
-		if ([obj[@"is_permanent"] boolValue] && self.client.onMessage){
+		if ([obj[@"is_permanent"] boolValue]){
 			int64_t chatId = [obj[@"chat_id"] longLongValue];
 			for (NSNumber *mid in obj[@"message_ids"]){
 				// Deleted while uploading: nothing left to wait for, and the
 				// sender did it, so it is not a failure to report.
 				[self.client noteSendFinished:[mid longLongValue] sent:YES];
-				self.client.onMessage(chatId, nil, [mid longLongValue]);
+				[self.client tellChat:chatId message:nil deletedId:[mid longLongValue]];
 			}
 			[[TGUpdateRouter shared] noteMessagesChangedInChat:chatId];
 		}

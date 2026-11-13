@@ -24,10 +24,54 @@ NSString *const TGFileGenerationUpdateNotification = @"TGFileGenerationUpdateNot
 - (void)markSavedMessagesRow;
 @end
 
+/// updateFile comes once per network chunk: dozens a second for one file,
+/// several files at a time. A progress bar needs ten a second. A step is
+/// passed on when 100 ms have gone by since the last one told, when the
+/// fraction moved by 5 %, when it reached the end, or when it went backwards
+/// (a restart). Completion is not progress and never comes through here.
+///
+/// A fixed table on the main queue: no boxing, no dictionary. The file that
+/// was told longest ago gives up its slot.
+enum { kProgressSlots = 16 };
+typedef struct {
+	NSInteger fileId;
+	double at;
+	float fraction;
+} TGProgressMark;
+static TGProgressMark sDownloadMarks[kProgressSlots];
+static TGProgressMark sUploadMarks[kProgressSlots];
+
+static BOOL TGProgressWorthTelling(TGProgressMark *marks, NSInteger fileId, float fraction) {
+	double now = CFAbsoluteTimeGetCurrent();
+	TGProgressMark *slot = NULL;
+	TGProgressMark *oldest = &marks[0];
+	for (int i = 0; i < kProgressSlots; i++){
+		if (marks[i].fileId == fileId){
+			slot = &marks[i];
+			break;
+		}
+		if (marks[i].at < oldest->at)
+			oldest = &marks[i];
+	}
+	if (!slot){
+		slot = oldest;
+		slot->fileId = fileId;
+		slot->at = 0;
+		slot->fraction = -1.0f;
+	}
+	BOOL soon = (now - slot->at) < 0.1;
+	BOOL smallStep = fraction >= slot->fraction && (fraction - slot->fraction) < 0.05f;
+	if (soon && smallStep && fraction < 1.0f)
+		return NO;
+	slot->at = now;
+	slot->fraction = fraction;
+	return YES;
+}
+
 @implementation TGUpdateHandlers (Misc)
 
-- (BOOL)handleMiscUpdates:(NSString *)type obj:(NSDictionary *)obj {
-	switch (TGUpdateTypeFor(type.UTF8String, type.length)){
+- (BOOL)handleMiscUpdates:(NSString *)type kind:(TGUpdateType)kind obj:(NSDictionary *)obj {
+	switch (kind){
 	case TGUpdateFile: {
 		NSDictionary *file = obj[@"file"];
 		NSInteger fid = [file[@"id"] integerValue];
@@ -35,19 +79,26 @@ NSString *const TGFileGenerationUpdateNotification = @"TGFileGenerationUpdateNot
 		if (self.client.onFileProgress && [local[@"is_downloading_active"] boolValue]){
 			double expected = [file[@"expected_size"] doubleValue];
 			double got = [local[@"downloaded_size"] doubleValue];
-			if (expected > 0)
-				self.client.onFileProgress(fid, (float)(got / expected));
+			if (expected > 0){
+				float fraction = (float)(got / expected);
+				if (TGProgressWorthTelling(sDownloadMarks, fid, fraction))
+					self.client.onFileProgress(fid, fraction);
+			}
 		}
 		if ([file[@"remote"][@"is_uploading_active"] boolValue]){
 			double expected = [file[@"expected_size"] doubleValue];
 			double uploaded = [file[@"remote"][@"uploaded_size"] doubleValue];
-			if (self.client.onFileUploadProgress && expected > 0)
-				self.client.onFileUploadProgress(fid, (float)(uploaded / expected));
-			[[NSNotificationCenter defaultCenter]
-					postNotificationName:TGFileUploadProgressNotification object:self
-								  userInfo:@{@"fileId" : @(fid), @"file" : file}];
-			if (expected > 0)
-				[self.client noteUploadProgress:fid fraction:(float)(uploaded / expected)];
+			float fraction = expected > 0 ? (float)(uploaded / expected) : 0.0f;
+			// Nothing below is allocated for a step nobody would see.
+			if (TGProgressWorthTelling(sUploadMarks, fid, fraction)){
+				if (self.client.onFileUploadProgress && expected > 0)
+					self.client.onFileUploadProgress(fid, fraction);
+				[[NSNotificationCenter defaultCenter]
+						postNotificationName:TGFileUploadProgressNotification object:self
+									  userInfo:@{@"fileId" : @(fid), @"file" : file}];
+				if (expected > 0)
+					[self.client noteUploadProgress:fid fraction:fraction];
+			}
 		}
 		BOOL done = [local[@"is_downloading_completed"] boolValue];
 		NSString *path = local[@"path"];
@@ -112,8 +163,7 @@ NSString *const TGFileGenerationUpdateNotification = @"TGFileGenerationUpdateNot
 			acting[@"action"] = phrase ?: @"";
 			[self.client markChatRowDirty:actingChat];
 		}
-		if (self.client.onChatAction)
-			self.client.onChatAction(actingChat, phrase);
+		[self.client tellChat:actingChat action:phrase];
 		return YES;
 	}
 

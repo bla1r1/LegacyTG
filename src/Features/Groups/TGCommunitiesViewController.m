@@ -13,14 +13,19 @@
 - (void)viewDidLoad {
 	self.title = @"Community";
 	[super viewDidLoad];
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGCommunitiesChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note){ [self rebuild]; }];
+	// A selector observer: the block form kept self alive for good, and
+	// removeObserver:self in dealloc does not remove a block observer.
+	[[NSNotificationCenter defaultCenter] addObserver:self
+			selector:@selector(rebuildFromNotification:) name:TGCommunitiesChangedNotification object:nil];
 	[self rebuild];
 }
 
 - (void)dealloc {
 	[[NSNotificationCenter defaultCenter] removeObserver:self];
+}
+
+- (void)rebuildFromNotification:(NSNotification *)note {
+	[self rebuild];
 }
 
 - (void)viewWillAppear:(BOOL)animated {

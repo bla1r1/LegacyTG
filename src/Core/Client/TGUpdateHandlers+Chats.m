@@ -21,8 +21,8 @@
 
 @implementation TGUpdateHandlers (Chats)
 
-- (BOOL)handleChatsUpdates:(NSString *)type obj:(NSDictionary *)obj {
-	switch (TGUpdateTypeFor(type.UTF8String, type.length)){
+- (BOOL)handleChatsUpdates:(NSString *)type kind:(TGUpdateType)kind obj:(NSDictionary *)obj {
+	switch (kind){
 	case TGUpdateNewChat: {
 		[self.client mergeChat:obj[@"chat"]];
 		return YES;

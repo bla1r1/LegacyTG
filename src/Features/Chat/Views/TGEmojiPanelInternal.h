@@ -92,3 +92,7 @@
 - (void)backspaceTapped;
 - (void)customEmojiLoaded:(NSNotification *)note;
 @end
+
+/// Pictures decoded for the grid and the strip, by file id. One cache for
+/// every part of the panel: defined in TGEmojiPanelBase.m, not per file.
+FOUNDATION_EXPORT NSCache *TGPanelImageCache(void);

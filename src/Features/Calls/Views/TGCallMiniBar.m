@@ -29,92 +29,14 @@
 
 
 
-static const CGFloat kTGCallPipWidth = 96.0f;
-static const CGFloat kTGCallPipHeight = 128.0f;
-static const CGFloat kTGCallFlipBtnSide = 32.0f;
 
 // A gradient layer wants CGColorRefs; the palette hands out UIColors.
-static NSArray *TGCallGradient(NSArray *colours) {
-    NSMutableArray *refs = [NSMutableArray arrayWithCapacity:colours.count];
-    for (UIColor *colour in colours)
-        [refs addObject:(id)colour.CGColor];
-    return refs;
-}
 
 typedef NS_ENUM(NSInteger, TGCallCircleStyle) {
 	TGCallCircleStyleOutline = 0,
 	TGCallCircleStyleFilled,
 	TGCallCircleStyleSolid
 };
-
-/// Cached circle images for call buttons drawn flat with CoreGraphics.
-/// Outline buttons draw a stroke of TGMetricBorderMedium and fill with
-/// callControlColour on highlight. Filled and solid buttons fill the oval,
-/// dimming by TGTransformScaleButtonActive on highlight.
-static UIImage *TGCallCircleImage(CGFloat side, UIColor *colour, TGCallCircleStyle style, BOOL highlighted) {
-	static NSMutableDictionary *cache = nil;
-	static dispatch_once_t onceToken;
-	dispatch_once(&onceToken, ^{
-		cache = [[NSMutableDictionary alloc] init];
-	});
-
-	CGFloat r = 0, g = 0, b = 0, a = 1.0f;
-	if (![colour getRed:&r green:&g blue:&b alpha:&a]) {
-		CGFloat w = 0;
-		if ([colour getWhite:&w alpha:&a]) {
-			r = w; g = w; b = w;
-		} else {
-			r = 1.0f; g = 1.0f; b = 1.0f; a = 1.0f;
-		}
-	}
-
-	NSString *styleKey = (style == TGCallCircleStyleOutline) ? @"outline" :
-						 (style == TGCallCircleStyleFilled)  ? @"filled" : @"solid";
-	NSString *key = [NSString stringWithFormat:@"circle_%.0f_r%.2f_g%.2f_b%.2f_a%.2f_%@_%@",
-					 side, r, g, b, a, styleKey, highlighted ? @"high" : @"norm"];
-	UIImage *cached = cache[key];
-	if (cached)
-		return cached;
-
-	UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), NO, 0.0f);
-	CGContextRef ctx = UIGraphicsGetCurrentContext();
-
-	if (style == TGCallCircleStyleOutline) {
-		CGFloat strokeWidth = TGMetricBorderMedium;
-		CGFloat inset = TGHalf(strokeWidth);
-		CGRect rect = CGRectInset(CGRectMake(0, 0, side, side), inset, inset);
-		UIBezierPath *path = [UIBezierPath bezierPathWithOvalInRect:rect];
-		path.lineWidth = strokeWidth;
-
-		if (highlighted) {
-			[[[TGTheme shared] callControlColour] setFill];
-			[path fill];
-		}
-		[colour setStroke];
-		[path stroke];
-	} else {
-		CGRect rect = CGRectMake(0, 0, side, side);
-		UIBezierPath *path = [UIBezierPath bezierPathWithOvalInRect:rect];
-		if (highlighted) {
-			CGContextSetRGBFillColor(ctx,
-									 r * TGTransformScaleButtonActive,
-									 g * TGTransformScaleButtonActive,
-									 b * TGTransformScaleButtonActive,
-									 a);
-			[path fill];
-		} else {
-			[colour setFill];
-			[path fill];
-		}
-	}
-
-	UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
-	UIGraphicsEndImageContext();
-
-	if (image)
-		cache[key] = image;
-	return image;
-}
 
 
 @implementation TGCallMiniBar {

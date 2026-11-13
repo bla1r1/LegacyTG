@@ -3,6 +3,12 @@
 
 @implementation TGChatListViewController
 
+- (void)dealloc {
+	// Block observers are not removed by removeObserver:self.
+	for (id observer in self.storeObservers)
+		[[NSNotificationCenter defaultCenter] removeObserver:observer];
+}
+
 /// The first search result replaces the chats with a different list, so a
 /// transition on the table's layer makes those rows dissolve over the old
 /// list instead of swapping in one frame.

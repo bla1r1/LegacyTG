@@ -10,7 +10,13 @@ FOUNDATION_EXPORT NSString *const TGPasscodeDidUnlockNotification;
 @interface TGPasscode : NSObject
 
 + (BOOL)hasPasscode;
+/// NO for a wrong PIN, and NO without looking while retryDelay is running.
+/// A PIN stored by an older build (bare SHA-256 in the defaults) is moved to
+/// the keychain record the first time it is entered correctly.
 + (BOOL)verifyPasscode:(NSString *)pin;
+/// Seconds until the next entry is looked at: 0 for the first four wrong
+/// entries, then 1, 5, 15 and 60 minutes. Survives a relaunch.
++ (NSTimeInterval)retryDelay;
 + (void)setPasscode:(NSString *)pin;
 + (void)clearPasscode;
 

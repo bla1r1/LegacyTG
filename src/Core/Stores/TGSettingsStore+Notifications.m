@@ -6,10 +6,6 @@
 #import "TGClient+AccountSupport.h"
 
 
-/// Defined with the autosave reads below; the update branch above it only
-/// needs the same flattening so both paths produce one row shape.
-static NSDictionary *TGFlattenAutosaveScope(NSDictionary *settings);
-
 /// TDLib names the three scopes; the app names them shortly.
 static NSString *TGScopeType(NSString *scope) {
 	if ([scope isEqualToString:@"groups"])   return @"notificationSettingsScopeGroupChats";
@@ -17,22 +13,6 @@ static NSString *TGScopeType(NSString *scope) {
 	return @"notificationSettingsScopePrivateChats";
 }
 
-/// Kept as a compatibility call into the pure gift flattening utility.
-static NSDictionary *TGFlattenGift(NSDictionary *entry) {
-	return TGFlattenReceivedGift(entry);
-}
-
-
-static NSArray *TGPacksFrom(NSDictionary *target) {
-	NSMutableArray *out = [NSMutableArray array];
-	for (NSDictionary *pack in target[@"language_packs"]){
-		if (![pack[@"id"] length])
-			continue;
-		[out addObject:@{@"id"   : pack[@"id"],
-						 @"name" : pack[@"native_name"] ?: pack[@"name"] ?: pack[@"id"]}];
-	}
-	return out;
-}
 
 
 

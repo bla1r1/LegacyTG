@@ -12,7 +12,6 @@
 /// grid. The thumbnail is drawn only when it is a still picture; a .tgs or
 /// .webm thumbnail is left to the emoji beside it.
 static NSDictionary *TGSFlattenCustomEmojiSet(NSDictionary *set);
-static NSArray *TGSFlattenCustomEmojiSets(NSArray *sets);
 
 static int64_t TGSStickerOwnerUserId(void) {
 	return [[TGClient shared].me[@"id"] longLongValue];
@@ -1246,16 +1245,4 @@ static NSDictionary *TGSFlattenCustomEmojiSet(NSDictionary *set) {
 		@"title"  : title,
 		@"emojis" : emojis
 	};
-}
-
-static NSArray *TGSFlattenCustomEmojiSets(NSArray *sets) {
-	if (![sets isKindOfClass:NSArray.class])
-		return @[];
-	NSMutableArray *out = [NSMutableArray array];
-	for (NSDictionary *set in sets){
-		NSDictionary *flat = TGSFlattenCustomEmojiSet(set);
-		if (flat)
-			[out addObject:flat];
-	}
-	return out;
 }

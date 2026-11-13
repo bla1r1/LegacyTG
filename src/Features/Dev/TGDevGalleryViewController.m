@@ -7,11 +7,9 @@
 #import "TGSnackbar.h"
 
 static const CGFloat kSectionGap = TGMetricPadWide;
-static const CGFloat kRowHeight = TGMetricRow;
 static const CGFloat kControlGap = TGMetricPadMedium;
 static const CGFloat kLabelHeight = 22.0f;
 static const CGFloat kCardHeight = 130.0f;
-static const CGFloat kSmallCardHeight = 90.0f;
 static const CGFloat kGalleryBubbleW = 230.0f;
 static const CGFloat kIncomingBubbleH = 58.0f;
 static const CGFloat kOutgoingBubbleH = 68.0f;

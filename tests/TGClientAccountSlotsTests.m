@@ -11,6 +11,8 @@
 #import "TGClientInternal.h"
 #import "TGStoreTestSupport.h"
 #import "TGAccountStore.h"
+#import "TGState.h"
+#import <objc/runtime.h>
 
 @interface TGClientAccountSlotsTests : XCTestCase @end
 
@@ -62,6 +64,84 @@ static TGClient *SlotsClient(void) {
 			@"Documents/tdlib");
 	XCTAssertEqualObjects(TGAccountDatabaseDirectory(@"Documents", 2),
 			@"Documents/tdlib-2");
+}
+
+/// The database held the session in Documents, which iTunes and iCloud back
+/// up. It is moved once; a move that cannot happen keeps the old place, and a
+/// database already at the new place is not replaced.
+- (void)testDatabaseDirectory_MovesOutOfDocumentsOnce {
+	NSFileManager *fm = [NSFileManager defaultManager];
+	NSString *tmp = [NSTemporaryDirectory() stringByAppendingPathComponent:
+			[NSString stringWithFormat:@"tg-move-%u", arc4random()]];
+	NSString *oldDir = [tmp stringByAppendingPathComponent:@"Documents/tdlib"];
+	NSString *newRoot = [tmp stringByAppendingPathComponent:@"Library/Accounts"];
+	NSString *newDir = [newRoot stringByAppendingPathComponent:@"tdlib"];
+	[fm createDirectoryAtPath:oldDir withIntermediateDirectories:YES attributes:nil error:nil];
+	[fm createDirectoryAtPath:newRoot withIntermediateDirectories:YES attributes:nil error:nil];
+	[@"old" writeToFile:[oldDir stringByAppendingPathComponent:@"td.binlog"]
+			 atomically:YES encoding:NSUTF8StringEncoding error:nil];
+
+	XCTAssertEqualObjects(TGAccountMoveDatabase(oldDir, newDir), newDir);
+	XCTAssertFalse([fm fileExistsAtPath:oldDir]);
+	XCTAssertEqualObjects([NSString stringWithContentsOfFile:
+			[newDir stringByAppendingPathComponent:@"td.binlog"]
+			encoding:NSUTF8StringEncoding error:nil], @"old");
+
+	// A fresh install has nothing to move and opens the new place.
+	XCTAssertEqualObjects(TGAccountMoveDatabase(oldDir, newDir), newDir);
+
+	// An old build ran again and made Documents/tdlib: the new one is kept.
+	[fm createDirectoryAtPath:oldDir withIntermediateDirectories:YES attributes:nil error:nil];
+	[@"stale" writeToFile:[oldDir stringByAppendingPathComponent:@"td.binlog"]
+			   atomically:YES encoding:NSUTF8StringEncoding error:nil];
+	XCTAssertEqualObjects(TGAccountMoveDatabase(oldDir, newDir), newDir);
+	XCTAssertEqualObjects([NSString stringWithContentsOfFile:
+			[newDir stringByAppendingPathComponent:@"td.binlog"]
+			encoding:NSUTF8StringEncoding error:nil], @"old");
+
+	// No parent for the destination: the move fails and the old place is used.
+	NSString *nowhere = [tmp stringByAppendingPathComponent:@"missing/parent/tdlib"];
+	XCTAssertEqualObjects(TGAccountMoveDatabase(oldDir, nowhere), oldDir);
+	XCTAssertTrue([fm fileExistsAtPath:oldDir]);
+
+	[fm removeItemAtPath:tmp error:nil];
+}
+
+/// A cache added to TGState and not to its reset is one account's data shown
+/// under the next. Every declared property is filled, then reset must leave
+/// each one nil or empty - whatever is added later included.
+- (void)testStateReset_LeavesNoPropertyBehind {
+	TGState *state = [TGState shared];
+	unsigned int count = 0;
+	objc_property_t *properties = class_copyPropertyList([TGState class], &count);
+	XCTAssertGreaterThan(count, (unsigned int)20);
+	NSMutableArray *names = [NSMutableArray array];
+	for (unsigned int i = 0; i < count; i++){
+		NSString *name = @(property_getName(properties[i]));
+		NSString *attributes = @(property_getAttributes(properties[i]));
+		[names addObject:name];
+		id value = [state valueForKey:name];
+		if ([attributes rangeOfString:@"Mutable"].location != NSNotFound ||
+			[attributes rangeOfString:@"LruCache"].location != NSNotFound){
+			XCTAssertNotNil(value);
+			if ([value isKindOfClass:NSMutableArray.class])
+				[value addObject:@(1)];
+			else
+				[value setObject:@(1) forKey:@(1)];
+		} else if ([attributes rangeOfString:@"NSArray"].location != NSNotFound){
+			[state setValue:@[@(1)] forKey:name];
+		} else {
+			[state setValue:@{@"id" : @(1)} forKey:name];
+		}
+	}
+	free(properties);
+
+	[state reset];
+
+	for (NSString *name in names){
+		id value = [state valueForKey:name];
+		XCTAssertTrue(value == nil || [value count] == 0);
+	}
 }
 
 // ─── addAccount ──────────────────────────────────────────────────────────────

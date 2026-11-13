@@ -47,20 +47,6 @@
 
 
 
-/// The pin in the strip under the bar, and where its two lines begin after it.
-static const CGFloat kPinnedGlyph = 14.0f;
-static const CGFloat kPinnedTextX = TGMetricPadLarge + kPinnedGlyph + TGMetricPadSmall;
-/// Finds the message line when the strip already exists and only its text changes.
-static const NSInteger kPinnedBodyTag = 0x9010;
-/// The bar that stands in for the composer: mute for a channel you follow,
-/// join for one you have not joined yet. One tag per state, so a second answer
-/// replaces the bar instead of stacking another one on top.
-static const NSInteger kChatMuteBarTag = 0x9020;
-static const NSInteger kChatJoinGroupBarTag = 0x9021;
-static const NSInteger kChatJoinChannelBarTag = 0x9022;
-static const NSInteger kChatDiscussBarTag = 0x9023;
-static const NSInteger kChatChannelBottomBarTag = 0x9024;
-
 #pragma mark - controller
 
 

@@ -44,9 +44,6 @@ static const CGFloat kClockWidth    = 52.0f;
 static const CGFloat kThumbSide     = 42.0f;
 static const CGFloat kThumbGap      = 6.0f;
 static const CGFloat kThumbStripH   = 54.0f;
-/// The software decoder is measured at 480x480; anything over 720 on its
-/// long side (1080x1080 is 19-25 fps) is not attempted.
-static const int kSoftVideoMaxLongSide = 720;
 
 /// A view whose whole job is to keep the player layer filling it. A CALayer
 /// does not autoresize, and this app rotates - the old movie view had its

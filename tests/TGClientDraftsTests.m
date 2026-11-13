@@ -327,6 +327,53 @@ static NSUInteger countRequestsOfType(TGClient *c, NSString *type) {
 	XCTAssertFalse([TGPasscode hasPasscode]);
 }
 
+/// Builds up to this one kept a bare SHA-256 of the PIN in the defaults. The
+/// first correct entry moves it to the salted record and removes the hash; a
+/// wrong entry leaves it where it was.
+- (void)testPasscode_LegacyHashMovesOnFirstCorrectEntry {
+	NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
+	[TGPasscode clearPasscode];
+	// SHA-256("1234")
+	[d setObject:@"03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4"
+		  forKey:@"TGPasscodeHash"];
+	XCTAssertTrue([TGPasscode hasPasscode]);
+
+	XCTAssertFalse([TGPasscode verifyPasscode:@"0000"]);
+	XCTAssertNotNil([d stringForKey:@"TGPasscodeHash"]);
+
+	XCTAssertTrue([TGPasscode verifyPasscode:@"1234"]);
+	XCTAssertNil([d stringForKey:@"TGPasscodeHash"]);
+	XCTAssertTrue([TGPasscode hasPasscode]);
+	XCTAssertTrue([TGPasscode verifyPasscode:@"1234"]);
+	XCTAssertFalse([TGPasscode verifyPasscode:@"0000"]);
+
+	[TGPasscode clearPasscode];
+}
+
+/// Four wrong entries are free; the fifth starts a wait, during which even
+/// the right PIN is refused, and the wait survives in the defaults.
+- (void)testPasscode_WrongEntriesStartAWait {
+	NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
+	[TGPasscode clearPasscode];
+	[TGPasscode setPasscode:@"1234"];
+
+	for (int i = 0; i < 4; i++)
+		XCTAssertFalse([TGPasscode verifyPasscode:@"0000"]);
+	XCTAssertEqual([TGPasscode retryDelay], (NSTimeInterval)0);
+	XCTAssertFalse([TGPasscode verifyPasscode:@"0000"]);
+	XCTAssertGreaterThan([TGPasscode retryDelay], (NSTimeInterval)0);
+	XCTAssertLessThanOrEqual([TGPasscode retryDelay], (NSTimeInterval)60);
+	XCTAssertFalse([TGPasscode verifyPasscode:@"1234"]);
+
+	// The wait is over: the right PIN opens and the count starts again.
+	[d setDouble:[NSDate timeIntervalSinceReferenceDate] - 1 forKey:@"TGPasscodeRetryAfter"];
+	XCTAssertEqual([TGPasscode retryDelay], (NSTimeInterval)0);
+	XCTAssertTrue([TGPasscode verifyPasscode:@"1234"]);
+	XCTAssertEqual([d integerForKey:@"TGPasscodeFailedAttempts"], (NSInteger)0);
+
+	[TGPasscode clearPasscode];
+}
+
 @end
 
 // vim:ft=objc
