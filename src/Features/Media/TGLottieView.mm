@@ -1,6 +1,7 @@
 //
 // TGLottieView.mm - High-performance C++ vector animation & WebM VP9 renderer for Telegram stickers.
 //
+#import "TGLottieSupport.h"
 #import "TGLottieView.h"
 #import "TGStyle.h"
 #import "TGJson.h"
@@ -1027,10 +1028,18 @@ static BOOL sBuildsDeferred = NO;
 				model.frameRate = [anim[@"fr"] doubleValue] ?: 60.0;
 				model.canvas = CGSizeMake([anim[@"w"] doubleValue], [anim[@"h"] doubleValue]);
 				ok = model.layers.count > 0 && model.canvas.width > 0;
+				// Drawn without what it needs, the file is a wrong picture
+				// rather than none; the still is the right one.
+				NSString *missing = ok ? TGLottieUnsupportedFeature(anim) : nil;
+				if (missing) {
+					model.blank = YES;
+					NSLog(@"TGLottie: %@ needs a %@, keeping the still",
+							path.lastPathComponent, missing);
+				}
 				// Frame 0 comes from the same queue: the sticker's very first
 				// appearance on the A4 was a synchronous raster inside the
 				// push burst.
-				if (ok) {
+				if (ok && !model.blank) {
 					CGImageRef f0 = TGRasterizeLottieFrame(model, model.inPoint, targetPxSize);
 					if (f0) {
 						model.firstFrame = [UIImage imageWithCGImage:f0];

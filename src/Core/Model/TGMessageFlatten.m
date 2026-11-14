@@ -359,6 +359,9 @@ NSDictionary *TGFlattenMessage(NSDictionary *m) {
 	NSString *transcription = @""; // a voice note's text, once recognized
 	BOOL transcriptionPending = NO;
 	NSString *extra       = nil;   // text the content itself carries
+	// A custom emoji sent alone arrives as an animated emoji whose sticker
+	// names it; its still comes from the custom emoji store.
+	NSNumber *stickerEmojiId = nil;
 	NSNumber *latitude = nil, *longitude = nil;
 	NSDictionary *contactDict = nil;
 	NSDictionary *venueDict   = nil;
@@ -474,6 +477,10 @@ NSDictionary *TGFlattenMessage(NSDictionary *m) {
 		}
 
 		extra = content[@"emoji"] ?: sticker[@"emoji"];
+		id customId = sticker[@"full_type"][@"custom_emoji_id"];
+		if (([customId isKindOfClass:NSNumber.class] || [customId isKindOfClass:NSString.class]) &&
+				[customId longLongValue] != 0)
+			stickerEmojiId = @([customId longLongValue]);
 
 	} else if ([ctype isEqualToString:@"messageDocument"]){
 		photoFileId = content[@"document"][@"thumbnail"][@"file"][@"id"];
@@ -929,6 +936,7 @@ NSDictionary *TGFlattenMessage(NSDictionary *m) {
 		@"videoFallbackId" : videoFallbackId ?: [NSNull null],
 		@"docThumbFileId" : docThumbFileId ?: @(0),
 		@"docName"   : docName     ?: @"",
+		@"stickerEmojiId" : stickerEmojiId ?: @(0),
 		@"docSize"   : docSize     ?: @(0),
 		@"transcription" : transcription ?: @"",
 		@"transcriptionPending" : @(transcriptionPending),

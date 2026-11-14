@@ -1,3 +1,4 @@
+#import "TGLoginLogic.h"
 #import "TGTextDraw.h"
 #import "TGLocalization.h"
 #import "TGLoginViewControllerInternal.h"
@@ -208,24 +209,22 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
 /// counted: "Forgot password?" landed one row lower, under the keyboard of a
 /// 3.5-inch screen.
 - (CGFloat)placeActionButtonAtY:(CGFloat)y width:(CGFloat)width {
-    CGFloat next = TGStackPlace(self.actionButton, y, TGMetricRow, width, TGMetricGutter);
-    return width < 360.0f ? y : next;
+    TGStackPlace(self.actionButton, y, TGMetricRow, width, TGMetricGutter);
+    return TGLoginYAfterActionRow(y, width);
 }
 
 /// One primary action per screen: the bottom Continue on a wide layout, the
 /// navigation-bar Next below 360 pt, where the keyboard leaves no room for a
 /// pinned button.
 - (void)updatePrimaryActionForWidth:(CGFloat)width {
-    BOOL narrow = width < 360.0f;
-    BOOL codeStep = (self.currentStep == TGLoginStepCode);
     BOOL fieldStep = (self.currentStep == TGLoginStepPhone ||
                       self.currentStep == TGLoginStepPassword ||
                       self.currentStep == TGLoginStepRegister ||
                       self.currentStep == TGLoginStepEmail ||
                       self.currentStep == TGLoginStepEmailCode ||
                       self.currentStep == TGLoginStepRecoveryCode);
-    self.actionButton.hidden = narrow || !fieldStep || codeStep;
-    self.navigationItem.rightBarButtonItem = narrow ? self.nextItem : nil;
+    self.actionButton.hidden = !TGLoginShowsBottomButton(fieldStep, width);
+    self.navigationItem.rightBarButtonItem = TGLoginUsesBarNext(width) ? self.nextItem : nil;
 }
 
 - (void)updateCodeBoxes {

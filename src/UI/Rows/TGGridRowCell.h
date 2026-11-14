@@ -9,6 +9,7 @@
 #import <UIKit/UIKit.h>
 #include <TargetConditionals.h>
 #import "TGStyle.h"
+#import "TGRowGeometry.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -31,19 +32,6 @@ static inline NSInteger TGGridColumnsForWidth(CGFloat width,
 	if (columns > TGMetricGridMaxColumns)
 		columns = TGMetricGridMaxColumns;
 	return columns;
-}
-
-/// The side of one square tile in a line of `columns`, after the cell inset
-/// and the gaps. Rounded down so a fractional point never overflows the card.
-static inline CGFloat TGGridTileSideForWidth(CGFloat width,
-		NSInteger columns) {
-	if (columns < 1)
-		return 0;
-	CGFloat usable = width - TGMetricGridInset * 2.0f -
-			(CGFloat)(columns - 1) * TGMetricGridGap;
-	if (usable <= 0)
-		return 0;
-	return floorf(usable / (CGFloat)columns);
 }
 
 /// The row height for a line of tiles. A caption adds one line under the

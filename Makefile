@@ -484,6 +484,7 @@ APP_SRC_M := \
 	src/Features/Auth/TGLoginViewController.m \
 	src/Features/Auth/TGLoginViewController+Phone.m \
 	src/Features/Auth/TGLoginViewController+Steps.m \
+	src/Features/Auth/TGLoginLogic.m \
 	src/Features/ChatList/TGChatListViewController.m \
 	src/Features/ChatList/Core/TGChatListSnapshot.m \
 	src/Features/ChatList/Core/TGChatListLifecycle.m \
@@ -548,6 +549,9 @@ APP_SRC_M := \
 	src/Features/Chat/Actions/TGChatViewController+MessageSheets.m \
 	src/Features/Chat/Rendering/TGChatViewController+Layout.m \
 	src/Features/Chat/Rendering/TGChatViewController+Cells.m \
+	src/Features/Chat/Rendering/TGChatCellLogic.m \
+	src/Features/Chat/Rendering/TGMessageMetrics.m \
+	src/Features/Chat/Rendering/TGMessageRowLayout.m \
 	src/Features/Chat/Rendering/TGChatViewController+ServiceCells.m \
 	src/Features/Chat/Composer/TGChatViewController+AudioCells.m \
 	src/Features/Chat/Composer/TGChatViewController+MediaCells.m \
@@ -671,6 +675,7 @@ APP_SRC_M := \
 	src/UI/Rows/TGRows.m \
 	src/UI/Rows/TGRowCell.m \
 	src/UI/Rows/TGGridRowCell.m \
+	src/UI/Rows/TGRowGeometry.m \
 	src/UI/Rows/TGPeerRowCell.m \
 	src/UI/Rows/TGFieldRowCell.m \
 	src/UI/Rows/TGChatRowCell.m \
@@ -717,6 +722,7 @@ APP_SRC_M := \
 	src/Media/UIImage+WebP.m \
 	src/Media/TGPatternImage.m \
 	src/Media/TGStickerImage.m \
+	src/Media/TGLottieSupport.m \
 	src/Media/TGWebMDecoder.m \
 	src/Media/TGSoftVideoPlayer.m \
 	src/Features/Media/TGMediaViewer.m \

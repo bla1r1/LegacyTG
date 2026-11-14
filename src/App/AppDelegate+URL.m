@@ -37,6 +37,7 @@ static const CGFloat kIconDumpSide = 52.0f;
 #import "TGUpdateInfoViewController.h"
 #import "TGNavController.h"
 #import <QuartzCore/QuartzCore.h>
+#import <objc/runtime.h>
 #import "TGAccountStore.h"
 #import "TGSettingsStore.h"
 #import "TGLocalization.h"
@@ -1266,6 +1267,50 @@ static NSUInteger TGChatsIndex(UITabBarController *tabs) {
 
 			NSLog(@"theme: %@ -> %@", arg,
 					[[TGTheme shared] selectThemeId:themeId] ? @"applied" : @"rejected");
+		});
+		return YES;
+	}
+
+	// itglegacy://dumplayout - every row of the open chat laid out afresh, all
+	// TGMessageLayout properties, into Caches/layouts.json. Moving the layout
+	// out of the screen must leave this file byte for byte the same.
+	if ([host isEqualToString:@"dumplayout"]){
+		dispatch_async(dispatch_get_main_queue(), ^{
+			UITabBarController *tabs = [self activeTabBarController];
+			UIViewController *top = [tabs isKindOfClass:UITabBarController.class]
+					? [tabs.viewControllers[tabs.selectedIndex] topViewController] : nil;
+			if (![top isKindOfClass:TGChatViewController.class])
+				return;
+			TGChatViewController *chat = (TGChatViewController *)top;
+			[chat.layoutCache removeAllObjects];
+			unsigned int count = 0;
+			objc_property_t *props = class_copyPropertyList(TGMessageLayout.class, &count);
+			NSMutableArray *names = [NSMutableArray array];
+			for (unsigned int i = 0; i < count; i++)
+				[names addObject:@(property_getName(props[i]))];
+			free(props);
+			[names sortUsingSelector:@selector(compare:)];
+			NSMutableArray *rows = [NSMutableArray array];
+			NSArray *messages = chat.messages;
+			for (NSUInteger row = 0; row < messages.count; row++) {
+				NSDictionary *m = messages[row];
+				TGMessageLayout *layout = [chat layoutForMessage:m atRow:(NSInteger)row];
+				NSMutableDictionary *entry = [NSMutableDictionary dictionary];
+				entry[@"_row"] = @(row);
+				entry[@"_id"] = m[@"id"] ?: @0;
+				entry[@"_kind"] = m[@"kind"] ?: @"";
+				for (NSString *name in names)
+					entry[name] = [[layout valueForKey:name] description] ?: @"(nil)";
+				[rows addObject:entry];
+			}
+			[chat.layoutCache removeAllObjects];
+			NSString *dir = [NSSearchPathForDirectoriesInDomains(
+					NSCachesDirectory, NSUserDomainMask, YES) objectAtIndex:0];
+			NSData *json = [NSJSONSerialization dataWithJSONObject:rows
+					options:NSJSONWritingPrettyPrinted error:nil];
+			BOOL ok = [json writeToFile:[dir stringByAppendingPathComponent:@"layouts.json"]
+							 atomically:YES];
+			NSLog(@"dumplayout: %lu rows %@", (unsigned long)rows.count, ok ? @"saved" : @"FAILED");
 		});
 		return YES;
 	}

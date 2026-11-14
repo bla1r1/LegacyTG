@@ -47,6 +47,28 @@ static NSDictionary *fxTextContent(NSString *text) {
 	XCTAssertEqual([flat[@"id"] longLongValue], 5LL);
 }
 
+/// A custom emoji sent alone: its .tgs may be one the renderer cannot draw,
+/// and the system has no glyph for many of them on iOS 6 (U+2604 among
+/// them), so the custom emoji id is the only way back to its still picture.
+- (void)testFlatten_AnimatedCustomEmojiKeepsItsEmojiId {
+	NSDictionary *sticker = @{
+		@"format"    : @{@"@type" : @"stickerFormatTgs"},
+		@"sticker"   : @{@"id" : @(41)},
+		@"thumbnail" : @{@"file" : @{@"id" : @(1321)}},
+		@"full_type" : @{@"@type" : @"stickerFullTypeCustomEmoji",
+						 @"custom_emoji_id" : @"5224607267797606837"},
+	};
+	NSDictionary *flat = TGFlattenMessage(fxMsg(@{@"@type" : @"messageAnimatedEmoji",
+			@"emoji" : @"\u2604\uFE0F", @"animated_emoji" : @{@"sticker" : sticker}}, nil));
+	XCTAssertEqual([flat[@"stickerEmojiId"] longLongValue], 5224607267797606837LL);
+	XCTAssertEqualObjects(flat[@"docName"], @"tgs");
+
+	NSDictionary *plain = TGFlattenMessage(fxMsg(@{@"@type" : @"messageSticker",
+			@"sticker" : @{@"format" : @{@"@type" : @"stickerFormatTgs"},
+						   @"sticker" : @{@"id" : @(42)}}}, nil));
+	XCTAssertEqual([plain[@"stickerEmojiId"] longLongValue], 0LL);
+}
+
 - (void)testFlatten_LiveLocationCarriesItsStatusKeys {
 	NSDictionary *flat = TGFlattenMessage(fxMsg(@{@"@type" : @"messageLiveLocation", @"expires_in" : @600,
 		@"location" : @{@"@type" : @"liveLocation", @"live_period" : @900, @"heading" : @45,

@@ -2,6 +2,7 @@
 // TGRowCell.m
 //
 #import "TGRowCell.h"
+#import "TGRowGeometry.h"
 #import "TGRows.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
@@ -365,21 +366,14 @@
 	CGFloat need = ceilf([value.text sizeWithFont:value.font].width);
 	if (need <= value.frame.size.width)
 		return;
-	CGRect valueFrame = value.frame;
-	CGFloat right = CGRectGetMaxX(valueFrame);
-	// Whole, as long as the title keeps its own words or half the row,
-	// whichever is less: a channel's description as the value took the
-	// entire row, ran off its left edge and left the title no width at all.
-	CGFloat room = right - title.frame.origin.x - TGMetricPadMedium;
-	CGFloat titleKeeps = MIN(ceilf([title.text sizeWithFont:title.font].width),
-			floorf(TGHalf(room)));
-	need = MIN(need, MAX(0, room - titleKeeps));
-	valueFrame.size.width = need;
-	valueFrame.origin.x = right - need;
+	CGRect valueFrame = value.frame, titleFrame = title.frame;
+	TGRowValueSplit split = TGRowKeepValueWhole(titleFrame.origin.x,
+			titleFrame.size.width, ceilf([title.text sizeWithFont:title.font].width),
+			CGRectGetMaxX(valueFrame), valueFrame.size.width, need);
+	valueFrame.origin.x = split.valueX;
+	valueFrame.size.width = split.valueWidth;
 	value.frame = valueFrame;
-	CGRect titleFrame = title.frame;
-	titleFrame.size.width = MAX(0, valueFrame.origin.x - TGMetricPadMedium -
-			titleFrame.origin.x);
+	titleFrame.size.width = split.titleWidth;
 	title.frame = titleFrame;
 }
 

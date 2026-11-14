@@ -1,3 +1,4 @@
+#import "TGChatCellLogic.h"
 #import "TGBubbleBackImage.h"
 #import "TGPerf.h"
 #import "TGLocalization.h"
@@ -491,44 +492,36 @@ static char kTGReactionChipInfoKey;
 
 		NSDictionary *anim = animatedAllowed && lottieCount < kMaxCustomEmojiPerBubble
 				? [[TGCustomEmojiStore shared] animationForId:emojiId] : nil;
-		// The animation takes the still picture's place only once it can be
-		// shown. Dropped as soon as TDLib named the animation, the emoji was
-		// a hole for the seconds the download and the build took - and for
-		// good when the file would not parse.
-		BOOL animated = NO;
 		NSNumber *fileId = anim[@"fileId"];
-		NSString *animPath = [fileId isKindOfClass:NSNumber.class]
-				? self.lottiePaths[fileId] : nil;
-		// After its one loop an emoji is its still picture again: frame 0 of
-		// an animation is often empty (a pin that drops in from nowhere).
-		if (animPath.length && [self.playedAnimations containsObject:animPath])
-			fileId = nil;
-		if ([fileId isKindOfClass:NSNumber.class] && fileId.longLongValue > 0) {
-			if (!animPath.length) {
-				if (![self.imagesRequested containsObject:fileId]) {
-					[self.imagesRequested addObject:fileId];
-					__weak typeof(self) weakSelf = self;
-					[[TGMessageStore shared] downloadFile:fileId.integerValue
-											   priority:TGDownloadPriorityOnScreen
-											completion:^(NSString *path) {
-						TGChatViewController *me = weakSelf;
-						if (!me) return;
-						if (path) me.lottiePaths[fileId] = path;
-						[me.imagesRequested removeObject:fileId];
-						[me reloadTableDebounced];
-					}];
-				}
-			} else {
-				TGLottieView *view = [cell customEmojiViewAtIndex:lottieCount];
-				view.frame = rect;
-				__weak typeof(self) weakSelf = self;
-				view.onStickerReady = ^{ [weakSelf reloadTableDebounced]; };
-				animated = [view loadStickerFile:animPath];
-				view.hidden = !animated;
-				if (animated) {
-					lottieCount++;
-					[self playOnce:view path:animPath settled:scrollSettled];
-				}
+		BOOL hasAnimation = [fileId isKindOfClass:NSNumber.class] && fileId.longLongValue > 0;
+		NSString *animPath = hasAnimation ? self.lottiePaths[fileId] : nil;
+		TGCustomEmojiShow show = TGCustomEmojiChoose(animatedAllowed, lottieCount,
+				kMaxCustomEmojiPerBubble, hasAnimation, animPath.length > 0,
+				animPath.length && [self.playedAnimations containsObject:animPath]);
+		BOOL animated = NO;
+		if (show == TGCustomEmojiShowStillAndFetch &&
+				![self.imagesRequested containsObject:fileId]) {
+			[self.imagesRequested addObject:fileId];
+			__weak typeof(self) weakSelf = self;
+			[[TGMessageStore shared] downloadFile:fileId.integerValue
+									   priority:TGDownloadPriorityOnScreen
+									completion:^(NSString *path) {
+				TGChatViewController *me = weakSelf;
+				if (!me) return;
+				if (path) me.lottiePaths[fileId] = path;
+				[me.imagesRequested removeObject:fileId];
+				[me reloadTableDebounced];
+			}];
+		} else if (show == TGCustomEmojiShowAnimation) {
+			TGLottieView *view = [cell customEmojiViewAtIndex:lottieCount];
+			view.frame = rect;
+			__weak typeof(self) weakSelf = self;
+			view.onStickerReady = ^{ [weakSelf reloadTableDebounced]; };
+			animated = [view loadStickerFile:animPath];
+			view.hidden = !animated;
+			if (animated) {
+				lottieCount++;
+				[self playOnce:view path:animPath settled:scrollSettled];
 			}
 		}
 		if (animated)

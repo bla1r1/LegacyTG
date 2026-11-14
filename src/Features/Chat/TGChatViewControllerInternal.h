@@ -38,11 +38,6 @@
 
 FOUNDATION_EXPORT TGMessageCard *TGChatCardForRow(NSDictionary *m);
 
-/// One poll option's row: the text measured at `rowWidth`, plus the row's own
-/// padding, and never under kPollRow. Layout and cell both call it, so the
-/// height they place and the height they draw cannot drift.
-FOUNDATION_EXPORT CGFloat TGPollOptionRowHeight(NSDictionary *option, CGFloat rowWidth);
-
 /// The composer's text view. UITextView has no placeholder or enabled flag,
 /// and the rest of the chat already speaks those two; the composer class
 /// implements them without a second text model.
@@ -494,20 +489,10 @@ FOUNDATION_EXPORT CGFloat TGPollOptionRowHeight(NSDictionary *option, CGFloat ro
 @interface TGChatViewController ()
 
 // Layout and cell helpers
-- (NSString *)quoteTextFor:(NSDictionary *)m;
-- (NSString *)quoteAuthorFor:(NSDictionary *)m;
-- (CGFloat)decorationHeightFor:(NSDictionary *)m;
-- (NSString *)stampFor:(NSDictionary *)m;
-- (CGFloat)timeWidthFor:(NSDictionary *)m;
-- (BOOL)stampFitsInlineFor:(NSDictionary *)m;
 - (CGFloat)layoutForwardIn:(TGBubbleCell *)cell message:(NSDictionary *)m width:(CGFloat)width;
-- (CGFloat)pollHeightFor:(NSDictionary *)m;
 /// The final service line: who did it, plus the pinned message quoted when
 /// that message is loaded. Layout and cell both draw this one string.
 - (NSString *)serviceLineForMessage:(NSDictionary *)m;
-- (CGFloat)checklistHeightFor:(NSDictionary *)m;
-- (BOOL)stampSitsOnPictureFor:(NSDictionary *)m;
-- (CGSize)bodySizeFor:(NSDictionary *)m;
 - (UIImage *)imageFor:(NSDictionary *)m;
 - (void)fetchImageForMessage:(NSDictionary *)m;
 - (CGSize)imageSizeFor:(NSDictionary *)m;

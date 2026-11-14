@@ -501,9 +501,8 @@ static UIImage *TGJumpChevron(UIColor *colour) {
 	CGFloat bottom = CGRectGetMaxY(table);
 	if (self.composeBanner && !self.composeBanner.hidden &&
 		CGAffineTransformIsIdentity(self.composeBanner.transform)){
-		self.composeBanner.frame = CGRectMake(0,
-				CGRectGetMinY(self.inputBar.frame) - kComposeBannerHeight,
-				self.view.bounds.size.width, kComposeBannerHeight);
+		self.composeBanner.frame = TGChatComposeBannerPlace(self.view.bounds.size.width,
+				CGRectGetMinY(self.inputBar.frame), NO).plate;
 		bottom = MIN(bottom, CGRectGetMinY(self.composeBanner.frame));
 	}
 	self.jumpButton.frame = CGRectMake(CGRectGetMaxX(table) - kJumpSide - TGMetricJumpMarginRight,

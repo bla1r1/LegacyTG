@@ -120,6 +120,52 @@ CGRect TGChatComposerSendFrame(CGFloat barWidth, CGFloat barHeight) {
 	return CGRectMake(x, y, TGMetricSendSide, TGMetricSendSide);
 }
 
+CGFloat TGChatComposerTextWidth(CGFloat barWidth) {
+	return MAX(1.0f, TGChatComposerFieldFrame(barWidth, TGMetricInputBarHeight,
+			TGChatComposerFieldHeightForLines(1)).size.width - kFieldLeftPad - TGMetricSendSide);
+}
+
+TGChatComposerFrames TGChatComposerPlace(CGFloat width, CGFloat bottom, NSInteger lines) {
+	TGChatComposerFrames f;
+	f.barHeight = TGChatComposerBarHeightForLines(lines);
+	f.scrolls = lines > TGChatComposerMaxLines();
+	f.well = TGChatComposerFieldFrame(width, f.barHeight, TGChatComposerFieldHeightForLines(lines));
+	f.send = TGChatComposerSendFrame(width, f.barHeight);
+	CGFloat controlY = CGRectGetMinY(f.send);
+	f.bar = CGRectMake(0, bottom - f.barHeight, width, f.barHeight);
+	// The text stops short of the sticker toggle sitting in the well.
+	f.text = f.well;
+	f.text.size.width = MAX(0.0f, f.text.size.width - TGMetricSendSide);
+	f.sticker = CGRectMake(CGRectGetMaxX(f.well) - TGMetricSendSide, controlY,
+			TGMetricSendSide, TGMetricSendSide);
+	f.attach = CGRectMake(kComposerInset, controlY, kAttachWidth, TGMetricSendSide);
+	f.ai = CGRectMake(kComposerInset, controlY - TGMetricSendSide, kAttachWidth, TGMetricSendSide);
+	f.table = CGRectMake(0, 0, width, bottom - f.barHeight);
+	return f;
+}
+
+TGChatComposeBannerFrames TGChatComposeBannerPlace(CGFloat width, CGFloat barTop,
+		BOOL twoLines) {
+	TGChatComposeBannerFrames f;
+	CGFloat textW = width - TGMetricComposeBannerTextMarginRight;
+	f.plate = CGRectMake(0, barTop - kComposeBannerHeight, width, kComposeBannerHeight);
+	f.stripe = CGRectMake(kBannerStripeX, kBannerStripeTop, TGMetricPadTiny,
+			kComposeBannerHeight - TGDoubled(kBannerStripeTop));
+	f.title = CGRectMake(kBannerTextX, twoLines ? kBannerTitleTop
+			: TGHalf(kComposeBannerHeight) - TGHalf(TGMetricLineSubhead),
+			textW, TGMetricLineSubhead);
+	f.subtitle = CGRectMake(kBannerTextX, kBannerTitleTop + TGMetricLineSubhead,
+			textW, TGMetricLineSubhead);
+	f.close = CGRectMake(width - TGMetricRow, 0, TGMetricRow, kComposeBannerHeight);
+	return f;
+}
+
+void TGChatComposerAboveKeyboard(CGSize viewSize, CGFloat barHeight,
+		CGFloat keyboardHeight, CGRect *bar, CGRect *table) {
+	*bar = CGRectMake(0, viewSize.height - barHeight - keyboardHeight, viewSize.width, barHeight);
+	*table = CGRectMake(0, 0, viewSize.width, viewSize.height - barHeight - keyboardHeight);
+}
+
 #pragma mark - AI composer
 
 NSArray<NSString *> *TGAiComposeModeTitles(void) {

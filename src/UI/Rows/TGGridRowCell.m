@@ -169,16 +169,7 @@
 @implementation TGGridRowCell
 
 + (CGFloat)heightForRow:(NSDictionary *)row inTableView:(UITableView *)tableView {
-	NSInteger columns = [row[TGRowGridColumns] integerValue];
-	if (columns < 1)
-		columns = 1;
 	NSArray *items = row[TGRowGridItems];
-	CGFloat width = tableView.bounds.size.width - TGMetricGridTableMargin;
-	if (width <= 0)
-		width = TGMetricScreenWidth - TGMetricGridTableMargin;
-	CGFloat side = TGGridTileSideForWidth(width, columns);
-	if (side <= 0)
-		return TGMetricRow;
 	BOOL captions = NO;
 	for (NSDictionary *item in items)
 		if ([item[TGGridItemCaption] isKindOfClass:NSString.class] &&
@@ -186,13 +177,9 @@
 			captions = YES;
 			break;
 		}
-	NSInteger lines = items.count
-			? (NSInteger)((items.count + (NSUInteger)columns - 1) /
-					(NSUInteger)columns) : 1;
-	CGFloat lineHeight = side + (captions
-			? TGMetricLineCaption + TGMetricPadTiny : 0);
-	return TGMetricGridInset * 2.0f + (CGFloat)lines * lineHeight +
-			(CGFloat)(lines - 1) * TGMetricGridGap;
+	return TGGridRowHeightForCount(
+			TGGridContentWidthForTable(tableView.bounds.size.width),
+			[row[TGRowGridColumns] integerValue], items.count, captions);
 }
 
 + (instancetype)cellForTableView:(UITableView *)tableView
@@ -309,25 +296,12 @@
 
 	CGFloat width = CGRectGetWidth(self.contentView.bounds);
 	NSInteger columns = [self.row[TGRowGridColumns] integerValue];
-	if (columns < 1)
-		columns = 1;
-	CGFloat side = TGGridTileSideForWidth(width, columns);
-	if (side <= 0)
+	if (TGGridTileSideForWidth(width, MAX(columns, 1)) <= 0)
 		return;
-	CGFloat captionHeight = self.captions
-			? TGMetricLineCaption + TGMetricPadTiny : 0;
-	CGFloat pitchX = side + TGMetricGridGap;
-	CGFloat pitchY = side + captionHeight + TGMetricGridGap;
-
 	for (NSUInteger i = 0; i < self.tiles.count; i++){
 		TGGridTileView *tile = self.tiles[i];
-		if (tile.hidden)
-			continue;
-		NSInteger column = (NSInteger)i % columns;
-		NSInteger line = (NSInteger)i / columns;
-		CGFloat x = TGMetricGridInset + (CGFloat)column * pitchX;
-		CGFloat y = TGMetricGridInset + (CGFloat)line * pitchY;
-		tile.frame = CGRectMake(x, y, side, side + captionHeight);
+		if (!tile.hidden)
+			tile.frame = TGGridTileFrame(i, width, columns, self.captions);
 	}
 }
 

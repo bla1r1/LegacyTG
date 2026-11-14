@@ -90,12 +90,18 @@ CLIENT_OBJC_SRCS := \
     $(ROOT)/third_party/yyjson/yyjson.c \
     $(ROOT)/third_party/nanosvg/nanosvg.c \
     src/Media/TGPatternImage.m \
+    src/Media/TGLottieSupport.m \
     src/Core/Support/TGBase64.m \
     src/Core/Support/TGLocalization.m \
     src/Core/Support/TGObservers.m \
     src/Core/Style/TGStyle.m \
     src/Features/Settings/Pages/TGSettingsPageModels.m \
     src/Features/Profile/Core/TGProfileLogic.m \
+    src/Features/Auth/TGLoginLogic.m \
+    src/UI/Rows/TGRowGeometry.m \
+    src/Features/Chat/Rendering/TGChatCellLogic.m \
+    src/Features/Chat/Rendering/TGMessageMetrics.m \
+    src/Features/Chat/Rendering/TGMessageRowLayout.m \
     src/Core/Support/TGUpdateType.c \
     src/Views/Icons/TGSVGPath.c \
     src/Views/Icons/TGIconPaths.m \
@@ -326,6 +332,7 @@ CLIENT_OBJC_SRCS := \
     src/UI/Controllers/TGRowsDataSource.m \
     src/Features/Calls/TGGroupCallParticipantCell.m \
     src/Features/Chat/Views/TGMessageLayout.mm \
+    src/Features/Chat/Views/TGMessageCardLayout.m \
     src/UI/Messages/TGMessageCellKind.m \
     src/Features/Chat/TGPollPresentation.m \
     src/Features/Chat/Core/TGChatParityModel.m \
@@ -455,6 +462,10 @@ CLIENT_TEST_SRCS := \
     $(TESTS)/TGPeerStoreTests.m \
     $(TESTS)/TGParitySettingsTests.m \
     $(TESTS)/TGSettingsPageModelsTests.m \
+    $(TESTS)/TGScreenLogicTests.m \
+    $(TESTS)/TGMessageMetricsTests.m \
+    $(TESTS)/TGLottieSupportTests.m \
+    $(TESTS)/TGMessageRowLayoutTests.m \
     $(TESTS)/TGSVGPathTests.m \
     $(TESTS)/TGIconCatalogTests.m \
     $(TESTS)/TGUIFormatTests.m \

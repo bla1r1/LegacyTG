@@ -13,6 +13,7 @@
 #import "TGLocalization.h"
 #import "TGRows.h"
 #import "TGRowCell.h"
+#import "TGRowGeometry.h"
 
 /// Telegram's swatch is 44 pt on a phone, per the parity spec; the gap and
 /// gutter come from the spacing scale.
@@ -25,11 +26,9 @@ static const NSInteger kSwatchColumns = 5;
 /// cells, so laying five swatches out across the table's own width pushed the
 /// fifth through the group's right border.
 static CGFloat TGAppearanceContentWidth(UITableView *tableView) {
-	CGFloat width = tableView.bounds.size.width ?: TGMetricScreenWidth;
-	if (NSFoundationVersionNumber <= NSFoundationVersionNumber_iOS_6_1 &&
-			tableView.style == UITableViewStyleGrouped)
-		width -= 2.0f * TGMetricGroupedInsetLegacy;
-	return width;
+	return TGRowContentWidth(tableView.bounds.size.width,
+			tableView.style == UITableViewStyleGrouped,
+			NSFoundationVersionNumber <= NSFoundationVersionNumber_iOS_6_1);
 }
 static const CGFloat kSwatchRow = kSwatchSide + TGMetricPadMedium;
 
@@ -381,15 +380,12 @@ static const NSInteger kPreviewNameTag = 8201;
 	NSArray *images = row[TGRowSwatches] ?: @[];
 	void (^tap)(NSInteger) = row[TGRowSwatchTap];
 	CGFloat width = TGAppearanceContentWidth(tableView);
-	CGFloat usable = width - TGDoubled(kSwatchInset) -
-			kSwatchGap * (kSwatchColumns - 1);
-	CGFloat side = floorf(usable / kSwatchColumns);
 	for (NSUInteger i = 0; i < images.count && i < (NSUInteger)kSwatchColumns; i++){
 		TGAppearanceSwatchButton *tile = [TGAppearanceSwatchButton
 				buttonWithType:UIButtonTypeCustom];
 		tile.tag = kSwatchButtonTag + (NSInteger)i;
-		tile.frame = CGRectMake(kSwatchInset + i * (side + kSwatchGap),
-				TGCenteredOrigin(kSwatchRow, kSwatchSide), side, kSwatchSide);
+		tile.frame = TGRowStripCellFrame(i, width, kSwatchColumns, kSwatchInset,
+				kSwatchGap, kSwatchRow, kSwatchSide);
 		[tile setImage:images[i] forState:UIControlStateNormal];
 		NSInteger index = (NSInteger)i;
 		tile.onTap = ^{ if (tap) tap(index); };

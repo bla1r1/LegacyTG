@@ -131,9 +131,31 @@
 		if (playable) {
 			[self playOnce:cell.lottie path:animPath settled:scrollSettled];
 		} else {
-			// A .tgs that is not gzip, or a .webm this decoder cannot open,
-			// otherwise leaves a sticker-sized hole with a clock in it.
-			[self placeStickerEmoji:cell message:m inFrame:cell.lottie.frame];
+			// Not playable: a .tgs not gzipped or the renderer cannot draw, a
+			// .webm this decoder cannot open, or a build still running. The
+			// sticker's own still comes first; the emoji glyph only while
+			// that is downloading. A single animated emoji has no glyph to
+			// fall back on and was a sticker-sized hole.
+			int64_t emojiId = [m[@"stickerEmojiId"] longLongValue];
+			UIImage *still = emojiId
+					? [[TGCustomEmojiStore shared] imageForId:emojiId side:side]
+					: [self imageFor:m];
+			if (still) {
+				[TGIcons setRoundedImage:still inView:cell.picture size:CGSizeZero
+								  radius:TGMetricCornerNone];
+				cell.picture.hidden = NO;
+				cell.picture.backgroundColor = [UIColor clearColor];
+				cell.picture.layer.cornerRadius = TGMetricCornerNone;
+				cell.picture.layer.borderWidth = TGMetricBorderNone;
+				cell.picture.clipsToBounds = YES;
+				cell.picture.frame = cell.lottie.frame;
+				[cell.bubble bringSubviewToFront:cell.picture];
+			} else {
+				// The store answers with TGCustomEmojiLoadedNotification.
+				if (!emojiId)
+					[self fetchImageForMessage:m];
+				[self placeStickerEmoji:cell message:m inFrame:cell.lottie.frame];
+			}
 		}
 
 		static NSDateFormatter *hmt = nil;

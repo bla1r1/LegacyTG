@@ -7,6 +7,7 @@
 // appear twice.
 //
 #import <UIKit/UIKit.h>
+#import "TGStyle.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -83,6 +84,50 @@ CGRect TGChatComposerSendFrame(CGFloat barWidth, CGFloat barHeight);
 /// Official shows the AI button when the field has non-whitespace text and
 /// has grown to at least three lines (ChatTextInputPanelNode, 3-line rule).
 BOOL TGChatComposerShowsAIEntry(NSString *text, CGFloat width);
+
+/// The composer's buttons: the paperclip on the left, and the text's own
+/// inset from the well's left edge.
+static const CGFloat kAttachWidth     = 34.0f;
+static const CGFloat kComposerInset   = TGMetricPadSmall;
+static const CGFloat kFieldLeftPad    = TGMetricPadMedium;
+
+/// The width the text wraps at in a bar `barWidth` wide: the one-line well
+/// less the text's left inset and the sticker toggle at its right end.
+CGFloat TGChatComposerTextWidth(CGFloat barWidth);
+
+/// Every frame of a composer holding `lines` lines in a bar `width` wide
+/// whose bottom edge is at `bottom`. Field and controls are bottom-aligned;
+/// the AI entry sits one slot above the paperclip; the table fills what is
+/// above the bar.
+typedef struct {
+	CGFloat barHeight;
+	BOOL scrolls;
+	CGRect bar, well, text, sticker, attach, ai, send, table;
+} TGChatComposerFrames;
+
+TGChatComposerFrames TGChatComposerPlace(CGFloat width, CGFloat bottom, NSInteger lines);
+
+/// The reply / edit strip above the composer: an accent stripe, then who is
+/// being answered over what they said, and a close button on the right.
+static const CGFloat kComposeBannerHeight = TGMetricRow;
+static const CGFloat kBannerStripeX   = TGMetricPadMedium + TGMetricPadTiny;
+static const CGFloat kBannerStripeTop = TGMetricPad;
+static const CGFloat kBannerTextX     = 22.0f;
+static const CGFloat kBannerTitleTop  = TGMetricPadSmall;
+
+typedef struct {
+	CGRect plate, stripe, title, subtitle, close;
+} TGChatComposeBannerFrames;
+
+/// The strip riding on a bar whose top is at `barTop`, `width` wide. One
+/// line (no subtitle) centres the title; two share the strip.
+TGChatComposeBannerFrames TGChatComposeBannerPlace(CGFloat width, CGFloat barTop,
+		BOOL twoLines);
+
+/// The bar and the table over a keyboard `keyboardHeight` tall in a view
+/// `viewSize` big, for a bar `barHeight` tall.
+void TGChatComposerAboveKeyboard(CGSize viewSize, CGFloat barHeight,
+		CGFloat keyboardHeight, CGRect *bar, CGRect *table);
 
 #pragma mark - AI composer
 

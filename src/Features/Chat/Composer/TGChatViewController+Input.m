@@ -325,19 +325,18 @@
 	if (width <= 0.0f)
 		return;
 
-	CGFloat textWidth = MAX(1.0f, TGChatComposerFieldFrame(width,
-			kInputHeight, TGChatComposerFieldHeightForLines(1)).size.width -
-			kFieldLeftPad - kSendSide);
+	CGFloat textWidth = TGChatComposerTextWidth(width);
 	NSString *text = self.input.text ?: @"";
 	NSInteger lines = TGChatComposerLineCount(text, textWidth);
-	CGFloat fieldH = TGChatComposerFieldHeightForLines(lines);
-	CGFloat barH = TGChatComposerBarHeightForLines(lines);
-	BOOL overflow = lines > TGChatComposerMaxLines();
 	BOOL showAI = TGChatComposerShowsAIEntry(text, textWidth);
-	CGRect fieldFrame = TGChatComposerFieldFrame(width, barH, fieldH);
-	CGRect sendFrame = TGChatComposerSendFrame(width, barH);
 
-	self.input.scrollEnabled = overflow;
+	CGFloat bottom = CGRectGetMaxY(self.inputBar.frame);
+	if (bottom <= 0.0f || CGRectIsEmpty(self.inputBar.frame))
+		bottom = self.view.bounds.size.height;
+	TGChatComposerFrames f = TGChatComposerPlace(width, bottom, lines);
+	CGFloat barH = f.barHeight;
+
+	self.input.scrollEnabled = f.scrolls;
 	self.composerBarHeight = barH;
 	// The corner stays the one-line capsule's as the field grows, as
 	// official's input panel keeps it; half the grown height turned a
@@ -345,7 +344,7 @@
 	// and stretched, leaving one stretchable row between the caps.
 	CGFloat wellRadius = MAX(TGMetricCornerNone,
 			TGHalf(TGMetricComposerFieldMinHeight) - TGMetricBorderWidth);
-	if (TGChatDrawableSize(fieldFrame.size)) {
+	if (TGChatDrawableSize(f.well.size)) {
 		self.composerWell.image = [TGTheme
 				skeuomorphicWellImageWithHeight:TGMetricComposerFieldMinHeight
 				cornerRadius:wellRadius];
@@ -355,27 +354,16 @@
 	((TGComposerInputField *)self.input).placeholderColour =
 			[[TGTheme shared] secondaryTextColour];
 
-	CGFloat bottom = CGRectGetMaxY(self.inputBar.frame);
-	if (bottom <= 0.0f || CGRectIsEmpty(self.inputBar.frame))
-		bottom = self.view.bounds.size.height;
-	CGFloat controlY = CGRectGetMinY(sendFrame);
-
 	void (^apply)(void) = ^{
-		self.inputBar.frame = CGRectMake(0, bottom - barH, width, barH);
-		self.composerWell.frame = fieldFrame;
-		// The text stops short of the sticker toggle sitting in the well.
-		CGRect textFrame = fieldFrame;
-		textFrame.size.width = MAX(0.0f, textFrame.size.width - kSendSide);
-		self.input.frame = textFrame;
-		self.stickerButton.frame = CGRectMake(CGRectGetMaxX(fieldFrame) - kSendSide,
-				controlY, kSendSide, kSendSide);
-		self.attachButton.frame = CGRectMake(kComposerInset, controlY,
-				kAttachWidth, kSendSide);
-		self.aiButton.frame = CGRectMake(kComposerInset, controlY - kSendSide,
-				kAttachWidth, kSendSide);
-		self.sendButton.frame = sendFrame;
-		self.micButton.frame = sendFrame;
-		self.table.frame = CGRectMake(0, 0, width, bottom - barH);
+		self.inputBar.frame = f.bar;
+		self.composerWell.frame = f.well;
+		self.input.frame = f.text;
+		self.stickerButton.frame = f.sticker;
+		self.attachButton.frame = f.attach;
+		self.aiButton.frame = f.ai;
+		self.sendButton.frame = f.send;
+		self.micButton.frame = f.send;
+		self.table.frame = f.table;
 		[self layoutChrome];
 	};
 
@@ -577,9 +565,9 @@ static const NSInteger kBannerSubtitleTag = 72;
 - (void)showComposeBanner:(NSString *)text subtitle:(NSString *)subtitle {
 	CGFloat width = self.view.bounds.size.width;
 	if (!self.composeBanner){
-		self.composeBanner = [[UIView alloc] initWithFrame:
-				CGRectMake(0, CGRectGetMinY(self.inputBar.frame) - kComposeBannerHeight,
-						   width, kComposeBannerHeight)];
+		TGChatComposeBannerFrames f = TGChatComposeBannerPlace(width,
+				CGRectGetMinY(self.inputBar.frame), YES);
+		self.composeBanner = [[UIView alloc] initWithFrame:f.plate];
 		self.composeBanner.backgroundColor = [[TGTheme shared] inputBarColour];
 		// Born hidden so the first show goes through the same slide-in as
 		// every later one.
@@ -587,15 +575,11 @@ static const NSInteger kBannerSubtitleTag = 72;
 		self.composeBanner.autoresizingMask = UIViewAutoresizingFlexibleWidth |
 											  UIViewAutoresizingFlexibleTopMargin;
 
-		UIView *stripe = [[UIView alloc] initWithFrame:CGRectMake(kBannerStripeX,
-				kBannerStripeTop, kQuoteBarWidth,
-				kComposeBannerHeight - TGDoubled(kBannerStripeTop))];
+		UIView *stripe = [[UIView alloc] initWithFrame:f.stripe];
 		stripe.backgroundColor = [[TGTheme shared] accentColour];
 		[self.composeBanner addSubview:stripe];
 
-		UILabel *title = [[UILabel alloc] initWithFrame:
-				CGRectMake(kBannerTextX, kBannerTitleTop,
-						width - TGMetricComposeBannerTextMarginRight, TGMetricLineSubhead)];
+		UILabel *title = [[UILabel alloc] initWithFrame:f.title];
 		title.tag = kBannerTitleTag;
 		title.font = TGFontCaptionStrong();
 		title.textColor = [[TGTheme shared] accentColour];
@@ -603,9 +587,7 @@ static const NSInteger kBannerSubtitleTag = 72;
 		title.autoresizingMask = UIViewAutoresizingFlexibleWidth;
 		[self.composeBanner addSubview:title];
 
-		UILabel *preview = [[UILabel alloc] initWithFrame:
-				CGRectMake(kBannerTextX, kBannerTitleTop + TGMetricLineSubhead,
-						width - TGMetricComposeBannerTextMarginRight, TGMetricLineSubhead)];
+		UILabel *preview = [[UILabel alloc] initWithFrame:f.subtitle];
 		preview.tag = kBannerSubtitleTag;
 		preview.font = TGFontCaption();
 		preview.textColor = [[TGTheme shared] secondaryTextColour];
@@ -614,7 +596,7 @@ static const NSInteger kBannerSubtitleTag = 72;
 		[self.composeBanner addSubview:preview];
 
 		UIButton *cancel = [UIButton buttonWithType:UIButtonTypeCustom];
-		cancel.frame = CGRectMake(width - TGMetricRow, 0, TGMetricRow, kComposeBannerHeight);
+		cancel.frame = f.close;
 		cancel.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin;
 		[cancel setImage:[TGIcons glyphNamed:@"close"
 									  colour:[[TGTheme shared] secondaryTextColour]
@@ -632,12 +614,8 @@ static const NSInteger kBannerSubtitleTag = 72;
 	title.text   = text;
 	preview.text = subtitle ?: @"";
 	// One line centres itself; two share the strip.
-	CGFloat half = TGHalf(kComposeBannerHeight);
-	title.frame = CGRectMake(kBannerTextX,
-							 subtitle.length ? kBannerTitleTop
-											  : half - TGHalf(TGMetricLineSubhead),
-							 self.composeBanner.bounds.size.width - TGMetricComposeBannerTextMarginRight,
-							 TGMetricLineSubhead);
+	title.frame = TGChatComposeBannerPlace(self.composeBanner.bounds.size.width, 0,
+			subtitle.length > 0).title;
 
 	BOOL wasHidden = self.composeBanner.hidden;
 	BOOL reveal = wasHidden || self.composeBanner.alpha < TGAlphaOpaque;
@@ -1341,11 +1319,11 @@ static NSInteger const kTGRepeatPeriods[] = {0, 86400, 604800, 2592000};
 	CGRect b = self.view.bounds;
 	CGFloat barH = self.composerBarHeight > 0.0f
 			? self.composerBarHeight : kInputHeight;
+	CGRect barFrame, tableFrame;
+	TGChatComposerAboveKeyboard(b.size, barH, height, &barFrame, &tableFrame);
 	[UIView animateWithDuration:TGAnimationDurationMedium animations:^{
-		self.inputBar.frame = CGRectMake(0, b.size.height - barH - height,
-				b.size.width, barH);
-		self.table.frame = CGRectMake(0, 0, b.size.width,
-				b.size.height - barH - height);
+		self.inputBar.frame = barFrame;
+		self.table.frame = tableFrame;
 		[self layoutChrome];
 	} completion:^(BOOL done){
 		[self scrollToBottomAnimated:NO];

@@ -13,11 +13,10 @@
 #import "TGChatViewController.h"
 #import "TGBubbleCell.h"
 #import "TGStyle.h"
+#import "TGMessageMetrics.h"
+#import "TGChatActionMenuModel.h"
 
 static const CGFloat kInputHeight = TGMetricInputBarHeight;
-/// The reply / edit strip above the composer: two lines, the way their client
-/// shows who is being answered and what they said.
-static const CGFloat kComposeBannerHeight = TGMetricRow;
 /// The channel bottom bar: button height and icon sizes.
 static const CGFloat kChannelBarIconSide     = TGMetricMenuGlyph;
 
@@ -28,85 +27,6 @@ static const CGFloat kChannelBarIconSide     = TGMetricMenuGlyph;
 // how the token layer came to hold more names than values. What they are built
 // from is TGStyle's, so a change to the spacing or the line scale reaches them.
 
-/// The gap between the last word of a message and the stamp on its line.
-static const CGFloat kStampGap        = TGMetricPad;
-/// A quote block: the author's line, then what they said, then a gap.
-static const CGFloat kQuoteLine       = TGMetricLineSubhead;
-static const CGFloat kQuoteBlock      = TGMetricLineSubhead + TGMetricLineSubhead + TGMetricPadSmall;
-/// The stripe down the left of a quote block, and the text's indent past it.
-static const CGFloat kQuoteBarWidth   = TGMetricPadTiny;
-static const CGFloat kQuoteTextInset  = TGMetricPad;
-/// A service plate - a day, or an event like "pinned a message" - sits on a
-/// row of its own: a gap, one line of header type, the same gap again.
-static const CGFloat kServiceGap      = TGMetricPad;
-static const CGFloat kServiceEventGap = TGMetricPadSmall;
-static const CGFloat kServicePlate    = TGMetricLineHeader;
-static const CGFloat kServiceRow      = TGMetricPad + TGMetricLineHeader + TGMetricPad;
-static const CGFloat kServiceEventRow = TGMetricPadSmall + TGMetricLineHeader + TGMetricPadSmall;
-/// Text from the end of a service plate, and the margin the plate keeps from
-/// the sides of the table so a long day never runs edge to edge.
-static const CGFloat kServicePlatePad    = TGMetricPadMedium;
-static const CGFloat kServicePlateMargin = TGMetricPadWide + TGMetricPadMedium;
-/// The unread marker, which is a band across the table rather than a plate.
-static const CGFloat kUnreadBar       = TGMetricLineBody + TGMetricPadSmall;
-/// A call bubble: a glyph beside two lines, at a height that does not vary.
-static const CGFloat kCallBubble      = TGMetricButtonHeight;
-/// What a call bubble keeps beside its text for the glyph and the button, and
-/// the least width it will shrink to so a short "Missed call" is still a card.
-static const CGFloat kCallBubbleRoom  = 80.0f;
-static const CGFloat kCallBubbleMin   = 190.0f;
-/// A document bubble, wide enough for a file name beside its tile.
-static const CGFloat kDocBubble       = 225.0f;
-/// A contact bubble: a disc, a name and a number, with a call button under.
-static const CGFloat kContactBubble   = 230.0f;
-static const CGFloat kContactBubbleH  = TGMetricPersonRow + TGMetricButtonHeightSmall;
-/// A location bubble: the map card, with a caption strip beneath it.
-static const CGFloat kLocationBubble  = 224.0f;
-static const CGFloat kLocationBubbleH = TGMetricMapCardHeight + TGMetricRow;
-/// A round video message, and an animated sticker. Both square; the round
-/// note reads its side from the token so the bubble and the full-screen
-/// player cannot drift apart by two points again.
-static const CGFloat kRoundSide       = TGMetricRoundVideoSide;
-static const CGFloat kLottieSide      = 128.0f;
-/// The narrowest a text bubble will be, so one word is still a bubble.
-static const CGFloat kBubbleMinW      = 170.0f;
-/// A bubble that carries a picture is this wide whatever the picture is.
-static const CGFloat kPicBubbleW      = 190.0f;
-/// The shortest a bubble row gets, so a one-word message still reads as a
-/// row and not as a line of text in a list.
-static const CGFloat kBubbleRowMin    = TGMetricRow - TGMetricPadSmall;
-/// A poll row: the dot's column, then the option, then its share on the right,
-/// over a track that runs the row's width.
-static const CGFloat kPollTextColumn  = TGMetricPadLarge + TGMetricPad;
-static const CGFloat kPollShareWidth  = 40.0f;
-static const CGFloat kPollTrackDrop   = TGMetricPadSmall;
-static const CGFloat kPollTrackHeight = TGMetricPadTiny;
-/// The "N voted" line under a poll's question.
-static const CGFloat kPollVotedLine   = TGMetricPadTiny + TGMetricLineRow;
-/// A poll bubble's text stack: the description, then the kind line, then the
-/// options. The same constants are read by the cell and by pollHeightFor:.
-static const CGFloat kPollDescriptionGap = TGMetricPadTiny;
-static const CGFloat kPollKindGap        = TGMetricPadTiny;
-static const CGFloat kPollKindLine       = TGMetricLineCaption;
-static const CGFloat kPollOptionsGap     = TGMetricPadSmall;
-/// The "Vote" button under a multiple-answer poll's draft answers.
-static const CGFloat kPollVoteHeight     = TGMetricButtonSmallH;
-static const CGFloat kPollVoteGap        = TGMetricPadTiny;
-/// A quiz's explanation under the options, and the votes line under it all.
-static const CGFloat kPollExplanationGap = TGMetricPadSmall;
-static const CGFloat kPollFooterGap      = TGMetricPadSmall;
-static const CGFloat kPollFooterLine     = TGMetricLineCaption;
-/// The room the stamp keeps below the votes line.
-static const CGFloat kPollStampRoom      = TGMetricLineBody;
-/// A checklist bubble: the title, one row per task, then the progress line.
-/// The cell and checklistHeightFor: read the same constants, so the rows and
-/// the bubble cannot drift apart.
-static const CGFloat kChecklistTitleGap    = TGMetricPadSmall;
-static const CGFloat kChecklistRow         = TGMetricPollRow;
-static const CGFloat kChecklistTextColumn  = TGMetricPadLarge + TGMetricPad;
-static const CGFloat kChecklistProgressGap = TGMetricPadSmall;
-static const CGFloat kChecklistProgressLine = TGMetricLineMicro;
-static const CGFloat kChecklistStampRoom   = TGMetricLineBody;
 /// A call bubble's arrow, and the button on its right.
 static const CGFloat kCallArrow       = 16.0f;
 static const CGFloat kCallButton      = 32.0f;
@@ -135,8 +55,6 @@ static const CGFloat kVideoDisc       = 48.0f;
 static const CGFloat kGifDisc         = 42.0f;
 /// A caption plate on a picture: how far in it sits, and the room it keeps.
 static const CGFloat kCaptionInset    = TGMetricPadSmall;
-/// How far a stamp on a picture sits in from its corner.
-static const CGFloat kMediaStampInset = TGMetricPadSmall;
 
 // ── the record bar and the player bar ───────────────────────────────────────
 // The two strips that take the composer's place: one while a voice note is
@@ -170,31 +88,10 @@ static const CGFloat kPlayerProgressH = TGMetricPadTiny;
 /// borrowing a name from it.
 static const CGFloat kPlayerTitleLine  = 15.0f;
 static const CGFloat kPlayerDetailLine = 13.0f;
-/// The composer: the attach button, the field between them, the send button
-/// and the sticker button tucked in beside it.
-static const CGFloat kAttachWidth     = 34.0f;
-static const CGFloat kComposerInset   = TGMetricPadSmall;
-static const CGFloat kSendInset       = 6.0f;
-static const CGFloat kStickerInset    = TGMetricSendSide + 6.0f;
-static const CGFloat kStickerWidth    = 30.0f;
-static const CGFloat kFieldLeft       = 40.0f;
-/// The sticker, not the camera/mic switch, is the nearest thing on the field's
-/// right; the field ends before it with one small pad of air. There used to be
-/// a second record-mode button in this bar's right end and the room was wider
-/// for it - one button switched modes from its own tap, and second control
-/// went away.
-static const CGFloat kFieldRoom       = 88.0f;
-static const CGFloat kFieldInsetV     = TGMetricPad;
-static const CGFloat kFieldLeftPad    = TGMetricPadMedium;
 /// The mode the recording button was left in, written by the chat that changed
 /// it and read back by whichever chat opens next - Telegram keeps the choice
 /// made in one chat for every other one.
 static NSString *const kRecordVideoModeKey = @"currentModeVideo";
-/// The reply / edit banner above the composer: a stripe, then two lines.
-static const CGFloat kBannerStripeX   = TGMetricPadMedium + TGMetricPadTiny;
-static const CGFloat kBannerStripeTop = TGMetricPad;
-static const CGFloat kBannerTextX     = 22.0f;
-static const CGFloat kBannerTitleTop  = TGMetricPadSmall;
 /// The little plate that says a file is being fetched.
 static const CGFloat kHUDWidth        = 110.0f;
 static const CGFloat kHUDHeight       = TGMetricListAvatar;
@@ -209,9 +106,6 @@ static const CGFloat kTitleRow        = TGMetricListAvatar;
 static const CGFloat kPinnedBanner    = 50.0f;
 /// The cross that dismisses the banner.
 static const CGFloat kBannerCloseGlyph = 16.0f;
-/// The eye glyph beside a channel post's view count.
-static const CGFloat kStampEyeSide     = TGMetricStampHeight;
-static const CGFloat kStampEyePad      = TGMetricPadTiny;
 
 // The three placers a cell configure uses; pure functions over the cell's
 // own parts.
