@@ -66,7 +66,6 @@ static UIImage *TGGiftRadialGradient(int32_t centerColor, int32_t edgeColor, CGF
 @property (nonatomic, copy) NSDictionary *gift;
 @property (nonatomic, strong) TGLottieView *lottieView;
 @property (nonatomic, assign) int64_t requestedUserId;
-@property (nonatomic, strong) UIButton *closeButton;
 /// The sender line in the table header. The name may arrive after the header
 /// is built, and the header is not a cell, so it is updated in place.
 @property (nonatomic, weak) UILabel *senderLabel;
@@ -125,24 +124,18 @@ static UIImage *TGGiftRadialGradient(int32_t centerColor, int32_t edgeColor, CGF
 	[self setupTableHeader];
 	[self rebuildSections];
 
-	// The art is the screen: no bar, and a Close X sits over it as official
-	// draws it.
-	self.closeButton = [UIButton buttonWithType:UIButtonTypeCustom];
-	self.closeButton.frame = CGRectMake(TGMetricPadMedium, TGMetricPadMedium,
-			TGMetricStoryCloseSide, TGMetricStoryCloseSide);
-	[self.closeButton setImage:[TGIcons glyphNamed:@"close"
-			colour:[[TGTheme shared] primaryTextColour]
-			side:TGMetricStoryCloseSide - TGMetricPadSmall]
-			forState:UIControlStateNormal];
-	[self.closeButton addTarget:self action:@selector(closeTapped)
-			forControlEvents:UIControlEventTouchUpInside];
-	[self.view addSubview:self.closeButton];
+	// iOS 6 chrome: the navigation bar stays, with Back when pushed and Close
+	// when this is the first screen of a sheet. A bar-less page with a
+	// floating X was the later iOS look.
+	if (self.navigationController.viewControllers.firstObject == self)
+		self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc]
+				initWithTitle:TGLocalized(@"Close") style:UIBarButtonItemStyleBordered
+					   target:self action:@selector(closeTapped)];
 
 }
 
 - (void)viewWillAppear:(BOOL)animated {
 	[super viewWillAppear:animated];
-	[self.navigationController setNavigationBarHidden:YES animated:NO];
 	[self applyTheme];
 	if (self.lottieView.loaded && [TGCapabilities canPlayAnimatedStickers] && [TGCapabilities animatedStickersWanted]) {
 		[self.lottieView play];
@@ -151,7 +144,6 @@ static UIImage *TGGiftRadialGradient(int32_t centerColor, int32_t edgeColor, CGF
 
 - (void)viewWillDisappear:(BOOL)animated {
 	[super viewWillDisappear:animated];
-	[self.navigationController setNavigationBarHidden:NO animated:NO];
 	[self.lottieView stop];
 }
 
@@ -224,9 +216,9 @@ static UIImage *TGGiftRadialGradient(int32_t centerColor, int32_t edgeColor, CGF
 				}
 			});
 		});
-	} else {
-		artContainer.backgroundColor = [[TGTheme shared] cardBackgroundColour];
 	}
+	// A regular gift's sticker stands on the page, with no white card under
+	// it: only a collectible brings its own backdrop.
 
 	UIImageView *stillView = [[UIImageView alloc] initWithFrame:artContainer.bounds];
 	stillView.contentMode = UIViewContentModeScaleAspectFit;
@@ -240,6 +232,13 @@ static UIImage *TGGiftRadialGradient(int32_t centerColor, int32_t edgeColor, CGF
 
 	NSNumber *stillId = isCollectible ? self.gift[@"modelThumbFileId"] : (self.gift[@"thumbFileId"] ?: self.gift[@"stickerThumbFileId"]);
 	NSNumber *stickerId = isCollectible ? self.gift[@"modelStickerFileId"] : self.gift[@"stickerFileId"];
+	// A gift of Stars with no sticker of its own shows the Star, as the
+	// official sheet does, instead of an empty frame.
+	if ([stillId integerValue] <= 0 && [stickerId integerValue] <= 0)
+		stillView.image = [TGIcons glyphNamed:@"star" colour:TGIconTileGold()
+				side:TGHalf(kArtSide)];
+	stillView.contentMode = stillView.image ? UIViewContentModeCenter
+			: UIViewContentModeScaleAspectFit;
 
 	__weak typeof(self) weakSelf = self;
 	__weak typeof(stillView) weakStill = stillView;

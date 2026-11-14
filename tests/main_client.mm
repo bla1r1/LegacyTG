@@ -95,6 +95,7 @@
 #import "TGParitySettingsTests.m"
 #import "TGSettingsPageModelsTests.m"
 #import "TGProfileScreenLogicTests.m"
+#import "TGPageTemplateTests.m"
 #import "TGScreenLogicTests.m"
 #import "TGMessageMetricsTests.m"
 #import "TGLottieSupportTests.m"

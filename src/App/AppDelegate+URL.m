@@ -48,6 +48,8 @@ static const CGFloat kIconDumpSide = 52.0f;
 #import "TGForwardPicker.h"
 #import "TGPrivacyRuleViewController.h"
 #import "TGStickerEditorViewController.h"
+#import "TGProfilePhotosViewController.h"
+#import "TGProfileStore.h"
 #include <dlfcn.h>
 
 @implementation AppDelegate (URL)
@@ -287,6 +289,7 @@ static NSUInteger TGChatsIndex(UITabBarController *tabs) {
 	//   forward         the forward picker; picking a chat only logs it
 	//   privacy/<key>   a privacy rule page, e.g. ShowStatus, ShowProfilePhoto
 	//   stickereditor   a new sticker set, before anything is created
+	//   photos/<userId> a user's profile photos (none: your own)
 	if ([host isEqualToString:@"screen"] && arg.length){
 		NSArray *parts = [url.path componentsSeparatedByString:@"/"];
 		NSString *name = parts.count > 1 ? parts[1] : arg;
@@ -318,6 +321,10 @@ static NSUInteger TGChatsIndex(UITabBarController *tabs) {
 						: [TGSettingsViewController privacyTitles][index];
 				screen = [[TGPrivacyRuleViewController alloc] initWithSetting:key
 						title:TGLocalized(title)];
+			} else if ([name isEqualToString:@"photos"]){
+				int64_t userId = value.longLongValue ?:
+						[[TGProfileStore shared].me[@"id"] longLongValue];
+				screen = [[TGProfilePhotosViewController alloc] initWithUserId:userId];
 			} else if ([name isEqualToString:@"stickereditor"]){
 				TGStickerEditorViewController *editor = [[TGStickerEditorViewController alloc] init];
 				editor.creating = YES;

@@ -90,6 +90,10 @@ extern NSString *const TGThemeChangedNotification;
 /// A search bar used as a navigation item's title view: no background of its
 /// own, so the field and the bar buttons share the navigation bar's.
 - (void)styleNavigationSearchBar:(UISearchBar *)bar;
+/// A strip of bar chrome under the navigation bar (search scopes): the
+/// toolbar takes the bar colour, its segmented control the bar style, so the
+/// strip reads as part of the navigation bar rather than a sheet of pills.
+- (void)styleBarStrip:(UIToolbar *)strip segments:(UISegmentedControl *)segments;
 /// A stock cell of this style, for reading the system's fonts and colours.
 + (UITableViewCell *)systemCellOfStyle:(UITableViewCellStyle)style;
 /// A grouped table the way the running OS draws one.

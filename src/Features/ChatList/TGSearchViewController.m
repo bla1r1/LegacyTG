@@ -26,7 +26,7 @@
 @property (nonatomic, strong) UISearchBar *bar;
 @property (nonatomic, strong) UIView *scopeHost;
 @property (nonatomic, strong) UIScrollView *scopeStrip;
-@property (nonatomic, strong) NSMutableArray *scopeButtons;
+@property (nonatomic, strong) UISegmentedControl *scopeSegments;
 @property (nonatomic, assign) NSInteger scope;
 @property (nonatomic, strong) NSArray *recentQueries;
 @property (nonatomic, copy) NSString *noResultsQuery;
@@ -86,10 +86,13 @@ static NSString *TGSearchDateText(NSNumber *stamp) {
 
 - (instancetype)init {
 	self = [super initWithStyle:UITableViewStylePlain];
-	// Set before the push, not in viewDidLoad: on iOS 6 an animated push
-	// right after a tab switch kept the previous screen's Back on top of the
-	// search field (reproduced twice on the iPod touch 4).
+	// hidesBackButton alone is not enough on iOS 6: after a tab switch or a
+	// theme change the previous screen's Back came back over the search
+	// field (seen three times on the iPod touch 4). A left item replaces the
+	// back button outright, and an empty one leaves the field the room.
 	self.navigationItem.hidesBackButton = YES;
+	self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc]
+			initWithCustomView:[[UIView alloc] initWithFrame:CGRectZero]];
 	return self;
 }
 
@@ -216,69 +219,70 @@ static NSString *TGSearchDateText(NSNumber *stamp) {
 
 - (void)applyTheme {
 	TGTheme *theme = [TGTheme shared];
-	self.view.backgroundColor = [theme listBackgroundColour];
 	[theme stylePlainTable:self.tableView];
+	// Results are white rows on the page, as every settings page is; a
+	// white sheet under the whole screen made the empty space look like
+	// more rows.
+	UIColor *page = [theme groupedBackgroundColour];
+	self.view.backgroundColor = page;
+	self.tableView.backgroundColor = page;
+	if ([self.tableView.backgroundView isMemberOfClass:UIView.class])
+		self.tableView.backgroundView.backgroundColor = page;
 	if ([self.tableView.backgroundView isKindOfClass:TGEmptyView.class])
 		[(TGEmptyView *)self.tableView.backgroundView applyTheme];
 	[theme styleNavigationSearchBar:self.bar];
 	[theme styleNavigationBar:self.navigationController.navigationBar];
 	if (self.scopeHost){
-		self.scopeHost.backgroundColor = [theme listBackgroundColour];
 		[self styleScopeButtons];
 	}
 }
 
+/// Rows stay white cards on the page background; a plain cell otherwise
+/// takes the table's colour and the page showed through every row.
+- (void)tableView:(UITableView *)tableView willDisplayCell:(UITableViewCell *)cell
+		forRowAtIndexPath:(NSIndexPath *)indexPath {
+	[super tableView:tableView willDisplayCell:cell forRowAtIndexPath:indexPath];
+	cell.backgroundColor = [[TGTheme shared] cardBackgroundColour];
+}
+
 #pragma mark - scope bar
 
-/// The pills are one row above the results, as Telegram's scopes are. They
-/// only appear once there is a query: an empty search has no scope to narrow.
+/// The scopes are one strip above the results, as Telegram's are. iOS 6
+/// draws scopes as a bar-style segmented control in the bar's own gradient;
+/// coloured pills on a white sheet looked like a later iOS. Eight scopes do
+/// not fit 320 pt, so the control scrolls sideways. The strip only appears
+/// once there is a query: an empty search has no scope to narrow.
 - (void)buildScopeBar {
-	TGTheme *theme = [TGTheme shared];
 	CGFloat width = self.view.bounds.size.width;
-
-	self.scopeHost = [[UIView alloc] initWithFrame:CGRectMake(0, 0, width,
+	UIToolbar *strip = [[UIToolbar alloc] initWithFrame:CGRectMake(0, 0, width,
 			TGMetricSearchScopeRow)];
-	self.scopeHost.backgroundColor = [theme listBackgroundColour];
-	self.scopeHost.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+	strip.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+	self.scopeHost = strip;
 
-	self.scopeStrip = [[UIScrollView alloc] initWithFrame:CGRectMake(0, 0, width,
-			TGMetricSearchScopeRow)];
+	self.scopeStrip = [[UIScrollView alloc] initWithFrame:strip.bounds];
 	self.scopeStrip.showsHorizontalScrollIndicator = NO;
 	self.scopeStrip.showsVerticalScrollIndicator = NO;
 	self.scopeStrip.alwaysBounceHorizontal = YES;
 	self.scopeStrip.backgroundColor = [UIColor clearColor];
 	self.scopeStrip.autoresizingMask = UIViewAutoresizingFlexibleWidth;
-	[self.scopeHost addSubview:self.scopeStrip];
+	[strip addSubview:self.scopeStrip];
 
-	self.scopeButtons = [NSMutableArray array];
-	NSArray *titles = TGSearchScopeTitles();
-	for (NSInteger i = 0; i < (NSInteger)titles.count; i++){
-		UIButton *pill = [UIButton buttonWithType:UIButtonTypeCustom];
-		pill.tag = i;
-		pill.titleLabel.font = TGFontCaption();
-		pill.layer.cornerRadius = TGHalf(TGMetricSearchScopeHeight);
-		pill.clipsToBounds = YES;
-		[pill addTarget:self action:@selector(scopeTapped:)
-			  forControlEvents:UIControlEventTouchUpInside];
-		[self.scopeStrip addSubview:pill];
-		[self.scopeButtons addObject:pill];
-	}
+	UISegmentedControl *segments = [[UISegmentedControl alloc]
+			initWithItems:TGSearchScopeTitles()];
+	segments.segmentedControlStyle = UISegmentedControlStyleBar;
+	segments.selectedSegmentIndex = self.scope;
+	[segments addTarget:self action:@selector(scopeChanged:)
+	   forControlEvents:UIControlEventValueChanged];
+	[self.scopeStrip addSubview:segments];
+	self.scopeSegments = segments;
 	[self styleScopeButtons];
 	[self layoutScopeButtons];
 }
 
 - (void)styleScopeButtons {
-	TGTheme *theme = [TGTheme shared];
-	NSArray *titles = TGSearchScopeTitles();
-	for (UIButton *pill in self.scopeButtons){
-		BOOL selected = (pill.tag == self.scope);
-		[pill setTitle:titles[(NSUInteger)pill.tag] forState:UIControlStateNormal];
-		[pill setTitleColor:(selected ? [theme onAccentColour]
-									 : [theme primaryTextColour])
-				  forState:UIControlStateNormal];
-		pill.backgroundColor = selected ? [theme accentColour]
-									   : [theme cardBackgroundColour];
-	}
+	[[TGTheme shared] styleBarStrip:(UIToolbar *)self.scopeHost
+						   segments:self.scopeSegments];
+	self.scopeSegments.selectedSegmentIndex = self.scope;
 }
 
 - (void)layoutScopeButtons {
@@ -288,17 +292,18 @@ static NSString *TGSearchDateText(NSNumber *stamp) {
 	self.scopeHost.frame = hostFrame;
 	self.scopeStrip.frame = CGRectMake(0, 0, width, TGMetricSearchScopeRow);
 
-	CGFloat x = TGMetricPad;
-	CGFloat y = TGCenteredOrigin(TGMetricSearchScopeRow,
-								 TGMetricSearchScopeHeight);
-	for (UIButton *pill in self.scopeButtons){
-		NSString *title = [pill titleForState:UIControlStateNormal] ?: @"";
-		CGFloat textWidth = [title sizeWithFont:pill.titleLabel.font].width;
-		CGFloat pillWidth = textWidth + TGDoubled(TGMetricPad);
-		pill.frame = CGRectMake(x, y, pillWidth, TGMetricSearchScopeHeight);
-		x += pillWidth + TGMetricSearchScopeGap;
+	UISegmentedControl *segments = self.scopeSegments;
+	UIFont *font = TGFontCaptionStrong();
+	CGFloat total = 0;
+	for (NSUInteger i = 0; i < segments.numberOfSegments; i++){
+		CGFloat w = [[segments titleForSegmentAtIndex:i] sizeWithFont:font].width
+				+ TGDoubled(TGMetricPadMedium);
+		[segments setWidth:w forSegmentAtIndex:i];
+		total += w;
 	}
-	self.scopeStrip.contentSize = CGSizeMake(x + TGMetricPad,
+	segments.frame = CGRectMake(TGMetricPad, TGCenteredOrigin(TGMetricSearchScopeRow,
+			TGMetricSearchScopeHeight), total, TGMetricSearchScopeHeight);
+	self.scopeStrip.contentSize = CGSizeMake(total + TGDoubled(TGMetricPad),
 											 TGMetricSearchScopeRow);
 }
 
@@ -311,11 +316,11 @@ static NSString *TGSearchDateText(NSNumber *stamp) {
 		[self layoutScopeButtons];
 }
 
-- (void)scopeTapped:(UIButton *)pill {
-	if (pill.tag < 0 || pill.tag >= (NSInteger)TGSearchScopeTitles().count)
+- (void)scopeChanged:(UISegmentedControl *)segments {
+	NSInteger picked = segments.selectedSegmentIndex;
+	if (picked < 0 || picked >= (NSInteger)TGSearchScopeTitles().count)
 		return;
-	self.scope = pill.tag;
-	[self styleScopeButtons];
+	self.scope = picked;
 	[self reloadSearchRows];
 	[self.tableView scrollRectToVisible:CGRectMake(0, 0, 1, 1) animated:YES];
 }

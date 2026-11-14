@@ -12,6 +12,7 @@
 #import "TGRows.h"
 #import "TGProfileLogic.h"
 #import "TGGridRowCell.h"
+#import "TGMediaViewer.h"
 
 static const NSInteger kPhotoGridColumns = 3;
 
@@ -61,6 +62,11 @@ static const NSInteger kPhotoGridColumns = 3;
 		me.photos = photos ?: @[];
 		[me rebuildSections];
 	}];
+}
+
+- (BOOL)isOwnProfile {
+	return !self.userId ||
+			self.userId == [[TGProfileStore shared].me[@"id"] longLongValue];
 }
 
 - (NSString *)dateTextForPhoto:(NSDictionary *)photo {
@@ -123,9 +129,19 @@ static const NSInteger kPhotoGridColumns = 3;
 			[me downloadPhoto:photo];
 		}
 		tile[TGGridItemCaption] = [me dateTextForPhoto:photo];
-		tile[TGGridItemHold] = ^{ [weakSelf confirmRemoveAtIndex:index]; };
+		// Only the account's own photos can be taken off; holding someone
+		// else's offered a Remove that Telegram refuses.
+		if ([me isOwnProfile])
+			tile[TGGridItemHold] = ^{ [weakSelf confirmRemoveAtIndex:index]; };
 		return tile;
-	}, nil);
+	}, ^(NSInteger index){
+		TGProfilePhotosViewController *me = weakSelf;
+		if (!me)
+			return;
+		// A tap had no handler at all: the grid was the end of the road.
+		[TGMediaViewer presentItems:TGProfilePhotoViewerItems(me.photos, me.userId)
+							startAt:index inChat:0];
+	});
 	self.sections = @[TGSection(nil, nil, rows)];
 	[self reloadRows];
 }

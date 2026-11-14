@@ -91,6 +91,11 @@ FOUNDATION_EXPORT NSURL *TGProfileFirstURL(NSString *text, NSArray *entities);
 /// username or phone fallback: the header shows those on their own rows.
 FOUNDATION_EXPORT NSString *TGProfileUserName(NSDictionary *user);
 
+/// The profile photos as TGMediaViewer items, so a tap opens the picture
+/// full screen and a swipe goes through the rest: a photo message each, the
+/// small file as its placeholder and the big one as what it opens.
+FOUNDATION_EXPORT NSArray *TGProfilePhotoViewerItems(NSArray *photos, int64_t userId);
+
 /// m:ss for a track or voice note; nil for no length.
 FOUNDATION_EXPORT NSString *TGProfileDurationText(NSNumber *seconds);
 

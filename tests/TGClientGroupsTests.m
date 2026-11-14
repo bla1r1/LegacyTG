@@ -1236,12 +1236,14 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 	// One good photo, one whose id is missing (nothing to delete it by),
 	// one whose small file is missing (nothing to draw it from) - and the
 	// answer keeps exactly the first.
+	NSArray *(^sizes)(NSInteger) = ^NSArray *(NSInteger fileId){
+		return @[@{@"@type" : @"photoSize", @"type" : @"a", @"width" : @160,
+				@"photo" : @{@"@type" : @"file", @"id" : @(fileId)}}];
+	};
 	answerG(c, @{@"@type" : @"chatPhotos", @"total_count" : @3, @"photos" : @[
-			@{@"@type" : @"chatPhoto", @"id" : @(9),
-			  @"small" : @{@"@type" : @"file", @"id" : @(91)}},
-			@{@"@type" : @"chatPhoto",
-			  @"small" : @{@"@type" : @"file", @"id" : @(92)}},
-			@{@"@type" : @"chatPhoto", @"id" : @(10)}]});
+			@{@"@type" : @"chatPhoto", @"id" : @(9), @"sizes" : sizes(91)},
+			@{@"@type" : @"chatPhoto", @"sizes" : sizes(92)},
+			@{@"@type" : @"chatPhoto", @"id" : @(10), @"sizes" : @[]}]});
 	XCTAssertEqual(photos.count, (NSUInteger)1);
 	XCTAssertEqual([photos[0][@"photoId"] longLongValue], 9LL);
 	XCTAssertEqual([photos[0][@"fileId"] integerValue], 91);

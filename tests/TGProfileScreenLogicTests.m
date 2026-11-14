@@ -195,4 +195,17 @@
 	XCTAssertNil(TGPrivacyRuleFooterText(@"ShowLinkInForwardedMessages"));
 }
 
+- (void)testPhotoViewerItems_OpenTheBigSizeAsPhotoMessages {
+	NSArray *items = TGProfilePhotoViewerItems(@[
+		@{@"photoId" : @1, @"fileId" : @31, @"bigFileId" : @41, @"date" : @5},
+		@{@"photoId" : @2, @"fileId" : @32},
+		@{@"photoId" : @3}], 1001);
+	XCTAssertEqual(items.count, (NSUInteger)2);
+	XCTAssertEqualObjects(items[0][@"kind"], @"messagePhoto");
+	XCTAssertEqualObjects(items[0][@"photoId"], @31);
+	XCTAssertEqualObjects(items[0][@"bigPhotoId"], @41);
+	XCTAssertEqualObjects(items[1][@"bigPhotoId"], @32, @"one size opens that size");
+	XCTAssertEqualObjects(items[0][@"senderId"], @1001);
+}
+
 @end

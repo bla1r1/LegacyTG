@@ -13,6 +13,10 @@
 	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)]) {
 		self.edgesForExtendedLayout = UIRectEdgeNone;
 	}
+	// A plain list stops at its last row: UIKit otherwise draws empty
+	// separators down the screen, which read as rows that are not there.
+	if (self.tableView.style == UITableViewStylePlain && !self.tableView.tableFooterView)
+		self.tableView.tableFooterView = [[UIView alloc] initWithFrame:CGRectZero];
 	[self applyTheme];
 
 	[[NSNotificationCenter defaultCenter] addObserver:self

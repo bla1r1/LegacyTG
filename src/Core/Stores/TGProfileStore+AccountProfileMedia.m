@@ -43,14 +43,29 @@
 		@"limit"   : @(50),
 	} completion:^(NSDictionary *result){
 		NSMutableArray *out = [NSMutableArray array];
-		for (NSDictionary *photo in result[@"photos"]){
+		NSArray *photos = [result[@"photos"] isKindOfClass:NSArray.class] ? result[@"photos"] : @[];
+		for (NSDictionary *photo in photos){
+			// A chatPhoto, not a profilePhoto: its pictures are in sizes and
+			// its date is added_date. Read as small/date, every photo was
+			// dropped and every gallery said "No Photos".
 			int64_t photoId = [photo[@"id"] longLongValue];
-			NSNumber *fileId = photo[@"small"][@"id"];
-			if (!photoId || !fileId)
+			NSDictionary *smallest = nil, *largest = nil;
+			NSArray *sizes = [photo[@"sizes"] isKindOfClass:NSArray.class] ? photo[@"sizes"] : @[];
+			for (NSDictionary *size in sizes){
+				if (![size[@"photo"][@"id"] isKindOfClass:NSNumber.class])
+					continue;
+				NSInteger width = [size[@"width"] integerValue];
+				if (!smallest || width < [smallest[@"width"] integerValue])
+					smallest = size;
+				if (!largest || width > [largest[@"width"] integerValue])
+					largest = size;
+			}
+			if (!photoId || !smallest)
 				continue;
 			[out addObject:@{@"photoId" : @(photoId),
-							  @"fileId" : fileId,
-							  @"date" : photo[@"date"] ?: @(0)}];
+							  @"fileId" : smallest[@"photo"][@"id"],
+							  @"bigFileId" : largest[@"photo"][@"id"],
+							  @"date" : photo[@"added_date"] ?: @(0)}];
 		}
 		if (completion) completion(out);
 	}];

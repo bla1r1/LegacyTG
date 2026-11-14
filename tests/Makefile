@@ -329,6 +329,7 @@ CLIENT_OBJC_SRCS := \
     src/Core/Stores/TGMemberAvatarStore.m \
     src/Core/Platform/TGPerf.m \
     src/UI/Format/TGUIFormat.m \
+    src/UI/Controllers/TGPageTemplate.m \
     src/UI/Rows/TGRows.m \
     src/UI/Controllers/TGRowsDataSource.m \
     src/Features/Calls/TGGroupCallParticipantCell.m \
@@ -464,6 +465,7 @@ CLIENT_TEST_SRCS := \
     $(TESTS)/TGParitySettingsTests.m \
     $(TESTS)/TGSettingsPageModelsTests.m \
     $(TESTS)/TGProfileScreenLogicTests.m \
+    $(TESTS)/TGPageTemplateTests.m \
     $(TESTS)/TGScreenLogicTests.m \
     $(TESTS)/TGMessageMetricsTests.m \
     $(TESTS)/TGLottieSupportTests.m \

@@ -541,3 +541,17 @@ NSString *TGProfileUserName(NSDictionary *user) {
 		return [NSString stringWithFormat:@"%@ %@", first, last];
 	return first.length ? first : last;
 }
+
+NSArray *TGProfilePhotoViewerItems(NSArray *photos, int64_t userId) {
+	NSMutableArray *items = [NSMutableArray array];
+	for (NSDictionary *photo in photos){
+		NSNumber *small = photo[@"fileId"];
+		if (![small isKindOfClass:NSNumber.class])
+			continue;
+		[items addObject:@{@"kind" : @"messagePhoto", @"photoId" : small,
+				@"bigPhotoId" : photo[@"bigFileId"] ?: small,
+				@"date" : photo[@"date"] ?: @0, @"senderId" : @(userId),
+				@"text" : @""}];
+	}
+	return items;
+}

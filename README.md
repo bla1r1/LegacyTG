@@ -24,11 +24,11 @@ Device explains every missing button.
 
 iPads install the app and run the portrait iPhone layout.
 
-| Package | Size (1.1) | Target |
-|---|---|---|
-| `LegacyTG-armv7.ipa` | 22 MB | iOS 6.0+, 32-bit |
-| `LegacyTG-arm64.ipa` | 24 MB | iOS 7.0–12.5.7, 64-bit |
-| `LegacyTG.ipa` | 37 MB | both slices |
+From 1.3 there is one download. `LegacyTG.ipa` (38 MB) carries the
+armv7 and arm64 app, so the same file installs on every device from iOS 6.0
+to 12.5.7. On a jailbroken device, add `https://bla1r1.github.io/LegacyTG` as
+a Cydia source and install LegacyTG from it; the package holds the same build.
+Every release lists the file's SHA-256.
 
 ## Setup
 
@@ -54,8 +54,9 @@ cd iTgLegacy
 scripts/build_all.sh
 ```
 
-`build_all.sh` goes from an empty `build/` to the three release IPAs in
-`build/ipa/` with a `SHA256SUMS` file: SDK, OpenSSL, libvpx, FFmpeg, TDLib
+`build_all.sh` goes from an empty `build/` to the release IPAs in
+`build/ipa/` with a `SHA256SUMS` file (`LegacyTG.ipa` is the one published;
+the per-architecture ones are for testing a slice): SDK, OpenSSL, libvpx, FFmpeg, TDLib
 twice, the release check, then `make ipa`. A cold run takes 30–60 min; each
 step is skipped when its output exists. `scripts/build_all.sh --deps` stops
 after the dependencies.

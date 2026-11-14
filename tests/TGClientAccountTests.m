@@ -246,13 +246,28 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 	TGClient *c = A();
 	__block NSArray *photos = nil;
 	[[TGProfileStore shared] userProfilePhotos:1001 completion:^(NSArray *found){ photos = found; }];
+	// td_api's chatPhoto: the pictures are in sizes ("a" 160 px, "c" 640 px)
+	// and the date is added_date. The answer used to be read as a
+	// profilePhoto (small, date), which a chatPhoto never has: every photo
+	// was dropped and every gallery said "No Photos".
 	answerA(c, @{@"@type" : @"chatPhotos", @"total_count" : @(2), @"photos" : @[
-			@{@"id" : @"7788", @"small" : @{@"id" : @(31)}, @"date" : @(1600000000)},
-			@{@"id" : @"7789", @"small" : @{@"id" : @(32)}}]});
+			@{@"@type" : @"chatPhoto", @"id" : @"7788", @"added_date" : @(1600000000),
+			  @"sizes" : @[
+				@{@"@type" : @"photoSize", @"type" : @"a", @"width" : @160, @"height" : @160,
+				  @"photo" : @{@"@type" : @"file", @"id" : @(31)}},
+				@{@"@type" : @"photoSize", @"type" : @"c", @"width" : @640, @"height" : @640,
+				  @"photo" : @{@"@type" : @"file", @"id" : @(41)}}]},
+			@{@"@type" : @"chatPhoto", @"id" : @"7789", @"sizes" : @[
+				@{@"@type" : @"photoSize", @"type" : @"a", @"width" : @160, @"height" : @160,
+				  @"photo" : @{@"@type" : @"file", @"id" : @(32)}}]}]});
 
 	XCTAssertEqual(photos.count, (NSUInteger)2);
 	XCTAssertEqual([photos[0][@"photoId"] longLongValue], 7788LL);
+	// The grid draws the small size, the viewer opens the big one.
 	XCTAssertEqual([photos[0][@"fileId"] integerValue], (NSInteger)31);
+	XCTAssertEqual([photos[0][@"bigFileId"] integerValue], (NSInteger)41);
+	XCTAssertEqual([photos[1][@"bigFileId"] integerValue], (NSInteger)32,
+			@"a photo with one size opens that size");
 	// The gallery dates a photo instead of numbering it, so the date has to
 	// survive the same flatten that keeps the id and the file.
 	XCTAssertEqual([photos[0][@"date"] doubleValue], 1600000000.0);
@@ -266,10 +281,12 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 	TGClient *c = A();
 	__block NSArray *photos = nil;
 	[[TGProfileStore shared] userProfilePhotos:1001 completion:^(NSArray *found){ photos = found; }];
+	NSArray *one = @[@{@"@type" : @"photoSize", @"type" : @"a", @"width" : @160,
+			@"photo" : @{@"@type" : @"file", @"id" : @(33)}}];
 	answerA(c, @{@"@type" : @"chatPhotos", @"photos" : @[
-			@{@"id" : @"7788"},
-			@{@"small" : @{@"id" : @(32)}},
-			@{@"id" : @"7790", @"small" : @{@"id" : @(33)}}]});
+			@{@"id" : @"7788", @"sizes" : @[]},
+			@{@"sizes" : one},
+			@{@"id" : @"7790", @"sizes" : one}]});
 	XCTAssertEqual(photos.count, (NSUInteger)1);
 	XCTAssertEqual([photos[0][@"photoId"] longLongValue], 7790LL);
 }

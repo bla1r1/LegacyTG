@@ -1,130 +1,63 @@
-## Release 1.3: Unified Message Core & Essential Gaps
+## Release 1.4
 
-Status: `in progress`; Phases 1–5 done, Phases 6–9 open. The release is not closed until the base under the screens is fixed: nothing new goes on top before that.
+Status: `planning`. 1.3 (3) shipped on 2026-11-14; its notes are in `CHANGELOG.md` and its work in the git history since the `1.2` tag. Below is what 1.3 left open, then the milestones 1.4 can take on top.
 
-Consolidates the 351 direct `TGClient` calls across `src/Features/Chat` into domain stores (`TGSendStore`, `TGMessageStreamStore`, `TGMediaStore`), enforces the 16 MB memory ceiling on 32-bit devices, and lands the top messaging gaps (M27, M23, M24) on top of the unified core.
+### Carried over from 1.3
 
-### Phase 1: Outbound message lifecycle and retry (`TGSendStore`) — done
-- [x] `done` Extract `sendMessage`, `editMessageText`, `deleteMessages` and transient send state tracking from `TGChatViewController+Input.m` and `TGChatActionsHoldMenu.m` into `TGSendStore`.
-  `TGSendStore.h` is the plain Objective-C surface; `TGSendStore.mm` owns the request shapes and the state table. Input sends/edits through it, the hold menu's Retry and the selection delete path call it too.
-- [x] `done` Track pending outbound messages, state transitions (`sending` -> `sent` / `failed`), and failure causes in a single C++ state table.
-  Keyed by `(chatId, messageId)`, capped at 256 records; `TGClient` reposts `updateMessageSendSucceeded/Failed` as `TGMessageSendStateChangedNotification`, the store publishes `TGSendStoreMessageStateChangedNotification` with the reason and `canRetry`.
-- [x] `done` Wire M27: failed delivery mark on bubbles and rows, one-tap retry invoking `[TGSendStore retryMessageId:]`.
-  Error glyph in the bubble and the chat-list row; tap on a failed bubble resends. History pages seed the table through `adoptMessages:inChat:`.
-- [x] `done` Drop `TGChatViewController+Input.m` from `scripts/lint_client.sh` allow list.
-  The file was not on the list at HEAD; checked `make -f tests/Makefile client` — clean.
-- [x] `done` Regression tests: `tests/TGSendStoreTests.m` covers send -> failed -> retry -> sent, the update-level error fallback, delete, history adoption and scheduled sends.
-  `make -f tests/Makefile test`: 2,239 passed, 0 failed.
+#### Coverage and the decoders (was phase 9)
+- [ ] `planned` Build the host suite with `-fprofile-instr-generate -fcoverage-mapping` and report per file through `llvm-cov`. "Compiled into the suite" is an upper bound; this shows the holes inside `Core`.
+- [ ] `planned` Tests for `src/Media` (WebP, WebM, patterns: 14% today) and `src/Audio` (0%). Both parse data from outside and neither needs UIKit.
 
-Phase 1 itself moved only the outbound text path; the off-plan section below extends the same boundary to every message action in the Chat feature.
+#### Logic out of the screens (rest of phase 8)
+- [ ] `planned` The rest of `Features/Profile` and `Features/Settings` as they are touched: a calculation that needs no `UIView` becomes a function with a test.
+- [ ] `planned` `TGGroupData` builds its own row model (`TGRow`, `TGInfoRow`, `TGSection`) and converts it later; it can build `TGRows` directly.
+- [ ] `planned` Chat tools and settings, Saved Messages and DM topics, quick replies, link and media downloads and the name, title and emoji-status caches still delegate to the client from explicit store methods; give them their own request bodies.
 
-### Off-plan: whole Chat message boundary (done)
-- [x] `done` Every `TGClient` reference under `src/Features/Chat` is gone: 345 direct calls across 38 files now go through `TGSendStore` (outbound) or `TGMessageStore` (everything else).
-- [x] `done` `TGMessageStore.h` declares the selectors and properties the Chat feature actually uses; `TGMessageStore.m` and `TGMessageStore+History.m` write every method out explicitly (no runtime forwarding). Outbound media, voice/video notes, delete/resend/retry, the core message actions and history requests own their request bodies; chat tools, topic screens and cache accessors remain explicit store methods that delegate to the client.
-- [x] `done` `scripts/lint_client.sh`: all 23 `src/Features/Chat` allow entries removed; the allow list is down to 98 files.
-- [x] `done` `tests/TGMessageStoreTests.m` covers property forwarding, an action request, callback slots, class helpers and runtime `respondsToSelector:`.
-- [x] `done` `make -f tests/Makefile test`: 2,245 passed, 0 failed. All 53 Chat translation units and both stores compile against the iOS SDK.
-- [ ] `planned` The separate domains stay on the client for now: chat tools/settings, Saved Messages/DM topics, quick replies, link/media downloads and the name/title/emoji-status caches. They are no longer reached from a view, only from an explicit store method.
+#### Screens on the base set
+- [ ] `planned` Move existing screens onto `TGPageViewController` one at a time, each through a list in `docs/ui-parity/` approved first: forward picker (Picker), contacts (List), File Info (Detail), sticker editor (Form), profile media (Gallery).
+- [ ] `planned` One row kind for sessions and websites: Devices and Active Websites keep their own rows.
+- [ ] `planned` The empty state knows the keyboard: "No matching contacts found" centres on the whole table and the keyboard covers its second line.
+- [ ] `planned` Topics and Saved Topics paint their table themselves and skip the base's repaint.
 
+#### Found in 1.3, not fixed
+- [ ] `planned` The composer's "Message" placeholder stays shifted after a long draft is cleared.
+- [ ] `planned` The first `itglegacy://saved` after a cold launch does nothing; the second opens Saved Messages.
+- [ ] `planned` The Russian pack shows "Кэш Кеш Мест…" on one storage row: two keys joined.
+- [ ] `planned` The group call and the video player write `00:07`; every other clock writes `0:07`.
+- [ ] `planned` The Calls and Forwarded Messages privacy pages have no help text: the pack has no sentence for them. Find the official keys or leave them empty on purpose.
+- [ ] `planned` The Lottie renderer has no trim paths, merge paths or precomps: 14 of 31 `.tgs` files on the bench phone keep their still. Trim paths alone bring 8 back (M38).
 
-### Off-plan: chat list store and M24 (done)
-- [x] `done` `TGChatListStore` owns the list data seam: chats, archive, folders, unread total, list callbacks, chat actions and story-list calls. Main `src/Features/ChatList` files import the store, not `TGClient`.
-- [x] `done` M24 row facts: preview kind and thumbnail file, reaction/poll/folder trailing badge, compact `99+` counts, Chats-tab badge, typing sender, Saved Messages row, pinned tint and scalar stripping.
-- [x] `done` `TGChatListStoreTests` covers compact counts, folder tag mapping, the row-model keys and the group typing sender; `make -f tests/Makefile test` is 2,313 passed, 0 failed.
-- [x] `done` `TGSearchStore` owns the search screen; `TGSearchViewController` no longer imports `TGClient` and the ChatList allow entries are gone.
+#### Not checked on a device
+- [ ] `planned` 26 of the 27 `UILabel` background fixes.
+- [ ] `planned` The passcode after the Keychain access-group fix; an incoming message with the chat open; a live call; an account switch.
+- [ ] `planned` A chat opened on return from the background once stayed empty.
+- [ ] `planned` The dev component gallery is killed for memory at about 39 MB on the iPod touch 4.
+- [ ] `planned` Dragging chat folders (the row mapping is tested, the drag was not); swiping between profile photos in the viewer; the new privacy help texts.
 
+### Milestones to choose from
 
-### Off-plan: Profile store (done)
-- [x] `done` `TGProfileStore` owns the Profile feature's 92 methods: profile/full-info reads, edit name/bio/birthday/username, photos, emoji status, audio, appearance, gifts, media tabs, blocks and chat actions.
-- [x] `done` All 148 `TGClient` calls in 15 Profile files moved behind the store; `src/Features/Profile` no longer mentions the client.
-- [x] `done` `TGProfileSupport.h` carries the two C helpers the screens still share (`TGFirstUsername`, `TGMediaPageAppending`).
-- [x] `done` `TGProfileStoreTests` covers properties, `setBio`, blocking and accent ids; `make -f tests/Makefile test` is 2,313 passed, 0 failed.
-- [x] `done` Request bodies for edit/photo/audio/action methods moved into `TGProfileStore` and its categories. Only `send:`, `request:` and the `supergroupIdForChat:` helper remain in the store.
+The open milestones of `docs/ROADMAP.md`, in the order the roadmap gives. 1.4 takes the ones picked here; the rest stay on the roadmap.
 
-
-### Off-plan: media store and M23 picker (done)
-- [x] `done` `TGMediaStore` owns file facts, local deletion, Downloads registration, cancel and the 16 MB decoded-buffer cache (32 MB on 64-bit). `TGStickerStore+Stickers.m` owns the sticker shelf and authoring bodies; Media feature allow-list is empty.
-- [x] `done` M23 file and music picker: `UIDocumentPicker` on iOS 8+, `MPMediaPickerController` with .m4a export, both sending through `TGSendStore`; GIF caption and view-once timer choices included.
-- [x] `done` `TGSendStore` owns `inputMessageDocument` and `inputMessageAudio` shapes; `TGFileInfoViewController` and the media viewer save/add-download paths use `TGMediaStore`.
-- [x] `done` `make -f tests/Makefile test`: 2,313 passed, 0 failed.
-- [x] `done` M23 remainder: `TGMusicStreamer` streams the growing file through `AudioFileStream`/`AudioQueue`; `TGSendStore` silent sends and `TGMessageStore scheduledAtDate:repeatPeriod:` are wired through `messageSendOptions`.
-- [x] `done` Store headers are UIKit-free (`UIImage`/`UIColor` are opaque `id`), `TGChatThemeStore` no longer imports a view (the UI installs a `.tgs` renderer), and `scripts/lint_layers.sh` enforces the dependency direction; the Client -> Store cycle is gone and the store headers are UIKit-free.
-- [x] `done` `TGTransport` is the single TDLib boundary (libtdjson loading, receive loop, outbox, `@extra`); `TGClient` keeps caches, auth state and update routing and forwards transport calls. Tests use transport hooks instead of touching TDLib symbols.
-- [x] `done` `make -f tests/Makefile corekit` links Client + Stores without any feature screen and runs a headless send, proving the domain layer is usable without the app UI.
-- [x] `done` `TGStarsStore` owns the stars, gifts, ads, boosts, affiliate and Premium request bodies; Auth routes through `TGAccountStore`. The allow list is now **0** (8 -> 0).
-- [x] `done` `TGCallStore` and `TGStoryStore` own the group-call and story request bodies; all 16 Calls/Stories allow-list entries are gone (24 -> 8).
-- [x] `done` `TGSettingsStore`, `TGSessionsStore`, `TGAccountStore` and `TGTextStylesStore` own the settings, sessions, account and text-style request bodies; all 14 Settings allow-list entries and TGClient in the Settings category files are gone (38 -> 24).
-- [x] `done` `TGBusinessStore` owns the business profile, links, away/greeting/hours and business-message requests; the 9 Business allow-list entries are gone (47 -> 38).
-- [x] `done` `TGContactsStore`, `TGChannelStore` and `TGDevStore` own the contacts, similar-channels and developer-tool request bodies; 11 allow-list entries removed (58 -> 47).
-- [x] `done` `TGGroupStore` owns the group request bodies (`+Groups`, `+Topics`, `+Invites`, `+Usernames`, `+Community`, `+Tools`); all 19 `src/Features/Groups` allow-list entries are gone, the list is down to 58 files, and `TGGroupStoreTests` checks the request shapes.
-
-### Phase 2: Attachment pipeline and file cache (`TGMediaStore`) — done
-- [x] `done` `TGChatViewController+Attachments.m` and `TGChatViewDocumentDelegate.m` reach files through `TGMediaStore`; neither imports `TGClient`.
-- [x] `done` `TGMediaStore` caps decoded buffers at 16 MB on 32-bit, 32 MB on 64-bit (`TGMediaStore.m:22`).
-- [x] `done` M23 document and audio pickers send `inputMessageDocument` / `inputMessageAudio` through `TGSendStore`.
-- [x] `done` The allow list is 0: no `src/Features` file imports `TGClient`.
-
-### Phase 3: History stream and pagination (`TGMessageStreamStore`) — done
-- [x] `done` `loadOlderInChat:limit:completion:` and `loadNewerInChat:limit:completion:` own the history request, the duplicate filter, the `loadingOlder/Newer` and `reachedStart/End` flags. `TGChatViewPagination.m` only keeps the table offset around the inserted rows.
-- [x] `done` `TGMessageStreamStore.mm` keeps a `std::vector<TGFlattenedMessage>` index beside the dictionaries and a `std::unordered_set<int64_t>` of ids, so bounds, de-duplication and the scalar accessors do not touch `NSDictionary`.
-- [x] `done` `TGMessagesChangedNotification` is posted by `TGUpdateRouter` once per 100 ms batch; `TGMessageStore` reposts it as `TGMessageStoreChangedNotification`, and the chat observes it and reloads the coalesced rows.
-
-### Phase 4: Chat-list integration (`TGChatListStore`) — done
-- [x] `done` `src/Features/ChatList` talks to `TGChatListStore`/`TGSearchStore`; no file imports `TGClient` (allow-list 0).
-- [x] `done` M24 is done: content-type glyphs and thumbnails, compact `99+` counts, reaction/poll/folder badges and the Chats-tab badge.
-
-### Phase 5: iOS 6.1 UI runtime parity and release smoke gate — done
-- [x] `done` Static Clang API availability gate: `-Wunguarded-availability` added to `CFLAGS_ARMV7` and `CFLAGS_ARM64` in `Makefile`; `CFLAGS_ARMV7_EXTRA` passthrough slot added for `check_release.sh`.
-  Ensures any iOS 7.0+ method (`sectionIndexBackgroundColor:`, `barTintColor:`, `interactivePopGestureRecognizer`, `edgesForExtendedLayout`) without an explicit guard triggers a build error instead of shipping to release.
-- [x] `done` Audit and isolate grouped selector guards in `src/Core/Style` and `src/UI`.
-  `barTintColor` in `-styleNavigationBar:` was the one ungated call in the iOS 7+ else-branch; fixed to `if ([bar respondsToSelector:@selector(setBarTintColor:)])`. Each of the three `UITableView` section-index selectors has its own independent guard.
-- [x] `done` Host unit tests: `tests/TGThemeIOS6Tests.m` — 12 tests.
-  NSProxy-based `TGIos6Proxy` wraps every component; `respondsToSelector:` returns NO for all 8 dangerous iOS 7+ selectors. Mock objects (`TGMockTable6`, `TGMockNavBar6`, `TGMockSearchBar6`, `TGMockTabBar6`) simulate real iOS 6 guard behaviour. 12 test methods cover sectionIndex triplet isolation, navBar/searchBar/tabBar dark+light paths, proxy blocking, exception type, and end-to-end iOS 6 simulation.
-- [x] `done` Deep device smoke in `scripts/devrun.sh` (`--smoke`): 4-phase interactive run.
-  Phase 1 cold launch → Phase 2 light-theme screen walk (`/`, `/settings`, `/profile`) → Phase 3 dark-theme switch + re-navigate → Phase 4 Dev Showcase 30-row scroll + Saved Messages. `NSInvalidArgumentException` added to crash pattern; crash report pulled from device on failure.
-- [x] `done` Binary selector audit in `scripts/check_release.sh` (gate 2 of 3).
-  `otool` extracts `__objc_methname` from the armv7 slice via `lipo -thin`; for each of 8 dangerous selectors found in the binary, grep verifies every call site in `src/` is within 5 lines of a `respondsToSelector:` guard. Script exits 1 on the first unguarded hit.
-- [x] `done` Pre-release availability gate in `scripts/check_release.sh` (gate 1 of 3).
-  Clean `-Werror=unguarded-availability` armv7 compile required; dev-symbol absence check is gate 3.
-- [x] `done` Regression: `make -f tests/Makefile test` — **2366 passed, 0 failed** (2354 prior + 12 new TGThemeIOS6Tests).
-
-**Blocked by:** nothing. Pure toolchain and test runner hardening.
-
-**Closes:** M27 (Failed-send mark) — `chat.md` failed delivery mark and
-`chat-list.md` delivery ticks. M23 and M24 are closed (Phases 2 and 4). iOS 6.1 runtime crashes (B1/theme guards) closed by Phase 5.
-
-### Phases 6–9: the base under the screens
-
-Comes out of the iOS 6 audit of 2026-11-14 (commit `92b06d44`). Still 1.3: this is repair, not a feature.
-
-The host suite compiles 37% of the tree (60.5 of 160 thousand lines), and the split is by layer, not by size: `Core/Client`, `Core/Model`, `Core/Stores` and `CallEngine` are at 94–100%, `Features/Chat` at 8%, the other features at 0–2%. Of about 25 defects found that night, a host test could have caught five. The rest sat in code that only runs under UIKit on the device. More tests on `Core` buy little; what is missing is a device gate for what cannot be host-tested and a way to host-test what can.
-
-The 1800-line limit keeps files readable and does not make them testable. `TGChatViewController+Cells.m`, `+Input.m` and `+Chrome.m` are still one object with shared state. The split also loses methods silently: `-musicStripTapped` was declared in the shared header, called from one file and implemented nowhere, and the compiler said nothing.
-
-#### Phase 6: Device walk as the regression gate
-- [x] `done` `scripts/walk.sh` (and `devrun.sh --smoke`, which builds, installs and runs it): 39 `itglegacy://` screens a pass, one screenshot each into `build/devlogs/walk-<stamp>/<pass>/`. `night/<on|off>` and `lang/<pack|system>` are new dev URLs for the passes; the run puts both back.
-- [x] `done` Exit 1 on `SIGABRT`, `unrecognized selector`, `Terminating app`, a new LegacyTG crash report or a new `LowMemory` report naming it. Reports already on the phone are listed first and ignored.
-- [x] `done` Second pass with Night Mode, third in Russian. First run on the iPod touch 4, 2026-11-14: 117 screens, passed, about 17 min.
-
-#### Phase 7: Lints for what the audit fixed by hand
-- [x] `done` `scripts/lint_methods.sh`, run by `make -f tests/Makefile test`: a method declared on one of our classes (any `@interface`, category or extension) with no body in the class or a superclass. A selector named inside a macro call in the class's implementation counts as implemented. The 19 dead declarations it found are deleted: the 11 of the audit plus `-[TGClient drainOutbox]`, two `TGClient` notification removals, a private `tg_graphForChat:` interface, and four `TGSettingsStore (Storage)` declarations whose bodies live in other stores.
-- [x] `done` `scripts/lint_ios6.sh`, run by the suite: a `UILabel` with no `backgroundColor` in the next 40 lines, and a block observer under `Features`/`UI` whose token is neither assigned, returned nor passed on. Clean at HEAD; both rules checked against a probe file.
-- [x] `done` `check_release.sh` gate 1 is gone: `-Werror=unguarded-availability` counts only `@available` as a guard and failed on 160 sites, nearly all behind `respondsToSelector:`. The selector audit that stays covers 29 iOS 7+ selectors (was 8), finds multi-part sends split over lines and dot-syntax getters and setters, skips declarations, and accepts a guard within 12 lines or an `ios7-guarded:` comment naming one further away (2 sites). Clean on the release build; a probe with three unguarded calls fails it. Classes, constants and enums stay with the build's warnings.
-
-#### Phase 8: Logic out of the screens
-A calculation that needs no `UIView` moves into a function that takes its inputs and returns its answer, and gets a test. `TGChatGeometry.h`, `TGProfileLogic.m` and `TGSettingsPageModels.m` already work this way and are the only parts of `Features` the suite reaches. Done in full before 1.4 opens, in the order below; every move lands with its tests and a device walk of the screen it touched.
-
-- [x] `done` The four defects of the audit that were arithmetic inside a view: `TGLoginLogic` (the hidden button takes no row), `TGRowGeometry` (content width of a grouped cell on iOS 6, swatch strip, grid height and tile frames, `TGRowKeepValueWhole`), `TGChatCellLogic` (still or animated custom emoji). `tests/TGScreenLogicTests.m`: 13 tests, 6 of them fail with the old arithmetic put back. Light walk before and after: pixel-identical below the status bar except live numbers and an animation frame.
-- [x] `done` The helpers of `TGChatViewController+Layout.m` are functions in `TGMessageMetrics.{h,m}` (stamp text and width, inline stamp, quote text/entities/author, decoration, poll and checklist height, service line); the screen state they read is an argument. `tests/TGMessageMetricsTests.m`: 12 tests.
-- [x] `done` `-layoutForMessage:atRow:` is `TGMessageRowLayout(TGMessageRowInput *)`: message, neighbours, table width, font size, card, loaded picture size, replied message and author, sender name and a block that measures the sender line (only a plain bubble asks), pending votes, whether the sticker file is ready. The screen keeps the cache, the location map card and the slow-row report. `itglegacy://dumplayout` writes every `TGMessageLayout` property of the open chat; Dev Showcase, Saved Messages and @telegram (135 rows, 26 kinds) dumped before and after on the iPod touch 4 differ only in the showcase's generated clock. `tests/TGMessageRowLayoutTests.m`: 15 tests.
-- [x] `done` Composer: `TGChatComposerPlace` gives the bar, well, text, sticker, paperclip, AI slot, send and table frames for a line count; `TGChatComposerAboveKeyboard` the bar and table over the keyboard; `TGChatComposeBannerPlace` the reply plate. Six unused composer constants are gone. Reply plate, a five-line draft and the cleared field shot on the iPod touch 4 with the old and the new build: the same. 5 tests in `TGScreenLogicTests`.
-- [x] `done` Profile and Settings, first pass: the profile's media tab choice (`TGProfileMediaTabs`, `TGProfileSelectedTabKind`, `TGProfileTabIsGrid` in `TGProfileTabs`); `TGProfileFirstURL`, `TGProfileDurationText` (was in two screens), `TGProfileBirthdayFieldText` and `TGProfilePhotoDateText` in `TGProfileLogic`; the Devices list split as `TGSessionsOtherThanCurrent`; the emoji status and wallpaper grids use `TGGridContentWidthForTable` instead of their own copy. `tests/TGProfileScreenLogicTests.m`: 9 tests. Channel and own profile with their tab strips, Edit Profile, Chat Wallpaper and Devices (`itglegacy://settings/sessions`, new) shot on the iPod touch 4 with the old and the new build: pixel-identical below the status bar.
-- [ ] `planned` The rest of `Features/Profile` and `Features/Settings` as they are touched.
-
-#### Phase 9: Line coverage and the decoders
-- [ ] `planned` Build the suite with `-fprofile-instr-generate -fcoverage-mapping` and report per file through `llvm-cov`. "Compiled into the suite" is an upper bound; this shows the holes inside `Core`.
-- [ ] `planned` `Media` (WebP, WebM, patterns) is at 14% and `Audio` at 0%. Both parse data from outside and neither needs UIKit.
-
-**Not in these phases:** more tests on `Core/Client` and `Core/Stores`; screen tests against UIKit stand-ins, which test the stand-in; further file splits for the size limit.
-
-**Blocked by:** nothing.
+| Milestone | State | Left |
+|---|---|---|
+| M20 Payments, Stars and gifts | `planned` | Pay path, Premium purchase, Stars, gifts, TON, Passport, StoreKit |
+| M21 Group-call audio | `planned` | RTP mixing and AudioUnit playback in the group-call screen |
+| M22 Video calls | `partial` | Dev-only engine; picture to an official client, release gate |
+| M25 Story rings | `planned` | Ring on every row and profile avatar, own-story tile |
+| M26 Chat search filters | `planned` | Sender, media and date chips, result opens the hit, search tokens |
+| M28 Profile cover, QR and Premium badge | `partial` | Accent gradient, background emoji, star badge, rating |
+| M29 Profile media tabs | `partial` | GIF and Polls panes, photo/video split, month sections, calendar, counts |
+| M30 Settings search | `planned` | A page index and a search field over every Settings row |
+| M31 Notification pages | `partial` | Permission warning, badge settings, exception editing |
+| M32 Contacts invite and import | `planned` | Invite Friends, address-book permission, phone-book import |
+| M33 Localisation | `partial` | 170 strings with no official match, gender forms, `native_name` |
+| M35 Message actions still missing | `planned` | Poll creation, copy in multi-select, forward with caption, reply quote, pinned list |
+| M36 Group administration and channel tools | `partial` | Admin rights editor, invite-link detail, removed users, statistics graphs |
+| M37 Settings and appearance detail | `partial` | Privacy exception lists, storage maximum, theme thumbnails, background colours |
+| M38 Media polish | `partial` | Live photos, scrub preview, Lottie mattes and trim paths, sticker keyword search |
+| M39 Stories after the strip | `partial` | Camera video, reply/share/repost, live stories, comments |
+| M40 Bots and mini apps | `planned` | Inline mode, Web App host, bot commands, game scores |
+| M41 Dark theme | `partial` | A device pass over every screen in the dark theme |
+| M43 Platform delivery and device coverage | `partial` | 4-inch check, background fetch, crash reporting |
+| M44 Message detail and unread TDLib fields | `partial` | Rich-message blocks, view/forward counts, service-action buttons |
+| M45 Updates, changelog and usage | `partial` | Usage counts by version and device |

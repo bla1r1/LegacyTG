@@ -285,6 +285,9 @@
 
 - (void)userProfile:(int64_t)userId completion:(void (^)(NSDictionary *info))completion;
 
+/// Every photo the account still has, newest first: "photoId" (to delete
+/// it by), "fileId" (the smallest size, for a grid tile), "bigFileId" (the
+/// largest, for the full-screen viewer) and "date".
 - (void)userProfilePhotos:(int64_t)userId
 			   completion:(void (^)(NSArray *photos))completion;
 

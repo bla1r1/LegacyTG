@@ -399,6 +399,19 @@ static const NSTimeInterval kAutoNightCheckInterval = 60.0;
 		[bar setBackgroundImage:nil];
 }
 
+- (void)styleBarStrip:(UIToolbar *)strip segments:(UISegmentedControl *)segments {
+	strip.barStyle = [self isDark] ? UIBarStyleBlack : UIBarStyleDefault;
+	if ([TGTheme drawsSkeuomorphicChrome]){
+		strip.tintColor = [self barColour];
+		segments.tintColor = [self barColour];
+	} else {
+		if ([strip respondsToSelector:@selector(setBarTintColor:)])
+			strip.barTintColor = [self barColour];
+		strip.tintColor = [self barButtonColour];
+		segments.tintColor = [self barButtonColour];
+	}
+}
+
 - (void)styleNavigationSearchBar:(UISearchBar *)bar {
 	[self styleSearchBar:bar];
 	// Inside a navigation bar the field sits on the bar's own gloss: a second
