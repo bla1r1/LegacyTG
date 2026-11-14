@@ -2,6 +2,7 @@
 
 ## 1.3 (3) - 2026-11-14
 
+- iOS 6: the dark theme no longer closes the app at launch. It set a section-index background colour and a bar tint that only exist from iOS 7; both are checked now.
 - One download for every device: `LegacyTG.ipa` carries the 32-bit (armv7) and 64-bit (arm64) app in one package, and the Cydia repository installs the same build.
 - A message that failed to send is marked in the chat and in the chat list; one tap sends it again.
 - Send files and music: the document picker on iOS 8 and later, songs from the music library on every version, plus silent and repeating scheduled messages. Music plays while it is still downloading.
