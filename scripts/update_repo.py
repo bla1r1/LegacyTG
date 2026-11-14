@@ -5,7 +5,8 @@ REPO_DIR is a checkout of the gh-pages branch. The deb is copied to debs/,
 older debs beyond the newest N (default 1) are removed, and Packages,
 Packages.gz, Packages.bz2 and Release are written again. The depiction page's
 changelog is rebuilt from CHANGELOG.md, so the page and the app's own notes
-say the same thing. Nothing is committed or pushed.
+say the same thing, and the landing page's version line follows the newest
+deb. Nothing is committed or pushed.
 """
 import argparse
 import bz2
@@ -105,6 +106,16 @@ def main():
         size, _, sha = digests(os.path.join(args.repo, name))
         release.append(" %s %d %s" % (sha, size, name))
     open(os.path.join(args.repo, "Release"), "w").write("\n".join(release) + "\n")
+
+    # The landing page says which version the repository serves.
+    landing = os.path.join(args.repo, "index.html")
+    if os.path.exists(landing):
+        short, _, build = version.partition("-")
+        text = open(landing).read()
+        text = re.sub(r"<!--version-->.*?<!--/version-->",
+                      "<!--version-->Version %s (%s)<!--/version-->" % (short, build),
+                      text, flags=re.S)
+        open(landing, "w").write(text)
 
     page = os.path.join(args.repo, "depiction", PKG, "index.html")
     text = open(page).read()
