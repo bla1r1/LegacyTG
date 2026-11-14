@@ -23,6 +23,7 @@
 #import "TGProfileStore.h"
 #import "TGSessionsStore.h"
 #import "TGSettingsStore.h"
+#import "TGSettingsPageModels.h"
 
 
 static const CGFloat kSettingsSearchWidth = 200.0f;
@@ -123,6 +124,7 @@ static const CGFloat kSettingsSearchHeight = 44.0f;
 		search.delegate = self;
 		search.placeholder = @"Search";
 		self.languageSearchBar = search;
+		[[TGTheme shared] styleNavigationSearchBar:search];
 		self.navigationItem.titleView = search;
 	}
 
@@ -225,6 +227,7 @@ static const CGFloat kSettingsSearchHeight = 44.0f;
 - (void)applyTheme {
 	[super applyTheme];
 	[[TGTheme shared] styleGroupedTable:self.tableView];
+	[[TGTheme shared] styleNavigationSearchBar:self.languageSearchBar];
 }
 
 
@@ -259,8 +262,18 @@ static const CGFloat kSettingsSearchHeight = 44.0f;
 - (BOOL)tableView:(UITableView *)tableView
 		canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
 	return self.page == TGSettingsPageFolders &&
-		   indexPath.section == 0 &&
-		   indexPath.row < (NSInteger)[TGChatListStore shared].folders.count;
+		   TGFoldersPageFolderIndex(indexPath.section, indexPath.row,
+				   [TGChatListStore shared].folders.count) >= 0;
+}
+
+- (NSIndexPath *)tableView:(UITableView *)tableView
+		targetIndexPathForMoveFromRowAtIndexPath:(NSIndexPath *)from
+		toProposedIndexPath:(NSIndexPath *)proposed {
+	if (self.page != TGSettingsPageFolders)
+		return proposed;
+	return [NSIndexPath indexPathForRow:TGFoldersPageDropRow(proposed.section,
+			proposed.row, [TGChatListStore shared].folders.count)
+			inSection:TGFoldersPageListSection];
 }
 
 - (void)tableView:(UITableView *)tableView
@@ -270,12 +283,14 @@ static const CGFloat kSettingsSearchHeight = 44.0f;
 	for (NSDictionary *folder in [TGChatListStore shared].folders)
 		if ([folder[@"id"] integerValue])
 			[order addObject:folder[@"id"]];
-	if (from.row >= (NSInteger)order.count || to.row >= (NSInteger)order.count)
+	NSInteger fromIndex = TGFoldersPageFolderIndex(from.section, from.row, order.count);
+	NSInteger toIndex = TGFoldersPageFolderIndex(to.section, to.row, order.count);
+	if (fromIndex < 0 || toIndex < 0)
 		return;
 
-	NSNumber *moved = order[(NSUInteger)from.row];
-	[order removeObjectAtIndex:(NSUInteger)from.row];
-	[order insertObject:moved atIndex:(NSUInteger)to.row];
+	NSNumber *moved = order[(NSUInteger)fromIndex];
+	[order removeObjectAtIndex:(NSUInteger)fromIndex];
+	[order insertObject:moved atIndex:(NSUInteger)toIndex];
 
 	// All Chats stays first: this app's strip draws it as the leading pill and
 	// has nowhere to put it in the middle.

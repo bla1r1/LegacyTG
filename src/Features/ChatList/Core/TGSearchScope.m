@@ -1,4 +1,5 @@
 #import "TGSearchScope.h"
+#import "TGLocalization.h"
 
 NSArray *TGSearchScopeTitles(void) {
 	return @[@"All", @"Chats", @"Messages", @"Media", @"Links",
@@ -88,4 +89,22 @@ BOOL TGSearchScopeShowsMessages(TGSearchScope scope) {
 
 BOOL TGSearchScopeShowsPublic(TGSearchScope scope) {
 	return scope == TGSearchScopeAll;
+}
+
+NSString *TGSearchPublicFooter(TGSearchScope scope, BOOL limitExceeded,
+		NSInteger nextFreeIn, NSInteger remainingFree) {
+	if (scope != TGSearchScopeAll)
+		return nil;
+	if (limitExceeded){
+		if (nextFreeIn <= 0)
+			return nil;
+		NSInteger minutes = MAX(1, (nextFreeIn + 59) / 60);
+		// The pack's own sentence already contains "in"; appending the
+		// "in %@ minutes" phrase produced "in in 15 minutes".
+		NSString *duration = TGLocalizedFormat(@"%@ minutes", @(minutes));
+		return TGLocalizedFormat(@"free search unlocks in %@", duration);
+	}
+	return remainingFree > 0
+			? TGLocalizedFormat(@"%@ free searches remaining today.", @(remainingFree))
+			: nil;
 }

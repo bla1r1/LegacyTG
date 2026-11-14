@@ -87,6 +87,9 @@ extern NSString *const TGThemeChangedNotification;
 - (UIColor *)systemBarBlueColour;
 /// A search bar the way the running OS draws one.
 - (void)styleSearchBar:(UISearchBar *)bar;
+/// A search bar used as a navigation item's title view: no background of its
+/// own, so the field and the bar buttons share the navigation bar's.
+- (void)styleNavigationSearchBar:(UISearchBar *)bar;
 /// A stock cell of this style, for reading the system's fonts and colours.
 + (UITableViewCell *)systemCellOfStyle:(UITableViewCellStyle)style;
 /// A grouped table the way the running OS draws one.

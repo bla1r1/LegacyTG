@@ -35,9 +35,9 @@ extern NSString *const TGPageModelRowIndex;
 /// does not have, so only the switches the app can honour are returned.
 NSArray *TGPowerSavingPageModel(BOOL stickersOn, BOOL gifsOn, BOOL wallpaperOn);
 
-/// Folders: Create New Folder, the account's folders, the recommended list,
-/// then the tag switch. `dev` adds the invite-link row, which official does
-/// not have.
+/// Folders: the page intro (folder icon and the official sentence), Create
+/// New Folder, the account's folders, the recommended list, then the tag
+/// switch. `dev` adds the invite-link row, which official does not have.
 NSArray *TGFoldersPageModel(NSArray *folders, NSArray *recommended,
 							NSDictionary *chatCounts, BOOL tagsOn, BOOL dev);
 
@@ -45,6 +45,34 @@ NSArray *TGFoldersPageModel(NSArray *folders, NSArray *recommended,
 /// list, as ProxyListSettingsController orders them.
 NSArray *TGProxyPageModel(NSArray *proxies, BOOL useProxy, BOOL connected,
 						  BOOL dev);
+
+/// The Chat Folders list section: after the intro, folders below the Create
+/// New Folder row.
+#define TGFoldersPageListSection 1
+#define TGFoldersPageFirstFolderRow 1
+
+/// The folder a row of the Chat Folders page shows, or -1 for any other row
+/// (the intro, Create New Folder, Add Folder, suggestions, the switch).
+NSInteger TGFoldersPageFolderIndex(NSInteger section, NSInteger row,
+								   NSUInteger folderCount);
+
+/// Where a dragged folder may land: inside the folder rows, whatever row the
+/// finger is over.
+NSInteger TGFoldersPageDropRow(NSInteger proposedSection, NSInteger proposedRow,
+							   NSUInteger folderCount);
+
+/// Values on the account pages: frozen or not, a subscription's state, the
+/// minimum age, a notification sound's name, a notification group's label.
+NSString *TGFreezeDetail(NSDictionary *state);
+NSString *TGSubscriptionDetail(NSDictionary *record);
+NSString *TGAgeVerificationDetail(NSDictionary *parameters);
+NSString *TGSoundName(NSDictionary *sound);
+NSString *TGNotificationGroupLabel(NSString *type);
+
+/// The help under a privacy rule's choices, in the pack's words. Calls and
+/// forwards get none: the pack has no sentence for them, and an invented one
+/// stays English in every language.
+NSString *TGPrivacyRuleFooterText(NSString *setting);
 
 /// A byte value without a trailing zero fraction, the shape official uses on
 /// the auto-download rows ("120 MB", not "120.0 MB").

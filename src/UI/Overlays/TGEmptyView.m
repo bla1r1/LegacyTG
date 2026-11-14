@@ -6,10 +6,9 @@
 #import "TGIcons.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
+#import "TGTextDraw.h"
+#import "TGRowGeometry.h"
 
-static const CGFloat kEmptyIconSide = TGMetricEmptyIconSide;
-static const CGFloat kEmptyBtnH     = TGMetricButtonHeightSmall;
-static const CGFloat kEmptyBtnW     = 160.0f;
 
 @implementation TGEmptyView
 
@@ -54,49 +53,34 @@ static const CGFloat kEmptyBtnW     = 160.0f;
 
 	TGTheme *theme = [TGTheme shared];
 	CGFloat width = self.bounds.size.width;
-	CGFloat height = self.bounds.size.height;
+	CGFloat lineWidth = TGCentredStackTextWidth(width);
+	CGFloat titleH = title.length ? TGTextHeight(title, TGFontTitle(), lineWidth) : 0;
+	CGFloat subH = subtitle.length ? TGTextHeight(subtitle, TGFontBody(), lineWidth) : 0;
+	CGSize button = buttonTitle.length
+			? CGSizeMake(TGMetricEmptyButtonWidth, TGMetricButtonHeightSmall) : CGSizeZero;
+	TGCentredStack place = TGEmptyStatePlace(self.bounds.size,
+			image ? TGMetricEmptyIconSide : 0, titleH, subH, button);
 
-	CGFloat titleH = TGMetricLineTitle;
-	BOOL multilineTitle = [title rangeOfString:@"\n"].location != NSNotFound;
-	if (multilineTitle)
-		titleH = TGDoubled(TGMetricLineTitle);
-
-	CGFloat contentHeight = kEmptyIconSide + TGMetricPadLarge + titleH + TGMetricPad + TGMetricLineBody * 2;
-	if (buttonTitle.length) {
-		contentHeight += TGMetricPadLarge + kEmptyBtnH;
+	if (image){
+		_iconView = [[UIImageView alloc] initWithFrame:place.art];
+		_iconView.image = image;
+		_iconView.contentMode = UIViewContentModeScaleAspectFit;
+		[TGIcons tintImageView:_iconView colour:[theme secondaryTextColour]];
+		_iconView.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin;
+		[self addSubview:_iconView];
 	}
 
-	CGFloat startY = TGCenteredOrigin(height, contentHeight);
-	if (startY < TGMetricPadWide) startY = TGMetricPadWide;
-
-	// Icon
-	CGFloat iconX = TGCenteredOrigin(width, kEmptyIconSide);
-	_iconView = [[UIImageView alloc] initWithFrame:CGRectMake(iconX, startY, kEmptyIconSide, kEmptyIconSide)];
-	_iconView.image = image;
-	_iconView.contentMode = UIViewContentModeScaleAspectFit;
-	[TGIcons tintImageView:_iconView colour:[theme secondaryTextColour]];
-	_iconView.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin;
-	[self addSubview:_iconView];
-
-	CGFloat y = startY + kEmptyIconSide + TGMetricPadLarge;
-
-	// Title
-	_titleLabel = [[UILabel alloc] initWithFrame:CGRectMake(TGMetricPadWide,
-			y, width - TGDoubled(TGMetricPadWide), titleH)];
+	_titleLabel = [[UILabel alloc] initWithFrame:place.title];
 	_titleLabel.font = TGFontTitle();
 	_titleLabel.textColor = [theme primaryTextColour];
 	_titleLabel.textAlignment = NSTextAlignmentCenter;
-	_titleLabel.numberOfLines = multilineTitle ? 0 : 1;
+	_titleLabel.numberOfLines = 0;
 	_titleLabel.text = title;
 	_titleLabel.backgroundColor = [UIColor clearColor];
 	_titleLabel.autoresizingMask = UIViewAutoresizingFlexibleWidth;
 	[self addSubview:_titleLabel];
 
-	y += titleH + TGMetricPad;
-
-	// Subtitle
-	CGFloat subH = TGMetricLineBody * 2;
-	_subtitleLabel = [[UILabel alloc] initWithFrame:CGRectMake(TGMetricPadWide, y, width - TGDoubled(TGMetricPadWide), subH)];
+	_subtitleLabel = [[UILabel alloc] initWithFrame:place.subtitle];
 	_subtitleLabel.font = TGFontBody();
 	_subtitleLabel.textColor = [theme secondaryTextColour];
 	_subtitleLabel.textAlignment = NSTextAlignmentCenter;
@@ -106,13 +90,9 @@ static const CGFloat kEmptyBtnW     = 160.0f;
 	_subtitleLabel.autoresizingMask = UIViewAutoresizingFlexibleWidth;
 	[self addSubview:_subtitleLabel];
 
-	y += subH + TGMetricPadLarge;
-
-	// Optional Action Button
 	if (buttonTitle.length) {
-		CGFloat btnX = TGCenteredOrigin(width, kEmptyBtnW);
 		_actionButton = [UIButton buttonWithType:UIButtonTypeCustom];
-		_actionButton.frame = CGRectMake(btnX, y, kEmptyBtnW, kEmptyBtnH);
+		_actionButton.frame = place.button;
 		_actionButton.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin;
 		[_actionButton setTitle:buttonTitle forState:UIControlStateNormal];
 		[TGTheme applySkeuomorphicStyleToButton:_actionButton style:TGButtonStyleAction];
@@ -121,6 +101,14 @@ static const CGFloat kEmptyBtnW     = 160.0f;
 		}
 		[self addSubview:_actionButton];
 	}
+}
+
+- (void)applyTheme {
+	TGTheme *theme = [TGTheme shared];
+	_titleLabel.textColor = [theme primaryTextColour];
+	_subtitleLabel.textColor = [theme secondaryTextColour];
+	if (_iconView)
+		[TGIcons tintImageView:_iconView colour:[theme secondaryTextColour]];
 }
 
 - (void)didMoveToWindow {

@@ -19,6 +19,7 @@
 #import "TGUIFormat.h"
 #import "TGOptions.h"
 #import "TGSearchScope.h"
+#import "TGEmptyView.h"
 
 
 @interface TGSearchViewController () <UISearchBarDelegate>
@@ -84,7 +85,12 @@ static NSString *TGSearchDateText(NSNumber *stamp) {
 @implementation TGSearchViewController
 
 - (instancetype)init {
-	return [super initWithStyle:UITableViewStylePlain];
+	self = [super initWithStyle:UITableViewStylePlain];
+	// Set before the push, not in viewDidLoad: on iOS 6 an animated push
+	// right after a tab switch kept the previous screen's Back on top of the
+	// search field (reproduced twice on the iPod touch 4).
+	self.navigationItem.hidesBackButton = YES;
+	return self;
 }
 
 - (void)viewDidLoad {
@@ -162,6 +168,7 @@ static NSString *TGSearchDateText(NSNumber *stamp) {
 
 - (void)viewWillAppear:(BOOL)animated {
 	[super viewWillAppear:animated];
+	[self.navigationItem setHidesBackButton:YES animated:NO];
 	[self applyTheme];
 }
 
@@ -211,7 +218,9 @@ static NSString *TGSearchDateText(NSNumber *stamp) {
 	TGTheme *theme = [TGTheme shared];
 	self.view.backgroundColor = [theme listBackgroundColour];
 	[theme stylePlainTable:self.tableView];
-	[theme styleSearchBar:self.bar];
+	if ([self.tableView.backgroundView isKindOfClass:TGEmptyView.class])
+		[(TGEmptyView *)self.tableView.backgroundView applyTheme];
+	[theme styleNavigationSearchBar:self.bar];
 	[theme styleNavigationBar:self.navigationController.navigationBar];
 	if (self.scopeHost){
 		self.scopeHost.backgroundColor = [theme listBackgroundColour];
@@ -738,23 +747,10 @@ static NSString *TGSearchDateText(NSNumber *stamp) {
 }
 
 - (NSString *)publicFooter {
-	if (self.scope != TGSearchScopeAll)
-		return nil;
-	if (self.publicLimitExceeded){
-		NSInteger wait = [self.publicLimits[@"nextFreeIn"] integerValue];
-		if (wait > 0){
-			NSInteger minutes = MAX(1, (wait + 59) / 60);
-			// The pack's own sentence already contains "in"; appending the
-			// "in %@ minutes" phrase produced "in in 15 minutes".
-			NSString *duration = TGLocalizedFormat(@"%@ minutes", @(minutes));
-			return TGLocalizedFormat(@"free search unlocks in %@", duration);
-		}
-		return TGLocalized(@"No Results");
-	}
-	NSInteger left = [self.publicLimits[@"remainingFree"] integerValue];
-	if (self.publicLimits && left > 0)
-		return TGLocalizedFormat(@"%@ free searches remaining today.", @(left));
-	return nil;
+	NSDictionary *limits = self.publicLimits;
+	return TGSearchPublicFooter(self.scope, self.publicLimitExceeded,
+			[limits[@"nextFreeIn"] integerValue],
+			limits ? [limits[@"remainingFree"] integerValue] : 0);
 }
 
 - (NSMutableDictionary *)peerRowForChat:(NSDictionary *)chat detail:(id)detail {

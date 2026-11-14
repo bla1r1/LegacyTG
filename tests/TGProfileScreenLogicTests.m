@@ -6,6 +6,7 @@
 #import "TGProfileLogic.h"
 #import "TGSettingsPageModels.h"
 #import "TGSearchScope.h"
+#import "TGGroupLogic.h"
 #import "TGUIFormat.h"
 
 @interface TGProfileScreenLogicTests : XCTestCase @end
@@ -143,12 +144,55 @@
 	XCTAssertEqualObjects(TGPublicPostText(@{@"content" : @{@"@type" : @"messagePoll"}}), @"Poll");
 }
 
+- (void)testSearch_PublicFooterNeverRepeatsNoResults {
+	// Spent limit, no wait known: the screen's empty state says "No Results";
+	// the footer said it again as a grey bar over Stories.
+	XCTAssertNil(TGSearchPublicFooter(TGSearchScopeAll, YES, 0, 0));
+	XCTAssertEqualObjects(TGSearchPublicFooter(TGSearchScopeAll, YES, 61, 0),
+			@"free search unlocks in 2 minutes");
+	XCTAssertEqualObjects(TGSearchPublicFooter(TGSearchScopeAll, NO, 0, 3),
+			@"3 free searches remaining today.");
+	XCTAssertNil(TGSearchPublicFooter(TGSearchScopeMessages, NO, 0, 3));
+}
+
 #pragma mark - helpers that had copies
 
 - (void)testUserName_JoinsWhatIsThere {
 	XCTAssertEqualObjects(TGProfileUserName((@{@"first_name" : @"Ann", @"last_name" : @"Lee"})), @"Ann Lee");
 	XCTAssertEqualObjects(TGProfileUserName(@{@"last_name" : @"Lee"}), @"Lee");
 	XCTAssertEqualObjects(TGProfileUserName(nil), @"");
+}
+
+#pragma mark - account and topic lines
+
+- (void)testAccountValues {
+	XCTAssertEqualObjects(TGFreezeDetail(nil), @"Unknown");
+	XCTAssertEqualObjects(TGFreezeDetail(@{@"is_frozen" : @YES}), @"Frozen");
+	XCTAssertEqualObjects(TGSubscriptionDetail((@{@"is_canceled" : @YES, @"is_payment_failed" : @YES})),
+			@"Payment failed");
+	XCTAssertEqualObjects(TGSubscriptionDetail(@{}), @"Active");
+	XCTAssertEqualObjects(TGAgeVerificationDetail(@{@"min_age" : @18}), @"Age 18+");
+	XCTAssertEqualObjects(TGAgeVerificationDetail(@{}), @"No minimum");
+	XCTAssertEqualObjects(TGSoundName(@{@"id" : @7}), @"Sound 7");
+	XCTAssertEqualObjects(TGNotificationGroupLabel(@"notificationGroupTypeMentions"), @"Mention");
+	XCTAssertEqualObjects(TGNotificationGroupLabel(@""), @"Notifications");
+}
+
+- (void)testTopicLines {
+	XCTAssertEqualObjects(TGTopicIconLine(@{@"colour" : @(0x6FB9F0)}), @"Colour 6FB9F0");
+	XCTAssertEqualObjects(TGTopicIconLine((@{@"colour" : @(0x6FB9F0), @"iconEmojiId" : @5})),
+			@"Custom emoji · colour 6FB9F0");
+	XCTAssertEqualObjects(TGTopicStateLine((@{@"pinned" : @YES, @"closed" : @YES})), @"Pinned · Closed");
+	XCTAssertEqualObjects(TGTopicStateLine(@{}), @"Open");
+}
+
+- (void)testPrivacyFooters_AreThePacksSentences {
+	// The old sentences were not in the pack and stayed English in Russian.
+	XCTAssertEqualObjects(TGPrivacyRuleFooterText(@"ShowProfilePhoto"),
+			@"You can restrict who can see your profile photo with granular precision.");
+	XCTAssertTrue([TGPrivacyRuleFooterText(@"ShowStatus") hasPrefix:@"Unless you are a Premium user"]);
+	XCTAssertNil(TGPrivacyRuleFooterText(@"AllowCalls"));
+	XCTAssertNil(TGPrivacyRuleFooterText(@"ShowLinkInForwardedMessages"));
 }
 
 @end

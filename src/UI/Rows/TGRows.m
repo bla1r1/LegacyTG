@@ -179,6 +179,13 @@ NSMutableDictionary *TGPeerRow(NSNumber *peerId, NSString *title,
 	return row;
 }
 
+NSMutableDictionary *TGPageHeaderRow(UIImage *art, NSString *title, NSString *text) {
+	NSMutableDictionary *row = TGRow(TGKindPageHeader, title);
+	if (art) row[TGRowAvatarImage] = art;
+	if (text) row[TGRowDetail] = text;
+	return row;
+}
+
 BOOL TGPeerRowIsChecked(NSDictionary *row) {
 	return [row[TGRowChecked] boolValue];
 }
@@ -312,6 +319,7 @@ NSString *const TGRowMove             = @"move";
 NSString *const TGKindField          = @"field";
 NSString *const TGKindMultilineField = @"multilinefield";
 NSString *const TGKindNote           = @"note";
+NSString *const TGKindPageHeader     = @"pageHeader";
 NSString *const TGKindPhoto          = @"photo";
 NSString *const TGKindImageCheck     = @"imagecheck";
 

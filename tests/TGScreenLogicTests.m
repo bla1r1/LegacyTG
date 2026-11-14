@@ -170,5 +170,38 @@
 	XCTAssertLessThanOrEqual(CGRectGetMaxX(one.title), one.close.origin.x);
 }
 
+#pragma mark - page header and empty state column
+
+- (void)testStack_PartsFollowEachOtherWithFixedGaps {
+	TGCentredStack s = TGCentredStackPlace(320, 16, 64, 26, 18, 36, CGSizeZero);
+	XCTAssertEqual(CGRectGetMidX(s.art), (CGFloat)160);
+	XCTAssertEqual(s.title.origin.y, CGRectGetMaxY(s.art) + TGMetricPadMedium);
+	// The subtitle belongs to the title: no gap.
+	XCTAssertEqual(s.subtitle.origin.y, CGRectGetMaxY(s.title));
+	XCTAssertEqual(s.text.origin.y, CGRectGetMaxY(s.subtitle) + TGMetricPad);
+	XCTAssertEqual(s.title.size.width, (CGFloat)(320 - 2 * TGMetricPadWide));
+	XCTAssertEqual(s.height, CGRectGetMaxY(s.text) - 16 + TGMetricPadLarge);
+}
+
+- (void)testStack_AMissingPartTakesItsGapWithIt {
+	// No art: the title starts at the top, not a gap below nothing.
+	TGCentredStack s = TGCentredStackPlace(320, 16, 0, 26, 0, 0, CGSizeZero);
+	XCTAssertTrue(CGRectIsEmpty(s.art));
+	XCTAssertEqual(s.title.origin.y, (CGFloat)16);
+	// Subtitle without a title keeps the gap from the art.
+	TGCentredStack lone = TGCentredStackPlace(320, 0, 64, 0, 18, 0, CGSizeZero);
+	XCTAssertEqual(lone.subtitle.origin.y, (CGFloat)(64 + TGMetricPadMedium));
+}
+
+- (void)testEmptyState_CentredButNeverUnderTheTop {
+	TGCentredStack mid = TGEmptyStatePlace(CGSizeMake(320, 400), 64, 26, 36,
+			CGSizeMake(160, 36));
+	CGFloat content = CGRectGetMaxY(mid.button) - mid.art.origin.y;
+	XCTAssertEqual(mid.art.origin.y, TGCenteredOrigin(400, content));
+	XCTAssertEqual(mid.button.origin.y, CGRectGetMaxY(mid.subtitle) + TGMetricPadLarge);
+	TGCentredStack tight = TGEmptyStatePlace(CGSizeMake(320, 60), 64, 26, 36, CGSizeZero);
+	XCTAssertEqual(tight.art.origin.y, TGMetricPadWide);
+}
+
 @end
 

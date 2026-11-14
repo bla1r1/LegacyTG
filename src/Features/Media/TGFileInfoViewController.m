@@ -6,6 +6,7 @@
 #import "TGIcons.h"
 #import "TGRows.h"
 #import "UIImage+WebP.h"
+#import "TGPageHeaderView.h"
 
 @interface TGFileInfoViewController ()
 @property (nonatomic, strong) NSDictionary *info;
@@ -13,9 +14,7 @@
 @property (nonatomic, copy) NSString *suggestedName;
 @property (nonatomic, assign) long long prefixBytes;
 @property (nonatomic, assign) BOOL loaded;
-@property (nonatomic, strong) UIImageView *heroIcon;
-@property (nonatomic, strong) UILabel *heroNameLabel;
-@property (nonatomic, strong) UILabel *heroSizeLabel;
+@property (nonatomic, strong) TGPageHeaderView *header;
 @end
 
 @implementation TGFileInfoViewController
@@ -67,43 +66,19 @@
 	CGFloat width = self.tableView.bounds.size.width;
 	if (width <= 0)
 		width = TGMetricScreenWidth;
-	UIView *header = [[UIView alloc] initWithFrame:
-			CGRectMake(0, 0, width, TGMetricFileInfoHero)];
-	header.backgroundColor = [UIColor clearColor];
-
-	self.heroIcon = [[UIImageView alloc] initWithFrame:CGRectMake(
-			TGMetricPadLarge,
-			TGCenteredOrigin(TGMetricFileInfoHero, TGMetricFileInfoIcon),
-			TGMetricFileInfoIcon, TGMetricFileInfoIcon)];
-	self.heroIcon.contentMode = UIViewContentModeScaleAspectFit;
-	[header addSubview:self.heroIcon];
-
-	CGFloat textX = CGRectGetMaxX(self.heroIcon.frame) + TGMetricPadMedium;
-	self.heroNameLabel = [[UILabel alloc] initWithFrame:CGRectMake(textX,
-			TGMetricPadMedium + TGMetricPadSmall,
-			width - textX - TGMetricPadLarge, TGMetricLineHeader)];
-	self.heroNameLabel.font = TGFontHeader();
-	self.heroNameLabel.lineBreakMode = NSLineBreakByTruncatingMiddle;
-	self.heroNameLabel.backgroundColor = [UIColor clearColor];
-	[header addSubview:self.heroNameLabel];
-
-	self.heroSizeLabel = [[UILabel alloc] initWithFrame:CGRectMake(textX,
-			CGRectGetMaxY(self.heroNameLabel.frame),
-			self.heroNameLabel.bounds.size.width, TGMetricLineCaption)];
-	self.heroSizeLabel.font = TGFontSubhead();
-	self.heroSizeLabel.backgroundColor = [UIColor clearColor];
-	[header addSubview:self.heroSizeLabel];
-
-	self.tableView.tableHeaderView = header;
+	// Name and size arrive with the file record: one line each is kept.
+	self.header = [[TGPageHeaderView alloc] initWithWidth:width
+			artSide:TGMetricPageArtSide title:@"" subtitle:@"" text:nil];
+	self.header.titleLabel.numberOfLines = 1;
+	self.header.titleLabel.lineBreakMode = NSLineBreakByTruncatingMiddle;
+	self.tableView.tableHeaderView = self.header;
 }
 
 - (void)updateHeader {
-	TGTheme *theme = [TGTheme shared];
-	self.heroIcon.image = [TGIcons fileDiscOfSide:TGMetricFileInfoIcon];
-	self.heroNameLabel.text = [self heroName];
-	self.heroNameLabel.textColor = [theme primaryTextColour];
-	self.heroSizeLabel.text = TGFileInfoBytesText([self heroSize]);
-	self.heroSizeLabel.textColor = [theme secondaryTextColour];
+	self.header.imageView.image = [TGIcons fileDiscOfSide:TGMetricPageArtSide];
+	self.header.titleLabel.text = [self heroName];
+	self.header.subtitleLabel.text = TGFileInfoBytesText([self heroSize]);
+	[self.header applyTheme];
 }
 
 - (void)load {

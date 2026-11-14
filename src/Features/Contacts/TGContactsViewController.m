@@ -347,16 +347,10 @@ static NSString *TGContactName(NSDictionary *u) {
 
 - (void)updateSearchEmptyViewForQuery:(NSString *)query {
 	if (self.isSearching && self.filteredUsers.count == 0 && query.length){
-		UILabel *empty = [[UILabel alloc] initWithFrame:self.tableView.bounds];
-		empty.text = TGLocalized(@"No matching\ncontacts found");
-		empty.textAlignment = NSTextAlignmentCenter;
-		empty.numberOfLines = 2;
-		empty.font = TGFontBody();
-		empty.textColor = [[TGTheme shared] secondaryTextColour];
-		empty.backgroundColor = [UIColor clearColor];
-		self.tableView.backgroundView = empty;
-	} else {
-		self.tableView.backgroundView = nil;
+		[self showEmptyWithImage:nil title:TGLocalized(@"No matching\ncontacts found")
+				subtitle:nil];
+	} else if (self.tableView.backgroundView){
+		[self hideEmpty];
 	}
 }
 

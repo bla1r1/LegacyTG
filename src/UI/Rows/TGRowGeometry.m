@@ -71,3 +71,58 @@ TGRowValueSplit TGRowKeepValueWhole(CGFloat titleX, CGFloat titleWidth,
 	split.titleWidth = MAX(0, split.valueX - TGMetricPadMedium - titleX);
 	return split;
 }
+
+CGFloat TGCentredStackTextWidth(CGFloat width) {
+	return MAX(0, width - TGDoubled(TGMetricPadWide));
+}
+
+TGCentredStack TGCentredStackPlace(CGFloat width, CGFloat top,
+		CGFloat artSide, CGFloat titleHeight, CGFloat subtitleHeight,
+		CGFloat textHeight, CGSize button) {
+	TGCentredStack s = {CGRectZero, CGRectZero, CGRectZero, CGRectZero, CGRectZero, 0};
+	CGFloat lineWidth = TGCentredStackTextWidth(width);
+	CGFloat y = top;
+	BOOL any = NO;
+	if (artSide > 0){
+		s.art = CGRectMake(TGCenteredOrigin(width, artSide), y, artSide, artSide);
+		y += artSide;
+		any = YES;
+	}
+	if (titleHeight > 0){
+		y += any ? TGMetricPadMedium : 0;
+		s.title = CGRectMake(TGMetricPadWide, y, lineWidth, titleHeight);
+		y += titleHeight;
+		any = YES;
+	}
+	if (subtitleHeight > 0){
+		// The subtitle belongs to the title: no gap when there is one.
+		y += (any && titleHeight <= 0) ? TGMetricPadMedium : 0;
+		s.subtitle = CGRectMake(TGMetricPadWide, y, lineWidth, subtitleHeight);
+		y += subtitleHeight;
+		any = YES;
+	}
+	if (textHeight > 0){
+		y += any ? TGMetricPad : 0;
+		s.text = CGRectMake(TGMetricPadWide, y, lineWidth, textHeight);
+		y += textHeight;
+		any = YES;
+	}
+	if (button.width > 0 && button.height > 0){
+		y += any ? TGMetricPadLarge : 0;
+		s.button = CGRectMake(TGCenteredOrigin(width, button.width), y,
+				button.width, button.height);
+		y += button.height;
+	}
+	s.height = y - top + TGMetricPadLarge;
+	return s;
+}
+
+TGCentredStack TGEmptyStatePlace(CGSize size, CGFloat artSide,
+		CGFloat titleHeight, CGFloat subtitleHeight, CGSize button) {
+	TGCentredStack probe = TGCentredStackPlace(size.width, 0, artSide, titleHeight,
+			subtitleHeight, 0, button);
+	CGFloat content = probe.height - TGMetricPadLarge;
+	CGFloat top = MAX(TGMetricPadWide, TGCenteredOrigin(size.height, content));
+	return TGCentredStackPlace(size.width, top, artSide, titleHeight,
+			subtitleHeight, 0, button);
+}

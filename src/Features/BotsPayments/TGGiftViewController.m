@@ -13,12 +13,10 @@
 #import "TGRows.h"
 #import "TGMessageStore.h"
 #import "TGDownloadPriority.h"
+#import "TGUIFormat.h"
+#import "TGPageHeaderView.h"
 
 static const CGFloat kArtSide = TGMetricProfilePhotoSide;
-static const CGFloat kHeaderPadTop = TGMetricPadLarge;
-static const CGFloat kHeaderPadMid = TGMetricPadMedium;
-static const CGFloat kTitleHeight = TGMetricLineTitle;
-static const CGFloat kHeaderHeight = TGMetricPadLarge + TGMetricProfilePhotoSide + TGMetricPadMedium + TGMetricLineTitle + TGMetricLineMicro + TGMetricPadLarge;
 static const CGFloat kRGBDivisor = 255.0f;
 
 static UIImage *TGGiftRadialGradient(int32_t centerColor, int32_t edgeColor, CGFloat side) {
@@ -196,15 +194,14 @@ static UIImage *TGGiftRadialGradient(int32_t centerColor, int32_t edgeColor, CGF
 	if (width <= 0)
 		width = TGMetricScreenWidth;
 
-	UIView *header = [[UIView alloc] initWithFrame:CGRectMake(0, 0, width, kHeaderHeight)];
-	header.backgroundColor = [UIColor clearColor];
-
-	CGFloat artX = TGCenteredOrigin(width, kArtSide);
-	CGRect artFrame = CGRectMake(artX, kHeaderPadTop, kArtSide, kArtSide);
-	UIView *artContainer = [[UIView alloc] initWithFrame:artFrame];
+	// The sender belongs under the art, not in a "From" row below it.
+	TGPageHeaderView *header = [[TGPageHeaderView alloc] initWithWidth:width
+			artSide:kArtSide title:[self headerTitleText] subtitle:[self senderText]
+			text:nil];
+	self.senderLabel = header.subtitleLabel;
+	UIView *artContainer = header.artView;
 	artContainer.layer.cornerRadius = TGMetricCornerCard;
 	artContainer.clipsToBounds = YES;
-	[header addSubview:artContainer];
 
 	BOOL isCollectible = [self.gift[@"isCollectible"] boolValue];
 	if (isCollectible) {
@@ -298,27 +295,6 @@ static UIImage *TGGiftRadialGradient(int32_t centerColor, int32_t edgeColor, CGF
 		}];
 	}
 
-	CGFloat titleY = kHeaderPadTop + kArtSide + kHeaderPadMid;
-	CGFloat titleW = width - TGDoubled(TGMetricPadLarge);
-	UILabel *titleLabel = [[UILabel alloc] initWithFrame:CGRectMake(TGMetricPadLarge, titleY, titleW, kTitleHeight)];
-	titleLabel.text = [self headerTitleText];
-	titleLabel.font = TGFontTitle();
-	titleLabel.textColor = [[TGTheme shared] primaryTextColour];
-	titleLabel.textAlignment = NSTextAlignmentCenter;
-	titleLabel.backgroundColor = [UIColor clearColor];
-	[header addSubview:titleLabel];
-
-	// The sender belongs under the art, not in a "From" row below it.
-	UILabel *senderLabel = [[UILabel alloc] initWithFrame:CGRectMake(
-			TGMetricPadLarge, titleY + kTitleHeight, titleW, TGMetricLineMicro)];
-	senderLabel.text = [self senderText];
-	senderLabel.font = TGFontSubhead();
-	senderLabel.textColor = [[TGTheme shared] secondaryTextColour];
-	senderLabel.textAlignment = NSTextAlignmentCenter;
-	senderLabel.backgroundColor = [UIColor clearColor];
-	[header addSubview:senderLabel];
-	self.senderLabel = senderLabel;
-
 	self.tableView.tableHeaderView = header;
 }
 
@@ -371,20 +347,8 @@ static UIImage *TGGiftRadialGradient(int32_t centerColor, int32_t edgeColor, CGF
 
 - (NSString *)formattedDate {
 	NSNumber *unix = self.gift[@"date"];
-	if (![unix isKindOfClass:[NSNumber class]] || [unix doubleValue] <= 0)
-		return @"";
-	static NSDateFormatter *fmt = nil;
-	static dispatch_once_t once;
-	dispatch_once(&once, ^{
-		fmt = [[NSDateFormatter alloc] init];
-		fmt.dateStyle = NSDateFormatterMediumStyle;
-		fmt.timeStyle = NSDateFormatterNoStyle;
-	});
-	NSString *language = TGAppLanguage();
-	fmt.locale = language.length
-			? [NSLocale localeWithLocaleIdentifier:language]
-			: [NSLocale currentLocale];
-	return [fmt stringFromDate:[NSDate dateWithTimeIntervalSince1970:[unix doubleValue]]];
+	double stamp = [unix isKindOfClass:[NSNumber class]] ? unix.doubleValue : 0;
+	return TGAppDate(stamp, NSDateFormatterMediumStyle, NSDateFormatterNoStyle) ?: @"";
 }
 
 #pragma mark - rows

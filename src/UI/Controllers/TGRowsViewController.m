@@ -17,6 +17,7 @@
 #import "TGThemeGridRowCell.h"
 #import "TGSnackbar.h"
 #import "TGStyle.h"
+#import "TGPageHeaderRowCell.h"
 
 @interface TGRowsViewController () <TGFieldRowCellDelegate>
 @property (nonatomic, strong) NSMutableDictionary *storedFieldText;
@@ -218,6 +219,8 @@ heightForRowAtIndexPath:(NSIndexPath *)indexPath {
 	if ([kind isEqualToString:TGKindProfileHeader] ||
 			[kind isEqualToString:TGKindProfile])
 		return [TGProfileHeaderRowCell heightForRow:row inTableView:tableView];
+	if ([kind isEqualToString:TGKindPageHeader])
+		return [TGPageHeaderRowCell heightForRow:row inTableView:tableView];
 	if ([kind isEqualToString:TGKindChatPreview] ||
 			[kind isEqualToString:TGKindPreview])
 		return [TGChatPreviewRowCell heightForRow:row inTableView:tableView];
@@ -253,6 +256,8 @@ heightForRowAtIndexPath:(NSIndexPath *)indexPath {
 	if ([kind isEqualToString:TGKindProfileHeader] ||
 			[kind isEqualToString:TGKindProfile])
 		return [TGProfileHeaderRowCell cellForTableView:tableView row:row];
+	if ([kind isEqualToString:TGKindPageHeader])
+		return [TGPageHeaderRowCell cellForTableView:tableView row:row];
 	if ([kind isEqualToString:TGKindChatPreview] ||
 			[kind isEqualToString:TGKindPreview])
 		return [TGChatPreviewRowCell cellForTableView:tableView row:row];

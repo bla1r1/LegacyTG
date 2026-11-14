@@ -222,17 +222,11 @@ static const CGFloat kPickerPanelHeight = TGMetricRow;
 	BOOL empty = [self matchingChats].count == 0;
 	if (!empty){
 		if (self.tableView.backgroundView)
-			self.tableView.backgroundView = nil;
+			[self hideEmpty];
 		return;
 	}
-	UILabel *label = [[UILabel alloc] initWithFrame:CGRectZero];
-	// Clear, or iOS 6 paints the label's default white box.
-	label.backgroundColor = [UIColor clearColor];
-	label.font = TGFontBody();
-	label.textColor = [[TGTheme shared] secondaryTextColour];
-	label.textAlignment = NSTextAlignmentCenter;
-	label.text = TGLocalized(@"No Results");
-	self.tableView.backgroundView = label;
+	if (!self.tableView.backgroundView)
+		[self showEmptyWithImage:nil title:TGLocalized(@"No Results") subtitle:nil];
 }
 
 - (NSArray *)selectedChatIdsInOrder {

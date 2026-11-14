@@ -107,6 +107,10 @@ NSDictionary *TGButtonRow(NSString *title, NSString *detail,
 NSMutableDictionary *TGPeerRow(NSNumber *peerId, NSString *title,
 		NSString *subtitle, void (^tap)(void));
 
+/// A TGKindPageHeader row. `art` is drawn at its own size; title and text
+/// may be nil.
+NSMutableDictionary *TGPageHeaderRow(UIImage *art, NSString *title, NSString *text);
+
 /// YES when the row's check accessory is ticked.
 BOOL TGPeerRowIsChecked(NSDictionary *row);
 
@@ -228,6 +232,10 @@ extern NSString *const TGRowMove;             // void(^)(NSInteger from, NSInteg
 extern NSString *const TGKindField;
 extern NSString *const TGKindMultilineField;
 extern NSString *const TGKindNote;
+/// The page's opening: a picture and a short paragraph centred above the
+/// first section, on the page background rather than in a card. Drawn by
+/// TGPageHeaderView, the same column as a table-header page header.
+extern NSString *const TGKindPageHeader;
 extern NSString *const TGKindPhoto;
 extern NSString *const TGKindImageCheck;
 

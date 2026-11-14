@@ -29,6 +29,7 @@
 #import "TGProfileStore.h"
 #import "TGSessionsStore.h"
 #import "TGSettingsStore.h"
+#import "TGOptions.h"
 
 
 
@@ -768,8 +769,11 @@ static NSString *TGCallDebugText(NSDictionary *call) {
 				[RootViewController setShowsCallsTab:on];
 			})]);
 
+	// CallListController's empty sentences, under the switch like any other
+	// list page's empty text.
 	if (!displayCalls.count)
-		return @[tabSection, TGSection(nil, nil, @[TGRow(TGKindPlain, self.recentCallsFilter == 1 ? @"You have no missed calls" : @"Empty")])];
+		return @[tabSection, TGSection(nil, self.recentCallsFilter == 1
+				? @"You have no missed calls" : @"Your recent calls will appear here", @[])];
 
 	NSMutableArray *rows = [NSMutableArray array];
 	for (NSDictionary *call in displayCalls){
@@ -780,11 +784,8 @@ static NSString *TGCallDebugText(NSDictionary *call) {
 		// this week, date beyond), not English and the locale's 06/11/26.
 		NSString *typeLabel = TGLocalized(missed ? @"Missed Call"
 				: (outgoing ? @"Outgoing Call" : @"Incoming Call"));
-		char buf[TGDateFormatBufferSize];
-		size_t len = TGChatDateFormat((time_t)[call[@"date"] doubleValue],
-				(time_t)[[NSDate date] timeIntervalSince1970], buf, sizeof(buf));
-		NSString *when = len ? TGLocalized([[NSString alloc] initWithBytes:buf
-				length:len encoding:NSASCIIStringEncoding]) : @"";
+		NSString *when = TGLocalized(TGUIFormatChatDate([call[@"date"] doubleValue],
+				TGOptionNow()));
 		NSString *detail = (!missed && duration > 0)
 				? [NSString stringWithFormat:@"%@, %@ (%@)", typeLabel, when,
 						TGUIFormatCallDuration(duration)]
@@ -804,14 +805,18 @@ static NSString *TGCallDebugText(NSDictionary *call) {
 						[done componentsJoinedByString:@", "]];
 		}
 
-		NSMutableDictionary *row = [TGSubtitleOpenRow(call[@"name"], detail, ^{
-			int64_t userId = [call[@"userId"] longLongValue];
-			if (userId) {
+		// The shared person row, as Blocked Users and every list of people:
+		// the photo, the name (red for a missed call), the call line under it.
+		int64_t userId = [call[@"userId"] longLongValue];
+		NSMutableDictionary *row = TGPeerRow(userId ? @(userId) : nil,
+				call[@"name"] ?: @"", detail, ^{
+			if (userId)
 				[TGCallViewController presentForUserId:userId name:call[@"name"] outgoing:YES];
-			}
-		}) mutableCopy];
+		});
+		row[TGRowAvatarUser] = @YES;
+		row[TGRowAccessory] = TGRowAccessoryDisclosure;
 		if (missed)
-			row[TGRowKind] = TGKindDestructive;
+			row[TGRowTitleColour] = [[TGTheme shared] destructiveColour];
 		[rows addObject:row];
 	}
 	return @[tabSection, TGSection(nil, nil, rows)];

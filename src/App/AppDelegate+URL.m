@@ -11,6 +11,7 @@ static const CGFloat kIconDumpSide = 52.0f;
 #import "TGDeviceViewController.h"
 #import "TGBackgroundsViewController.h"
 #import "TGSettingsViewController.h"
+#import "TGSettingsViewControllerInternal.h"
 #import "TGCall.h"
 #import "TGCallViewController.h"
 #import "TGChatViewController.h"
@@ -42,6 +43,11 @@ static const CGFloat kIconDumpSide = 52.0f;
 #import "TGSessionsViewController.h"
 #import "TGSettingsStore.h"
 #import "TGLocalization.h"
+#import "TGGiftViewController.h"
+#import "TGFileInfoViewController.h"
+#import "TGForwardPicker.h"
+#import "TGPrivacyRuleViewController.h"
+#import "TGStickerEditorViewController.h"
 #include <dlfcn.h>
 
 @implementation AppDelegate (URL)
@@ -269,6 +275,84 @@ static NSUInteger TGChatsIndex(UITabBarController *tabs) {
 			}
 			[chat playVideoNoteAtPath:[NSTemporaryDirectory() stringByAppendingPathComponent:
 					@"video-note-square-0.mov"] row:[arg integerValue]];
+		});
+		return YES;
+	}
+
+	// itglegacy://screen/<name>[/<arg>] - a screen a finger reaches only deep in
+	// the app, pushed on the current tab so a device check can shoot it. Each
+	// opens with nothing done to the account; acting on it still takes a tap.
+	//   gift            a regular gift fixture (50 Stars, no sender)
+	//   fileinfo/<id>   File Info for a TDLib file id (0: the empty record)
+	//   forward         the forward picker; picking a chat only logs it
+	//   privacy/<key>   a privacy rule page, e.g. ShowStatus, ShowProfilePhoto
+	//   stickereditor   a new sticker set, before anything is created
+	if ([host isEqualToString:@"screen"] && arg.length){
+		NSArray *parts = [url.path componentsSeparatedByString:@"/"];
+		NSString *name = parts.count > 1 ? parts[1] : arg;
+		NSString *value = parts.count > 2 ? parts[2] : @"";
+		dispatch_async(dispatch_get_main_queue(), ^{
+			UITabBarController *tabs = [self activeTabBarController];
+			if (![tabs isKindOfClass:UITabBarController.class])
+				return;
+			UINavigationController *nc = tabs.viewControllers[tabs.selectedIndex];
+			UIViewController *screen = nil;
+			if ([name isEqualToString:@"gift"]){
+				screen = [[TGGiftViewController alloc] initWithGift:@{
+					@"starCount" : @50, @"date" : @((long long)time(NULL)),
+					@"canBeSaved" : @NO}];
+			} else if ([name isEqualToString:@"fileinfo"]){
+				TGFileInfoViewController *info = [[TGFileInfoViewController alloc] init];
+				info.fileId = value.integerValue;
+				screen = info;
+			} else if ([name isEqualToString:@"forward"]){
+				TGForwardPicker *picker = [[TGForwardPicker alloc] init];
+				picker.onPicked = ^(int64_t chatId){
+					NSLog(@"screen/forward: picked %lld, nothing sent", chatId);
+				};
+				screen = picker;
+			} else if ([name isEqualToString:@"privacy"]){
+				NSString *key = value.length ? value : @"ShowStatus";
+				NSUInteger index = [[TGSettingsViewController privacySettings] indexOfObject:key];
+				NSString *title = index == NSNotFound ? key
+						: [TGSettingsViewController privacyTitles][index];
+				screen = [[TGPrivacyRuleViewController alloc] initWithSetting:key
+						title:TGLocalized(title)];
+			} else if ([name isEqualToString:@"stickereditor"]){
+				TGStickerEditorViewController *editor = [[TGStickerEditorViewController alloc] init];
+				editor.creating = YES;
+				screen = editor;
+			}
+			if (!screen){
+				NSLog(@"screen: no screen named %@", name);
+				return;
+			}
+			screen.hidesBottomBarWhenPushed = YES;
+			[nc pushViewController:screen animated:NO];
+		});
+		return YES;
+	}
+
+	// itglegacy://focus - the first search bar or text field on screen takes the
+	// keyboard, so itglegacy://type/ has somewhere to type. touch/ cannot do it:
+	// a field becomes first responder from its own touch handling.
+	if ([host isEqualToString:@"focus"]){
+		dispatch_async(dispatch_get_main_queue(), ^{
+			UIView *found = nil;
+			NSMutableArray *queue = [NSMutableArray arrayWithObject:self.window];
+			while (queue.count && !found){
+				UIView *view = queue.firstObject;
+				[queue removeObjectAtIndex:0];
+				if (!view.hidden && view.alpha > 0 &&
+						([view isKindOfClass:UISearchBar.class] ||
+						 [view isKindOfClass:UITextField.class] ||
+						 [view isKindOfClass:UITextView.class]))
+					found = view;
+				else
+					[queue addObjectsFromArray:view.subviews];
+			}
+			BOOL ok = [found becomeFirstResponder];
+			NSLog(@"focus: %@ %@", [found class], ok ? @"took the keyboard" : @"refused");
 		});
 		return YES;
 	}

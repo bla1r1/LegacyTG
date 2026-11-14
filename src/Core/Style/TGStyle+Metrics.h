@@ -476,6 +476,10 @@ static const CGFloat TGMetricPlayerModalButtonMain = 58.0f;
 static const CGFloat TGMetricPlayerModalButtonSide = 44.0f;
 static const CGFloat TGMetricPlayerModalSliderH   = 28.0f;
 static const CGFloat TGMetricEmptyIconSide         = 64.0f;
+/// The picture at the top of a page header (TGPageHeaderView) when the page
+/// has no art of its own size: the same side as an empty state's icon.
+static const CGFloat TGMetricPageArtSide           = 64.0f;
+static const CGFloat TGMetricEmptyButtonWidth      = 160.0f;
 static const CGFloat TGMetricConnectionBannerH     = 28.0f;
 static const CGFloat TGMetricSegmentedHeight       = 30.0f;
 

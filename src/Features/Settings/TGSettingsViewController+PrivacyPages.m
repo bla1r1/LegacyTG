@@ -19,61 +19,17 @@
 #import "TGProfileStore.h"
 #import "TGSessionsStore.h"
 #import "TGSettingsStore.h"
+#import "TGUIFormat.h"
+#import "TGSettingsPageModels.h"
 
-
-static NSString *TGFreezeDetail(NSDictionary *state) {
-	if (![state isKindOfClass:NSDictionary.class])
-		return @"Unknown";
-	return [state[@"is_frozen"] boolValue] ? @"Frozen" : @"Not frozen";
-}
 
 /// Subscription flags are not exclusive: a canceled subscription can also
 /// carry a failed payment. The row names the one that changes what to do.
-static NSString *TGSubscriptionDetail(NSDictionary *record) {
-	if (![record isKindOfClass:NSDictionary.class])
-		return @"None";
-	if ([record[@"is_payment_failed"] boolValue])
-		return @"Payment failed";
-	if ([record[@"is_canceled"] boolValue])
-		return @"Canceled";
-	if ([record[@"is_restored"] boolValue])
-		return @"Restored";
-	return @"Active";
-}
-
-static NSString *TGAgeVerificationDetail(NSDictionary *parameters) {
-	if (![parameters isKindOfClass:NSDictionary.class])
-		return @"Not set";
-	NSInteger minAge = [parameters[@"min_age"] integerValue];
-	if (minAge <= 0)
-		return @"No minimum";
-	return [NSString stringWithFormat:@"Age %ld+", (long)minAge];
-}
-
 @implementation TGSettingsViewController (PrivacyPages)
 
 static NSString *TGNotificationWhen(NSNumber *stamp) {
-	if (![stamp isKindOfClass:NSNumber.class] || ![stamp longLongValue])
-		return @"";
-	return [NSDateFormatter localizedStringFromDate:
-			[NSDate dateWithTimeIntervalSince1970:[stamp doubleValue]]
-			dateStyle:NSDateFormatterShortStyle
-			timeStyle:NSDateFormatterShortStyle];
-}
-
-static NSString *TGSoundName(NSDictionary *sound) {
-	NSString *title = sound[@"title"];
-	if (title.length)
-		return title;
-	return [NSString stringWithFormat:@"Sound %@", sound[@"id"] ?: @(0)];
-}
-
-static NSString *TGNotificationGroupLabel(NSString *type) {
-	if ([type isEqualToString:@"notificationGroupTypeMessages"]) return @"Messages";
-	if ([type isEqualToString:@"notificationGroupTypeMentions"]) return @"Mention";
-	if ([type isEqualToString:@"notificationGroupTypeSecretChat"]) return @"Secret Chats";
-	if ([type isEqualToString:@"notificationGroupTypeCalls"]) return @"Calls";
-	return type.length ? type : @"Notifications";
+	double date = [stamp isKindOfClass:NSNumber.class] ? stamp.doubleValue : 0;
+	return TGAppDate(date, NSDateFormatterShortStyle, NSDateFormatterShortStyle) ?: @"";
 }
 
 - (NSArray *)notificationSections {

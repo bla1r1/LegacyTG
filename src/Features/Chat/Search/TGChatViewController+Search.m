@@ -18,7 +18,7 @@
 
 	CGRect b = self.view.bounds;
 	self.chatSearchBar = [[UISearchBar alloc] initWithFrame:CGRectMake(0, 0, b.size.width, TGMetricRow)];
-	[[TGTheme shared] styleSearchBar:self.chatSearchBar];
+	[[TGTheme shared] styleNavigationSearchBar:self.chatSearchBar];
 	self.chatSearchBar.delegate = self;
 	self.chatSearchBar.placeholder = @"Search in chat";
 	self.chatSearchBar.autoresizingMask = UIViewAutoresizingFlexibleWidth;

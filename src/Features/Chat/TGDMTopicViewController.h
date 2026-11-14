@@ -5,6 +5,7 @@
 #import <UIKit/UIKit.h>
 #import "TGRowsViewController.h"
 #import "TGLocalization.h"
+#import "TGUIFormat.h"
 
 @interface TGDMTopicViewController : TGRowsViewController
 
@@ -81,12 +82,8 @@ static inline NSString *TGDMTopicMessageTitle(NSDictionary *message) {
 /// A history row's subtitle: the date, prefixed with "You" when outgoing.
 static inline NSString *TGDMTopicMessageDetail(NSDictionary *message) {
 	NSNumber *date = message[@"date"];
-	NSString *when = [date isKindOfClass:NSNumber.class] && date.doubleValue > 0
-			? [NSDateFormatter localizedStringFromDate:
-					[NSDate dateWithTimeIntervalSince1970:date.doubleValue]
-					dateStyle:NSDateFormatterShortStyle
-					timeStyle:NSDateFormatterShortStyle]
-			: @"";
+	NSString *when = TGAppDate([date isKindOfClass:NSNumber.class] ? date.doubleValue : 0,
+			NSDateFormatterShortStyle, NSDateFormatterShortStyle) ?: @"";
 	return [message[@"outgoing"] boolValue]
 			? [NSString stringWithFormat:@"%@ · %@", TGLocalized(@"You"), when]
 			: when;

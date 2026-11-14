@@ -382,37 +382,66 @@ static const NSTimeInterval kAutoNightCheckInterval = 60.0;
 - (void)styleSearchBar:(UISearchBar *)bar {
 	if (!bar)
 		return;
+	// The bar is chrome, like the navigation bar it sits under or inside: it
+	// takes the bar's colour, never the accent. On iOS 6 tintColor paints the
+	// whole gradient, so the accent here turned the strip blue in the dark
+	// theme while the navigation bar beside it was black.
+	bar.barStyle = [self isDark] ? UIBarStyleBlack : UIBarStyleDefault;
+	if ([TGTheme drawsSkeuomorphicChrome]){
+		bar.tintColor = [self barColour];
+	} else {
+		bar.tintColor = [self barButtonColour];
+		if ([bar respondsToSelector:@selector(setBarTintColor:)])
+			bar.barTintColor = [self barColour];
+	}
+	bar.backgroundColor = nil;
 	if ([bar respondsToSelector:@selector(setBackgroundImage:)])
 		[bar setBackgroundImage:nil];
-	if ([self isDark]) {
-		bar.barStyle = UIBarStyleBlack;
-		bar.tintColor = [self accentColour];
-		if ([bar respondsToSelector:@selector(setBarTintColor:)])
-			bar.barTintColor = [self searchBarBackgroundColour];
-		bar.backgroundColor = [self listBackgroundColour];
-	} else {
-		bar.barStyle = UIBarStyleDefault;
-		bar.tintColor = nil;
-		if ([bar respondsToSelector:@selector(setBarTintColor:)])
-			bar.barTintColor = nil;
-		bar.backgroundColor = nil;
+}
+
+- (void)styleNavigationSearchBar:(UISearchBar *)bar {
+	[self styleSearchBar:bar];
+	// Inside a navigation bar the field sits on the bar's own gloss: a second
+	// gradient under it left a seam between the field and Cancel.
+	static UIImage *clear = nil;
+	if (!clear){
+		UIGraphicsBeginImageContextWithOptions(CGSizeMake(1, 1), NO, 0);
+		clear = UIGraphicsGetImageFromCurrentImageContext();
+		UIGraphicsEndImageContext();
 	}
+	if ([bar respondsToSelector:@selector(setBackgroundImage:)])
+		[bar setBackgroundImage:clear];
+	bar.backgroundColor = [UIColor clearColor];
 }
 
 /// A grouped table as UIKit draws it on the OS it runs on - iOS 6's
 /// pinstripes and rounded cards, iOS 7's grey sheet - with only the colours
 /// changed on a dark or imported theme.
+/// A screen's own background view (an empty state) stays: only the plain
+/// fill this class puts there is swapped. Replacing it wiped "No Results"
+/// whenever the theme changed under it.
+static void TGThemeSetTableFill(UITableView *table, UIColor *fill) {
+	UIView *current = table.backgroundView;
+	if (current && ![current isMemberOfClass:UIView.class])
+		return;
+	if (!fill){
+		table.backgroundView = nil;
+		return;
+	}
+	UIView *bg = [[UIView alloc] initWithFrame:table.bounds];
+	bg.backgroundColor = fill;
+	table.backgroundView = bg;
+}
+
 - (void)styleGroupedTable:(UITableView *)table {
 	table.separatorStyle = UITableViewCellSeparatorStyleSingleLine;
 	if ([self isDark]) {
 		table.backgroundColor = [self groupedBackgroundColour];
-		UIView *bg = [[UIView alloc] initWithFrame:table.bounds];
-		bg.backgroundColor = [self groupedBackgroundColour];
-		table.backgroundView = bg;
+		TGThemeSetTableFill(table, [self groupedBackgroundColour]);
 		table.separatorColor = [self separatorColour];
 	} else {
 		table.backgroundColor = [self groupedBackgroundColour];
-		table.backgroundView = nil;
+		TGThemeSetTableFill(table, nil);
 		table.separatorColor = nil;
 	}
 }
@@ -420,9 +449,7 @@ static const NSTimeInterval kAutoNightCheckInterval = 60.0;
 - (void)stylePlainTable:(UITableView *)table {
 	if ([self isDark]) {
 		table.backgroundColor = [self listBackgroundColour];
-		UIView *bg = [[UIView alloc] initWithFrame:table.bounds];
-		bg.backgroundColor = [self listBackgroundColour];
-		table.backgroundView = bg;
+		TGThemeSetTableFill(table, [self listBackgroundColour]);
 		table.separatorColor = [self separatorColour];
 		if ([table respondsToSelector:@selector(setSectionIndexColor:)])
 			table.sectionIndexColor = [self accentColour];
@@ -433,7 +460,7 @@ static const NSTimeInterval kAutoNightCheckInterval = 60.0;
 			table.sectionIndexTrackingBackgroundColor = [self listBackgroundColour];
 	} else {
 		table.backgroundColor = [self listBackgroundColour];
-		table.backgroundView = nil;
+		TGThemeSetTableFill(table, nil);
 		table.separatorColor = [self separatorColour];
 	}
 }

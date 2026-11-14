@@ -15,6 +15,7 @@
 #import "TGClientNotifications.h"
 #import "TGUIFormat.h"
 #import "TGOptions.h"
+#import "TGGroupLogic.h"
 
 /// A topic row is a chat row in miniature: a coloured icon made from the
 /// topic's own id, the name, the last message, the time and the unread count.
@@ -531,31 +532,8 @@ static NSString *TGTopicDateText(NSNumber *stamp) {
 }
 
 static NSString *TGTopicWhen(NSNumber *stamp) {
-	if (![stamp isKindOfClass:NSNumber.class] || ![stamp longLongValue])
-		return @"";
-	return [NSDateFormatter localizedStringFromDate:
-			[NSDate dateWithTimeIntervalSince1970:[stamp doubleValue]]
-			dateStyle:NSDateFormatterMediumStyle
-			timeStyle:NSDateFormatterShortStyle];
-}
-
-static NSString *TGTopicIconLine(NSDictionary *info) {
-	NSInteger colour = [info[@"colour"] integerValue];
-	BOOL emoji = [info[@"iconEmojiId"] longLongValue] != 0;
-	if (emoji)
-		return [NSString stringWithFormat:@"Custom emoji · colour %06lX",
-				(long)colour];
-	return [NSString stringWithFormat:@"Colour %06lX", (long)colour];
-}
-
-static NSString *TGTopicStateLine(NSDictionary *info) {
-	NSMutableArray *parts = [NSMutableArray array];
-	if ([info[@"general"] boolValue]) [parts addObject:@"General"];
-	if ([info[@"pinned"] boolValue])  [parts addObject:@"Pinned"];
-	if ([info[@"closed"] boolValue])  [parts addObject:@"Closed"];
-	if ([info[@"hidden"] boolValue])  [parts addObject:@"Hidden"];
-	if (!parts.count)                 [parts addObject:@"Open"];
-	return [parts componentsJoinedByString:@" · "];
+	double date = [stamp isKindOfClass:NSNumber.class] ? stamp.doubleValue : 0;
+	return TGAppDate(date, NSDateFormatterMediumStyle, NSDateFormatterShortStyle) ?: @"";
 }
 
 /// Topic Info is where the fields no row has space for live, and where the

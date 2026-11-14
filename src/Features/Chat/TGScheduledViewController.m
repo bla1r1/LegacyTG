@@ -76,12 +76,6 @@
 	}];
 }
 
-- (void)applyTheme {
-	[super applyTheme];
-	TGTheme *theme = [TGTheme shared];
-	self.tableView.backgroundColor = [theme listBackgroundColour];
-	self.tableView.separatorColor = [theme separatorColour];
-}
 
 - (void)updateEmptyView {
 	if (self.messages.count) {

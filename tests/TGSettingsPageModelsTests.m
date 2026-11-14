@@ -59,7 +59,7 @@
 	];
 	NSArray *model = TGFoldersPageModel(folders, @[], @{@(1) : @(7)},
 			YES, NO);
-	NSDictionary *section = model[0];
+	NSDictionary *section = model[TGFoldersPageListSection];
 	XCTAssertEqualObjects(section[TGPageModelHeader], @"Folders");
 	XCTAssertEqualObjects(section[TGPageModelFooter],
 			@"Tap 'Edit' to change the order or delete folders.");
@@ -70,8 +70,8 @@
 	XCTAssertEqual([titles indexOfObject:@"Create New Folder"], (NSUInteger)0);
 	XCTAssertEqual([titles indexOfObject:@"Add Folder"], NSNotFound);
 	// The tag switch is its own section, after the list.
-	XCTAssertEqual(model.count, (NSUInteger)2);
-	XCTAssertEqualObjects([self titlesInSection:model[1]],
+	XCTAssertEqual(model.count, (NSUInteger)3);
+	XCTAssertEqualObjects([self titlesInSection:model[2]],
 			(@[@"Show Folder Tags"]));
 	// The folder count stays on the right, and a zero count is blank.
 	NSArray *rows = [self rowsInSection:section];
@@ -80,9 +80,32 @@
 
 - (void)testFolders_DevBuildKeepsTheInviteRow {
 	NSArray *model = TGFoldersPageModel(@[], @[], @{}, YES, YES);
-	NSArray *titles = [self titlesInSection:model[0]];
+	NSArray *titles = [self titlesInSection:model[TGFoldersPageListSection]];
 	XCTAssertEqualObjects(titles, (@[@"Create New Folder", @"Add Folder"]));
 	XCTAssertEqual([titles indexOfObject:@"Add Folder"], (NSUInteger)1);
+}
+
+- (void)testFolders_OpensWithTheOfficialIntro {
+	NSArray *model = TGFoldersPageModel(@[], @[], @{}, YES, NO);
+	NSDictionary *intro = [self rowsInSection:model[0]][0];
+	XCTAssertEqualObjects(intro[TGPageModelRowKind], @"pageHeader");
+	XCTAssertEqualObjects(intro[TGPageModelRowDetail],
+			@"Create folders for different groups of chats and quickly switch between them.");
+	XCTAssertNil(model[0][TGPageModelHeader]);
+}
+
+- (void)testFolders_DragMapsRowsToFoldersPastTheCreateRow {
+	// Section 0 row 0 was taken for the first folder: the Create row could be
+	// dragged, and moving the first folder moved the second.
+	XCTAssertEqual(TGFoldersPageFolderIndex(TGFoldersPageListSection, 0, 3), -1);
+	XCTAssertEqual(TGFoldersPageFolderIndex(TGFoldersPageListSection, 1, 3), 0);
+	XCTAssertEqual(TGFoldersPageFolderIndex(TGFoldersPageListSection, 3, 3), 2);
+	XCTAssertEqual(TGFoldersPageFolderIndex(TGFoldersPageListSection, 4, 3), -1);
+	XCTAssertEqual(TGFoldersPageFolderIndex(0, 1, 3), -1);
+	// A drop over the Create row or another section stays among the folders.
+	XCTAssertEqual(TGFoldersPageDropRow(TGFoldersPageListSection, 0, 3), 1);
+	XCTAssertEqual(TGFoldersPageDropRow(TGFoldersPageListSection + 1, 0, 3), 3);
+	XCTAssertEqual(TGFoldersPageDropRow(0, 0, 3), 1);
 }
 
 - (void)testProxy_AddProxyComesBeforeSavedServers {

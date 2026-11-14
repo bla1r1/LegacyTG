@@ -11,6 +11,9 @@
 @property (nonatomic, strong, readonly) UILabel *subtitleLabel;
 @property (nonatomic, strong, readonly) UIButton *actionButton;
 
+/// Repaints the labels and icon from TGTheme.
+- (void)applyTheme;
+
 + (instancetype)emptyViewWithFrame:(CGRect)frame
                              image:(UIImage *)image
                              title:(NSString *)title

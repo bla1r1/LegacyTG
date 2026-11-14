@@ -102,3 +102,22 @@ NSDictionary *TGGroupInfoRowModel(NSString *title, NSString *detail,
 		row[TGRowEnabled] = @NO;
 	return row;
 }
+
+NSString *TGTopicIconLine(NSDictionary *info) {
+	NSInteger colour = [info[@"colour"] integerValue];
+	BOOL emoji = [info[@"iconEmojiId"] longLongValue] != 0;
+	if (emoji)
+		return [NSString stringWithFormat:@"Custom emoji · colour %06lX",
+				(long)colour];
+	return [NSString stringWithFormat:@"Colour %06lX", (long)colour];
+}
+
+NSString *TGTopicStateLine(NSDictionary *info) {
+	NSMutableArray *parts = [NSMutableArray array];
+	if ([info[@"general"] boolValue]) [parts addObject:@"General"];
+	if ([info[@"pinned"] boolValue])  [parts addObject:@"Pinned"];
+	if ([info[@"closed"] boolValue])  [parts addObject:@"Closed"];
+	if ([info[@"hidden"] boolValue])  [parts addObject:@"Hidden"];
+	if (!parts.count)                 [parts addObject:@"Open"];
+	return [parts componentsJoinedByString:@" · "];
+}

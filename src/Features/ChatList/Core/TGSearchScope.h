@@ -32,6 +32,13 @@ FOUNDATION_EXPORT BOOL TGSearchScopeShowsMessages(TGSearchScope scope);
 /// Public posts are only in All.
 FOUNDATION_EXPORT BOOL TGSearchScopeShowsPublic(TGSearchScope scope);
 
+/// The line under Public Posts: when free search unlocks, or how many free
+/// searches are left today. Nil otherwise: with the limit spent and no wait
+/// known the screen's own "No Results" already says it, and a second one sat
+/// in the footer as a bar over Stories.
+FOUNDATION_EXPORT NSString *TGSearchPublicFooter(TGSearchScope scope, BOOL limitExceeded,
+		NSInteger nextFreeIn, NSInteger remainingFree);
+
 /// A raw td_api public post's line: its text or caption, trimmed, or the
 /// content type without the "message" prefix when it has neither.
 FOUNDATION_EXPORT NSString *TGPublicPostText(NSDictionary *message);

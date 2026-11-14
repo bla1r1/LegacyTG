@@ -58,14 +58,6 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 	[self applyTheme];
 }
 
-- (void)applyTheme {
-	[super applyTheme];
-	TGTheme *theme = [TGTheme shared];
-	self.tableView.backgroundColor = [theme listBackgroundColour];
-	self.tableView.separatorColor = [theme separatorColour];
-	[theme styleNavigationBar:self.navigationController.navigationBar];
-}
-
 #pragma mark - loading
 
 - (void)reloadStickers {

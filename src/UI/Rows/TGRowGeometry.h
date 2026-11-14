@@ -63,6 +63,28 @@ FOUNDATION_EXPORT TGRowValueSplit TGRowKeepValueWhole(CGFloat titleX,
 		CGFloat titleWidth, CGFloat titleNeed, CGFloat valueRight,
 		CGFloat valueWidth, CGFloat valueNeed);
 
+/// The centred column every page header and empty state is: a picture, a
+/// title, a subtitle under it, a paragraph, a button. A part with no size
+/// is left out together with the gap before it, so a header without art or
+/// an empty state without a title still sits evenly.
+typedef struct {
+	CGRect art, title, subtitle, text, button;
+	/// From `top` to the bottom of the last part, plus TGMetricPadLarge.
+	CGFloat height;
+} TGCentredStack;
+
+FOUNDATION_EXPORT TGCentredStack TGCentredStackPlace(CGFloat width, CGFloat top,
+		CGFloat artSide, CGFloat titleHeight, CGFloat subtitleHeight,
+		CGFloat textHeight, CGSize button);
+
+/// An empty state's column: centred in `height`, never closer to the top
+/// than TGMetricPadWide.
+FOUNDATION_EXPORT TGCentredStack TGEmptyStatePlace(CGSize size, CGFloat artSide,
+		CGFloat titleHeight, CGFloat subtitleHeight, CGSize button);
+
+/// The width a centred line of the column may use.
+FOUNDATION_EXPORT CGFloat TGCentredStackTextWidth(CGFloat width);
+
 #ifdef __cplusplus
 }
 #endif

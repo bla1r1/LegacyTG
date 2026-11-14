@@ -17,6 +17,7 @@ Telegram client for iOS 6.0–12.5.7 on old hardware. Objective-C UI over TDLib 
 - `scripts/split_source.py` — mechanical `classes` / `sections` split; dry run by default, `--apply` updates Makefiles, docs line references
 - `make -j8 -f tests/Makefile test` — host test suite (currently 1950 client and 229 call tests); one object per source, so a change rebuilds only what it touches
 - `scripts/devrun.sh` — build, install, launch, log, screenshot on device; `--screenoff` / `--screenon` dark or wake the panel
+- `scripts/shots.sh OUT name=route,...` — open itglegacy:// routes and shoot each named step; `scripts/shotdiff.py BEFORE AFTER` compares two runs pixel by pixel below the status bar. Deep screens open with `itglegacy://screen/<gift|fileinfo/ID|forward|privacy/KEY|stickereditor>` and `settings/sessions`; `itglegacy://focus` gives the first field the keyboard so `type/` can reach it
 - `scripts/screen.sh` — `off` / `on` / `status` for the bench phone's backlight and lock screen. `itglegacy://stand/on` also remembers the choice in `TGStandScreenOff`, so the panel goes dark again after every launch; `stand/off` clears it
 - `make -j8 DEV=1` — dev build (`-j` is safe: every IPA stages in its own folder): dev mode (three taps on Chats), fixture chats, bench, automation URLs, ghost mode. All under `#if TG_DEV`; `devrun.sh` builds this into `build/armv7/app-dev`. `scripts/check_release.sh` fails if any of it reaches a build without the flag
 - `scripts/build_ffmpeg.sh` — FFmpeg for the Vintage software video player, into `build/armv7/ffmpeg`

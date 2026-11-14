@@ -41,6 +41,9 @@
 	} else {
 		[theme stylePlainTable:self.tableView];
 	}
+	// The styling leaves an empty state in place; its labels repaint here.
+	if ([self.tableView.backgroundView isKindOfClass:TGEmptyView.class])
+		[(TGEmptyView *)self.tableView.backgroundView applyTheme];
 }
 
 - (void)tableView:(UITableView *)tableView willDisplayCell:(UITableViewCell *)cell forRowAtIndexPath:(NSIndexPath *)indexPath {

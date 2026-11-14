@@ -121,6 +121,13 @@ NSArray *TGFoldersPageModel(NSArray *folders, NSArray *recommended,
 	NSString *folderFooter = folders.count
 			? @"Tap 'Edit' to change the order or delete folders." : nil;
 	NSMutableArray *sections = [NSMutableArray array];
+	// ChatListFilterPresetListController opens with its header item.
+	NSMutableDictionary *intro = TGPageRow(@"pageHeader", nil, nil);
+	intro[TGPageModelRowDetail] =
+			@"Create folders for different groups of chats and quickly switch between them.";
+	intro[TGPageModelRowIcon] = @"folder";
+	intro[TGPageModelRowColour] = @"cyan";
+	[sections addObject:TGPageSection(nil, nil, @[intro])];
 	[sections addObject:TGPageSection(@"Folders", folderFooter, rows)];
 
 	if (recommended.count){
@@ -215,4 +222,79 @@ NSArray *TGSessionsOtherThanCurrent(NSArray *sessions, BOOL unconfirmed,
 			[out addObject:session];
 	}
 	return out;
+}
+
+NSInteger TGFoldersPageFolderIndex(NSInteger section, NSInteger row,
+								   NSUInteger folderCount) {
+	if (section != TGFoldersPageListSection)
+		return -1;
+	NSInteger index = row - TGFoldersPageFirstFolderRow;
+	return index >= 0 && index < (NSInteger)folderCount ? index : -1;
+}
+
+NSInteger TGFoldersPageDropRow(NSInteger proposedSection, NSInteger proposedRow,
+							   NSUInteger folderCount) {
+	NSInteger first = TGFoldersPageFirstFolderRow;
+	NSInteger last = first + (NSInteger)folderCount - 1;
+	if (proposedSection < TGFoldersPageListSection)
+		return first;
+	if (proposedSection > TGFoldersPageListSection)
+		return last;
+	return MAX(first, MIN(last, proposedRow));
+}
+
+NSString *TGFreezeDetail(NSDictionary *state) {
+	if (![state isKindOfClass:NSDictionary.class])
+		return @"Unknown";
+	return [state[@"is_frozen"] boolValue] ? @"Frozen" : @"Not frozen";
+}
+
+NSString *TGSubscriptionDetail(NSDictionary *record) {
+	if (![record isKindOfClass:NSDictionary.class])
+		return @"None";
+	if ([record[@"is_payment_failed"] boolValue])
+		return @"Payment failed";
+	if ([record[@"is_canceled"] boolValue])
+		return @"Canceled";
+	if ([record[@"is_restored"] boolValue])
+		return @"Restored";
+	return @"Active";
+}
+
+NSString *TGAgeVerificationDetail(NSDictionary *parameters) {
+	if (![parameters isKindOfClass:NSDictionary.class])
+		return @"Not set";
+	NSInteger minAge = [parameters[@"min_age"] integerValue];
+	if (minAge <= 0)
+		return @"No minimum";
+	return [NSString stringWithFormat:@"Age %ld+", (long)minAge];
+}
+
+NSString *TGSoundName(NSDictionary *sound) {
+	NSString *title = sound[@"title"];
+	if (title.length)
+		return title;
+	return [NSString stringWithFormat:@"Sound %@", sound[@"id"] ?: @(0)];
+}
+
+NSString *TGNotificationGroupLabel(NSString *type) {
+	if ([type isEqualToString:@"notificationGroupTypeMessages"]) return @"Messages";
+	if ([type isEqualToString:@"notificationGroupTypeMentions"]) return @"Mention";
+	if ([type isEqualToString:@"notificationGroupTypeSecretChat"]) return @"Secret Chats";
+	if ([type isEqualToString:@"notificationGroupTypeCalls"]) return @"Calls";
+	return type.length ? type : @"Notifications";
+}
+
+
+NSString *TGPrivacyRuleFooterText(NSString *setting) {
+	NSString *english = nil;
+	if ([setting isEqualToString:@"ShowStatus"])
+		english = @"Unless you are a Premium user, you won't see Last Seen or Online statuses for people with whom you don't share yours. Approximate times will be shown instead (recently, within a week, within a month).";
+	else if ([setting isEqualToString:@"ShowProfilePhoto"])
+		english = @"You can restrict who can see your profile photo with granular precision.";
+	else if ([setting isEqualToString:@"ShowPhoneNumber"])
+		english = @"Users who have your number saved in their contacts will also see it on Telegram.";
+	else if ([setting isEqualToString:@"AllowChatInvites"])
+		english = @"You can restrict who can add you to groups and channels with granular precision.";
+	return english ? TGLocalized(english) : nil;
 }

@@ -3,9 +3,7 @@
 @implementation TGChatListViewController (Search)
 
 - (void)styleSearchBar {
-	TGTheme *theme = [TGTheme shared];
-	self.searchBar.barStyle = UIBarStyleDefault;
-	[theme styleSearchBar:self.searchBar];
+	[[TGTheme shared] styleSearchBar:self.searchBar];
 }
 
 - (BOOL)searchBarShouldBeginEditing:(UISearchBar *)searchBar {

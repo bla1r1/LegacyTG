@@ -468,6 +468,7 @@ APP_SRC_M := \
 	src/UI/Controls/TGTextField.m \
 	src/UI/Controls/TGSegmentedControl.m \
 	src/UI/Controls/TGCardView.m \
+	src/UI/Controls/TGPageHeaderView.m \
 	src/UI/Controls/TGBadge.m \
 	src/UI/Overlays/TGReactionPicker.m \
 	src/UI/Controls/TGAvatarView.m \
@@ -610,7 +611,6 @@ APP_SRC_M := \
 	src/UI/Controllers/TGViewController.m \
 	src/UI/Controllers/TGTableViewController.m \
 	src/UI/Controls/TGTableViewCell.m \
-	src/UI/Controllers/TGFormViewController.m \
 	src/Features/Settings/TGNetworkViewController.m \
 	src/Features/Chat/TGChatToolsViewController.m \
 	src/Features/Profile/TGProfileViewController.m \
@@ -686,6 +686,7 @@ APP_SRC_M := \
 	src/UI/Rows/TGTabStripRowCell.m \
 	src/UI/Controls/TGProfileHeaderView.m \
 	src/UI/Rows/TGProfileHeaderRowCell.m \
+	src/UI/Rows/TGPageHeaderRowCell.m \
 	src/UI/Rows/TGChatPreviewRowCell.m \
 	src/UI/Rows/TGThemeCardsRowCell.m \
 	src/UI/Rows/TGThemeGridRowCell.m \

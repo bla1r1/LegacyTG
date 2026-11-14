@@ -13,6 +13,7 @@
 #import "TGGroupStore.h"
 #import "TGProfileStore.h"
 #import "TGMessageStore.h"
+#import "TGUIFormat.h"
 
 /// Pushes `controller` when the host is on a navigation stack; otherwise
 /// wraps it in one and presents that. A profile opened from a popover or a
@@ -360,10 +361,7 @@ void TGPresentControllerFrom(UIViewController *controller, UIViewController *hos
 		double until = [status[@"restricted_until_date"] doubleValue];
 		if (until > 0)
 			[lines addObject:TGLocalizedFormat(@"until %@",
-					[NSDateFormatter localizedStringFromDate:
-							[NSDate dateWithTimeIntervalSince1970:until]
-							dateStyle:NSDateFormatterMediumStyle
-							timeStyle:NSDateFormatterNoStyle])];
+					TGAppDate(until, NSDateFormatterMediumStyle, NSDateFormatterNoStyle))];
 
 		NSDictionary *permissions =
 				[status[@"permissions"] isKindOfClass:NSDictionary.class]

@@ -45,3 +45,11 @@ FOUNDATION_EXPORT NSDictionary *TGGroupInfoRowModel(NSString *title,
 													BOOL opens,
 													BOOL destructive,
 													BOOL disabled);
+
+/// A forum topic's icon line for its info sheet: the colour, and that it has a
+/// custom emoji.
+FOUNDATION_EXPORT NSString *TGTopicIconLine(NSDictionary *info);
+
+/// A topic's flags joined with a middle dot (General, Pinned, Closed,
+/// Hidden), or "Open" when it has none.
+FOUNDATION_EXPORT NSString *TGTopicStateLine(NSDictionary *info);

@@ -7,6 +7,7 @@
 #import "TGAlertSheet.h"
 #import "TGRows.h"
 #import "TGSettingsStore.h"
+#import "TGSettingsPageModels.h"
 
 
 @interface TGPrivacyRuleViewController ()
@@ -17,23 +18,6 @@
 @property (nonatomic, strong) NSMutableArray *restrictUserIds;
 @property (nonatomic, assign) BOOL loaded;
 @end
-
-static NSString *TGPrivacyRuleFooterText(NSString *setting) {
-	if ([setting isEqualToString:@"ShowStatus"])
-		return TGLocalized(@"You won't see Last Seen or Online times for people with whom you don't share yours. Approximate times will be shown instead.");
-	if ([setting isEqualToString:@"ShowProfilePhoto"])
-		return TGLocalized(@"You can restrict who can see your profile photo and choose exceptions.");
-	if ([setting isEqualToString:@"ShowPhoneNumber"])
-		return TGLocalized(@"Users who have your number saved in their contacts will also see it on Telegram.");
-	if ([setting isEqualToString:@"AllowCalls"] ||
-		[setting isEqualToString:@"ShowPeerToPeerCall"])
-		return TGLocalized(@"Choose who can call you.");
-	if ([setting isEqualToString:@"ShowLinkInForwardedMessages"])
-		return TGLocalized(@"Messages you send will link to your account when forwarded by others.");
-	if ([setting isEqualToString:@"AllowChatInvites"])
-		return TGLocalized(@"You can restrict who can add you to groups and channels.");
-	return nil;
-}
 
 @implementation TGPrivacyRuleViewController
 

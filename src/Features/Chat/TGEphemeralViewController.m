@@ -68,8 +68,6 @@
 
 - (void)applyTheme {
 	[super applyTheme];
-	self.tableView.separatorColor = [[TGTheme shared] separatorColour];
-	self.tableView.backgroundColor = [[TGTheme shared] groupedBackgroundColour];
 	[[TGTheme shared] styleNavigationBar:self.navigationController.navigationBar];
 	self.composer.backgroundColor = [[TGTheme shared] cardBackgroundColour];
 	self.composer.textColor = [[TGTheme shared] primaryTextColour];
