@@ -182,8 +182,7 @@ static BOOL TGBBackgroundIsCurrent(NSDictionary *background, int64_t currentId) 
 #pragma mark - sections
 
 - (CGFloat)gridWidth {
-	CGFloat width = self.tableView.bounds.size.width - TGMetricGridTableMargin;
-	return width > 0 ? width : TGMetricScreenWidth - TGMetricGridTableMargin;
+	return TGGridContentWidthForTable(self.tableView.bounds.size.width);
 }
 
 - (NSInteger)gridColumns {

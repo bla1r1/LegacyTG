@@ -10,6 +10,7 @@
 #import <CoreMedia/CoreMedia.h>
 #import <MobileCoreServices/MobileCoreServices.h>
 #import <QuartzCore/QuartzCore.h>
+#import "TGUIFormat.h"
 
 /// The shutter: a ring around a disc, drawn once. 76 pt is the thumb-sized
 /// target the official camera uses on a 320 pt screen.
@@ -779,8 +780,7 @@ static void TGStoryCrossFade(UINavigationController *navigation) {
 	self.durationLabel.font = TGFontCaption();
 	self.durationLabel.textAlignment = NSTextAlignmentCenter;
 	self.durationLabel.hidden = !self.videoPath || self.duration <= 0;
-	int seconds = (int)(self.duration + 0.5);
-	self.durationLabel.text = [NSString stringWithFormat:@"%d:%02d", seconds / 60, seconds % 60];
+	self.durationLabel.text = TGUIFormatCallDuration(floor(self.duration + 0.5));
 	[self.view addSubview:self.durationLabel];
 
 	self.bar = [[UIView alloc] initWithFrame:CGRectZero];

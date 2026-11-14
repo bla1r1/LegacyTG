@@ -97,6 +97,7 @@ CLIENT_OBJC_SRCS := \
     src/Core/Style/TGStyle.m \
     src/Features/Settings/Pages/TGSettingsPageModels.m \
     src/Features/Profile/Core/TGProfileLogic.m \
+    src/Features/ChatList/Core/TGSearchScope.m \
     src/Features/Auth/TGLoginLogic.m \
     src/UI/Rows/TGRowGeometry.m \
     src/Features/Chat/Rendering/TGChatCellLogic.m \
@@ -462,6 +463,7 @@ CLIENT_TEST_SRCS := \
     $(TESTS)/TGPeerStoreTests.m \
     $(TESTS)/TGParitySettingsTests.m \
     $(TESTS)/TGSettingsPageModelsTests.m \
+    $(TESTS)/TGProfileScreenLogicTests.m \
     $(TESTS)/TGScreenLogicTests.m \
     $(TESTS)/TGMessageMetricsTests.m \
     $(TESTS)/TGLottieSupportTests.m \

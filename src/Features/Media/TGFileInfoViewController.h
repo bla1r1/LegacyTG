@@ -2,19 +2,11 @@
 // TGFileInfoViewController - the file record behind a picture or document.
 //
 #import <Foundation/Foundation.h>
+#import "TGUIFormat.h"
 #import "TGLocalization.h"
 
 static inline NSString *TGFileInfoBytesText(long long bytes) {
-	if (bytes <= 0)
-		return @"0 B";
-	if (bytes < 1024)
-		return [NSString stringWithFormat:@"%lld B", bytes];
-	if (bytes < 1024 * 1024)
-		return [NSString stringWithFormat:@"%.0f KB", bytes / 1024.0];
-	if (bytes < 1024LL * 1024 * 1024)
-		return [NSString stringWithFormat:@"%.1f MB", bytes / (1024.0 * 1024.0)];
-	return [NSString stringWithFormat:@"%.2f GB",
-			bytes / (1024.0 * 1024.0 * 1024.0)];
+	return TGBytes(bytes);
 }
 
 /// The record's rows as title/detail pairs, in the order the sheet shows them.

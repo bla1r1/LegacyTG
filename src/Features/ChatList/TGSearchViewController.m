@@ -16,6 +16,9 @@
 #import "TGChatParityModel.h"
 #import "TGRows.h"
 #import "TGDateFormat.h"
+#import "TGUIFormat.h"
+#import "TGOptions.h"
+#import "TGSearchScope.h"
 
 
 @interface TGSearchViewController () <UISearchBarDelegate>
@@ -25,7 +28,7 @@
 @property (nonatomic, strong) NSMutableArray *scopeButtons;
 @property (nonatomic, assign) NSInteger scope;
 @property (nonatomic, strong) NSArray *recentQueries;
-@property (nonatomic, strong) UILabel *noResultsView;
+@property (nonatomic, copy) NSString *noResultsQuery;
 @property (nonatomic, strong) NSArray *chatHits;
 @property (nonatomic, strong) NSArray *messageHits;
 /// Who this account talks to most, shown before anything is typed - their
@@ -64,23 +67,7 @@
 /// Cancel button has somewhere to sit.
 static const CGFloat kSearchBarWidth = 240.0f;
 
-/// Telegram's scopes, in the order its search shows them. The integers are
-/// the tag on each pill; the array index is the same, so a tag is the scope.
-enum {
-	TGSearchScopeAll = 0,
-	TGSearchScopeChats,
-	TGSearchScopeMessages,
-	TGSearchScopeMedia,
-	TGSearchScopeLinks,
-	TGSearchScopeFiles,
-	TGSearchScopeMusic,
-	TGSearchScopeVoice,
-};
 
-static NSArray *TGSearchScopeTitles(void) {
-	return @[@"All", @"Chats", @"Messages", @"Media", @"Links",
-			 @"Files", @"Music", @"Voice"];
-}
 
 /// Old searches live in this app rather than on the account: Telegram stores
 /// the log per device and clears it when the user says so, which is exactly
@@ -90,33 +77,9 @@ static const NSInteger kRecentQueriesLimit = 8;
 
 /// A message hit's date, in the same short form the chat list uses.
 static NSString *TGSearchDateText(NSNumber *stamp) {
-	if (![stamp isKindOfClass:NSNumber.class] || ![stamp longLongValue])
-		return @"";
-	char buf[TGDateFormatBufferSize + 1] = {0};
-	size_t len = TGChatDateFormat((time_t)[stamp doubleValue],
-			(time_t)[[NSDate date] timeIntervalSince1970], buf,
-			TGDateFormatBufferSize);
-	return len ? [[NSString alloc] initWithBytes:buf length:len
-									   encoding:NSUTF8StringEncoding] : @"";
+	return TGUIFormatChatDate([stamp isKindOfClass:NSNumber.class] ? stamp.doubleValue : 0, TGOptionNow());
 }
 
-static NSString *TGPublicPostText(NSDictionary *message) {
-	NSDictionary *content = [message[@"content"] isKindOfClass:NSDictionary.class]
-			? message[@"content"] : nil;
-	NSDictionary *text = [content[@"text"] isKindOfClass:NSDictionary.class]
-			? content[@"text"] : nil;
-	if (![text[@"text"] isKindOfClass:NSString.class])
-		text = [content[@"caption"] isKindOfClass:NSDictionary.class]
-				? content[@"caption"] : nil;
-	if ([text[@"text"] isKindOfClass:NSString.class])
-		return [text[@"text"] stringByTrimmingCharactersInSet:
-				[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-	NSString *kind = [content[@"@type"] isKindOfClass:NSString.class]
-			? content[@"@type"] : nil;
-	if ([kind hasPrefix:@"message"])
-		return [kind substringFromIndex:7];
-	return @"";
-}
 
 @implementation TGSearchViewController
 
@@ -213,8 +176,7 @@ static NSString *TGPublicPostText(NSDictionary *message) {
 /// stories row is an action, not a result, so it does not count.
 - (void)updateEmptyState {
 	if (!self.bar.text.length || [self showsFrequent]){
-		if (self.tableView.backgroundView)
-			self.tableView.backgroundView = nil;
+		[self hideNoResults];
 		return;
 	}
 	NSInteger rows = 0;
@@ -227,24 +189,22 @@ static NSString *TGPublicPostText(NSDictionary *message) {
 		rows += [self tableView:self.tableView numberOfRowsInSection:section];
 	}
 	if (rows > 0){
-		if (self.tableView.backgroundView)
-			self.tableView.backgroundView = nil;
+		[self hideNoResults];
 		return;
 	}
-	if (!self.noResultsView){
-		self.noResultsView = [[UILabel alloc] initWithFrame:CGRectZero];
-		self.noResultsView.font = TGFontBody();
-		self.noResultsView.textColor = [[TGTheme shared] secondaryTextColour];
-		self.noResultsView.textAlignment = NSTextAlignmentCenter;
-		self.noResultsView.numberOfLines = 0;
-		self.noResultsView.backgroundColor = [UIColor clearColor];
-	}
 	NSString *query = self.bar.text ?: @"";
-	self.noResultsView.text = [NSString stringWithFormat:@"%@\n%@",
-			TGLocalized(@"No Results"),
-			TGLocalizedFormat(@"There were no results for \"%@\".\nTry a new search.", query)];
-	if (self.tableView.backgroundView != self.noResultsView)
-		self.tableView.backgroundView = self.noResultsView;
+	if (self.tableView.backgroundView && [self.noResultsQuery isEqualToString:query])
+		return;
+	self.noResultsQuery = query;
+	[self showEmptyWithImage:nil title:TGLocalized(@"No Results")
+			subtitle:TGLocalizedFormat(@"There were no results for \"%@\".\nTry a new search.", query)];
+}
+
+- (void)hideNoResults {
+	if (!self.tableView.backgroundView)
+		return;
+	self.noResultsQuery = nil;
+	[self hideEmpty];
 }
 
 - (void)applyTheme {
@@ -554,76 +514,31 @@ static NSString *TGPublicPostText(NSDictionary *message) {
 
 #pragma mark - scope filtering
 
-static BOOL TGSearchKindIsMedia(NSString *kind) {
-	return [kind isEqualToString:@"messagePhoto"] ||
-		   [kind isEqualToString:@"messageVideo"] ||
-		   [kind isEqualToString:@"messageAnimation"] ||
-		   [kind isEqualToString:@"messageVideoNote"];
-}
 
-static BOOL TGSearchKindIsFile(NSString *kind) {
-	return [kind isEqualToString:@"messageDocument"];
-}
 
-static BOOL TGSearchKindIsMusic(NSString *kind) {
-	return [kind isEqualToString:@"messageAudio"];
-}
 
-static BOOL TGSearchKindIsVoice(NSString *kind) {
-	return [kind isEqualToString:@"messageVoiceNote"];
-}
 
 /// TDLib hands search results as whole messages; the scope is a filter over
 /// the same answer rather than a second request, which is why switching a
 /// pill is instant on a 4S.
-static BOOL TGSearchMessageHasLink(NSDictionary *message) {
-	NSString *text = [message[@"text"] isKindOfClass:NSString.class]
-			? message[@"text"] : @"";
-	if (!text.length)
-		return NO;
-	NSString *lower = text.lowercaseString;
-	return [lower rangeOfString:@"http://"].location != NSNotFound ||
-		   [lower rangeOfString:@"https://"].location != NSNotFound ||
-		   [lower rangeOfString:@"www."].location != NSNotFound ||
-		   [lower rangeOfString:@"t.me/"].location != NSNotFound ||
-		   [lower rangeOfString:@"tg://"].location != NSNotFound;
-}
 
-static BOOL TGSearchMessageMatchesScope(NSDictionary *message, NSInteger scope) {
-	NSString *kind = [message[@"kind"] isKindOfClass:NSString.class]
-			? message[@"kind"] : @"";
-	switch (scope){
-		case TGSearchScopeMedia: return TGSearchKindIsMedia(kind);
-		case TGSearchScopeLinks: return TGSearchMessageHasLink(message);
-		case TGSearchScopeFiles: return TGSearchKindIsFile(kind);
-		case TGSearchScopeMusic: return TGSearchKindIsMusic(kind);
-		case TGSearchScopeVoice: return TGSearchKindIsVoice(kind);
-		default: return YES;
-	}
-}
 
 /// The messages the current scope shows. All and Messages are the same list;
 /// the other scopes narrow it by what the message carries.
 - (NSArray *)scopedMessageHits {
-	if (self.scope == TGSearchScopeAll || self.scope == TGSearchScopeMessages)
-		return self.messageHits;
-	NSMutableArray *out = [NSMutableArray array];
-	for (NSDictionary *message in self.messageHits)
-		if (TGSearchMessageMatchesScope(message, self.scope))
-			[out addObject:message];
-	return out;
+	return TGSearchScopedMessages(self.messageHits, self.scope);
 }
 
 - (BOOL)scopeShowsChats {
-	return self.scope == TGSearchScopeAll || self.scope == TGSearchScopeChats;
+	return TGSearchScopeShowsChats(self.scope);
 }
 
 - (BOOL)scopeShowsMessages {
-	return self.scope == TGSearchScopeAll || self.scope >= TGSearchScopeMessages;
+	return TGSearchScopeShowsMessages(self.scope);
 }
 
 - (BOOL)scopeShowsPublic {
-	return self.scope == TGSearchScopeAll;
+	return TGSearchScopeShowsPublic(self.scope);
 }
 
 #pragma mark - searching

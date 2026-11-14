@@ -10,6 +10,7 @@
 #import "TGAlertSheet.h"
 #import "TGStyle.h"
 #import "TGGroupStore.h"
+#import "TGUIFormat.h"
 
 @interface TGAntiSpamViewController ()
 @property (nonatomic, strong) NSArray *rows;
@@ -41,12 +42,8 @@
 - (void)rebuildSections {
 	NSMutableArray *rows = [NSMutableArray array];
 	for (NSDictionary *candidate in self.rows){
-		NSDate *date = [NSDate dateWithTimeIntervalSince1970:
-				[candidate[@"date"] doubleValue]];
-		NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
-		formatter.dateStyle = NSDateFormatterShortStyle;
-		formatter.timeStyle = NSDateFormatterShortStyle;
-		NSString *when = [formatter stringFromDate:date];
+		NSString *when = TGAppDate([candidate[@"date"] doubleValue],
+				NSDateFormatterShortStyle, NSDateFormatterShortStyle) ?: @"";
 		NSString *detail = [NSString stringWithFormat:@"%@  %@",
 				candidate[@"text"] ?: @"Message Deleted.", when];
 		NSMutableDictionary *row = [TGBAction(

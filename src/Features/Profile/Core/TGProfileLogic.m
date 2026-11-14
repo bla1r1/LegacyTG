@@ -2,6 +2,7 @@
 #import "TGRows.h"
 #import "TGBadge.h"
 #import "TGLocalization.h"
+#import "TGUIFormat.h"
 
 static NSString *TGProfileTrimmed(NSString *text) {
 	if (![text isKindOfClass:NSString.class])
@@ -480,4 +481,63 @@ NSArray *TGProfileMediaRowsMatchingQuery(NSArray *rows, NSString *query,
 			[matches addObject:row];
 	}
 	return matches;
+}
+
+NSURL *TGProfileFirstURL(NSString *text, NSArray *entities) {
+	if (![entities isKindOfClass:NSArray.class])
+		return nil;
+	for (NSDictionary *entity in entities){
+		NSDictionary *type = entity[@"type"];
+		NSString *name = [type isKindOfClass:NSDictionary.class] ? type[@"@type"] : nil;
+		NSString *url = nil;
+		if ([name isEqualToString:@"textEntityTypeTextUrl"])
+			url = type[@"url"];
+		else if ([name isEqualToString:@"textEntityTypeUrl"]){
+			NSInteger offset = [entity[@"offset"] integerValue], length = [entity[@"length"] integerValue];
+			if (length > 0 && (NSUInteger)(offset + length) <= text.length)
+				url = [text substringWithRange:NSMakeRange((NSUInteger)offset, (NSUInteger)length)];
+		}
+		if (!url.length)
+			continue;
+		NSURL *parsed = [NSURL URLWithString:url];
+		return parsed.scheme.length ? parsed
+				: [NSURL URLWithString:[@"http://" stringByAppendingString:url]];
+	}
+	return nil;
+}
+
+NSString *TGProfileDurationText(NSNumber *seconds) {
+	return [seconds integerValue] > 0 ? TGUIFormatCallDuration([seconds integerValue]) : nil;
+}
+
+NSString *TGProfileBirthdayFieldText(NSInteger day, NSInteger month, NSInteger year) {
+	if (day <= 0)
+		return nil;
+	static NSArray *months = nil;
+	if (!months) months = @[@"", @"January", @"February", @"March", @"April",
+			@"May", @"June", @"July", @"August", @"September", @"October",
+			@"November", @"December"];
+	NSString *name = (month > 0 && month < 13) ? months[(NSUInteger)month] : @"";
+	if (year > 0){
+		NSString *key = [name stringByAppendingString:@" %1$@, %2$@"];
+		return TGLocalizedFormat(key,
+				[NSString stringWithFormat:@"%ld", (long)day],
+				[NSString stringWithFormat:@"%ld", (long)year]);
+	}
+	NSString *key = [name stringByAppendingString:@" %@"];
+	return TGLocalizedFormat(key, [NSString stringWithFormat:@"%ld", (long)day]);
+}
+
+NSString *TGProfilePhotoDateText(double date, NSString *language) {
+	return TGUIFormatDate(date, NSDateFormatterMediumStyle, NSDateFormatterNoStyle,
+			language) ?: TGLocalized(@"Profile Photos");
+}
+
+NSString *TGProfileUserName(NSDictionary *user) {
+	if (!user) return @"";
+	NSString *first = user[@"first_name"] ?: @"";
+	NSString *last = user[@"last_name"] ?: @"";
+	if (first.length && last.length)
+		return [NSString stringWithFormat:@"%@ %@", first, last];
+	return first.length ? first : last;
 }

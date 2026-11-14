@@ -155,8 +155,7 @@ static const NSTimeInterval kStatusTwoDays = 48 * kStatusHour;
 }
 
 - (CGFloat)gridWidth {
-	CGFloat width = self.tableView.bounds.size.width - TGMetricGridTableMargin;
-	return width > 0 ? width : TGMetricScreenWidth - TGMetricGridTableMargin;
+	return TGGridContentWidthForTable(self.tableView.bounds.size.width);
 }
 
 - (NSInteger)gridColumns {

@@ -35,11 +35,6 @@ static const NSInteger kZoomTag = 0x7001;
 
 /// Pages come from chats, profiles and galleries; only a chat message says
 /// whether it may leave, and only an explicit NO locks it.
-static BOOL TGViewerItemLocked(NSDictionary *item) {
-	id saveable = item[@"canBeSaved"];
-	return [saveable isKindOfClass:NSNumber.class] && ![saveable boolValue];
-}
-
 
 // vim:ft=objc
 

@@ -8,6 +8,7 @@
 #import "TGDevice.h"
 #import "TGStyle.h"
 #import "TGLocalization.h"
+#import "TGUIFormat.h"
 
 @implementation TGChatViewController (MediaCells)
 
@@ -52,7 +53,7 @@
 					initWithTarget:self action:@selector(videoNoteDiscTapped:)]];
 		}
 		NSInteger dur = [m[@"duration"] integerValue];
-		NSString *durStr = (dur > 0) ? [NSString stringWithFormat:@"%ld:%02ld", (long)(dur / 60), (long)(dur % 60)] : @"";
+		NSString *durStr = (dur > 0) ? TGUIFormatCallDuration(dur) : @"";
 		if ([m[@"viewOnce"] boolValue]){
 			// The one-time round note wears its "1" like their chat does - the
 			// clock that sent it has one opening in it.

@@ -19,16 +19,11 @@
 #import "TGLocalization.h"
 #import "TGPeerRowCell.h"
 #import "TGRows.h"
+#import "TGUIFormat.h"
+#import "TGOptions.h"
 
 static NSString *TGSavedTopicDateText(NSNumber *stamp) {
-	if (![stamp isKindOfClass:NSNumber.class] || ![stamp longLongValue])
-		return @"";
-	char buf[TGDateFormatBufferSize + 1] = {0};
-	size_t len = TGChatDateFormat((time_t)[stamp doubleValue],
-			(time_t)[[NSDate date] timeIntervalSince1970], buf,
-			TGDateFormatBufferSize);
-	return len ? [[NSString alloc] initWithBytes:buf length:len
-									   encoding:NSUTF8StringEncoding] : @"";
+	return TGUIFormatChatDate([stamp isKindOfClass:NSNumber.class] ? stamp.doubleValue : 0, TGOptionNow());
 }
 
 @interface TGSavedTopicsViewController ()

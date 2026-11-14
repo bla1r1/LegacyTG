@@ -99,10 +99,11 @@ static NSArray *BotsChatMediaTitles(NSArray *rows) {
 #pragma mark - file info
 
 - (void)testFileInfo_BytesAndDetailOrder {
-	XCTAssertEqualObjects(TGFileInfoBytesText(0), @"0 B");
+	// The sheet prints sizes with TGBytes, like every other screen.
+	XCTAssertEqualObjects(TGFileInfoBytesText(0), @"0 KB");
 	XCTAssertEqualObjects(TGFileInfoBytesText(512), @"512 B");
 	XCTAssertEqualObjects(TGFileInfoBytesText(1536), @"2 KB");
-	XCTAssertEqualObjects(TGFileInfoBytesText(1024 * 1024), @"1.0 MB");
+	XCTAssertEqualObjects(TGFileInfoBytesText(1024 * 1024), @"1 MB");
 
 	NSArray *rows = TGFileInfoDetailModels(@{
 		@"size" : @2048, @"expectedSize" : @4096,

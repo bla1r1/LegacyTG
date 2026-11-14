@@ -42,6 +42,7 @@ static NSMutableSet *sLive;
 
 + (void)present:(UIAlertController *)alert from:(UIView *)host {
 	// iPad shows a sheet as a popover, which needs somewhere to point.
+	// ios7-guarded: every caller is behind +hasAlertController (iOS 8+).
 	UIPopoverPresentationController *pop = alert.popoverPresentationController;
 	if (pop) {
 		pop.sourceView = host;

@@ -6,6 +6,7 @@
 #import "TGWebsitesViewController.h"
 #import "TGRows.h"
 #import "TGSessionsStore.h"
+#import "TGSettingsPageModels.h"
 
 
 @interface TGSessionsViewController ()
@@ -51,29 +52,15 @@
 
 /// Current session first, the way every client orders this list.
 - (NSArray *)othersOnly {
-	NSMutableArray *others = [NSMutableArray array];
-	for (NSDictionary *session in self.sessions)
-		if (![session[@"isCurrent"] boolValue])
-			[others addObject:session];
-	return others;
+	return TGSessionsOtherThanCurrent(self.sessions, YES, YES);
 }
 
 - (NSArray *)unconfirmedSessions {
-	NSMutableArray *out = [NSMutableArray array];
-	for (NSDictionary *session in self.sessions)
-		if (![session[@"isCurrent"] boolValue] &&
-			[session[@"isUnconfirmed"] boolValue])
-			[out addObject:session];
-	return out;
+	return TGSessionsOtherThanCurrent(self.sessions, YES, NO);
 }
 
 - (NSArray *)otherSessions {
-	NSMutableArray *out = [NSMutableArray array];
-	for (NSDictionary *session in self.sessions)
-		if (![session[@"isCurrent"] boolValue] &&
-			![session[@"isUnconfirmed"] boolValue])
-			[out addObject:session];
-	return out;
+	return TGSessionsOtherThanCurrent(self.sessions, NO, YES);
 }
 
 - (NSDictionary *)currentSession {

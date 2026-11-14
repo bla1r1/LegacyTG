@@ -82,3 +82,23 @@ FOUNDATION_EXPORT NSArray *TGProfileGridRowModels(NSArray *items,
 /// Handler keys: community, channel, detail (NSString kind), danger, member
 /// (NSInteger index). Media rows carry their own taps.
 FOUNDATION_EXPORT NSArray *TGProfileSectionsForFixture(NSDictionary *fixture);
+
+/// The address a piece of text links to: a text link's own URL, or the first
+/// URL typed in it, with http:// added when it has no scheme. Nil when none.
+FOUNDATION_EXPORT NSURL *TGProfileFirstURL(NSString *text, NSArray *entities);
+
+/// First and last name joined; either alone when the other is empty. No
+/// username or phone fallback: the header shows those on their own rows.
+FOUNDATION_EXPORT NSString *TGProfileUserName(NSDictionary *user);
+
+/// m:ss for a track or voice note; nil for no length.
+FOUNDATION_EXPORT NSString *TGProfileDurationText(NSNumber *seconds);
+
+/// The edit screen's Birthday field: "March 5" or "March 5, 1990", no age,
+/// through the pack's month keys. Nil when no day is set.
+FOUNDATION_EXPORT NSString *TGProfileBirthdayFieldText(NSInteger day, NSInteger month,
+		NSInteger year);
+
+/// A profile photo's date in the app's language (medium style), or the
+/// "Profile Photos" title for a photo with no date.
+FOUNDATION_EXPORT NSString *TGProfilePhotoDateText(double date, NSString *language);

@@ -1,4 +1,6 @@
 #import "TGUIFormat.h"
+#import "TGDateFormat.h"
+#import "TGLocalization.h"
 
 static NSString *TGUIDigits(NSString *raw) {
 	NSMutableString *digits = [NSMutableString stringWithCapacity:raw.length];
@@ -130,4 +132,78 @@ NSString *TGCompactCount(int64_t n) {
 		return TGFormatScaled(n, 1000000.0, "M");
 	}
 	return TGFormatScaled(n, 1000.0, "K");
+}
+
+NSString *TGUIFormatChatDate(NSTimeInterval unix, NSTimeInterval now) {
+	if (unix <= 0)
+		return @"";
+	char buf[TGDateFormatBufferSize + 1] = {0};
+	size_t len = TGChatDateFormat((time_t)unix, (time_t)now, buf, TGDateFormatBufferSize);
+	return len ? [[NSString alloc] initWithBytes:buf length:len
+									   encoding:NSUTF8StringEncoding] : @"";
+}
+
+NSString *TGUIFormatDate(NSTimeInterval unix, NSDateFormatterStyle date,
+		NSDateFormatterStyle time, NSString *language) {
+	if (unix <= 0)
+		return nil;
+	static NSMutableDictionary *formatters = nil;
+	NSString *key = [NSString stringWithFormat:@"%d/%d/%@", (int)date, (int)time,
+			language ?: @""];
+	NSDateFormatter *formatter = nil;
+	@synchronized ([NSDateFormatter class]) {
+		if (!formatters)
+			formatters = [NSMutableDictionary dictionary];
+		formatter = formatters[key];
+		if (!formatter){
+			formatter = [[NSDateFormatter alloc] init];
+			formatter.dateStyle = date;
+			formatter.timeStyle = time;
+			formatter.locale = language.length
+					? [NSLocale localeWithLocaleIdentifier:language]
+					: [NSLocale currentLocale];
+			formatters[key] = formatter;
+		}
+		return [formatter stringFromDate:[NSDate dateWithTimeIntervalSince1970:unix]];
+	}
+}
+
+NSString *TGAppDate(NSTimeInterval unix, NSDateFormatterStyle date,
+		NSDateFormatterStyle time) {
+	return TGUIFormatDate(unix, date, time, TGAppLanguage());
+}
+
+NSString *TGBytesForLanguage(long long bytes, NSString *language) {
+	// ponytail: one cached formatter, main-thread callers only (rows and cells).
+	static NSNumberFormatter *formatter = nil;
+	static NSString *formatterLanguage = nil;
+	if (!formatter)
+		formatter = [[NSNumberFormatter alloc] init];
+	NSString *code = language.length ? language : @"en";
+	if (![formatterLanguage isEqualToString:code]){
+		formatterLanguage = [code copy];
+		formatter.locale = [NSLocale localeWithLocaleIdentifier:code];
+		formatter.numberStyle = NSNumberFormatterDecimalStyle;
+	}
+	if (bytes <= 0)
+		return TGLocalizedFormat(@"%@ KB", @"0");
+	if (bytes < 1024)
+		return TGLocalizedFormat(@"%@ B", [NSString stringWithFormat:@"%lld", bytes]);
+	if (bytes < 1024 * 1024){
+		formatter.maximumFractionDigits = 0;
+		return TGLocalizedFormat(@"%@ KB",
+				[formatter stringFromNumber:@(bytes / 1024.0)]);
+	}
+	if (bytes < 1024LL * 1024 * 1024){
+		formatter.maximumFractionDigits = 1;
+		return TGLocalizedFormat(@"%@ MB",
+				[formatter stringFromNumber:@(bytes / (1024.0 * 1024.0))]);
+	}
+	formatter.maximumFractionDigits = 2;
+	return TGLocalizedFormat(@"%@ GB",
+			[formatter stringFromNumber:@(bytes / (1024.0 * 1024.0 * 1024.0))]);
+}
+
+NSString *TGBytes(long long bytes) {
+	return TGBytesForLanguage(bytes, TGAppLanguage());
 }

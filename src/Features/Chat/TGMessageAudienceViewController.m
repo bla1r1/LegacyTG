@@ -17,14 +17,11 @@
 #import "TGOptions.h"
 #import "TGProfileViewController.h"
 #import "TGRows.h"
+#import "TGUIFormat.h"
 
 /// The same three shapes the chat list and the chat sheets use for a time.
 static NSString *TGAudienceDate(NSTimeInterval unix) {
-	char buf[TGDateFormatBufferSize + 1] = {0};
-	size_t len = TGChatDateFormat((time_t)unix, (time_t)TGOptionNow(), buf,
-								TGDateFormatBufferSize);
-	return len ? [[NSString alloc] initWithBytes:buf length:len encoding:NSUTF8StringEncoding]
-			   : @"";
+	return TGUIFormatChatDate(unix, TGOptionNow());
 }
 
 @interface TGMessageAudienceViewController ()

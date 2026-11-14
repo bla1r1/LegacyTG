@@ -16,46 +16,6 @@
 #import "TGStyle.h"
 #import "TGRows.h"
 
-/// A byte count in the pack's own unit strings ("%@ KB", "%@ MB", "%@ GB"),
-/// with the decimal separator of the app's language rather than the phone's.
-/// A Russian interface says "1,5 МБ" on a device set to English because the
-/// number and the unit belong to the same sentence. `language` is passed in so
-/// the host test can pin both spellings; TGBytes uses the selected pack.
-///
-/// One formatter is cached: NSNumberFormatter is an ICU setup, and the settings
-/// rows build their values when data arrives, not in cellForRow:.
-static inline NSString *TGBytesForLanguage(long long bytes, NSString *language) {
-	static NSNumberFormatter *formatter = nil;
-	static NSString *formatterLanguage = nil;
-	if (!formatter)
-		formatter = [[NSNumberFormatter alloc] init];
-	NSString *code = language.length ? language : @"en";
-	if (![formatterLanguage isEqualToString:code]){
-		formatterLanguage = [code copy];
-		formatter.locale = [NSLocale localeWithLocaleIdentifier:code];
-		formatter.numberStyle = NSNumberFormatterDecimalStyle;
-	}
-	if (bytes <= 0)
-		return TGLocalizedFormat(@"%@ KB", @"0");
-	if (bytes < 1024 * 1024){
-		formatter.maximumFractionDigits = 0;
-		return TGLocalizedFormat(@"%@ KB",
-				[formatter stringFromNumber:@(bytes / 1024.0)]);
-	}
-	if (bytes < 1024LL * 1024 * 1024){
-		formatter.maximumFractionDigits = 1;
-		return TGLocalizedFormat(@"%@ MB",
-				[formatter stringFromNumber:@(bytes / (1024.0 * 1024.0))]);
-	}
-	formatter.maximumFractionDigits = 2;
-	return TGLocalizedFormat(@"%@ GB",
-			[formatter stringFromNumber:@(bytes / (1024.0 * 1024.0 * 1024.0))]);
-}
-
-static inline NSString *TGBytes(long long bytes) {
-	return TGBytesForLanguage(bytes, TGAppLanguage());
-}
-
 /// The auto-download value as official's autodownloadDataSizeString makes it:
 /// a whole number of MB from 10 MB up, one decimal below that, and the app
 /// language's decimal separator. "121,5 МБ" was wider than the value column

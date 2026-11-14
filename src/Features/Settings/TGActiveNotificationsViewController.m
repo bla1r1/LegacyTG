@@ -6,19 +6,14 @@
 #import "TGMessageStore.h"
 #import "TGSessionsStore.h"
 #import "TGSettingsStore.h"
+#import "TGUIFormat.h"
 
 
 /// One date format for every row; creating one per cell was the usual
 /// reason a notification list scrolls badly on an A5.
 static NSString *TGNotificationDateText(NSNumber *timestamp) {
-	static NSDateFormatter *formatter = nil;
-	if (!formatter){
-		formatter = [[NSDateFormatter alloc] init];
-		formatter.dateStyle = NSDateFormatterShortStyle;
-		formatter.timeStyle = NSDateFormatterShortStyle;
-	}
-	return [formatter stringFromDate:
-			[NSDate dateWithTimeIntervalSince1970:[timestamp doubleValue]]];
+	return TGAppDate([timestamp doubleValue], NSDateFormatterShortStyle,
+			NSDateFormatterShortStyle) ?: @"";
 }
 
 @implementation TGActiveNotificationsViewController

@@ -4,6 +4,12 @@
 #import "TGMediaPlayerView.h"
 #import "TGSoftVideoPlayer.h"
 
+/// The sender turned saving off: no Save, no Share, no forward of this item.
+static inline BOOL TGViewerItemLocked(NSDictionary *item) {
+	id saveable = item[@"canBeSaved"];
+	return [saveable isKindOfClass:NSNumber.class] && ![saveable boolValue];
+}
+
 @interface TGMediaViewer () <UIScrollViewDelegate, UIGestureRecognizerDelegate>
 @property (nonatomic, strong) NSArray *items;
 @property (nonatomic, assign) NSInteger index;

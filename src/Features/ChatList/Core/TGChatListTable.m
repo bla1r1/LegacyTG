@@ -15,6 +15,7 @@
 #import "TGPasscode.h"
 #import "TGPasscodeViewController.h"
 #import "TGChatListRowGeometry.h"
+#import "TGUIFormat.h"
 
 
 // Height of the folder pill strip above the chat list (official-style tabs).
@@ -32,14 +33,7 @@
 
 /// Today shows the time, this week the weekday, older the date - as clients do.
 static NSString *TGChatDate(NSTimeInterval unix) {
-	char buf[TGDateFormatBufferSize];
-	// The server's clock, not this device's: a 4S off by a year grades every
-	// date as "today" until the option arrives.
-	size_t len = TGChatDateFormat((time_t)unix, (time_t)TGOptionNow(), buf, sizeof(buf));
-	if (!len)
-		return @"";
-	return [[NSString alloc] initWithBytes:buf length:len
-								  encoding:NSASCIIStringEncoding];
+	return TGUIFormatChatDate(unix, TGOptionNow());
 }
 
 /// Saved Messages has a row of its own above the list, so leaving it among the

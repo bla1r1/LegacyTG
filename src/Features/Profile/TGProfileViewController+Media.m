@@ -14,74 +14,15 @@
 #import "TGGridRowCell.h"
 #import "TGPictureRowCell.h"
 #import "TGMusicPlayer.h"
-
-/// The address a piece of text links to: a text link's own URL, or the first
-/// URL typed in it. Nil when it has none.
-NSURL *TGProfileFirstURL(NSString *text, NSArray *entities) {
-	if (![entities isKindOfClass:NSArray.class])
-		return nil;
-	for (NSDictionary *entity in entities){
-		NSDictionary *type = entity[@"type"];
-		NSString *name = [type isKindOfClass:NSDictionary.class] ? type[@"@type"] : nil;
-		NSString *url = nil;
-		if ([name isEqualToString:@"textEntityTypeTextUrl"])
-			url = type[@"url"];
-		else if ([name isEqualToString:@"textEntityTypeUrl"]){
-			NSInteger offset = [entity[@"offset"] integerValue], length = [entity[@"length"] integerValue];
-			if (length > 0 && (NSUInteger)(offset + length) <= text.length)
-				url = [text substringWithRange:NSMakeRange((NSUInteger)offset, (NSUInteger)length)];
-		}
-		if (!url.length)
-			continue;
-		NSURL *parsed = [NSURL URLWithString:url];
-		return parsed.scheme.length ? parsed
-				: [NSURL URLWithString:[@"http://" stringByAppendingString:url]];
-	}
-	return nil;
-}
-
-static BOOL TGKindIsStories(NSString *kind) {
-	return [kind isEqualToString:@"stories"] || [kind isEqualToString:@"archive"];
-}
+#import "TGUIFormat.h"
 
 static NSString *TGProfileFileSizeText(NSNumber *bytes) {
-	long long value = [bytes longLongValue];
-	if (value <= 0)
-		return nil;
-	if (value < 1024)
-		return [NSString stringWithFormat:@"%lld B", value];
-	if (value < 1024 * 1024)
-		return [NSString stringWithFormat:@"%.0f KB", value / 1024.0];
-	return [NSString stringWithFormat:@"%.1f MB", value / (1024.0 * 1024.0)];
-}
-
-static NSString *TGProfileDurationText(NSNumber *seconds) {
-	NSInteger value = [seconds integerValue];
-	if (value <= 0)
-		return nil;
-	return [NSString stringWithFormat:@"%ld:%02ld", (long)(value / 60),
-			(long)(value % 60)];
-}
-
-static void TGProfileApplyAppLocale(NSDateFormatter *formatter) {
-	NSString *language = TGAppLanguage();
-	formatter.locale = language.length
-			? [NSLocale localeWithLocaleIdentifier:language]
-			: [NSLocale currentLocale];
+	return [bytes longLongValue] > 0 ? TGBytes([bytes longLongValue]) : nil;
 }
 
 static NSString *TGProfileShortDate(NSNumber *date) {
-	if (![date isKindOfClass:NSNumber.class] || !date.doubleValue)
-		return nil;
-	static NSDateFormatter *formatter = nil;
-	if (!formatter){
-		formatter = [[NSDateFormatter alloc] init];
-		formatter.dateStyle = NSDateFormatterMediumStyle;
-		formatter.timeStyle = NSDateFormatterNoStyle;
-	}
-	TGProfileApplyAppLocale(formatter);
-	return [formatter stringFromDate:
-			[NSDate dateWithTimeIntervalSince1970:date.doubleValue]];
+	double stamp = [date isKindOfClass:NSNumber.class] ? date.doubleValue : 0;
+	return TGAppDate(stamp, NSDateFormatterMediumStyle, NSDateFormatterNoStyle);
 }
 
 static NSString *TGProfileJoin(NSString *left, NSString *right) {
@@ -233,20 +174,11 @@ static NSString *TGProfileJoin(NSString *left, NSString *right) {
 }
 
 - (NSArray *)currentMediaTabs {
-	NSDictionary *titles = @{@"stories" : @"Stories", @"gifts" : @"Gifts",
-			@"media" : @"Media", @"files" : @"Files", @"music" : @"Music",
-			@"voice" : @"Voice", @"links" : @"Links", @"groups" : @"Groups",
-			@"archive" : @"Archive", @"similar" : @"Similar Channels"};
 	BOOL own = self.isOwnProfile;
 	BOOL ownPublic = own && ![self showsSavedMessages];
-	NSMutableArray *out = [NSMutableArray array];
-	for (NSString *kind in TGProfileTabKinds(!own && self.stories.count,
+	return TGProfileMediaTabs(TGProfileTabKinds(!own && self.stories.count,
 			self.gifts.count > 0, self.commonGroupCount > 0, ownPublic,
-			self.mainMediaKind))
-		[out addObject:@{@"title" : titles[kind], @"kind" : kind}];
-	if (self.isChannel && self.similarChatIds.count)
-		[out addObject:@{@"title" : titles[@"similar"], @"kind" : @"similar"}];
-	return out;
+			self.mainMediaKind), self.isChannel && self.similarChatIds.count);
 }
 
 - (void)mediaTabSelected:(NSString *)kind {
@@ -293,9 +225,7 @@ static NSString *TGProfileJoin(NSString *left, NSString *right) {
 }
 
 - (BOOL)selectedTabIsGrid {
-	NSString *kind = [self selectedMediaKind];
-	return [kind isEqualToString:@"media"] || TGKindIsStories(kind) ||
-		   [kind isEqualToString:@"gifts"];
+	return TGProfileTabIsGrid([self selectedMediaKind]);
 }
 
 - (NSDictionary *)giftOwnerSenderId {
@@ -307,16 +237,7 @@ static NSString *TGProfileJoin(NSString *left, NSString *right) {
 }
 
 - (NSString *)selectedMediaKind {
-	NSString *kind = self.storedMediaKind;
-	if ([kind isEqualToString:@"posts"])
-		kind = @"stories";
-	else if ([kind isEqualToString:@"gifs"])
-		kind = @"media";
-	NSArray *tabs = [self currentMediaTabs];
-	for (NSDictionary *tab in tabs)
-		if ([tab[@"kind"] isEqualToString:kind])
-			return kind;
-	return tabs.firstObject[@"kind"];
+	return TGProfileSelectedTabKind(self.storedMediaKind, [self currentMediaTabs]);
 }
 
 - (BOOL)showsSavedMessages {
@@ -506,7 +427,7 @@ static NSString *TGProfileJoin(NSString *left, NSString *right) {
 	if ([self selectedTabIsGrid]){
 		__weak typeof(self) weakSelf = self;
 		BOOL giftKind = [kind isEqualToString:@"gifts"];
-		BOOL storyKind = TGKindIsStories(kind);
+		BOOL storyKind = TGProfileTabIsStories(kind);
 		NSArray *rows = TGProfileGridRowModels(items, 3,
 				^NSDictionary *(NSInteger index){
 			TGProfileViewController *me = weakSelf;
@@ -522,7 +443,7 @@ static NSString *TGProfileJoin(NSString *left, NSString *right) {
 		if (rows.count)
 			return rows;
 		// An answered empty pane says so rather than looking frozen.
-		if (TGKindIsStories(kind) &&
+		if (TGProfileTabIsStories(kind) &&
 				[self.loadedMediaKinds containsObject:kind]){
 			BOOL archive = [kind isEqualToString:@"archive"];
 			NSMutableArray *empty = [NSMutableArray array];
@@ -631,7 +552,7 @@ static NSString *TGProfileJoin(NSString *left, NSString *right) {
 		if (row)
 			[rows addObject:row];
 	}
-	if (!rows.count && TGKindIsStories(kind) &&
+	if (!rows.count && TGProfileTabIsStories(kind) &&
 			[self.loadedMediaKinds containsObject:kind]){
 		NSMutableDictionary *line = [TGRow(TGKindPlain,
 				[kind isEqualToString:@"archive"] ? TGLocalized(@"No Archived Stories")
@@ -646,7 +567,7 @@ static NSString *TGProfileJoin(NSString *left, NSString *right) {
 	NSArray *rows = [self selectedMediaRows];
 	if (index < 0 || index >= (NSInteger)rows.count)
 		return;
-	if (TGKindIsStories(kind)){
+	if (TGProfileTabIsStories(kind)){
 		[self openStoryAtIndex:index];
 		return;
 	}

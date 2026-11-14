@@ -34,6 +34,10 @@ BOOL TGIsEmojiScalar(UTF32Char c);
 /// against the system font and its fallback list, cached per character.
 /// Returns the same object when nothing goes.
 NSString *TGStripUndrawableScalars(NSString *text);
+
+/// The first character of a title this device can draw, for a pack's
+/// letter tile; "?" when none can be.
+NSString *TGFirstDrawableCharacter(NSString *title);
 /// Drops U+FE0F after emoji Apple Color Emoji lacks: no face has it, and
 /// CoreText searched every font on disk for it. YES if anything went.
 BOOL TGMarkUndrawableEmoji(NSMutableAttributedString *text, CGFloat size);

@@ -18,6 +18,7 @@
 #import "TGForwardPicker.h"
 #import "TGMessageLayout.h"
 #import "TGMediaViewerInternal.h"
+#import "TGUIFormat.h"
 
 
 // The chrome sits over the picture rather than beside it, which is what makes
@@ -296,9 +297,8 @@ static const int kSoftVideoMaxLongSide = 720;
 		NSTimeInterval at = [self moviePosition];
 		if (!self.scrubber.tracking)
 			self.scrubber.value = (float)(at / duration);
-		NSInteger left = (NSInteger)MAX(0.0, duration - at);
-		self.timeLabel.text = [NSString stringWithFormat:@"-%ld:%02ld",
-				(long)(left / 60), (long)(left % 60)];
+		self.timeLabel.text = [@"-" stringByAppendingString:
+				TGUIFormatCallDuration(duration - at)];
 		return;
 	}
 	if (self.player.currentItem.status == AVPlayerItemStatusFailed){
@@ -311,9 +311,8 @@ static const int kSoftVideoMaxLongSide = 720;
 	NSTimeInterval at = [self moviePosition];
 	if (!self.scrubber.tracking)
 		self.scrubber.value = (float)(at / duration);
-	NSInteger left = (NSInteger)MAX(0.0, duration - at);
-	self.timeLabel.text = [NSString stringWithFormat:@"-%ld:%02ld",
-			(long)(left / 60), (long)(left % 60)];
+	self.timeLabel.text = [@"-" stringByAppendingString:
+			TGUIFormatCallDuration(duration - at)];
 }
 
 /// Exact, which is the point of the change: MPMoviePlayerController seeks to

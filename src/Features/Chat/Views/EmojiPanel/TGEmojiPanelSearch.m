@@ -21,12 +21,6 @@
 
 /// The first character a title can show for a set with no cover: a whole
 /// composed character, never half a surrogate pair, and never one no font has.
-static NSString *TGFirstDrawableCharacter(NSString *title) {
-	NSString *shown = TGStripUndrawableScalars(title ?: @"");
-	return shown.length
-			? [shown substringWithRange:[shown rangeOfComposedCharacterSequenceAtIndex:0]] : @"?";
-}
-
 /// A set row as the search feed draws it: the tile carries the whole record
 /// so the install sheet has the id and the count, and a cover to show.
 static NSArray *TGPackSearchTiles(NSArray *sets) {

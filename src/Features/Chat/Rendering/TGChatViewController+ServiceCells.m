@@ -8,6 +8,7 @@
 #import "TGPollPresentation.h"
 #import "TGLiveLocation.h"
 #import "TGChecklistPresentation.h"
+#import "TGUIFormat.h"
 
 /// The card a chat row shows, without the buttons this app cannot honour
 /// yet: there is no payment form and no group-call audio, and a Pay or Join
@@ -506,18 +507,8 @@ TGMessageCard *TGChatCardForRow(NSDictionary *m) {
 		for (NSUInteger i = 0; i < docs.count; i++) {
 			NSDictionary *docMsg = docs[i];
 			NSString *fileName = [docMsg[@"docName"] length] ? docMsg[@"docName"] : nil;
-			NSString *fileSize = @"";
-			if ([docMsg[@"docSize"] longLongValue] > 0) {
-				double bytes = [docMsg[@"docSize"] doubleValue];
-				if (bytes < 1024.0)
-					fileSize = [NSString stringWithFormat:@"%.0f B", bytes];
-				else if (bytes < 1024.0 * 1024.0)
-					fileSize = [NSString stringWithFormat:@"%.1f KB", bytes / 1024.0];
-				else if (bytes < 1024.0 * 1024.0 * 1024.0)
-					fileSize = [NSString stringWithFormat:@"%.1f MB", bytes / (1024.0 * 1024.0)];
-				else
-					fileSize = [NSString stringWithFormat:@"%.1f GB", bytes / (1024.0 * 1024.0 * 1024.0)];
-			}
+			long long size = [docMsg[@"docSize"] longLongValue];
+			NSString *fileSize = size > 0 ? TGBytes(size) : @"";
 			if (!fileName.length) {
 				NSArray *lines = [docMsg[@"text"] componentsSeparatedByString:@"\n"];
 				fileName = lines.count ? lines[0] : @"Document";

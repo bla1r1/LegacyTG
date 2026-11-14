@@ -24,15 +24,6 @@
 
 
 
-static NSString *TGProfileUserName(NSDictionary *user) {
-	if (!user) return @"";
-	NSString *first = user[@"first_name"] ?: @"";
-	NSString *last = user[@"last_name"] ?: @"";
-	if (first.length && last.length)
-		return [NSString stringWithFormat:@"%@ %@", first, last];
-	return first.length ? first : last;
-}
-
 
 
 

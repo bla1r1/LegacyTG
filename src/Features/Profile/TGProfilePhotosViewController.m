@@ -64,17 +64,7 @@ static const NSInteger kPhotoGridColumns = 3;
 }
 
 - (NSString *)dateTextForPhoto:(NSDictionary *)photo {
-	double date = [photo[@"date"] doubleValue];
-	if (date <= 0)
-		return TGLocalized(@"Profile Photos");
-	NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
-	formatter.dateStyle = NSDateFormatterMediumStyle;
-	formatter.timeStyle = NSDateFormatterNoStyle;
-	NSString *language = TGAppLanguage();
-	formatter.locale = language.length
-			? [NSLocale localeWithLocaleIdentifier:language]
-			: [NSLocale currentLocale];
-	return [formatter stringFromDate:[NSDate dateWithTimeIntervalSince1970:date]];
+	return TGProfilePhotoDateText([photo[@"date"] doubleValue], TGAppLanguage());
 }
 
 - (void)downloadPhoto:(NSDictionary *)photo {

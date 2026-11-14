@@ -92,4 +92,31 @@
 	XCTAssertEqualObjects(TGCompactCount(1500000000), @"1.5B");
 }
 
+- (void)testChatDate_EmptyForNoDateAndTheTimeToday {
+	XCTAssertEqualObjects(TGUIFormatChatDate(0, 1700000000), @"");
+	NSString *today = TGUIFormatChatDate(1700000000 - 60, 1700000000);
+	XCTAssertTrue([today containsString:@":"], @"%@", today);
+}
+
+- (void)testDate_FollowsTheLanguageNotThePhone {
+	// Noon UTC keeps the day in every time zone.
+	NSString *en = TGUIFormatDate(1699963200, NSDateFormatterMediumStyle,
+			NSDateFormatterNoStyle, @"en_US");
+	NSString *ru = TGUIFormatDate(1699963200, NSDateFormatterMediumStyle,
+			NSDateFormatterNoStyle, @"ru");
+	XCTAssertTrue([en containsString:@"Nov"], @"%@", en);
+	XCTAssertTrue([ru containsString:@"нояб"], @"%@", ru);
+	// The cache keys on the language: asking English again is still English.
+	XCTAssertEqualObjects(TGUIFormatDate(1699963200, NSDateFormatterMediumStyle,
+			NSDateFormatterNoStyle, @"en_US"), en);
+	XCTAssertNil(TGUIFormatDate(0, NSDateFormatterMediumStyle,
+			NSDateFormatterNoStyle, @"en_US"));
+}
+
+- (void)testBytes_UnderAKilobyteInBytes {
+	XCTAssertEqualObjects(TGBytesForLanguage(512, @"en"), @"512 B");
+	XCTAssertEqualObjects(TGBytesForLanguage(1536, @"en"), @"2 KB");
+	XCTAssertEqualObjects(TGBytesForLanguage(1572864, @"en"), @"1.5 MB");
+}
+
 @end

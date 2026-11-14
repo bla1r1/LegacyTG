@@ -50,6 +50,11 @@ NSArray *TGProxyPageModel(NSArray *proxies, BOOL useProxy, BOOL connected,
 /// the auto-download rows ("120 MB", not "120.0 MB").
 NSString *TGPageModelCompactBytes(long long bytes);
 
+/// Every session but this device's, keeping the ones whose isUnconfirmed
+/// matches: incomplete sign-ins, confirmed ones, or both. The list order stays.
+NSArray *TGSessionsOtherThanCurrent(NSArray *sessions, BOOL unconfirmed,
+									BOOL confirmed);
+
 #ifdef __cplusplus
 }
 #endif

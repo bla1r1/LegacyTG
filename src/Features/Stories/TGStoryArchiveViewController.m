@@ -8,24 +8,12 @@
 #import "TGLocalization.h"
 #import "TGRows.h"
 #import "TGStoryStore.h"
+#import "TGUIFormat.h"
 
 /// The archive list's date uses the app language, not the device locale.
 static NSString *TGStoryArchiveDateText(NSNumber *unixTime) {
-	static NSDateFormatter *formatter = nil;
-	static dispatch_once_t once;
-	dispatch_once(&once, ^{
-		formatter = [[NSDateFormatter alloc] init];
-		[formatter setDateStyle:NSDateFormatterMediumStyle];
-		[formatter setTimeStyle:NSDateFormatterShortStyle];
-	});
-	if (![unixTime isKindOfClass:NSNumber.class] || unixTime.doubleValue <= 0)
-		return nil;
-	NSString *language = TGAppLanguage();
-	formatter.locale = language.length
-			? [NSLocale localeWithLocaleIdentifier:language]
-			: [NSLocale currentLocale];
-	return [formatter stringFromDate:
-			[NSDate dateWithTimeIntervalSince1970:unixTime.doubleValue]];
+	double stamp = [unixTime isKindOfClass:NSNumber.class] ? unixTime.doubleValue : 0;
+	return TGAppDate(stamp, NSDateFormatterMediumStyle, NSDateFormatterShortStyle);
 }
 
 @interface TGStoryArchiveViewController ()

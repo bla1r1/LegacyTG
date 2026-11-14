@@ -5,20 +5,13 @@
 #define TGWEBSITESVIEWCONTROLLER_H
 
 #import <Foundation/Foundation.h>
+#import "TGUIFormat.h"
 
 /// When the site last used its token, as a short date. A site that never did
 /// is not a parse failure; it is one that signed in and did nothing.
 static inline NSString *TGWebsiteWhen(NSNumber *seconds) {
-	NSTimeInterval stamp = seconds.doubleValue;
-	if (stamp <= 0)
-		return @"—";
-	static NSDateFormatter *formatter = nil;
-	if (!formatter){
-		formatter = [[NSDateFormatter alloc] init];
-		formatter.dateStyle = NSDateFormatterShortStyle;
-		formatter.timeStyle = NSDateFormatterShortStyle;
-	}
-	return [formatter stringFromDate:[NSDate dateWithTimeIntervalSince1970:stamp]];
+	return TGAppDate(seconds.doubleValue, NSDateFormatterShortStyle,
+			NSDateFormatterShortStyle) ?: @"—";
 }
 
 /// The line under a site's domain: browser, platform, place, address, then

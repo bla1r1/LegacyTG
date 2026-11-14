@@ -8,24 +8,12 @@
 #import "TGLocalization.h"
 #import "TGRows.h"
 #import "TGStoryStore.h"
+#import "TGUIFormat.h"
 
 /// Album story dates use the app language, not the device locale.
 static NSString *TGStoryAlbumDateText(NSNumber *unixTime) {
-	static NSDateFormatter *formatter = nil;
-	static dispatch_once_t once;
-	dispatch_once(&once, ^{
-		formatter = [[NSDateFormatter alloc] init];
-		[formatter setDateStyle:NSDateFormatterMediumStyle];
-		[formatter setTimeStyle:NSDateFormatterShortStyle];
-	});
-	if (![unixTime isKindOfClass:NSNumber.class] || unixTime.doubleValue <= 0)
-		return @"-";
-	NSString *language = TGAppLanguage();
-	formatter.locale = language.length
-			? [NSLocale localeWithLocaleIdentifier:language]
-			: [NSLocale currentLocale];
-	return [formatter stringFromDate:
-			[NSDate dateWithTimeIntervalSince1970:unixTime.doubleValue]];
+	double stamp = [unixTime isKindOfClass:NSNumber.class] ? unixTime.doubleValue : 0;
+	return TGAppDate(stamp, NSDateFormatterMediumStyle, NSDateFormatterShortStyle) ?: @"-";
 }
 
 /// The picture is a peer-row picture: the album's own photo when it has one,

@@ -8,6 +8,7 @@
 // every answer is Telegram's.
 //
 #import "TGStarsGiftsViewController.h"
+#import "TGUIFormat.h"
 #import "TGAlertSheet.h"
 #import "TGStyle.h"
 #import "TGTheme.h"
@@ -17,20 +18,8 @@
 /// A transaction timestamp in the app's date format; the audit screen used to
 /// print the raw Unix number.
 static NSString *TGStarsTransactionDate(NSNumber *unix) {
-	static NSDateFormatter *fmt = nil;
-	static dispatch_once_t once;
-	dispatch_once(&once, ^{
-		fmt = [[NSDateFormatter alloc] init];
-		fmt.dateStyle = NSDateFormatterMediumStyle;
-		fmt.timeStyle = NSDateFormatterShortStyle;
-	});
-	if (![unix isKindOfClass:[NSNumber class]] || unix.doubleValue <= 0)
-		return @"-";
-	NSString *language = TGAppLanguage();
-	fmt.locale = language.length
-			? [NSLocale localeWithLocaleIdentifier:language]
-			: [NSLocale currentLocale];
-	return [fmt stringFromDate:[NSDate dateWithTimeIntervalSince1970:unix.doubleValue]];
+	double stamp = [unix isKindOfClass:[NSNumber class]] ? unix.doubleValue : 0;
+	return TGAppDate(stamp, NSDateFormatterMediumStyle, NSDateFormatterShortStyle) ?: @"-";
 }
 
 #import "TGStarsTransactionText.h"

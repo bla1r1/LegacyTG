@@ -279,6 +279,12 @@ NSString *TGStripUndrawableScalars(NSString *text) {
 	return TGStripScalars(text, TGFontsHaveScalar);
 }
 
+NSString *TGFirstDrawableCharacter(NSString *title) {
+	NSString *shown = TGStripUndrawableScalars(title ?: @"");
+	return shown.length
+			? [shown substringWithRange:[shown rangeOfComposedCharacterSequenceAtIndex:0]] : @"?";
+}
+
 /// Whether Apple Color Emoji itself has the scalar. A face elsewhere in the
 /// cascade may draw it as a plain symbol (U+2604 COMET on iOS 7), but then the
 /// U+FE0F after it has no face at all and CoreText scans every font on disk.

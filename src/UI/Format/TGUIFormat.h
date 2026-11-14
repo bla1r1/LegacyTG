@@ -30,6 +30,34 @@ NSString *TGUIFormatFullPhone(NSString *prefix, NSString *number);
 /// count, and an empty query matches everything.
 BOOL TGUIFormatChatMatches(NSString *title, NSString *query);
 
+/// A list row's date the way the chat list prints it: the time today, the
+/// weekday this week, the date before that. Empty for no date. `now` is
+/// TGOptionNow, the server's clock, so a phone with a wrong clock still says
+/// "today" about today.
+NSString *TGUIFormatChatDate(NSTimeInterval unix, NSTimeInterval now);
+
+/// A date in `language` (the device locale when empty), nil for no date.
+/// Formatters are kept per style and language: making one per row is what
+/// made long lists scroll badly on an A5.
+NSString *TGUIFormatDate(NSTimeInterval unix, NSDateFormatterStyle date,
+		NSDateFormatterStyle time, NSString *language);
+
+/// TGUIFormatDate in the app's language, so a Russian UI never prints an
+/// English month.
+NSString *TGAppDate(NSTimeInterval unix, NSDateFormatterStyle date,
+		NSDateFormatterStyle time);
+
+/// A byte count in the pack's own unit strings ("%@ KB", "%@ MB", "%@ GB"),
+/// with the decimal separator of the app's language rather than the phone's.
+/// A Russian interface says "1,5 МБ" on a device set to English because the
+/// number and the unit belong to the same sentence. `language` is passed in so
+/// the host test can pin both spellings; TGBytes uses the selected pack.
+///
+/// One formatter is cached: NSNumberFormatter is an ICU setup, and the settings
+/// rows build their values when data arrives, not in cellForRow:.
+NSString *TGBytesForLanguage(long long bytes, NSString *language);
+NSString *TGBytes(long long bytes);
+
 /// Compact count for post views: 0..999 as is, 1.2K, 12K, 1M, 1.2M.
 NSString *TGCompactCount(int64_t n);
 

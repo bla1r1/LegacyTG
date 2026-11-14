@@ -13,20 +13,15 @@
 #import "TGRows.h"
 #import "TGGroupStore.h"
 #import "TGClientNotifications.h"
+#import "TGUIFormat.h"
+#import "TGOptions.h"
 
 /// A topic row is a chat row in miniature: a coloured icon made from the
 /// topic's own id, the name, the last message, the time and the unread count.
 /// The stock subtitle cell could not carry the icon and the badge without
 /// the two fighting for the same 40 pt.
 static NSString *TGTopicDateText(NSNumber *stamp) {
-	if (![stamp isKindOfClass:NSNumber.class] || ![stamp longLongValue])
-		return @"";
-	char buf[TGDateFormatBufferSize + 1] = {0};
-	size_t len = TGChatDateFormat((time_t)[stamp doubleValue],
-			(time_t)[[NSDate date] timeIntervalSince1970], buf,
-			TGDateFormatBufferSize);
-	return len ? [[NSString alloc] initWithBytes:buf length:len
-									   encoding:NSUTF8StringEncoding] : @"";
+	return TGUIFormatChatDate([stamp isKindOfClass:NSNumber.class] ? stamp.doubleValue : 0, TGOptionNow());
 }
 
 @interface TGTopicsViewController ()

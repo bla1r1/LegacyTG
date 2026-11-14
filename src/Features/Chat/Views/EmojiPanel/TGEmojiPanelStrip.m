@@ -20,12 +20,6 @@
 
 /// The first character a title can show for a set with no cover: a whole
 /// composed character, never half a surrogate pair, and never one no font has.
-static NSString *TGFirstDrawableCharacter(NSString *title) {
-	NSString *shown = TGStripUndrawableScalars(title ?: @"");
-	return shown.length
-			? [shown substringWithRange:[shown rangeOfComposedCharacterSequenceAtIndex:0]] : @"?";
-}
-
 static const CGFloat kStripHeight = TGMetricEmojiStripHeight;   // categories / sets along the top
 
 

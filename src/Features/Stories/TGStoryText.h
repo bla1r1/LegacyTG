@@ -5,6 +5,7 @@
 #import <Foundation/Foundation.h>
 #import "TGLocalization.h"
 #import "TGRows.h"
+#import "TGUIFormat.h"
 
 static inline NSString *TGStoryPrivacyNoun(NSString *privacy) {
 	if (![privacy isKindOfClass:NSString.class] || !privacy.length)
@@ -31,21 +32,8 @@ static inline NSString *TGStoryInteractionNoun(NSString *kind) {
 /// The story sheet's date, in the app language rather than the phone's: a
 /// Russian UI must not print an English month. Pure enough for the host test.
 static inline NSString *TGStoryDateText(NSNumber *unixTime) {
-	static NSDateFormatter *formatter = nil;
-	static dispatch_once_t once;
-	dispatch_once(&once, ^{
-		formatter = [[NSDateFormatter alloc] init];
-		[formatter setDateStyle:NSDateFormatterMediumStyle];
-		[formatter setTimeStyle:NSDateFormatterShortStyle];
-	});
-	if (![unixTime isKindOfClass:NSNumber.class] || unixTime.doubleValue <= 0)
-		return @"-";
-	NSString *language = TGAppLanguage();
-	formatter.locale = language.length
-			? [NSLocale localeWithLocaleIdentifier:language]
-			: [NSLocale currentLocale];
-	return [formatter stringFromDate:
-			[NSDate dateWithTimeIntervalSince1970:unixTime.doubleValue]];
+	double stamp = [unixTime isKindOfClass:NSNumber.class] ? unixTime.doubleValue : 0;
+	return TGAppDate(stamp, NSDateFormatterMediumStyle, NSDateFormatterShortStyle) ?: @"-";
 }
 
 /// One line of the story sheet: a title, an optional detail under it and a

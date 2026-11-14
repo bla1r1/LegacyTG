@@ -4,6 +4,7 @@
 #import "TGIcons.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
+#import "TGUIFormat.h"
 
 static NSString *const TGInstantRule = @"────────────────────────────────";
 
@@ -210,14 +211,8 @@ static void TGInstantAppendBlock(NSMutableAttributedString *out,
 				TGFontCaption(), secondary, accent).string;
 		NSNumber *date = [block[@"publish_date"] isKindOfClass:NSNumber.class]
 				? block[@"publish_date"] : nil;
-		NSString *when = nil;
-		if (date.integerValue > 0) {
-			NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
-			formatter.dateStyle = NSDateFormatterMediumStyle;
-			formatter.timeStyle = NSDateFormatterNoStyle;
-			when = [formatter stringFromDate:
-					[NSDate dateWithTimeIntervalSince1970:date.doubleValue]];
-		}
+		NSString *when = TGAppDate(date.doubleValue, NSDateFormatterMediumStyle,
+				NSDateFormatterNoStyle);
 		NSString *joined = nil;
 		if (author.length && when.length)
 			joined = TGLocalizedFormat(@"%1$@, %2$@", author, when);

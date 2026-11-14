@@ -1,4 +1,5 @@
 #import "TGEditProfileViewController.h"
+#import "TGProfileLogic.h"
 #import "TGSheet.h"
 #import "TGProfileStore.h"
 #import "TGTheme.h"
@@ -388,23 +389,7 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 #pragma mark - birthday
 
 - (NSString *)birthdayText {
-	if (self.birthDay <= 0)
-		return nil;
-	static NSArray *months = nil;
-	if (!months) months = @[@"", @"January", @"February", @"March", @"April",
-			@"May", @"June", @"July", @"August", @"September", @"October",
-			@"November", @"December"];
-	NSString *month = (self.birthMonth > 0 && self.birthMonth < 13)
-			? months[self.birthMonth] : @"";
-	if (self.birthYear > 0){
-		NSString *key = [month stringByAppendingString:@" %1$@, %2$@"];
-		return TGLocalizedFormat(key,
-				[NSString stringWithFormat:@"%ld", (long)self.birthDay],
-				[NSString stringWithFormat:@"%ld", (long)self.birthYear]);
-	}
-	NSString *key = [month stringByAppendingString:@" %@"];
-	return TGLocalizedFormat(key,
-			[NSString stringWithFormat:@"%ld", (long)self.birthDay]);
+	return TGProfileBirthdayFieldText(self.birthDay, self.birthMonth, self.birthYear);
 }
 
 /// A date picker in a sheet: iOS 7 has no way to put one in a row, and a

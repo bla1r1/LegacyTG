@@ -19,6 +19,7 @@
 #import "TGForwardPicker.h"
 #import "TGMessageLayout.h"
 #import "TGMediaViewerInternal.h"
+#import "TGUIFormat.h"
 
 
 // The chrome sits over the picture rather than beside it, which is what makes
@@ -52,11 +53,6 @@ static const CGFloat kThumbStripH   = 54.0f;
 
 /// Pages come from chats, profiles and galleries; only a chat message says
 /// whether it may leave, and only an explicit NO locks it.
-static BOOL TGViewerItemLocked(NSDictionary *item) {
-	id saveable = item[@"canBeSaved"];
-	return [saveable isKindOfClass:NSNumber.class] && ![saveable boolValue];
-}
-
 
 // vim:ft=objc
 
@@ -441,20 +437,10 @@ static BOOL TGViewerItemLocked(NSDictionary *item) {
 - (void)refreshChrome {
 	NSDictionary *item = self.items[self.index];
 
-	static NSDateFormatter *when = nil;
-	if (!when){
-		when = [[NSDateFormatter alloc] init];
-		when.dateStyle = NSDateFormatterMediumStyle;
-		when.timeStyle = NSDateFormatterShortStyle;
-	}
-	NSString *language = TGAppLanguage();
-	when.locale = language.length
-			? [NSLocale localeWithLocaleIdentifier:language]
-			: [NSLocale currentLocale];
 	int64_t senderId = [item[@"senderId"] longLongValue];
 	NSString *sender = [[TGMediaStore shared] nameForUserId:senderId];
-	NSString *date = [when stringFromDate:
-			[NSDate dateWithTimeIntervalSince1970:[item[@"date"] doubleValue]]];
+	NSString *date = TGAppDate([item[@"date"] doubleValue], NSDateFormatterMediumStyle,
+			NSDateFormatterShortStyle) ?: @"";
 	self.counterLabel.text = sender.length ? sender : @"Media";
 	NSString *counter = TGLocalizedFormat(@"%1$@ of %2$@",
 			@(self.index + 1), @(self.items.count));

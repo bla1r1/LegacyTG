@@ -5,6 +5,7 @@
 #import "TGChatViewControllerInternal.h"
 #import "TGMusicPlayer.h"
 #import "TGStyle.h"
+#import "TGUIFormat.h"
 
 @implementation TGChatViewController (AudioCells)
 
@@ -111,8 +112,7 @@
 
 		NSInteger seconds = [m[@"duration"] integerValue];
 		NSString *length = seconds > 0
-				? [NSString stringWithFormat:@"%ld:%02ld",
-						(long)(seconds / 60), (long)(seconds % 60)]
+				? TGUIFormatCallDuration(seconds)
 				: @"";
 		NSString *performer = m[@"audioPerformer"];
 		NSString *second = performer.length
@@ -205,8 +205,7 @@
 		}
 
 		NSInteger seconds = [m[@"duration"] integerValue];
-		NSString *durText = [NSString stringWithFormat:@"%ld:%02ld",
-				(long)(seconds / 60), (long)(seconds % 60)];
+		NSString *durText = TGUIFormatCallDuration(seconds);
 		// The "1" their client puts before the clock: the note goes away the
 		// first time it is opened, so the run keeps one listening in it.
 		if ([m[@"viewOnce"] boolValue])

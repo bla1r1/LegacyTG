@@ -4,6 +4,7 @@
 #import "TGSuggestedPostViewController.h"
 #import "TGMessageStore.h"
 #import "TGAlertSheet.h"
+#import "TGUIFormat.h"
 
 @interface TGSuggestedPostViewController ()
 @property (nonatomic, assign) int64_t chatId;
@@ -51,14 +52,8 @@
 	__weak typeof(self) weakSelf = self;
 	NSMutableArray *detailRows = [NSMutableArray array];
 	if (self.post){
-		NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
-		formatter.dateStyle = NSDateFormatterMediumStyle;
-		formatter.timeStyle = NSDateFormatterShortStyle;
-		NSNumber *sendDate = self.post[@"sendDate"];
-		NSString *dateText = [sendDate longLongValue] > 0
-				? [formatter stringFromDate:[NSDate dateWithTimeIntervalSince1970:
-						[sendDate doubleValue]]]
-				: @"None";
+		NSString *dateText = TGAppDate([self.post[@"sendDate"] doubleValue],
+				NSDateFormatterMediumStyle, NSDateFormatterShortStyle) ?: @"None";
 		[detailRows addObject:TGFeatureRow(@"Price", self.post[@"price"], nil)];
 		[detailRows addObject:TGFeatureRow(@"Date", dateText, nil)];
 		[detailRows addObject:TGFeatureRow(@"Status", self.post[@"state"], nil)];

@@ -651,16 +651,8 @@ static BOOL TGNotificationsWarning(void) {
 }
 
 static NSString *TGCallRecordWhen(NSNumber *stamp) {
-	NSTimeInterval seconds = stamp.doubleValue;
-	if (seconds <= 0)
-		return @"unknown time";
-	static NSDateFormatter *formatter = nil;
-	if (!formatter){
-		formatter = [[NSDateFormatter alloc] init];
-		formatter.dateStyle = NSDateFormatterMediumStyle;
-		formatter.timeStyle = NSDateFormatterShortStyle;
-	}
-	return [formatter stringFromDate:[NSDate dateWithTimeIntervalSince1970:seconds]];
+	return TGAppDate(stamp.doubleValue, NSDateFormatterMediumStyle,
+			NSDateFormatterShortStyle) ?: @"unknown time";
 }
 
 /// The record this client writes for sendCallLog. TDLib's own log is not a

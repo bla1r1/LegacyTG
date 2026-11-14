@@ -66,9 +66,6 @@ static const NSInteger kSectionMedia           = 8;
 static const NSInteger kStoryGridCols  = 3;
 static const CGFloat   kStoryGridGap   = TGMetricCollageGap;
 
-/// The address a piece of text links to; nil when it has none.
-NSURL *TGProfileFirstURL(NSString *text, NSArray *entities);
-
 @interface TGProfileViewController () <TGStreamingVoicePlayerDelegate, UISearchBarDelegate>
 
 @property (nonatomic, strong) NSMutableSet *thumbnailsRequested;

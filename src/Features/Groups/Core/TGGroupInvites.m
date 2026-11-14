@@ -19,6 +19,7 @@
 #import "TGLocalization.h"
 #import "TGGroupStore.h"
 #import "TGProfileStore.h"
+#import "TGUIFormat.h"
 
 
 
@@ -254,17 +255,8 @@ typedef NS_ENUM(NSInteger, TGGroupRowKind) {
 /// The joined date follows the app language, not the device locale: a Russian
 /// UI should not print an English month.
 static NSString *TGInviteLinkDateText(NSDate *date) {
-	static NSDateFormatter *formatter = nil;
-	if (!formatter){
-		formatter = [[NSDateFormatter alloc] init];
-		formatter.dateStyle = NSDateFormatterMediumStyle;
-		formatter.timeStyle = NSDateFormatterNoStyle;
-	}
-	NSString *language = TGAppLanguage();
-	formatter.locale = language.length
-			? [NSLocale localeWithLocaleIdentifier:language]
-			: [NSLocale currentLocale];
-	return [formatter stringFromDate:date];
+	return TGAppDate(date.timeIntervalSince1970, NSDateFormatterMediumStyle,
+			NSDateFormatterNoStyle);
 }
 
 - (void)showMembersOfInviteLink:(NSString *)url inChat:(int64_t)chatId {

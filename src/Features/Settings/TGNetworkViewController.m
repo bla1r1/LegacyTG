@@ -14,6 +14,7 @@
 #import "TGTheme.h"
 #import "TGRows.h"
 #import "TGSettingsStore.h"
+#import "TGUIFormat.h"
 
 
 static NSMutableDictionary *TGNetRow(NSString *title, NSString *detail,
@@ -36,17 +37,8 @@ static NSString *TGNetworkTypeTitle(NSString *type) {
 	return @"Other";
 }
 
-static NSString *TGNetBytes(long long bytes) {
-	if (bytes <= 0)
-		return @"0 KB";
-	if (bytes < 1024 * 1024)
-		return [NSString stringWithFormat:@"%.0f KB", bytes / 1024.0];
-	if (bytes < 1024LL * 1024 * 1024)
-		return [NSString stringWithFormat:@"%.1f MB", bytes / (1024.0 * 1024.0)];
-	return [NSString stringWithFormat:@"%.2f GB", bytes / (1024.0 * 1024.0 * 1024.0)];
-}
-
-static NSString *TGConfigValueText(id value) {	if ([value isKindOfClass:NSString.class])
+static NSString *TGConfigValueText(id value) {
+	if ([value isKindOfClass:NSString.class])
 		return value;
 	if ([value isKindOfClass:NSNumber.class])
 		return [value stringValue];
@@ -56,10 +48,6 @@ static NSString *TGConfigValueText(id value) {	if ([value isKindOfClass:NSString
 	if (!data)
 		return [value description];
 	return [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] ?: @"";
-}
-
-static NSDictionary *TGNetSection(NSString *header, NSString *footer, NSArray *rows) {
-	return TGSection(header, footer, rows);
 }
 
 @interface TGNetworkViewController ()
@@ -126,7 +114,7 @@ static NSDictionary *TGNetSection(NSString *header, NSString *footer, NSArray *r
 	NSArray *usage = @[
 		TGNetRow(@"Data Usage",
 				[NSString stringWithFormat:@"%@ in, %@ out",
-						TGNetBytes(weakSelf.received), TGNetBytes(weakSelf.sent)],
+						TGBytes(weakSelf.received), TGBytes(weakSelf.sent)],
 				^{ [weakSelf loadTotals]; }),
 		TGNetRow(@"Add Usage Entry", nil, ^{ [weakSelf addUsageEntry]; }),
 	];
@@ -136,10 +124,10 @@ static NSDictionary *TGNetSection(NSString *header, NSString *footer, NSArray *r
 	];
 
 	return @[
-		TGNetSection(@"CONNECTION", nil, connection),
-		TGNetSection(@"DIAGNOSTICS", nil, diagnostics),
-		TGNetSection(@"DATA USAGE", nil, usage),
-		TGNetSection(@"STATISTICS", self.status, graph),
+		TGSection(@"CONNECTION", nil, connection),
+		TGSection(@"DIAGNOSTICS", nil, diagnostics),
+		TGSection(@"DATA USAGE", nil, usage),
+		TGSection(@"STATISTICS", self.status, graph),
 	];
 }
 

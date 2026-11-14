@@ -204,3 +204,15 @@ NSString *TGPageModelCompactBytes(long long bytes) {
 	}
 	return [number stringByAppendingString:unit];
 }
+
+NSArray *TGSessionsOtherThanCurrent(NSArray *sessions, BOOL unconfirmed,
+									BOOL confirmed) {
+	NSMutableArray *out = [NSMutableArray array];
+	for (NSDictionary *session in sessions){
+		if ([session[@"isCurrent"] boolValue])
+			continue;
+		if ([session[@"isUnconfirmed"] boolValue] ? unconfirmed : confirmed)
+			[out addObject:session];
+	}
+	return out;
+}

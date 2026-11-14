@@ -487,6 +487,7 @@ APP_SRC_M := \
 	src/Features/Auth/TGLoginLogic.m \
 	src/Features/ChatList/TGChatListViewController.m \
 	src/Features/ChatList/Core/TGChatListSnapshot.m \
+	src/Features/ChatList/Core/TGSearchScope.m \
 	src/Features/ChatList/Core/TGChatListLifecycle.m \
 	src/Features/ChatList/Core/TGChatListHeader.m \
 	src/Features/ChatList/Core/TGChatListFolders.m \

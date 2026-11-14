@@ -39,6 +39,7 @@ static const CGFloat kIconDumpSide = 52.0f;
 #import <QuartzCore/QuartzCore.h>
 #import <objc/runtime.h>
 #import "TGAccountStore.h"
+#import "TGSessionsViewController.h"
 #import "TGSettingsStore.h"
 #import "TGLocalization.h"
 #include <dlfcn.h>
@@ -985,6 +986,13 @@ static NSUInteger TGChatsIndex(UITabBarController *tabs) {
 						[[TGBackgroundsViewController alloc] init];
 				gallery.hidesBottomBarWhenPushed = YES;
 				[nc pushViewController:gallery animated:NO];
+				return;
+			}
+			// Devices is a screen of its own, not a TGSettingsPage.
+			if ([arg isEqualToString:@"sessions"]) {
+				TGSessionsViewController *sessions = [[TGSessionsViewController alloc] init];
+				sessions.hidesBottomBarWhenPushed = YES;
+				[nc pushViewController:sessions animated:NO];
 				return;
 			}
 			TGSettingsViewController *page = [[TGSettingsViewController alloc] init];

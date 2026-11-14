@@ -9,6 +9,7 @@
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
 #import "TGPlayerView.h"
+#import "TGUIFormat.h"
 
 
 
@@ -212,14 +213,11 @@
 
 /// "1:07 / 3:42", or just the elapsed time while the length is unknown.
 static NSString *TGClockText(NSTimeInterval position, NSTimeInterval duration) {
-	NSInteger at = (NSInteger)MAX(0.0, position);
-	NSString *elapsed = [NSString stringWithFormat:@"%ld:%02ld",
-			(long)(at / 60), (long)(at % 60)];
+	NSString *elapsed = TGUIFormatCallDuration(position);
 	if (duration <= 0)
 		return elapsed;
-	NSInteger total = (NSInteger)duration;
-	return [NSString stringWithFormat:@"%@ / %ld:%02ld", elapsed,
-			(long)(total / 60), (long)(total % 60)];
+	return [NSString stringWithFormat:@"%@ / %@", elapsed,
+			TGUIFormatCallDuration(floor(duration))];
 }
 
 - (void)hidePlayerBar {

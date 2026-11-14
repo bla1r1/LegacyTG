@@ -62,6 +62,7 @@ NSAttributedString *TGNameWithStatus(NSString *name, int64_t statusEmojiId, UIFo
 
 	NSMutableAttributedString *res = [[NSMutableAttributedString alloc] initWithString:name attributes:baseAttrs];
 	[res appendAttributedString:[[NSAttributedString alloc] initWithString:@" " attributes:baseAttrs]];
+	// ios7-guarded: the respondsToSelector: check and return near the top.
 	NSAttributedString *attachStr = [NSAttributedString attributedStringWithAttachment:attachment];
 	if (attachStr) {
 		[res appendAttributedString:attachStr];

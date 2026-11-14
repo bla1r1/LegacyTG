@@ -1,4 +1,5 @@
 #import "TGProfileAudioViewController.h"
+#import "TGProfileLogic.h"
 #import "TGAlertSheet.h"
 #import "TGProfileStore.h"
 #import "TGMediaStore.h"
@@ -153,14 +154,6 @@ static UIImage *TGProfileAudioArtwork(UIImage *cover, BOOL playing) {
 	[self rebuildSections];
 }
 
-- (NSString *)durationText:(NSNumber *)seconds {
-	NSInteger value = [seconds integerValue];
-	if (value <= 0)
-		return @"";
-	return [NSString stringWithFormat:@"%ld:%02ld", (long)(value / 60),
-			(long)(value % 60)];
-}
-
 #pragma mark - rows
 
 - (void)requestCover:(NSNumber *)coverId {
@@ -215,7 +208,7 @@ static UIImage *TGProfileAudioArtwork(UIImage *cover, BOOL playing) {
 		NSMutableDictionary *row = TGPeerRow(@(messageId), title, performer,
 				^{ [weakSelf playAtIndex:(NSInteger)index]; });
 		row[TGRowHeight] = @(TGMetricTrackRow);
-		row[TGRowAccessory] = [self durationText:audio[@"duration"]];
+		row[TGRowAccessory] = (TGProfileDurationText(audio[@"duration"]) ?: @"");
 		row[TGRowAvatarImage] = TGProfileAudioArtwork(cover,
 				current && player.playing);
 		if (current)
