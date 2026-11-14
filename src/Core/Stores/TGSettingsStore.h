@@ -179,8 +179,6 @@
 #pragma mark - Storage
 @interface TGSettingsStore (Storage)
 
-	- (void)downloadFile:(NSInteger)fileId completion:(void (^)(NSString *path))completion;
-	- (void)downloadFile:(NSInteger)fileId priority:(NSInteger)priority completion:(void (^)(NSString *path))completion;
 	- (void)networkStatsWithCompletion:(void (^)(long long sent, long long received))completion;
 	- (void)resetNetworkStats;
 	- (BOOL)autoDownloadOverMobile;
@@ -195,8 +193,6 @@
 	- (void)fileNameInfo:(NSString *)name completion:(void (^)(NSDictionary *info))completion;
 	- (void)suggestedFileNameForFile:(NSInteger)fileId directory:(NSString *)directory completion:(void (^)(NSString *name))completion;
 	- (void)readFilePartOfFile:(NSInteger)fileId offset:(long long)offset count:(NSInteger)count completion:(void (^)(NSData *data))completion;
-	- (void)cancelPreliminaryUploadOfFile:(NSInteger)fileId;
-	- (void)generateTextFileNamed:(NSString *)name contents:(NSString *)contents progress:(void (^)(NSInteger fileId, float progress, NSString *stage))progress completion:(void (^)(NSInteger fileId, NSString *path, NSError *error))completion;
 	- (void)autoDownloadSettingsPresetsWithCompletion: (void (^)(NSDictionary *presets))completion;
 	- (void)applyAutoDownloadPreset:(NSDictionary *)preset forNetwork:(NSString *)network completion:(void (^)(BOOL ok))completion;
 @end

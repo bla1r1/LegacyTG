@@ -147,7 +147,6 @@ typedef NS_ENUM(NSInteger, TGLoginStep) {
 - (void)resendTick:(NSTimer *)timer;
 - (void)resendButtonTapped;
 - (NSString *)resendTitleForCountdown:(NSInteger)seconds;
-- (void)resetSessionTapped;
 - (UIImage *)generateQRCodeForString:(NSString *)string size:(CGFloat)size;
 - (void)clearStepLinks;
 - (void)showRecoveryCodeStep;

@@ -38,6 +38,8 @@ static const CGFloat kIconDumpSide = 52.0f;
 #import "TGNavController.h"
 #import <QuartzCore/QuartzCore.h>
 #import "TGAccountStore.h"
+#import "TGSettingsStore.h"
+#import "TGLocalization.h"
 #include <dlfcn.h>
 
 @implementation AppDelegate (URL)
@@ -1264,6 +1266,32 @@ static NSUInteger TGChatsIndex(UITabBarController *tabs) {
 
 			NSLog(@"theme: %@ -> %@", arg,
 					[[TGTheme shared] selectThemeId:themeId] ? @"applied" : @"rejected");
+		});
+		return YES;
+	}
+
+	// itglegacy://night/<on|off> - Night Mode, the dark pass of the device walk.
+	// Every built-in theme id is Classic now, so theme/ cannot reach dark.
+	if ([host isEqualToString:@"night"]){
+		dispatch_async(dispatch_get_main_queue(), ^{
+			[[TGTheme shared] setNightModeEnabled:[arg isEqualToString:@"on"]];
+			NSLog(@"night: %@ (%@)", arg, [TGTheme shared].isDark ? @"dark" : @"light");
+		});
+		return YES;
+	}
+
+	// itglegacy://lang/<pack id|system> - what a row of Settings > Language
+	// does, without its Restart alert; the walk relaunches the app after it.
+	if ([host isEqualToString:@"lang"]){
+		dispatch_async(dispatch_get_main_queue(), ^{
+			NSString *packId = [arg isEqualToString:@"system"] ? nil : arg;
+			TGSetAppLanguage(packId);
+			TGSetTelegramLanguageLookup(nil);
+			if (packId)
+				[[TGSettingsStore shared] setLanguage:packId];
+			[[TGSettingsStore shared] loadAppLanguagePack:TGAppLanguage() completion:^(BOOL ok){
+				NSLog(@"lang: %@ %@", TGAppLanguage(), ok ? @"loaded" : @"FAILED");
+			}];
 		});
 		return YES;
 	}

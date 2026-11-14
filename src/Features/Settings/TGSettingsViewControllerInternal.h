@@ -220,7 +220,6 @@
 - (void)askPrivacyRuleAtIndex:(NSUInteger)index;
 - (void)showCloseFriends;
 - (void)hideCloseBirthdays;
-- (void)chooseAccentColorForProfile:(BOOL)profile;
 - (void)showDefaultBackground;
 - (void)chooseTextSize;
 - (void)chooseWallpaper;

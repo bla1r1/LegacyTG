@@ -200,7 +200,6 @@ NSArray *TGMediaPageAppending(NSArray *existing, NSArray *more);
 
 // Internal methods shared across categories
 - (void)request:(NSDictionary *)request completion:(void (^)(NSDictionary *))completion;
-- (void)drainOutbox;
 - (void)handleUpdate:(NSDictionary *)obj;
 - (void)handleAuthState:(NSDictionary *)state;
 - (void)sendTdlibParameters;
@@ -226,11 +225,6 @@ FOUNDATION_EXPORT NSString *const TGCallUpdateNotification;
 - (void)mergeChat:(NSDictionary *)chat;
 - (void)applyChatUpdate:(NSDictionary *)update;
 - (void)rebuildChats;
-/// The local notification list's four updates. They live beside the public
-/// activeNotifications read so the row shape and the incremental shape agree.
-- (void)applyActiveNotificationsUpdate:(NSDictionary *)update;
-- (void)applyNotificationUpdate:(NSDictionary *)update;
-- (void)applyNotificationGroupUpdate:(NSDictionary *)update;
 - (void)applyHavePendingNotificationsUpdate:(NSDictionary *)update;
 /// updateAutosaveSettings carries one scope, never the exception list; the
 /// page re-reads the whole record. Kept in TGClient+Account where the

@@ -17,16 +17,6 @@
 /// Delayed or unreceived notifications are outstanding; the screen shows a
 /// refresh indicator until both flags are off.
 @property (nonatomic, readonly) BOOL havePendingNotifications;
-/// Remove one row. TDLib also sends updateNotificationGroup, but applying it
-/// here too keeps a screen that asked for the removal from blinking back.
-- (void)removeNotification:(int32_t)notificationId
-				   inGroup:(int32_t)groupId
-				completion:(void (^)(BOOL ok))completion;
-/// Remove a whole group. `maxNotificationId` is the highest id in it; TDLib
-/// needs it to close the group rather than only the rows the client knows.
-- (void)removeNotificationGroup:(int32_t)groupId
-			  maxNotificationId:(int32_t)maxNotificationId
-					 completion:(void (^)(BOOL ok))completion;
 /// From updateFreezeState: "is_frozen", "freezing_date", "deletion_date" and
 /// "appeal_link". Nil until Telegram has said anything about this account.
 @property (nonatomic, readonly, copy) NSDictionary *freezeState;

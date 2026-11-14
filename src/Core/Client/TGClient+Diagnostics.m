@@ -11,14 +11,6 @@
 #import "TGDatabaseKey.h"
 #import "TGBase64.h"
 
-@interface TGClient (TGDiagnosticsPrivate)
-- (void)tg_graphForChat:(int64_t)chatId
-				  token:(NSString *)token
-					  x:(NSInteger)x
-				attempt:(NSInteger)attempt
-			 completion:(void (^)(NSDictionary *graph, NSString *error))completion;
-@end
-
 @implementation TGClient (Diagnostics)
 
 #pragma mark - state and configuration

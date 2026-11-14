@@ -315,7 +315,6 @@ FOUNDATION_EXPORT CGFloat TGPollOptionRowHeight(NSDictionary *option, CGFloat ro
 
 - (void)reload;
 - (void)showPlaybackFailure;
-- (void)applyTheme;
 - (void)inputChanged;
 /// Recomputes the field and bar height from the text's line count. The bar
 /// grows up to TGMetricComposerMaxLines and the text view scrolls after.
@@ -363,16 +362,11 @@ FOUNDATION_EXPORT CGFloat TGPollOptionRowHeight(NSDictionary *option, CGFloat ro
 - (void)cyclePlaybackSpeed;
 - (void)showMusicBar;
 - (void)playVoiceNoteForMessage:(NSDictionary *)m atRow:(NSInteger)row;
-- (void)updatePlayerBar;
 - (void)scrollToBottomAnimated:(BOOL)animated;
 - (TGBubbleCell *)finalizeCell:(TGBubbleCell *)cell message:(NSDictionary *)m layout:(TGMessageLayout *)layout isMine:(BOOL)mine;
 - (void)promptDeleteMessages:(NSArray *)ids;
 - (void)executeDeleteMessages:(NSArray *)ids revoke:(BOOL)revoke;
 - (void)updateEditToolbar;
-- (void)openAudioAtPath:(NSString *)path duration:(NSInteger)duration sender:(NSString *)sender title:(NSString *)title;
-- (void)downloadFileId:(NSInteger)fileId;
-- (void)openFileWithViewer:(NSString *)filePath;
-- (void)handleMessageTap:(NSDictionary *)m;
 - (void)reloadTableDebounced;
 - (void)playOnce:(TGLottieView *)view path:(NSString *)path settled:(BOOL)settled;
 - (void)showChannelBottomBar;

@@ -511,7 +511,7 @@ LIBTGVOIP_SRCS := \
 
 # ─── targets ──────────────────────────────────────────────────────────────────
 
-.PHONY: test build clean tokens sizes screens sim official_sim icons client
+.PHONY: test build clean tokens sizes screens sim official_sim icons client methods ios6
 
 icons:
 	@echo "\n════════ Icon catalogue lint ════════"
@@ -541,6 +541,15 @@ sizes:
 	@echo "\n════════ File size lint ════════"
 	@sh $(ROOT)/scripts/lint_size.sh
 
+# A declaration with no body compiles in a class split over categories.
+methods:
+	@echo "\n════════ Declared-not-implemented lint ════════"
+	@sh $(ROOT)/scripts/lint_methods.sh
+
+ios6:
+	@echo "\n════════ iOS 6 hazard lint ════════"
+	@sh $(ROOT)/scripts/lint_ios6.sh
+
 TEST_BINARY_DEPS := $(TESTS)/main.m $(C_SRCS) $(OBJC_SRCS) $(TEST_HELPER_SRCS) $(TEST_SRCS) \
                 $(TESTS)/TGTestRunner.h $(TESTS)/TGCallTestHelpers.h
 CLIENT_BINARY_DEPS := $(TESTS)/main_client.mm $(CLIENT_OBJC_SRCS) $(CLIENT_HELPER_SRCS) \
@@ -549,7 +558,7 @@ SIM_BINARY_DEPS := $(TESTS)/call_sim.mm $(C_SRCS) $(OBJC_SRCS) $(TEST_HELPER_SRC
                 $(TESTS)/TGCallTestHelpers.h
 OFFICIAL_SIM_DEPS := $(TESTS)/official_tgvoip_sim.mm $(LIBTGVOIP_SRCS)
 
-test: tokens sizes screens layers $(TEST_BINARY) $(CLIENT_BINARY)
+test: tokens sizes screens layers methods ios6 $(TEST_BINARY) $(CLIENT_BINARY)
 	@echo "\n════════ Running call stack tests ════════"
 	$(TEST_BINARY)
 	@echo "\n════════ Running TGClient regression tests ════════"
