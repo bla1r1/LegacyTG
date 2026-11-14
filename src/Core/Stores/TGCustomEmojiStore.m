@@ -24,6 +24,10 @@ static const NSUInteger kBatchLimit = 200;
 @property (nonatomic, strong) NSMutableDictionary *paths;    // id -> file on disk
 @property (nonatomic, strong) NSMutableDictionary *wanted;   // id -> set of sides
 @property (nonatomic, strong) NSMutableSet *queued;          // ids waiting for the batch
+/// Ids already sent to TDLib. A row redrawn while its answer was on the way
+/// asked again: three getCustomEmojiStickers for the same ids, three
+/// downloads, three decodes, and a redraw of the screen after each.
+@property (nonatomic, strong) NSMutableSet *asked;
 @property (nonatomic, strong) NSMutableSet *failed;          // ids TDLib gave no picture for
 @property (nonatomic, strong) NSMutableDictionary *animations; // id -> @{@"fileId": @(fileId), @"format": fmt}
 /// id -> still picture's path from earlier runs. getCustomEmojiStickers
@@ -76,6 +80,7 @@ static NSString *TGCustomEmojiThumbnailPath(int64_t emojiId, CGFloat side) {
 	self.paths = [NSMutableDictionary dictionary];
 	self.wanted = [NSMutableDictionary dictionary];
 	self.queued = [NSMutableSet set];
+	self.asked = [NSMutableSet set];
 	self.failed = [NSMutableSet set];
 	self.animations = [NSMutableDictionary dictionary];
 	// Keyed by emoji id, which is global, but the files belong to this
@@ -117,7 +122,8 @@ static NSString *TGNormalizeStickerFormat(id formatObj) {
 	NSNumber *key = @(emojiId);
 	NSDictionary *info = self.animations[key];
 	if (!info || ![info isKindOfClass:NSDictionary.class]) {
-		if (![self.failed containsObject:key] && ![self.queued containsObject:key]) {
+		if (![self.failed containsObject:key] && ![self.queued containsObject:key] &&
+				![self.asked containsObject:key]) {
 			[self.queued addObject:key];
 			if (self.queued.count == 1)
 				[self performSelector:@selector(sendBatch) withObject:nil afterDelay:0.05];
@@ -180,7 +186,7 @@ static NSString *TGPictureKey(int64_t emojiId, CGFloat side) {
 		[self decodePath:path forId:emojiId side:side];
 		return nil;
 	}
-	if (asked)
+	if (asked || [self.asked containsObject:key])
 		return nil;
 	[self.queued addObject:key];
 	if (self.queued.count >= 20) {
@@ -197,6 +203,7 @@ static NSString *TGPictureKey(int64_t emojiId, CGFloat side) {
 	NSArray *ids = [[self.queued allObjects] subarrayWithRange:
 			NSMakeRange(0, MIN(self.queued.count, kBatchLimit))];
 	[self.queued minusSet:[NSSet setWithArray:ids]];
+	[self.asked addObjectsFromArray:ids];
 	if (self.queued.count)
 		[self performSelector:@selector(sendBatch) withObject:nil afterDelay:0.15];
 

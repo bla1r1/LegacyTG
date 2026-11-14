@@ -7,6 +7,7 @@
 // owns three states: the rows, "loading", and the sentence Telegram gave for
 // why there are none - never an empty table that looks broken.
 //
+#import "TGObservers.h"
 #import "TGMessageAudienceViewController.h"
 #import "TGLocalization.h"
 #import "TGAlertSheet.h"
@@ -86,10 +87,7 @@ static NSString *TGAudienceDate(NSTimeInterval unix) {
 	}
 
 	__weak typeof(self) weakSelf = self;
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGCustomEmojiLoadedNotification
-													  object:nil
-													   queue:[NSOperationQueue mainQueue]
-												  usingBlock:^(NSNotification *note){
+	[TGObservers observe:TGCustomEmojiLoadedNotification owner:self usingBlock:^(NSNotification *note){
 		TGMessageAudienceViewController *me = weakSelf;
 		if (!me) return;
 		[NSObject cancelPreviousPerformRequestsWithTarget:me selector:@selector(reloadVisibleRows) object:nil];

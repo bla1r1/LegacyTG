@@ -50,6 +50,8 @@ static const CGFloat kBadgePadH = 6.0f;
 	[self addSubview:_backgroundView];
 
 	_label = [[UILabel alloc] init];
+	// Clear, or iOS 6 paints the label's default white box.
+	_label.backgroundColor = [UIColor clearColor];
 	_label.font = TGFontCaptionStrong();
 	_label.textAlignment = NSTextAlignmentCenter;
 	[self addSubview:_label];

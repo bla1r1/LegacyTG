@@ -96,6 +96,7 @@ static int64_t sActiveChatId = 0;
 	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(memoryWarning:)
 			name:UIApplicationDidReceiveMemoryWarningNotification object:nil];
 	self.lottiePaths = [NSMutableDictionary dictionary];
+	self.playedAnimations = [NSMutableSet set];
 	self.maps = [[TGImageLruCache alloc] initWithCapacity:20];
 	self.mapsRequested = [NSMutableSet set];
 	self.quotes = [NSMutableDictionary dictionary];
@@ -339,7 +340,10 @@ FOUNDATION_EXPORT void TGBubbleFlushCache(void);
 	self.view.backgroundColor = [theme chatBackgroundColour];
 	self.table.backgroundColor = [UIColor clearColor];
 	self.inputBar.backgroundColor = [theme inputBarColour];
-	self.input.backgroundColor = [theme inputFieldColour];
+	// Clear: the rounded well behind the field carries the field's colour.
+	// Painted here, the text view became an opaque square over the well on
+	// every theme pass after the first - a finished wallpaper bake is one.
+	self.input.backgroundColor = [UIColor clearColor];
 	self.input.textColor = [theme primaryTextColour];
 	self.input.layer.borderColor = [theme separatorColour].CGColor;
 	self.input.keyboardAppearance = [theme isDark] ? UIKeyboardAppearanceDark : UIKeyboardAppearanceLight;

@@ -20,6 +20,17 @@ static const CGFloat kSwatchSide = 44.0f;
 static const CGFloat kSwatchGap = TGMetricPadSmall;
 static const CGFloat kSwatchInset = TGMetricPadMedium;
 static const NSInteger kSwatchColumns = 5;
+
+/// The width a row's content has. Before iOS 7 a grouped table insets its
+/// cells, so laying five swatches out across the table's own width pushed the
+/// fifth through the group's right border.
+static CGFloat TGAppearanceContentWidth(UITableView *tableView) {
+	CGFloat width = tableView.bounds.size.width ?: TGMetricScreenWidth;
+	if (NSFoundationVersionNumber <= NSFoundationVersionNumber_iOS_6_1 &&
+			tableView.style == UITableViewStyleGrouped)
+		width -= 2.0f * TGMetricGroupedInsetLegacy;
+	return width;
+}
 static const CGFloat kSwatchRow = kSwatchSide + TGMetricPadMedium;
 
 static const NSInteger kTabProfile = 0;
@@ -343,7 +354,7 @@ static const NSInteger kPreviewNameTag = 8201;
 	avatarView.image = row[TGRowPreviewImage];
 	[cell.contentView addSubview:avatarView];
 
-	CGFloat width = tableView.bounds.size.width ?: TGMetricScreenWidth;
+	CGFloat width = TGAppearanceContentWidth(tableView);
 	UILabel *nameLabel = [[UILabel alloc] initWithFrame:
 			CGRectMake(TGMetricGutter + side + TGMetricPadMedium,
 					TGCenteredOrigin(TGMetricPersonRow, TGMetricLineRow),
@@ -369,7 +380,7 @@ static const NSInteger kPreviewNameTag = 8201;
 
 	NSArray *images = row[TGRowSwatches] ?: @[];
 	void (^tap)(NSInteger) = row[TGRowSwatchTap];
-	CGFloat width = tableView.bounds.size.width ?: TGMetricScreenWidth;
+	CGFloat width = TGAppearanceContentWidth(tableView);
 	CGFloat usable = width - TGDoubled(kSwatchInset) -
 			kSwatchGap * (kSwatchColumns - 1);
 	CGFloat side = floorf(usable / kSwatchColumns);

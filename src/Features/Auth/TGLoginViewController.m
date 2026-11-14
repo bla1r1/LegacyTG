@@ -234,6 +234,14 @@
 
     self.inputField.textColor = [theme primaryTextColour];
     self.inputField.keyboardAppearance = UIKeyboardAppearanceLight;
+    // The code step paints its digits in boxes over a field kept invisible.
+    // This pass runs after the step is set up and on every theme change, and
+    // used to paint the field back: the code showed twice, the field's own
+    // "123" across the third box.
+    if (self.codeBoxesView && !self.codeBoxesView.hidden) {
+        self.inputField.textColor = [UIColor clearColor];
+        self.inputContainer.backgroundColor = [UIColor clearColor];
+    }
 
     if (self.inputField.placeholder.length) {
         self.inputField.attributedPlaceholder = [[NSAttributedString alloc]

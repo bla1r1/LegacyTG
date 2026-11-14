@@ -57,6 +57,24 @@
 			@"Work · \U0001F44D 3 · Poll · 12");
 }
 
+/// The thumbnails are keyed by TDLib file id, and every account's database
+/// numbers its files from the start: after a switch the same id is another
+/// account's picture.
+- (void)testAccountSwitchDropsPreviewThumbnails {
+	TGChatListStore *store = [TGChatListStore shared];
+	// No public way in without a real download; the ivars are the cache.
+	[[store valueForKey:@"previewImages"] setObject:@"picture" forKey:@(555)];
+	[[store valueForKey:@"previewRequests"] addObject:@(556)];
+	XCTAssertNotNil([store cachedPreviewImageForFileId:@(555)]);
+
+	[[NSNotificationCenter defaultCenter]
+			postNotificationName:TGAccountDidSwitchNotification object:nil];
+
+	XCTAssertNil([store cachedPreviewImageForFileId:@(555)]);
+	XCTAssertEqual([[store valueForKey:@"previewRequests"] count], (NSUInteger)0,
+			@"a request in flight belongs to the old account's file");
+}
+
 - (void)testRowModelCarriesTheM24Facts {
 	[TGClient shared].folders = @[@{@"id" : @(4), @"title" : @"Work"}];
 	NSDictionary *chat = @{

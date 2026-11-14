@@ -1,3 +1,4 @@
+#import "TGObservers.h"
 #import "TGStoryViewerViewController.h"
 #import "TGLocalization.h"
 #import "TGTheme.h"
@@ -219,9 +220,7 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 	// is open. The row handles its own copy; here the story id decides
 	// whether the picture on screen or the count behind it moved.
 	__weak typeof(self) weakSelf = self;
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGStoriesChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		usingBlock:^(NSNotification *note){
+	[TGObservers observe:TGStoriesChangedNotification owner:self usingBlock:^(NSNotification *note){
 		TGStoryViewerViewController *me = weakSelf;
 		if (!me || me.closed)
 			return;

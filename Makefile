@@ -290,6 +290,7 @@ APP_SRC_M := \
 	src/Core/Support/TGBase64.m \
 	src/Core/Support/TGLocalization.m \
 	src/Core/Support/TGQRCode.m \
+	src/Core/Support/TGObservers.m \
 	src/App/TGNavController.m \
 	src/Core/Client/Account/TGClient+AccountContacts.m \
 	src/Core/Client/Account/TGClient+AccountPeople.m \
@@ -903,7 +904,10 @@ ipa-armv7: $(MACHOFIX) $(ARMV7_ALL_OBJS)
 	@cp -f "$(BUILD_DIR)/armv7/tdlib/lib/libtdjson.dylib" "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || echo "[!] no libtdjson.dylib - run scripts/build_tdlib_dylib.sh"
 	@echo "[+] Repairing armv7 Mach-O (__PAGEZERO, LC_MAIN, Thumb bits)..."
 	$(MACHOFIX) "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/$(APP_NAME)"
-	@ldid -S "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/$(APP_NAME)" 2>/dev/null || true
+	@# Signed with an access group: with a bare fake signature securityd
+	@# answers every keychain call "missing entitlement", so the passcode
+	@# and the database key could not be stored on a jailbroken install.
+	@ldid -S$(ROOT_DIR)/resources/LegacyTG-jailbreak.xcent "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/$(APP_NAME)" 2>/dev/null || true
 	@# Each package stages in its own folder: under -j the three used to share
 	@# build/Payload and zip each other's half-copied bundles.
 	@rm -rf "$(BUILD_DIR)/stage-armv7" "$(IPA_ARMV7)"

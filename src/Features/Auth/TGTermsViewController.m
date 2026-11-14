@@ -43,8 +43,13 @@
 	body.editable = NO;
 	body.font = TGFontBody();
 	body.text = self.termsText ?: @"";
-	body.textContainerInset = UIEdgeInsetsMake(TGMetricPad, TGMetricPad,
-											   TGMetricPad, TGMetricPad);
+	// iOS 7's property; iOS 6 has no text container and pads with contentInset.
+	if ([body respondsToSelector:@selector(setTextContainerInset:)])
+		body.textContainerInset = UIEdgeInsetsMake(TGMetricPad, TGMetricPad,
+												   TGMetricPad, TGMetricPad);
+	else
+		body.contentInset = UIEdgeInsetsMake(TGMetricPadSmall, TGMetricPadSmall,
+											 TGMetricPadSmall, TGMetricPadSmall);
 	self.body = body;
 	[self.view addSubview:body];
 

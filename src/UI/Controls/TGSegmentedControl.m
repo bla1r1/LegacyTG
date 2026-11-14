@@ -76,6 +76,8 @@ static const NSTimeInterval kSegmentAnimDuration = 0.20;
 	NSUInteger count = _items.count;
 	for (NSUInteger i = 0; i < count; i++) {
 		UILabel *lbl = [[UILabel alloc] init];
+		// Clear, or iOS 6 paints the label's default white box.
+		lbl.backgroundColor = [UIColor clearColor];
 		lbl.font = TGFontCaptionStrong();
 		lbl.textAlignment = NSTextAlignmentCenter;
 		lbl.text = [_items[i] description];

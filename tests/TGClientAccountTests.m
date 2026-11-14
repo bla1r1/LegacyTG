@@ -20,6 +20,7 @@
 #import "TGGroupStore.h"
 #import "TGProfileStore.h"
 #import "TGSettingsStore.h"
+#import "TGAccountSession.h"
 
 @interface TGClientAccountTests : XCTestCase @end
 
@@ -676,6 +677,51 @@ static void answerA(TGClient *c, NSDictionary *answer) {
 
 	c.paused = NO;
 	c.onAuthState = saved;
+}
+
+/// authorizationStateClosed without a prior pause request is a logOut or
+/// destroy.  The session must fire onSignedOut so the account's caches are
+/// dropped, then onRestartRequested so the new client is spun up immediately —
+/// not wait for the app to be killed.
+- (void)testClientClosed_WithoutPauseFiresSignedOutThenRestart {
+	TGAccountSession *session = [TGAccountSession shared];
+	// Save whatever is there and start clean.
+	void (^savedSignedOut)(void)  = session.onSignedOut;
+	void (^savedRestart)(void)    = session.onRestartRequested;
+	session.pausing = NO;
+
+	__block NSMutableArray *order = [NSMutableArray array];
+	session.onSignedOut        = ^{ [order addObject:@"signedOut"]; };
+	session.onRestartRequested = ^{ [order addObject:@"restart"]; };
+
+	[session clientClosed];
+
+	XCTAssertEqual(order.count, (NSUInteger)2);
+	XCTAssertEqualObjects(order[0], @"signedOut",
+			@"caches must be dropped before the new client starts");
+	XCTAssertEqualObjects(order[1], @"restart");
+
+	session.onSignedOut        = savedSignedOut;
+	session.onRestartRequested = savedRestart;
+}
+
+/// A background pause fires onCloseRequested, TDLib answers Closed, and
+/// clientClosed arrives with pausing=YES.  That path must NOT call onSignedOut.
+- (void)testClientClosed_WithPauseDoesNotFireSignedOut {
+	TGAccountSession *session = [TGAccountSession shared];
+	void (^savedSignedOut)(void) = session.onSignedOut;
+
+	__block BOOL signedOut = NO;
+	session.onSignedOut = ^{ signedOut = YES; };
+	session.pausing = YES;      // simulates "we asked for the close"
+	session.pauseDone = nil;
+
+	[session clientClosed];
+
+	XCTAssertFalse(signedOut, @"a voluntary pause must not look like a sign-out");
+	// restore
+	session.paused    = NO;
+	session.onSignedOut = savedSignedOut;
 }
 
 /// Not running (TDLib missing, or already closed): nothing to wait for.

@@ -40,6 +40,20 @@ static NSString *TGStoreDiskPath(NSString *name) {
 			[name stringByAppendingPathExtension:@"png"]];
 }
 
+/// Baked wallpapers. Not "wall-": files under that name were keyed by an
+/// address and can never be found again. "mask-" files were keyed by a
+/// TDLib file id, which means another pattern under another account. Both
+/// are removed at launch; masks are "pattern-<content hash>" now.
+static NSString *const TGStoreBakePrefix = @"bake-";
+
+static void TGStoreRemoveOrphanedBakes(void) {
+	NSString *dir = [TGStoreDiskPath(@"x") stringByDeletingLastPathComponent];
+	NSFileManager *fm = [NSFileManager defaultManager];
+	for (NSString *file in [fm contentsOfDirectoryAtPath:dir error:NULL])
+		if ([file hasPrefix:@"wall-"] || [file hasPrefix:@"mask-"])
+			[fm removeItemAtPath:[dir stringByAppendingPathComponent:file] error:NULL];
+}
+
 static UIImage *TGStoreDiskImage(NSString *name) {
 	NSData *data = [NSData dataWithContentsOfFile:TGStoreDiskPath(name)];
 	return data.length ? [UIImage imageWithData:data] : nil;
@@ -357,10 +371,25 @@ static NSNumber *TGStoreFileIdFromDocument(NSDictionary *document) {
 	_patternDataCache.totalCostLimit = sizeof(void *) == 4
 			? 1 * 1024 * 1024 : 16 * 1024 * 1024;
 	_wallpaperCache.totalCostLimit = limit;
+#if TARGET_OS_IPHONE
+	dispatch_async(TGPatternWorkQueue(), ^{ TGStoreRemoveOrphanedBakes(); });
+#endif
 	[[NSNotificationCenter defaultCenter] addObserver:self
 			selector:@selector(appearanceChanged:)
 				name:TGAppearanceDefaultsChangedNotification object:nil];
+	[[NSNotificationCenter defaultCenter] addObserver:self
+			selector:@selector(accountDidSwitch:)
+				name:TGAccountDidSwitchNotification object:nil];
 	return self;
+}
+
+/// Masks and pattern documents are keyed by TDLib file id, which every
+/// account's database numbers from the start: after a switch the same id is
+/// another theme's pattern. The baked wallpapers are keyed by theme and stay.
+- (void)accountDidSwitch:(NSNotification *)note {
+	[_patternCache removeAllObjects];
+	[_patternDataCache removeAllObjects];
+	[_requestedPatterns removeAllObjects];
 }
 
 - (void)dealloc {
@@ -458,6 +487,16 @@ static NSNumber *TGStoreFileIdFromDocument(NSDictionary *document) {
 
 #if TARGET_OS_IPHONE
 
+/// FNV-1a over the whole document: NSData's own hash reads only the first
+/// 80 bytes, which every gzip of an SVG shares.
+static uint32_t TGStoreContentHash(NSData *data) {
+	uint32_t hash = 2166136261u;
+	const uint8_t *bytes = data.bytes;
+	for (NSUInteger i = 0; i < data.length; i++)
+		hash = (hash ^ bytes[i]) * 16777619u;
+	return hash;
+}
+
 /// A .tgv starts with gzip's magic; a fixture may hand over the SVG itself.
 static BOOL TGStoreDataIsTGPattern(NSData *data) {
 	if (data.length < 4)
@@ -475,8 +514,23 @@ static BOOL TGStoreDataIsTGPattern(NSData *data) {
 		TGChatThemeStore *me = weakSelf;
 		if (!me)
 			return;
-		NSString *diskName = [NSString stringWithFormat:@"mask-%@-%.0f",
-				fileId, TGStorePatternSide];
+		// The document first, whether or not the card mask is on disk: the
+		// chat wallpaper is drawn from the SVG at the screen's size. With
+		// only the 256 px card mask in hand, every launch after the first
+		// stretched that square over the whole screen.
+		NSData *data = [NSData dataWithContentsOfFile:path];
+		// Named by the document's bytes. Named by the file id, a mask saved
+		// under one account was read back as another account's pattern, and
+		// kept being so after signing in again.
+		NSString *diskName = [NSString stringWithFormat:@"pattern-%08x-%.0f",
+				TGStoreContentHash(data), TGStorePatternSide];
+		BOOL isPattern = data.length && TGStoreDataIsTGPattern(data);
+		if (isPattern){
+			NSData *unpacked = TGPatternGunzip(data);
+			if (unpacked.length)
+				[me->_patternDataCache setObject:unpacked forKey:fileId
+										 cost:unpacked.length];
+		}
 		UIImage *stored = TGStoreDiskImage(diskName);
 		if (stored){
 			dispatch_async(dispatch_get_main_queue(), ^{
@@ -484,12 +538,7 @@ static BOOL TGStoreDataIsTGPattern(NSData *data) {
 			});
 			return;
 		}
-		NSData *data = [NSData dataWithContentsOfFile:path];
-		if (data.length && TGStoreDataIsTGPattern(data)){
-			NSData *unpacked = TGPatternGunzip(data);
-			if (unpacked.length)
-				[me->_patternDataCache setObject:unpacked forKey:fileId
-										 cost:unpacked.length];
+		if (isPattern){
 			CGImageRef mask = TGPatternCreateMask(data,
 					CGSizeMake(TGStorePatternSide, TGStorePatternSide));
 			UIImage *image = mask ? [UIImage imageWithCGImage:mask] : nil;
@@ -587,9 +636,18 @@ static BOOL TGStoreDataIsTGPattern(NSData *data) {
 			? [_patternDataCache objectForKey:fileId] : nil;
 	UIImage *patternMask = [fileId isKindOfClass:NSNumber.class]
 			? [self patternImageForFileId:fileId] : nil;
-	NSString *key = [NSString stringWithFormat:@"%@|%d|%.0fx%.0f|%lu", name,
-			dark, size.width, size.height,
-			(unsigned long)(patternData ? patternData.hash : patternMask.hash)];
+	// Baked in pixels: at the point size a Retina screen showed the pattern
+	// at half its resolution, scaled up.
+	CGFloat screenScale = [UIScreen mainScreen].scale;
+	CGSize pixels = CGSizeMake(size.width * screenScale, size.height * screenScale);
+	// The pattern's file id, not the hash of what was decoded from it: a
+	// UIImage hashes as its address, so the key changed on every launch, the
+	// disk copy was never found, and each launch baked and stored another.
+	// Whether the theme has a pattern, not which file id it has here: the
+	// id differs between accounts, the theme's pattern does not.
+	NSString *key = [NSString stringWithFormat:@"%@|%d|%.0fx%.0f|%d", name,
+			dark, pixels.width, pixels.height,
+			[fileId isKindOfClass:NSNumber.class]];
 	UIImage *cached = [_wallpaperCache objectForKey:key];
 	if (cached)
 		return cached;
@@ -608,27 +666,31 @@ static BOOL TGStoreDataIsTGPattern(NSData *data) {
 			TGChatThemeStore *me = weakSelf;
 			if (!me)
 				return;
-			NSString *diskName = [NSString stringWithFormat:@"wall-%lu",
-					(unsigned long)key.hash];
+			NSUInteger cost = (NSUInteger)(pixels.width * pixels.height * 4);
+			NSString *diskName = [NSString stringWithFormat:@"%@%lu",
+					TGStoreBakePrefix, (unsigned long)key.hash];
 			UIImage *stored = TGStoreDiskImage(diskName);
+			if (stored.CGImage)
+				stored = [UIImage imageWithCGImage:stored.CGImage
+						scale:screenScale orientation:UIImageOrientationUp];
 			if (stored){
 				dispatch_async(dispatch_get_main_queue(), ^{
 					[me->_pendingWallpapers removeObject:key];
-					NSUInteger cost = (NSUInteger)(size.width * size.height * 4);
 					[me->_wallpaperCache setObject:stored forKey:key cost:cost];
 					[me postChangedSoon];
 				});
 				return;
 			}
 			CGImageRef mask = patternData.length
-					? TGPatternCreateMask(patternData, size)
+					? TGPatternCreateMask(patternData, pixels)
 					: CGImageRetain(patternMask.CGImage);
-			CGImageRef composite = TGPatternCreateWallpaper(size,
+			CGImageRef composite = TGPatternCreateWallpaper(pixels,
 					TGStoreWallpaperColours(palette), fill[@"kind"],
 					[fill[@"angle"] doubleValue], mask, intensity, inverted);
 			if (mask)
 				CGImageRelease(mask);
-			UIImage *image = composite ? [UIImage imageWithCGImage:composite] : nil;
+			UIImage *image = composite ? [UIImage imageWithCGImage:composite
+					scale:screenScale orientation:UIImageOrientationUp] : nil;
 			if (composite)
 				CGImageRelease(composite);
 			TGStoreDiskWrite(image, diskName);
@@ -636,7 +698,6 @@ static BOOL TGStoreDataIsTGPattern(NSData *data) {
 				[me->_pendingWallpapers removeObject:key];
 				if (!image)
 					return;
-				NSUInteger cost = (NSUInteger)(size.width * size.height * 4);
 				[me->_wallpaperCache setObject:image forKey:key cost:cost];
 				[me postChangedSoon];
 			});

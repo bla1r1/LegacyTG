@@ -5,6 +5,7 @@
 // updateSavedMessagesTopic one per touched row; the client keeps them, this
 // screen reads that array. A row's id is a message thread id, so a tap
 // opens the Saved chat at the topic the same way forum topics open.
+#import "TGObservers.h"
 #import "TGSavedTopicsViewController.h"
 #import "TGAlertSheet.h"
 #import "TGChatViewController.h"
@@ -70,11 +71,10 @@ static NSString *TGSavedTopicDateText(NSNumber *stamp) {
 			selector:@selector(topicsChanged:)
 				name:TGSavedTopicsChangedNotification object:nil];
 
-	[[NSNotificationCenter defaultCenter] addObserverForName:
-			TGThemeChangedNotification object:nil
-			queue:[NSOperationQueue mainQueue]
-		   usingBlock:^(NSNotification *note){
-		__weak typeof(self) weakSelf = self;
+	// Weak before the block, not inside it: declared inside, the block had
+	// already captured self strongly and the screen never went away.
+	__weak typeof(self) weakSelf = self;
+	[TGObservers observe:TGThemeChangedNotification owner:self usingBlock:^(NSNotification *note){
 		[weakSelf applyTheme];
 		weakSelf.emptyView = nil;
 		weakSelf.tableView.backgroundView = nil;

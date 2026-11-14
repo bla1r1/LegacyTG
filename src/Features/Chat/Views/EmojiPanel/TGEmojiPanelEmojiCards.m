@@ -40,6 +40,8 @@ static const CGFloat   kEmojiCardHeaderHeight = 100.0f;
 			CGRectMake(0, 0, kPreviewHeaderWidth, kEmojiCardHeaderHeight)];
 	header.backgroundColor = [UIColor clearColor];
 	UILabel *glyph = [[UILabel alloc] initWithFrame:header.bounds];
+	// Clear, or iOS 6 paints the label's default white box.
+	glyph.backgroundColor = [UIColor clearColor];
 	glyph.text = emoji;
 	glyph.font = TGFontEmojiLarge();
 	glyph.textAlignment = NSTextAlignmentCenter;

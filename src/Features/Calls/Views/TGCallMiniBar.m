@@ -1,3 +1,4 @@
+#import "TGObservers.h"
 #import "TGCallViewController.h"
 #import "TGClientNotifications.h"
 #import "TGLocalization.h"
@@ -53,10 +54,7 @@ typedef NS_ENUM(NSInteger, TGCallCircleStyle) {
 		// The bar names the peer of the running call. When the account changes
 		// that call is gone, so hide it rather than leaving the old account's
 		// name up where a tap would reopen a dead user id.
-		[[NSNotificationCenter defaultCenter]
-				addObserverForName:TGAccountDidSwitchNotification
-							object:nil queue:[NSOperationQueue mainQueue]
-					 usingBlock:^(NSNotification *note){
+		[TGObservers observe:TGAccountDidSwitchNotification owner:self usingBlock:^(NSNotification *note){
 			[bar hide];
 		}];
 	});

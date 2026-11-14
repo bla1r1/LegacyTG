@@ -252,6 +252,7 @@ static BOOL TGNotificationsWarning(void) {
 				[TGAlertSheet showMessage:@"Restart"
 									title:@"Interface Language" inView:weakSelf.view];
 			}];
+			[weakSelf rebuild];
 		})];
 	for (NSDictionary *language in self.languages){
 		NSString *packId = language[@"id"];
@@ -264,8 +265,10 @@ static BOOL TGNotificationsWarning(void) {
 			continue;
 		// Official shows the language's native name and a checkmark. The
 		// pack id on the right read as "en" under "Русский".
+		// One checkmark: following the system is its own choice, not also
+		// the language the system happens to resolve to.
 		[rows addObject:TGCheckRow(name, nil,
-				[packId isEqualToString:appLanguage], ^{
+				!TGAppLanguageIsSystem() && [packId isEqualToString:appLanguage], ^{
 			TGSetAppLanguage(packId);
 			TGSetTelegramLanguageLookup(nil);
 			// One choice sets both the UI pack and TDLib's language, as the

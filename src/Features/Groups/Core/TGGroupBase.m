@@ -1,3 +1,4 @@
+#import "TGObservers.h"
 #import "TGGroupSettingsViewController.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
@@ -86,24 +87,18 @@ typedef NS_ENUM(NSInteger, TGGroupRowKind) {
 	[self.tableView addGestureRecognizer:memberHold];
 
 	__weak typeof(self) weakSelf = self;
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGThemeChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note) {
+	[TGObservers observe:TGThemeChangedNotification owner:self usingBlock:^(NSNotification *note) {
 		[weakSelf applyTheme];
 		[weakSelf rebuild];
 	}];
 	// A switch moved on another device is a full-info update here. The screen
 	// re-reads rather than showing the value it opened with.
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGFullInfoChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note) {
+	[TGObservers observe:TGFullInfoChangedNotification owner:self usingBlock:^(NSNotification *note) {
 		NSNumber *chatId = note.userInfo[@"id"];
 		if (chatId && [chatId longLongValue] == weakSelf.chatId)
 			[weakSelf load];
 	}];
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGChatMembersChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note) {
+	[TGObservers observe:TGChatMembersChangedNotification owner:self usingBlock:^(NSNotification *note) {
 		NSNumber *chatId = note.userInfo[@"chatId"];
 		if (chatId && [chatId longLongValue] == weakSelf.chatId)
 			[weakSelf load];

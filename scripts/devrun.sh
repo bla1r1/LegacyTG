@@ -132,10 +132,14 @@ install_over_ssh() {
 	say "installing over SSH into /Applications"
 	# tar over the pipe: the device has tar and gzip but no rsync, and scp of a
 	# whole bundle costs one connection per file.
+	# Re-signed on the device with the same entitlements the Makefile gives
+	# it: a bare `ldid -S` here stripped the keychain access group.
+	ssh $SSH_OPTS "$SSH_HOST" "cat > /tmp/LegacyTG.xcent" \
+		< "$ROOT/resources/LegacyTG-jailbreak.xcent" || return 1
 	tar -czf - -C "$(dirname "$app")" "$(basename "$app")" \
 		| ssh $SSH_OPTS "$SSH_HOST" "rm -rf /Applications/LegacyTG.app && \
 			tar -xzf - -C /Applications && \
-			ldid -S /Applications/LegacyTG.app/LegacyTG && \
+			ldid -S/tmp/LegacyTG.xcent /Applications/LegacyTG.app/LegacyTG && \
 			chmod 755 /Applications/LegacyTG.app/LegacyTG && \
 			chown -R root:wheel /Applications/LegacyTG.app && \
 			uicache 2>/dev/null; killall -9 SpringBoard 2>/dev/null; sleep 3; true" || return 1

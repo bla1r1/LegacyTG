@@ -47,10 +47,15 @@
         [path stroke];
         if ((NSUInteger)i < self.code.length) {
             NSString *digit = [self.code substringWithRange:NSMakeRange((NSUInteger)i, 1)];
-            CGSize size = [digit sizeWithAttributes:attributes];
-            [digit drawAtPoint:CGPointMake(CGRectGetMidX(box) - TGHalf(size.width),
-                                           CGRectGetMidY(box) - TGHalf(size.height))
-                    withAttributes:attributes];
+            // Through TGTextDraw: -sizeWithAttributes: and
+            // -drawAtPoint:withAttributes: are iOS 7, and this view is the
+            // login code - on iOS 6 the first digit typed ended the app.
+            CGSize size = TGLineTextSize(digit, font);
+            TGDrawText(digit, CGRectMake(CGRectGetMidX(box) - TGHalf(size.width),
+                                         CGRectGetMidY(box) - TGHalf(size.height),
+                                         size.width, size.height),
+                       font, attributes[NSForegroundColorAttributeName],
+                       NSTextAlignmentLeft, nil);
         }
         x += boxWidth + gap;
     }
@@ -158,7 +163,7 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
 
     y = TGStackPlace(self.inputContainer, y, TGMetricRow, width, TGMetricGutter);
     y = [self placeErrorAtY:y width:width];
-    y = TGStackPlace(self.actionButton, y, TGMetricRow, width, TGMetricGutter);
+    y = [self placeActionButtonAtY:y width:width];
 
     CGFloat fieldX = TGMetricPadMedium + TGMetricLoginPrefixWidth + TGMetricPadMedium;
     self.inputField.frame = CGRectMake(fieldX, 0,
@@ -196,6 +201,15 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
     y += TGMetricStackGroup;
     self.scrollView.contentSize = CGSizeMake(width,
             y - TGMetricStackStep + TGMetricPadLarge);
+}
+
+/// The bottom button takes its row only where it is shown. Below 360 pt the
+/// action is the bar's Next and the button is hidden, but its row was still
+/// counted: "Forgot password?" landed one row lower, under the keyboard of a
+/// 3.5-inch screen.
+- (CGFloat)placeActionButtonAtY:(CGFloat)y width:(CGFloat)width {
+    CGFloat next = TGStackPlace(self.actionButton, y, TGMetricRow, width, TGMetricGutter);
+    return width < 360.0f ? y : next;
 }
 
 /// One primary action per screen: the bottom Continue on a wide layout, the
@@ -285,7 +299,7 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
         y += termsHeight + TGMetricPadSmall;
     }
 
-    y = TGStackPlace(self.actionButton, y, TGMetricRow, width, TGMetricGutter);
+    y = [self placeActionButtonAtY:y width:width];
 
     y = [self placeStepLinksFromY:y width:width];
     [self updatePrimaryActionForWidth:width];
@@ -377,6 +391,7 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
     self.inputField.text = self.savedNationalNumber ?: @"";
     self.inputField.secureTextEntry = NO;
     self.inputField.textColor = [[TGTheme shared] primaryTextColour];
+    self.inputField.clearButtonMode = UITextFieldViewModeWhileEditing;
     self.inputField.keyboardType = UIKeyboardTypePhonePad;
     self.inputField.returnKeyType = UIReturnKeyGo;
     [self.actionButton setTitle:@"Continue" forState:UIControlStateNormal];
@@ -465,6 +480,7 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
     self.actionButton.hidden = NO;
     self.inputField.hidden = NO;
     self.inputField.textColor = [[TGTheme shared] primaryTextColour];
+    self.inputField.clearButtonMode = UITextFieldViewModeWhileEditing;
     self.phonePrefixField.hidden = YES;
     self.prefixSeparator.hidden = YES;
     if (self.qrImageView) {
@@ -613,6 +629,7 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
     // The boxes paint the code; the field behind them stays the responder.
     self.inputField.placeholder = nil;
     self.inputField.textColor = [UIColor clearColor];
+    self.inputField.clearButtonMode = UITextFieldViewModeNever;
     self.inputField.keyboardType = UIKeyboardTypeNumberPad;
     self.inputField.returnKeyType = UIReturnKeyDone;
     self.inputContainer.backgroundColor = [UIColor clearColor];

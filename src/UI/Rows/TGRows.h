@@ -165,6 +165,10 @@ NSDictionary *TGCentredDestructiveRow(NSString *title, void (^tap)(void));
 /// The height of an icon + title + two-line detail + switch row, from the
 /// measured heights of its two labels. Pure, so the Power Saving rows can be
 /// checked without a table or a font.
+/// The width the title and description of a TGKindToggleInfo row wrap at.
+/// The height and the cell's layout both use it, so they cannot disagree.
+CGFloat TGRowsToggleInfoTextWidth(CGFloat tableWidth, BOOL grouped,
+								  BOOL legacyChrome, BOOL hasIcon);
 CGFloat TGRowsToggleInfoHeight(CGFloat titleHeight, CGFloat detailHeight);
 
 

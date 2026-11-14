@@ -23,6 +23,11 @@
 		one->_buffers = [[NSCache alloc] init];
 		one->_buffers.totalCostLimit = (sizeof(void *) == 4)
 				? 16 * 1024 * 1024 : 32 * 1024 * 1024;
+		// Keyed by TDLib file id, and every account's database numbers its
+		// files from the start: after a switch the same id is another file.
+		[[NSNotificationCenter defaultCenter] addObserver:one
+				selector:@selector(accountDidSwitch:)
+					name:TGAccountDidSwitchNotification object:nil];
 	});
 	return one;
 }
@@ -142,6 +147,10 @@ NSString *value = name ?: @"";
 - (void)cancelDownloadOfFile:(NSInteger)fileId onlyIfPending:(BOOL)onlyIfPending {
 	[[TGDownloadStore shared] cancelDownloadOfFile:fileId onlyIfPending:onlyIfPending];
 }
+- (void)accountDidSwitch:(NSNotification *)note {
+	[_buffers removeAllObjects];
+}
+
 - (NSData *)cachedBufferForFileId:(NSInteger)fileId {
 	return [_buffers objectForKey:@(fileId)];
 }

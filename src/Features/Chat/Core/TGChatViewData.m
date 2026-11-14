@@ -939,6 +939,8 @@ static NSMutableDictionary *TGChatProfileMemo(void) {
 	UILabel *countLabel = [[UILabel alloc] initWithFrame:CGRectMake(
 			TGMetricPad, TGMetricRow + TGMetricPickerHeight - TGMetricPad,
 			card.bounds.size.width - TGMetricPad - TGMetricPad, TGMetricRow)];
+	// Clear, or iOS 6 paints the label's default white box.
+	countLabel.backgroundColor = [UIColor clearColor];
 	countLabel.font = TGFontCaption();
 	countLabel.textColor = [[TGTheme shared] secondaryTextColour];
 	countLabel.text = @"counting...";

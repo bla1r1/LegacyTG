@@ -1,3 +1,4 @@
+#import "TGObservers.h"
 #import "TGCustomEmojiStore.h"
 #import "TGLocalization.h"
 #import "TGNameWithStatus.h"
@@ -73,9 +74,7 @@ static const CGFloat kListStoryGap     = TGMetricPadSmall;
 	[[TGTheme shared] styleNavigationBar:self.navigationController.navigationBar];
 	[[TGTheme shared] styleTabBar:self.tabBarController.tabBar];
 
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGThemeChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		usingBlock:^(NSNotification *note){
+	[TGObservers observe:TGThemeChangedNotification owner:self usingBlock:^(NSNotification *note){
 		[TGIcons flush];
 		weakSelf.view.backgroundColor = [[TGTheme shared] listBackgroundColour];
 		[[TGTheme shared] styleNavigationBar:weakSelf.navigationController.navigationBar];
@@ -108,9 +107,7 @@ static const CGFloat kListStoryGap     = TGMetricPadSmall;
 	}];
 	// A status or preview custom emoji picture arrived: the visible rows draw it,
 	// at most every 0.3 s while a burst comes in.
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGCustomEmojiLoadedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		usingBlock:^(NSNotification *note){
+	[TGObservers observe:TGCustomEmojiLoadedNotification owner:self usingBlock:^(NSNotification *note){
 		TGChatListViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -120,24 +117,18 @@ static const CGFloat kListStoryGap     = TGMetricPadSmall;
 	}];
 	// A send was refused or retried: the last-message mark on that chat's row
 	// changes, and TGChatRow rebuilds it from the store.
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGSendStoreMessageStateChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		usingBlock:^(NSNotification *note){
+	[TGObservers observe:TGSendStoreMessageStateChangedNotification owner:self usingBlock:^(NSNotification *note){
 		TGChatListViewController *me = weakSelf;
 		if (me)
 			[me reloadVisibleRows];
 	}];
 	// M24: a preview thumbnail landed; the rows showing it redraw in place.
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGChatListPreviewImageLoadedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		usingBlock:^(NSNotification *note){
+	[TGObservers observe:TGChatListPreviewImageLoadedNotification owner:self usingBlock:^(NSNotification *note){
 		TGChatListViewController *me = weakSelf;
 		if (me)
 			[me reloadVisibleRows];
 	}];
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGStoriesChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		usingBlock:^(NSNotification *note){
+	[TGObservers observe:TGStoriesChangedNotification owner:self usingBlock:^(NSNotification *note){
 		TGChatListViewController *me = weakSelf;
 		if (!me)
 			return;

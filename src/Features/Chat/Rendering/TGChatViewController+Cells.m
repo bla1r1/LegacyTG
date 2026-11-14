@@ -461,7 +461,7 @@ static char kTGReactionChipInfoKey;
 	}
 
 	// Still emoji draw on every OS; only the animations obey the budget.
-	BOOL animatedAllowed = [TGCapabilities canPlayAnimatedStickers] && [TGCapabilities animatedStickersWanted];
+	BOOL animatedAllowed = [TGCapabilities canPlayAnimatedStickers];
 	if (animatedAllowed) {
 		TGStickerBudget budget = TGStickerBudgetForMemory([TGCapabilities memoryMB]);
 		animatedAllowed = budget.frameCap > 0;
@@ -471,11 +471,14 @@ static char kTGReactionChipInfoKey;
 	BOOL scrollSettled = [TGDevice tier] != TGDeviceTierVintage ||
 			!(self.table.isDragging || self.table.isDecelerating);
 
-	NSUInteger maxEmoji = MIN(kMaxCustomEmojiPerBubble, emojiRects.count);
 	NSUInteger lottieCount = 0;
 	NSUInteger staticCount = 0;
 
-	for (NSUInteger i = 0; i < maxEmoji; i++) {
+	// Every emoji is drawn; the cap is on how many of them animate. Applied
+	// to the loop itself it left the fourth emoji onward as blank space on
+	// iOS 6, where no fallback glyph sits underneath. Telegram allows 100
+	// entities a message, so the still pictures need no cap of their own.
+	for (NSUInteger i = 0; i < emojiRects.count; i++) {
 		NSDictionary *entry = emojiRects[i];
 		int64_t emojiId = [entry[@"id"] longLongValue];
 		NSValue *rectVal = entry[@"rect"];
@@ -486,43 +489,50 @@ static char kTGReactionChipInfoKey;
 		if (CGRectIsEmpty(rect))
 			continue;
 
-		NSDictionary *anim = animatedAllowed
+		NSDictionary *anim = animatedAllowed && lottieCount < kMaxCustomEmojiPerBubble
 				? [[TGCustomEmojiStore shared] animationForId:emojiId] : nil;
-		if (anim) {
-			NSNumber *fileId = anim[@"fileId"];
-			if ([fileId isKindOfClass:NSNumber.class] && fileId.longLongValue > 0) {
-				NSString *animPath = self.lottiePaths[fileId];
-				if (!animPath.length) {
-					if (![self.imagesRequested containsObject:fileId]) {
-						[self.imagesRequested addObject:fileId];
-						__weak typeof(self) weakSelf = self;
-						[[TGMessageStore shared] downloadFile:fileId.integerValue
-												   priority:TGDownloadPriorityOnScreen
-												completion:^(NSString *path) {
-							TGChatViewController *me = weakSelf;
-							if (!me) return;
-							if (path) me.lottiePaths[fileId] = path;
-							[me.imagesRequested removeObject:fileId];
-							[me reloadTableDebounced];
-						}];
-					}
-					continue;
+		// The animation takes the still picture's place only once it can be
+		// shown. Dropped as soon as TDLib named the animation, the emoji was
+		// a hole for the seconds the download and the build took - and for
+		// good when the file would not parse.
+		BOOL animated = NO;
+		NSNumber *fileId = anim[@"fileId"];
+		NSString *animPath = [fileId isKindOfClass:NSNumber.class]
+				? self.lottiePaths[fileId] : nil;
+		// After its one loop an emoji is its still picture again: frame 0 of
+		// an animation is often empty (a pin that drops in from nowhere).
+		if (animPath.length && [self.playedAnimations containsObject:animPath])
+			fileId = nil;
+		if ([fileId isKindOfClass:NSNumber.class] && fileId.longLongValue > 0) {
+			if (!animPath.length) {
+				if (![self.imagesRequested containsObject:fileId]) {
+					[self.imagesRequested addObject:fileId];
+					__weak typeof(self) weakSelf = self;
+					[[TGMessageStore shared] downloadFile:fileId.integerValue
+											   priority:TGDownloadPriorityOnScreen
+											completion:^(NSString *path) {
+						TGChatViewController *me = weakSelf;
+						if (!me) return;
+						if (path) me.lottiePaths[fileId] = path;
+						[me.imagesRequested removeObject:fileId];
+						[me reloadTableDebounced];
+					}];
 				}
-
+			} else {
 				TGLottieView *view = [cell customEmojiViewAtIndex:lottieCount];
 				view.frame = rect;
 				__weak typeof(self) weakSelf = self;
 				view.onStickerReady = ^{ [weakSelf reloadTableDebounced]; };
-				BOOL playable = [view loadStickerFile:animPath];
-				view.hidden = !playable;
-				if (playable && scrollSettled) {
-					[view play];
-				}
-				if (playable)
+				animated = [view loadStickerFile:animPath];
+				view.hidden = !animated;
+				if (animated) {
 					lottieCount++;
-				continue;
+					[self playOnce:view path:animPath settled:scrollSettled];
+				}
 			}
 		}
+		if (animated)
+			continue;
 
 		if (TGCustomEmojiInlineSupported()) {
 			// Still WebP or animation still resolving: the inline attachment
@@ -541,6 +551,29 @@ static char kTGReactionChipInfoKey;
 
 	[cell hideCustomEmojiViewsFromIndex:lottieCount];
 	[cell hideStaticCustomEmojiViewsFromIndex:staticCount];
+}
+
+/// Settings > Power Saving > Loop Animated Stickers, as in the official
+/// client: on, an animation loops; off, each file runs one loop per visit to
+/// the chat, stickers and custom emoji alike, and then rests.
+- (void)playOnce:(TGLottieView *)view path:(NSString *)path settled:(BOOL)settled {
+	if ([TGCapabilities animatedStickersWanted]) {
+		if (settled)
+			[view play];
+		return;
+	}
+	if ([self.playedAnimations containsObject:path]) {
+		[view stop];
+		return;
+	}
+	if (!settled)
+		return;
+	__weak typeof(self) weakSelf = self;
+	view.onPlayedOnce = ^{
+		[weakSelf.playedAnimations addObject:path];
+		[weakSelf reloadTableDebounced];
+	};
+	[view playOnce];
 }
 
 - (void)tableView:(UITableView *)tableView didEndDisplayingCell:(UITableViewCell *)tableCell forRowAtIndexPath:(NSIndexPath *)indexPath {

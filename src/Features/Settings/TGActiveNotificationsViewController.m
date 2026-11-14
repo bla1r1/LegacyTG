@@ -1,3 +1,4 @@
+#import "TGObservers.h"
 #import "TGActiveNotificationsViewController.h"
 #import "TGAlertSheet.h"
 #import "TGLocalization.h"
@@ -33,10 +34,7 @@ static NSString *TGNotificationDateText(NSNumber *timestamp) {
 				   target:self action:@selector(clearAll)];
 
 	__weak typeof(self) weakSelf = self;
-	[[NSNotificationCenter defaultCenter]
-			addObserverForName:TGActiveNotificationsChangedNotification
-						object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note){
+	[TGObservers observe:TGActiveNotificationsChangedNotification owner:self usingBlock:^(NSNotification *note){
 		[weakSelf reloadList];
 	}];
 }

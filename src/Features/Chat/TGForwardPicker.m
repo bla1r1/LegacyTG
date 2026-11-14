@@ -1,3 +1,4 @@
+#import "TGObservers.h"
 #import "TGForwardPicker.h"
 #import "TGLocalization.h"
 #import "TGMessageStore.h"
@@ -79,9 +80,7 @@ static const CGFloat kPickerPanelHeight = TGMetricRow;
 	[self buildSendPanel];
 
 	__weak typeof(self) weakSelf = self;
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGThemeChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note){
+	[TGObservers observe:TGThemeChangedNotification owner:self usingBlock:^(NSNotification *note){
 		TGForwardPicker *me = weakSelf;
 		if (!me) return;
 		[TGIcons flush];
@@ -227,6 +226,8 @@ static const CGFloat kPickerPanelHeight = TGMetricRow;
 		return;
 	}
 	UILabel *label = [[UILabel alloc] initWithFrame:CGRectZero];
+	// Clear, or iOS 6 paints the label's default white box.
+	label.backgroundColor = [UIColor clearColor];
 	label.font = TGFontBody();
 	label.textColor = [[TGTheme shared] secondaryTextColour];
 	label.textAlignment = NSTextAlignmentCenter;

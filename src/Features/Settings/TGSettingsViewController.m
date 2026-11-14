@@ -1,3 +1,4 @@
+#import "TGObservers.h"
 #import "TGSettingsViewController.h"
 #import "TGTheme.h"
 #import "TGThemeFile.h"
@@ -90,6 +91,16 @@ static const CGFloat kSettingsSearchHeight = 44.0f;
 
 	if (self.page == TGSettingsPageRecentCalls) {
 		UISegmentedControl *filter = [[UISegmentedControl alloc] initWithItems:@[@"All", @"Missed"]];
+		// Before iOS 7 a segmented control is the tall "plain" style unless
+		// told it sits in a bar; in the title view that drew two overlapping
+		// words in a 44 pt box.
+		if (NSFoundationVersionNumber <= NSFoundationVersionNumber_iOS_6_1) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+			filter.segmentedControlStyle = UISegmentedControlStyleBar;
+#pragma clang diagnostic pop
+		}
+		[filter sizeToFit];
 		filter.selectedSegmentIndex = self.recentCallsFilter;
 		[filter addTarget:self action:@selector(recentCallsFilterChanged:) forControlEvents:UIControlEventValueChanged];
 		self.navigationItem.titleView = filter;
@@ -120,52 +131,38 @@ static const CGFloat kSettingsSearchHeight = 44.0f;
 
 	// Repaint on theme change notification.
 	__weak typeof(self) weakSelf = self;
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGThemeChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note){
+	[TGObservers observe:TGThemeChangedNotification owner:self usingBlock:^(NSNotification *note){
 		[weakSelf repaint];
 	}];
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGPrivacyRulesChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note){
+	[TGObservers observe:TGPrivacyRulesChangedNotification owner:self usingBlock:^(NSNotification *note){
 		[weakSelf privacyRulesChanged];
 	}];
 	// The verification row has nothing to show until Telegram asks; when it
 	// does, the row fills in without the page being reopened.
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGApplicationVerificationRequiredNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note){
+	[TGObservers observe:TGApplicationVerificationRequiredNotification owner:self usingBlock:^(NSNotification *note){
 		[weakSelf rebuild];
 	}];
 	// The Appearance page's colour lists arrive by update; it re-reads while
 	// open instead of waiting for Telegram to be asked again on reopen.
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGAccentColorsChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note){
+	[TGObservers observe:TGAccentColorsChangedNotification owner:self usingBlock:^(NSNotification *note){
 		if (weakSelf.page == TGSettingsPageAppearance)
 			[weakSelf rebuild];
 	}];
 	// Account status and Telegram's appearance defaults are pushed, so the
 	// page that draws them re-reads while it is open - a freeze that starts
 	// during a session should not need Settings closed and reopened.
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGAccountStatusChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note){
+	[TGObservers observe:TGAccountStatusChangedNotification owner:self usingBlock:^(NSNotification *note){
 		if (weakSelf.page == TGSettingsPagePrivacy)
 			[weakSelf rebuild];
 	}];
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGAppearanceDefaultsChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note){
+	[TGObservers observe:TGAppearanceDefaultsChangedNotification owner:self usingBlock:^(NSNotification *note){
 		if (weakSelf.page == TGSettingsPageAppearance)
 			[weakSelf rebuild];
 	}];
 	// The Active Notifications page is a view of the client's local list:
 	// removing one row, or TDLib replacing the list, must reach it without a
 	// reopen. The summary row on the page above reads the same count.
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGActiveNotificationsChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note){
+	[TGObservers observe:TGActiveNotificationsChangedNotification owner:self usingBlock:^(NSNotification *note){
 		if (weakSelf.page == TGSettingsPageActiveNotifications ||
 			weakSelf.page == TGSettingsPageNotifications)
 			[weakSelf rebuild];
@@ -173,14 +170,10 @@ static const CGFloat kSettingsSearchHeight = 44.0f;
 	// Autosave and language state can change on another client while these
 	// pages are open. Both re-read their whole record rather than patching
 	// one row from an update that carries only one scope or one string.
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGAutosaveSettingsChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note){
+	[TGObservers observe:TGAutosaveSettingsChangedNotification owner:self usingBlock:^(NSNotification *note){
 		[weakSelf autosaveSettingsChanged];
 	}];
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGLanguagePackStringsChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note){
+	[TGObservers observe:TGLanguagePackStringsChangedNotification owner:self usingBlock:^(NSNotification *note){
 		[weakSelf languagePackStringsChanged:note.userInfo[@"packId"]];
 	}];
 }

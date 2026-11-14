@@ -50,9 +50,10 @@
 		// labels are measured: the switch and the icon take their own width
 		// out of the text column, which the old fixed 30 + detail formula did
 		// not account for.
-		CGFloat width = MAX(TGMetricRow, tableView.bounds.size.width -
-				TGMetricGutter - TGMetricRow - TGMetricSwitchW -
-				TGMetricPadMedium);
+		CGFloat width = TGRowsToggleInfoTextWidth(tableView.bounds.size.width,
+				tableView.style == UITableViewStyleGrouped,
+				NSFoundationVersionNumber <= NSFoundationVersionNumber_iOS_6_1,
+				row[TGRowIcon] != nil);
 		CGSize title = [TGLocalized(row[TGRowTitle] ?: @"")
 				sizeWithFont:TGFontRow()
 				constrainedToSize:CGSizeMake(width, TGMetricImageMax)
@@ -246,6 +247,8 @@
 	NSString *trailing = row[TGRowAccessory];
 	if ([trailing isKindOfClass:NSString.class] && trailing.length){
 		UILabel *label = [[UILabel alloc] initWithFrame:CGRectZero];
+		// Clear, or iOS 6 paints the label's default white box.
+		label.backgroundColor = [UIColor clearColor];
 		label.font = TGFontSubheadStrong();
 		label.text = trailing;
 		UIColor *trailingColour = row[TGRowAccessoryColour];
@@ -290,6 +293,45 @@
 - (void)layoutSubviews {
 	[super layoutSubviews];
 	[self keepValueWhole];
+	[self shiftIconToGutter];
+	[self layoutToggleInfo];
+}
+
+/// UIKit centres a subtitle cell's two labels as if each were one line. This
+/// row's description wraps, so both are placed from the top at the width
+/// the row's height was measured with.
+- (void)layoutToggleInfo {
+	if (![self.reuseIdentifier isEqualToString:@"TGRowCellToggleInfo"])
+		return;
+	UITableView *table = (UITableView *)self.superview;
+	while (table && ![table isKindOfClass:UITableView.class])
+		table = (UITableView *)table.superview;
+	CGFloat x = self.textLabel.frame.origin.x;
+	CGFloat width = TGRowsToggleInfoTextWidth(
+			table ? table.bounds.size.width : self.bounds.size.width,
+			table.style == UITableViewStyleGrouped,
+			NSFoundationVersionNumber <= NSFoundationVersionNumber_iOS_6_1,
+			self.imageView.image != nil);
+	width = MIN(width, MAX(0, self.contentView.bounds.size.width - x));
+	CGSize bound = CGSizeMake(width, TGMetricImageMax);
+	self.textLabel.numberOfLines = 0;
+	CGFloat titleHeight = ceilf([self.textLabel.text sizeWithFont:self.textLabel.font
+			constrainedToSize:bound lineBreakMode:NSLineBreakByWordWrapping].height);
+	CGFloat detailHeight = ceilf([self.detailTextLabel.text sizeWithFont:self.detailTextLabel.font
+			constrainedToSize:bound lineBreakMode:NSLineBreakByWordWrapping].height);
+	if (!self.detailTextLabel.text.length){
+		// No description: the title sits on the row's middle like any other.
+		self.textLabel.frame = CGRectMake(x,
+				floorf(TGHalf(self.contentView.bounds.size.height - titleHeight)),
+				width, titleHeight);
+		return;
+	}
+	self.textLabel.frame = CGRectMake(x, TGMetricPad, width, titleHeight);
+	self.detailTextLabel.frame = CGRectMake(x, TGMetricPad + titleHeight + TGMetricPadTiny,
+			width, detailHeight);
+}
+
+- (void)shiftIconToGutter {
 	if (!self.imageView.image ||
 		NSFoundationVersionNumber > NSFoundationVersionNumber_iOS_6_1)
 		return;
@@ -325,6 +367,13 @@
 		return;
 	CGRect valueFrame = value.frame;
 	CGFloat right = CGRectGetMaxX(valueFrame);
+	// Whole, as long as the title keeps its own words or half the row,
+	// whichever is less: a channel's description as the value took the
+	// entire row, ran off its left edge and left the title no width at all.
+	CGFloat room = right - title.frame.origin.x - TGMetricPadMedium;
+	CGFloat titleKeeps = MIN(ceilf([title.text sizeWithFont:title.font].width),
+			floorf(TGHalf(room)));
+	need = MIN(need, MAX(0, room - titleKeeps));
 	valueFrame.size.width = need;
 	valueFrame.origin.x = right - need;
 	value.frame = valueFrame;

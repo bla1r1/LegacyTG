@@ -16,6 +16,10 @@
 
 - (void)play;
 - (void)stop;
+/// One loop, then the first frame again and onPlayedOnce: what a chat does
+/// with "Loop Animated Stickers" off.
+- (void)playOnce;
+@property (nonatomic, copy) void (^onPlayedOnce)(void);
 
 /// Set while the chat table is scrolling on a single-core device. A sticker
 /// whose model is not built yet shows its emoji and the raster waits until the

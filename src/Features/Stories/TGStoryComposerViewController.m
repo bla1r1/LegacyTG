@@ -1,3 +1,4 @@
+#import "TGObservers.h"
 #import "TGStoryComposerViewController.h"
 #import "TGStoryCameraViewController.h"
 #import "TGTheme.h"
@@ -111,9 +112,7 @@ static BOOL sStoryFlowOpening = NO;
 	// postStory returns while the upload is still running, so the server's
 	// final word arrives here. Only the post this screen started matters;
 	// once the request has already answered the completion below has said it.
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGStoryPostFinishedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note){
+	[TGObservers observe:TGStoryPostFinishedNotification owner:self usingBlock:^(NSNotification *note){
 		TGStoryComposerViewController *me = weakSelf;
 		if (!me || !me.posting)
 			return;

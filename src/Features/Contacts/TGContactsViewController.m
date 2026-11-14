@@ -1,3 +1,4 @@
+#import "TGObservers.h"
 #import "TGContactsViewController.h"
 #import "TGLocalization.h"
 #import "TGNewContactViewController.h"
@@ -121,9 +122,7 @@ static NSArray *TGContactSections(NSArray *users) {
 	[[TGTheme shared] stylePlainTable:self.tableView];
 
 	__weak typeof(self) weakContacts = self;
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGThemeChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note){
+	[TGObservers observe:TGThemeChangedNotification owner:self usingBlock:^(NSNotification *note){
 		TGContactsViewController *me = weakContacts;
 		[TGIcons flush];
 		me.view.backgroundColor = [[TGTheme shared] listBackgroundColour];
@@ -133,10 +132,7 @@ static NSArray *TGContactSections(NSArray *users) {
 		[me.tableView reloadData];
 	}];
 
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGCustomEmojiLoadedNotification
-													  object:nil
-													   queue:[NSOperationQueue mainQueue]
-												  usingBlock:^(NSNotification *note){
+	[TGObservers observe:TGCustomEmojiLoadedNotification owner:self usingBlock:^(NSNotification *note){
 		TGContactsViewController *me = weakContacts;
 		if (!me) return;
 		[NSObject cancelPreviousPerformRequestsWithTarget:me selector:@selector(reloadVisibleRows) object:nil];

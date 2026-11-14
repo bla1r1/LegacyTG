@@ -66,6 +66,31 @@ static TGClient *SlotsClient(void) {
 			@"Documents/tdlib-2");
 }
 
+/// Installed to /Applications the app shares /var/mobile/Library with the
+/// system, whose account database is Library/Accounts. The session must not
+/// land there, and that directory must stay in the backup.
+- (void)testDataRoot_LeavesTheSystemAccountsDirectoryAlone {
+	NSFileManager *fm = [NSFileManager defaultManager];
+	NSString *library = [NSTemporaryDirectory() stringByAppendingPathComponent:
+			[NSString stringWithFormat:@"tg-root-%u/Library", arc4random()]];
+	NSString *system = [library stringByAppendingPathComponent:@"Accounts"];
+	[fm createDirectoryAtPath:system withIntermediateDirectories:YES attributes:nil error:nil];
+
+	NSString *root = TGAccountDataRootInLibrary(library);
+
+	XCTAssertEqualObjects(root, [library stringByAppendingPathComponent:@"LegacyTG"]);
+	BOOL isDirectory = NO;
+	XCTAssertTrue([fm fileExistsAtPath:root isDirectory:&isDirectory] && isDirectory);
+	NSNumber *excluded = nil;
+	[[NSURL fileURLWithPath:system isDirectory:YES] getResourceValue:&excluded
+			forKey:NSURLIsExcludedFromBackupKey error:nil];
+	XCTAssertFalse(excluded.boolValue);
+	[[NSURL fileURLWithPath:root isDirectory:YES] getResourceValue:&excluded
+			forKey:NSURLIsExcludedFromBackupKey error:nil];
+	XCTAssertTrue(excluded.boolValue);
+	[fm removeItemAtPath:[library stringByDeletingLastPathComponent] error:nil];
+}
+
 /// The database held the session in Documents, which iTunes and iCloud back
 /// up. It is moved once; a move that cannot happen keeps the old place, and a
 /// database already at the new place is not replaced.
@@ -74,7 +99,7 @@ static TGClient *SlotsClient(void) {
 	NSString *tmp = [NSTemporaryDirectory() stringByAppendingPathComponent:
 			[NSString stringWithFormat:@"tg-move-%u", arc4random()]];
 	NSString *oldDir = [tmp stringByAppendingPathComponent:@"Documents/tdlib"];
-	NSString *newRoot = [tmp stringByAppendingPathComponent:@"Library/Accounts"];
+	NSString *newRoot = [tmp stringByAppendingPathComponent:@"Library/LegacyTG"];
 	NSString *newDir = [newRoot stringByAppendingPathComponent:@"tdlib"];
 	[fm createDirectoryAtPath:oldDir withIntermediateDirectories:YES attributes:nil error:nil];
 	[fm createDirectoryAtPath:newRoot withIntermediateDirectories:YES attributes:nil error:nil];

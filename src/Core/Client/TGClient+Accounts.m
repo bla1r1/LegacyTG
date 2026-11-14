@@ -34,27 +34,34 @@ NSString *TGAccountDatabaseDirectory(NSString *documents, NSInteger slot) {
 			[NSString stringWithFormat:@"tdlib-%ld", (long)slot]];
 }
 
+NSString *TGAccountDataRootInLibrary(NSString *library) {
+	if (!library.length)
+		return nil;
+	// Not `Library/Accounts`: installed to /Applications the app has no
+	// container, Library is /var/mobile/Library, and that name is the
+	// system's own account database (Accounts3.sqlite). The backup flag
+	// below would have taken it out of the device backup.
+	NSString *path = [library stringByAppendingPathComponent:@"LegacyTG"];
+	NSError *error = nil;
+	if (![[NSFileManager defaultManager] createDirectoryAtPath:path
+			withIntermediateDirectories:YES attributes:nil error:&error]){
+		NSLog(@"TGClient: cannot create %@: %@", path, error);
+		return nil;
+	}
+	// The flag is inherited by everything inside: one call covers every
+	// slot's database and its files directory.
+	if (![[NSURL fileURLWithPath:path isDirectory:YES] setResourceValue:@YES
+			forKey:NSURLIsExcludedFromBackupKey error:&error])
+		NSLog(@"TGClient: cannot exclude %@ from backup: %@", path, error);
+	return path;
+}
+
 NSString *TGAccountDataRoot(void) {
 	static NSString *root = nil;
 	static dispatch_once_t once;
 	dispatch_once(&once, ^{
-		NSString *library = [NSSearchPathForDirectoriesInDomains(
-				NSLibraryDirectory, NSUserDomainMask, YES) firstObject];
-		if (!library.length)
-			return;
-		NSString *path = [library stringByAppendingPathComponent:@"Accounts"];
-		NSError *error = nil;
-		if (![[NSFileManager defaultManager] createDirectoryAtPath:path
-				withIntermediateDirectories:YES attributes:nil error:&error]){
-			NSLog(@"TGClient: cannot create %@: %@", path, error);
-			return;
-		}
-		// The flag is inherited by everything inside: one call covers every
-		// slot's database and its files directory.
-		if (![[NSURL fileURLWithPath:path isDirectory:YES] setResourceValue:@YES
-				forKey:NSURLIsExcludedFromBackupKey error:&error])
-			NSLog(@"TGClient: cannot exclude %@ from backup: %@", path, error);
-		root = path;
+		root = TGAccountDataRootInLibrary([NSSearchPathForDirectoriesInDomains(
+				NSLibraryDirectory, NSUserDomainMask, YES) firstObject]);
 	});
 	return root;
 }

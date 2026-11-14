@@ -105,7 +105,18 @@ static NSNumber *TGBackgroundStorePatternFileId(NSDictionary *background) {
 	BOOL small = sizeof(void *) == 4;
 	_patternData.totalCostLimit = small ? 1 * 1024 * 1024 : 16 * 1024 * 1024;
 	_baked.totalCostLimit = small ? 1 * 1024 * 1024 : 16 * 1024 * 1024;
+	[[NSNotificationCenter defaultCenter] addObserver:self
+			selector:@selector(accountDidSwitch:)
+				name:TGAccountDidSwitchNotification object:nil];
 	return self;
+}
+
+/// The pattern documents are keyed by TDLib file id, which every account's
+/// database numbers from the start: the same id is another document after a
+/// switch. The baked pictures are keyed by the background's server id and stay.
+- (void)accountDidSwitch:(NSNotification *)note {
+	[_patternData removeAllObjects];
+	[_requested removeAllObjects];
 }
 
 - (void)installedBackgroundsForDarkTheme:(BOOL)darkTheme

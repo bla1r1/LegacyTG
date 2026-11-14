@@ -1120,7 +1120,8 @@
 				NSString *title = [item valueForProperty:MPMediaItemPropertyTitle] ?: @"";
 				NSString *artist = [item valueForProperty:MPMediaItemPropertyArtist] ?: @"";
 				[me sendPickedAudioAtPath:out title:title performer:artist
-								 duration:(NSInteger)round(item.playbackDuration)];
+								 duration:(NSInteger)round([[item valueForProperty:
+										 MPMediaItemPropertyPlaybackDuration] doubleValue])];
 			});
 		}];
 	}];

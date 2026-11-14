@@ -485,6 +485,12 @@ static const CGFloat TGMetricButtonSmallH          = 28.0f;
 static const CGFloat TGMetricButtonMediumH         = 36.0f;
 static const CGFloat TGMetricButtonLargeH          = 44.0f;
 static const CGFloat TGMetricSwitchW               = 51.0f;
+/// UISwitch before iOS 7, with its ON/OFF lettering.
+static const CGFloat TGMetricSwitchWLegacy         = 79.0f;
+/// A grouped table's side inset before iOS 7.
+static const CGFloat TGMetricGroupedInsetLegacy    = 10.0f;
+/// The tile TGIcons draws for a settings row.
+static const CGFloat TGMetricRowIconSide           = 29.0f;
 static const CGFloat TGMetricSwitchH               = 31.0f;
 static const CGFloat TGMetricSwitchThumbD          = 27.0f;
 static const CGFloat TGMetricSliderH               = 28.0f;

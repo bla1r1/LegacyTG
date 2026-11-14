@@ -57,10 +57,14 @@ static const CGFloat kHighlightBorderW = 1.0f;
 	[_headerBar addSubview:_iconView];
 
 	_titleLabel = [[UILabel alloc] init];
+	// Clear, or iOS 6 paints the label's default white box.
+	_titleLabel.backgroundColor = [UIColor clearColor];
 	_titleLabel.font = TGFontRowStrong();
 	[_headerBar addSubview:_titleLabel];
 
 	_subtitleLabel = [[UILabel alloc] init];
+	// Clear, or iOS 6 paints the label's default white box.
+	_subtitleLabel.backgroundColor = [UIColor clearColor];
 	_subtitleLabel.font = TGFontCaption();
 	[_headerBar addSubview:_subtitleLabel];
 

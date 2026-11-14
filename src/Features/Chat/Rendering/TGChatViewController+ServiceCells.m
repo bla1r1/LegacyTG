@@ -611,6 +611,8 @@ TGMessageCard *TGChatCardForRow(NSDictionary *m) {
 			CGFloat textW = rowW - textX;
 
 			UILabel *nameLabel = [[UILabel alloc] initWithFrame:CGRectMake(textX, TGMetricPadTiny, textW, TGMetricLineBody)];
+			// Clear, or iOS 6 paints the label's default white box.
+			nameLabel.backgroundColor = [UIColor clearColor];
 			nameLabel.userInteractionEnabled = NO;
 			nameLabel.font = TGFontBody();
 			nameLabel.textColor = [cardTheme fileNameColour];
@@ -619,6 +621,8 @@ TGMessageCard *TGChatCardForRow(NSDictionary *m) {
 			[rowBtn addSubview:nameLabel];
 
 			UILabel *sizeLabel = [[UILabel alloc] initWithFrame:CGRectMake(textX, TGMetricPadTiny + TGMetricLineBody, textW, TGMetricLineSubhead)];
+			// Clear, or iOS 6 paints the label's default white box.
+			sizeLabel.backgroundColor = [UIColor clearColor];
 			sizeLabel.userInteractionEnabled = NO;
 			sizeLabel.font = TGFontCaption();
 			sizeLabel.textColor = [cardTheme fileMetaColour];

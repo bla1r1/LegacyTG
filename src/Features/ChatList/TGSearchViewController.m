@@ -1,6 +1,7 @@
 //
 // TGSearchViewController - search controller for chats and messages.
 //
+#import "TGObservers.h"
 #import "TGSearchViewController.h"
 #import "TGLocalization.h"
 #import "TGChatViewController.h"
@@ -157,16 +158,12 @@ static NSString *TGPublicPostText(NSDictionary *message) {
 	[self applyTheme];
 
 	__weak typeof(self) weakSelf = self;
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGThemeChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note) {
+	[TGObservers observe:TGThemeChangedNotification owner:self usingBlock:^(NSNotification *note) {
 		[weakSelf applyTheme];
 		[weakSelf reloadSearchRows];
 	}];
 
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGCustomEmojiLoadedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note) {
+	[TGObservers observe:TGCustomEmojiLoadedNotification owner:self usingBlock:^(NSNotification *note) {
 		TGSearchViewController *me = weakSelf;
 		if (!me) return;
 		[NSObject cancelPreviousPerformRequestsWithTarget:me selector:@selector(reloadVisibleRows) object:nil];

@@ -359,8 +359,21 @@ static void TGAssertColour(NSString *key, NSDictionary *palette,
 	TGAssertColour(@"bubbleMine", darkChat, 0x2B, 0x5D, 0x7F);
 }
 
-@end
+/// A pattern is cached under its TDLib file id. Every account's database
+/// numbers its files from the start, so after a switch the same id belongs to
+/// another theme's pattern.
+- (void)testAccountSwitch_DropsPatternsKeyedByFileId {
+	TGChatThemeStore *store = [TGChatThemeStore shared];
+	NSCache *patterns = [store valueForKey:@"patternCache"];
+	NSCache *documents = [store valueForKey:@"patternDataCache"];
+	[patterns setObject:@"mask" forKey:@(11)];
+	[documents setObject:[@"svg" dataUsingEncoding:NSUTF8StringEncoding] forKey:@(11)];
 
-// The .tgv pipeline lives in its own file; this suite is what main_client
-// already imports, so it pulls the pattern tests into the same binary.
-#import "TGPatternTests.m"
+	[[NSNotificationCenter defaultCenter]
+			postNotificationName:TGAccountDidSwitchNotification object:nil];
+
+	XCTAssertNil([patterns objectForKey:@(11)]);
+	XCTAssertNil([documents objectForKey:@(11)]);
+}
+
+@end

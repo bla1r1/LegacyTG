@@ -1,6 +1,7 @@
 //
 // TGDevHubViewController.m
 //
+#import "TGObservers.h"
 #import "TGDevHubViewController.h"
 #import "TGDevStore.h"
 #import "TGMessageStore.h"
@@ -20,9 +21,7 @@
 					   TGQuickRepliesChangedNotification,
 					   TGSuggestedActionsChangedNotification];
 	for (NSString *name in names){
-		[[NSNotificationCenter defaultCenter] addObserverForName:name
-				object:nil queue:[NSOperationQueue mainQueue]
-			 usingBlock:^(NSNotification *note){
+		[TGObservers observe:name owner:self usingBlock:^(NSNotification *note){
 			[weakSelf rebuild];
 		}];
 	}

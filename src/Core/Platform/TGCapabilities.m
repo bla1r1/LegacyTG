@@ -60,7 +60,9 @@ static void TGSetWanted(NSString *key, BOOL wanted) {
 + (BOOL)canPlayAnimatedStickers {
 	// TGLottieView renders vector animations with C++ optimization.
 	// Dual-core runs at 18 fps, single-core (A4) throttles to 12 fps with model caching.
-	return [self animatedStickersWanted];
+	// Every tier can. "Loop Animated Stickers" off is the official meaning,
+	// one loop and then rest - it used to switch the animation off entirely.
+	return YES;
 }
 
 + (BOOL)canShowWallpaper {

@@ -1117,4 +1117,86 @@ static void joinTestReply(TGClient *c, NSDictionary *request, NSDictionary *answ
 	[[NSNotificationCenter defaultCenter] removeObserver:observer];
 }
 
+#pragma mark - loadChats chains
+
+/// Every loadChats for one list still in the outbox, oldest first.
+static NSArray *loadChatsRequests(TGClient *c, NSString *listType) {
+	NSMutableArray *found = [NSMutableArray array];
+	for (NSData *d in c.outbox){
+		NSString *json = [[NSString alloc] initWithData:d encoding:NSUTF8StringEncoding];
+		NSString *trimmed = [json componentsSeparatedByString:@"\0"][0];
+		NSDictionary *request = [NSJSONSerialization JSONObjectWithData:
+				[trimmed dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil];
+		if ([request[@"@type"] isEqualToString:@"loadChats"] &&
+			[request[@"chat_list"][@"@type"] isEqualToString:listType])
+			[found addObject:request];
+	}
+	return found;
+}
+
+static TGClient *loadChatsStarted(void) {
+	TGClient *c = T();
+	[c.outbox removeAllObjects];
+	[c.pendingRequests removeAllObjects];
+	[c loadChats];
+	return c;
+}
+
+static NSDictionary *kNotFound(void) {
+	return @{@"@type" : @"error", @"code" : @404, @"message" : @"Not Found"};
+}
+
+/// ok means "this batch is done, ask again": each list runs its own chain,
+/// one request in flight at a time.
+- (void)testLoadChats_OkAnswerChainsNextRequest {
+	TGClient *c = loadChatsStarted();
+	XCTAssertEqual(loadChatsRequests(c, @"chatListMain").count, (NSUInteger)1);
+	XCTAssertEqual(loadChatsRequests(c, @"chatListArchive").count, (NSUInteger)1);
+
+	joinTestReply(c, loadChatsRequests(c, @"chatListMain").lastObject, @{@"@type" : @"ok"});
+
+	XCTAssertEqual(loadChatsRequests(c, @"chatListMain").count, (NSUInteger)2,
+			@"an ok answer must send the next loadChats(main)");
+	XCTAssertEqual(loadChatsRequests(c, @"chatListArchive").count, (NSUInteger)1,
+			@"the main answer must not touch the archive chain");
+	XCTAssertEqual(c.loadChatsAttempts, (NSUInteger)2);
+	XCTAssertFalse(c.chatListComplete);
+}
+
+- (void)testLoadChats_Error404OnMainSetsChatListComplete {
+	TGClient *c = loadChatsStarted();
+	joinTestReply(c, loadChatsRequests(c, @"chatListMain").lastObject, kNotFound());
+
+	XCTAssertTrue(c.chatListComplete, @"404 from the main list means everything is loaded");
+	XCTAssertEqual(loadChatsRequests(c, @"chatListMain").count, (NSUInteger)1,
+			@"no further loadChats(main) after 404");
+}
+
+/// The archive is usually empty and answers 404 on its first call. That used
+/// to end the main list as well.
+- (void)testLoadChats_Error404OnArchiveDoesNotCompleteMainList {
+	TGClient *c = loadChatsStarted();
+	joinTestReply(c, loadChatsRequests(c, @"chatListArchive").lastObject, kNotFound());
+	XCTAssertFalse(c.chatListComplete);
+
+	joinTestReply(c, loadChatsRequests(c, @"chatListMain").lastObject, @{@"@type" : @"ok"});
+	XCTAssertEqual(loadChatsRequests(c, @"chatListMain").count, (NSUInteger)2,
+			@"the main chain keeps going after the archive is done");
+}
+
+/// Any other error ends the chain without declaring the list complete, so the
+/// next authorizationStateReady starts it again.
+- (void)testLoadChats_OtherErrorEndsChainWithoutCompleting {
+	TGClient *c = loadChatsStarted();
+	joinTestReply(c, loadChatsRequests(c, @"chatListMain").lastObject,
+			@{@"@type" : @"error", @"code" : @420, @"message" : @"FLOOD_WAIT_5"});
+
+	XCTAssertFalse(c.chatListComplete);
+	XCTAssertEqual(loadChatsRequests(c, @"chatListMain").count, (NSUInteger)1);
+
+	[c loadChats];
+	XCTAssertEqual(loadChatsRequests(c, @"chatListMain").count, (NSUInteger)2,
+			@"an incomplete list can be asked for again");
+}
+
 @end

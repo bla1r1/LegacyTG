@@ -59,6 +59,8 @@ NSArray *TGCustomEmojiRectsInText(NSAttributedString *text, CGFloat width);
 /// would come out at its own size and move the text; there the fallback
 /// characters stay in the string and the bubble draws the picture over them.
 BOOL TGCustomEmojiInlineSupported(void);
+/// The iOS 6 path of TGCustomEmojiRectsInText (no TextKit), by CoreText.
+NSArray *TGCustomEmojiRectsCoreText(NSAttributedString *text, CGFloat width);
 NSAttributedString *TGAttributedMessageText(NSString *text, NSArray *entities, UIFont *baseFont, UIColor *textColor);
 /// The same text with spoiler runs either drawn under an opaque plate or, once
 /// the reader has tapped the bubble, left as plain text. The plain call above

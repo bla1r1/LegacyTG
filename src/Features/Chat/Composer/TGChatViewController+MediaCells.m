@@ -128,9 +128,9 @@
 		// the scroll settles and the settle reload starts the animation.
 		BOOL scrollSettled = [TGDevice tier] != TGDeviceTierVintage ||
 				!(self.table.isDragging || self.table.isDecelerating);
-		if (playable && scrollSettled) {
-			[cell.lottie play];
-		} else if (!playable) {
+		if (playable) {
+			[self playOnce:cell.lottie path:animPath settled:scrollSettled];
+		} else {
 			// A .tgs that is not gzip, or a .webm this decoder cannot open,
 			// otherwise leaves a sticker-sized hole with a clock in it.
 			[self placeStickerEmoji:cell message:m inFrame:cell.lottie.frame];

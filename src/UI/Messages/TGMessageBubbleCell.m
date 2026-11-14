@@ -214,6 +214,8 @@ static const NSUInteger kMaxCustomEmojiViews = 3;
 	[self.bubble addSubview:self.linkPreviewButton];
 
 	self.icon = [[UILabel alloc] init];
+	// Clear, or iOS 6 paints the label's default white box.
+	self.icon.backgroundColor = [UIColor clearColor];
 	self.icon.textAlignment = NSTextAlignmentCenter;
 	self.icon.textColor = [[TGTheme shared] onAccentColour];
 	self.icon.font = TGFontHeader();
@@ -244,6 +246,8 @@ static const NSUInteger kMaxCustomEmojiViews = 3;
 	[self.bubble addSubview:self.forwardLabel];
 
 	self.mediaStamp = [[UILabel alloc] init];
+	// Clear, or iOS 6 paints the label's default white box.
+	self.mediaStamp.backgroundColor = [UIColor clearColor];
 	self.mediaStamp.font = TGFontMicro();
 	self.mediaStamp.textColor = [[TGTheme shared] onMediaColour];
 	self.mediaStamp.textAlignment = NSTextAlignmentCenter;

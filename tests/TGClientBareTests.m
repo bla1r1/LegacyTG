@@ -312,4 +312,17 @@ static NSDictionary *plainB(NSDictionary *d) {
 	XCTAssertEqual(c.outbox.count, (NSUInteger)2);
 }
 
+/// Streamed audio is buffered under its TDLib file id, which another
+/// account's database gives to another file.
+- (void)testMediaStore_AccountSwitchDropsBuffersKeyedByFileId {
+	TGMediaStore *store = [TGMediaStore shared];
+	[store cacheBuffer:[@"voice" dataUsingEncoding:NSUTF8StringEncoding] forFileId:4242];
+	XCTAssertNotNil([store cachedBufferForFileId:4242]);
+
+	[[NSNotificationCenter defaultCenter]
+			postNotificationName:TGAccountDidSwitchNotification object:nil];
+
+	XCTAssertNil([store cachedBufferForFileId:4242]);
+}
+
 @end

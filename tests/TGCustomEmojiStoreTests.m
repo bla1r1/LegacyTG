@@ -155,6 +155,39 @@ static NSDictionary *cesRow(int64_t emojiId, int64_t fileId, NSString *format, i
 	XCTAssertTrue(notified);
 }
 
+/// A row redrawn while the answer is on the way must not ask again: on the
+/// iPod touch 4 one chat sent the same ids three times, and every answer
+/// downloaded, decoded and redrew the screen.
+- (void)testIdInFlight_IsNotAskedTwice {
+	TGCustomEmojiStore *store = [TGCustomEmojiStore shared];
+	[store reset];
+	TGClient *client = [TGClient shared];
+	[client.outbox removeAllObjects];
+	SEL sendBatch = NSSelectorFromString(@"sendBatch");
+
+	[store animationForId:3001LL];
+	[store imageForId:3001LL side:17];
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+	[store performSelector:sendBatch];
+	// The same row, drawn again before TDLib has answered.
+	[store animationForId:3001LL];
+	[store imageForId:3001LL side:17];
+	[store imageForId:3001LL side:20];
+	[store performSelector:sendBatch];
+#pragma clang diagnostic pop
+
+	NSUInteger asks = 0;
+	for (NSData *d in client.outbox) {
+		NSString *json = [[NSString alloc] initWithData:d encoding:NSUTF8StringEncoding];
+		if ([json rangeOfString:@"getCustomEmojiStickers"].location != NSNotFound)
+			asks++;
+	}
+	XCTAssertEqual(asks, (NSUInteger)1);
+	[NSObject cancelPreviousPerformRequestsWithTarget:store];
+	[store reset];
+}
+
 - (void)testReceiveStickers_RequestsThumbWithOnScreenPriority {
 	TGCustomEmojiStore *store = [TGCustomEmojiStore shared];
 	TGClient *client = [TGClient shared];

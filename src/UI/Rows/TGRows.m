@@ -235,6 +235,23 @@ NSDictionary *TGCentredDestructiveRow(NSString *title, void (^tap)(void)) {
 	return row;
 }
 
+CGFloat TGRowsToggleInfoTextWidth(CGFloat tableWidth, BOOL grouped,
+								  BOOL legacyChrome, BOOL hasIcon) {
+	// What is left for the two labels once the group's inset, the icon and
+	// the switch with its margins are taken out. Before iOS 7 the group is
+	// inset and the switch is 28 pt wider; measured against the full table
+	// width the description was sized for two lines and wrapped to three.
+	CGFloat width = tableWidth;
+	if (legacyChrome && grouped)
+		width -= 2.0f * TGMetricGroupedInsetLegacy;
+	width -= hasIcon ? TGMetricGutter + TGMetricRowIconSide + TGMetricGutter
+					 : TGMetricGutter;
+	width -= (legacyChrome ? TGMetricSwitchWLegacy : TGMetricSwitchW) +
+			2.0f * TGMetricPadMedium;
+	width -= TGMetricPadMedium;
+	return MAX(TGMetricRow, width);
+}
+
 CGFloat TGRowsToggleInfoHeight(CGFloat titleHeight, CGFloat detailHeight) {
 	CGFloat text = TGMetricPad + ceilf(titleHeight) + TGMetricPadTiny +
 			ceilf(detailHeight) + TGMetricPad;

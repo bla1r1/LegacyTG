@@ -80,7 +80,9 @@
 		// loadChats runs before getMe, so the chat with yourself can arrive
 		// before its id is known; re-mark it now that me is here.
 		[self.client markSavedMessagesRow];
-		NSLog(@"TGClient: signed in as +%@", self.client.me[@"phone"]);
+		// No phone number: stderr is a file in Caches and, before iOS 7, a
+		// syslog any app can read.
+		NSLog(@"TGClient: signed in");
 		return;
 	}
 

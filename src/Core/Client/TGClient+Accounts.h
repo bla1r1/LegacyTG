@@ -13,11 +13,14 @@
 /// the path without routing through the category.
 FOUNDATION_EXPORT NSString *TGAccountDatabaseDirectory(NSString *documents, NSInteger slot);
 
-/// Where the databases live now: `Library/Accounts`, created on first use and
+/// Where the databases live now: `Library/LegacyTG`, created on first use and
 /// marked NSURLIsExcludedFromBackupKey. `Documents` goes into every iTunes
 /// and iCloud backup, and td.binlog holds the session's auth key. nil when
 /// the directory cannot be made.
 FOUNDATION_EXPORT NSString *TGAccountDataRoot(void);
+/// The same for a given Library directory; the directory is the app's own,
+/// never one the system keeps there.
+FOUNDATION_EXPORT NSString *TGAccountDataRootInLibrary(NSString *library);
 
 /// Moves a database an older build left at `oldDirectory` to `newDirectory`.
 /// Returns the directory to open: the new one, or the old one when the move

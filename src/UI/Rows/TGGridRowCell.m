@@ -51,6 +51,8 @@
 	[_plateView addSubview:_lockView];
 
 	_badgeLabel = [[UILabel alloc] initWithFrame:CGRectZero];
+	// Clear, or iOS 6 paints the label's default white box.
+	_badgeLabel.backgroundColor = [UIColor clearColor];
 	_badgeLabel.font = TGFontMicro();
 	_badgeLabel.textAlignment = NSTextAlignmentCenter;
 	_badgeLabel.clipsToBounds = YES;

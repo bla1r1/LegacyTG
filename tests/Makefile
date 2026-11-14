@@ -92,6 +92,7 @@ CLIENT_OBJC_SRCS := \
     src/Media/TGPatternImage.m \
     src/Core/Support/TGBase64.m \
     src/Core/Support/TGLocalization.m \
+    src/Core/Support/TGObservers.m \
     src/Core/Style/TGStyle.m \
     src/Features/Settings/Pages/TGSettingsPageModels.m \
     src/Features/Profile/Core/TGProfileLogic.m \
@@ -435,6 +436,7 @@ CLIENT_TEST_SRCS := \
     $(TESTS)/TGChatListRowGeometryTests.m \
     $(TESTS)/TGChatListRowsTests.m \
     $(TESTS)/TGChatListStoreTests.m \
+    $(TESTS)/TGObserversTests.m \
     $(TESTS)/TGSearchStoreTests.m \
     $(TESTS)/TGProfileStoreTests.m \
     $(TESTS)/TGCallStoreTests.m \

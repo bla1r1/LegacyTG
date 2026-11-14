@@ -204,4 +204,20 @@
 	XCTAssertEqualObjects(missing[TGRowDetail], @"Requires iOS 8");
 }
 
+/// The description wrapped to three lines in a row measured for two: the
+/// width forgot the group's inset and the wider switch before iOS 7.
+- (void)testToggleInfoTextWidth_LegacyChromeIsNarrowerThanModern {
+	CGFloat modern = TGRowsToggleInfoTextWidth(320, YES, NO, YES);
+	CGFloat legacy = TGRowsToggleInfoTextWidth(320, YES, YES, YES);
+	XCTAssertEqual(modern - legacy,
+			2 * TGMetricGroupedInsetLegacy + TGMetricSwitchWLegacy - TGMetricSwitchW);
+	// On the iPod touch 4 the labels have 147 pt between the icon and the
+	// switch; the measured width must fit inside that.
+	XCTAssertTrue(legacy <= 147);
+	XCTAssertTrue(TGRowsToggleInfoTextWidth(320, YES, YES, NO) > legacy,
+			@"a row without an icon has more room");
+	XCTAssertEqual(TGRowsToggleInfoTextWidth(10, YES, YES, YES), TGMetricRow,
+			@"never below one row's worth");
+}
+
 @end

@@ -1,3 +1,4 @@
+#import "TGObservers.h"
 #import "TGProfileViewControllerInternal.h"
 #import "TGProfileStore.h"
 #import "TGNameWithStatus.h"
@@ -88,17 +89,13 @@ static NSString *TGProfileUserName(NSDictionary *user) {
 	[self.tableView addGestureRecognizer:memberHold];
 
 	__weak typeof(self) weakSelf = self;
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGThemeChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note) {
+	[TGObservers observe:TGThemeChangedNotification owner:self usingBlock:^(NSNotification *note) {
 		[weakSelf applyTheme];
 		[weakSelf buildHeader];
 		[weakSelf rebuildSections];
 	}];
 
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGCustomEmojiLoadedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note) {
+	[TGObservers observe:TGCustomEmojiLoadedNotification owner:self usingBlock:^(NSNotification *note) {
 		TGProfileViewController *me = weakSelf;
 		if (!me)
 			return;

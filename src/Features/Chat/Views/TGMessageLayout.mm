@@ -660,7 +660,7 @@ BOOL TGCustomEmojiInlineSupported(void) {
 // upward from the frame's bottom while the label draws downward, so a line's
 // top sits at frameH - origin.y - ascent; the frame is made tall enough that
 // the first line still lands at the top.
-static NSArray *TGCustomEmojiRectsCoreText(NSAttributedString *text, CGFloat width) {
+NSArray *TGCustomEmojiRectsCoreText(NSAttributedString *text, CGFloat width) {
 	CTFramesetterRef framesetter = CTFramesetterCreateWithAttributedString(
 			(__bridge CFAttributedStringRef)text);
 	if (!framesetter)
@@ -697,33 +697,36 @@ static NSArray *TGCustomEmojiRectsCoreText(NSAttributedString *text, CGFloat wid
 				if (runRange.length <= 0)
 					continue;
 				CGFloat runAscent = 0.0f, runDescent = 0.0f, runLeading = 0.0f;
-				CGFloat runWidth = CTRunGetTypographicBounds(run,
+				CTRunGetTypographicBounds(run,
 						CFRangeMake(0, CTRunGetGlyphCount(run)),
 						&runAscent, &runDescent, &runLeading);
-				if (runWidth <= 0)
-					continue;
 				// The picture was decoded at the square the string builder
-				// asked for; centre it over the fallback glyph's run.
+				// asked for; centre it over the fallback glyph.
 				CGFloat side = runAscent + runDescent;
 				NSNumber *sideAttr = attributes[@"TGCustomEmojiSide"];
 				if ([sideAttr isKindOfClass:[NSNumber class]] && [sideAttr doubleValue] > 0)
 					side = [sideAttr doubleValue];
-				CGFloat x = CTLineGetOffsetForStringIndex(line, runRange.location, NULL);
-				CGRect emojiRect = CGRectMake(x + TGHalf(runWidth - side),
-											  lineTop + TGHalf(lineHeight - side),
-											  side, side);
-				emojiRect = CGRectIntegral(emojiRect);
-
-				NSValue *rectVal = nil;
+				// One rect per character, not per run: the same emoji three
+				// times in a row has equal attributes and comes back as one
+				// run, which drew a single picture in the middle of the three.
+				for (CFIndex k = runRange.location; k < runRange.location + runRange.length; k++) {
+					CGFloat x = CTLineGetOffsetForStringIndex(line, k, NULL);
+					CGFloat width = CTLineGetOffsetForStringIndex(line, k + 1, NULL) - x;
+					if (width <= 0)
+						continue;
+					CGRect emojiRect = CGRectIntegral(CGRectMake(x + TGHalf(width - side),
+							lineTop + TGHalf(lineHeight - side), side, side));
+					NSValue *rectVal = nil;
 #if TARGET_OS_IPHONE
-				rectVal = [NSValue valueWithCGRect:emojiRect];
+					rectVal = [NSValue valueWithCGRect:emojiRect];
 #else
-				rectVal = [NSValue valueWithBytes:&emojiRect objCType:@encode(CGRect)];
+					rectVal = [NSValue valueWithBytes:&emojiRect objCType:@encode(CGRect)];
 #endif
-				[results addObject:@{
-					@"id"   : emojiId,
-					@"rect" : rectVal
-				}];
+					[results addObject:@{
+						@"id"   : emojiId,
+						@"rect" : rectVal
+					}];
+				}
 			}
 		}
 	}
@@ -763,20 +766,23 @@ NSArray *TGCustomEmojiRectsInText(NSAttributedString *text, CGFloat width) {
 	[text enumerateAttribute:@"TGCustomEmojiId"
 					 inRange:NSMakeRange(0, text.length)
 					 options:0
-				  usingBlock:^(id value, NSRange range, BOOL *stop) {
+				  usingBlock:^(id value, NSRange run, BOOL *stop) {
 		if (!value || ![value isKindOfClass:NSNumber.class])
 			return;
 		int64_t emojiId = [value longLongValue];
 		if (emojiId == 0)
 			return;
 
+		// Each attachment is one character; equal neighbours arrive as one run.
+		for (NSUInteger k = run.location; k < NSMaxRange(run); k++) {
+		NSRange range = NSMakeRange(k, 1);
 		NSRange glyphRange = [layoutManager glyphRangeForCharacterRange:range actualCharacterRange:NULL];
 		if (glyphRange.location == NSNotFound || glyphRange.length == 0)
-			return;
+			continue;
 
 		CGRect glyphRect = [layoutManager boundingRectForGlyphRange:glyphRange inTextContainer:container];
 		if (CGRectIsEmpty(glyphRect))
-			return;
+			continue;
 
 		CGFloat side = glyphRect.size.width;
 		id attachment = [text attribute:NSAttachmentAttributeName atIndex:range.location effectiveRange:NULL];
@@ -802,6 +808,7 @@ NSArray *TGCustomEmojiRectsInText(NSAttributedString *text, CGFloat width) {
 			@"id"   : @(emojiId),
 			@"rect" : rectVal ?: [NSNull null]
 		}];
+		}
 	}];
 
 	return results;

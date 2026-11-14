@@ -80,4 +80,29 @@
 			TGMessageCellKindBubble);
 }
 
+/// The same custom emoji three times in a row has equal attributes, so
+/// CoreText hands it back as one run. On iOS 6 that drew one picture in the
+/// middle of the three.
+- (void)testCustomEmojiRects_RepeatedEmojiGetsOneRectEach {
+	NSMutableAttributedString *text = [[NSMutableAttributedString alloc]
+			initWithString:@"\u2003\u2003\u2003"
+				attributes:@{@"TGCustomEmojiId" : @(77), @"TGCustomEmojiSide" : @(17)}];
+	[text appendAttributedString:[[NSAttributedString alloc] initWithString:@"\u2003"
+			attributes:@{@"TGCustomEmojiId" : @(78), @"TGCustomEmojiSide" : @(17)}]];
+
+	NSArray *rects = TGCustomEmojiRectsCoreText(text, 200);
+
+	XCTAssertEqual(rects.count, (NSUInteger)4);
+	CGFloat lastX = -CGFLOAT_MAX;
+	for (NSDictionary *entry in rects) {
+		CGRect rect = CGRectZero;
+		[entry[@"rect"] getValue:&rect];
+		XCTAssertTrue(rect.origin.x > lastX, @"each emoji sits to the right of the one before");
+		// Snapped outward to whole points, so 17 or 18.
+		XCTAssertTrue(rect.size.width >= 17 && rect.size.width <= 18);
+		lastX = rect.origin.x;
+	}
+	XCTAssertEqualObjects([rects.lastObject objectForKey:@"id"], @(78));
+}
+
 @end

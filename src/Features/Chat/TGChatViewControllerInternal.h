@@ -23,6 +23,7 @@
 #import "TGStreamingVoicePlayer.h"
 #import "TGImageLruCache.h"
 #import "TGCustomEmojiStore.h"
+@class TGLottieView;
 #import "TGSendStore.h"
 #import <MediaPlayer/MediaPlayer.h>
 #import <AVFoundation/AVFoundation.h>
@@ -85,6 +86,8 @@ FOUNDATION_EXPORT CGFloat TGPollOptionRowHeight(NSDictionary *option, CGFloat ro
 @property (nonatomic, assign) BOOL silentPosting;
 @property (nonatomic, assign) BOOL canBeAnonymous;
 @property (nonatomic, strong) NSMutableDictionary *lottiePaths;   // fileId -> path
+/// Animation files that have run their one loop since this chat was opened.
+@property (nonatomic, strong) NSMutableSet *playedAnimations;
 @property (nonatomic, strong) TGImageLruCache *maps;             // messageId -> UIImage (cap 20)
 @property (nonatomic, strong) NSMutableSet *mapsRequested;
 @property (nonatomic, strong) NSMutableDictionary *quotes;       // messageId -> flattened
@@ -371,6 +374,7 @@ FOUNDATION_EXPORT CGFloat TGPollOptionRowHeight(NSDictionary *option, CGFloat ro
 - (void)openFileWithViewer:(NSString *)filePath;
 - (void)handleMessageTap:(NSDictionary *)m;
 - (void)reloadTableDebounced;
+- (void)playOnce:(TGLottieView *)view path:(NSString *)path settled:(BOOL)settled;
 - (void)showChannelBottomBar;
 - (void)directMessagesFromChat:(UIButton *)sender;
 - (void)showViewersOfActionMessage;

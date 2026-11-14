@@ -392,6 +392,8 @@ static const CGFloat kActionBarCloseSide = TGMetricButtonLargeH;
 	TGTheme *theme = [TGTheme shared];
 
 	self.floatingDate = [[UILabel alloc] init];
+	// Clear, or iOS 6 paints the label's default white box.
+	self.floatingDate.backgroundColor = [UIColor clearColor];
 	self.floatingDate.font = TGFontCaptionStrong();
 	self.floatingDate.textAlignment = NSTextAlignmentCenter;
 	// Rounded by its background alone. Every view over the table is drawn

@@ -141,10 +141,8 @@ UIImage *TGAppearancePreviewImage(CGFloat width) {
 	CGRect replyRect = CGRectMake(CGRectGetMinX(incomingRect) + kPreviewTextLeft,
 			CGRectGetMinY(incomingRect) + kPreviewGap,
 			incomingW - TGDoubled(kPreviewTextLeft), replyH);
-	UIBezierPath *replyPath = [UIBezierPath bezierPathWithRoundedRect:replyRect
-			cornerRadius:TGMetricCornerSmall];
-	[theme.serviceBubbleColour setFill];
-	[replyPath fill];
+	// The bar alone, as a real bubble draws its quote: the fill here was the
+	// service pill's colour, a grey slab under the sender's name.
 	[theme.accentColour setFill];
 	UIRectFill(CGRectMake(CGRectGetMinX(replyRect), CGRectGetMinY(replyRect),
 			TGMetricBorderThick, CGRectGetHeight(replyRect)));

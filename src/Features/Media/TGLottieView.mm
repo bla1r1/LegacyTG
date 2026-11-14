@@ -264,6 +264,9 @@ static inline float TGScalarAtFast(NSDictionary *prop, double frame, float fallb
 // every reuse without rasterising or VP9-decoding again on the main thread.
 @property (nonatomic, strong) UIImage *firstFrame;
 @property (nonatomic, assign) BOOL isRasterizing;
+/// Every frame of the loop came out fully transparent: this renderer cannot
+/// draw the file. The view answers NO for it and the still picture stays.
+@property (nonatomic, assign) BOOL blank;
 @property (nonatomic, assign) BOOL isWebM;
 @end
 
@@ -773,6 +776,36 @@ static dispatch_queue_t TGLottiePlayerQueue(void) {
 	return queue;
 }
 
+/// YES when no frame has a single lit pixel. Premultiplied, so a transparent
+/// pixel is four zero bytes whatever the channel order.
+static BOOL TGLottieFramesAreBlank(NSArray *frames) {
+	if (!frames.count)
+		return NO;
+	for (id frame in frames) {
+		CFDataRef data = CGDataProviderCopyData(
+				CGImageGetDataProvider((__bridge CGImageRef)frame));
+		if (!data)
+			return NO;
+		const uint8_t *bytes = CFDataGetBytePtr(data);
+		CFIndex length = CFDataGetLength(data);
+		BOOL lit = NO;
+		for (CFIndex i = 0; i < length && !lit; i++)
+			lit = bytes[i] != 0;
+		CFRelease(data);
+		if (lit)
+			return NO;
+	}
+	return YES;
+}
+
+/// The cache key: the file and the side it is rastered for. Keyed by the file
+/// alone, a sticker whose file had first been built for a 17 pt custom emoji
+/// got that emoji's 34 px frames, stretched over 130 pt.
+static NSString *TGLottieKey(NSString *path, CGSize viewSize) {
+	return [NSString stringWithFormat:@"%@|%.0f", path,
+			viewSize.width > 0 ? viewSize.width : 130.0];
+}
+
 @interface TGLottieView ()
 @property (nonatomic, copy) NSString *loadedPath;
 /// The file this view asked for while its model was still being built.
@@ -786,6 +819,8 @@ static dispatch_queue_t TGLottiePlayerQueue(void) {
 @property (nonatomic, strong) NSTimer *timer;
 @property (nonatomic, assign) BOOL loaded;
 @property (nonatomic, assign) BOOL isPlaying;
+/// Stop after the loop now running.
+@property (nonatomic, assign) BOOL once;
 @end
 
 
@@ -939,9 +974,10 @@ static BOOL sBuildsDeferred = NO;
 - (void)buildStickerModelForFile:(NSString *)path {
 	NSCache *cache = TGLottieStickerCache();
 	NSMutableSet *building = TGLottieBuilding();
-	if ([building containsObject:path])
+	NSString *key = TGLottieKey(path, self.bounds.size);
+	if ([building containsObject:key])
 		return;
-	[building addObject:path];
+	[building addObject:key];
 	double buildStart = TGPerfNow();
 
 	BOOL isWebM = [path.pathExtension.lowercaseString isEqualToString:@"webm"];
@@ -1006,7 +1042,7 @@ static BOOL sBuildsDeferred = NO;
 
 		NSString *ext = path.pathExtension.lowercaseString;
 		dispatch_async(dispatch_get_main_queue(), ^{
-			[building removeObject:path];
+			[building removeObject:key];
 			const char *kind = isWebM ? "webm" : "tgs";
 			TGPerfReport("sticker build", kind, buildStart, 50.0);
 			if (!ok) {
@@ -1019,12 +1055,12 @@ static BOOL sBuildsDeferred = NO;
 				cost = TGStickerFrameBytes(
 						(size_t)(model.firstFrame.size.width * model.firstFrame.scale),
 						(size_t)(model.firstFrame.size.height * model.firstFrame.scale), 1);
-			[cache setObject:model forKey:path cost:cost];
+			[cache setObject:model forKey:key cost:cost];
 			// Every view still waiting for this file loads it now from the
 			// cache and hears it is ready; one reused for another file since
 			// has a different waitingPath and is skipped.
-			NSHashTable *waiters = [TGLottieWaiters() objectForKey:path];
-			[TGLottieWaiters() removeObjectForKey:path];
+			NSHashTable *waiters = [TGLottieWaiters() objectForKey:key];
+			[TGLottieWaiters() removeObjectForKey:key];
 			for (TGLottieView *view in waiters.allObjects){
 				if (![view.waitingPath isEqualToString:path])
 					continue;
@@ -1040,7 +1076,7 @@ static BOOL sBuildsDeferred = NO;
 
 - (BOOL)loadStickerFileInner:(NSString *)path {
 	if (!path.length) return NO;
-	if ([self.loadedPath isEqualToString:path] && self.loaded) {
+	if ([self.loadedPath isEqualToString:path] && self.loaded && !self.model.blank) {
 		if (self.isPlaying) {
 			if (self.model.isWebM) {
 				[self ensureWebMPlayer];
@@ -1058,20 +1094,21 @@ static BOOL sBuildsDeferred = NO;
 	}
 
 	NSCache *cache = TGLottieStickerCache();
-	TGLottieModel *model = [cache objectForKey:path];
+	NSString *key = TGLottieKey(path, self.bounds.size);
+	TGLottieModel *model = [cache objectForKey:key];
 
 	if (!model){
 		// Remember who asked, whether this call starts the build or one is
 		// already running for another view.
 		self.waitingPath = path;
-		NSHashTable *waiters = [TGLottieWaiters() objectForKey:path];
+		NSHashTable *waiters = [TGLottieWaiters() objectForKey:key];
 		if (!waiters){
 			waiters = [NSHashTable weakObjectsHashTable];
-			[TGLottieWaiters() setObject:waiters forKey:path];
+			[TGLottieWaiters() setObject:waiters forKey:key];
 		}
 		[waiters addObject:self];
 	}
-	if (!model && ![TGLottieBuilding() containsObject:path]) {
+	if (!model && ![TGLottieBuilding() containsObject:key]) {
 		// First look at this file: the parse and the first raster never run
 		// on the main thread, so the scroll is not held by them. Until they
 		// answer, this call is NO and the cell shows the emoji it stands for.
@@ -1086,6 +1123,11 @@ static BOOL sBuildsDeferred = NO;
 	if (!model)
 		// Building in the background right now.
 		return NO;
+	if (model.blank) {
+		self.loaded = NO;
+		self.loadedPath = nil;
+		return NO;
+	}
 
 	self.loadedPath = path;
 	self.model = model;
@@ -1148,9 +1190,26 @@ static BOOL sBuildsDeferred = NO;
 					}
 				}
 
+				BOOL blank = TGLottieFramesAreBlank(rendered);
 				dispatch_async(dispatch_get_main_queue(), ^{
 					model.cachedFrames = rendered;
 					model.isRasterizing = NO;
+					if (blank) {
+						// A pin emoji drew nothing in any of its frames and
+						// sat in the message as an empty space, looping.
+						model.blank = YES;
+						NSLog(@"TGLottie: %@ renders blank, keeping the still",
+								path.lastPathComponent);
+						TGLottieView *me = weakSelf;
+						if ([me.loadedPath isEqualToString:path]) {
+							[me stop];
+							me.loaded = NO;
+							me.loadedPath = nil;
+							if (me.onStickerReady)
+								me.onStickerReady();
+						}
+						return;
+					}
 					// The real cost is known only now that the loop is done:
 					// re-inserting lets the cache evict what it overpaid for.
 					if (rendered.count > 0) {
@@ -1158,7 +1217,7 @@ static BOOL sBuildsDeferred = NO;
 						size_t cost = TGStickerFrameBytes(CGImageGetWidth(f0),
 														  CGImageGetHeight(f0),
 														  (int)rendered.count);
-						[TGLottieStickerCache() setObject:model forKey:path cost:cost];
+						[TGLottieStickerCache() setObject:model forKey:key cost:cost];
 					}
 					if ([weakSelf.loadedPath isEqualToString:path]) {
 						if (rendered.count > 0 && !weakSelf.layer.contents) {
@@ -1179,6 +1238,49 @@ static BOOL sBuildsDeferred = NO;
 }
 
 - (void)play {
+	self.once = NO;
+	[NSObject cancelPreviousPerformRequestsWithTarget:self
+			selector:@selector(finishOnce) object:nil];
+	[self startPlaying];
+}
+
+- (void)playOnce {
+	// Already on its one loop: a table reload must not start it over.
+	if (self.once && self.isPlaying)
+		return;
+	self.once = YES;
+	self.currentFrameIndex = 0;
+	[self startPlaying];
+}
+
+/// The stream player loops by itself and reports nothing, so its one loop is
+/// timed. ponytail: a clock, not a frame count - ends up to a frame early or
+/// late; give the player an end callback if that ever shows.
+- (void)armOnceTimer {
+	if (!self.once)
+		return;
+	[NSObject cancelPreviousPerformRequestsWithTarget:self
+			selector:@selector(finishOnce) object:nil];
+	NSTimeInterval loop = self.webMPlayer.duration;
+	[self performSelector:@selector(finishOnce) withObject:nil
+			   afterDelay:loop > 0.2 ? loop : 3.0];
+}
+
+- (void)finishOnce {
+	if (!self.once)
+		return;
+	[self stop];
+	self.currentFrameIndex = 0;
+	NSArray *frames = self.model.cachedFrames;
+	if (frames.count > 0)
+		self.layer.contents = frames[0];
+	else if (self.model.firstFrame)
+		self.layer.contents = (__bridge id)self.model.firstFrame.CGImage;
+	if (self.onPlayedOnce)
+		self.onPlayedOnce();
+}
+
+- (void)startPlaying {
 	self.isPlaying = YES;
 	if (self.loaded && self.model.isWebM && !self.webMPlayer) {
 		[self ensureWebMPlayer];
@@ -1186,6 +1288,7 @@ static BOOL sBuildsDeferred = NO;
 	}
 	if (self.webMPlayer) {
 		[self.webMPlayer play];
+		[self armOnceTimer];
 	} else if (self.loaded && !self.model.isWebM && !self.timer) {
 		[self startTimer];
 	}
@@ -1214,14 +1317,19 @@ static BOOL sBuildsDeferred = NO;
 				return;
 			me.webMPlayer = player;
 			player.targetLayer = me.layer;
-			if (me.isPlaying)
+			if (me.isPlaying) {
 				[player play];
+				[me armOnceTimer];
+			}
 		});
 	});
 }
 
 - (void)stop {
 	self.isPlaying = NO;
+	self.once = NO;
+	[NSObject cancelPreviousPerformRequestsWithTarget:self
+			selector:@selector(finishOnce) object:nil];
 	if (self.webMPlayer) {
 		[self.webMPlayer stop];
 	}
@@ -1236,6 +1344,10 @@ static BOOL sBuildsDeferred = NO;
 	NSArray *frames = self.model.cachedFrames;
 	if (frames.count > 0) {
 		self.currentFrameIndex = (self.currentFrameIndex + 1) % frames.count;
+		if (self.once && self.currentFrameIndex == 0) {
+			[self finishOnce];
+			return;
+		}
 		CGImageRef img = (__bridge CGImageRef)frames[self.currentFrameIndex];
 		if (img) {
 			self.layer.contents = (__bridge id)img;

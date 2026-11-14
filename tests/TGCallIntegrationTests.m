@@ -48,6 +48,7 @@
 @property (nonatomic, assign) uint32_t currentSenderTag;
 @property (nonatomic, assign) uint32_t nominatedSenderTag;
 @property (nonatomic, assign) uint32_t verifiedMediaTag;
+@property (nonatomic, strong) NSMutableArray *reflectors;
 - (void)teardown;
 - (void)inspectReflectorPacket:(NSData *)packet;
 - (void)sendOutgoingAudioFrame:(NSData *)opusFrame;
@@ -76,6 +77,21 @@
 @interface TGClient (Testing)
 + (NSArray<NSDictionary *> *)sentRequests;
 + (void)resetSentRequests;
+@end
+
+/// Notes what was still alive when the call stopped it. -stop returns only
+/// after the reader thread has left onPacket, so whatever that thread reads
+/// has to outlive it.
+@interface TGCallStopOrderReflector : TGCallReflector
+@property (nonatomic, assign) BOOL stopped;
+@property (nonatomic, assign) BOOL engineAliveAtStop;
+@end
+
+@implementation TGCallStopOrderReflector
+- (void)stop {
+    self.stopped = YES;
+    self.engineAliveAtStop = [TGCall shared].audioEngine != nil;
+}
 @end
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -978,6 +994,23 @@
 
     XCTAssertTrue(done, @"At least 25 frames each way must arrive and decode");
     XCTAssertEqual(self.peer.decryptFailures, 0u, @"Zero decrypt failures expected");
+}
+
+/// The reader thread starts a new audio engine when it finds none. With the
+/// reflectors stopped last, a packet arriving mid-teardown brought the
+/// microphone back up on a call that had already ended.
+- (void)testTeardown_StopsReflectorsBeforeTheAudioEngine {
+    TGCall *call = [TGCall shared];
+    TGCallStopOrderReflector *reflector = [[TGCallStopOrderReflector alloc] init];
+    call.reflectors = [NSMutableArray arrayWithObject:reflector];
+    call.audioEngine = [[TGCallAudioEngine alloc] init];
+
+    [call teardown];
+
+    XCTAssertTrue(reflector.stopped);
+    XCTAssertTrue(reflector.engineAliveAtStop,
+            @"the readers must be gone before what they read is released");
+    XCTAssertNil(call.audioEngine);
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

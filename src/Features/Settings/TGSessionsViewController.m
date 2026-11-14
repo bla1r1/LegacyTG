@@ -1,3 +1,4 @@
+#import "TGObservers.h"
 #import "TGSessionsViewController.h"
 #import "TGLocalization.h"
 #import "TGAlertSheet.h"
@@ -25,9 +26,7 @@
 	__weak typeof(self) weakSelf = self;
 	// A new login waiting to be confirmed arrives as updateUnconfirmedSession
 	// while this list is open; re-reading is how the row gets its Confirm.
-	[[NSNotificationCenter defaultCenter] addObserverForName:TGSessionsChangedNotification
-			object:nil queue:[NSOperationQueue mainQueue]
-		 usingBlock:^(NSNotification *note) {
+	[TGObservers observe:TGSessionsChangedNotification owner:self usingBlock:^(NSNotification *note) {
 		[weakSelf refresh];
 	}];
 }

@@ -1,3 +1,4 @@
+#import "TGObservers.h"
 #import "TGEmojiPanel.h"
 #import "TGEmojiData.h"
 #import "TGCapabilities.h"
@@ -54,10 +55,7 @@ static UIImage *TGBackspaceImage(UIColor *colour) {
 	// different picture after an account switch. The cache is a file-scope
 	// static shared by every panel, so it is emptied when the account changes
 	// instead of drawing the previous account's sticker under a new one.
-	[[NSNotificationCenter defaultCenter]
-			addObserverForName:TGAccountDidSwitchNotification
-						object:nil queue:[NSOperationQueue mainQueue]
-				 usingBlock:^(NSNotification *note){
+	[TGObservers observe:TGAccountDidSwitchNotification owner:self usingBlock:^(NSNotification *note){
 		[TGPanelImageCache() removeAllObjects];
 	}];
 }

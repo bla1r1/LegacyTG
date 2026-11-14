@@ -3,6 +3,7 @@
 #import "TGPeerStore.h"
 #import "TGStyle.h"
 #import "TGProfileHeaderView.h"
+#import "TGProfileAudioViewController.h"
 #import "TGProfileLogic.h"
 #import "TGLocalization.h"
 
@@ -180,6 +181,18 @@
 
 - (BOOL)isOwnProfile {
 	return self.userId && self.userId == [[TGProfileStore shared].me[@"id"] longLongValue];
+}
+
+/// The saved-music strip in the header. The header view calls this through
+/// musicTap; the method was dropped when the header became its own view, so a
+/// tap on the strip ended the app with an unrecognized selector.
+- (void)musicStripTapped {
+	TGProfileAudioViewController *audio = [[TGProfileAudioViewController alloc] init];
+	audio.userId = self.userId;
+	audio.subjectTitle = self.name.length ? self.name : @"Profile Music";
+	audio.autoplay = YES;
+	audio.hidesBottomBarWhenPushed = YES;
+	[self.navigationController pushViewController:audio animated:YES];
 }
 
 @end

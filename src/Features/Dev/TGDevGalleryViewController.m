@@ -131,6 +131,8 @@ static const CGFloat kAvatarLargeSide = TGMetricChatAvatar;
 
 - (UILabel *)createSectionHeaderWithTitle:(NSString *)title {
 	UILabel *label = [[UILabel alloc] init];
+	// Clear, or iOS 6 paints the label's default white box.
+	label.backgroundColor = [UIColor clearColor];
 	label.font = TGFontMicroStrong();
 	label.textColor = [TGTheme shared].secondaryTextColour;
 	label.shadowColor = [TGTheme shared].etchedTextShadowColour;
@@ -170,6 +172,8 @@ static const CGFloat kAvatarLargeSide = TGMetricChatAvatar;
 	[_contentView addSubview:_pushSwitch];
 
 	_pushLabel = [[UILabel alloc] init];
+	// Clear, or iOS 6 paints the label's default white box.
+	_pushLabel.backgroundColor = [UIColor clearColor];
 	_pushLabel.font = TGFontRow();
 	_pushLabel.textColor = theme.primaryTextColour;
 	_pushLabel.text = @"Push Notifications: ON";
@@ -181,6 +185,8 @@ static const CGFloat kAvatarLargeSide = TGMetricChatAvatar;
 	[_contentView addSubview:_soundSwitch];
 
 	_soundLabel = [[UILabel alloc] init];
+	// Clear, or iOS 6 paints the label's default white box.
+	_soundLabel.backgroundColor = [UIColor clearColor];
 	_soundLabel.font = TGFontRow();
 	_soundLabel.textColor = theme.primaryTextColour;
 	_soundLabel.text = @"Sound Effects: OFF";
@@ -196,6 +202,8 @@ static const CGFloat kAvatarLargeSide = TGMetricChatAvatar;
 	[_contentView addSubview:_volumeSlider];
 
 	_volumeLabel = [[UILabel alloc] init];
+	// Clear, or iOS 6 paints the label's default white box.
+	_volumeLabel.backgroundColor = [UIColor clearColor];
 	_volumeLabel.font = TGFontCaptionStrong();
 	_volumeLabel.textColor = theme.secondaryTextColour;
 	_volumeLabel.text = @"Volume: 68%";
@@ -216,6 +224,8 @@ static const CGFloat kAvatarLargeSide = TGMetricChatAvatar;
 	[_contentView addSubview:_previewCard];
 
 	_previewCardLabel = [[UILabel alloc] init];
+	// Clear, or iOS 6 paints the label's default white box.
+	_previewCardLabel.backgroundColor = [UIColor clearColor];
 	_previewCardLabel.font = TGFontBody();
 	_previewCardLabel.textColor = theme.primaryTextColour;
 	_previewCardLabel.text = @"Viewing Overview panel. Select a segment above to animate.";
@@ -263,6 +273,8 @@ static const CGFloat kAvatarLargeSide = TGMetricChatAvatar;
 	[_incomingBubble addSubview:_incomingShine];
 
 	_incomingBody = [[UILabel alloc] init];
+	// Clear, or iOS 6 paints the label's default white box.
+	_incomingBody.backgroundColor = [UIColor clearColor];
 	_incomingBody.font = TGFontRow();
 	_incomingBody.textColor = [theme primaryTextColour];
 	_incomingBody.shadowColor = [theme etchedTextShadowColour];
@@ -272,6 +284,8 @@ static const CGFloat kAvatarLargeSide = TGMetricChatAvatar;
 	[_incomingBubble addSubview:_incomingBody];
 
 	_incomingTime = [[UILabel alloc] init];
+	// Clear, or iOS 6 paints the label's default white box.
+	_incomingTime.backgroundColor = [UIColor clearColor];
 	_incomingTime.font = TGFontMicro();
 	_incomingTime.textColor = [theme timeColour];
 	_incomingTime.shadowColor = [theme etchedTextShadowColour];
@@ -293,6 +307,8 @@ static const CGFloat kAvatarLargeSide = TGMetricChatAvatar;
 	[_outgoingBubble addSubview:_outgoingShine];
 
 	_outgoingBody = [[UILabel alloc] init];
+	// Clear, or iOS 6 paints the label's default white box.
+	_outgoingBody.backgroundColor = [UIColor clearColor];
 	_outgoingBody.font = TGFontRow();
 	_outgoingBody.textColor = [theme onAccentColour];
 	_outgoingBody.shadowColor = [theme navBarTextShadowColour];
@@ -302,6 +318,8 @@ static const CGFloat kAvatarLargeSide = TGMetricChatAvatar;
 	[_outgoingBubble addSubview:_outgoingBody];
 
 	_outgoingTime = [[UILabel alloc] init];
+	// Clear, or iOS 6 paints the label's default white box.
+	_outgoingTime.backgroundColor = [UIColor clearColor];
 	_outgoingTime.font = TGFontMicro();
 	_outgoingTime.textColor = [theme timeMineColour];
 	_outgoingTime.shadowColor = [theme navBarTextShadowColour];

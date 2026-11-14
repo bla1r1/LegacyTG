@@ -167,12 +167,16 @@ static TGChatRowAccessories TGChatRowCellAccessories(NSDictionary *row,
 	[self.contentView addSubview:self.avatar];
 
 	self.titleLabel = [[UILabel alloc] init];
+	// Clear, or iOS 6 paints the label's default white box.
+	self.titleLabel.backgroundColor = [UIColor clearColor];
 	self.titleLabel.font = TGChatRowCellTitleFont();
 	self.titleLabel.textColor = [theme primaryTextColour];
 	self.titleLabel.lineBreakMode = NSLineBreakByTruncatingTail;
 	[self.contentView addSubview:self.titleLabel];
 
 	self.previewLabel = [[UILabel alloc] init];
+	// Clear, or iOS 6 paints the label's default white box.
+	self.previewLabel.backgroundColor = [UIColor clearColor];
 	self.previewLabel.font = TGFontBody();
 	self.previewLabel.textColor = [theme secondaryTextColour];
 	self.previewLabel.numberOfLines = 2;
@@ -180,6 +184,8 @@ static TGChatRowAccessories TGChatRowCellAccessories(NSDictionary *row,
 	[self.contentView addSubview:self.previewLabel];
 
 	self.dateLabel = [[UILabel alloc] init];
+	// Clear, or iOS 6 paints the label's default white box.
+	self.dateLabel.backgroundColor = [UIColor clearColor];
 	self.dateLabel.font = TGFontSubhead();
 	self.dateLabel.textColor = [theme listDateColour];
 	self.dateLabel.textAlignment = NSTextAlignmentRight;

@@ -774,6 +774,8 @@ static void TGStoryCrossFade(UINavigationController *navigation) {
 	[self.view addSubview:self.imageView];
 
 	self.durationLabel = [[UILabel alloc] initWithFrame:CGRectZero];
+	// Clear, or iOS 6 paints the label's default white box.
+	self.durationLabel.backgroundColor = [UIColor clearColor];
 	self.durationLabel.font = TGFontCaption();
 	self.durationLabel.textAlignment = NSTextAlignmentCenter;
 	self.durationLabel.hidden = !self.videoPath || self.duration <= 0;
