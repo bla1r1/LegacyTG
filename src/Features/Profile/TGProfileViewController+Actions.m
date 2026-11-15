@@ -226,11 +226,12 @@
 		if (!me)
 			return;
 		if (![result isEqualToString:@"ok"]){
-			NSString *say = [result isEqualToString:@"paidMessages"]
-					? @"An error occurred."
-					: ([result isEqualToString:@"userRestrictsNewChats"]
-					   ? @"An error occurred."
-					   : @"An error occurred.");
+			// Chat.ToastMessagingRestrictedToPremium for a person who takes
+			// new chats from contacts and Premium accounts only.
+			NSString *say = [result isEqualToString:@"userRestrictsNewChats"]
+					? [TGLocalizedFormat(@"**%@** only accepts messages from contacts and **Premium** users.", name ?: @"")
+							stringByReplacingOccurrencesOfString:@"**" withString:@""]
+					: TGLocalized(@"An error occurred.");
 			[TGAlertSheet showMessage:say
 								title:name.length ? name : @"Message"
 							   inView:me.view];

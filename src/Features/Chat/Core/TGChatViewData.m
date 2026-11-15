@@ -1,5 +1,6 @@
 #import "TGPerf.h"
 #import "TGLocalization.h"
+#import "TGGroupStore.h"
 #import "TGChatViewController.h"
 #import "TGMessageStore.h"
 #import "TGTheme.h"
@@ -287,6 +288,7 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 		// A failed send from before this screen opened is already in the
 		// history; seed the store so the bubble's mark and its retry agree.
 		[[TGSendStore shared] adoptMessages:messages inChat:me.chatId];
+		[me refreshUnreadJumps];
 		me.rawMessages = [me.streamStore messages];
 		me.messages = [me groupedMessagesFromMessages:me.rawMessages];
 		NSInteger unreadRow = firstLoad ? [me unreadSeparatorRow] : NSNotFound;
@@ -495,6 +497,8 @@ static NSMutableDictionary *TGChatProfileMemo(void) {
 		BOOL isMember = [known[@"isMember"] boolValue];
 		self.isChannel = isChannel;
 		self.isChannelMember = isMember;
+		if (!isChannel)
+			[self refreshSlowModeWait];
 		if (!self.isGroup){
 			self.isGroup = YES;
 			[self.table reloadData];
@@ -1301,18 +1305,10 @@ static NSMutableDictionary *TGChatProfileMemo(void) {
 				TGChatViewController *me = weakSelf;
 				if (!me)
 					return;
-				NSString *body;
-				if (!info)
-					body = @"Could not load this giveaway.";
-				else if ([info[@"isWinner"] boolValue])
-					body = [info[@"giftCode"] length]
-						? [NSString stringWithFormat:@"You won a prize in this giveaway. Your gift code: %@", info[@"giftCode"]]
-						: @"You won a prize in this giveaway.";
-				else if ([info[@"isEnded"] boolValue])
-					body = @"This giveaway has ended.";
-				else
-					body = @"This giveaway is still running.";
-				[TGAlertSheet showMessage:body title:@"Giveaway" inView:me.view];
+				BOOL ended = [info[@"isEnded"] boolValue] || [info[@"isWinner"] boolValue];
+				[TGAlertSheet showMessage:TGGiveawayInfoText(info, me.chatTitle)
+									title:ended ? TGLocalized(@"Giveaway Ended") : TGLocalized(@"About This Giveaway")
+								   inView:me.view];
 			});
 		}];
 		break;
@@ -1362,5 +1358,16 @@ static NSMutableDictionary *TGChatProfileMemo(void) {
 	});
 }
 
+
+/// Asks how long slow mode still holds this account back here; the send
+/// button says so instead of sending into a refusal.
+- (void)refreshSlowModeWait {
+	__weak typeof(self) weakSelf = self;
+	[[TGGroupStore shared] slowModeWaitForChat:self.chatId completion:^(double seconds){
+		dispatch_async(dispatch_get_main_queue(), ^{
+			weakSelf.slowModeUntil = seconds > 0 ? [NSDate date].timeIntervalSince1970 + seconds : 0;
+		});
+	}];
+}
 
 @end

@@ -63,6 +63,7 @@
 	X(TGUpdateChatOnlineMemberCount,  "updateChatOnlineMemberCount") \
 	X(TGUpdateChatUnreadPollVoteCount, "updateChatUnreadPollVoteCount") \
 	X(TGUpdateMessageContainsUnreadPollVotes, "updateMessageContainsUnreadPollVotes") \
+	X(TGUpdateSpeechRecognitionTrial, "updateSpeechRecognitionTrial") \
 	X(TGUpdateChatAddedToList,        "updateChatAddedToList") \
 	X(TGUpdateChatRemovedFromList,    "updateChatRemovedFromList") \
 	X(TGUpdateScopeNotificationSettings, "updateScopeNotificationSettings") \
@@ -84,6 +85,7 @@
 	X(TGUpdateSupergroup,             "updateSupergroup") \
 	X(TGUpdateUserStatus,             "updateUserStatus") \
 	X(TGUpdateChatActionBar,          "updateChatActionBar") \
+	X(TGUpdateChatBusinessBotManageBar, "updateChatBusinessBotManageBar") \
 	X(TGUpdateChatFolders,            "updateChatFolders") \
 	X(TGUpdateUnreadChatCount,        "updateUnreadChatCount") \
 	X(TGUpdateChatReplyMarkup,        "updateChatReplyMarkup") \

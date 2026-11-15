@@ -251,6 +251,28 @@ static NSDictionary *TGFilterFromName(NSString *name) {
 							  @"detail" : [NSString stringWithFormat:@"%.0f%%",
 									[result[@"enabled_notifications_percentage"] doubleValue]]}];
 		}
+		// The graphs follow in official's order (ChannelStatsController,
+		// GroupStatsController), each under its section title; a row
+		// carrying "graph" is drawn, not listed.
+		NSArray *graphs = [kind isEqualToString:@"chatStatisticsChannel"] ? @[
+			@[@"member_count_graph", @"GROWTH"], @[@"join_graph", @"FOLLOWERS"],
+			@[@"mute_graph", @"NOTIFICATIONS"], @[@"view_count_by_hour_graph", @"VIEWS BY HOURS"],
+			@[@"view_count_by_source_graph", @"VIEWS BY SOURCE"],
+			@[@"join_by_source_graph", @"FOLLOWERS BY SOURCE"], @[@"language_graph", @"LANGUAGES"],
+			@[@"message_interaction_graph", @"INTERACTIONS"],
+			@[@"instant_view_interaction_graph", @"INSTANT VIEW INTERACTIONS"],
+		] : @[
+			@[@"member_count_graph", @"GROWTH"], @[@"join_graph", @"GROUP MEMBERS"],
+			@[@"join_by_source_graph", @"NEW MEMBERS BY SOURCE"],
+			@[@"language_graph", @"MEMBERS' PRIMARY LANGUAGE"],
+			@[@"message_content_graph", @"MESSAGES"], @[@"action_graph", @"ACTIONS"],
+			@[@"day_graph", @"TOP HOURS"], @[@"week_graph", @"TOP DAYS OF WEEK"],
+		];
+		for (NSArray *pair in graphs){
+			NSDictionary *graph = result[pair[0]];
+			if ([graph isKindOfClass:NSDictionary.class])
+				[rows addObject:@{@"title" : pair[1], @"graph" : graph}];
+		}
 		if (completion)
 			completion(rows, kind);
 	}];

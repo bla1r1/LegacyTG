@@ -13,6 +13,7 @@
 #import "TGTestRunner.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
+#import "TGStatChart.h"
 
 @interface TGMessageParserTests : XCTestCase @end
 
@@ -981,6 +982,177 @@ static NSDictionary *pmPaidMediaMsgContent(id starCount, NSString *caption, NSAr
 	NSDictionary *flat = TGFlattenMessage(fxMsg(content, nil));
 	XCTAssertEqualObjects(flat[@"kind"], @"messageChatAddedToCommunity");
 	XCTAssertEqual([flat[@"communityId"] longLongValue], 9876543210LL);
+}
+
+
+#pragma mark - batch 3 fields
+
+- (void)testExtras_BoostImportRepliersAndUnreadMarks {
+	NSDictionary *row = TGFlattenMessage(fxMsg(fxTextContent(@"hi"), @{
+		@"sender_boost_count" : @4,
+		@"import_info" : @{@"@type" : @"messageImportInfo", @"sender_name" : @"Ann", @"date" : @1500000000},
+		@"unread_reactions" : @[@{@"@type" : @"unreadReaction"}, @{@"@type" : @"unreadReaction"}],
+		@"contains_unread_poll_votes" : @YES,
+		@"interaction_info" : @{@"reply_info" : @{@"reply_count" : @5, @"recent_replier_ids" : @[
+			@{@"@type" : @"messageSenderUser", @"user_id" : @7},
+			@{@"@type" : @"messageSenderChat", @"chat_id" : @-100},
+			@{@"@type" : @"messageSenderUser", @"user_id" : @8},
+			@{@"@type" : @"messageSenderUser", @"user_id" : @9}]}},
+	}));
+	XCTAssertEqualObjects(row[@"boostCount"], @4);
+	XCTAssertEqualObjects(row[@"importDate"], @1500000000);
+	XCTAssertEqualObjects(row[@"unreadReactions"], @2);
+	XCTAssertEqualObjects(row[@"unreadPollVotes"], @YES);
+	XCTAssertEqualObjects(row[@"recentRepliers"], (@[@7, @-100, @8]));
+	NSDictionary *plain = TGFlattenMessage(fxMsg(fxTextContent(@"hi"), nil));
+	XCTAssertNil(plain[@"boostCount"]);
+	XCTAssertNil(plain[@"recentRepliers"]);
+}
+
+// A retry that TDLib will refuse again is not offered as one.
+- (void)testFailedSendBlocker_StarsAndSenderBlockReplyDoesNot {
+	NSDictionary *base = @{@"@type" : @"messageSendingStateFailed", @"can_retry" : @YES};
+	XCTAssertEqualObjects(TGFailedSendBlocker(base), @"");
+	NSMutableDictionary *stars = [base mutableCopy];
+	stars[@"required_paid_message_star_count"] = @25;
+	XCTAssertEqualObjects(TGFailedSendBlocker(stars), @"stars");
+	NSMutableDictionary *sender = [base mutableCopy];
+	sender[@"need_another_sender"] = @YES;
+	XCTAssertEqualObjects(TGFailedSendBlocker(sender), @"sender");
+	NSMutableDictionary *reply = [base mutableCopy];
+	reply[@"need_drop_reply"] = @YES;
+	XCTAssertEqualObjects(TGFailedSendBlocker(reply), @"");
+	NSDictionary *row = TGFlattenMessage(fxMsg(fxTextContent(@"x"), @{@"sending_state" : stars}));
+	XCTAssertEqualObjects(row[@"failBlocker"], @"stars");
+	XCTAssertEqualObjects(row[@"failStars"], @25);
+}
+
+- (void)testReplyKeyboard_CarriesResizeAndPersistent {
+	NSDictionary *kb = TGFlattenReplyMarkup(@{@"@type" : @"replyMarkupShowKeyboard",
+		@"rows" : @[@[@{@"text" : @"A"}]], @"resize_keyboard" : @YES, @"is_persistent" : @YES})[@"replyKeyboard"];
+	XCTAssertEqualObjects(kb[@"resize"], @YES);
+	XCTAssertEqualObjects(kb[@"persistent"], @YES);
+}
+
+- (void)testLinkPreview_PictureSizeAndPlace {
+	NSDictionary *content = @{@"@type" : @"messageText",
+		@"text" : @{@"@type" : @"formattedText", @"text" : @"https://x.org"},
+		@"link_preview" : @{@"url" : @"https://x.org", @"title" : @"X",
+			@"has_large_media" : @YES, @"show_large_media" : @YES,
+			@"show_media_above_description" : @YES,
+			@"type" : @{@"@type" : @"linkPreviewTypeArticle", @"photo" : @{@"sizes" : @[
+				@{@"width" : @90, @"height" : @60, @"photo" : @{@"id" : @11}},
+				@{@"width" : @600, @"height" : @400, @"photo" : @{@"id" : @12}},
+				@{@"width" : @1280, @"height" : @853, @"photo" : @{@"id" : @13}}]}}}};
+	NSDictionary *row = TGFlattenMessage(fxMsg(content, nil));
+	XCTAssertEqualObjects(row[@"linkPreviewPhotoId"], @12);
+	XCTAssertEqualObjects(row[@"linkPreviewLarge"], @YES);
+	XCTAssertEqualObjects(row[@"linkPreviewAbove"], @YES);
+	NSMutableDictionary *lp = [content[@"link_preview"] mutableCopy];
+	lp[@"has_large_media"] = @NO;
+	NSMutableDictionary *fixed = [content mutableCopy];
+	fixed[@"link_preview"] = lp;
+	XCTAssertEqualObjects(TGFlattenMessage(fxMsg(fixed, nil))[@"linkPreviewLarge"], @NO);
+}
+
+
+#pragma mark - batch 4 fields
+
+- (void)testTimersVideoStartAndManualQuote {
+	NSDictionary *row = TGFlattenMessage(fxMsg(@{@"@type" : @"messageVideo",
+		@"video" : @{@"duration" : @90}, @"start_timestamp" : @30,
+		@"caption" : @{@"@type" : @"formattedText", @"text" : @""}}, @{
+		@"auto_delete_in" : @3600.0,
+		@"reply_to" : @{@"@type" : @"messageReplyToMessage", @"message_id" : @3,
+			@"quote" : @{@"@type" : @"textQuote", @"text" : @{@"@type" : @"formattedText",
+				@"text" : @"part"}, @"position" : @0, @"is_manual" : @YES}}}));
+	XCTAssertEqualObjects(row[@"startSeconds"], @30);
+	XCTAssertEqualObjects(row[@"replyQuoteManual"], @YES);
+	double left = [row[@"deleteAt"] doubleValue] - [[NSDate date] timeIntervalSince1970];
+	XCTAssertTrue(left > 3590 && left <= 3600, @"%f", left);
+	// self_destruct_in wins: the opened timed photo goes first.
+	NSDictionary *both = TGFlattenMessage(fxMsg(fxTextContent(@"x"),
+		@{@"auto_delete_in" : @3600.0, @"self_destruct_in" : @5.0}));
+	XCTAssertTrue([both[@"deleteAt"] doubleValue] - [[NSDate date] timeIntervalSince1970] <= 5);
+}
+
+// ChatMessageRestrictedBubbleContentNode: the reason, in italics, instead
+// of the content.
+- (void)testRestrictedMessage_ShowsTheReason {
+	NSDictionary *row = TGFlattenMessage(fxMsg(@{@"@type" : @"messagePhoto",
+		@"photo" : @{@"sizes" : @[@{@"width" : @100, @"height" : @100, @"photo" : @{@"id" : @9}}]},
+		@"caption" : @{@"@type" : @"formattedText", @"text" : @""}}, @{
+		@"restriction_info" : @{@"@type" : @"restrictionInfo",
+			@"restriction_reason" : @"This message is unavailable.", @"has_sensitive_content" : @NO}}));
+	XCTAssertEqualObjects(row[@"text"], @"This message is unavailable.");
+	XCTAssertEqualObjects(row[@"kind"], @"messageText");
+	XCTAssertTrue([row[@"photoId"] isKindOfClass:NSNull.class]);
+	XCTAssertEqualObjects(row[@"entities"][0][@"type"][@"@type"], @"textEntityTypeItalic");
+}
+
+
+#pragma mark - statistics graphs
+
+- (void)testStatChart_ParsesTelegramChartJson {
+	NSString *json = @"{\"columns\":[[\"x\",1,2,3],[\"y0\",5,9,7],[\"y1\",1,2,30]],"
+		"\"types\":{\"x\":\"x\",\"y0\":\"line\",\"y1\":\"bar\"},"
+		"\"names\":{\"y0\":\"Joined\",\"y1\":\"Left\"},\"colors\":{\"y0\":\"#4BA0E9\"}}";
+	NSDictionary *chart = TGStatChartParse(json);
+	XCTAssertEqual([chart[@"x"] count], (NSUInteger)3);
+	XCTAssertEqual([chart[@"series"] count], (NSUInteger)2);
+	XCTAssertEqualObjects(chart[@"series"][0][@"name"], @"Joined");
+	XCTAssertEqualObjects(chart[@"series"][0][@"colour"], @"#4BA0E9");
+	XCTAssertEqualObjects(chart[@"series"][1][@"type"], @"bar");
+	XCTAssertEqual(TGStatChartMax(chart), 30.0);
+	XCTAssertNil(TGStatChartParse(@"{\"columns\":[[\"y0\",1]]}"));
+	XCTAssertNil(TGStatChartParse(@"not json"));
+}
+
+
+- (void)testActionBarFields_UnarchiveRequestDateAccount {
+	NSDictionary *add = TGActionBarFields(@{@"@type" : @"chatActionBarReportAddBlock", @"can_unarchive" : @YES,
+		@"account_info" : @{@"registration_month" : @3, @"registration_year" : @2021,
+			@"phone_number_country_code" : @"UA", @"last_name_change_date" : @5, @"last_photo_change_date" : @6}});
+	XCTAssertEqualObjects(add[@"actionBarCanUnarchive"], @YES);
+	XCTAssertEqualObjects(add[@"actionBarAccount"][@"country"], @"UA");
+	XCTAssertEqualObjects(add[@"actionBarAccount"][@"registrationYear"], @2021);
+	NSDictionary *join = TGActionBarFields(@{@"@type" : @"chatActionBarJoinRequest", @"title" : @"Cats",
+		@"is_channel" : @YES, @"request_date" : @1700000000});
+	XCTAssertEqualObjects(join[@"actionBarRequestDate"], @1700000000);
+	XCTAssertEqualObjects(join[@"actionBarIsChannel"], @YES);
+	XCTAssertNil(join[@"actionBarCanUnarchive"]);
+	XCTAssertEqual(TGActionBarFields(nil).count, (NSUInteger)0);
+}
+
+- (void)testTrack_CarriesTheCoverMinithumbnail {
+	NSDictionary *row = TGFlattenMessage(fxMsg(@{@"@type" : @"messageAudio", @"audio" : @{@"duration" : @10,
+		@"album_cover_minithumbnail" : @{@"width" : @40, @"height" : @40, @"data" : @"AAAA"}},
+		@"caption" : @{@"@type" : @"formattedText", @"text" : @""}}, nil));
+	XCTAssertEqualObjects(row[@"albumCoverMini"][@"data"], @"AAAA");
+}
+
+
+- (void)testUnreadMentionMark {
+	XCTAssertEqualObjects(TGFlattenMessage(fxMsg(fxTextContent(@"@me"), @{@"contains_unread_mention" : @YES}))[@"unreadMention"], @YES);
+	XCTAssertNil(TGFlattenMessage(fxMsg(fxTextContent(@"x"), nil))[@"unreadMention"]);
+}
+
+
+- (void)testBatch8Flatten_PsaReactorsBusinessBotSwitchTarget {
+	NSDictionary *row = TGFlattenMessage(fxMsg(fxTextContent(@"x"), @{
+		@"forward_info" : @{@"origin" : @{@"@type" : @"messageOriginChannel"}, @"public_service_announcement_type" : @"default"},
+		@"interaction_info" : @{@"reactions" : @{@"reactions" : @[], @"can_get_added_reactions" : @NO}}}));
+	XCTAssertEqualObjects(row[@"forwardPsa"], @"default");
+	XCTAssertEqualObjects(row[@"reactorsHidden"], @YES);
+	NSDictionary *bot = TGBusinessBotBarFields(@{@"bot_user_id" : @9, @"is_bot_paused" : @YES,
+		@"can_bot_reply" : @YES, @"manage_url" : @"https://t.me/x"})[@"businessBot"];
+	XCTAssertEqualObjects(bot[@"botId"], @9);
+	XCTAssertEqualObjects(bot[@"paused"], @YES);
+	XCTAssertEqual(TGBusinessBotBarFields(nil).count, (NSUInteger)0);
+	NSDictionary *kb = TGFlattenReplyMarkup(@{@"@type" : @"replyMarkupInlineKeyboard", @"rows" : @[@[
+		@{@"text" : @"Share", @"type" : @{@"@type" : @"inlineKeyboardButtonTypeSwitchInline", @"query" : @"q",
+			@"target_chat" : @{@"@type" : @"targetChatChosen"}}}]]});
+	XCTAssertEqualObjects(kb[@"inlineRows"][0][0][@"chooseChat"], @YES);
 }
 
 @end

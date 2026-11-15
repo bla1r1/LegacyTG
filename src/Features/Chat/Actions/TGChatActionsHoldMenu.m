@@ -16,6 +16,7 @@
 #import "TGGameScoresViewController.h"
 #import "TGPollPresentation.h"
 #import "TGChatActionMenuModel.h"
+#import "TGPerf.h"
 #import <CoreImage/CoreImage.h>
 #import <QuartzCore/QuartzCore.h>
 
@@ -187,15 +188,81 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 
 @implementation TGChatViewController (TGChatActionsHoldMenu)
 
+/// One picture of `view`, at `scale` pixels per point. renderInContext is
+/// the only path iOS 6 offers.
+static UIImage *TGHoldCapture(UIView *view, CGFloat scale) {
+	if (!view || CGRectIsEmpty(view.bounds))
+		return nil;
+	UIGraphicsBeginImageContextWithOptions(view.bounds.size, NO, scale);
+	CGContextRef ctx = UIGraphicsGetCurrentContext();
+	if (!ctx){
+		UIGraphicsEndImageContext();
+		return nil;
+	}
+	CGContextSetInterpolationQuality(ctx, kCGInterpolationLow);
+	[view.layer renderInContext:ctx];
+	UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+	UIGraphicsEndImageContext();
+	return image;
+}
+
+/// The chat as it stands, at `scale`, for the blur. The wallpaper is the
+/// slow part (a full-screen picture scaled down: 170 ms on the A4) and does
+/// not change between holds, so its small copy is kept per picture and size;
+/// the views over it (the list, the composer, the pinned strip) take 5-15 ms.
+static UIImage *TGHoldCaptureChat(UIView *root, UIImageView *wallpaper, CGFloat scale) {
+	static UIImage *cachedWallpaper = nil;
+	static __weak UIImage *cachedSource = nil;
+	static CGSize cachedSize;
+	if (wallpaper.image && (cachedSource != wallpaper.image ||
+			!CGSizeEqualToSize(cachedSize, wallpaper.bounds.size))){
+		cachedWallpaper = TGHoldCapture(wallpaper, scale);
+		cachedSource = wallpaper.image;
+		cachedSize = wallpaper.bounds.size;
+	}
+	UIGraphicsBeginImageContextWithOptions(root.bounds.size, YES, scale);
+	CGContextRef ctx = UIGraphicsGetCurrentContext();
+	if (!ctx){
+		UIGraphicsEndImageContext();
+		return nil;
+	}
+	CGContextSetInterpolationQuality(ctx, kCGInterpolationLow);
+	[root.backgroundColor ?: [UIColor blackColor] setFill];
+	UIRectFill(root.bounds);
+	if (wallpaper.image && cachedWallpaper)
+		[cachedWallpaper drawInRect:[wallpaper convertRect:wallpaper.bounds toView:root]];
+	for (UIView *sub in root.subviews){
+		if (sub == wallpaper || sub.hidden || sub.alpha < TGAlphaEpsilon)
+			continue;
+		CGContextSaveGState(ctx);
+		CGContextTranslateCTM(ctx, CGRectGetMinX(sub.frame), CGRectGetMinY(sub.frame));
+		[sub.layer renderInContext:ctx];
+		CGContextRestoreGState(ctx);
+	}
+	UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+	UIGraphicsEndImageContext();
+	return image;
+}
+
+/// The blur behind a held message. Official lays UIBlurEffect over the chat,
+/// a frosted Gaussian about 20 points wide; iOS 6 has no live blur, so the
+/// chat is captured once at 1x and blurred once: TGTheme's box passes run on
+/// a quarter-size copy, which is what makes a radius this wide cheap on the
+/// A4 (the old hold used 10 points, a 3-pixel box, and read as a smudge).
+static const CGFloat kHoldBlurRadius = 28.0f;
+
 #pragma mark - hold presentation
 
-/// Official keeps the held bubble in place and dims the chat around it. This
-/// screen does the same: one transparent dim, no snapshot, no lift and no
-/// per-hold capture. The returned rect is the bubble's frame, which is where
-/// the action card anchors itself.
+/// Official lifts the held message out of the list over a blurred, dimmed
+/// chat (ContextControllerImpl: UIBlurEffect plus contextMenu.dimColor) and
+/// moves it only when the reaction bar or the card would leave the screen.
+/// Here the chat is one blurred capture taken without the bubble, the
+/// bubble is a sharp copy above it, and nothing is live.
 - (CGRect)beginHoldPresentationForCell:(TGBubbleCell *)cell
+								 above:(CGFloat)above
+								 below:(CGFloat)below
                               didLift:(void (^)(CGRect anchor))didLift {
-	if (self.holdBackdropView){
+	if (self.holdBackdropView || self.holdLiftView){
 		self.table.scrollEnabled = self.holdTableWasScrollable;
 		[self discardHoldPresentation];
 	}
@@ -209,41 +276,92 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 	if (CGRectIsEmpty(origin))
 		return CGRectZero;
 
-	// Official keeps the bubble where it is and dims the chat around it. The
-	// old lift and the full-screen blur were a different interaction and a
-	// per-hold capture this phone cannot afford.
+	double start = TGPerfNow();
+	UIImage *bubbleImage = TGHoldCapture(cell.bubble, 0);
+	if (!bubbleImage)
+		return CGRectZero;
+	// The chat without the bubble, so the blur has no ghost of it; the alpha
+	// goes straight back so a reload never finds an invisible bubble.
+	CGFloat bubbleAlpha = cell.bubble.alpha, tailAlpha = cell.tail.alpha;
+	cell.bubble.alpha = TGAlphaTransparent;
+	cell.tail.alpha = TGAlphaTransparent;
+	UIImage *chat = TGHoldCaptureChat(self.view, self.wallpaperView, 0.25f);
+	cell.bubble.alpha = bubbleAlpha;
+	cell.tail.alpha = tailAlpha;
+	UIImage *blurred = chat ? [TGTheme softenedImage:chat radius:kHoldBlurRadius dim:0] : nil;
+	TGPerfReport("hold", "backdrop", start, 50.0);
+
 	TGTheme *theme = [TGTheme shared];
 	UIView *backdrop = [[UIView alloc] initWithFrame:self.view.bounds];
-	backdrop.backgroundColor = [theme holdDimColour];
-	backdrop.autoresizingMask = UIViewAutoresizingFlexibleWidth |
-								UIViewAutoresizingFlexibleHeight;
+	backdrop.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+	backdrop.backgroundColor = [theme chatBackgroundColour];
 	backdrop.alpha = TGAlphaTransparent;
+	UIImageView *picture = [[UIImageView alloc] initWithFrame:backdrop.bounds];
+	picture.autoresizingMask = backdrop.autoresizingMask;
+	picture.contentMode = UIViewContentModeScaleToFill;
+	picture.image = blurred;
+	[backdrop addSubview:picture];
+	// The material's frost, then official's dim over it.
+	for (UIColor *wash in @[[theme holdFrostColour], [theme holdDimColour]]){
+		UIView *layer = [[UIView alloc] initWithFrame:backdrop.bounds];
+		layer.autoresizingMask = backdrop.autoresizingMask;
+		layer.backgroundColor = wash;
+		[backdrop addSubview:layer];
+	}
 	[self.view addSubview:backdrop];
 
+	UIImageView *lift = [[UIImageView alloc] initWithImage:bubbleImage];
+	lift.frame = origin;
+	lift.userInteractionEnabled = NO;
+	[self.view addSubview:lift];
+
 	self.holdBackdropView = backdrop;
+	self.holdLiftView = lift;
+	self.holdLiftOrigin = origin;
 	self.holdTableWasScrollable = self.table.scrollEnabled;
 	self.table.scrollEnabled = NO;
 
-	[UIView animateWithDuration:TGAnimationDurationFast animations:^{
+	// Clear of the pinned strip, inside this screen (it does not run under
+	// the navigation bar).
+	CGFloat top = TGMetricPad;
+	if (self.pinnedBannerView && !self.pinnedBannerView.hidden)
+		top = MAX(top, CGRectGetMaxY(self.pinnedBannerView.frame) + TGMetricPadSmall);
+	CGFloat bottom = CGRectGetHeight(self.view.bounds) - TGMetricPad;
+	CGRect target = origin;
+	target.origin.y = TGHoldLiftY(origin, above, below, top, bottom);
+
+	NSInteger generation = ++self.holdGeneration;
+	__weak typeof(self) weakSelf = self;
+	[UIView animateWithDuration:TGAnimationDurationFast
+						  delay:0
+						options:UIViewAnimationOptionCurveEaseOut
+					 animations:^{
 		backdrop.alpha = TGAlphaOpaque;
+		lift.frame = target;
+	} completion:^(BOOL finished){
+		TGChatViewController *me = weakSelf;
+		if (!me || me.holdGeneration != generation || me.holdLiftView != lift)
+			return;
+		if (didLift)
+			didLift(target);
 	}];
-	if (didLift)
-		didLift(origin);
-	return origin;
+	return target;
 }
 
 - (void)discardHoldPresentation {
 	++self.holdGeneration;
 	self.holdReturning = NO;
 	[self.holdBackdropView removeFromSuperview];
+	[self.holdLiftView removeFromSuperview];
 	self.holdBackdropView = nil;
+	self.holdLiftView = nil;
 }
 
 - (void)endHoldPresentation {
-	if (!self.holdBackdropView)
+	if (!self.holdBackdropView && !self.holdLiftView)
 		return;
 	// The menu can be dismissed twice on the way out - once by the row or
-	// the tap, once by the screen closing. One fade is enough.
+	// the tap, once by the screen closing. One return is enough.
 	if (self.holdReturning)
 		return;
 
@@ -252,13 +370,18 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 	self.table.scrollEnabled = self.holdTableWasScrollable;
 
 	UIView *backdrop = self.holdBackdropView;
+	UIImageView *lift = self.holdLiftView;
+	CGRect home = self.holdLiftOrigin;
 	[UIView animateWithDuration:TGAnimationDurationFast animations:^{
 		backdrop.alpha = TGAlphaTransparent;
+		lift.frame = home;
 	} completion:^(BOOL finished){
 		[backdrop removeFromSuperview];
+		[lift removeFromSuperview];
 		if (generation != self.holdGeneration)
 			return;
 		self.holdBackdropView = nil;
+		self.holdLiftView = nil;
 		self.holdReturning = NO;
 	}];
 }
@@ -286,6 +409,9 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 	// Mono-forum posts are the only ones whose author official names here.
 	context.canViewAuthor = NO;
 	context.canEditFactCheck = self.isChannel;
+	if ([self.actionProperties isKindOfClass:NSDictionary.class] &&
+		[self.actionMessage[@"id"] longLongValue] == heldId)
+		TGChatActionMenuApplyProperties(&context, self.actionProperties);
 #if TG_DEV
 	context.hasMessageEffects = [m[@"effectId"] longLongValue] > 0 ||
 			[TGMessageStore shared].availableMessageEffectIds.count ||
@@ -309,11 +435,39 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 /// comes from the message when Telegram already counted it, else from the
 /// same getMessageViewers call the Who Read This screen uses - never from
 /// cell layout.
+/// One quiet line across the top of the card: the copy-protection tip or
+/// when the message was read.
+- (UILabel *)holdCardNote:(NSString *)text {
+	UILabel *note = [[UILabel alloc] initWithFrame:CGRectMake(0.0f, 0.0f, TGMetricMenuWidth,
+			TGMetricMenuReadHeaderHeight)];
+	note.backgroundColor = [UIColor clearColor];
+	note.font = TGFontCaption();
+	note.textColor = [[TGTheme shared] secondaryTextColour];
+	note.textAlignment = NSTextAlignmentCenter;
+	note.numberOfLines = 2;
+	note.text = text;
+	return note;
+}
+
 - (UIView *)readSummaryHeaderForMessage:(NSDictionary *)m {
 	BOOL mine = [m[@"outgoing"] boolValue];
 	TGChatActionMenuContext context = [self actionMenuContextForMessage:m
 																 mine:mine
 															   heldId:[m[@"id"] longLongValue]];
+	// Official's tip in a chat with copying turned off.
+	NSString *tip = TGCopyProtectionTip(context, self.chatTitle);
+	if (tip)
+		return [self holdCardNote:tip];
+	// "read 12:30" over our message in a private chat, when TDLib has it.
+	if (mine && context.canGetReadDate && !self.isGroup && !self.isChannel){
+		UILabel *note = [self holdCardNote:@""];
+		__weak UILabel *weakNote = note;
+		[[TGMessageStore shared] readDateOfMessage:[m[@"id"] longLongValue] inChat:self.chatId
+										completion:^(NSTimeInterval readDate, NSString *reason){
+			weakNote.text = TGReadDateText(readDate) ?: reason;
+		}];
+		return note;
+	}
 	if (!TGChatActionMenuShowsReadSummary(m, context))
 		return nil;
 
@@ -412,12 +566,15 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 				initWithRootViewController:picker];
 		[self presentViewController:nav animated:YES completion:nil];
 
+	} else if ([action isEqualToString:@"View Thread"]){
+		[self openCommentsForMessage:m];
+
 	} else if ([action isEqualToString:@"Select"]){
 		[self enterEditMode];
 		[self toggleMessageSelection:messageId];
 
 	} else if ([action isEqualToString:@"Retry"]){
-		[[TGSendStore shared] retryMessageId:messageId inChat:self.chatId];
+		[self retryFailedMessage:m];
 
 	} else if ([action isEqualToString:@"Checklist"]){
 		TGChecklistViewController *checklist = [[TGChecklistViewController alloc]
@@ -889,12 +1046,27 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 		}];
 
 	} else if ([action isEqualToString:@"Transcribe"]){
+		TGMessageStore *store = [TGMessageStore shared];
+		NSString *cooldown = TGTranscriptionCooldownText([store freeTranscriptionsLeft],
+				[store freeTranscriptionsWeekly], [store freeTranscriptionsResetDate],
+				[[NSDate date] timeIntervalSince1970]);
+		if (cooldown){
+			[TGAlertSheet showMessage:cooldown title:nil inView:self.view];
+			return;
+		}
 		__weak typeof(self) weakSelf = self;
 		[[TGMessageStore shared] recognizeSpeechInChat:self.chatId message:messageId
 									  completion:^(BOOL ok, NSString *error){
-			if (ok) return;   // the bubble says "Transcribing..." until the text lands
 			TGChatViewController *me = weakSelf;
 			if (!me) return;
+			if (ok){
+				// The bubble says "Transcribing..." until the text lands; an
+				// account on the free trial hears how many are left.
+				NSString *left = TGFreeTranscriptionsText([[TGMessageStore shared] freeTranscriptionsLeft]);
+				if (left)
+					[TGSnackbar showInView:me.view text:left seconds:3 onCommit:nil];
+				return;
+			}
 			NSString *text = error.length ? error
 					: @"An error occurred.";
 			[TGAlertSheet showMessage:text title:@"Transcribe" inView:me.view];

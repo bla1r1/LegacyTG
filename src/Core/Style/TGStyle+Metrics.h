@@ -313,9 +313,13 @@ static const CGFloat TGMetricLoginLinkHeight     = 30.0f;
 /// A bot's inline button under its message, and the space between two.
 static const CGFloat TGMetricBotButtonHeight     = 32.0f;
 static const CGFloat TGMetricBotButtonGap        = 4.0f;
-/// One key of a bot's reply keyboard, and how many rows show before it scrolls.
+/// One key of a bot's reply keyboard (its pitch, gap included), and the
+/// system keyboard's portrait height, which a keyboard not sized to its keys
+/// fills and any keyboard scrolls past.
 static const CGFloat TGMetricBotKeyHeight        = 40.0f;
-static const NSInteger TGMetricBotKeyRowsShown   = 4;
+static const CGFloat TGMetricBotKeyboardHeight   = 216.0f;
+/// How many bot commands the "/" list shows before it scrolls.
+static const CGFloat TGMetricBotCommandRowsShown = 4.0f;
 static const CGFloat TGMetricStackQRTop          = 64.0f;
 static const CGFloat TGMetricUploadPhotoSide     = 640.0f;
 /// Telegram's square for a static sticker and for a sticker set thumbnail.

@@ -10,6 +10,13 @@
 
 /// The status word a member record names: owner, administrator, member,
 /// restricted, banned or left.
+/// Whether Promote / Dismiss Admin is offered on a member. A supergroup
+/// leaves it to the admin's rights; in a basic group an admin who is not
+/// the owner may only promote someone they invited (official's
+/// legacyGroupMember invitedBy check).
+FOUNDATION_EXPORT BOOL TGGroupMemberCanBePromoted(int64_t chatId, BOOL iAmOwner, BOOL theyAreAdmin,
+		int64_t inviterId, int64_t myId);
+
 FOUNDATION_EXPORT NSString *TGGroupMemberStatusName(NSDictionary *status);
 
 @interface TGGroupStore : NSObject
@@ -260,5 +267,10 @@ FOUNDATION_EXPORT NSString *TGGroupMemberStatusName(NSDictionary *status);
 - (void)inviteLink:(NSString *)link
 			inChat:(int64_t)chatId
 		completion:(void (^)(NSDictionary *info))completion;
+
+/// Seconds until slow mode lets this account post again in a supergroup
+/// (getSupergroup is_slow_mode_enabled, getSupergroupFullInfo
+/// slow_mode_delay_expires_in); 0 when it may post now or slow mode is off.
+- (void)slowModeWaitForChat:(int64_t)chatId completion:(void (^)(double seconds))completion;
 
 @end

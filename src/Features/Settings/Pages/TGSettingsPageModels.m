@@ -298,3 +298,8 @@ NSString *TGPrivacyRuleFooterText(NSString *setting) {
 		english = @"You can restrict who can add you to groups and channels with granular precision.";
 	return english ? TGLocalized(english) : nil;
 }
+
+BOOL TGPrivacyOffersPublicPhoto(NSString *setting, NSString *ruleType, NSUInteger neverCount) {
+	return [setting isEqualToString:@"ShowProfilePhoto"] &&
+			(![ruleType isEqualToString:@"everybody"] || neverCount > 0);
+}

@@ -5,6 +5,7 @@
 // pinned before they ever reach a device.
 #import "TGTestRunner.h"
 #import "TGStatusText.h"
+#import "TGUpdateHandlersSupport.h"
 #import "TGDateFormat.h"
 #import "TGClient.h"
 
@@ -116,6 +117,24 @@ static NSDictionary *offlineDays(NSInteger days){
 	XCTAssertNil(ready, @"'ready' hands ownership back - it names nothing");
 	XCTAssertEqualObjects(unknown, @"Something unusual",
 			@"a future state name passes through verbatim");
+}
+
+// TDLib sends no update when an online status runs out; the dot went out
+// only on the next status, minutes later.
+- (void)testOnline_EndsAtItsExpiry {
+	NSDictionary *online = @{ @"@type" : @"userStatusOnline", @"expires" : @1000 };
+	XCTAssertTrue(TGUserStatusOnlineAt(online, 999));
+	XCTAssertFalse(TGUserStatusOnlineAt(online, 1000));
+	XCTAssertFalse(TGUserStatusOnlineAt(@{ @"@type" : @"userStatusOffline" }, 0));
+	NSDictionary *lapsed = @{ @"@type" : @"userStatusOnline", @"expires" : @([NSDate date].timeIntervalSince1970 - 60) };
+	XCTAssertTrue([TGStatusTextFromTDStatus(lapsed) hasPrefix:@"last seen"]);
+}
+
+- (void)testStoryRing_FromActiveStoryState {
+	XCTAssertEqual(TGUStoryRing(nil), 0);
+	XCTAssertEqual(TGUStoryRing(@{ @"@type" : @"activeStoryStateRead" }), 1);
+	XCTAssertEqual(TGUStoryRing(@{ @"@type" : @"activeStoryStateUnread" }), 2);
+	XCTAssertEqual(TGUStoryRing(@{ @"@type" : @"activeStoryStateLive" }), 2);
 }
 
 @end

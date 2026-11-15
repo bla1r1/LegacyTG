@@ -74,6 +74,10 @@ NSString *TGNotificationGroupLabel(NSString *type);
 /// stays English in every language.
 NSString *TGPrivacyRuleFooterText(NSString *setting);
 
+/// The profile photo rule offers a public photo once someone is kept from
+/// the real one: anyone but everybody, or a Never Allow list.
+BOOL TGPrivacyOffersPublicPhoto(NSString *setting, NSString *ruleType, NSUInteger neverCount);
+
 /// A byte value without a trailing zero fraction, the shape official uses on
 /// the auto-download rows ("120 MB", not "120.0 MB").
 NSString *TGPageModelCompactBytes(long long bytes);

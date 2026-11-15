@@ -13,6 +13,7 @@ Telegram client for iOS 6.0–12.5.7 on old hardware. Objective-C UI over TDLib 
 - `src/Media/` — decoders (WebP, WebM sticker video)
 - `scripts/i18n_match.py` — check a UI string or a file against the downloaded official Telegram pack (`--coverage` for the whole tree)
 - `scripts/lint_tokens.sh` — fails on any hardcoded point size or colour in a screen
+- `scripts/lint_fields.sh` — every TDLib field the app is handed and never reads has a line in `scripts/tdlib_fields.txt`: `todo <screen>` (official shows it, we drop it), `skip` with a reason, or `open` (not looked at). Fails on an unlisted field and on a listed one the app now reads; `--update` adds new fields as open. Drawing a todo field means deleting its line
 - `src/Core/Support/TGLocalization.h` — `TGLocalized(@"English")` for UI copy; official Telegram language packs supply the translations, English is the fallback. Counts use `TGLocalizedPlural(@"%d chat", @"%d chats", count)` so the pack's one/few/many forms apply. UIKit chrome and alerts are localised centrally; message bodies are not.
 - `scripts/split_source.py` — mechanical `classes` / `sections` split; dry run by default, `--apply` updates Makefiles, docs line references
 - `make -j8 -f tests/Makefile test` — host test suite (currently 1950 client and 229 call tests); one object per source, so a change rebuilds only what it touches
@@ -41,11 +42,11 @@ Telegram client for iOS 6.0–12.5.7 on old hardware. Objective-C UI over TDLib 
   fails on any file over the limit; there is no baseline.
 
 ## Matching the official client
-- A new screen, row or action is built where official Telegram has it, so it is never moved twice: the same entry point (which screen, which row, which bar button or context menu), the same presentation (push, modal sheet, context menu, action sheet), the same section and row order, the same navigation bar buttons, the same confirmation alert. Read the official source for that screen before writing ours; `docs/ui-parity/` names the official file for each area.
+- A new screen, row or action is built where official Telegram has it, so it is never moved twice: the same entry point (which screen, which row, which bar button or context menu), the same presentation (push, modal sheet, context menu, action sheet), the same section and row order, the same navigation bar buttons, the same confirmation alert. Read the official source for that screen before writing ours.
 - Text uses the official English from the language pack, word for word, so it translates: `scripts/i18n_match.py "text"` before inventing wording. Counts go through `TGLocalizedPlural`; no sentences glued from pieces.
 - No "tools" screens or extra menus that collect actions official places elsewhere. A developer tool goes behind `TG_DEV`.
 - Look, not layout, is ours: iOS 6 skeuomorphic chrome, `TGStyle` and `TGTheme` tokens, no live blur, masks or shadows on scrolling layers. Where an official effect cannot run on the A4, keep its position and drop the effect.
-- Existing screens change only from the fix lists in `docs/ui-parity/` the user has approved, not on a general "make it like Telegram". The call screen keeps its current design on purpose.
+- Existing screens change only from a fix list the user has approved in the conversation, not on a general "make it like Telegram". Fix lists and audits are working notes and stay out of the repository; what changed is recorded in the area's file under `docs/status/`. The call screen keeps its current design on purpose.
 
 ## Testing — mandatory
 - **Compile ≠ done.** A feature is done when it works on a real device, matches official Telegram behaviour, and has a passing regression test.

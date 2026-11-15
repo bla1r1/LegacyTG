@@ -77,3 +77,10 @@ Search filters and tokens are M26.
 | Real peek on hold | missing | `Features/ChatList/TGChatListViewController+Actions.m:98` | A centred action menu only; no preview card. |
 | Group preview with an author prefix stays one line | missing | `Features/Chat/Views/TGChatCell.m:73` | `previewLabel.numberOfLines = 2` always, so "Ivan: …" can wrap under the author. |
 | Archive intro pages | missing | — | No archive intro or empty-archive state. |
+
+## Data we had and did not show (15 November 2026)
+
+- The online dot and "online" go out when `userStatusOnline.expires` passes; TDLib sends no update then, so one check is scheduled per status update and the header reads "last seen at" the expiry, as official does (`TGUserStatusOnlineAt`).
+- A ring round the avatar for a person or channel with active stories, accent when unseen and grey when seen (`active_story_state`, `TGUStoryRing`); drawn from a cached image, no stroked layer on the scrolling row. Not yet seen on the bench phone: no chat on that account has stories.
+- The notice over the list from TDLib's suggested actions, as official ChatListNoticeItem: "Protect Your Account" opens Two-Step Verification and has no close button; "Don't lose access to Telegram Premium!" closes with ✕ (hideSuggestedAction) and opens TDLib's subscription page. `itglegacy://suggest/password|premium` feeds one in dev builds.
+- Open: the login email prompt (`suggestedActionSetLoginEmailAddress`) needs official's email setup screen; folder tabs show no unread counts.

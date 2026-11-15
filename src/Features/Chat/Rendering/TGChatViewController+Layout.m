@@ -83,7 +83,7 @@ UIColor *TGSenderColour(int64_t userId) {
 		}
 	}
 	if ([cell.forwardLabel respondsToSelector:@selector(setAttributedText:)]){
-		NSString *line = TGLocalizedFormat(@"Forwarded from: %@", from);
+		NSString *line = TGForwardHeaderLine(from, m[@"forwardPsa"]);
 		NSMutableAttributedString *styled =
 				[[NSMutableAttributedString alloc] initWithString:line
 													   attributes:@{
@@ -99,7 +99,7 @@ UIColor *TGSenderColour(int64_t userId) {
 		cell.forwardLabel.attributedText = styled;
 	} else {
 		cell.forwardLabel.textColor = [theme accentColour];
-		cell.forwardLabel.text = TGLocalizedFormat(@"Forwarded from: %@", from);
+		cell.forwardLabel.text = TGForwardHeaderLine(from, m[@"forwardPsa"]);
 	}
 	return TGMetricQuoteForwardLine;
 }
@@ -113,7 +113,7 @@ UIColor *TGSenderColour(int64_t userId) {
 	return TGMessageServiceLine(m, who, self.messages);
 }
 
-static UIImage *TGImageFromMinithumbnail(id mini) {
+UIImage *TGImageFromMinithumbnail(id mini) {
 	NSData *data = nil;
 	if ([mini isKindOfClass:NSData.class]) {
 		data = (NSData *)mini;
@@ -245,9 +245,10 @@ static UIImage *TGImageFromMinithumbnail(id mini) {
 		int64_t senderId = [m[@"senderId"] longLongValue];
 		input.senderName = [[TGMessageStore shared] nameForUserId:senderId];
 		__weak typeof(self) weakSelf = self;
+		CGFloat boost = TGMessageBoostBadgeWidth(m);
 		input.senderLineWidth = ^CGFloat(NSString *line){
 			return [weakSelf senderLineWidthFor:line
-					statusId:[[TGMessageStore shared] emojiStatusIdForUser:senderId]];
+					statusId:[[TGMessageStore shared] emojiStatusIdForUser:senderId]] + boost;
 		};
 	}
 	if ([m[@"service"] boolValue] && !m[@"separator"])

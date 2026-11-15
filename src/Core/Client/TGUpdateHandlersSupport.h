@@ -22,6 +22,19 @@ static inline NSString *TGUFirstActiveUsername(NSDictionary *user){
 	return [names isKindOfClass:NSArray.class] ? [names firstObject] : nil;
 }
 
+/// The ring round a chat-list avatar from active_story_state: 0 none, 1 seen
+/// (grey), 2 unseen or live (accent), as official ChatListItem draws it.
+static inline NSInteger TGUStoryRing(id state){
+	if (![state isKindOfClass:NSDictionary.class])
+		return 0;
+	NSString *type = state[@"@type"];
+	if ([type isEqualToString:@"activeStoryStateRead"])
+		return 1;
+	if ([type isEqualToString:@"activeStoryStateUnread"] || [type isEqualToString:@"activeStoryStateLive"])
+		return 2;
+	return 0;
+}
+
 static inline NSArray *TGUEffectIdList(id value){
 	if (![value isKindOfClass:NSArray.class])
 		return @[];

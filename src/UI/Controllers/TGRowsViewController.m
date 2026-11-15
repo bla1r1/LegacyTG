@@ -3,6 +3,7 @@
 //
 #import "TGRowsViewController.h"
 #import "TGRows.h"
+#import "TGRowsDataSource.h"
 #import "TGLocalization.h"
 #import "TGRowCell.h"
 #import "TGPeerRowCell.h"
@@ -282,6 +283,8 @@ heightForRowAtIndexPath:(NSIndexPath *)indexPath {
 		return [TGPictureRowCell cellForTableView:tableView row:row];
 	if ([kind isEqualToString:TGKindTabStrip])
 		return [TGTabStripRowCell cellForTableView:tableView row:row];
+	if ([kind isEqualToString:TGKindChart])
+		return TGChartRowCellFor(tableView, row);
 	return [TGRowCell cellForTableView:tableView row:row
 							 rowIndex:indexPath.row totalRows:rows.count];
 }

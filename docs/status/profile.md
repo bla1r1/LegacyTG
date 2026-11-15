@@ -117,3 +117,10 @@ rows are layout, not missing data.
 | Username availability while typing | missing | — | This TDLib has no account-username availability check; only `setUsername` exists. |
 | Tabs stay under the bar | missing | `src/Features/Profile/Core/TGProfileDetails.m:285` | The tab strip is a section header and scrolls away with the grid. |
 | Tab bar stays stable while loading | missing | — | Each completion appends a tab and reloads the table. |
+- The Username row writes the other active usernames under it ("also @a, @b"); a bot that works in groups offers "Add to Group or Channel" (chat picker, addChatMember), and a verified bot shows its verifier's line instead.
+
+## Data we had and did not show, batch 4 (15 November 2026)
+
+- A business profile has the business hours row (PeerInfoScreenBusinessHoursItem): "Open · 09:00 – 18:00" or "Closed · Opens in 2 hours" from local_opening_hours, next_open_in and next_close_in; a tap lists the week (official unfolds it under the row). Not checked on a device: the bench account has no business contact.
+- Privacy > Profile Photo, once someone is kept from the real picture, offers Set / Update / Remove Public Photo with official's footer (userFullInfo.public_photo, setProfilePhoto is_public).
+- Not drawn: collectible usernames open Fragment's item sheet in official, which is not built; secondary_username has no place in official iOS.

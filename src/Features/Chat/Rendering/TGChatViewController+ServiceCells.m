@@ -57,6 +57,7 @@ TGMessageCard *TGChatCardForRow(NSDictionary *m) {
 		cell.cardView.onAction = ^(TGMessageCard *tapped){
 			[weakSelf openCard:tapped ofMessage:messageId];
 		};
+		cell.cardView.mine = mine;
 		[cell.cardView showCard:card];
 
 		cell.time.text = layout.stamp;
@@ -159,8 +160,8 @@ TGMessageCard *TGChatCardForRow(NSDictionary *m) {
 						TGMetricPollDotSide, TGMetricPollDotSide)];
 				dot.layer.cornerRadius = TGHalf(TGMetricPollDotSide);
 				dot.layer.borderWidth = TGMetricBorderMedium;
-				dot.layer.borderColor = [checklistTheme accentColour].CGColor;
-				dot.backgroundColor = done ? [checklistTheme accentColour] : [UIColor clearColor];
+				dot.layer.borderColor = [checklistTheme bubbleAccentColour:mine].CGColor;
+				dot.backgroundColor = done ? [checklistTheme bubbleAccentColour:mine] : [UIColor clearColor];
 				[row addSubview:dot];
 
 				UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(kChecklistTextColumn,
@@ -185,7 +186,7 @@ TGMessageCard *TGChatCardForRow(NSDictionary *m) {
 					CGRectMake(kPadH, rowY, contentW, kChecklistProgressLine)];
 			progress.tag = 0x93FF;
 			progress.font = TGFontMeta();
-			progress.textColor = [checklistTheme secondaryTextColour];
+			progress.textColor = [checklistTheme bubbleSecondaryColour:mine];
 			progress.backgroundColor = [UIColor clearColor];
 			progress.text = TGChecklistProgressLine(checklist);
 			[cell.bubble addSubview:progress];
@@ -273,7 +274,7 @@ TGMessageCard *TGChatCardForRow(NSDictionary *m) {
 			cell.subtitle.hidden = NO;
 			cell.subtitle.numberOfLines = 0;
 			cell.subtitle.font = TGFontSubhead();
-			cell.subtitle.textColor = [pollTheme secondaryTextColour];
+			cell.subtitle.textColor = [pollTheme bubbleSecondaryColour:mine];
 			cell.subtitle.text = description;
 			y += kPollDescriptionGap;
 			cell.subtitle.frame = CGRectMake(kPadH, y, contentW, descriptionH);
@@ -321,7 +322,7 @@ TGMessageCard *TGChatCardForRow(NSDictionary *m) {
 					CGRectMake(kPadH, kindY, contentW, kPollKindLine)];
 			kind.tag = 0x91E0;
 			kind.font = TGFontMeta();
-			kind.textColor = [pollTheme secondaryTextColour];
+			kind.textColor = [pollTheme bubbleSecondaryColour:mine];
 			kind.backgroundColor = [UIColor clearColor];
 			kind.text = kindLine;
 			[cell.bubble addSubview:kind];
@@ -335,7 +336,7 @@ TGMessageCard *TGChatCardForRow(NSDictionary *m) {
 				BOOL pendingHere = multiple && [pending containsIndex:i];
 				BOOL filled = mark != TGPollMarkNone || pendingHere;
 				UIColor *dotColour = mark == TGPollMarkWrong
-						? [pollTheme destructiveColour] : [pollTheme accentColour];
+						? [pollTheme destructiveColour] : [pollTheme bubbleAccentColour:mine];
 
 				NSString *optionText = TGPollOptionText(option);
 				CGFloat textW = rowW - kPollTextColumn - kPollShareWidth - TGMetricPadTiny;
@@ -362,7 +363,13 @@ TGMessageCard *TGChatCardForRow(NSDictionary *m) {
 				dot.backgroundColor = filled ? dotColour : [UIColor clearColor];
 				[row addSubview:dot];
 
-				UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(kPollTextColumn,
+				// With results the share takes the radio's place on the left
+				// and the text moves over by the share's column, as official
+				// does (PollBubbleContentNode percentageNode). The text keeps
+				// its measured width, so the row height does not change.
+				CGFloat textX = showsResults ? kPollShareWidth : kPollTextColumn;
+				dot.hidden = showsResults;
+				UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(textX,
 						textY, textW, textH)];
 				label.numberOfLines = 0;
 				label.font = TGFontSubhead();
@@ -380,12 +387,12 @@ TGMessageCard *TGChatCardForRow(NSDictionary *m) {
 					NSInteger share = [option[@"percent"] isKindOfClass:NSNumber.class]
 							? [option[@"percent"] integerValue] : 0;
 					UILabel *percent = [[UILabel alloc] initWithFrame:
-							CGRectMake(rowW - kPollShareWidth, textY,
-									kPollShareWidth, TGMetricLineRow)];
+							CGRectMake(TGMetricZero, textY,
+									kPollShareWidth - TGMetricPadSmall, TGMetricLineSubhead)];
 					percent.text = [NSString stringWithFormat:@"%ld%%", (long)share];
-					percent.font = TGFontCaption();
+					percent.font = TGFontCaptionStrong();
 					percent.textAlignment = NSTextAlignmentRight;
-					percent.textColor = [pollTheme secondaryTextColour];
+					percent.textColor = [pollTheme primaryTextColour];
 					percent.backgroundColor = [UIColor clearColor];
 					[row addSubview:percent];
 
@@ -394,17 +401,34 @@ TGMessageCard *TGChatCardForRow(NSDictionary *m) {
 					CGFloat trackY = MAX(textY + textH,
 							rowH - kPollTrackDrop - kPollTrackHeight);
 					UIView *track = [[UIView alloc] initWithFrame:
-							CGRectMake(kPollTextColumn, trackY,
-									rowW - kPollTextColumn, kPollTrackHeight)];
+							CGRectMake(textX, trackY,
+									rowW - textX, kPollTrackHeight)];
 					track.backgroundColor = [pollTheme separatorColour];
 					[row addSubview:track];
 
 					UIView *fill = [[UIView alloc] initWithFrame:
-							CGRectMake(kPollTextColumn, trackY,
-									(rowW - kPollTextColumn) * share / TGPercentFull,
+							CGRectMake(textX, trackY,
+									(rowW - textX) * share / TGPercentFull,
 									kPollTrackHeight)];
-					fill.backgroundColor = [pollTheme accentColour];
+					fill.backgroundColor = [pollTheme bubbleAccentColour:mine];
 					[row addSubview:fill];
+
+					// Your pick, or a quiz's answer, gets a mark left of its bar:
+					// a tick when right, a cross when wrong (resultBarIconNode).
+					if (mark != TGPollMarkNone){
+						UIImageView *badge = [[UIImageView alloc] initWithFrame:
+								CGRectMake(textX - TGMetricPadSmall - TGMetricPollDotSide,
+										trackY + TGCenteredOrigin(kPollTrackHeight, TGMetricPollDotSide),
+										TGMetricPollDotSide, TGMetricPollDotSide)];
+						badge.backgroundColor = dotColour;
+						badge.layer.cornerRadius = TGHalf(TGMetricPollDotSide);
+						badge.contentMode = UIViewContentModeCenter;
+						badge.image = mark == TGPollMarkWrong
+								? [TGIcons glyphNamed:@"close" colour:[pollTheme onAccentColour]
+												side:TGMetricPollDotSide - TGMetricPadSmall]
+								: [TGIcons ticksColour:[pollTheme onAccentColour] read:NO];
+						[row addSubview:badge];
+					}
 				}
 
 				rowY += rowH;
@@ -418,8 +442,8 @@ TGMessageCard *TGChatCardForRow(NSDictionary *m) {
 				vote.frame = CGRectMake(kPadH, stackY, contentW, kPollVoteHeight);
 				vote.titleLabel.font = TGFontBodyStrong();
 				[vote setTitle:@"Vote" forState:UIControlStateNormal];
-				[vote setTitleColor:[pollTheme accentColour] forState:UIControlStateNormal];
-				[vote setTitleColor:[pollTheme accentColour] forState:UIControlStateHighlighted];
+				[vote setTitleColor:[pollTheme bubbleAccentColour:mine] forState:UIControlStateNormal];
+				[vote setTitleColor:[pollTheme bubbleAccentColour:mine] forState:UIControlStateHighlighted];
 				vote.backgroundColor = [UIColor clearColor];
 				[vote addTarget:self action:@selector(pollVoteTapped:) forControlEvents:UIControlEventTouchUpInside];
 				[cell.bubble addSubview:vote];
@@ -435,7 +459,7 @@ TGMessageCard *TGChatCardForRow(NSDictionary *m) {
 				note.tag = 0x91F2;
 				note.numberOfLines = 0;
 				note.font = TGFontCaption();
-				note.textColor = [pollTheme secondaryTextColour];
+				note.textColor = [pollTheme bubbleSecondaryColour:mine];
 				note.backgroundColor = [UIColor clearColor];
 				note.text = explanation;
 				[cell.bubble addSubview:note];
@@ -447,8 +471,10 @@ TGMessageCard *TGChatCardForRow(NSDictionary *m) {
 			footer.frame = CGRectMake(kPadH, stackY, contentW, kPollFooterLine);
 			footer.tag = 0x91F1;
 			footer.titleLabel.font = TGFontMeta();
-			footer.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeft;
-			[footer setTitleColor:[pollTheme secondaryTextColour] forState:UIControlStateNormal];
+			// Centred under the options (official votersNode); the time sits
+			// on the line below.
+			footer.contentHorizontalAlignment = UIControlContentHorizontalAlignmentCenter;
+			[footer setTitleColor:[pollTheme bubbleSecondaryColour:mine] forState:UIControlStateNormal];
 			footer.backgroundColor = [UIColor clearColor];
 			[footer setTitle:TGPollVotesLine(poll) forState:UIControlStateNormal];
 			[footer addTarget:self action:@selector(pollFooterTapped:)
@@ -523,7 +549,7 @@ TGMessageCard *TGChatCardForRow(NSDictionary *m) {
 
 			UIView *tile = [[UIView alloc] initWithFrame:CGRectMake(TGMetricZero, TGMetricZero, kFileTile, kFileTile)];
 			tile.userInteractionEnabled = NO;
-			tile.backgroundColor = [cardTheme fileTileColour];
+			tile.backgroundColor = [cardTheme bubblePlaceholderColour:mine];
 			tile.layer.cornerRadius = TGMetricCornerSmall;
 			[rowBtn addSubview:tile];
 
@@ -606,7 +632,7 @@ TGMessageCard *TGChatCardForRow(NSDictionary *m) {
 			nameLabel.backgroundColor = [UIColor clearColor];
 			nameLabel.userInteractionEnabled = NO;
 			nameLabel.font = TGFontBody();
-			nameLabel.textColor = [cardTheme fileNameColour];
+			nameLabel.textColor = mine ? [cardTheme bubbleAccentColour:YES] : [cardTheme fileNameColour];
 			nameLabel.lineBreakMode = NSLineBreakByTruncatingMiddle;
 			nameLabel.text = fileName;
 			[rowBtn addSubview:nameLabel];
@@ -616,7 +642,7 @@ TGMessageCard *TGChatCardForRow(NSDictionary *m) {
 			sizeLabel.backgroundColor = [UIColor clearColor];
 			sizeLabel.userInteractionEnabled = NO;
 			sizeLabel.font = TGFontCaption();
-			sizeLabel.textColor = [cardTheme fileMetaColour];
+			sizeLabel.textColor = [cardTheme bubbleSecondaryColour:mine];
 			sizeLabel.text = fileSize;
 			[rowBtn addSubview:sizeLabel];
 
@@ -703,10 +729,10 @@ TGMessageCard *TGChatCardForRow(NSDictionary *m) {
 
 		cell.subtitle.hidden = NO;
 		cell.subtitle.font = TGFontCaption();
-		cell.subtitle.textColor = [cardTheme fileMetaColour];
+		cell.subtitle.textColor = [cardTheme bubbleSecondaryColour:mine];
 		cell.subtitle.text = phone;
 
-		CGFloat sepY = fwd + kContactButtons;
+		CGFloat sepY = fwd + kContactButtons + TGMetricLineMicro;
 		cell.contactSeparatorH.hidden = NO;
 		cell.contactSeparatorH.backgroundColor = [cardTheme separatorColour];
 		cell.contactSeparatorH.frame = CGRectMake(TGMetricZero, sepY,
@@ -719,7 +745,7 @@ TGMessageCard *TGChatCardForRow(NSDictionary *m) {
 
 		cell.contactCallButton.hidden = NO;
 		cell.contactCallButton.frame = CGRectMake(TGMetricZero, sepY, btnW, TGMetricButtonHeightSmall);
-		[cell.contactCallButton setTitleColor:[cardTheme accentColour] forState:UIControlStateNormal];
+		[cell.contactCallButton setTitleColor:[cardTheme bubbleAccentColour:mine] forState:UIControlStateNormal];
 		[cell.contactCallButton setTitleColor:[cardTheme buttonHighlightColour] forState:UIControlStateHighlighted];
 		cell.contactCallButton.tag = indexPath.row;
 		[cell.contactCallButton removeTarget:nil action:NULL forControlEvents:UIControlEventAllEvents];
@@ -727,7 +753,7 @@ TGMessageCard *TGChatCardForRow(NSDictionary *m) {
 
 		cell.contactAddButton.hidden = NO;
 		cell.contactAddButton.frame = CGRectMake(btnW, sepY, btnW, TGMetricButtonHeightSmall);
-		[cell.contactAddButton setTitleColor:[cardTheme accentColour] forState:UIControlStateNormal];
+		[cell.contactAddButton setTitleColor:[cardTheme bubbleAccentColour:mine] forState:UIControlStateNormal];
 		[cell.contactAddButton setTitleColor:[cardTheme buttonHighlightColour] forState:UIControlStateHighlighted];
 		cell.contactAddButton.tag = indexPath.row;
 		[cell.contactAddButton removeTarget:nil action:NULL forControlEvents:UIControlEventAllEvents];
@@ -735,11 +761,13 @@ TGMessageCard *TGChatCardForRow(NSDictionary *m) {
 
 		cell.time.text = layout.stamp;
 		cell.time.textColor = mine ? [cardTheme timeMineColour] : [cardTheme timeColour];
-		TGPlaceStamp(cell, layout.bubbleFrame, layout.timeWidth, mine);
+		cell.time.textAlignment = NSTextAlignmentRight;
+		cell.time.frame = layout.timeFrame;
+		cell.viewsEye.hidden = YES;
 		cell.ticks.hidden = !mine;
 		if (mine) {
 			cell.ticks.image = [self ticksForMessage:m white:NO];
-			TGPlaceTicks(cell, layout.bubbleFrame);
+			cell.ticks.frame = layout.stampTicksFrame;
 		}
 		cell.picture.hidden = YES;
 		return YES;
@@ -852,7 +880,7 @@ TGMessageCard *TGChatCardForRow(NSDictionary *m) {
 			cell.subtitle.hidden = NO;
 			cell.subtitle.numberOfLines = 1;
 			cell.subtitle.font = TGFontMeta();
-			cell.subtitle.textColor = [locTheme fileMetaColour];
+			cell.subtitle.textColor = [locTheme bubbleSecondaryColour:mine];
 			cell.subtitle.text = vAddr;
 			TGPlaceTitleDetail(cell, kPadH, fwd + mapH + TGMetricPadTiny,
 							   mapW - TGDoubled(kPadH));

@@ -92,19 +92,36 @@
 - (void)showActionsForRow:(NSUInteger)row {
 	if (row >= self.messages.count)
 		return;
+	// Send Now and Edit Time follow can_edit_scheduling_state: a message
+	// whose time TDLib will not move offers only Delete.
+	int64_t messageId = [self.messages[row][@"id"] longLongValue];
+	__weak typeof(self) weakSelf = self;
+	[[TGMessageStore shared] messagePropertiesForChat:self.chatId messageId:messageId
+										   completion:^(NSDictionary *properties){
+		id movable = properties[@"can_edit_scheduling_state"];
+		[weakSelf showActionsForRow:row canMove:!movable || [movable boolValue]];
+	}];
+}
+
+- (void)showActionsForRow:(NSUInteger)row canMove:(BOOL)canMove {
+	if (row >= self.messages.count)
+		return;
 	NSDictionary *m = self.messages[row];
 	int64_t messageId = [m[@"id"] longLongValue];
 	NSString *what = m[@"text"] ?: TGLocalized(@"Message");
 	__weak typeof(self) weakSelf = self;
 
-	NSMutableArray *choices = [NSMutableArray arrayWithObjects:
-			TGLocalized(@"Send Now"), TGLocalized(@"Edit Time"),
-			TGLocalized(@"Delete"), nil];
+	NSMutableArray *choices = canMove
+			? [NSMutableArray arrayWithObjects:TGLocalized(@"Send Now"), TGLocalized(@"Edit Time"),
+					TGLocalized(@"Delete"), nil]
+			: [NSMutableArray arrayWithObject:TGLocalized(@"Delete")];
+	NSInteger offset = canMove ? 0 : 2;
 	[TGAlertSheet showChoices:choices
 						title:what.length > 60 ? [what substringToIndex:60] : what
-			 destructiveIndex:2
+			 destructiveIndex:(NSInteger)choices.count - 1
 					   inView:self.navigationController.view ?: self.view
-					 onChoice:^(NSInteger index){
+					 onChoice:^(NSInteger picked){
+		NSInteger index = picked + offset;
 		void (^done)(BOOL) = ^(BOOL ok){
 			NSString *say = ok ? TGLocalized(@"Done")
 					: TGLocalized(@"An error occurred.");

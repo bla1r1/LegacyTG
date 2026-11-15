@@ -145,6 +145,12 @@ static int64_t sActiveChatId = 0;
 	tableTap.cancelsTouchesInView = NO;
 	[self.table addGestureRecognizer:tableTap];
 
+	// Records where a finger lands and declines the touch, so it changes
+	// nothing else: the row's tap then knows which part was hit.
+	self.touchRecorder = [[UITapGestureRecognizer alloc] initWithTarget:nil action:nil];
+	self.touchRecorder.delegate = self;
+	[self.table addGestureRecognizer:self.touchRecorder];
+
 	[self.view addSubview:self.table];
 
 	[self buildInputBar:b];
@@ -172,6 +178,8 @@ static int64_t sActiveChatId = 0;
 	// mark is drawn from the store, so the row has to be redrawn.
 	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(sendStateChanged:)
 			name:TGSendStoreMessageStateChangedNotification object:nil];
+	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(speedLimited:)
+			name:TGSpeedLimitNotification object:nil];
 	TGPerfReport("chat vc", "chrome", vcStart, 50.0);
 	[self installSwipeToReply];
 	TGPerfReport("chat vc", "swipe + load", vcStart, 100.0);
@@ -376,6 +384,7 @@ FOUNDATION_EXPORT void TGBubbleFlushCache(void);
 	[super viewWillAppear:animated];
 	sActiveChatId = self.chatId;
 	[self installLiveHandlers];
+	[self refreshUnreadJumps];
 	if (self.readWhenShown.count) {
 		[[TGMessageStore shared] markRead:self.readWhenShown inChat:self.chatId];
 		[self.readWhenShown removeAllObjects];
@@ -386,6 +395,17 @@ FOUNDATION_EXPORT void TGBubbleFlushCache(void);
 /// this one (profile > Send Message, a forwarded-from link) has its feed and
 /// this one keeps hearing. Idempotent: called on every appearance, which is
 /// also what brings the feed back after a back swipe that was cancelled.
+/// Chat.SpeedLimitAlert: the title alone; the "N times faster" number comes
+/// from the Premium configuration this client does not read.
+- (void)speedLimited:(NSNotification *)note {
+	if ([TGChatViewController activeChatId] != self.chatId)
+		return;
+	BOOL upload = [note.userInfo[@"upload"] boolValue];
+	[TGSnackbar showInView:self.view
+					  text:upload ? TGLocalized(@"Upload speed limited") : TGLocalized(@"Download speed limited")
+				   seconds:3 onCommit:nil];
+}
+
 - (void)installLiveHandlers {
 	if (self.liveListener)
 		return;

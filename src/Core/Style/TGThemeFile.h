@@ -25,3 +25,8 @@
 + (NSDictionary *)cardPaletteForThemeEntry:(NSDictionary *)entry;
 
 @end
+
+/// "#3497ED" or "3497edcc" as a colour, nil for anything else. Data-borne
+/// colours only (a theme file, a statistics graph); the app's own come from
+/// TGTheme.
+FOUNDATION_EXPORT UIColor *TGColourFromHexString(NSString *hex);

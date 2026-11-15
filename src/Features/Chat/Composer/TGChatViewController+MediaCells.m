@@ -10,6 +10,14 @@
 #import "TGLocalization.h"
 #import "TGUIFormat.h"
 
+/// A photo's corner follows its bubble's: the bubble's radius less the
+/// kMediaInset between them, so the two curves stay parallel.
+static CGFloat TGChatMediaCorner(void) {
+	CGFloat bubble = [TGTheme drawsSkeuomorphicChrome] ? TGMetricCornerBubbleSkeuo
+			: TGMetricCornerBubbleFlat;
+	return bubble - kMediaInset;
+}
+
 @implementation TGChatViewController (MediaCells)
 
 - (BOOL)configureRoundOrStickerCell:(TGBubbleCell *)cell message:(NSDictionary *)m layout:(TGMessageLayout *)layout isMine:(BOOL)mine {
@@ -70,27 +78,43 @@
 		TGVideoNoteLayoutBottomBar(frame, durW, clockW, mine, unplayedDot,
 								   &durFrame, &timeFrame, &ticksFrame, &dotFrame);
 
+		// Duration and time sit on the wallpaper under the circle: each gets
+		// the plate a photo's stamp has, or a busy pattern swallows them.
+		CGRect plateInsets = CGRectInset(durFrame, -TGMetricPadSmall,
+				-TGHalf(TGMetricLineCaption - TGMetricStampHeight));
 		[cell.contentView addSubview:cell.mediaStamp];
 		cell.mediaStamp.hidden = !durStr.length;
-		cell.mediaStamp.backgroundColor = [UIColor clearColor];
-		cell.mediaStamp.textColor = [theme timeColour];
+		cell.mediaStamp.backgroundColor = [theme mediaStampColour];
+		cell.mediaStamp.textColor = [theme onMediaColour];
 		cell.mediaStamp.font = TGFontMicro();
 		cell.mediaStamp.text = durStr;
-		cell.mediaStamp.textAlignment = NSTextAlignmentLeft;
-		cell.mediaStamp.layer.cornerRadius = TGMetricCornerNone;
-		cell.mediaStamp.frame = durFrame;
+		cell.mediaStamp.textAlignment = NSTextAlignmentCenter;
+		cell.mediaStamp.layer.cornerRadius = TGMetricCornerControl;
+		cell.mediaStamp.frame = plateInsets;
 
 		[cell.contentView addSubview:cell.time];
 		cell.time.hidden = !stamp.length;
 		cell.time.text = stamp;
-		cell.time.textColor = [theme timeColour];
+		cell.time.textColor = [theme onMediaColour];
 		cell.time.textAlignment = NSTextAlignmentLeft;
 		cell.time.frame = timeFrame;
+
+		CGRect group = timeFrame;
+		if (mine)
+			group = CGRectUnion(group, ticksFrame);
+		if (stamp.length){
+			[cell.contentView insertSubview:cell.stampPlate belowSubview:cell.time];
+			cell.stampPlate.hidden = NO;
+			cell.stampPlate.backgroundColor = [theme mediaStampColour];
+			cell.stampPlate.frame = CGRectMake(group.origin.x - TGMetricPadSmall,
+					CGRectGetMidY(timeFrame) - TGHalf(TGMetricLineCaption),
+					group.size.width + TGDoubled(TGMetricPadSmall), TGMetricLineCaption);
+		}
 
 		cell.ticks.hidden = !mine;
 		if (mine) {
 			[cell.contentView addSubview:cell.ticks];
-			cell.ticks.image = [self ticksForMessage:m white:NO];
+			cell.ticks.image = [self ticksForMessage:m white:YES];
 			cell.ticks.frame = ticksFrame;
 		}
 
@@ -159,12 +183,31 @@
 			}
 		}
 
-		static NSDateFormatter *hmt = nil;
-		if (!hmt) { hmt = [[NSDateFormatter alloc] init]; [hmt setDateFormat:@"HH:mm"]; }
-		cell.time.text = [hmt stringFromDate:[NSDate dateWithTimeIntervalSince1970:[m[@"date"] doubleValue]]];
-		cell.time.textColor = [theme timeColour];
-		TGPlaceStamp(cell, layout.bubbleFrame,
-				TGTextSize(cell.time.text, TGFontMicro(), 0).width, NO);
+		// The sticker's stamp is the whole stamp (edited, views, ticks) on
+		// a plate under its right edge, placed like every other stamp. It
+		// was a bare "HH:mm" on the wallpaper, with no ticks.
+		TGMessageStampParts parts;
+		CGRect plate = TGMessageStampPlate(m, side, layout.bubbleFrame.size.height, &parts);
+		cell.stampPlate.hidden = NO;
+		cell.stampPlate.backgroundColor = [theme mediaStampColour];
+		cell.stampPlate.frame = plate;
+		[cell.bubble insertSubview:cell.stampPlate belowSubview:cell.time];
+		cell.time.text = layout.stamp;
+		cell.time.textColor = [theme onMediaColour];
+		cell.time.textAlignment = NSTextAlignmentRight;
+		cell.time.frame = parts.text;
+		cell.viewsEye.hidden = CGRectIsEmpty(parts.eye);
+		if (!cell.viewsEye.hidden){
+			cell.viewsEye.image = [TGIcons glyphNamed:@"eye" colour:[theme onMediaColour] side:kStampEyeSide];
+			cell.viewsEye.frame = parts.eye;
+		}
+		cell.ticks.hidden = !mine;
+		if (mine){
+			cell.ticks.image = [self ticksForMessage:m white:YES];
+			cell.ticks.frame = parts.ticks;
+			[cell.bubble bringSubviewToFront:cell.ticks];
+		}
+		[cell.bubble bringSubviewToFront:cell.time];
 		return YES;
 	}
 
@@ -245,21 +288,9 @@
 		if (layout.stampOnPicture) {
 			cell.mediaStamp.hidden = NO;
 			cell.mediaStamp.backgroundColor = [theme mediaStampColour];
-			int64_t mediaViews = [m[@"viewCount"] respondsToSelector:@selector(longLongValue)] ? [m[@"viewCount"] longLongValue] : 0;
-			if (mediaViews > 0) {
-				cell.viewsEye.hidden = NO;
-				cell.viewsEye.image = [TGIcons glyphNamed:@"eye" colour:[theme onMediaColour] side:kStampEyeSide];
-				CGFloat eyeX = layout.mediaStampFrame.origin.x + TGMetricPadSmall;
-				CGFloat eyeY = layout.mediaStampFrame.origin.y + TGCenteredOrigin(layout.mediaStampFrame.size.height, kStampEyeSide);
-				cell.viewsEye.frame = CGRectMake(eyeX, eyeY, kStampEyeSide, kStampEyeSide);
-				cell.mediaStamp.text = mine ? [NSString stringWithFormat:@"   %@  ", layout.stamp] : [NSString stringWithFormat:@"   %@", layout.stamp];
-				cell.mediaStamp.textAlignment = NSTextAlignmentLeft;
-				[cell.bubble bringSubviewToFront:cell.viewsEye];
-			} else {
-				cell.viewsEye.hidden = YES;
-				cell.mediaStamp.text = mine ? [NSString stringWithFormat:@"  %@", layout.stamp] : layout.stamp;
-				cell.mediaStamp.textAlignment = mine ? NSTextAlignmentLeft : NSTextAlignmentCenter;
-			}
+			// The plate is only the plate: its eye, text and ticks are
+			// placed by TGMessageStampPlace, not padded in with spaces.
+			cell.mediaStamp.text = @"";
 			cell.mediaStamp.frame = layout.mediaStampFrame;
 			[cell.bubble bringSubviewToFront:cell.mediaStamp];
 		}
@@ -272,12 +303,14 @@
 		// A sticker goes in as it is (a zero size means "do not round").
 		[TGIcons setRoundedImage:img inView:cell.picture
 							size:layout.isSticker ? CGSizeZero : layout.pictureFrame.size
-						  radius:TGMetricCornerMedium];
+						  radius:TGChatMediaCorner()];
 		// The tile shows while the rounded copy is still being drawn.
-		cell.picture.backgroundColor = layout.isSticker ? [UIColor clearColor] : [theme fileTileColour];
+		cell.picture.backgroundColor = layout.isSticker ? [UIColor clearColor] : [theme bubblePlaceholderColour:mine];
 		cell.picture.frame = layout.pictureFrame;
-		cell.picture.layer.cornerRadius = layout.isSticker ? TGMetricCornerNone : TGMetricCornerMedium;
-		cell.picture.layer.borderWidth = (layout.isSticker || layout.isRound) ? 0.0f : 1.0f;
+		cell.picture.layer.cornerRadius = layout.isSticker ? TGMetricCornerNone : TGChatMediaCorner();
+		// No frame round a photo: no iOS release draws one, and the grey
+		// line read as a heavy border in both themes.
+		cell.picture.layer.borderWidth = TGMetricBorderNone;
 		// A sticker is clipped to a plain rectangle, which is a scissor and
 		// free; a photo is already rounded, so it needs no clip at all.
 		cell.picture.clipsToBounds = layout.isSticker;
@@ -326,21 +359,9 @@
 		if (layout.stampOnPicture) {
 			cell.mediaStamp.hidden = NO;
 			cell.mediaStamp.backgroundColor = [theme mediaStampColour];
-			int64_t mediaViews = [m[@"viewCount"] respondsToSelector:@selector(longLongValue)] ? [m[@"viewCount"] longLongValue] : 0;
-			if (mediaViews > 0) {
-				cell.viewsEye.hidden = NO;
-				cell.viewsEye.image = [TGIcons glyphNamed:@"eye" colour:[theme onMediaColour] side:kStampEyeSide];
-				CGFloat eyeX = layout.mediaStampFrame.origin.x + TGMetricPadSmall;
-				CGFloat eyeY = layout.mediaStampFrame.origin.y + TGCenteredOrigin(layout.mediaStampFrame.size.height, kStampEyeSide);
-				cell.viewsEye.frame = CGRectMake(eyeX, eyeY, kStampEyeSide, kStampEyeSide);
-				cell.mediaStamp.text = mine ? [NSString stringWithFormat:@"   %@  ", layout.stamp] : [NSString stringWithFormat:@"   %@", layout.stamp];
-				cell.mediaStamp.textAlignment = NSTextAlignmentLeft;
-				[cell.bubble bringSubviewToFront:cell.viewsEye];
-			} else {
-				cell.viewsEye.hidden = YES;
-				cell.mediaStamp.text = mine ? [NSString stringWithFormat:@"  %@", layout.stamp] : layout.stamp;
-				cell.mediaStamp.textAlignment = mine ? NSTextAlignmentLeft : NSTextAlignmentCenter;
-			}
+			// The plate is only the plate: its eye, text and ticks are
+			// placed by TGMessageStampPlace, not padded in with spaces.
+			cell.mediaStamp.text = @"";
 			cell.mediaStamp.frame = layout.mediaStampFrame;
 			[cell.bubble bringSubviewToFront:cell.mediaStamp];
 		}

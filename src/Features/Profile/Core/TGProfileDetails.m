@@ -48,9 +48,12 @@
 		@"bio"             : bio ?: @"",
 		@"note"            : self.personalNote ?: @"",
 		@"businessLocation": self.businessLocation ?: @"",
+		@"businessInfo"    : self.businessInfo ?: (id)[NSNull null],
 		@"isOwnProfile"    : @(self.isOwnProfile),
 		@"isContact"       : @(self.isContact),
 		@"isBot"           : @(self.isBot),
+		@"botCanJoinGroups": @(self.botCanJoinGroups),
+		@"botVerification" : self.botVerification ?: @"",
 		@"blocked"         : @(self.blocked),
 	});
 }

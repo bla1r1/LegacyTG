@@ -273,6 +273,7 @@ APP_SRC_M := \
 	src/Core/Model/TGGiftFlatten.m \
 	src/Core/Model/TGMediaSupport.m \
 	src/Core/Model/TGPinnedLine.m \
+	src/Core/Model/TGStatChart.m \
 	src/Core/Stores/TGCustomEmojiStore.m \
 	src/Core/Stores/TGMediaStore.m \
 	src/Core/Stores/TGMemberAvatarStore.m \
@@ -615,6 +616,7 @@ APP_SRC_M := \
 	src/UI/Controls/TGTableViewCell.m \
 	src/Features/Settings/TGNetworkViewController.m \
 	src/Features/Chat/TGChatToolsViewController.m \
+	src/Features/Chat/TGStatisticsViewController.m \
 	src/Features/Profile/TGProfileViewController.m \
 	src/Features/Profile/Core/TGProfileLifecycle.m \
 	src/Features/Profile/Core/TGProfileHeader.m \

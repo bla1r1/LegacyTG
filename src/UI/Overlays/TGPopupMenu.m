@@ -50,6 +50,27 @@ static TGPopupMenu *sOpenMenu = nil;
 
 @implementation TGPopupMenu
 
++ (void)liftedRoomForItems:(NSArray *)items
+				headerView:(UIView *)headerView
+				 reactions:(NSArray *)reactions
+					 above:(CGFloat *)above
+					 below:(CGFloat *)below {
+	CGFloat headerH = headerView ? headerView.bounds.size.height : kMenuHeaderH;
+	CGFloat cardH = headerH + (CGFloat)items.count * kMenuRowH + TGMetricPadSmall;
+	for (NSDictionary *it in items)
+		if ([it[@"title"] isEqualToString:@"Select"]){
+			cardH += TGMetricPadTiny;
+			break;
+		}
+	CGFloat reactionH = 0;
+	if (reactions.count){
+		TGReactionPicker *probe = [[TGReactionPicker alloc] initWithEmojis:reactions selectedEmoji:nil];
+		reactionH = [probe sizeThatFits:CGSizeZero].height + kReactionPadV + TGMetricPadSmall;
+	}
+	if (above) *above = reactionH;
+	if (below) *below = TGMetricPadSmall + cardH;
+}
+
 + (void)dismiss {
 	TGPopupMenu *menu = sOpenMenu;
 	sOpenMenu = nil;
@@ -438,8 +459,21 @@ onDefaultReaction:(void (^)(NSString *))defaultChoice
 			[row addSubview:icon];
 		}
 
+		// A row with a subtitle (a timed message's Delete) puts the title in
+		// the upper part and the smaller line under it, in the row's colour.
+		NSString *subtitle = [item[@"subtitle"] isKindOfClass:NSString.class] ? item[@"subtitle"] : nil;
+		CGFloat titleH = subtitle.length ? kMenuRowH - TGMetricLineMicro : kMenuRowH;
 		UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(
-				kMenuLabelX, 0, kMenuCardW - kMenuLabelX - TGMetricPad, kMenuRowH)];
+				kMenuLabelX, 0, kMenuCardW - kMenuLabelX - TGMetricPad, titleH)];
+		if (subtitle.length){
+			UILabel *small = [[UILabel alloc] initWithFrame:CGRectMake(kMenuLabelX,
+					titleH - TGMetricPadSmall, kMenuCardW - kMenuLabelX - TGMetricPad, TGMetricLineMicro)];
+			small.text = subtitle;
+			small.font = TGFontMicro();
+			small.backgroundColor = [UIColor clearColor];
+			small.textColor = destructive ? [theme destructiveColour] : [theme secondaryTextColour];
+			[row addSubview:small];
+		}
 		label.text = title;
 		label.font = TGFontRowStrong();
 		label.backgroundColor = [UIColor clearColor];

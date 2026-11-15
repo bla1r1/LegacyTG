@@ -33,6 +33,8 @@
 #import "TGStyle.h"
 
 #import "TGChatGeometry.h"
+#import "TGChatParityModel.h"
+#import "TGUIFormat.h"
 
 @class TGMessageStreamStore;
 
@@ -50,10 +52,13 @@ FOUNDATION_EXPORT TGMessageCard *TGChatCardForRow(NSDictionary *m);
 @property (nonatomic, assign) UITextFieldViewMode rightViewMode;
 @end
 
+/// A TDLib minithumbnail (its base64 "data", or raw bytes) as a picture.
+UIImage *TGImageFromMinithumbnail(id mini);
+
 @interface TGChatViewController () <UISearchBarDelegate, CLLocationManagerDelegate, TGEmojiPanelDelegate,
 		UIScrollViewDelegate, AVAudioPlayerDelegate, TGStreamingVoicePlayerDelegate,
 		ABPeoplePickerNavigationControllerDelegate, UIDocumentInteractionControllerDelegate,
-		UIDocumentPickerDelegate, MPMediaPickerControllerDelegate>
+		UIDocumentPickerDelegate, MPMediaPickerControllerDelegate, UIGestureRecognizerDelegate>
 
 @property (nonatomic, strong) UIDocumentInteractionController *docInteractionController;
 
@@ -88,10 +93,16 @@ FOUNDATION_EXPORT TGMessageCard *TGChatCardForRow(NSDictionary *m);
 @property (nonatomic, strong) NSMutableDictionary *quotes;       // messageId -> flattened
 @property (nonatomic, strong) NSMutableSet *quotesRequested;
 @property (nonatomic, strong) NSDictionary *actionMessage;   // long-pressed
+/// TDLib's messageProperties for actionMessage, fetched before its card opens.
+@property (nonatomic, strong) NSDictionary *actionProperties;
+@property (nonatomic, assign) int64_t actionPropertiesFor;
 /// The held message's presentation: the dimmed chat behind it. Official keeps
 /// the bubble in place; the cell never moves and the dim is the only view the
 /// hold owns.
 @property (nonatomic, strong) UIView *holdBackdropView;
+/// The held bubble's picture over the blurred chat, and where it came from.
+@property (nonatomic, strong) UIImageView *holdLiftView;
+@property (nonatomic, assign) CGRect holdLiftOrigin;
 /// Bumped for every hold and every dismissal; a late animation completion
 /// that no longer matches this belongs to a hold that is gone.
 @property (nonatomic, assign) NSInteger holdGeneration;
@@ -135,6 +146,12 @@ FOUNDATION_EXPORT TGMessageCard *TGChatCardForRow(NSDictionary *m);
 // The bar over a chat nobody has spoken to: report spam, add to contacts.
 @property (nonatomic, strong) UIView *actionBarView;
 @property (nonatomic, strong) UILabel *actionBarLabel;
+/// The requests strip closed for this visit (official hides it until the
+/// count changes).
+@property (nonatomic, assign) NSInteger joinRequestsDismissedAt;
+/// When slow mode next lets this account post here (0: no wait known).
+@property (nonatomic, assign) NSTimeInterval slowModeUntil;
+- (void)refreshSlowModeWait;
 /// Following a reply: the quote header is the button; this is where it lands.
 - (void)jumpToReplyById:(int64_t)replyId;
 - (void)refreshActionBar;
@@ -211,6 +228,20 @@ FOUNDATION_EXPORT TGMessageCard *TGChatCardForRow(NSDictionary *m);
 @property (nonatomic, strong) UIButton *jumpButton;
 @property (nonatomic, strong) UILabel *jumpBadge;
 @property (nonatomic, assign) NSInteger newWhileAway;
+/// Over the down arrow: jump to the oldest unread reaction, then to the
+/// oldest unread poll vote. Each carries its chat counter as a badge.
+@property (nonatomic, strong) UIButton *mentionsJumpButton;
+@property (nonatomic, assign) NSInteger unreadMentionJumps;
+@property (nonatomic, strong) UIButton *reactionsJumpButton;
+@property (nonatomic, strong) UIButton *pollVotesJumpButton;
+@property (nonatomic, assign) NSInteger unreadReactionJumps;
+@property (nonatomic, assign) NSInteger unreadPollVoteJumps;
+/// Ids already reported seen for their reactions or votes this visit.
+@property (nonatomic, strong) NSMutableSet *unreadMarksSeen;
+- (void)refreshUnreadJumps;
+- (void)retryFailedMessage:(NSDictionary *)m;
+- (void)openMediaOfMessage:(NSDictionary *)m atSeconds:(int32_t)seconds;
+- (void)noteUnreadMarksOfMessage:(NSDictionary *)m;
 @property (nonatomic, strong) UIPanGestureRecognizer *replyPanRecognizer;
 @property (nonatomic, weak) UITableViewCell *replySwipeCell;
 @property (nonatomic, assign) NSInteger replySwipeRow;
@@ -245,9 +276,24 @@ FOUNDATION_EXPORT TGMessageCard *TGChatCardForRow(NSDictionary *m);
 - (void)refreshReplyKeyboard;
 - (void)replyMarkupChanged:(NSNotification *)note;
 - (void)hideBotKeyboard;
+/// The chat's bot commands and official's "/" key in the field that lists
+/// them over the composer.
+@property (nonatomic, strong) NSArray *botCommands;
+/// The other side of this private chat refuses voice and round messages.
+@property (nonatomic, assign) BOOL voiceRestricted;
+@property (nonatomic, strong) UIButton *botCommandsToggle;
+@property (nonatomic, strong) UIScrollView *botCommandsPanel;
+- (void)hideBotCommands;
+- (BOOL)botKeyboardShown;
+- (void)toggleBotKeyboard;
 @property (nonatomic, strong) UIView *pinnedBannerView;
 @property (nonatomic, strong) UIView *pinnedBannerHair;
 @property (nonatomic, assign) BOOL isEditingMessages;
+/// Where the last finger came down on the table. didSelectRowAtIndexPath
+/// carries only the row, and a file opened from a tap anywhere on it.
+@property (nonatomic, strong) UITapGestureRecognizer *touchRecorder;
+@property (nonatomic, assign) CGPoint lastTouchPoint;
+@property (nonatomic, assign) BOOL hasTouchPoint;
 @property (nonatomic, strong) NSMutableSet *selectedMessageIds;
 @property (nonatomic, strong) UIView *editToolbar;
 @property (nonatomic, strong) UIButton *editDeleteButton;
@@ -416,12 +462,15 @@ FOUNDATION_EXPORT TGMessageCard *TGChatCardForRow(NSDictionary *m);
 /// Take the lift, the backdrop and the table's scroll state down. Safe to
 /// call when nothing is lifted; the hold menu calls it as its dismissal.
 - (void)endHoldPresentation;
-/// Snapshot `cell`'s bubble, dim and blur the chat behind it, and lift the
-/// copy to the top of the screen. Returns the rect it lands on - the menu's
-/// anchor - or CGRectZero when the cell is not a bubble to lift, in which
-/// case the caller keeps the old point-anchored menu. `didLift` runs when
-/// the lift animation lands, so the menu appears under the settled copy.
+/// Blur and dim the chat behind `cell`'s bubble and hold a sharp copy of the
+/// bubble over it, moved only as far as the menu's room (`above` for the
+/// reaction bar, `below` for the card) needs. Returns the rect it lands on -
+/// the menu's anchor - or CGRectZero when the cell is not a bubble, in which
+/// case the caller keeps the point-anchored menu. `didLift` runs when the
+/// copy has landed.
 - (CGRect)beginHoldPresentationForCell:(TGBubbleCell *)cell
+								 above:(CGFloat)above
+								 below:(CGFloat)below
                               didLift:(void (^)(CGRect anchor))didLift;
 /// Remove any lift still on screen without its return animation. Used when a
 /// new hold replaces one that is still fading, so its backdrop is not baked
@@ -480,6 +529,7 @@ FOUNDATION_EXPORT TGMessageCard *TGChatCardForRow(NSDictionary *m);
 - (void)fetchMissingImages;
 - (void)applyThemeFromMessage:(NSDictionary *)m;
 - (UIImage *)avatarForUser:(int64_t)userId name:(NSString *)name;
+- (UIImage *)replierFaces:(NSArray *)peerIds;
 - (UIImage *)mapCardForLatitude:(double)lat longitude:(double)lon;
 - (void)beginDownloadHUDForFile:(NSInteger)fileId;
 - (void)endDownloadHUD;

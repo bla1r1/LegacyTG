@@ -61,6 +61,24 @@ NSString *TGBytes(long long bytes);
 /// Compact count for post views: 0..999 as is, 1.2K, 12K, 1M, 1.2M.
 NSString *TGCompactCount(int64_t n);
 
+/// A textEntityTypeDateTime's words in the reader's time
+/// (stringForEntityFormattedDate): "5 minutes ago", "in 2 days", or the
+/// date and time at the precision the sender chose, weekday first when asked.
+/// Nil when the entity has no formatting type: its own text stays.
+NSString *TGDateEntityText(int64_t unixTime, NSDictionary *formattingType,
+		NSTimeInterval now);
+
+/// `text` with every formatted date entity's words swapped in, and in
+/// `outEntities` all the entities moved to match. Nil when nothing changes,
+/// so the common message pays for one scan of its entity types.
+NSString *TGApplyDateEntities(NSString *text, NSArray *entities, NSTimeInterval now,
+		NSArray **outEntities);
+
+/// The link a "0:42" media timestamp carries inside a message, and its
+/// seconds back out of it; -1 for any other link.
+NSString *TGMediaTimestampLink(int32_t seconds);
+int32_t TGMediaTimestampFromLink(NSString *link);
+
 #ifdef __cplusplus
 }
 #endif

@@ -11,6 +11,10 @@
 /// Returns nil when the receiver's text should keep whatever it has.
 FOUNDATION_EXPORT NSString *TGStatusTextFromTDStatus(NSDictionary *status);
 
+/// userStatusOnline counts only until its `expires`; TDLib sends no update
+/// when that passes, so every reader asks with the clock.
+FOUNDATION_EXPORT BOOL TGUserStatusOnlineAt(NSDictionary *status, NSTimeInterval now);
+
 /// The phrase to show over a line while the connection is not `ready`, or
 /// nil when they are - the list of network states matches what TGClient
 /// maps from updateConnectionState.

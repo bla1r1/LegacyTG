@@ -605,7 +605,11 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
     NSDictionary *info = [TGAccountStore shared].codeInfo;
     NSString *codeType = info[@"type"][@"@type"];
     NSString *sentence = nil;
-    if ([codeType isEqualToString:@"authenticationCodeTypeSms"]) {
+    BOOL wordCode = [codeType isEqualToString:@"authenticationCodeTypeSmsWord"] ||
+            [codeType isEqualToString:@"authenticationCodeTypeSmsPhrase"];
+    if (wordCode) {
+        sentence = TGLoginWordCodeSentence(info[@"type"], displayNumber);
+    } else if ([codeType isEqualToString:@"authenticationCodeTypeSms"]) {
         sentence = TGLocalizedFormat(
                 @"We've sent an SMS with an activation code to your phone **%@**.",
                 displayNumber);
@@ -678,6 +682,20 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
         self.resendCountdown = 0;
         [self.resendButton setTitle:TGLocalized(@"Send the code as an SMS")
                           forState:UIControlStateNormal];
+    }
+
+    // A word or a phrase is typed, not counted into digit boxes (official
+    // AuthorizationSequenceCodeEntryController's word mode).
+    if (wordCode) {
+        self.codeBoxesView.hidden = YES;
+        self.expectedCodeLength = 0;
+        BOOL phrase = [codeType isEqualToString:@"authenticationCodeTypeSmsPhrase"];
+        self.inputField.placeholder = TGLocalized(phrase ? @"Enter Phrase from SMS" : @"Enter Word from SMS");
+        self.inputField.textColor = [[TGTheme shared] primaryTextColour];
+        self.inputField.keyboardType = UIKeyboardTypeDefault;
+        self.inputField.autocorrectionType = UITextAutocorrectionTypeNo;
+        self.inputField.autocapitalizationType = UITextAutocapitalizationTypeNone;
+        self.actionButton.hidden = NO;
     }
 
     [self applyTheme];
@@ -986,9 +1004,41 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
                  button:@"Continue"];
     self.expectedCodeLength = [info[@"code_info"][@"length"] integerValue];
     [self updateActionEnabled];
-    if ([info[@"can_reset_email_address"] boolValue])
-        [self addStepLink:@"Can't access this email?" action:@selector(resetEmailTapped) atY:0];
+    // AuthorizationSequenceCodeEntryControllerNode: a reset that can start
+    // offers "Can't access this email?"; one already running says when it
+    // lands and offers to finish it by SMS.
+    NSDictionary *reset = [info[@"email_address_reset_state"] isKindOfClass:NSDictionary.class]
+            ? info[@"email_address_reset_state"] : nil;
+    if ([reset[@"@type"] isEqualToString:@"emailAddressResetStatePending"]){
+        self.subtitleLabel.text = [NSString stringWithFormat:@"%@\n\n%@", subtitle,
+                TGLoginEmailResetPendingText([reset[@"reset_in"] integerValue])];
+        [self addStepLink:TGLocalized(@"Reset now via SMS") action:@selector(resetEmailTapped) atY:0];
+    } else if ([reset[@"@type"] isEqualToString:@"emailAddressResetStateAvailable"]){
+        [self addStepLink:TGLocalized(@"Can't access this email?") action:@selector(resetEmailAsked) atY:0];
+    }
     [self layoutActiveStep];
+}
+
+/// With Premium the reset is immediate; otherwise official first says how
+/// long it takes (Login.Email.ResetText) and resets on Reset.
+- (void)resetEmailAsked {
+    NSDictionary *info = [TGAccountStore shared].emailCodeInfo;
+    NSDictionary *reset = info[@"email_address_reset_state"];
+    NSInteger wait = [reset[@"wait_period"] integerValue];
+    if (wait <= 0){
+        [self resetEmailTapped];
+        return;
+    }
+    NSString *pattern = info[@"code_info"][@"email_address_pattern"] ?: @"";
+    NSString *text = TGLocalizedFormat(@"You can change your login email if you are logged into Telegram from another device. Otherwise, if you don't have access to email %1$@, you can reset this email with an **SMS** code **%2$@**.",
+            pattern, TGLoginResetInterval(wait));
+    __weak typeof(self) weakSelf = self;
+    [TGAlertSheet showConfirm:[text stringByReplacingOccurrencesOfString:@"**" withString:@""]
+                        title:TGLocalized(@"Reset Email")
+                       action:TGLocalized(@"Reset")
+                  destructive:NO
+                       inView:self.view
+                    onConfirm:^{ [weakSelf resetEmailTapped]; }];
 }
 
 - (void)resetEmailTapped {

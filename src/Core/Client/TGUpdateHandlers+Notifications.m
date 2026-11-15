@@ -121,8 +121,19 @@
 				postNotificationName:TGStickerListsChangedNotification object:self];
 		return YES;
 	}
+	case TGUpdateChatPendingJoinRequests: {
+		NSNumber *chatId = obj[@"chat_id"];
+		NSMutableDictionary *chat = chatId ? self.client.chatsById[chatId] : nil;
+		id pending = obj[@"pending_join_requests"];
+		if (chat)
+			chat[@"joinRequestCount"] = [pending isKindOfClass:NSDictionary.class] ? (pending[@"total_count"] ?: @0) : @0;
+		if (chatId)
+			[[NSNotificationCenter defaultCenter]
+					postNotificationName:TGChatMembersChangedNotification object:self
+								userInfo:@{@"chatId" : chatId}];
+		return YES;
+	}
 	case TGUpdateChatMember:
-	case TGUpdateChatPendingJoinRequests:
 	case TGUpdateNewChatJoinRequest:
 	case TGUpdateChatJoinResult: {
 		// updateChatJoinResult is the answer to our own join request, sent

@@ -28,5 +28,9 @@ FOUNDATION_EXPORT TGMessageCardFrames TGMessageCardLayout(TGMessageCard *card, C
 @property (nonatomic, copy) void (^onAction)(TGMessageCard *card);
 /// Lays the card out at the view's current width and starts loading its
 /// picture through TGMediaStore; a later card cancels an earlier load.
+/// The card sits in your own bubble: its kicker, lines and button take the
+/// own-bubble colours (on a dark theme the shared blue vanished on teal).
+@property (nonatomic, assign) BOOL mine;
+
 - (void)showCard:(TGMessageCard *)card;
 @end

@@ -7,6 +7,17 @@
 //
 #import "TGSessionsStore.h"
 #import "TGClientInternal.h"
+#import "TGLocalization.h"
+
+/// The app's name, with official's "(ID: n)" after an unofficial one
+/// (AuthSessions.AppUnofficial), so a third-party client stands out.
+NSString *TGSessionAppName(NSDictionary *session) {
+	NSString *name = [session[@"application_name"] isKindOfClass:NSString.class] ? session[@"application_name"] : @"";
+	if ([session[@"is_official_application"] boolValue] || !session[@"api_id"])
+		return name;
+	NSString *tag = TGLocalizedFormat(@"(ID: %@)", session[@"api_id"]);
+	return name.length ? [NSString stringWithFormat:@"%@ %@", name, tag] : tag;
+}
 
 @implementation TGSessionsStore
 
@@ -38,12 +49,16 @@
 		for (NSDictionary *session in result[@"sessions"]){
 			[out addObject:@{
 				@"id"         : session[@"id"] ?: @0,
-				@"name"       : session[@"application_name"] ?: @"",
+				@"name"       : TGSessionAppName(session),
+				@"device"     : session[@"device_type"][@"@type"] ?: @"",
 				@"platform"   : [NSString stringWithFormat:@"%@ %@",
 						session[@"platform"] ?: @"", session[@"system_version"] ?: @""],
 				@"ip"         : session[@"ip_address"] ?: session[@"ip"] ?: @"",
 				@"isCurrent"  : session[@"is_current"] ?: @NO,
-				@"isUnconfirmed" : session[@"is_unconfirmed"] ?: @NO,
+				// Official lists a sign-in stopped at the password with the
+				// incomplete attempts, beside the unconfirmed ones.
+				@"isUnconfirmed" : @([session[@"is_unconfirmed"] boolValue] ||
+						[session[@"is_password_pending"] boolValue]),
 				@"canAcceptSecretChats" : session[@"can_accept_secret_chats"] ?: @YES,
 				@"canAcceptCalls" : session[@"can_accept_calls"] ?: @YES,
 				@"lastActive" : session[@"last_active_date"] ?: @0,

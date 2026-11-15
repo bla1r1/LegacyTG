@@ -13,6 +13,22 @@ static inline NSString *TGSessionRowTitle(NSDictionary *session) {
 	return session[@"name"] ?: @"Loading...";
 }
 
+/// The tile colour official gives each device kind (iconForSession):
+/// green Android, Chrome and Xbox; orange Firefox, Brave and Ubuntu; red
+/// Opera and Vivaldi; grey Linux and unknown; blue the rest.
+static inline NSString *TGSessionDeviceTint(NSDictionary *session) {
+	NSString *device = [session[@"device"] isKindOfClass:NSString.class] ? session[@"device"] : @"";
+	for (NSString *kind in @[@"Android", @"Chrome", @"Xbox"])
+		if ([device hasSuffix:kind]) return @"green";
+	for (NSString *kind in @[@"Firefox", @"Brave", @"Ubuntu"])
+		if ([device hasSuffix:kind]) return @"amber";
+	for (NSString *kind in @[@"Opera", @"Vivaldi"])
+		if ([device hasSuffix:kind]) return @"red";
+	if (!device.length || [device hasSuffix:@"Linux"] || [device hasSuffix:@"Unknown"])
+		return @"grey";
+	return @"azure";
+}
+
 static inline NSString *TGSessionRowDetail(NSDictionary *session, BOOL isCurrent) {
 	NSMutableArray *parts = [NSMutableArray array];
 	if ([session[@"platform"] length])

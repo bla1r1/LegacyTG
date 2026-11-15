@@ -43,7 +43,7 @@
 
 		cell.subtitle.hidden = NO;
 		cell.subtitle.font = TGFontMeta();
-		cell.subtitle.textColor = [callTheme secondaryTextColour];
+		cell.subtitle.textColor = [callTheme bubbleSecondaryColour:mine];
 		cell.subtitle.text = layout.stamp;
 
 		cell.contactCallButton.hidden = NO;
@@ -81,7 +81,7 @@
 		UIImage *cover = [self artworkForTrack:m];
 		cell.artwork.image = cover;
 		cell.artwork.backgroundColor = cover ? [UIColor clearColor]
-											 : [cardTheme fileTileColour];
+											 : [cardTheme bubblePlaceholderColour:mine];
 
 		BOOL isCurrent = [TGMusicPlayer shared].currentMessageId ==
 						 [m[@"id"] longLongValue];
@@ -121,7 +121,7 @@
 				: length;
 		cell.subtitle.hidden = NO;
 		cell.subtitle.font = TGFontCaption();
-		cell.subtitle.textColor = [cardTheme fileMetaColour];
+		cell.subtitle.textColor = [cardTheme bubbleSecondaryColour:mine];
 		cell.subtitle.text = second;
 
 		NSString *caption = [m[@"caption"] isKindOfClass:NSString.class]
@@ -146,7 +146,23 @@
 		}
 		cell.transcriptionLabel.hidden = YES;
 
+		// The time and ticks were laid out and never written in, so a track
+		// was the one bubble with no time on it.
+		cell.time.hidden = NO;
+		cell.time.text = layout.stamp;
+		cell.time.textColor = mine ? [cardTheme timeMineColour] : [cardTheme timeColour];
 		cell.time.frame = layout.timeFrame;
+		cell.ticks.hidden = !mine;
+		if (mine){
+			cell.ticks.image = [self ticksForMessage:m white:NO];
+			cell.ticks.frame = layout.stampTicksFrame;
+		}
+		// The performer line stops short of the time on the same line.
+		CGRect sub = cell.subtitle.frame;
+		if (CGRectGetMaxY(sub) > layout.timeFrame.origin.y && layout.timeFrame.size.width > 0)
+			sub.size.width = MAX(TGMetricZero, MIN(sub.size.width,
+					layout.timeFrame.origin.x - TGMetricPadSmall - sub.origin.x));
+		cell.subtitle.frame = sub;
 		return YES;
 	}
 
@@ -192,7 +208,7 @@
 		cell.wave.hidden = NO;
 		CGSize waveSize = CGSizeMake(layout.bubbleFrame.size.width - left - kPadH, kVoiceWaveHeight);
 		[cell setWaveform:m[@"waveform"] size:waveSize
-				   colour:[voiceTheme accentColour]];
+				   colour:[voiceTheme bubbleAccentColour:mine]];
 		[cell setWavePlayed:(isPlaying ? [self playedFraction]
 									   : (unplayed && !mine ? 1.0f : 0))];
 		cell.wave.frame = CGRectMake(left, fwd + kVoiceWaveTop, waveSize.width, waveSize.height);
@@ -213,7 +229,7 @@
 		cell.body.hidden = NO;
 		cell.body.numberOfLines = 1;
 		cell.body.font = TGFontMeta();
-		cell.body.textColor = [voiceTheme secondaryTextColour];
+		cell.body.textColor = [voiceTheme bubbleSecondaryColour:mine];
 		cell.body.text = durText;
 		cell.body.frame = CGRectMake(left, fwd + TGMetricPersonRow - TGMetricLineRow,
 				MAX(TGTextSize(durText, TGFontMeta(), 0).width, kVoiceClockMinimum), TGMetricLineMicro);
@@ -249,7 +265,7 @@
 			CGSize transSize = TGTextSize(transcription, TGFontSubhead(), textW);
 			cell.transcriptionLabel.hidden = NO;
 			cell.transcriptionLabel.font = TGFontSubhead();
-			cell.transcriptionLabel.textColor = [voiceTheme secondaryTextColour];
+			cell.transcriptionLabel.textColor = [voiceTheme bubbleSecondaryColour:mine];
 			cell.transcriptionLabel.text = transcription;
 			cell.transcriptionLabel.frame = CGRectMake(kPadH, transY, textW, transSize.height);
 			[cell.bubble bringSubviewToFront:cell.transcriptionLabel];

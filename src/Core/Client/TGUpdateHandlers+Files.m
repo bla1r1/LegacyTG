@@ -26,8 +26,16 @@
 	case TGUpdateFileAddedToDownloads:
 	case TGUpdateFileDownload:
 	case TGUpdateFileDownloads:
-	case TGUpdateFileRemovedFromDownloads:
-	case TGUpdateSpeedLimitNotification: {
+	case TGUpdateSpeedLimitNotification:
+		// Official's tooltip in the chat that is loading: which way the
+		// speed is capped.
+		[[NSNotificationCenter defaultCenter]
+				postNotificationName:TGSpeedLimitNotification object:self
+							userInfo:@{@"upload" : obj[@"is_upload"] ?: @NO}];
+		[[NSNotificationCenter defaultCenter]
+				postNotificationName:TGDownloadsChangedNotification object:self];
+		return YES;
+	case TGUpdateFileRemovedFromDownloads: {
 		// Settings > Downloads is the one screen built from a single
 		// searchFileDownloads answer, so it had no way of noticing a download
 		// that finished, paused or was removed from another device.

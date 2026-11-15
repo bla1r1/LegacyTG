@@ -149,6 +149,9 @@ static const CGFloat   kStoryGridGap   = TGMetricCollageGap;
 @property (nonatomic, strong) NSMutableSet *similarChannelsRequested;
 @property (nonatomic, strong) UIImage *similarChannelsCompositeImage;
 @property (nonatomic, assign) BOOL isBot;
+/// userTypeBot can_join_groups: official offers "Add to Group or Channel".
+@property (nonatomic, assign) BOOL botCanJoinGroups;
+@property (nonatomic, copy) NSString *botVerification;
 @property (nonatomic, assign) BOOL birthdayToday;
 @property (nonatomic, assign) int64_t emojiStatusId;
 @property (nonatomic, strong) UIImage *emojiStatusImage;
@@ -170,6 +173,7 @@ static const CGFloat   kStoryGridGap   = TGMetricCollageGap;
 @property (nonatomic, copy) NSString *username;
 @property (nonatomic, copy) NSArray *activeUsernames;
 @property (nonatomic, copy) NSString *businessLocation;
+@property (nonatomic, strong) NSDictionary *businessInfo;
 /// The voice/round note playing from the Voice tab, and which message id.
 @property (nonatomic, strong) TGStreamingVoicePlayer *voicePlayer;
 @property (nonatomic, assign) int64_t playingVoiceId;

@@ -5,6 +5,7 @@
 // feeds to TGRows; the checks pin order, fallbacks and the words official
 // uses.
 #define TGROW_MODELS_ONLY 1
+#import "TGSessionsStore.h"
 #import "TGTestRunner.h"
 #import "TGSessionsViewController.h"
 #import "TGWebsitesViewController.h"
@@ -144,6 +145,19 @@
 			@"Channel");
 	XCTAssertEqualObjects(TGSimilarChannelDetail(@{@"members" : @5}, @{}),
 			@"5 subscribers");
+}
+
+// Every session row was the same; official tints by device and marks an
+// unofficial app with its API id.
+- (void)testSessions_DeviceTintAndUnofficialApp {
+	XCTAssertEqualObjects(TGSessionDeviceTint(@{ @"device" : @"sessionDeviceTypeAndroid" }), @"green");
+	XCTAssertEqualObjects(TGSessionDeviceTint(@{ @"device" : @"sessionDeviceTypeFirefox" }), @"amber");
+	XCTAssertEqualObjects(TGSessionDeviceTint(@{ @"device" : @"sessionDeviceTypeIphone" }), @"azure");
+	XCTAssertEqualObjects(TGSessionDeviceTint(@{}), @"grey");
+	XCTAssertEqualObjects(TGSessionAppName(@{ @"application_name" : @"Nicegram", @"is_official_application" : @NO, @"api_id" : @12 }),
+			@"Nicegram (ID: 12)");
+	XCTAssertEqualObjects(TGSessionAppName(@{ @"application_name" : @"Telegram iOS", @"is_official_application" : @YES, @"api_id" : @1 }),
+			@"Telegram iOS");
 }
 
 @end

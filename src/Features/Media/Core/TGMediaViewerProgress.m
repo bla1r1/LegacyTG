@@ -148,7 +148,9 @@ static const NSInteger kSpinnerOffset = 2;   // kZoomTag + 2 is a page's spinner
 				});
 			}];
 		}
-		if (isAnim && page == self.index){
+		// A media timestamp opens the video playing from its second; a
+		// video's own start time only says where play begins.
+		if ((isAnim || [item[@"playNow"] boolValue]) && page == self.index){
 			[self toggleMovie];
 		}
 		return;

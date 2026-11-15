@@ -23,6 +23,10 @@
 
 - (UIColor *)calloutBackgroundColour {
 	///< the satin glass plate behind popup callouts and reaction bars
+	// Night: official contextMenu.backgroundColor #252525; the light card
+	// with the theme's white text was unreadable.
+	if ([self isDark])
+		return [UIColor colorWithRed:0x25 / 255.0f green:0x25 / 255.0f blue:0x25 / 255.0f alpha:0.98f];
 	// Light / White theme: luminous white/pearl skeuomorphic card
 	return [UIColor colorWithRed:0.96f green:0.97f blue:0.98f alpha:0.98f];
 }
@@ -33,26 +37,36 @@
 }
 
 - (UIColor *)calloutBorderColour {
+	if ([self isDark])
+		return [UIColor colorWithWhite:1.0f alpha:0.10f];
 	return [UIColor colorWithRed:0.72f green:0.75f blue:0.78f alpha:0.90f];
 }
 
 - (UIColor *)calloutDividerDarkColour {
 	///< etched dark groove
+	if ([self isDark])
+		return [UIColor colorWithWhite:1.0f alpha:0.15f];   // official itemSeparatorColor
 	return [UIColor colorWithWhite:0.0f alpha:0.12f];
 }
 
 - (UIColor *)calloutDividerLightColour {
 	///< etched specular highlight
+	if ([self isDark])
+		return [UIColor clearColor];
 	return [UIColor colorWithWhite:1.0f alpha:0.85f];
 }
 
 - (UIColor *)calloutGlossTopColour {
 	///< specular top reflection for callout popup menu
+	if ([self isDark])
+		return [UIColor colorWithWhite:1.0f alpha:0.04f];
 	return TGRole(@"calloutGlossTop", [UIColor colorWithWhite:1.0f alpha:0.65f]);
 }
 
 - (UIColor *)calloutGlossBottomColour {
 	///< specular fade for callout popup menu
+	if ([self isDark])
+		return [UIColor clearColor];
 	return TGRole(@"calloutGlossBottom", [UIColor colorWithWhite:1.0f alpha:0.10f]);
 }
 

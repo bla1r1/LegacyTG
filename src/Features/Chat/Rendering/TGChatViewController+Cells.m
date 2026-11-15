@@ -82,6 +82,12 @@ static char kTGReactionChipInfoKey;
 	reactionChips.hidden = YES;
 	UIImageView *senderStatus = (UIImageView *)[cell.bubble viewWithTag:0x9006];
 	senderStatus.hidden = YES;
+	// The same for the comments footer, its rule and a preview's picture:
+	// a card branch returns before they are placed, and a reused cell showed
+	// a channel post's "12 Comments" across a checklist.
+	static const NSInteger kLeftovers[] = {0x9003, 0x9008, 0x900C, 0x900D};
+	for (size_t i = 0; i < sizeof(kLeftovers) / sizeof(kLeftovers[0]); i++)
+		[cell.bubble viewWithTag:kLeftovers[i]].hidden = YES;
 
 	// 1. Who wrote it. This runs before the service and audio branches
 	// return: the layout indents the bubble by the avatar column and keeps a
@@ -100,6 +106,34 @@ static char kTGReactionChipInfoKey;
 		int64_t statusId = [[TGMessageStore shared] emojiStatusIdForUser:senderId];
 		cell.sender.attributedText = TGNameWithStatus(layout.senderName, statusId, cell.sender.font, TGSenderColour(senderId));
 		cell.sender.frame = layout.senderFrame;
+	}
+	// A booster's bolt, with the count past one, at the end of the name
+	// line in the name's colour (ChatMessageBubbleItemNode's boost badge).
+	UIButton *boost = (UIButton *)[cell.bubble viewWithTag:0x900B];
+	NSString *boostText = layout.senderName.length ? TGMessageBoostBadgeText(m) : nil;
+	if (boostText){
+		if (!boost){
+			boost = [UIButton buttonWithType:UIButtonTypeCustom];
+			boost.tag = 0x900B; // 0x9008 is the comments rule, 0x900A the repliers
+			boost.userInteractionEnabled = NO;
+			boost.titleLabel.font = TGFontMicro();
+			boost.alpha = TGAlphaSecondary;
+			boost.contentHorizontalAlignment = UIControlContentHorizontalAlignmentRight;
+			[cell.bubble addSubview:boost];
+		}
+		UIColor *nameColour = TGSenderColour(senderId);
+		[boost setImage:[TGIcons glyphNamed:@"flash" colour:nameColour side:TGMetricLineMicro]
+			   forState:UIControlStateNormal];
+		[boost setTitle:boostText forState:UIControlStateNormal];
+		[boost setTitleColor:nameColour forState:UIControlStateNormal];
+		CGFloat boostW = TGMessageBoostBadgeWidth(m);
+		CGRect line = layout.senderFrame;
+		boost.frame = CGRectMake(CGRectGetMaxX(line) - boostW, line.origin.y, boostW, line.size.height);
+		boost.hidden = NO;
+		line.size.width = MAX(TGMetricZero, line.size.width - boostW);
+		cell.sender.frame = line;
+	} else {
+		boost.hidden = YES;
 	}
 
 	// 2. Card-like bubbles (polls, checklists, documents, contacts, locations).
@@ -139,12 +173,12 @@ static char kTGReactionChipInfoKey;
 
 	if (layout.quoteText) {
 		cell.quoteBar.hidden = NO;
-		cell.quoteBar.backgroundColor = [theme accentColour];
+		cell.quoteBar.backgroundColor = [theme bubbleAccentColour:mine];
 		cell.quoteBar.frame = layout.quoteBarFrame;
 
 		cell.quoteAuthor.hidden = NO;
 		cell.quoteAuthor.font = TGFontCaptionStrong();
-		cell.quoteAuthor.textColor = [theme accentColour];
+		cell.quoteAuthor.textColor = [theme bubbleAccentColour:mine];
 		NSString *qAuthor = layout.quoteAuthor ?: TGLocalized(@"Reply");
 		int64_t authorStatusId = [self quoteAuthorStatusIdFor:m];
 		cell.quoteAuthor.attributedText = TGNameWithStatus(qAuthor, authorStatusId, cell.quoteAuthor.font, [theme accentColour]);
@@ -160,6 +194,25 @@ static char kTGReactionChipInfoKey;
 			cell.quote.text = layout.quoteText;
 		}
 		cell.quote.frame = layout.quoteFrame;
+		// A quote the sender picked by hand wears official's quote mark in
+		// the reply's top right corner (ChatMessageReplyInfoNode).
+		UIImageView *mark = (UIImageView *)[cell.bubble viewWithTag:0x900D];
+		if ([m[@"replyQuoteManual"] boolValue]){
+			if (!mark){
+				mark = [[UIImageView alloc] init];
+				mark.tag = 0x900D;
+				[cell.bubble addSubview:mark];
+			}
+			CGFloat side = TGMetricLineMicro;
+			mark.image = [TGIcons glyphNamed:@"quote" colour:[theme bubbleAccentColour:mine] side:side];
+			CGRect author = layout.quoteAuthorFrame;
+			mark.frame = CGRectMake(CGRectGetMaxX(layout.quoteFrame) - side, author.origin.y, side, side);
+			mark.hidden = NO;
+			author.size.width = MAX(TGMetricZero, author.size.width - side - TGMetricPadSmall);
+			cell.quoteAuthor.frame = author;
+		} else {
+			mark.hidden = YES;
+		}
 
 		NSNumber *replyId = [m[@"replyId"] isKindOfClass:NSNumber.class]
 				? m[@"replyId"] : nil;
@@ -191,12 +244,12 @@ static char kTGReactionChipInfoKey;
 	// 7b. Link preview block
 	if (!CGRectIsEmpty(layout.linkPreviewFrame)) {
 		cell.linkPreviewBar.hidden = NO;
-		cell.linkPreviewBar.backgroundColor = [theme accentColour];
+		cell.linkPreviewBar.backgroundColor = [theme bubbleAccentColour:mine];
 		cell.linkPreviewBar.frame = layout.linkBarFrame;
 
 		if (layout.linkSite.length) {
 			cell.linkPreviewSite.hidden = NO;
-			cell.linkPreviewSite.textColor = [theme accentColour];
+			cell.linkPreviewSite.textColor = [theme bubbleAccentColour:mine];
 			cell.linkPreviewSite.text = layout.linkSite;
 			cell.linkPreviewSite.frame = layout.linkSiteFrame;
 		}
@@ -210,7 +263,7 @@ static char kTGReactionChipInfoKey;
 
 		if (layout.linkDesc.length) {
 			cell.linkPreviewDesc.hidden = NO;
-			cell.linkPreviewDesc.textColor = [theme secondaryTextColour];
+			cell.linkPreviewDesc.textColor = [theme bubbleSecondaryColour:mine];
 			cell.linkPreviewDesc.text = layout.linkDesc;
 			cell.linkPreviewDesc.frame = layout.linkDescFrame;
 		}
@@ -219,10 +272,35 @@ static char kTGReactionChipInfoKey;
 		cell.linkPreviewButton.frame = layout.linkPreviewFrame;
 		cell.linkPreviewUrl = layout.linkUrl;
 	}
+	// The preview's picture rides the same image cache as a photo's.
+	UIImageView *linkMedia = (UIImageView *)[cell.bubble viewWithTag:0x900C];
+	if (!CGRectIsEmpty(layout.linkMediaFrame)){
+		if (!linkMedia){
+			linkMedia = [[UIImageView alloc] init];
+			linkMedia.tag = 0x900C;
+			linkMedia.contentMode = UIViewContentModeScaleAspectFill;
+			linkMedia.clipsToBounds = YES;
+			linkMedia.layer.cornerRadius = TGMetricCornerSmall;
+			[cell.bubble addSubview:linkMedia];
+		}
+		NSDictionary *picture = @{@"photoId" : m[@"linkPreviewPhotoId"]};
+		linkMedia.image = [self imageFor:picture];
+		if (!linkMedia.image)
+			[self fetchImageForMessage:picture];
+		linkMedia.backgroundColor = [theme separatorColour];
+		linkMedia.frame = layout.linkMediaFrame;
+		linkMedia.hidden = NO;
+	} else {
+		linkMedia.hidden = YES;
+	}
 
 	__weak typeof(self) weakSelf = self;
 	cell.onLinkTapped = ^(NSString *url) {
-		[weakSelf handleOpenLink:url];
+		int32_t seconds = TGMediaTimestampFromLink(url);
+		if (seconds >= 0)
+			[weakSelf openMediaOfMessage:m atSeconds:seconds];
+		else
+			[weakSelf handleOpenLink:url];
 	};
 
 	// 8. Reactions: pills under the bubble, one per group. A group with a
@@ -243,7 +321,7 @@ static char kTGReactionChipInfoKey;
 			// The arrow sits at the bubble's right edge, apart from the
 			// count (ChatMessageCommentFooterContentNode).
 			UILabel *arrow = [[UILabel alloc] init];
-			arrow.tag = 0x9005;
+			arrow.tag = 0x9007; // 0x9005 is the reaction chips, looked up across the whole cell
 			arrow.text = @"\u203A";
 			arrow.font = TGFontCaptionStrong();
 			arrow.textAlignment = NSTextAlignmentRight;
@@ -253,32 +331,39 @@ static char kTGReactionChipInfoKey;
 			[comments addSubview:arrow];
 			[cell.bubble addSubview:comments];
 		}
-		NSInteger count = [m[@"replyCount"] integerValue];
-		NSString *label = nil;
-		if (count <= 0)
-			label = TGLocalized(@"Leave a Comment");
-		else {
-			label = TGLocalizedFormat(@"[%@]Comments", @(count));
-			label = [label stringByReplacingOccurrencesOfString:@"[" withString:@""];
-			label = [label stringByReplacingOccurrencesOfString:@"]" withString:@""];
-		}
+		NSString *label = TGMessageCommentsTitle([m[@"replyCount"] integerValue]);
 		comments.hidden = NO;
 		[comments setTitle:label forState:UIControlStateNormal];
-		[comments setImage:[TGIcons glyphNamed:@"chat"
-									   colour:[theme accentColour]
+		// The latest commenters' faces stand in for the icon, overlapping,
+		// as ChatMessageCommentFooterContentNode draws up to three.
+		NSArray *repliers = m[@"recentRepliers"];
+		UIImage *faces = repliers.count ? [self replierFaces:repliers] : nil;
+		[comments setImage:faces ?: [TGIcons glyphNamed:@"chat"
+									   colour:[theme bubbleAccentColour:mine]
 										 side:TGMetricLineCaption]
 				  forState:UIControlStateNormal];
 		comments.titleEdgeInsets = UIEdgeInsetsMake(0, TGMetricPadSmall, 0, 0);
-		[comments setTitleColor:[theme accentColour] forState:UIControlStateNormal];
-		CGFloat below = layout.bodyFrame.origin.y + layout.bodySize.height + TGMetricPadTiny;
-		comments.frame = CGRectMake(kPadH, below,
-				layout.bubbleFrame.size.width - TGDoubled(kPadH), TGMetricLineCaption);
-		UILabel *arrow = (UILabel *)[comments viewWithTag:0x9005];
-		arrow.textColor = [theme accentColour];
+		[comments setTitleColor:[theme bubbleAccentColour:mine] forState:UIControlStateNormal];
+		comments.frame = CGRectInset(layout.commentsFrame, kPadH, TGMetricZero);
+		// A hairline across the whole bubble sets the footer apart, as the
+		// contact card's button row is.
+		UIView *rule = [cell.bubble viewWithTag:0x9008];
+		if (!rule){
+			rule = [[UIView alloc] init];
+			rule.tag = 0x9008; // 0x9006 is the sender status icon
+			[cell.bubble addSubview:rule];
+		}
+		rule.hidden = NO;
+		rule.backgroundColor = [theme separatorColour];
+		rule.frame = CGRectMake(layout.commentsFrame.origin.x, layout.commentsFrame.origin.y,
+				layout.commentsFrame.size.width, TGMetricHairline);
+		UILabel *arrow = (UILabel *)[comments viewWithTag:0x9007];
+		arrow.textColor = [theme bubbleAccentColour:mine];
 		arrow.frame = CGRectMake(comments.bounds.size.width - TGMetricLineCaption, 0,
 				TGMetricLineCaption, comments.bounds.size.height);
 	} else {
 		comments.hidden = YES;
+		[cell.bubble viewWithTag:0x9008].hidden = YES;
 	}
 
 	// 8c. A bot's inline buttons, rebuilt per message: they are rare enough
@@ -293,8 +378,7 @@ static char kTGReactionChipInfoKey;
 		}
 		for (UIView *old in [keys.subviews copy])
 			[old removeFromSuperview];
-		CGFloat top = layout.bodyFrame.origin.y + layout.bodySize.height + TGMetricBotButtonGap
-				+ ([m[@"canComment"] boolValue] ? TGMetricLineBody : 0);
+		CGFloat top = layout.bodyFrame.origin.y + layout.bodySize.height + TGMetricBotButtonGap;
 		CGFloat width = layout.bubbleFrame.size.width - TGDoubled(kPadH);
 		keys.frame = CGRectMake(kPadH, top, width,
 				rows.count * (TGMetricBotButtonHeight + TGMetricBotButtonGap));
@@ -327,56 +411,50 @@ static char kTGReactionChipInfoKey;
 		keys.hidden = YES;
 	}
 
-	// 9. Time & delivery ticks
+	// 9. Time & delivery ticks. Eye, text and ticks sit where
+	// TGMessageStampPlace put them, in the text line or on the picture's
+	// plate. The cell used to shift the text by the eye's room a second time:
+	// the count drifted off its eye and the time was cut to "2.1M...".
 	BOOL onPicture = !cell.mediaStamp.hidden;
+	BOOL hideStamp = [self albumContinuesAfterRow:indexPath.row];
+	// A sticker has no bubble: its stamp stands on the wallpaper and gets
+	// the plate a photo's stamp has.
+	BOOL onWallpaper = layout.isSticker && !onPicture && !hideStamp;
 	int64_t viewCount = 0;
 	id rawViews = m[@"viewCount"];
-	if ([rawViews respondsToSelector:@selector(longLongValue)]) {
+	if ([rawViews respondsToSelector:@selector(longLongValue)])
 		viewCount = [rawViews longLongValue];
+	UIColor *stampColour = (onPicture || onWallpaper) ? [theme onMediaColour]
+			: (mine ? [theme timeMineColour] : [theme timeColour]);
+	cell.stampPlate.hidden = !onWallpaper;
+	if (onWallpaper){
+		CGRect group = layout.timeFrame;
+		if (!CGRectIsEmpty(layout.stampEyeFrame))
+			group = CGRectUnion(group, layout.stampEyeFrame);
+		if (mine && !CGRectIsEmpty(layout.stampTicksFrame))
+			group = CGRectUnion(group, layout.stampTicksFrame);
+		cell.stampPlate.backgroundColor = [theme mediaStampColour];
+		cell.stampPlate.frame = CGRectMake(group.origin.x - TGMetricPadSmall,
+				CGRectGetMidY(layout.timeFrame) - TGHalf(TGMetricLineCaption),
+				group.size.width + TGDoubled(TGMetricPadSmall), TGMetricLineCaption);
+		[cell.bubble insertSubview:cell.stampPlate belowSubview:cell.time];
 	}
-	if (viewCount > 0 && !onPicture && ![self albumContinuesAfterRow:indexPath.row]) {
-		cell.viewsEye.hidden = NO;
-		UIColor *eyeCol = mine ? [theme timeMineColour] : [theme timeColour];
-		cell.viewsEye.image = [TGIcons glyphNamed:@"eye" colour:eyeCol side:kStampEyeSide];
-		// The layout reserved the eye's room at the stamp's start; left of it
-		// is the last line of text.
-		CGFloat eyeX = layout.timeFrame.origin.x;
-		CGFloat eyeY = layout.timeFrame.origin.y + TGCenteredOrigin(TGMetricStampHeight, kStampEyeSide);
-		cell.viewsEye.frame = CGRectMake(eyeX, eyeY, kStampEyeSide, kStampEyeSide);
+	cell.viewsEye.hidden = !(viewCount > 0 && !hideStamp && !CGRectIsEmpty(layout.stampEyeFrame));
+	if (!cell.viewsEye.hidden){
+		cell.viewsEye.image = [TGIcons glyphNamed:@"eye" colour:stampColour side:kStampEyeSide];
+		cell.viewsEye.frame = layout.stampEyeFrame;
 		[cell.bubble bringSubviewToFront:cell.viewsEye];
-	} else if (viewCount > 0 && onPicture) {
-		cell.viewsEye.hidden = NO;
-		cell.viewsEye.image = [TGIcons glyphNamed:@"eye" colour:[theme onMediaColour] side:kStampEyeSide];
-		CGFloat eyeX = layout.mediaStampFrame.origin.x + TGMetricPadSmall;
-		CGFloat eyeY = layout.mediaStampFrame.origin.y + TGCenteredOrigin(layout.mediaStampFrame.size.height, kStampEyeSide);
-		cell.viewsEye.frame = CGRectMake(eyeX, eyeY, kStampEyeSide, kStampEyeSide);
-		[cell.bubble bringSubviewToFront:cell.viewsEye];
-	} else {
-		cell.viewsEye.hidden = YES;
 	}
 
-	cell.time.text = (onPicture || [self albumContinuesAfterRow:indexPath.row]) ? @"" : layout.stamp;
-	cell.time.textColor = mine ? [theme timeMineColour] : [theme timeColour];
+	cell.time.text = hideStamp ? @"" : layout.stamp;
+	cell.time.textColor = stampColour;
+	cell.time.textAlignment = NSTextAlignmentRight;
 	cell.time.frame = layout.timeFrame;
-	if (!cell.viewsEye.hidden && !onPicture) {
-		CGRect timeFrame = layout.timeFrame;
-		timeFrame.origin.x += kStampEyeSide + kStampEyePad;
-		timeFrame.size.width -= kStampEyeSide + kStampEyePad;
-		cell.time.frame = timeFrame;
-	}
 
-	cell.ticks.hidden = !mine;
-	if (mine && onPicture) {
-		cell.ticks.image = [self ticksForMessage:m white:YES];
-		cell.ticks.frame = CGRectMake(CGRectGetMaxX(cell.mediaStamp.frame) - TGMetricMediaStampCheckPhotoInset,
-									  CGRectGetMidY(cell.mediaStamp.frame) - TGHalf(TGMetricTicksHeight),
-									  TGMetricTicksWidth, TGMetricTicksHeight);
-		[cell.bubble bringSubviewToFront:cell.ticks];
-	} else if (mine) {
-		cell.ticks.image = [self ticksForMessage:m white:NO];
-		cell.ticks.frame = CGRectMake(layout.bubbleFrame.size.width - kPadH - TGMetricTicksWidth,
-				layout.timeFrame.origin.y + TGCenteredOrigin(TGMetricStampHeight, TGMetricTicksHeight),
-				TGMetricTicksWidth, TGMetricTicksHeight);
+	cell.ticks.hidden = !mine || hideStamp;
+	if (!cell.ticks.hidden){
+		cell.ticks.image = [self ticksForMessage:m white:onPicture || onWallpaper];
+		cell.ticks.frame = layout.stampTicksFrame;
 		[cell.bubble bringSubviewToFront:cell.ticks];
 	}
 	[cell.bubble bringSubviewToFront:cell.time];
@@ -387,7 +465,11 @@ static char kTGReactionChipInfoKey;
 		cell.shineBar.hidden = YES;
 		cell.shineGradientLayer.hidden = YES;
 		UIColor *bodyColor = mine ? [theme bubbleMineTextColour] : [theme bubbleTheirsTextColour];
-		cell.body.textColor = bodyColor;
+		// iOS 6 paints textColor over the whole attributed string, so links,
+		// mentions and dates lost their colour here; the attributed text
+		// already carries bodyColor as its base.
+		if (![m[@"entities"] count])
+			cell.body.textColor = bodyColor;
 		cell.body.shadowColor = [theme etchedTextShadowColour];
 		cell.body.shadowOffset = TGMetricShadowOffsetEtched;
 		cell.time.textColor = mine ? [theme timeMineColour] : [theme timeColour];
@@ -768,6 +850,7 @@ UIImage *TGBubbleBackImage(TGTheme *theme, BOOL mine, BOOL first, BOOL last) {
 	cell.tail.hidden = YES;
 
 	NSDictionary *m = self.messages[indexPath.row];
+	[self noteUnreadMarksOfMessage:m];
 	TGMessageLayout *layout = [self layoutForMessage:m atRow:indexPath.row];
 	[self startGifIfWantedIn:cell message:m];
 	NSInteger row = indexPath.row;
@@ -959,7 +1042,15 @@ UIImage *TGBubbleBackImage(TGTheme *theme, BOOL mine, BOOL first, BOOL last) {
 	NSDictionary *info = objc_getAssociatedObject(tap.view, &kTGReactionChipInfoKey);
 	if (!info)
 		return;
-	[self showReactorsOfMessage:info[@"message"]
+	// Where Telegram keeps who reacted to itself (a channel), a chip is the
+	// reaction, as official's: a tap puts it on or takes it off.
+	NSDictionary *message = info[@"message"];
+	if ([message[@"reactorsHidden"] boolValue] && [info[@"emoji"] length]){
+		[[TGMessageStore shared] reactTo:[message[@"id"] longLongValue] inChat:self.chatId
+								   emoji:info[@"emoji"]];
+		return;
+	}
+	[self showReactorsOfMessage:message
 						  emoji:info[@"emoji"]
 				  customEmojiId:[info[@"customEmojiId"] longLongValue]];
 }

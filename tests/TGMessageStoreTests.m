@@ -110,4 +110,16 @@
 			respondsToSelector:@selector(reactTo:inChat:emoji:)]);
 }
 
+
+- (void)testBotCommandRows_FlattenEveryBot {
+	NSArray *rows = TGBotCommandRows(@[
+		@{@"bot_user_id" : @7, @"commands" : @[@{@"command" : @"start", @"description" : @"Go"}]},
+		@{@"bot_user_id" : @8, @"commands" : @[@{@"command" : @"help", @"description" : @"?"},
+											   @{@"command" : @"", @"description" : @"dropped"}]}]);
+	XCTAssertEqual(rows.count, (NSUInteger)2);
+	XCTAssertEqualObjects(rows[1][@"command"], @"help");
+	XCTAssertEqualObjects(rows[1][@"botId"], @8);
+	XCTAssertEqual(TGBotCommandRows((id)[NSNull null]).count, (NSUInteger)0);
+}
+
 @end

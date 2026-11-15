@@ -180,6 +180,9 @@
 @interface TGSettingsStore (Storage)
 
 	- (void)networkStatsWithCompletion:(void (^)(long long sent, long long received))completion;
+	/// When the totals last started counting (getNetworkStatistics since_date),
+	/// read by the last networkStatsWithCompletion answer; 0 before one.
+	- (NSTimeInterval)networkStatsSince;
 	- (void)resetNetworkStats;
 	- (BOOL)autoDownloadOverMobile;
 	- (BOOL)autoDownloadOverWifi;

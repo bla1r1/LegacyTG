@@ -188,8 +188,38 @@ static inline BOOL TGColourIsDark(UIColor *colour) {
 }
 
 - (UIColor *)timeMineColour {
-	///< the same stamp in your own bubble
-	return [self timeColour];
+	// The theme's own outgoing secondary colour; the incoming grey was
+	// unreadable on a dark theme's coloured own bubble.
+	return [self bubbleSecondaryColour:YES];
+}
+
+/// Own bubbles take the theme's outgoing colours. A theme that names none
+/// gets them from the bubble's own text colour when the theme is dark, where
+/// the shared blue accent and grey vanished on a teal bubble.
+- (UIColor *)bubbleSecondaryColour:(BOOL)mine {
+	if (!mine)
+		return [self timeColour];
+	UIColor *custom = [self importedColour:@"bubbleMineSecondary"];
+	if (custom) return custom;
+	return [self isDark] ? [[self bubbleMineTextColour] colorWithAlphaComponent:0.65f]
+			: [self timeColour];
+}
+
+- (UIColor *)bubbleAccentColour:(BOOL)mine {
+	if (!mine)
+		return [self accentColour];
+	UIColor *custom = [self importedColour:@"bubbleMineAccent"];
+	if (custom) return custom;
+	return [self isDark] ? [self bubbleMineTextColour] : [self accentColour];
+}
+
+- (UIColor *)bubblePlaceholderColour:(BOOL)mine {
+	if (!mine)
+		return [self fileTileColour];
+	UIColor *custom = [self importedColour:@"bubbleMinePlaceholder"];
+	if (custom) return custom;
+	return [self isDark] ? [[self bubbleMineTextColour] colorWithAlphaComponent:0.15f]
+			: [self fileTileColour];
 }
 
 - (UIColor *)listDateColour {
@@ -271,7 +301,16 @@ static inline BOOL TGColourIsDark(UIColor *colour) {
 }
 
 - (UIColor *)holdDimColour {
-	return [UIColor colorWithWhite:0.0f alpha:0.45f];   ///< the chat behind a lifted message
+	// Official contextMenu.dimColor: #000a26 at 20% in day, black at 60% in night.
+	if ([self isDark])
+		return [UIColor colorWithWhite:0.0f alpha:0.6f];
+	return [UIColor colorWithRed:0.0f green:10.0f / 255.0f blue:38.0f / 255.0f alpha:0.2f];
+}
+
+- (UIColor *)holdFrostColour {
+	if ([self isDark])
+		return [UIColor colorWithWhite:0.1f alpha:0.5f];
+	return [UIColor colorWithWhite:1.0f alpha:0.35f];
 }
 
 #pragma mark - chat list

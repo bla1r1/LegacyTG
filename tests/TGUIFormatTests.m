@@ -119,4 +119,62 @@
 	XCTAssertEqualObjects(TGBytesForLanguage(1572864, @"en"), @"1.5 MB");
 }
 
+
+#pragma mark - date entities (textEntityTypeDateTime)
+
+- (void)testDateEntity_RelativeReadsInTheReadersClock {
+	NSDictionary *relative = @{@"@type" : @"dateTimeFormattingTypeRelative"};
+	XCTAssertEqualObjects(TGDateEntityText(1000000 - 7200, relative, 1000000), @"2 hours ago");
+	XCTAssertEqualObjects(TGDateEntityText(1000000 + 172800, relative, 1000000), @"in 2 days");
+	XCTAssertEqualObjects(TGDateEntityText(1000000 - 1, relative, 1000000), @"1 second ago");
+	XCTAssertEqualObjects(TGDateEntityText(1000000 + 90, relative, 1000000), @"in 2 minutes");
+}
+
+- (void)testDateEntity_NoFormattingKeepsTheSendersWords {
+	XCTAssertNil(TGDateEntityText(1000000, nil, 1000000));
+	XCTAssertNil(TGDateEntityText(1000000, (id)[NSNull null], 1000000));
+	NSDictionary *nothing = @{@"@type" : @"dateTimeFormattingTypeAbsolute",
+		@"time_precision" : @{@"@type" : @"dateTimePartPrecisionNone"},
+		@"date_precision" : @{@"@type" : @"dateTimePartPrecisionNone"}};
+	XCTAssertNil(TGDateEntityText(1000000, nothing, 1000000));
+}
+
+- (void)testDateEntity_AbsoluteJoinsDayAndTime {
+	NSDictionary *both = @{@"@type" : @"dateTimeFormattingTypeAbsolute",
+		@"time_precision" : @{@"@type" : @"dateTimePartPrecisionShort"},
+		@"date_precision" : @{@"@type" : @"dateTimePartPrecisionLong"},
+		@"show_day_of_week" : @YES};
+	NSString *text = TGDateEntityText(1763200000, both, 0);
+	XCTAssertTrue([text rangeOfString:@" at "].location != NSNotFound, @"%@", text);
+	NSDictionary *timeOnly = @{@"@type" : @"dateTimeFormattingTypeAbsolute",
+		@"time_precision" : @{@"@type" : @"dateTimePartPrecisionShort"},
+		@"date_precision" : @{@"@type" : @"dateTimePartPrecisionNone"}};
+	XCTAssertEqual([TGDateEntityText(1763200000, timeOnly, 0) rangeOfString:@" at "].location,
+			(NSUInteger)NSNotFound);
+}
+
+// A swapped date changes the text's length; an entity after it must move
+// with it or its bold lands on the wrong words.
+- (void)testApplyDateEntities_MovesLaterEntities {
+	NSString *text = @"at X then bold";
+	NSArray *entities = @[
+		@{@"offset" : @3, @"length" : @1, @"type" : @{@"@type" : @"textEntityTypeDateTime",
+			@"unix_time" : @(1000000 - 7200),
+			@"formatting_type" : @{@"@type" : @"dateTimeFormattingTypeRelative"}}},
+		@{@"offset" : @10, @"length" : @4, @"type" : @{@"@type" : @"textEntityTypeBold"}},
+	];
+	NSArray *moved = nil;
+	NSString *out = TGApplyDateEntities(text, entities, 1000000, &moved);
+	XCTAssertEqualObjects(out, @"at 2 hours ago then bold");
+	XCTAssertEqual([moved[0][@"length"] integerValue], (NSInteger)11);
+	XCTAssertEqualObjects([out substringWithRange:NSMakeRange([moved[1][@"offset"] integerValue],
+			[moved[1][@"length"] integerValue])], @"bold");
+	XCTAssertNil(TGApplyDateEntities(text, @[entities[1]], 1000000, &moved));
+}
+
+- (void)testMediaTimestampLink_RoundTrips {
+	XCTAssertEqual(TGMediaTimestampFromLink(TGMediaTimestampLink(42)), 42);
+	XCTAssertEqual(TGMediaTimestampFromLink(@"https://t.me/x"), -1);
+}
+
 @end

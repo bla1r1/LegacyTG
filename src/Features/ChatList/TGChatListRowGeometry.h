@@ -22,6 +22,12 @@ extern "C" {
 /// the archive is the only row whose count can be one.
 NSString *TGChatListArchiveSubtitle(NSUInteger count);
 
+/// The notice over the chat list from TDLib's suggested actions (rows of
+/// {title, action}), as official ChatListNoticeItem: "setupPassword" (no
+/// close) or "premiumGrace" (closable, opens the subscription page). Keys:
+/// kind, title, text, url (may be absent), closable, action. Nil for none.
+NSDictionary *TGChatListNotice(NSArray *suggestedRows);
+
 /// Frames for the badge and the pin at the trailing edge of the row's second
 /// line, and where the preview has to stop.
 ///

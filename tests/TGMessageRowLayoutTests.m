@@ -134,16 +134,28 @@ static TGMessageRowInput *rlInput(NSDictionary *m) {
 	in.imageSize = CGSizeMake(200, 150);
 	TGMessageLayout *l = TGMessageRowLayout(in);
 	XCTAssertTrue(l.stampOnPicture);
-	XCTAssertTrue(CGSizeEqualToSize(l.pictureFrame.size, CGSizeMake(200, 150)));
+	// The photo fills its bubble to kMediaInset of every edge (it sat in the
+	// text padding, which read as a heavy frame) and keeps its proportions.
+	CGFloat w = l.bubbleFrame.size.width - 2 * kMediaInset;
+	XCTAssertEqual(l.pictureFrame.origin.x, kMediaInset);
+	XCTAssertEqual(l.pictureFrame.origin.y, kMediaInset);
+	XCTAssertEqual(l.pictureFrame.size.width, w);
+	XCTAssertEqual(l.pictureFrame.size.height, floorf(150 * w / 200));
+	XCTAssertEqual(CGRectGetMaxY(l.pictureFrame) + kMediaInset, l.bubbleFrame.size.height);
+	// The plate sits on the photo's corner, inside it.
 	XCTAssertGreaterThan(l.mediaStampFrame.size.width, (CGFloat)0);
+	XCTAssertLessThanOrEqual(CGRectGetMaxX(l.mediaStampFrame), CGRectGetMaxX(l.pictureFrame));
 }
 
 - (void)testAlbum_ThreeItemsAreOneOverTwo {
 	TGMessageLayout *l = TGMessageRowLayout(rlInput(@{ @"kind": @"messagePhoto", @"isAlbum": @YES,
 			@"albumMessages": @[ @{}, @{}, @{} ] }));
 	XCTAssertEqual(l.albumFrames.count, (NSUInteger)3);
-	XCTAssertEqual(l.collageFrame.size.height,
-			TGMetricCollageTopHeight + TGMetricCollageGap + TGMetricCollageBottomHeight);
+	// One over two, scaled with the bubble's width so the album fills it.
+	CGFloat scale = l.collageFrame.size.width / TGMetricCollageWidth;
+	XCTAssertEqual(l.collageFrame.size.width, l.bubbleFrame.size.width - 2 * kMediaInset);
+	XCTAssertEqual(l.collageFrame.size.height, floorf((TGMetricCollageTopHeight
+			+ TGMetricCollageGap + TGMetricCollageBottomHeight) * scale));
 }
 
 - (void)testReactions_AddTheirRowUnderTheBubble {
@@ -186,6 +198,109 @@ static TGMessageRowInput *rlInput(NSDictionary *m) {
 	XCTAssertEqual(asked, (NSUInteger)1);
 	XCTAssertEqualObjects(l.senderName, @"Ann · admin");
 	XCTAssertEqual(l.bubbleFrame.size.width, (CGFloat)(150 + 2 * kPadH));
+}
+
+- (void)testPhoto_TheCaptionWrapsUnderThePictureInsteadOfWideningIt {
+	// Sized by its caption, a photo was stretched to the widest line and came
+	// out twice as tall.
+	NSString *caption = [@"" stringByPaddingToLength:400 withString:@"word " startingAtIndex:0];
+	TGMessageRowInput *in = rlInput(@{ @"kind" : @"messagePhoto", @"photoId" : @9, @"text" : caption });
+	in.imageSize = CGSizeMake(200, 150);
+	TGMessageLayout *l = TGMessageRowLayout(in);
+	XCTAssertEqual(l.bubbleFrame.size.width, (CGFloat)(200 + 2 * kMediaInset));
+	XCTAssertEqual(l.pictureFrame.size.height, (CGFloat)150);
+	XCTAssertEqual(l.bodyFrame.size.width, l.bubbleFrame.size.width - 2 * kPadH);
+	XCTAssertFalse(l.inlineStamp);
+	XCTAssertGreaterThanOrEqual(l.timeFrame.origin.y, CGRectGetMaxY(l.bodyFrame));
+}
+
+#pragma mark - the stamp
+
+- (void)testStamp_EyeCountTimeAndTicksOnOneLineWithoutOverlap {
+	// The cell moved the text right by the eye's room a second time: the
+	// count drifted off its eye and the time was cut to "2.1M...".
+	NSDictionary *m = @{ @"date" : @1700000000, @"viewCount" : @2100000, @"outgoing" : @YES };
+	TGMessageStampParts p = TGMessageStampPlace(m, 200, 50);
+	// The label keeps a 2 pt slack on its left; the eye sits over it, so the
+	// gap to the count is the eye pad alone.
+	XCTAssertEqual(CGRectGetMaxX(p.eye) + kStampEyePad, p.text.origin.x + TGMetricPadTiny);
+	XCTAssertEqual(p.text.size.width, TGTextSize(TGMessageStampText(m), TGFontMicro(), 0).width + TGMetricPadTiny);
+	XCTAssertLessThanOrEqual(CGRectGetMaxX(p.text), p.ticks.origin.x);
+	XCTAssertEqual(CGRectGetMaxX(p.ticks), (CGFloat)200);
+	XCTAssertEqual(CGRectGetMidY(p.text), (CGFloat)50);
+	XCTAssertEqual(p.width, 200 - p.eye.origin.x);
+	XCTAssertEqual(p.width, TGMessageStampWidth(m));
+	TGMessageStampParts theirs = TGMessageStampPlace(@{ @"date" : @1700000000 }, 200, 50);
+	XCTAssertTrue(CGRectIsEmpty(theirs.eye));
+	XCTAssertTrue(CGRectIsEmpty(theirs.ticks));
+	XCTAssertEqual(CGRectGetMaxX(theirs.text), (CGFloat)200);
+}
+
+- (void)testStamp_SentDocumentLeavesTheTicksTheirRoom {
+	NSDictionary *m = @{ @"kind" : @"messageDocument", @"docName" : @"a.pdf", @"outgoing" : @YES };
+	TGMessageLayout *l = TGMessageRowLayout(rlInput(m));
+	XCTAssertFalse(CGRectIsEmpty(l.stampTicksFrame));
+	XCTAssertLessThanOrEqual(CGRectGetMaxX(l.timeFrame), l.stampTicksFrame.origin.x);
+}
+
+- (void)testStamp_ContactTimeHasItsOwnLineAboveTheButtons {
+	TGMessageLayout *l = TGMessageRowLayout(rlInput(@{ @"kind" : @"messageContact" }));
+	XCTAssertLessThanOrEqual(CGRectGetMaxY(l.timeFrame), TGMetricPersonRow + TGMetricLineMicro);
+	XCTAssertGreaterThanOrEqual(l.timeFrame.origin.y, TGMetricPersonRow);
+	XCTAssertEqual(l.bubbleFrame.size.height, kContactBubbleH);
+}
+
+// Item 11: the caption of a file is not the file, and beside the bubble is
+// nothing at all.
+- (void)testTap_DocumentOpensOnlyFromItsTile {
+	NSDictionary *m = @{ @"kind" : @"messageDocument", @"docName" : @"a.pdf", @"text" : @"a caption under the file" };
+	TGMessageLayout *l = TGMessageRowLayout(rlInput(m));
+	CGRect b = l.bubbleFrame;
+	CGPoint onTile = CGPointMake(b.origin.x + CGRectGetMidX(l.documentFrame), b.origin.y + CGRectGetMidY(l.documentFrame));
+	XCTAssertEqual(TGMessageTapPartAt(l, onTile), TGMessageTapDocument);
+	CGPoint onCaption = CGPointMake(b.origin.x + CGRectGetMidX(l.documentFrame), CGRectGetMaxY(b) - 2);
+	XCTAssertEqual(TGMessageTapPartAt(l, onCaption), TGMessageTapBubble);
+	XCTAssertEqual(TGMessageTapPartAt(l, CGPointMake(CGRectGetMaxX(b) + 4, CGRectGetMidY(b))), TGMessageTapNone);
+}
+
+- (void)testTap_ReplyJumpsOnlyFromItsQuote {
+	TGMessageRowInput *in = rlInput(@{ @"text" : @"an answer long enough to have its own line", @"replyId" : @7 });
+	in.replied = @{ @"id": @7, @"kind": @"messageText", @"text": @"the question" };
+	in.quoteAuthor = @"Ann";
+	TGMessageLayout *l = TGMessageRowLayout(in);
+	XCTAssertFalse(CGRectIsEmpty(l.quoteFrame));
+	CGRect b = l.bubbleFrame;
+	XCTAssertEqual(TGMessageTapPartAt(l, CGPointMake(b.origin.x + CGRectGetMidX(l.quoteFrame), b.origin.y + CGRectGetMidY(l.quoteFrame))), TGMessageTapQuote);
+	XCTAssertEqual(TGMessageTapPartAt(l, CGPointMake(b.origin.x + CGRectGetMidX(l.bodyFrame), b.origin.y + CGRectGetMaxY(l.bodyFrame) - 2)), TGMessageTapBubble);
+}
+
+// The official footer: under the text and the time, across the bubble's
+// bottom, never between the text and its time.
+- (void)testComments_FooterIsTheLastRowUnderTheTime {
+	TGMessageLayout *l = TGMessageRowLayout(rlInput(@{ @"text" : @"Major update: full support for legacy iOS vector and video stickers has landed!",
+			@"forward" : @"Pavel Durov", @"canComment" : @YES, @"replyCount" : @12 }));
+	CGRect f = l.commentsFrame;
+	XCTAssertEqual(f.size.height, kCommentsBar);
+	XCTAssertEqual(CGRectGetMaxY(f), l.bubbleFrame.size.height);
+	XCTAssertEqual(f.size.width, l.bubbleFrame.size.width);
+	XCTAssertLessThanOrEqual(CGRectGetMaxY(l.timeFrame), f.origin.y);
+	XCTAssertLessThanOrEqual(CGRectGetMaxY(l.bodyFrame), f.origin.y);
+}
+
+- (void)testTrack_TimeSitsInsideTheBubbleBottomRight {
+	TGMessageLayout *l = TGMessageRowLayout(rlInput(@{ @"kind" : @"messageAudio", @"audioTitle" : @"Midnight City",
+			@"audioPerformer" : @"M83", @"duration" : @243, @"outgoing" : @YES }));
+	XCTAssertGreaterThan(l.timeFrame.size.width, (CGFloat)0);
+	XCTAssertLessThanOrEqual(CGRectGetMaxY(l.timeFrame), l.bubbleFrame.size.height);
+	XCTAssertGreaterThanOrEqual(CGRectGetMaxY(l.timeFrame), l.bubbleFrame.size.height - kPadV - TGMetricStampHeight);
+	XCTAssertLessThanOrEqual(CGRectGetMaxX(l.timeFrame), l.stampTicksFrame.origin.x);
+	XCTAssertLessThanOrEqual(CGRectGetMaxX(l.stampTicksFrame), l.bubbleFrame.size.width);
+}
+
+- (void)testSenderLine_NamesTheInlineBot {
+	XCTAssertEqualObjects(TGMessageSenderLine(@"Ann", @{ @"viaBot" : @"gif" }), @"Ann via @gif");
+	XCTAssertEqualObjects(TGMessageSenderLine(@"Ann", @{ @"viaBot" : @"gif", @"senderTag" : @"admin" }), @"Ann via @gif · admin");
+	XCTAssertEqualObjects(TGMessageSenderLine(@"Ann", @{}), @"Ann");
 }
 
 @end

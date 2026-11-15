@@ -251,6 +251,7 @@
 		// A bot has no presence and cannot be a contact.
 		if ([user[@"type"][@"@type"] isEqualToString:@"userTypeBot"]){
 			weakSelf.isBot = YES;
+			weakSelf.botCanJoinGroups = [user[@"type"][@"can_join_groups"] boolValue];
 			weakSelf.restingStatus = @"bot";
 			[weakSelf statusLabelOwnerChanged:nil];
 		}
@@ -291,6 +292,9 @@
 			weakSelf.canVideoCall = [info[@"canVideoCall"] boolValue];
 			weakSelf.commonGroupCount = [info[@"commonGroups"] integerValue];
 			weakSelf.businessLocation = info[@"businessLocation"] ?: @"";
+			weakSelf.businessInfo = [info[@"businessInfo"] isKindOfClass:NSDictionary.class]
+					? info[@"businessInfo"] : nil;
+			weakSelf.botVerification = info[@"botVerification"] ?: @"";
 			NSDictionary *firstAudio = [info[@"firstProfileAudio"]
 					isKindOfClass:NSDictionary.class] ? info[@"firstProfileAudio"] : nil;
 			if (![firstAudio isEqual:weakSelf.firstProfileAudio]){

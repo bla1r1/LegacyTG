@@ -6,6 +6,7 @@
 #import "TGStyle.h"
 #import "TGTheme.h"
 #import "TGIcons.h"
+#import "TGMessageStore.h"
 
 @implementation TGDevShowcase
 
@@ -230,8 +231,41 @@
 + (NSDictionary *)replyKeyboardForChatId:(int64_t)chatId {
 	if (chatId != kDevBotChatId)
 		return nil;
+	// Not resize_keyboard: three rows fill the system keyboard's height.
 	return @{@"rows" : @[@[@"/showcase", @"/ping"], @[@"/theme", @"/poll"], @[@"Help"]],
-			 @"oneTime" : @NO, @"placeholder" : @"Ask Dev Bot"};
+			 @"oneTime" : @NO, @"resize" : @NO, @"persistent" : @NO,
+			 @"placeholder" : @"Ask Dev Bot"};
+}
+
++ (NSArray *)botCommandsForChatId:(int64_t)chatId {
+	if (chatId != kDevChatId)
+		return nil;
+	return TGBotCommandRows(@[@{@"bot_user_id" : @10001, @"commands" : @[
+		@{@"command" : @"start", @"description" : @"Open the showcase"},
+		@{@"command" : @"ping", @"description" : @"Measure network latency"},
+		@{@"command" : @"theme", @"description" : @"Switch iOS 6 themes"}]}]);
+}
+
++ (NSArray *)statisticsRows {
+	NSMutableString *x = [NSMutableString stringWithString:@"[\"x\""];
+	NSMutableString *joined = [NSMutableString stringWithString:@"[\"y0\""];
+	NSMutableString *left = [NSMutableString stringWithString:@"[\"y1\""];
+	double day = 1760000000000.0;
+	for (int i = 0; i < 30; i++){
+		[x appendFormat:@",%.0f", day + i * 86400000.0];
+		[joined appendFormat:@",%d", 40 + (i * 37) % 23 + i];
+		[left appendFormat:@",%d", 10 + (i * 13) % 11];
+	}
+	NSString *json = [NSString stringWithFormat:@"{\"columns\":[%@],%@],%@]],"
+			"\"types\":{\"x\":\"x\",\"y0\":\"line\",\"y1\":\"line\"},"
+			"\"names\":{\"y0\":\"Joined\",\"y1\":\"Left\"},"
+			"\"colors\":{\"y0\":\"#4BA0E9\",\"y1\":\"#E05356\"}}", x, joined, left];
+	return @[@{@"title" : @"Members", @"detail" : @"1,204"},
+			 @{@"title" : @"Messages", @"detail" : @"8,310"},
+			 @{@"title" : @"GROWTH", @"graph" : @{@"@type" : @"statisticalGraphData", @"json_data" : json}},
+			 @{@"title" : @"GROUP MEMBERS", @"graph" : @{@"@type" : @"statisticalGraphData", @"json_data" : json}},
+			 @{@"title" : @"TOP HOURS", @"graph" : @{@"@type" : @"statisticalGraphError",
+				@"error_message" : @"Not enough data to display"}}];
 }
 
 + (NSString *)devStickerPath {
@@ -267,6 +301,13 @@ static NSData *TGShowcaseWaveform(void) {
 			out[bit / 8 + 1] |= (uint8_t)(samples[i] >> (8 - (bit % 8)));
 	}
 	return packed;
+}
+
+/// An entity over the first `part` of `text`, so a fixture's offsets follow
+/// its wording.
+static NSDictionary *TGShowcaseEntity(NSString *text, NSString *part, NSDictionary *type) {
+	NSRange r = [text rangeOfString:part];
+	return @{@"offset" : @(r.location), @"length" : @(r.length), @"type" : type};
 }
 
 + (NSArray *)allShowcaseMessages {
@@ -345,9 +386,11 @@ static NSData *TGShowcaseWaveform(void) {
 		@"text"       : @"Major update: full support for legacy iOS vector and video stickers has landed!",
 		@"kind"       : @"messageText",
 		@"forward"    : @"Pavel Durov",
+		@"forwardPsa" : @"default",
 		// Drawn as a channel post with comments, so the bar has a place here.
 		@"canComment" : @YES,
 		@"replyCount" : @12,
+		@"recentRepliers" : @[@20002, @10001, @30003],
 	}];
 
 	// 6. Sticker: Static WebP
@@ -404,9 +447,10 @@ static NSData *TGShowcaseWaveform(void) {
 		@"text"       : @"🎲 Rolled a 6",
 	}];
 
-	// 10. Single Photo with Caption
+	// 10. Single Photo with Caption, sent through an inline bot
 	[list addObject:@{
 		@"id"         : @10,
+		@"viaBot"     : @"pic",
 		@"chatId"     : @(kDevChatId),
 		@"senderId"   : @(senderPeer),
 		@"outgoing"   : @NO,
@@ -416,6 +460,23 @@ static NSData *TGShowcaseWaveform(void) {
 		@"text"       : @"A scenic view captured in high definition.",
 		@"width"      : @400,
 		@"height"     : @300,
+	}];
+
+	// 10b. Photo under its caption, with views: a channel post with "show
+	// caption above media". The stamp went onto the photo as a text line.
+	[list addObject:@{
+		@"id"           : @1010,
+		@"chatId"       : @(kDevChatId),
+		@"senderId"     : @(senderPeer),
+		@"outgoing"     : @NO,
+		@"date"         : @(baseTime + 101),
+		@"kind"         : @"messagePhoto",
+		@"photoId"      : @(-301),
+		@"text"         : @"Caption above the photo, as channels post it.",
+		@"captionAbove" : @YES,
+		@"viewCount"    : @12400,
+		@"width"        : @400,
+		@"height"       : @300,
 	}];
 
 	// 11. Dual Photo Album (2 photos)
@@ -733,6 +794,58 @@ static NSData *TGShowcaseWaveform(void) {
 		@"live" : @{@"livePeriod" : @3600, @"heading" : @45, @"proximityRadius" : @500,
 			@"expiresIn" : @3300, @"isForever" : @NO},
 		@"editDate" : @(now - 120)}];
+
+	// 37-43. What batch 3 of the unread TDLib fields draws: a booster's
+	// badge, date and media timestamp entities, an imported date, link
+	// preview pictures in their three places, a send that has to be paid.
+	NSString *dated = @"Booster here. Call moved to Tomorrow 18:00, posted a while ago; the demo starts at 0:42.";
+	[list addObject:@{@"id" : @37, @"chatId" : @(kDevChatId), @"senderId" : @(senderPeer),
+		@"outgoing" : @NO, @"date" : @(baseTime + 296), @"kind" : @"messageText",
+		@"text" : dated, @"boostCount" : @3,
+		@"entities" : @[
+			TGShowcaseEntity(dated, @"Tomorrow 18:00", @{@"@type" : @"textEntityTypeDateTime",
+				@"unix_time" : @(now + 86400),
+				@"formatting_type" : @{@"@type" : @"dateTimeFormattingTypeAbsolute",
+					@"time_precision" : @{@"@type" : @"dateTimePartPrecisionShort"},
+					@"date_precision" : @{@"@type" : @"dateTimePartPrecisionLong"},
+					@"show_day_of_week" : @YES}}),
+			TGShowcaseEntity(dated, @"a while ago", @{@"@type" : @"textEntityTypeDateTime",
+				@"unix_time" : @(now - 7200),
+				@"formatting_type" : @{@"@type" : @"dateTimeFormattingTypeRelative"}}),
+			TGShowcaseEntity(dated, @"0:42", @{@"@type" : @"textEntityTypeMediaTimestamp",
+				@"media_timestamp" : @42}),
+		]}];
+	[list addObject:@{@"id" : @38, @"chatId" : @(kDevChatId), @"senderId" : @(senderBot),
+		@"outgoing" : @NO, @"date" : @(baseTime + 297), @"kind" : @"messageText",
+		@"text" : @"Imported from another app.", @"importDate" : @(now - 400 * 86400), @"boostCount" : @1}];
+	NSString *link = @"https://telegram.org/blog";
+	NSDictionary *preview = @{@"linkPreviewSite" : @"Telegram", @"linkPreviewTitle" : @"Telegram Blog",
+		@"linkPreviewDesc" : @"News and updates from the Telegram team.", @"linkPreviewUrl" : link,
+		@"linkPreviewPhotoW" : @800, @"linkPreviewPhotoH" : @450};
+	NSArray *places = @[@[@(-303), @YES, @NO], @[@(-302), @NO, @NO], @[@(-301), @YES, @YES]];
+	for (NSUInteger i = 0; i < places.count; i++){
+		NSMutableDictionary *row = [preview mutableCopy];
+		[row addEntriesFromDictionary:@{@"id" : @(39 + i), @"chatId" : @(kDevChatId),
+			@"senderId" : @(senderPeer), @"outgoing" : @NO, @"date" : @(baseTime + 298),
+			@"kind" : @"messageText", @"text" : link,
+			@"linkPreviewPhotoId" : places[i][0], @"linkPreviewLarge" : places[i][1],
+			@"linkPreviewAbove" : places[i][2]}];
+		[list addObject:row];
+	}
+	[list addObject:@{@"id" : @42, @"chatId" : @(kDevChatId), @"senderId" : @(senderBot),
+		@"outgoing" : @YES, @"date" : @(baseTime + 299), @"kind" : @"messageText",
+		@"text" : @"This chat now charges Stars.", @"failed" : @YES, @"failBlocker" : @"stars",
+		@"failStars" : @10, @"errorMessage" : @"PAYMENT_REQUIRED"}];
+
+	// 43-44. Batch 4: a message on an auto-delete timer (its Delete row says
+	// when) and a reply whose quote the sender picked by hand.
+	[list addObject:@{@"id" : @43, @"chatId" : @(kDevChatId), @"senderId" : @(senderBot),
+		@"outgoing" : @YES, @"date" : @(baseTime + 299), @"kind" : @"messageText",
+		@"text" : @"This one deletes itself.", @"deleteAt" : @(now + 42)}];
+	[list addObject:@{@"id" : @44, @"chatId" : @(kDevChatId), @"senderId" : @(senderPeer),
+		@"outgoing" : @NO, @"date" : @(baseTime + 299), @"kind" : @"messageText",
+		@"text" : @"Exactly that part.", @"replyId" : @2,
+		@"replyText" : @"standard plain text message", @"replyQuoteManual" : @YES}];
 
 	// 30. Final interactive text
 	[list addObject:@{

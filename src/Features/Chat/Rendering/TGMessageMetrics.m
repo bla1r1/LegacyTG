@@ -17,6 +17,13 @@ static int64_t TGMessageViewCount(NSDictionary *m) {
 
 NSString *TGMessageStampText(NSDictionary *m) {
 	NSString *time = TGMessageStamp([m[@"date"] doubleValue], [m[@"edited"] boolValue]);
+	// An imported message keeps the day it was first written
+	// (Message.ImportedDateFormat).
+	double imported = [m[@"importDate"] doubleValue];
+	if (imported > 0)
+		time = TGLocalizedFormat(@"%1$@, %2$@ Imported %3$@",
+				TGAppDate(imported, NSDateFormatterShortStyle, NSDateFormatterNoStyle) ?: @"",
+				TGMessageStamp(imported, NO), time);
 	int64_t viewCount = TGMessageViewCount(m);
 	if (viewCount <= 0)
 		return time;
@@ -33,10 +40,37 @@ NSString *TGMessageStampText(NSDictionary *m) {
 CGFloat TGMessageStampWidth(NSDictionary *m) {
 	CGFloat w = TGTextSize(TGMessageStampText(m), TGFontMicro(), 0).width + TGMetricPadTiny;
 	if (TGMessageViewCount(m) > 0)
-		w += kStampEyeSide + kStampEyePad;
+		w += kStampEyeSide + kStampEyePad - TGMetricPadTiny;
 	if ([m[@"outgoing"] boolValue])
 		w += TGMetricStampTicksRoom;
 	return w;
+}
+
+NSString *TGMessageBoostBadgeText(NSDictionary *m) {
+	NSInteger boosts = [m[@"boostCount"] integerValue];
+	if (boosts <= 0 || [m[@"outgoing"] boolValue])
+		return nil;
+	return boosts > 1 ? [NSString stringWithFormat:@"%ld", (long)boosts] : @"";
+}
+
+CGFloat TGMessageBoostBadgeWidth(NSDictionary *m) {
+	NSString *text = TGMessageBoostBadgeText(m);
+	if (!text)
+		return 0;
+	CGFloat w = TGMetricPadSmall + TGMetricLineMicro;
+	if (text.length)
+		w += TGTextSize(text, TGFontMicro(), 0).width;
+	return ceilf(w);
+}
+
+CGSize TGLinkPreviewMediaSize(NSDictionary *m, CGFloat columnW) {
+	if (![m[@"linkPreviewPhotoId"] isKindOfClass:NSNumber.class])
+		return CGSizeZero;
+	if (![m[@"linkPreviewLarge"] boolValue])
+		return CGSizeMake(kLinkThumbSide, kLinkThumbSide);
+	CGFloat w = [m[@"linkPreviewPhotoW"] floatValue], h = [m[@"linkPreviewPhotoH"] floatValue];
+	CGFloat height = (w > 0 && h > 0) ? roundf(columnW * h / w) : roundf(columnW * 0.75f);
+	return CGSizeMake(columnW, MIN(height, kImageMax));
 }
 
 BOOL TGMessageStampFitsInline(NSDictionary *m, CGFloat fontSize) {
@@ -80,6 +114,12 @@ NSString *TGMessageQuoteAuthor(NSDictionary *replied, NSString *senderName) {
 	return [replied[@"outgoing"] boolValue] ? TGLocalized(@"You") : senderName;
 }
 
+NSString *TGMessageCommentsTitle(NSInteger count) {
+	if (count <= 0)
+		return TGLocalized(@"Leave a Comment");
+	return TGLocalizedPlural(@"%d Comment", @"%d Comments", count);
+}
+
 CGFloat TGMessageDecorationHeight(NSDictionary *m, BOOL hasQuote) {
 	CGFloat h = TGMetricZero;
 	if ([m[@"forward"] length])
@@ -88,9 +128,9 @@ CGFloat TGMessageDecorationHeight(NSDictionary *m, BOOL hasQuote) {
 	// they said.
 	if (hasQuote)
 		h += kQuoteBlock;
-	// The "12 Comments" bar under a channel post.
+	// The "12 Comments" footer under a channel post.
 	if ([m[@"canComment"] boolValue])
-		h += TGMetricLineBody;
+		h += kCommentsBar;
 	// A bot's buttons, a row each.
 	NSUInteger rows = [m[@"inlineRows"] count];
 	if (rows)
@@ -193,4 +233,42 @@ NSString *TGMessageServiceLine(NSDictionary *m, NSString *who, NSArray *messages
 			return TGPinnedLine(line, candidate);
 	}
 	return line;
+}
+
+CGFloat TGStampEyeX(CGFloat textRight, NSString *stampText) {
+	CGFloat words = TGTextSize(stampText ?: @"", TGFontMicro(), 0).width;
+	return textRight - words - kStampEyePad - kStampEyeSide;
+}
+
+TGMessageStampParts TGMessageStampPlace(NSDictionary *m, CGFloat right, CGFloat midY) {
+	TGMessageStampParts p;
+	CGFloat lineY = midY - TGHalf(TGMetricStampHeight);
+	CGFloat x = right;
+	p.ticks = CGRectZero;
+	if ([m[@"outgoing"] boolValue]){
+		x -= TGMetricStampTicksRoom;
+		p.ticks = CGRectMake(right - TGMetricTicksWidth,
+				midY - TGHalf(TGMetricTicksHeight), TGMetricTicksWidth, TGMetricTicksHeight);
+	}
+	CGFloat textW = TGTextSize(TGMessageStampText(m), TGFontMicro(), 0).width + TGMetricPadTiny;
+	x -= textW;
+	p.text = CGRectMake(x, lineY, textW, TGMetricStampHeight);
+	p.eye = CGRectZero;
+	if (TGMessageViewCount(m) > 0){
+		x = TGStampEyeX(x + textW, TGMessageStampText(m));
+		p.eye = CGRectMake(x, midY - TGHalf(kStampEyeSide), kStampEyeSide, kStampEyeSide);
+	}
+	p.width = right - x;
+	return p;
+}
+
+CGRect TGMessageStampPlate(NSDictionary *m, CGFloat right, CGFloat bottom,
+		TGMessageStampParts *parts) {
+	CGFloat plateH = TGMetricLineCaption;
+	CGFloat midY = bottom - TGHalf(plateH);
+	TGMessageStampParts placed = TGMessageStampPlace(m, right - TGMetricPadSmall, midY);
+	if (parts)
+		*parts = placed;
+	CGFloat plateW = placed.width + TGDoubled(TGMetricPadSmall);
+	return CGRectMake(right - plateW, bottom - plateH, plateW, plateH);
 }

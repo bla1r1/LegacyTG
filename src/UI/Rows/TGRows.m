@@ -321,6 +321,7 @@ NSString *const TGKindMultilineField = @"multilinefield";
 NSString *const TGKindNote           = @"note";
 NSString *const TGKindPageHeader     = @"pageHeader";
 NSString *const TGKindPhoto          = @"photo";
+NSString *const TGKindChart          = @"chart";
 NSString *const TGKindImageCheck     = @"imagecheck";
 
 NSMutableDictionary *TGFieldRow(NSString *placeholder, NSString *text,
@@ -608,6 +609,7 @@ NSString *const TGRowChatMarkedUnread  = @"chatMarkedUnread";
 NSString *const TGRowChatMuted         = @"chatMuted";
 NSString *const TGRowChatPinned        = @"chatPinned";
 NSString *const TGRowChatOnline        = @"chatOnline";
+NSString *const TGRowChatStoryRing     = @"chatStoryRing";
 NSString *const TGRowChatSaved         = @"chatSaved";
 NSString *const TGRowChatOutgoing      = @"chatOutgoing";
 NSString *const TGRowChatRead          = @"chatRead";
@@ -674,6 +676,7 @@ NSMutableDictionary *TGChatRow(NSDictionary *chat, NSString *dateText) {
 	row[TGRowChatMuted] = @([chat[@"isMuted"] boolValue]);
 	row[TGRowChatPinned] = @([chat[@"isPinned"] boolValue]);
 	row[TGRowChatOnline] = @([chat[@"isOnline"] boolValue]);
+	row[TGRowChatStoryRing] = @([chat[@"storyRing"] integerValue]);
 	row[TGRowChatSaved] = @([chat[@"isSaved"] boolValue]);
 	row[TGRowChatOutgoing] = @([chat[@"lastOutgoing"] boolValue]);
 	row[TGRowChatRead] = @([chat[@"lastId"] longLongValue] <=

@@ -421,9 +421,10 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 	XCTAssertEqualObjects(note, @"This link carries a private secret.");
 }
 
-/// A prompt to update the app is not the payload's meaning: TDLib said so
-/// because its copy is stale. None the wiser, the tap falls back.
-- (void)testInternalLink_ADeepLinkAndUpdatePromptIsNotAMeaning {
+/// need_update_application (the key the old test spelled "update_app",
+/// which TDLib never sends): official still shows the link's text, and
+/// says the app needs updating when there is none.
+- (void)testInternalLink_ADeepLinkThatNeedsAnUpdateStillSaysItsText {
 	TGClient *c = C();
 	[[TGTransport shared] testSetExecute:NULL];
 	__block NSString *kind = nil;
@@ -433,9 +434,18 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 			@{@"@type" : @"internalLinkTypeUnsupported"});
 	answerTyped(c, @"getDeepLinkInfo",
 			@{@"@type" : @"deepLinkInfo",
-			  @"message" : @{@"text" : @"Update Telegram"},
-			  @"update_app" : @YES});
-	XCTAssertEqualObjects(kind, @"unknown");
+			  @"message" : @{@"text" : @"This needs a newer app."},
+			  @"need_update_application" : @YES});
+	XCTAssertEqualObjects(kind, @"deepLink");
+	__block NSString *note = nil;
+	[c internalLinkKind:@"https://t.me/other"
+			 completion:^(NSString *k, NSString *v){ kind = k; note = v; }];
+	answerTyped(c, @"getInternalLinkType",
+			@{@"@type" : @"internalLinkTypeUnsupported"});
+	answerTyped(c, @"getDeepLinkInfo",
+			@{@"@type" : @"deepLinkInfo", @"message" : @{@"text" : @""},
+			  @"need_update_application" : @YES});
+	XCTAssertEqualObjects(note, @"Update Telegram");
 }
 
 #pragma mark - markdown of a received message
@@ -651,15 +661,17 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 	NSMutableDictionary *row = [@{@"id" : @(123)} mutableCopy];
 	[c mergeActionBar:@{
 		@"@type" : @"chatActionBarReportAddBlock",
+		// accountInfo as td_api.tl has it: no name or phone, the dates
+		// and the phone's country the new-contact card shows.
 		@"account_info" : @{
-			@"first_name" : @"Jane",
-			@"last_name" : @"Doe",
-			@"phone_number" : @"+999",
+			@"registration_month" : @7,
+			@"registration_year" : @2019,
+			@"phone_number_country_code" : @"DE",
 		},
 	} intoChatRow:row];
 	XCTAssertEqualObjects(row[@"actionBarKind"], @"chatActionBarReportAddBlock");
-	XCTAssertEqualObjects(row[@"actionBarAccount"][@"name"], @"Jane Doe");
-	XCTAssertEqualObjects(row[@"actionBarAccount"][@"phone"], @"+999");
+	XCTAssertEqualObjects(row[@"actionBarAccount"][@"registrationMonth"], @7);
+	XCTAssertEqualObjects(row[@"actionBarAccount"][@"country"], @"DE");
 }
 
 #pragma mark - replies and messages

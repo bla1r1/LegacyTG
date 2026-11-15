@@ -12,9 +12,16 @@
 
 #pragma mark - network and downloads
 
+static NSTimeInterval TGNetworkStatsSince;
+
+- (NSTimeInterval)networkStatsSince {
+	return TGNetworkStatsSince;
+}
+
 - (void)networkStatsWithCompletion:(void (^)(long long, long long))completion {
 	[[TGClient shared] request:@{@"@type" : @"getNetworkStatistics", @"only_current" : @NO}
 	   completion:^(NSDictionary *stats){
+		TGNetworkStatsSince = [stats[@"since_date"] doubleValue];
 		long long sent = 0, received = 0;
 		for (NSDictionary *entry in stats[@"entries"]){
 			sent     += [entry[@"sent_bytes"] longLongValue];

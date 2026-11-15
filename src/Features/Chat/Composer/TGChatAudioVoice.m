@@ -1,4 +1,5 @@
 #import "TGChatViewControllerInternal.h"
+#import "TGLocalization.h"
 #import "TGVideoNoteRecorder.h"
 #import "TGVideoNoteViewController.h"
 #import "TGPlaybackQueue.h"
@@ -302,6 +303,13 @@ static const NSTimeInterval kRecordHintSeconds = 1.6;
 /// lands, the clock runs, and only a finger still down kRecordToggleTapSeconds
 /// later becomes a recording. A tap never touches the recorder at all.
 - (void)recordTouchDown:(UIButton *)btn withEvent:(UIEvent *)event {
+	// Official says so on the mic instead of recording what cannot be sent
+	// (Conversation.VoiceMessagesRestricted).
+	if (self.voiceRestricted){
+		[TGSnackbar showInView:self.view text:TGLocalizedFormat(@"%@ doesn't accept voice and video messages",
+				self.chatTitle ?: @"") seconds:2 onCommit:nil];
+		return;
+	}
 	self.recordBeganAt = [NSDate date];
 	sIsCancelled = NO;
 	sIsLocked = NO;
@@ -344,7 +352,7 @@ static const NSTimeInterval kRecordHintSeconds = 1.6;
 }
 
 - (void)recordTouchUp:(UIButton *)btn withEvent:(UIEvent *)event {
-	if (self.videoNoteOverlayActive)
+	if (self.videoNoteOverlayActive || self.voiceRestricted)
 		return;
 	self.table.scrollEnabled = YES;
 	[self invalidatePendingRecordStart];
@@ -384,7 +392,7 @@ static const NSTimeInterval kRecordHintSeconds = 1.6;
 }
 
 - (void)recordDrag:(UIButton *)btn withEvent:(UIEvent *)event {
-	if (self.videoNoteOverlayActive || sIsCancelled) return;
+	if (self.videoNoteOverlayActive || sIsCancelled || self.voiceRestricted) return;
 	UITouch *touch = [[event allTouches] anyObject];
 	if (!touch) return;
 	CGPoint pt = [touch locationInView:self.view];

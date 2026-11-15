@@ -65,3 +65,7 @@ forward counts. Views and the signature are in the stamp as of 7 November 2026.
 | Administrators screen | missing | — | `administratorsOfChat` is only used by the member action sheet. |
 | Removed users screen | missing | — | No banned/restricted filter screen. |
 | Boosts | missing | — | No channel boosts surface; calls exist only in the `TG_DEV` Stars console. |
+
+## Statistics graphs (15 November 2026)
+
+- The Statistics page draws official's graph sections after the overview numbers, in ChannelStatsController's order: GROWTH, FOLLOWERS, NOTIFICATIONS, VIEWS BY HOURS, VIEWS BY SOURCE, FOLLOWERS BY SOURCE, LANGUAGES, INTERACTIONS, INSTANT VIEW INTERACTIONS; a group's as GroupStatsController orders them (GROWTH, GROUP MEMBERS, NEW MEMBERS BY SOURCE, MEMBERS' PRIMARY LANGUAGE, MESSAGES, ACTIONS, TOP HOURS, TOP DAYS OF WEEK). A graph is one picture drawn once (`TGStatChartParse`, `TGKindChart`): grid, series as lines in their own colours, first and last day, names under it; a token graph is fetched with getStatisticalGraph, an error shows its message. No zoom, no tooltips, and bar, area and pie kinds are drawn as lines. Checked on the iPod with a fixture; the bench account has no channel with statistics.

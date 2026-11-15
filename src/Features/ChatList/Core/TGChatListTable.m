@@ -16,6 +16,8 @@
 #import "TGPasscodeViewController.h"
 #import "TGChatListRowGeometry.h"
 #import "TGUIFormat.h"
+#import "TGRowCell.h"
+#import "TGRows.h"
 
 
 // Height of the folder pill strip above the chat list (official-style tabs).
@@ -107,7 +109,40 @@ static NSString *TGChatDate(NSTimeInterval unix) {
 }
 
 - (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath {
+	NSArray *header = self.searchResults ? nil : [self headerRows];
+	if (indexPath.row < (NSInteger)header.count && [header[indexPath.row] isEqualToString:@"notice"])
+		return [TGRowCell heightForRow:[self noticeRow] inTableView:tableView];
 	return kRowHeight;
+}
+
+/// The notice as a shared row: title, the official sentence under it, and a
+/// close glyph when official lets it be dismissed.
+- (NSDictionary *)noticeRow {
+	NSDictionary *notice = TGChatListNotice([TGChatListStore shared].suggestedActions);
+	if (!notice)
+		return TGSubtitleRow(@"", @"", nil);
+	NSDictionary *action = notice[@"action"];
+	NSMutableDictionary *row = [([notice[@"closable"] boolValue]
+			? TGButtonRow(notice[@"title"], notice[@"text"], nil, ^{
+				[[TGChatListStore shared] hideSuggestedAction:action];
+			}, nil)
+			: TGSubtitleRow(notice[@"title"], notice[@"text"], nil)) mutableCopy];
+	if ([notice[@"closable"] boolValue])
+		row[TGRowAccessoryImage] = [TGIcons glyphNamed:@"close"
+				colour:[[TGTheme shared] secondaryTextColour] side:TGMetricMenuGlyph];
+	// Official wraps the sentence in grey; it is not a link.
+	row[TGRowDetailLines] = @3;
+	row[TGRowDetailColour] = [[TGTheme shared] secondaryTextColour];
+	// The shared cell sizes one line of detail; this one wraps, so the row
+	// is measured here: a bold title line over the subhead-sized sentence,
+	// as the subtitle cell draws them.
+	CGFloat width = self.tableView.bounds.size.width - TGDoubled(TGMetricPadLarge)
+			- ([notice[@"closable"] boolValue] ? TGMetricMenuGlyph + TGMetricPadLarge : TGMetricZero);
+	CGFloat detail = [notice[@"text"] sizeWithFont:TGFontSubhead()
+			constrainedToSize:CGSizeMake(width, CGFLOAT_MAX)
+			lineBreakMode:NSLineBreakByWordWrapping].height;
+	row[TGRowHeight] = @(ceilf(TGFontBodyStrong().lineHeight + detail) + TGDoubled(TGMetricPadMedium));
+	return row;
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
@@ -125,6 +160,8 @@ static NSString *TGChatDate(NSTimeInterval unix) {
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
 	NSArray *header = [self headerRows];
+	if (indexPath.row < (NSInteger)header.count && [header[indexPath.row] isEqualToString:@"notice"])
+		return [TGRowCell cellForTableView:tableView row:[self noticeRow] rowIndex:0 totalRows:1];
 	if (indexPath.row < (NSInteger)header.count){
 		BOOL isArchive = [header[indexPath.row] isEqualToString:@"archive"];
 		NSUInteger archived = [TGChatListStore shared].archivedChats.count;

@@ -36,7 +36,43 @@ typedef struct {
 	BOOL canViewAuthor;
 	/// Broadcast channels can carry a fact check; official only offers it there.
 	BOOL canEditFactCheck;
+	/// Set once getMessageProperties answered: Copy and Delete then follow
+	/// TDLib instead of guesses.
+	BOOL hasProperties;
+	BOOL canCopy;
+	BOOL canDeleteForSelf;
+	BOOL canDeleteForAll;
+	/// The rest of messageProperties the card reads: Replace Photo, the
+	/// viewers line, Report Reaction, View Thread, the read date, and the
+	/// copy-protection tip (by you, by the other side).
+	BOOL canEditMedia;
+	BOOL canGetViewers;
+	BOOL canReportReactions;
+	BOOL canGetThread;
+	BOOL canGetReadDate;
+	BOOL protectedByMe;
+	BOOL protectedByOther;
 } TGChatActionMenuContext;
+
+/// Where a held bubble of `bubble`'s size sits while its menu is open, as
+/// official ContextControllerExtractedPresentationNode places it: where it
+/// was, unless the reaction bar (`above`) or the card under it (`below`)
+/// would leave [top, bottom]; then the bubble moves just enough. When both
+/// cannot fit, the top wins and the card scrolls.
+CGFloat TGHoldLiftY(CGRect bubble, CGFloat above, CGFloat below, CGFloat top, CGFloat bottom);
+
+/// TDLib's messageProperties over the guesses: reply, edit, pin, copy and
+/// the two deletes. Nil leaves the context as it was.
+void TGChatActionMenuApplyProperties(TGChatActionMenuContext *context,
+		NSDictionary *properties);
+
+/// The delete sheet's choices as official offers them for one message:
+/// "Delete for Everyone" (or "for All" in a group) when it can be revoked,
+/// "Delete for me" when it can go from this side only. Each is
+/// {title, revoke}. Without properties both are offered, Saved Messages
+/// offers one plain Delete.
+NSArray<NSDictionary *> *TGMessageDeleteChoices(BOOL isSaved, BOOL isGroup,
+		NSDictionary *properties);
 
 /// The rows of the single context card, in official order. Each row carries
 /// "title", "action", "icon" and an optional "destructive". TG_DEV rows sit
@@ -69,6 +105,31 @@ NSInteger TGChatComposerMaxLines(void);
 /// How many body lines `text` takes at `width`. Empty text is one line, as
 /// an empty editor still shows its caret on the first one.
 NSInteger TGChatComposerLineCount(NSString *text, CGFloat width);
+
+/// The line under Delete for a message on a timer: "auto-deletes in 0:42",
+/// "auto-deletes in 1:02:09", "auto-deletes in 2 days"
+/// (Conversation.AutoremoveRemaining*).
+NSString *TGAutoDeleteText(NSTimeInterval seconds);
+
+/// Official's tooltip after a free transcription: "You have 3 free voice
+/// transcriptions left this week." Nil for an unknown count (-1).
+NSString *TGFreeTranscriptionsText(NSInteger left);
+
+/// The tip official puts on the hold menu in a private chat with copying
+/// turned off: by you, or by the other side. Nil otherwise.
+NSString *TGCopyProtectionTip(TGChatActionMenuContext context, NSString *peerName);
+
+/// "read 12:30" over an own message in a private chat (getMessageReadDate).
+NSString *TGReadDateText(NSTimeInterval readDate);
+
+/// Conversation.FreeTranscriptionCooldownTooltip and WaitOrSubscribe as one
+/// plain sentence, for an account with no free transcription left (`left`
+/// 0); nil while one is left, the count is unknown (-1) or the reset passed.
+NSString *TGTranscriptionCooldownText(NSInteger left, NSInteger weekly,
+		NSTimeInterval resetDate, NSTimeInterval now);
+
+/// "0:42" for the slow mode wait, as official's tooltip writes it.
+NSString *TGSlowModeWaitText(NSTimeInterval seconds);
 
 /// The bar height that holds a field of `lines` lines plus its inset above and
 /// below. The field and the send control both use it, so they cannot drift.

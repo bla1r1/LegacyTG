@@ -11,6 +11,7 @@
 #import "TGMessageContentInteractive.h"
 #import "TGLiveLocation.h"
 #import "TGClientInternal.h"
+#import "TGUpdateHandlersSupport.h"
 #import "TGBase64.h"
 #import "TGCapabilities.h"
 
@@ -194,6 +195,10 @@ static NSDictionary *TGFlattenInlineButton(NSDictionary *button) {
 	} else if ([t isEqualToString:@"inlineKeyboardButtonTypeSwitchInline"]) {
 		out[@"kind"] = @"switch";
 		out[@"query"] = type[@"query"] ?: @"";
+		// targetChatChosen: the query goes to a chat the user picks, not
+		// into this one.
+		NSDictionary *target = [type[@"target_chat"] isKindOfClass:NSDictionary.class] ? type[@"target_chat"] : nil;
+		out[@"chooseChat"] = @([target[@"@type"] isEqualToString:@"targetChatChosen"]);
 	} else if ([t isEqualToString:@"inlineKeyboardButtonTypeCopyText"]) {
 		out[@"kind"] = @"copy";
 		out[@"copy"] = type[@"text"] ?: @"";
@@ -238,6 +243,8 @@ NSDictionary *TGFlattenReplyMarkup(NSDictionary *markup) {
 			return nil;
 		return @{@"replyKeyboard" : @{@"rows" : rows,
 									  @"oneTime" : markup[@"one_time"] ?: @NO,
+									  @"resize" : markup[@"resize_keyboard"] ?: @NO,
+									  @"persistent" : markup[@"is_persistent"] ?: @NO,
 									  @"placeholder" : markup[@"input_field_placeholder"] ?: @""}};
 	}
 	if ([t isEqualToString:@"replyMarkupRemoveKeyboard"])
@@ -348,7 +355,146 @@ static NSString *(^TGFlattenChatTitle)(int64_t) = ^NSString *(int64_t chatId){
 	return [title isKindOfClass:NSString.class] && title.length ? title : nil;
 };
 
+NSString *TGFailedSendBlocker(NSDictionary *state) {
+	if (![state isKindOfClass:NSDictionary.class] ||
+		![state[@"@type"] isEqualToString:@"messageSendingStateFailed"])
+		return @"";
+	if ([state[@"required_paid_message_star_count"] longLongValue] > 0)
+		return @"stars";
+	if ([state[@"need_another_sender"] boolValue])
+		return @"sender";
+	// A vanished reply or a quote that no longer matches does not block:
+	// resendMessages drops the one and sends without the other.
+	return @"";
+}
+
+/// A preview's picture: the largest size of its photo that a bubble can
+/// show, 640 on the long side at most. Nil when the preview has none.
+static NSDictionary *TGFlattenLinkPreviewMedia(NSDictionary *lp) {
+	NSDictionary *type = [lp[@"type"] isKindOfClass:NSDictionary.class] ? lp[@"type"] : nil;
+	NSDictionary *photo = [type[@"photo"] isKindOfClass:NSDictionary.class] ? type[@"photo"] : nil;
+	NSArray *sizes = [photo[@"sizes"] isKindOfClass:NSArray.class] ? photo[@"sizes"] : nil;
+	NSDictionary *chosen = nil;
+	for (NSDictionary *s in sizes){
+		int side = MAX([s[@"width"] intValue], [s[@"height"] intValue]);
+		if (side > 0 && side <= 640)
+			chosen = s;
+	}
+	chosen = chosen ?: sizes.firstObject;
+	NSNumber *fileId = chosen[@"photo"][@"id"];
+	if (![fileId isKindOfClass:NSNumber.class])
+		return nil;
+	// show_large_media only means something where the sender could pick
+	// the size; otherwise the server's choice is the small corner picture.
+	BOOL large = [lp[@"has_large_media"] boolValue] && [lp[@"show_large_media"] boolValue];
+	return @{@"linkPreviewPhotoId" : fileId,
+			 @"linkPreviewPhotoW" : @([chosen[@"width"] intValue]),
+			 @"linkPreviewPhotoH" : @([chosen[@"height"] intValue]),
+			 @"linkPreviewLarge" : @(large),
+			 @"linkPreviewAbove" : @([lp[@"show_media_above_description"] boolValue])};
+}
+
+/// The fields most messages do not have, so most rows keep their literal
+/// dictionary: sender boosts, an import date, commenters, unread marks,
+/// why a failed send cannot simply be retried, a preview's picture.
+static NSDictionary *TGFlattenMessageExtras(NSDictionary *m, NSDictionary *lp) {
+	NSMutableDictionary *out = nil;
+#define TG_EXTRA(key, value) do { if (!out) out = [NSMutableDictionary dictionary]; out[key] = value; } while (0)
+	// Either timer ends the message; official names whichever is set under
+	// Delete in the hold menu. Seconds left are turned into a moment here,
+	// as the row outlives the TDLib object it came from.
+	double deleteIn = [m[@"self_destruct_in"] doubleValue];
+	if (deleteIn <= 0)
+		deleteIn = [m[@"auto_delete_in"] doubleValue];
+	if (deleteIn > 0)
+		TG_EXTRA(@"deleteAt", @([[NSDate date] timeIntervalSince1970] + deleteIn));
+	NSDictionary *content = m[@"content"];
+	NSDictionary *mini = [content[@"audio"] isKindOfClass:NSDictionary.class]
+			? content[@"audio"][@"album_cover_minithumbnail"] : nil;
+	if ([mini isKindOfClass:NSDictionary.class] && [mini[@"data"] length])
+		TG_EXTRA(@"albumCoverMini", mini);
+	if ([content[@"@type"] isEqualToString:@"messageVideo"] && [content[@"start_timestamp"] intValue] > 0)
+		TG_EXTRA(@"startSeconds", content[@"start_timestamp"]);
+	NSDictionary *quote = [m[@"reply_to"] isKindOfClass:NSDictionary.class] &&
+			[m[@"reply_to"][@"quote"] isKindOfClass:NSDictionary.class] ? m[@"reply_to"][@"quote"] : nil;
+	if ([quote[@"is_manual"] boolValue])
+		TG_EXTRA(@"replyQuoteManual", @YES);
+	NSInteger boosts = [m[@"sender_boost_count"] integerValue];
+	if (boosts > 0)
+		TG_EXTRA(@"boostCount", @(boosts));
+	NSDictionary *imported = [m[@"import_info"] isKindOfClass:NSDictionary.class] ? m[@"import_info"] : nil;
+	if ([imported[@"date"] longLongValue] > 0)
+		TG_EXTRA(@"importDate", imported[@"date"]);
+	NSArray *unread = [m[@"unread_reactions"] isKindOfClass:NSArray.class] ? m[@"unread_reactions"] : nil;
+	if (unread.count)
+		TG_EXTRA(@"unreadReactions", @(unread.count));
+	if ([m[@"contains_unread_poll_votes"] boolValue])
+		TG_EXTRA(@"unreadPollVotes", @YES);
+	NSDictionary *reactions = [m[@"interaction_info"] isKindOfClass:NSDictionary.class]
+			? m[@"interaction_info"][@"reactions"] : nil;
+	if ([reactions isKindOfClass:NSDictionary.class] && ![reactions[@"can_get_added_reactions"] boolValue])
+		TG_EXTRA(@"reactorsHidden", @YES);
+	NSString *psa = [m[@"forward_info"] isKindOfClass:NSDictionary.class]
+			? m[@"forward_info"][@"public_service_announcement_type"] : nil;
+	if ([psa isKindOfClass:NSString.class] && psa.length)
+		TG_EXTRA(@"forwardPsa", psa);
+	if ([m[@"contains_unread_mention"] boolValue])
+		TG_EXTRA(@"unreadMention", @YES);
+	NSDictionary *replyInfo = m[@"interaction_info"][@"reply_info"];
+	NSArray *repliers = [replyInfo isKindOfClass:NSDictionary.class] &&
+			[replyInfo[@"recent_replier_ids"] isKindOfClass:NSArray.class]
+			? replyInfo[@"recent_replier_ids"] : nil;
+	if (repliers.count){
+		NSMutableArray *ids = [NSMutableArray arrayWithCapacity:3];
+		for (NSDictionary *sender in repliers){
+			if (![sender isKindOfClass:NSDictionary.class])
+				continue;
+			NSNumber *peer = sender[@"user_id"] ?: sender[@"chat_id"];
+			if ([peer isKindOfClass:NSNumber.class] && ids.count < 3)
+				[ids addObject:peer];
+		}
+		if (ids.count)
+			TG_EXTRA(@"recentRepliers", ids);
+	}
+	NSDictionary *state = [m[@"sending_state"] isKindOfClass:NSDictionary.class] ? m[@"sending_state"] : nil;
+	NSString *blocker = TGFailedSendBlocker(state);
+	if (blocker.length){
+		TG_EXTRA(@"failBlocker", blocker);
+		TG_EXTRA(@"failStars", @([state[@"required_paid_message_star_count"] longLongValue]));
+	}
+	NSDictionary *media = [lp isKindOfClass:NSDictionary.class] ? TGFlattenLinkPreviewMedia(lp) : nil;
+	if (media){
+		if (!out) out = [NSMutableDictionary dictionary];
+		[out addEntriesFromDictionary:media];
+	}
+#undef TG_EXTRA
+	return out;
+}
+
+/// A message Telegram restricts on this platform carries the reason, which
+/// official draws in place of the content, in italics
+/// (ChatMessageRestrictedBubbleContentNode). Nil when it is not restricted.
+static NSDictionary *TGRestrictedMessage(NSDictionary *m) {
+	NSDictionary *info = [m[@"restriction_info"] isKindOfClass:NSDictionary.class]
+			? m[@"restriction_info"] : nil;
+	NSString *reason = [info[@"restriction_reason"] isKindOfClass:NSString.class]
+			? info[@"restriction_reason"] : @"";
+	if (!reason.length)
+		return nil;
+	NSMutableDictionary *copy = [m mutableCopy];
+	copy[@"content"] = @{@"@type" : @"messageText",
+		@"text" : @{@"@type" : @"formattedText", @"text" : reason,
+			@"entities" : @[@{@"@type" : @"textEntity", @"offset" : @0,
+				@"length" : @(reason.length),
+				@"type" : @{@"@type" : @"textEntityTypeItalic"}}]}};
+	[copy removeObjectForKey:@"restriction_info"];
+	return copy;
+}
+
 NSDictionary *TGFlattenMessage(NSDictionary *m) {
+	NSDictionary *restricted = TGRestrictedMessage(m);
+	if (restricted)
+		m = restricted;
 	NSDictionary *content = m[@"content"];
 	NSString *ctype = content[@"@type"];
 	NSNumber *photoFileId = nil;   // an image to show in the bubble
@@ -928,6 +1074,10 @@ NSDictionary *TGFlattenMessage(NSDictionary *m) {
 		@"linkPreviewDesc"  : lpDesc ?: @"",
 		@"linkPreviewUrl"   : lpUrl ?: @"",
 		@"senderTag"        : m[@"sender_tag"] ?: @"",
+		// The inline bot that made it: "Name via @gif" in the sender line.
+		// TDLib sends the bot's updateUser before the message, so its
+		// username is in the raw user cache by now.
+		@"viaBot"           : TGUFirstActiveUsername([TGClient shared].rawUsersById[m[@"via_bot_user_id"] ?: @0]) ?: @"",
 		// The file behind docId can be a smaller alternative of the original;
 		// its own size decides whether the software player may try it.
 		@"docWidth"  : @(docWidth),
@@ -1052,12 +1202,16 @@ NSDictionary *TGFlattenMessage(NSDictionary *m) {
 	BOOL hasCommunity = ([ctype isEqualToString:@"messageChatAddedToCommunity"] ||
 			[ctype isEqualToString:@"messageChatJoinFromCommunity"]);
 
+	NSDictionary *extras = TGFlattenMessageExtras(m, lp);
+
 	// Only those rows and a sending row pay for the extra mutable copy:
 	// every other row keeps the literal dictionary it has always been.
-	if (structured || sending || hasCommunity){
+	if (structured || sending || hasCommunity || extras){
 		NSMutableDictionary *richer = [row mutableCopy];
 		if (structured)
 			[richer addEntriesFromDictionary:structured];
+		if (extras)
+			[richer addEntriesFromDictionary:extras];
 		if (sending)
 			richer[@"sending"] = @YES;
 		if (hasCommunity) {
@@ -1094,3 +1248,36 @@ NSArray *TGMediaPageAppending(NSArray *existing, NSArray *more) {
 }
 
 
+
+NSDictionary *TGActionBarFields(NSDictionary *bar) {
+	NSString *kind = [bar isKindOfClass:NSDictionary.class] ? bar[@"@type"] : nil;
+	if (![kind isKindOfClass:NSString.class] || !kind.length)
+		return @{};
+	NSMutableDictionary *out = [NSMutableDictionary dictionaryWithObject:kind forKey:@"actionBarKind"];
+	if ([bar[@"can_unarchive"] boolValue])
+		out[@"actionBarCanUnarchive"] = @YES;
+	if ([kind isEqualToString:@"chatActionBarJoinRequest"]){
+		out[@"actionBarText"] = bar[@"title"] ?: @"";
+		out[@"actionBarRequestDate"] = bar[@"request_date"] ?: @0;
+		out[@"actionBarIsChannel"] = bar[@"is_channel"] ?: @NO;
+	}
+	NSDictionary *info = [bar[@"account_info"] isKindOfClass:NSDictionary.class] ? bar[@"account_info"] : nil;
+	if (info)
+		out[@"actionBarAccount"] = @{
+			@"registrationMonth" : info[@"registration_month"] ?: @0,
+			@"registrationYear"  : info[@"registration_year"] ?: @0,
+			@"country"           : info[@"phone_number_country_code"] ?: @"",
+			@"nameChanged"       : info[@"last_name_change_date"] ?: @0,
+			@"photoChanged"      : info[@"last_photo_change_date"] ?: @0,
+		};
+	return out;
+}
+
+NSDictionary *TGBusinessBotBarFields(NSDictionary *bar) {
+	if (![bar isKindOfClass:NSDictionary.class] || [bar[@"bot_user_id"] longLongValue] == 0)
+		return @{};
+	return @{@"businessBot" : @{@"botId" : bar[@"bot_user_id"],
+		@"paused" : bar[@"is_bot_paused"] ?: @NO,
+		@"canReply" : bar[@"can_bot_reply"] ?: @NO,
+		@"manageUrl" : bar[@"manage_url"] ?: @""}};
+}

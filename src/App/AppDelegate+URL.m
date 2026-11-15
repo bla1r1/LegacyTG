@@ -5,6 +5,7 @@
 static const CGFloat kIconDumpSide = 52.0f;
 #import "RootViewController.h"
 #import "TGClient.h"
+#import "TGClientInternal.h"
 #import "TGTheme.h"
 #import "TGSnackbar.h"
 #import "TGSearchViewController.h"
@@ -169,6 +170,18 @@ static NSUInteger TGChatsIndex(UITabBarController *tabs) {
 	}
 
 	// itglegacy://devmode[/close] - what three taps on Chats opens.
+	// itglegacy://suggest/password|premium - feeds the chat list a suggested
+	// action the bench account does not have, to see its notice.
+	if ([host isEqualToString:@"suggest"]){
+		dispatch_async(dispatch_get_main_queue(), ^{
+			NSDictionary *action = [arg isEqualToString:@"premium"]
+					? @{ @"@type" : @"suggestedActionExtendPremium", @"manage_premium_subscription_url" : @"https://t.me/premium" }
+					: @{ @"@type" : @"suggestedActionSetPassword" };
+			[[TGClient shared] applySuggestedActionsUpdate:@{ @"added_actions" : @[action], @"removed_actions" : @[] }];
+		});
+		return YES;
+	}
+
 	if ([host isEqualToString:@"devmode"]){
 		dispatch_async(dispatch_get_main_queue(), ^{
 			UIViewController *root = self.rootViewController ?: self.window.rootViewController;
@@ -655,9 +668,26 @@ static NSUInteger TGChatsIndex(UITabBarController *tabs) {
 				return;
 			}
 
-			// Rows are reachable through itglegacy://tap/N and settings pages
-			// through itglegacy://settings/N, so anything that is not a control
-			// is left alone rather than guessed at.
+			// A chat row answers by the part under the point (file, picture,
+			// quote), so it is selected with that point rather than by index.
+			UITableView *table = nil;
+			for (UIView *view = hit; view && !table; view = view.superview)
+				if ([view isKindOfClass:UITableView.class])
+					table = (UITableView *)view;
+			id<UITableViewDelegate> owner = table.delegate;
+			if ([(id)owner respondsToSelector:@selector(setLastTouchPoint:)]){
+				CGPoint inTable = [table convertPoint:point fromView:window];
+				NSIndexPath *row = [table indexPathForRowAtPoint:inTable];
+				if (row){
+					[(id)owner setValue:[NSValue valueWithCGPoint:inTable] forKey:@"lastTouchPoint"];
+					[(id)owner setValue:@YES forKey:@"hasTouchPoint"];
+					[owner tableView:table didSelectRowAtIndexPath:row];
+					NSLog(@"touch: row %ld at %.0f,%.0f", (long)row.row, inTable.x, inTable.y);
+					return;
+				}
+			}
+			// Settings pages are reachable through itglegacy://settings/N, so
+			// anything else is left alone rather than guessed at.
 			NSLog(@"touch: nothing actionable at that point");
 		});
 		return YES;
@@ -1542,6 +1572,19 @@ static NSUInteger TGChatsIndex(UITabBarController *tabs) {
 				[top performSelector:@selector(aiComposeTapped)];
 #pragma clang diagnostic pop
 			NSLog(@"aicompose on %@", [top class]);
+		});
+		return YES;
+	}
+
+	// itglegacy://stats - the open chat's statistics page.
+	if ([host isEqualToString:@"stats"]){
+		dispatch_async(dispatch_get_main_queue(), ^{
+			UITabBarController *tabs = [self activeTabBarController];
+			UINavigationController *nc = tabs.viewControllers[tabs.selectedIndex];
+			UIViewController *top = [nc isKindOfClass:UINavigationController.class] ? nc.topViewController : nil;
+			SEL show = NSSelectorFromString(@"showChatStatistics");
+			if ([top respondsToSelector:show])
+				[top performSelector:show withObject:nil afterDelay:0];
 		});
 		return YES;
 	}

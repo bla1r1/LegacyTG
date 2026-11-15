@@ -95,6 +95,10 @@
 - (void)hideSendRing;
 
 @property (nonatomic, strong) UILabel *mediaStamp;
+/// The plate under a stamp that stands on the wallpaper (a sticker, a round
+/// video): the same fill the plate on a photo has, so the time stays legible
+/// on any pattern. Placed under `time` in whatever view holds it.
+@property (nonatomic, strong) UIView *stampPlate;
 @property (nonatomic, assign) int64_t voiceMessageId;
 @property (nonatomic, assign) int64_t pollMessageId;
 @property (nonatomic, assign) int64_t docMessageId;

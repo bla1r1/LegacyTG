@@ -4,11 +4,22 @@
 #import "TGMessageCard.h"
 #import "TGMessageCardView.h"
 #import "TGStyle.h"
+#import "TGLocalization.h"
 
 @implementation TGMessageRowInput
 @end
 
 /// The album's tile frames as the cell reads them back with -CGRectValue.
+static CGRect TGRectFromValue(NSValue *value) {
+#if TARGET_OS_IPHONE
+	return [value CGRectValue];
+#else
+	CGRect rect;
+	[value getValue:&rect];
+	return rect;
+#endif
+}
+
 static NSValue *TGRectValue(CGRect rect) {
 #if TARGET_OS_IPHONE
 	return [NSValue valueWithCGRect:rect];
@@ -31,8 +42,15 @@ BOOL TGMessageRowWantsCard(NSDictionary *m) {
 }
 
 NSString *TGMessageSenderLine(NSString *name, NSDictionary *m) {
+	if (!name.length)
+		return name;
+	// Official: the author, then "via @bot" (Conversation.MessageViaUser).
+	NSString *via = m[@"viaBot"];
+	if ([via isKindOfClass:NSString.class] && via.length)
+		name = [NSString stringWithFormat:@"%@ %@", name,
+				TGLocalizedFormat(@"via %@", [@"@" stringByAppendingString:via])];
 	NSString *tag = m[@"senderTag"];
-	if (name.length && [tag isKindOfClass:NSString.class] && tag.length)
+	if ([tag isKindOfClass:NSString.class] && tag.length)
 		return [NSString stringWithFormat:@"%@ · %@", name, tag];
 	return name;
 }
@@ -210,6 +228,7 @@ TGMessageLayout *TGMessageRowLayout(TGMessageRowInput *in) {
 		}
 		CGFloat docsH = docCount * kFileTile + (docCount > 1 ? (docCount - 1) * TGMetricPadSmall : 0);
 		CGFloat height = docsH + TGDoubled(kPadV) + forwarded;
+		layout.documentFrame = CGRectMake(kPadH, forwarded + kPadV, width - TGDoubled(kPadH), docsH);
 
 		NSString *caption = m[@"caption"];
 		if (!caption.length && [m[@"text"] length]) {
@@ -235,14 +254,13 @@ TGMessageLayout *TGMessageRowLayout(TGMessageRowInput *in) {
 		} else {
 			layout.bodyFrame = CGRectZero;
 		}
-		CGFloat eyeRoom = 0;
-		int64_t viewCount = [m[@"viewCount"] respondsToSelector:@selector(longLongValue)] ? [m[@"viewCount"] longLongValue] : 0;
-		if (viewCount > 0) {
-			eyeRoom = kStampEyeSide + kStampEyePad;
-		}
-		layout.timeFrame = CGRectMake(width - layout.timeWidth - kPadH + eyeRoom,
-									  height - kPadV - TGMetricStampHeight,
-									  layout.timeWidth - eyeRoom, TGMetricStampHeight);
+		// The same stamp as every other bubble: this branch kept its own
+		// arithmetic and left out a sent document's ticks.
+		TGMessageStampParts stamp = TGMessageStampPlace(m, width - kPadH,
+				height - kPadV - TGHalf(TGMetricStampHeight));
+		layout.timeFrame = stamp.text;
+		layout.stampEyeFrame = stamp.eye;
+		layout.stampTicksFrame = stamp.ticks;
 		layout.rowHeight = height + TGDoubled(TGMetricBubbleRowInset);
 		return layout;
 	}
@@ -252,6 +270,11 @@ TGMessageLayout *TGMessageRowLayout(TGMessageRowInput *in) {
 		CGFloat height = kContactBubbleH + forwarded;
 		CGFloat x = mine ? (tableW - width - TGMetricPad) : TGMetricPad;
 		layout.bubbleFrame = CGRectMake(x, TGMetricBubbleRowInset, width, height);
+		TGMessageStampParts stamp = TGMessageStampPlace(m, width - kPadH,
+				forwarded + TGMetricPersonRow + TGHalf(TGMetricLineMicro));
+		layout.timeFrame = stamp.text;
+		layout.stampEyeFrame = stamp.eye;
+		layout.stampTicksFrame = stamp.ticks;
 		layout.rowHeight = height + TGDoubled(TGMetricBubbleRowInset);
 		return layout;
 	}
@@ -328,7 +351,10 @@ TGMessageLayout *TGMessageRowLayout(TGMessageRowInput *in) {
 	NSString *senderName = TGMessageSenderLine(in.senderName, m);
 
 	BOOL stampOnPicture = TGMessageStampOnPicture(m, in.imageSize, in.fontSize);
-	BOOL inlineStamp = !stampOnPicture && TGMessageStampFitsInline(m, in.fontSize);
+	// A track's empty caption "fits" the stamp and put it on the title line;
+	// its time belongs at the bubble's bottom right, as a file's does.
+	BOOL inlineStamp = !stampOnPicture && ![kind isEqualToString:@"messageAudio"]
+			&& TGMessageStampFitsInline(m, in.fontSize);
 	NSString *lpSite = m[@"linkPreviewSite"];
 	NSString *lpTitle = m[@"linkPreviewTitle"];
 	NSString *lpDesc = m[@"linkPreviewDesc"];
@@ -347,6 +373,8 @@ TGMessageLayout *TGMessageRowLayout(TGMessageRowInput *in) {
 	CGFloat linkSiteH = 0;
 	CGFloat linkTitleH = 0;
 	CGFloat linkDescH = 0;
+	CGSize linkMedia = CGSizeZero;
+	BOOL linkMediaLarge = NO;
 	if (hasLinkPreview) {
 		layout.linkSite = lpSite;
 		layout.linkTitle = lpTitle;
@@ -354,6 +382,14 @@ TGMessageLayout *TGMessageRowLayout(TGMessageRowInput *in) {
 		layout.linkUrl = lpUrl;
 
 		CGFloat textMaxW = kBubbleMaxW - TGDoubled(kPadH) - kQuoteBarWidth - TGMetricPadSmall;
+		linkMedia = TGLinkPreviewMediaSize(m, textMaxW);
+		linkMediaLarge = [m[@"linkPreviewLarge"] boolValue] && linkMedia.width > 0;
+		// A picture makes the preview as wide as a bubble gets; the small
+		// one takes its corner out of the words' width.
+		if (linkMedia.width > 0)
+			contentW = MAX(contentW, kBubbleMaxW);
+		if (linkMedia.width > 0 && !linkMediaLarge)
+			textMaxW -= linkMedia.width + TGMetricPadSmall;
 		if (lpSite.length) {
 			linkSiteH = TGMetricLineCaption;
 			linkPreviewH += linkSiteH;
@@ -368,6 +404,10 @@ TGMessageLayout *TGMessageRowLayout(TGMessageRowInput *in) {
 			linkDescH = MIN(ds.height, TGMetricLineCaption * 2.0f);
 			linkPreviewH += linkDescH;
 		}
+		if (linkMediaLarge)
+			linkPreviewH += linkMedia.height + TGMetricPadSmall;
+		else if (linkMedia.width > 0)
+			linkPreviewH = MAX(linkPreviewH, linkMedia.height);
 		linkPreviewH += TGMetricPadSmall;
 	}
 	if (inlineStamp)
@@ -384,12 +424,65 @@ TGMessageLayout *TGMessageRowLayout(TGMessageRowInput *in) {
 	if ([m[@"inlineRows"] count])
 		contentW = kBubbleMaxW;
 	CGFloat senderH = senderName.length ? TGMetricSenderLineHeight : TGMetricZero;
-	if (senderName.length)
-		contentW = MAX(contentW, in.senderLineWidth ? in.senderLineWidth(senderName) : 0);
+	CGFloat senderW = TGMetricZero;
+	if (senderName.length){
+		senderW = in.senderLineWidth ? in.senderLineWidth(senderName) : 0;
+		contentW = MAX(contentW, senderW);
+	}
 
 	CGFloat bubbleW = MAX(contentW + TGDoubled(kPadH),
 			timeW + TGDoubled(kPadH) + TGMetricPad);
 	bubbleW = MIN(bubbleW, kBubbleMaxW + TGDoubled(kPadH));
+
+	// A photo or an album fills its bubble to kMediaInset of the edge, as
+	// the official bubbles do; the text padding round it read as a heavy
+	// frame. The picture keeps its proportions: it grows with the width.
+	BOOL fillsBubble = (isAlbum || pic.height > 0) && !isSticker;
+	if (fillsBubble){
+		// The picture sets the bubble's width and the caption wraps under it,
+		// as in the official client; sized by the caption, a photo was
+		// stretched to the widest line and came out twice as tall.
+		CGFloat natural = (isAlbum ? collageW : pic.width) + TGDoubled(kMediaInset);
+		if (senderName.length)
+			natural = MAX(natural, senderW + TGDoubled(kPadH));
+		if (body.height > 0)
+			natural = MAX(natural, kBubbleMinW);
+		bubbleW = MIN(natural, kBubbleMaxW + TGDoubled(kPadH));
+		if (body.height > 0){
+			body = TGTextSizeWithEntities(m[@"text"] ?: @"", m[@"entities"],
+					TGFontAtSize(in.fontSize), bubbleW - TGDoubled(kPadH));
+			layout.bodySize = body;
+			// Measured for the full width, the last line may not have room
+			// for the stamp at this one: it gets its own line.
+			inlineStamp = NO;
+		}
+	}
+	CGFloat mediaW = bubbleW - TGDoubled(kMediaInset);
+	if (fillsBubble && isAlbum && collageW > 0){
+		CGFloat scale = mediaW / collageW;
+		collageH = floorf(collageH * scale);
+		NSMutableArray *scaled = [NSMutableArray array];
+		for (NSValue *value in itemFrames){
+			CGRect f = TGRectFromValue(value);
+			[scaled addObject:TGRectValue(CGRectMake(floorf(f.origin.x * scale),
+					floorf(f.origin.y * scale), floorf(f.size.width * scale),
+					floorf(f.size.height * scale)))];
+		}
+		itemFrames = scaled;
+		layout.albumFrames = scaled;
+		collageW = mediaW;
+	} else if (fillsBubble && pic.width > 0){
+		pic = CGSizeMake(mediaW, floorf(pic.height * mediaW / pic.width));
+	}
+	BOOL captionAboveMedia = fillsBubble && body.height > 0 &&
+			[m[@"captionAbove"] isKindOfClass:NSNumber.class] && [m[@"captionAbove"] boolValue];
+	// Nothing above the picture (no name, forward, quote or caption) and
+	// nothing under it (no caption, link preview or stamp line): the bubble's
+	// padding on that side shrinks to kMediaInset.
+	BOOL mediaFirst = fillsBubble && !senderName.length && forwarded <= 0 &&
+			!quoted.length && !captionAboveMedia;
+	BOOL mediaLast = fillsBubble && !hasLinkPreview &&
+			(body.height <= 0 || captionAboveMedia);
 
 	// A caption under a voice note or a track, and the transcription under a
 	// voice note, are text inside the same bubble. Measure them here so the
@@ -420,10 +513,12 @@ TGMessageLayout *TGMessageRowLayout(TGMessageRowInput *in) {
 
 	stampOnPicture = TGMessageStampOnPicture(m, in.imageSize, in.fontSize);
 	CGFloat bubbleH = TGDoubled(kPadV) + senderH
+			- (mediaFirst ? kPadV - kMediaInset : TGMetricZero)
+			- (mediaLast ? kPadV - kMediaInset : TGMetricZero)
 			+ (inlineStamp || stampOnPicture ? TGMetricZero : TGMetricLineMicro)
 			+ TGMessageDecorationHeight(m, quoted != nil)
 			+ (isAlbum ? (collageH + (body.height ? TGMetricPadSmall : TGMetricZero))
-					   : (pic.height ? pic.height + TGMetricPadSmall : TGMetricZero))
+					   : (pic.height ? pic.height + (mediaLast ? TGMetricZero : TGMetricPadSmall) : TGMetricZero))
 			+ body.height
 			+ (hasLinkPreview ? (linkPreviewH + (body.height > 0 ? TGMetricPadSmall : TGMetricZero)) : TGMetricZero);
 	if (isVoice)
@@ -458,7 +553,7 @@ TGMessageLayout *TGMessageRowLayout(TGMessageRowInput *in) {
 
 	layout.tailFrame = CGRectZero;
 
-	CGFloat y = kPadV + senderH + forwarded;
+	CGFloat y = (mediaFirst ? kMediaInset : kPadV) + senderH + forwarded;
 	if (quoted) {
 		CGFloat quoteW = bubbleW - TGDoubled(kPadH) - TGMetricPadMedium;
 		layout.quoteBarFrame = CGRectMake(kPadH, y, kQuoteBarWidth, TGDoubled(kQuoteLine));
@@ -468,12 +563,15 @@ TGMessageLayout *TGMessageRowLayout(TGMessageRowInput *in) {
 	}
 	CGFloat innerW = bubbleW - TGDoubled(kPadH);
 	if (isAlbum) {
-		CGFloat cW = (body.height > 0) ? innerW : collageW;
-		layout.collageFrame = CGRectMake(kPadH, y, cW, collageH);
+		CGFloat cW = fillsBubble ? mediaW : ((body.height > 0) ? innerW : collageW);
+		layout.collageFrame = CGRectMake(fillsBubble ? kMediaInset : kPadH, y, cW, collageH);
 		if (!body.height) {
-			CGFloat plateW = timeW + (mine ? TGMetricGroupAvatarSide : TGMetricLineMicro);
-			layout.mediaStampFrame = CGRectMake(kPadH + collageW - plateW - kMediaStampInset,
-					y + collageH - TGMetricFloatingDateHeight, plateW, TGMetricLineCaption);
+			TGMessageStampParts plate;
+			layout.mediaStampFrame = TGMessageStampPlate(m, CGRectGetMaxX(layout.collageFrame) - kMediaStampInset,
+					y + collageH - TGMetricFloatingDateHeight + TGMetricLineCaption, &plate);
+			layout.timeFrame = plate.text;
+			layout.stampEyeFrame = plate.eye;
+			layout.stampTicksFrame = plate.ticks;
 		}
 		y += collageH + TGMetricPadSmall;
 		layout.bodyFrame = CGRectMake(kPadH, y, innerW, body.height);
@@ -486,12 +584,15 @@ TGMessageLayout *TGMessageRowLayout(TGMessageRowInput *in) {
 			layout.bodyFrame = CGRectMake(kPadH, y, innerW, body.height);
 			y += body.height + TGMetricPadSmall;
 		}
-		CGFloat picW = (body.height > 0) ? innerW : pic.width;
-		layout.pictureFrame = CGRectMake(kPadH, y, picW, pic.height);
+		CGFloat picW = fillsBubble ? mediaW : ((body.height > 0) ? innerW : pic.width);
+		layout.pictureFrame = CGRectMake(fillsBubble ? kMediaInset : kPadH, y, picW, pic.height);
 		if (stampOnPicture) {
-			CGFloat plateW = timeW + (mine ? TGMetricGroupAvatarSide : TGMetricLineMicro);
-			layout.mediaStampFrame = CGRectMake(kPadH + picW - plateW - kMediaStampInset,
-					y + pic.height - TGMetricFloatingDateHeight, plateW, TGMetricLineCaption);
+			TGMessageStampParts plate;
+			layout.mediaStampFrame = TGMessageStampPlate(m, CGRectGetMaxX(layout.pictureFrame) - kMediaStampInset,
+					y + pic.height - TGMetricFloatingDateHeight + TGMetricLineCaption, &plate);
+			layout.timeFrame = plate.text;
+			layout.stampEyeFrame = plate.eye;
+			layout.stampTicksFrame = plate.ticks;
 		}
 		if (captionAbove) {
 			y += pic.height + (hasLinkPreview ? TGMetricPadSmall : TGMetricZero);
@@ -514,6 +615,22 @@ TGMessageLayout *TGMessageRowLayout(TGMessageRowInput *in) {
 		CGFloat textX = kPadH + kQuoteBarWidth + TGMetricPadSmall;
 		CGFloat textW = innerW - kQuoteBarWidth - TGMetricPadSmall;
 		CGFloat curY = lY;
+		BOOL mediaAbove = [m[@"linkPreviewAbove"] boolValue];
+		if (linkMediaLarge){
+			// show_media_above_description: the picture heads the preview,
+			// otherwise it closes it.
+			CGFloat mediaY = mediaAbove ? lY
+					: lY + linkPreviewH - TGMetricPadSmall - linkMedia.height;
+			layout.linkMediaFrame = CGRectMake(textX, mediaY, textW, linkMedia.height);
+			if (mediaAbove)
+				curY += linkMedia.height + TGMetricPadSmall;
+		} else if (linkMedia.width > 0){
+			layout.linkMediaFrame = CGRectMake(textX + textW - linkMedia.width, lY,
+					linkMedia.width, linkMedia.height);
+			textW -= linkMedia.width + TGMetricPadSmall;
+		} else {
+			layout.linkMediaFrame = CGRectZero;
+		}
 		if (linkSiteH > 0) {
 			layout.linkSiteFrame = CGRectMake(textX, curY, textW, linkSiteH);
 			curY += linkSiteH;
@@ -535,24 +652,32 @@ TGMessageLayout *TGMessageRowLayout(TGMessageRowInput *in) {
 		y += linkPreviewH;
 	} else {
 		layout.linkPreviewFrame = CGRectZero;
+		layout.linkMediaFrame = CGRectZero;
 	}
 
+	// The comments footer is the bubble's last row; the time stays above it.
+	CGFloat commentsH = [m[@"canComment"] boolValue] ? kCommentsBar : TGMetricZero;
+	layout.commentsFrame = commentsH > 0
+			? CGRectMake(TGMetricZero, bubbleH - commentsH, bubbleW, commentsH) : CGRectZero;
 	CGFloat stampY = inlineStamp ? TGInlineStampY(layout.bodyFrame)
-			: (bubbleH - kPadV - TGMetricStampHeight);
-	CGFloat tickW = mine ? TGMetricStampTicksRoom : TGMetricZero;
-	CGFloat eyeRoom = 0;
-	int64_t viewCount = [m[@"viewCount"] respondsToSelector:@selector(longLongValue)] ? [m[@"viewCount"] longLongValue] : 0;
-	if (viewCount > 0) {
-		eyeRoom = kStampEyeSide + kStampEyePad;
+			: (bubbleH - commentsH - kPadV - TGMetricStampHeight);
+	// On a picture the plate's parts are already placed above.
+	if (!stampOnPicture){
+		TGMessageStampParts stamp = TGMessageStampPlace(m, bubbleW - kPadH,
+				stampY + TGHalf(TGMetricStampHeight));
+		layout.timeFrame = stamp.text;
+		layout.stampEyeFrame = stamp.eye;
+		layout.stampTicksFrame = stamp.ticks;
 	}
-	layout.timeFrame = CGRectMake(bubbleW - timeW - kPadH + eyeRoom, stampY, timeW - tickW - eyeRoom, TGMetricStampHeight);
 
 	CGFloat rowH = TGDoubled(kPadV) + TGMessageDecorationHeight(m, quoted != nil) +
-			(inlineStamp || stampOnPicture ? TGMetricZero : TGMetricLineMicro);
+			(inlineStamp || stampOnPicture ? TGMetricZero : TGMetricLineMicro)
+			- (mediaFirst ? kPadV - kMediaInset : TGMetricZero)
+			- (mediaLast ? kPadV - kMediaInset : TGMetricZero);
 	if (in.isGroup && !mine && senderName.length)
 		rowH += TGMetricSenderLineHeight;
 	if (isAlbum) rowH += collageH + (body.height > 0 ? TGMetricPadSmall : TGMetricZero);
-	else if (pic.height > 0) rowH += pic.height + TGMetricPadSmall;
+	else if (pic.height > 0) rowH += pic.height + (mediaLast ? TGMetricZero : TGMetricPadSmall);
 	if (body.height > 0) rowH += body.height;
 	if (hasLinkPreview) rowH += linkPreviewH + (body.height > 0 ? TGMetricPadSmall : TGMetricZero);
 	if (isVoice) rowH = TGMetricVoicePillHeight + forwarded + audioExtraH;
@@ -588,3 +713,19 @@ TGMessageLayout *TGMessageRowLayout(TGMessageRowInput *in) {
 	return layout;
 }
 
+
+TGMessageTapPart TGMessageTapPartAt(TGMessageLayout *layout, CGPoint point) {
+	CGRect bubble = layout.bubbleFrame;
+	if (!CGRectContainsPoint(bubble, point))
+		return TGMessageTapNone;
+	CGPoint p = CGPointMake(point.x - bubble.origin.x, point.y - bubble.origin.y);
+	CGRect quote = CGRectUnion(layout.quoteBarFrame, layout.quoteFrame);
+	if (!CGRectIsEmpty(layout.quoteFrame) && CGRectContainsPoint(quote, p))
+		return TGMessageTapQuote;
+	if (!CGRectIsEmpty(layout.documentFrame) && CGRectContainsPoint(layout.documentFrame, p))
+		return TGMessageTapDocument;
+	if ((!CGRectIsEmpty(layout.pictureFrame) && CGRectContainsPoint(layout.pictureFrame, p)) ||
+			(!CGRectIsEmpty(layout.collageFrame) && CGRectContainsPoint(layout.collageFrame, p)))
+		return TGMessageTapPicture;
+	return TGMessageTapBubble;
+}

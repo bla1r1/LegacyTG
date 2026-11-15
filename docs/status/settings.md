@@ -95,3 +95,9 @@ M34 harness pages and TDLib footers.
 | Show next media on tap | missing | — | No media setting. |
 | App icon picker | missing | — | No picker; iOS 6 has no alternate-icon API. |
 | Settings row badges | partial | `Features/Settings/TGSettingsViewController.m:161` | No "New", red "!" or device-count badge model; the notification warning is missing too. |
+
+## Data we had and did not show, batch 2 (16 November 2026)
+
+- Devices: each session has a device tile tinted as official's iconForSession (green Android/Chrome, orange Firefox/Brave/Ubuntu, red Opera/Vivaldi, grey Linux and unknown, blue the rest); an unofficial app reads "Name (ID: n)" (AuthSessions.AppUnofficial); a sign-in stopped at the password is listed under incomplete login attempts.
+- Data Usage ends with "Your data usage since <date>" (getNetworkStatistics since_date).
+- Sign-in by an SMS word or phrase: the official sentence with its first letter or word, a text field instead of digit boxes, and the code sent as typed.

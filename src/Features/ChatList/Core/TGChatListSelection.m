@@ -13,6 +13,7 @@
 #import "TGPasscode.h"
 #import "TGPasscodeViewController.h"
 #import "TGChatListRowGeometry.h"
+#import "TGSettingsViewController.h"
 
 
 // Height of the folder pill strip above the chat list (official-style tabs).
@@ -35,7 +36,9 @@
 
 	NSArray *header = [self headerRows];
 	if (indexPath.row < (NSInteger)header.count){
-		if ([header[indexPath.row] isEqualToString:@"archive"])
+		if ([header[indexPath.row] isEqualToString:@"notice"])
+			[self openNotice];
+		else if ([header[indexPath.row] isEqualToString:@"archive"])
 			[self openArchive];
 		else
 			[self openSavedMessages];
@@ -49,6 +52,22 @@
 	// An open that feels instant lands its screen inside two frames; over
 	// that the tap reads as nothing happening.
 	TGPerfReport("chat open", "push", pushStart, 66.0);
+}
+
+/// The notice's tap, as official: the password setup, or the Premium
+/// subscription page TDLib names.
+- (void)openNotice {
+	NSDictionary *notice = TGChatListNotice([TGChatListStore shared].suggestedActions);
+	if ([notice[@"kind"] isEqualToString:@"setupPassword"]){
+		TGSettingsViewController *settings = [[TGSettingsViewController alloc] init];
+		settings.page = TGSettingsPagePrivacy;
+		settings.hidesBottomBarWhenPushed = YES;
+		[self.navigationController pushViewController:settings animated:YES];
+		dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.4 * NSEC_PER_SEC)),
+				dispatch_get_main_queue(), ^{ [settings showTwoStepState]; });
+	} else if ([notice[@"url"] length]){
+		[[UIApplication sharedApplication] openURL:[NSURL URLWithString:notice[@"url"]]];
+	}
 }
 
 /// The one place a chat dictionary becomes a screen: the forum check is what

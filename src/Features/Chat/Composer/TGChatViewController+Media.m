@@ -74,14 +74,23 @@
 		return [TGDevShowcase trackArtwork];
 	}
 #endif
+	// The cover's minithumbnail stands in until the cover itself is here,
+	// as official's file node shows it blurred.
+	UIImage *mini = nil;
+	if (m[@"albumCoverMini"]){
+		NSString *key = [NSString stringWithFormat:@"mini:%@", m[@"id"]];
+		mini = self.images[key];
+		if (!mini && (mini = TGImageFromMinithumbnail(m[@"albumCoverMini"])))
+			self.images[key] = mini;
+	}
 	if (![coverId isKindOfClass:NSNumber.class] || coverId.integerValue <= 0)
-		return nil;
+		return mini;
 
 	UIImage *cached = self.images[coverId];
 	if (cached)
 		return cached;
 	if ([self.imagesRequested containsObject:coverId])
-		return nil;
+		return mini;
 	[self.imagesRequested addObject:coverId];
 
 	__weak typeof(self) weakSelf = self;
@@ -93,7 +102,7 @@
 		me.images[coverId] = cover;
 		[me reloadTableDebounced];
 	}];
-	return nil;
+	return mini;
 }
 
 - (void)fetchMissingMaps {
@@ -363,6 +372,34 @@
 		[me reloadTableDebounced];
 	}];
 	return placeholder;
+}
+
+/// Up to three commenters' faces, each overlapping the one before by a
+/// third, drawn into one picture for the comments footer.
+- (UIImage *)replierFaces:(NSArray *)peerIds {
+	CGFloat side = TGMetricLineCaption + TGMetricPadSmall;
+	CGFloat step = roundf(side * 2.0f / 3.0f);
+	NSUInteger count = MIN(peerIds.count, (NSUInteger)3);
+	if (!count)
+		return nil;
+	CGSize size = CGSizeMake(side + step * (count - 1), side);
+	UIGraphicsBeginImageContextWithOptions(size, NO, 0);
+	CGContextRef ctx = UIGraphicsGetCurrentContext();
+	// Right to left, so the first face lies on top as official's set does.
+	for (NSInteger i = (NSInteger)count - 1; i >= 0; i--){
+		int64_t peerId = [peerIds[(NSUInteger)i] longLongValue];
+		UIImage *face = [self avatarForUser:peerId
+									   name:[[TGMessageStore shared] nameForUserId:peerId]];
+		CGRect at = CGRectMake(step * i, 0, side, side);
+		CGContextSaveGState(ctx);
+		CGContextAddEllipseInRect(ctx, at);
+		CGContextClip(ctx);
+		[face drawInRect:at];
+		CGContextRestoreGState(ctx);
+	}
+	UIImage *out = UIGraphicsGetImageFromCurrentImageContext();
+	UIGraphicsEndImageContext();
+	return out;
 }
 
 #pragma mark - download progress

@@ -71,6 +71,25 @@
 	if ([m[@"service"] boolValue])
 		return;
 
+	// What this message may do is TDLib's answer, not a guess: Copy in a
+	// protected chat, Pin, and Delete on an incoming message all hang on it.
+	// The request is local and answers within a frame or two.
+	int64_t heldMessageId = [m[@"id"] longLongValue];
+	if (heldMessageId > 0 && self.actionPropertiesFor != heldMessageId){
+		__weak typeof(self) weakSelf = self;
+		[[TGMessageStore shared] messagePropertiesForChat:self.chatId messageId:heldMessageId
+											   completion:^(NSDictionary *properties){
+			TGChatViewController *me = weakSelf;
+			if (!me)
+				return;
+			me.actionProperties = properties;
+			me.actionPropertiesFor = heldMessageId;
+			[me showActionsForRow:row atPoint:point];
+		}];
+		return;
+	}
+	self.actionPropertiesFor = 0;
+
 	// A second hold - or a URL asking for the same menu - replaces the card
 	// that is open instead of stacking a new lift under it. Dismissing here
 	// also runs the old card's onDismiss while the old lift is still the one
@@ -162,7 +181,11 @@
 	}
 
 	TGBubbleCell *cell = (TGBubbleCell *)[self.table cellForRowAtIndexPath:indexPath];
-	CGRect anchor = [self beginHoldPresentationForCell:cell didLift:^(CGRect lifted){
+	CGFloat above = 0, below = 0;
+	[TGPopupMenu liftedRoomForItems:items headerView:summary reactions:reactions
+							  above:&above below:&below];
+	CGRect anchor = [self beginHoldPresentationForCell:cell above:above below:below
+											  didLift:^(CGRect lifted){
 		presentMenu(YES, lifted, CGPointMake(CGRectGetMidX(lifted), CGRectGetMaxY(lifted)));
 	}];
 

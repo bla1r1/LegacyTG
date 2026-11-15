@@ -238,6 +238,9 @@ extern NSString *const TGKindNote;
 extern NSString *const TGKindPageHeader;
 extern NSString *const TGKindPhoto;
 extern NSString *const TGKindImageCheck;
+/// A picture across the card at its own height (TGRowImage), for a
+/// statistics graph; TGRowHeight sets the row.
+extern NSString *const TGKindChart;
 
 /// A one-line field. `changed` runs on every edit, as official's textUpdated.
 NSMutableDictionary *TGFieldRow(NSString *placeholder, NSString *text,
@@ -404,6 +407,7 @@ extern NSString *const TGRowChatMarkedUnread;   // NSNumber BOOL
 extern NSString *const TGRowChatMuted;          // NSNumber BOOL
 extern NSString *const TGRowChatPinned;         // NSNumber BOOL
 extern NSString *const TGRowChatOnline;         // NSNumber BOOL
+extern NSString *const TGRowChatStoryRing;      // NSNumber 0 none, 1 seen, 2 unseen
 extern NSString *const TGRowChatSaved;          // NSNumber BOOL, Saved Messages
 extern NSString *const TGRowChatOutgoing;       // NSNumber BOOL, your last message
 extern NSString *const TGRowChatRead;           // NSNumber BOOL, read outbox

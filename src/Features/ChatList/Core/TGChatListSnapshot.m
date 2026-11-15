@@ -40,7 +40,7 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 	dispatch_once(&once, ^{
 		keys = @[@"id", @"title", @"date", @"text", @"previewText", @"lastAuthor",
 				@"unread", @"unreadMentions", @"markedUnread", @"isMuted",
-				@"isPinned", @"isOnline", @"isSaved", @"lastId", @"lastOutgoing",
+				@"isPinned", @"isOnline", @"storyRing", @"isSaved", @"lastId", @"lastOutgoing",
 				@"readOutbox", @"readInbox", @"isGroup", @"isForum",
 				@"isSecret", @"order", @"archiveOrder", @"supergroupId", @"draft",
 				@"emojiStatusId", @"photoFileId", @"previewKind", @"previewFileId", @"previewReactionSummary", @"previewPollVotes", @"unreadReactions", @"unreadPollVotes", @"folderIds", @"lastFailed"];

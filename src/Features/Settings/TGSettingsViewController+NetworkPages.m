@@ -184,8 +184,18 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 	NSString *received = self.loaded ? self.receivedText : loading;
 	NSString *sent = self.loaded ? self.sentText : loading;
 	__weak typeof(self) weakSelf = self;
+	// Official's footer: since when the totals count (DataUsageScreen).
+	NSTimeInterval since = self.loaded ? [[TGSettingsStore shared] networkStatsSince] : 0;
+	NSString *footer = nil;
+	if (since > 0){
+		NSDateFormatter *format = [[NSDateFormatter alloc] init];
+		format.dateStyle = NSDateFormatterMediumStyle;
+		format.timeStyle = NSDateFormatterShortStyle;
+		footer = TGLocalizedFormat(@"Your data usage since %@",
+				[format stringFromDate:[NSDate dateWithTimeIntervalSince1970:since]]);
+	}
 	self.sections = @[
-		TGSection(TGLocalized(@"Data Usage"), nil, @[
+		TGSection(TGLocalized(@"Data Usage"), footer, @[
 			TGTapRow(TGLocalized(@"Data Received"), received, nil),
 			TGTapRow(TGLocalized(@"Data Sent"), sent, nil),
 		]),

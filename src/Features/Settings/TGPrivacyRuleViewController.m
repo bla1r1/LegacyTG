@@ -8,6 +8,9 @@
 #import "TGRows.h"
 #import "TGSettingsStore.h"
 #import "TGSettingsPageModels.h"
+#import "TGProfileStore.h"
+#import "TGIcons.h"
+#import "TGStyle.h"
 
 
 @interface TGPrivacyRuleViewController ()
@@ -17,6 +20,10 @@
 @property (nonatomic, strong) NSMutableArray *allowUserIds;
 @property (nonatomic, strong) NSMutableArray *restrictUserIds;
 @property (nonatomic, assign) BOOL loaded;
+@property (nonatomic, assign) int64_t publicPhotoId;
+@end
+
+@interface TGPrivacyRuleViewController () <UIImagePickerControllerDelegate, UINavigationControllerDelegate>
 @end
 
 @implementation TGPrivacyRuleViewController
@@ -37,6 +44,7 @@
 	[super viewDidLoad];
 	self.title = self.ruleTitle;
 	[self loadDetails];
+	[self loadPublicPhoto];
 }
 
 - (void)loadDetails {
@@ -98,14 +106,83 @@
 			TGPrivacyExceptionDetail(self.restrictUserIds.count),
 			^{ [weakSelf openExceptionsAllowing:NO]; })];
 
-	self.sections = @[
+	NSMutableArray *sections = [@[
 		TGSection(header, TGPrivacyRuleFooterText(self.setting), choiceRows),
 		TGSection(@"ADD EXCEPTIONS", nil, exceptionRows),
-	];
+	] mutableCopy];
+	// The photo page, once someone cannot see the real picture, offers the
+	// public one for them (official's Set / Update / Remove Public Photo).
+	if (TGPrivacyOffersPublicPhoto(self.setting, self.ruleType, self.restrictUserIds.count)){
+		NSMutableArray *photoRows = [NSMutableArray array];
+		[photoRows addObject:TGOpenRow(self.publicPhotoId ? TGLocalized(@"Update Public Photo")
+				: TGLocalized(@"Set Public Photo"), nil, ^{ [weakSelf pickPublicPhoto]; })];
+		if (self.publicPhotoId){
+			NSMutableDictionary *remove = [TGOpenRow(TGLocalized(@"Remove Public Photo"), nil,
+					^{ [weakSelf removePublicPhoto]; }) mutableCopy];
+			remove[TGRowDestructive] = @YES;
+			[photoRows addObject:remove];
+		}
+		[sections addObject:TGSection(nil, TGLocalized(@"You can upload a public photo for those who are restricted from viewing your real profile photo."), photoRows)];
+	}
+	self.sections = sections;
 	[self reloadRows];
 }
 
 #pragma mark - actions
+
+- (void)loadPublicPhoto {
+	__weak typeof(self) weakSelf = self;
+	[[TGProfileStore shared] publicPhotoIdWithCompletion:^(int64_t photoId){
+		weakSelf.publicPhotoId = photoId;
+		if (weakSelf.loaded)
+			[weakSelf rebuildSections];
+	}];
+}
+
+- (void)pickPublicPhoto {
+	if (![UIImagePickerController isSourceTypeAvailable:UIImagePickerControllerSourceTypePhotoLibrary])
+		return;
+	UIImagePickerController *picker = [[UIImagePickerController alloc] init];
+	picker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;
+	picker.delegate = self;
+	[self presentViewController:picker animated:YES completion:nil];
+}
+
+- (void)imagePickerControllerDidCancel:(UIImagePickerController *)picker {
+	[picker dismissViewControllerAnimated:YES completion:nil];
+}
+
+- (void)imagePickerController:(UIImagePickerController *)picker
+		didFinishPickingMediaWithInfo:(NSDictionary *)info {
+	[picker dismissViewControllerAnimated:YES completion:nil];
+	UIImage *image = info[UIImagePickerControllerOriginalImage];
+	if (!image)
+		return;
+	UIImage *scaled = [TGIcons decodedImage:image
+								fittingSize:CGSizeMake(TGMetricUploadPhotoSide, TGMetricUploadPhotoSide)
+									   fill:NO scale:TGMetricScaleFull];
+	NSString *path = [NSTemporaryDirectory() stringByAppendingPathComponent:@"public-photo.jpg"];
+	if (![UIImageJPEGRepresentation(scaled, TGCompressionQualityStandard) writeToFile:path atomically:YES])
+		return;
+	__weak typeof(self) weakSelf = self;
+	[[TGProfileStore shared] setPublicPhotoAtPath:path completion:^(BOOL ok){
+		TGPrivacyRuleViewController *me = weakSelf;
+		if (!me)
+			return;
+		[TGAlertSheet showMessage:ok ? TGLocalized(@"This photo will be shown to those who are restricted from viewing your main photo.")
+								  : TGLocalized(@"An error occurred.")
+							title:nil inView:me.view];
+		[me loadPublicPhoto];
+	}];
+}
+
+- (void)removePublicPhoto {
+	__weak typeof(self) weakSelf = self;
+	[[TGProfileStore shared] removePublicPhoto:self.publicPhotoId completion:^(BOOL ok){
+		if (ok)
+			[weakSelf loadPublicPhoto];
+	}];
+}
 
 - (void)chooseRuleType:(NSString *)key {
 	self.ruleType = key;

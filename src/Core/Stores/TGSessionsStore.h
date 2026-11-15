@@ -9,6 +9,9 @@
 #import <Foundation/Foundation.h>
 #import "TGClientNotifications.h"
 
+/// The application name as the sessions list shows it.
+FOUNDATION_EXPORT NSString *TGSessionAppName(NSDictionary *rawSession);
+
 @interface TGSessionsStore : NSObject
 
 + (instancetype)shared;

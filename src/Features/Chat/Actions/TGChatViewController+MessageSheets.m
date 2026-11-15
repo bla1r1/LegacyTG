@@ -164,6 +164,12 @@ static NSString *TGSheetDate(NSTimeInterval unix) {
 				   customEmojiId:customEmojiId];
 	people.hidesBottomBarWhenPushed = YES;
 	[self.navigationController pushViewController:people animated:YES];
+	// Removing someone's reaction is an admin's right, TDLib's word on it.
+	__weak TGMessageAudienceViewController *weakPeople = people;
+	[[TGMessageStore shared] messagePropertiesForChat:self.chatId messageId:messageId
+										   completion:^(NSDictionary *properties){
+		weakPeople.canDeleteReactions = [properties[@"can_delete_reactions"] boolValue];
+	}];
 }
 
 - (void)showAuthorOfActionMessage {

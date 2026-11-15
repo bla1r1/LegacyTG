@@ -20,8 +20,13 @@
 			if (completion) completion(nil, TGAuditError(result));
 			return;
 		}
+		NSDictionary *status = [result[@"status"] isKindOfClass:NSDictionary.class] ? result[@"status"] : nil;
 		if (completion)
 			completion(@{@"kind" : TGAuditShortType(result[@"@type"]),
+						 @"activationCount" : TGAuditNumber(result, @"activation_count"),
+						 @"status" : status[@"@type"] ?: @"",
+						 @"statusDate" : status[@"joined_chat_date"] ?: @0,
+						 @"statusCountry" : status[@"user_country_code"] ?: @"",
 						 @"creationDate" : TGAuditNumber(result, @"creation_date"),
 						 @"isEnded" : @([result[@"is_ended"] boolValue]),
 						 @"isWinner" : @([result[@"is_winner"] boolValue]),

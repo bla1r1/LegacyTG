@@ -86,4 +86,13 @@ static NSDictionary *TGGRequest(TGClient *c, NSString *type) {
 	XCTAssertEqual([request[@"chat_id"] longLongValue], 77LL);
 }
 
+
+// A basic group admin who is not the owner promotes only whom they invited.
+- (void)testPromote_BasicGroupNeedsOwnInvite {
+	XCTAssertTrue(TGGroupMemberCanBePromoted(-123, NO, NO, 5, 5));
+	XCTAssertFalse(TGGroupMemberCanBePromoted(-123, NO, NO, 6, 5));
+	XCTAssertTrue(TGGroupMemberCanBePromoted(-123, YES, NO, 6, 5));
+	XCTAssertTrue(TGGroupMemberCanBePromoted(-1001234567890LL, NO, NO, 6, 5));
+}
+
 @end

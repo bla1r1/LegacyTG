@@ -46,7 +46,9 @@ static const CGFloat kCallBubbleMin   = 190.0f;
 static const CGFloat kDocBubble       = 225.0f;
 /// A contact bubble: a disc, a name and a number, with a call button under.
 static const CGFloat kContactBubble   = 230.0f;
-static const CGFloat kContactBubbleH  = TGMetricPersonRow + TGMetricButtonHeightSmall;
+/// The person row, a line for the stamp, then Call and Add. The stamp sat in
+/// the button row, on "Add", until it got its own line.
+static const CGFloat kContactBubbleH  = TGMetricPersonRow + TGMetricLineMicro + TGMetricButtonHeightSmall;
 /// A location bubble: the map card, with a caption strip beneath it.
 static const CGFloat kLocationBubble  = 224.0f;
 static const CGFloat kLocationBubbleH = TGMetricMapCardHeight + TGMetricRow;
@@ -64,9 +66,18 @@ static const CGFloat kPicBubbleW      = 190.0f;
 static const CGFloat kBubbleRowMin    = TGMetricRow - TGMetricPadSmall;
 /// How far a stamp on a picture sits in from its corner.
 static const CGFloat kMediaStampInset = TGMetricPadSmall;
+/// How far a photo or album sits from its bubble's edge.
+static const CGFloat kMediaInset      = TGMetricPadTiny;
+/// The comments footer under a channel post: its own row across the bubble,
+/// under the text and the time, as tall as the contact card's button row.
+static const CGFloat kCommentsBar     = TGMetricButtonHeightSmall;
+/// A link preview's small picture, in the preview's top right corner.
+static const CGFloat kLinkThumbSide   = 48.0f;
 /// The eye glyph beside a channel post's view count.
 static const CGFloat kStampEyeSide     = TGMetricStampHeight;
-static const CGFloat kStampEyePad      = TGMetricPadTiny;
+/// Nothing between the eye and the count: the glyph's own 2 pt margin is
+/// the gap, which comes to official's 3 pt between icon and date.
+static const CGFloat kStampEyePad      = TGMetricZero;
 /// A poll row: the dot's column, then the option, then its share on the right,
 /// over a track that runs the row's width.
 static const CGFloat kPollTextColumn  = TGMetricPadLarge + TGMetricPad;
@@ -112,6 +123,42 @@ FOUNDATION_EXPORT NSString *TGMessageStampText(NSDictionary *m);
 /// The stamp's width with the eye and the ticks it carries.
 FOUNDATION_EXPORT CGFloat TGMessageStampWidth(NSDictionary *m);
 
+/// Where the eye goes for a right-aligned stamp ending at `textRight`: its
+/// own gap clear of the words themselves, not of the label's slack
+/// (ChatMessageDateAndStatusNode puts the date 3 pt after the icon).
+FOUNDATION_EXPORT CGFloat TGStampEyeX(CGFloat textRight, NSString *stampText);
+
+/// Room the boost badge takes at the end of a group sender's name line:
+/// the bolt alone for one boost, the bolt and the count for more, nothing
+/// for none or an outgoing message (official shows it on incoming only).
+FOUNDATION_EXPORT CGFloat TGMessageBoostBadgeWidth(NSDictionary *m);
+FOUNDATION_EXPORT NSString *TGMessageBoostBadgeText(NSDictionary *m);
+
+/// A link preview's picture in a text column `columnW` wide: the column's
+/// width at the photo's proportions (no taller than kImageMax) when the
+/// preview shows large media, the corner square otherwise, zero for none.
+FOUNDATION_EXPORT CGSize TGLinkPreviewMediaSize(NSDictionary *m, CGFloat columnW);
+
+/// The stamp's parts on one line, laid right to left from `right`: the ticks
+/// of a sent message, the text, and the views eye just before the count.
+/// `midY` is the line's centre. Every stamp (text line, document, the plate
+/// on a picture) is placed by this, so the eye cannot drift off its count and
+/// the text gets exactly the width it was measured at.
+typedef struct {
+	CGRect eye;      ///< empty without views
+	CGRect text;
+	CGRect ticks;    ///< empty for a message from someone else
+	CGFloat width;   ///< from the eye (or the text) to `right`
+} TGMessageStampParts;
+
+FOUNDATION_EXPORT TGMessageStampParts TGMessageStampPlace(NSDictionary *m,
+		CGFloat right, CGFloat midY);
+
+/// The plate a stamp sits on over a picture: the parts with TGMetricPadSmall
+/// round them, its right edge at `right`, its bottom at `bottom`.
+FOUNDATION_EXPORT CGRect TGMessageStampPlate(NSDictionary *m, CGFloat right,
+		CGFloat bottom, TGMessageStampParts *parts);
+
 /// Telegram puts the stamp at the end of a one-line message when it fits
 /// there, and on its own line only when it does not.
 FOUNDATION_EXPORT BOOL TGMessageStampFitsInline(NSDictionary *m, CGFloat fontSize);
@@ -128,6 +175,9 @@ FOUNDATION_EXPORT NSString *TGMessageQuoteAuthor(NSDictionary *replied, NSString
 
 /// Forward line, quote block, comments bar and bot buttons over the body.
 FOUNDATION_EXPORT CGFloat TGMessageDecorationHeight(NSDictionary *m, BOOL hasQuote);
+
+/// "Leave a Comment", "1 Comment", "12 Comments".
+FOUNDATION_EXPORT NSString *TGMessageCommentsTitle(NSInteger count);
 
 /// Title, a row per task, the progress line.
 FOUNDATION_EXPORT CGFloat TGMessageChecklistHeight(NSDictionary *m);

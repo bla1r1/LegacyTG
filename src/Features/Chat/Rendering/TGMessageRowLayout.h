@@ -59,6 +59,22 @@ FOUNDATION_EXPORT BOOL TGMessageRowWantsCard(NSDictionary *m);
 /// middle dot. Nil for no name.
 FOUNDATION_EXPORT NSString *TGMessageSenderLine(NSString *name, NSDictionary *m);
 
+/// What a tap at `point` (in the row's coordinates) lands on. A tap on
+/// the row beside the bubble is nothing; one on the reply quote is the quote;
+/// a document opens from its file block and a photo from the picture, not
+/// from their caption or the bubble's padding.
+typedef NS_ENUM(NSInteger, TGMessageTapPart) {
+	TGMessageTapNone = 0,
+	TGMessageTapBubble,
+	TGMessageTapQuote,
+	TGMessageTapDocument,
+	TGMessageTapPicture,
+	/// A row selected with no finger on it (VoiceOver, itglegacy://tap/N):
+	/// every part answers, as before the parts existed.
+	TGMessageTapWhole,
+};
+FOUNDATION_EXPORT TGMessageTapPart TGMessageTapPartAt(TGMessageLayout *layout, CGPoint point);
+
 /// The text's size inside a bubble; zero for a sticker or no text.
 FOUNDATION_EXPORT CGSize TGMessageBodySize(NSDictionary *m, CGFloat fontSize);
 

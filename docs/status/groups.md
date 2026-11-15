@@ -97,3 +97,9 @@ removed users, statistics graphs, boosts); M21 group-call audio.
 | Removed / banned users screen | missing | — | No banned or restricted filter screen. |
 | Linked channel row | missing | — | Not shown on a group profile. |
 | Verification note and verifier tools | missing | — | Only a debug "Verify A User Or Chat" row exists. |
+
+## Data we had and did not show, batch 4 (15 November 2026)
+
+- In a basic group, an admin who is not the owner is offered Promote only on members they invited themselves (chatMember.inviter_user_id, `TGGroupMemberCanBePromoted`), as official's member actions do.
+- The Group Stickers row shows only where Telegram lets the group have a set (supergroupFullInfo.can_set_sticker_set).
+- Not drawn: the "Level 1+" boost badge needs the group Appearance row; the restricted count is never shown by official.

@@ -39,6 +39,7 @@ static const CGFloat kSwipeActionWidth = 76.0f;
 @property (nonatomic, strong) UILabel *badge;
 @property (nonatomic, strong) UILabel *mentionBadge;
 @property (nonatomic, strong) UIView *onlineDot;
+@property (nonatomic, strong) UIImageView *storyRing;
 @property (nonatomic, strong) UIImageView *tick;   // your own last message
 @property (nonatomic, strong) UIImageView *pin;   // pinned to the top
 @property (nonatomic, strong) UIImageView *statusIcon; // the emoji status after the title
@@ -121,6 +122,29 @@ static TGChatRowAccessories TGChatRowCellAccessories(NSDictionary *row,
 	return a;
 }
 
+/// The ring, drawn once per colour: a stroked layer on a scrolling row is
+/// what the pre-baked avatar circle exists to avoid.
+static UIImage *TGChatRowStoryRingImage(CGSize side, UIColor *colour) {
+	static NSMutableDictionary *cache = nil;
+	if (!cache)
+		cache = [NSMutableDictionary dictionary];
+	id key = colour ?: [NSNull null];
+	UIImage *image = cache[key];
+	if (image)
+		return image;
+	UIGraphicsBeginImageContextWithOptions(side, NO, 0);
+	CGContextRef ctx = UIGraphicsGetCurrentContext();
+	CGContextSetStrokeColorWithColor(ctx, colour.CGColor);
+	CGContextSetLineWidth(ctx, TGMetricBorderMedium);
+	CGFloat half = TGHalf(TGMetricBorderMedium);
+	CGContextStrokeEllipseInRect(ctx, CGRectMake(half, half, side.width - TGMetricBorderMedium, side.height - TGMetricBorderMedium));
+	image = UIGraphicsGetImageFromCurrentImageContext();
+	UIGraphicsEndImageContext();
+	if (image)
+		cache[key] = image;
+	return image;
+}
+
 @implementation TGChatRowCell
 
 + (CGFloat)statusSide {
@@ -165,6 +189,13 @@ static TGChatRowAccessories TGChatRowCellAccessories(NSDictionary *row,
 	self.avatar.opaque = NO;
 	self.avatar.backgroundColor = [UIColor clearColor];
 	[self.contentView addSubview:self.avatar];
+
+	// Stories: a ring round the picture with a gap, unseen in the accent and
+	// seen in grey (official ChatListItem avatar story ring, gradient dropped).
+	CGFloat ringOut = TGMetricPadTiny + TGMetricBorderMedium;
+	self.storyRing = [[UIImageView alloc] initWithFrame:CGRectInset(self.avatar.frame, -ringOut, -ringOut)];
+	self.storyRing.hidden = YES;
+	[self.contentView addSubview:self.storyRing];
 
 	self.titleLabel = [[UILabel alloc] init];
 	// Clear, or iOS 6 paints the label's default white box.
@@ -329,6 +360,11 @@ static TGChatRowAccessories TGChatRowCellAccessories(NSDictionary *row,
 	}
 
 	self.onlineDot.hidden = ![row[TGRowChatOnline] boolValue];
+	NSInteger ring = [row[TGRowChatStoryRing] integerValue];
+	self.storyRing.hidden = ring == 0;
+	if (ring)
+		self.storyRing.image = TGChatRowStoryRingImage(self.storyRing.bounds.size,
+				ring == 2 ? [theme accentColour] : [theme secondaryTextColour]);
 
 	// Your own last message shows whether it has been read, beside the date.
 	// Saved Messages has no one to read it. A refused message takes the tick's

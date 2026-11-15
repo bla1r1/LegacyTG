@@ -112,7 +112,7 @@ static BOOL TGPeerRecordOnline(NSDictionary *record) {
 		return NO;
 	if ([record[@"isOnline"] boolValue])
 		return YES;
-	return [record[@"status"][@"@type"] isEqualToString:@"userStatusOnline"];
+	return TGUserStatusOnlineAt(record[@"status"], [NSDate date].timeIntervalSince1970);
 }
 
 #pragma mark - picture decode

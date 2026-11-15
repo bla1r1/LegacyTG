@@ -207,3 +207,146 @@ NSString *TGBytesForLanguage(long long bytes, NSString *language) {
 NSString *TGBytes(long long bytes) {
 	return TGBytesForLanguage(bytes, TGAppLanguage());
 }
+
+static NSString *TGEntityTypeName(NSDictionary *entity) {
+	id type = entity[@"type"];
+	if ([type isKindOfClass:NSDictionary.class] && [type[@"@type"] isKindOfClass:NSString.class])
+		return type[@"@type"];
+	return [type isKindOfClass:NSString.class] ? type : nil;
+}
+
+NSString *TGDateEntityText(int64_t unixTime, NSDictionary *formattingType,
+		NSTimeInterval now) {
+	if (![formattingType isKindOfClass:NSDictionary.class] || unixTime <= 0)
+		return nil;
+	NSString *kind = formattingType[@"@type"];
+	if ([kind isEqualToString:@"dateTimeFormattingTypeRelative"]){
+		int64_t value = (int64_t)now - unixTime;
+		BOOL past = value > 0;
+		int64_t gap = past ? value : -value;
+		int64_t count;
+		NSString *one, *other;
+		if (gap < 60){
+			count = gap;
+			one = past ? @"%@ second ago" : @"in %@ second";
+			other = past ? @"%@ seconds ago" : @"in %@ seconds";
+		} else if (gap <= 3600){
+			count = (int64_t)llround(gap / 60.0);
+			one = past ? @"%@ minute ago" : @"in %@ minute";
+			other = past ? @"%@ minutes ago" : @"in %@ minutes";
+		} else if (gap <= 86400){
+			count = (int64_t)llround(gap / 3600.0);
+			one = past ? @"%@ hour ago" : @"in %@ hour";
+			other = past ? @"%@ hours ago" : @"in %@ hours";
+		} else {
+			count = (int64_t)llround(gap / 86400.0);
+			one = past ? @"%@ day ago" : @"in %@ day";
+			other = past ? @"%@ days ago" : @"in %@ days";
+		}
+		return TGLocalizedPluralValue(one, other, [NSString stringWithFormat:@"%lld", count],
+				(NSInteger)count);
+	}
+	if (![kind isEqualToString:@"dateTimeFormattingTypeAbsolute"])
+		return nil;
+	NSString *datePrecision = formattingType[@"date_precision"][@"@type"];
+	NSString *timePrecision = formattingType[@"time_precision"][@"@type"];
+	NSDateFormatterStyle dateStyle =
+			[datePrecision isEqualToString:@"dateTimePartPrecisionLong"] ? NSDateFormatterLongStyle :
+			[datePrecision isEqualToString:@"dateTimePartPrecisionShort"] ? NSDateFormatterShortStyle :
+			NSDateFormatterNoStyle;
+	NSDateFormatterStyle timeStyle =
+			[timePrecision isEqualToString:@"dateTimePartPrecisionLong"] ? NSDateFormatterMediumStyle :
+			[timePrecision isEqualToString:@"dateTimePartPrecisionShort"] ? NSDateFormatterShortStyle :
+			NSDateFormatterNoStyle;
+	NSMutableString *day = [NSMutableString string];
+	if ([formattingType[@"show_day_of_week"] boolValue]){
+		static NSString *const names[] = {@"Sunday", @"Monday", @"Tuesday", @"Wednesday",
+				@"Thursday", @"Friday", @"Saturday"};
+		static NSString *const shortNames[] = {@"Sun", @"Mon", @"Tue", @"Wed", @"Thu",
+				@"Fri", @"Sat"};
+		time_t t = (time_t)unixTime;
+		struct tm parts;
+		localtime_r(&t, &parts);
+		int wday = parts.tm_wday % 7;
+		[day appendString:TGLocalized(dateStyle == NSDateFormatterShortStyle
+				? shortNames[wday] : names[wday])];
+	}
+	if (dateStyle != NSDateFormatterNoStyle){
+		if (day.length)
+			[day appendString:@" "];
+		[day appendString:TGAppDate(unixTime, dateStyle, NSDateFormatterNoStyle) ?: @""];
+	}
+	NSString *time = timeStyle != NSDateFormatterNoStyle
+			? TGAppDate(unixTime, NSDateFormatterNoStyle, timeStyle) : nil;
+	if (time.length && day.length)
+		return [NSString stringWithFormat:TGLocalizedKey(@"Time.AtPreciseDate", @"%@ at %@"),
+				day, time];
+	return time.length ? time : (day.length ? [day copy] : nil);
+}
+
+NSString *TGApplyDateEntities(NSString *text, NSArray *entities, NSTimeInterval now,
+		NSArray **outEntities) {
+	BOOL any = NO;
+	for (NSDictionary *e in entities)
+		if ([e isKindOfClass:NSDictionary.class] &&
+			[TGEntityTypeName(e) isEqualToString:@"textEntityTypeDateTime"]){
+			any = YES;
+			break;
+		}
+	if (!any || !text.length)
+		return nil;
+	// Replacements move every entity after them, so they are made in text
+	// order with a running shift; one that began inside replaced words has
+	// nothing left to point at and is dropped.
+	NSArray *ordered = [entities sortedArrayUsingComparator:^NSComparisonResult(id a, id b){
+		NSInteger x = [a isKindOfClass:NSDictionary.class] ? [a[@"offset"] integerValue] : 0;
+		NSInteger y = [b isKindOfClass:NSDictionary.class] ? [b[@"offset"] integerValue] : 0;
+		return x < y ? NSOrderedAscending : (x > y ? NSOrderedDescending : NSOrderedSame);
+	}];
+	NSMutableString *out = [text mutableCopy];
+	NSMutableArray *moved = [NSMutableArray arrayWithCapacity:entities.count];
+	NSInteger shift = 0, replacedEnd = -1;
+	BOOL changed = NO;
+	for (NSDictionary *e in ordered){
+		if (![e isKindOfClass:NSDictionary.class])
+			continue;
+		NSInteger offset = [e[@"offset"] integerValue], length = [e[@"length"] integerValue];
+		if (offset < replacedEnd)
+			continue;
+		NSInteger at = offset + shift;
+		if (at < 0 || length <= 0 || at + length > (NSInteger)out.length)
+			continue;
+		NSMutableDictionary *copy = [e mutableCopy];
+		copy[@"offset"] = @(at);
+		NSString *words = nil;
+		if ([TGEntityTypeName(e) isEqualToString:@"textEntityTypeDateTime"])
+			words = TGDateEntityText([e[@"type"][@"unix_time"] longLongValue],
+					e[@"type"][@"formatting_type"], now);
+		if (words.length){
+			[out replaceCharactersInRange:NSMakeRange((NSUInteger)at, (NSUInteger)length)
+							   withString:words];
+			copy[@"length"] = @(words.length);
+			shift += (NSInteger)words.length - length;
+			replacedEnd = offset + length;
+			changed = YES;
+		}
+		[moved addObject:copy];
+	}
+	if (!changed)
+		return nil;
+	if (outEntities)
+		*outEntities = moved;
+	return out;
+}
+
+static NSString *const kMediaTimestampScheme = @"tg-media-timestamp:";
+
+NSString *TGMediaTimestampLink(int32_t seconds) {
+	return [kMediaTimestampScheme stringByAppendingFormat:@"%d", MAX(0, seconds)];
+}
+
+int32_t TGMediaTimestampFromLink(NSString *link) {
+	if (![link isKindOfClass:NSString.class] || ![link hasPrefix:kMediaTimestampScheme])
+		return -1;
+	return (int32_t)[[link substringFromIndex:kMediaTimestampScheme.length] intValue];
+}

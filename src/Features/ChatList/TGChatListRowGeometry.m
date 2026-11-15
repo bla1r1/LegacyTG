@@ -1,6 +1,34 @@
 #import "TGChatListRowGeometry.h"
 #import "TGLocalization.h"
 
+NSDictionary *TGChatListNotice(NSArray *suggestedRows) {
+	NSDictionary *password = nil, *premium = nil;
+	for (NSDictionary *row in suggestedRows){
+		NSDictionary *action = [row isKindOfClass:NSDictionary.class] ? row[@"action"] : nil;
+		if (![action isKindOfClass:NSDictionary.class])
+			continue;
+		NSString *type = action[@"@type"];
+		if ([type isEqualToString:@"suggestedActionSetPassword"] && !password)
+			password = action;
+		else if ([type isEqualToString:@"suggestedActionExtendPremium"] && !premium)
+			premium = action;
+	}
+	if (password)
+		return @{ @"kind" : @"setupPassword", @"closable" : @NO, @"action" : password,
+				  @"title" : TGLocalized(@"Protect Your Account"),
+				  @"text" : TGLocalized(@"Set a password that will be required each time you log in with this phone number.") };
+	if (premium){
+		NSString *url = premium[@"manage_premium_subscription_url"];
+		NSMutableDictionary *notice = [@{ @"kind" : @"premiumGrace", @"closable" : @YES, @"action" : premium,
+				@"title" : TGLocalized(@"\u26A0\uFE0F Don't lose access to Telegram Premium!"),
+				@"text" : TGLocalized(@"Your exclusive benefits are about to expire.") } mutableCopy];
+		if ([url isKindOfClass:NSString.class] && url.length)
+			notice[@"url"] = url;
+		return notice;
+	}
+	return nil;
+}
+
 NSString *TGChatListArchiveSubtitle(NSUInteger count) {
 	return TGLocalizedPlural(@"%d chat", @"%d chats", (NSInteger)count);
 }

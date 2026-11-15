@@ -355,7 +355,10 @@
         NSString *cleanCode = [text stringByReplacingOccurrencesOfString:@"\\D" withString:@"" options:NSRegularExpressionSearch range:NSMakeRange(0, text.length)];
         self.codeSubmitPending = YES;
         if (self.onCodeSubmitted) {
-            self.onCodeSubmitted(cleanCode.length ? cleanCode : text);
+            // A word or phrase from an SMS is sent as typed.
+            BOOL words = [text rangeOfCharacterFromSet:[NSCharacterSet letterCharacterSet]].location != NSNotFound;
+            self.onCodeSubmitted(cleanCode.length && !words ? cleanCode
+                    : [text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]]);
         }
     } else if (self.currentStep == TGLoginStepPassword) {
         if (self.onPasswordSubmitted) {

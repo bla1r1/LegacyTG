@@ -43,6 +43,12 @@
 		if (u[@"id"] && name.length)
 			self.client.usersById[u[@"id"]] = name;
 		[self.client cacheProfilePhoto:u];
+		NSMutableDictionary *privateChat = u[@"id"] ? self.client.chatsById[u[@"id"]] : nil;
+		NSNumber *ring = @(TGUStoryRing(u[@"active_story_state"]));
+		if (privateChat && ![privateChat[@"storyRing"] isEqual:ring]){
+			privateChat[@"storyRing"] = ring;
+			[self.client markChatRowDirty:[u[@"id"] longLongValue]];
+		}
 		if (u[@"id"] && self.client.updateCoalescer) {
 			[self.client.updateCoalescer markUserDirty:[u[@"id"] longLongValue]];
 		}

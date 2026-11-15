@@ -42,4 +42,8 @@ typedef NS_ENUM(NSInteger, TGSettingsPage) {
 /// Root unless set before the view loads.
 @property (nonatomic, assign) TGSettingsPage page;
 
+/// Two-Step Verification: the chat list's "Protect Your Account" notice
+/// opens it, as official does.
+- (void)showTwoStepState;
+
 @end

@@ -24,4 +24,8 @@ typedef NS_ENUM(NSInteger, TGMessageAudienceKind) {
 					   emoji:(NSString *)emoji
 			   customEmojiId:(int64_t)customEmojiId;
 
+/// messageProperties.can_delete_reactions: a hold on a person removes their
+/// reaction (an admin's correction). Off, the hold does nothing.
+@property (nonatomic, assign) BOOL canDeleteReactions;
+
 @end

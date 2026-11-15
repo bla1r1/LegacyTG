@@ -536,16 +536,12 @@ static CGGradientRef TGGradientFromStops(NSArray *k, NSUInteger perStop, double 
 static void TGGradientFillPath(CGPathRef path, NSDictionary *shape, double frame, CGContextRef ctx) {
 	if (CGPathIsEmpty(path))
 		return;
-	NSDictionary *g = shape[@"g"];
-	id kObj = g[@"k"];
-	NSArray *k = [kObj isKindOfClass:NSArray.class] ? (NSArray *)kObj : nil;
-	NSInteger stops = [g[@"p"] integerValue];
-	if (stops < 2 || !k.count)
+	// Telegram's files wrap the stops in {a, k} and may add opacity stops:
+	// read as a bare array, every gradient fill was skipped.
+	NSArray *k = TGLottieGradientStops(shape[@"g"], frame);
+	if (!k.count)
 		return;
-
-	NSUInteger perStop = k.count / (NSUInteger)stops;
-	if ((perStop != 4 && perStop != 5) || k.count < perStop * (NSUInteger)stops)
-		return;
+	NSUInteger perStop = 5;
 
 	float alpha = TGScalarAtFast(shape[@"o"], frame, 100.0f) / 100.0f;
 	CGGradientRef gradient = TGGradientFromStops(k, perStop, alpha);

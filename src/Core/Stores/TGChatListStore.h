@@ -38,6 +38,11 @@ extern NSString *const TGChatListPreviewImageLoadedNotification;
 @property (nonatomic, readonly) int64_t savedMessagesChatId;
 @property (nonatomic, readonly) NSDictionary *me;
 @property (nonatomic, readonly) NSInteger unreadTotal;
+/// TDLib's suggested actions as {title, action} rows; the list's notice comes
+/// from these. Changes post TGSuggestedActionsChangedNotification.
+@property (nonatomic, readonly) NSArray *suggestedActions;
+/// The notice's close button: hideSuggestedAction.
+- (void)hideSuggestedAction:(NSDictionary *)action;
 
 /// The screen's handlers. The store owns the client's single callback slots
 /// and calls these from them, so two list screens cannot overwrite each other.

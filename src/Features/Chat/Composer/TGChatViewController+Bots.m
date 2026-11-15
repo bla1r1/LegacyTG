@@ -7,6 +7,7 @@
 #import "TGChatViewControllerInternal.h"
 #import "TGProfileViewController.h"
 #import "TGDevShowcase.h"
+#import "TGForwardPicker.h"
 
 @implementation TGChatViewController (Bots)
 
@@ -73,15 +74,35 @@
 			}];
 		}];
 	} else if ([kind isEqualToString:@"switch"]) {
-		// Inline mode is typed into the composer: "@bot query".
+		// Inline mode is typed into the composer: "@bot query" - here, or in
+		// a chat the user picks first when the button says so.
+		BOOL choose = [button[@"chooseChat"] boolValue];
 		[[TGMessageStore shared] userInfo:[m[@"senderId"] longLongValue] completion:^(NSDictionary *user){
 			TGChatViewController *me = weakSelf;
 			NSArray *names = user[@"usernames"][@"active_usernames"];
 			NSString *bot = names.count ? [@"@" stringByAppendingString:names[0]] : @"";
-			me.input.text = [[NSString stringWithFormat:@"%@ %@", bot, button[@"query"] ?: @""]
+			NSString *text = [[NSString stringWithFormat:@"%@ %@", bot, button[@"query"] ?: @""]
 					stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
-			[me.input becomeFirstResponder];
-			[me inputChanged];
+			if (!choose){
+				me.input.text = text;
+				[me.input becomeFirstResponder];
+				[me inputChanged];
+				return;
+			}
+			TGForwardPicker *picker = [[TGForwardPicker alloc] init];
+			picker.sourceChatId = me.chatId;
+			picker.onPicked = ^(int64_t targetChatId){
+				TGChatViewController *other = [[TGChatViewController alloc] init];
+				other.chatId = targetChatId;
+				other.chatTitle = [[TGMessageStore shared] titleForChat:targetChatId] ?: @"";
+				other.hidesBottomBarWhenPushed = YES;
+				[weakSelf.navigationController pushViewController:other animated:YES];
+				(void)other.view;   // the composer is built in viewDidLoad
+				other.input.text = text;
+				[other inputChanged];
+			};
+			UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:picker];
+			[me presentViewController:nav animated:YES completion:nil];
 		}];
 	} else if ([kind isEqualToString:@"copy"]) {
 		[UIPasteboard generalPasteboard].string = button[@"copy"] ?: @"";
@@ -94,6 +115,109 @@
 	} else {
 		[TGSnackbar showInView:self.view text:@"Update Telegram" seconds:2 onCommit:nil];
 	}
+}
+
+#pragma mark - bot commands
+
+/// Official's "/" key sits where the keyboard key would (ChatTextInputPanelNode's
+/// commands accessory) when the chat's bots have commands and no keyboard
+/// is up; a reply keyboard takes the place instead.
+- (void)refreshBotCommands {
+	__weak typeof(self) weakSelf = self;
+	void (^apply)(NSArray *) = ^(NSArray *commands){
+		TGChatViewController *me = weakSelf;
+		if (!me || me.replyKeyboard)
+			return;
+		me.botCommands = commands;
+		if (!commands.count){
+			[me hideBotCommands];
+			return;
+		}
+		if (!me.botCommandsToggle){
+			UIButton *toggle = [UIButton buttonWithType:UIButtonTypeCustom];
+			toggle.frame = CGRectMake(0, 0, TGMetricRow - TGMetricPadMedium, me.input.bounds.size.height);
+			[toggle addTarget:me action:@selector(toggleBotCommands)
+			 forControlEvents:UIControlEventTouchUpInside];
+			me.botCommandsToggle = toggle;
+		}
+		[me.botCommandsToggle setImage:[TGIcons glyphNamed:@"botCommands"
+				colour:[[TGTheme shared] secondaryTextColour] side:TGMetricMenuGlyph]
+							  forState:UIControlStateNormal];
+		me.input.rightView = me.botCommandsToggle;
+		me.input.rightViewMode = UITextFieldViewModeAlways;
+	};
+#if TG_DEV
+	NSArray *fixture = [TGDevShowcase botCommandsForChatId:self.chatId];
+	if (fixture){
+		apply(fixture);
+		return;
+	}
+#endif
+	[[TGMessageStore shared] botCommandsForChat:self.chatId completion:apply];
+}
+
+- (void)hideBotCommands {
+	[self.botCommandsPanel removeFromSuperview];
+	self.botCommandsPanel = nil;
+}
+
+/// The list rises over the composer, a row per command: "/start" and what
+/// it does, as official's commands panel shows them. A row sends its command.
+- (void)toggleBotCommands {
+	if (self.botCommandsPanel){
+		[self hideBotCommands];
+		return;
+	}
+	NSArray *commands = self.botCommands;
+	if (!commands.count)
+		return;
+	TGTheme *theme = [TGTheme shared];
+	CGFloat width = self.view.bounds.size.width;
+	CGFloat rowH = TGMetricRow;
+	CGFloat height = MIN((CGFloat)commands.count, TGMetricBotCommandRowsShown) * rowH;
+	CGFloat bottom = CGRectGetMinY(self.inputBar.frame);
+	UIScrollView *panel = [[UIScrollView alloc] initWithFrame:CGRectMake(0, bottom - height, width, height)];
+	panel.backgroundColor = [theme inputBarColour];
+	panel.contentSize = CGSizeMake(width, commands.count * rowH);
+	for (NSUInteger i = 0; i < commands.count; i++){
+		NSDictionary *command = commands[i];
+		UIButton *row = [UIButton buttonWithType:UIButtonTypeCustom];
+		row.frame = CGRectMake(0, i * rowH, width, rowH);
+		row.tag = (NSInteger)i;
+		[row addTarget:self action:@selector(botCommandTapped:) forControlEvents:UIControlEventTouchUpInside];
+		UILabel *name = [[UILabel alloc] initWithFrame:CGRectMake(TGMetricPadLarge, 0,
+				width - TGDoubled(TGMetricPadLarge), TGHalf(rowH) + TGMetricPadSmall)];
+		name.backgroundColor = [UIColor clearColor];
+		name.font = TGFontBodyStrong();
+		name.textColor = [theme primaryTextColour];
+		name.text = [@"/" stringByAppendingString:command[@"command"]];
+		[row addSubview:name];
+		UILabel *about = [[UILabel alloc] initWithFrame:CGRectMake(TGMetricPadLarge,
+				TGHalf(rowH), width - TGDoubled(TGMetricPadLarge), TGHalf(rowH) - TGMetricPadSmall)];
+		about.backgroundColor = [UIColor clearColor];
+		about.font = TGFontCaption();
+		about.textColor = [theme secondaryTextColour];
+		about.text = command[@"description"];
+		[row addSubview:about];
+		UIView *rule = [[UIView alloc] initWithFrame:CGRectMake(TGMetricPadLarge, rowH - TGMetricHairline,
+				width - TGMetricPadLarge, TGMetricHairline)];
+		rule.backgroundColor = [theme separatorColour];
+		[row addSubview:rule];
+		[panel addSubview:row];
+	}
+	[self.view addSubview:panel];
+	self.botCommandsPanel = panel;
+}
+
+- (void)botCommandTapped:(UIButton *)row {
+	NSArray *commands = self.botCommands;
+	if (row.tag < 0 || row.tag >= (NSInteger)commands.count)
+		return;
+	// ponytail: "/cmd" without "@bot"; a group with two bots that share a
+	// command name answers from both, as Telegram itself routes it.
+	NSString *text = [@"/" stringByAppendingString:commands[(NSUInteger)row.tag][@"command"]];
+	[[TGSendStore shared] sendText:text toChat:self.chatId thread:self.threadId];
+	[self hideBotCommands];
 }
 
 #pragma mark - reply keyboard
@@ -111,6 +235,7 @@
 			[me hideBotKeyboard];
 			me.input.rightView = nil;
 			me.input.rightViewMode = UITextFieldViewModeNever;
+			[me refreshBotCommands];
 			return;
 		}
 		if (!me.botKeyboardToggle) {
@@ -127,6 +252,10 @@
 		NSString *placeholder = keyboard[@"placeholder"];
 		if (placeholder.length)
 			me.input.placeholder = placeholder;
+		// A persistent keyboard is open whenever the text one is not.
+		if ([keyboard[@"persistent"] boolValue] && ![me botKeyboardShown] &&
+			![me.input isFirstResponder])
+			[me toggleBotKeyboard];
 	};
 #if TG_DEV
 	NSDictionary *fixture = [TGDevShowcase replyKeyboardForChatId:self.chatId];
@@ -160,8 +289,10 @@
 		[self.input resignFirstResponder];
 
 	CGRect b = self.view.bounds;
-	CGFloat height = MIN((CGFloat)rows.count, (CGFloat)TGMetricBotKeyRowsShown) * TGMetricBotKeyHeight
-			+ TGMetricBotButtonGap;
+	CGFloat pitch = TGMetricBotKeyHeight;
+	CGFloat height = TGBotKeyboardPanelHeight((NSInteger)rows.count,
+			[self.replyKeyboard[@"resize"] boolValue], TGMetricBotKeyboardHeight,
+			TGMetricBotButtonGap, &pitch);
 	[self.botKeyboardPanel removeFromSuperview];
 	UIScrollView *panel = [[UIScrollView alloc] initWithFrame:CGRectMake(0, b.size.height, b.size.width, height)];
 	panel.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleTopMargin;
@@ -173,8 +304,8 @@
 		CGFloat w = (b.size.width - gap * (row.count + 1)) / row.count;
 		for (NSUInteger c = 0; c < row.count; c++) {
 			UIButton *key = [UIButton buttonWithType:UIButtonTypeCustom];
-			key.frame = CGRectMake(gap + c * (w + gap), gap + r * TGMetricBotKeyHeight,
-								   w, TGMetricBotKeyHeight - gap);
+			key.frame = CGRectMake(gap + c * (w + gap), gap + r * pitch,
+								   w, pitch - gap);
 			key.backgroundColor = [theme cardBackgroundColour];
 			key.layer.cornerRadius = TGMetricCornerSmall;
 			key.layer.borderWidth = TGMetricBorderWidth;
@@ -186,7 +317,7 @@
 			[panel addSubview:key];
 		}
 	}
-	panel.contentSize = CGSizeMake(b.size.width, rows.count * TGMetricBotKeyHeight + gap);
+	panel.contentSize = CGSizeMake(b.size.width, rows.count * pitch + gap);
 	[self.view addSubview:panel];
 	self.botKeyboardPanel = panel;
 	[UIView animateWithDuration:TGAnimationDurationMedium animations:^{

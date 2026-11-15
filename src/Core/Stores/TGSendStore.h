@@ -125,6 +125,9 @@ extern NSString *const TGSendStoreCanRetryKey;
 				revoke:(BOOL)revoke;
 - (void)resendMessages:(NSArray *)messageIds inChat:(int64_t)chatId;
 - (void)retryMessageId:(int64_t)messageId inChat:(int64_t)chatId;
+/// A retry that pays the chat's current price per message, after the user
+/// agreed to it; failed sends that report required_paid_message_star_count.
+- (void)retryMessageId:(int64_t)messageId inChat:(int64_t)chatId paidStars:(int64_t)stars;
 - (void)markSendingMessageId:(int64_t)messageId chatId:(int64_t)chatId;
 - (TGSendState)stateForMessageId:(int64_t)messageId inChat:(int64_t)chatId;
 - (NSString *)failureReasonForMessageId:(int64_t)messageId inChat:(int64_t)chatId;

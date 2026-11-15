@@ -96,6 +96,11 @@ CGFloat TGInlineStampY(CGRect bodyFrame);
 @property (nonatomic, assign) CGRect quoteAuthorFrame;
 @property (nonatomic, assign) CGRect quoteFrame;
 @property (nonatomic, assign) CGRect pictureFrame;
+/// The file block of a document bubble (tile, name, size): the part a tap
+/// opens. A caption under it is not.
+@property (nonatomic, assign) CGRect documentFrame;
+/// The comments footer, across the bubble at its bottom; empty without one.
+@property (nonatomic, assign) CGRect commentsFrame;
 @property (nonatomic, assign) CGRect collageFrame;
 @property (nonatomic, strong) NSArray *albumFrames;
 @property (nonatomic, assign) CGRect mediaStampFrame;
@@ -104,6 +109,9 @@ CGFloat TGInlineStampY(CGRect bodyFrame);
 @property (nonatomic, assign) CGRect linkSiteFrame;
 @property (nonatomic, assign) CGRect linkTitleFrame;
 @property (nonatomic, assign) CGRect linkDescFrame;
+/// The preview's picture: full column above or below the words, or a square
+/// in the top right corner beside them. Zero for a preview without one.
+@property (nonatomic, assign) CGRect linkMediaFrame;
 @property (nonatomic, copy)   NSString *linkSite;
 @property (nonatomic, copy)   NSString *linkTitle;
 @property (nonatomic, copy)   NSString *linkDesc;
@@ -111,6 +119,10 @@ CGFloat TGInlineStampY(CGRect bodyFrame);
 /// The row of reaction chips under a bubble; empty when there are none.
 @property (nonatomic, assign) CGRect reactionChipsFrame;
 @property (nonatomic, assign) CGRect timeFrame;
+/// The views eye and the ticks of the stamp, placed with its text by
+/// TGMessageStampPlace: in the text line, or on the plate over a picture.
+@property (nonatomic, assign) CGRect stampEyeFrame;
+@property (nonatomic, assign) CGRect stampTicksFrame;
 @property (nonatomic, assign) CGSize bodySize;
 @property (nonatomic, assign) CGSize picSize;
 @property (nonatomic, assign) BOOL inlineStamp;

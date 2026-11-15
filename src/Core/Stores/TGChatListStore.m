@@ -105,6 +105,25 @@ NSString *const TGChatListPreviewImageLoadedNotification = @"TGChatListPreviewIm
 - (NSDictionary *)me { return [TGClient shared].me; }
 - (NSInteger)unreadTotal { return _unreadTotal; }
 
+- (NSArray *)suggestedActions {
+	return [TGClient shared].suggestedActionsValue ?: @[];
+}
+
+- (void)hideSuggestedAction:(NSDictionary *)action {
+	if (![action isKindOfClass:NSDictionary.class])
+		return;
+	[[TGClient shared] request:@{ @"@type" : @"hideSuggestedAction", @"action" : action }
+				   completion:nil];
+	// TDLib answers with updateSuggestedActions removing it; the notice goes
+	// now rather than after that round trip.
+	NSMutableArray *kept = [NSMutableArray array];
+	for (NSDictionary *row in [TGClient shared].suggestedActionsValue)
+		if (![row[@"action"] isEqual:action])
+			[kept addObject:row];
+	[TGClient shared].suggestedActionsValue = kept;
+	[[NSNotificationCenter defaultCenter] postNotificationName:TGSuggestedActionsChangedNotification object:nil];
+}
+
 + (NSInteger)activeAccountSlot { return [TGClient activeAccountSlot]; }
 
 - (void (^)(void))onChatsChanged { return _onChatsChanged; }

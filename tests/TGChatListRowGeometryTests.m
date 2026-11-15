@@ -120,4 +120,21 @@ static const CGFloat kGap = 8.0f;
 	XCTAssertEqual(TGAvatarWindow(0, 14, 0).length, (NSUInteger)0);
 }
 
+// Official ChatListNoticeItem: the password notice first and without a
+// close button, the Premium one closable and opening TDLib's page.
+- (void)testNotice_FromSuggestedActions {
+	XCTAssertNil(TGChatListNotice(@[]));
+	NSDictionary *premium = @{ @"action" : @{ @"@type" : @"suggestedActionExtendPremium",
+			@"manage_premium_subscription_url" : @"https://t.me/premium" } };
+	NSDictionary *password = @{ @"action" : @{ @"@type" : @"suggestedActionSetPassword", @"authorization_delay" : @7 } };
+	NSDictionary *notice = TGChatListNotice(@[premium]);
+	XCTAssertEqualObjects(notice[@"kind"], @"premiumGrace");
+	XCTAssertEqualObjects(notice[@"url"], @"https://t.me/premium");
+	XCTAssertTrue([notice[@"closable"] boolValue]);
+	notice = TGChatListNotice(@[premium, password]);
+	XCTAssertEqualObjects(notice[@"kind"], @"setupPassword");
+	XCTAssertFalse([notice[@"closable"] boolValue]);
+	XCTAssertEqualObjects(notice[@"title"], @"Protect Your Account");
+}
+
 @end

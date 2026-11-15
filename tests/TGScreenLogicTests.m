@@ -203,5 +203,20 @@
 	XCTAssertEqual(tight.art.origin.y, TGMetricPadWide);
 }
 
-@end
+// A word or phrase code had the digit-code sentence and digit boxes.
+- (void)testLoginWordCode_UsesOfficialHint {
+	NSString *word = TGLoginWordCodeSentence(@{ @"@type" : @"authenticationCodeTypeSmsWord", @"first_letter" : @"k" }, @"+1 555");
+	XCTAssertTrue([word rangeOfString:@"starts with **\"k\"**"].location != NSNotFound);
+	NSString *phrase = TGLoginWordCodeSentence(@{ @"@type" : @"authenticationCodeTypeSmsPhrase" }, @"+1 555");
+	XCTAssertTrue([phrase hasPrefix:@"We've sent you an SMS with a secret phrase to your phone"]);
+}
 
+
+- (void)testEmailReset_PendingAndWaitWords {
+	XCTAssertEqualObjects(TGLoginEmailResetPendingText(299), @"Email will be reset in 4:59");
+	XCTAssertEqualObjects(TGLoginEmailResetPendingText(6 * 86400 + 5), @"Email will be reset in 6 days");
+	XCTAssertEqualObjects(TGLoginEmailResetPendingText(0), @"Email will be reset Please wait...");
+	XCTAssertEqualObjects(TGLoginResetInterval(3 * 3600), @"in 3 hours");
+}
+
+@end

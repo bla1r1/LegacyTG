@@ -294,7 +294,7 @@ static NSString *TGAudienceDate(NSTimeInterval unix) {
 /// A hold on a reactor, not a tap: removing somebody's reactions is an
 /// administrator's correction, not what the list is for on a normal read.
 - (void)rowHeld:(UILongPressGestureRecognizer *)hold {
-	if (hold.state != UIGestureRecognizerStateBegan)
+	if (hold.state != UIGestureRecognizerStateBegan || !self.canDeleteReactions)
 		return;
 	CGPoint where = [hold locationInView:self.tableView];
 	NSIndexPath *path = [self.tableView indexPathForRowAtPoint:where];

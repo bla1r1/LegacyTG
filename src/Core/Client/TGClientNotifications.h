@@ -119,6 +119,8 @@ extern NSString *const TGApplicationVerificationRequiredNotification;
 // Fired when updateChatActionBar arrives: the bar over a chat nobody knows
 // - report spam, add to contacts - follows the update, not only the fetch.
 extern NSString *const TGChatActionBarChangedNotification;
+/// updateSpeedLimitNotification; userInfo "upload" says which way.
+extern NSString *const TGSpeedLimitNotification;
 /// A bot's keyboard on a chat changed; userInfo carries "chatId".
 extern NSString *const TGChatReplyMarkupChangedNotification;
 

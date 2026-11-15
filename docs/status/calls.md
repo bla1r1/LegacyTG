@@ -138,3 +138,4 @@ with every source line: `git show cf71bc9:docs/calls_v9_spec.md`.
 
 A4 cost is small at 50 packets/s, but allocate nothing per packet; keep the
 DTLS handshake off the main thread.
+- An outgoing call reads "Contacting...", "Waiting..." and "Ringing..." from callStatePending is_created / is_received, as official; the rating sheet comes only when Telegram asks (need_rating), not after any call over 10 s.

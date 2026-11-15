@@ -1,5 +1,6 @@
 #import "TGCallViewController.h"
 #import "TGCall.h"
+#import "TGLocalization.h"
 #import "TGTheme.h"
 #import "TGIcons.h"
 #import "TGCapabilities.h"
@@ -580,7 +581,8 @@ static UIImage *TGCallCircleImage(CGFloat side, UIColor *colour, TGCallCircleSty
     [self updateLayoutForCallActive:!isRinging];
     switch (state){
         case TGCallStatePending:
-            [self setStatusText:(self.outgoing ? @"Ringing..." : @"Incoming call")];
+            [self setStatusText:(self.outgoing ? TGLocalized([TGCall shared].pendingStatus ?: @"Contacting...")
+                                               : TGLocalized(@"Incoming call"))];
             [self setStatusPulsing:YES];
             break;
         case TGCallStateExchangingKeys:
@@ -998,7 +1000,9 @@ static UIImage *TGCallCircleImage(CGFloat side, UIColor *colour, TGCallCircleSty
     NSTimeInterval talked = self.connectedAt ? -[self.connectedAt timeIntervalSinceNow] : 0;
     TGCallViewController *me = self;
     [self dismissViewControllerAnimated:YES completion:^{
-        if (talked >= 10)
+        // Official asks only when Telegram does; a time guess asked after
+        // calls the server did not want rated.
+        if ([TGCall shared].needsRating)
             [me askForCallRatingAfter:talked];
     }];
 }

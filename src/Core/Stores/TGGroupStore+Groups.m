@@ -62,6 +62,15 @@ NSString *TGGroupMemberStatusName(NSDictionary *status) {
 	return @"member";
 }
 
+BOOL TGGroupMemberCanBePromoted(int64_t chatId, BOOL iAmOwner, BOOL theyAreAdmin,
+		int64_t inviterId, int64_t myId) {
+	// A supergroup's chat id is -100xxxxxxxxxx; a basic group's is short.
+	BOOL basicGroup = chatId < 0 && chatId > -1000000000000LL;
+	if (!basicGroup || iAmOwner)
+		return YES;
+	return !theyAreAdmin && inviterId != 0 && inviterId == myId;
+}
+
 /// Flattens chatInviteLink down to what a row shows and a tap needs.
 static NSDictionary *TGGFlattenInviteLink(NSDictionary *link) {
 	return @{
@@ -949,6 +958,27 @@ static NSDictionary *TGGFlattenInviteLink(NSDictionary *link) {
 			if (completion)
 				completion(ok, ok ? nil : ([message isKindOfClass:NSString.class]
 						? message : @"An error occurred."));
+		}];
+	}];
+}
+
+- (void)slowModeWaitForChat:(int64_t)chatId completion:(void (^)(double))completion {
+	[[TGClient shared] supergroupIdForChat:chatId completion:^(int64_t supergroupId){
+		if (!supergroupId){
+			if (completion) completion(0);
+			return;
+		}
+		[[TGClient shared] request:@{@"@type" : @"getSupergroup", @"supergroup_id" : @(supergroupId)}
+			   completion:^(NSDictionary *group){
+			if (![group[@"is_slow_mode_enabled"] boolValue]){
+				if (completion) completion(0);
+				return;
+			}
+			[[TGClient shared] request:@{@"@type" : @"getSupergroupFullInfo", @"supergroup_id" : @(supergroupId)}
+				   completion:^(NSDictionary *full){
+				if (completion)
+					completion(MAX(0.0, [full[@"slow_mode_delay_expires_in"] doubleValue]));
+			}];
 		}];
 	}];
 }

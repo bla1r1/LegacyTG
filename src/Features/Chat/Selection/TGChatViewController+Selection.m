@@ -1,5 +1,6 @@
 #import "TGChatViewControllerInternal.h"
 #import "TGLocalization.h"
+#import "TGChatActionMenuModel.h"
 #import "TGForwardPicker.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
@@ -275,10 +276,17 @@ static void TGAnimateSelectionCheckbox(TGChatViewController *chat, int64_t messa
 	// Saved Messages has nobody else to revoke from, so there is one choice
 	// there and two everywhere else. Either way the first one revokes.
 	BOOL isSaved = (self.chatId == [[TGMessageStore shared] savedMessagesChatId]);
-	NSString *forBoth = self.isGroup ? TGLocalized(@"Delete for All")
-									 : TGLocalized(@"Delete for Everyone");
-	NSArray *choices = isSaved ? @[TGLocalized(@"Delete")]
-			: @[forBoth, TGLocalized(@"Delete for me")];
+	// One held message carries TDLib's word on who it can go from; a
+	// selection of many keeps both choices.
+	NSDictionary *properties = (ids.count == 1 &&
+			[ids[0] longLongValue] == [self.actionMessage[@"id"] longLongValue])
+			? self.actionProperties : nil;
+	NSArray *options = TGMessageDeleteChoices(isSaved, self.isGroup, properties);
+	if (!options.count)
+		return;
+	NSMutableArray *choices = [NSMutableArray array];
+	for (NSDictionary *option in options)
+		[choices addObject:option[@"title"]];
 
 	__weak typeof(self) weakSelf = self;
 	[TGAlertSheet showChoices:choices
@@ -286,7 +294,9 @@ static void TGAnimateSelectionCheckbox(TGChatViewController *chat, int64_t messa
 			 destructiveIndex:0
 					   inView:self.view
 					 onChoice:^(NSInteger index){
-		[weakSelf executeDeleteMessages:ids revoke:(index == 0)];
+		if (index < 0 || index >= (NSInteger)options.count)
+			return;
+		[weakSelf executeDeleteMessages:ids revoke:[options[(NSUInteger)index][@"revoke"] boolValue]];
 	}];
 }
 

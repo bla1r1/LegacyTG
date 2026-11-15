@@ -6,6 +6,7 @@
 #import "TGPerf.h"
 #import "TGStatusText.h"
 #import "TGStyle.h"
+#import "TGClientNotifications.h"
 #import "TGAlertSheet.h"
 #import "TGPeerStore.h"
 #import "TGDateFormat.h"
@@ -114,6 +115,10 @@ static const CGFloat kListStoryGap     = TGMetricPadSmall;
 		[NSObject cancelPreviousPerformRequestsWithTarget:me
 				selector:@selector(reloadVisibleRows) object:nil];
 		[me performSelector:@selector(reloadVisibleRows) withObject:nil afterDelay:0.3];
+	}];
+	// The notice over the list comes and goes with TDLib's suggested actions.
+	[TGObservers observe:TGSuggestedActionsChangedNotification owner:self usingBlock:^(NSNotification *note){
+		[weakSelf reload];
 	}];
 	// A send was refused or retried: the last-message mark on that chat's row
 	// changes, and TGChatRow rebuilds it from the store.

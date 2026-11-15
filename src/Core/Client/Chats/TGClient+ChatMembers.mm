@@ -34,6 +34,9 @@ NSDictionary *TGMemberRowForMember(NSDictionary *member, NSString *name) {
 		@"status" : word,
 		@"tag"    : tag ?: @"",
 		@"owner"  : @([word isEqualToString:@"owner"]),
+		// Who added them: in a basic group an admin may promote only the
+		// members they invited themselves (official's member actions).
+		@"inviterId" : member[@"inviter_user_id"] ?: @0,
 	};
 }
 

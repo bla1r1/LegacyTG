@@ -68,6 +68,36 @@ NSDictionary *info = [TGClient shared].communityFullInfoById[@(communityId)];
 	return [info isKindOfClass:NSDictionary.class] ? info : nil;
 }
 
+- (void)messagingStateForUser:(int64_t)userId
+				   completion:(void (^)(int64_t stars, BOOL premiumOnly))completion {
+	NSDictionary *user = [TGClient shared].rawUsersById[@(userId)];
+	if (userId <= 0 || (![user[@"restricts_new_chats"] boolValue] &&
+						[user[@"paid_message_star_count"] longLongValue] <= 0)){
+		if (completion) completion(0, NO);
+		return;
+	}
+	[[TGClient shared] request:@{@"@type" : @"canSendMessageToUser", @"user_id" : @(userId),
+								 @"only_local" : @NO}
+				   completion:^(NSDictionary *result){
+		if (completion)
+			completion([result[@"outgoing_paid_message_star_count"] longLongValue],
+					   [result[@"@type"] isEqualToString:@"canSendMessageToUserResultUserRestrictsNewChats"]);
+	}];
+}
+
+- (void)paidMessageStarsForUser:(int64_t)userId completion:(void (^)(int64_t stars))completion {
+	if (userId <= 0){
+		if (completion) completion(0);
+		return;
+	}
+	[[TGClient shared] request:@{@"@type" : @"canSendMessageToUser", @"user_id" : @(userId),
+								 @"only_local" : @NO}
+				   completion:^(NSDictionary *result){
+		if (completion)
+			completion([result[@"outgoing_paid_message_star_count"] longLongValue]);
+	}];
+}
+
 - (void)canSendMessageToUser:(int64_t)userId completion:(void (^)(NSString *result))completion {
 if (!userId){
 		if (completion) completion(@"userDeleted");
@@ -652,6 +682,35 @@ if (day <= 0){
 	}];
 }
 
+- (void)publicPhotoIdWithCompletion:(void (^)(int64_t photoId))completion {
+	int64_t myId = [self.me[@"id"] longLongValue];
+	[[TGClient shared] request:@{@"@type" : @"getUserFullInfo", @"user_id" : @(myId)}
+				   completion:^(NSDictionary *full){
+		NSDictionary *photo = [full[@"public_photo"] isKindOfClass:NSDictionary.class]
+				? full[@"public_photo"] : nil;
+		if (completion)
+			completion([photo[@"id"] longLongValue]);
+	}];
+}
+
+- (void)setPublicPhotoAtPath:(NSString *)path completion:(void (^)(BOOL ok))completion {
+	[[TGClient shared] request:@{
+		@"@type" : @"setProfilePhoto",
+		@"photo" : @{@"@type" : @"inputChatPhotoStatic",
+					 @"photo" : @{@"@type" : @"inputFileLocal", @"path" : path ?: @""}},
+		@"is_public" : @YES,
+	} completion:^(NSDictionary *result){
+		if (completion) completion(![result[@"@type"] isEqualToString:@"error"]);
+	}];
+}
+
+- (void)removePublicPhoto:(int64_t)photoId completion:(void (^)(BOOL ok))completion {
+	[[TGClient shared] request:@{@"@type" : @"deleteProfilePhoto", @"profile_photo_id" : @(photoId)}
+				   completion:^(NSDictionary *result){
+		if (completion) completion(![result[@"@type"] isEqualToString:@"error"]);
+	}];
+}
+
 - (void)setProfilePhotoAtPath:(NSString *)path completion:(void (^)(BOOL ok))completion {
 [[TGClient shared] request:@{
 		@"@type" : @"setProfilePhoto",
@@ -911,7 +970,14 @@ NSDictionary *raw = [TGClient shared].rawUsersById[@(userId)];
 			@"personalChatId" : [full[@"personal_chat_id"] isKindOfClass:NSNumber.class]
 					? full[@"personal_chat_id"] : @0,
 			@"businessLocation" : full[@"business_info"][@"location"][@"address"] ?: @"",
+			@"businessInfo"     : [full[@"business_info"] isKindOfClass:NSDictionary.class]
+					? full[@"business_info"] : (id)[NSNull null],
+			// A third-party verifier's line under a bot's card (official
+			// PeerInfoScreenCommentItem ItemVerification).
+			@"botVerification"  : [full[@"bot_verification"] isKindOfClass:NSDictionary.class]
+					? (full[@"bot_verification"][@"custom_description"][@"text"] ?: @"") : @"",
 			@"botDescription"   : full[@"bot_info"][@"short_description"] ?: (full[@"bot_info"][@"description"] ?: @""),
+			@"voiceRestricted"  : full[@"has_restricted_voice_and_video_note_messages"] ?: @NO,
 		});
 	}];
 }

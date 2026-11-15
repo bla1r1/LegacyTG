@@ -28,6 +28,7 @@
 #import "TGSnackbar.h"
 #import "TGMediaViewer.h"
 #import "TGPollPresentation.h"
+#import "TGMessageRowLayout.h"
 #import "TGChecklistPresentation.h"
 #import "TGGiftViewController.h"
 #import "TGStoryViewerViewController.h"
@@ -142,6 +143,76 @@
 	}];
 }
 
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)recognizer shouldReceiveTouch:(UITouch *)touch {
+	if (recognizer == self.touchRecorder){
+		self.lastTouchPoint = [touch locationInView:self.table];
+		self.hasTouchPoint = YES;
+		return NO;
+	}
+	return YES;
+}
+
+/// The part of row `row` the last touch hit; the whole row when no touch was
+/// recorded.
+- (TGMessageTapPart)tapPartForRow:(NSInteger)row {
+	if (!self.hasTouchPoint)
+		return TGMessageTapWhole;
+	self.hasTouchPoint = NO;
+	CGRect rowRect = [self.table rectForRowAtIndexPath:[NSIndexPath indexPathForRow:row inSection:0]];
+	CGPoint inRow = CGPointMake(self.lastTouchPoint.x - rowRect.origin.x,
+			self.lastTouchPoint.y - rowRect.origin.y);
+	TGMessageLayout *layout = [self layoutForMessage:self.messages[(NSUInteger)row] atRow:row];
+	return TGMessageTapPartAt(layout, inRow);
+}
+
+/// A "0:42" in a message: its own video, or the video it answers, plays
+/// from there (textEntityTypeMediaTimestamp). Other media keep the link inert.
+- (void)openMediaOfMessage:(NSDictionary *)m atSeconds:(int32_t)seconds {
+	NSDictionary *target = m;
+	if (![m[@"kind"] isEqualToString:@"messageVideo"]){
+		int64_t replyId = [m[@"replyId"] isKindOfClass:NSNumber.class] ? [m[@"replyId"] longLongValue] : 0;
+		target = nil;
+		for (NSDictionary *row in self.rawMessages)
+			if (replyId && [row[@"id"] longLongValue] == replyId)
+				target = row;
+	}
+	if (![target[@"kind"] isEqualToString:@"messageVideo"])
+		return;
+	NSMutableDictionary *item = [target mutableCopy];
+	item[@"startSeconds"] = @(seconds);
+	item[@"playNow"] = @YES;
+	[TGMediaViewer presentItems:@[item] startAt:0 inChat:self.chatId isAlbum:NO];
+}
+
+/// A plain retry, unless TDLib says it would fail again: a chat that now
+/// charges more asks to pay (official's Confirm Payment), and a message only
+/// another identity may send says why instead of bouncing once more.
+- (void)retryFailedMessage:(NSDictionary *)m {
+	int64_t messageId = [m[@"id"] longLongValue];
+	NSString *blocker = m[@"failBlocker"];
+	if ([blocker isEqualToString:@"stars"]){
+		int64_t stars = [m[@"failStars"] longLongValue];
+		int64_t chatId = self.chatId;
+		NSString *button = TGLocalizedPluralValue(@"Pay for %@ Message", @"Pay for %@ Messages", @"1", 1);
+		[TGAlertSheet showConfirm:TGPaidResendConfirmText(self.chatTitle, stars)
+							title:TGLocalized(@"Confirm Payment")
+						   action:button
+					  destructive:NO
+						   inView:self.view
+						onConfirm:^{
+			[[TGSendStore shared] retryMessageId:messageId inChat:chatId paidStars:stars];
+		}];
+		return;
+	}
+	if ([blocker isEqualToString:@"sender"]){
+		NSString *reason = [m[@"errorMessage"] length] ? m[@"errorMessage"]
+				: TGLocalized(@"An error occurred.");
+		[TGAlertSheet showMessage:reason title:nil inView:self.view];
+		return;
+	}
+	[[TGSendStore shared] retryMessageId:messageId inChat:self.chatId];
+}
+
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
 	[tableView deselectRowAtIndexPath:indexPath animated:NO];
 	if (indexPath.row < 0 || indexPath.row >= (NSInteger)self.messages.count)
@@ -157,6 +228,11 @@
 		return;
 	}
 	NSString *kind = m[@"kind"];
+	// Beside the bubble is nothing; a file and a photo open only from
+	// themselves, and a reply jumps only from its quote.
+	TGMessageTapPart part = [self tapPartForRow:indexPath.row];
+	if (part == TGMessageTapNone)
+		return;
 
 	// A message Telegram refused: the tap is the retry. The hold menu's Retry
 	// row stays for anyone who looks for it there.
@@ -164,7 +240,7 @@
 	TGSendState sendState = [[TGSendStore shared] stateForMessageId:failedId
 															 inChat:self.chatId];
 	if (sendState == TGSendStateFailed || [m[@"failed"] boolValue]){
-		[[TGSendStore shared] retryMessageId:failedId inChat:self.chatId];
+		[self retryFailedMessage:m];
 		return;
 	}
 
@@ -223,7 +299,7 @@
 	// number selector - asking it for a long long is what brought the app
 	// down on the first tap on a voice note.
 	NSNumber *replyTo = [m[@"replyId"] isKindOfClass:NSNumber.class] ? m[@"replyId"] : nil;
-	if (replyTo){
+	if (replyTo && (part == TGMessageTapQuote || part == TGMessageTapWhole)){
 		[self jumpToReplyById:replyTo.longLongValue];
 		return;
 	}
@@ -237,7 +313,8 @@
 	}
 
 	if ([kind isEqualToString:@"messageDocument"]){
-		[self openDocumentMessage:m fromCell:[tableView cellForRowAtIndexPath:indexPath]];
+		if (part == TGMessageTapDocument || part == TGMessageTapWhole)
+			[self openDocumentMessage:m fromCell:[tableView cellForRowAtIndexPath:indexPath]];
 		return;
 	}
 
@@ -298,6 +375,8 @@
 		[kind isEqualToString:@"messageAnimation"] ||
 		[kind isEqualToString:@"messagePhoto"] ||
 		([m[@"isAlbum"] boolValue] && ![kind isEqualToString:@"messageDocument"])){
+		if (part != TGMessageTapPicture && part != TGMessageTapWhole)
+			return;
 		NSArray *albumMsgs = [m[@"isAlbum"] boolValue] ? m[@"albumMessages"] : nil;
 		if (albumMsgs.count) {
 			[TGMediaViewer presentItems:albumMsgs

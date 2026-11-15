@@ -78,6 +78,11 @@ NSArray *TGMediaPageAppending(NSArray *existing, NSArray *more);
 /// public surface reads it; the setter rebuilds it so one switch does not
 /// clear the sources this screen does not show.
 @property (nonatomic, copy) NSDictionary *reactionNotificationSettingsValue;
+/// Free voice transcriptions left this week (updateSpeechRecognitionTrial);
+/// nil until TDLib says.
+@property (nonatomic, strong) NSNumber *speechTrialLeftValue;
+@property (nonatomic, assign) NSInteger speechTrialWeekly;
+@property (nonatomic, assign) NSTimeInterval speechTrialResetDate;
 /// TDLib's local notification groups, as updateActiveNotifications and the
 /// two incremental updates shape them. Each group keeps its notifications
 /// sorted by id; the Active Notifications screen draws this and only asks the
@@ -299,6 +304,18 @@ NSNumber *TGPlayableVideoFileId(NSDictionary *video, NSArray *alternatives, int 
 NSNumber *TGPlayableVideoFileIdVintage(NSDictionary *video, NSArray *alternatives,
 									   NSNumber **fallback, int *width, int *height);
 NSDictionary *TGFlattenReplyMarkup(NSDictionary *markup);
+/// Why a failed send cannot just be retried: "stars" (the chat's price went
+/// up, the retry has to pay it), "sender" (only another identity may send
+/// it), or empty when resendMessages will do.
+NSString *TGFailedSendBlocker(NSDictionary *sendingState);
+/// A chat's action bar as the chat row carries it: actionBarKind,
+/// actionBarCanUnarchive, a join request's actionBarText and
+/// actionBarRequestDate, and the new contact's actionBarAccount
+/// (registrationMonth/Year, country, nameChanged, photoChanged).
+NSDictionary *TGActionBarFields(NSDictionary *bar);
+/// chat.business_bot_manage_bar as the chat row's "businessBot": botId,
+/// paused, canReply, manageUrl. Empty when no bot manages the chat.
+NSDictionary *TGBusinessBotBarFields(NSDictionary *bar);
 NSString *TGMessagePreview(NSDictionary *message);
 NSString *TGKnownMessagePreview(NSDictionary *message);
 NSString *TGServicePreview(NSDictionary *message);

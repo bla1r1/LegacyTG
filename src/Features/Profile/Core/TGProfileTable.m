@@ -10,6 +10,8 @@
 #import "TGSimilarChannelsViewController.h"
 #import "TGDMTopicsViewController.h"
 #import "TGProfileLogic.h"
+#import "TGContactsStore.h"
+#import "TGLocalization.h"
 #import "TGLocalization.h"
 #import "TGIcons.h"
 #import <AVFoundation/AVFoundation.h>
@@ -31,6 +33,7 @@ static CGFloat TGProfileDetailRowHeight(NSDictionary *row, CGFloat width) {
 	}
 	BOOL ownText = [kind isEqualToString:@"warning"] ||
 			[kind isEqualToString:@"addContact"] ||
+			[kind isEqualToString:@"addBotToChat"] ||
 			[kind isEqualToString:@"block"];
 	NSString *measured = ownText ? TGLocalized(value) : value;
 	CGFloat textHeight = [measured sizeWithFont:TGFontBody()
@@ -127,6 +130,8 @@ static CGFloat TGProfileDetailRowHeight(NSDictionary *row, CGFloat width) {
 				} else if ([kind isEqualToString:@"birthday"] &&
 						self.birthdayToday){
 					row[TGRowDetailColour] = [theme onlineColour];
+				} else if ([kind isEqualToString:@"verification"]){
+					row[TGRowTitleColour] = [theme secondaryTextColour];
 				} else if ([kind isEqualToString:@"bio"] ||
 						[kind isEqualToString:@"note"] ||
 						[kind isEqualToString:@"about"]){
@@ -138,6 +143,11 @@ static CGFloat TGProfileDetailRowHeight(NSDictionary *row, CGFloat width) {
 					row[TGRowTitleColour] = [theme accentColour];
 				} else {
 					row[TGRowDetailColour] = [theme accentColour];
+				}
+				if ([detail[@"also"] length]){
+					row[TGRowDetail] = [NSString stringWithFormat:@"%@\n%@",
+							row[TGRowDetail] ?: @"", detail[@"also"]];
+					row[TGRowDetailLines] = @2;
 				}
 				if ([kind isEqualToString:@"username"] ||
 						[kind isEqualToString:@"invite"]){
@@ -221,6 +231,10 @@ heightForHeaderInSection:(NSInteger)section {
 		similarVC.channelChatIds = self.similarChatIds;
 		similarVC.hidesBottomBarWhenPushed = YES;
 		[self.navigationController pushViewController:similarVC animated:YES];
+	} else if ([kind isEqualToString:@"businessHours"]){
+		// ponytail: official unfolds the week under the row; one alert
+		// carries the same seven lines.
+		[TGAlertSheet showMessage:row[@"week"] title:row[@"label"] inView:self.view];
 	} else if ([kind isEqualToString:@"businessLocation"]){
 		NSString *encoded = [row[@"value"] stringByAddingPercentEscapesUsingEncoding:
 				NSUTF8StringEncoding];
@@ -229,6 +243,20 @@ heightForHeaderInSection:(NSInteger)section {
 		[[UIApplication sharedApplication] openURL:[NSURL URLWithString:maps]];
 	} else if ([kind isEqualToString:@"addContact"]){
 		[self addToContactsTapped];
+	} else if ([kind isEqualToString:@"addBotToChat"]){
+		// Official opens a chat picker; the chosen group gets the bot.
+		TGForwardPicker *picker = [[TGForwardPicker alloc] init];
+		int64_t botId = self.userId;
+		__weak typeof(self) weakSelf = self;
+		picker.onPicked = ^(int64_t chatId){
+			[[TGContactsStore shared] addUser:botId toChat:chatId completion:^(BOOL ok, NSArray *failed){
+				TGProfileViewController *me = weakSelf;
+				if (me && !ok)
+					[TGAlertSheet showMessage:TGLocalized(@"An error occurred.") title:nil inView:me.view];
+			}];
+		};
+		[self presentViewController:[[UINavigationController alloc] initWithRootViewController:picker]
+						   animated:YES completion:nil];
 	} else if ([kind isEqualToString:@"block"]){
 		[self runMoreAction:(self.blocked ? @"Unblock" : @"Block")];
 	} else if ([kind isEqualToString:@"addBio"]){

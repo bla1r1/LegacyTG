@@ -141,7 +141,19 @@ static const NSUInteger kCardLineViewsCount = 4;
 	[self applyCardLayout];
 }
 
+- (void)applyColours {
+	TGTheme *theme = [TGTheme shared];
+	UIColor *accent = [theme bubbleAccentColour:self.mine];
+	self.kicker.textColor = accent;
+	self.title.textColor = self.mine ? [theme bubbleMineTextColour] : [theme bubbleTheirsTextColour];
+	for (UILabel *line in self.lineLabels)
+		line.textColor = [theme bubbleSecondaryColour:self.mine];
+	[self.button setTitleColor:accent forState:UIControlStateNormal];
+	self.button.layer.borderColor = accent.CGColor;
+}
+
 - (void)showCard:(TGMessageCard *)card {
+	[self applyColours];
 	// A row rebuilds its card on every reload; the same file already drawn
 	// stays, or each reload would blank and re-decode the picture.
 	BOOL samePicture = card && self.card && card.imageFileId == self.card.imageFileId &&

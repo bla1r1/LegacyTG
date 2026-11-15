@@ -6,6 +6,7 @@
 #import "TGWebsitesViewController.h"
 #import "TGRows.h"
 #import "TGSessionsStore.h"
+#import "TGStyle.h"
 #import "TGSettingsPageModels.h"
 
 
@@ -16,6 +17,18 @@
 @property (nonatomic, assign) NSInteger inactiveTtl;
 @property (nonatomic, assign) BOOL ttlLoaded;
 @end
+
+/// A session row with its device tile, as official draws every session.
+static NSDictionary *TGSessionRow(NSDictionary *row, NSDictionary *session) {
+	NSMutableDictionary *withTile = [row mutableCopy];
+	withTile[TGRowIcon] = @"devices";
+	NSString *tint = TGSessionDeviceTint(session);
+	withTile[TGRowColour] = [tint isEqualToString:@"green"] ? TGIconTileGreen()
+			: [tint isEqualToString:@"amber"] ? TGIconTileAmber()
+			: [tint isEqualToString:@"red"] ? TGIconTileRed()
+			: [tint isEqualToString:@"grey"] ? TGIconTileGrey() : TGIconTileAzure();
+	return withTile;
+}
 
 @implementation TGSessionsViewController
 
@@ -116,9 +129,9 @@
 			NSMutableArray *rows = [NSMutableArray array];
 			NSDictionary *current = [self currentSession];
 			if (current){
-				[rows addObject:TGSubtitleRow(TGSessionRowTitle(current),
+				[rows addObject:TGSessionRow(TGSubtitleRow(TGSessionRowTitle(current),
 						TGSessionRowDetail(current, YES),
-						^{ [weakSelf showSessionActions:current isCurrent:YES]; })];
+						^{ [weakSelf showSessionActions:current isCurrent:YES]; }), current)];
 			} else {
 				[rows addObject:TGRow(TGKindPlain, @"Loading...")];
 			}
@@ -131,9 +144,9 @@
 		} else if ([kind isEqualToString:@"unconfirmed"]){
 			NSMutableArray *rows = [NSMutableArray array];
 			for (NSDictionary *session in [self unconfirmedSessions]){
-				[rows addObject:TGSubtitleRow(TGSessionRowTitle(session),
+				[rows addObject:TGSessionRow(TGSubtitleRow(TGSessionRowTitle(session),
 						TGSessionRowDetail(session, NO),
-						^{ [weakSelf showSessionActions:session isCurrent:NO]; })];
+						^{ [weakSelf showSessionActions:session isCurrent:NO]; }), session)];
 			}
 			[sections addObject:TGSection(
 					TGLocalized(@"INCOMPLETE LOGIN ATTEMPTS"), nil, rows)];
@@ -144,9 +157,9 @@
 				[rows addObject:TGRow(TGKindPlain, @"No other sessions")];
 			} else {
 				for (NSDictionary *session in others){
-					[rows addObject:TGSubtitleRow(TGSessionRowTitle(session),
+					[rows addObject:TGSessionRow(TGSubtitleRow(TGSessionRowTitle(session),
 							TGSessionRowDetail(session, NO),
-							^{ [weakSelf showSessionActions:session isCurrent:NO]; })];
+							^{ [weakSelf showSessionActions:session isCurrent:NO]; }), session)];
 				}
 			}
 			[sections addObject:TGSection(TGLocalized(@"ACTIVE SESSIONS"), nil, rows)];

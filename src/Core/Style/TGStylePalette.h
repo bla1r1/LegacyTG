@@ -11,6 +11,9 @@ extern "C" {
 #pragma mark - colour that is not the theme's
 
 UIColor *TGColourLink(void);
+/// The four colours of a secret chat's key picture (secretChat.key_hash:
+/// FFFFFF, D5E6F3, 2D5775, 2F99C9), the same in every theme.
+UIColor *TGColourSecretKey(NSInteger index);
 UIColor *TGColourCodeBackground(void);
 UIColor *TGColourCodeBlockBackground(void);
 /// Telegram's colour for a sender's name, which no theme overrides.

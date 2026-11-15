@@ -655,4 +655,12 @@ static NSDictionary *spSpoilerEntity(NSInteger offset, NSInteger length, NSStrin
 	XCTAssertEqual(shown.length, text.length);
 }
 
+
+- (void)testBareUrlEntityIsALink {
+	NSString *text = @"see https://telegram.org now";
+	NSAttributedString *out = TGAttributedMessageText(text, @[@{@"offset" : @4, @"length" : @20,
+		@"type" : @{@"@type" : @"textEntityTypeUrl"}}], nil, nil);
+	XCTAssertEqualObjects([out attribute:@"TGLinkURL" atIndex:6 effectiveRange:NULL], @"https://telegram.org");
+}
+
 @end

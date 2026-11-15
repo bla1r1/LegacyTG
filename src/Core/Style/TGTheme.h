@@ -265,6 +265,12 @@ typedef NS_ENUM(NSInteger, TGButtonStyle) {
 - (UIColor *)searchBarBackgroundColour;
 - (UIColor *)timeColour;            ///< the stamp in the corner of a bubble
 - (UIColor *)timeMineColour;        ///< the same stamp in your own bubble
+/// A bubble's secondary text (file size, poll hint, card subtitle, stamp),
+/// its accent (links, card titles, button outlines, waveform) and its media
+/// placeholder fill, for your own bubble or someone else's.
+- (UIColor *)bubbleSecondaryColour:(BOOL)mine;
+- (UIColor *)bubbleAccentColour:(BOOL)mine;
+- (UIColor *)bubblePlaceholderColour:(BOOL)mine;
 - (UIColor *)listDateColour;        ///< the date on a chat list row
 - (UIColor *)cellDetailColour;      ///< the value on the right of a settings row
 - (UIColor *)sectionHeaderColour;   ///< the caption above a group of rows
@@ -286,6 +292,9 @@ typedef NS_ENUM(NSInteger, TGButtonStyle) {
 /// Darker than the sheet scrim: the lifted bubble has to read as the only
 /// thing in focus, and on iOS 6 there is no live blur to do that job alone.
 - (UIColor *)holdDimColour;
+/// The frost on the blurred chat behind a held message: what UIBlurEffect's
+/// light or dark material lays over its blur.
+- (UIColor *)holdFrostColour;
 
 #pragma mark - chat list
 

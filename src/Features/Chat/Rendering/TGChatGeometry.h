@@ -114,11 +114,11 @@ static inline void TGPlaceStamp(TGBubbleCell *cell, CGRect bubbleFrame,
 								CGFloat timeWidth, BOOL mine) {
 	CGFloat eyeRoom = 0;
 	if (cell.viewsEye && !cell.viewsEye.hidden) {
-		eyeRoom = kStampEyeSide + kStampEyePad;
-		CGFloat startX = bubbleFrame.size.width - timeWidth - kPadH;
+		eyeRoom = kStampEyeSide + kStampEyePad - TGMetricPadTiny;
+		CGFloat textRight = bubbleFrame.size.width - kPadH - (mine ? TGMetricStampTicksRoom : 0);
 		CGFloat stampY = bubbleFrame.size.height - TGMetricStampBottomInset;
 		cell.viewsEye.frame = CGRectMake(
-				startX,
+				TGStampEyeX(textRight, cell.time.text),
 				stampY + TGCenteredOrigin(TGMetricStampHeight, kStampEyeSide),
 				kStampEyeSide,
 				kStampEyeSide);

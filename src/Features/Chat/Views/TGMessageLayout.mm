@@ -7,6 +7,7 @@
 #import <CoreText/CoreText.h>
 #import "TGLruCache.hpp"
 #import "TGPerf.h"
+#import "TGUIFormat.h"
 #include <time.h>
 #include <string.h>
 
@@ -505,6 +506,15 @@ NSAttributedString *TGAttributedMessageTextRevealing(NSString *text, NSArray *en
 		baseFont = TGFontBody();
 	if (!textColor)
 		textColor = [UIColor blackColor];
+	// A date entity reads in the reader's clock; its words replace the
+	// sender's before anything is measured, so layout and drawing agree.
+	NSArray *datedEntities = nil;
+	NSString *dated = TGApplyDateEntities(text, entities, [[NSDate date] timeIntervalSince1970],
+			&datedEntities);
+	if (dated){
+		text = dated;
+		entities = datedEntities;
+	}
 
 	// 1. Emoji font substitution on base text
 	NSMutableAttributedString *str = nil;
@@ -561,7 +571,9 @@ NSAttributedString *TGAttributedMessageTextRevealing(NSString *text, NSArray *en
 			if (mono)
 				[str addAttribute:NSFontAttributeName value:mono range:range];
 			[str addAttribute:NSBackgroundColorAttributeName value:TGColourCodeBackground() range:range];
-		} else if ([type isEqualToString:@"textEntityTypeTextUrl"] || [type isEqualToString:@"messageEntityTextUrl"] || [type isEqualToString:@"url"] || [type isEqualToString:@"textEntityTypeUrl"]) {
+		} else if ([type isEqualToString:@"textEntityTypeTextUrl"] || [type isEqualToString:@"messageEntityTextUrl"]) {
+			// A bare URL is the next branch: it has no url of its own, and
+			// caught here it was left black and dead.
 			NSString *urlStr = nil;
 			if ([typeObj isKindOfClass:[NSDictionary class]]) {
 				urlStr = typeObj[@"url"];
@@ -583,6 +595,13 @@ NSAttributedString *TGAttributedMessageTextRevealing(NSString *text, NSArray *en
 			NSString *link = [text substringWithRange:range];
 			[str addAttribute:NSForegroundColorAttributeName value:linkColour range:range];
 			[str addAttribute:@"TGLinkURL" value:link range:range];
+		} else if ([type isEqualToString:@"textEntityTypeMediaTimestamp"] && [typeObj isKindOfClass:NSDictionary.class]) {
+			// "0:42" plays the message's video from there.
+			[str addAttribute:NSForegroundColorAttributeName value:linkColour range:range];
+			[str addAttribute:@"TGLinkURL"
+						value:TGMediaTimestampLink([typeObj[@"media_timestamp"] intValue]) range:range];
+		} else if ([type isEqualToString:@"textEntityTypeDateTime"]) {
+			[str addAttribute:NSForegroundColorAttributeName value:linkColour range:range];
 		} else if ([type isEqualToString:@"textEntityTypeMention"] || [type isEqualToString:@"textEntityTypeHashtag"] ||
 				   [type isEqualToString:@"textEntityTypeBotCommand"]) {
 			[str addAttribute:NSForegroundColorAttributeName value:linkColour range:range];

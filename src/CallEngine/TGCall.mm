@@ -139,6 +139,8 @@ static void TGInstallCrypto(void) {
 
 @interface TGCall ()
 @property (nonatomic, assign) TGCallState state;
+@property (nonatomic, copy) NSString *pendingStatus;
+@property (nonatomic, assign) BOOL needsRating;
 @property (nonatomic, assign) int32_t callId;
 @property (nonatomic, assign) int32_t lastCallId;
 @property (nonatomic, assign) int64_t peerUserId;
@@ -707,6 +709,7 @@ static const char *kBuildMarker = "BUILD_MARKER_AUDIO_FIX_V8";
 	self.outgoing = NO;
 	self.muted = NO;
 	self.endReason = nil;
+	self.needsRating = NO;
 	self.state = TGCallStateNone;
 }
 
@@ -755,7 +758,17 @@ static const char *kBuildMarker = "BUILD_MARKER_AUDIO_FIX_V8";
 	NSLog(@"TGCall: %@ (call %d, outgoing %d) full: %@", kind, self.callId, self.outgoing, call);
 
 	if ([kind isEqualToString:@"callStatePending"]){
+		NSString *status = ![state[@"is_created"] boolValue] ? @"Contacting..."
+				: ![state[@"is_received"] boolValue] ? @"Waiting..." : @"Ringing...";
+		BOOL moved = self.state == TGCallStatePending && ![status isEqualToString:self.pendingStatus];
+		self.pendingStatus = status;
 		self.state = TGCallStatePending;
+		// The state stays Pending while the words change; say so anyway.
+		if (moved)
+			dispatch_async(dispatch_get_main_queue(), ^{
+				if (self.onStateChanged)
+					self.onStateChanged(TGCallStatePending);
+			});
 		if (!self.outgoing) {
 			dispatch_async(dispatch_get_main_queue(), ^{
 				if (self.onIncomingCall)
@@ -776,6 +789,7 @@ static const char *kBuildMarker = "BUILD_MARKER_AUDIO_FIX_V8";
 		NSString *reason = state[@"reason"][@"@type"];
 		NSLog(@"TGCall: discarded, reason %@", reason ?: @"(none)");
 		self.endReason = [self humanReason:reason];
+		self.needsRating = [state[@"need_rating"] boolValue];
 		[self teardown];
 		self.state = TGCallStateEnded;
 	} else if ([kind isEqualToString:@"callStateError"]){

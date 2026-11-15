@@ -408,9 +408,12 @@
 				detail:nil action:@"clearByDate" opens:YES destructive:YES
 				disabled:!self.canDeleteMessages]];
 		if (supergroup){
-			[tools addObject:[self valueRow:TGLocalized(@"Group Stickers")
-					detail:nil action:@"groupStickers" opens:YES
-					destructive:NO disabled:!self.canChangeInfo]];
+			// Official lists the set only where Telegram lets this group
+			// have one (supergroupFullInfo.can_set_sticker_set).
+			if ([self.groupInfo[@"can_set_sticker_set"] boolValue])
+				[tools addObject:[self valueRow:TGLocalized(@"Group Stickers")
+						detail:nil action:@"groupStickers" opens:YES
+						destructive:NO disabled:!self.canChangeInfo]];
 			[tools addObject:[self valueRow:TGLocalized(@"Custom Emoji")
 					detail:nil action:@"customEmojiStickers" opens:YES
 					destructive:NO disabled:!self.canChangeInfo]];

@@ -148,4 +148,12 @@
 	XCTAssertFalse([text rangeOfString:@".0"].location != NSNotFound);
 }
 
+
+- (void)testPublicPhoto_OfferedOnlyWhenTheRealOneIsHidden {
+	XCTAssertFalse(TGPrivacyOffersPublicPhoto(@"ShowProfilePhoto", @"everybody", 0));
+	XCTAssertTrue(TGPrivacyOffersPublicPhoto(@"ShowProfilePhoto", @"everybody", 2));
+	XCTAssertTrue(TGPrivacyOffersPublicPhoto(@"ShowProfilePhoto", @"contacts", 0));
+	XCTAssertFalse(TGPrivacyOffersPublicPhoto(@"ShowStatus", @"nobody", 0));
+}
+
 @end

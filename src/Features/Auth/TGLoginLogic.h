@@ -22,3 +22,15 @@ FOUNDATION_EXPORT BOOL TGLoginShowsBottomButton(BOOL fieldStep, CGFloat width);
 /// Where the stack continues after the button's row: `y` unchanged when the
 /// button is not shown, else below the row and one stack step.
 FOUNDATION_EXPORT CGFloat TGLoginYAfterActionRow(CGFloat y, CGFloat width);
+/// The code step's sentence for an SMS word or phrase code, with the
+/// official hint at its start when TDLib gives first_letter / first_word.
+FOUNDATION_EXPORT NSString *TGLoginWordCodeSentence(NSDictionary *codeType, NSString *phone);
+
+/// "in 5 minutes", "in 3 hours", "in 6 days" (unmuteIntervalString,
+/// MuteExpires.*), for the email reset waits.
+FOUNDATION_EXPORT NSString *TGLoginResetInterval(NSInteger seconds);
+
+/// Under the email code field while a reset is pending
+/// (emailAddressResetStatePending.reset_in): "Email will be reset in 4:59"
+/// within a day, "... in 6 days" past it, "Please wait..." at zero.
+FOUNDATION_EXPORT NSString *TGLoginEmailResetPendingText(NSInteger resetIn);

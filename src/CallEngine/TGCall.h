@@ -37,6 +37,15 @@ typedef NS_ENUM(NSInteger, TGCallState) {
 - (void)setVideoEnabled:(BOOL)enabled;
 - (void)switchCamera;
 
+/// An outgoing call's progress before it is answered, as official words it:
+/// "Contacting..." until the server made it, "Waiting..." until the other
+/// phone has it, then "Ringing..." (callStatePending is_created, is_received).
+@property (nonatomic, readonly) NSString *pendingStatus;
+
+/// Telegram asked for a rating of the call that just ended
+/// (callStateDiscarded need_rating); official asks only then.
+@property (nonatomic, readonly) BOOL needsRating;
+
 /// Why the last call ended, when the other side said. Nil otherwise.
 @property (nonatomic, readonly) NSString *endReason;
 

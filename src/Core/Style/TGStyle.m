@@ -50,6 +50,13 @@ UIFont *TGFontEmojiMeta(void)     {
 }
 UIFont *TGFontEmojiLarge(void)    { return [UIFont systemFontOfSize:TGSizeEmojiLg]; }
 
+UIColor *TGColourSecretKey(NSInteger index) {
+	static const unsigned int rgb[] = {0xFFFFFF, 0xD5E6F3, 0x2D5775, 0x2F99C9};
+	unsigned int c = rgb[(NSUInteger)index % 4];
+	return [UIColor colorWithRed:((c >> 16) & 0xFF) / 255.0f green:((c >> 8) & 0xFF) / 255.0f
+							blue:(c & 0xFF) / 255.0f alpha:1.0f];
+}
+
 UIColor *TGColourLink(void) {
 	return [UIColor colorWithRed:0.18f green:0.54f blue:0.92f alpha:1.0f];
 }

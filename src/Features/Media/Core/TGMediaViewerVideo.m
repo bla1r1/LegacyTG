@@ -129,6 +129,9 @@ static const int kSoftVideoMaxLongSide = 720;
 			selector:@selector(movieFinished)
 				name:AVPlayerItemDidPlayToEndTimeNotification object:playerItem];
 
+	double start = [item[@"startSeconds"] doubleValue];
+	if (start > 0)
+		[self.player seekToTime:CMTimeMakeWithSeconds(start, 600)];
 	[self.player play];
 	self.movieTimer = [NSTimer scheduledTimerWithTimeInterval:0.3 target:self
 			selector:@selector(movieTicked) userInfo:nil repeats:YES];
@@ -284,6 +287,9 @@ static const int kSoftVideoMaxLongSide = 720;
 		[me showVideoFormatAlert];
 	};
 
+	double start = [item[@"startSeconds"] doubleValue];
+	if (start > 0)
+		[soft seekToTime:start];
 	[soft play];
 	self.movieTimer = [NSTimer scheduledTimerWithTimeInterval:0.3 target:self
 			selector:@selector(movieTicked) userInfo:nil repeats:YES];

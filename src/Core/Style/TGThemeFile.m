@@ -152,6 +152,9 @@ static id TGDig(NSDictionary *root, NSString *path) {
 		{@"bubbleTheirs",  @"chat.message.incoming.bubble.withoutWp.bg|chat.message.incoming.bubble.withWp.bg"},
 		{@"bubbleMineText",@"chat.message.outgoing.primaryText"},
 		{@"bubbleTheirsText",@"chat.message.incoming.primaryText"},
+		{@"bubbleMineSecondary", @"chat.message.outgoing.secondaryText"},
+		{@"bubbleMineAccent", @"chat.message.outgoing.accentText|chat.message.outgoing.linkText"},
+		{@"bubbleMinePlaceholder", @"chat.message.outgoing.mediaPlaceholder"},
 		{@"listBackground",@"chatList.bg|list.plainBg"},
 		{@"groupedBackground", @"list.blocksBg|chatList.bg"},
 		{@"cardBackground",@"list.itemBlocksBg|list.plainBg|chatList.itemBg"},
@@ -453,3 +456,7 @@ static UIColor *TGColourFromDesktopHex(NSString *raw) {
 @end
 
 // vim:ft=objc
+
+UIColor *TGColourFromHexString(NSString *hex) {
+	return TGColourFromHex(hex);
+}

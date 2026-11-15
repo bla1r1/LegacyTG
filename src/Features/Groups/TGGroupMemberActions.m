@@ -127,7 +127,9 @@ void TGPresentControllerFrom(UIViewController *controller, UIViewController *hos
 		NSMutableArray *choices = [NSMutableArray arrayWithObject:@"Send Message"];
 		if (iCanEdit){
 			[choices addObject:@"Add Member Tag"];
-			[choices addObject:theyAreAdmin ? @"Dismiss Admin" : @"Promote"];
+			if (TGGroupMemberCanBePromoted(chatId, iAmOwner, theyAreAdmin,
+					[member[@"inviterId"] longLongValue], myId))
+				[choices addObject:theyAreAdmin ? @"Dismiss Admin" : @"Promote"];
 			[choices addObject:@"Remove"];
 		}
 
@@ -193,11 +195,10 @@ void TGPresentControllerFrom(UIViewController *controller, UIViewController *hos
 				}];
 				return;
 			}
-			NSString *say = [result isEqualToString:@"paidMessages"]
-					? @"An error occurred."
-					: ([result isEqualToString:@"userRestrictsNewChats"]
-					   ? @"An error occurred."
-					   : @"An error occurred.");
+			NSString *say = [result isEqualToString:@"userRestrictsNewChats"]
+					? [TGLocalizedFormat(@"**%@** only accepts messages from contacts and **Premium** users.", name ?: @"")
+							stringByReplacingOccurrencesOfString:@"**" withString:@""]
+					: TGLocalized(@"An error occurred.");
 			[TGAlertSheet showMessage:say
 								title:name.length ? name : @"Message"
 							   inView:me.view];

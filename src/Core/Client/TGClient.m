@@ -49,6 +49,7 @@ NSString *const TGDirectMessagesTopicsChangedNotification = @"TGDirectMessagesTo
 NSString *const TGStakeDiceStateChangedNotification = @"TGStakeDiceStateChangedNotification";
 NSString *const TGApplicationVerificationRequiredNotification = @"TGApplicationVerificationRequiredNotification";
 NSString *const TGChatActionBarChangedNotification = @"TGChatActionBarChangedNotification";
+NSString *const TGSpeedLimitNotification = @"TGSpeedLimitNotification";
 NSString *const TGSavedTopicsChangedNotification = @"TGSavedTopicsChangedNotification";
 NSString *const TGServiceNotificationReceivedNotification = @"TGServiceNotificationReceivedNotification";
 NSString *const TGTermsOfServiceReceivedNotification = @"TGTermsOfServiceReceivedNotification";

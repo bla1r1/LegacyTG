@@ -8,10 +8,30 @@
 #import "TGMessageStore.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
+#import "TGBase64.h"
 #import "TGUpdateRouter.h"
 #import "TGDownloadStore.h"
 
 NSString *const TGMessageStoreChangedNotification = @"TGMessageStoreChangedNotification";
+
+NSArray *TGBotCommandRows(NSArray *sets) {
+	NSMutableArray *rows = [NSMutableArray array];
+	if (![sets isKindOfClass:NSArray.class])
+		return rows;
+	for (NSDictionary *set in sets){
+		if (![set isKindOfClass:NSDictionary.class] || ![set[@"commands"] isKindOfClass:NSArray.class])
+			continue;
+		for (NSDictionary *command in set[@"commands"]){
+			NSString *name = [command isKindOfClass:NSDictionary.class] ? command[@"command"] : nil;
+			if (![name isKindOfClass:NSString.class] || !name.length)
+				continue;
+			[rows addObject:@{@"command" : name,
+							  @"description" : command[@"description"] ?: @"",
+							  @"botId" : set[@"bot_user_id"] ?: @0}];
+		}
+	}
+	return rows;
+}
 
 @implementation TGMessageStore
 
@@ -678,6 +698,112 @@ NSString *const TGMessageStoreChangedNotification = @"TGMessageStoreChangedNotif
 
 - (void)markChecklistTasksAsDone:(NSArray *)doneTaskIds notDoneTaskIds:(NSArray *)notDoneTaskIds onMessage:(int64_t)messageId inChat:(int64_t)chatId completion:(void (^)(BOOL ok, NSString *error))completion {
 	[[TGClient shared] markChecklistTasksAsDone:doneTaskIds notDoneTaskIds:notDoneTaskIds onMessage:messageId inChat:chatId completion:completion];
+}
+
+- (void)botCommandsForChat:(int64_t)chatId completion:(void (^)(NSArray *commands))completion {
+	TGClient *client = [TGClient shared];
+	void (^finish)(NSArray *) = ^(NSArray *sets){
+		if (completion)
+			completion(TGBotCommandRows(sets));
+	};
+	[client chatRecordForChat:chatId completion:^(NSDictionary *chat){
+		NSDictionary *type = chat[@"type"];
+		NSString *kind = type[@"@type"];
+		if ([kind isEqualToString:@"chatTypePrivate"]){
+			[client request:@{@"@type" : @"getUserFullInfo", @"user_id" : type[@"user_id"] ?: @0}
+				 completion:^(NSDictionary *full){
+				NSDictionary *bot = [full[@"bot_info"] isKindOfClass:NSDictionary.class] ? full[@"bot_info"] : nil;
+				finish(bot ? @[@{@"bot_user_id" : type[@"user_id"] ?: @0,
+								 @"commands" : bot[@"commands"] ?: @[]}] : @[]);
+			}];
+		} else if ([kind isEqualToString:@"chatTypeBasicGroup"]){
+			[client request:@{@"@type" : @"getBasicGroupFullInfo",
+							  @"basic_group_id" : type[@"basic_group_id"] ?: @0}
+				 completion:^(NSDictionary *full){ finish(full[@"bot_commands"]); }];
+		} else if ([kind isEqualToString:@"chatTypeSupergroup"] && ![type[@"is_channel"] boolValue]){
+			[client request:@{@"@type" : @"getSupergroupFullInfo",
+							  @"supergroup_id" : type[@"supergroup_id"] ?: @0}
+				 completion:^(NSDictionary *full){ finish(full[@"bot_commands"]); }];
+		} else {
+			finish(@[]);
+		}
+	}];
+}
+
+- (void)statisticalGraph:(NSString *)token inChat:(int64_t)chatId
+			  completion:(void (^)(NSString *json, NSString *error))completion {
+	[[TGClient shared] request:@{@"@type" : @"getStatisticalGraph", @"chat_id" : @(chatId),
+								 @"token" : token ?: @"", @"x" : @0}
+				   completion:^(NSDictionary *graph){
+		if (completion)
+			completion([graph[@"json_data"] isKindOfClass:NSString.class] ? graph[@"json_data"] : nil,
+					   graph[@"error_message"] ?: graph[@"message"]);
+	}];
+}
+
+- (void)secretChatKeyHash:(NSInteger)secretChatId completion:(void (^)(NSData *keyHash))completion {
+	[[TGClient shared] request:@{@"@type" : @"getSecretChat", @"secret_chat_id" : @(secretChatId)}
+				   completion:^(NSDictionary *chat){
+		NSString *hash = [chat[@"key_hash"] isKindOfClass:NSString.class] ? chat[@"key_hash"] : nil;
+		if (completion)
+			completion(hash.length ? TGBase64Decode(hash) : nil);
+	}];
+}
+
+- (void)setBusinessBotPaused:(BOOL)paused inChat:(int64_t)chatId {
+	[[TGClient shared] send:@{@"@type" : @"toggleBusinessConnectedBotChatIsPaused",
+							  @"chat_id" : @(chatId), @"is_paused" : @(paused)}];
+}
+
+- (void)removeBusinessBotFromChat:(int64_t)chatId {
+	[[TGClient shared] send:@{@"@type" : @"removeBusinessConnectedBotFromChat", @"chat_id" : @(chatId)}];
+}
+
+- (NSInteger)freeTranscriptionsLeft {
+	TGClient *client = [TGClient shared];
+	if ([client.me[@"is_premium"] boolValue] || !client.speechTrialLeftValue)
+		return -1;
+	return client.speechTrialLeftValue.integerValue;
+}
+
+- (NSInteger)freeTranscriptionsWeekly {
+	return [TGClient shared].speechTrialWeekly;
+}
+
+- (NSTimeInterval)freeTranscriptionsResetDate {
+	return [TGClient shared].speechTrialResetDate;
+}
+
+- (void)unreadJumpCountsForChat:(int64_t)chatId
+					   completion:(void (^)(NSInteger mentions, NSInteger reactions,
+											NSInteger pollVotes))completion {
+	[[TGClient shared] chatRecordForChat:chatId completion:^(NSDictionary *chat){
+		if (completion)
+			completion([chat[@"unread_mention_count"] integerValue],
+					   [chat[@"unread_reaction_count"] integerValue],
+					   [chat[@"unread_poll_vote_count"] integerValue]);
+	}];
+}
+
+- (void)oldestUnreadMessageInChat:(int64_t)chatId
+						   filter:(NSString *)filter
+					   completion:(void (^)(int64_t messageId))completion {
+	// ponytail: newest 100 and take the last; a chat with more unread
+	// reactions than that starts at the 100th, and the next tap goes on.
+	[[TGClient shared] request:@{
+		@"@type"           : @"searchChatMessages",
+		@"chat_id"         : @(chatId),
+		@"query"           : @"",
+		@"from_message_id" : @0,
+		@"offset"          : @0,
+		@"limit"           : @100,
+		@"filter"          : @{@"@type" : filter ?: @""},
+	} completion:^(NSDictionary *result){
+		NSArray *messages = [result[@"messages"] isKindOfClass:NSArray.class]
+				? result[@"messages"] : nil;
+		if (completion)
+			completion([[messages.lastObject objectForKey:@"id"] longLongValue]);
+	}];
 }
 
 - (void)markRead:(NSArray *)messageIds inChat:(int64_t)chatId {

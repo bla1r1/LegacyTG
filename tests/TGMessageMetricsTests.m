@@ -70,10 +70,16 @@
 - (void)testDecoration_EachPartAddsItsHeight {
 	NSDictionary *m = @{ @"forward": @"Bob", @"canComment": @YES,
 			@"inlineRows": @[ @[], @[] ] };
-	CGFloat expected = TGMetricQuoteForwardLine + kQuoteBlock + TGMetricLineBody +
+	CGFloat expected = TGMetricQuoteForwardLine + kQuoteBlock + kCommentsBar +
 			2 * (TGMetricBotButtonHeight + TGMetricBotButtonGap) + TGMetricBotButtonGap;
 	XCTAssertEqual(TGMessageDecorationHeight(m, YES), expected);
 	XCTAssertEqual(TGMessageDecorationHeight(m, NO), expected - kQuoteBlock);
+}
+
+- (void)testComments_TitleSpacesTheCount {
+	XCTAssertEqualObjects(TGMessageCommentsTitle(12), @"12 Comments");
+	XCTAssertEqualObjects(TGMessageCommentsTitle(1), @"1 Comment");
+	XCTAssertEqualObjects(TGMessageCommentsTitle(0), @"Leave a Comment");
 }
 
 #pragma mark - poll and checklist
@@ -119,6 +125,53 @@
 	NSArray *loaded = @[ @{ @"id": @9, @"kind": @"messageText", @"text": @"Hello world" } ];
 	XCTAssertEqualObjects(TGMessageServiceLine(pin, @"Ann", nil), @"Ann pinned a message");
 	XCTAssertEqualObjects(TGMessageServiceLine(pin, @"Ann", loaded), @"Ann pinned \"Hello world\"");
+}
+
+
+#pragma mark - batch 3 fields
+
+// Message.ImportedDateFormat: the first day comes before "Imported".
+- (void)testStamp_ImportedMessageKeepsItsFirstDate {
+	NSString *plain = TGMessageStampText(@{@"date" : @1700000000});
+	NSString *imported = TGMessageStampText(@{@"date" : @1700000000, @"importDate" : @1600000000});
+	XCTAssertTrue([imported rangeOfString:@" Imported "].location != NSNotFound, @"%@", imported);
+	XCTAssertTrue([imported hasSuffix:plain]);
+	XCTAssertTrue(TGMessageStampWidth(@{@"date" : @1700000000, @"importDate" : @1600000000})
+			> TGMessageStampWidth(@{@"date" : @1700000000}));
+}
+
+- (void)testBoostBadge_OnlyIncomingAndCountPastOne {
+	XCTAssertNil(TGMessageBoostBadgeText(@{}));
+	XCTAssertNil(TGMessageBoostBadgeText(@{@"boostCount" : @3, @"outgoing" : @YES}));
+	XCTAssertEqualObjects(TGMessageBoostBadgeText(@{@"boostCount" : @1}), @"");
+	XCTAssertEqualObjects(TGMessageBoostBadgeText(@{@"boostCount" : @3}), @"3");
+	XCTAssertTrue(TGMessageBoostBadgeWidth(@{@"boostCount" : @3}) >
+			TGMessageBoostBadgeWidth(@{@"boostCount" : @1}));
+	XCTAssertEqual(TGMessageBoostBadgeWidth(@{}), (CGFloat)0);
+}
+
+- (void)testLinkPreviewMedia_LargeFillsTheColumnSmallIsTheCorner {
+	XCTAssertTrue(CGSizeEqualToSize(TGLinkPreviewMediaSize(@{}, 200), CGSizeZero));
+	NSDictionary *small = @{@"linkPreviewPhotoId" : @5, @"linkPreviewPhotoW" : @800,
+			@"linkPreviewPhotoH" : @400, @"linkPreviewLarge" : @NO};
+	XCTAssertEqual(TGLinkPreviewMediaSize(small, 200).width, kLinkThumbSide);
+	NSMutableDictionary *large = [small mutableCopy];
+	large[@"linkPreviewLarge"] = @YES;
+	CGSize size = TGLinkPreviewMediaSize(large, 200);
+	XCTAssertEqual(size.width, (CGFloat)200);
+	XCTAssertEqual(size.height, (CGFloat)100);
+}
+
+
+// The eye sits its own gap from the count, not that plus the label's slack:
+// "after the views the gap is large" on every channel post.
+- (void)testStampEye_GapIsTheEyePadOnly {
+	NSDictionary *post = @{@"date" : @1700000000, @"viewCount" : @1800000};
+	TGMessageStampParts p = TGMessageStampPlace(post, 300, 50);
+	CGFloat words = TGTextSize(TGMessageStampText(post), TGFontMicro(), 0).width;
+	CGFloat textStart = CGRectGetMaxX(p.text) - words;
+	XCTAssertTrue(fabs(textStart - CGRectGetMaxX(p.eye) - kStampEyePad) < 0.01, @"gap %f", textStart - CGRectGetMaxX(p.eye));
+	XCTAssertTrue(fabs(p.width - (300 - p.eye.origin.x)) < 0.01);
 }
 
 @end

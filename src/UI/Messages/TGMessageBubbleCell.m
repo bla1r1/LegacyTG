@@ -70,7 +70,7 @@ static const NSUInteger kMaxCustomEmojiViews = 3;
 	// Pictures arrive pre-cropped and pre-rounded (TGIcons roundedImage:);
 	// cornerRadius here only shapes the placeholder fill, which costs nothing.
 	self.picture.layer.borderColor = [theme separatorColour].CGColor;
-	self.picture.layer.borderWidth = 1.0f;
+	self.picture.layer.borderWidth = TGMetricBorderNone;
 	self.picture.layer.cornerRadius = TGMetricCornerSmall;
 	[self.bubble addSubview:self.picture];
 
@@ -254,6 +254,11 @@ static const NSUInteger kMaxCustomEmojiViews = 3;
 	self.mediaStamp.layer.cornerRadius = TGMetricCornerControl;
 	self.mediaStamp.hidden = YES;
 	[self.bubble addSubview:self.mediaStamp];
+
+	self.stampPlate = [[UIView alloc] init];
+	self.stampPlate.layer.cornerRadius = TGMetricCornerControl;
+	self.stampPlate.hidden = YES;
+	[self.bubble addSubview:self.stampPlate];
 
 	self.time = [[UILabel alloc] init];
 	self.time.font = TGFontMicro();
@@ -739,6 +744,7 @@ static const NSUInteger kMaxCustomEmojiViews = 3;
 	self.contactSeparatorV.hidden = YES;
 	self.mediaStamp.hidden = YES;
 	self.mediaStamp.text = nil;
+	self.stampPlate.hidden = YES;
 	self.unreadDot.hidden = YES;
 	self.docMessageId = 0;
 
@@ -760,6 +766,8 @@ static const NSUInteger kMaxCustomEmojiViews = 3;
 		[self.bubble addSubview:self.viewsEye];
 	if (self.ticks.superview != self.bubble)
 		[self.bubble addSubview:self.ticks];
+	if (self.stampPlate.superview != self.bubble)
+		[self.bubble insertSubview:self.stampPlate belowSubview:self.time];
 	if (self.mediaStamp.superview != self.bubble) {
 		[self.bubble addSubview:self.mediaStamp];
 		self.mediaStamp.layer.cornerRadius = TGMetricCornerControl;

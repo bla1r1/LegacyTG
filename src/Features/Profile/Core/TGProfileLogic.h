@@ -21,6 +21,12 @@ FOUNDATION_EXPORT NSString *TGProfileShortLinkText(NSString *link);
 /// bio, note, businessLocation, isOwnProfile, isContact, isBot, blocked.
 FOUNDATION_EXPORT NSArray *TGProfileUserInfoRows(NSDictionary *info);
 
+/// The business hours row (PeerInfoScreenBusinessHoursItem): "Open · 09:00 –
+/// 18:00" or "Closed · Opens in 2 hours" from local_opening_hours (already in
+/// the reader's zone), next_open_in and next_close_in, and the week under
+/// "week" for the tap. Nil for a profile without hours.
+FOUNDATION_EXPORT NSDictionary *TGBusinessHoursRow(NSDictionary *businessInfo, NSTimeInterval now);
+
 /// The info card for a group or channel: link, description, settings. The
 /// community is its own section, and the linked chat belongs to the edit
 /// screen; similar channels are a media pane. Neither is an info row.

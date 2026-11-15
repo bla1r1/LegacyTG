@@ -33,6 +33,9 @@ CGFloat TGRowsDataSourceHeight(NSDictionary *row, CGFloat width);
 
 #if TARGET_OS_IPHONE
 
+/// The TGKindChart cell: its picture across the card, inset to the text column.
+UITableViewCell *TGChartRowCellFor(UITableView *tableView, NSDictionary *row);
+
 @interface TGRowsDataSource : NSObject <UITableViewDataSource, UITableViewDelegate>
 
 /// "header", "footer" and "rows", the same shape TGRowsViewController takes.

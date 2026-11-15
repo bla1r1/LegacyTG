@@ -709,6 +709,18 @@ NSString *TGErrorMessage(NSDictionary *message, NSDictionary *fallback) {
 	[self resendMessages:@[@(messageId)] inChat:chatId];
 }
 
+- (void)retryMessageId:(int64_t)messageId inChat:(int64_t)chatId paidStars:(int64_t)stars {
+	if (messageId <= 0)
+		return;
+	[[TGClient shared] send:@{
+		@"@type"                   : @"resendMessages",
+		@"chat_id"                 : @(chatId),
+		@"message_ids"             : @[@(messageId)],
+		@"paid_message_star_count" : @(MAX((int64_t)0, stars)),
+	}];
+	[self markSendingMessageId:messageId chatId:chatId];
+}
+
 - (void)markSendingMessageId:(int64_t)messageId chatId:(int64_t)chatId {
 	TGSendKey key = {chatId, messageId};
 	auto found = _states.find(key);

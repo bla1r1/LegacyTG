@@ -36,6 +36,14 @@
 
 - (NSDictionary *)cachedCommunityFullInfo:(int64_t)communityId;
 
+/// The Stars a message to this user costs (canSendMessageToUserResult
+/// UserHasPaidMessages); 0 when it is free or the answer is anything else.
+- (void)paidMessageStarsForUser:(int64_t)userId completion:(void (^)(int64_t stars))completion;
+/// Both answers at once: the price, and whether only Premium accounts may
+/// start a chat with this user. Asked only when the user record hints at
+/// either (restricts_new_chats, paid_message_star_count).
+- (void)messagingStateForUser:(int64_t)userId
+				   completion:(void (^)(int64_t stars, BOOL premiumOnly))completion;
 - (void)canSendMessageToUser:(int64_t)userId
 				  completion:(void (^)(NSString *result))completion;
 
@@ -227,6 +235,12 @@
                    completion:(void (^)(BOOL ok, NSString *error))completion;
 
 - (void)setProfilePhotoAtPath:(NSString *)path completion:(void (^)(BOOL ok))completion;
+
+/// Our public photo (userFullInfo.public_photo): what people the photo
+/// privacy rule hides the real one from see instead. Its id, or 0 for none.
+- (void)publicPhotoIdWithCompletion:(void (^)(int64_t photoId))completion;
+- (void)setPublicPhotoAtPath:(NSString *)path completion:(void (^)(BOOL ok))completion;
+- (void)removePublicPhoto:(int64_t)photoId completion:(void (^)(BOOL ok))completion;
 
 - (void)setProfileShareThemeForChat:(int64_t)chatId
 						 backdropId:(NSInteger)backdropId

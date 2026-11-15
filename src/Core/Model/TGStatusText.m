@@ -38,11 +38,24 @@ static NSString *TGOfflinePhrase(NSTimeInterval was){
 	return @"last seen a long time ago";
 }
 
+BOOL TGUserStatusOnlineAt(NSDictionary *status, NSTimeInterval now){
+	if (![status isKindOfClass:NSDictionary.class] ||
+		![status[@"@type"] isEqualToString:@"userStatusOnline"])
+		return NO;
+	NSTimeInterval expires = [status[@"expires"] doubleValue];
+	return expires <= 0 || expires > now;
+}
+
 NSString *TGStatusTextFromTDStatus(NSDictionary *status){
 	NSString *kind = status[@"@type"];
 	NSString *text = nil;
 
 	if ([kind isEqualToString:@"userStatusOnline"]){
+		// Past its expiry it is the moment they were last seen, as official
+		// reads presence (`.present(until)` older than now).
+		NSTimeInterval expires = [status[@"expires"] doubleValue];
+		if (!TGUserStatusOnlineAt(status, [NSDate date].timeIntervalSince1970))
+			return TGOfflinePhrase(expires);
 		text = @"online";
 	} else if ([kind isEqualToString:@"userStatusRecently"]){
 		text = @"last seen recently";

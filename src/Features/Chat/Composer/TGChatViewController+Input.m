@@ -1,4 +1,5 @@
 #import "TGChatViewControllerInternal.h"
+#import "TGProfileStore.h"
 #import "TGLocalization.h"
 #import "TGChatParityModel.h"
 #import "TGChatActionMenuModel.h"
@@ -311,6 +312,23 @@
 - (void)updateComposerPlaceholder {
 	self.input.placeholder = TGChatComposerPlaceholder(self.isChannel,
 			self.silentPosting, self.canBeAnonymous);
+	// A person who charges for messages: the field names the price.
+	if (self.isGroup || self.isChannel || self.chatId <= 0)
+		return;
+	__weak typeof(self) weakSelf = self;
+	[[TGProfileStore shared] userProfile:self.chatId completion:^(NSDictionary *info){
+		weakSelf.voiceRestricted = [info[@"voiceRestricted"] boolValue];
+	}];
+	[[TGProfileStore shared] messagingStateForUser:self.chatId
+										completion:^(int64_t stars, BOOL premiumOnly){
+		// Chat.MessagingRestrictedPlaceholder for a person who takes new
+		// chats only from Premium accounts; else the price, if any.
+		NSString *word = premiumOnly
+				? TGLocalizedFormat(@"Only Premium users can message %@.", weakSelf.chatTitle ?: @"")
+				: TGPaidMessagePlaceholder(stars);
+		if (word)
+			weakSelf.input.placeholder = word;
+	}];
 }
 
 /// The bar's own growth: the text view asks how many lines it has, the field
@@ -685,6 +703,23 @@ static void TGTextFieldSetSelectedRange(UITextView *tf, NSRange range) {
 			[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 	if (!text.length)
 		return;
+
+	// Slow mode: official keeps the text and says when it can go
+	// (Chat.SlowmodeTooltip) instead of sending a message Telegram refuses.
+	NSTimeInterval wait = self.slowModeUntil - [NSDate date].timeIntervalSince1970;
+	if (self.editingId == 0 && wait > 0){
+		[TGSnackbar showInView:self.view
+						  text:TGLocalizedFormat(@"Slowmode is enabled. You can send\nyour next message in %@.",
+								TGSlowModeWaitText(wait))
+					   seconds:3 onCommit:nil];
+		return;
+	}
+	// This send starts a new wait; ask again once Telegram has it.
+	if (self.isGroup && !self.isChannel && self.editingId == 0){
+		__weak typeof(self) weakSelf = self;
+		dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2 * NSEC_PER_SEC)),
+				dispatch_get_main_queue(), ^{ [weakSelf refreshSlowModeWait]; });
+	}
 
 	if (self.editingId != 0 && self.editingIsCaption){
 		__weak typeof(self) weakSelf = self;
@@ -1304,6 +1339,7 @@ static NSInteger const kTGRepeatPeriods[] = {0, 86400, 604800, 2592000};
 	if ([self stickerPanelShown])
 		[self hideStickerPanel];
 	[self hideBotKeyboard];
+	[self hideBotCommands];
 	CGRect kb = [[note.userInfo objectForKey:UIKeyboardFrameEndUserInfoKey] CGRectValue];
 	[self shiftForKeyboardHeight:kb.size.height];
 }
@@ -1312,6 +1348,14 @@ static NSInteger const kTGRepeatPeriods[] = {0, 86400, 604800, 2592000};
 	// Going down because the panel is coming up: the panel moves the bar.
 	if ([self stickerPanelShown])
 		return;
+	// A persistent bot keyboard is what the composer rests on: put the text
+	// keyboard away and the bot's comes back, as official's inputButtons
+	// mode does. Not while this screen is being left.
+	if ([self.replyKeyboard[@"persistent"] boolValue] && ![self botKeyboardShown] &&
+		self.navigationController.topViewController == self){
+		[self toggleBotKeyboard];
+		return;
+	}
 	[self shiftForKeyboardHeight:0];
 }
 

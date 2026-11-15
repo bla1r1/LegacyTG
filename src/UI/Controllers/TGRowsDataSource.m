@@ -84,6 +84,26 @@ CGFloat TGRowsDataSourceHeight(NSDictionary *row, CGFloat width) {
 #import "TGPeerRowCell.h"
 #import "TGFieldRowCell.h"
 
+/// The chart row: one image view inset to the card's text column.
+@interface TGChartRowCell : UITableViewCell
+@end
+@implementation TGChartRowCell
+- (void)layoutSubviews {
+	[super layoutSubviews];
+	self.imageView.frame = CGRectInset(self.contentView.bounds, TGMetricPadLarge, TGMetricPadMedium);
+	self.imageView.contentMode = UIViewContentModeScaleAspectFit;
+}
+@end
+
+UITableViewCell *TGChartRowCellFor(UITableView *tableView, NSDictionary *row) {
+	UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:TGKindChart] ?:
+			[[TGChartRowCell alloc] initWithStyle:UITableViewCellStyleDefault
+								  reuseIdentifier:TGKindChart];
+	cell.selectionStyle = UITableViewCellSelectionStyleNone;
+	cell.imageView.image = [row[TGRowImage] isKindOfClass:UIImage.class] ? row[TGRowImage] : nil;
+	return cell;
+}
+
 @interface TGRowsDataSource () <TGFieldRowCellDelegate>
 @property (nonatomic, strong) NSMutableDictionary *storedFieldText;
 @property (nonatomic, weak) TGFieldRowCell *activeFieldCell;
@@ -230,6 +250,8 @@ heightForRowAtIndexPath:(NSIndexPath *)indexPath {
 		cell = [TGImageCheckRowCell cellForTableView:tableView row:row];
 	} else if ([kind isEqualToString:TGKindGrid]){
 		cell = [TGGridRowCell cellForTableView:tableView row:row];
+	} else if ([kind isEqualToString:TGKindChart]){
+		cell = TGChartRowCellFor(tableView, row);
 	} else {
 		cell = [TGRowCell cellForTableView:tableView row:row
 				rowIndex:indexPath.row totalRows:rows.count];

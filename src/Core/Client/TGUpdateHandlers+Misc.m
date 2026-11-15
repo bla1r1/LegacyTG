@@ -3,6 +3,7 @@
 //
 #import "TGUpdateHandlers.h"
 #import "TGUpdateHandlersSupport.h"
+#import "TGStatusText.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
 
@@ -129,6 +130,15 @@ static BOOL TGProgressWorthTelling(TGProgressMark *marks, NSInteger fileId, floa
 		return YES;
 	}
 
+	case TGUpdateSpeechRecognitionTrial: {
+		NSNumber *left = obj[@"left_count"];
+		if ([left isKindOfClass:NSNumber.class])
+			self.client.speechTrialLeftValue = left;
+		self.client.speechTrialWeekly = [obj[@"weekly_count"] integerValue];
+		self.client.speechTrialResetDate = [obj[@"next_reset_date"] doubleValue];
+		return YES;
+	}
+
 	case TGUpdateChatAction: {
 		// TDLib names the action; the client turns it into the phrase every
 		// other client shows.
@@ -176,15 +186,18 @@ static BOOL TGProgressWorthTelling(TGProgressMark *marks, NSInteger fileId, floa
 		if (!groupId)
 			return YES;
 		BOOL isForum = [group[@"is_forum"] boolValue];
-		if ([self.client.forumSupergroups[groupId] boolValue] == isForum &&
-			self.client.forumSupergroups[groupId])
-			return YES;
+		NSNumber *ring = @(TGUStoryRing(group[@"active_story_state"]));
+		BOOL forumSame = [self.client.forumSupergroups[groupId] boolValue] == isForum &&
+				self.client.forumSupergroups[groupId];
 		self.client.forumSupergroups[groupId] = @(isForum);
 
 		for (NSMutableDictionary *chat in self.client.chatsById.allValues){
 			if (![chat[@"supergroupId"] isEqual:groupId])
 				continue;
+			if (forumSame && [chat[@"storyRing"] isEqual:ring])
+				continue;
 			chat[@"isForum"] = @(isForum);
+			chat[@"storyRing"] = ring;
 			[self.client markChatRowDirty:[chat[@"id"] longLongValue]];
 		}
 		return YES;
@@ -208,7 +221,23 @@ static BOOL TGProgressWorthTelling(TGProgressMark *marks, NSInteger fileId, floa
 							userInfo:@{@"userId" : @(userId)}];
 		if (!chat)
 			return YES;
-		BOOL online = [obj[@"status"][@"@type"] isEqualToString:@"userStatusOnline"];
+		NSTimeInterval now = [NSDate date].timeIntervalSince1970;
+		BOOL online = TGUserStatusOnlineAt(obj[@"status"], now);
+		NSTimeInterval expires = online ? [obj[@"status"][@"expires"] doubleValue] : 0;
+		chat[@"onlineUntil"] = @(expires);
+		// TDLib says nothing when the online time runs out, so the dot would
+		// stay lit until the next status: one check at the expiry instead.
+		if (expires > now){
+			TGClient *client = self.client;
+			dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)((expires - now + 1) * NSEC_PER_SEC)),
+					dispatch_get_main_queue(), ^{
+				NSMutableDictionary *row = client.chatsById[@(userId)];
+				if (![row[@"onlineUntil"] isEqual:@(expires)] || ![row[@"isOnline"] boolValue])
+					return;
+				row[@"isOnline"] = @NO;
+				[client markChatRowDirty:userId];
+			});
+		}
 		if ([chat[@"isOnline"] boolValue] == online)
 			return YES;
 		chat[@"isOnline"] = @(online);
@@ -223,6 +252,22 @@ static BOOL TGProgressWorthTelling(TGProgressMark *marks, NSInteger fileId, floa
 		NSMutableDictionary *row = self.client.chatsById[@(chatId)];
 		if (row){
 			[self.client mergeActionBar:obj[@"action_bar"] intoChatRow:row];
+			[self.client markChatRowDirty:chatId];
+		}
+		[[NSNotificationCenter defaultCenter]
+				postNotificationName:TGChatActionBarChangedNotification
+							  object:@(chatId)];
+		return YES;
+	}
+
+	case TGUpdateChatBusinessBotManageBar: {
+		// The bar a Business bot keeps over a chat it answers in: same
+		// redraw path as the action bar.
+		int64_t chatId = [obj[@"chat_id"] longLongValue];
+		NSMutableDictionary *row = self.client.chatsById[@(chatId)];
+		if (row){
+			[row removeObjectForKey:@"businessBot"];
+			[row addEntriesFromDictionary:TGBusinessBotBarFields(obj[@"business_bot_manage_bar"])];
 			[self.client markChatRowDirty:chatId];
 		}
 		[[NSNotificationCenter defaultCenter]

@@ -7,6 +7,15 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface TGPopupMenu : UIView
 
+/// The room a lifted card takes round its bubble: the reaction bar and its
+/// gap above, the gap and the whole card below. The hold places the bubble
+/// with these before the card opens.
++ (void)liftedRoomForItems:(NSArray *)items
+				headerView:(UIView *)headerView
+				 reactions:(NSArray *)reactions
+					 above:(CGFloat *)above
+					 below:(CGFloat *)below;
+
 /// Primary API: displays popup menu with integrated emoji reactions bar,
 /// callout arrow pointing to anchor point, and tactile action items.
 + (void)showItems:(NSArray *)items

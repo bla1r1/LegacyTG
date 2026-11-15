@@ -60,6 +60,73 @@ NSString *TGProfileShortLinkText(NSString *link) {
 	return [@"https://t.me/" stringByAppendingString:rest];
 }
 
+/// "09:00 – 18:00", "open 24 hours" or "closed" for one day of a week of
+/// minute ranges counted from Monday 00:00 (dayBusinessHoursText).
+static NSString *TGBusinessDayText(NSArray *intervals, NSInteger day) {
+	NSInteger dayStart = day * 1440, dayEnd = dayStart + 1440;
+	NSMutableArray *parts = [NSMutableArray array];
+	for (NSDictionary *range in intervals){
+		NSInteger start = [range[@"start_minute"] integerValue], end = [range[@"end_minute"] integerValue];
+		if (end <= dayStart || start >= dayEnd)
+			continue;
+		if (start <= dayStart && end >= dayEnd)
+			return TGLocalized(@"open 24 hours");
+		NSInteger a = MAX(start, dayStart) % 1440, b = MIN(end, dayEnd) % 1440;
+		[parts addObject:[NSString stringWithFormat:@"%02ld:%02ld – %02ld:%02ld",
+				(long)(a / 60), (long)(a % 60), (long)(b / 60), (long)(b % 60)]];
+	}
+	return parts.count ? [parts componentsJoinedByString:@", "] : TGLocalized(@"closed");
+}
+
+NSDictionary *TGBusinessHoursRow(NSDictionary *businessInfo, NSTimeInterval now) {
+	if (![businessInfo isKindOfClass:NSDictionary.class])
+		return nil;
+	NSDictionary *local = [businessInfo[@"local_opening_hours"] isKindOfClass:NSDictionary.class]
+			? businessInfo[@"local_opening_hours"] : nil;
+	NSArray *intervals = [local[@"opening_hours"] isKindOfClass:NSArray.class] ? local[@"opening_hours"] : nil;
+	if (!intervals.count)
+		return nil;
+	static NSString *const names[] = {@"Monday", @"Tuesday", @"Wednesday", @"Thursday",
+			@"Friday", @"Saturday", @"Sunday"};
+	NSMutableArray *week = [NSMutableArray arrayWithCapacity:7];
+	for (NSInteger day = 0; day < 7; day++)
+		[week addObject:[NSString stringWithFormat:@"%@: %@", TGLocalized(names[day]),
+				TGBusinessDayText(intervals, day)]];
+	// The hours are already in the reader's zone; today is the local weekday.
+	time_t t = (time_t)now;
+	struct tm parts;
+	localtime_r(&t, &parts);
+	NSInteger today = (parts.tm_wday + 6) % 7;
+	NSInteger closeIn = [businessInfo[@"next_close_in"] integerValue];
+	NSInteger openIn = [businessInfo[@"next_open_in"] integerValue];
+	BOOL open = closeIn > 0 && (openIn <= 0 || closeIn < openIn);
+	NSString *detail = TGBusinessDayText(intervals, today);
+	if (!open && openIn > 0){
+		NSInteger minutes = (openIn + 59) / 60;
+		if (minutes < 60)
+			detail = TGLocalizedPlural(@"Opens in one minute", @"Opens in %d minutes", minutes);
+		else if (minutes < 6 * 60)
+			detail = TGLocalizedPlural(@"Opens in one hour", @"Opens in %d hours", minutes / 60);
+		else {
+			time_t opens = (time_t)(now + openIn);
+			struct tm at;
+			localtime_r(&opens, &at);
+			NSString *clock = [NSString stringWithFormat:@"%02d:%02d", at.tm_hour, at.tm_min];
+			NSInteger days = (at.tm_yday - parts.tm_yday + 366) % 366;
+			if (days == 0)
+				detail = TGLocalizedFormat(@"Opens today at %@", clock);
+			else if (days == 1)
+				detail = TGLocalizedFormat(@"Opens tomorrow at %@", clock);
+			else
+				detail = TGLocalizedPlural(@"Opens in 1 day", @"Opens in %d days", days);
+		}
+	}
+	NSString *status = open ? TGLocalized(@"Open") : TGLocalized(@"Closed");
+	return @{@"kind" : @"businessHours", @"label" : TGLocalized(@"business hours"),
+			 @"value" : [NSString stringWithFormat:@"%@ · %@", status, detail],
+			 @"open" : @(open), @"week" : [week componentsJoinedByString:@"\n"]};
+}
+
 NSArray *TGProfileUserInfoRows(NSDictionary *info) {
 	if (![info isKindOfClass:NSDictionary.class])
 		return @[];
@@ -88,11 +155,20 @@ NSArray *TGProfileUserInfoRows(NSDictionary *info) {
 	// One Username row; the official item puts extra usernames under the
 	// same value, not in rows of their own.
 	if (mainUsername.length){
-		[rows addObject:@{
+		NSMutableDictionary *row = [@{
 			@"kind"  : @"username",
 			@"label" : @"Username",
 			@"value" : [@"@" stringByAppendingString:mainUsername],
-		}];
+		} mutableCopy];
+		// The rest go on a line under it, as official's "also @a, @b"
+		// (Profile.AdditionalUsernames).
+		NSMutableArray *others = [NSMutableArray array];
+		for (id value in activeUsernames)
+			if ([value isKindOfClass:NSString.class] && [value length] && ![value isEqualToString:mainUsername])
+				[others addObject:[@"@" stringByAppendingString:value]];
+		if (others.count)
+			row[@"also"] = TGLocalizedFormat(@"also %@", [others componentsJoinedByString:@", "]);
+		[rows addObject:row];
 	}
 
 	NSString *birthday = TGProfileTrimmed(info[@"birthday"]);
@@ -136,6 +212,10 @@ NSArray *TGProfileUserInfoRows(NSDictionary *info) {
 		}];
 	}
 
+	NSDictionary *hours = TGBusinessHoursRow(info[@"businessInfo"], [[NSDate date] timeIntervalSince1970]);
+	if (hours)
+		[rows addObject:hours];
+
 	NSString *location = TGProfileTrimmed(info[@"businessLocation"]);
 	if (location.length){
 		[rows addObject:@{
@@ -144,6 +224,14 @@ NSArray *TGProfileUserInfoRows(NSDictionary *info) {
 			@"value" : location,
 		}];
 	}
+
+	// Official: a verified bot shows the verifier's line, any other bot
+	// that works in groups offers to be added to one.
+	NSString *verification = TGProfileTrimmed(info[@"botVerification"]);
+	if (isBot && verification.length)
+		[rows addObject:@{@"kind" : @"verification", @"label" : @"", @"value" : verification}];
+	else if (isBot && [info[@"botCanJoinGroups"] boolValue])
+		[rows addObject:@{@"kind" : @"addBotToChat", @"label" : @"", @"value" : @"Add to Group or Channel"}];
 
 	BOOL isContact = [info[@"isContact"] boolValue];
 	if (!isContact && !isOwnProfile && !isBot){

@@ -147,6 +147,9 @@
 	if (self.searchResults || self.showsArchive || self.folderId != 0)
 		return @[];
 	NSMutableArray *rows = [NSMutableArray array];
+	// Official puts its notice above everything else in the list.
+	if (TGChatListNotice([TGChatListStore shared].suggestedActions))
+		[rows addObject:@"notice"];
 	if ([TGChatListStore shared].archivedChats.count > 0)
 		[rows addObject:@"archive"];
 	// Saved Messages has its own row above the chats and is hidden from the

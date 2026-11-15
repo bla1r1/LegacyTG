@@ -42,6 +42,9 @@ static NSDictionary *RowOfKind(NSArray *rows, NSString *kind) {
 			(@[@"phone", @"username", @"birthday", @"bio",
 			   @"note", @"businessLocation", @"addContact", @"block"]));
 	XCTAssertEqualObjects(RowOfKind(rows, @"username")[@"value"], @"@ada");
+	// The other active username was read and dropped; official writes it
+	// under the first.
+	XCTAssertEqualObjects(RowOfKind(rows, @"username")[@"also"], @"also @ada_l");
 	XCTAssertEqualObjects(RowOfKind(rows, @"phone")[@"value"], @"+15551234");
 	XCTAssertEqualObjects(RowOfKind(rows, @"birthday")[@"value"], @"10 December 1815");
 	XCTAssertEqualObjects(RowOfKind(rows, @"bio")[@"label"], @"Bio");
@@ -116,6 +119,36 @@ static NSDictionary *RowOfKind(NSArray *rows, NSString *kind) {
 	XCTAssertEqualObjects(TGProfileDisplayName(
 			(@{@"phone_number" : @"+15559876"}), @""), @"+15559876");
 	XCTAssertEqualObjects(TGProfileDisplayName(@{}, @""), @"");
+}
+
+// A bot that works in groups offered no way to add it; a verified bot
+// showed nothing of its verifier.
+- (void)testBot_AddToGroupOrVerification {
+	NSArray *rows = TGProfileUserInfoRows(@{ @"isBot" : @YES, @"botCanJoinGroups" : @YES });
+	XCTAssertEqualObjects(RowOfKind(rows, @"addBotToChat")[@"value"], @"Add to Group or Channel");
+	rows = TGProfileUserInfoRows(@{ @"isBot" : @YES, @"botCanJoinGroups" : @YES, @"botVerification" : @"Verified by X" });
+	XCTAssertNil(RowOfKind(rows, @"addBotToChat"));
+	XCTAssertEqualObjects(RowOfKind(rows, @"verification")[@"value"], @"Verified by X");
+}
+
+
+// PeerInfoScreenBusinessHoursItem: status, today's hours or when it opens,
+// and the week for the tap.
+- (void)testBusinessHours_OpenClosedAndWeek {
+	NSDictionary *open = @{@"local_opening_hours" : @{@"time_zone_id" : @"x",
+		@"opening_hours" : @[@{@"start_minute" : @(9 * 60), @"end_minute" : @(18 * 60)}]},
+		@"next_close_in" : @3600, @"next_open_in" : @80000};
+	NSDictionary *row = TGBusinessHoursRow(open, 1763200000);
+	XCTAssertEqualObjects(row[@"kind"], @"businessHours");
+	XCTAssertTrue([row[@"value"] hasPrefix:@"Open"], @"%@", row[@"value"]);
+	XCTAssertTrue([row[@"week"] hasPrefix:@"Monday: 09:00 – 18:00\nTuesday: closed"], @"%@", row[@"week"]);
+	NSMutableDictionary *closed = [open mutableCopy];
+	closed[@"next_close_in"] = @0;
+	closed[@"next_open_in"] = @(2 * 3600 + 30);
+	XCTAssertEqualObjects(TGBusinessHoursRow(closed, 1763200000)[@"value"], @"Closed · Opens in 2 hours");
+	closed[@"next_open_in"] = @600;
+	XCTAssertEqualObjects(TGBusinessHoursRow(closed, 1763200000)[@"value"], @"Closed · Opens in 10 minutes");
+	XCTAssertNil(TGBusinessHoursRow(@{}, 0));
 }
 
 @end

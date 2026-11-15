@@ -2,6 +2,7 @@
 #import "TGLocalization.h"
 #import "TGPollPresentation.h"
 #import "TGStyle.h"
+#import "TGUIFormat.h"
 #include <math.h>
 
 static NSDictionary *TGRow(NSString *title, NSString *action, NSString *icon,
@@ -358,6 +359,9 @@ BOOL TGChatActionMenuShowsReadSummary(NSDictionary *message,
 		return NO;
 	if (!context.isGroup && !context.isChannel)
 		return NO;
+	// TDLib knows when the viewers list exists (a small group, recent).
+	if (context.hasProperties && !context.canGetViewers && !context.isChannel)
+		return NO;
 	return !TGMessageIsService(message);
 }
 
@@ -372,6 +376,61 @@ NSString *TGChatActionMenuReactionText(NSInteger reactionCount) {
 	if (reactionCount <= 0)
 		return @"";
 	return TGLocalizedPlural(@"%d reaction", @"%d reactions", reactionCount);
+}
+
+CGFloat TGHoldLiftY(CGRect bubble, CGFloat above, CGFloat below, CGFloat top, CGFloat bottom) {
+	CGFloat y = CGRectGetMinY(bubble);
+	CGFloat h = CGRectGetHeight(bubble);
+	if (y - above < top)
+		y = top + above;
+	if (y + h + below > bottom)
+		y = bottom - below - h;
+	if (y - above < top)
+		y = top + above;
+	return y;
+}
+
+void TGChatActionMenuApplyProperties(TGChatActionMenuContext *context,
+		NSDictionary *properties) {
+	if (!context || ![properties isKindOfClass:NSDictionary.class] ||
+		![properties[@"@type"] isEqualToString:@"messageProperties"])
+		return;
+	context->hasProperties = YES;
+	context->canReply = context->canReply && [properties[@"can_be_replied"] boolValue];
+	context->canEdit = [properties[@"can_be_edited"] boolValue];
+	context->canPin = [properties[@"can_be_pinned"] boolValue];
+	context->canCopy = [properties[@"can_be_copied"] boolValue];
+	context->canDeleteForSelf = [properties[@"can_be_deleted_only_for_self"] boolValue];
+	context->canDeleteForAll = [properties[@"can_be_deleted_for_all_users"] boolValue];
+	context->canViewAuthor = [properties[@"can_get_author"] boolValue];
+	context->canEditFactCheck = [properties[@"can_set_fact_check"] boolValue];
+	context->canViewStats = [properties[@"need_show_statistics"] boolValue];
+	context->canReport = [properties[@"can_report_chat"] boolValue] ||
+			[properties[@"can_report_supergroup_spam"] boolValue];
+	context->canEditMedia = [properties[@"can_edit_media"] boolValue];
+	context->canGetViewers = [properties[@"can_get_viewers"] boolValue];
+	context->canReportReactions = [properties[@"can_report_reactions"] boolValue];
+	context->canGetThread = [properties[@"can_get_message_thread"] boolValue];
+	context->canGetReadDate = [properties[@"can_get_read_date"] boolValue];
+	context->protectedByMe = [properties[@"has_protected_content_by_current_user"] boolValue];
+	context->protectedByOther = [properties[@"has_protected_content_by_other_user"] boolValue];
+}
+
+NSArray<NSDictionary *> *TGMessageDeleteChoices(BOOL isSaved, BOOL isGroup,
+		NSDictionary *properties) {
+	if (isSaved)
+		return @[ @{ @"title" : TGLocalized(@"Delete"), @"revoke" : @YES } ];
+	BOOL known = [properties isKindOfClass:NSDictionary.class] &&
+			[properties[@"@type"] isEqualToString:@"messageProperties"];
+	BOOL forAll = !known || [properties[@"can_be_deleted_for_all_users"] boolValue];
+	BOOL forSelf = !known || [properties[@"can_be_deleted_only_for_self"] boolValue];
+	NSMutableArray *choices = [NSMutableArray array];
+	if (forAll)
+		[choices addObject:@{ @"title" : isGroup ? TGLocalized(@"Delete for All")
+										: TGLocalized(@"Delete for Everyone"), @"revoke" : @YES }];
+	if (forSelf)
+		[choices addObject:@{ @"title" : TGLocalized(@"Delete for me"), @"revoke" : @NO }];
+	return choices;
 }
 
 NSArray<NSDictionary *> *TGChatActionMenuRows(NSDictionary *message,
@@ -410,11 +469,19 @@ NSArray<NSDictionary *> *TGChatActionMenuRows(NSDictionary *message,
 
 	if (context.canReply && !failed && !service)
 		add(TGLocalized(@"Reply"), @"Reply", @"reply", NO);
+	// Official's thread row follows Reply: "View 3 Replies" when there are
+	// some, "View Thread" when the message only starts one.
+	if (context.canGetThread && !service && !failed){
+		NSInteger replies = [message[@"replyCount"] integerValue];
+		add(replies > 0 ? TGLocalizedPluralValue(@"View %@ Reply", @"View %@ Replies",
+						[NSString stringWithFormat:@"%ld", (long)replies], replies)
+				: TGLocalized(@"View Thread"), @"View Thread", @"reply", NO);
+	}
 
 	// Copy, Quote, Translate and Speak are text actions. A voice note, a
 	// sticker or a bare photo carries a system description in `text`, not
 	// words the sender typed, and official does not offer any of them there.
-	if (bodyText && saveable)
+	if (bodyText && saveable && (!context.hasProperties || context.canCopy))
 		add(TGLocalized(@"Copy"), @"Copy", @"copy", NO);
 	if (bodyText)
 		add(TGLocalized(@"Quote"), @"Find Quote", @"data", NO);
@@ -446,8 +513,8 @@ NSArray<NSDictionary *> *TGChatActionMenuRows(NSDictionary *message,
 		add(TGLocalized(@"Suggest Post"), @"Suggest Post", @"edit", NO);
 	// Editing media belongs to the author, and only when Telegram would accept
 	// the edit; somebody else's photo never offers it.
-	if (context.mine && context.canEdit && !failed && !sticker &&
-			[message[@"photoId"] isKindOfClass:NSNumber.class])
+	if ((context.hasProperties ? context.canEditMedia : context.mine && context.canEdit) &&
+			!failed && !sticker && [message[@"photoId"] isKindOfClass:NSNumber.class])
 		add(TGLocalized(@"Replace Photo"), @"Replace Photo", @"react", NO);
 
 	// Pin, poll and link rows follow Edit in official, before Forward.
@@ -497,7 +564,7 @@ NSArray<NSDictionary *> *TGChatActionMenuRows(NSDictionary *message,
 	}
 	NSDictionary *reactionReport = message[@"reactionReport"];
 	if (reactionReport && ![reactionReport isKindOfClass:NSNull.class] &&
-			!context.mine)
+			!context.mine && (!context.hasProperties || context.canReportReactions))
 		add(TGLocalized(@"Report Reaction"), @"Report Reaction", @"privacy", YES);
 
 	if (context.canViewStats && !service)
@@ -524,8 +591,20 @@ NSArray<NSDictionary *> *TGChatActionMenuRows(NSDictionary *message,
 	if ([message[@"kind"] isEqualToString:@"messageGame"])
 		add(TGLocalized(@"Game Scores"), @"Game Scores", @"star", NO);
 
-	if (context.mine)
+	// Official offers Delete whenever the message can go from either side,
+	// an incoming one in a private chat included; without TDLib's answer
+	// only our own messages are offered.
+	if (context.hasProperties ? (context.canDeleteForSelf || context.canDeleteForAll) : context.mine){
 		add(TGLocalized(@"Delete"), @"Delete", @"delete", YES);
+		// A timed message says under Delete when it goes by itself
+		// (ChatDeleteMessageContextItem).
+		double left = [message[@"deleteAt"] doubleValue] - [[NSDate date] timeIntervalSince1970];
+		if (left > 0 && rows.count){
+			NSMutableDictionary *row = [rows.lastObject mutableCopy];
+			row[@"subtitle"] = TGAutoDeleteText(left);
+			rows[rows.count - 1] = row;
+		}
+	}
 
 	if (context.canSelect)
 		add(TGLocalized(@"Select"), @"Select", @"select", NO);
@@ -551,4 +630,61 @@ NSArray<NSDictionary *> *TGChatActionMenuRows(NSDictionary *message,
 #endif
 
 	return rows;
+}
+
+NSString *TGSlowModeWaitText(NSTimeInterval seconds) {
+	NSInteger total = (NSInteger)ceil(MAX(0, seconds));
+	return [NSString stringWithFormat:@"%ld:%02ld", (long)(total / 60), (long)(total % 60)];
+}
+
+NSString *TGAutoDeleteText(NSTimeInterval seconds) {
+	NSInteger total = (NSInteger)MAX(0, seconds);
+	if (total >= 86400){
+		NSInteger days = (NSInteger)lround(total / 86400.0);
+		return TGLocalizedPluralValue(@"auto-deletes in %@ day", @"auto-deletes in %@ days",
+				[NSString stringWithFormat:@"%ld", (long)days], days);
+	}
+	NSString *clock = total >= 3600
+			? [NSString stringWithFormat:@"%ld:%02ld:%02ld", (long)(total / 3600),
+					(long)(total / 60 % 60), (long)(total % 60)]
+			: [NSString stringWithFormat:@"%ld:%02ld", (long)(total / 60), (long)(total % 60)];
+	return TGLocalizedFormat(@"auto-deletes in %@", clock);
+}
+
+NSString *TGFreeTranscriptionsText(NSInteger left) {
+	if (left < 0)
+		return nil;
+	NSString *text = TGLocalizedPluralValue(@"You have **%@** free voice transcription left this week.",
+			@"You have **%@** free voice transcriptions left this week.",
+			[NSString stringWithFormat:@"%ld", (long)left], left);
+	return [text stringByReplacingOccurrencesOfString:@"**" withString:@""];
+}
+
+NSString *TGCopyProtectionTip(TGChatActionMenuContext context, NSString *peerName) {
+	if (context.protectedByMe)
+		return TGLocalized(@"You disabled copying and forwarding in this chat.");
+	if (context.protectedByOther)
+		return [TGLocalizedFormat(@"**%@** disabled copying and forwarding in this chat.", peerName ?: @"")
+				stringByReplacingOccurrencesOfString:@"**" withString:@""];
+	return nil;
+}
+
+NSString *TGReadDateText(NSTimeInterval readDate) {
+	if (readDate <= 0)
+		return nil;
+	return TGLocalizedFormat(@"read %@", TGAppDate(readDate, NSDateFormatterNoStyle, NSDateFormatterShortStyle));
+}
+
+NSString *TGTranscriptionCooldownText(NSInteger left, NSInteger weekly,
+		NSTimeInterval resetDate, NSTimeInterval now) {
+	if (left != 0 || resetDate <= now)
+		return nil;
+	NSString *used = TGLocalizedPluralValue(@"You have used all your **%@** free transcription this week.",
+			@"You have used all your **%@** free transcriptions this week.",
+			[NSString stringWithFormat:@"%ld", (long)weekly], weekly);
+	NSString *wait = TGLocalizedFormat(@"Wait until **%@** to use it again or subscribe to [Telegram Premium]() now.",
+			TGAppDate(resetDate, NSDateFormatterMediumStyle, NSDateFormatterNoStyle) ?: @"");
+	NSString *text = [NSString stringWithFormat:@"%@ %@", used, wait];
+	text = [text stringByReplacingOccurrencesOfString:@"**" withString:@""];
+	return [text stringByReplacingOccurrencesOfString:@"[Telegram Premium]()" withString:@"Telegram Premium"];
 }

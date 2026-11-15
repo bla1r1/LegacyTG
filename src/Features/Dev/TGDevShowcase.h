@@ -22,6 +22,10 @@
 + (NSArray *)devBotMessages;
 /// Dev Bot's reply keyboard; nil for any other chat.
 + (NSDictionary *)replyKeyboardForChatId:(int64_t)chatId;
+/// The "/" commands the showcase group's bots offer.
++ (NSArray *)botCommandsForChatId:(int64_t)chatId;
+/// A group's statistics with two drawn graphs and one that failed.
++ (NSArray *)statisticsRows;
 + (NSString *)devStickerPath;
 + (NSString *)devWebMPath;
 + (UIImage *)imageForPhotoId:(int64_t)photoId;

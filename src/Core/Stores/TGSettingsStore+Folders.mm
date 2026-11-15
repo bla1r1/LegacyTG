@@ -514,27 +514,17 @@ static BOOL TGGroupStatusIsMember(NSDictionary *status) {
 		[row removeObjectForKey:@"actionBarKind"];
 		[row removeObjectForKey:@"actionBarText"];
 		[row removeObjectForKey:@"actionBarAccount"];
+		[row removeObjectForKey:@"actionBarRequestDate"];
+		[row removeObjectForKey:@"actionBarCanUnarchive"];
+	[row removeObjectForKey:@"actionBarIsChannel"];
 		return;
 	}
-	row[@"actionBarKind"] = kind;
-	if ([kind isEqualToString:@"chatActionBarReportAddBlock"]){
-		NSString *first = bar[@"account_info"][@"first_name"] ?: @"";
-		NSString *last  = bar[@"account_info"][@"last_name"] ?: @"";
-		NSString *name  = [[NSString stringWithFormat:@"%@ %@", first, last]
-				stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
-		row[@"actionBarAccount"] = @{
-			@"name"  : name.length ? name : @"",
-			@"first" : first,
-			@"last"  : last,
-			@"phone" : bar[@"account_info"][@"phone_number"] ?: @"",
-		};
-	} else {
-		[row removeObjectForKey:@"actionBarAccount"];
-	}
-	if ([kind isEqualToString:@"chatActionBarJoinRequest"])
-		row[@"actionBarText"] = bar[@"title"] ?: @"";
-	else
-		[row removeObjectForKey:@"actionBarText"];
+	[row removeObjectForKey:@"actionBarText"];
+	[row removeObjectForKey:@"actionBarAccount"];
+	[row removeObjectForKey:@"actionBarRequestDate"];
+	[row removeObjectForKey:@"actionBarCanUnarchive"];
+	[row removeObjectForKey:@"actionBarIsChannel"];
+	[row addEntriesFromDictionary:TGActionBarFields(bar)];
 }
 
 /// The chat with yourself is Saved Messages everywhere in Telegram, not a
@@ -577,6 +567,8 @@ static BOOL TGGroupStatusIsMember(NSDictionary *status) {
 	// a phone number. Telegram hands the kind over with the chat and again
 	// in an update, so both write through the same helper.
 	[self mergeActionBar:chat[@"action_bar"] intoChatRow:info];
+	[info removeObjectForKey:@"businessBot"];
+	[info addEntriesFromDictionary:TGBusinessBotBarFields(chat[@"business_bot_manage_bar"])];
 	if (chat[@"title"])
 		info[@"title"] = chat[@"title"];
 
@@ -614,6 +606,9 @@ static BOOL TGGroupStatusIsMember(NSDictionary *status) {
 	// with nothing unread can still be marked, and the menu has to know.
 	if (chat[@"is_marked_as_unread"])
 		info[@"markedUnread"] = chat[@"is_marked_as_unread"];
+	// People waiting to join: the chat's "N Requests to Join" bar.
+	id pending = chat[@"pending_join_requests"];
+	info[@"joinRequestCount"] = [pending isKindOfClass:NSDictionary.class] ? (pending[@"total_count"] ?: @0) : @0;
 	if (chat[@"last_read_outbox_message_id"])
 		info[@"readOutbox"] = chat[@"last_read_outbox_message_id"];
 	if (chat[@"last_read_inbox_message_id"])

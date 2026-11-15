@@ -252,13 +252,15 @@
 				NSDictionary *said = [info[@"message"] isKindOfClass:NSDictionary.class]
 						? info[@"message"] : nil;
 				NSString *note = said[@"text"] ?: @"";
-				// "update_app" means TDLib answered because its copy is
-				// stale, not because this is what the link means: the tap
-				// falls back rather than reciting a version check.
-				BOOL staleCopy = [info[@"update_app"] boolValue];
-				if ([info[@"@type"] isEqualToString:@"deepLinkInfo"] && note.length &&
-						!staleCopy)
+				// need_update_application: the link names something this
+				// client is too old for. Official shows the text either way
+				// (and offers the App Store, which this device cannot use);
+				// without text it says the app needs updating.
+				BOOL tooOld = [info[@"need_update_application"] boolValue];
+				if ([info[@"@type"] isEqualToString:@"deepLinkInfo"] && note.length)
 					completion(@"deepLink", note);
+				else if ([info[@"@type"] isEqualToString:@"deepLinkInfo"] && tooOld)
+					completion(@"deepLink", @"Update Telegram");
 				else
 					completion(@"unknown", nil);
 			}];

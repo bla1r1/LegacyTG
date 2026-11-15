@@ -15,6 +15,9 @@
 /// "chatIds" is an NSArray of NSNumber chat ids.
 FOUNDATION_EXPORT NSString *const TGMessageStoreChangedNotification;
 
+/// TDLib's botCommands sets flattened into one list, in order.
+FOUNDATION_EXPORT NSArray *TGBotCommandRows(NSArray *sets);
+
 @interface TGMessageStore : NSObject
 
 + (instancetype)shared;
@@ -438,6 +441,45 @@ FOUNDATION_EXPORT NSString *const TGMessageStoreChangedNotification;
                          onMessage:(int64_t)messageId
                             inChat:(int64_t)chatId
                         completion:(void (^)(BOOL ok, NSString *error))completion;
+
+/// The "/" commands a chat's bots offer, as rows of command, description
+/// and botId: a bot's own (userFullInfo.bot_info) in a private chat, every
+/// member bot's (bot_commands) in a group. Empty for a channel.
+- (void)botCommandsForChat:(int64_t)chatId completion:(void (^)(NSArray *commands))completion;
+
+/// Free voice transcriptions left this week for an account without
+/// Premium; -1 when unknown or unlimited.
+- (NSInteger)freeTranscriptionsLeft;
+
+/// This week's free transcriptions and when they come back
+/// (updateSpeechRecognitionTrial weekly_count, next_reset_date).
+- (NSInteger)freeTranscriptionsWeekly;
+- (NSTimeInterval)freeTranscriptionsResetDate;
+
+/// A statistics graph TDLib answered with a token (statisticalGraphAsync):
+/// its chart JSON, or the error to show in its place.
+- (void)statisticalGraph:(NSString *)token inChat:(int64_t)chatId
+			  completion:(void (^)(NSString *json, NSString *error))completion;
+
+/// A secret chat's key hash (secretChat.key_hash, decoded) for the
+/// encryption key picture; nil when TDLib has none yet.
+- (void)secretChatKeyHash:(NSInteger)secretChatId completion:(void (^)(NSData *keyHash))completion;
+
+/// The Business bot bar's two actions: pause or resume the bot in this
+/// chat, or take it out of the chat altogether.
+- (void)setBusinessBotPaused:(BOOL)paused inChat:(int64_t)chatId;
+- (void)removeBusinessBotFromChat:(int64_t)chatId;
+
+/// The chat's unread reaction and poll vote counters, for the jump buttons.
+- (void)unreadJumpCountsForChat:(int64_t)chatId
+					   completion:(void (^)(NSInteger mentions, NSInteger reactions,
+											NSInteger pollVotes))completion;
+
+/// The oldest message matching a search filter such as
+/// searchMessagesFilterUnreadReaction; 0 when none.
+- (void)oldestUnreadMessageInChat:(int64_t)chatId
+						   filter:(NSString *)filter
+					   completion:(void (^)(int64_t messageId))completion;
 
 - (void)markRead:(NSArray *)messageIds inChat:(int64_t)chatId;
 
