@@ -15,6 +15,10 @@
 #import "TGGroupSettingsViewController.h"
 #import "TGGroupSwitch.h"
 #import "TGGroupSettingsViewControllerInternal.h"
+#import "TGListViewController.h"
+#import "TGSettingsStore.h"
+#import "TGUIFormat.h"
+#import "TGLocalization.h"
 
 
 
@@ -64,6 +68,7 @@ typedef NS_ENUM(NSInteger, TGGroupRowKind) {
 	if ([action isEqualToString:@"addMembers"])   { [self addMembers]; return; }
 	if ([action isEqualToString:@"findMember"])   { [self findMember]; return; }
 	if ([action isEqualToString:@"members"])      { [self showMembersList]; return; }
+	if ([action isEqualToString:@"recentActions"]){ [self showRecentActions]; return; }
 	if ([action isEqualToString:@"permissions"])  { [self choosePermissions]; return; }
 	if ([action isEqualToString:@"slow"])         { [self chooseSlowMode]; return; }
 	if ([action isEqualToString:@"broadcast"])    { [self confirmBroadcast]; return; }
@@ -94,5 +99,34 @@ typedef NS_ENUM(NSInteger, TGGroupRowKind) {
 	if ([action isEqualToString:@"deleteChat"])   { [self deleteChatForEveryone]; return; }
 }
 
+
+/// Official's Recent Actions: the last 48 hours of service actions, one row
+/// each - the sentence, then when and what changed.
+- (void)showRecentActions {
+	__weak typeof(self) weakSelf = self;
+	BOOL channel = [self isChannelChat];
+	[[TGSettingsStore shared] eventLogForChat:self.chatId isChannel:channel completion:^(NSArray *events){
+		TGGroupSettingsViewController *me = weakSelf;
+		if (!me)
+			return;
+		NSMutableArray *rows = [NSMutableArray arrayWithCapacity:events.count];
+		for (NSDictionary *event in events){
+			NSString *when = TGAppDate([event[@"date"] doubleValue], NSDateFormatterShortStyle,
+					NSDateFormatterShortStyle) ?: @"";
+			NSString *detail = [event[@"detail"] length]
+					? [NSString stringWithFormat:@"%@ · %@", when, event[@"detail"]] : when;
+			[rows addObject:@{@"title" : event[@"title"] ?: @"", @"detail" : detail}];
+		}
+		TGListViewController *list = [[TGListViewController alloc] init];
+		list.listTitle = TGLocalized(@"Recent Actions");
+		list.rows = rows;
+		list.emptyText = channel
+				? TGLocalized(@"No service actions were taken by the channel's subscribers and admins in the last 48 hours.")
+				: TGLocalized(@"No service actions were taken by the group's members and admins in the last 48 hours.");
+		list.offersCopy = YES;
+		list.hidesBottomBarWhenPushed = YES;
+		[me.navigationController pushViewController:list animated:YES];
+	}];
+}
 
 @end

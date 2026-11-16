@@ -42,8 +42,12 @@
 	// send: silently drops anything sent too early. Hold it and flush once
 	// the state machine actually asks for a number.
 	[TGClient shared].pendingPhoneNumber = phoneNumber;
-	if ([TGClient shared].available && ([TGClient shared].authState == TGAuthStateWaitPhoneNumber || [TGClient shared].authState == TGAuthStateWaitCode))
+	TGClient *client = [TGClient shared];
+	if (client.available && (client.authState == TGAuthStateWaitPhoneNumber || client.authState == TGAuthStateWaitCode))
 		[self flushPendingPhoneNumber];
+	else    // a login spinner that never stops starts here; the number itself stays out of the log
+		NSLog(@"TGClient: phone number held: available=%d authState=%ld",
+				client.available, (long)client.authState);
 }
 
 - (void)flushPendingPhoneNumber {
@@ -51,6 +55,7 @@
 		return;
 	NSString *number = [TGClient shared].pendingPhoneNumber;
 	[TGClient shared].pendingPhoneNumber = nil;
+	NSLog(@"TGClient: >>> setAuthenticationPhoneNumber");
 	[[TGClient shared] send:@{
 		@"@type"        : @"setAuthenticationPhoneNumber",
 		@"phone_number" : number,
@@ -220,6 +225,23 @@ static NSString *TGAuthError(NSDictionary *result) {
 		}
 		if (completion)
 			completion(out);
+	}];
+}
+
+/// One country of that list by ISO code, or nil. The phone step needs this
+/// before sign-in, where TDLib refuses getCountry with 401; getCountries is
+/// on its pre-authentication list.
+- (void)countryForCode:(NSString *)code completion:(void (^)(NSDictionary *country))completion {
+	NSString *iso = [code uppercaseString];
+	[self countriesWithCompletion:^(NSArray *countries){
+		NSDictionary *match = nil;
+		for (NSDictionary *country in countries)
+			if ([country[@"code"] isEqualToString:iso]){
+				match = country;
+				break;
+			}
+		if (completion)
+			completion(match);
 	}];
 }
 

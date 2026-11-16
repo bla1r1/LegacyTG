@@ -88,12 +88,27 @@ static void TGWatchForIncomingCalls(void) {
 /// The per-slot "this account has signed in" flag. Slot 0 keeps the original
 /// key so an existing install's YES survives the update; later slots get their
 /// own so switching never reads another account's answer.
-static void TGSetAuthorizedSession(BOOL authorized) {
+static NSString *TGAuthorizedSessionKey(void) {
 	NSInteger slot = [TGClient activeAccountSlot];
-	NSString *key = slot > 0
+	return slot > 0
 			? [NSString stringWithFormat:@"hasAuthorizedSession-%ld", (long)slot]
 			: @"hasAuthorizedSession";
-	[[NSUserDefaults standardUserDefaults] setBool:authorized forKey:key];
+}
+
+static void TGSetAuthorizedSession(BOOL authorized) {
+	[[NSUserDefaults standardUserDefaults] setBool:authorized forKey:TGAuthorizedSessionKey()];
+}
+
+static BOOL TGHasAuthorizedSession(void) {
+	return [[NSUserDefaults standardUserDefaults] boolForKey:TGAuthorizedSessionKey()];
+}
+
+static BOOL TGDevShowcaseBuild(void) {
+#if TG_DEV
+	return YES;
+#else
+	return NO;
+#endif
 }
 
 #if TG_DEV
@@ -301,7 +316,9 @@ static UIImage *TGCustomEmojiFromStore(int64_t emojiId, CGFloat side) {
 	stepStart = TGPerfNow();
 	self.window = [[UIWindow alloc] initWithFrame:[[UIScreen mainScreen] bounds]];
 	self.window.backgroundColor = [[TGTheme shared] listBackgroundColour];
-	[self showMainUI];
+	// Signed out, the auth state picks login; the chat list waits for one
+	// that was signed in before.
+	[self showScreen:TGLaunchScreenForSession(TGHasAuthorizedSession(), TGDevShowcaseBuild())];
 	TGPerfReport("launch", "showMainUI", stepStart, 100.0);
 	stepStart = TGPerfNow();
 	[self.window makeKeyAndVisible];
@@ -426,7 +443,7 @@ static UIImage *TGCustomEmojiFromStore(int64_t emojiId, CGFloat side) {
 				case TGAuthStateClosed:
 				case TGAuthStateLoggingOut:
 					TGSetAuthorizedSession(NO);
-					[me showMainUI];
+					[me routeForAuthState:state];
 					break;
 				default:
 					break;
@@ -476,12 +493,14 @@ static UIImage *TGCustomEmojiFromStore(int64_t emojiId, CGFloat side) {
 /// The login screen is put up before its step is set: a step sent to a nil
 /// loginVC is lost, which left a fresh release install on an empty chat list.
 - (void)routeForAuthState:(TGAuthState)state {
-#if TG_DEV
-	BOOL showcase = YES;
-#else
-	BOOL showcase = NO;
-#endif
-	switch (TGAuthScreenForState(state, self.loginVC != nil, showcase)){
+	[self showScreen:TGAuthScreenForState(state, self.loginVC != nil, TGDevShowcaseBuild())];
+}
+
+- (void)showScreen:(TGAuthScreen)screen {
+	switch (screen){
+		case TGAuthScreenLoading:
+			[self showLoadingUI];
+			break;
 		case TGAuthScreenLogin:
 			[self showLoginUI];
 			break;
@@ -509,6 +528,9 @@ static UIImage *TGCustomEmojiFromStore(int64_t emojiId, CGFloat side) {
 	[spinner startAnimating];
 	[vc.view addSubview:spinner];
 
+	// The login screen leaves the window here; kept, showLoginUI would see it
+	// as still up and the spinner would stay (Reset Session from login).
+	self.loginVC = nil;
 	[self.window setRootViewController:vc];
 }
 

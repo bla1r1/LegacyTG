@@ -12,6 +12,7 @@ INSTALL
 certificates
 configure_ios.sh
 vendor/include/tg_config.h
+vendor/include/tg_api_key.h
 .vim*
 *~
 

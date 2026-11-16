@@ -18,13 +18,18 @@ TGAuthScreen TGAuthScreenForState(TGAuthState state, BOOL loginOpen, BOOL devSho
 				return TGAuthScreenLogin;
 			return TGAuthScreenMain;
 		case TGAuthStateReady:
+			return TGAuthScreenMain;
 		case TGAuthStateLoggingOut:
 		case TGAuthStateClosed:
-			// Closed is followed by a fresh client's WaitPhoneNumber, which
-			// brings the login screen.
-			return TGAuthScreenMain;
+			// A fresh client's WaitPhoneNumber follows and brings login; the
+			// chat list in between flashed empty for ~1 s after Log Out.
+			return devShowcase ? TGAuthScreenMain : TGAuthScreenLoading;
 		case TGAuthStateUnknown:
 		default:
 			return TGAuthScreenKeep;
 	}
+}
+
+TGAuthScreen TGLaunchScreenForSession(BOOL authorized, BOOL devShowcase) {
+	return (authorized || devShowcase) ? TGAuthScreenMain : TGAuthScreenLoading;
 }

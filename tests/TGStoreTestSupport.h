@@ -60,6 +60,7 @@
 - (void)registerWithFirstName:(NSString *)firstName lastName:(NSString *)lastName completion:(void (^)(BOOL ok, NSString *error))completion;
 - (NSString *)registrationTerms;
 - (void)countriesWithCompletion:(void (^)(NSArray *countries))completion;
+- (void)countryForCode:(NSString *)code completion:(void (^)(NSDictionary *country))completion;
 - (void)registerPushToken:(NSString *)token sandbox:(BOOL)sandbox completion:(void (^)(BOOL ok))completion;
 - (void)processPushPayload:(NSDictionary *)payload;
 @end

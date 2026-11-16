@@ -276,7 +276,10 @@
 	- (void)addChat:(int64_t)chatId toList:(NSDictionary *)list completion:(void (^)(BOOL ok))completion;
 	- (void)ownerAfterLeavingChat:(int64_t)chatId completion:(void (^)(NSDictionary *user))completion;
 	- (void)chatStatisticsForChat:(int64_t)chatId completion:(void (^)(NSArray *rows, NSString *kind))completion;
-	- (void)eventLogForChat:(int64_t)chatId completion:(void (^)(NSArray *events))completion;
+	/// Recent Actions: the last 48 hours of service actions, newest first, as
+	/// rows of date, title (official's sentence) and detail.
+	- (void)eventLogForChat:(int64_t)chatId isChannel:(BOOL)isChannel
+				 completion:(void (^)(NSArray *events))completion;
 	- (void)reportChatPhotoInChat:(int64_t)chatId reason:(NSString *)reason detail:(NSString *)detail completion:(void (^)(BOOL ok))completion;
 	- (void)defaultChatPhotoEmojiStickersWithCompletion: (void (^)(NSArray *stickers))completion;
 	- (void)setEmojiPhotoForChat:(int64_t)chatId customEmojiId:(int64_t)customEmojiId colour:(NSInteger)colour completion:(void (^)(BOOL ok))completion;

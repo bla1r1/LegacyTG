@@ -1,8 +1,8 @@
-## Release 1.4: one look for messages and screens
+## Release 1.5: one look for messages and screens
 
-Status: `planned`. 1.3 (3) shipped on 2026-11-14; its notes are in `CHANGELOG.md` and its work in the git history since the `1.2` tag.
+Status: `planned`. 1.4 (4) shipped on 2026-11-16 as a sign-in and fixes release (`CHANGELOG.md`); this visual scope moved to 1.5 unchanged.
 
-1.4 is a visual release. The core was standardised in 1.3 (stores, one TDLib boundary, tested functions); the UI was not. Messages are laid out by one function, `TGMessageRowLayout`, and still draw badly in places: the view count drifts, the stamp sits on a picture that is not the last thing in the bubble, every picture has a hard 1 pt frame no iOS release draws. Screens share `TGRowsViewController`, and `TGPageViewController` exists, but no screen uses it yet. Each item below that changes how something looks starts as a fix list the user approves, with before and after shots from `scripts/shots.sh`; the lists stay out of the repository, and what changed goes into `docs/status/`.
+1.5 is a visual release. The core was standardised in 1.3 (stores, one TDLib boundary, tested functions); the UI was not. Messages are laid out by one function, `TGMessageRowLayout`, and still draw badly in places: the view count drifts, the stamp sits on a picture that is not the last thing in the bubble, every picture has a hard 1 pt frame no iOS release draws. Screens share `TGRowsViewController`, and `TGPageViewController` exists, but no screen uses it yet. Each item below that changes how something looks starts as a fix list the user approves, with before and after shots from `scripts/shots.sh`; the lists stay out of the repository, and what changed goes into `docs/status/`.
 
 Most people on the channel run iOS 6. A screen that is only checked on iOS 12, or only in the light theme, is not checked.
 
@@ -75,6 +75,6 @@ Scroll jank on the iPod touch 4 is the render server (backboardd), which pays fo
 
 Proposed from the comparison with official screenshots (15 November 2026), waiting for the user's approval: the card aligned to the bubble's edge, sized to its longest row; official's rows and order (no Quote, Translate only when enabled, no Speak, "Report"); Select after a divider; the "edited" header; the custom emoji footer; the reaction bar's tail; emoji tags in Saved Messages. The card's look stays ours unless the user decides otherwise.
 
-### Not in 1.4
+### Not in 1.5
 
 M20 payments and Stars, M21 group-call audio, M22 video calls and M40 bots and mini apps are each a release of their own; M42 iPad and landscape stays deferred. The other open milestones stay on `docs/ROADMAP.md`.

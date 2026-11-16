@@ -1,6 +1,6 @@
 Login, sign-up and account switching: every auth step, the account slots, sessions and websites. Sources are `_parity_audit/settings_main.md` and `changelog.md`; checked against `src/` on 7 November 2026. Sessions detail is in `privacy-security.md`.
 
-Counts: 25 done, 4 partial, 0 missing, 2 dev-only.
+Counts: 25 done, 4 partial, 1 missing, 2 dev-only.
 
 Built: M2 (phone/code, sign-up, 2FA and recovery, email, QR, web token,
 Firebase SMS, change phone, temporary password, application verification; three
@@ -10,16 +10,17 @@ per-account logout). Passkeys and OAuth stay in the `TG_DEV` console.
 
 | Feature | State | Where | Note |
 |---|---|---|---|
-| Sign in by phone and code | done | `Features/Auth/TGLoginViewController+Steps.m:1` | Phone, code and password steps are driven by `authorizationStateWait*`. |
-| Country and phone prefix | done | `Features/Auth/TGLoginViewController+Phone.m:14` | `getCountries`, `getCountryCode` and a searchable country picker. |
+| Sign in by phone and code | done | `Features/Auth/TGLoginViewController+Steps.m:1` | Phone, code and password steps are driven by `authorizationStateWait*`. The keyboard closes on a drag or a tap on empty space (`TGKeyboardDismissal`, shared with every TGTableViewController screen); on iOS 6 the phone pad had no way to close. Not host-testable (UIKit gestures). |
+| Launch screen | done | `App/TGAuthRoute.m:1` | A slot that never reached `authorizationStateReady` starts on a spinner, not the chat list, until TDLib names the step (~1 s); Log Out waits on the same spinner for the next client's phone step. Dev builds keep the showcase chats. B36 covers the signed-out route. |
+| Country and phone prefix | done | `Features/Auth/TGCountryPickerViewController.m:1` | The Country row pushes official's list: search bar, every country A-Z under letter headers with the index, flag, name and code; it replaced a search alert that listed at most 20 matches. `getCountryCode` preselects; signed out, the guessed country is named from `getCountries`: `getCountry` is 401 before authorization (B38). |
 | Sign-up name | done | `Features/Auth/TGLoginViewController+Steps.m:537` | `registerUser` with first and last name and the terms text. |
 | Terms of service | done | `Features/Auth/TGTermsViewController.m:1` | Terms screen; Accept sends `acceptTermsOfService`. |
 | Two-step verification password | done | `Core/Client/TGClient+Auth.m:71` | `checkAuthenticationPassword`, hint and email recovery steps. |
 | Forgot password | done | `Core/Client/TGClient+Auth.m:104` | `requestPasswordRecovery`, `checkAuthenticationPasswordRecoveryCode`, `recoverPassword`; hint shown. |
 | Email address step | done | `Features/Auth/TGLoginViewController+Steps.m:1` | `authorizationStateWaitEmailAddress` / `WaitEmailCode` have steps. |
-| QR login | done | `Core/Client/TGClient+Auth.m:48` | `requestQrCodeAuthentication`; the QR step draws a locally generated code. |
+| QR login | done | `Features/Auth/TGLoginViewController+Steps.m:413` | "Log in by QR Code" under the phone step again (official iOS keeps it behind DEBUG; removed in the 8 November parity wave, restored on request); `requestQrCodeAuthentication`, the QR step draws a locally generated code. The QR step no longer offers "QR Code" to paste a link: that is `confirmQrCodeAuthentication`, which TDLib refuses with 401 before sign-in. |
 | Scan a QR link | done | `Features/Auth/TGQRViewController.m:65` | Camera scanner confirms through `confirmQrCodeAuthentication`. |
-| Web login token | done | `Core/Client/TGClient+Auth.m:363` | `checkAuthenticationWebToken`; the step is on the login screen. |
+| Web login token | missing | `Core/Stores/TGAccountStore+Auth.m:398` | `checkAuthenticationWebToken` is in the store, but no login row ever opened it; the unreachable handler was removed. |
 | Firebase-delivered SMS code | done | `Core/Client/TGClient+Auth.m:548` | `sendAuthenticationFirebaseSms`. |
 | Login with Telegram (OAuth) | dev-only | `Core/Client/Audit/TGClient+OAuth.m:9` | Only in the `TG_DEV` bot console; `updateNewOauthRequest` has no release screen. |
 | Passkeys | dev-only | `Core/Client/TGClient+BotSession.m:186` | The calls are in the `TG_DEV` bot console; iOS 6 cannot produce an attestation. |

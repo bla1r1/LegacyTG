@@ -1,4 +1,5 @@
 #import "TGSettingsStore.h"
+#import "TGChatEventText.h"
 //
 // TGClient+ChatTools.m - Tier 2's chat surface: folders' shared half, invite
 // links, per-chat settings, discovery, statistics, event logs and positions.
@@ -50,39 +51,57 @@ static NSString *TGStatValue(NSDictionary *value, NSString *suffix) {
 	return [NSString stringWithFormat:@"%@ (%+.1f%%)", base, growth];
 }
 
-/// One service action in words. The event id and actor are added by the
-/// caller; this is only the sentence, and an unknown kind falls back to its
-/// own type name rather than disappearing.
-static NSString *TGChatEventText(NSDictionary *action) {
-	NSString *kind = action[@"@type"] ?: @"";
-	if ([kind isEqualToString:@"chatEventMessageEdited"])     return @"edited a message";
-	if ([kind isEqualToString:@"chatEventMessageDeleted"])    return @"deleted a message";
-	if ([kind isEqualToString:@"chatEventMessagePinned"])     return @"pinned a message";
-	if ([kind isEqualToString:@"chatEventMessageUnpinned"])   return @"unpinned a message";
-	if ([kind isEqualToString:@"chatEventMemberJoined"])      return @"joined the chat";
-	if ([kind isEqualToString:@"chatEventMemberLeft"])        return @"left the chat";
-	if ([kind isEqualToString:@"chatEventMemberInvited"])     return @"invited a member";
-	if ([kind isEqualToString:@"chatEventMemberPromoted"])    return @"changed an administrator";
-	if ([kind isEqualToString:@"chatEventMemberRestricted"])  return @"restricted a member";
-	if ([kind isEqualToString:@"chatEventMemberTagChanged"])  return @"changed a member tag";
-	if ([kind isEqualToString:@"chatEventTitleChanged"])      return @"changed the title";
-	if ([kind isEqualToString:@"chatEventDescriptionChanged"]) return @"changed the description";
-	if ([kind isEqualToString:@"chatEventPhotoChanged"])      return @"changed the photo";
-	if ([kind isEqualToString:@"chatEventLocationChanged"])   return @"changed the location";
-	if ([kind isEqualToString:@"chatEventSlowModeDelayChanged"]) return @"changed slow mode";
-	if ([kind isEqualToString:@"chatEventPermissionsChanged"]) return @"changed permissions";
-	if ([kind isEqualToString:@"chatEventSettingChanged"])    return @"changed a setting";
-	if ([kind isEqualToString:@"chatEventInviteLinkEdited"])  return @"edited an invite link";
-	if ([kind isEqualToString:@"chatEventInviteLinkRevoked"]) return @"revoked an invite link";
-	if ([kind isEqualToString:@"chatEventInviteLinkDeleted"]) return @"deleted an invite link";
-	if ([kind isEqualToString:@"chatEventIsAllHistoryAvailableToggled"]) return @"changed history visibility";
-	if ([kind isEqualToString:@"chatEventForumTopicCreated"]) return @"created a topic";
-	if ([kind isEqualToString:@"chatEventForumTopicEdited"])  return @"edited a topic";
-	if ([kind isEqualToString:@"chatEventForumTopicDeleted"]) return @"deleted a topic";
-	if ([kind isEqualToString:@"chatEventForumTopicPinned"])  return @"pinned a topic";
-	if ([kind isEqualToString:@"chatEventVideoChatCreated"])  return @"started a video chat";
-	if ([kind isEqualToString:@"chatEventVideoChatEnded"])    return @"ended a video chat";
-	return TGPhraseFromTypeName(kind);
+/// The rows Recent Actions draws. A channel status is a custom emoji, so its
+/// emoji is looked up in one getCustomEmojiStickers before the lines are made.
+static void TGEventLogLines(NSArray *events, BOOL isChannel, void (^completion)(NSArray *)) {
+	NSMutableArray *ids = [NSMutableArray array];
+	for (NSDictionary *event in events){
+		NSDictionary *status = event[@"action"][@"new_emoji_status"];
+		id emojiId = [status isKindOfClass:NSDictionary.class] ? status[@"type"][@"custom_emoji_id"] : nil;
+		if (emojiId)
+			[ids addObject:emojiId];
+	}
+	void (^build)(NSDictionary *) = ^(NSDictionary *emojiById){
+		TGClient *me = [TGClient shared];
+		NSString *(^name)(int64_t) = ^NSString *(int64_t uid){
+			return [me nameForUserId:uid] ?: [me titleForChat:uid];
+		};
+		NSMutableArray *out = [NSMutableArray arrayWithCapacity:events.count];
+		for (NSDictionary *event in events){
+			NSDictionary *sender = event[@"member_id"];
+			int64_t senderId = [sender[@"user_id"] longLongValue] ?: [sender[@"chat_id"] longLongValue];
+			NSString *actor = (senderId ? name(senderId) : nil) ?: @"Someone";
+			NSDictionary *action = event[@"action"];
+			NSDictionary *status = action[@"new_emoji_status"];
+			if ([status isKindOfClass:NSDictionary.class]){
+				NSMutableDictionary *withEmoji = [action mutableCopy];
+				withEmoji[@"emoji"] = emojiById[[status[@"type"][@"custom_emoji_id"] description]] ?: @"";
+				action = withEmoji;
+			}
+			NSDictionary *line = TGChatEventLine(action, actor, isChannel, name);
+			[out addObject:@{
+				@"date"   : event[@"date"] ?: @(0),
+				@"title"  : line[@"title"],
+				@"detail" : line[@"detail"],
+			}];
+		}
+		if (completion)
+			completion(out);
+	};
+	if (!ids.count){
+		build(nil);
+		return;
+	}
+	[[TGClient shared] request:@{@"@type" : @"getCustomEmojiStickers", @"custom_emoji_ids" : ids}
+			completion:^(NSDictionary *result){
+		NSMutableDictionary *emojiById = [NSMutableDictionary dictionary];
+		for (NSDictionary *sticker in result[@"stickers"]){
+			id emojiId = [sticker isKindOfClass:NSDictionary.class] ? sticker[@"full_type"][@"custom_emoji_id"] : nil;
+			if (emojiId && [sticker[@"emoji"] length])
+				emojiById[[emojiId description]] = sticker[@"emoji"];
+		}
+		build(emojiById);
+	}];
 }
 
 static NSDictionary *TGEventFilterAll(void) {
@@ -98,6 +117,33 @@ static NSDictionary *TGEventFilterAll(void) {
 		@"subscription_extensions" : @YES,
 	};
 }
+
+/// One page of 100, newest first, then the next from the oldest id seen.
+/// ponytail: stops at 500 events; official pages on scroll instead.
+static void TGEventLogPage(int64_t chatId, BOOL isChannel, int64_t fromId, NSMutableArray *raw,
+		void (^completion)(NSArray *)) {
+	[[TGClient shared] request:@{
+		@"@type" : @"getChatEventLog",
+		@"chat_id" : @(chatId),
+		@"query" : @"",
+		@"from_event_id" : @(fromId),
+		@"limit" : @(100),
+		@"filters" : TGEventFilterAll(),
+		@"user_ids" : @[],
+	} completion:^(NSDictionary *result){
+		NSArray *events = [result[@"events"] isKindOfClass:NSArray.class] ? result[@"events"] : @[];
+		for (NSDictionary *event in events)
+			if ([event isKindOfClass:NSDictionary.class])
+				[raw addObject:event];
+		int64_t last = [[raw.lastObject objectForKey:@"id"] longLongValue];
+		if (events.count == 100 && raw.count < 500 && last && last != fromId){
+			TGEventLogPage(chatId, isChannel, last, raw, completion);
+			return;
+		}
+		TGEventLogLines(raw, isChannel, completion);
+	}];
+}
+
 
 static NSDictionary *TGFilterFromName(NSString *name) {
 	NSString *type = @"searchMessagesFilterEmpty";
@@ -853,36 +899,9 @@ static NSDictionary *TGFilterFromName(NSString *name) {
 	}];
 }
 
-- (void)eventLogForChat:(int64_t)chatId
+- (void)eventLogForChat:(int64_t)chatId isChannel:(BOOL)isChannel
 			 completion:(void (^)(NSArray *events))completion {
-	__weak TGClient *weakSelf = [TGClient shared];
-	[[TGClient shared] request:@{
-		@"@type" : @"getChatEventLog",
-		@"chat_id" : @(chatId),
-		@"query" : @"",
-		@"from_event_id" : @(0),
-		@"limit" : @(100),
-		@"filters" : TGEventFilterAll(),
-		@"user_ids" : @[],
-	} completion:^(NSDictionary *result){
-		TGClient *me = [TGClient shared];
-		NSMutableArray *out = [NSMutableArray array];
-		for (NSDictionary *event in result[@"events"]){
-			if (![event isKindOfClass:NSDictionary.class])
-				continue;
-			NSDictionary *sender = event[@"member_id"];
-			int64_t userId = [sender[@"user_id"] longLongValue];
-			NSString *actor = userId ? ([me nameForUserId:userId] ?: @"Someone")
-									 : @"Someone";
-			[out addObject:@{
-				@"date"   : event[@"date"] ?: @(0),
-				@"actor"  : actor,
-				@"text"   : TGChatEventText(event[@"action"]),
-			}];
-		}
-		if (completion)
-			completion(out);
-	}];
+	TGEventLogPage(chatId, isChannel, 0, [NSMutableArray array], completion);
 }
 
 - (void)reportChatPhotoInChat:(int64_t)chatId

@@ -11,9 +11,16 @@ typedef NS_ENUM(NSInteger, TGAuthScreen) {
 	/// Leave whatever is on screen (state not known yet).
 	TGAuthScreenKeep = 0,
 	TGAuthScreenMain,
-	TGAuthScreenLogin
+	TGAuthScreenLogin,
+	/// A spinner until TDLib names the auth state.
+	TGAuthScreenLoading
 };
 
 /// `loginOpen`: the login screen is already the root. `devShowcase`: the dev
 /// build's fixture chats should stay reachable while signed out.
 FOUNDATION_EXTERN TGAuthScreen TGAuthScreenForState(TGAuthState state, BOOL loginOpen, BOOL devShowcase);
+
+/// The first screen, before TDLib has said anything. `authorized`: this
+/// account slot reached authorizationStateReady before. Without it the chat
+/// list would flash "Chats / Loading..." for ~1 s ahead of login.
+FOUNDATION_EXTERN TGAuthScreen TGLaunchScreenForSession(BOOL authorized, BOOL devShowcase);

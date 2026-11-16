@@ -19,6 +19,7 @@
 		return;
 	NSString *number = self.pendingPhoneNumber;
 	self.pendingPhoneNumber = nil;
+	NSLog(@"TGClient: >>> setAuthenticationPhoneNumber");
 	[self send:@{
 		@"@type"        : @"setAuthenticationPhoneNumber",
 		@"phone_number" : number,

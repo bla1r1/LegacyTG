@@ -58,3 +58,34 @@ NSString *TGLoginEmailResetPendingText(NSInteger resetIn) {
 		when = TGLoginResetInterval(resetIn);
 	return TGLocalizedFormat(@"Email will be reset %@", when);
 }
+
+NSArray *TGCountrySections(NSArray *countries, NSString *query) {
+	NSArray *sorted = [countries sortedArrayUsingComparator:^NSComparisonResult(NSDictionary *a, NSDictionary *b){
+		return [a[@"name"] ?: @"" localizedCaseInsensitiveCompare:b[@"name"] ?: @""];
+	}];
+	NSString *needle = [query stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+	if (needle.length){
+		// "+49", "49" and "ger" all find Germany.
+		NSString *digits = [needle stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"+"]];
+		NSMutableArray *found = [NSMutableArray array];
+		for (NSDictionary *country in sorted){
+			NSString *name = country[@"name"] ?: @"";
+			NSString *prefix = country[@"prefix"] ?: @"";
+			if ([name rangeOfString:needle options:NSCaseInsensitiveSearch | NSDiacriticInsensitiveSearch].location != NSNotFound ||
+					(digits.length && [prefix rangeOfString:digits].location != NSNotFound))
+				[found addObject:country];
+		}
+		return found.count ? @[@{@"title" : @"", @"countries" : found}] : @[];
+	}
+	NSMutableArray *sections = [NSMutableArray array];
+	for (NSDictionary *country in sorted){
+		NSString *name = country[@"name"] ?: @"";
+		NSString *letter = name.length
+				? [[name substringWithRange:[name rangeOfComposedCharacterSequenceAtIndex:0]] uppercaseString] : @"#";
+		NSDictionary *last = sections.lastObject;
+		if (![last[@"title"] isEqualToString:letter])
+			[sections addObject:@{@"title" : letter, @"countries" : [NSMutableArray array]}];
+		[sections.lastObject[@"countries"] addObject:country];
+	}
+	return sections;
+}

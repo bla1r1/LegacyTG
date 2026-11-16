@@ -14,6 +14,7 @@
 #import "TGClient.h"
 #import "TGClientInternal.h"
 #import "TGStatChart.h"
+#import "TGChatEventText.h"
 
 @interface TGMessageParserTests : XCTestCase @end
 
@@ -1153,6 +1154,85 @@ static NSDictionary *pmPaidMediaMsgContent(id starCount, NSString *caption, NSAr
 		@{@"text" : @"Share", @"type" : @{@"@type" : @"inlineKeyboardButtonTypeSwitchInline", @"query" : @"q",
 			@"target_chat" : @{@"@type" : @"targetChatChosen"}}}]]});
 	XCTAssertEqualObjects(kb[@"inlineRows"][0][0][@"chooseChat"], @YES);
+}
+
+
+#pragma mark - Recent Actions (Channel.AdminLog.*)
+
+static NSString *evName(int64_t uid) { return uid == 7 ? @"Bob" : @"Eve"; }
+
+- (void)testEventLine_OfficialSentences {
+	NSString *(^names)(int64_t) = ^NSString *(int64_t uid){ return evName(uid); };
+	NSDictionary *line = TGChatEventLine(@{@"@type" : @"chatEventTitleChanged", @"new_title" : @"Cats"}, @"Ann", NO, names);
+	XCTAssertEqualObjects(line[@"title"], @"Ann changed group name to \"Cats\"");
+	line = TGChatEventLine(@{@"@type" : @"chatEventDescriptionChanged", @"old_description" : @"old",
+		@"new_description" : @"new"}, @"Ann", YES, names);
+	XCTAssertEqualObjects(line[@"title"], @"Ann edited channel description");
+	XCTAssertEqualObjects(line[@"detail"], @"new\nPrevious description: old");
+	line = TGChatEventLine(@{@"@type" : @"chatEventUsernameChanged", @"old_username" : @"a", @"new_username" : @""}, @"Ann", NO, names);
+	XCTAssertEqualObjects(line[@"title"], @"Ann removed group link");
+	XCTAssertEqualObjects(line[@"detail"], @"Previous link: t.me/a");
+	line = TGChatEventLine(@{@"@type" : @"chatEventSlowModeDelayChanged", @"new_slow_mode_delay" : @60}, @"Ann", NO, names);
+	XCTAssertEqualObjects(line[@"title"], @"Ann set slowmode to 1 minute");
+	line = TGChatEventLine(@{@"@type" : @"chatEventMemberPromoted", @"user_id" : @7,
+		@"old_status" : @{@"@type" : @"chatMemberStatusMember"},
+		@"new_status" : @{@"@type" : @"chatMemberStatusAdministrator"}}, @"Ann", NO, names);
+	XCTAssertEqualObjects(line[@"title"], @"Ann promoted Bob");
+	line = TGChatEventLine(@{@"@type" : @"chatEventMemberRestricted", @"member_id" : @{@"user_id" : @7},
+		@"old_status" : @{@"@type" : @"chatMemberStatusMember"},
+		@"new_status" : @{@"@type" : @"chatMemberStatusBanned"}}, @"Ann", NO, names);
+	XCTAssertEqualObjects(line[@"title"], @"Ann banned Bob");
+	line = TGChatEventLine(@{@"@type" : @"chatEventPermissionsChanged",
+		@"old_permissions" : @{@"can_send_basic_messages" : @YES},
+		@"new_permissions" : @{@"can_send_basic_messages" : @NO, @"can_send_polls" : @YES}}, @"Ann", NO, names);
+	XCTAssertEqualObjects(line[@"detail"], @"-Send Messages\n+Send Polls");
+	line = TGChatEventLine(@{@"@type" : @"chatEventForumTopicToggleIsClosed",
+		@"topic_info" : @{@"name" : @"News", @"is_closed" : @YES}}, @"Ann", NO, names);
+	XCTAssertEqualObjects(line[@"title"], @"Ann closed topic News");
+	line = TGChatEventLine(@{@"@type" : @"chatEventMemberJoinedByInviteLink", @"via_chat_folder_invite_link" : @YES,
+		@"invite_link" : @{@"invite_link" : @"t.me/+x"}}, @"Ann", NO, names);
+	XCTAssertEqualObjects(line[@"title"], @"Ann joined via invite link t.me/+x (community)");
+	line = TGChatEventLine(@{@"@type" : @"chatEventMessageEdited", @"old_message" : @{@"content" : @{@"text" : @{@"text" : @"hi"}}},
+		@"new_message" : @{@"content" : @{@"text" : @{@"text" : @"hello"}}}}, @"Ann", NO, names);
+	XCTAssertEqualObjects(line[@"detail"], @"hello\nOriginal message: hi");
+}
+
+/// Lines that read wrong or fell back to the bare type name.
+- (void)testEventLine_ChannelPhotoTogglesAndInvites {
+	NSString *(^names)(int64_t) = ^NSString *(int64_t uid){ return evName(uid); };
+	XCTAssertEqualObjects(TGChatEventLine(@{@"@type" : @"chatEventPhotoChanged"}, @"Ann", YES, names)[@"title"],
+			@"Channel photo removed");
+	XCTAssertEqualObjects(TGChatEventLine(@{@"@type" : @"chatEventMemberInvited", @"user_id" : @7}, @"Ann", NO, names)[@"title"],
+			@"Ann invited Bob");
+	XCTAssertEqualObjects(TGChatEventLine(@{@"@type" : @"chatEventIsAllHistoryAvailableToggled",
+			@"is_all_history_available" : @YES}, @"Ann", NO, names)[@"title"],
+			@"Ann made the group history visible for new members");
+	XCTAssertEqualObjects(TGChatEventLine(@{@"@type" : @"chatEventHasProtectedContentToggled",
+			@"has_protected_content" : @NO}, @"Ann", YES, names)[@"title"], @"Ann allowed message forwarding");
+	XCTAssertEqualObjects(TGChatEventLine(@{@"@type" : @"chatEventIsForumToggled", @"is_forum" : @YES},
+			@"Ann", NO, names)[@"title"], @"Ann enabled topics");
+	XCTAssertEqualObjects(TGChatEventLine(@{@"@type" : @"chatEventVideoChatParticipantVolumeLevelChanged",
+			@"participant_id" : @{@"user_id" : @7}, @"volume_level" : @5000}, @"Ann", NO, names)[@"title"],
+			@"Ann changed Bob volume to 50%");
+	XCTAssertEqualObjects(TGChatEventLine(@{@"@type" : @"chatEventMemberJoinedByRequest",
+			@"approver_user_id" : @7}, @"Ann", NO, names)[@"title"],
+			@"Ann joined via public request, approved by Bob");
+	// Newer than this client: still a sentence, never "Ann: AccentColorChanged".
+	XCTAssertEqualObjects(TGChatEventLine(@{@"@type" : @"chatEventAccentColorChanged"}, @"Ann", YES, names)[@"title"],
+			@"Ann accent color changed");
+}
+
+/// Video, audio and files are media too; only photos used to count.
+- (void)testEventLine_AnyMediaKindIsSendMedia {
+	NSDictionary *line = TGChatEventLine(@{@"@type" : @"chatEventPermissionsChanged",
+		@"old_permissions" : @{@"can_send_videos" : @YES},
+		@"new_permissions" : @{@"can_send_videos" : @NO}}, @"Ann", NO, nil);
+	XCTAssertEqualObjects(line[@"detail"], @"-Send Media");
+	line = TGChatEventLine(@{@"@type" : @"chatEventMessageEdited",
+		@"old_message" : @{@"content" : @{@"caption" : @{@"text" : @"a"}}},
+		@"new_message" : @{@"content" : @{@"caption" : @{@"text" : @"b"}}}}, @"Ann", NO, nil);
+	XCTAssertEqualObjects(line[@"title"], @"Ann edited caption:");
+	XCTAssertEqualObjects(line[@"detail"], @"b\nOriginal caption: a");
 }
 
 @end

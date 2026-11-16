@@ -547,8 +547,9 @@ NSDictionary *TGFormattedText(NSString *text) {
 	// runs on WaitTdlibParameters, before TDLib has opened anything.
 	NSString *db = TGAccountResolvedDatabaseDirectory([TGClient activeAccountSlot]);
 
-	int SETUP_API_ID(apiId)
-	char * SETUP_API_HASH(apiHash)
+	int apiId = TGApiId();
+	char apiHash[TG_API_HASH_LEN + 1];
+	TGApiHash(apiHash);
 
 	UIDevice *dev = [UIDevice currentDevice];
 

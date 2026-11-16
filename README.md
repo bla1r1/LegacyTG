@@ -51,8 +51,18 @@ brew install cmake gperf ccache ldid llvm
 ```bash
 git clone --recursive https://github.com/bla1r1/iTgLegacy.git
 cd iTgLegacy
-scripts/build_all.sh
+scripts/setup.sh
 ```
+
+`setup.sh` installs the missing Homebrew tools (without upgrading anything
+installed), fetches TDLib, checks the git-ignored inputs below, builds the
+dependencies with `build_all.sh --deps`, runs the host tests and, on Apple
+Silicon, builds the iPhone 4 / iOS 6.1.3 emulator into `~/lt-emu` (`--no-emu`
+skips it). The emulator needs 17 more Homebrew packages (qemu's and
+libimobiledevice's build dependencies, the same no-upgrade rule), Rust through
+rustup when `cargo` is missing, and Apple's 940 MB iOS 6.1.3 IPSW. A cold run
+takes about an hour; a rerun skips what is done.
+`scripts/build_all.sh` then builds the release IPAs.
 
 `build_all.sh` goes from an empty `build/` to the release IPAs in
 `build/ipa/` with a `SHA256SUMS` file (`LegacyTG.ipa` is the one published;
@@ -75,8 +85,10 @@ have to come from an earlier checkout.
 | `make -j8 DEV=1` | Dev build: dev menu, fixture chats, bench, automation URLs; never in a release |
 | `make clean` | Remove `build/armv7`, `build/arm64` and `build/ipa`, the per-architecture dependencies with them; run `build_all.sh` again after it |
 | `make -j8 -f tests/Makefile test` | Host test suite |
+| `scripts/emu.sh test` | armv7 IPA into the iPhone 4 / iOS 6.1.3 emulator: install, open, screenshots and syslog in `~/lt-emu/out`, auth and connection lines printed (~7 min). Vintage tier only; not a substitute for a device |
 | `scripts/devrun.sh` | Build, install, launch, log and screenshot on a device over SSH |
-| `scripts/check_release.sh` | Fails if anything behind `TG_DEV` reached a release build |
+| `scripts/check_release.sh` | Fails if anything behind `TG_DEV` reached a release build, on placeholder API keys, missing keychain entitlements or a plain API hash in a slice |
+| `scripts/release.sh` | The version in `Info.plist`, from build to published: checks, IPAs, emulator smoke, deb, then (after a question) tag, push, GitHub Release with the CHANGELOG section, Cydia repo. `--dry-run` stops before publishing. The channel post text lands in `build/ipa/telegram-post.txt` |
 
 ## Repository layout
 

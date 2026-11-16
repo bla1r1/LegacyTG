@@ -17,6 +17,8 @@
 #import "TGStoreTestSupport.h"
 #import "TGAccountStore.h"
 #import "TGContactsStore.h"
+#import "api_id.h"
+#import "tg_config.h"
 
 @interface TGClientComposeTests : XCTestCase @end
 
@@ -542,6 +544,58 @@ static void answerTyped(TGClient *c, NSString *type, NSDictionary *answer) {
 	XCTAssertEqual(countries.count, (NSUInteger)1);
 	XCTAssertEqualObjects(countries[0][@"code"], @"UA");
 	XCTAssertEqualObjects(countries[0][@"prefix"], @"+380");
+}
+
+/// The phone step names the guessed country before sign-in, where TDLib
+/// answers getCountry with 401 Unauthorized; getCountries is on its
+/// pre-authentication list. The empty Country row on a fresh install.
+- (void)testCountryForCode_AsksTheListTDLibAnswersBeforeSignIn {
+	TGClient *c = C();
+	[[TGTransport shared] testSetExecute:NULL];
+	__block NSDictionary *country = nil;
+	__block BOOL called = NO;
+	[[TGAccountStore shared] countryForCode:@"de" completion:^(NSDictionary *found){
+		called = YES;
+		country = found;
+	}];
+	XCTAssertNil(lastC(c, @"getCountry"));
+	answerTyped(c, @"getCountries", @{@"@type" : @"countries", @"countries" : @[
+			@{@"country_code" : @"UA", @"name" : @"Ukraine", @"calling_codes" : @[@"380"]},
+			@{@"country_code" : @"DE", @"name" : @"Germany", @"calling_codes" : @[@"49"]}]});
+	XCTAssertTrue(called);
+	XCTAssertEqualObjects(country[@"name"], @"Germany");
+	XCTAssertEqualObjects(country[@"prefix"], @"+49");
+
+	called = NO;
+	[[TGAccountStore shared] countryForCode:@"QQ" completion:^(NSDictionary *found){
+		called = YES;
+		country = found;
+	}];
+	answerTyped(c, @"getCountries", @{@"@type" : @"error", @"code" : @500, @"message" : @"x"});
+	XCTAssertTrue(called);
+	XCTAssertNil(country);
+}
+
+/// The phone step spun forever on the iPhone 4 emulator: TDLib answered
+/// setAuthenticationPhoneNumber with an error, the log said "first error",
+/// and no "<<< ERROR" followed, so onError never released the spinner.
+- (void)testLoginStepError_ReachesOnError {
+	TGClient *c = C();
+	__block NSString *seen = nil;
+	void (^saved)(NSString *) = c.onError;
+	c.onError = ^(NSString *msg){ seen = msg; };
+	[c handleUpdate:@{@"@type" : @"error", @"code" : @400, @"message" : @"PHONE_NUMBER_INVALID"}];
+	c.onError = saved;
+	XCTAssertEqualObjects(seen, @"PHONE_NUMBER_INVALID");
+}
+
+/// The binary carries the keys masked; what setTdlibParameters gets has to
+/// be exactly tg_config.h's, or every sign-in fails with API_ID_INVALID.
+- (void)testApiKeys_UnmaskToTgConfig {
+	XCTAssertEqual(TGApiId(), TG_API_ID);
+	char hash[TG_API_HASH_LEN + 1];
+	TGApiHash(hash);
+	XCTAssertEqual(strcmp(hash, TG_API_HASH), 0);
 }
 
 #pragma mark - push

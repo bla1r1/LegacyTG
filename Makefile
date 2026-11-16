@@ -107,8 +107,12 @@ ADD_DEV_SCHEMES = /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0 dict" \
 	-c "Add :CFBundleURLTypes:0:CFBundleURLSchemes array" \
 	-c "Add :CFBundleURLTypes:0:CFBundleURLSchemes:0 string legacytg" \
 	-c "Add :CFBundleURLTypes:0:CFBundleURLSchemes:1 string itglegacy" "$(1)"
+DROP_DEV_ASSETS = true
 else
 ADD_DEV_SCHEMES = true
+# Only TGDevShowcase reads these. dev_sticker.tgs and dev_video_sticker.webm
+# stay: the sticker editor uploads them in release.
+DROP_DEV_ASSETS = rm -f "$(1)/avatar-durov.jpg" "$(1)/avatar-bot.jpg"
 endif
 
 WEBP_ARMV7 := -F$(ROOT_DIR)/vendor/libs -framework WebP
@@ -275,6 +279,7 @@ APP_SRC_M := \
 	src/Core/Model/TGMediaSupport.m \
 	src/Core/Model/TGPinnedLine.m \
 	src/Core/Model/TGStatChart.m \
+	src/Core/Model/TGChatEventText.m \
 	src/Core/Stores/TGCustomEmojiStore.m \
 	src/Core/Stores/TGMediaStore.m \
 	src/Core/Stores/TGMemberAvatarStore.m \
@@ -489,6 +494,7 @@ APP_SRC_M := \
 	src/Features/Auth/TGLoginViewController.m \
 	src/Features/Auth/TGLoginViewController+Phone.m \
 	src/Features/Auth/TGLoginViewController+Steps.m \
+	src/Features/Auth/TGCountryPickerViewController.m \
 	src/Features/Auth/TGLoginLogic.m \
 	src/Features/ChatList/TGChatListViewController.m \
 	src/Features/ChatList/Core/TGChatListSnapshot.m \
@@ -614,6 +620,7 @@ APP_SRC_M := \
 	src/UI/Controllers/TGListViewController.m \
 	src/UI/Controllers/TGViewController.m \
 	src/UI/Controllers/TGTableViewController.m \
+	src/UI/Controllers/TGKeyboardDismissal.m \
 	src/UI/Controls/TGTableViewCell.m \
 	src/Features/Settings/TGNetworkViewController.m \
 	src/Features/Chat/TGChatToolsViewController.m \
@@ -881,7 +888,10 @@ ipa: ipa-armv7 ipa-arm64
 	# ignores it. Packaging from the arm64 bundle alone left it out, and the
 	# universal build installed on a 4S with no TDLib at all.
 	@cp -f "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/libtdjson.dylib" "$(BUILD_DIR)/fat_app/$(APP_NAME).app/" 2>/dev/null || echo "[!] no armv7 libtdjson.dylib to package"
-	@codesign -s - --force "$(BUILD_DIR)/fat_app/$(APP_NAME).app" 2>/dev/null || true
+	@codesign -s - --force "$(BUILD_DIR)/fat_app/$(APP_NAME).app"
+	@# codesign above signs with no entitlements: 1.3 shipped that way and
+	@# securityd refused every keychain call. ldid signs every slice.
+	@ldid -S$(ROOT_DIR)/resources/LegacyTG-jailbreak.xcent "$(BUILD_DIR)/fat_app/$(APP_NAME).app/$(APP_NAME)"
 	@rm -rf "$(BUILD_DIR)/stage-fat"
 	@mkdir -p "$(BUILD_DIR)/stage-fat/Payload"
 	@cp -rf "$(BUILD_DIR)/fat_app/$(APP_NAME).app" "$(BUILD_DIR)/stage-fat/Payload/"
@@ -912,6 +922,7 @@ ipa-armv7: $(MACHOFIX) $(ARMV7_ALL_OBJS)
 	@cp -f "$(ROOT_DIR)/resources/strings/"*.plist "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
 	@cp -f "$(ROOT_DIR)/resources/"*.tgios-theme "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
 	@cp -rf "$(ROOT_DIR)/resources/images/"* "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
+	@$(call DROP_DEV_ASSETS,$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app)
 	@# TDLib rides along as its own image: statically linked it pushes __TEXT
 	@# past the 16MB armv7 thumb branch limit. Built by scripts/build_tdlib_dylib.sh.
 	@cp -f "$(BUILD_DIR)/armv7/tdlib/lib/libtdjson.dylib" "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || echo "[!] no libtdjson.dylib - run scripts/build_tdlib_dylib.sh"
@@ -920,7 +931,7 @@ ipa-armv7: $(MACHOFIX) $(ARMV7_ALL_OBJS)
 	@# Signed with an access group: with a bare fake signature securityd
 	@# answers every keychain call "missing entitlement", so the passcode
 	@# and the database key could not be stored on a jailbroken install.
-	@ldid -S$(ROOT_DIR)/resources/LegacyTG-jailbreak.xcent "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/$(APP_NAME)" 2>/dev/null || true
+	@ldid -S$(ROOT_DIR)/resources/LegacyTG-jailbreak.xcent "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/$(APP_NAME)"
 	@# Each package stages in its own folder: under -j the three used to share
 	@# build/Payload and zip each other's half-copied bundles.
 	@rm -rf "$(BUILD_DIR)/stage-armv7" "$(IPA_ARMV7)"
@@ -942,7 +953,9 @@ ipa-arm64: $(ARM64_ALL_OBJS)
 	@cp -f "$(ROOT_DIR)/resources/strings/"*.plist "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
 	@cp -f "$(ROOT_DIR)/resources/"*.tgios-theme "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
 	@cp -rf "$(ROOT_DIR)/resources/images/"* "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
-	@codesign -s - --force "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app" 2>/dev/null || true
+	@$(call DROP_DEV_ASSETS,$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app)
+	@codesign -s - --force "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app"
+	@ldid -S$(ROOT_DIR)/resources/LegacyTG-jailbreak.xcent "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app/$(APP_NAME)"
 	@# Each package stages in its own folder: under -j the three used to share
 	@# build/Payload and zip each other's half-copied bundles.
 	@rm -rf "$(BUILD_DIR)/stage-arm64" "$(IPA_ARM64)"
@@ -954,6 +967,12 @@ ipa-arm64: $(ARM64_ALL_OBJS)
 # ------------------------------------------------------------------------------
 # Object Compilation Rules (32-bit armv7)
 # ------------------------------------------------------------------------------
+# The API keys, masked for the binary (scripts/gen_api_key.py).
+API_KEY_H := $(ROOT_DIR)/vendor/include/tg_api_key.h
+$(API_KEY_H): $(ROOT_DIR)/vendor/include/tg_config.h $(ROOT_DIR)/scripts/gen_api_key.py
+	@python3 $(ROOT_DIR)/scripts/gen_api_key.py $< $@
+$(ARMV7_OBJ_DIR)/src/Core/Client/TGClient.o $(ARM64_OBJ_DIR)/src/Core/Client/TGClient.o: $(API_KEY_H)
+
 $(ARMV7_OBJ_DIR)/%.o: %.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS_ARMV7) -c $< -o $@

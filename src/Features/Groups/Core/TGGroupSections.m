@@ -251,6 +251,10 @@
 				: TGLocalized(@"Members"))
 				detail:[NSString stringWithFormat:@"%ld", (long)self.memberCount]
 				action:@"members" opens:YES destructive:NO disabled:NO]];
+	// Official's admin row for the event log, which a basic group has not.
+	if (!basic && manager)
+		[info addObject:[self valueRow:TGLocalized(@"Recent Actions")
+				detail:nil action:@"recentActions" opens:YES destructive:NO disabled:NO]];
 	if (basic && manager)
 		[info addObject:[self valueRow:TGLocalized(@"Upgrade to Supergroup")
 				detail:nil action:@"upgrade" opens:NO destructive:NO disabled:NO]];

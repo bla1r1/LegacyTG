@@ -33,8 +33,15 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 #    away (an early return, a check in the caller) is named in a comment
 #    "ios7-guarded: <where>" just above the call.
 # -----------------------------------------------------------------
+# The example's keys build fine and fail only at sign-in, as API_ID_INVALID.
+if grep -Eq '^#define[[:space:]]+TG_API_ID[[:space:]]+12345([^0-9]|$)' "$ROOT/vendor/include/tg_config.h"; then
+	echo "[check_release] vendor/include/tg_config.h has the example's api_id 12345: no release with placeholder keys"
+	exit 1
+fi
+
 echo "[check_release] selector audit: iOS 7+ guard coverage"
-make -C "$ROOT" DEV=0 ipa-armv7 >/dev/null
+# All three packages: the entitlement check below reads every IPA.
+make -C "$ROOT" -j8 DEV=0 ipa >/dev/null
 APP="$ROOT/build/armv7/app/LegacyTG.app"
 BIN="$APP/LegacyTG"
 
@@ -159,5 +166,54 @@ if plutil -p "$APP/Info.plist" | grep -qE 'legacytg|itglegacy'; then
 	echo "FOUND in release: automation URL scheme"
 	FOUND=1
 fi
+for f in avatar-durov.jpg avatar-bot.jpg; do
+	if [ -e "$APP/$f" ]; then
+		echo "FOUND in release: $f"
+		FOUND=1
+	fi
+done
 [ "$FOUND" = 0 ] && echo "release clean"
+
+# -----------------------------------------------------------------
+# 3) Keychain entitlements: every slice of every IPA. 1.3 was re-signed by a
+#    bare codesign after lipo, securityd answered "missing entitlement", and
+#    the database key and passcode were never stored. IPA_DIR=<dir> checks
+#    another set of packages.
+# -----------------------------------------------------------------
+IPA_DIR="${IPA_DIR:-$ROOT/build/ipa}"
+# scripts/gen_api_key.py masks the hash; a plain copy back in a slice means
+# something compiled tg_config.h's TG_API_HASH in directly.
+API_HASH=$(sed -nE 's/^#define[[:space:]]+TG_API_HASH[[:space:]]+"([^"]+)".*/\1/p' "$ROOT/vendor/include/tg_config.h")
+# Release packages only: a dev IPA left over from devrun.sh is not shipped.
+IPAS=$(ls "$IPA_DIR"/*.ipa 2>/dev/null | grep -v -- '-dev\.ipa$' || true)
+if [ -z "$IPAS" ]; then
+	echo "NO release IPA in $IPA_DIR to check entitlements on"
+	exit 1
+fi
+ENT_TMP="$(mktemp -d)"
+for ipa in $IPAS; do
+	rm -rf "$ENT_TMP/Payload"
+	if ! unzip -oq "$ipa" 'Payload/*.app/LegacyTG' -d "$ENT_TMP"; then
+		echo "NO LegacyTG binary in $(basename "$ipa")"
+		FOUND=1
+		continue
+	fi
+	bin="$(echo "$ENT_TMP"/Payload/*.app/LegacyTG)"
+	for arch in $(lipo -archs "$bin"); do
+		lipo -thin "$arch" "$bin" -output "$ENT_TMP/slice" 2>/dev/null || cp "$bin" "$ENT_TMP/slice"
+		if [ -n "$API_HASH" ] && grep -qaF "$API_HASH" "$ENT_TMP/slice"; then
+			echo "API hash in plain text: $(basename "$ipa") $arch"
+			FOUND=1
+		fi
+		ldid -e "$ENT_TMP/slice" > "$ENT_TMP/ent.plist" 2>/dev/null
+		if plutil -extract keychain-access-groups xml1 -o - "$ENT_TMP/ent.plist" 2>/dev/null \
+				| grep -q '<string>org.legacy.itg</string>'; then
+			echo "entitlements ok: $(basename "$ipa") $arch"
+		else
+			echo "NO keychain-access-groups org.legacy.itg: $(basename "$ipa") $arch"
+			FOUND=1
+		fi
+	done
+done
+rm -rf "$ENT_TMP"
 exit "$FOUND"

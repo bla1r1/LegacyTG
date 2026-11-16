@@ -199,6 +199,7 @@ CLIENT_OBJC_SRCS := \
     src/Core/Model/TGMediaSupport.m \
     src/Core/Model/TGPinnedLine.m \
     src/Core/Model/TGStatChart.m \
+    src/Core/Model/TGChatEventText.m \
     src/Core/Client/TGClient+MessageMeta.m \
     src/Core/Client/TGClient+SavedMessages.m \
     src/Core/Client/TGClient+Notifications.m \
@@ -530,7 +531,7 @@ LIBTGVOIP_SRCS := \
 
 # ─── targets ──────────────────────────────────────────────────────────────────
 
-.PHONY: test build clean tokens sizes screens sim official_sim icons client methods ios6 fields
+.PHONY: test build clean tokens sizes screens sim official_sim icons client methods ios6 fields preauth
 
 icons:
 	@echo "\n════════ Icon catalogue lint ════════"
@@ -575,6 +576,11 @@ fields:
 	@echo "\n════════ Unread TDLib field lint ════════"
 	@sh $(ROOT)/scripts/lint_fields.sh
 
+# A login screen request TDLib refuses with 401 before sign-in (B38).
+preauth:
+	@echo "\n════════ Pre-authentication request lint ════════"
+	@sh $(ROOT)/scripts/lint_preauth.sh
+
 TEST_BINARY_DEPS := $(TESTS)/main.m $(C_SRCS) $(OBJC_SRCS) $(TEST_HELPER_SRCS) $(TEST_SRCS) \
                 $(TESTS)/TGTestRunner.h $(TESTS)/TGCallTestHelpers.h
 CLIENT_BINARY_DEPS := $(TESTS)/main_client.mm $(CLIENT_OBJC_SRCS) $(CLIENT_HELPER_SRCS) \
@@ -583,7 +589,7 @@ SIM_BINARY_DEPS := $(TESTS)/call_sim.mm $(C_SRCS) $(OBJC_SRCS) $(TEST_HELPER_SRC
                 $(TESTS)/TGCallTestHelpers.h
 OFFICIAL_SIM_DEPS := $(TESTS)/official_tgvoip_sim.mm $(LIBTGVOIP_SRCS)
 
-test: tokens sizes screens layers methods ios6 fields $(TEST_BINARY) $(CLIENT_BINARY)
+test: tokens sizes screens layers methods ios6 fields preauth $(TEST_BINARY) $(CLIENT_BINARY)
 	@echo "\n════════ Running call stack tests ════════"
 	$(TEST_BINARY)
 	@echo "\n════════ Running TGClient regression tests ════════"
@@ -623,6 +629,12 @@ corekit: $(COREKIT_OBJS)
 # main_client object after a test file #imported into it changed (five new
 # tests never ran). make's own -MMD dependencies already rebuild only what
 # changed.
+
+# The API keys, masked as the app gets them (scripts/gen_api_key.py).
+API_KEY_H := $(ROOT)/vendor/include/tg_api_key.h
+$(API_KEY_H): $(ROOT)/vendor/include/tg_config.h $(ROOT)/scripts/gen_api_key.py
+	@python3 $(ROOT)/scripts/gen_api_key.py $< $@
+$(call objs_of,$(SRC)/Core/Client/TGClient.m): $(API_KEY_H)
 
 $(OBJDIR)/%.o: /%
 	@mkdir -p $(dir $@)

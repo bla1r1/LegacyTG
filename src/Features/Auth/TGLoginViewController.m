@@ -1,4 +1,5 @@
 #import "TGLoginViewControllerInternal.h"
+#import "TGKeyboardDismissal.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
 #import "TGIcons.h"
@@ -76,9 +77,9 @@
                                        UIViewAutoresizingFlexibleHeight;
     self.scrollView.backgroundColor = [UIColor clearColor];
     self.scrollView.alwaysBounceVertical = YES;
-    if ([self.scrollView respondsToSelector:@selector(setKeyboardDismissMode:)]) {
-        self.scrollView.keyboardDismissMode = UIScrollViewKeyboardDismissModeInteractive;
-    }
+    // The phone and code pads have no return key; on iOS 6 this was the only
+    // way the keyboard could close.
+    TGInstallKeyboardDismissal(self.scrollView);
     [self.view addSubview:self.scrollView];
 
     CGFloat inner = width - TGDoubled(TGMetricGutter);

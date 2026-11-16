@@ -219,4 +219,35 @@
 	XCTAssertEqualObjects(TGLoginResetInterval(3 * 3600), @"in 3 hours");
 }
 
+/// The Country row opened a search alert and up to 20 matches; official's
+/// list is every country A-Z under letter headers.
+- (void)testCountrySections_LetterHeadersInNameOrder {
+	NSArray *countries = @[
+		@{@"code" : @"DE", @"name" : @"Germany", @"prefix" : @"+49"},
+		@{@"code" : @"AT", @"name" : @"Austria", @"prefix" : @"+43"},
+		@{@"code" : @"GE", @"name" : @"Georgia", @"prefix" : @"+995"},
+		@{@"code" : @"AX", @"name" : @"\u00C5land Islands", @"prefix" : @"+358"},
+	];
+	NSArray *sections = TGCountrySections(countries, @"");
+	NSMutableArray *titles = [NSMutableArray array];
+	for (NSDictionary *s in sections)
+		[titles addObject:s[@"title"]];
+	// Official takes the first letter as it is, so Aland's ring keeps its own header.
+	XCTAssertEqualObjects(titles, (@[@"\u00C5", @"A", @"G"]));
+	NSDictionary *g = sections.lastObject;
+	XCTAssertEqualObjects(g[@"title"], @"G");
+	XCTAssertEqualObjects([g[@"countries"] valueForKey:@"code"], (@[@"GE", @"DE"]));
+}
+
+- (void)testCountrySections_SearchByNameOrCode {
+	NSArray *countries = @[
+		@{@"code" : @"DE", @"name" : @"Germany", @"prefix" : @"+49"},
+		@{@"code" : @"UA", @"name" : @"Ukraine", @"prefix" : @"+380"},
+	];
+	XCTAssertEqualObjects([TGCountrySections(countries, @"ger")[0][@"countries"] valueForKey:@"code"], (@[@"DE"]));
+	XCTAssertEqualObjects([TGCountrySections(countries, @"+380")[0][@"countries"] valueForKey:@"code"], (@[@"UA"]));
+	XCTAssertEqualObjects(TGCountrySections(countries, @"+380")[0][@"title"], @"");
+	XCTAssertEqual(TGCountrySections(countries, @"zz").count, (NSUInteger)0);
+}
+
 @end

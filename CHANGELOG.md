@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.4 (4) - 2026-11-16
+
+- Sign-in works again. 1.3 was built with placeholder API keys, so Telegram refused every new sign-in, and the screen kept loading because the error was never shown. Errors from Telegram are shown again on every sign-in step.
+- A fresh install opens on the phone number instead of an empty "Chats / Loading..." list, and Log Out waits on a spinner rather than an empty chat list.
+- The phone step names your country and its code before you sign in. Country opens Telegram's full list: A to Z with an index and search by name or code.
+- Log in by QR Code is back under the phone number.
+- The keyboard closes when you tap empty space or drag the screen, on iOS 6 too, where the number pad had no way to close.
+- Recent Actions for supergroup and channel admins: the last 48 hours of service actions in Telegram's own words.
+- The passcode and the database key are kept on jailbroken installs: the 1.3 package had lost its keychain permission.
+- More of what Telegram sends is shown: when someone was last online, story rings, chat list notices, the full hold menu, SMS word codes, call status and rating, extra usernames, the join request bar, slow mode, jumps to unread reactions and poll votes, why a message failed to send, link preview pictures, commenters' photos, auto-delete timers, quotes, bot commands, business hours and the public photo.
+- The API keys are no longer readable as plain text in the app.
+
 ## 1.3 (3) - 2026-11-14
 
 - iOS 6: the dark theme no longer closes the app at launch. It set a section-index background colour and a bar tint that only exist from iOS 7; both are checked now.

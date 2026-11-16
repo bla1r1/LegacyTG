@@ -21,6 +21,9 @@ Telegram client for iOS 6.0–12.5.7 on old hardware. Objective-C UI over TDLib 
 - `scripts/shots.sh OUT name=route,...` — open itglegacy:// routes and shoot each named step; `scripts/shotdiff.py BEFORE AFTER` compares two runs pixel by pixel below the status bar. Deep screens open with `itglegacy://screen/<gift|fileinfo/ID|forward|privacy/KEY|stickereditor|photos/USERID>` and `settings/sessions`; `itglegacy://focus` gives the first field the keyboard so `type/` can reach it
 - `scripts/screen.sh` — `off` / `on` / `status` for the bench phone's backlight and lock screen. `itglegacy://stand/on` also remembers the choice in `TGStandScreenOff`, so the panel goes dark again after every launch; `stand/off` clears it
 - `make -j8 DEV=1` — dev build (`-j` is safe: every IPA stages in its own folder): dev mode (three taps on Chats), fixture chats, bench, automation URLs, ghost mode. All under `#if TG_DEV`; `devrun.sh` builds this into `build/armv7/app-dev`. `scripts/check_release.sh` fails if any of it reaches a build without the flag
+- `scripts/setup.sh` — fresh Mac to working checkout: Homebrew tools, TDLib, dependencies, host tests, emulator
+- `scripts/release.sh` — publish the Info.plist version: build_all, emulator smoke, deb, then on a yes the tag, push, GitHub Release (notes `build: N` + the CHANGELOG section, read by the update bot) and the Cydia repo; `--dry-run` publishes nothing. The Telegram channel post is the user's, from `build/ipa/telegram-post.txt`
+- `scripts/emu.sh` — iPhone 4 / iOS 6.1.3 emulator in `~/lt-emu`: `setup` once, then `test` builds ipa-armv7, installs, opens LegacyTG, prints AUTH STATE / connection lines; shots and syslog in `~/lt-emu/out`. armv7 and iOS 6 only, never a device substitute; never kill a running session (`prepare` recovers a dirty device)
 - `scripts/build_ffmpeg.sh` — FFmpeg for the Vintage software video player, into `build/armv7/ffmpeg`
 
 ## Architecture rules

@@ -350,8 +350,10 @@ static BOOL TGProgressWorthTelling(TGProgressMark *marks, NSInteger fileId, floa
 		return YES;
 	}
 	default:
-		return YES;
-
+		// Not claimed: "error" has to fall through to handleUpdate's error
+		// branch. Claiming everything here swallowed every unclaimed TDLib
+		// error, and the login spinner waited forever on a wrong number (B40).
+		break;
 	}
 	return NO;
 }

@@ -35,14 +35,32 @@
 	XCTAssertEqual(TGAuthScreenForState(TGAuthStateWaitCode, YES, NO), TGAuthScreenLogin);
 }
 
-- (void)testSignedInAndClosedShowChatList {
+- (void)testSignedInShowsChatList {
 	XCTAssertEqual(TGAuthScreenForState(TGAuthStateReady, YES, NO), TGAuthScreenMain);
-	XCTAssertEqual(TGAuthScreenForState(TGAuthStateClosed, NO, NO), TGAuthScreenMain);
-	XCTAssertEqual(TGAuthScreenForState(TGAuthStateLoggingOut, NO, NO), TGAuthScreenMain);
+}
+
+/// Log Out put the empty chat list up until the next client asked for a phone.
+- (void)testLogOutWaitsOnASpinnerInRelease {
+	XCTAssertEqual(TGAuthScreenForState(TGAuthStateClosed, NO, NO), TGAuthScreenLoading);
+	XCTAssertEqual(TGAuthScreenForState(TGAuthStateLoggingOut, NO, NO), TGAuthScreenLoading);
+	XCTAssertEqual(TGAuthScreenForState(TGAuthStateClosed, NO, YES), TGAuthScreenMain);
 }
 
 - (void)testUnknownStateLeavesScreen {
 	XCTAssertEqual(TGAuthScreenForState(TGAuthStateUnknown, NO, NO), TGAuthScreenKeep);
+}
+
+- (void)testFirstLaunchWaitsForTheAuthStateInsteadOfTheChatList {
+	XCTAssertEqual(TGLaunchScreenForSession(NO, NO), TGAuthScreenLoading);
+}
+
+- (void)testSignedInLaunchOpensTheChatListAtOnce {
+	XCTAssertEqual(TGLaunchScreenForSession(YES, NO), TGAuthScreenMain);
+}
+
+- (void)testDevLaunchKeepsTheShowcaseChats {
+	XCTAssertEqual(TGLaunchScreenForSession(NO, YES), TGAuthScreenMain);
+	XCTAssertEqual(TGLaunchScreenForSession(YES, YES), TGAuthScreenMain);
 }
 
 @end

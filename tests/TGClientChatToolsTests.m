@@ -514,7 +514,7 @@ static NSDictionary *ctPlain(NSDictionary *d) {
 - (void)testEventLog_AsksEveryFilterAndReadsTheAction {
 	TGClient *c = CT();
 	__block NSArray *events = nil;
-	[[TGSettingsStore shared] eventLogForChat:77 completion:^(NSArray *e){ events = e; }];
+	[[TGSettingsStore shared] eventLogForChat:77 isChannel:NO completion:^(NSArray *e){ events = e; }];
 	NSDictionary *r = ctLast(c, @"getChatEventLog");
 	XCTAssertEqualObjects(r[@"filters"][@"member_tag_changes"], @YES);
 	XCTAssertEqualObjects(r[@"limit"], @(100));
@@ -523,7 +523,42 @@ static NSDictionary *ctPlain(NSDictionary *d) {
 										  @"member_id" : @{@"@type" : @"messageSenderUser",
 														   @"user_id" : @(42)},
 										  @"action" : @{@"@type" : @"chatEventMemberJoined"}}]}));
-	XCTAssertEqualObjects(events[0][@"text"], @"joined the chat");
+	XCTAssertEqualObjects(events[0][@"title"], @"Someone joined the group");
+}
+
+/// A busy 48 hours outgrew one page of 100 and the rest was never shown.
+- (void)testEventLog_ReadsThePagesAfterTheFirstHundred {
+	TGClient *c = CT();
+	__block NSArray *events = nil;
+	[[TGSettingsStore shared] eventLogForChat:77 isChannel:NO completion:^(NSArray *e){ events = e; }];
+	NSMutableArray *page = [NSMutableArray array];
+	for (int i = 0; i < 100; i++)
+		[page addObject:@{@"id" : @(1000 - i), @"date" : @(1700000000),
+						  @"action" : @{@"@type" : @"chatEventMemberLeft"}}];
+	ctAnswer(c, ctPlain(@{@"@type" : @"chatEvents", @"events" : page}));
+	XCTAssertNil(events);
+	XCTAssertEqual(ctCount(c, @"getChatEventLog"), (NSUInteger)2);
+	XCTAssertEqualObjects(ctLast(c, @"getChatEventLog")[@"from_event_id"], @(901));
+	ctAnswer(c, ctPlain(@{@"@type" : @"chatEvents", @"events" : @[
+			@{@"id" : @(5), @"date" : @(1700000000), @"action" : @{@"@type" : @"chatEventMemberLeft"}}]}));
+	XCTAssertEqual(events.count, (NSUInteger)101);
+}
+
+/// The channel status is a custom emoji; the line showed a star in its place.
+- (void)testEventLog_NamesTheChannelStatusEmoji {
+	TGClient *c = CT();
+	__block NSArray *events = nil;
+	[[TGSettingsStore shared] eventLogForChat:77 isChannel:YES completion:^(NSArray *e){ events = e; }];
+	ctAnswer(c, ctPlain(@{@"@type" : @"chatEvents", @"events" : @[
+			@{@"id" : @(1), @"date" : @(1700000000),
+			  @"action" : @{@"@type" : @"chatEventEmojiStatusChanged",
+							@"new_emoji_status" : @{@"@type" : @"emojiStatus",
+								@"type" : @{@"@type" : @"emojiStatusTypeCustomEmoji", @"custom_emoji_id" : @"555"}}}}]}));
+	XCTAssertEqualObjects(ctLast(c, @"getCustomEmojiStickers")[@"custom_emoji_ids"], (@[@"555"]));
+	ctAnswer(c, ctPlain(@{@"@type" : @"stickers", @"stickers" : @[
+			@{@"emoji" : @"\U0001F525", @"full_type" : @{@"@type" : @"stickerFullTypeCustomEmoji",
+														   @"custom_emoji_id" : @"555"}}]}));
+	XCTAssertEqualObjects(events[0][@"title"], @"Someone changed the channel status to \U0001F525");
 }
 
 - (void)testReportChatPhoto_UsesTheLargestSize {

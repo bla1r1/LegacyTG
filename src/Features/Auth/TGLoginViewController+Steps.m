@@ -408,6 +408,10 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
         self.codeStepQrButton = nil;
     }
 
+    // Official iOS keeps this behind DEBUG; here it stays, because an old
+    // phone is easiest to sign in by scanning it from the phone in your hand.
+    [self addStepLink:TGLocalized(@"Log in by QR Code") action:@selector(qrCodeButtonTapped) atY:0];
+
     // Start from the device's own country, then let Telegram's network guess
     // replace it. The old hardcoded +380 was wrong for everyone outside
     // Ukraine until the answer arrived.
@@ -431,16 +435,15 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
         return;
     NSInteger generation = self.countryGuessGeneration;
     __weak typeof(self) weakSelf = self;
-    [[TGSettingsStore shared] countryInfoForCode:iso completion:^(NSDictionary *country){
+    // countryForCode, not TGSettingsStore's getCountry: this runs signed out,
+    // where TDLib answers getCountry with 401 and the row stayed empty.
+    [[TGAccountStore shared] countryForCode:iso completion:^(NSDictionary *country){
         TGLoginViewController *me = weakSelf;
-        if (!me || me.currentStep != TGLoginStepPhone ||
+        if (!me || me.currentStep != TGLoginStepPhone || !country ||
             !TGCountryGuessCanApply(generation, me.countryGuessGeneration,
                     me.prefixEdited, me.countryGuessResolvedByNetwork, NO))
             return;
-        NSString *prefix = [country[@"callingCodes"] firstObject];
-        if (![prefix isKindOfClass:[NSString class]] || !prefix.length)
-            return;
-        me.phonePrefixField.text = [@"+" stringByAppendingString:prefix];
+        me.phonePrefixField.text = country[@"prefix"];
         me.savedCountryName = country[@"name"];
         [me.countryButton setTitle:me.savedCountryName
                           forState:UIControlStateNormal];
@@ -453,20 +456,18 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
             !TGCountryGuessCanApply(generation, me.countryGuessGeneration,
                     me.prefixEdited, me.countryGuessResolvedByNetwork, YES))
             return;
-        [[TGSettingsStore shared] countryInfoForCode:code completion:^(NSDictionary *country){
-            if (!me || me.currentStep != TGLoginStepPhone ||
-                !TGCountryGuessCanApply(generation, me.countryGuessGeneration,
-                        me.prefixEdited, me.countryGuessResolvedByNetwork, YES))
+        [[TGAccountStore shared] countryForCode:code completion:^(NSDictionary *country){
+            TGLoginViewController *screen = weakSelf;
+            if (!screen || screen.currentStep != TGLoginStepPhone || !country ||
+                !TGCountryGuessCanApply(generation, screen.countryGuessGeneration,
+                        screen.prefixEdited, screen.countryGuessResolvedByNetwork, YES))
                 return;
-            NSString *prefix = [country[@"callingCodes"] firstObject];
-            if (![prefix isKindOfClass:[NSString class]] || !prefix.length)
-                return;
-            me.countryGuessResolvedByNetwork = YES;
-            me.phonePrefixField.text = [@"+" stringByAppendingString:prefix];
-            me.savedCountryName = country[@"name"];
-            [me.countryButton setTitle:me.savedCountryName
+            screen.countryGuessResolvedByNetwork = YES;
+            screen.phonePrefixField.text = country[@"prefix"];
+            screen.savedCountryName = country[@"name"];
+            [screen.countryButton setTitle:screen.savedCountryName
                               forState:UIControlStateNormal];
-            [me refreshPhoneNumberInfo];
+            [screen refreshPhoneNumberInfo];
         }];
     }];
 }
@@ -571,11 +572,6 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
     } else {
         self.qrImageView.alpha = TGAlphaOpaque;
     }
-
-    // The other direction: the other device shows the code and this one
-    // confirms the link, which is what their "scan a QR" does with a camera
-    // this OS may not have.
-    [self addStepLink:@"QR Code" action:@selector(qrLinkTapped) atY:0];
 
     [self layoutActiveStep];
     [self applyTheme];
@@ -1052,74 +1048,6 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
     [[TGAccountStore shared] reportAuthenticationCodeMissing];
     [TGAlertSheet showMessage:@"Done"
                         title:@"Code" inView:self.view];
-}
-
-/// A token from a web login: the desktop page shows one when it waits for a
-/// phone to approve it. Either it signs in, or it is dropped so it stops
-/// waiting - both answers come from Telegram and are shown.
-- (void)webTokenTapped {
-    __weak typeof(self) weakSelf = self;
-    [TGAlertSheet showInput:@"Web Login Token"
-                    message:nil
-                placeholder:@"Token"
-                       text:nil
-                     action:@"Continue"
-                     inView:self.view
-                   onSubmit:^(NSString *token){
-        TGLoginViewController *me = weakSelf;
-        [TGAlertSheet showChoices:@[@"Log In", @"Dismiss"]
-                            title:@"Web Login Token"
-                     destructiveIndex:1
-                           inView:me.view
-                         onChoice:^(NSInteger index){
-            if (index == 1){
-                [[TGAccountStore shared] dismissWebToken:token completion:^(NSString *error){
-                    [TGAlertSheet showMessage:(error
-                            ?: @"Done")
-                                        title:@"Web Login Token" inView:me.view];
-                }];
-                return;
-            }
-            [TGAlertSheet showInput:@"Datacenter"
-                            message:nil
-                        placeholder:@"dc_id"
-                               text:@"2"
-                             action:@"Log In"
-                             inView:me.view
-                           onSubmit:^(NSString *dc){
-                NSInteger dcId = [dc integerValue];
-                if (dcId <= 0)
-                    dcId = 2;
-                [[TGAccountStore shared] checkAuthenticationWebToken:token dcId:dcId
-                                                    completion:^(NSString *error){
-                    [TGAlertSheet showMessage:(error
-                            ?: @"Done")
-                                        title:@"Web Login Token" inView:me.view];
-                }];
-            }];
-        }];
-    }];
-}
-
-/// The other half of QR login: a link from a QR another device shows. The
-/// server creates the session, so success is the authorization state that
-/// follows; a refusal is said here instead.
-- (void)qrLinkTapped {
-    __weak typeof(self) weakSelf = self;
-    [TGAlertSheet showInput:@"QR Code"
-                    message:nil
-                placeholder:@"tg://login?token=..."
-                       text:nil
-                     action:@"Confirm"
-                     inView:self.view
-                   onSubmit:^(NSString *link){
-        TGLoginViewController *me = weakSelf;
-        [[TGAccountStore shared] confirmQrCodeAuthenticationLink:link completion:^(NSString *error){
-            [TGAlertSheet showMessage:(error
-                    ?: @"Done")
-                                title:@"QR Code" inView:me.view];
-        }];
-    }];
 }
 
 /// The Firebase code arrives as a secret in a push, not as an SMS. There is

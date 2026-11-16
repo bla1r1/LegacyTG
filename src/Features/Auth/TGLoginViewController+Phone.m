@@ -2,12 +2,13 @@
 #import "TGAlertSheet.h"
 #import "TGPhoneNumberRules.h"
 #import "TGAccountStore.h"
+#import "TGCountryPickerViewController.h"
+#import "TGLocalization.h"
 
 @implementation TGLoginViewController (Phone)
 
 /// The country behind the prefix, when the network's guess is wrong or the
-/// number is foreign. getCountries carries the calling code and the name in
-/// every language TDLib has; the query matches either.
+/// number is foreign: official pushes the whole A-Z list with search.
 - (void)countryPickerTapped {
     if (self.currentStep != TGLoginStepPhone)
         return;
@@ -17,55 +18,25 @@
         if (!me || me.currentStep != TGLoginStepPhone)
             return;
         if (!countries.count){
-            [TGAlertSheet showMessage:@"An error occurred."
-                                  title:@"Country" inView:me.view];
+            [TGAlertSheet showMessage:TGLocalized(@"An error occurred.")
+                                  title:TGLocalized(@"Country") inView:me.view];
             return;
         }
-        [TGAlertSheet showInput:@"Country"
-                        message:nil
-                    placeholder:@"Country"
-                           text:nil
-                         action:@"Search"
-                         inView:me.view
-                     onSubmit:^(NSString *query){
-            NSString *needle = [query lowercaseString];
-            NSMutableArray *matches = [NSMutableArray array];
-            for (NSDictionary *country in countries){
-                NSString *name = [country[@"name"] lowercaseString];
-                NSString *prefix = country[@"prefix"] ?: @"";
-                if ([name rangeOfString:needle].location != NSNotFound ||
-                        [prefix rangeOfString:needle].location != NSNotFound){
-                    [matches addObject:country];
-                    if (matches.count >= 20)
-                        break;
-                }
-            }
-            if (!matches.count){
-                [TGAlertSheet showMessage:@"An error occurred."
-                                      title:@"Country" inView:me.view];
+        TGCountryPickerViewController *picker = [[TGCountryPickerViewController alloc]
+                initWithCountries:countries picked:^(NSDictionary *country){
+            TGLoginViewController *screen = weakSelf;
+            if (!screen || screen.currentStep != TGLoginStepPhone)
                 return;
-            }
-            NSMutableArray *rows = [NSMutableArray array];
-            for (NSDictionary *country in matches)
-                [rows addObject:[NSString stringWithFormat:@"%@  %@  %@",
-                        country[@"flag"] ?: @"", country[@"name"],
-                        country[@"prefix"] ?: @""]];
-            [TGAlertSheet showChoices:rows
-                                title:@"Country"
-                     destructiveIndex:-1
-                               inView:me.view
-                             onChoice:^(NSInteger index){
-                NSDictionary *country = matches[(NSUInteger)index];
-                me.phonePrefixField.text = country[@"prefix"];
-                me.savedCountryName = country[@"name"];
-                [me.countryButton setTitle:me.savedCountryName
+            screen.phonePrefixField.text = country[@"prefix"];
+            screen.savedCountryName = country[@"name"];
+            [screen.countryButton setTitle:screen.savedCountryName
                                   forState:UIControlStateNormal];
-                me.prefixEdited = YES;
-                [me updateActionEnabled];
-                [me refreshPhoneNumberInfo];
-                [me.inputField becomeFirstResponder];
-            }];
+            screen.prefixEdited = YES;
+            [screen updateActionEnabled];
+            [screen refreshPhoneNumberInfo];
+            [screen.inputField becomeFirstResponder];
         }];
+        [me.navigationController pushViewController:picker animated:YES];
     }];
 }
 

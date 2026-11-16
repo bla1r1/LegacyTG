@@ -72,6 +72,10 @@ NSString *const TGMessagesChangedNotification = @"TGMessagesChangedNotification"
 	if (!completion)
 		return NO;
 	[[TGTransport shared].pendingRequests removeObjectForKey:extra];
+	// A claimed error never reaches the "<<< ERROR" line; without this the
+	// log said only "first error" and not which request failed or why.
+	if ([obj[@"@type"] isEqualToString:@"error"])
+		NSLog(@"TGClient: %@ failed: %@ %@", extra, obj[@"code"], obj[@"message"]);
 	completion(obj);
 	return YES;
 }

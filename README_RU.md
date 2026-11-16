@@ -53,8 +53,18 @@ brew install cmake gperf ccache ldid llvm
 ```bash
 git clone --recursive https://github.com/bla1r1/iTgLegacy.git
 cd iTgLegacy
-scripts/build_all.sh
+scripts/setup.sh
 ```
+
+`setup.sh` ставит недостающие пакеты Homebrew (ничего установленного не
+обновляет), подтягивает TDLib, проверяет файлы из `.gitignore` (ниже), собирает
+зависимости через `build_all.sh --deps`, гоняет тесты на хосте и на Apple
+Silicon собирает эмулятор iPhone 4 / iOS 6.1.3 в `~/lt-emu` (`--no-emu` —
+без него). Эмулятору нужны ещё 17 пакетов Homebrew (зависимости сборки qemu и
+libimobiledevice, тоже без обновления установленного), Rust через rustup, если
+нет `cargo`, и IPSW iOS 6.1.3 от Apple на 940 МБ. С нуля около часа; повторный
+запуск пропускает готовое. Релизные
+IPA потом собирает `scripts/build_all.sh`.
 
 `build_all.sh` проходит от пустого `build/` до релизных IPA в
 `build/ipa/` с файлом `SHA256SUMS` (публикуется `LegacyTG.ipa`; IPA под
@@ -77,8 +87,10 @@ scripts/build_all.sh
 | `make -j8 DEV=1` | Dev-сборка: меню разработчика, тестовые чаты, бенч, URL автоматизации; в релиз не попадает |
 | `make clean` | Удаляет `build/armv7`, `build/arm64` и `build/ipa` вместе с зависимостями под архитектуры; после него снова `build_all.sh` |
 | `make -j8 -f tests/Makefile test` | Тесты на хосте |
+| `scripts/emu.sh test` | armv7 IPA в эмулятор iPhone 4 / iOS 6.1.3: установка, запуск, скриншоты и syslog в `~/lt-emu/out`, строки авторизации и подключения в выводе (~7 мин). Только тир Vintage; устройство не заменяет |
 | `scripts/devrun.sh` | Сборка, установка, запуск, лог и скриншот на устройстве по SSH |
-| `scripts/check_release.sh` | Падает, если что-то из-под `TG_DEV` попало в релиз |
+| `scripts/check_release.sh` | Падает, если что-то из-под `TG_DEV` попало в релиз, на ключах API из примера, без keychain-entitlements или с открытым хэшем API в срезе |
+| `scripts/release.sh` | Версия из `Info.plist` от сборки до публикации: проверки, IPA, прогон в эмуляторе, deb, затем (после вопроса) тег, пуш, GitHub Release с секцией из CHANGELOG, Cydia-репозиторий. `--dry-run` останавливается до публикации. Текст поста для канала: `build/ipa/telegram-post.txt` |
 
 ## Структура репозитория
 

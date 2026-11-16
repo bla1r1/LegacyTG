@@ -1,6 +1,7 @@
 #import "TGTableViewController.h"
 #import "TGTheme.h"
 #import "TGEmptyView.h"
+#import "TGKeyboardDismissal.h"
 
 @interface TGTableViewController ()
 @property (nonatomic, strong) TGEmptyView *tg_emptyView;
@@ -17,6 +18,7 @@
 	// separators down the screen, which read as rows that are not there.
 	if (self.tableView.style == UITableViewStylePlain && !self.tableView.tableFooterView)
 		self.tableView.tableFooterView = [[UIView alloc] initWithFrame:CGRectZero];
+	TGInstallKeyboardDismissal(self.tableView);
 	[self applyTheme];
 
 	[[NSNotificationCenter defaultCenter] addObserver:self

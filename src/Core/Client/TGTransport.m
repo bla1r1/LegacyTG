@@ -206,7 +206,9 @@ static const int64_t kIdlePollNanoseconds = 20 * NSEC_PER_MSEC;
 		});
 		return;
 	}
-	NSString *extra = [NSString stringWithFormat:@"r%lu", (unsigned long)(++self.requestSeq)];
+	// The type rides in the id so a failed answer can say what it answers.
+	NSString *extra = [NSString stringWithFormat:@"r%lu:%@", (unsigned long)(++self.requestSeq),
+			request[@"@type"] ?: @""];
 	self.pendingRequests[extra] = [completion copy];
 
 	NSMutableDictionary *withExtra = [request mutableCopy];

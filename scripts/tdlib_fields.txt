@@ -122,69 +122,29 @@ todo  later     chatBoostSourceGiveaway.is_unclaimed  boost list: unclaimed give
 todo  later     chatBoostStatus.gift_code_boost_count  boost screen header numbers
 todo  later     chatBoostStatus.premium_member_percentage  boost screen header numbers
 todo  later     chatBoostStatus.prepaid_giveaways  boost screen header numbers
-todo  adminlog  chatEventAccentColorChanged.new_accent_color_id  event line names the new colour
-todo  adminlog  chatEventAccentColorChanged.new_background_custom_emoji_id  event line names the new colour
-todo  adminlog  chatEventAccentColorChanged.old_accent_color_id  event line names the new colour
-todo  adminlog  chatEventAccentColorChanged.old_background_custom_emoji_id  event line names the new colour
-todo  adminlog  chatEventActiveUsernamesChanged.new_usernames  event line shows old and new usernames
-todo  adminlog  chatEventActiveUsernamesChanged.old_usernames  event line shows old and new usernames
-todo  adminlog  chatEventAvailableReactionsChanged.new_available_reactions  event line shows the reaction change
-todo  adminlog  chatEventAvailableReactionsChanged.old_available_reactions  event line shows the reaction change
-todo  adminlog  chatEventBackgroundChanged.new_background  event line with the new wallpaper
-todo  adminlog  chatEventBackgroundChanged.old_background  event line with the new wallpaper
-todo  adminlog  chatEventCustomEmojiStickerSetChanged.new_sticker_set_id  event line names the set
-todo  adminlog  chatEventCustomEmojiStickerSetChanged.old_sticker_set_id  event line names the set
-todo  adminlog  chatEventDescriptionChanged.new_description  event shows old and new description
-todo  adminlog  chatEventDescriptionChanged.old_description  event shows old and new description
-todo  adminlog  chatEventEmojiStatusChanged.new_emoji_status  event shows the emoji status
-todo  adminlog  chatEventEmojiStatusChanged.old_emoji_status  event shows the emoji status
-todo  adminlog  chatEventForumTopicCreated.topic_info  event names the topic
-todo  adminlog  chatEventForumTopicDeleted.topic_info  event names the topic
-todo  adminlog  chatEventForumTopicEdited.new_topic_info  event names the topic
-todo  adminlog  chatEventForumTopicEdited.old_topic_info  event names the topic
-todo  adminlog  chatEventForumTopicPinned.new_topic_info  event names the topic
-todo  adminlog  chatEventForumTopicPinned.old_topic_info  event names the topic
-todo  adminlog  chatEventForumTopicToggleIsClosed.topic_info  event names the topic
-todo  adminlog  chatEventForumTopicToggleIsHidden.topic_info  event names the topic
-todo  adminlog  chatEventInviteLinkEdited.new_invite_link  event names the link
-todo  adminlog  chatEventInviteLinkEdited.old_invite_link  event names the link
-todo  adminlog  chatEventLinkedChatChanged.new_linked_chat_id  event names the linked chat
-todo  adminlog  chatEventLinkedChatChanged.old_linked_chat_id  event names the linked chat
-todo  adminlog  chatEventLocationChanged.new_location  event names the place
-todo  adminlog  chatEventLocationChanged.old_location  event names the place
-todo  adminlog  chatEventMemberJoinedByInviteLink.via_chat_folder_invite_link  "joined via folder link"
-todo  adminlog  chatEventMemberPromoted.new_status  event lists the rights that changed
-todo  adminlog  chatEventMemberPromoted.old_status  event lists the rights that changed
-todo  adminlog  chatEventMemberRestricted.new_status  event lists the restrictions
-todo  adminlog  chatEventMemberRestricted.old_status  event lists the restrictions
-todo  adminlog  chatEventMemberSubscriptionExtended.new_status  "extended subscription"
-todo  adminlog  chatEventMemberSubscriptionExtended.old_status  "extended subscription"
-todo  adminlog  chatEventMemberTagChanged.new_tag  event shows old and new tag
-todo  adminlog  chatEventMemberTagChanged.old_tag  event shows old and new tag
-todo  adminlog  chatEventMessageAutoDeleteTimeChanged.new_message_auto_delete_time  event shows the timer
-todo  adminlog  chatEventMessageAutoDeleteTimeChanged.old_message_auto_delete_time  event shows the timer
-todo  adminlog  chatEventMessageEdited.new_message  event shows the edited message and its original
-todo  adminlog  chatEventMessageEdited.old_message  event shows the edited message and its original
-todo  adminlog  chatEventPermissionsChanged.new_permissions  event lists the permissions
-todo  adminlog  chatEventPermissionsChanged.old_permissions  event lists the permissions
-todo  adminlog  chatEventPhotoChanged.new_photo  event shows the new photo
-todo  adminlog  chatEventPhotoChanged.old_photo  event shows the new photo
-todo  adminlog  chatEventProfileAccentColorChanged.new_profile_accent_color_id  event line names the new colour
-todo  adminlog  chatEventProfileAccentColorChanged.new_profile_background_custom_emoji_id  event line names the new colour
-todo  adminlog  chatEventProfileAccentColorChanged.old_profile_accent_color_id  event line names the new colour
-todo  adminlog  chatEventProfileAccentColorChanged.old_profile_background_custom_emoji_id  event line names the new colour
-todo  adminlog  chatEventSlowModeDelayChanged.new_slow_mode_delay  event shows the delay
-todo  adminlog  chatEventSlowModeDelayChanged.old_slow_mode_delay  event shows the delay
-todo  adminlog  chatEventStickerSetChanged.new_sticker_set_id  event line names the set
-todo  adminlog  chatEventStickerSetChanged.old_sticker_set_id  event line names the set
-todo  adminlog  chatEventTitleChanged.new_title  event shows old and new title
-todo  adminlog  chatEventTitleChanged.old_title  event shows old and new title
-todo  adminlog  chatEventUsernameChanged.new_username  event shows old and new username
-todo  adminlog  chatEventUsernameChanged.old_username  event shows old and new username
+todo  later     chatEventAccentColorChanged.new_accent_color_id  event line with the colour swatch and icon; official draws them, text alone names nothing
+todo  later     chatEventAccentColorChanged.new_background_custom_emoji_id  event line with the colour swatch and icon; official draws them, text alone names nothing
+todo  later     chatEventAccentColorChanged.old_accent_color_id  event line with the colour swatch and icon; official draws them, text alone names nothing
+todo  later     chatEventAccentColorChanged.old_background_custom_emoji_id  event line with the colour swatch and icon; official draws them, text alone names nothing
+skip  -         chatEventAvailableReactionsChanged.old_available_reactions  official's Recent Actions line names only the new value
+skip  -         chatEventBackgroundChanged.old_background  official's Recent Actions line names only the new value
+skip  -         chatEventCustomEmojiStickerSetChanged.old_sticker_set_id  official's Recent Actions line names only the new value
+skip  -         chatEventEmojiStatusChanged.old_emoji_status  official's Recent Actions line names only the new value
+skip  -         chatEventInviteLinkEdited.old_invite_link  official's Recent Actions line names only the new value
+skip  -         chatEventLocationChanged.old_location  official's Recent Actions line names only the new value
+skip  -         chatEventMemberTagChanged.old_tag  official's Recent Actions line names only the new value
+skip  -         chatEventMessageAutoDeleteTimeChanged.old_message_auto_delete_time  official's Recent Actions line names only the new value
+skip  -         chatEventPhotoChanged.old_photo  official's Recent Actions line names only the new value
+todo  later     chatEventProfileAccentColorChanged.new_profile_accent_color_id  event line with the colour swatch and icon; official draws them, text alone names nothing
+todo  later     chatEventProfileAccentColorChanged.new_profile_background_custom_emoji_id  event line with the colour swatch and icon; official draws them, text alone names nothing
+todo  later     chatEventProfileAccentColorChanged.old_profile_accent_color_id  event line with the colour swatch and icon; official draws them, text alone names nothing
+todo  later     chatEventProfileAccentColorChanged.old_profile_background_custom_emoji_id  event line with the colour swatch and icon; official draws them, text alone names nothing
+skip  -         chatEventSlowModeDelayChanged.old_slow_mode_delay  official's Recent Actions line names only the new value
+skip  -         chatEventStickerSetChanged.old_sticker_set_id  official's Recent Actions line names only the new value
+skip  -         chatEventTitleChanged.old_title  official's Recent Actions line names only the new value
 todo  group     chatInviteLink.expired_member_count  invite link row: "N expired"
 skip  -         chatInviteLinkInfo.accessible_for  official shows nothing for it; the preview simply opens
 todo  later     chatInviteLinkInfo.subscription_info  paid subscription join (Stars payment form)
-todo  group     chatInviteLinkMember.via_chat_folder_invite_link  link members: joined through a folder
 todo  later     chatInviteLinkSubscriptionInfo.can_reuse  paid subscription join flow
 todo  later     chatInviteLinkSubscriptionInfo.form_id  paid subscription join flow
 skip  -         chatPhoto.small_animation  avatars are drawn still on every tier
@@ -213,8 +173,8 @@ skip  -         diceStickersSlotMachine.left_reel  the slot machine is drawn as 
 skip  -         diceStickersSlotMachine.lever  the slot machine is drawn as its final sticker
 skip  -         diceStickersSlotMachine.right_reel  the slot machine is drawn as its final sticker
 skip  -         diffEntityTypeReplace.old_text  AI text diff is not offered
-todo  later     downloadedFileCounts.completed_count  downloads list
-todo  later     downloadedFileCounts.paused_count  downloads list
+todo  settings  downloadedFileCounts.completed_count  Settings > Downloads (the screen exists): counts, dates, totals
+todo  settings  downloadedFileCounts.paused_count  Settings > Downloads (the screen exists): counts, dates, totals
 skip  -         draftMessageContentVideoNote.file_path  voice and round drafts are not kept
 skip  -         draftMessageContentVoiceNote.file_path  voice and round drafts are not kept
 skip  -         emojiCategory.is_greeting  greeting stickers belong to the empty-chat sticker, not drawn
@@ -227,7 +187,7 @@ skip  -         encryptedPassportElement.selfie  Telegram Passport is not offere
 skip  -         ephemeralMessageContent.has_timestamped_media  media timestamps are found from the entities
 todo  group     failedToAddMember.premium_required_to_send_messages  "add members" failure: Premium needed
 todo  group     failedToAddMember.premium_would_allow_invite  "add members" failure: Premium needed
-todo  later     fileDownload.add_date  downloads list
+todo  settings  fileDownload.add_date  Settings > Downloads (the screen exists): counts, dates, totals
 todo  group     forumTopics.next_offset_date  topics list paging
 todo  group     forumTopics.next_offset_forum_topic_id  topics list paging
 todo  group     forumTopics.next_offset_message_id  topics list paging
@@ -591,15 +551,14 @@ todo  later     updateChatBoost.boost  boost list
 skip  -         updateChatMember.actor_user_id  the members list re-reads instead of patching
 skip  -         updateChatMember.new_chat_member  the members list re-reads instead of patching
 skip  -         updateChatMember.old_chat_member  the members list re-reads instead of patching
-skip  -         updateChatMember.via_chat_folder_invite_link  the members list re-reads instead of patching
 skip  -         updateChatMember.via_join_request  the members list re-reads instead of patching
 skip  -         updateDeleteMessages.from_cache  a cache eviction removes the rows either way
 skip  -         updateFavoriteStickers.sticker_ids  the panel re-asks favourites
-todo  later     updateFileAddedToDownloads.counts  downloads list
-todo  later     updateFileAddedToDownloads.file_download  downloads list
-todo  later     updateFileDownload.counts  downloads list
-todo  later     updateFileDownloads.total_size  downloads list
-todo  later     updateFileRemovedFromDownloads.counts  downloads list
+todo  settings  updateFileAddedToDownloads.counts  Settings > Downloads (the screen exists): counts, dates, totals
+todo  settings  updateFileAddedToDownloads.file_download  Settings > Downloads (the screen exists): counts, dates, totals
+todo  settings  updateFileDownload.counts  Settings > Downloads (the screen exists): counts, dates, totals
+todo  settings  updateFileDownloads.total_size  Settings > Downloads (the screen exists): counts, dates, totals
+todo  settings  updateFileRemovedFromDownloads.counts  Settings > Downloads (the screen exists): counts, dates, totals
 todo  calls     updateGroupCallVerificationState.generation  emoji fingerprint in group calls
 skip  -         updateMessageContent.new_content  the chat re-reads the message instead of patching
 skip  -         updateMessageReaction.new_reaction_types  bot-side update

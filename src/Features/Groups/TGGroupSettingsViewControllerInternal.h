@@ -70,6 +70,7 @@
 - (void)addMembers;
 - (void)findMember;
 - (void)showMembersList;
+- (void)showRecentActions;
 - (void)choosePermissions;
 - (void)chooseSlowMode;
 - (void)confirmBroadcast;

@@ -34,3 +34,9 @@ FOUNDATION_EXPORT NSString *TGLoginResetInterval(NSInteger seconds);
 /// (emailAddressResetStatePending.reset_in): "Email will be reset in 4:59"
 /// within a day, "... in 6 days" past it, "Please wait..." at zero.
 FOUNDATION_EXPORT NSString *TGLoginEmailResetPendingText(NSInteger resetIn);
+
+/// The Country list's sections, as official sorts them: by name, one section
+/// per first letter ({"title": "G", "countries": [...]}). A query keeps the
+/// countries whose name or calling code contains it, in one untitled section.
+/// Entries are TGAccountStore's ("code", "name", "prefix", "flag").
+FOUNDATION_EXPORT NSArray *TGCountrySections(NSArray *countries, NSString *query);
