@@ -37,6 +37,7 @@ history at `cf71bc9`.
 | B33 | A channel not joined said "last seen recently" and offered Mute | chat-list, channels | `chatKindForChat:` from `getChat` and the group record; Join sends `joinChat` only when pressed | Device |
 | B34 | `TGCallTests` died at `key + 88` now and then | calls | `TGCallReflector stop` returned while the reader was in `onPacket`; it now joins the reader | 30 of 30 clean |
 | B35 | Media came first on every profile | profile | `profileTabPosts` read as Media; `TGProfileTabKinds` order fixed | Device |
+| B36 | A fresh release install opened on an empty "Chats / Loading..." list instead of login | login | `WaitPhoneNumber` kept the dev showcase's chat list with no `TG_DEV` guard and sent the step to a nil login screen; `TGAuthScreenForState` puts login up first; `TGAuthRouteTests` | Seen in the iPhone 4 6.1.3 emulator; fix not yet on a device |
 
 Suggested order when something regresses: `TGClient+Files.m` (B1+B2), status
 formatter (B4), tab kinds (B1 UI), gifts flatten (B5), contacts `getChat` on open

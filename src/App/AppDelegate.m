@@ -22,6 +22,7 @@
 #import "TGVideoNoteRecorder.h"
 #import "TGCallViewController.h"
 #import "TGLoginViewController.h"
+#import "TGAuthRoute.h"
 #import "TGChatViewController.h"
 #import "TGInAppNotificationBanner.h"
 #import "TGClientInternal.h"
@@ -368,13 +369,13 @@ static UIImage *TGCustomEmojiFromStore(int64_t emojiId, CGFloat side) {
 			switch (state){
 				case TGAuthStateWaitPhoneNumber:
 					TGSetAuthorizedSession(NO);
+					[me routeForAuthState:state];
 					[me.loginVC setBusy:NO];
 					[me.loginVC showPhoneStep];
-					// In dev builds, keep Main UI active so showcase chats are instantly accessible
-					[me showMainUI];
 					break;
 				case TGAuthStateWaitCode: {
 					TGSetAuthorizedSession(NO);
+					[me routeForAuthState:state];
 					NSString *phone = me.currentPhoneNumber;
 					if (!phone.length) {
 						phone = [[TGClient shared].codeInfo objectForKey:@"phone_number"];
@@ -385,33 +386,32 @@ static UIImage *TGCustomEmojiFromStore(int64_t emojiId, CGFloat side) {
 					} else {
 						[me.loginVC showCodeStepWithPhoneNumber:phone];
 					}
-					if (me.loginVC) [me showLoginUI]; else [me showMainUI];
 					break;
 				}
 				case TGAuthStateWaitPassword:
 					TGSetAuthorizedSession(NO);
+					[me routeForAuthState:state];
 					[me.loginVC showPasswordStep];
-					if (me.loginVC) [me showLoginUI]; else [me showMainUI];
 					break;
 				case TGAuthStateWaitEmailAddress:
 					TGSetAuthorizedSession(NO);
+					[me routeForAuthState:state];
 					[me.loginVC showEmailStep];
-					if (me.loginVC) [me showLoginUI]; else [me showMainUI];
 					break;
 				case TGAuthStateWaitEmailCode:
 					TGSetAuthorizedSession(NO);
+					[me routeForAuthState:state];
 					[me.loginVC showEmailCodeStep];
-					if (me.loginVC) [me showLoginUI]; else [me showMainUI];
 					break;
 				case TGAuthStateWaitRegistration:
 					TGSetAuthorizedSession(NO);
+					[me routeForAuthState:state];
 					[me.loginVC showRegisterStep];
-					if (me.loginVC) [me showLoginUI]; else [me showMainUI];
 					break;
 				case TGAuthStateWaitOtherDeviceConfirmation:
 					TGSetAuthorizedSession(NO);
+					[me routeForAuthState:state];
 					[me.loginVC showQRCodeStepWithLink:[TGClient shared].qrCodeLink];
-					if (me.loginVC) [me showLoginUI]; else [me showMainUI];
 					break;
 				case TGAuthStateReady:
 					// Telegram only takes a token for a signed-in account, so
@@ -472,6 +472,26 @@ static UIImage *TGCustomEmojiFromStore(int64_t emojiId, CGFloat side) {
 }
 
 #pragma mark - screens
+
+/// The login screen is put up before its step is set: a step sent to a nil
+/// loginVC is lost, which left a fresh release install on an empty chat list.
+- (void)routeForAuthState:(TGAuthState)state {
+#if TG_DEV
+	BOOL showcase = YES;
+#else
+	BOOL showcase = NO;
+#endif
+	switch (TGAuthScreenForState(state, self.loginVC != nil, showcase)){
+		case TGAuthScreenLogin:
+			[self showLoginUI];
+			break;
+		case TGAuthScreenMain:
+			[self showMainUI];
+			break;
+		case TGAuthScreenKeep:
+			break;
+	}
+}
 
 - (void)showLoadingUI {
 	UIViewController *vc = [[UIViewController alloc] init];

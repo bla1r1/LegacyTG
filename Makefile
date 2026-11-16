@@ -225,6 +225,7 @@ APP_SRC_M := \
 	src/App/AppDelegate.m \
 	src/App/AppDelegate+URL.m \
 	src/App/RootViewController.m \
+	src/App/TGAuthRoute.m \
 	src/App/main.m \
 	src/Features/Dev/TGDevBench.m \
 	src/Features/Dev/TGDevFeedback.m \

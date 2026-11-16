@@ -1,0 +1,30 @@
+//
+// TGAuthRoute.m
+//
+#import "TGAuthRoute.h"
+
+TGAuthScreen TGAuthScreenForState(TGAuthState state, BOOL loginOpen, BOOL devShowcase) {
+	switch (state){
+		case TGAuthStateWaitPhoneNumber:
+		case TGAuthStateWaitCode:
+		case TGAuthStateWaitPassword:
+		case TGAuthStateWaitEmailAddress:
+		case TGAuthStateWaitEmailCode:
+		case TGAuthStateWaitRegistration:
+		case TGAuthStateWaitOtherDeviceConfirmation:
+			// Official opens on the phone step; a fresh install that lands on
+			// an empty chat list never finds Settings > Log in.
+			if (loginOpen || !devShowcase)
+				return TGAuthScreenLogin;
+			return TGAuthScreenMain;
+		case TGAuthStateReady:
+		case TGAuthStateLoggingOut:
+		case TGAuthStateClosed:
+			// Closed is followed by a fresh client's WaitPhoneNumber, which
+			// brings the login screen.
+			return TGAuthScreenMain;
+		case TGAuthStateUnknown:
+		default:
+			return TGAuthScreenKeep;
+	}
+}

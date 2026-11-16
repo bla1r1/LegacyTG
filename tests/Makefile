@@ -161,6 +161,7 @@ CLIENT_OBJC_SRCS := \
     src/Core/Stores/TGSettingsStore+Folders.mm \
     src/Core/Stores/TGSessionsStore.m \
     src/Core/Stores/TGAccountStore.m \
+    src/App/TGAuthRoute.m \
     src/Core/Stores/TGAccountStore+Auth.m \
     src/Core/Stores/TGAccountStore+Accounts.m \
     src/Core/Stores/TGAccountStore+People.m \
@@ -460,6 +461,7 @@ CLIENT_TEST_SRCS := \
     $(TESTS)/TGSendStoreTests.m \
     $(TESTS)/TGStarsStoreTests.m \
     $(TESTS)/TGAuthStoreTests.m \
+    $(TESTS)/TGAuthRouteTests.m \
     $(TESTS)/TGSettingsStoreTests.m \
     $(TESTS)/TGGroupStoreTests.m \
     $(TESTS)/TGMessageStoreTests.m \
