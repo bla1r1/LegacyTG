@@ -42,6 +42,12 @@ def deb_control(path):
     raise SystemExit("no control in " + path)
 
 
+def deb_version(path):
+    """1.4-4 -> (1, 4, 4), for ordering debs newest first."""
+    version = re.search(r"^Version:\s*(\S+)", deb_control(path), re.M).group(1)
+    return tuple(int(n) for n in re.findall(r"\d+", version))
+
+
 def digests(path):
     data = open(path, "rb").read()
     return len(data), hashlib.md5(data).hexdigest(), hashlib.sha256(data).hexdigest()
@@ -73,8 +79,11 @@ def main():
     debs = os.path.join(args.repo, "debs")
     os.makedirs(debs, exist_ok=True)
     shutil.copy2(args.deb, debs)
+    # By the package's own version, not file times: a fresh gh-pages checkout
+    # gives the old deb a newer mtime than the one just built, and 1.4 was
+    # dropped in favour of 1.3 that way.
     found = sorted((f for f in os.listdir(debs) if f.endswith(".deb")),
-                   key=lambda f: os.path.getmtime(os.path.join(debs, f)), reverse=True)
+                   key=lambda f: deb_version(os.path.join(debs, f)), reverse=True)
     for old in found[args.keep:]:
         os.remove(os.path.join(debs, old))
 
