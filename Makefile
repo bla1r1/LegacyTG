@@ -294,6 +294,7 @@ APP_SRC_M := \
 	src/Core/Client/Messages/TGClient+MessageRecord.m \
 	src/Core/Client/Messages/TGClient+InlineMessages.m \
 	src/Core/Model/TGMessageFlatten.m \
+	src/Core/Model/TGLinkPreviewAction.m \
 	src/Core/Client/TGClient+MessageMeta.m \
 	src/Core/Client/TGClient+SavedMessages.m \
 	src/Core/Client/TGClient+Notifications.m \

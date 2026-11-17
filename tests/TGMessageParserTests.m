@@ -11,6 +11,8 @@
 // from, and content nobody wrote a branch for says what it is instead of
 // drawing an empty bubble.
 #import "TGTestRunner.h"
+#import "TGLinkPreviewAction.h"
+#import "TGMessageFlatten.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
 #import "TGStatChart.h"
@@ -69,6 +71,38 @@ static NSDictionary *fxTextContent(NSString *text) {
 			@"sticker" : @{@"format" : @{@"@type" : @"stickerFormatTgs"},
 						   @"sticker" : @{@"id" : @(42)}}}, nil));
 	XCTAssertEqual([plain[@"stickerEmojiId"] longLongValue], 0LL);
+}
+
+/// A big emoji whose sticker TDLib does not know yet still has a size: the
+/// expected one, so the row does not jump when the file lands.
+- (void)testFlatten_AnimatedEmojiTakesItsExpectedSize {
+	NSDictionary *pending = TGFlattenMessage(fxMsg(@{@"@type" : @"messageAnimatedEmoji",
+			@"emoji" : @"\U0001F600", @"animated_emoji" : @{@"sticker_width" : @512,
+			@"sticker_height" : @480}}, nil));
+	XCTAssertEqualObjects(pending[@"mediaWidth"], @512);
+	XCTAssertEqualObjects(pending[@"mediaHeight"], @480);
+	NSDictionary *known = TGFlattenMessage(fxMsg(@{@"@type" : @"messageAnimatedEmoji",
+			@"emoji" : @"\U0001F600", @"animated_emoji" : @{@"sticker_width" : @512,
+			@"sticker_height" : @512, @"sticker" : @{@"width" : @400, @"height" : @300,
+			@"format" : @{@"@type" : @"stickerFormatTgs"}, @"sticker" : @{@"id" : @9}}}}, nil));
+	XCTAssertEqualObjects(known[@"mediaWidth"], @400);
+	XCTAssertEqualObjects(known[@"mediaHeight"], @300);
+}
+
+/// A track without its own cover takes one of the outside variants: the
+/// smallest wide enough for the bubble.
+- (void)testFlatten_TrackWithoutCoverTakesAnExternalOne {
+	NSDictionary *(^track)(NSDictionary *) = ^(NSDictionary *extra){
+		NSMutableDictionary *audio = [@{@"title" : @"Song", @"audio" : @{@"id" : @1},
+			@"external_album_covers" : @[
+				@{@"width" : @60, @"height" : @60, @"file" : @{@"id" : @71}},
+				@{@"width" : @600, @"height" : @600, @"file" : @{@"id" : @73}},
+				@{@"width" : @100, @"height" : @100, @"file" : @{@"id" : @72}}]} mutableCopy];
+		[audio addEntriesFromDictionary:extra];
+		return TGFlattenMessage(fxMsg(@{@"@type" : @"messageAudio", @"audio" : audio}, nil));
+	};
+	XCTAssertEqualObjects(track(@{})[@"albumCoverId"], @72);
+	XCTAssertEqualObjects(track(@{@"album_cover_thumbnail" : @{@"file" : @{@"id" : @9}}})[@"albumCoverId"], @9);
 }
 
 - (void)testFlatten_LiveLocationCarriesItsStatusKeys {
@@ -458,6 +492,30 @@ static NSDictionary *fxTextContent(NSString *text) {
 				   @"no named sender, so the chip counts instead of guessing");
 }
 
+/// Saved Messages reactions are tags: no face even for one reactor, and the
+/// tag's label from updateSavedMessagesTags rides with the group.
+- (void)testFlatten_SavedMessagesTagsCarryTheirLabel {
+	NSDictionary *saved = [TGClient shared].savedTagLabels;
+	[TGClient shared].savedTagLabels = TGSavedTagLabels(@[
+		@{@"@type" : @"savedMessagesTag", @"tag" : @{@"@type" : @"reactionTypeEmoji", @"emoji" : @"\U0001F44D"},
+		  @"label" : @"Ideas", @"count" : @3},
+		@{@"@type" : @"savedMessagesTag", @"tag" : @{@"@type" : @"reactionTypeEmoji", @"emoji" : @"\u2764"},
+		  @"label" : @"", @"count" : @1}]);
+	NSDictionary *flat = TGFlattenMessage(fxMsg(fxTextContent(@"hi"), @{
+		@"interaction_info" : @{@"reactions" : @{@"are_tags" : @YES, @"reactions" : @[
+			@{@"type" : @{@"@type" : @"reactionTypeEmoji", @"emoji" : @"\U0001F44D"}, @"total_count" : @1,
+			  @"recent_sender_ids" : @[@{@"@type" : @"messageSenderUser", @"user_id" : @5}]},
+			@{@"type" : @{@"@type" : @"reactionTypeEmoji", @"emoji" : @"\u2764"}, @"total_count" : @1}]}}}));
+	[TGClient shared].savedTagLabels = saved;
+	NSArray *groups = flat[@"reactionGroups"];
+	XCTAssertTrue([groups[0][@"tag"] boolValue]);
+	XCTAssertEqualObjects(groups[0][@"tagLabel"], @"Ideas");
+	XCTAssertEqual([groups[0][@"userId"] longLongValue], 0LL, @"a tag shows no face");
+	XCTAssertEqualObjects(groups[1][@"tagLabel"], @"");
+	XCTAssertEqualObjects(TGSavedTagKey(@{@"@type" : @"reactionTypeCustomEmoji", @"custom_emoji_id" : @"77"}),
+			@"custom:77");
+}
+
 /// A message without reactions carries an empty list and zero views, so the
 /// cell has one branch to check instead of a nil that would crash a count.
 - (void)testFlatten_NoReactionsIsAnEmptyGroupList {
@@ -754,6 +812,37 @@ static NSDictionary *fxTextContent(NSString *text) {
 	XCTAssertEqualObjects(flat[@"text"], @"");
 }
 
+/// A slot machine is its background plus the reels and the lever, back to
+/// front as official stacks them (SlotMachineAnimationNode).
+- (void)testFlatten_SlotMachineCarriesItsReelsAndLever {
+	NSDictionary *(^tgs)(int) = ^(int fileId){
+		return @{@"@type" : @"sticker", @"sticker" : @{@"@type" : @"file", @"id" : @(fileId)},
+				 @"format" : @{@"@type" : @"stickerFormatTgs"}};
+	};
+	NSDictionary *flat = TGFlattenMessage(fxMsg(@{@"@type" : @"messageDice",
+		@"final_state" : @{@"@type" : @"diceStickersSlotMachine", @"background" : tgs(1),
+			@"lever" : tgs(5), @"left_reel" : tgs(2), @"center_reel" : tgs(3), @"right_reel" : tgs(4)}}, nil));
+	XCTAssertEqualObjects(flat[@"docId"], @1);
+	XCTAssertEqualObjects(flat[@"slotLayers"], (@[@2, @3, @4, @5]));
+	NSDictionary *partial = TGFlattenMessage(fxMsg(@{@"@type" : @"messageDice",
+		@"final_state" : @{@"@type" : @"diceStickersSlotMachine", @"background" : tgs(1),
+			@"lever" : tgs(5)}}, nil));
+	XCTAssertEqualObjects(partial[@"slotLayers"], @[], @"half a machine is not drawn");
+}
+
+/// A premium sticker carries the effect official plays once around it.
+- (void)testFlatten_PremiumStickerCarriesItsEffect {
+	NSDictionary *flat = TGFlattenMessage(fxMsg(@{@"@type" : @"messageSticker",
+		@"sticker" : @{@"format" : @{@"@type" : @"stickerFormatTgs"}, @"sticker" : @{@"id" : @42},
+			@"full_type" : @{@"@type" : @"stickerFullTypeRegular",
+				@"premium_animation" : @{@"@type" : @"file", @"id" : @77}}}}, nil));
+	XCTAssertEqualObjects(flat[@"stickerEffectId"], @77);
+	NSDictionary *plain = TGFlattenMessage(fxMsg(@{@"@type" : @"messageSticker",
+		@"sticker" : @{@"format" : @{@"@type" : @"stickerFormatTgs"}, @"sticker" : @{@"id" : @42},
+			@"full_type" : @{@"@type" : @"stickerFullTypeRegular"}}}, nil));
+	XCTAssertEqualObjects(plain[@"stickerEffectId"], @0);
+}
+
 - (void)testFlatten_DiceMissingFinalStateUsesInitialState {
 	NSDictionary *flat = TGFlattenMessage(fxMsg(@{
 			@"@type" : @"messageDice",
@@ -1033,6 +1122,85 @@ static NSDictionary *pmPaidMediaMsgContent(id starCount, NSString *caption, NSAr
 		@"rows" : @[@[@{@"text" : @"A"}]], @"resize_keyboard" : @YES, @"is_persistent" : @YES})[@"replyKeyboard"];
 	XCTAssertEqualObjects(kb[@"resize"], @YES);
 	XCTAssertEqualObjects(kb[@"persistent"], @YES);
+}
+
+/// The button official draws under a Telegram link's preview
+/// (ChatMessageWebpageBubbleContentNode actionTitle).
+- (void)testLinkPreview_ActionFollowsTheKind {
+	NSDictionary *(^kind)(NSDictionary *, NSString *) = ^(NSDictionary *type, NSString *display){
+		return TGLinkPreviewAction(@{@"type" : type, @"display_url" : display ?: @""});
+	};
+	XCTAssertEqualObjects(kind(@{@"@type" : @"linkPreviewTypeUser", @"is_bot" : @NO}, @"t.me/ann")[@"action"],
+			@"SEND MESSAGE");
+	XCTAssertEqualObjects(kind(@{@"@type" : @"linkPreviewTypeUser", @"is_bot" : @NO}, @"t.me/ann?profile")[@"action"],
+			@"OPEN PROFILE");
+	XCTAssertNil(kind(@{@"@type" : @"linkPreviewTypeUser", @"is_bot" : @YES}, nil)[@"action"]);
+	XCTAssertEqualObjects(kind(@{@"@type" : @"linkPreviewTypeChat",
+			@"type" : @{@"@type" : @"inviteLinkChatTypeChannel"}}, nil)[@"action"], @"VIEW CHANNEL");
+	XCTAssertEqualObjects(kind(@{@"@type" : @"linkPreviewTypeChat", @"creates_join_request" : @YES,
+			@"type" : @{@"@type" : @"inviteLinkChatTypeSupergroup"}}, nil)[@"action"], @"REQUEST TO JOIN");
+	NSDictionary *call = kind(@{@"@type" : @"linkPreviewTypeVideoChat", @"is_live_stream" : @YES,
+			@"joins_as_speaker" : @NO}, nil);
+	XCTAssertEqualObjects(call[@"action"], @"JOIN AS LISTENER");
+	XCTAssertEqualObjects(call[@"title"], @"Live Stream");
+	XCTAssertEqualObjects(kind(@{@"@type" : @"linkPreviewTypeVideoChat", @"joins_as_speaker" : @YES}, nil)[@"action"],
+			@"JOIN AS SPEAKER");
+	XCTAssertEqualObjects(kind(@{@"@type" : @"linkPreviewTypePhoto"}, @"t.me/c/1/2")[@"action"], @"VIEW MESSAGE");
+	XCTAssertNil(kind(@{@"@type" : @"linkPreviewTypePhoto"}, @"example.com")[@"action"]);
+	XCTAssertNil(kind(@{@"@type" : @"linkPreviewTypeArticle"}, nil)[@"action"]);
+
+	NSDictionary *row = TGFlattenMessage(fxMsg(@{@"@type" : @"messageText",
+		@"text" : @{@"@type" : @"formattedText", @"text" : @"t.me/bg/abc"},
+		@"link_preview" : @{@"url" : @"https://t.me/bg/abc", @"site_name" : @"Telegram",
+			@"title" : @"x", @"description" : @{@"text" : @"y"},
+			@"type" : @{@"@type" : @"linkPreviewTypeBackground"}}}, nil));
+	XCTAssertEqualObjects(row[@"linkPreviewAction"], @"VIEW BACKGROUND");
+	XCTAssertEqualObjects(row[@"linkPreviewTitle"], @"Chat Background");
+	XCTAssertEqualObjects(row[@"linkPreviewSite"], @"");
+	XCTAssertEqualObjects(row[@"linkPreviewDesc"], @"");
+}
+
+/// A background link pictures the wallpaper: a fill as its colours, an image
+/// or pattern as the document's thumbnail (official WallpaperPreviewMedia).
+- (void)testLinkPreview_BackgroundPicturesTheWallpaper {
+	NSDictionary *(^row)(NSDictionary *) = ^(NSDictionary *type){
+		NSMutableDictionary *full = [@{@"@type" : @"linkPreviewTypeBackground"} mutableCopy];
+		[full addEntriesFromDictionary:type];
+		return TGFlattenMessage(fxMsg(@{@"@type" : @"messageText",
+			@"text" : @{@"@type" : @"formattedText", @"text" : @"t.me/bg/x"},
+			@"link_preview" : @{@"url" : @"https://t.me/bg/x", @"type" : full}}, nil));
+	};
+	NSDictionary *gradient = row(@{@"background_type" : @{@"@type" : @"backgroundTypeFill",
+		@"fill" : @{@"@type" : @"backgroundFillGradient", @"top_color" : @(0xFF0000),
+		@"bottom_color" : @(0x0000FF), @"rotation_angle" : @0}}});
+	XCTAssertEqualObjects(gradient[@"linkPreviewFill"], (@[@(0xFF0000), @(0x0000FF)]));
+	NSDictionary *solid = row(@{@"background_type" : @{@"@type" : @"backgroundTypeFill",
+		@"fill" : @{@"@type" : @"backgroundFillSolid", @"color" : @(0x00FF00)}}});
+	XCTAssertEqualObjects(solid[@"linkPreviewFill"], @[@(0x00FF00)]);
+	NSDictionary *image = row(@{@"background_type" : @{@"@type" : @"backgroundTypeWallpaper"},
+		@"document" : @{@"thumbnail" : @{@"width" : @90, @"height" : @160, @"file" : @{@"id" : @44}}}});
+	XCTAssertEqualObjects(image[@"linkPreviewPhotoId"], @44);
+	XCTAssertNil(image[@"linkPreviewFill"]);
+}
+
+/// A theme link: the settings' outgoing fill as the swatch, else the theme
+/// file's thumbnail (official telegram_theme).
+- (void)testLinkPreview_ThemePicturesItsColoursOrFile {
+	NSDictionary *(^row)(NSDictionary *) = ^(NSDictionary *type){
+		NSMutableDictionary *full = [@{@"@type" : @"linkPreviewTypeTheme"} mutableCopy];
+		[full addEntriesFromDictionary:type];
+		return TGFlattenMessage(fxMsg(@{@"@type" : @"messageText",
+			@"text" : @{@"@type" : @"formattedText", @"text" : @"t.me/addtheme/x"},
+			@"link_preview" : @{@"url" : @"https://t.me/addtheme/x", @"type" : full}}, nil));
+	};
+	NSDictionary *settings = row(@{@"documents" : @[], @"settings" : @{@"accent_color" : @(0xFF112233),
+		@"outgoing_message_fill" : @{@"@type" : @"backgroundFillGradient", @"top_color" : @5, @"bottom_color" : @6}}});
+	XCTAssertEqualObjects(settings[@"linkPreviewFill"], (@[@5, @6]));
+	NSDictionary *accent = row(@{@"documents" : @[], @"settings" : @{@"accent_color" : @(0xFF112233)}});
+	XCTAssertEqualObjects(accent[@"linkPreviewFill"], @[@(0x112233)]);
+	NSDictionary *file = row(@{@"documents" : @[@{@"file_name" : @"t.tgios-theme",
+		@"thumbnail" : @{@"width" : @90, @"height" : @90, @"file" : @{@"id" : @55}}}]});
+	XCTAssertEqualObjects(file[@"linkPreviewPhotoId"], @55);
 }
 
 - (void)testLinkPreview_PictureSizeAndPlace {

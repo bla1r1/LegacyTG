@@ -103,6 +103,14 @@ static void TGSetWanted(NSString *key, BOOL wanted) {
 	return [self gifAutoplayWanted];
 }
 
++ (BOOL)canPlayVideoAvatars {
+	return [TGDevice tier] >= TGDeviceTierModern && [self gifAutoplayWanted];
+}
+
++ (BOOL)canPlayStickerEffects {
+	return [TGDevice tier] >= TGDeviceTierFull && [self animatedStickersWanted];
+}
+
 + (NSUInteger)maxConcurrentGIFs {
 	switch ([TGDevice tier]){
 		case TGDeviceTierVintage: return 1;
@@ -207,6 +215,8 @@ static BOOL TGEmojiFontHasGlyphs(CTFontRef font, NSString *s) {
 		@[@"Swipe actions in chats",  @YES,  @"every device"],
 		@[@"Chat wallpaper",          @([self canShowWallpaper]),      @"every device, off by default on the oldest"],
 		@[@"GIF autoplay",            @([self canAutoplayGIFs]),       @"every device, one at a time on the oldest"],
+		@[@"Video profile pictures",  @([self canPlayVideoAvatars]),   @"Modern+ - the A7's decoder; older devices show the still"],
+		@[@"Premium sticker effects", @([self canPlayStickerEffects]), @"Full - a second, larger animation over the list"],
 		@[@"Multiple accounts",       @([self canHoldMultipleAccounts]), @"every device, one active at a time"],
 		@[@"Custom emoji",            @YES,  @"every device, static on Vintage"],
 		@[@"Mini apps",               @([self canRunWebApps]),         @"iOS 9 or later"],

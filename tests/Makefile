@@ -189,6 +189,7 @@ CLIENT_OBJC_SRCS := \
     src/Core/Client/Messages/TGClient+MessageRecord.m \
     src/Core/Client/Messages/TGClient+InlineMessages.m \
     src/Core/Model/TGMessageFlatten.m \
+    src/Core/Model/TGLinkPreviewAction.m \
     src/Core/Model/TGServiceMessageText.m \
     src/Core/Model/TGChatStatistics.m \
     src/Core/Model/TGDownloadList.m \

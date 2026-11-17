@@ -47,6 +47,14 @@
 /// the A5 decodes in hardware a couple at a time; the A4 and older cannot
 /// keep up while the list scrolls, so there a GIF plays on tap.
 + (BOOL)canAutoplayGIFs;
+/// A profile picture that is a clip plays it, looped and silent, in the
+/// profile header. A 160 px H.264 clip beside a scrolling list is a job for
+/// the A7's decoder; older devices keep the still.
++ (BOOL)canPlayVideoAvatars;
+/// A premium sticker's effect plays once around it when it first shows: a
+/// second, larger animation over the list, which only the Full tier's memory
+/// and GPU carry without dropping the scroll.
++ (BOOL)canPlayStickerEffects;
 /// How many GIFs may play at once on this device.
 + (NSUInteger)maxConcurrentGIFs;
 

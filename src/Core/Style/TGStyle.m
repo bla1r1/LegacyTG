@@ -124,6 +124,10 @@ UIColor *TGColourAccentName(NSInteger accentId, NSArray *accentColors, BOOL dark
 	return nil;
 }
 
+UIColor *TGColourFromRGB(uint32_t c) {
+	return TGTILE(((c >> 16) & 0xFF) / 255.0f, ((c >> 8) & 0xFF) / 255.0f, (c & 0xFF) / 255.0f);
+}
+
 UIColor *TGColourProfileAccent(NSInteger accentId, NSArray *profileAccentColors, BOOL dark) {
 	if (accentId < 0)
 		return nil;

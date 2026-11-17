@@ -15,6 +15,34 @@
 #import "TGStickerBudget.h"
 #import "TGDevice.h"
 
+/// A background link's colours as the swatch official draws for a plain or
+/// gradient wallpaper: one colour, or the colours top to bottom. Small and
+/// stretched by the view, so it costs one tiny bitmap per row.
+static UIImage *TGLinkFillImage(NSArray *colours) {
+	NSUInteger count = colours.count;
+	CGSize size = CGSizeMake(TGMetricScaleFull, MAX(count, (NSUInteger)1) * TGMetricPadSmall);
+	UIGraphicsBeginImageContextWithOptions(size, YES, TGMetricScaleFull);
+	CGContextRef context = UIGraphicsGetCurrentContext();
+	NSMutableArray *cg = [NSMutableArray arrayWithCapacity:count];
+	for (NSNumber *value in colours) {
+		[cg addObject:(__bridge id)TGColourFromRGB((uint32_t)[value unsignedIntValue]).CGColor];
+	}
+	if (count == 1) {
+		CGContextSetFillColorWithColor(context, (__bridge CGColorRef)cg[0]);
+		CGContextFillRect(context, CGRectMake(0, 0, size.width, size.height));
+	} else if (count > 1) {
+		CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
+		CGGradientRef gradient = CGGradientCreateWithColors(space, (__bridge CFArrayRef)cg, NULL);
+		CGContextDrawLinearGradient(context, gradient, CGPointZero,
+				CGPointMake(0, size.height), 0);
+		CGGradientRelease(gradient);
+		CGColorSpaceRelease(space);
+	}
+	UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+	UIGraphicsEndImageContext();
+	return image;
+}
+
 @implementation TGChatViewController (Cells)
 
 /// Documents, voice notes, polls, cards and locations place their stamp with
@@ -268,8 +296,19 @@ static char kTGReactionChipInfoKey;
 			cell.linkPreviewDesc.frame = layout.linkDescFrame;
 		}
 
+		// The button opens the link, as a tap on the preview does
+		// (official linkButtonNode under the preview).
+		if (layout.linkAction.length) {
+			cell.linkPreviewAction.hidden = NO;
+			cell.linkPreviewAction.textColor = [theme bubbleAccentColour:mine];
+			cell.linkPreviewAction.text = layout.linkAction;
+			cell.linkPreviewAction.frame = layout.linkActionFrame;
+		}
+
 		cell.linkPreviewButton.hidden = NO;
-		cell.linkPreviewButton.frame = layout.linkPreviewFrame;
+		cell.linkPreviewButton.frame = CGRectIsEmpty(layout.linkActionFrame)
+				? layout.linkPreviewFrame
+				: CGRectUnion(layout.linkPreviewFrame, layout.linkActionFrame);
 		cell.linkPreviewUrl = layout.linkUrl;
 	}
 	// The preview's picture rides the same image cache as a photo's.
@@ -283,10 +322,15 @@ static char kTGReactionChipInfoKey;
 			linkMedia.layer.cornerRadius = TGMetricCornerSmall;
 			[cell.bubble addSubview:linkMedia];
 		}
-		NSDictionary *picture = @{@"photoId" : m[@"linkPreviewPhotoId"]};
-		linkMedia.image = [self imageFor:picture];
-		if (!linkMedia.image)
-			[self fetchImageForMessage:picture];
+		NSArray *fill = [m[@"linkPreviewFill"] isKindOfClass:NSArray.class] ? m[@"linkPreviewFill"] : nil;
+		if (fill.count) {
+			linkMedia.image = TGLinkFillImage(fill);
+		} else {
+			NSDictionary *picture = @{@"photoId" : m[@"linkPreviewPhotoId"]};
+			linkMedia.image = [self imageFor:picture];
+			if (!linkMedia.image)
+				[self fetchImageForMessage:picture];
+		}
 		linkMedia.backgroundColor = [theme separatorColour];
 		linkMedia.frame = layout.linkMediaFrame;
 		linkMedia.hidden = NO;
@@ -954,8 +998,14 @@ UIImage *TGBubbleBackImage(TGTheme *theme, BOOL mine, BOOL first, BOOL last) {
 		NSString *text = nil;
 		CGFloat chipW = TGMetricZero;
 
+		// A Saved Messages tag counts nothing; its label, if any, takes the
+		// count's place (official ReactionButtonComponent isTag).
+		NSString *tagLabel = [group[@"tag"] boolValue]
+				? ([group[@"tagLabel"] isKindOfClass:NSString.class] ? group[@"tagLabel"] : @"")
+				: nil;
+		NSString *countText = tagLabel ?: [NSString stringWithFormat:@"%ld", (long)count];
 		if (customEmojiImg) {
-			text = single ? @"" : [NSString stringWithFormat:@"%ld", (long)count];
+			text = single ? @"" : countText;
 			chipW = TGDoubled(TGMetricReactionChipInset) + emojiSide;
 			if (single)
 				chipW += TGMetricReactionChipAvatar + TGMetricReactionChipGap;
@@ -963,8 +1013,8 @@ UIImage *TGBubbleBackImage(TGTheme *theme, BOOL mine, BOOL first, BOOL last) {
 				chipW += TGMetricReactionChipGap + TGTextSize(text, TGFontCaption(), 0).width;
 		} else {
 			NSString *glyph = emoji.length ? emoji : @"\u2605";
-			text = single ? glyph
-					: [NSString stringWithFormat:@"%@ %ld", glyph, (long)count];
+			text = (single || (tagLabel && !tagLabel.length)) ? glyph
+					: [NSString stringWithFormat:@"%@ %@", glyph, countText];
 			chipW = TGTextSize(text, TGFontCaption(), 0).width
 					+ TGDoubled(TGMetricReactionChipInset);
 			if (single)

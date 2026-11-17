@@ -126,6 +126,8 @@ NSArray *TGMediaPageAppending(NSArray *existing, NSArray *more);
 /// colours instead of a name list.
 @property (nonatomic, strong) NSArray *accentColors;
 @property (nonatomic, strong) NSArray *profileAccentColors;
+/// Saved Messages tag labels of the whole chat, by TGSavedTagKey.
+@property (nonatomic, strong) NSDictionary *savedTagLabels;
 /// Contacts with a birthday nearby, from updateContactCloseBirthdays. The
 /// privacy page shows the count and hideContactCloseBirthdays empties it.
 @property (nonatomic, strong) NSArray *contactCloseBirthdays;

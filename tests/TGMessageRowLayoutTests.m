@@ -303,4 +303,20 @@ static TGMessageRowInput *rlInput(NSDictionary *m) {
 	XCTAssertEqualObjects(TGMessageSenderLine(@"Ann", @{}), @"Ann");
 }
 
+/// Official's button under a Telegram link's preview takes a row of its own
+/// below the preview and adds that row to the bubble.
+- (void)testLinkPreview_ActionRowSitsUnderThePreview {
+	NSDictionary *m = @{ @"text": @"t.me/cats", @"linkPreviewSite": @"Telegram",
+			@"linkPreviewTitle": @"Cats", @"linkPreviewUrl": @"https://t.me/cats" };
+	TGMessageLayout *plain = TGMessageRowLayout(rlInput(m));
+	NSMutableDictionary *withButton = [m mutableCopy];
+	withButton[@"linkPreviewAction"] = @"VIEW CHANNEL";
+	TGMessageLayout *button = TGMessageRowLayout(rlInput(withButton));
+	XCTAssertEqualObjects(button.linkAction, @"VIEW CHANNEL");
+	XCTAssertEqual(button.linkActionFrame.origin.y, CGRectGetMaxY(button.linkPreviewFrame));
+	XCTAssertEqual(button.bubbleFrame.size.height - plain.bubbleFrame.size.height,
+			TGMetricButtonSmallH);
+	XCTAssertTrue(CGRectIsEmpty(plain.linkActionFrame));
+}
+
 @end

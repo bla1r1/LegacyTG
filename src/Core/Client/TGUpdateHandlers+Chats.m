@@ -13,6 +13,7 @@
 #import "TGOptions.h"
 #import "TGBase64.h"
 #import "TGCall.h"
+#import "TGMessageFlatten.h"
 #include "TGUpdateType.h"
 
 @interface TGClient (TGUpdateHandlerPrivate)
@@ -145,6 +146,12 @@
 	case TGUpdateSavedMessagesTopic:
 	case TGUpdateSavedMessagesTopicCount:
 	case TGUpdateSavedMessagesTags: {
+		// The whole chat's tag labels name the tag chips under messages
+		// (official ChatMessageReactionsFooterContentNode savedMessageTags).
+		if (kind == TGUpdateSavedMessagesTags && ![obj[@"saved_messages_topic_id"] longLongValue]) {
+			NSDictionary *tags = [obj[@"tags"] isKindOfClass:NSDictionary.class] ? obj[@"tags"] : nil;
+			self.client.savedTagLabels = TGSavedTagLabels(tags[@"tags"]);
+		}
 		// A Saved Messages topic arrived, moved, or got a label: asked for by
 		// loadSavedMessagesTopics, changing while the topics screen is open.
 		// The tags update patches the row the tag belonged to.

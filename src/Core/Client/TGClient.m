@@ -141,6 +141,8 @@ NSString *const TGSuggestedActionsChangedNotification = @"TGSuggestedActionsChan
 - (void)setAccentColors:(NSArray *)value { [TGState shared].accentColors = value; }
 - (NSArray *)profileAccentColors { return [TGState shared].profileAccentColors; }
 - (void)setProfileAccentColors:(NSArray *)value { [TGState shared].profileAccentColors = value; }
+- (NSDictionary *)savedTagLabels { return [TGState shared].savedTagLabels; }
+- (void)setSavedTagLabels:(NSDictionary *)value { [TGState shared].savedTagLabels = value; }
 - (NSMutableDictionary *)userSubscriptionsById { return [TGState shared].userSubscriptionsById; }
 - (void)setUserSubscriptionsById:(NSMutableDictionary *)value { [TGState shared].userSubscriptionsById = value; }
 - (NSMutableDictionary *)noteSendWaiters { return [TGState shared].noteSendWaiters; }

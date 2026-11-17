@@ -116,6 +116,10 @@ CGFloat TGInlineStampY(CGRect bodyFrame);
 @property (nonatomic, copy)   NSString *linkTitle;
 @property (nonatomic, copy)   NSString *linkDesc;
 @property (nonatomic, copy)   NSString *linkUrl;
+/// Official's button under a Telegram link's preview ("VIEW CHANNEL"); nil
+/// and a zero frame when the kind has none.
+@property (nonatomic, copy)   NSString *linkAction;
+@property (nonatomic, assign) CGRect linkActionFrame;
 /// The row of reaction chips under a bubble; empty when there are none.
 @property (nonatomic, assign) CGRect reactionChipsFrame;
 @property (nonatomic, assign) CGRect timeFrame;

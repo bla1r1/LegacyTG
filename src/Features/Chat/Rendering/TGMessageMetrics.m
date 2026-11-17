@@ -69,6 +69,8 @@ CGFloat TGMessageBoostBadgeWidth(NSDictionary *m) {
 }
 
 CGSize TGLinkPreviewMediaSize(NSDictionary *m, CGFloat columnW) {
+	if ([m[@"linkPreviewFill"] count])
+		return CGSizeMake(kLinkThumbSide, kLinkThumbSide);
 	if (![m[@"linkPreviewPhotoId"] isKindOfClass:NSNumber.class])
 		return CGSizeZero;
 	if (![m[@"linkPreviewLarge"] boolValue])

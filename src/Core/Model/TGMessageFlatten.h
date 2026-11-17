@@ -10,3 +10,9 @@ NSDictionary *TGFlattenMessage(NSDictionary *message);
 /// "videoChatStarted" -> "Video chat started": the words for a TDLib type
 /// this client has no sentence for yet.
 NSString *TGPhraseFromTypeName(NSString *ctype);
+
+/// A ReactionType as one string: the emoji, or "custom:<id>".
+FOUNDATION_EXPORT NSString *TGSavedTagKey(NSDictionary *reactionType);
+
+/// The non-empty labels of savedMessagesTags.tags, by TGSavedTagKey.
+FOUNDATION_EXPORT NSDictionary *TGSavedTagLabels(NSArray *tags);

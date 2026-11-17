@@ -359,6 +359,8 @@ TGMessageLayout *TGMessageRowLayout(TGMessageRowInput *in) {
 	NSString *lpTitle = m[@"linkPreviewTitle"];
 	NSString *lpDesc = m[@"linkPreviewDesc"];
 	NSString *lpUrl = m[@"linkPreviewUrl"];
+	NSString *lpAction = [m[@"linkPreviewAction"] isKindOfClass:NSString.class]
+			? m[@"linkPreviewAction"] : @"";
 	BOOL hasLinkPreview = !isService && (lpTitle.length > 0 || lpDesc.length > 0 || lpSite.length > 0);
 	if (hasLinkPreview) inlineStamp = NO;
 	CGFloat timeW = TGMessageStampWidth(m);
@@ -370,6 +372,7 @@ TGMessageLayout *TGMessageRowLayout(TGMessageRowInput *in) {
 		contentW = MAX(contentW, kBubbleMinW);
 
 	CGFloat linkPreviewH = 0;
+	CGFloat linkActionH = 0;
 	CGFloat linkSiteH = 0;
 	CGFloat linkTitleH = 0;
 	CGFloat linkDescH = 0;
@@ -409,6 +412,10 @@ TGMessageLayout *TGMessageRowLayout(TGMessageRowInput *in) {
 		else if (linkMedia.width > 0)
 			linkPreviewH = MAX(linkPreviewH, linkMedia.height);
 		linkPreviewH += TGMetricPadSmall;
+		// The button sits under the preview, outside its bar, and counts
+		// as part of the preview for the bubble's height.
+		if (lpAction.length)
+			linkActionH = TGMetricButtonSmallH;
 	}
 	if (inlineStamp)
 		contentW = MAX(contentW, body.width + kStampGap + timeW);
@@ -520,7 +527,7 @@ TGMessageLayout *TGMessageRowLayout(TGMessageRowInput *in) {
 			+ (isAlbum ? (collageH + (body.height ? TGMetricPadSmall : TGMetricZero))
 					   : (pic.height ? pic.height + (mediaLast ? TGMetricZero : TGMetricPadSmall) : TGMetricZero))
 			+ body.height
-			+ (hasLinkPreview ? (linkPreviewH + (body.height > 0 ? TGMetricPadSmall : TGMetricZero)) : TGMetricZero);
+			+ (hasLinkPreview ? (linkPreviewH + linkActionH + (body.height > 0 ? TGMetricPadSmall : TGMetricZero)) : TGMetricZero);
 	if (isVoice)
 		bubbleH = TGMetricPersonRow + senderH
 				+ ([m[@"forward"] length] ? TGMetricQuoteForwardLine : TGMetricZero)
@@ -650,7 +657,12 @@ TGMessageLayout *TGMessageRowLayout(TGMessageRowInput *in) {
 			layout.linkDescFrame = CGRectZero;
 		}
 		y += linkPreviewH;
+		layout.linkAction = linkActionH > 0 ? lpAction : nil;
+		layout.linkActionFrame = linkActionH > 0
+				? CGRectMake(kPadH, y, innerW, linkActionH) : CGRectZero;
+		y += linkActionH;
 	} else {
+		layout.linkActionFrame = CGRectZero;
 		layout.linkPreviewFrame = CGRectZero;
 		layout.linkMediaFrame = CGRectZero;
 	}
@@ -679,7 +691,7 @@ TGMessageLayout *TGMessageRowLayout(TGMessageRowInput *in) {
 	if (isAlbum) rowH += collageH + (body.height > 0 ? TGMetricPadSmall : TGMetricZero);
 	else if (pic.height > 0) rowH += pic.height + (mediaLast ? TGMetricZero : TGMetricPadSmall);
 	if (body.height > 0) rowH += body.height;
-	if (hasLinkPreview) rowH += linkPreviewH + (body.height > 0 ? TGMetricPadSmall : TGMetricZero);
+	if (hasLinkPreview) rowH += linkPreviewH + linkActionH + (body.height > 0 ? TGMetricPadSmall : TGMetricZero);
 	if (isVoice) rowH = TGMetricVoicePillHeight + forwarded + audioExtraH;
 	// Fixed, like a voice note: the artwork and the two lines beside it do
 	// not grow with the title, which is truncated instead.

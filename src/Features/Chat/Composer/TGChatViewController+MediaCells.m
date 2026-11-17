@@ -5,6 +5,7 @@
 #import "TGChatViewControllerInternal.h"
 #import <QuartzCore/QuartzCore.h>
 #import "TGCapabilities.h"
+#import "TGLottieView.h"
 #import "TGDevice.h"
 #import "TGStyle.h"
 #import "TGLocalization.h"
@@ -147,6 +148,8 @@ static CGFloat TGChatMediaCorner(void) {
 		cell.lottie.frame = CGRectMake(TGMetricZero, TGMetricZero, side, side);
 		BOOL playable = [cell.lottie loadStickerFile:animPath];
 		cell.lottie.hidden = !playable;
+		[self placeSlotLayersIn:cell message:m playable:playable];
+		[self playStickerEffectIn:cell message:m playable:playable];
 		// On Vintage the VP9/vector decode and the scroll share one core: a
 		// sticker told to play mid-drag starts a decode that fights the scroll
 		// for it. It keeps its first frame (already decoded and cached) until
@@ -212,6 +215,72 @@ static CGFloat TGChatMediaCorner(void) {
 	}
 
 	return NO;
+}
+
+/// A slot machine's reels and lever over its background, in one frame and
+/// played together; drawn only once all four have arrived, so a half-built
+/// machine never shows. Any other sticker clears them from a reused cell.
+- (void)placeSlotLayersIn:(TGBubbleCell *)cell message:(NSDictionary *)m playable:(BOOL)playable {
+	NSArray *layers = [m[@"slotLayers"] isKindOfClass:NSArray.class] ? m[@"slotLayers"] : @[];
+	NSMutableArray *paths = [NSMutableArray array];
+	for (NSNumber *layer in layers) {
+		NSString *path = self.lottiePaths[layer];
+		if (path)
+			[paths addObject:path];
+	}
+	BOOL draw = playable && layers.count && paths.count == layers.count;
+	for (NSUInteger i = 0; i < 4; i++) {
+		TGLottieView *view = (TGLottieView *)[cell.bubble viewWithTag:TGBubbleSlotLayerTag + (NSInteger)i];
+		if (!draw || i >= paths.count) {
+			view.hidden = YES;
+			continue;
+		}
+		if (!view) {
+			view = [[TGLottieView alloc] initWithFrame:cell.lottie.frame];
+			view.tag = TGBubbleSlotLayerTag + (NSInteger)i;
+			view.userInteractionEnabled = NO;
+			[cell.bubble insertSubview:view aboveSubview:(i ? [cell.bubble viewWithTag:TGBubbleSlotLayerTag + (NSInteger)i - 1] : cell.lottie)];
+		}
+		view.frame = cell.lottie.frame;
+		view.hidden = ![view loadStickerFile:paths[i]];
+		if (!view.hidden)
+			[self playOnce:view path:paths[i] settled:YES];
+	}
+}
+
+/// A premium sticker's effect, once per message per chat visit, larger than
+/// the sticker and leaning toward the bubble's open side, mirrored for an
+/// incoming one (official playEffectAnimation). It goes when it has played.
+- (void)playStickerEffectIn:(TGBubbleCell *)cell message:(NSDictionary *)m playable:(BOOL)playable {
+	NSNumber *effectId = m[@"stickerEffectId"];
+	NSNumber *msgId = m[@"id"];
+	NSString *path = [effectId longLongValue] > 0 ? self.lottiePaths[effectId] : nil;
+	if (!playable || !path || !msgId || ![TGCapabilities canPlayStickerEffects] ||
+			[self.playedStickerEffects containsObject:msgId])
+		return;
+	if (!self.playedStickerEffects)
+		self.playedStickerEffects = [NSMutableSet set];
+	[self.playedStickerEffects addObject:msgId];
+
+	BOOL incoming = ![m[@"outgoing"] boolValue];
+	CGRect sticker = [cell.bubble convertRect:cell.lottie.frame toView:cell.contentView];
+	CGFloat dx = sticker.size.width * TGMetricStickerEffectGrow - TGMetricStickerEffectPullBack;
+	CGRect frame = CGRectInset(CGRectOffset(sticker, incoming ? dx : -dx, TGMetricZero),
+			-sticker.size.width * TGMetricStickerEffectGrow,
+			-sticker.size.height * TGMetricStickerEffectGrow);
+	TGLottieView *effect = [[TGLottieView alloc] initWithFrame:frame];
+	effect.tag = TGBubbleStickerEffectTag;
+	effect.userInteractionEnabled = NO;
+	if (incoming)
+		effect.transform = CGAffineTransformMakeScale(-TGMetricScaleFull, TGMetricScaleFull);
+	if (![effect loadStickerFile:path])
+		return;
+	cell.clipsToBounds = NO;
+	cell.contentView.clipsToBounds = NO;
+	[cell.contentView addSubview:effect];
+	__weak TGLottieView *weakEffect = effect;
+	effect.onPlayedOnce = ^{ [weakEffect removeFromSuperview]; };
+	[effect playOnce];
 }
 
 /// What Telegram shows while a sticker is still a promise: the emoji it

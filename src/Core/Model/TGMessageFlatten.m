@@ -7,6 +7,7 @@
 // and the message stream store; declared in TGClientInternal.h.
 //
 #import "TGServiceMessageText.h"
+#import "TGLinkPreviewAction.h"
 #import "TGMessageContentCommerce.h"
 #import "TGMessageContentInteractive.h"
 #import "TGLiveLocation.h"
@@ -122,10 +123,65 @@ NSString *TGMyReactionEmoji(NSDictionary *m) {
 /// reactor can therefore show the person's avatar instead of a bare count.
 /// Both spellings of ReactionType are read: a custom emoji has no glyph, so
 /// its id travels instead and the chip falls back to a star.
+NSString *TGSavedTagKey(NSDictionary *type) {
+	if (![type isKindOfClass:NSDictionary.class])
+		return @"";
+	if ([type[@"emoji"] isKindOfClass:NSString.class])
+		return type[@"emoji"];
+	id custom = type[@"custom_emoji_id"];
+	return custom ? [NSString stringWithFormat:@"custom:%@", custom] : @"";
+}
+
+NSDictionary *TGSavedTagLabels(NSArray *tags) {
+	if (![tags isKindOfClass:NSArray.class])
+		return @{};
+	NSMutableDictionary *labels = [NSMutableDictionary dictionary];
+	for (NSDictionary *tag in tags) {
+		if (![tag isKindOfClass:NSDictionary.class])
+			continue;
+		NSString *label = [tag[@"label"] isKindOfClass:NSString.class] ? tag[@"label"] : @"";
+		NSString *key = TGSavedTagKey(tag[@"tag"]);
+		if (label.length && key.length)
+			labels[key] = label;
+	}
+	return labels;
+}
+
+/// The cover a track bubble draws: the sender's own thumbnail, else one of
+/// the variants TDLib found outside for a file without a cover (official
+/// ChatMessageInteractiveFileNode falls back to the external album art). The
+/// smallest variant wide enough for the bubble's square, else the largest.
+static NSNumber *TGAudioCoverFileId(NSDictionary *audio) {
+	if (![audio isKindOfClass:NSDictionary.class])
+		return nil;
+	id own = audio[@"album_cover_thumbnail"][@"file"][@"id"];
+	if ([own isKindOfClass:NSNumber.class])
+		return own;
+	NSArray *covers = [audio[@"external_album_covers"] isKindOfClass:NSArray.class]
+			? audio[@"external_album_covers"] : nil;
+	NSDictionary *best = nil;
+	for (NSDictionary *cover in covers) {
+		if (![cover isKindOfClass:NSDictionary.class] ||
+				![cover[@"file"][@"id"] isKindOfClass:NSNumber.class])
+			continue;
+		int width = [cover[@"width"] intValue];
+		int bestWidth = [best[@"width"] intValue];
+		BOOL enough = width >= 90, bestEnough = bestWidth >= 90;
+		if (!best || (enough && (!bestEnough || width < bestWidth)) ||
+				(!enough && !bestEnough && width > bestWidth))
+			best = cover;
+	}
+	return best[@"file"][@"id"];
+}
+
 static NSArray *TGFlattenReactionGroups(NSDictionary *m) {
 	NSArray *groups = m[@"interaction_info"][@"reactions"][@"reactions"];
 	if (![groups isKindOfClass:NSArray.class] || !groups.count)
 		return @[];
+	// Saved Messages reactions are tags: no count and no face, the tag's
+	// label when it has one (official ReactionButtonComponent isTag).
+	BOOL tags = [m[@"interaction_info"][@"reactions"][@"are_tags"] boolValue];
+	NSDictionary *labels = tags ? [TGClient shared].savedTagLabels : nil;
 
 	NSMutableArray *out = [NSMutableArray arrayWithCapacity:groups.count];
 	for (NSDictionary *r in groups){
@@ -150,6 +206,13 @@ static NSArray *TGFlattenReactionGroups(NSDictionary *m) {
 			@"name"         : @"",
 			@"avatarFileId" : @(0),
 		} mutableCopy];
+
+		if (tags) {
+			row[@"tag"] = @YES;
+			row[@"tagLabel"] = labels[TGSavedTagKey(type)] ?: @"";
+			[out addObject:row];
+			continue;
+		}
 
 		NSArray *senders = r[@"recent_sender_ids"];
 		if (count == 1 && [senders isKindOfClass:NSArray.class] && senders.count == 1){
@@ -370,8 +433,65 @@ NSString *TGFailedSendBlocker(NSDictionary *state) {
 
 /// A preview's picture: the largest size of its photo that a bubble can
 /// show, 640 on the long side at most. Nil when the preview has none.
+/// A BackgroundFill's colours, 0xRRGGBB, top to bottom.
+static NSArray *TGLinkFillColours(NSDictionary *fill) {
+	if (![fill isKindOfClass:NSDictionary.class])
+		return nil;
+	NSString *kind = fill[@"@type"];
+	if ([kind isEqualToString:@"backgroundFillSolid"])
+		return fill[@"color"] ? @[fill[@"color"]] : nil;
+	if ([kind isEqualToString:@"backgroundFillGradient"])
+		return (fill[@"top_color"] && fill[@"bottom_color"])
+				? @[fill[@"top_color"], fill[@"bottom_color"]] : nil;
+	if ([kind isEqualToString:@"backgroundFillFreeformGradient"])
+		return [fill[@"colors"] isKindOfClass:NSArray.class] ? fill[@"colors"] : nil;
+	return nil;
+}
+
 static NSDictionary *TGFlattenLinkPreviewMedia(NSDictionary *lp) {
 	NSDictionary *type = [lp[@"type"] isKindOfClass:NSDictionary.class] ? lp[@"type"] : nil;
+	// A background link pictures the wallpaper (official WallpaperPreviewMedia):
+	// a colour or gradient as a swatch of its colours, an image or a pattern
+	// as the document's thumbnail.
+	// A theme link: its settings' outgoing fill (else its accent) as the
+	// swatch, or the theme file's own thumbnail when the settings are unknown
+	// (official telegram_theme, WallpaperPreviewMedia .themeSettings / .file).
+	if ([type[@"@type"] isEqualToString:@"linkPreviewTypeTheme"]) {
+		NSDictionary *settings = [type[@"settings"] isKindOfClass:NSDictionary.class] ? type[@"settings"] : nil;
+		if (settings) {
+			NSArray *colours = TGLinkFillColours(settings[@"outgoing_message_fill"]);
+			if (!colours.count && settings[@"accent_color"])
+				colours = @[@([settings[@"accent_color"] unsignedIntValue] & 0xFFFFFF)];
+			return colours.count ? @{@"linkPreviewFill" : colours} : nil;
+		}
+		NSArray *documents = [type[@"documents"] isKindOfClass:NSArray.class] ? type[@"documents"] : @[];
+		for (NSDictionary *document in documents) {
+			NSDictionary *thumb = [document isKindOfClass:NSDictionary.class] ? document[@"thumbnail"] : nil;
+			NSNumber *thumbId = thumb[@"file"][@"id"];
+			if ([thumbId isKindOfClass:NSNumber.class])
+				return @{@"linkPreviewPhotoId" : thumbId,
+						 @"linkPreviewPhotoW" : @([thumb[@"width"] intValue]),
+						 @"linkPreviewPhotoH" : @([thumb[@"height"] intValue]),
+						 @"linkPreviewLarge" : @NO, @"linkPreviewAbove" : @NO};
+		}
+		return nil;
+	}
+	if ([type[@"@type"] isEqualToString:@"linkPreviewTypeBackground"]) {
+		NSDictionary *bg = [type[@"background_type"] isKindOfClass:NSDictionary.class] ? type[@"background_type"] : nil;
+		if ([bg[@"@type"] isEqualToString:@"backgroundTypeFill"]) {
+			NSArray *colours = TGLinkFillColours(bg[@"fill"]);
+			return colours.count ? @{@"linkPreviewFill" : colours} : nil;
+		}
+		NSDictionary *thumb = type[@"document"][@"thumbnail"];
+		NSNumber *thumbId = thumb[@"file"][@"id"];
+		if (![thumbId isKindOfClass:NSNumber.class])
+			return nil;
+		return @{@"linkPreviewPhotoId" : thumbId,
+				 @"linkPreviewPhotoW" : @([thumb[@"width"] intValue]),
+				 @"linkPreviewPhotoH" : @([thumb[@"height"] intValue]),
+				 @"linkPreviewLarge" : @NO,
+				 @"linkPreviewAbove" : @NO};
+	}
 	NSDictionary *photo = [type[@"photo"] isKindOfClass:NSDictionary.class] ? type[@"photo"] : nil;
 	NSArray *sizes = [photo[@"sizes"] isKindOfClass:NSArray.class] ? photo[@"sizes"] : nil;
 	NSDictionary *chosen = nil;
@@ -536,6 +656,8 @@ NSDictionary *TGFlattenMessage(NSDictionary *m) {
 
 	NSNumber *bigPhotoFileId = nil;
 	int mediaWidth = 0, mediaHeight = 0;
+	NSArray *slotLayers = nil;
+	NSNumber *stickerEffectId = nil;
 	int docWidth = 0, docHeight = 0;
 	NSNumber *videoFallbackId = nil;
 	BOOL hasStickers = NO;   // media other stickers were attached to
@@ -633,7 +755,22 @@ NSDictionary *TGFlattenMessage(NSDictionary *m) {
 			photoFileId = sticker[@"thumbnail"][@"file"][@"id"];
 		}
 
+		// A big emoji keeps its own proportions (official sizes it from
+		// the file's dimensions over 512); TDLib gives the expected size for
+		// a sticker it does not know yet, so the row holds its place.
+		if ([ctype isEqualToString:@"messageAnimatedEmoji"]) {
+			NSDictionary *animated = content[@"animated_emoji"];
+			mediaWidth = [sticker[@"width"] intValue] ?: [animated[@"sticker_width"] intValue];
+			mediaHeight = [sticker[@"height"] intValue] ?: [animated[@"sticker_height"] intValue];
+		}
+
 		extra = content[@"emoji"] ?: sticker[@"emoji"];
+		// A premium sticker carries an effect official plays once around it
+		// (ChatMessageAnimatedStickerItemNode playPremiumStickerAnimation).
+		id effect = sticker[@"full_type"][@"premium_animation"][@"id"];
+		if ([sticker[@"full_type"][@"@type"] isEqualToString:@"stickerFullTypeRegular"] &&
+				[effect respondsToSelector:@selector(longLongValue)] && [effect longLongValue] > 0)
+			stickerEffectId = @([effect longLongValue]);
 		id customId = sticker[@"full_type"][@"custom_emoji_id"];
 		if (([customId isKindOfClass:NSNumber.class] || [customId isKindOfClass:NSString.class]) &&
 				[customId longLongValue] != 0)
@@ -683,7 +820,7 @@ NSDictionary *TGFlattenMessage(NSDictionary *m) {
 		audioTitle     = content[@"audio"][@"title"];
 		audioPerformer = content[@"audio"][@"performer"];
 		duration       = content[@"audio"][@"duration"];
-		albumCoverId   = content[@"audio"][@"album_cover_thumbnail"][@"file"][@"id"];
+		albumCoverId   = TGAudioCoverFileId(content[@"audio"]);
 		extra = [audioTitle length] ? audioTitle : (docName ?: @"Audio");
 
 	} else if ([ctype isEqualToString:@"messageContact"]){
@@ -744,8 +881,9 @@ NSDictionary *TGFlattenMessage(NSDictionary *m) {
 	} else if ([ctype isEqualToString:@"messageDice"]){
 		// The throw itself is a sticker, not text: final_state has the one it
 		// landed on, initial_state the rolling frame until it does. A slot
-		// machine's background stands for the whole machine; its reels are
-		// still the sticker's own and are not drawn here.
+		// machine is its background with the three reels and the lever laid
+		// over it in one frame, back to front as official stacks them
+		// (SlotMachineAnimationNode).
 		NSDictionary *state = [content[@"final_state"] isKindOfClass:NSDictionary.class]
 				? content[@"final_state"] : content[@"initial_state"];
 		NSDictionary *diceState = [state isKindOfClass:NSDictionary.class] ? state : nil;
@@ -754,8 +892,19 @@ NSDictionary *TGFlattenMessage(NSDictionary *m) {
 		NSDictionary *diceSticker = nil;
 		if ([diceKind isEqualToString:@"diceStickersRegular"])
 			diceSticker = diceState[@"sticker"];
-		else if ([diceKind isEqualToString:@"diceStickersSlotMachine"])
+		else if ([diceKind isEqualToString:@"diceStickersSlotMachine"]) {
 			diceSticker = diceState[@"background"];
+			NSMutableArray *layers = [NSMutableArray array];
+			for (NSString *key in @[@"left_reel", @"center_reel", @"right_reel", @"lever"]) {
+				NSDictionary *layer = [diceState[key] isKindOfClass:NSDictionary.class] ? diceState[key] : nil;
+				id file = layer[@"sticker"][@"id"];
+				if ([layer[@"format"][@"@type"] isEqualToString:@"stickerFormatTgs"] &&
+						[file respondsToSelector:@selector(longLongValue)] && [file longLongValue] > 0)
+					[layers addObject:@([file longLongValue])];
+			}
+			if (layers.count == 4)
+				slotLayers = layers;
+		}
 		if (![diceSticker isKindOfClass:NSDictionary.class])
 			diceSticker = nil;
 
@@ -1029,6 +1178,13 @@ NSDictionary *TGFlattenMessage(NSDictionary *m) {
 	NSString *lpDesc = [lp[@"description"] isKindOfClass:NSDictionary.class]
 			? (lp[@"description"][@"text"] ?: @"") : (lp[@"description"] ?: @"");
 	NSString *lpUrl = lp[@"url"] ?: @"";
+	NSDictionary *lpButton = TGLinkPreviewAction(lp);
+	if (lpButton[@"title"])
+		lpTitle = lpButton[@"title"];
+	if ([lpButton[@"dropsText"] boolValue]) {
+		lpSite = @"";
+		lpDesc = @"";
+	}
 
 	NSString *authorSignature = @"";
 	id rawSig = m[@"author_signature"];
@@ -1084,6 +1240,7 @@ NSDictionary *TGFlattenMessage(NSDictionary *m) {
 		@"linkPreviewTitle" : lpTitle ?: @"",
 		@"linkPreviewDesc"  : lpDesc ?: @"",
 		@"linkPreviewUrl"   : lpUrl ?: @"",
+		@"linkPreviewAction": lpButton[@"action"] ?: @"",
 		@"senderTag"        : m[@"sender_tag"] ?: @"",
 		// The inline bot that made it: "Name via @gif" in the sender line.
 		// TDLib sends the bot's updateUser before the message, so its
@@ -1094,6 +1251,8 @@ NSDictionary *TGFlattenMessage(NSDictionary *m) {
 		@"docWidth"  : @(docWidth),
 		@"docHeight" : @(docHeight),
 		@"docId"     : docFileId   ?: [NSNull null],
+		@"slotLayers": slotLayers  ?: @[],
+		@"stickerEffectId": stickerEffectId ?: @0,
 		@"videoFallbackId" : videoFallbackId ?: [NSNull null],
 		@"docThumbFileId" : docThumbFileId ?: @(0),
 		@"docName"   : docName     ?: @"",

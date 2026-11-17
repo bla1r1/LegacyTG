@@ -65,6 +65,7 @@
 	self.profileAccentColorIds = @[];
 	self.accentColors = @[];
 	self.profileAccentColors = @[];
+	self.savedTagLabels = @{};
 	self.archiveSettings = nil;
 	self.me = nil;
 }

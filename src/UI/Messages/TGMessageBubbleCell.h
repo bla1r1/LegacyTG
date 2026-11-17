@@ -15,6 +15,12 @@
 
 @class TGTheme;
 
+/// Tags of the four views a slot machine lays over its background
+/// (reels, then the lever); a reused cell hides them.
+static const NSInteger TGBubbleSlotLayerTag = 0x9320;
+/// A premium sticker's effect laid over the row while it plays.
+static const NSInteger TGBubbleStickerEffectTag = 0x9330;
+
 @interface TGBubbleCell : UITableViewCell
 
 /// Applies the part of a row that every bubble shares: clears the previous
@@ -54,6 +60,7 @@
 @property (nonatomic, strong) UILabel *linkPreviewSite;
 @property (nonatomic, strong) UILabel *linkPreviewTitle;
 @property (nonatomic, strong) UILabel *linkPreviewDesc;
+@property (nonatomic, strong) UILabel *linkPreviewAction;
 @property (nonatomic, strong) UIButton *linkPreviewButton;
 @property (nonatomic, copy)   NSString *linkPreviewUrl;
 @property (nonatomic, strong) UIImageView *ticks;

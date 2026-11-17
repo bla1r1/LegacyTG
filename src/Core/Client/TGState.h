@@ -35,6 +35,7 @@
 @property (nonatomic, strong) NSArray *profileAccentColorIds;
 @property (nonatomic, strong) NSArray *accentColors;
 @property (nonatomic, strong) NSArray *profileAccentColors;
+@property (nonatomic, strong) NSDictionary *savedTagLabels;
 @property (nonatomic, strong) NSMutableDictionary *userSubscriptionsById;
 @property (nonatomic, strong) NSMutableDictionary *noteSendWaiters;
 @property (nonatomic, strong) NSMutableDictionary *communitiesById;

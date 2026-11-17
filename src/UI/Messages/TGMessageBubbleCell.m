@@ -208,6 +208,13 @@ static const NSUInteger kMaxCustomEmojiViews = 3;
 	self.linkPreviewDesc.hidden = YES;
 	[self.bubble addSubview:self.linkPreviewDesc];
 
+	self.linkPreviewAction = [[UILabel alloc] init];
+	self.linkPreviewAction.font = TGFontMetaStrong();
+	self.linkPreviewAction.textAlignment = NSTextAlignmentCenter;
+	self.linkPreviewAction.backgroundColor = [UIColor clearColor];
+	self.linkPreviewAction.hidden = YES;
+	[self.bubble addSubview:self.linkPreviewAction];
+
 	self.linkPreviewButton = [UIButton buttonWithType:UIButtonTypeCustom];
 	self.linkPreviewButton.hidden = YES;
 	[self.linkPreviewButton addTarget:self action:@selector(linkPreviewTapped) forControlEvents:UIControlEventTouchUpInside];
@@ -688,6 +695,9 @@ static const NSUInteger kMaxCustomEmojiViews = 3;
 
 - (void)resetForReuse {
 	[self unparkViews];
+	for (NSInteger i = 0; i < 4; i++)
+		[self.bubble viewWithTag:TGBubbleSlotLayerTag + i].hidden = YES;
+	[[self.contentView viewWithTag:TGBubbleStickerEffectTag] removeFromSuperview];
 	self.cardView.hidden = YES;
 	self.veilView.hidden = YES;
 	[self stopLoopingVideo];
@@ -785,6 +795,8 @@ static const NSUInteger kMaxCustomEmojiViews = 3;
 	self.linkPreviewTitle.text = nil;
 	self.linkPreviewDesc.hidden = YES;
 	self.linkPreviewDesc.text = nil;
+	self.linkPreviewAction.hidden = YES;
+	self.linkPreviewAction.text = nil;
 	self.linkPreviewButton.hidden = YES;
 	self.linkPreviewUrl = nil;
 	self.forwardLabel.hidden = YES;

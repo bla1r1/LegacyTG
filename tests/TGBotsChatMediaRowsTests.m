@@ -63,6 +63,8 @@ static NSArray *BotsChatMediaTitles(NSArray *rows) {
 	}), (@[@"Date", @"Owner", @"Telegram", @"Model", @"Symbol", @"Backdrop", @"Availability"]));
 	XCTAssertEqualObjects(TGGiftAttributeDetail(@"Pepe", @"1.2%"), @"Pepe \u00B7 1.2%");
 	XCTAssertEqualObjects(TGGiftAttributeDetail(@"Pepe", @""), @"Pepe");
+	XCTAssertEqualObjects(TGGiftReleasedByText(@"cats"), @"released by @cats");
+	XCTAssertNil(TGGiftReleasedByText(@""));
 	// Grouped in the user's locale, as official's groupingSeparator is.
 	NSNumberFormatter *grouping = [[NSNumberFormatter alloc] init];
 	grouping.numberStyle = NSNumberFormatterDecimalStyle;

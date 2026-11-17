@@ -86,6 +86,8 @@ UIImage *TGImageFromMinithumbnail(id mini);
 @property (nonatomic, assign) BOOL silentPosting;
 @property (nonatomic, assign) BOOL canBeAnonymous;
 @property (nonatomic, strong) NSMutableDictionary *lottiePaths;   // fileId -> path
+/// Messages whose premium sticker effect already played in this visit.
+@property (nonatomic, strong) NSMutableSet *playedStickerEffects;
 /// Animation files that have run their one loop since this chat was opened.
 @property (nonatomic, strong) NSMutableSet *playedAnimations;
 @property (nonatomic, strong) TGImageLruCache *maps;             // messageId -> UIImage (cap 20)

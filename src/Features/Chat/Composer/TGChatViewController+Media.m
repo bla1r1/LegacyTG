@@ -217,7 +217,17 @@
 	// Animated stickers (.tgs or .webm) need the animation file, not just the still thumbnail.
 	// Only fetch when the device and user settings allow animated stickers.
 	if ([TGCapabilities canPlayAnimatedStickers]){
+		// A slot machine's reels and lever are animations of their own.
+		NSMutableArray *animated = [NSMutableArray array];
 		for (NSDictionary *m in allMsgs){
+			[animated addObject:m];
+			for (NSNumber *layer in m[@"slotLayers"])
+				if ([layer isKindOfClass:NSNumber.class])
+					[animated addObject:@{@"docName" : @"tgs", @"docId" : layer}];
+			if ([TGCapabilities canPlayStickerEffects] && [m[@"stickerEffectId"] longLongValue] > 0)
+				[animated addObject:@{@"docName" : @"tgs", @"docId" : m[@"stickerEffectId"]}];
+		}
+		for (NSDictionary *m in animated){
 			if (![m[@"docName"] isEqualToString:@"tgs"] && ![m[@"docName"] isEqualToString:@"webm"])
 				continue;
 			NSNumber *docId = m[@"docId"];
@@ -237,7 +247,8 @@
 				}
 				me.lottiePaths[docId] = path;
 				for (NSDictionary *msg in me.messages) {
-					if ([msg[@"docId"] isEqual:docId]) {
+					if ([msg[@"docId"] isEqual:docId] || [msg[@"slotLayers"] containsObject:docId] ||
+							[msg[@"stickerEffectId"] isEqual:docId]) {
 						NSNumber *msgId = msg[@"id"];
 						if (msgId) [me.layoutCache removeObjectForKey:msgId];
 					}
