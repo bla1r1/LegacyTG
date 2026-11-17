@@ -75,4 +75,13 @@
 	XCTAssertEqualObjects(TGContactSectionTitle(nil), @"#");
 }
 
+- (void)testListEntryKeepsItsSwatch {
+	UIColor *red = [UIColor redColor];
+	NSDictionary *row = TGRowFromListEntry(@{@"title" : @"Ann changed to \u25CF",
+			TGRowTitleSwatchLocation : @14, TGRowTitleSwatchColour : red});
+	XCTAssertEqualObjects(row[TGRowTitleSwatchLocation], @14);
+	XCTAssertEqualObjects(row[TGRowTitleSwatchColour], red);
+	XCTAssertNil(TGRowFromListEntry(@{@"title" : @"plain"})[TGRowTitleSwatchColour]);
+}
+
 @end

@@ -56,6 +56,26 @@ static NSArray *BotsChatMediaTitles(NSArray *rows) {
 	}), (@[@"Date", @"Model", @"Symbol", @"Backdrop", @"Value"]));
 }
 
+- (void)testGift_CollectibleUniqueTableRows {
+	XCTAssertEqualObjects(TGGiftDetailRowTitles(@{
+		@"isCollectible" : @YES, @"ownerUserId" : @7, @"hostChatId" : @(-5),
+		@"issuedTotal" : @100,
+	}), (@[@"Date", @"Owner", @"Telegram", @"Model", @"Symbol", @"Backdrop", @"Availability"]));
+	XCTAssertEqualObjects(TGGiftAttributeDetail(@"Pepe", @"1.2%"), @"Pepe \u00B7 1.2%");
+	XCTAssertEqualObjects(TGGiftAttributeDetail(@"Pepe", @""), @"Pepe");
+	// Grouped in the user's locale, as official's groupingSeparator is.
+	NSNumberFormatter *grouping = [[NSNumberFormatter alloc] init];
+	grouping.numberStyle = NSNumberFormatterDecimalStyle;
+	NSString *expected = [NSString stringWithFormat:@"%@/%@ issued",
+			[grouping stringFromNumber:@1500], [grouping stringFromNumber:@20000]];
+	XCTAssertEqualObjects(TGGiftIssuedText(1500, 20000), expected);
+	XCTAssertTrue([TGGiftIssuedText(1500, 20000) hasSuffix:@" issued"]);
+	XCTAssertEqualObjects(TGGiftOriginalText(nil, @"Ann", @"Nov 1, 2026", nil),
+			@"Gifted to Ann on Nov 1, 2026.");
+	XCTAssertEqualObjects(TGGiftOriginalText(@"Bob", @"Ann", @"Nov 1, 2026", @"hi"),
+			@"Gifted by Bob to Ann on Nov 1, 2026 with comment \"hi\".");
+}
+
 #pragma mark - scheduled messages
 
 - (void)testScheduled_UsesTheMessageTextAndFallsBackToMessage {

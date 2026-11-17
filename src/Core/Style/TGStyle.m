@@ -124,6 +124,23 @@ UIColor *TGColourAccentName(NSInteger accentId, NSArray *accentColors, BOOL dark
 	return nil;
 }
 
+UIColor *TGColourProfileAccent(NSInteger accentId, NSArray *profileAccentColors, BOOL dark) {
+	if (accentId < 0)
+		return nil;
+	for (NSDictionary *colour in profileAccentColors){
+		if (![colour isKindOfClass:NSDictionary.class] ||
+				[colour[@"id"] integerValue] != accentId)
+			continue;
+		NSDictionary *set = colour[dark ? @"dark_theme_colors" : @"light_theme_colors"];
+		NSArray *palette = [set isKindOfClass:NSDictionary.class] ? set[@"palette_colors"] : nil;
+		if (![palette isKindOfClass:NSArray.class] || !palette.count)
+			return nil;
+		uint32_t c = (uint32_t)[palette[0] unsignedIntValue];
+		return TGTILE(((c >> 16) & 0xFF) / 255.0f, ((c >> 8) & 0xFF) / 255.0f, (c & 0xFF) / 255.0f);
+	}
+	return nil;
+}
+
 UIFont *TGFontAtSize(CGFloat size)       { return [UIFont systemFontOfSize:size]; }
 UIFont *TGFontBoldAtSize(CGFloat size)   { return [UIFont boldSystemFontOfSize:size]; }
 UIFont *TGFontItalicAtSize(CGFloat size) { return [UIFont italicSystemFontOfSize:size]; }

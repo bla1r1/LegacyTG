@@ -11,6 +11,9 @@ extern "C" {
 /// {"title": the sentence with the actor in it, "detail": what changed -
 /// the new description, the previous link, the edited text, the permissions
 /// turned on and off - or ""}. `name` turns a user id into a name.
+/// A colour change adds "swatch": {location of the dot in the title,
+/// colorId, profile} for the list to paint; action[@"iconEmoji"] is the new
+/// icon's emoji when the caller looked it up.
 NSDictionary *TGChatEventLine(NSDictionary *action, NSString *actor, BOOL isChannel,
 		NSString *(^name)(int64_t userId));
 

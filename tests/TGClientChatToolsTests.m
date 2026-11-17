@@ -504,11 +504,15 @@ static NSDictionary *ctPlain(NSDictionary *d) {
 		XCTAssertEqualObjects(kind, @"chatStatisticsChannel");
 	}];
 	ctAnswer(c, ctPlain(@{@"@type" : @"chatStatisticsChannel",
-						  @"member_count" : @{@"value" : @(1200),
+						  @"member_count" : @{@"value" : @(1200), @"previous_value" : @(1000),
 											  @"growth_rate_percentage" : @(2.5)},
 						  @"mean_message_view_count" : @{@"value" : @(80)}}));
-	XCTAssertEqual(rows.count, (NSUInteger)5);
-	XCTAssertEqualObjects(rows[0][@"detail"], @"1200 (+2.5%)");
+	// Members, three per-post and three per-story means, notifications:
+	// official's channel overview (ChannelStatsController). The change is
+	// against the previous period, as StatsOverviewItem writes it.
+	XCTAssertEqual(rows.count, (NSUInteger)8);
+	XCTAssertEqualObjects(rows[0][@"detail"], @"1200 +200 (20.00%)");
+	XCTAssertEqualObjects(rows[1][@"title"], @"Views Per Post");
 }
 
 - (void)testEventLog_AsksEveryFilterAndReadsTheAction {

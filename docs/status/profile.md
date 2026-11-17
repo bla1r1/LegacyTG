@@ -119,8 +119,28 @@ rows are layout, not missing data.
 | Tab bar stays stable while loading | missing | — | Each completion appends a tab and reloads the table. |
 - The Username row writes the other active usernames under it ("also @a, @b"); a bot that works in groups offers "Add to Group or Channel" (chat picker, addChatMember), and a verified bot shows its verifier's line instead.
 
-## Data we had and did not show, batch 4 (15 November 2026)
+## Data we had and did not show
 
 - A business profile has the business hours row (PeerInfoScreenBusinessHoursItem): "Open · 09:00 – 18:00" or "Closed · Opens in 2 hours" from local_opening_hours, next_open_in and next_close_in; a tap lists the week (official unfolds it under the row). Not checked on a device: the bench account has no business contact.
 - Privacy > Profile Photo, once someone is kept from the real picture, offers Set / Update / Remove Public Photo with official's footer (userFullInfo.public_photo, setProfilePhoto is_public).
 - Not drawn: collectible usernames open Fragment's item sheet in official, which is not built; secondary_username has no place in official iOS.
+
+## Data we had and did not show (17 November 2026)
+
+- The status line of someone without a last seen follows official's PeerInfoData order: "support" for Telegram's support accounts (user.is_support), "1 200 users" for a bot with monthly users (userTypeBot.active_user_count), else "bot".
+- Someone on an unofficial client gets official's first info row, in secondary text: "Ann uses an unofficial Telegram client – messages to this user may be less secure." (userFullInfo.uses_unofficial_app).
+- Add to Contacts on a profile that hides its number from you adds a "Share My Phone Number" switch, on by default, with "You can make your phone visible to Ann." under it; the switch goes to addContact as share_phone_number (need_phone_number_privacy_exception).
+- Waiting for screens this client has not built: private calls (official pushes the group-call invite screen) and "hidden by your settings" (official's "when?" badge opens the Premium last-seen sheet).
+- Compile-checked for armv7 and arm64 on Linux; host tests not run, not checked on a device.
+
+## Data we had and did not show (17 November 2026)
+
+- A bot with an open affiliate program shows official's "Affiliate Program" row with its commission at the trailing edge ("12.5%") and the footer "Share a link to Shop with your friends and and earn 12.5% of their spending there." (the pack's wording, double "and" included); the row opens the affiliate programs screen (botInfo.affiliate_program, end_date 0).
+- The bot owner's rows (Edit Intro, Edit Commands, Change Bot Settings, Verify Accounts, Balance) and the bot preview pane wait for screens this client has not built; their ten fields are `todo later` with the official file.
+- Compile-checked for armv7 and arm64 on Linux; host tests not run, not checked on a device.
+
+## Data we had and did not show (17 November 2026)
+
+- A user or bot verified by a third-party verifier shows the verifier's custom emoji mark before the name in the profile header, mirroring the Telegram mark after it (verificationStatus.bot_verification_icon_custom_emoji_id; official PeerInfoHeaderNode verifiedIcon).
+- The stories pane flags and the permanent link flag are skipped: official decides the pane from the loaded list, and this client always asks for the permanent link.
+- Compile-checked for armv7 and arm64 on Linux; host tests not run, not checked on a device.

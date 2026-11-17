@@ -208,4 +208,18 @@
 	XCTAssertEqualObjects(items[0][@"senderId"], @1001);
 }
 
+// Parity: the status line of someone without a last seen, in official's
+// order (PeerInfoData.swift: .support, .bot(subscriberCount:)).
+- (void)testFixedStatus_SupportBotAndUsers {
+	XCTAssertEqualObjects(TGProfileFixedStatus(@{ @"is_support" : @YES,
+			@"type" : @{ @"@type" : @"userTypeRegular" } }), @"support");
+	XCTAssertEqualObjects(TGProfileFixedStatus(@{ @"type" : @{ @"@type" : @"userTypeBot",
+			@"active_user_count" : @0 } }), @"bot");
+	XCTAssertEqualObjects(TGProfileFixedStatus(@{ @"type" : @{ @"@type" : @"userTypeBot",
+			@"active_user_count" : @1200 } }), @"1200 users");
+	XCTAssertEqualObjects(TGProfileFixedStatus(@{ @"type" : @{ @"@type" : @"userTypeBot",
+			@"active_user_count" : @1 } }), @"1 user");
+	XCTAssertNil(TGProfileFixedStatus(@{ @"type" : @{ @"@type" : @"userTypeRegular" } }));
+}
+
 @end

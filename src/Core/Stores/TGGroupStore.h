@@ -24,6 +24,10 @@ FOUNDATION_EXPORT NSString *TGGroupMemberStatusName(NSDictionary *status);
 + (instancetype)shared;
 
 - (void)forumTopicsForChat:(int64_t)chatId completion:(void (^)(NSArray *))completion;
+
+/// The offsets of the page after `result` (a TDLib forumTopics), or nil when
+/// it was the last: a page shorter than `pageSize` or zero next offsets.
+FOUNDATION_EXPORT NSDictionary *TGForumTopicsNextOffset(NSDictionary *result, NSInteger pageSize);
 - (void)toggleGeneralForumTopicHidden:(BOOL)hidden
                                inChat:(int64_t)chatId
                            completion:(void (^)(BOOL, NSString *))completion;

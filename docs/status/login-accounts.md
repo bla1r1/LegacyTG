@@ -43,6 +43,6 @@ per-account logout). Passkeys and OAuth stay in the `TG_DEV` console.
 | Proxy at sign-in | done | `Features/Settings/TGSettingsViewController+NetworkPages.m:722` | Proxy can be added and enabled; TDLib uses it for auth too. |
 | Auth errors as sentences | partial | `Core/Client/TGClient.m` | Core passes `result[@"message"]` up, so alerts contain TDLib's own text. |
 
-## Data we had and did not show, batch 4 (15 November 2026)
+## Data we had and did not show (15 November 2026)
 
 - The email code step reads email_address_reset_state (the old can_reset_email_address key no longer exists, so the link never showed): an available reset offers "Can't access this email?" and, without Premium, official's Reset Email alert with the wait; a pending one says "Email will be reset in 6 days" and offers "Reset now via SMS". Not checked on a device: it needs a sign-in with a login email.

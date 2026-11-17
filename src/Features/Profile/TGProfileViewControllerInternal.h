@@ -149,12 +149,24 @@ static const CGFloat   kStoryGridGap   = TGMetricCollageGap;
 @property (nonatomic, strong) NSMutableSet *similarChannelsRequested;
 @property (nonatomic, strong) UIImage *similarChannelsCompositeImage;
 @property (nonatomic, assign) BOOL isBot;
+/// The status line is "support", "bot" or "N users", never a last seen.
+@property (nonatomic, assign) BOOL fixedStatus;
+/// userFullInfo.uses_unofficial_app: the card opens with official's warning.
+@property (nonatomic, assign) BOOL usesUnofficialApp;
+/// userFullInfo.need_phone_number_privacy_exception: Add to Contacts offers
+/// to share this account's number.
+@property (nonatomic, assign) BOOL offersPhoneShare;
+/// botInfo.affiliate_program: the commission a bot's open program pays.
+@property (nonatomic, assign) NSInteger affiliatePermille;
 /// userTypeBot can_join_groups: official offers "Add to Group or Channel".
 @property (nonatomic, assign) BOOL botCanJoinGroups;
 @property (nonatomic, copy) NSString *botVerification;
 @property (nonatomic, assign) BOOL birthdayToday;
 @property (nonatomic, assign) int64_t emojiStatusId;
 @property (nonatomic, strong) UIImage *emojiStatusImage;
+/// verificationStatus.bot_verification_icon_custom_emoji_id, decoded.
+@property (nonatomic, strong) UIImage *botVerificationImage;
+@property (nonatomic, assign) int64_t botVerificationIconId;
 @property (nonatomic, assign) CGFloat mediaTabsOffset;
 @property (nonatomic, strong) UIImage *avatarImage;
 @property (nonatomic, strong) NSNumber *avatarFileId;
@@ -268,6 +280,8 @@ static const CGFloat   kStoryGridGap   = TGMetricCollageGap;
 - (void)loadMoreMediaForCurrentTab;
 - (NSString *)linkDomainForMessage:(NSDictionary *)message;
 - (void)fetchEmojiStatusImage:(int64_t)emojiId;
+- (void)fetchBotVerificationImage:(int64_t)emojiId;
+- (void)fetchCustomEmojiImage:(int64_t)emojiId done:(void (^)(UIImage *image))done;
 - (NSArray *)basicDetailsRows;
 - (NSArray *)fullDetailsRowsWithBio:(NSString *)bio birthday:(NSString *)birthday;
 - (void)fetchPersonalChannel:(int64_t)chatId;

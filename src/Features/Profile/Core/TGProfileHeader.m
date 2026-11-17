@@ -96,6 +96,8 @@
 	} mutableCopy];
 	if (self.avatarImage)
 		model[TGProfileHeaderAvatar] = self.avatarImage;
+	if (self.botVerificationImage)
+		model[TGProfileHeaderBotVerification] = self.botVerificationImage;
 	if (music)
 		model[TGProfileHeaderMusic] = music;
 
@@ -125,7 +127,7 @@
 									completion:^(TGPeer *peer){
 			if (!peer.lastSeenText.length)
 				return;
-			if (!weakSelf.isBot)
+			if (!weakSelf.isBot && !weakSelf.fixedStatus)
 				weakSelf.restingStatus = peer.lastSeenText;
 			[weakSelf statusLabelOwnerChanged:nil];
 		}];

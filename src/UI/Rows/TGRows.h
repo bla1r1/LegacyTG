@@ -53,6 +53,10 @@ extern NSString *const TGRowAccessory;   // one of TGRowAccessory* below, or tra
 extern NSString *const TGRowBadgeVariant; // NSNumber TGBadgeVariant
 extern NSString *const TGRowBadgeInline;  // NSNumber BOOL, badge after the name
 extern NSString *const TGRowTitleColour;  // UIColor for the name
+// One character of the title painted in its own colour: a swatch dot in a
+// Recent Actions line (official draws the new name colour inline).
+extern NSString *const TGRowTitleSwatchLocation; // NSNumber, index in the title
+extern NSString *const TGRowTitleSwatchColour;   // UIColor
 extern NSString *const TGRowHeight;       // NSNumber, row height from TGStyle
 
 extern NSString *const TGRowAccessoryCheck;

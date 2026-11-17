@@ -736,7 +736,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 	__block BOOL ok = NO;
 	[[TGSendStore shared] setSchedulingState:nil forMessage:140 inChat:-70 completion:^(BOOL good){ ok = good; }];
 	NSDictionary *r = lastG(c, @"editMessageSchedulingState");
-	XCTAssertTrue(r[@"scheduling_state"] == (id)kCFNull,
+	XCTAssertTrue(r[@"scheduling_state"] == [NSNull null],
 				  @"absent is the JSON null TDLib reads as send at once");
 	XCTAssertEqual([r[@"message_id"] longLongValue], 140LL);
 	answerG(c, @{@"@type" : @"ok"});
@@ -748,7 +748,7 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 						  @"messageSchedulingStateSendWhenOnline");
 }
 
-#pragma mark - the batch, the one member, and the permissions preset
+#pragma mark - the members, and the permissions preset
 
 - (void)testAddMembers_TheBatchIsOneRequestAndAnEmptyPickSendsNone {
 	TGClient *c = G();
@@ -808,7 +808,8 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 	NSDictionary *all = [TGGroupStore chatPermissionsForPreset:@"all"];
 	NSArray *adminLike = @[@"can_change_info", @"can_pin_messages",
 						   @"can_create_topics", @"can_edit_tag"];
-	[all enumerateKeysAndObjectsUsingBlock:^(NSString *key, id value, BOOL *stop){
+	[all enumerateKeysAndObjectsUsingBlock:^(id rawKey, id value, BOOL *stop){
+		NSString *key = rawKey;
 		if ([key isEqualToString:@"@type"])
 			return;
 		if ([adminLike containsObject:key])
@@ -830,7 +831,8 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 	XCTAssertTrue([text[@"can_invite_users"] boolValue]);
 
 	NSDictionary *read = [TGGroupStore chatPermissionsForPreset:@"read"];
-	[read enumerateKeysAndObjectsUsingBlock:^(NSString *key, id value, BOOL *stop){
+	[read enumerateKeysAndObjectsUsingBlock:^(id rawKey, id value, BOOL *stop){
+		NSString *key = rawKey;
 		if (![key isEqualToString:@"@type"])
 			XCTAssertFalse([value boolValue], @"%@ open in the read preset", key);
 	}];
@@ -1531,6 +1533,21 @@ static NSDictionary *memberWithTag(int64_t userId, NSString *status, NSString *t
 	if (tag)
 		member[@"tag"] = tag;
 	return member;
+}
+
+/// Parity: a bot member says whether it reads the group's messages, as the
+/// official members pane does (PeerInfoMembersPane.swift).
+- (void)testMemberRow_BotAccessFromTheUserRecord {
+	TGClient *c = [TGClient shared];
+	if (!c.rawUsersById)
+		c.rawUsersById = [[TGObjectLruCache alloc] initWithCapacity:64];
+	c.rawUsersById[@(901)] = @{@"@type" : @"user", @"id" : @(901),
+			@"type" : @{@"@type" : @"userTypeBot", @"can_read_all_group_messages" : @YES}};
+	c.rawUsersById[@(902)] = @{@"@type" : @"user", @"id" : @(902),
+			@"type" : @{@"@type" : @"userTypeBot", @"can_read_all_group_messages" : @NO}};
+	XCTAssertEqualObjects(TGMemberRowForMember(memberOf(901, @"chatMemberStatusMember"), @"Bot")[@"botAccess"], @"reads");
+	XCTAssertEqualObjects(TGMemberRowForMember(memberOf(902, @"chatMemberStatusMember"), @"Bot")[@"botAccess"], @"noReads");
+	XCTAssertEqualObjects(TGMemberRowForMember(memberOf(903, @"chatMemberStatusMember"), @"Ann")[@"botAccess"], @"");
 }
 
 /// The role word is what both member lists draw a badge from, and an

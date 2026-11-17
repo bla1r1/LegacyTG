@@ -7,6 +7,7 @@
 // three strings a row can show before the screen ever sees them.
 //
 #import "TGClientInternal.h"
+#import "TGChatStatistics.h"
 #include <math.h>
 
 #pragma mark - flatteners
@@ -37,17 +38,6 @@ NSArray *TGChatRowsForIds(TGClient *client, NSArray *ids) {
 
 /// The words a statistic row can carry. TDLib sends doubles; the growth is
 /// shown only when it is worth saying, because "+0.0%" on every line is noise.
-static NSString *TGStatValue(NSDictionary *value, NSString *suffix) {
-	if (![value isKindOfClass:NSDictionary.class])
-		return @"-";
-	double now = [value[@"value"] doubleValue];
-	double growth = [value[@"growth_rate_percentage"] doubleValue];
-	NSString *base = [NSString stringWithFormat:@"%ld%@", (long)llround(now),
-					  suffix ?: @""];
-	if (fabs(growth) < 0.05)
-		return base;
-	return [NSString stringWithFormat:@"%@ (%+.1f%%)", base, growth];
-}
 
 static NSDictionary *TGFilterFromName(NSString *name) {
 	NSString *type = @"searchMessagesFilterEmpty";
@@ -222,35 +212,43 @@ static NSDictionary *TGFilterFromName(NSString *name) {
 				completion(@[], @"");
 			return;
 		}
-		[rows addObject:@{@"title" : @"Members",
-						  @"detail" : TGStatValue(result[@"member_count"], @"")}];
-		if ([kind isEqualToString:@"chatStatisticsSupergroup"]){
-			[rows addObject:@{@"title" : @"Messages",
-							  @"detail" : TGStatValue(result[@"message_count"], @"")}];
-			[rows addObject:@{@"title" : @"Viewers",
-							  @"detail" : TGStatValue(result[@"viewer_count"], @"")}];
-			[rows addObject:@{@"title" : @"Senders",
-							  @"detail" : TGStatValue(result[@"sender_count"], @"")}];
-			for (NSDictionary *sender in result[@"top_senders"]){
-				NSNumber *userId = sender[@"user_id"] ?: @(0);
-				[rows addObject:@{
-					@"title" : [NSString stringWithFormat:@"Top sender: %@",
-							[self nameForUserId:userId.longLongValue] ?: @"?"],
-					@"detail" : [NSString stringWithFormat:@"%@ messages",
-							sender[@"sent_message_count"] ?: @(0)],
-				}];
-			}
-		} else if ([kind isEqualToString:@"chatStatisticsChannel"]){
-			[rows addObject:@{@"title" : @"Mean views",
-							  @"detail" : TGStatValue(result[@"mean_message_view_count"], @"")}];
-			[rows addObject:@{@"title" : @"Mean shares",
-							  @"detail" : TGStatValue(result[@"mean_message_share_count"], @"")}];
-			[rows addObject:@{@"title" : @"Mean reactions",
-							  @"detail" : TGStatValue(result[@"mean_message_reaction_count"], @"")}];
-			[rows addObject:@{@"title" : @"Notifications on",
-							  @"detail" : [NSString stringWithFormat:@"%.0f%%",
-									[result[@"enabled_notifications_percentage"] doubleValue]]}];
+		// The overview and the lists come from the model; a recent post is
+		// named by its text, fetched in one getMessages first.
+		NSArray *postIds = TGChatStatisticsPostIds(result);
+		__weak typeof(self) weakSelf = self;
+		void (^finish)(NSDictionary *) = ^(NSDictionary *texts){
+			TGClient *me = weakSelf;
+			[rows addObjectsFromArray:TGChatStatisticsRows(result, ^NSString *(int64_t userId){
+				return [me nameForUserId:userId];
+			}, ^NSString *(int64_t messageId){
+				return texts[@(messageId)];
+			})];
+			[me appendStatisticsGraphs:result kind:kind to:rows];
+			if (completion)
+				completion(rows, kind);
+		};
+		if (!postIds.count) {
+			finish(@{});
+			return;
 		}
+		[self request:@{@"@type" : @"getMessages", @"chat_id" : @(chatId), @"message_ids" : postIds}
+		   completion:^(NSDictionary *answer){
+			NSMutableDictionary *texts = [NSMutableDictionary dictionary];
+			for (NSDictionary *message in [answer[@"messages"] isKindOfClass:NSArray.class] ? answer[@"messages"] : @[]) {
+				if (![message isKindOfClass:NSDictionary.class] || !message[@"id"])
+					continue;
+				NSDictionary *content = message[@"content"];
+				NSString *text = content[@"text"][@"text"] ?: content[@"caption"][@"text"];
+				if ([text isKindOfClass:NSString.class] && text.length)
+					texts[message[@"id"]] = [[text componentsSeparatedByString:@"\n"] firstObject];
+			}
+			finish(texts);
+		}];
+	}];
+}
+
+- (void)appendStatisticsGraphs:(NSDictionary *)result kind:(NSString *)kind to:(NSMutableArray *)rows {
+	{
 		// The graphs follow in official's order (ChannelStatsController,
 		// GroupStatsController), each under its section title; a row
 		// carrying "graph" is drawn, not listed.
@@ -273,9 +271,7 @@ static NSDictionary *TGFilterFromName(NSString *name) {
 			if ([graph isKindOfClass:NSDictionary.class])
 				[rows addObject:@{@"title" : pair[1], @"graph" : graph}];
 		}
-		if (completion)
-			completion(rows, kind);
-	}];
+	}
 }
 
 - (void)reportChatPhotoInChat:(int64_t)chatId

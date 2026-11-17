@@ -2,6 +2,7 @@
 // TGProfileStore.m - explicit Profile boundary.
 //
 #import "TGProfileStore.h"
+#import "TGStoryAreas.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
 #import "TGGiftFlatten.h"
@@ -773,12 +774,13 @@ __weak typeof(self) weakSelf = self;
 - (void)storiesForChat:(int64_t)chatId completion:(void (^)(NSArray *stories))completion {
 __weak typeof(self) weakSelf = self;
 
+	__block NSArray *pinnedIds = nil;
 	void (^flattenAll)(NSArray *) = ^(NSArray *stories){
 		NSMutableArray *out = [NSMutableArray array];
 		for (NSDictionary *story in stories)
 			if ([story isKindOfClass:NSDictionary.class])
 				[out addObject:TGFlattenStory(story)];
-		if (completion) completion(out);
+		if (completion) completion(TGStoriesPinnedFirst(out, pinnedIds));
 	};
 
 	[[TGClient shared] request:@{
@@ -789,6 +791,8 @@ __weak typeof(self) weakSelf = self;
 	} completion:^(NSDictionary *posted){
 		NSArray *stories = posted[@"stories"];
 		if ([stories count]){
+			pinnedIds = [posted[@"pinned_story_ids"] isKindOfClass:NSArray.class]
+					? posted[@"pinned_story_ids"] : nil;
 			flattenAll(stories);
 			return;
 		}
@@ -978,6 +982,14 @@ NSDictionary *raw = [TGClient shared].rawUsersById[@(userId)];
 					? (full[@"bot_verification"][@"custom_description"][@"text"] ?: @"") : @"",
 			@"botDescription"   : full[@"bot_info"][@"short_description"] ?: (full[@"bot_info"][@"description"] ?: @""),
 			@"voiceRestricted"  : full[@"has_restricted_voice_and_video_note_messages"] ?: @NO,
+			@"unofficialApp"    : full[@"uses_unofficial_app"] ?: @NO,
+			@"sharePhoneOffer"  : full[@"need_phone_number_privacy_exception"] ?: @NO,
+			// A bot's running affiliate program, as the commission it pays;
+			// zero when it has none or it is closing (official starRefProgram
+			// with no endDate).
+			@"affiliatePermille": @(([full[@"bot_info"][@"affiliate_program"] isKindOfClass:NSDictionary.class] &&
+					[full[@"bot_info"][@"affiliate_program"][@"end_date"] longLongValue] == 0)
+					? [full[@"bot_info"][@"affiliate_program"][@"parameters"][@"commission_per_mille"] integerValue] : 0),
 		});
 	}];
 }

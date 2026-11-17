@@ -55,6 +55,9 @@
 		@"botCanJoinGroups": @(self.botCanJoinGroups),
 		@"botVerification" : self.botVerification ?: @"",
 		@"blocked"         : @(self.blocked),
+		@"unofficialApp"   : @(self.usesUnofficialApp),
+		@"affiliatePermille": @(self.affiliatePermille),
+		@"name"            : self.name ?: @"",
 	});
 }
 
@@ -62,6 +65,25 @@
 /// card that opens it like any chat the list holds.
 - (void)fetchEmojiStatusImage:(int64_t)emojiId {
 	__weak typeof(self) weakSelf = self;
+	[self fetchCustomEmojiImage:emojiId done:^(UIImage *image){
+		weakSelf.emojiStatusImage = image;
+		[weakSelf buildHeader];
+	}];
+}
+
+/// The verifier bot's mark, the same custom emoji route as the status.
+- (void)fetchBotVerificationImage:(int64_t)emojiId {
+	if (!emojiId || emojiId == self.botVerificationIconId)
+		return;
+	self.botVerificationIconId = emojiId;
+	__weak typeof(self) weakSelf = self;
+	[self fetchCustomEmojiImage:emojiId done:^(UIImage *image){
+		weakSelf.botVerificationImage = image;
+		[weakSelf buildHeader];
+	}];
+}
+
+- (void)fetchCustomEmojiImage:(int64_t)emojiId done:(void (^)(UIImage *image))done {
 	[[TGProfileStore shared] customEmojiStickersForIds:@[@(emojiId)] completion:^(NSArray *stickers){
 		NSNumber *thumb = stickers.count ? stickers[0][@"thumbId"] : nil;
 		if (![thumb isKindOfClass:NSNumber.class] || !thumb.integerValue)
@@ -75,10 +97,8 @@
 				UIImage *image = [UIImage imageWithContentsOfFile:path]
 						?: [UIImage convertFromWebP:path compressedData:nil error:nil];
 				dispatch_async(dispatch_get_main_queue(), ^{
-					if (!image)
-						return;
-					weakSelf.emojiStatusImage = image;
-					[weakSelf buildHeader];
+					if (image && done)
+						done(image);
 				});
 			});
 		}];

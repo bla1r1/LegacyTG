@@ -132,6 +132,7 @@ NSDictionary *TGChatEventLine(NSDictionary *action, NSString *actor, BOOL isChan
 	NSString *kind = [action isKindOfClass:NSDictionary.class] ? TGEString(action[@"@type"]) : @"";
 	NSString *who = actor ?: @"";
 	NSString *title = nil, *detail = @"";
+	NSDictionary *swatch = nil;
 	NSString *(^person)(id) = ^NSString *(id userId){
 		return name ? (name([userId longLongValue]) ?: @"") : @"";
 	};
@@ -305,13 +306,45 @@ NSDictionary *TGChatEventLine(NSDictionary *action, NSString *actor, BOOL isChan
 		title = isChannel ? TGLocalizedFormat(@"%@ left the channel", who)
 				: TGLocalizedFormat(@"%@ left the group", who);
 	}
+	// Official writes the new colour as a swatch and the new icon as its
+	// emoji, never the old ones (ChatRecentActionsHistoryTransition
+	// changeNameColor / changeProfileColor). The swatch is a dot here that
+	// the list colours; the icon is the custom emoji's own emoji, as the
+	// status line above does.
+	if ([kind isEqualToString:@"chatEventAccentColorChanged"] ||
+			[kind isEqualToString:@"chatEventProfileAccentColorChanged"]){
+		BOOL profile = [kind isEqualToString:@"chatEventProfileAccentColorChanged"];
+		NSInteger colourId = [action[profile ? @"new_profile_accent_color_id" : @"new_accent_color_id"]
+				integerValue];
+		BOOL hasIcon = [action[profile ? @"new_profile_background_custom_emoji_id"
+				: @"new_background_custom_emoji_id"] longLongValue] != 0;
+		NSString *icon = TGEString(action[@"iconEmoji"]);
+		NSString *dot = @"\u25CF";
+		if (profile && colourId < 0)
+			title = TGLocalizedFormat(@"%1$@ changed the removed profile color and icon", who);
+		else if (hasIcon)
+			title = profile
+					? TGLocalizedFormat(@"%1$@ changed the channel profile color and icon to %2$@ %3$@", who, dot, icon)
+					: TGLocalizedFormat(@"%1$@ changed the channel name color and icon to %2$@ %3$@", who, dot, icon);
+		else
+			title = profile
+					? TGLocalizedFormat(@"%1$@ changed the channel profile color to %2$@", who, dot)
+					: TGLocalizedFormat(@"%1$@ changed the channel name color to %2$@", who, dot);
+		title = [title stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+		NSRange at = [title rangeOfString:dot options:NSBackwardsSearch];
+		if (at.location != NSNotFound && !(profile && colourId < 0))
+			swatch = @{@"location" : @(at.location), @"colorId" : @(colourId),
+					   @"profile" : @(profile)};
+	}
 	if (!title)
 		title = TGEToggleLine(kind, action, who, person);
 	if (!title){
-		// The colour events wait for the swatch official draws; anything newer
-		// than this list still says what happened, in plain words.
+		// Anything newer than this list still says what happened, in plain
+		// words.
 		NSString *rest = [kind hasPrefix:@"chatEvent"] ? [kind substringFromIndex:9] : kind;
 		title = [NSString stringWithFormat:@"%@ %@", who, [TGPhraseFromTypeName(rest) lowercaseString]];
 	}
+	if (swatch)
+		return @{@"title" : title, @"detail" : detail ?: @"", @"swatch" : swatch};
 	return @{@"title" : title, @"detail" : detail ?: @""};
 }

@@ -26,6 +26,16 @@
 					   phone:(NSString *)phone
 				  completion:(void (^)(BOOL ok))completion;
 
+/// The same, and with `sharePhone` this account's number becomes visible to
+/// the new contact (addContact share_phone_number, official "Share My Phone
+/// Number").
+- (void)addContactWithUserId:(int64_t)userId
+				   firstName:(NSString *)firstName
+					lastName:(NSString *)lastName
+					   phone:(NSString *)phone
+				  sharePhone:(BOOL)sharePhone
+				  completion:(void (^)(BOOL ok))completion;
+
 /// Imports a number Telegram has never met. The id it answers with is the
 /// user the contact is then added to; zero when the import answered nothing.
 - (void)importContactNamed:(NSString *)firstName

@@ -130,7 +130,9 @@ static CGFloat TGProfileDetailRowHeight(NSDictionary *row, CGFloat width) {
 				} else if ([kind isEqualToString:@"birthday"] &&
 						self.birthdayToday){
 					row[TGRowDetailColour] = [theme onlineColour];
-				} else if ([kind isEqualToString:@"verification"]){
+				} else if ([kind isEqualToString:@"verification"] ||
+						[kind isEqualToString:@"unofficial"] ||
+						[kind isEqualToString:@"affiliateInfo"]){
 					row[TGRowTitleColour] = [theme secondaryTextColour];
 				} else if ([kind isEqualToString:@"bio"] ||
 						[kind isEqualToString:@"note"] ||
@@ -231,6 +233,8 @@ heightForHeaderInSection:(NSInteger)section {
 		similarVC.channelChatIds = self.similarChatIds;
 		similarVC.hidesBottomBarWhenPushed = YES;
 		[self.navigationController pushViewController:similarVC animated:YES];
+	} else if ([kind isEqualToString:@"affiliate"]){
+		[self runMoreAction:@"Affiliate Program"];
 	} else if ([kind isEqualToString:@"businessHours"]){
 		// ponytail: official unfolds the week under the row; one alert
 		// carries the same seven lines.

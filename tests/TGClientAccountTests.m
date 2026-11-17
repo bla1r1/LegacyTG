@@ -1077,6 +1077,12 @@ static BOOL TGSameColour(UIColor *a, UIColor *b) {
 	XCTAssertTrue(TGColourAccentName(42, records, NO) == nil);
 	XCTAssertTrue(TGColourAccentName(-1, records, NO) == nil);
 
+	NSArray *profiles = @[@{@"@type" : @"profileAccentColor", @"id" : @(3),
+			@"light_theme_colors" : @{@"palette_colors" : @[@(0x0A0B0C), @(0x101010)]}}];
+	XCTAssertTrue(TGSameColour(TGColourProfileAccent(3, profiles, NO),
+			[UIColor colorWithRed:0x0A/255.0 green:0x0B/255.0 blue:0x0C/255.0 alpha:1]));
+	XCTAssertTrue(TGColourProfileAccent(4, profiles, NO) == nil);
+
 	TGClient *c = A();
 	[c.rawUsersById removeObjectForKey:@(777001)];
 	XCTAssertTrue(TGSameColour([c nameColourForUser:777001], TGColourPeerName(777001, NO)),

@@ -1,6 +1,7 @@
 #import "TGGroupSettingsViewController.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
+#import "TGRows.h"
 #import "TGAlertSheet.h"
 #import "TGSnackbar.h"
 #import "TGContactsViewController.h"
@@ -115,7 +116,13 @@ typedef NS_ENUM(NSInteger, TGGroupRowKind) {
 					NSDateFormatterShortStyle) ?: @"";
 			NSString *detail = [event[@"detail"] length]
 					? [NSString stringWithFormat:@"%@ · %@", when, event[@"detail"]] : when;
-			[rows addObject:@{@"title" : event[@"title"] ?: @"", @"detail" : detail}];
+			NSMutableDictionary *row = [@{@"title" : event[@"title"] ?: @"", @"detail" : detail}
+					mutableCopy];
+			if (event[@"swatchColour"]){
+				row[TGRowTitleSwatchLocation] = event[@"swatchLocation"];
+				row[TGRowTitleSwatchColour] = event[@"swatchColour"];
+			}
+			[rows addObject:row];
 		}
 		TGListViewController *list = [[TGListViewController alloc] init];
 		list.listTitle = TGLocalized(@"Recent Actions");

@@ -404,6 +404,21 @@
 	UIColor *titleColour = row[TGRowTitleColour];
 	if ([titleColour isKindOfClass:UIColor.class])
 		self.textLabel.textColor = titleColour;
+
+	UIColor *swatch = row[TGRowTitleSwatchColour];
+	NSUInteger swatchAt = [row[TGRowTitleSwatchLocation] unsignedIntegerValue];
+	NSString *shown = self.textLabel.text;
+	if ([swatch isKindOfClass:UIColor.class] && row[TGRowTitleSwatchLocation] &&
+			swatchAt < shown.length){
+		NSMutableAttributedString *painted = [[NSMutableAttributedString alloc]
+				initWithString:shown attributes:@{
+					NSFontAttributeName : self.textLabel.font,
+					NSForegroundColorAttributeName : self.textLabel.textColor,
+				}];
+		[painted addAttribute:NSForegroundColorAttributeName value:swatch
+						range:[shown rangeOfComposedCharacterSequenceAtIndex:swatchAt]];
+		self.textLabel.attributedText = painted;
+	}
 	UIColor *detailColour = row[TGRowDetailColour];
 	if ([detailColour isKindOfClass:UIColor.class])
 		self.detailTextLabel.textColor = detailColour;

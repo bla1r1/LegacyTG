@@ -156,6 +156,8 @@
 			? [[words subarrayWithRange:NSMakeRange(1, words.count - 1)]
 					componentsJoinedByString:@" "] : @"";
 	contact.phone = self.phoneNumber ?: @"";
+	contact.offersPhoneShare = self.offersPhoneShare;
+	contact.shareName = words.firstObject ?: @"";
 	UINavigationController *nav = [[UINavigationController alloc]
 			initWithRootViewController:contact];
 	[self presentViewController:nav animated:YES completion:nil];

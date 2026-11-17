@@ -14,6 +14,7 @@ NSString *const TGProfileHeaderInitials = @"initials";
 NSString *const TGProfileHeaderColourId = @"colourId";
 NSString *const TGProfileHeaderEmojiStatusId = @"emojiStatusId";
 NSString *const TGProfileHeaderVerified = @"verified";
+NSString *const TGProfileHeaderBotVerification = @"botVerification";
 NSString *const TGProfileHeaderStatus = @"status";
 NSString *const TGProfileHeaderStatusColour = @"statusColour";
 NSString *const TGProfileHeaderActions = @"actions";
@@ -148,6 +149,19 @@ static UIImage *TGHeaderSolidImage(UIColor *colour) {
 			_nameLabel.bounds.size.width)) + TGMetricPadSmall;
 	CGFloat markY = kHeaderAvatarTop + side + kHeaderNameTop +
 			TGCenteredOrigin(TGMetricLineTitle, kHeaderNameBadge);
+	// A third-party verifier's mark sits before the name, mirroring the
+	// Telegram mark after it (PeerInfoHeaderNode verifiedIcon).
+	UIImage *verifier = [model[TGProfileHeaderBotVerification] isKindOfClass:UIImage.class]
+			? model[TGProfileHeaderBotVerification] : nil;
+	if (verifier){
+		CGFloat leftX = TGHalf(width) - TGHalf(MIN(measuredNameW,
+				_nameLabel.bounds.size.width)) - TGMetricPadSmall - kHeaderNameBadge;
+		UIImageView *mark = [[UIImageView alloc] initWithFrame:
+				CGRectMake(leftX, markY, kHeaderNameBadge, kHeaderNameBadge)];
+		mark.image = verifier;
+		mark.contentMode = UIViewContentModeScaleAspectFit;
+		[self addSubview:mark];
+	}
 	if ([model[TGProfileHeaderVerified] boolValue]){
 		UIImageView *badge = [[UIImageView alloc] initWithFrame:
 				CGRectMake(markX, markY, kHeaderNameBadge, kHeaderNameBadge)];

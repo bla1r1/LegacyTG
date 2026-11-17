@@ -6,6 +6,7 @@
 // are the rules the table reads, so a reload cannot reorder them.
 #import "TGTestRunner.h"
 #import "TGProfileLogic.h"
+#import "TGRows.h"
 
 @interface TGProfileInfoRowsTests : XCTestCase @end
 
@@ -149,6 +150,48 @@ static NSDictionary *RowOfKind(NSArray *rows, NSString *kind) {
 	closed[@"next_open_in"] = @600;
 	XCTAssertEqualObjects(TGBusinessHoursRow(closed, 1763200000)[@"value"], @"Closed · Opens in 10 minutes");
 	XCTAssertNil(TGBusinessHoursRow(@{}, 0));
+}
+
+// Parity: official opens the card of someone on an unofficial client with
+// a warning (PeerInfoProfileItems.swift, InfoSection.unofficial).
+- (void)testUnofficialApp_WarningComesFirst {
+	NSArray *rows = TGProfileUserInfoRows(@{ @"unofficialApp" : @YES, @"name" : @"Ann",
+			@"phoneNumber" : @"15551234567" });
+	XCTAssertEqualObjects(rows[0][@"kind"], @"unofficial");
+	XCTAssertEqualObjects(rows[0][@"value"],
+			@"Ann uses an unofficial Telegram client – messages to this user may be less secure.");
+	XCTAssertEqualObjects(rows[1][@"kind"], @"phone");
+	NSArray *plain = TGProfileUserInfoRows(@{ @"phoneNumber" : @"15551234567" });
+	XCTAssertEqualObjects(plain[0][@"kind"], @"phone");
+}
+
+// Parity: a bot's open affiliate program, with official's badge and footer
+// (PeerInfoProfileItems.swift, botAffiliateProgram).
+- (void)testBotAffiliateProgram_RowAndFooter {
+	NSArray *rows = TGProfileUserInfoRows(@{ @"isBot" : @YES, @"name" : @"Shop",
+			@"affiliatePermille" : @125 });
+	NSDictionary *row = RowOfKind(rows, @"affiliate");
+	XCTAssertEqualObjects(row[@"value"], @"Affiliate Program");
+	XCTAssertEqualObjects(row[@"badge"], @"12.5%");
+	XCTAssertEqualObjects(RowOfKind(rows, @"affiliateInfo")[@"value"],
+			@"Share a link to Shop with your friends and and earn 12.5% of their spending there.");
+	XCTAssertNil(RowOfKind(TGProfileUserInfoRows(@{ @"isBot" : @YES, @"affiliatePermille" : @0 }), @"affiliate"));
+	XCTAssertNil(RowOfKind(TGProfileUserInfoRows(@{ @"affiliatePermille" : @100 }), @"affiliate"));
+}
+
+- (void)testPermilleText {
+	XCTAssertEqualObjects(TGProfilePermilleText(100), @"10");
+	XCTAssertEqualObjects(TGProfilePermilleText(125), @"12.5");
+	XCTAssertEqualObjects(TGProfilePermilleText(5), @"0.5");
+}
+
+// Parity: the bot member's line in the members list.
+- (void)testMemberRow_BotAccessSubtitle {
+	NSDictionary *reads = TGProfileMemberRowModel(@{ @"id" : @1, @"name" : @"Bot", @"botAccess" : @"reads" }, 0);
+	XCTAssertEqualObjects(reads[TGRowDetail], @"has access to messages");
+	NSDictionary *blind = TGProfileMemberRowModel(@{ @"id" : @2, @"name" : @"Bot", @"botAccess" : @"noReads" }, 0);
+	XCTAssertEqualObjects(blind[TGRowDetail], @"has no access to messages");
+	XCTAssertNil(TGProfileMemberRowModel(@{ @"id" : @3, @"name" : @"Ann" }, 0)[TGRowDetail]);
 }
 
 @end

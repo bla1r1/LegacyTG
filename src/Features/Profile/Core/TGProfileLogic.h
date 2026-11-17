@@ -97,6 +97,15 @@ FOUNDATION_EXPORT NSURL *TGProfileFirstURL(NSString *text, NSArray *entities);
 /// username or phone fallback: the header shows those on their own rows.
 FOUNDATION_EXPORT NSString *TGProfileUserName(NSDictionary *user);
 
+/// The status line a user without presence has, in official's order
+/// (PeerInfoData.swift): "support" for Telegram's support accounts, "N users"
+/// for a bot with monthly users, else "bot". Nil for everyone else, whose
+/// line is their last seen.
+FOUNDATION_EXPORT NSString *TGProfileFixedStatus(NSDictionary *user);
+
+/// A per-mille commission as official writes it: 100 -> "10", 125 -> "12.5".
+FOUNDATION_EXPORT NSString *TGProfilePermilleText(NSInteger permille);
+
 /// The profile photos as TGMediaViewer items, so a tap opens the picture
 /// full screen and a swipe goes through the rest: a photo message each, the
 /// small file as its placeholder and the big one as what it opens.

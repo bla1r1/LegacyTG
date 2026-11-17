@@ -22,6 +22,9 @@ UIColor *TGColourPeerName(int64_t colourId, BOOL dark);
 /// seven (the same slots TGColourPeerName fills), 7 and up come from
 /// updateAccentColors. Nil when the id is unknown (negative or not listed).
 UIColor *TGColourAccentName(NSInteger accentId, NSArray *accentColors, BOOL dark);
+/// A profile accent colour (updateProfileAccentColors): the first palette
+/// colour, what official's colour picker shows. Nil when the id is unknown.
+UIColor *TGColourProfileAccent(NSInteger accentId, NSArray *profileAccentColors, BOOL dark);
 
 #pragma mark - Classic theme roles
 

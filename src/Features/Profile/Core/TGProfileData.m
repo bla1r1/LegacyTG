@@ -247,12 +247,19 @@
 		weakSelf.isVerified = [verification[@"is_verified"] boolValue];
 		weakSelf.isScam = [verification[@"is_scam"] boolValue];
 		weakSelf.isFake = [verification[@"is_fake"] boolValue];
+		[weakSelf fetchBotVerificationImage:
+				[verification[@"bot_verification_icon_custom_emoji_id"] longLongValue]];
 		weakSelf.isContact = [user[@"is_contact"] boolValue];
-		// A bot has no presence and cannot be a contact.
+		// A bot has no presence and cannot be a contact; neither has a
+		// support account a last seen.
 		if ([user[@"type"][@"@type"] isEqualToString:@"userTypeBot"]){
 			weakSelf.isBot = YES;
 			weakSelf.botCanJoinGroups = [user[@"type"][@"can_join_groups"] boolValue];
-			weakSelf.restingStatus = @"bot";
+		}
+		NSString *fixedStatus = TGProfileFixedStatus(user);
+		if (fixedStatus.length){
+			weakSelf.fixedStatus = YES;
+			weakSelf.restingStatus = fixedStatus;
 			[weakSelf statusLabelOwnerChanged:nil];
 		}
 		// The contact flag arrives with this answer and decides the Edit
@@ -295,6 +302,9 @@
 			weakSelf.businessInfo = [info[@"businessInfo"] isKindOfClass:NSDictionary.class]
 					? info[@"businessInfo"] : nil;
 			weakSelf.botVerification = info[@"botVerification"] ?: @"";
+			weakSelf.usesUnofficialApp = [info[@"unofficialApp"] boolValue];
+			weakSelf.offersPhoneShare = [info[@"sharePhoneOffer"] boolValue];
+			weakSelf.affiliatePermille = [info[@"affiliatePermille"] integerValue];
 			NSDictionary *firstAudio = [info[@"firstProfileAudio"]
 					isKindOfClass:NSDictionary.class] ? info[@"firstProfileAudio"] : nil;
 			if (![firstAudio isEqual:weakSelf.firstProfileAudio]){

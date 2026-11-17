@@ -217,6 +217,20 @@ NSDictionary *TGGMemberRowForMember(NSDictionary *member, NSString *name) {
 /// One forumTopic in the shape the topic list and the Topic Info screen read.
 /// `topic` is a forumTopic; getForumTopic answers with the same object, so
 /// both paths share this and cannot disagree about a count or a flag.
+NSDictionary *TGForumTopicsNextOffset(NSDictionary *result, NSInteger pageSize) {
+	if (![result isKindOfClass:NSDictionary.class])
+		return nil;
+	NSArray *topics = [result[@"topics"] isKindOfClass:NSArray.class] ? result[@"topics"] : @[];
+	int64_t date = [result[@"next_offset_date"] longLongValue];
+	int64_t messageId = [result[@"next_offset_message_id"] longLongValue];
+	int64_t topicId = [result[@"next_offset_forum_topic_id"] longLongValue];
+	// A short page is the last one; zero offsets mean TDLib has no more.
+	if ((NSInteger)topics.count < pageSize || (!date && !messageId && !topicId))
+		return nil;
+	return @{@"offset_date" : @(date), @"offset_message_id" : @(messageId),
+			 @"offset_forum_topic_id" : @(topicId)};
+}
+
 static NSDictionary *TGGForumTopicRow(NSDictionary *topic) {
 	if (![topic isKindOfClass:NSDictionary.class])
 		return nil;
@@ -260,21 +274,42 @@ static NSDictionary *TGGForumTopicRow(NSDictionary *topic) {
 }
 
 /// A forum keeps several threads in one chat; each topic reads like a chat row.
+/// TDLib hands topics a hundred at a time with the offsets of the next page
+/// (forumTopics.next_offset_*); the list is walked to its end, at most
+/// TGForumTopicPagesMax pages, so a forum past a hundred topics is whole.
+static const NSInteger TGForumTopicPageSize = 100;
+static const NSInteger TGForumTopicPagesMax = 10;
+
 - (void)forumTopicsForChat:(int64_t)chatId completion:(void (^)(NSArray *))completion {
+	NSMutableArray *out = [NSMutableArray array];
+	[self forumTopicsForChat:chatId offset:nil page:0 into:out completion:completion];
+}
+
+- (void)forumTopicsForChat:(int64_t)chatId
+					offset:(NSDictionary *)offset
+					  page:(NSInteger)page
+					  into:(NSMutableArray *)out
+				completion:(void (^)(NSArray *))completion {
+	__weak typeof(self) weakSelf = self;
 	[[TGClient shared] request:@{
-		@"@type"                    : @"getForumTopics",
-		@"chat_id"                  : @(chatId),
-		@"query"                    : @"",
-		@"offset_date"              : @(0),
-		@"offset_message_id"        : @(0),
-		@"offset_message_thread_id" : @(0),
-		@"limit"                    : @(100),
+		@"@type"                 : @"getForumTopics",
+		@"chat_id"               : @(chatId),
+		@"query"                 : @"",
+		@"offset_date"           : offset[@"offset_date"] ?: @(0),
+		@"offset_message_id"     : offset[@"offset_message_id"] ?: @(0),
+		@"offset_forum_topic_id" : offset[@"offset_forum_topic_id"] ?: @(0),
+		@"limit"                 : @(TGForumTopicPageSize),
 	} completion:^(NSDictionary *result){
-		NSMutableArray *out = [NSMutableArray array];
 		for (NSDictionary *topic in result[@"topics"]){
 			NSDictionary *row = TGGForumTopicRow(topic);
 			if (row)
 				[out addObject:row];
+		}
+		NSDictionary *next = TGForumTopicsNextOffset(result, TGForumTopicPageSize);
+		if (next && page + 1 < TGForumTopicPagesMax && weakSelf){
+			[weakSelf forumTopicsForChat:chatId offset:next page:page + 1
+									into:out completion:completion];
+			return;
 		}
 		NSLog(@"TGClient: %lu forum topics", (unsigned long)out.count);
 		if (completion) completion(out);

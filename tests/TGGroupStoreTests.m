@@ -95,4 +95,34 @@ static NSDictionary *TGGRequest(TGClient *c, NSString *type) {
 	XCTAssertTrue(TGGroupMemberCanBePromoted(-1001234567890LL, NO, NO, 6, 5));
 }
 
+// Parity: topics come a hundred at a time; the next page starts at
+// forumTopics.next_offset_* (official loads more as the list scrolls).
+- (void)testForumTopicsNextOffset_FullPageWithOffsets {
+	NSMutableArray *topics = [NSMutableArray array];
+	for (int i = 0; i < 100; i++) [topics addObject:@{}];
+	NSDictionary *next = TGForumTopicsNextOffset(@{ @"topics" : topics,
+			@"next_offset_date" : @1700000000, @"next_offset_message_id" : @55,
+			@"next_offset_forum_topic_id" : @7 }, 100);
+	XCTAssertEqualObjects(next[@"offset_date"], @1700000000);
+	XCTAssertEqualObjects(next[@"offset_message_id"], @55);
+	XCTAssertEqualObjects(next[@"offset_forum_topic_id"], @7);
+}
+
+- (void)testForumTopicsNextOffset_ShortPageOrZeroOffsetsEnd {
+	XCTAssertNil(TGForumTopicsNextOffset(@{ @"topics" : @[@{}],
+			@"next_offset_date" : @1, @"next_offset_message_id" : @1,
+			@"next_offset_forum_topic_id" : @1 }, 100));
+	NSMutableArray *topics = [NSMutableArray array];
+	for (int i = 0; i < 100; i++) [topics addObject:@{}];
+	XCTAssertNil(TGForumTopicsNextOffset(@{ @"topics" : topics }, 100));
+}
+
+- (void)testForumTopicsRequestNamesTheTopicOffset {
+	TGClient *c = TGGClient();
+	[[TGGroupStore shared] forumTopicsForChat:78 completion:nil];
+	NSDictionary *request = TGGRequest(c, @"getForumTopics");
+	XCTAssertNotNil(request[@"offset_forum_topic_id"]);
+	XCTAssertNil(request[@"offset_message_thread_id"]);
+}
+
 @end

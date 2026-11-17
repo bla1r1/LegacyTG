@@ -18,6 +18,7 @@ extern NSString *const TGProfileHeaderInitials;    // NSString fallback picture
 extern NSString *const TGProfileHeaderColourId;    // NSNumber avatar colour id
 extern NSString *const TGProfileHeaderEmojiStatusId; // NSNumber
 extern NSString *const TGProfileHeaderVerified;    // NSNumber BOOL
+extern NSString *const TGProfileHeaderBotVerification; // UIImage, a verifier bot's mark before the name
 extern NSString *const TGProfileHeaderStatus;      // NSString
 extern NSString *const TGProfileHeaderStatusColour; // UIColor
 extern NSString *const TGProfileHeaderActions;     // NSArray of tile dicts

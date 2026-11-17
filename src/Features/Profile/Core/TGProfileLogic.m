@@ -127,10 +127,30 @@ NSDictionary *TGBusinessHoursRow(NSDictionary *businessInfo, NSTimeInterval now)
 			 @"open" : @(open), @"week" : [week componentsJoinedByString:@"\n"]};
 }
 
+/// The pack's footer ends a placeholder with a bare "%" ("%2$@% of"), which
+/// a printf-style format would read as a conversion; the values go in by
+/// name instead.
+static NSString *TGProfileAffiliateFooter(NSString *name, NSInteger permille) {
+	NSString *text = TGLocalized(@"Share a link to %1$@ with your friends and and earn %2$@% of their spending there.");
+	text = [text stringByReplacingOccurrencesOfString:@"%1$@" withString:name];
+	return [text stringByReplacingOccurrencesOfString:@"%2$@" withString:TGProfilePermilleText(permille)];
+}
+
 NSArray *TGProfileUserInfoRows(NSDictionary *info) {
 	if (![info isKindOfClass:NSDictionary.class])
 		return @[];
 	NSMutableArray *rows = [NSMutableArray array];
+
+	// Official's first info section (PeerInfoProfileItems.swift, .unofficial):
+	// someone on an unofficial client is a security risk to write to.
+	if ([info[@"unofficialApp"] boolValue]){
+		[rows addObject:@{
+			@"kind"  : @"unofficial",
+			@"label" : @"",
+			@"value" : TGLocalizedFormat(@"%@ uses an unofficial Telegram client – messages to this user may be less secure.",
+					TGProfileTrimmed(info[@"name"]) ?: @""),
+		}];
+	}
 
 	NSString *phone = TGProfileTrimmed(info[@"phoneNumber"]);
 	if (phone.length){
@@ -232,6 +252,17 @@ NSArray *TGProfileUserInfoRows(NSDictionary *info) {
 		[rows addObject:@{@"kind" : @"verification", @"label" : @"", @"value" : verification}];
 	else if (isBot && [info[@"botCanJoinGroups"] boolValue])
 		[rows addObject:@{@"kind" : @"addBotToChat", @"label" : @"", @"value" : @"Add to Group or Channel"}];
+
+	// A bot with an open affiliate program offers it, with the commission
+	// (PeerInfoProfileItems.swift, InfoSection.botAffiliateProgram).
+	NSInteger permille = [info[@"affiliatePermille"] integerValue];
+	if (isBot && permille > 0){
+		NSString *percent = [TGProfilePermilleText(permille) stringByAppendingString:@"%"];
+		[rows addObject:@{@"kind" : @"affiliate", @"label" : @"",
+				@"value" : TGLocalized(@"Affiliate Program"), @"badge" : percent}];
+		[rows addObject:@{@"kind" : @"affiliateInfo", @"label" : @"",
+				@"value" : TGProfileAffiliateFooter(TGProfileTrimmed(info[@"name"]) ?: @"", permille)}];
+	}
 
 	BOOL isContact = [info[@"isContact"] boolValue];
 	if (!isContact && !isOwnProfile && !isBot){
@@ -344,6 +375,15 @@ NSDictionary *TGProfileInfoRowModel(NSDictionary *detail) {
 	}
 	if ([kind isEqualToString:@"settings"])
 		row[TGRowOpens] = @YES;
+	// The affiliate row carries its commission at the trailing edge, as
+	// official's labelBadge does.
+	if ([detail[@"badge"] isKindOfClass:NSString.class] && [detail[@"badge"] length])
+		row[TGRowAccessory] = detail[@"badge"];
+	if ([kind isEqualToString:@"unofficial"] || [kind isEqualToString:@"affiliate"] ||
+			[kind isEqualToString:@"affiliateInfo"]){
+		row[TGRowRawTitle] = @YES;
+		row[TGRowTitleLines] = @0;
+	}
 	if ([kind isEqualToString:@"about"] || [kind isEqualToString:@"bio"] ||
 			[kind isEqualToString:@"note"])
 		row[TGRowDetailLines] = @4;
@@ -364,7 +404,10 @@ NSDictionary *TGProfileMemberRowModel(NSDictionary *member,
 	NSString *name = [member[@"name"] isKindOfClass:NSString.class]
 			? [member[@"name"] stringByTrimmingCharactersInSet:
 					[NSCharacterSet whitespaceAndNewlineCharacterSet]] : nil;
-	NSMutableDictionary *row = [TGPeerRow(@(userId), name ?: @"", nil, nil)
+	NSString *botAccess = [member[@"botAccess"] isKindOfClass:NSString.class] ? member[@"botAccess"] : @"";
+	NSString *subtitle = [botAccess isEqualToString:@"reads"] ? TGLocalized(@"has access to messages")
+			: [botAccess isEqualToString:@"noReads"] ? TGLocalized(@"has no access to messages") : nil;
+	NSMutableDictionary *row = [TGPeerRow(@(userId), name ?: @"", subtitle, nil)
 			mutableCopy];
 	row[TGRowAvatarUser] = @YES;
 	row[TGRowAccessory] = TGRowAccessoryDisclosure;
@@ -628,6 +671,26 @@ NSString *TGProfileUserName(NSDictionary *user) {
 	if (first.length && last.length)
 		return [NSString stringWithFormat:@"%@ %@", first, last];
 	return first.length ? first : last;
+}
+
+NSString *TGProfileFixedStatus(NSDictionary *user) {
+	if (![user isKindOfClass:NSDictionary.class])
+		return nil;
+	if ([user[@"is_support"] boolValue])
+		return TGLocalized(@"support");
+	NSDictionary *type = [user[@"type"] isKindOfClass:NSDictionary.class] ? user[@"type"] : nil;
+	if (![type[@"@type"] isEqualToString:@"userTypeBot"])
+		return nil;
+	NSInteger users = [type[@"active_user_count"] integerValue];
+	if (users > 0)
+		return TGLocalizedPlural(@"1 user", @"%d users", users);
+	return TGLocalized(@"bot");
+}
+
+NSString *TGProfilePermilleText(NSInteger permille) {
+	if (permille % 10 == 0)
+		return [NSString stringWithFormat:@"%ld", (long)(permille / 10)];
+	return [NSString stringWithFormat:@"%.1f", (double)permille / 10.0];
 }
 
 NSArray *TGProfilePhotoViewerItems(NSArray *photos, int64_t userId) {

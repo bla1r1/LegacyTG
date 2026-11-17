@@ -28,10 +28,19 @@ NSDictionary *TGMemberRowForMember(NSDictionary *member, NSString *name) {
 	NSString *tag = [member[@"tag"] isKindOfClass:NSString.class]
 			? [member[@"tag"] stringByTrimmingCharactersInSet:
 					[NSCharacterSet whitespaceAndNewlineCharacterSet]] : @"";
+	// A bot member says whether it sees the group's messages
+	// (PeerInfoMembersPane.swift: hasAccessToChatHistory). The user record is
+	// whatever the client already holds; an unknown bot says nothing.
+	NSDictionary *user = [TGClient shared].rawUsersById[@(userId)];
+	NSDictionary *userType = [user isKindOfClass:NSDictionary.class] &&
+			[user[@"type"] isKindOfClass:NSDictionary.class] ? user[@"type"] : nil;
+	NSString *botAccess = [userType[@"@type"] isEqualToString:@"userTypeBot"]
+			? ([userType[@"can_read_all_group_messages"] boolValue] ? @"reads" : @"noReads") : @"";
 	return @{
 		@"id"     : @(userId),
 		@"name"   : name ?: @"",
 		@"status" : word,
+		@"botAccess" : botAccess,
 		@"tag"    : tag ?: @"",
 		@"owner"  : @([word isEqualToString:@"owner"]),
 		// Who added them: in a basic group an admin may promote only the

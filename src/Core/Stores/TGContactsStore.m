@@ -73,6 +73,16 @@
 					lastName:(NSString *)lastName
 					   phone:(NSString *)phone
 				  completion:(void (^)(BOOL))completion {
+	[self addContactWithUserId:userId firstName:firstName lastName:lastName
+						 phone:phone sharePhone:NO completion:completion];
+}
+
+- (void)addContactWithUserId:(int64_t)userId
+				   firstName:(NSString *)firstName
+					lastName:(NSString *)lastName
+					   phone:(NSString *)phone
+				  sharePhone:(BOOL)sharePhone
+				  completion:(void (^)(BOOL))completion {
 	[[TGClient shared] request:@{
 		@"@type"   : @"addContact",
 		@"user_id" : @(userId),
@@ -83,7 +93,7 @@
 			@"last_name"       : lastName ?: @"",
 			@"note"            : @{@"@type" : @"formattedText", @"text" : @""},
 		},
-		@"share_phone_number" : @NO,
+		@"share_phone_number" : @(sharePhone),
 	} completion:^(NSDictionary *result){
 		if (completion)
 			completion(![result[@"@type"] isEqualToString:@"error"]);

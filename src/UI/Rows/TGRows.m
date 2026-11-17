@@ -40,6 +40,8 @@ NSString *const TGRowAccessory    = @"accessory";
 NSString *const TGRowBadgeVariant = @"badgeVariant";
 NSString *const TGRowBadgeInline  = @"badgeInline";
 NSString *const TGRowTitleColour  = @"titleColour";
+NSString *const TGRowTitleSwatchLocation = @"swatchLocation";
+NSString *const TGRowTitleSwatchColour   = @"swatchColour";
 NSString *const TGRowHeight       = @"height";
 
 NSString *const TGRowAccessoryCheck      = @"check";
@@ -525,6 +527,10 @@ NSDictionary *TGRowFromListEntry(NSDictionary *entry) {
 		row[TGRowDetail] = entry[TGRowDetail];
 	if ([entry[TGRowOpens] boolValue])
 		row[TGRowOpens] = @YES;
+	if (entry[TGRowTitleSwatchLocation] && entry[TGRowTitleSwatchColour]){
+		row[TGRowTitleSwatchLocation] = entry[TGRowTitleSwatchLocation];
+		row[TGRowTitleSwatchColour] = entry[TGRowTitleSwatchColour];
+	}
 	return row;
 }
 

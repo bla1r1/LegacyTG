@@ -22,6 +22,7 @@
 @property (nonatomic, strong) UIBarButtonItem *doneItem;
 @property (nonatomic, strong) UIActivityIndicatorView *spinner;
 @property (nonatomic, assign) BOOL saving;
+@property (nonatomic, assign) BOOL sharePhone;
 @end
 
 @implementation TGNewContactViewController
@@ -93,10 +94,19 @@
 		[weakSelf.view endEditing:YES];
 	};
 
-	self.sections = @[
+	NSMutableArray *sections = [NSMutableArray arrayWithObjects:
 		TGSection(nil, nil, @[first, last]),
-		TGSection(nil, nil, @[phone]),
-	];
+		TGSection(nil, nil, @[phone]), nil];
+	if (self.offersPhoneShare){
+		self.sharePhone = YES;
+		NSDictionary *share = TGSwitchRow(TGLocalized(@"Share My Phone Number"), YES, ^(BOOL on){
+			weakSelf.sharePhone = on;
+		});
+		[sections addObject:TGSection(nil,
+				TGLocalizedFormat(@"You can make your phone visible to %@.", self.shareName ?: @""),
+				@[share])];
+	}
+	self.sections = sections;
 	// The form's two cards keep the old 10 pt breath above them.
 	self.tableView.sectionHeaderHeight = TGMetricPadMedium;
 	[self updateDoneState];
@@ -191,6 +201,7 @@
 									  firstName:first
 									   lastName:last
 										  phone:phone
+									 sharePhone:self.sharePhone
 									 completion:^(BOOL ok){
 			finish(ok, self.userId);
 		}];
@@ -215,6 +226,7 @@
 									  firstName:first
 									   lastName:last
 										  phone:phone
+									 sharePhone:me.sharePhone
 									 completion:^(BOOL ok){
 			finish(ok, userId);
 		}];

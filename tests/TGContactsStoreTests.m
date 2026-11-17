@@ -63,6 +63,20 @@ static NSDictionary *TCSRequest(NSString *type) {
 	XCTAssertEqualObjects(request[@"share_phone_number"], @NO);
 }
 
+// Parity: a profile that hides its number offers Share My Phone Number
+// (official NewContactScreen shareViaException); the switch reaches addContact.
+- (void)testAddContactCanShareThePhone {
+	[[TGContactsStore shared] addContactWithUserId:43
+										 firstName:@"Bob"
+										  lastName:@""
+											 phone:@"+1556"
+										sharePhone:YES
+										completion:^(BOOL ok){}];
+	NSDictionary *request = TCSRequest(@"addContact");
+	XCTAssertEqual([request[@"user_id"] longLongValue], 43LL);
+	XCTAssertEqualObjects(request[@"share_phone_number"], @YES);
+}
+
 - (void)testImportContactSendsOneImportedContact {
 	[[TGContactsStore shared] importContactNamed:@" Ann "
 										lastName:@" Lee "
