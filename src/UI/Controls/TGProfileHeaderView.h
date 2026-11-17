@@ -28,6 +28,7 @@ extern NSString *const TGProfileHeaderActionKey;   // NSString routing key
 extern NSString *const TGProfileHeaderMusic;       // NSDictionary or nil
 extern NSString *const TGProfileHeaderMusicTitle;
 extern NSString *const TGProfileHeaderMusicPerformer;
+extern NSString *const TGProfileHeaderLevel;       // NSNumber star rating level, or absent
 
 #ifdef __cplusplus
 }
@@ -38,6 +39,8 @@ extern NSString *const TGProfileHeaderMusicPerformer;
 @property (nonatomic, copy) void (^avatarTap)(void);
 @property (nonatomic, copy) void (^actionTap)(NSString *key);
 @property (nonatomic, copy) void (^musicTap)(void);
+/// The star rating's level badge after the status line.
+@property (nonatomic, copy) void (^levelTap)(void);
 
 /// The status line is updated in place on presence changes, without a rebuild.
 @property (nonatomic, copy) NSString *statusText;
@@ -49,6 +52,14 @@ extern NSString *const TGProfileHeaderMusicPerformer;
 + (CGFloat)heightForWidth:(CGFloat)width model:(NSDictionary *)model;
 
 - (void)configureWithModel:(NSDictionary *)model;
+
+/// Plays a profile picture's clip over the still, silent and looped, from
+/// `seconds` (the frame the picture rests on).
+- (void)playAvatarVideoAtPath:(NSString *)path from:(double)seconds;
+
+/// Plays a sticker photo: its fill's colours (0xRRGGBB, top to bottom) in the
+/// circle, the sticker looping at two thirds of the picture over it.
+- (void)playAvatarSticker:(NSString *)path colours:(NSArray *)colours;
 
 @end
 

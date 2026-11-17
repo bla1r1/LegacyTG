@@ -2,6 +2,8 @@
 // TGProfileStore.m - explicit Profile boundary.
 //
 #import "TGProfileStore.h"
+#import "TGVideoAvatar.h"
+#import "TGUserRating.h"
 #import "TGStoryAreas.h"
 #import "TGClient.h"
 #import "TGClientInternal.h"
@@ -273,6 +275,26 @@ if (!ids.count){
 
 - (void)downloadFile:(NSInteger)fileId completion:(void (^)(NSString *path))completion {
 [[TGMediaStore shared] downloadFile:fileId completion:completion];
+}
+
+- (void)avatarSticker:(NSDictionary *)stickerAvatar
+		   completion:(void (^)(NSString *path, NSString *format))completion {
+	if (![stickerAvatar isKindOfClass:NSDictionary.class] || !stickerAvatar[@"setId"]){
+		if (completion) completion(nil, nil);
+		return;
+	}
+	int64_t stickerId = [stickerAvatar[@"stickerId"] longLongValue];
+	[[TGClient shared] request:@{@"@type" : @"getStickerSet", @"set_id" : stickerAvatar[@"setId"]}
+		completion:^(NSDictionary *set){
+		NSDictionary *pick = TGStickerAvatarPick(set[@"stickers"], stickerId);
+		if (!pick){
+			if (completion) completion(nil, nil);
+			return;
+		}
+		[[TGMediaStore shared] downloadFile:[pick[@"fileId"] integerValue] completion:^(NSString *path){
+			if (completion) completion(path, pick[@"format"]);
+		}];
+	}];
 }
 
 - (void)downloadFile:(NSInteger)fileId priority:(NSInteger)priority completion:(void (^)(NSString *path))completion {
@@ -983,6 +1005,15 @@ NSDictionary *raw = [TGClient shared].rawUsersById[@(userId)];
 			@"botDescription"   : full[@"bot_info"][@"short_description"] ?: (full[@"bot_info"][@"description"] ?: @""),
 			@"voiceRestricted"  : full[@"has_restricted_voice_and_video_note_messages"] ?: @NO,
 			@"unofficialApp"    : full[@"uses_unofficial_app"] ?: @NO,
+			// The star rating's level badge and the Rating screen behind it
+			// (official PeerInfoHeaderNode starRating / pendingStarRating).
+			@"rating"           : TGUserRatingFrom(full[@"rating"]) ?: (id)[NSNull null],
+			@"pendingRating"    : TGUserRatingFrom(full[@"pending_rating"]) ?: (id)[NSNull null],
+			@"pendingRatingDate": @([full[@"pending_rating_date"] longLongValue]),
+			// The picture's clip, when the user's photo record says it moves.
+			@"stickerAvatar"    : TGStickerAvatarFrom(full[@"photo"]) ?: (id)[NSNull null],
+			@"videoAvatar"      : (TGVideoAvatarAnnounced([TGClient shared].rawUsersById[@(userId)][@"profile_photo"])
+					? TGVideoAvatarFrom(full[@"photo"]) : nil) ?: (id)[NSNull null],
 			@"sharePhoneOffer"  : full[@"need_phone_number_privacy_exception"] ?: @NO,
 			// A bot's running affiliate program, as the commission it pays;
 			// zero when it has none or it is closing (official starRefProgram

@@ -1,5 +1,7 @@
 #import "TGProfileViewControllerInternal.h"
+#import "TGProfileLevelViewController.h"
 #import "TGProfileStore.h"
+#import "TGCapabilities.h"
 #import "TGPeerStore.h"
 #import "TGStyle.h"
 #import "TGProfileHeaderView.h"
@@ -100,6 +102,8 @@
 		model[TGProfileHeaderBotVerification] = self.botVerificationImage;
 	if (music)
 		model[TGProfileHeaderMusic] = music;
+	if (self.userRating)
+		model[TGProfileHeaderLevel] = self.userRating[@"level"] ?: @0;
 
 	CGFloat height = [TGProfileHeaderView heightForWidth:width model:model];
 	TGProfileHeaderView *header = [[TGProfileHeaderView alloc]
@@ -108,7 +112,12 @@
 	header.avatarTap = ^{ [weakSelf avatarTapped]; };
 	header.actionTap = ^(NSString *key){ [weakSelf handleActionKey:key]; };
 	header.musicTap = ^{ [weakSelf musicStripTapped]; };
+	header.levelTap = ^{ [weakSelf levelBadgeTapped]; };
 	[header configureWithModel:model];
+	if (self.videoAvatarPath)
+		[header playAvatarVideoAtPath:self.videoAvatarPath from:self.videoAvatarFrame];
+	else if (self.stickerAvatarPath)
+		[header playAvatarSticker:self.stickerAvatarPath colours:self.stickerAvatarColours];
 	self.headerView = header;
 	self.tableView.tableHeaderView = header;
 	self.tableView.backgroundColor = [[TGTheme shared] groupedBackgroundColour];
@@ -195,6 +204,63 @@
 	audio.autoplay = YES;
 	audio.hidesBottomBarWhenPushed = YES;
 	[self.navigationController pushViewController:audio animated:YES];
+}
+
+/// Official pushes the Rating screen from the level badge
+/// (PeerInfoHeaderNode, ProfileLevelInfoScreen).
+- (void)levelBadgeTapped {
+	if (!self.userRating)
+		return;
+	BOOL mine = self.userId && self.userId == [[TGProfileStore shared].me[@"id"] longLongValue];
+	TGProfileLevelViewController *screen = [[TGProfileLevelViewController alloc]
+			initWithRating:self.userRating pending:(mine ? self.pendingRating : nil)
+			   pendingDate:(mine ? self.pendingRatingDate : 0) name:(mine ? nil : self.name)];
+	screen.hidesBottomBarWhenPushed = YES;
+	[self.navigationController pushViewController:screen animated:YES];
+}
+
+/// Official plays a moving profile picture in the header
+/// (PeerInfoAvatarListNode); here only where the device decodes it beside a
+/// scrolling list (TGCapabilities canPlayVideoAvatars).
+- (void)loadVideoAvatar:(id)videoAvatar {
+	if (![videoAvatar isKindOfClass:NSDictionary.class] || ![TGCapabilities canPlayVideoAvatars])
+		return;
+	NSNumber *fileId = videoAvatar[@"fileId"];
+	double frame = [videoAvatar[@"frame"] doubleValue];
+	__weak typeof(self) weakSelf = self;
+	[[TGProfileStore shared] downloadFile:fileId.integerValue completion:^(NSString *path){
+		if (!path.length)
+			return;
+		dispatch_async(dispatch_get_main_queue(), ^{
+			TGProfileViewController *me = weakSelf;
+			if (!me || [me.videoAvatarPath isEqualToString:path])
+				return;
+			me.videoAvatarPath = path;
+			me.videoAvatarFrame = frame;
+			[me.headerView playAvatarVideoAtPath:path from:frame];
+		});
+	}];
+}
+
+/// A photo made from a sticker of a set plays the sticker over its fill, as
+/// official's AvatarVideoNode does; the same devices as a video picture.
+- (void)loadStickerAvatar:(id)stickerAvatar {
+	if (![stickerAvatar isKindOfClass:NSDictionary.class] || ![TGCapabilities canPlayVideoAvatars])
+		return;
+	NSArray *colours = stickerAvatar[@"colours"];
+	__weak typeof(self) weakSelf = self;
+	[[TGProfileStore shared] avatarSticker:stickerAvatar completion:^(NSString *path, NSString *format){
+		if (!path.length || [format isEqualToString:@"webp"])
+			return;
+		dispatch_async(dispatch_get_main_queue(), ^{
+			TGProfileViewController *me = weakSelf;
+			if (!me || me.videoAvatarPath || [me.stickerAvatarPath isEqualToString:path])
+				return;
+			me.stickerAvatarPath = path;
+			me.stickerAvatarColours = colours;
+			[me.headerView playAvatarSticker:path colours:colours];
+		});
+	}];
 }
 
 @end

@@ -37,6 +37,8 @@
 #import "TGGiftFlattenTests.m"
 #import "TGPinnedLineTests.m"
 #import "TGPollPresentationTests.m"
+#import "TGUserRatingTests.m"
+#import "TGVideoAvatarTests.m"
 #import "TGParityChatTests.m"
 #import "TGChecklistPresentationTests.m"
 #import "TGLocalizationTests.m"

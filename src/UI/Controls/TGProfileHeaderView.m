@@ -3,6 +3,8 @@
 //
 #import "TGProfileHeaderView.h"
 #import "TGTheme.h"
+#import "TGLottieView.h"
+#import <AVFoundation/AVFoundation.h>
 #import "TGStyle.h"
 #import "TGIcons.h"
 #import "TGNameWithStatus.h"
@@ -24,6 +26,7 @@ NSString *const TGProfileHeaderActionKey = @"key";
 NSString *const TGProfileHeaderMusic = @"music";
 NSString *const TGProfileHeaderMusicTitle = @"title";
 NSString *const TGProfileHeaderMusicPerformer = @"performer";
+NSString *const TGProfileHeaderLevel = @"level";
 
 // The header stacks a picture, a name and a status line, then the action
 // plates. These named steps are the header's own; the values are the style
@@ -58,6 +61,12 @@ static UIImage *TGHeaderSolidImage(UIColor *colour) {
 
 @interface TGProfileHeaderView ()
 @property (nonatomic, strong) UIImageView *avatarView;
+@property (nonatomic, strong) UIButton *levelButton;
+@property (nonatomic, strong) AVPlayer *avatarPlayer;
+@property (nonatomic, strong) AVPlayerLayer *avatarPlayerLayer;
+@property (nonatomic, strong) UIImageView *avatarRing;
+@property (nonatomic, strong) UIImageView *avatarFill;
+@property (nonatomic, strong) TGLottieView *avatarSticker;
 @property (nonatomic, strong) UILabel *nameLabel;
 @property (nonatomic, strong) UILabel *statusLabel;
 @property (nonatomic, strong) NSArray *actions;
@@ -180,6 +189,22 @@ static UIImage *TGHeaderSolidImage(UIColor *colour) {
 	[self addSubview:_statusLabel];
 	self.statusColour = model[TGProfileHeaderStatusColour] ?:
 			[theme secondaryTextColour];
+	// Official puts the rating level in a small badge after the status
+	// (PeerInfoRatingComponent); a negative level has no number to show.
+	NSNumber *level = model[TGProfileHeaderLevel];
+	if ([level isKindOfClass:NSNumber.class]){
+		_levelButton = [UIButton buttonWithType:UIButtonTypeCustom];
+		_levelButton.titleLabel.font = TGFontMetaStrong();
+		[_levelButton setTitle:(level.integerValue < 0 ? @"!" : level.stringValue)
+					  forState:UIControlStateNormal];
+		[_levelButton setTitleColor:[theme onAccentColour] forState:UIControlStateNormal];
+		_levelButton.backgroundColor = level.integerValue < 0
+				? [theme destructiveColour] : [theme accentColour];
+		_levelButton.layer.cornerRadius = TGHalf(TGMetricLineCaption);
+		[_levelButton addTarget:self action:@selector(levelTapped)
+			   forControlEvents:UIControlEventTouchUpInside];
+		[self addSubview:_levelButton];
+	}
 	self.statusText = model[TGProfileHeaderStatus];
 
 	[self buildActionsAtY:(kHeaderAvatarTop + side + kHeaderActionsTop)];
@@ -315,6 +340,32 @@ static UIImage *TGHeaderSolidImage(UIColor *colour) {
 - (void)setStatusText:(NSString *)statusText {
 	_statusText = [statusText copy];
 	self.statusLabel.text = _statusText;
+	[self placeLevelBadge];
+}
+
+/// The badge follows the centred status text, so it moves with every
+/// presence change.
+- (void)placeLevelBadge {
+	if (!self.levelButton)
+		return;
+	CGRect label = self.statusLabel.frame;
+	CGFloat textW = self.statusText.length
+			? [self.statusText sizeWithFont:self.statusLabel.font].width : TGMetricZero;
+	textW = MIN(textW, label.size.width);
+	NSString *title = [self.levelButton titleForState:UIControlStateNormal];
+	CGFloat badgeW = MAX(TGMetricLineCaption,
+			[title sizeWithFont:self.levelButton.titleLabel.font].width + TGMetricPad);
+	CGFloat x = textW > TGMetricZero
+			? CGRectGetMidX(label) + TGHalf(textW) + TGMetricPadSmall
+			: CGRectGetMidX(label) - TGHalf(badgeW);
+	self.levelButton.frame = CGRectMake(x,
+			label.origin.y + TGCenteredOrigin(label.size.height, TGMetricLineCaption),
+			badgeW, TGMetricLineCaption);
+}
+
+- (void)levelTapped {
+	if (self.levelTap)
+		self.levelTap();
 }
 
 - (void)setStatusColour:(UIColor *)statusColour {
@@ -348,6 +399,121 @@ static UIImage *TGHeaderSolidImage(UIColor *colour) {
 - (void)musicTapped {
 	if (self.musicTap)
 		self.musicTap();
+}
+
+#pragma mark - video avatar
+
+/// The page colour everywhere but a circle: laid over the square video it
+/// rounds the clip without a mask, which a scrolling header cannot afford.
+static UIImage *TGAvatarRingImage(CGFloat side, UIColor *page) {
+	UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), NO, 0);
+	CGContextRef context = UIGraphicsGetCurrentContext();
+	CGContextAddRect(context, CGRectMake(0, 0, side, side));
+	CGContextAddEllipseInRect(context, CGRectMake(0, 0, side, side));
+	CGContextSetFillColorWithColor(context, page.CGColor);
+	CGContextEOFillPath(context);
+	UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+	UIGraphicsEndImageContext();
+	return image;
+}
+
+- (void)playAvatarVideoAtPath:(NSString *)path from:(double)seconds {
+	if (!path.length)
+		return;
+	[self stopAvatarVideo];
+	NSURL *url = [NSURL fileURLWithPath:path];
+	AVPlayerItem *item = [AVPlayerItem playerItemWithURL:url];
+	AVPlayer *player = [AVPlayer playerWithPlayerItem:item];
+	player.muted = YES;
+	player.actionAtItemEnd = AVPlayerActionAtItemEndNone;
+	AVPlayerLayer *layer = [AVPlayerLayer playerLayerWithPlayer:player];
+	layer.videoGravity = AVLayerVideoGravityResizeAspectFill;
+	layer.frame = self.avatarView.bounds;
+	[self.avatarView.layer addSublayer:layer];
+
+	UIImageView *ring = [[UIImageView alloc] initWithFrame:self.avatarView.bounds];
+	ring.image = TGAvatarRingImage(self.avatarView.bounds.size.width,
+			self.backgroundColor ?: [[TGTheme shared] groupedBackgroundColour]);
+	[self.avatarView addSubview:ring];
+
+	self.avatarPlayer = player;
+	self.avatarPlayerLayer = layer;
+	self.avatarRing = ring;
+	[[NSNotificationCenter defaultCenter] addObserver:self
+			selector:@selector(avatarVideoEnded:)
+				name:AVPlayerItemDidPlayToEndTimeNotification object:item];
+	if (seconds > 0)
+		[player seekToTime:CMTimeMakeWithSeconds(seconds, 600)];
+	[player play];
+}
+
+- (void)avatarVideoEnded:(NSNotification *)note {
+	[self.avatarPlayer seekToTime:kCMTimeZero];
+	[self.avatarPlayer play];
+}
+
+- (void)stopAvatarVideo {
+	if (!self.avatarPlayer)
+		return;
+	[[NSNotificationCenter defaultCenter] removeObserver:self
+			name:AVPlayerItemDidPlayToEndTimeNotification object:self.avatarPlayer.currentItem];
+	[self.avatarPlayer pause];
+	[self.avatarPlayerLayer removeFromSuperlayer];
+	[self.avatarRing removeFromSuperview];
+	self.avatarPlayer = nil;
+	self.avatarPlayerLayer = nil;
+	self.avatarRing = nil;
+}
+
+/// The fill in a circle on a clear square: one colour, or the colours top to
+/// bottom.
+static UIImage *TGAvatarFillImage(CGFloat side, NSArray *colours) {
+	UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), NO, 0);
+	CGContextRef context = UIGraphicsGetCurrentContext();
+	CGContextAddEllipseInRect(context, CGRectMake(0, 0, side, side));
+	CGContextClip(context);
+	NSMutableArray *cg = [NSMutableArray array];
+	for (NSNumber *value in colours)
+		[cg addObject:(__bridge id)TGColourFromRGB((uint32_t)[value unsignedIntValue]).CGColor];
+	if (cg.count == 1) {
+		CGContextSetFillColorWithColor(context, (__bridge CGColorRef)cg[0]);
+		CGContextFillRect(context, CGRectMake(0, 0, side, side));
+	} else if (cg.count > 1) {
+		CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
+		CGGradientRef gradient = CGGradientCreateWithColors(space, (__bridge CFArrayRef)cg, NULL);
+		CGContextDrawLinearGradient(context, gradient, CGPointZero, CGPointMake(0, side), 0);
+		CGGradientRelease(gradient);
+		CGColorSpaceRelease(space);
+	}
+	UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+	UIGraphicsEndImageContext();
+	return image;
+}
+
+- (void)playAvatarSticker:(NSString *)path colours:(NSArray *)colours {
+	if (!path.length)
+		return;
+	[self.avatarSticker removeFromSuperview];
+	[self.avatarFill removeFromSuperview];
+	CGRect bounds = self.avatarView.bounds;
+	TGLottieView *sticker = [[TGLottieView alloc] initWithFrame:CGRectInset(bounds,
+			bounds.size.width * TGMetricAvatarStickerInset, bounds.size.height * TGMetricAvatarStickerInset)];
+	sticker.userInteractionEnabled = NO;
+	if (![sticker loadStickerFile:path])
+		return;
+	if (colours.count) {
+		UIImageView *fill = [[UIImageView alloc] initWithFrame:bounds];
+		fill.image = TGAvatarFillImage(bounds.size.width, colours);
+		[self.avatarView addSubview:fill];
+		self.avatarFill = fill;
+	}
+	[self.avatarView addSubview:sticker];
+	self.avatarSticker = sticker;
+	[sticker play];
+}
+
+- (void)dealloc {
+	[self stopAvatarVideo];
 }
 
 @end

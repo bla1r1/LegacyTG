@@ -158,6 +158,18 @@ static const CGFloat   kStoryGridGap   = TGMetricCollageGap;
 @property (nonatomic, assign) BOOL offersPhoneShare;
 /// botInfo.affiliate_program: the commission a bot's open program pays.
 @property (nonatomic, assign) NSInteger affiliatePermille;
+/// The star rating (TGUserRatingFrom) and this account's pending change.
+@property (nonatomic, strong) NSDictionary *userRating;
+@property (nonatomic, strong) NSDictionary *pendingRating;
+@property (nonatomic, assign) int64_t pendingRatingDate;
+/// The profile picture's clip on disk and the second it rests on.
+@property (nonatomic, copy) NSString *videoAvatarPath;
+@property (nonatomic, assign) double videoAvatarFrame;
+- (void)loadVideoAvatar:(id)videoAvatar;
+/// A photo made from a sticker: its file and its fill's colours.
+@property (nonatomic, copy) NSString *stickerAvatarPath;
+@property (nonatomic, copy) NSArray *stickerAvatarColours;
+- (void)loadStickerAvatar:(id)stickerAvatar;
 /// userTypeBot can_join_groups: official offers "Add to Group or Channel".
 @property (nonatomic, assign) BOOL botCanJoinGroups;
 @property (nonatomic, copy) NSString *botVerification;

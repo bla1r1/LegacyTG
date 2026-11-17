@@ -424,6 +424,13 @@ static const CGFloat TGDampingReplySwipeSlope      = 1.50f;
 
 static const CGFloat TGMetricZero                  = 0.0f;
 static const CGFloat TGMetricScaleFull             = 1.0f;
+/// A premium sticker's effect: 0.245 of the sticker's side outward on each
+/// side, then 21 pt back toward the bubble (official playEffectAnimation).
+static const CGFloat TGMetricStickerEffectGrow     = 0.245f;
+static const CGFloat TGMetricStickerEffectPullBack = 21.0f;
+/// A sticker photo's sticker fills two thirds of the picture: a sixth of
+/// the side in from each edge (official AvatarVideoNode itemSize 0.67).
+static const CGFloat TGMetricAvatarStickerInset    = 0.165f;
 static const CGFloat TGMetricEpsilon               = 0.10f;
 static const CGFloat TGPercentFull                 = 100.0f;
 static const CGFloat TGCompressionQualityHigh      = 0.85f;

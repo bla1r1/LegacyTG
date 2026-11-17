@@ -190,6 +190,8 @@ CLIENT_OBJC_SRCS := \
     src/Core/Client/Messages/TGClient+InlineMessages.m \
     src/Core/Model/TGMessageFlatten.m \
     src/Core/Model/TGLinkPreviewAction.m \
+    src/Core/Model/TGUserRating.m \
+    src/Core/Model/TGVideoAvatar.m \
     src/Core/Model/TGServiceMessageText.m \
     src/Core/Model/TGChatStatistics.m \
     src/Core/Model/TGDownloadList.m \
@@ -421,6 +423,8 @@ CLIENT_TEST_SRCS := \
     $(TESTS)/TGGiftFlattenTests.m \
     $(TESTS)/TGPinnedLineTests.m \
     $(TESTS)/TGPollPresentationTests.m \
+    $(TESTS)/TGUserRatingTests.m \
+    $(TESTS)/TGVideoAvatarTests.m \
     $(TESTS)/TGParityChatTests.m \
     $(TESTS)/TGChecklistPresentationTests.m \
     $(TESTS)/TGLocalizationTests.m \

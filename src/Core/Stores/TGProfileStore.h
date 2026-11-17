@@ -96,6 +96,11 @@
 
 - (void)downloadFile:(NSInteger)fileId completion:(void (^)(NSString *path))completion;
 
+/// The sticker a TGStickerAvatarFrom photo is made of, on disk, with its
+/// format ("tgs", "webm", "webp"); nil when the set no longer has it.
+- (void)avatarSticker:(NSDictionary *)stickerAvatar
+		   completion:(void (^)(NSString *path, NSString *format))completion;
+
 - (void)downloadFile:(NSInteger)fileId priority:(NSInteger)priority completion:(void (^)(NSString *path))completion;
 
 - (int64_t)emojiStatusIdForUser:(int64_t)userId;

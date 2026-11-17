@@ -166,6 +166,8 @@
 			me.directMessagesChatId = [info[@"directMessagesChatId"] longLongValue];
 			me.hasDirectMessages = [info[@"hasDirectMessages"] boolValue];
 			me.canManageDirectMessages = [info[@"canManageDirectMessages"] boolValue];
+			[me loadVideoAvatar:info[@"videoAvatar"]];
+			[me loadStickerAvatar:info[@"stickerAvatar"]];
 			[me updateGroupStatus];
 			me.communityId = [info[@"communityId"] longLongValue];
 			me.communityName = nil;
@@ -305,6 +307,16 @@
 			weakSelf.usesUnofficialApp = [info[@"unofficialApp"] boolValue];
 			weakSelf.offersPhoneShare = [info[@"sharePhoneOffer"] boolValue];
 			weakSelf.affiliatePermille = [info[@"affiliatePermille"] integerValue];
+			[weakSelf loadVideoAvatar:info[@"videoAvatar"]];
+			[weakSelf loadStickerAvatar:info[@"stickerAvatar"]];
+			NSDictionary *rating = [info[@"rating"] isKindOfClass:NSDictionary.class] ? info[@"rating"] : nil;
+			weakSelf.pendingRating = [info[@"pendingRating"] isKindOfClass:NSDictionary.class]
+					? info[@"pendingRating"] : nil;
+			weakSelf.pendingRatingDate = [info[@"pendingRatingDate"] longLongValue];
+			if ((rating || weakSelf.userRating) && ![rating isEqual:weakSelf.userRating]){
+				weakSelf.userRating = rating;
+				[weakSelf buildHeader];
+			}
 			NSDictionary *firstAudio = [info[@"firstProfileAudio"]
 					isKindOfClass:NSDictionary.class] ? info[@"firstProfileAudio"] : nil;
 			if (![firstAudio isEqual:weakSelf.firstProfileAudio]){

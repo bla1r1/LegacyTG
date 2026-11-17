@@ -269,12 +269,7 @@ static NSArray *TGAccentIdsOrDefault(NSArray *ids) {
 /// swatch shows. Ids 0 to 6 are not in the list at all: the schema leaves them to
 /// the app, so these are the same seven the initials avatars use. The palette
 /// belongs to the account rather than the theme, so it is mapped here.
-static UIColor *TGColourFromRGB(int32_t rgb) {
-	return [UIColor colorWithRed:((rgb >> 16) & 0xFF) / 255.0f
-						   green:((rgb >> 8) & 0xFF) / 255.0f
-							blue:(rgb & 0xFF) / 255.0f
-						   alpha:1.0f];
-}
+// TGColourFromRGB lives in TGStylePalette with the other server colours.
 
 - (UIColor *)accentColourForId:(NSInteger)colourId profile:(BOOL)profile {
 	for (NSDictionary *record in (profile ? [TGClient shared].profileAccentColors : [TGClient shared].accentColors) ?: @[]){

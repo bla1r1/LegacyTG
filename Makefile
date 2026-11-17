@@ -295,6 +295,8 @@ APP_SRC_M := \
 	src/Core/Client/Messages/TGClient+InlineMessages.m \
 	src/Core/Model/TGMessageFlatten.m \
 	src/Core/Model/TGLinkPreviewAction.m \
+	src/Core/Model/TGUserRating.m \
+	src/Core/Model/TGVideoAvatar.m \
 	src/Core/Client/TGClient+MessageMeta.m \
 	src/Core/Client/TGClient+SavedMessages.m \
 	src/Core/Client/TGClient+Notifications.m \
@@ -586,6 +588,7 @@ APP_SRC_M := \
 	src/Features/Stories/TGStoriesMenuViewController.m \
 	src/Features/Profile/TGEmojiStatusViewController.m \
 	src/Features/Profile/TGProfileAudioViewController.m \
+	src/Features/Profile/TGProfileLevelViewController.m \
 	src/Features/Settings/TGTextStylesViewController.m \
 	src/Features/Chat/TGDMTopicsViewController.m \
 	src/Features/Chat/TGDMTopicViewController.m \

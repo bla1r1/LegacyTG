@@ -1,5 +1,6 @@
 #import "TGClient+ChatMembers.h"
 #import "TGClientInternal.h"
+#import "TGVideoAvatar.h"
 #ifndef typeof
 #define typeof __typeof__
 #endif
@@ -199,6 +200,7 @@ NSDictionary *TGMemberRowForMember(NSDictionary *member, NSString *name) {
 		__block BOOL verified = NO;
 		__block BOOL hasDM = NO;
 		__block BOOL adminDM = NO;
+		__block NSString *username = @"";
 		void (^answer)(NSDictionary *) = ^(NSDictionary *full){
 			int64_t dmId = [full[@"direct_messages_chat_id"] longLongValue];
 			int64_t commId = [full[@"community_id"] longLongValue];
@@ -213,6 +215,12 @@ NSDictionary *TGMemberRowForMember(NSDictionary *member, NSString *name) {
 				@"communityId" : @(commId),
 				@"hasDirectMessages": @(hasDM || dmId != 0),
 				@"canManageDirectMessages": @(adminDM),
+				@"username"    : username ?: @"",
+				// A group's or channel's moving picture, when its photo record
+				// says it has one.
+				@"stickerAvatar" : TGStickerAvatarFrom(full[@"photo"]) ?: (id)[NSNull null],
+				@"videoAvatar" : (TGVideoAvatarAnnounced(chat[@"photo"])
+						? TGVideoAvatarFrom(full[@"photo"]) : nil) ?: (id)[NSNull null],
 			});
 		};
 
@@ -224,6 +232,9 @@ NSDictionary *TGMemberRowForMember(NSDictionary *member, NSString *name) {
 				verified = [group[@"verification_status"][@"is_verified"] boolValue];
 				hasDM = [group[@"has_direct_messages_group"] boolValue];
 				adminDM = [group[@"is_administered_direct_messages_group"] boolValue];
+				NSArray *active = group[@"usernames"][@"active_usernames"];
+				if ([active isKindOfClass:NSArray.class] && [active.firstObject isKindOfClass:NSString.class])
+					username = active.firstObject;
 				[weakSelf request:@{@"@type" : @"getSupergroupFullInfo",
 									@"supergroup_id" : supergroupId}
 					   completion:answer];
