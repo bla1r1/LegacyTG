@@ -5,8 +5,32 @@
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGUIFormat.h"
+#import "TGInstantPageActions.h"
 
 static NSString *const TGInstantRule = @"────────────────────────────────";
+
+/// A tappable run: the action string TGInstantPageActions.h describes.
+static NSString *const TGInstantActionAttribute = @"TGInstantAction";
+/// Where an anchor sits: a zero-width run carrying the anchor's name.
+static NSString *const TGInstantAnchorAttribute = @"TGInstantAnchor";
+
+// The page is built on the main thread in one pass; these are that pass's
+// state: the references a footnote link shows, the details blocks the
+// reader toggled, and the running number of details blocks.
+static NSMutableDictionary *TGInstantReferences;
+static NSSet *TGInstantToggledDetails;
+static NSInteger TGInstantDetailsCounter;
+
+static NSAttributedString *TGInstantTappable(NSAttributedString *text, NSString *action,
+											 UIColor *colour) {
+	NSMutableAttributedString *out = [text mutableCopy];
+	if (!out.length || !action.length)
+		return out;
+	[out addAttribute:TGInstantActionAttribute value:action range:NSMakeRange(0, out.length)];
+	if (colour)
+		[out addAttribute:NSForegroundColorAttributeName value:colour range:NSMakeRange(0, out.length)];
+	return out;
+}
 
 /// Rich text is a tree of wrappers around plain runs. This builder keeps the
 /// wrappers that change how a word looks - bold, italic, code, a link - and
@@ -66,11 +90,37 @@ static NSAttributedString *TGInstantRichText(NSDictionary *text,
 		[out addAttribute:NSUnderlineStyleAttributeName
 					value:@(NSUnderlineStyleSingle)
 					range:NSMakeRange(0, out.length)];
+		if ([text[@"url"] isKindOfClass:NSString.class] && [text[@"url"] length])
+			return TGInstantTappable(out, [@"url:" stringByAppendingString:text[@"url"]], nil);
 		return out;
+	}
+	// In-page links (official InstantPageControllerNode findAnchorItem): an
+	// anchor link scrolls to its anchor, a reference link shows the
+	// reference's text, as official's reference popup does.
+	if ([type isEqualToString:@"richTextAnchorLink"]) {
+		NSString *name = [text[@"anchor_name"] isKindOfClass:NSString.class] ? text[@"anchor_name"] : @"";
+		return TGInstantTappable(TGInstantRichText(text[@"text"], font, linkColour, linkColour),
+				[@"anchor:" stringByAppendingString:name], linkColour);
+	}
+	if ([type isEqualToString:@"richTextReferenceLink"]) {
+		NSString *name = [text[@"reference_name"] isKindOfClass:NSString.class] ? text[@"reference_name"] : @"";
+		return TGInstantTappable(TGInstantRichText(text[@"text"], font, linkColour, linkColour),
+				[@"ref:" stringByAppendingString:name], linkColour);
+	}
+	if ([type isEqualToString:@"richTextReference"]) {
+		NSAttributedString *body = TGInstantRichText(text[@"text"], font, colour, linkColour);
+		if ([text[@"name"] isKindOfClass:NSString.class] && body.length)
+			TGInstantReferences[text[@"name"]] = body.string;
+		return body;
+	}
+	if ([type isEqualToString:@"richTextAnchor"]) {
+		NSString *name = [text[@"name"] isKindOfClass:NSString.class] ? text[@"name"] : @"";
+		return [[NSAttributedString alloc] initWithString:@"\u200B"
+				attributes:@{NSFontAttributeName : font, TGInstantAnchorAttribute : name}];
 	}
 	if ([type isEqualToString:@"richTextCustomEmoji"])
 		return TGInstantPlain(text[@"alternative_text"] ?: @"", font, colour);
-	if ([type isEqualToString:@"richTextIcon"] || [type isEqualToString:@"richTextAnchor"])
+	if ([type isEqualToString:@"richTextIcon"])
 		return TGInstantPlain(@"", font, colour);
 	if ([type isEqualToString:@"richTextButton"])
 		return TGInstantRichText(text[@"button"][@"text"], font, linkColour, linkColour);
@@ -80,7 +130,6 @@ static NSAttributedString *TGInstantRichText(NSDictionary *text,
 			[type isEqualToString:@"richTextHashtag"] ||
 			[type isEqualToString:@"richTextCashtag"] ||
 			[type isEqualToString:@"richTextBankCard"] ||
-			[type isEqualToString:@"richTextAnchorLink"] ||
 			[type isEqualToString:@"richTextMarked"] ||
 			[type isEqualToString:@"richTextSubscript"] ||
 			[type isEqualToString:@"richTextSuperscript"])
@@ -109,15 +158,17 @@ static NSAttributedString *TGInstantCaption(NSDictionary *caption,
 	return out;
 }
 
-static void TGInstantAppend(NSMutableAttributedString *out,
+static void TGInstantAppendAligned(NSMutableAttributedString *out,
 							NSAttributedString *text,
 							CGFloat indent,
 							CGFloat before,
-							CGFloat after) {
+							CGFloat after,
+							NSTextAlignment alignment) {
 	if (!text.length)
 		return;
 	NSMutableAttributedString *piece = [text mutableCopy];
 	NSMutableParagraphStyle *style = [[NSMutableParagraphStyle alloc] init];
+	style.alignment = alignment;
 	style.firstLineHeadIndent = indent;
 	style.headIndent = indent;
 	style.paragraphSpacingBefore = before;
@@ -134,6 +185,14 @@ static void TGInstantAppend(NSMutableAttributedString *out,
 				NSParagraphStyleAttributeName : style,
 			}];
 	[out appendAttributedString:ending];
+}
+
+static void TGInstantAppend(NSMutableAttributedString *out,
+							NSAttributedString *text,
+							CGFloat indent,
+							CGFloat before,
+							CGFloat after) {
+	TGInstantAppendAligned(out, text, indent, before, after, NSTextAlignmentLeft);
 }
 
 static void TGInstantAppendBlocks(NSMutableAttributedString *out,
@@ -266,10 +325,42 @@ static void TGInstantAppendBlock(NSMutableAttributedString *out,
 		}
 		return;
 	}
+	// Details open as the page says and fold on a tap of the header
+	// (official InstantPageDetailsItem, pageBlockDetails.is_open).
 	if ([type isEqualToString:@"pageBlockDetails"]) {
-		TGInstantAppend(out, TGInstantRichText(block[@"header"], TGFontBodyStrong(),
-				primary, accent), indent, TGMetricPadMedium, TGMetricPadSmall);
-		TGInstantAppendBlocks(out, block[@"blocks"], indent + TGMetricPadLarge, theme);
+		NSInteger number = TGInstantDetailsCounter++;
+		BOOL open = [block[@"is_open"] boolValue] != [TGInstantToggledDetails containsObject:@(number)];
+		NSMutableAttributedString *header = [TGInstantPlain(open ? @"▾ " : @"▸ ",
+				TGFontBodyStrong(), secondary) mutableCopy];
+		[header appendAttributedString:TGInstantRichText(block[@"header"], TGFontBodyStrong(),
+				primary, accent)];
+		TGInstantAppend(out, TGInstantTappable(header,
+				[NSString stringWithFormat:@"details:%ld", (long)number], nil),
+				indent, TGMetricPadMedium, TGMetricPadSmall);
+		if (open)
+			TGInstantAppendBlocks(out, block[@"blocks"], indent + TGMetricPadLarge, theme);
+		return;
+	}
+	// A row of buttons, each a tappable label, set where the page aligns it.
+	if ([type isEqualToString:@"pageBlockButtonRow"]) {
+		NSMutableAttributedString *row = [[NSMutableAttributedString alloc] init];
+		for (NSDictionary *button in block[@"buttons"]) {
+			NSAttributedString *label = TGInstantRichText(button[@"text"], TGFontBodyStrong(), accent, accent);
+			if (!label.length)
+				continue;
+			if (row.length)
+				[row appendAttributedString:TGInstantPlain(@"     ", TGFontBody(), primary)];
+			NSString *action = TGInstantButtonAction(button);
+			[row appendAttributedString:action ? TGInstantTappable(label, action, nil) : label];
+		}
+		TGInstantAppendAligned(out, row, indent, TGMetricPadSmall, TGMetricPadMedium,
+				(NSTextAlignment)TGInstantAlignment(block[@"align"]));
+		return;
+	}
+	if ([type isEqualToString:@"pageBlockAnchor"]) {
+		NSString *name = [block[@"name"] isKindOfClass:NSString.class] ? block[@"name"] : @"";
+		[out appendAttributedString:[[NSAttributedString alloc] initWithString:@"\u200B"
+				attributes:@{NSFontAttributeName : TGFontBody(), TGInstantAnchorAttribute : name}]];
 		return;
 	}
 	if ([type isEqualToString:@"pageBlockCollage"] ||
@@ -324,15 +415,17 @@ static void TGInstantAppendBlock(NSMutableAttributedString *out,
 	}
 	if ([type isEqualToString:@"pageBlockTable"]) {
 		for (NSArray *row in block[@"cells"]) {
-			NSMutableArray *cells = [NSMutableArray array];
+			NSMutableAttributedString *line = [[NSMutableAttributedString alloc] init];
 			for (NSDictionary *cell in row) {
-				NSAttributedString *plain = TGInstantRichText(cell[@"text"],
-						TGFontCaption(), primary, accent);
-				[cells addObject:plain.string ?: @""];
+				if (line.length)
+					[line appendAttributedString:TGInstantPlain(@"  |  ", TGFontCaption(), secondary)];
+				// A header cell reads bold, as official's table draws it.
+				UIFont *cellFont = [cell[@"is_header"] boolValue]
+						? TGFontBoldAtSize(TGFontCaption().pointSize) : TGFontCaption();
+				[line appendAttributedString:TGInstantRichText(cell[@"text"],
+						cellFont, primary, accent)];
 			}
-			NSString *line = [cells componentsJoinedByString:@"  |  "];
-			TGInstantAppend(out, TGInstantPlain(line, TGFontCaption(), primary),
-					indent, TGMetricPadTiny, TGMetricPadTiny);
+			TGInstantAppend(out, line, indent, TGMetricPadTiny, TGMetricPadTiny);
 		}
 		return;
 	}
@@ -354,8 +447,7 @@ static void TGInstantAppendBlock(NSMutableAttributedString *out,
 		return;
 	}
 	// Anchors and markup the reader has no use for are simply absent.
-	if ([type isEqualToString:@"pageBlockAnchor"] ||
-			[type isEqualToString:@"pageBlockUnsupported"] ||
+	if ([type isEqualToString:@"pageBlockUnsupported"] ||
 			[type isEqualToString:@"pageBlockMathematicalExpression"])
 		return;
 }
@@ -368,8 +460,10 @@ static void TGInstantAppendBlocks(NSMutableAttributedString *out,
 		TGInstantAppendBlock(out, block, indent, theme);
 }
 
-@interface TGInstantViewController () <UITextViewDelegate>
+@interface TGInstantViewController () <UITextViewDelegate, UIGestureRecognizerDelegate>
 @property (nonatomic, weak) UITextView *reader;
+@property (nonatomic, copy) NSSet *toggledDetails;
+@property (nonatomic, copy) NSDictionary *references;
 @property (nonatomic, strong) UIView *progressTrack;
 @property (nonatomic, strong) UIView *progressFill;
 @end
@@ -416,6 +510,14 @@ static void TGInstantAppendBlocks(NSMutableAttributedString *out,
 	reader.attributedText = [self readerText];
 	[self.view addSubview:reader];
 	self.reader = reader;
+	// Links, anchors, details and buttons are runs in the text; iOS 6's text
+	// view has no link attribute, so a tap finds its run through the text
+	// position under the finger.
+	UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self
+			action:@selector(readerTapped:)];
+	tap.cancelsTouchesInView = NO;
+	tap.delegate = self;
+	[reader addGestureRecognizer:tap];
 
 	// A 2 pt reading-progress line under the bar.
 	CGFloat line = TGMetricBorderThick;
@@ -458,7 +560,17 @@ static void TGInstantAppendBlocks(NSMutableAttributedString *out,
 - (NSAttributedString *)readerText {
 	TGTheme *theme = [TGTheme shared];
 	NSMutableAttributedString *text = [[NSMutableAttributedString alloc] init];
+	TGInstantReferences = [NSMutableDictionary dictionary];
+	TGInstantToggledDetails = self.toggledDetails ?: [NSSet set];
+	TGInstantDetailsCounter = 0;
 	TGInstantAppendBlocks(text, self.blocks, TGMetricZero, theme);
+	self.references = TGInstantReferences;
+	// Official's last row: "Wrong layout?" to the previews bot
+	// (InstantPageFeedbackItem, webPageInstantView.feedback_link).
+	if (TGInstantFeedbackURL(self.feedbackLink).length)
+		TGInstantAppendAligned(text, TGInstantTappable(TGInstantPlain(TGLocalized(@"Wrong layout?"),
+				TGFontCaption(), [theme secondaryTextColour]), @"feedback", nil),
+				TGMetricZero, TGMetricPadLarge, TGMetricPadLarge, NSTextAlignmentCenter);
 	if (!self.blocks.count) {
 		[text appendAttributedString:TGInstantPlain(
 				@"Telegram returned an empty page.", TGFontBody(),
@@ -470,6 +582,87 @@ static void TGInstantAppendBlocks(NSMutableAttributedString *out,
 - (void)applyThemeToReader:(UITextView *)reader {
 	reader.backgroundColor = [[TGTheme shared] listBackgroundColour];
 	reader.textColor = [[TGTheme shared] primaryTextColour];
+}
+
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gesture
+		shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)other {
+	return YES;
+}
+
+- (void)readerTapped:(UITapGestureRecognizer *)tap {
+	UITextView *reader = self.reader;
+	NSAttributedString *text = reader.attributedText;
+	UITextPosition *position = [reader closestPositionToPoint:[tap locationInView:reader]];
+	if (!position || !text.length)
+		return;
+	NSInteger index = [reader offsetFromPosition:reader.beginningOfDocument toPosition:position];
+	NSString *action = nil;
+	for (NSInteger at = index; at >= MAX(0, index - 1) && !action; at--)
+		if (at < (NSInteger)text.length)
+			action = [text attribute:TGInstantActionAttribute atIndex:(NSUInteger)at effectiveRange:NULL];
+	if (action.length)
+		[self runAction:action];
+}
+
+- (void)runAction:(NSString *)action {
+	if ([action hasPrefix:@"anchor:"]) {
+		[self scrollToAnchor:[action substringFromIndex:7]];
+	} else if ([action hasPrefix:@"ref:"]) {
+		NSString *body = self.references[[action substringFromIndex:4]];
+		if (body.length)
+			[TGAlertSheet showMessage:body title:nil inView:self.view];
+	} else if ([action hasPrefix:@"details:"]) {
+		NSNumber *number = @([[action substringFromIndex:8] integerValue]);
+		NSMutableSet *toggled = [self.toggledDetails mutableCopy] ?: [NSMutableSet set];
+		if ([toggled containsObject:number])
+			[toggled removeObject:number];
+		else
+			[toggled addObject:number];
+		self.toggledDetails = toggled;
+		CGPoint offset = self.reader.contentOffset;
+		self.reader.attributedText = [self readerText];
+		self.reader.contentOffset = offset;
+	} else if ([action hasPrefix:@"url:"]) {
+		NSURL *url = [NSURL URLWithString:[action substringFromIndex:4]];
+		if (url)
+			[[UIApplication sharedApplication] openURL:url];
+	} else if ([action hasPrefix:@"copy:"]) {
+		[UIPasteboard generalPasteboard].string = [action substringFromIndex:5];
+		[TGAlertSheet showMessage:TGLocalized(@"Copied to clipboard.") title:nil inView:self.view];
+	} else if ([action isEqualToString:@"feedback"]) {
+		NSURL *url = [NSURL URLWithString:TGInstantFeedbackURL(self.feedbackLink) ?: @""];
+		if (url)
+			[[UIApplication sharedApplication] openURL:url];
+	}
+}
+
+/// An empty name goes back to the top, as TDLib documents for anchor links.
+- (void)scrollToAnchor:(NSString *)name {
+	UITextView *reader = self.reader;
+	if (!name.length) {
+		[reader setContentOffset:CGPointMake(0, -reader.contentInset.top) animated:YES];
+		return;
+	}
+	__block NSRange found = NSMakeRange(NSNotFound, 0);
+	[reader.attributedText enumerateAttribute:TGInstantAnchorAttribute
+			inRange:NSMakeRange(0, reader.attributedText.length) options:0
+		 usingBlock:^(id value, NSRange range, BOOL *stop){
+		if ([value isKindOfClass:NSString.class] && [value isEqualToString:name]) {
+			found = range;
+			*stop = YES;
+		}
+	}];
+	if (found.location == NSNotFound)
+		return;
+	UITextPosition *start = [reader positionFromPosition:reader.beginningOfDocument
+												  offset:(NSInteger)found.location];
+	UITextPosition *end = [reader positionFromPosition:start offset:1];
+	if (!start || !end)
+		return;
+	CGRect rect = [reader firstRectForRange:[reader textRangeFromPosition:start toPosition:end]];
+	CGFloat maxY = MAX(0, reader.contentSize.height - reader.bounds.size.height);
+	[reader setContentOffset:CGPointMake(0, MIN(maxY, MAX(-reader.contentInset.top, rect.origin.y)))
+					animated:YES];
 }
 
 - (void)showActions {

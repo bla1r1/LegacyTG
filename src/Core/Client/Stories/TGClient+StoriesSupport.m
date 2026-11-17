@@ -1,4 +1,5 @@
 #import "TGClient+StoriesSupport.h"
+#import "TGStoryAreas.h"
 #import "TGClientInternal.h"
 
 NSDictionary *TGStoryDict(id value) {
@@ -241,6 +242,7 @@ NSDictionary *TGStoryFlatten(NSDictionary *story) {
 		@"viewers"        : interactions[@"view_count"] ?: @(0),
 		@"forwards"       : interactions[@"forward_count"] ?: @(0),
 		@"reactions"      : interactions[@"reaction_count"] ?: @(0),
+		@"recentViewerIds": TGStoryArray(interactions[@"recent_viewer_user_ids"]),
 		@"chosenReaction" : chosen,
 		@"isPostedToChatPage" : story[@"is_posted_to_chat_page"] ?: @NO,
 		@"isBeingPosted" : story[@"is_being_posted"] ?: @NO,
@@ -258,6 +260,7 @@ NSDictionary *TGStoryFlatten(NSDictionary *story) {
 		@"hasExpiredViewers" : story[@"has_expired_viewers"] ?: @NO,
 		@"privacy"       : TGStoryPrivacyName(TGStoryDict(story[@"privacy_settings"])),
 		@"albumIds"      : TGStoryArray(story[@"album_ids"]),
+		@"areas"         : TGStoryAreasFromTD(story[@"areas"]),
 	} mutableCopy];
 	if ([photoId isKindOfClass:NSNumber.class])
 		out[@"photoId"] = photoId;

@@ -12,6 +12,7 @@
 #import "TGSponsoredMessagesViewController.h"
 #import "TGGameScoresViewController.h"
 #import "TGPollPresentation.h"
+#import "TGInternalLinkRoute.h"
 #import <CoreImage/CoreImage.h>
 #import <QuartzCore/QuartzCore.h>
 
@@ -558,6 +559,28 @@
 		// "addstickers". The guess is still the fallback, because an answer
 		// takes a round trip and some links genuinely have no kind.
 		__weak typeof(self) weakSelf = self;
+		// The link types this client has a screen for open where official
+		// opens them; the rest keep the classification below.
+		[[TGMessageStore shared] internalLinkType:clean completion:^(NSDictionary *linkType){
+			TGChatViewController *me = weakSelf;
+			if (!me)
+				return;
+			if ([me openInternalLinkRoute:TGInternalLinkRoute(linkType)])
+				return;
+			[me classifyTelegramLink:clean isTelegramHost:isTelegramHost
+					isTelegramScheme:isTelegramScheme];
+		}];
+		return;
+	}
+
+	[self presentExternalLink:clean];
+}
+
+- (void)classifyTelegramLink:(NSString *)clean
+			  isTelegramHost:(BOOL)isTelegramHost
+			isTelegramScheme:(BOOL)isTelegramScheme {
+	{
+		__weak typeof(self) weakSelf = self;
 		[[TGMessageStore shared] internalLinkKind:clean
 								 completion:^(NSString *kind, NSString *value){
 			TGChatViewController *me = weakSelf;
@@ -570,10 +593,7 @@
 						 isTelegramHost:isTelegramHost
 					   isTelegramScheme:isTelegramScheme];
 		}];
-		return;
 	}
-
-	[self presentExternalLink:clean];
 }
 
 /// The canonical t.me/tg:// form of a link Telegram has already classified,
@@ -996,6 +1016,8 @@
 	reader.pageTitle = [NSURL URLWithString:link].host ?: @"Instant View";
 	reader.sourceURL = link;
 	reader.blocks = blocks;
+	reader.feedbackLink = [view[@"feedback_link"] isKindOfClass:NSDictionary.class]
+			? view[@"feedback_link"] : nil;
 	reader.hidesBottomBarWhenPushed = YES;
 	[self.navigationController pushViewController:reader animated:YES];
 }

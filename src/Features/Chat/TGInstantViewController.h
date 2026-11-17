@@ -13,5 +13,7 @@
 @property (nonatomic, copy) NSString *sourceURL;
 /// PageBlock dictionaries straight from getWebPageInstantView.
 @property (nonatomic, copy) NSArray *blocks;
+/// webPageInstantView.feedback_link: the "Wrong layout?" row at the end.
+@property (nonatomic, copy) NSDictionary *feedbackLink;
 
 @end

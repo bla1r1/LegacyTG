@@ -13,6 +13,9 @@
 #import "TGLiveStoryViewController.h"
 #import "TGMessageLayout.h"
 #import "TGPopupMenu.h"
+#import "TGStoryAreas.h"
+#import "TGChatViewController.h"
+#import "TGMessageStore.h"
 #import <AVFoundation/AVFoundation.h>
 #import <QuartzCore/QuartzCore.h>
 #import "TGMediaStore.h"
@@ -61,6 +64,9 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 @property (nonatomic, strong) UIButton *infoButton;
 @property (nonatomic, strong) UILabel *captionLabel;
 @property (nonatomic, strong) UILabel *infoLabel;
+/// Up to three faces of the latest viewers before the views line, as
+/// official's story footer draws them (recent_viewer_user_ids).
+@property (nonatomic, strong) NSArray *viewerFaces;
 @property (nonatomic, strong) UIActivityIndicatorView *loadingView;
 /// The still gradient the official loading effect draws behind a story while
 /// its picture downloads; no blur or animation on the A4.
@@ -365,6 +371,7 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 	_infoLabel.frame = CGRectMake(TGMetricPadLarge,
 			height - TGMetricStoryReactionRow - TGMetricPadLarge, width -
 			TGDoubled(TGMetricPadLarge), TGMetricLineCaption);
+	[self layoutViewerFaces];
 	_infoButton.frame = _infoLabel.frame;
 	self.reactionRail.frame = CGRectMake(TGMetricPadLarge,
 			height - TGMetricStoryReactionRow - TGMetricPadSmall,
@@ -507,6 +514,7 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 	if ([story[@"isPostedToChatPage"] boolValue])
 		[bits addObject:TGLocalized(@"Story posted to your profile")];
 	self.infoLabel.text = [bits componentsJoinedByString:@" · "];
+	[self showViewerFaces:story[@"recentViewerIds"]];
 
 	[self loadReactionsForStory:story];
 	[self startProgressForStory:story];
@@ -535,6 +543,58 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 	NSNumber *videoId = story[@"videoId"];
 	if ([videoId isKindOfClass:NSNumber.class] && videoId.integerValue > 0)
 		[self playVideoId:videoId.integerValue];
+}
+
+- (void)showViewerFaces:(NSArray *)viewerIds {
+	if (!self.viewerFaces) {
+		NSMutableArray *faces = [NSMutableArray array];
+		for (NSInteger i = 0; i < 3; i++) {
+			UIImageView *face = [[UIImageView alloc] initWithFrame:CGRectZero];
+			face.backgroundColor = [UIColor clearColor];
+			[self.view addSubview:face];
+			[faces addObject:face];
+		}
+		self.viewerFaces = faces;
+	}
+	NSArray *ids = [viewerIds isKindOfClass:NSArray.class] ? viewerIds : @[];
+	CGFloat side = TGMetricLineCaption;
+	for (NSUInteger i = 0; i < self.viewerFaces.count; i++) {
+		UIImageView *face = self.viewerFaces[i];
+		int64_t userId = i < ids.count ? [ids[i] longLongValue] : 0;
+		face.image = nil;
+		face.hidden = userId == 0;
+		face.tag = (NSInteger)userId;
+		if (!userId)
+			continue;
+		UIImage *cached = [[TGPeerStore shared] cachedAvatarForPeer:userId side:side];
+		if (cached) {
+			face.image = cached;
+			continue;
+		}
+		[[TGPeerStore shared] loadAvatarForPeer:userId side:side completion:^(UIImage *image){
+			if (face.tag == (NSInteger)userId)
+				face.image = image;
+		}];
+	}
+	[self layoutViewerFaces];
+}
+
+/// The faces overlap by a third, and the views line starts after them.
+- (void)layoutViewerFaces {
+	CGFloat side = TGMetricLineCaption;
+	CGRect line = self.infoLabel.frame;
+	CGFloat x = TGMetricPadLarge;
+	for (UIImageView *face in self.viewerFaces) {
+		if (face.hidden)
+			continue;
+		face.frame = CGRectMake(x, line.origin.y, side, side);
+		x += side - side / 3;
+	}
+	if (x > TGMetricPadLarge)
+		x += side / 3 + TGMetricPadSmall;
+	line.size.width += line.origin.x - x;
+	line.origin.x = x;
+	self.infoLabel.frame = line;
 }
 
 - (void)playVideoId:(NSInteger)videoId {
@@ -829,9 +889,47 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 
 - (void)tapAt:(UITapGestureRecognizer *)tap {
 	CGPoint point = [tap locationInView:self.view];
+	// A link or a channel message placed on the story answers the tap with
+	// official's one-row menu before the story moves on
+	// (StoryItemSetContainerViewSendMessage activateMediaArea).
+	NSDictionary *area = TGStoryAreaAt(self.currentStory[@"areas"], point, self.picture.frame);
+	if (area) {
+		[self offerStoryArea:area atPoint:point];
+		return;
+	}
 	// The left third goes back and the rest goes on, as Telegram's stories
 	// do - a 320 pt phone gives 107 pt to each side.
 	[self advance:(point.x < self.view.bounds.size.width / 3.0f) ? -1 : 1];
+}
+
+- (void)offerStoryArea:(NSDictionary *)area atPoint:(CGPoint)point {
+	BOOL link = [area[@"kind"] isEqualToString:@"link"];
+	[self pause];
+	__weak typeof(self) weakSelf = self;
+	[TGPopupMenu showItems:@[@{@"title" : link ? TGLocalized(@"Open Link") : TGLocalized(@"View Message"),
+							   @"icon" : @"forward"}]
+				   atPoint:point inView:self.view reactions:nil selectedReaction:nil onReaction:nil
+				  onChoice:^(NSInteger index, NSString *title){
+		TGStoryViewerViewController *me = weakSelf;
+		if (!me)
+			return;
+		if (link) {
+			NSURL *url = [NSURL URLWithString:area[@"url"]];
+			if (url)
+				[[UIApplication sharedApplication] openURL:url];
+			[me resume];
+			return;
+		}
+		TGChatViewController *chat = [[TGChatViewController alloc] init];
+		chat.chatId = [area[@"chatId"] longLongValue];
+		chat.chatTitle = [[TGMessageStore shared] titleForChat:chat.chatId] ?: @"";
+		chat.initialMessageId = [area[@"messageId"] longLongValue];
+		chat.hidesBottomBarWhenPushed = YES;
+		if (me.navigationController)
+			[me.navigationController pushViewController:chat animated:YES];
+		else
+			[me resume];
+	}];
 }
 
 /// A drag down carries the story with the finger; letting go before the

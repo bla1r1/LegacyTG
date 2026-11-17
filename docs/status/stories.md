@@ -45,3 +45,10 @@ playback and hosting, comments). Business stories stay behind `TG_DEV`.
 | Live story host | missing | `Features/Stories/TGLiveStoryViewController.m:1` | `startLiveStory` is called, but this client has no camera encoder. |
 | Story comments and paid pins | missing | `Features/Stories/TGLiveStoryViewController.m:1` | Only donor and reaction records are listed. |
 | Business stories | dev-only | `Features/Stories/TGStoryViewerViewController.m:905` | Rows exist and show Telegram's refusal; no business connection is modelled. |
+
+## Data we had and did not show (17 November 2026)
+
+- A link or a channel message placed on a story answers a tap with official's one-row menu, "Open Link" or "View Message", at the finger; the link opens, the message opens in its chat. The hit test is official's: the point turned back by the area's rotation, inside the area grown by a tenth (areaPosition x/y/width/height_percentage; `TGStoryAreas`). Location areas open official's location story search and reaction widgets are tapped through their own view; neither is built, so those areas do not answer yet.
+- Your story's views line starts with up to three faces of the latest viewers (storyInteractionInfo.recent_viewer_user_ids).
+- A profile's stories pane lists pinned stories first, in their pinned order (stories.pinned_story_ids).
+- Left as todo: the "only you" privacy mark and the flipped reaction widget, which need the story's privacy badge and the reaction widget drawn. Compile-checked for armv7 and arm64 on Linux; host tests not run, not checked on a device.
