@@ -3,6 +3,7 @@
 // Settings pages for data usage, network stats, power saving, folders, downloads, and proxies.
 //
 #import "TGSettingsViewControllerInternal.h"
+#import "TGDownloadList.h"
 #import "TGLocalization.h"
 #import "TGAlertSheet.h"
 #import "TGForwardPicker.h"
@@ -791,47 +792,58 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 
 - (NSArray *)downloadSections {
 	__weak typeof(self) weakSelf = self;
-
-	NSMutableArray *rows = [NSMutableArray array];
-	for (NSDictionary *download in self.downloads){
-		long long size = [download[@"size"] longLongValue];
-		// The pack has no "Paused"; its "Pause" (Пауза) reads as the state.
-		NSString *state = [download[@"done"] boolValue] ? TGLocalized(@"Done")
-				: ([download[@"paused"] boolValue] ? TGLocalized(@"Pause")
-												   : TGLocalized(@"Downloading"));
-		[rows addObject:TGTapRow(download[@"name"],
-				[NSString stringWithFormat:@"%@ - %@", TGBytes(size), state], ^{
-			[weakSelf runDownloadActionFor:download];
-		})];
-	}
-
-	NSMutableArray *sections = [NSMutableArray array];
 	// An empty page read as broken; it now says why there is nothing to show.
 	if (!self.downloads.count)
 		return @[TGSection(nil,
 				@"No downloads yet. Files you download in chats will appear here.", @[])];
-	[sections addObject:TGSection(@"Files", nil, rows)];
 
-	if (self.downloads.count)
-		[sections addObject:TGSection(nil, nil, @[
-			TGActionRow(self.activeDownloads > 0 ? @"Pause All" : @"Resume All", ^{
-				[[TGSettingsStore shared] setAllDownloadsPaused:
-						weakSelf.activeDownloads > 0];
+	// Official's list: Downloading, with Pause All or Resume All, then
+	// Recently Downloaded, newest first, with Clear (ChatListSearchListPaneNode).
+	NSDictionary *model = TGDownloadListModel(self.downloads,
+			[TGSettingsStore shared].lastDownloadCounts);
+	NSMutableArray *(^rowsFor)(NSArray *) = ^NSMutableArray *(NSArray *items){
+		NSMutableArray *rows = [NSMutableArray array];
+		for (NSDictionary *download in items){
+			long long size = [download[@"size"] longLongValue];
+			// The pack has no "Paused"; its "Pause" (Пауза) reads as the state.
+			NSString *state = [download[@"done"] boolValue] ? TGLocalized(@"Done")
+					: ([download[@"paused"] boolValue] ? TGLocalized(@"Pause")
+													   : TGLocalized(@"Downloading"));
+			[rows addObject:TGTapRow(download[@"name"],
+					[NSString stringWithFormat:@"%@ - %@", TGBytes(size), state], ^{
+				[weakSelf runDownloadActionFor:download];
+			})];
+		}
+		return rows;
+	};
+
+	NSMutableArray *sections = [NSMutableArray array];
+	NSArray *downloading = model[@"downloading"];
+	if (downloading.count){
+		BOOL allPaused = [model[@"allPaused"] boolValue];
+		NSMutableArray *rows = rowsFor(downloading);
+		[rows addObject:TGActionRow(allPaused ? @"Resume All" : @"Pause All", ^{
+			[[TGSettingsStore shared] setAllDownloadsPaused:!allPaused];
+			[weakSelf loadForPage];
+		})];
+		[sections addObject:TGSection(TGLocalized(@"Downloading"), nil, rows)];
+	}
+	NSArray *downloaded = model[@"downloaded"];
+	if ([model[@"hasCompleted"] boolValue] && downloaded.count){
+		NSMutableArray *rows = rowsFor(downloaded);
+		[rows addObject:TGRedRow(@"Clear", ^{
+			[TGAlertSheet showConfirm:nil
+								title:@"Clear Download List"
+							   action:@"Clear"
+						  destructive:YES
+							   inView:weakSelf.view
+							onConfirm:^{
+				[[TGSettingsStore shared] clearDownloadsDeletingFromCache:YES];
 				[weakSelf loadForPage];
-			}),
-			TGRedRow(@"Clear Download List", ^{
-				[TGAlertSheet showConfirm:nil
-									title:@"Clear Download List"
-								   action:@"Clear"
-							  destructive:YES
-								   inView:weakSelf.view
-								onConfirm:^{
-					[[TGSettingsStore shared] clearDownloadsDeletingFromCache:YES];
-					[weakSelf loadForPage];
-				}];
-			}),
-		])];
-
+			}];
+		})];
+		[sections addObject:TGSection(TGLocalized(@"Recently Downloaded"), nil, rows)];
+	}
 	return sections;
 }
 

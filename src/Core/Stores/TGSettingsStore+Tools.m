@@ -1,5 +1,6 @@
 #import "TGSettingsStore.h"
 #import "TGChatEventText.h"
+#import "TGStylePalette.h"
 //
 // TGClient+ChatTools.m - Tier 2's chat surface: folders' shared half, invite
 // links, per-chat settings, discovery, statistics, event logs and positions.
@@ -51,8 +52,18 @@ static NSString *TGStatValue(NSDictionary *value, NSString *suffix) {
 	return [NSString stringWithFormat:@"%@ (%+.1f%%)", base, growth];
 }
 
-/// The rows Recent Actions draws. A channel status is a custom emoji, so its
-/// emoji is looked up in one getCustomEmojiStickers before the lines are made.
+/// The custom emoji a colour change sets as the name or profile icon; 0 when
+/// none or another event.
+static int64_t TGEventIconEmojiId(NSDictionary *action) {
+	if (![action isKindOfClass:NSDictionary.class])
+		return 0;
+	return [action[@"new_background_custom_emoji_id"] longLongValue]
+			?: [action[@"new_profile_background_custom_emoji_id"] longLongValue];
+}
+
+/// The rows Recent Actions draws. A channel status and a colour icon are
+/// custom emoji, so their emoji are looked up in one getCustomEmojiStickers
+/// before the lines are made.
 static void TGEventLogLines(NSArray *events, BOOL isChannel, void (^completion)(NSArray *)) {
 	NSMutableArray *ids = [NSMutableArray array];
 	for (NSDictionary *event in events){
@@ -60,6 +71,9 @@ static void TGEventLogLines(NSArray *events, BOOL isChannel, void (^completion)(
 		id emojiId = [status isKindOfClass:NSDictionary.class] ? status[@"type"][@"custom_emoji_id"] : nil;
 		if (emojiId)
 			[ids addObject:emojiId];
+		int64_t iconId = TGEventIconEmojiId(event[@"action"]);
+		if (iconId)
+			[ids addObject:@(iconId)];
 	}
 	void (^build)(NSDictionary *) = ^(NSDictionary *emojiById){
 		TGClient *me = [TGClient shared];
@@ -78,12 +92,30 @@ static void TGEventLogLines(NSArray *events, BOOL isChannel, void (^completion)(
 				withEmoji[@"emoji"] = emojiById[[status[@"type"][@"custom_emoji_id"] description]] ?: @"";
 				action = withEmoji;
 			}
+			int64_t iconId = TGEventIconEmojiId(action);
+			if (iconId){
+				NSMutableDictionary *withIcon = [action mutableCopy];
+				withIcon[@"iconEmoji"] = emojiById[[@(iconId) description]] ?: @"";
+				action = withIcon;
+			}
 			NSDictionary *line = TGChatEventLine(action, actor, isChannel, name);
-			[out addObject:@{
+			NSMutableDictionary *row = [@{
 				@"date"   : event[@"date"] ?: @(0),
 				@"title"  : line[@"title"],
 				@"detail" : line[@"detail"],
-			}];
+			} mutableCopy];
+			NSDictionary *swatch = line[@"swatch"];
+			if (swatch){
+				NSInteger colourId = [swatch[@"colorId"] integerValue];
+				UIColor *colour = [swatch[@"profile"] boolValue]
+						? TGColourProfileAccent(colourId, me.profileAccentColors, NO)
+						: TGColourAccentName(colourId, me.accentColors, NO);
+				if (colour){
+					row[@"swatchLocation"] = swatch[@"location"];
+					row[@"swatchColour"] = colour;
+				}
+			}
+			[out addObject:row];
 		}
 		if (completion)
 			completion(out);

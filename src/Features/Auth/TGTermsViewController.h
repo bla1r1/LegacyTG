@@ -10,6 +10,8 @@
 @interface TGTermsViewController : TGViewController
 
 @property (nonatomic, copy) NSString *termsText;
+/// termsOfService.min_user_age: Accept first asks to confirm the age.
+@property (nonatomic, assign) NSInteger minUserAge;
 /// Runs once, when Accept is tapped, before the screen goes away.
 @property (nonatomic, copy) void (^onAccept)(void);
 /// Runs when Decline is tapped, before the screen goes away. Optional.

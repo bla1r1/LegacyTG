@@ -293,7 +293,7 @@ static const char *ctFakeTdExecMarkdown(void *client, const char *request) {
 	XCTAssertFalse(ok);
 }
 
-// ─── batches two to six: links, moderation, saved topics, welcome ───────────
+// ─── parts two to six: links, moderation, saved topics, welcome ───────────
 
 - (void)testCalendarJump_AnswersTheMessageAndTheTotal {
 	TGClient *c = M();

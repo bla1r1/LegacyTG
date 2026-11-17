@@ -190,6 +190,10 @@ CLIENT_OBJC_SRCS := \
     src/Core/Client/Messages/TGClient+InlineMessages.m \
     src/Core/Model/TGMessageFlatten.m \
     src/Core/Model/TGServiceMessageText.m \
+    src/Core/Model/TGChatStatistics.m \
+    src/Core/Model/TGDownloadList.m \
+    src/Core/Model/TGStoryAreas.m \
+    src/Core/Model/TGInternalLinkRoute.m \
     src/Core/Model/TGMessageContentCommerce.m \
     src/Core/Model/TGMessageContentInteractive.m \
     src/Core/Model/TGMessageCard.m \
@@ -402,6 +406,11 @@ CLIENT_TEST_SRCS := \
     $(TESTS)/TGClientRecordOnceTests.m \
     $(TESTS)/TGMessageParserTests.m \
     $(TESTS)/TGServiceMessageTextTests.m \
+    $(TESTS)/TGInstantPageActionsTests.m \
+    $(TESTS)/TGChatStatisticsTests.m \
+    $(TESTS)/TGDownloadListTests.m \
+    $(TESTS)/TGStoryAreasTests.m \
+    $(TESTS)/TGInternalLinkRouteTests.m \
     $(TESTS)/TGMessagePreviewTests.m \
     $(TESTS)/TGMessageContentCommerceTests.m \
     $(TESTS)/TGMessageContentInteractiveTests.m \

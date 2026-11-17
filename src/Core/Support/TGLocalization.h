@@ -30,6 +30,10 @@ NSString *TGLocalizedPlural(NSString *one, NSString *other, NSInteger count);
 NSString *TGLocalizedPluralValue(NSString *one, NSString *other,
 								 NSString *value, NSInteger count);
 
+/// The CLDR plural category ("zero", "one", "two", "few", "many", "other")
+/// `count` takes in `language` (a pack id such as "ar" or "ru").
+NSString *TGPluralCategory(NSInteger count, NSString *language);
+
 /// The selected language pack id, or nil for the system language.
 NSString *TGAppLanguage(void);
 BOOL TGAppLanguageIsSystem(void);

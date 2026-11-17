@@ -107,7 +107,11 @@ static inline void TGTestRunnerRun(void) {
     classNames = [NSMutableArray arrayWithArray:
         [classNames sortedArrayUsingSelector:@selector(compare:)]];
 
+    // TG_TEST_CLASS runs one suite of a binary that links many - the Linux
+    // runner's way to build a file the way main_client.mm does.
+    const char *only = getenv("TG_TEST_CLASS");
     for (NSString *clsName in classNames) {
+        if (only && *only && strcmp(only, clsName.UTF8String) != 0) continue;
         Class cls = NSClassFromString(clsName);
         if (!cls) continue;
         printf("\n# %s\n", clsName.UTF8String);

@@ -80,7 +80,8 @@
 			[[NSNotificationCenter defaultCenter]
 					postNotificationName:TGTermsOfServiceReceivedNotification
 								object:self
-							userInfo:@{@"id" : termsId, @"text" : text ?: @""}];
+							userInfo:@{@"id" : termsId, @"text" : text ?: @"",
+									   @"minAge" : terms[@"min_user_age"] ?: @0}];
 		} else {
 			[self.client acceptTermsOfService:termsId completion:nil];
 		}

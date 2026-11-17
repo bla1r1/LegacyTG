@@ -25,6 +25,20 @@ NSString *TGUpdateQueryString(NSString *version,
                               NSString *language,
                               BOOL statistics);
 
+/// Extended query with stability, distribution channel and optional DC.
+NSString *TGUpdateQueryStringWithTelemetry(NSString *version,
+                                           NSString *build,
+                                           NSString *ios,
+                                           NSString *device,
+                                           NSString *tier,
+                                           BOOL jailbroken,
+                                           NSString *language,
+                                           BOOL statistics,
+                                           BOOL crashed,
+                                           NSString *source,
+                                           NSInteger dc,
+                                           NSString *crashDetail);
+
 /// YES when no check has run yet or the last one is at least a day old.
 BOOL TGUpdateCheckIsDue(NSDate *now, NSDate *lastCheck);
 
@@ -72,6 +86,16 @@ TGUpdateInfo *TGUpdateInfoFromInlineResults(NSArray *results,
 
 /// /Applications/Cydia.app. The screen opens the cydia URL only here.
 + (BOOL)isJailbroken;
+
+/// Distribution source: @"deb" if installed to /Applications/, @"ipa" otherwise.
++ (NSString *)distributionSource;
+
+/// Notes active screen for crash attribution (e.g. @"Chat", @"Media").
++ (void)noteActiveScreen:(NSString *)screen;
+
+/// Session tracking for crash detection.
++ (void)sessionDidStart;
++ (void)sessionDidEnd;
 
 /// On by default: an absent defaults value means YES.
 + (BOOL)usageStatisticsEnabled;

@@ -3,6 +3,7 @@
 // The pack is keyed by English values. Exact text must win, a case-only
 // difference may use the folded map, and an ambiguous fold must not guess.
 #import "TGTestRunner.h"
+#import "TGTermsAge.h"
 #import "TGLocalization.h"
 
 @interface TGLocalizationTests : XCTestCase @end
@@ -137,6 +138,29 @@
 			(id)@"3 месяца");
 	XCTAssertEqualObjects((id)TGLocalizedPluralValue(@"%@ month", @"%@ months", @"5", 5),
 			(id)@"5 месяцев");
+}
+
+// Parity: the zero and two forms a pack carries for Arabic, Hebrew,
+// Slovenian and Irish are picked by CLDR's rules, as official's
+// StringPluralization does; the old rules stay for everything else.
+- (void)testPluralCategory_ZeroAndTwoLanguages {
+	XCTAssertEqualObjects(TGPluralCategory(0, @"ar"), @"zero");
+	XCTAssertEqualObjects(TGPluralCategory(2, @"ar"), @"two");
+	XCTAssertEqualObjects(TGPluralCategory(5, @"ar"), @"few");
+	XCTAssertEqualObjects(TGPluralCategory(11, @"ar"), @"many");
+	XCTAssertEqualObjects(TGPluralCategory(100, @"ar"), @"other");
+	XCTAssertEqualObjects(TGPluralCategory(2, @"he"), @"two");
+	XCTAssertEqualObjects(TGPluralCategory(102, @"sl"), @"two");
+	XCTAssertEqualObjects(TGPluralCategory(8, @"ga"), @"many");
+	XCTAssertEqualObjects(TGPluralCategory(3, @"ru"), @"few");
+	XCTAssertEqualObjects(TGPluralCategory(2, @"en"), @"other");
+	XCTAssertEqualObjects(TGPluralCategory(1, @"en"), @"one");
+}
+
+// Parity: terms with a minimum age ask official's Age Verification first.
+- (void)testTermsAgeConfirmation {
+	XCTAssertEqualObjects(TGTermsAgeConfirmation(16), @"Tap Agree to confirm that you are 16 or over.");
+	XCTAssertNil(TGTermsAgeConfirmation(0));
 }
 
 @end

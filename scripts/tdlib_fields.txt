@@ -3,7 +3,7 @@
 # todo later    type.field note  - official shows it on a screen or feature this client has not built yet
 # skip -        type.field note  - nothing to draw, with the reason
 # open -        type.field       - not looked at yet
-todo  later     linkPreview.display_url  picks the preview's action button word (View Message, Open Profile); the button itself is not drawn yet
+todo  bubble    linkPreview.display_url  the link preview's action button in the bubble (View Message, Open Profile, Join Voice Chat...) with display_url (ChatMessageWebpageBubbleContentNode); the bubble exists, the button is not drawn
 skip  -         messageSendingStateFailed.need_another_reply_quote  resendMessages sends without the quote when none is passed; a retry works and there is nothing to say
 skip  -         messageSendingStateFailed.need_drop_reply  resendMessages drops the reply itself; a retry works and there is nothing to say
 todo  later     userTypeBot.inline_query_placeholder  "@gif Search GIFs" placeholder; official shows it only with the inline results panel, which the composer does not have yet
@@ -13,7 +13,7 @@ skip  -         updateUnreadChatCount.marked_as_unread_count  unread_count alrea
 skip  -         updateUnreadChatCount.marked_as_unread_unmuted_count  unread_count already counts chats marked unread (td_api.tl)
 todo  later     supergroup.boost_level  "Level 1+" badge on the group Appearance row, which the group page does not have yet
 skip  -         supergroupFullInfo.restricted_count  official never shows the restricted count; exceptions are listed on the Permissions page
-skip  -         user.is_close_friend  official uses it only in story audience lists, which read getCloseFriends
+todo  stories   user.is_close_friend  green ring and audience indicator for close friends in stories
 skip  -         user.is_mutual_contact  official draws no mutual-contact mark (PeerInfoScreen)
 todo  later     usernames.collectible_usernames  a collectible username opens Fragment's item sheet (CollectibleItemInfoScreen), which is not built
 skip  -         usernames.secondary_username  TDLib-only field for bots; official iOS has no secondary username
@@ -27,14 +27,10 @@ todo  later     acceptedGiftTypes.unlimited_gifts  Gifts privacy page: which gif
 todo  later     acceptedGiftTypes.upgraded_gifts  Gifts privacy page: which gift kinds are accepted
 skip  -         affiliateInfo.affiliate_chat_id  affiliate payouts are a bot owner's web page; no client screen reads the chat id
 skip  -         alternativeVideo.hls_file  the player downloads a whole MP4; HLS is not playable by the software decoder
-skip  -         animatedChatPhoto.main_frame_timestamp  avatars are drawn still on every tier
-skip  -         animatedEmoji.sticker_height  the bubble draws an animated emoji at its fixed sticker size
-skip  -         animatedEmoji.sticker_width  the bubble draws an animated emoji at its fixed sticker size
-todo  stories   areaPosition.corner_radius_percentage  tappable story areas (link, location, reaction) placed on the story
-todo  stories   areaPosition.height_percentage  tappable story areas (link, location, reaction) placed on the story
-todo  stories   areaPosition.width_percentage  tappable story areas (link, location, reaction) placed on the story
-todo  stories   areaPosition.x_percentage  tappable story areas (link, location, reaction) placed on the story
-todo  stories   areaPosition.y_percentage  tappable story areas (link, location, reaction) placed on the story
+todo  profile   animatedChatPhoto.main_frame_timestamp  official plays video avatars (PeerInfoAvatarListNode); possible on the Modern and Full tiers, still on Vintage and Legacy
+todo  bubble    animatedEmoji.sticker_height  official sizes a big animated emoji from the sticker's own size (ChatMessageAnimatedStickerItemNode)
+todo  bubble    animatedEmoji.sticker_width  official sizes a big animated emoji from the sticker's own size (ChatMessageAnimatedStickerItemNode)
+todo  stories   areaPosition.corner_radius_percentage  corner radius on interactive tappable area highlight masks in stories
 todo  later     attachmentMenuBot.default_icon  bot buttons in the attachment sheet
 todo  later     attachmentMenuBot.icon_color  bot buttons in the attachment sheet
 skip  -         attachmentMenuBot.ios_animated_icon  attachment bots are drawn with the static icon
@@ -63,33 +59,32 @@ todo  later     auctionStateFinished.acquired_item_count  gift auction screen, n
 todo  later     auctionStateFinished.average_price  gift auction screen, not built
 todo  later     auctionStateFinished.fragment_listed_item_count  gift auction screen, not built
 todo  later     auctionStateFinished.telegram_listed_item_count  gift auction screen, not built
-todo  later     audio.external_album_covers  cover from an outside service when the file has none
+todo  bubble    audio.external_album_covers  a track without a cover takes one from the outside service (official ChatMessageInteractiveFileNode); the track bubble exists
 skip  -         authorizationStateWaitEmailAddress.allow_apple_id  Sign in with Apple and Google need iOS 13 and later
 skip  -         authorizationStateWaitEmailAddress.allow_google_id  Sign in with Apple and Google need iOS 13 and later
 skip  -         authorizationStateWaitEmailCode.allow_apple_id  Sign in with Apple and Google need iOS 13 and later
 skip  -         authorizationStateWaitEmailCode.allow_google_id  Sign in with Apple and Google need iOS 13 and later
-todo  auth      authorizationStateWaitPassword.has_passport_data  the password reset warns that Telegram Passport data goes with it
+skip  -         authorizationStateWaitPassword.has_passport_data  official's password step does not carry it (AuthorizationUI AuthorizationSequenceController.swift, .passwordEntry(hint, number, code, suggestReset, syncContacts)); nothing warns about Passport data
 todo  later     authorizationStateWaitPremiumPurchase.premium_day_count  sign-up that needs Premium first, not built
 todo  later     authorizationStateWaitPremiumPurchase.store_product_id  sign-up that needs Premium first, not built
 todo  later     authorizationStateWaitPremiumPurchase.support_email_address  sign-up that needs Premium first, not built
 todo  later     authorizationStateWaitPremiumPurchase.support_email_subject  sign-up that needs Premium first, not built
-todo  later     availableReactions.are_tags  Saved Messages tags
+todo  bubble    availableReactions.are_tags  Saved Messages reactions drawn as tags (ChatMessageReactionsFooterContentNode, tag style); the bubble's reaction chips exist
 todo  later     backgroundTypeChatTheme.theme_name  chat themes as the wallpaper; the theme picker is not built
-todo  profile   botInfo.affiliate_program  bot profile: affiliate program, revenue, edit links, media previews, verification
-todo  profile   botInfo.can_get_revenue_statistics  bot profile: affiliate program, revenue, edit links, media previews, verification
-todo  profile   botInfo.edit_commands_link  bot profile: affiliate program, revenue, edit links, media previews, verification
-todo  profile   botInfo.edit_description_link  bot profile: affiliate program, revenue, edit links, media previews, verification
-todo  profile   botInfo.edit_description_media_link  bot profile: affiliate program, revenue, edit links, media previews, verification
-todo  profile   botInfo.edit_settings_link  bot profile: affiliate program, revenue, edit links, media previews, verification
-todo  profile   botInfo.has_media_previews  bot profile: affiliate program, revenue, edit links, media previews, verification
-todo  profile   botInfo.verification_parameters  bot profile: affiliate program, revenue, edit links, media previews, verification
+todo  later     botInfo.can_get_revenue_statistics  the owner's Balance row opens monetization statistics (PeerInfoProfileItems.swift ItemBalance -> openStats(.monetization)); the revenue pages are not built
+todo  later     botInfo.edit_commands_link  the bot owner's Edit screen (PeerInfoProfileItems.swift editing items for botInfo.canEdit: Edit Intro, Edit Commands, Change Bot Settings via @BotFather), which is not built
+todo  later     botInfo.edit_description_link  the bot owner's Edit screen (PeerInfoProfileItems.swift editing items for botInfo.canEdit: Edit Intro, Edit Commands, Change Bot Settings via @BotFather), which is not built
+todo  later     botInfo.edit_description_media_link  the bot owner's Edit screen (PeerInfoProfileItems.swift editing items for botInfo.canEdit: Edit Intro, Edit Commands, Change Bot Settings via @BotFather), which is not built
+todo  later     botInfo.edit_settings_link  the bot owner's Edit screen (PeerInfoProfileItems.swift editing items for botInfo.canEdit: Edit Intro, Edit Commands, Change Bot Settings via @BotFather), which is not built
+todo  later     botInfo.has_media_previews  the bot's preview media pane (PeerInfoData.swift botPreviewStoryListContext), not built
+todo  later     botInfo.verification_parameters  "Verify Accounts" on the bot owner's Edit screen and its verify sheet (PeerInfoProfileItems.swift ItemVerify, verifierSettings), not built
 skip  -         botInfo.web_app_background_dark_color  Mini Apps open in the system browser; no web view header to colour
 skip  -         botInfo.web_app_background_light_color  Mini Apps open in the system browser; no web view header to colour
 skip  -         botInfo.web_app_header_dark_color  Mini Apps open in the system browser; no web view header to colour
 skip  -         botInfo.web_app_header_light_color  Mini Apps open in the system browser; no web view header to colour
-todo  profile   botVerificationParameters.can_set_custom_description  bot profile: affiliate program, revenue, edit links, media previews, verification
-todo  profile   botVerificationParameters.default_custom_description  bot profile: affiliate program, revenue, edit links, media previews, verification
-todo  profile   botVerificationParameters.organization_name  bot profile: affiliate program, revenue, edit links, media previews, verification
+todo  later     botVerificationParameters.can_set_custom_description  the verifier bot's verify sheet (PeerInfoProfileItems.swift ItemVerify -> editingOpenVerifyAccounts), not built
+todo  later     botVerificationParameters.default_custom_description  the verifier bot's verify sheet (PeerInfoProfileItems.swift ItemVerify -> editingOpenVerifyAccounts), not built
+todo  later     botVerificationParameters.organization_name  the verifier bot's verify sheet (PeerInfoProfileItems.swift ItemVerify -> editingOpenVerifyAccounts), not built
 skip  -         businessConnection.user_chat_id  bot-side Business API; a user client receives none
 skip  -         businessMessage.reply_to_message  bot-side Business API; a user client receives none
 skip  -         callServer.ipv6_address  call engine internals: reflectors over IPv4 UDP, no WebRTC, no debug log upload
@@ -103,7 +98,7 @@ skip  -         callStateReady.config  call engine internals: reflectors over IP
 skip  -         callStateReady.custom_parameters  call engine internals: reflectors over IPv4 UDP, no WebRTC, no debug log upload
 skip  -         callStateReady.is_group_call_supported  call engine internals: reflectors over IPv4 UDP, no WebRTC, no debug log upload
 todo  later     chat.upgraded_gift_colors  gift name colours
-todo  group     chatAdministrator.custom_title  admin titles on the administrators list, which is not built
+todo  later     chatAdministrator.custom_title  the administrators list shows the title as the row label (PeerInfoUI ChannelAdminsController.swift, rank ?? Conversation.Owner), which is not built
 todo  later     chatBoostFeatures.min_automatic_translation_boost_level  boost screen: levels, features, giveaways, premium share
 todo  later     chatBoostFeatures.min_background_custom_emoji_boost_level  boost screen: what each level unlocks
 todo  later     chatBoostFeatures.min_chat_theme_background_boost_level  boost screen: what each level unlocks
@@ -118,14 +113,11 @@ todo  later     chatBoostLevelFeatures.can_set_profile_background_custom_emoji  
 todo  later     chatBoostLevelFeatures.chat_theme_background_count  boost screen: what each level unlocks
 todo  later     chatBoostLevelFeatures.profile_accent_color_count  boost screen: what each level unlocks
 todo  later     chatBoostLevelFeatures.title_color_count  boost screen: what each level unlocks
-todo  later     chatBoostSourceGiveaway.is_unclaimed  boost list: unclaimed giveaway boost
 todo  later     chatBoostStatus.gift_code_boost_count  boost screen header numbers
 todo  later     chatBoostStatus.premium_member_percentage  boost screen header numbers
 todo  later     chatBoostStatus.prepaid_giveaways  boost screen header numbers
-todo  later     chatEventAccentColorChanged.new_accent_color_id  event line with the colour swatch and icon; official draws them, text alone names nothing
-todo  later     chatEventAccentColorChanged.new_background_custom_emoji_id  event line with the colour swatch and icon; official draws them, text alone names nothing
-todo  later     chatEventAccentColorChanged.old_accent_color_id  event line with the colour swatch and icon; official draws them, text alone names nothing
-todo  later     chatEventAccentColorChanged.old_background_custom_emoji_id  event line with the colour swatch and icon; official draws them, text alone names nothing
+skip  -         chatEventAccentColorChanged.old_accent_color_id  official writes only the new colour and icon (ChatRecentActionsHistoryTransition changeNameColor / changeProfileColor ignore the previous values)
+skip  -         chatEventAccentColorChanged.old_background_custom_emoji_id  official writes only the new colour and icon (ChatRecentActionsHistoryTransition changeNameColor / changeProfileColor ignore the previous values)
 skip  -         chatEventAvailableReactionsChanged.old_available_reactions  official's Recent Actions line names only the new value
 skip  -         chatEventBackgroundChanged.old_background  official's Recent Actions line names only the new value
 skip  -         chatEventCustomEmojiStickerSetChanged.old_sticker_set_id  official's Recent Actions line names only the new value
@@ -135,62 +127,42 @@ skip  -         chatEventLocationChanged.old_location  official's Recent Actions
 skip  -         chatEventMemberTagChanged.old_tag  official's Recent Actions line names only the new value
 skip  -         chatEventMessageAutoDeleteTimeChanged.old_message_auto_delete_time  official's Recent Actions line names only the new value
 skip  -         chatEventPhotoChanged.old_photo  official's Recent Actions line names only the new value
-todo  later     chatEventProfileAccentColorChanged.new_profile_accent_color_id  event line with the colour swatch and icon; official draws them, text alone names nothing
-todo  later     chatEventProfileAccentColorChanged.new_profile_background_custom_emoji_id  event line with the colour swatch and icon; official draws them, text alone names nothing
-todo  later     chatEventProfileAccentColorChanged.old_profile_accent_color_id  event line with the colour swatch and icon; official draws them, text alone names nothing
-todo  later     chatEventProfileAccentColorChanged.old_profile_background_custom_emoji_id  event line with the colour swatch and icon; official draws them, text alone names nothing
+skip  -         chatEventProfileAccentColorChanged.old_profile_accent_color_id  official writes only the new colour and icon (ChatRecentActionsHistoryTransition changeNameColor / changeProfileColor ignore the previous values)
+skip  -         chatEventProfileAccentColorChanged.old_profile_background_custom_emoji_id  official writes only the new colour and icon (ChatRecentActionsHistoryTransition changeNameColor / changeProfileColor ignore the previous values)
 skip  -         chatEventSlowModeDelayChanged.old_slow_mode_delay  official's Recent Actions line names only the new value
 skip  -         chatEventStickerSetChanged.old_sticker_set_id  official's Recent Actions line names only the new value
 skip  -         chatEventTitleChanged.old_title  official's Recent Actions line names only the new value
-todo  group     chatInviteLink.expired_member_count  invite link row: "N expired"
+todo  group     chatInviteLink.expired_member_count  count of expired members in subscription invite links list
 skip  -         chatInviteLinkInfo.accessible_for  official shows nothing for it; the preview simply opens
 todo  later     chatInviteLinkInfo.subscription_info  paid subscription join (Stars payment form)
 todo  later     chatInviteLinkSubscriptionInfo.can_reuse  paid subscription join flow
 todo  later     chatInviteLinkSubscriptionInfo.form_id  paid subscription join flow
-skip  -         chatPhoto.small_animation  avatars are drawn still on every tier
-skip  -         chatPhotoInfo.has_animation  avatars are drawn still on every tier
-todo  later     chatPhotoStickerTypeRegularOrMask.sticker_id  sticker as a group photo
+todo  profile   chatPhoto.small_animation  official plays video avatars (PeerInfoAvatarListNode); possible on the Modern and Full tiers, still on Vintage and Legacy
+todo  profile   chatPhotoInfo.has_animation  official plays video avatars (PeerInfoAvatarListNode); possible on the Modern and Full tiers, still on Vintage and Legacy
+todo  group     chatPhotoStickerTypeRegularOrMask.sticker_id  a sticker set as the group photo is drawn from the sticker; the group header exists
 todo  later     chatRevenueStatistics.revenue_by_hour_graph  channel revenue page
 todo  later     chatRevenueTransactionTypeFragmentRefund.refund_date  channel revenue page
 todo  later     chatRevenueTransactionTypeFragmentWithdrawal.withdrawal_date  channel revenue page
-todo  stats     chatStatisticsAdministratorActionsInfo.banned_user_count  TOP ADMINS list
-todo  stats     chatStatisticsAdministratorActionsInfo.deleted_message_count  TOP ADMINS list
-todo  stats     chatStatisticsAdministratorActionsInfo.restricted_user_count  TOP ADMINS list
-todo  stats     chatStatisticsChannel.mean_story_reaction_count  story overview numbers and RECENT POSTS
-todo  stats     chatStatisticsChannel.mean_story_share_count  story overview numbers and RECENT POSTS
-todo  stats     chatStatisticsChannel.mean_story_view_count  story overview numbers and RECENT POSTS
-todo  stats     chatStatisticsChannel.recent_interactions  story overview numbers and RECENT POSTS
-todo  stats     chatStatisticsInteractionInfo.object_type  RECENT POSTS list
-todo  stats     chatStatisticsInviterInfo.added_member_count  TOP INVITERS list
-todo  stats     chatStatisticsMessageSenderInfo.average_character_count  TOP MEMBERS list
-todo  stats     chatStatisticsSupergroup.top_administrators  TOP ADMINS and TOP INVITERS lists
-todo  stats     chatStatisticsSupergroup.top_inviters  TOP ADMINS and TOP INVITERS lists
 todo  later     chatThemeGift.gift_theme  gift chat themes
 todo  later     communityAdministratorRights.can_ban_members  community admin rights
 todo  later     communityAdministratorRights.can_manage_community  community admin rights
-skip  -         diceStickersSlotMachine.center_reel  the slot machine is drawn as its final sticker
-skip  -         diceStickersSlotMachine.left_reel  the slot machine is drawn as its final sticker
-skip  -         diceStickersSlotMachine.lever  the slot machine is drawn as its final sticker
-skip  -         diceStickersSlotMachine.right_reel  the slot machine is drawn as its final sticker
+todo  bubble    diceStickersSlotMachine.center_reel  official spins the slot machine from its reels and lever (SlotMachineAnimationNode); the dice bubble exists
+todo  bubble    diceStickersSlotMachine.left_reel  official spins the slot machine from its reels and lever (SlotMachineAnimationNode); the dice bubble exists
+todo  bubble    diceStickersSlotMachine.lever  official spins the slot machine from its reels and lever (SlotMachineAnimationNode); the dice bubble exists
+todo  bubble    diceStickersSlotMachine.right_reel  official spins the slot machine from its reels and lever (SlotMachineAnimationNode); the dice bubble exists
 skip  -         diffEntityTypeReplace.old_text  AI text diff is not offered
-todo  settings  downloadedFileCounts.completed_count  Settings > Downloads (the screen exists): counts, dates, totals
-todo  settings  downloadedFileCounts.paused_count  Settings > Downloads (the screen exists): counts, dates, totals
-skip  -         draftMessageContentVideoNote.file_path  voice and round drafts are not kept
-skip  -         draftMessageContentVoiceNote.file_path  voice and round drafts are not kept
-skip  -         emojiCategory.is_greeting  greeting stickers belong to the empty-chat sticker, not drawn
-todo  later     emojiKeyword.keyword  emoji suggestions over the composer while typing; no suggestion strip yet
+todo  bubble    draftMessageContentVideoNote.file_path  restore unsent video note draft file from composer state
+todo  bubble    draftMessageContentVoiceNote.file_path  restore unsent voice note draft file from composer state
+todo  bubble    emojiCategory.is_greeting  the empty chat's greeting sticker, tap to send (ChatController empty node greeting sticker); the chat exists
+todo  bubble    emojiKeyword.keyword  emoji suggestions over the composer while typing; the composer exists, the strip is not drawn
 todo  later     emojiStatusTypeUpgradedGift.symbol_custom_emoji_id  gift emoji status
 todo  later     emojiStatusTypeUpgradedGift.upgraded_gift_id  gift emoji status
 skip  -         encryptedPassportElement.front_side  Telegram Passport is not offered
 skip  -         encryptedPassportElement.reverse_side  Telegram Passport is not offered
 skip  -         encryptedPassportElement.selfie  Telegram Passport is not offered
 skip  -         ephemeralMessageContent.has_timestamped_media  media timestamps are found from the entities
-todo  group     failedToAddMember.premium_required_to_send_messages  "add members" failure: Premium needed
-todo  group     failedToAddMember.premium_would_allow_invite  "add members" failure: Premium needed
-todo  settings  fileDownload.add_date  Settings > Downloads (the screen exists): counts, dates, totals
-todo  group     forumTopics.next_offset_date  topics list paging
-todo  group     forumTopics.next_offset_forum_topic_id  topics list paging
-todo  group     forumTopics.next_offset_message_id  topics list paging
+todo  later     failedToAddMember.premium_required_to_send_messages  the members Telegram would not add go to the invite-link screen (TelegramUI Components SendInviteLinkScreen; AddPeerMember.swift TelegramForbiddenInvitePeer), which is not built
+todo  later     failedToAddMember.premium_would_allow_invite  the members Telegram would not add go to the invite-link screen (TelegramUI Components SendInviteLinkScreen; AddPeerMember.swift TelegramForbiddenInvitePeer), which is not built
 todo  later     gift.auction_info  gift shop details: limits, prices, upgrade
 todo  later     gift.default_sell_star_count  gift shop details: limits, prices, upgrade
 todo  later     gift.first_send_date  gift shop details: limits, prices, upgrade
@@ -219,37 +191,29 @@ todo  later     groupCallMessageLevel.pin_duration  paid messages in live stream
 todo  later     groupCallMessageLevel.second_color  paid messages in live streams
 skip  -         importedContacts.importer_count  the "N friends imported you" hint is not shown
 skip  -         inlineKeyboardButtonTypeLoginUrl.forward_text  the server puts it on the forwarded copy's button, which arrives with that text
-todo  links     internalLinkTypeBackground.background_name  in-app link opens the exact place (background_name)
-todo  links     internalLinkTypeBotAddToChannel.administrator_rights  in-app link opens the exact place (administrator_rights)
-todo  links     internalLinkTypeBotStart.autostart  in-app link opens the exact place (autostart)
-todo  links     internalLinkTypeBotStartInGroup.administrator_rights  in-app link opens the exact place (administrator_rights)
-todo  links     internalLinkTypeCallsPage.section  in-app link opens the exact place (section)
-todo  links     internalLinkTypeContactsPage.section  in-app link opens the exact place (section)
-todo  links     internalLinkTypeDirectMessagesChat.channel_username  in-app link opens the exact place (channel_username)
-todo  links     internalLinkTypeGiftCollection.collection_id  in-app link opens the exact place (collection_id)
-todo  links     internalLinkTypeGiftCollection.gift_owner_username  in-app link opens the exact place (gift_owner_username)
-todo  links     internalLinkTypeInstantView.fallback_url  in-app link opens the exact place (fallback_url)
-todo  links     internalLinkTypeLiveStory.story_poster_username  in-app link opens the exact place (story_poster_username)
-todo  links     internalLinkTypeMessageDraft.contains_link  in-app link opens the exact place (contains_link)
-todo  links     internalLinkTypeMyProfilePage.section  in-app link opens the exact place (section)
-todo  links     internalLinkTypeNewStory.content_type  in-app link opens the exact place (content_type)
-todo  links     internalLinkTypePassportDataRequest.callback_url  in-app link opens the exact place (callback_url)
-todo  links     internalLinkTypePassportDataRequest.public_key  in-app link opens the exact place (public_key)
-todo  links     internalLinkTypeRequestManagedBot.manager_bot_username  in-app link opens the exact place (manager_bot_username)
-todo  links     internalLinkTypeRequestManagedBot.suggested_bot_name  in-app link opens the exact place (suggested_bot_name)
-todo  links     internalLinkTypeRequestManagedBot.suggested_bot_username  in-app link opens the exact place (suggested_bot_username)
-todo  links     internalLinkTypeSettings.section  in-app link opens the exact place (section)
-todo  links     internalLinkTypeStarPurchase.purpose  in-app link opens the exact place (purpose)
-todo  links     internalLinkTypeStory.story_poster_username  in-app link opens the exact place (story_poster_username)
-todo  links     internalLinkTypeStoryAlbum.story_album_owner_username  in-app link opens the exact place (story_album_owner_username)
-todo  links     internalLinkTypeTheme.theme_name  in-app link opens the exact place (theme_name)
+todo  later     internalLinkTypeBackground.background_name  the wallpaper preview with Set (TelegramUI OpenResolvedUrl.swift .wallpaper -> WallpaperGalleryController), not built
+todo  later     internalLinkTypeBotAddToChannel.administrator_rights  the admin rights screen for the bot after the chat is picked (TelegramUI OpenResolvedUrl.swift .groupBotStart -> ChannelAdminController), not built
+skip  -         internalLinkTypeBotStart.autostart  official always opens the bot chat with an interactive START (TelegramUI OpenResolvedUrl.swift .botStart -> ChatControllerInitialBotStart behavior .interactive); nothing starts on its own
+todo  later     internalLinkTypeBotStartInGroup.administrator_rights  the admin rights screen for the bot after the chat is picked (TelegramUI OpenResolvedUrl.swift .groupBotStart -> ChannelAdminController), not built
+todo  later     internalLinkTypeGiftCollection.collection_id  the profile opened on one gift collection (TelegramUI OpenResolvedUrl.swift .giftCollection -> makePeerInfoController mode .giftCollection), not built
+todo  later     internalLinkTypeGiftCollection.gift_owner_username  the profile opened on one gift collection (TelegramUI OpenResolvedUrl.swift .giftCollection -> makePeerInfoController mode .giftCollection), not built
+todo  later     internalLinkTypeMessageDraft.contains_link  official picks a chat and opens it with the text in the field, the part after the link selected (TelegramUI OpenResolvedUrl.swift .share -> ChatTextInputState selectionRange); the chat cannot open with a prefilled field yet
+skip  -         internalLinkTypeNewStory.content_type  official's link handling has no case for it (TelegramUI OpenResolvedUrl.swift and its ResolvedUrl cases)
+skip  -         internalLinkTypePassportDataRequest.callback_url  Telegram Passport is not offered (official handles it in PassportUI)
+skip  -         internalLinkTypePassportDataRequest.public_key  Telegram Passport is not offered (official handles it in PassportUI)
+todo  later     internalLinkTypeRequestManagedBot.manager_bot_username  the managed bot request sheet, not built (managed bots are a later feature)
+todo  later     internalLinkTypeRequestManagedBot.suggested_bot_name  the managed bot request sheet, not built (managed bots are a later feature)
+todo  later     internalLinkTypeRequestManagedBot.suggested_bot_username  the managed bot request sheet, not built (managed bots are a later feature)
+todo  later     internalLinkTypeStarPurchase.purpose  the Stars purchase screen (TelegramUI OpenResolvedUrl.swift .starsTopup -> makeStarsPurchaseScreen purpose), not built
+todo  later     internalLinkTypeStoryAlbum.story_album_owner_username  the profile opened on one story album (TelegramUI OpenResolvedUrl.swift .storyFolder -> makePeerInfoController mode .storyAlbum), not built
+todo  later     internalLinkTypeTheme.theme_name  the cloud theme preview (TelegramUI OpenResolvedUrl.swift .theme(slug)), not built
 skip  -         internalLinkTypeTonConnect.connect_request  TON wallet is not offered
 skip  -         internalLinkTypeTonConnect.dapp_client_id  TON wallet is not offered
 skip  -         internalLinkTypeTonConnect.return_strategy  TON wallet is not offered
 skip  -         internalLinkTypeTonConnect.rpc_request  TON wallet is not offered
 skip  -         internalLinkTypeTonConnect.trace_id  TON wallet is not offered
 skip  -         internalLinkTypeTonWalletTransfer.receiver  TON wallet is not offered
-todo  links     internalLinkTypeVideoChat.is_live_stream  in-app link opens the exact place (is_live_stream)
+skip  -         internalLinkTypeVideoChat.is_live_stream  official joins with peer and invite only and lets the call say what it is (TelegramUI OpenResolvedUrl.swift .joinVoiceChat(peerId, invite) -> VoiceChatJoinScreen)
 todo  later     invoice.is_flexible  payment form: tips, shipping, recurring terms
 todo  later     invoice.max_tip_amount  payment form: tips, shipping, recurring terms
 todo  later     invoice.need_email_address  payment form: tips, shipping, recurring terms
@@ -258,7 +222,6 @@ todo  later     invoice.need_phone_number  payment form: tips, shipping, recurri
 todo  later     invoice.recurring_payment_terms_of_service_url  payment form: tips, shipping, recurring terms
 todo  later     invoice.send_email_address_to_provider  payment form: tips, shipping, recurring terms
 todo  later     invoice.send_phone_number_to_provider  payment form: tips, shipping, recurring terms
-todo  later     invoice.subscription_period  payment form: tips, shipping, recurring terms
 todo  later     invoice.suggested_tip_amounts  payment form: tips, shipping, recurring terms
 todo  later     invoice.terms_of_service_url  payment form: tips, shipping, recurring terms
 todo  later     keyboardButtonTypeRequestChat.bot_administrator_rights  "share a chat" keyboard button
@@ -285,14 +248,12 @@ todo  later     keyboardButtonTypeRequestUsers.restrict_user_is_bot  "share user
 todo  later     keyboardButtonTypeRequestUsers.restrict_user_is_premium  "share users" keyboard button
 todo  later     keyboardButtonTypeRequestUsers.user_is_bot  "share users" keyboard button
 todo  later     keyboardButtonTypeRequestUsers.user_is_premium  "share users" keyboard button
-todo  settings  languagePackStringValuePluralized.two_value  zero and two plural forms in the language pack
-todo  settings  languagePackStringValuePluralized.zero_value  zero and two plural forms in the language pack
-todo  later     linkPreviewTypeBackground.background_type  link preview action button, with display_url
+todo  bubble    linkPreviewTypeBackground.background_type  the link preview's action button in the bubble (View Message, Open Profile, Join Voice Chat...) with display_url (ChatMessageWebpageBubbleContentNode); the bubble exists, the button is not drawn
 todo  later     linkPreviewTypeGiftAuction.auction_end_date  gift auction preview
-todo  later     linkPreviewTypeTheme.documents  link preview action button, with display_url
-todo  later     linkPreviewTypeUser.is_bot  link preview action button, with display_url
-todo  later     linkPreviewTypeVideoChat.is_live_stream  link preview action button, with display_url
-todo  later     linkPreviewTypeVideoChat.joins_as_speaker  link preview action button, with display_url
+todo  bubble    linkPreviewTypeTheme.documents  the link preview's action button in the bubble (View Message, Open Profile, Join Voice Chat...) with display_url (ChatMessageWebpageBubbleContentNode); the bubble exists, the button is not drawn
+todo  bubble    linkPreviewTypeUser.is_bot  the link preview's action button in the bubble (View Message, Open Profile, Join Voice Chat...) with display_url (ChatMessageWebpageBubbleContentNode); the bubble exists, the button is not drawn
+todo  bubble    linkPreviewTypeVideoChat.is_live_stream  the link preview's action button in the bubble (View Message, Open Profile, Join Voice Chat...) with display_url (ChatMessageWebpageBubbleContentNode); the bubble exists, the button is not drawn
+todo  bubble    linkPreviewTypeVideoChat.joins_as_speaker  the link preview's action button in the bubble (View Message, Open Profile, Join Voice Chat...) with display_url (ChatMessageWebpageBubbleContentNode); the bubble exists, the button is not drawn
 skip  -         localFile.can_be_downloaded  download progress is read from downloaded_size; partial prefixes are not streamed
 skip  -         localFile.download_offset  download progress is read from downloaded_size; partial prefixes are not streamed
 skip  -         localFile.downloaded_prefix_size  download progress is read from downloaded_size; partial prefixes are not streamed
@@ -300,66 +261,38 @@ todo  later     message.guest_bot_caller_id  guest bot answers
 skip  -         message.has_timestamped_media  media timestamps are found from the entities
 skip  -         message.is_from_offline  "sent offline" is only a scheduled-by-bot detail; official shows nothing
 skip  -         message.is_paid_gram_suggested_post  Gram payments are a TON feature
-todo  bubble    message.is_paid_star_suggested_post  paid suggested post mark
-todo  bubble    message.sender_business_bot_user_id  "sent by a business bot" line
-skip  -         message.summary_language_code  AI summaries are not offered
-todo  bubble    messageAnimation.is_secret  secret chat GIF opens once
+todo  bubble    message.summary_language_code  the AI summary block of a long post (official Summarize); the bubble exists
 skip  -         messageChatHasProtectedContentToggled.old_has_protected_content  the service line names the new state only
-todo  bubble    messageChatSetBackground.old_background_message_id  "set the same wallpaper" link on the service line
-todo  bubble    messageChatSetMessageAutoDeleteTime.from_user_id  service line names who set the timer
-todo  bubble    messageChecklistTasksAdded.checklist_message_id  service line jumps to the checklist
-todo  bubble    messageChecklistTasksDone.checklist_message_id  service line jumps to the checklist
 skip  -         messageCopyOptions.new_caption  request options this client builds, never reads
 skip  -         messageCopyOptions.new_show_caption_above_media  request options this client builds, never reads
 skip  -         messageCopyOptions.replace_caption  request options this client builds, never reads
 skip  -         messageCopyOptions.send_copy  request options this client builds, never reads
-todo  bubble    messageGameScore.game_id  score line jumps to the game
-todo  bubble    messageGameScore.game_message_id  score line jumps to the game
+skip  -         messageGameScore.game_id  official ignores it: the game is the replied message (ServiceMessageStrings.swift, .gameScore(gameId: _, score))
 todo  later     messageGift.is_from_auction  gift upgrade details
 todo  later     messageGift.is_prepaid_upgrade  gift upgrade details
 todo  later     messageGift.is_upgrade_separate  gift upgrade details
 todo  later     messageGift.prepaid_upgrade_hash  gift upgrade details
 todo  later     messageGift.prepaid_upgrade_star_count  gift upgrade details
 todo  later     messageGift.upgraded_received_gift_id  gift upgrade details
-todo  bubble    messageGiveawayCompleted.is_star_giveaway  Stars giveaway result wording
-todo  bubble    messageGiveawayPrizeStars.is_unclaimed  unclaimed Stars prize
-todo  bubble    messageGiveawayWinners.additional_chat_count  "and N other channels"
-todo  bubble    messageInvoice.paid_media_caption  paid media caption
-skip  -         messageLinkInfo.checklist_task_id  a task link opens its checklist message; this client does not mark single tasks
 skip  -         messagePassportDataReceived.credentials  Telegram Passport is not offered
 skip  -         messagePassportDataReceived.elements  Telegram Passport is not offered
-todo  bubble    messagePaymentSuccessful.invoice_chat_id  service line jumps to the invoice; subscription words
-todo  bubble    messagePaymentSuccessful.invoice_message_id  service line jumps to the invoice; subscription words
-todo  bubble    messagePaymentSuccessful.is_first_recurring  service line jumps to the invoice; subscription words
-todo  bubble    messagePaymentSuccessful.is_recurring  service line jumps to the invoice; subscription words
-todo  bubble    messagePaymentSuccessful.subscription_until_date  service line jumps to the invoice; subscription words
-skip  -         messagePaymentSuccessfulBot.is_first_recurring  bot-side payment message
-skip  -         messagePaymentSuccessfulBot.is_recurring  bot-side payment message
+todo  later     messagePaymentSuccessful.invoice_chat_id  the line opens the payment receipt (ChatController.swift openMessage .paymentSent -> BotReceiptController / Stars receipt), which is not built
+todo  later     messagePaymentSuccessful.invoice_message_id  the line opens the payment receipt (ChatController.swift openMessage .paymentSent -> BotReceiptController / Stars receipt), which is not built
+todo  later     messagePaymentSuccessful.subscription_until_date  not on the service line (ServiceMessageStrings.swift .paymentSent); the Stars receipt shows the renewal, which is not built
 skip  -         messagePaymentSuccessfulBot.subscription_until_date  bot-side payment message
-todo  bubble    messagePhoto.is_secret  secret chat photo opens once
-todo  bubble    messagePoll.can_add_option  "Add an option" on someone else's poll
-todo  bubble    messagePollOptionAdded.poll_message_id  service line jumps to the poll
-todo  bubble    messagePollOptionDeleted.poll_message_id  service line jumps to the poll
-todo  bubble    messagePremiumGiftCode.is_unclaimed  unclaimed gift code
 todo  later     messageProperties.can_add_offer  gift offers
 skip  -         messageProperties.can_be_copied_to_secret_chat  sending to secret chats from the forward picker is not offered
 todo  later     messageProperties.can_be_paid  suggested post payments
-todo  later     messageProperties.can_be_shared_in_story  "Share to Story" row; story posting from a message
+todo  bubble    messageProperties.can_be_shared_in_story  "Share to Story" in the hold menu; the story composer exists (TGStoryComposerViewController)
 todo  later     messageProperties.can_edit_suggested_post_info  suggested post payments
 skip  -         messageProperties.can_get_embedding_code  official iOS never offers embedding code
-todo  later     messageProperties.can_get_media_timestamp_links  "Copy Link at 0:42" needs the viewer's share sheet with the play position
-skip  -         messageProperties.can_get_video_advertisements  video ads are not shown
+todo  bubble    messageProperties.can_get_media_timestamp_links  "Copy Link at 0:42" for a video post; the hold menu and viewer exist
+skip  -         messageProperties.can_get_video_advertisements  the owner decided against ads (2026-11-17); official shows sponsored messages and video ads, LegacyTG shows neither
 todo  later     messageReaction.used_sender_id  react as a channel (send-as picker)
-todo  later     messageReactions.are_tags  Saved Messages tags
+todo  bubble    messageReactions.are_tags  Saved Messages reactions drawn as tags (ChatMessageReactionsFooterContentNode, tag style); the bubble's reaction chips exist
 todo  later     messageReactions.paid_reactors  paid Star reactions
-todo  bubble    messageReplyToMessage.checklist_task_id  reply to a checklist task; original send date
-todo  bubble    messageReplyToMessage.origin_send_date  reply to a checklist task; original send date
+skip  -         messageReplyToMessage.origin_send_date  official's reply header shows no date (Chat ChatMessageReplyInfoNode.swift)
 skip  -         messageStakeDice.prize_gram_amount  Gram stakes are a TON feature, not offered
-todo  bubble    messageSuggestedPostApprovalFailed.suggested_post_message_id  service line jumps to the post
-todo  bubble    messageSuggestedPostApproved.suggested_post_message_id  service line jumps to the post
-todo  bubble    messageSuggestedPostDeclined.suggested_post_message_id  service line jumps to the post
-todo  bubble    messageSuggestedPostPaid.suggested_post_message_id  service line jumps to the post
-todo  bubble    messageSuggestedPostRefunded.suggested_post_message_id  service line jumps to the post
 skip  -         messageThreadInfo.unread_message_count  a thread opens from reply_info's read position; the count adds nothing on screen
 skip  -         messageTonConnectRequest.trace_id  TON wallet is not offered
 skip  -         messageTonWalletTransfer.is_comment_encrypted  TON wallet is not offered
@@ -371,9 +304,7 @@ todo  later     messageUpgradedGift.next_resale_date  upgraded gift details
 todo  later     messageUpgradedGift.next_transfer_date  upgraded gift details
 todo  later     messageUpgradedGift.transfer_star_count  upgraded gift details
 todo  later     messageUpgradedGiftPurchaseOfferRejected.offer_message_id  gift offers
-todo  bubble    messageVideo.is_secret  secret chat video opens once
 skip  -         messageVideo.storyboards  scrubbing storyboards are not drawn
-todo  bubble    messageVideoNote.is_secret  secret chat round video opens once
 skip  -         oauthLinkInfo.dapp_client_id  TON Connect and app OAuth are not offered
 skip  -         oauthLinkInfo.from_app  TON Connect and app OAuth are not offered
 skip  -         oauthLinkInfo.match_code_first  TON Connect and app OAuth are not offered
@@ -382,37 +313,29 @@ skip  -         oauthLinkInfo.request_ton_wallet_access  TON Connect and app OAu
 skip  -         oauthLinkInfo.ton_connect_manifest_url  TON Connect and app OAuth are not offered
 skip  -         oauthLinkInfo.ton_proof_payload  TON Connect and app OAuth are not offered
 skip  -         oauthLinkInfo.verified_app_name  TON Connect and app OAuth are not offered
-todo  iv        pageBlockAnimation.need_autoplay  Instant View block detail
-todo  iv        pageBlockButtonRow.align  Instant View block detail
-todo  iv        pageBlockButtonRow.buttons  Instant View block detail
-todo  iv        pageBlockDetails.is_open  Instant View block detail
-skip  -         pageBlockEmbedded.allow_scrolling  embedded web content in Instant View needs a web view
-skip  -         pageBlockEmbedded.html  embedded web content in Instant View needs a web view
-skip  -         pageBlockEmbedded.is_full_width  embedded web content in Instant View needs a web view
-skip  -         pageBlockEmbedded.poster_photo  embedded web content in Instant View needs a web view
-todo  iv        pageBlockEmbeddedPost.author_photo  Instant View block detail
-todo  iv        pageBlockTable.is_bordered  Instant View table styling
-todo  iv        pageBlockTable.is_compact  Instant View table styling
-todo  iv        pageBlockTable.is_striped  Instant View table styling
-todo  iv        pageBlockTableCell.align  Instant View table styling
-todo  iv        pageBlockTableCell.colspan  Instant View table styling
-todo  iv        pageBlockTableCell.is_header  Instant View table styling
-todo  iv        pageBlockTableCell.rowspan  Instant View table styling
-todo  iv        pageBlockTableCell.valign  Instant View table styling
-todo  iv        pageBlockVideo.is_looped  Instant View block detail
-todo  iv        pageBlockVideo.need_autoplay  Instant View block detail
+todo  later     pageBlockAnimation.need_autoplay  media blocks (InstantPageUI InstantPagePlayableVideoItem / InstantPageImageItem); this reader writes a media block as its caption line
+todo  iv        pageBlockEmbedded.allow_scrolling  official embeds the web content in the page (InstantPageUI InstantPageWebEmbedNode); UIWebView runs on iOS 6
+todo  iv        pageBlockEmbedded.html  official embeds the web content in the page (InstantPageUI InstantPageWebEmbedNode); UIWebView runs on iOS 6
+todo  iv        pageBlockEmbedded.is_full_width  official embeds the web content in the page (InstantPageUI InstantPageWebEmbedNode); UIWebView runs on iOS 6
+todo  iv        pageBlockEmbedded.poster_photo  official embeds the web content in the page (InstantPageUI InstantPageWebEmbedNode); UIWebView runs on iOS 6
+todo  later     pageBlockEmbeddedPost.author_photo  media blocks (InstantPageUI InstantPagePlayableVideoItem / InstantPageImageItem); this reader writes a media block as its caption line
+todo  later     pageBlockTable.is_bordered  the table grid (InstantPageUI InstantPageTableItem.swift); this reader writes a table as text lines, one per row
+todo  later     pageBlockTable.is_compact  the table grid (InstantPageUI InstantPageTableItem.swift); this reader writes a table as text lines, one per row
+todo  later     pageBlockTable.is_striped  the table grid (InstantPageUI InstantPageTableItem.swift); this reader writes a table as text lines, one per row
+todo  later     pageBlockTableCell.colspan  the table grid (InstantPageUI InstantPageTableItem.swift); this reader writes a table as text lines, one per row
+todo  later     pageBlockTableCell.rowspan  the table grid (InstantPageUI InstantPageTableItem.swift); this reader writes a table as text lines, one per row
+todo  later     pageBlockTableCell.valign  the table grid (InstantPageUI InstantPageTableItem.swift); this reader writes a table as text lines, one per row
+todo  later     pageBlockVideo.is_looped  media blocks (InstantPageUI InstantPagePlayableVideoItem / InstantPageImageItem); this reader writes a media block as its caption line
+todo  later     pageBlockVideo.need_autoplay  media blocks (InstantPageUI InstantPagePlayableVideoItem / InstantPageImageItem); this reader writes a media block as its caption line
 skip  -         passwordState.has_passport_data  Telegram Passport is not offered
 todo  later     paymentReceipt.seller_bot_user_id  payment receipt
 todo  later     paymentReceiptTypeRegular.payment_provider_user_id  payment receipt
 todo  later     paymentReceiptTypeRegular.shipping_option  payment receipt
 todo  later     paymentReceiptTypeRegular.tip_amount  payment receipt
 skip  -         photoSize.progressive_sizes  progressive JPEG sizes; the whole file is decoded
-todo  bubble    poll.can_see_results  poll options order, results visibility, who may vote
-todo  bubble    poll.members_only  poll options order, results visibility, who may vote
-todo  bubble    poll.option_order  poll options order, results visibility, who may vote
-todo  bubble    poll.vote_restriction_reason  poll options order, results visibility, who may vote
+skip  -         poll.members_only  official uses it only to work out that voting is restricted (AccountContext ChatController.swift isPollVotingRestricted, restrictToSubscribers); TDLib reports that outcome in vote_restriction_reason, which the bubble reads
 skip  -         pollMediaVideo.storyboards  scrubbing storyboards are not drawn
-todo  bubble    pollTypeQuiz.explanation_media  quiz explanation picture
+todo  later     pollTypeQuiz.explanation_media  official shows the explanation with its picture in a quiz answer bubble that opens the media in the gallery (ChatMessagePollBubbleContentNode ChatMessageQuizAnswerBubbleContentNode.swift, openPollMedia .solution); our poll bubble carries the explanation as text and has no quiz answer bubble
 skip  -         premiumPaymentOption.discount_percentage  Premium is bought outside this client
 skip  -         premiumPaymentOption.store_product_id  Premium is bought outside this client
 skip  -         premiumState.business_animations  Premium is bought outside this client
@@ -425,7 +348,7 @@ todo  later     profileAccentColor.min_channel_chat_boost_level  profile colour 
 todo  later     profileAccentColor.min_supergroup_chat_boost_level  profile colour picker
 todo  later     profileAccentColors.background_colors  profile colour picker
 todo  later     profileAccentColors.story_colors  profile colour picker
-skip  -         profilePhoto.has_animation  avatars are drawn still on every tier
+todo  profile   profilePhoto.has_animation  official plays video avatars (PeerInfoAvatarListNode); possible on the Modern and Full tiers, still on Vintage and Legacy
 skip  -         pushMessageContentChatAddMembers.is_returned  push payloads; notifications are built from messages
 skip  -         pushMessageContentChatAddMembers.member_name  push payloads; notifications are built from messages
 skip  -         pushMessageContentChatDeleteMember.is_left  push payloads; notifications are built from messages
@@ -439,12 +362,10 @@ skip  -         pushMessageContentMediaAlbum.has_audios  push payloads; notifica
 skip  -         pushMessageContentMediaAlbum.has_documents  push payloads; notifications are built from messages
 skip  -         pushMessageContentMediaAlbum.has_photos  push payloads; notifications are built from messages
 skip  -         pushMessageContentMediaAlbum.has_videos  push payloads; notifications are built from messages
-skip  -         pushMessageContentPhoto.is_secret  push payloads; notifications are built from messages
 skip  -         pushMessageContentPoll.is_regular  push payloads; notifications are built from messages
 skip  -         pushMessageContentStory.is_mention  push payloads; notifications are built from messages
 skip  -         pushMessageContentUpgradedGift.is_prepaid_upgrade  push payloads; notifications are built from messages
 skip  -         pushMessageContentUpgradedGift.is_upgrade  push payloads; notifications are built from messages
-skip  -         pushMessageContentVideo.is_secret  push payloads; notifications are built from messages
 todo  later     receivedGift.collection_ids  received gift details: collections, transfer, resale
 todo  later     receivedGift.craft_date  received gift details: collections, transfer, resale
 todo  later     receivedGift.drop_original_details_star_count  received gift details: collections, transfer, resale
@@ -457,75 +378,48 @@ todo  later     receivedGift.prepaid_upgrade_star_count  received gift details: 
 todo  later     receivedGift.transfer_star_count  received gift details: collections, transfer, resale
 todo  later     receivedGifts.are_notifications_enabled  gift notifications toggle
 skip  -         remoteFile.is_uploading_completed  upload progress is read from uploaded_size
-todo  bubble    restrictionInfo.has_sensitive_content  18+ media hidden under a spoiler
-todo  iv        richTextAnchorLink.anchor_name  Instant View anchors
-todo  iv        richTextBotCommand.bot_command  tappable bot command in rich text
-todo  iv        richTextCashtag.cashtag  tappable cashtag in rich text
+skip  -         richTextBotCommand.bot_command  the same characters as the run's text; official's reader draws rich text runs and has no bot command handling (InstantPageUI)
+skip  -         richTextCashtag.cashtag  the same characters as the run's text; official's reader draws rich text runs and has no cashtag handling (InstantPageUI)
 skip  -         richTextDiff.old_text  AI text diff is not offered
-todo  iv        richTextReferenceLink.reference_name  Instant View references
 skip  -         richTextUrl.is_cached  cached-page hint, the link opens either way
 skip  -         secretChat.layer  protocol layer; TDLib negotiates it
-skip  -         settingsSectionAppearance.subsection  settings deep-link subsections; the section itself opens
-skip  -         settingsSectionBusiness.subsection  settings deep-link subsections; the section itself opens
-skip  -         settingsSectionChatFolders.subsection  settings deep-link subsections; the section itself opens
-skip  -         settingsSectionDataAndStorage.subsection  settings deep-link subsections; the section itself opens
-skip  -         settingsSectionDevices.subsection  settings deep-link subsections; the section itself opens
-skip  -         settingsSectionEditProfile.subsection  settings deep-link subsections; the section itself opens
-skip  -         settingsSectionInAppBrowser.subsection  settings deep-link subsections; the section itself opens
-skip  -         settingsSectionLanguage.subsection  settings deep-link subsections; the section itself opens
-skip  -         settingsSectionMyStars.subsection  settings deep-link subsections; the section itself opens
-skip  -         settingsSectionNotifications.subsection  settings deep-link subsections; the section itself opens
-skip  -         settingsSectionPowerSaving.subsection  settings deep-link subsections; the section itself opens
-skip  -         settingsSectionPrivacyAndSecurity.subsection  settings deep-link subsections; the section itself opens
-skip  -         settingsSectionQrCode.subsection  settings deep-link subsections; the section itself opens
-skip  -         settingsSectionSendGift.subsection  settings deep-link subsections; the section itself opens
-skip  -         sponsoredMessages.messages_between  sponsored messages are not shown between posts
+skip  -         sponsoredMessages.messages_between  the owner decided against ads (2026-11-17); official shows sponsored messages and video ads, LegacyTG shows neither
 todo  later     starSubscriptionTypeBot.invoice_link  Stars subscriptions list
 todo  later     starSubscriptionTypeBot.is_canceled_by_bot  Stars subscriptions list
 todo  later     starSubscriptionTypeChannel.can_reuse  Stars subscriptions list
-todo  stars     starTransactionTypeBotSubscriptionPurchase.subscription_period  subscription period on the transaction
-todo  stars     starTransactionTypeBotSubscriptionSale.subscription_period  subscription period on the transaction
-todo  stars     starTransactionTypeChannelSubscriptionPurchase.subscription_period  subscription period on the transaction
-todo  stars     starTransactionTypeChannelSubscriptionSale.subscription_period  subscription period on the transaction
-todo  stars     starTransactionTypeFragmentWithdrawal.withdrawal_state  withdrawal state
-todo  stars     starTransactionTypePaidGroupCallMessageReceive.commission_star_amount  commission line on an income transaction
-todo  stars     starTransactionTypePaidGroupCallReactionReceive.commission_star_amount  commission line on an income transaction
-todo  stars     starTransactionTypePaidMessageReceive.commission_star_amount  commission line on an income transaction
-todo  stars     starTransactionTypeTelegramApiUsage.request_count  "API usage" transaction count
-todo  stars     starTransactionTypeUpgradedGiftSale.commission_star_amount  commission line on an income transaction
+todo  later     starTransactionTypePaidGroupCallMessageReceive.commission_star_amount  the transaction details screen works the share out from the commission (Stars StarsTransactionScreen.swift, starrefCommissionPermille description); the details screen is not built
+todo  later     starTransactionTypePaidGroupCallReactionReceive.commission_star_amount  the transaction details screen works the share out from the commission (Stars StarsTransactionScreen.swift, starrefCommissionPermille description); the details screen is not built
+todo  later     starTransactionTypePaidMessageReceive.commission_star_amount  the transaction details screen works the share out from the commission (Stars StarsTransactionScreen.swift, starrefCommissionPermille description); the details screen is not built
+todo  later     starTransactionTypeUpgradedGiftSale.commission_star_amount  the transaction details screen works the share out from the commission (Stars StarsTransactionScreen.swift, starrefCommissionPermille description); the details screen is not built
 todo  later     starTransactionTypeUpgradedGiftSale.via_offer  gift offers
-todo  stats     statisticalValue.previous_value  overview change against the previous period
-skip  -         stickerFullTypeRegular.premium_animation  premium sticker effects need the animation layer the A4 cannot run
-todo  stickers  stickerSet.is_allowed_as_chat_emoji_status  set thumbnail outline and emoji-status sets
-todo  stickers  stickerSet.thumbnail_outline  set thumbnail outline and emoji-status sets
-todo  stickers  stickerSetInfo.is_allowed_as_chat_emoji_status  set thumbnail outline and emoji-status sets
-todo  stickers  stickerSetInfo.thumbnail_outline  set thumbnail outline and emoji-status sets
-todo  settings  storageStatisticsFast.language_pack_database_size  storage: language pack size
-todo  stories   stories.pinned_story_ids  pinned stories first
-todo  stories   story.is_visible_only_for_self  "only you" story mark
-todo  stories   storyAreaTypeSuggestedReaction.is_flipped  flipped reaction area
-todo  stories   storyInteractionInfo.recent_viewer_user_ids  viewer faces under your story
-todo  stories   storyRepostInfo.is_content_modified  "modified" on a repost
+todo  bubble    stickerFullTypeRegular.premium_animation  official plays a premium sticker's effect around it; possible on the Full tier
+todo  later     stickerSet.is_allowed_as_chat_emoji_status  filters the installed sets in a channel's emoji status picker (EntityKeyboard EmojiPagerContentSignals.swift, .channelStatus, isAvailableAsChannelStatus); our picker shows Telegram's default and themed lists, not installed sets
+skip  -         stickerSet.thumbnail_outline  the outline is official's loading placeholder under a set's thumbnail (EntityKeyboard immediateThumbnailData), an effect this client draws without
+todo  later     stickerSetInfo.is_allowed_as_chat_emoji_status  filters the installed sets in a channel's emoji status picker (EntityKeyboard EmojiPagerContentSignals.swift, .channelStatus, isAvailableAsChannelStatus); our picker shows Telegram's default and themed lists, not installed sets
+skip  -         stickerSetInfo.thumbnail_outline  the outline is official's loading placeholder under a set's thumbnail (EntityKeyboard immediateThumbnailData), an effect this client draws without
+skip  -         storageStatisticsFast.language_pack_database_size  official's storage screen has no language pack category (TelegramUI StorageUsageScreen)
+todo  later     story.is_visible_only_for_self  the privacy badge on your own story and its tooltip "This story is shown only to you." (StoryItemSetContainerComponent presentPrivacyTooltip, .nobody); the badge is not built
+todo  later     storyAreaTypeSuggestedReaction.is_flipped  mirrors the reaction widget official draws on the story (StoryContainerScreen StoryItemOverlaysView.swift, .isFlipped); the reaction widget is not built
+skip  -         storyRepostInfo.is_content_modified  official carries it into the forward info and no component reads it (StoryContainerScreen StoryChatContent.swift, isModified)
 skip  -         storyVideo.preload_prefix_size  video stories are downloaded whole
-todo  group     supergroup.has_linked_chat  linked chat and location rows
-todo  group     supergroup.has_location  linked chat and location rows
-todo  group     supergroupFullInfo.can_enable_paid_messages  "Charge for Messages" row
-todo  group     supergroupFullInfo.can_enable_paid_reaction  reactions page: Star reaction switch
-todo  group     supergroupFullInfo.can_get_members  members list shown only when allowed
+todo  later     supergroup.has_linked_chat  in a discussion group Pin Messages and Change Info are locked with "not available in discussion groups" on the per-right permissions screen (PeerInfoUI ChannelPermissionsController.swift), which this client replaces with three presets
+todo  later     supergroup.has_location  in a geo group Pin Messages and Change Info are locked with "not available in geo groups" on the per-right permissions screen (PeerInfoUI ChannelPermissionsController.swift), which this client replaces with three presets
+todo  later     supergroupFullInfo.can_enable_paid_messages  "Charge for Messages" on the per-right permissions screen (PeerInfoUI ChannelPermissionsController.swift), which this client replaces with three presets
+todo  later     supergroupFullInfo.can_enable_paid_reaction  the Star reaction switch on the allowed reactions screen (TelegramUI Components PeerAllowedReactionsScreen.swift, isStarReactionAvailable), which is not built
+skip  -         supergroupFullInfo.can_get_members  no official screen reads it: CachedChannelFlags.canDisplayParticipants is only set (TelegramCore UpdateCachedPeerData.swift); the members list asks and shows what comes back
 todo  later     supergroupFullInfo.can_get_revenue_statistics  channel revenue page
 todo  later     supergroupFullInfo.can_get_star_revenue_statistics  Stars revenue page
 todo  later     supergroupFullInfo.can_send_gift  "Send a Gift" to a channel
-todo  group     supergroupFullInfo.can_set_location  location row for geo groups
-todo  group     supergroupFullInfo.has_paid_media_allowed  "Paid Media" switch
-todo  profile   supergroupFullInfo.has_pinned_stories  stories tab only when there are pinned stories
+skip  -         supergroupFullInfo.can_set_location  no official screen reads it: CachedChannelFlags.canChangePeerGeoLocation is only set (TelegramCore UpdateCachedPeerData.swift)
+todo  later     supergroupFullInfo.has_paid_media_allowed  the paid content option in the media picker (MediaPickerUI MediaPickerScreen.swift paidMediaAllowed); paid media sending is not built
+skip  -         supergroupFullInfo.has_pinned_stories  official shows the stories pane from the loaded list, not a flag (PeerInfoScreen PeerInfoData.swift hasStories from storyListContext.state)
 todo  later     supergroupFullInfo.my_boost_count  boost screen: your boosts
-todo  later     supergroupFullInfo.upgraded_from_basic_group_id  history of the basic group before the upgrade
-todo  later     supergroupFullInfo.upgraded_from_max_message_id  history of the basic group before the upgrade
-todo  auth      termsOfService.min_user_age  minimum age on the terms
+todo  bubble    supergroupFullInfo.upgraded_from_basic_group_id  the chat shows the basic group's history before the upgrade (official loads the migrated history); the chat exists
+todo  bubble    supergroupFullInfo.upgraded_from_max_message_id  the chat shows the basic group's history before the upgrade (official loads the migrated history); the chat exists
 skip  -         textCompositionStyle.english_example  AI composition styles are a Premium web feature
 skip  -         textQuote.rich_texts  the quote text is drawn from text; rich_texts duplicates it
-skip  -         themeSettings.animate_outgoing_message_fill  animated outgoing gradients cannot run on the A4
-skip  -         themeSettings.has_outgoing_message_accent_color  animated outgoing gradients cannot run on the A4
+todo  settings  themeSettings.animate_outgoing_message_fill  official animates the outgoing bubble gradient of a theme; possible on the Full tier, still elsewhere
+todo  settings  themeSettings.has_outgoing_message_accent_color  official animates the outgoing bubble gradient of a theme; possible on the Full tier, still elsewhere
 skip  -         tonConnectConnectRequest.manifest_url  TON wallet is not offered
 skip  -         tonConnectSession.dapp_client_id  TON wallet is not offered
 skip  -         tonConnectSession.manifest  TON wallet is not offered
@@ -554,12 +448,12 @@ skip  -         updateChatMember.old_chat_member  the members list re-reads inst
 skip  -         updateChatMember.via_join_request  the members list re-reads instead of patching
 skip  -         updateDeleteMessages.from_cache  a cache eviction removes the rows either way
 skip  -         updateFavoriteStickers.sticker_ids  the panel re-asks favourites
-todo  settings  updateFileAddedToDownloads.counts  Settings > Downloads (the screen exists): counts, dates, totals
-todo  settings  updateFileAddedToDownloads.file_download  Settings > Downloads (the screen exists): counts, dates, totals
-todo  settings  updateFileDownload.counts  Settings > Downloads (the screen exists): counts, dates, totals
-todo  settings  updateFileDownloads.total_size  Settings > Downloads (the screen exists): counts, dates, totals
-todo  settings  updateFileRemovedFromDownloads.counts  Settings > Downloads (the screen exists): counts, dates, totals
-todo  calls     updateGroupCallVerificationState.generation  emoji fingerprint in group calls
+skip  -         updateFileAddedToDownloads.counts  the Downloads page re-reads searchFileDownloads on every download update (TGUpdateHandlers+Files.m), so the counts and entries reach it through that answer; official keeps its own fetch manager (ChatListUI ChatListSearchListPaneNode entriesSummary)
+skip  -         updateFileAddedToDownloads.file_download  the Downloads page re-reads searchFileDownloads on every download update (TGUpdateHandlers+Files.m), so the counts and entries reach it through that answer; official keeps its own fetch manager (ChatListUI ChatListSearchListPaneNode entriesSummary)
+skip  -         updateFileDownload.counts  the Downloads page re-reads searchFileDownloads on every download update (TGUpdateHandlers+Files.m), so the counts and entries reach it through that answer; official keeps its own fetch manager (ChatListUI ChatListSearchListPaneNode entriesSummary)
+todo  later     updateFileDownloads.total_size  the chat list's downloads button with overall progress (ChatListUI ChatListController.swift activeDownloads, .downloading(progress)), not built
+skip  -         updateFileRemovedFromDownloads.counts  the Downloads page re-reads searchFileDownloads on every download update (TGUpdateHandlers+Files.m), so the counts and entries reach it through that answer; official keeps its own fetch manager (ChatListUI ChatListSearchListPaneNode entriesSummary)
+todo  later     updateGroupCallVerificationState.generation  the encryption key emoji of a video chat (TelegramCallsUI VideoChatScreen.swift encryptionKeyEmoji); group-call audio is its own release (M21)
 skip  -         updateMessageContent.new_content  the chat re-reads the message instead of patching
 skip  -         updateMessageReaction.new_reaction_types  bot-side update
 skip  -         updateMessageReaction.old_reaction_types  bot-side update
@@ -585,28 +479,19 @@ todo  later     upgradedGift.can_be_ton_wallet_card_background  upgraded gift pa
 todo  later     upgradedGift.can_send_purchase_offer  upgraded gift page
 todo  later     upgradedGift.craft_probability_per_mille  upgraded gift page
 todo  later     upgradedGift.gift_address  upgraded gift page
-todo  later     upgradedGift.host_id  upgraded gift page
 todo  later     upgradedGift.is_burned  upgraded gift page
 todo  later     upgradedGift.is_crafted  upgraded gift page
 todo  later     upgradedGift.is_theme_available  upgraded gift page
-todo  later     upgradedGift.max_upgraded_count  upgraded gift page
-todo  later     upgradedGift.original_details  upgraded gift page
 todo  later     upgradedGift.owner_address  upgraded gift page
-todo  later     upgradedGift.owner_name  upgraded gift page
-todo  later     upgradedGift.publisher_chat_id  upgraded gift page
+todo  gift      upgradedGift.publisher_chat_id  official's gift screen shows it (Gifts GiftViewScreen.swift: Gift.View.ReleasedBy); our received gift screen (TGGiftViewController) has Date, Model, Symbol, Backdrop and Value only
 todo  later     upgradedGift.resale_parameters  upgraded gift page
-todo  later     upgradedGift.total_upgraded_count  upgraded gift page
 todo  later     upgradedGift.used_theme_chat_id  upgraded gift page
-todo  later     upgradedGiftAttributeRarityPerMille.per_mille  upgraded gift page
-todo  later     upgradedGiftBackdrop.rarity  upgraded gift page
 todo  later     upgradedGiftBackdropColors.symbol_color  upgraded gift page
 todo  later     upgradedGiftColors.dark_theme_accent_color  gift name colours
 todo  later     upgradedGiftColors.light_theme_accent_color  gift name colours
 todo  later     upgradedGiftColors.symbol_custom_emoji_id  gift name colours
 todo  later     upgradedGiftModel.is_crafted  upgraded gift page
-todo  later     upgradedGiftModel.rarity  upgraded gift page
 todo  later     upgradedGiftOriginUpgrade.gift_message_id  upgraded gift page
-todo  later     upgradedGiftSymbol.rarity  upgraded gift page
 todo  later     upgradedGiftValueInfo.fragment_listed_gift_count  gift value page
 todo  later     upgradedGiftValueInfo.initial_sale_date  gift value page
 todo  later     upgradedGiftValueInfo.initial_sale_price  gift value page
@@ -616,34 +501,29 @@ todo  later     upgradedGiftValueInfo.last_sale_date  gift value page
 todo  later     upgradedGiftValueInfo.last_sale_price  gift value page
 todo  later     upgradedGiftValueInfo.telegram_listed_gift_count  gift value page
 todo  later     user.added_to_attachment_menu  bot buttons in the attachment sheet
-todo  profile   user.is_support  "Telegram Support" mark
 todo  later     user.upgraded_gift_colors  gift name colours
 todo  later     userAuctionBid.bid_date  gift auction screen
 todo  later     userAuctionBid.next_bid_star_count  gift auction screen
 todo  later     userAuctionBid.was_returned  gift auction screen
 todo  later     userFullInfo.gift_settings  gift button on the profile
-todo  profile   userFullInfo.has_posted_to_profile_stories  stories tab only when there are stories
-todo  profile   userFullInfo.has_private_calls  call button hidden when calls are private
+skip  -         userFullInfo.has_posted_to_profile_stories  official shows the stories pane from the loaded list, not a flag (PeerInfoScreen PeerInfoData.swift hasStories from storyListContext.state)
+todo  later     userFullInfo.has_private_calls  official keeps the Call button and on a tap pushes the group-call invite screen (PeerInfoScreenCallActions.swift, callsPrivate -> makeSendInviteLinkScreen .groupCall), which is not built
 skip  -         userFullInfo.has_private_forwards  hidden forwards already arrive as messageOriginHiddenUser
-todo  profile   userFullInfo.need_phone_number_privacy_exception  "share my number" offer after adding a contact
-todo  later     userFullInfo.pending_rating  user rating
-todo  later     userFullInfo.pending_rating_date  user rating
+todo  profile   userFullInfo.pending_rating  the star rating badge in the profile header and its sheet (PeerInfoHeaderNode currentStarRating / currentPendingStarRating); the header exists
+todo  profile   userFullInfo.pending_rating_date  the star rating badge in the profile header and its sheet (PeerInfoHeaderNode currentStarRating / currentPendingStarRating); the header exists
 todo  later     userFullInfo.set_chat_background  "reset wallpaper for both" with per-chat wallpapers
 skip  -         userFullInfo.ton_wallet_card  TON wallet is not offered
-todo  profile   userFullInfo.uses_unofficial_app  "uses an unofficial app" warning
-todo  profile   userLink.can_get_permanent_link  permanent profile link
-todo  later     userRating.current_level_rating  user rating
-todo  later     userRating.is_maximum_level_reached  user rating
-todo  later     userRating.next_level_rating  user rating
-todo  profile   userStatusLastMonth.by_my_privacy_settings  "hidden by your settings" on last seen
-todo  profile   userStatusLastWeek.by_my_privacy_settings  "hidden by your settings" on last seen
-todo  profile   userStatusRecently.by_my_privacy_settings  "hidden by your settings" on last seen
-todo  profile   userTypeBot.active_user_count  "N monthly users" under a bot
+skip  -         userLink.can_get_permanent_link  this client always asks getUserLink for the permanent link (TGProfileStore+AccountProfileMedia myUserLink); official shows no expiring user link
+todo  profile   userRating.current_level_rating  the star rating badge in the profile header and its sheet (PeerInfoHeaderNode currentStarRating / currentPendingStarRating); the header exists
+todo  profile   userRating.is_maximum_level_reached  the star rating badge in the profile header and its sheet (PeerInfoHeaderNode currentStarRating / currentPendingStarRating); the header exists
+todo  profile   userRating.next_level_rating  the star rating badge in the profile header and its sheet (PeerInfoHeaderNode currentStarRating / currentPendingStarRating); the header exists
+todo  later     userStatusLastMonth.by_my_privacy_settings  official puts a "when?" badge by the status that opens the Premium last-seen sheet (PeerInfoHeaderNode.swift isHiddenStatus -> displayStatusPremiumIntro), which is not built
+todo  later     userStatusLastWeek.by_my_privacy_settings  official puts a "when?" badge by the status that opens the Premium last-seen sheet (PeerInfoHeaderNode.swift isHiddenStatus -> displayStatusPremiumIntro), which is not built
+todo  later     userStatusRecently.by_my_privacy_settings  official puts a "when?" badge by the status that opens the Premium last-seen sheet (PeerInfoHeaderNode.swift isHiddenStatus -> displayStatusPremiumIntro), which is not built
 todo  later     userTypeBot.allows_users_to_create_topics  bot topics
 todo  later     userTypeBot.can_be_added_to_attachment_menu  bot buttons in the attachment sheet
 todo  later     userTypeBot.can_connect_to_business  Business chatbot picker
 todo  later     userTypeBot.can_manage_bots  managed bots
-todo  group     userTypeBot.can_read_all_group_messages  "has access to messages" under a bot member
 skip  -         userTypeBot.has_main_web_app  Mini Apps open in the system browser
 todo  later     userTypeBot.has_topics  bot topics
 todo  later     userTypeBot.is_guard  guard bots
@@ -654,18 +534,16 @@ skip  -         vectorPathCommandCubicBezierCurve.end_control_point  sticker out
 skip  -         vectorPathCommandCubicBezierCurve.end_point  sticker outlines; thumbnails stand in
 skip  -         vectorPathCommandCubicBezierCurve.start_control_point  sticker outlines; thumbnails stand in
 skip  -         vectorPathCommandLine.end_point  sticker outlines; thumbnails stand in
-todo  profile   verificationStatus.bot_verification_icon_custom_emoji_id  third-party verification icon
 skip  -         video.supports_streaming  videos are downloaded whole before playing
 todo  later     videoChat.has_participants  video chat bar over a group chat
-skip  -         videoMessageAdvertisements.between_delay  video ads are not shown
-skip  -         videoMessageAdvertisements.start_delay  video ads are not shown
+skip  -         videoMessageAdvertisements.between_delay  the owner decided against ads (2026-11-17); official shows sponsored messages and video ads, LegacyTG shows neither
+skip  -         videoMessageAdvertisements.start_delay  the owner decided against ads (2026-11-17); official shows sponsored messages and video ads, LegacyTG shows neither
 skip  -         videoStoryboard.map_file  scrubbing storyboards are not drawn
 skip  -         videoStoryboard.storyboard_file  scrubbing storyboards are not drawn
 skip  -         webAppUrl.require_same_origin  Mini Apps open in the system browser
 skip  -         webBrowserSettings.external_exceptions  links open in the system browser; no in-app browser
 skip  -         webBrowserSettings.in_app_exceptions  links open in the system browser; no in-app browser
 skip  -         webDomainException.favicon_custom_emoji_id  links open in the system browser; no in-app browser
-todo  iv        webPageInstantView.feedback_link  "Wrong layout?" feedback link
 skip  -         webProxyCarrier.bridge_object_name  dev-only web proxy experiment
 skip  -         webProxyCarrier.is_temporary  dev-only web proxy experiment
 skip  -         webProxyCarrier.path_prefix  dev-only web proxy experiment
@@ -678,7 +556,6 @@ skip  -         inputMessageForwarded.copy_options  we send it; nothing to draw
 skip  -         inputMessageForwarded.in_game_share  we send it; nothing to draw
 skip  -         inputMessageForwarded.new_video_start_timestamp  we send it; nothing to draw
 skip  -         inputMessageForwarded.replace_video_start_timestamp  we send it; nothing to draw
-skip  -         inputMessageInvoice.paid_media_caption  we send it; nothing to draw
 skip  -         inputMessageInvoice.photo_height  we send it; nothing to draw
 skip  -         inputMessageInvoice.photo_size  we send it; nothing to draw
 skip  -         inputMessageInvoice.photo_url  we send it; nothing to draw
@@ -688,11 +565,6 @@ skip  -         inputMessageInvoice.provider_token  we send it; nothing to draw
 skip  -         inputMessagePoll.hide_results_until_closes  we send it; nothing to draw
 skip  -         inputMessagePoll.members_only  we send it; nothing to draw
 skip  -         inputMessagePoll.shuffle_options  we send it; nothing to draw
-skip  -         inputMessageReplyToExternalMessage.checklist_task_id  we send it; nothing to draw
-skip  -         inputMessageReplyToMessage.checklist_task_id  we send it; nothing to draw
-skip  -         inputPageBlockButtonRow.align  we send it; nothing to draw
-skip  -         inputPageBlockButtonRow.buttons  we send it; nothing to draw
-skip  -         inputPageBlockDetails.is_open  we send it; nothing to draw
 skip  -         inputPageBlockTable.is_bordered  we send it; nothing to draw
 skip  -         inputPageBlockTable.is_compact  we send it; nothing to draw
 skip  -         inputPageBlockTable.is_striped  we send it; nothing to draw

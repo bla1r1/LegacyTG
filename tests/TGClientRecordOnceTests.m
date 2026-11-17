@@ -136,4 +136,34 @@ static NSString *ORDocPath(void) {
 	XCTAssertEqual([flat[@"viewOnce"] boolValue], NO);
 	XCTAssertEqual([flat[@"destructSeconds"] integerValue], 0);
 }
+/// Parity: secret chat media carries is_secret, and the bubble veils it
+/// and opens it once (official ChatMessageInteractiveMediaNode isSecretMedia).
+- (void)testFlatten_SecretMedia_EachKind {
+	NSArray *kinds = @[@"messagePhoto", @"messageVideo", @"messageAnimation", @"messageVideoNote"];
+	for (NSString *kind in kinds) {
+		NSDictionary *m = @{@"@type" : @"message", @"id" : @(14),
+				@"chat_id" : @(42), @"sender_id" : @{@"user_id" : @(2)},
+				@"date" : @100,
+				@"content" : @{@"@type" : kind, @"is_secret" : @YES}};
+		XCTAssertEqual([TGFlattenMessage(m)[@"secretMedia"] boolValue], YES, @"%@", kind);
+	}
+	NSDictionary *plain = @{@"@type" : @"message", @"id" : @(15),
+			@"chat_id" : @(42), @"sender_id" : @{@"user_id" : @(2)},
+			@"date" : @100, @"content" : @{@"@type" : @"messagePhoto", @"is_secret" : @NO}};
+	XCTAssertEqual([TGFlattenMessage(plain)[@"secretMedia"] boolValue], NO);
+}
+/// Parity: an 18+ message and a reply to a checklist task carry their
+/// marks through the flatten.
+- (void)testFlatten_SensitiveAndChecklistReply {
+	NSDictionary *m = @{@"@type" : @"message", @"id" : @(16),
+			@"chat_id" : @(42), @"sender_id" : @{@"user_id" : @(2)}, @"date" : @100,
+			@"restriction_info" : @{@"@type" : @"restrictionInfo", @"restriction_reason" : @"",
+					@"has_sensitive_content" : @YES},
+			@"reply_to" : @{@"@type" : @"messageReplyToMessage", @"chat_id" : @(42),
+					@"message_id" : @(9), @"checklist_task_id" : @(3)},
+			@"content" : @{@"@type" : @"messagePhoto"}};
+	NSDictionary *flat = TGFlattenMessage(m);
+	XCTAssertEqual([flat[@"sensitive"] boolValue], YES);
+	XCTAssertEqual([flat[@"replyTaskId"] integerValue], 3);
+}
 @end

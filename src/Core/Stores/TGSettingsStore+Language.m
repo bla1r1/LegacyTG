@@ -83,6 +83,15 @@ static NSArray *TGLanguagePackStrings(NSDictionary *result) {
 			if ([value[@"other_value"] isKindOfClass:NSString.class] &&
 					[value[@"other_value"] length])
 				forms[@"other"] = value[@"other_value"];
+			// Arabic, Hebrew, Slovenian and Irish have a form for two, and
+			// Arabic one for zero, as official's CLDR rules pick
+			// (StringPluralization getPluralizationForm).
+			if ([value[@"zero_value"] isKindOfClass:NSString.class] &&
+					[value[@"zero_value"] length])
+				forms[@"zero"] = value[@"zero_value"];
+			if ([value[@"two_value"] isKindOfClass:NSString.class] &&
+					[value[@"two_value"] length])
+				forms[@"two"] = value[@"two_value"];
 			[out addObject:@{
 				@"key" : string[@"key"] ?: @"",
 				@"value" : value[@"other_value"] ?: @"",

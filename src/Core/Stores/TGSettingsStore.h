@@ -17,6 +17,8 @@
 #import "TGClientNotifications.h"
 
 @interface TGSettingsStore : NSObject
+/// downloadedFileCounts of the last fileDownloadsMatching answer.
+@property (nonatomic, copy) NSDictionary *lastDownloadCounts;
 
 + (instancetype)shared;
 

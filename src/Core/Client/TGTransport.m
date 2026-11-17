@@ -24,7 +24,13 @@ static const int64_t kIdlePollNanoseconds = 20 * NSEC_PER_MSEC;
 @interface TGTransport ()
 @property (nonatomic, strong) NSMutableArray *outbox;
 @property (nonatomic, strong) NSLock *outboxLock;
+// A dispatch object is an Objective-C object wherever the app runs; on the
+// Linux host run (libdispatch without its ObjC layer) it is a plain pointer.
+#if OS_OBJECT_USE_OBJC
 @property (nonatomic, strong) dispatch_semaphore_t outboxSignal;
+#else
+@property (nonatomic, assign) dispatch_semaphore_t outboxSignal;
+#endif
 @property (nonatomic, strong) NSMutableDictionary *pendingRequests;
 @property (nonatomic, assign) unsigned long requestSeq;
 @property (nonatomic, assign) void *handle;

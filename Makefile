@@ -270,6 +270,10 @@ APP_SRC_M := \
 	src/Core/Stores/TGStoryStore+Viewer.m \
 	src/Core/Stores/TGEmojiStore.m \
 	src/Core/Model/TGServiceMessageText.m \
+	src/Core/Model/TGChatStatistics.m \
+	src/Core/Model/TGDownloadList.m \
+	src/Core/Model/TGStoryAreas.m \
+	src/Core/Model/TGInternalLinkRoute.m \
 	src/Core/Model/TGMessageContentCommerce.m \
 	src/Core/Model/TGMessageContentInteractive.m \
 	src/Core/Model/TGMessageCard.m \
@@ -558,6 +562,7 @@ APP_SRC_M := \
 	src/Features/Chat/Actions/TGChatActionsMessageActions.m \
 	src/Features/Chat/Actions/TGChatActionsHoldMenu.m \
 	src/Features/Chat/Actions/TGChatViewController+Attachments.m \
+	src/Features/Chat/Actions/TGChatViewController+LinkRoutes.m \
 	src/Features/Chat/Actions/TGChatViewController+MessageSheets.m \
 	src/Features/Chat/Rendering/TGChatViewController+Layout.m \
 	src/Features/Chat/Rendering/TGChatViewController+Cells.m \

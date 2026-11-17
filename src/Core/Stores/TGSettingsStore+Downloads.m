@@ -69,10 +69,19 @@
 				@"size"   : file[@"size"] ?: @(0),
 				@"paused" : download[@"is_paused"] ?: @NO,
 				@"done"   : @([download[@"complete_date"] integerValue] > 0),
+				@"addDate" : download[@"add_date"] ?: @(0),
+				@"completeDate" : download[@"complete_date"] ?: @(0),
 			}];
 		}
+		NSDictionary *counts = [result[@"total_counts"] isKindOfClass:NSDictionary.class]
+				? result[@"total_counts"] : @{};
+		self.lastDownloadCounts = @{
+			@"active_count"    : counts[@"active_count"] ?: @0,
+			@"paused_count"    : counts[@"paused_count"] ?: @0,
+			@"completed_count" : counts[@"completed_count"] ?: @0,
+		};
 		if (completion)
-			completion(out, [result[@"total_counts"][@"active_count"] integerValue]);
+			completion(out, [counts[@"active_count"] integerValue]);
 	}];
 }
 

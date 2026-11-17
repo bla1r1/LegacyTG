@@ -123,7 +123,23 @@ static const CGFloat kChartHeight = 150.0f;
 	NSMutableArray *overview = [NSMutableArray array];
 	NSMutableArray *sections = [NSMutableArray array];
 	CGFloat width = self.view.bounds.size.width - TGDoubled(TGMetricPadLarge + TGMetricPad);
+	// TOP MEMBERS, TOP ADMINS, TOP INVITERS and RECENT POSTS come after the
+	// graphs, each under its heading, as official lists them.
+	NSMutableArray *listTitles = [NSMutableArray array];
+	NSMutableDictionary *lists = [NSMutableDictionary dictionary];
 	for (NSDictionary *row in self.statRows){
+		NSString *heading = row[@"section"];
+		if (heading.length){
+			if (!lists[heading]){
+				lists[heading] = [NSMutableArray array];
+				[listTitles addObject:heading];
+			}
+			NSMutableDictionary *item = TGRow(TGKindPlain, row[@"title"]);
+			item[TGRowDetail] = row[@"detail"] ?: @"";
+			item[TGRowRawTitle] = @YES;
+			[lists[heading] addObject:item];
+			continue;
+		}
 		if (!row[@"graph"]){
 			NSMutableDictionary *plain = TGRow(TGKindPlain, row[@"title"]);
 			plain[TGRowDetail] = row[@"detail"] ?: @"";
@@ -145,6 +161,8 @@ static const CGFloat kChartHeight = 150.0f;
 		}
 		[sections addObject:TGSection(TGLocalized(title), nil, @[cell])];
 	}
+	for (NSString *heading in listTitles)
+		[sections addObject:TGSection(TGLocalized(heading), nil, lists[heading])];
 	[sections insertObject:TGSection(TGLocalized(@"OVERVIEW"), nil, overview) atIndex:0];
 	self.sections = sections;
 	[self reloadRows];

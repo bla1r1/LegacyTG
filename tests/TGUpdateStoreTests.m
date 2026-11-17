@@ -52,6 +52,20 @@ static NSString *TGUSUpdateJSON(NSInteger build, BOOL blocking) {
 			@"lt1 v=1.2 b=42 ios=6.1.6 dev=iPhone3,1 tier=vintage jb=1 lang=uk stats=0");
 }
 
+- (void)testQueryStringWithTelemetryAppendsTelemetryFields {
+	NSString *query = TGUpdateQueryStringWithTelemetry(@"1.2", @"42", @"7.1.2",
+			@"iPhone4,1", @"legacy", NO, @"en", YES, YES, @"deb", 2, @"Chat");
+	XCTAssertEqualObjects(query,
+			@"lt1 v=1.2 b=42 ios=7.1.2 dev=iPhone4,1 tier=legacy jb=0 lang=en stats=1 cr=1 cdet=Chat src=deb dc=2");
+}
+
+- (void)testQueryStringWithTelemetryOmitsEmptyCrashDetails {
+	NSString *query = TGUpdateQueryStringWithTelemetry(@"1.2", @"42", @"7.1.2",
+			@"iPhone4,1", @"legacy", NO, @"en", YES, NO, @"ipa", 0, nil);
+	XCTAssertEqualObjects(query,
+			@"lt1 v=1.2 b=42 ios=7.1.2 dev=iPhone4,1 tier=legacy jb=0 lang=en stats=1 src=ipa");
+}
+
 - (void)testQueryStringIsCappedAt256Bytes {
 	NSString *device = [@"" stringByPaddingToLength:400
 			withString:@"A" startingAtIndex:0];

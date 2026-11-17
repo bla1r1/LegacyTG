@@ -6,6 +6,8 @@
 // document nobody could read. Decline and Accept sit on the bottom bar, as
 // official draws them.
 #import "TGTermsViewController.h"
+#import "TGTermsAge.h"
+#import "TGAlertSheet.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGButton.h"
@@ -86,6 +88,21 @@
 }
 
 - (void)acceptTapped {
+	NSString *ageCheck = TGTermsAgeConfirmation(self.minUserAge);
+	if (ageCheck.length) {
+		__weak typeof(self) weakSelf = self;
+		[TGAlertSheet showConfirm:ageCheck
+							title:TGLocalized(@"Age Verification")
+						   action:TGLocalized(@"Agree")
+					  destructive:NO
+						   inView:self.view
+						onConfirm:^{ [weakSelf acceptConfirmed]; }];
+		return;
+	}
+	[self acceptConfirmed];
+}
+
+- (void)acceptConfirmed {
 	if (self.onAccept)
 		self.onAccept();
 	[self dismissSelf];

@@ -310,8 +310,44 @@ NSString *TGLocalizedFormat(NSString *english, ...) {
 	return answer;
 }
 
-static NSString *TGPluralFormKey(NSInteger count, NSString *language) {
+static NSString *TGPluralFormKeyClassic(NSInteger count, NSString *lang);
+
+NSString *TGPluralCategory(NSInteger count, NSString *language) {
 	NSString *lang = [language lowercaseString];
+	// CLDR cardinal rules for the languages whose packs carry zero and two
+	// forms (official StringPluralization, numberPluralizationForm).
+	if ([lang hasPrefix:@"ar"]){
+		NSInteger mod100 = count % 100;
+		if (count == 0) return @"zero";
+		if (count == 1) return @"one";
+		if (count == 2) return @"two";
+		if (mod100 >= 3 && mod100 <= 10) return @"few";
+		if (mod100 >= 11 && mod100 <= 99) return @"many";
+		return @"other";
+	}
+	if ([lang hasPrefix:@"he"] || [lang hasPrefix:@"iw"]){
+		if (count == 1) return @"one";
+		if (count == 2) return @"two";
+		return @"other";
+	}
+	if ([lang hasPrefix:@"sl"]){
+		NSInteger mod100 = count % 100;
+		if (mod100 == 1) return @"one";
+		if (mod100 == 2) return @"two";
+		if (mod100 == 3 || mod100 == 4) return @"few";
+		return @"other";
+	}
+	if ([lang hasPrefix:@"ga"]){
+		if (count == 1) return @"one";
+		if (count == 2) return @"two";
+		if (count >= 3 && count <= 6) return @"few";
+		if (count >= 7 && count <= 10) return @"many";
+		return @"other";
+	}
+	return TGPluralFormKeyClassic(count, lang);
+}
+
+static NSString *TGPluralFormKeyClassic(NSInteger count, NSString *lang) {
 	// Slavic three-form rule: 1, 2-4, 5-20 and the teens.
 	if ([lang hasPrefix:@"ru"] || [lang hasPrefix:@"uk"] || [lang hasPrefix:@"be"]){
 		NSInteger mod10 = count % 10;
@@ -338,7 +374,7 @@ static NSString *TGPluralForm(NSString *one, NSString *other, NSInteger count) {
 	NSString *form = nil;
 	NSDictionary *forms = other.length ? TGTelegramPlurals[other] : nil;
 	if ([forms isKindOfClass:NSDictionary.class]){
-		NSString *key = TGPluralFormKey(count, TGAppLanguage());
+		NSString *key = TGPluralCategory(count, TGAppLanguage());
 		form = forms[key];
 		if (!form.length)
 			form = forms[@"other"];

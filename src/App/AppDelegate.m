@@ -336,6 +336,7 @@ static UIImage *TGCustomEmojiFromStore(int64_t emojiId, CGFloat side) {
 	[self startTDLib];
 	TGPerfReport("launch", "startTDLib", stepStart, 50.0);
 	TGWarmFonts([TGTheme shared].messageFontSize);
+	[TGUpdateStore sessionDidStart];
 	// One line if the launch itself misbehaves; silent when it is healthy.
 	TGPerfReport("launch", "didFinishLaunching", launchStart, 300.0);
 
@@ -346,6 +347,7 @@ static UIImage *TGCustomEmojiFromStore(int64_t emojiId, CGFloat side) {
 
 - (void)applicationDidEnterBackground:(UIApplication *)application {
 	[TGPasscode noteAppBackgrounded];
+	[TGUpdateStore sessionDidEnd];
 
 	// B13: the close has to finish before iOS suspends us.
 	__block UIBackgroundTaskIdentifier task = UIBackgroundTaskInvalid;
@@ -360,6 +362,7 @@ static UIImage *TGCustomEmojiFromStore(int64_t emojiId, CGFloat side) {
 }
 
 - (void)applicationWillEnterForeground:(UIApplication *)application {
+	[TGUpdateStore sessionDidStart];
 	if ([TGPasscode shouldLockOnForeground]) {
 		[TGPasscodeViewController presentUnlockIfLocked];
 	}
@@ -725,6 +728,7 @@ static UIImage *TGCustomEmojiFromStore(int64_t emojiId, CGFloat side) {
 
 	TGTermsViewController *terms = [[TGTermsViewController alloc] init];
 	terms.termsText = info[@"text"] ?: @"";
+	terms.minUserAge = [info[@"minAge"] integerValue];
 	terms.onAccept = ^{
 		[[TGClient shared] acceptTermsOfService:termsId completion:nil];
 	};

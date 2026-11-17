@@ -12,6 +12,9 @@ NSString *const TGUpdateAvailableNotification = @"TGUpdateAvailableNotification"
 static NSString *const TGUpdateLastCheckKey = @"TGUpdateLastCheck";
 static NSString *const TGUpdateSkippedBuildKey = @"TGUpdateSkippedBuild";
 static NSString *const TGUpdateStatisticsKey = @"TGUsageStatisticsEnabled";
+static NSString *const TGUpdateSessionOpenKey = @"TGUpdateSessionIsOpen";
+static NSString *const TGUpdateActiveScreenKey = @"TGUpdateActiveScreen";
+static NSString *const TGUpdateCrashMarkerKey = @"TGUpdateLastCrashMarker";
 
 // The bot that answers the daily update check. The name is compiled in, so a
 // rename needs a build. Inline mode must stay on.
@@ -39,6 +42,39 @@ static NSString *TGUpdateTruncate(NSString *text, NSUInteger limit) {
 	return @"";
 }
 
+NSString *TGUpdateQueryStringWithTelemetry(NSString *version,
+                                           NSString *build,
+                                           NSString *ios,
+                                           NSString *device,
+                                           NSString *tier,
+                                           BOOL jailbroken,
+                                           NSString *language,
+                                           BOOL statistics,
+                                           BOOL crashed,
+                                           NSString *source,
+                                           NSInteger dc,
+                                           NSString *crashDetail) {
+	NSMutableString *query = [NSMutableString stringWithFormat:
+			@"lt1 v=%@ b=%@ ios=%@ dev=%@ tier=%@ jb=%d lang=%@ stats=%d",
+			version ?: @"", build ?: @"", ios ?: @"", device ?: @"",
+			tier ?: @"", jailbroken ? 1 : 0, language ?: @"", statistics ? 1 : 0];
+
+	if (crashed) {
+		[query appendString:@" cr=1"];
+		if (crashDetail.length) {
+			[query appendFormat:@" cdet=%@", crashDetail];
+		}
+	}
+	if (source.length) {
+		[query appendFormat:@" src=%@", source];
+	}
+	if (dc > 0 && dc <= 5) {
+		[query appendFormat:@" dc=%ld", (long)dc];
+	}
+
+	return TGUpdateTruncate(query, TGUpdateQueryLimit);
+}
+
 NSString *TGUpdateQueryString(NSString *version,
                               NSString *build,
                               NSString *ios,
@@ -47,11 +83,9 @@ NSString *TGUpdateQueryString(NSString *version,
                               BOOL jailbroken,
                               NSString *language,
                               BOOL statistics) {
-	NSString *query = [NSString stringWithFormat:
-			@"lt1 v=%@ b=%@ ios=%@ dev=%@ tier=%@ jb=%d lang=%@ stats=%d",
-			version ?: @"", build ?: @"", ios ?: @"", device ?: @"",
-			tier ?: @"", jailbroken ? 1 : 0, language ?: @"", statistics ? 1 : 0];
-	return TGUpdateTruncate(query, TGUpdateQueryLimit);
+	return TGUpdateQueryStringWithTelemetry(version, build, ios, device, tier,
+	                                        jailbroken, language, statistics,
+	                                        NO, nil, 0, nil);
 }
 
 BOOL TGUpdateCheckIsDue(NSDate *now, NSDate *lastCheck) {
@@ -226,6 +260,36 @@ static BOOL TGUpdateStatisticsEnabled(void) {
 			fileExistsAtPath:@"/Applications/Cydia.app"];
 }
 
++ (NSString *)distributionSource {
+	NSString *path = [[NSBundle mainBundle] bundlePath];
+	if ([path hasPrefix:@"/Applications/"]) {
+		return @"deb";
+	}
+	return @"ipa";
+}
+
++ (void)noteActiveScreen:(NSString *)screen {
+	if (!screen.length) return;
+	NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+	[defaults setObject:screen forKey:TGUpdateActiveScreenKey];
+}
+
++ (void)sessionDidStart {
+	NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+	if ([defaults boolForKey:TGUpdateSessionOpenKey]) {
+		NSString *lastScreen = [defaults stringForKey:TGUpdateActiveScreenKey] ?: @"App";
+		[defaults setObject:[NSString stringWithFormat:@"OOM@%@", lastScreen] forKey:TGUpdateCrashMarkerKey];
+	}
+	[defaults setBool:YES forKey:TGUpdateSessionOpenKey];
+	[defaults synchronize];
+}
+
++ (void)sessionDidEnd {
+	NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+	[defaults setBool:NO forKey:TGUpdateSessionOpenKey];
+	[defaults synchronize];
+}
+
 + (BOOL)usageStatisticsEnabled {
 	return TGUpdateStatisticsEnabled();
 }
@@ -287,7 +351,11 @@ static BOOL TGUpdateStatisticsEnabled(void) {
 	if (!forced && !TGUpdateCheckIsDue([NSDate date], lastCheck))
 		return;
 
-	NSString *query = TGUpdateQueryString(
+	NSString *crashDetail = [defaults stringForKey:TGUpdateCrashMarkerKey];
+	BOOL crashed = crashDetail.length > 0;
+	NSString *source = [TGUpdateStore distributionSource];
+
+	NSString *query = TGUpdateQueryStringWithTelemetry(
 			TGUpdateBundleValue(@"CFBundleShortVersionString"),
 			TGUpdateBundleValue(@"CFBundleVersion"),
 			[UIDevice currentDevice].systemVersion,
@@ -295,7 +363,11 @@ static BOOL TGUpdateStatisticsEnabled(void) {
 			TGUpdateTier(),
 			[TGUpdateStore isJailbroken],
 			TGAppLanguage() ?: @"",
-			[TGUpdateStore usageStatisticsEnabled]);
+			[TGUpdateStore usageStatisticsEnabled],
+			crashed,
+			source,
+			0,
+			crashDetail);
 
 	_checking = YES;
 	[client inlineQueryWithBotUsername:TGUpdateBotUsername
@@ -304,6 +376,9 @@ static BOOL TGUpdateStatisticsEnabled(void) {
 						   completion:^(NSArray *results){
 		self->_checking = NO;
 		[defaults setObject:[NSDate date] forKey:TGUpdateLastCheckKey];
+		if (crashed) {
+			[defaults removeObjectForKey:TGUpdateCrashMarkerKey];
+		}
 		[defaults synchronize];
 		if (!results)
 			return;

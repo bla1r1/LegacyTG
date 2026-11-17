@@ -96,8 +96,16 @@ M34 harness pages and TDLib footers.
 | App icon picker | missing | — | No picker; iOS 6 has no alternate-icon API. |
 | Settings row badges | partial | `Features/Settings/TGSettingsViewController.m:161` | No "New", red "!" or device-count badge model; the notification warning is missing too. |
 
-## Data we had and did not show, batch 2 (16 November 2026)
+## Data we had and did not show
 
 - Devices: each session has a device tile tinted as official's iconForSession (green Android/Chrome, orange Firefox/Brave/Ubuntu, red Opera/Vivaldi, grey Linux and unknown, blue the rest); an unofficial app reads "Name (ID: n)" (AuthSessions.AppUnofficial); a sign-in stopped at the password is listed under incomplete login attempts.
 - Data Usage ends with "Your data usage since <date>" (getNetworkStatistics since_date).
 - Sign-in by an SMS word or phrase: the official sentence with its first letter or word, a text field instead of digit boxes, and the code sent as typed.
+
+## Data we had and did not show (17 November 2026)
+
+- Settings > Downloads is official's list: "Downloading", newest first by when the file joined the queue (fileDownload.add_date), ending in Pause All, or Resume All when every download is paused (downloadedFileCounts.paused_count against active_count; the old row said Resume All only when nothing was active, which a paused download is); then "Recently Downloaded", newest first, ending in Clear, shown while Telegram counts completed downloads (completed_count).
+- A language pack's zero and two plural forms are used: Arabic, Hebrew, Slovenian and Irish pick them by CLDR's rules, as official's StringPluralization does (languagePackStringValuePluralized.zero_value, two_value; `TGPluralCategory`).
+- Terms of service with a minimum age ask official's "Age Verification - Tap Agree to confirm that you are 16 or over." before Accept goes through (termsOfService.min_user_age).
+- Compile-checked for armv7 and arm64 on Linux; host tests not run, not checked on a device.
+- Settings links with a subsection (17 November 2026). getInternalLinkType's settingsSection*.subsection now picks the page: privacy "blocked", "passcode" and the seven rule keys (last-seen, profile-photos, phone-number, birthday, calls, invites, forwards), data "proxy", "save-to-photos", "storage", appearance "wallpapers", "night-mode", "auto-night-mode". The rest (toggles, edit modes, 2-Step Verification, data usage) open the section page, where official focuses the row. Host test: TGInternalLinkRouteTests.testSettings_SubsectionToItsPage (Linux). Not checked on a device.
