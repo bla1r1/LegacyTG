@@ -348,3 +348,34 @@ The screens are UIKit and need a device pass; every request shape behind them is
 ## Testing: feature × device matrix
 
 Run `scripts/devrun.sh` for device-side checks. Host suite: `make -f tests/Makefile test`.
+
+---
+
+## Host tests on Linux
+
+`scripts/linux_setup.sh` builds GNUstep with clang's runtime into `build/gnustep`
+(about 15 min, once). `python3 scripts/linux_test.py [TestFile.m …]` then compiles
+the `tests/Makefile` client sources against it plus the shims in `tests/linux`,
+links one binary per test file and runs it under its own Xvfb. Second runs rebuild
+only what changed. The Mac `make -f tests/Makefile test` stays the reference: a
+red file that is green on the Mac is a platform gap, not an app bug.
+
+Current state: 102 of 115 test files pass, and every file builds.
+`main_client.mm` is one translation unit, so a file that leans on a stand-in an
+earlier file declared is rebuilt with every file before it, in the Mac order,
+and run alone through `TG_TEST_CLASS`. Without the private `tg_config.h` the
+example's values stand in and `tg_api_key.h` is generated from them. The 13
+that fail do so on GNUstep behaviour, not app logic: NSJSONSerialization number
+types (TGJson, TGClientTier3Audit), binary plist writing (TGLocalization), Opal
+bitmap rendering (TGPattern, TGMediaVeilBlur, TGMessageCellFactory custom emoji
+rects), ICU-less diacritic folding (TGUIFormat, TGScreenLogic country search),
+a main-queue notification observer that GNUstep runs later and Apple runs inline
+(TGCustomEmojiStore), URL parsing of `socks` links (TGClientFolders), the
+account data root (TGClientAccountSlots), `phoneNumberInfoSync`
+(TGClientAuthFunctions) and a weak-reference timing under libobjc2
+(TGObservers).
+
+UIKit itself does not run here. Chameleon (UIKit over AppKit) type-checks 90 of
+its 112 files against GNUstep and libs-quartzcore, but its window bridge needs
+layer-backed NSViews, which GNUstep's AppKit does not have; UIKit behaviour
+stays with the emulator (`scripts/emu.sh`) and the device.
