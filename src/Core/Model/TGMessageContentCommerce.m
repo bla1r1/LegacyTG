@@ -211,6 +211,7 @@ NSDictionary *TGFlattenCommerceContent(NSDictionary *content) {
 			@"needShipping"     : TGCBool(content[@"need_shipping_address"]),
 			@"receiptMessageId" : TGCNumber(content[@"receipt_message_id"]),
 			@"hasPaidMedia"     : @(TGCDict(content[@"paid_media"]) != nil),
+			@"paidMediaCaption" : TGCText(content[@"paid_media_caption"]),
 		}};
 	}
 
@@ -241,6 +242,7 @@ NSDictionary *TGFlattenCommerceContent(NSDictionary *content) {
 			@"giveawayMessageId"          : TGCNumber(content[@"giveaway_message_id"]),
 			@"actualWinnersSelectionDate" : TGCNumber(content[@"actual_winners_selection_date"]),
 			@"winnerCount"                : TGCNumber(content[@"winner_count"]),
+			@"additionalChatCount"        : TGCNumber(content[@"additional_chat_count"]),
 			@"unclaimedPrizeCount"        : TGCNumber(content[@"unclaimed_prize_count"]),
 			@"winnerUserIds"              : TGCNumberArray(content[@"winner_user_ids"]),
 			@"onlyNewMembers"             : TGCBool(content[@"only_new_members"]),

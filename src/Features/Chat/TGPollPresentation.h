@@ -32,8 +32,16 @@ NSString *TGPollVotesLine(NSDictionary *poll);
 /// unscheduled or past.
 NSString *TGPollClosesLine(NSDictionary *poll, NSTimeInterval now);
 
-/// Closed polls show their tally, and so does any poll this account voted in.
+/// Closed polls show their tally, and so does any poll this account voted in
+/// or may not vote in - unless the poll keeps its results from this account.
 BOOL TGPollShowsResults(NSDictionary *poll);
+
+/// An open poll this account has not answered and may answer.
+BOOL TGPollCanVote(NSDictionary *poll);
+
+/// The option shown at row `row`: TDLib's per-account order when the poll
+/// shuffles its options, else `row` itself.
+NSUInteger TGPollDisplayIndex(NSDictionary *poll, NSUInteger row);
 
 /// The mark an option wears once results are visible.
 TGPollMark TGPollMarkForOption(NSDictionary *poll, NSUInteger index);
@@ -43,6 +51,15 @@ NSArray *TGPollVoteIndexes(NSIndexSet *pending);
 
 /// A poll whose own vote can be taken back.
 BOOL TGPollCanRetract(NSDictionary *poll);
+
+/// An open poll that takes new options from this account: the "Add an Option"
+/// row under the options (official ChatMessagePollAddOptionNode).
+BOOL TGPollCanAddOption(NSDictionary *poll);
+
+/// What a typed option sends: trimmed and cut to official's 100-character
+/// field limit (characterLimit: 100), never mid-character. Empty when nothing
+/// is left.
+NSString *TGPollAddOptionText(NSString *typed);
 
 #ifdef __cplusplus
 }

@@ -11,6 +11,7 @@ typedef NS_ENUM(NSInteger, TGMediaVeilKind) {
 	TGMediaVeilKindSpoiler,   ///< tap reveals, as in Telegram
 	TGMediaVeilKindViewOnce,  ///< "Tap to view", opens once full screen
 	TGMediaVeilKindPaid,      ///< "Unlock for N Stars"
+	TGMediaVeilKindSensitive, ///< "18+ Content": a tap asks before it reveals
 };
 
 /// A blurred copy of `image`: the result is small (at most 48 px on its long

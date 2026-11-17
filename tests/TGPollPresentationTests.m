@@ -253,4 +253,75 @@ static NSDictionary *ppOtherOption(void) {
 	XCTAssertFalse(TGPollCanRetract(revoting));
 }
 
+#pragma mark - order, hidden results, restricted voting
+
+// Official resolvedOptionOrder / hideResultsUntilClose / isPollVotingRestricted
+// (ChatMessagePollBubbleContentNode.swift); TDLib hands the outcome as
+// option_order, can_see_results and vote_restriction_reason.
+- (void)testDisplayIndex_FollowsTDLibOrder {
+	NSMutableDictionary *poll = [ppPoll(NO, NO, NO, NO, @[ppOtherOption(), ppOtherOption(), ppOtherOption()], 0) mutableCopy];
+	poll[@"displayOrder"] = @[@2, @0, @1];
+	XCTAssertEqual(TGPollDisplayIndex(poll, 0), (NSUInteger)2);
+	XCTAssertEqual(TGPollDisplayIndex(poll, 1), (NSUInteger)0);
+	XCTAssertEqual(TGPollDisplayIndex(poll, 2), (NSUInteger)1);
+}
+
+- (void)testDisplayIndex_NoOrderOrBadOrderKeepsRows {
+	NSMutableDictionary *poll = [ppPoll(NO, NO, NO, NO, @[ppOtherOption(), ppOtherOption()], 0) mutableCopy];
+	XCTAssertEqual(TGPollDisplayIndex(poll, 1), (NSUInteger)1);
+	poll[@"displayOrder"] = @[@1];
+	XCTAssertEqual(TGPollDisplayIndex(poll, 0), (NSUInteger)0);
+	poll[@"displayOrder"] = @[@0, @9];
+	XCTAssertEqual(TGPollDisplayIndex(poll, 1), (NSUInteger)1);
+}
+
+- (void)testHiddenResults_VotedPollMarksOnlyOwnAnswer {
+	NSMutableDictionary *poll = [ppPoll(NO, NO, NO, NO, @[ppChosenOption(), ppOtherOption()], 5) mutableCopy];
+	poll[@"canSeeResults"] = @NO;
+	XCTAssertFalse(TGPollShowsResults(poll));
+	XCTAssertFalse(TGPollCanVote(poll));
+	XCTAssertEqual(TGPollMarkForOption(poll, 0), TGPollMarkChosen);
+	XCTAssertEqual(TGPollMarkForOption(poll, 1), TGPollMarkNone);
+}
+
+- (void)testRestricted_ShowsResultsAndCannotVote {
+	NSMutableDictionary *poll = [ppPoll(NO, NO, NO, NO, @[ppOtherOption(), ppOtherOption()], 5) mutableCopy];
+	poll[@"voteRestriction"] = @"pollVoteRestrictionReasonMembershipRequired";
+	XCTAssertTrue(TGPollShowsResults(poll));
+	XCTAssertFalse(TGPollCanVote(poll));
+}
+
+- (void)testRestricted_UnsentPollShowsNoTally {
+	NSMutableDictionary *poll = [ppPoll(NO, NO, NO, NO, @[ppOtherOption()], 0) mutableCopy];
+	poll[@"voteRestriction"] = @"pollVoteRestrictionReasonYetUnsent";
+	XCTAssertFalse(TGPollShowsResults(poll));
+	XCTAssertFalse(TGPollCanVote(poll));
+}
+
+- (void)testCanVote_OpenUnansweredPoll {
+	XCTAssertTrue(TGPollCanVote(ppPoll(NO, NO, NO, NO, @[ppOtherOption()], 0)));
+	XCTAssertFalse(TGPollCanVote(ppPoll(YES, NO, NO, NO, @[ppOtherOption()], 0)));
+}
+
+- (void)testCanAddOption_OnlyWhileOpenAndAllowed {
+	NSMutableDictionary *poll = [ppPoll(NO, NO, NO, NO, @[ppOtherOption()], 0) mutableCopy];
+	XCTAssertFalse(TGPollCanAddOption(poll));
+	poll[@"canAddOption"] = @YES;
+	XCTAssertTrue(TGPollCanAddOption(poll));
+	poll[@"isClosed"] = @YES;
+	XCTAssertFalse(TGPollCanAddOption(poll));
+	XCTAssertFalse(TGPollCanAddOption(nil));
+}
+
+- (void)testAddOptionText_TrimsAndStopsAtTheFieldLimit {
+	XCTAssertEqualObjects(TGPollAddOptionText(@"  Pizza \n"), @"Pizza");
+	XCTAssertEqualObjects(TGPollAddOptionText(nil), @"");
+	NSString *long101 = [@"" stringByPaddingToLength:101 withString:@"a" startingAtIndex:0];
+	XCTAssertEqual(TGPollAddOptionText(long101).length, (NSUInteger)100);
+	// 99 letters and a two-unit emoji: the emoji would cross 100, so it goes.
+	NSString *edge = [[@"" stringByPaddingToLength:99 withString:@"b" startingAtIndex:0]
+			stringByAppendingString:@"\U0001F355"];
+	XCTAssertEqual(TGPollAddOptionText(edge).length, (NSUInteger)99);
+}
+
 @end

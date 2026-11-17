@@ -6,6 +6,7 @@
 #import <QuartzCore/QuartzCore.h>
 #import "TGStyle.h"
 #import "TGPollPresentation.h"
+#import "TGLocalization.h"
 #import "TGLiveLocation.h"
 #import "TGChecklistPresentation.h"
 #import "TGUIFormat.h"
@@ -291,6 +292,7 @@ TGMessageCard *TGChatCardForRow(NSDictionary *m) {
 		revision = revision * 33 + (NSUInteger)[poll[@"totalVoterCount"] longLongValue];
 		revision = revision * 33 + options.count;
 		revision = revision * 33 + (closed ? 1 : 0);
+		revision = revision * 33 + (TGPollCanAddOption(poll) ? 1 : 0);
 		revision = revision * 33 + (showsResults ? 1 : 0);
 		revision = revision * 33 + (multiple ? 1 : 0);
 		revision = revision * 33 + (NSUInteger)([poll[@"correctOption"] longLongValue] + 1);
@@ -303,6 +305,7 @@ TGMessageCard *TGChatCardForRow(NSDictionary *m) {
 			revision = revision * 33 + TGPollOptionText(option).length;
 			revision = revision * 33 + (NSUInteger)(TGPollMarkForOption(poll, i) + 1);
 			revision = revision * 33 + (NSUInteger)[option[@"percent"] longLongValue];
+			revision = revision * 33 + TGPollDisplayIndex(poll, i);
 			if ([pending containsIndex:i])
 				revision = revision * 33 + (i + 1);
 		}
@@ -329,7 +332,9 @@ TGMessageCard *TGChatCardForRow(NSDictionary *m) {
 
 			CGFloat rowW = layout.bubbleFrame.size.width - TGDoubled(kPadH);
 			CGFloat rowY = optionsY;
-			for (NSUInteger i = 0; i < options.count; i++) {
+			BOOL canVote = TGPollCanVote(poll);
+			for (NSUInteger shown = 0; shown < options.count; shown++) {
+				NSUInteger i = TGPollDisplayIndex(poll, shown);
 				NSDictionary *option = [options[i] isKindOfClass:NSDictionary.class]
 						? options[i] : @{};
 				TGPollMark mark = TGPollMarkForOption(poll, i);
@@ -347,7 +352,7 @@ TGMessageCard *TGChatCardForRow(NSDictionary *m) {
 				UIButton *row = [UIButton buttonWithType:UIButtonTypeCustom];
 				row.frame = CGRectMake(kPadH, rowY, rowW, rowH);
 				row.tag = 0x9100 + (NSInteger)i;
-				row.enabled = !closed && !showsResults;
+				row.enabled = canVote;
 				[row addTarget:self action:@selector(pollOptionTapped:) forControlEvents:UIControlEventTouchUpInside];
 				[cell.bubble addSubview:row];
 
@@ -435,6 +440,32 @@ TGMessageCard *TGChatCardForRow(NSDictionary *m) {
 			}
 
 			CGFloat stackY = rowY;
+			// Official opens a text field in place of this row; iOS 6 has no
+			// inline field in a scrolling bubble that survives cell reuse, so
+			// the row asks in an alert and keeps official's position.
+			if (TGPollCanAddOption(poll)) {
+				UIButton *add = [UIButton buttonWithType:UIButtonTypeCustom];
+				add.tag = 0x91F3;
+				add.frame = CGRectMake(kPadH, stackY, contentW, kPollAddOptionHeight);
+				add.titleLabel.font = TGFontSubhead();
+				add.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeft;
+				add.titleEdgeInsets = UIEdgeInsetsMake(TGMetricZero, kPollTextColumn,
+						TGMetricZero, TGMetricZero);
+				[add setTitle:TGLocalized(@"Add an Option") forState:UIControlStateNormal];
+				[add setTitleColor:[pollTheme bubbleAccentColour:mine] forState:UIControlStateNormal];
+				add.backgroundColor = [UIColor clearColor];
+				UILabel *plus = [[UILabel alloc] initWithFrame:CGRectMake(TGMetricZero,
+						TGMetricZero, kPollTextColumn, kPollAddOptionHeight)];
+				plus.text = @"+";
+				plus.font = TGFontBodyStrong();
+				plus.textColor = [pollTheme bubbleAccentColour:mine];
+				plus.backgroundColor = [UIColor clearColor];
+				[add addSubview:plus];
+				[add addTarget:self action:@selector(pollAddOptionTapped:)
+				 forControlEvents:UIControlEventTouchUpInside];
+				[cell.bubble addSubview:add];
+				stackY += kPollAddOptionHeight;
+			}
 			if (showVote) {
 				UIButton *vote = [UIButton buttonWithType:UIButtonTypeCustom];
 				vote.tag = 0x91F0;

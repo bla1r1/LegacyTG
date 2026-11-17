@@ -305,6 +305,21 @@ static NSDictionary *mcUser(id userId, NSString *firstName, NSString *lastName, 
 
 #pragma mark - Invoice
 
+// Parity: an invoice carrying paid media shows the media's caption.
+- (void)testInvoice_PaidMediaCaptionReplacesDescription {
+	TGMessageCard *card = TGMessageCardForRow(mcRow(@502, @"invoice", @{
+		@"title": @"Photos", @"description": @"Product text",
+		@"currency": @"XTR", @"totalAmount": @10,
+		@"hasPaidMedia": @YES, @"paidMediaCaption": @"Behind the scenes",
+	}));
+	XCTAssertEqualObjects(card.lines, (@[@"Behind the scenes"]));
+	TGMessageCard *plain = TGMessageCardForRow(mcRow(@503, @"invoice", @{
+		@"title": @"Photos", @"description": @"Product text",
+		@"hasPaidMedia": @NO, @"paidMediaCaption": @"Ignored",
+	}));
+	XCTAssertEqualObjects(plain.lines, (@[@"Product text"]));
+}
+
 - (void)testInvoice_StandardNormalFlow {
 	NSDictionary *row = mcRow(@501, @"invoice", @{
 		@"title": @"Premium Membership",

@@ -266,6 +266,22 @@ NSString *TGGiveawayInfoText(NSDictionary *info, NSString *chatTitle) {
 					stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
 		else
 			text = TGLocalized(@"You didn't win a prize in this giveaway.");
+		// Official's ended sheet says who picked whom, naming the other
+		// channels when there were some (GiveawayInfoController .finished:
+		// Chat.Giveaway.Info.Ended / EndedMany by additional channels).
+		double selected = [info[@"selectionDate"] doubleValue];
+		NSInteger winners = [info[@"winnerCount"] integerValue];
+		if (selected > 0 && winners > 0) {
+			NSString *count = [NSString stringWithFormat:@"%ld", (long)winners];
+			NSString *who = [info[@"isGroup"] boolValue]
+					? TGLocalizedPluralValue(@"**%@** random member", @"**%@** random members", count, winners)
+					: TGLocalizedPluralValue(@"**%@** random subscriber", @"**%@** random subscribers", count, winners);
+			NSString *date = TGAppDate(selected, NSDateFormatterMediumStyle, NSDateFormatterNoStyle) ?: @"";
+			NSString *ending = [info[@"additionalChatCount"] integerValue] > 0
+					? TGLocalizedFormat(@"On **%1$@**, Telegram automatically selected %2$@ of **%3$@** and other listed channels.", date, who, chat)
+					: TGLocalizedFormat(@"On **%1$@**, Telegram automatically selected %2$@ of **%3$@**.", date, who, chat);
+			text = [NSString stringWithFormat:@"%@\n\n%@", text, ending];
+		}
 		NSInteger used = [info[@"activationCount"] integerValue];
 		if (used > 0)
 			text = [NSString stringWithFormat:@"%@\n\n%@", text,

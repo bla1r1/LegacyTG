@@ -62,7 +62,7 @@ static CGFloat TGChatMediaCorner(void) {
 		}
 		NSInteger dur = [m[@"duration"] integerValue];
 		NSString *durStr = (dur > 0) ? TGUIFormatCallDuration(dur) : @"";
-		if ([m[@"viewOnce"] boolValue]){
+		if ([m[@"viewOnce"] boolValue] || [m[@"secretMedia"] boolValue]){
 			// The one-time round note wears its "1" like their chat does - the
 			// clock that sent it has one opening in it.
 			durStr = durStr.length ? [@"1 " stringByAppendingString:durStr] : @"1";
@@ -383,11 +383,14 @@ static CGFloat TGChatMediaCorner(void) {
 	BOOL isPaid = [m[@"paidPreview"] boolValue] || [kind isEqualToString:@"messagePaidMedia"];
 	BOOL media = [kind isEqualToString:@"messagePhoto"] || [kind isEqualToString:@"messageVideo"] ||
 			[kind isEqualToString:@"messageAnimation"];
-	BOOL once = [m[@"viewOnce"] boolValue] || [m[@"destructSeconds"] integerValue] > 0;
+	BOOL once = [m[@"viewOnce"] boolValue] || [m[@"destructSeconds"] integerValue] > 0 ||
+			[m[@"secretMedia"] boolValue];
 	BOOL spoiler = [m[@"hasSpoiler"] boolValue] && ![self.revealedSpoilers containsObject:m[@"id"] ?: @0];
+	BOOL sensitive = [m[@"sensitive"] boolValue] && ![self.revealedSpoilers containsObject:m[@"id"] ?: @0];
 	TGMediaVeilKind veil = isPaid ? TGMediaVeilKindPaid
 			: !media ? TGMediaVeilKindNone
 			: once ? TGMediaVeilKindViewOnce
+			: sensitive ? TGMediaVeilKindSensitive
 			: spoiler ? TGMediaVeilKindSpoiler : TGMediaVeilKindNone;
 	if (veil == TGMediaVeilKindNone){
 		cell.veilView.hidden = YES;

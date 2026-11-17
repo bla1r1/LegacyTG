@@ -116,7 +116,7 @@
 	if (_kind == TGMediaVeilKindSpoiler) {
 		_titleLabel.hidden = YES;
 		_paidButton.hidden = YES;
-	} else if (_kind == TGMediaVeilKindViewOnce) {
+	} else if (_kind == TGMediaVeilKindViewOnce || _kind == TGMediaVeilKindSensitive) {
 		_titleLabel.hidden = NO;
 		_titleLabel.text = TGMediaVeilTitle(_kind, _starCount);
 		_paidButton.hidden = YES;

@@ -24,6 +24,11 @@ NSString *TGMessageStampText(NSDictionary *m) {
 		time = TGLocalizedFormat(@"%1$@, %2$@ Imported %3$@",
 				TGAppDate(imported, NSDateFormatterShortStyle, NSDateFormatterNoStyle) ?: @"",
 				TGMessageStamp(imported, NO), time);
+	id rawBot = m[@"businessBotName"];
+	if ([rawBot isKindOfClass:NSString.class] && [rawBot length])
+		time = [NSString stringWithFormat:@"%@, %@",
+				[rawBot length] > 16 ? [[rawBot substringToIndex:16] stringByAppendingString:@"..."] : rawBot,
+				time];
 	int64_t viewCount = TGMessageViewCount(m);
 	if (viewCount <= 0)
 		return time;
@@ -88,12 +93,27 @@ static BOOL TGMessageAnswers(NSDictionary *m) {
 	return [m[@"replyId"] isKindOfClass:NSNumber.class];
 }
 
+NSString *TGMessageQuotedTask(NSDictionary *m, NSDictionary *replied) {
+	int64_t taskId = [m[@"replyTaskId"] longLongValue];
+	NSDictionary *list = [replied[@"checklist"] isKindOfClass:NSDictionary.class] ? replied[@"checklist"] : nil;
+	if (!taskId || !list)
+		return nil;
+	for (NSDictionary *task in [list[@"tasks"] isKindOfClass:NSArray.class] ? list[@"tasks"] : @[]) {
+		if ([task isKindOfClass:NSDictionary.class] && [task[@"taskId"] longLongValue] == taskId)
+			return [task[@"text"] isKindOfClass:NSString.class] ? task[@"text"] : nil;
+	}
+	return nil;
+}
+
 NSString *TGMessageQuoteText(NSDictionary *m, NSDictionary *replied) {
 	if (!TGMessageAnswers(m))
 		return nil;
 	NSString *inline_ = m[@"replyText"];
 	if (inline_.length)
 		return inline_;
+	NSString *task = TGMessageQuotedTask(m, replied);
+	if (task.length)
+		return task;
 	return replied ? TGDescribeMessageContent(replied) : @"...";
 }
 
@@ -198,6 +218,8 @@ CGFloat TGMessagePollHeight(NSDictionary *m, NSIndexSet *pendingVotes) {
 	height += kPollKindGap + kPollKindLine + kPollOptionsGap;
 	for (NSDictionary *option in options)
 		height += TGPollOptionRowHeight(option, textW);
+	if (TGPollCanAddOption(poll))
+		height += kPollAddOptionHeight;
 	if (showVote)
 		height += kPollVoteGap + kPollVoteHeight;
 	if (explanationH > TGMetricZero)

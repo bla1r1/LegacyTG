@@ -321,7 +321,105 @@ static NSDictionary *svcSenderUser(int64_t userId) {
 		@"is_recurring" : @NO,
 		@"is_first_recurring" : @NO,
 		@"invoice_name" : @"Pro",
-	}), @"Alice paid $4.99 for \"Pro\"");
+	}), @"You have just successfully transferred $4.99 to  for Pro");
+}
+
+static NSString *svcInChat(NSDictionary *content, int64_t chatId, BOOL outgoing) {
+	NSMutableDictionary *m = [svcMessage(content) mutableCopy];
+	m[@"chat_id"] = @(chatId);
+	m[@"is_outgoing"] = @(outgoing);
+	return TGServiceMessageText(m, svcUsers(), svcChats());
+}
+
+static NSDictionary *svcPayment(BOOL recurring, BOOL first, NSString *invoice) {
+	return @{
+		@"@type" : @"messagePaymentSuccessful",
+		@"invoice_chat_id" : @(2002), @"invoice_message_id" : @(42),
+		@"currency" : @"USD", @"total_amount" : @(499),
+		@"subscription_until_date" : @(0),
+		@"is_recurring" : @(recurring), @"is_first_recurring" : @(first),
+		@"invoice_name" : invoice,
+	};
+}
+
+// Parity: official's payment line names the bot and says when a
+// subscription starts or renews (ServiceMessageStrings.swift, .paymentSent).
+- (void)testPaymentSuccessful_NamesBot {
+	XCTAssertEqualObjects(svcInChat(svcPayment(NO, NO, @"Pro"), 2002, YES),
+			@"You have just successfully transferred $4.99 to Design for Pro");
+}
+
+- (void)testPaymentSuccessful_FirstRecurring {
+	XCTAssertEqualObjects(svcInChat(svcPayment(YES, YES, @"Pro"), 2002, YES),
+			@"You have just successfully transferred $4.99 to Design for Pro and allowed future reccurrent payments");
+}
+
+- (void)testPaymentSuccessful_RecurringNoTitle {
+	XCTAssertEqualObjects(svcInChat(svcPayment(YES, NO, @""), 2002, YES),
+			@"You have just successfully transferred $4.99 to Design via recurrent payments");
+}
+
+- (void)testPaymentSuccessful_Stars {
+	NSMutableDictionary *c = [svcPayment(NO, NO, @"") mutableCopy];
+	c[@"currency"] = @"XTR"; c[@"total_amount"] = @(50);
+	XCTAssertEqualObjects(svcInChat(c, 2002, YES),
+			@"You have just successfully transferred 50 Stars to Design");
+}
+
+- (void)testChatSetBackground_Same {
+	XCTAssertEqualObjects(svcSentence(@{
+		@"@type" : @"messageChatSetBackground",
+		@"old_background_message_id" : @(40),
+		@"background" : @{@"@type" : @"chatBackground"},
+		@"only_for_self" : @NO,
+	}), @"Alice set the same wallpaper for this chat");
+	XCTAssertEqualObjects(svcInChat(@{
+		@"@type" : @"messageChatSetBackground",
+		@"old_background_message_id" : @(40),
+		@"background" : @{@"@type" : @"chatBackground"},
+		@"only_for_self" : @NO,
+	}, 1001, YES), @"You set the same wallpaper for this chat");
+}
+
+- (void)testAutoDelete_GlobalTimerFromOther {
+	XCTAssertEqualObjects(svcSentence(@{
+		@"@type" : @"messageChatSetMessageAutoDeleteTime",
+		@"message_auto_delete_time" : @(86400),
+		@"from_user_id" : @(1002),
+	}), @"Bob set a self-destruct timer for all chats.\nAll new messages in this chat will be automatically deleted after 1 day they're sent.");
+}
+
+- (void)testAutoDelete_GlobalTimerFromMe {
+	XCTAssertEqualObjects(svcInChat(@{
+		@"@type" : @"messageChatSetMessageAutoDeleteTime",
+		@"message_auto_delete_time" : @(604800),
+		@"from_user_id" : @(1001),
+	}, 1002, YES), @"You set a self-destruct timer for all chats.\nAll new messages in this chat will be automatically deleted after 1 week they're sent.");
+}
+
+static NSDictionary *svcGiveawayDone(int64_t winners, int64_t unclaimed, BOOL stars) {
+	return @{
+		@"@type" : @"messageGiveawayCompleted", @"giveaway_message_id" : @(42),
+		@"winner_count" : @(winners), @"is_star_giveaway" : @(stars),
+		@"unclaimed_prize_count" : @(unclaimed),
+	};
+}
+
+- (void)testGiveawayCompleted_StarsNoWinners {
+	NSMutableDictionary *m = [svcMessage(svcGiveawayDone(0, 0, YES)) mutableCopy];
+	m[@"is_channel_post"] = @YES;
+	XCTAssertEqualObjects(TGServiceMessageText(m, svcUsers(), svcChats()),
+			@"Due to the giveaway terms, no winners could be selected by Telegram, all stars were credited to channel administrators.");
+}
+
+- (void)testGiveawayCompleted_PremiumNoWinnersGroup {
+	XCTAssertEqualObjects(svcSentence(svcGiveawayDone(0, 3, NO)),
+			@"Due to the giveaway terms, no winners could be selected by Telegram, all 3 gift links were forwarded to group administrators.");
+}
+
+- (void)testGiveawayCompleted_Mixed {
+	XCTAssertEqualObjects(svcSentence(svcGiveawayDone(5, 2, NO)),
+			@"5 winners of the giveaway were randomly selected by Telegram and received their gift links in private messages.\n2 undistributed gift links were forwarded to group administrators");
 }
 
 - (void)testPaymentSuccessfulBotEuro {
@@ -410,6 +508,19 @@ static NSDictionary *svcSenderUser(int64_t userId) {
 	}), @"Alice received a gift code for 12 months of Telegram Premium");
 }
 
+- (void)testPremiumGiftCode_Unclaimed {
+	XCTAssertEqualObjects(svcSentence(@{
+		@"@type" : @"messagePremiumGiftCode",
+		@"creator_id" : @{@"@type" : @"messageSenderChat", @"chat_id" : @(2001)},
+		@"text" : svcFormatted(@""),
+		@"is_from_giveaway" : @YES,
+		@"is_unclaimed" : @YES,
+		@"month_count" : @(3),
+		@"day_count" : @(0),
+		@"code" : @"CODE",
+	}), @"You have an unclaimed prize from a giveaway by News.\n\nThis prize is a Telegram Premium subscription for 3 months.");
+}
+
 - (void)testGiftedStars {
 	XCTAssertEqualObjects(svcSentence(@{
 		@"@type" : @"messageGiftedStars",
@@ -477,7 +588,7 @@ static NSDictionary *svcSenderUser(int64_t userId) {
 		@"winner_count" : @(5),
 		@"is_star_giveaway" : @NO,
 		@"unclaimed_prize_count" : @(0),
-	}), @"Alice's giveaway has ended: 5 winners");
+	}), @"5 winners of the giveaway were randomly selected by Telegram and received their gift links in private messages.");
 }
 
 #pragma mark - bots, web apps and passport

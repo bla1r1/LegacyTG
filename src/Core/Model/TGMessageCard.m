@@ -157,6 +157,13 @@ TGMessageCard *TGMessageCardForRow(NSDictionary *row) {
 		NSString *title = TGMCString(invoice[@"title"]);
 		card.title = title.length ? title : @"Invoice";
 		NSString *desc = TGMCString(invoice[@"description"]);
+		// Paid media in an invoice speaks through its own caption, as a paid
+		// media post does (official renders the invoice's extended media with
+		// the message text under it).
+		NSString *caption = TGMCBool(invoice[@"hasPaidMedia"])
+				? TGMCString(invoice[@"paidMediaCaption"]) : @"";
+		if (caption.length)
+			desc = caption;
 		card.lines = desc.length ? @[desc] : @[];
 		card.imageFileId = TGMCInt64(invoice[@"photoFileId"]);
 		card.imageAspect = 1.0f;

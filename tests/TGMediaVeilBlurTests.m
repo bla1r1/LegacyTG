@@ -409,4 +409,9 @@ static CGImageRef mvCreateTestImage(size_t w, size_t h, void (^fill)(uint8_t *by
 	XCTAssertTrue(title == nil);
 }
 
+// Parity: 18+ media wears official's "18+ Content" (Chat.SensitiveContent).
+- (void)testTitle_Sensitive {
+	XCTAssertEqualObjects(TGMediaVeilTitle(TGMediaVeilKindSensitive, 0), @"18+ Content");
+}
+
 @end

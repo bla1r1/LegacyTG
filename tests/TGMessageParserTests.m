@@ -986,7 +986,7 @@ static NSDictionary *pmPaidMediaMsgContent(id starCount, NSString *caption, NSAr
 }
 
 
-#pragma mark - batch 3 fields
+#pragma mark - parity fields
 
 - (void)testExtras_BoostImportRepliersAndUnreadMarks {
 	NSDictionary *row = TGFlattenMessage(fxMsg(fxTextContent(@"hi"), @{
@@ -1057,7 +1057,7 @@ static NSDictionary *pmPaidMediaMsgContent(id starCount, NSString *caption, NSAr
 }
 
 
-#pragma mark - batch 4 fields
+#pragma mark - parity fields
 
 - (void)testTimersVideoStartAndManualQuote {
 	NSDictionary *row = TGFlattenMessage(fxMsg(@{@"@type" : @"messageVideo",
@@ -1161,6 +1161,32 @@ static NSDictionary *pmPaidMediaMsgContent(id starCount, NSString *caption, NSAr
 
 static NSString *evName(int64_t uid) { return uid == 7 ? @"Bob" : @"Eve"; }
 
+/// A colour change says only the new colour and icon, with a dot for the
+/// swatch (ChatRecentActionsHistoryTransition changeNameColor/ProfileColor).
+- (void)testEventLine_ColourChangeNamesTheNewSwatchAndIcon {
+	NSDictionary *line = TGChatEventLine(@{@"@type" : @"chatEventAccentColorChanged",
+		@"old_accent_color_id" : @1, @"new_accent_color_id" : @4,
+		@"old_background_custom_emoji_id" : @"0", @"new_background_custom_emoji_id" : @"0"},
+		@"Ann", YES, nil);
+	XCTAssertEqualObjects(line[@"title"], @"Ann changed the channel name color to \u25CF");
+	XCTAssertEqualObjects(line[@"swatch"][@"location"], @([line[@"title"] length] - 1));
+	XCTAssertEqualObjects(line[@"swatch"][@"colorId"], @4);
+	XCTAssertFalse([line[@"swatch"][@"profile"] boolValue]);
+
+	line = TGChatEventLine(@{@"@type" : @"chatEventProfileAccentColorChanged",
+		@"new_profile_accent_color_id" : @2, @"new_profile_background_custom_emoji_id" : @"55",
+		@"iconEmoji" : @"\U0001F431"}, @"Ann", YES, nil);
+	XCTAssertEqualObjects(line[@"title"],
+			@"Ann changed the channel profile color and icon to \u25CF \U0001F431");
+	XCTAssertTrue([line[@"swatch"][@"profile"] boolValue]);
+
+	line = TGChatEventLine(@{@"@type" : @"chatEventProfileAccentColorChanged",
+		@"new_profile_accent_color_id" : @(-1), @"new_profile_background_custom_emoji_id" : @"0"},
+		@"Ann", YES, nil);
+	XCTAssertEqualObjects(line[@"title"], @"Ann changed the removed profile color and icon");
+	XCTAssertNil(line[@"swatch"]);
+}
+
 - (void)testEventLine_OfficialSentences {
 	NSString *(^names)(int64_t) = ^NSString *(int64_t uid){ return evName(uid); };
 	NSDictionary *line = TGChatEventLine(@{@"@type" : @"chatEventTitleChanged", @"new_title" : @"Cats"}, @"Ann", NO, names);
@@ -1218,8 +1244,8 @@ static NSString *evName(int64_t uid) { return uid == 7 ? @"Bob" : @"Eve"; }
 			@"approver_user_id" : @7}, @"Ann", NO, names)[@"title"],
 			@"Ann joined via public request, approved by Bob");
 	// Newer than this client: still a sentence, never "Ann: AccentColorChanged".
-	XCTAssertEqualObjects(TGChatEventLine(@{@"@type" : @"chatEventAccentColorChanged"}, @"Ann", YES, names)[@"title"],
-			@"Ann accent color changed");
+	XCTAssertEqualObjects(TGChatEventLine(@{@"@type" : @"chatEventFutureThingChanged"}, @"Ann", YES, names)[@"title"],
+			@"Ann future thing changed");
 }
 
 /// Video, audio and files are media too; only photos used to count.

@@ -425,6 +425,17 @@ static NSDictionary *TGFlattenMessageExtras(NSDictionary *m, NSDictionary *lp) {
 	NSDictionary *imported = [m[@"import_info"] isKindOfClass:NSDictionary.class] ? m[@"import_info"] : nil;
 	if ([imported[@"date"] longLongValue] > 0)
 		TG_EXTRA(@"importDate", imported[@"date"]);
+	// A reply to one task of a checklist quotes that task, not the list
+	// (official ChatMessageReplyInfoNode, innerSubject .todoItem).
+	NSDictionary *replyTo = [m[@"reply_to"] isKindOfClass:NSDictionary.class] ? m[@"reply_to"] : nil;
+	if ([replyTo[@"checklist_task_id"] longLongValue] > 0)
+		TG_EXTRA(@"replyTaskId", replyTo[@"checklist_task_id"]);
+	// 18+ media stays under official's veil until the viewer agrees
+	// (ChatMessageInteractiveMediaNode isSensitiveContent).
+	NSDictionary *restriction = [m[@"restriction_info"] isKindOfClass:NSDictionary.class]
+			? m[@"restriction_info"] : nil;
+	if ([restriction[@"has_sensitive_content"] boolValue])
+		TG_EXTRA(@"sensitive", @YES);
 	NSArray *unread = [m[@"unread_reactions"] isKindOfClass:NSArray.class] ? m[@"unread_reactions"] : nil;
 	if (unread.count)
 		TG_EXTRA(@"unreadReactions", @(unread.count));
@@ -1107,6 +1118,15 @@ NSDictionary *TGFlattenMessage(NSDictionary *m) {
 		@"viewCount" : @(viewCount),
 		// The author signature on a channel post or forwarded message, empty string when unsigned.
 		@"authorSignature" : authorSignature,
+		// A suggested post the channel was paid Stars for: deleting it within
+		// a day loses them (official PublishedSuggestedPostMessageAttribute).
+		@"paidStarPost" : @([m[@"is_paid_star_suggested_post"] boolValue]),
+		// A reply a Business bot sent for the account carries the bot's name
+		// by the time (official messageTimestampStatusAuthorTitle,
+		// InlineBusinessBotMessageAttribute).
+		@"businessBotName" : ([m[@"sender_business_bot_user_id"] longLongValue] != 0
+				? ([[TGClient shared] nameForUserId:[m[@"sender_business_bot_user_id"] longLongValue]] ?: @"")
+				: @""),
 		// Your own reaction, so the menu can offer to take it off.
 		@"myReaction" : TGMyReactionEmoji(m) ?: @"",
 		// Buttons a bot put under its message, and the keyboard it asked for.
@@ -1166,6 +1186,9 @@ NSDictionary *TGFlattenMessage(NSDictionary *m) {
 		// to show how long it has.
 		@"viewOnce" : @([destType isEqualToString:
 				@"messageSelfDestructTypeImmediately"]),
+		// Secret chat media: blurred, opened alone, once
+		// (ChatMessageInteractiveMediaNode.swift, isSecretMedia).
+		@"secretMedia" : @([content[@"is_secret"] boolValue]),
 		@"destructSeconds" : ([destType isEqualToString:
 				@"messageSelfDestructTypeTimer"]
 				? m[@"self_destruct_type"][@"self_destruct_time"] ?: @0 : @0),

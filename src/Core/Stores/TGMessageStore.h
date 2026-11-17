@@ -381,6 +381,11 @@ FOUNDATION_EXPORT NSArray *TGBotCommandRows(NSArray *sets);
 - (void)internalLinkKind:(NSString *)link
 			  completion:(void (^)(NSString *kind, NSString *value))completion;
 
+/// TDLib's InternalLinkType for a t.me or tg:// link as it answers, nil on
+/// an error; TGInternalLinkRoute reads it.
+- (void)internalLinkType:(NSString *)link
+			  completion:(void (^)(NSDictionary *type))completion;
+
 - (BOOL)isChatMuted:(int64_t)chatId;
 
 - (void)isUserBlocked:(int64_t)userId completion:(void (^)(BOOL blocked))completion;

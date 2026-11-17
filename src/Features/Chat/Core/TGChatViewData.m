@@ -1135,9 +1135,9 @@ static NSMutableDictionary *TGChatProfileMemo(void) {
 			? poll[@"options"] : @[];
 	if (!poll || index < 0 || index >= (NSInteger)options.count)
 		return;
-	// Closed polls and polls this account voted in show their results; their
-	// options are labels, not votes.
-	if (TGPollShowsResults(poll))
+	// Closed polls, polls this account voted in and polls it may not vote in
+	// have labels, not votes.
+	if (!TGPollCanVote(poll))
 		return;
 
 	int64_t messageId = cell.pollMessageId;
@@ -1306,7 +1306,21 @@ static NSMutableDictionary *TGChatProfileMemo(void) {
 				if (!me)
 					return;
 				BOOL ended = [info[@"isEnded"] boolValue] || [info[@"isWinner"] boolValue];
-				[TGAlertSheet showMessage:TGGiveawayInfoText(info, me.chatTitle)
+				// The winners message knows what getGiveawayInfo does not say:
+				// the day of the draw, the count and whether other channels took part.
+				NSDictionary *winners = nil;
+				for (NSDictionary *row in me.messages)
+					if ([row[@"id"] longLongValue] == messageId &&
+							[row[@"giveawayWinners"] isKindOfClass:NSDictionary.class])
+						winners = row[@"giveawayWinners"];
+				NSMutableDictionary *full = [info mutableCopy] ?: [NSMutableDictionary dictionary];
+				if (winners) {
+					full[@"selectionDate"] = winners[@"actualWinnersSelectionDate"] ?: @0;
+					full[@"winnerCount"] = winners[@"winnerCount"] ?: @0;
+					full[@"additionalChatCount"] = winners[@"additionalChatCount"] ?: @0;
+					full[@"isGroup"] = @(me.isGroup);
+				}
+				[TGAlertSheet showMessage:TGGiveawayInfoText(full, me.chatTitle)
 									title:ended ? TGLocalized(@"Giveaway Ended") : TGLocalized(@"About This Giveaway")
 								   inView:me.view];
 			});
@@ -1358,6 +1372,37 @@ static NSMutableDictionary *TGChatProfileMemo(void) {
 	});
 }
 
+/// Official types the option into a field inside the bubble and sends on
+/// return; here an alert holds the field (see the row in ServiceCells). The
+/// option arrives as an edit of the poll message, so nothing is drawn early.
+- (void)pollAddOptionTapped:(UIButton *)button {
+	UIView *view = button;
+	while (view && ![view isKindOfClass:TGBubbleCell.class])
+		view = view.superview;
+	TGBubbleCell *cell = (TGBubbleCell *)view;
+	if (!cell || !cell.pollMessageId)
+		return;
+	int64_t messageId = cell.pollMessageId;
+	int64_t chatId = self.chatId;
+	__weak typeof(self) weakSelf = self;
+	[TGAlertSheet showInput:@"Add an Option" message:nil placeholder:@"Option"
+					   text:nil action:@"Add" inView:self.view onSubmit:^(NSString *typed){
+		NSString *text = TGPollAddOptionText(typed);
+		if (!text.length)
+			return;
+		[[TGMessageStore shared] addPollOption:text toMessage:messageId inChat:chatId
+									completion:^(BOOL ok){
+			if (ok)
+				return;
+			dispatch_async(dispatch_get_main_queue(), ^{
+				UIView *host = weakSelf.view;
+				if (host)
+					[TGAlertSheet showMessage:@"An error occurred." title:@"Add an Option"
+									   inView:host];
+			});
+		}];
+	}];
+}
 
 /// Asks how long slow mode still holds this account back here; the send
 /// button says so instead of sending into a refusal.

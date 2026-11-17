@@ -593,6 +593,18 @@ NSArray *TGBotCommandRows(NSArray *sets) {
 	[[TGClient shared] internalLinkKind:link completion:completion];
 }
 
+- (void)internalLinkType:(NSString *)link completion:(void (^)(NSDictionary *type))completion {
+	if (!link.length){
+		if (completion) completion(nil);
+		return;
+	}
+	[[TGClient shared] request:@{@"@type" : @"getInternalLinkType", @"link" : link}
+	   completion:^(NSDictionary *result){
+		if (completion)
+			completion([result[@"@type"] hasPrefix:@"internalLinkType"] ? result : nil);
+	}];
+}
+
 - (BOOL)isChatMuted:(int64_t)chatId {
 	return [[TGClient shared] isChatMuted:chatId];
 }

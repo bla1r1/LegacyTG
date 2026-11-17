@@ -257,6 +257,13 @@
 		return;
 	}
 
+	// So do a game score, a checklist or poll change, a suggested post's
+	// outcome and "set the same wallpaper": each leads to the message it is about.
+	if ([m[@"serviceTargetId"] isKindOfClass:[NSNumber class]] && [m[@"serviceTargetId"] longLongValue]){
+		[self jumpToReplyById:[m[@"serviceTargetId"] longLongValue]];
+		return;
+	}
+
 	// Contact card tap
 	if ([kind isEqualToString:@"messageContact"]){
 		[self handleContactTapForMessage:m];
@@ -337,9 +344,36 @@
 		return;
 	}
 
+	// 18+ media asks first (official chatAgeRestrictionAlertController); View
+	// Anyway takes the veil off for this visit. Official's "Always show 18+
+	// media" switch in the same alert is not offered: the alert has no
+	// checkbox on iOS 6, and the setting lives in Data and Storage.
+	if ([m[@"sensitive"] boolValue] && m[@"id"] && ![self.revealedSpoilers containsObject:m[@"id"]]){
+		NSNumber *messageId = m[@"id"];
+		__weak typeof(self) weakSelf = self;
+		NSString *text = [TGLocalized(@"This media may contain sensitive content suitable only for adults.\nDo you still want to view it?")
+				stringByReplacingOccurrencesOfString:@"\n" withString:@" "];
+		[TGAlertSheet showConfirm:text
+							title:TGLocalized(@"18+ Content")
+						   action:TGLocalized(@"View Anyway")
+					  destructive:NO
+						   inView:self.view
+						onConfirm:^{
+			TGChatViewController *me = weakSelf;
+			if (!me)
+				return;
+			if (!me.revealedSpoilers)
+				me.revealedSpoilers = [NSMutableSet set];
+			[me.revealedSpoilers addObject:messageId];
+			[me.table reloadData];
+		}];
+		return;
+	}
+
 	// The first tap on a spoiler takes the cover off; the next opens it.
 	if ([m[@"hasSpoiler"] boolValue] && m[@"id"] && ![self.revealedSpoilers containsObject:m[@"id"]] &&
-		![m[@"viewOnce"] boolValue] && ![m[@"destructSeconds"] integerValue]){
+		![m[@"viewOnce"] boolValue] && ![m[@"destructSeconds"] integerValue] &&
+		![m[@"secretMedia"] boolValue]){
 		if (!self.revealedSpoilers)
 			self.revealedSpoilers = [NSMutableSet set];
 		[self.revealedSpoilers addObject:m[@"id"]];
@@ -362,8 +396,11 @@
 	// A one-time or timed picture opens alone - no paging to its neighbours -
 	// and tells TDLib it was opened, which starts the sender's clock. TDLib
 	// then swaps the content for "expired"; the viewer keeps the file it has.
-	if (([kind isEqualToString:@"messagePhoto"] || [kind isEqualToString:@"messageVideo"]) &&
-		([m[@"viewOnce"] boolValue] || [m[@"destructSeconds"] integerValue] > 0)){
+	// A secret chat's GIF goes the same way.
+	if (([kind isEqualToString:@"messagePhoto"] || [kind isEqualToString:@"messageVideo"] ||
+		 [kind isEqualToString:@"messageAnimation"]) &&
+		([m[@"viewOnce"] boolValue] || [m[@"destructSeconds"] integerValue] > 0 ||
+		 [m[@"secretMedia"] boolValue])){
 		[[TGMessageStore shared] openContentOfMessage:[m[@"id"] longLongValue] inChat:self.chatId];
 		[TGMediaViewer presentItems:@[m] startAt:0 inChat:self.chatId isAlbum:NO];
 		return;

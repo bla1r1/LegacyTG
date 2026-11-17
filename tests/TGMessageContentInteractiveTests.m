@@ -149,6 +149,54 @@ static NSDictionary *dcDiceSlotMachine(NSDictionary *background) {
 	XCTAssertEqual([poll[@"closeDate"] integerValue], (NSInteger)0);
 }
 
+/// can_add_option sits on messagePoll, not on the poll; the bubble reads it
+/// from the poll dictionary with the rest.
+- (void)testPoll_CanAddOptionComesFromTheContent {
+	NSDictionary *poll = @{@"@type" : @"poll", @"id" : @7,
+						   @"question" : @{@"@type" : @"formattedText", @"text" : @"Lunch?"}};
+	NSDictionary *open = TGFlattenInteractiveContent(@{@"@type" : @"messagePoll",
+			@"poll" : poll, @"can_add_option" : @YES})[@"poll"];
+	XCTAssertTrue([open[@"canAddOption"] boolValue]);
+	NSDictionary *fixed = TGFlattenInteractiveContent(@{@"@type" : @"messagePoll",
+			@"poll" : poll})[@"poll"];
+	XCTAssertFalse([fixed[@"canAddOption"] boolValue]);
+}
+
+/// Parity: the per-account option order, results visibility and the vote
+/// restriction come through for the bubble.
+- (void)testPoll_OrderResultsAndRestriction {
+	NSDictionary *option = @{@"@type" : @"pollOption",
+			@"text" : @{@"@type" : @"formattedText", @"text" : @"A"}};
+	NSDictionary *out = TGFlattenInteractiveContent(@{
+		@"@type" : @"messagePoll",
+		@"poll"  : @{
+			@"@type" : @"poll", @"id" : @8,
+			@"question" : @{@"@type" : @"formattedText", @"text" : @"Q"},
+			@"options" : @[option, option, option],
+			@"option_order" : @[@2, @0, @1],
+			@"can_see_results" : @NO,
+			@"vote_restriction_reason" : @{@"@type" : @"pollVoteRestrictionReasonCountryRestricted",
+					@"country_code" : @"RU"},
+		},
+	});
+	NSDictionary *poll = out[@"poll"];
+	XCTAssertEqualObjects(poll[@"displayOrder"], (@[@2, @0, @1]));
+	XCTAssertFalse([poll[@"canSeeResults"] boolValue]);
+	XCTAssertEqualObjects(poll[@"voteRestriction"], @"pollVoteRestrictionReasonCountryRestricted");
+}
+
+- (void)testPoll_MissingResultsFlagMeansVisible {
+	NSDictionary *out = TGFlattenInteractiveContent(@{
+		@"@type" : @"messagePoll",
+		@"poll"  : @{@"@type" : @"poll", @"id" : @9,
+				@"question" : @{@"@type" : @"formattedText", @"text" : @"Q"},
+				@"vote_restriction_reason" : [NSNull null]},
+	});
+	XCTAssertTrue([out[@"poll"][@"canSeeResults"] boolValue]);
+	XCTAssertEqualObjects(out[@"poll"][@"voteRestriction"], @"");
+	XCTAssertEqual([out[@"poll"][@"displayOrder"] count], (NSUInteger)0);
+}
+
 /// Multiple answers are a property of the poll, not of its type, and a pending
 /// request marks the option being chosen right now.
 - (void)testPoll_MultipleAnswersAndPendingChoice {
@@ -768,6 +816,36 @@ static NSDictionary *dcDiceSlotMachine(NSDictionary *background) {
 - (void)testExpired_VoiceNote {
 	NSDictionary *out = TGFlattenInteractiveContent(@{@"@type" : @"messageExpiredVoiceNote"});
 	XCTAssertEqualObjects(out[@"expiredKind"], @"voiceNote");
+}
+
+#pragma mark - service lines that lead to a message
+
+// Parity: official opens the message a service line is about
+// (ChatController.swift, openMessage for .gameScore, .todo*, .pollOption*,
+// .suggestedPost*, .setSameChatWallpaper).
+- (void)testServiceTarget_EachType {
+	NSDictionary *cases = @{
+		@"messageChecklistTasksAdded"          : @"checklist_message_id",
+		@"messageChecklistTasksDone"           : @"checklist_message_id",
+		@"messageGameScore"                    : @"game_message_id",
+		@"messagePollOptionAdded"              : @"poll_message_id",
+		@"messagePollOptionDeleted"            : @"poll_message_id",
+		@"messageSuggestedPostApprovalFailed"  : @"suggested_post_message_id",
+		@"messageSuggestedPostApproved"        : @"suggested_post_message_id",
+		@"messageSuggestedPostDeclined"        : @"suggested_post_message_id",
+		@"messageSuggestedPostPaid"            : @"suggested_post_message_id",
+		@"messageSuggestedPostRefunded"        : @"suggested_post_message_id",
+		@"messageChatSetBackground"            : @"old_background_message_id",
+	};
+	for (NSString *type in cases) {
+		NSDictionary *out = TGFlattenInteractiveContent(@{@"@type" : type, cases[type] : @(4194304)});
+		XCTAssertEqual([out[@"serviceTargetId"] longLongValue], 4194304LL, @"%@", type);
+	}
+}
+
+- (void)testServiceTarget_ZeroIsNoTarget {
+	XCTAssertTrue(TGFlattenInteractiveContent(@{
+		@"@type" : @"messageChatSetBackground", @"old_background_message_id" : @0}) == nil);
 }
 
 #pragma mark - everything else

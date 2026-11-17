@@ -1,5 +1,6 @@
 // The blur, apart from the view so the host tests can run it.
 #import "TGMediaVeil.h"
+#import "TGLocalization.h"
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
@@ -10,6 +11,8 @@ NSString *TGMediaVeilTitle(TGMediaVeilKind kind, int64_t starCount) {
 			return nil;
 		case TGMediaVeilKindViewOnce:
 			return @"Tap to view";
+		case TGMediaVeilKindSensitive:
+			return TGLocalized(@"18+ Content");
 		case TGMediaVeilKindPaid:
 			if (starCount == 1) {
 				return @"Unlock for 1 Star";

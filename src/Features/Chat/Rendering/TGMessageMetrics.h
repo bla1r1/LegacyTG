@@ -95,6 +95,7 @@ static const CGFloat kPollOptionsGap     = TGMetricPadSmall;
 /// The "Vote" button under a multiple-answer poll's draft answers.
 static const CGFloat kPollVoteHeight     = TGMetricButtonSmallH;
 static const CGFloat kPollVoteGap        = TGMetricPadTiny;
+static const CGFloat kPollAddOptionHeight = TGMetricButtonSmallH;
 /// A quiz's explanation under the options, and the votes line under it all.
 static const CGFloat kPollExplanationGap = TGMetricPadSmall;
 static const CGFloat kPollFooterGap      = TGMetricPadSmall;
@@ -163,8 +164,13 @@ FOUNDATION_EXPORT CGRect TGMessageStampPlate(NSDictionary *m, CGFloat right,
 /// there, and on its own line only when it does not.
 FOUNDATION_EXPORT BOOL TGMessageStampFitsInline(NSDictionary *m, CGFloat fontSize);
 
-/// The quote block's text: TDLib's inline quote, else the replied message
-/// described, else "..." while it loads. Nil for a message that answers nothing.
+/// The text of the checklist task a reply answers (reply_to.checklist_task_id),
+/// or nil when it answers the whole message.
+FOUNDATION_EXPORT NSString *TGMessageQuotedTask(NSDictionary *m, NSDictionary *replied);
+
+/// The quote block's text: TDLib's inline quote, else the task or the replied
+/// message described, else "..." while it loads. Nil for a message that
+/// answers nothing.
 FOUNDATION_EXPORT NSString *TGMessageQuoteText(NSDictionary *m, NSDictionary *replied);
 
 FOUNDATION_EXPORT NSArray *TGMessageQuoteEntities(NSDictionary *m, NSDictionary *replied);

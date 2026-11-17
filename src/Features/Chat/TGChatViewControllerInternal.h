@@ -369,6 +369,11 @@ UIImage *TGImageFromMinithumbnail(id mini);
 - (void)openChatWithPhoneNumber:(NSString *)phone;
 - (void)openChatWithUserToken:(NSString *)token;
 - (void)presentExternalLink:(NSString *)link;
+/// Opens a TGInternalLinkRoute; NO when the route is nil or has no screen.
+- (BOOL)openInternalLinkRoute:(NSDictionary *)route;
+- (void)classifyTelegramLink:(NSString *)clean
+			  isTelegramHost:(BOOL)isTelegramHost
+			isTelegramScheme:(BOOL)isTelegramScheme;
 - (void)showExternalLink:(NSString *)link browser:(NSString *)browser info:(NSDictionary *)info;
 - (void)openInstantViewForLink:(NSString *)link;
 - (void)openInstantViewForLink:(NSString *)link view:(NSDictionary *)view;
@@ -557,6 +562,7 @@ UIImage *TGImageFromMinithumbnail(id mini);
 - (void)pollOptionTapped:(UIButton *)option;
 - (void)checklistTaskTapped:(UIButton *)taskRow;
 - (void)pollVoteTapped:(UIButton *)button;
+- (void)pollAddOptionTapped:(UIButton *)button;
 - (void)pollFooterTapped:(UIButton *)button;
 /// The card button of a message row: open the person, chat, gift, story, game or giveaway.
 - (void)openCard:(TGMessageCard *)card ofMessage:(int64_t)messageId;

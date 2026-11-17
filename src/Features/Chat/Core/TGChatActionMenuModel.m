@@ -416,6 +416,19 @@ void TGChatActionMenuApplyProperties(TGChatActionMenuContext *context,
 	context->protectedByOther = [properties[@"has_protected_content_by_other_user"] boolValue];
 }
 
+BOOL TGDeleteLosesPaidPostStars(NSArray<NSDictionary *> *messages, BOOL revoke,
+		NSTimeInterval now) {
+	if (!revoke || ![messages isKindOfClass:NSArray.class])
+		return NO;
+	for (NSDictionary *m in messages) {
+		if (![m isKindOfClass:NSDictionary.class] || ![m[@"paidStarPost"] boolValue])
+			continue;
+		if ([m[@"date"] doubleValue] > now - 24 * 60 * 60)
+			return YES;
+	}
+	return NO;
+}
+
 NSArray<NSDictionary *> *TGMessageDeleteChoices(BOOL isSaved, BOOL isGroup,
 		NSDictionary *properties) {
 	if (isSaved)
@@ -541,7 +554,10 @@ NSArray<NSDictionary *> *TGChatActionMenuRows(NSDictionary *message,
 		}
 		if ([message[@"pollStats"] boolValue])
 			add(TGLocalized(@"Poll Stats"), @"Poll Statistics", @"data", NO);
-		if (context.mine && [message[@"pollOpen"] boolValue])
+		// TDLib's can_add_option decides, not authorship: anyone may add to a
+		// poll with open answers.
+		if (TGPollCanAddOption([message[@"poll"] isKindOfClass:NSDictionary.class]
+				? message[@"poll"] : nil))
 			add(TGLocalized(@"Add an Option"), @"Add Option", @"edit", NO);
 		if (context.mine && [message[@"pollOpen"] boolValue] &&
 				[message[@"pollDeletable"] boolValue])

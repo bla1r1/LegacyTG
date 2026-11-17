@@ -101,7 +101,7 @@ static NSArray *TGInteractiveUserIds(id senders) {
 	return ids;
 }
 
-static NSDictionary *TGInteractivePoll(id rawPoll, id rawDescription) {
+static NSDictionary *TGInteractivePoll(id rawPoll, id rawDescription, id rawCanAddOption) {
 	NSDictionary *poll = [rawPoll isKindOfClass:NSDictionary.class] ? rawPoll : @{};
 
 	NSMutableArray *options = [NSMutableArray array];
@@ -137,7 +137,27 @@ static NSDictionary *TGInteractivePoll(id rawPoll, id rawDescription) {
 		explanation = TGInteractiveText(type[@"explanation"]);
 	}
 
+	// The order TDLib shuffled the options into for this account, the
+	// results the poll lets this account see, and whether it may vote at all
+	// (official resolvedOptionOrder, hideResultsUntilClose,
+	// isPollVotingRestricted in ChatMessagePollBubbleContentNode.swift).
+	NSMutableArray *order = [NSMutableArray array];
+	id rawOrder = poll[@"option_order"];
+	if ([rawOrder isKindOfClass:NSArray.class] && [rawOrder count] == options.count) {
+		for (id value in rawOrder)
+			if ([value isKindOfClass:NSNumber.class])
+				[order addObject:value];
+	}
+	id seeResults = poll[@"can_see_results"];
+	NSDictionary *restriction = [poll[@"vote_restriction_reason"] isKindOfClass:NSDictionary.class]
+			? poll[@"vote_restriction_reason"] : nil;
+	NSString *restrictionType = [restriction[@"@type"] isKindOfClass:NSString.class]
+			? restriction[@"@type"] : @"";
+
 	return @{
+		@"displayOrder"    : order,
+		@"canSeeResults"   : seeResults ? TGInteractiveBool(seeResults) : @YES,
+		@"voteRestriction" : restrictionType,
 		@"pollId"          : TGInteractiveInt64(poll[@"id"]),
 		@"question"        : TGInteractiveText(poll[@"question"]),
 		@"questionEntities": TGInteractiveEntities(poll[@"question"]),
@@ -154,6 +174,7 @@ static NSDictionary *TGInteractivePoll(id rawPoll, id rawDescription) {
 		@"recentVoterIds" : TGInteractiveUserIds(poll[@"recent_voter_ids"]),
 		@"openPeriod"     : TGInteractiveInt64(poll[@"open_period"]),
 		@"closeDate"      : TGInteractiveInt64(poll[@"close_date"]),
+		@"canAddOption"   : TGInteractiveBool(rawCanAddOption),
 	};
 }
 
@@ -280,6 +301,26 @@ static NSDictionary *TGInteractiveGame(id rawGame) {
 	}};
 }
 
+static NSString *TGInteractiveServiceTargetKey(NSString *type) {
+	if ([type isEqualToString:@"messageChecklistTasksAdded"] ||
+			[type isEqualToString:@"messageChecklistTasksDone"])
+		return @"checklist_message_id";
+	if ([type isEqualToString:@"messageGameScore"])
+		return @"game_message_id";
+	if ([type isEqualToString:@"messagePollOptionAdded"] ||
+			[type isEqualToString:@"messagePollOptionDeleted"])
+		return @"poll_message_id";
+	if ([type isEqualToString:@"messageSuggestedPostApprovalFailed"] ||
+			[type isEqualToString:@"messageSuggestedPostApproved"] ||
+			[type isEqualToString:@"messageSuggestedPostDeclined"] ||
+			[type isEqualToString:@"messageSuggestedPostPaid"] ||
+			[type isEqualToString:@"messageSuggestedPostRefunded"])
+		return @"suggested_post_message_id";
+	if ([type isEqualToString:@"messageChatSetBackground"])
+		return @"old_background_message_id";
+	return nil;
+}
+
 NSDictionary *TGFlattenInteractiveContent(NSDictionary *content) {
 	if (![content isKindOfClass:NSDictionary.class])
 		return nil;
@@ -288,10 +329,20 @@ NSDictionary *TGFlattenInteractiveContent(NSDictionary *content) {
 		return nil;
 
 	if ([type isEqualToString:@"messagePoll"])
-		return @{@"poll" : TGInteractivePoll(content[@"poll"], content[@"description"])};
+		return @{@"poll" : TGInteractivePoll(content[@"poll"], content[@"description"], content[@"can_add_option"])};
 
 	if ([type isEqualToString:@"messagePinMessage"])
 		return @{@"pinnedMessageId" : TGInteractiveInt64(content[@"message_id"])};
+
+	// The service lines official opens the message they are about from
+	// (ChatController.swift, openMessage: .gameScore, .todoCompletions,
+	// .todoAppendTasks, .pollOptionAppended, .suggestedPost*,
+	// .setSameChatWallpaper navigate to the replied message).
+	NSString *targetKey = TGInteractiveServiceTargetKey(type);
+	if (targetKey) {
+		NSNumber *target = TGInteractiveInt64(content[targetKey]);
+		return target.longLongValue ? @{@"serviceTargetId" : target} : nil;
+	}
 
 	if ([type isEqualToString:@"messageUsersShared"]) {
 		NSMutableArray *users = [NSMutableArray array];

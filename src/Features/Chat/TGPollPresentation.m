@@ -110,20 +110,52 @@ NSString *TGPollClosesLine(NSDictionary *poll, NSTimeInterval now) {
 	return TGLocalizedFormat(@"ends in %@", clock);
 }
 
+/// A poll not yet sent or only scheduled cannot be voted in, but has no
+/// tally to show either.
+static BOOL TGPollRestrictedWithResults(NSDictionary *poll) {
+	id type = poll[@"voteRestriction"];
+	if (![type isKindOfClass:NSString.class] || ![type length])
+		return NO;
+	return ![type isEqualToString:@"pollVoteRestrictionReasonYetUnsent"] &&
+			![type isEqualToString:@"pollVoteRestrictionReasonScheduled"];
+}
+
 BOOL TGPollShowsResults(NSDictionary *poll) {
 	if (![poll isKindOfClass:NSDictionary.class])
 		return NO;
+	id see = poll[@"canSeeResults"];
+	if (see && !TGPollBool(see))
+		return NO;
 	if (TGPollBool(poll[@"isClosed"]))
 		return YES;
-	return TGPollAnyChosen(poll);
+	return TGPollAnyChosen(poll) || TGPollRestrictedWithResults(poll);
+}
+
+BOOL TGPollCanVote(NSDictionary *poll) {
+	if (![poll isKindOfClass:NSDictionary.class])
+		return NO;
+	if (TGPollBool(poll[@"isClosed"]) || TGPollAnyChosen(poll))
+		return NO;
+	id type = poll[@"voteRestriction"];
+	return !([type isKindOfClass:NSString.class] && [type length]);
+}
+
+NSUInteger TGPollDisplayIndex(NSDictionary *poll, NSUInteger row) {
+	NSArray *order = [poll isKindOfClass:NSDictionary.class] ? poll[@"displayOrder"] : nil;
+	NSUInteger count = TGPollOptions(poll).count;
+	if (![order isKindOfClass:NSArray.class] || order.count != count || row >= count)
+		return row;
+	long long index = TGPollLongLong(order[row]);
+	return (index >= 0 && (NSUInteger)index < count) ? (NSUInteger)index : row;
 }
 
 TGPollMark TGPollMarkForOption(NSDictionary *poll, NSUInteger index) {
-	if (!TGPollShowsResults(poll))
-		return TGPollMarkNone;
 	NSDictionary *option = TGPollOptionAt(poll, index);
 	if (!option)
 		return TGPollMarkNone;
+	// Results kept back: only this account's own answer is marked.
+	if (!TGPollShowsResults(poll))
+		return TGPollOptionChosen(option) ? TGPollMarkChosen : TGPollMarkNone;
 
 	BOOL chosen = TGPollOptionChosen(option);
 	if (TGPollBool(poll[@"isQuiz"])) {
@@ -153,4 +185,30 @@ BOOL TGPollCanRetract(NSDictionary *poll) {
 	if (!TGPollBool(poll[@"allowsRevoting"]))
 		return NO;
 	return TGPollAnyChosen(poll);
+}
+
+BOOL TGPollCanAddOption(NSDictionary *poll) {
+	if (![poll isKindOfClass:NSDictionary.class])
+		return NO;
+	return TGPollBool(poll[@"canAddOption"]) && !TGPollBool(poll[@"isClosed"]);
+}
+
+NSString *TGPollAddOptionText(NSString *typed) {
+	if (![typed isKindOfClass:NSString.class])
+		return @"";
+	NSCharacterSet *blank = [NSCharacterSet whitespaceAndNewlineCharacterSet];
+	NSString *clean = [typed stringByTrimmingCharactersInSet:blank];
+	static const NSUInteger kLimit = 100;
+	if (clean.length <= kLimit)
+		return clean;
+	// Stop before the composed character that would cross the limit, so an
+	// emoji is never cut in half.
+	NSUInteger end = 0;
+	while (end < clean.length) {
+		NSUInteger next = NSMaxRange([clean rangeOfComposedCharacterSequenceAtIndex:end]);
+		if (next > kLimit)
+			break;
+		end = next;
+	}
+	return [[clean substringToIndex:end] stringByTrimmingCharactersInSet:blank];
 }

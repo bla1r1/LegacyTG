@@ -117,6 +117,24 @@
 	XCTAssertTrue([refund[@"amount"] hasPrefix:@"+"]);
 }
 
+/// Parity: official's row says what kind of charge it was and how a
+/// withdrawal stands (StarsTransactionsListPanelComponent).
+- (void)testStarsRow_SubscriptionApiUsageAndWithdrawal {
+	NSDictionary *fee = TGStarsTransactionRow(@{ @"type" : @"botSubscriptionPurchase",
+			@"starCount" : @(-100), @"isSubscription" : @YES, @"dateText" : @"1 Jan" });
+	XCTAssertEqualObjects(fee[@"subtitle"], @"Monthly Subscription Fee · 1 Jan");
+	NSDictionary *api = TGStarsTransactionRow(@{ @"type" : @"telegramApiUsage",
+			@"starCount" : @(-5), @"requestCount" : @(250), @"dateText" : @"2 Jan" });
+	XCTAssertEqualObjects(api[@"subtitle"], @"250 Messages · 2 Jan");
+	NSDictionary *pending = TGStarsTransactionRow(@{ @"type" : @"fragmentWithdrawal",
+			@"starCount" : @(-500), @"withdrawal" : @"pending", @"dateText" : @"3 Jan" });
+	XCTAssertEqualObjects(pending[@"subtitle"], @"3 Jan – Pending");
+	NSDictionary *failed = TGStarsTransactionRow(@{ @"type" : @"fragmentWithdrawal",
+			@"starCount" : @(-500), @"withdrawal" : @"failed", @"dateText" : @"4 Jan" });
+	XCTAssertEqualObjects(failed[@"subtitle"], @"4 Jan – Not Completed");
+	XCTAssertTrue([failed[@"isFailed"] boolValue]);
+}
+
 /// A unique gift's Value comes from its fiat amount and currency, never from
 /// sell_star_count; without both fields the row is dropped.
 - (void)testGiftValueUsesTheFiatAmountAndDropsWithoutIt {

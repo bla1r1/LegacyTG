@@ -296,7 +296,27 @@ static void TGAnimateSelectionCheckbox(TGChatViewController *chat, int64_t messa
 					 onChoice:^(NSInteger index){
 		if (index < 0 || index >= (NSInteger)options.count)
 			return;
-		[weakSelf executeDeleteMessages:ids revoke:[options[(NSUInteger)index][@"revoke"] boolValue]];
+		BOOL revoke = [options[(NSUInteger)index][@"revoke"] boolValue];
+		TGChatViewController *me = weakSelf;
+		NSMutableArray *chosen = [NSMutableArray array];
+		NSSet *idSet = [NSSet setWithArray:ids];
+		for (NSDictionary *m in me.messages)
+			if ([idSet containsObject:m[@"id"]])
+				[chosen addObject:m];
+		if (me && TGDeleteLosesPaidPostStars(chosen, revoke, [[NSDate date] timeIntervalSince1970])) {
+			NSString *text = [TGLocalized(@"You won't receive **Stars** for this post if you delete it now. The post must remain visible for at least **24 hours** after publication.")
+					stringByReplacingOccurrencesOfString:@"**" withString:@""];
+			[TGAlertSheet showConfirm:text
+								title:TGLocalized(@"Stars Will Be Lost")
+							   action:TGLocalized(@"Delete Anyway")
+						  destructive:YES
+							   inView:me.view
+							onConfirm:^{
+				[weakSelf executeDeleteMessages:ids revoke:YES];
+			}];
+			return;
+		}
+		[me executeDeleteMessages:ids revoke:revoke];
 	}];
 }
 

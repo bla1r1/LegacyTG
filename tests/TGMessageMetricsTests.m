@@ -22,6 +22,27 @@
 	XCTAssertFalse([stamp hasPrefix:@"A very"]);
 }
 
+- (void)testStamp_BusinessBotNameBeforeTheTime {
+	// Parity: official signs a Business bot's reply with the bot's name by
+	// the time (StringForMessageTimestampStatus.swift).
+	NSString *time = TGMessageStampText(@{ @"date": @1700000000 });
+	NSString *stamp = TGMessageStampText(@{ @"date": @1700000000, @"businessBotName": @"Shop Bot" });
+	XCTAssertEqualObjects(stamp, [@"Shop Bot, " stringByAppendingString:time]);
+}
+
+// Parity: a reply to one checklist task quotes the task
+// (official ChatMessageReplyInfoNode, innerSubject .todoItem).
+- (void)testQuote_ChecklistTask {
+	NSDictionary *replied = @{ @"checklist" : @{ @"tasks" : @[
+		@{ @"taskId" : @1, @"text" : @"Buy milk" },
+		@{ @"taskId" : @2, @"text" : @"Call Ann" } ] } };
+	NSDictionary *m = @{ @"replyId" : @5, @"replyTaskId" : @2 };
+	XCTAssertEqualObjects(TGMessageQuotedTask(m, replied), @"Call Ann");
+	XCTAssertEqualObjects(TGMessageQuoteText(m, replied), @"Call Ann");
+	XCTAssertNil(TGMessageQuotedTask(@{ @"replyId" : @5 }, replied));
+	XCTAssertNil(TGMessageQuotedTask(@{ @"replyId" : @5, @"replyTaskId" : @9 }, replied));
+}
+
 - (void)testStamp_WidthCarriesTheEyeAndTheTicks {
 	NSDictionary *in = @{ @"date": @1700000000 };
 	NSDictionary *out = @{ @"date": @1700000000, @"outgoing": @YES };
@@ -128,7 +149,7 @@
 }
 
 
-#pragma mark - batch 3 fields
+#pragma mark - parity fields
 
 // Message.ImportedDateFormat: the first day comes before "Imported".
 - (void)testStamp_ImportedMessageKeepsItsFirstDate {

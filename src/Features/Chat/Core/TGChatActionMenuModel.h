@@ -71,6 +71,12 @@ void TGChatActionMenuApplyProperties(TGChatActionMenuContext *context,
 /// "Delete for me" when it can go from this side only. Each is
 /// {title, revoke}. Without properties both are offered, Saved Messages
 /// offers one plain Delete.
+/// YES when deleting `messages` for everyone forfeits Stars: a paid
+/// suggested post less than 24 hours old (official ChatControllerLoadDisplayNode
+/// deleteMessages, "Stars Will Be Lost").
+BOOL TGDeleteLosesPaidPostStars(NSArray<NSDictionary *> *messages, BOOL revoke,
+		NSTimeInterval now);
+
 NSArray<NSDictionary *> *TGMessageDeleteChoices(BOOL isSaved, BOOL isGroup,
 		NSDictionary *properties);
 

@@ -188,6 +188,84 @@ static NSString *TGServiceGiftReceiver(NSDictionary *content, NSDictionary *mess
 	return [message[@"is_outgoing"] boolValue] ? @"someone" : @"you";
 }
 
+/// Official's service strings mark names in **bold**; the line is plain text.
+static NSString *TGServiceStripBold(NSString *text) {
+	return [text stringByReplacingOccurrencesOfString:@"**" withString:@""];
+}
+
+/// ServiceMessageStrings.swift, .paymentSent: the payer's line, with the bot's
+/// name and the invoice title; a subscription's first payment and its renewals
+/// say so (Notification.PaymentSentRecurringInit / RecurringUsed).
+static NSString *TGServicePaymentSentText(NSDictionary *message, NSDictionary *content,
+		TGServiceChatTitle chatTitle) {
+	NSString *currency = TGServiceString(content, @"currency");
+	int64_t total = [content[@"total_amount"] longLongValue];
+	NSString *amount = [currency isEqualToString:@"XTR"]
+			? TGServiceStars(total) : TGServiceMoney(currency, total);
+	NSString *invoice = TGServiceString(content, @"invoice_name");
+	BOOL first = [content[@"is_first_recurring"] boolValue];
+	BOOL recurring = [content[@"is_recurring"] boolValue];
+	NSString *pattern;
+	if (first)
+		pattern = invoice.length
+				? @"You have just successfully transferred {amount} to {name} for {title} and allowed future reccurrent payments"
+				: @"You have just successfully transferred {amount} to {name} and allowed future reccurrent payments";
+	else if (recurring)
+		pattern = invoice.length
+				? @"You have just successfully transferred {amount} to {name} for {title} via recurrent payments"
+				: @"You have just successfully transferred {amount} to {name} via recurrent payments";
+	else
+		pattern = invoice.length
+				? @"You have just successfully transferred {amount} to {name} for {title}"
+				: @"You have just successfully transferred {amount} to {name}";
+	int64_t chatId = [message[@"chat_id"] longLongValue];
+	NSString *bot = chatTitle && chatId ? chatTitle(chatId) : nil;
+	NSString *line = TGLocalized(pattern);
+	line = [line stringByReplacingOccurrencesOfString:@"{amount}" withString:amount ?: @""];
+	line = [line stringByReplacingOccurrencesOfString:@"{name}" withString:bot ?: @""];
+	if (invoice.length)
+		line = [line stringByReplacingOccurrencesOfString:@"{title}" withString:invoice];
+	return line;
+}
+
+/// ServiceMessageStrings.swift, .giveawayResults: who won, what went to the
+/// admins, and for a Stars giveaway without winners that the Stars did.
+static NSString *TGServiceGiveawayResultsText(NSDictionary *message, NSDictionary *content) {
+	int64_t winners = [content[@"winner_count"] longLongValue];
+	int64_t unclaimed = [content[@"unclaimed_prize_count"] longLongValue];
+	BOOL stars = [content[@"is_star_giveaway"] boolValue];
+	BOOL isGroup = ![message[@"is_channel_post"] boolValue];
+	NSString *winnersValue = [NSString stringWithFormat:@"%lld", (long long)winners];
+	NSString *unclaimedValue = [NSString stringWithFormat:@"%lld", (long long)unclaimed];
+	if (winners == 0) {
+		if (stars)
+			return TGLocalized(isGroup
+					? @"Due to the giveaway terms, no winners could be selected by Telegram, all stars were credited to group administrators."
+					: @"Due to the giveaway terms, no winners could be selected by Telegram, all stars were credited to channel administrators.");
+		return TGServiceStripBold(isGroup
+				? TGLocalizedPluralValue(@"Due to the giveaway terms, no winners could be selected by Telegram, a gift link was forwarded to group administrators.",
+						@"Due to the giveaway terms, no winners could be selected by Telegram, all **%@** gift links were forwarded to group administrators.",
+						unclaimedValue, (NSInteger)unclaimed)
+				: TGLocalizedPluralValue(@"Due to the giveaway terms, no winners could be selected by Telegram, a gift link was forwarded to channel administrators.",
+						@"Due to the giveaway terms, no winners could be selected by Telegram, all **%@** gift links were forwarded to channel administrators.",
+						unclaimedValue, (NSInteger)unclaimed));
+	}
+	NSString *won = TGLocalizedPluralValue(
+			@"**%@** winner of the giveaway was randomly selected by Telegram and received their gift link in a private message.",
+			@"**%@** winners of the giveaway were randomly selected by Telegram and received their gift links in private messages.",
+			winnersValue, (NSInteger)winners);
+	if (unclaimed <= 0)
+		return TGServiceStripBold(won);
+	NSString *left = isGroup
+			? TGLocalizedPluralValue(@"**%@** undistributed gift link was forwarded to group administrators",
+					@"**%@** undistributed gift links were forwarded to group administrators",
+					unclaimedValue, (NSInteger)unclaimed)
+			: TGLocalizedPluralValue(@"**%@** undistributed gift link was forwarded to channel administrators",
+					@"**%@** undistributed gift links were forwarded to channel administrators",
+					unclaimedValue, (NSInteger)unclaimed);
+	return TGServiceStripBold([NSString stringWithFormat:@"%@\n%@", won, left]);
+}
+
 NSString *TGServiceMessageText(NSDictionary *message,
 		TGServiceUserName userName, TGServiceChatTitle chatTitle) {
 	if (![message isKindOfClass:[NSDictionary class]])
@@ -290,8 +368,15 @@ NSString *TGServiceMessageText(NSDictionary *message,
 	}
 	if ([type isEqualToString:@"messageScreenshotTaken"])
 		return [NSString stringWithFormat:@"%@ took a screenshot", actor];
-	if ([type isEqualToString:@"messageChatSetBackground"])
+	if ([type isEqualToString:@"messageChatSetBackground"]) {
+		// A wallpaper someone had already set (ServiceMessageStrings.swift,
+		// .setSameChatWallpaper); the line leads to that earlier message.
+		if ([content[@"old_background_message_id"] longLongValue] != 0)
+			return [actor isEqualToString:@"You"]
+					? TGLocalized(@"You set the same wallpaper for this chat")
+					: TGLocalizedFormat(@"%1$@ set the same wallpaper for this chat", actor);
 		return [NSString stringWithFormat:@"%@ set a new chat background", actor];
+	}
 	if ([type isEqualToString:@"messageChatSetTheme"]) {
 		NSDictionary *theme = content[@"theme"];
 		BOOL hasTheme = [theme isKindOfClass:[NSDictionary class]] &&
@@ -302,6 +387,21 @@ NSString *TGServiceMessageText(NSDictionary *message,
 	}
 	if ([type isEqualToString:@"messageChatSetMessageAutoDeleteTime"]) {
 		int64_t seconds = [content[@"message_auto_delete_time"] longLongValue];
+		// The timer came from someone's default for all chats
+		// (ServiceMessageStrings.swift, autoSourcePeerId).
+		int64_t fromUserId = [content[@"from_user_id"] longLongValue];
+		if (seconds > 0 && fromUserId != 0) {
+			NSDictionary *sender = message[@"sender_id"];
+			BOOL fromMe = [message[@"is_outgoing"] boolValue] &&
+					[sender isKindOfClass:[NSDictionary class]] &&
+					[sender[@"user_id"] longLongValue] == fromUserId;
+			if (fromMe)
+				return TGLocalizedFormat(@"You set a self-destruct timer for all chats.\nAll new messages in this chat will be automatically deleted after %1$@ they're sent.",
+						TGServiceDuration(seconds));
+			NSString *who = userName ? userName(fromUserId) : nil;
+			return TGLocalizedFormat(@"%1$@ set a self-destruct timer for all chats.\nAll new messages in this chat will be automatically deleted after %2$@ they're sent.",
+					who.length ? who : TGLocalized(@"Someone"), TGServiceDuration(seconds));
+		}
 		return seconds > 0
 				? TGLocalizedFormat(@"%1$@ set messages to auto-delete in %2$@",
 						actor, TGServiceDuration(seconds))
@@ -347,14 +447,8 @@ NSString *TGServiceMessageText(NSDictionary *message,
 		return [NSString stringWithFormat:@"%@ scored %lld in a game",
 				actor, (long long)score];
 	}
-	if ([type isEqualToString:@"messagePaymentSuccessful"]) {
-		NSString *amount = TGServiceMoney(TGServiceString(content, @"currency"),
-				[content[@"total_amount"] longLongValue]);
-		NSString *invoice = TGServiceString(content, @"invoice_name");
-		return invoice.length
-				? [NSString stringWithFormat:@"%@ paid %@ for \"%@\"", actor, amount, invoice]
-				: [NSString stringWithFormat:@"%@ paid %@", actor, amount];
-	}
+	if ([type isEqualToString:@"messagePaymentSuccessful"])
+		return TGServicePaymentSentText(message, content, chatTitle);
 	if ([type isEqualToString:@"messagePaymentSuccessfulBot"]) {
 		NSString *amount = TGServiceMoney(TGServiceString(content, @"currency"),
 				[content[@"total_amount"] longLongValue]);
@@ -378,6 +472,21 @@ NSString *TGServiceMessageText(NSDictionary *message,
 						gifter, receiver];
 	}
 	if ([type isEqualToString:@"messagePremiumGiftCode"]) {
+		// A prize nobody claimed (ChatMessageGiftBubbleContentNode.swift,
+		// .giftCode unclaimed): official's card text, as one line.
+		if ([content[@"is_unclaimed"] boolValue]) {
+			NSString *creator = TGServiceSenderName(content[@"creator_id"], userName, chatTitle);
+			int64_t days = [content[@"day_count"] longLongValue];
+			int64_t months = [content[@"month_count"] longLongValue];
+			if (months <= 0)
+				months = MAX(3, (days + 15) / 30);
+			NSString *count = [NSString stringWithFormat:@"%lld", (long long)months];
+			NSString *period = TGLocalizedPluralValue(@"**%@** month", @"**%@** months",
+					count, (NSInteger)months);
+			return TGServiceStripBold(TGLocalizedFormat(
+					@"You have an unclaimed prize from a giveaway by **%1$@**.\n\nThis prize is a **Telegram Premium** subscription for %2$@.",
+					creator.length ? creator : TGLocalized(@"Someone"), period));
+		}
 		NSString *period = TGServicePremiumPeriod(
 				[content[@"month_count"] longLongValue],
 				[content[@"day_count"] longLongValue]);
@@ -412,12 +521,8 @@ NSString *TGServiceMessageText(NSDictionary *message,
 						actor, TGServiceStars(stars)]
 				: TGLocalizedFormat(@"%@ started a giveaway", actor);
 	}
-	if ([type isEqualToString:@"messageGiveawayCompleted"]) {
-		int64_t winners = [content[@"winner_count"] longLongValue];
-		return [NSString stringWithFormat:@"%@ giveaway has ended: %@",
-				TGServicePossessive(actor),
-				TGServiceCount(winners, @"winner", @"winners")];
-	}
+	if ([type isEqualToString:@"messageGiveawayCompleted"])
+		return TGServiceGiveawayResultsText(message, content);
 	if ([type isEqualToString:@"messageContactRegistered"])
 		return TGLocalizedFormat(@"%@ joined Telegram", actor);
 	if ([type isEqualToString:@"messageBotWriteAccessAllowed"]) {

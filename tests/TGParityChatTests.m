@@ -473,6 +473,29 @@ static NSArray *TGMenuActions(NSDictionary *message, TGChatActionMenuContext con
 	XCTAssertEqual(TGMessageDeleteChoices(YES, NO, nil).count, (NSUInteger)1);
 }
 
+// Parity: deleting a paid suggested post for everyone within a day loses
+// its Stars, and official asks first (ChatControllerLoadDisplayNode.swift).
+- (void)testDeleteLosesPaidPostStars_OnlyRecentRevokedPaidPosts {
+	NSTimeInterval now = 1700100000;
+	NSDictionary *fresh = @{ @"paidStarPost" : @YES, @"date" : @(now - 3600) };
+	NSDictionary *old = @{ @"paidStarPost" : @YES, @"date" : @(now - 25 * 3600) };
+	NSDictionary *plain = @{ @"paidStarPost" : @NO, @"date" : @(now - 60) };
+	XCTAssertTrue(TGDeleteLosesPaidPostStars(@[plain, fresh], YES, now));
+	XCTAssertFalse(TGDeleteLosesPaidPostStars(@[fresh], NO, now));
+	XCTAssertFalse(TGDeleteLosesPaidPostStars(@[old, plain], YES, now));
+}
+
+// Parity: the ended giveaway sheet says who drew whom, naming the other
+// channels (GiveawayInfoController .finished, Ended / EndedMany).
+- (void)testGiveawayInfo_EndedNamesOtherChannels {
+	NSString *many = TGGiveawayInfoText(@{ @"isEnded" : @YES, @"selectionDate" : @(1700000000),
+			@"winnerCount" : @3, @"additionalChatCount" : @2 }, @"Cats");
+	XCTAssertTrue([many rangeOfString:@"Telegram automatically selected 3 random subscribers of Cats and other listed channels."].location != NSNotFound);
+	NSString *one = TGGiveawayInfoText(@{ @"isEnded" : @YES, @"selectionDate" : @(1700000000),
+			@"winnerCount" : @1, @"additionalChatCount" : @0, @"isGroup" : @YES }, @"Cats");
+	XCTAssertTrue([one rangeOfString:@"Telegram automatically selected 1 random member of Cats."].location != NSNotFound);
+}
+
 // Official moves a held bubble only as far as its menu needs; the old lift
 // always threw it to the top, and the dim-only hold let the card run off.
 - (void)testHoldLift_MovesOnlyAsFarAsTheMenuNeeds {
@@ -530,7 +553,7 @@ static NSArray *TGMenuActions(NSDictionary *message, TGChatActionMenuContext con
 }
 
 
-#pragma mark - batch 4
+#pragma mark - parity
 
 // ChatDeleteMessageContextItem: the timer under Delete.
 - (void)testAutoDeleteText_ClockThenDays {
@@ -563,7 +586,7 @@ static NSArray *TGMenuActions(NSDictionary *message, TGChatActionMenuContext con
 }
 
 
-#pragma mark - batch 6
+#pragma mark - parity
 
 - (void)testNewContactCard_CountryMonthAndChanges {
 	NSDictionary *account = @{@"registrationMonth" : @3, @"registrationYear" : @2021,
@@ -584,7 +607,7 @@ static NSArray *TGMenuActions(NSDictionary *message, TGChatActionMenuContext con
 }
 
 
-#pragma mark - batch 7: the hold menu follows messageProperties
+#pragma mark - the hold menu follows messageProperties
 
 static NSDictionary *TGProps(NSDictionary *extra) {
 	NSMutableDictionary *p = [@{@"@type" : @"messageProperties", @"can_be_replied" : @YES,
@@ -640,7 +663,7 @@ static NSDictionary *TGProps(NSDictionary *extra) {
 }
 
 
-#pragma mark - batch 8
+#pragma mark - parity
 
 - (void)testForwardHeader_PsaWording {
 	XCTAssertEqualObjects(TGForwardHeaderLine(@"Ann", nil), @"Forwarded from: Ann");
@@ -673,6 +696,19 @@ static NSDictionary *TGProps(NSDictionary *extra) {
 	XCTAssertEqualObjects([cells subarrayWithRange:NSMakeRange(0, 4)], (@[@0, @1, @2, @3]));
 	XCTAssertTrue([TGSecretKeyHex(key) hasPrefix:@"E4 00 00"]);
 	XCTAssertEqual([[TGSecretKeyHex(key) componentsSeparatedByString:@"\n"] count], (NSUInteger)4);
+}
+
+/// Someone else's open-answer poll takes a new option; your own closed-to-
+/// additions poll does not. TDLib's can_add_option decides, not authorship.
+- (void)testAddOptionFollowsCanAddOptionNotAuthorship {
+	NSDictionary *option = @{@"text" : @"A"};
+	NSDictionary *theirs = @{@"text" : @"", @"service" : @NO, @"pollOptions" : @[option],
+							 @"pollOpen" : @YES,
+							 @"poll" : @{@"options" : @[option], @"canAddOption" : @YES}};
+	XCTAssertTrue([TGMenuActions(theirs, TGMenuContext(NO, YES, NO)) containsObject:@"Add Option"]);
+	NSDictionary *mine = @{@"text" : @"", @"service" : @NO, @"pollOptions" : @[option],
+						   @"pollOpen" : @YES, @"poll" : @{@"options" : @[option]}};
+	XCTAssertFalse([TGMenuActions(mine, TGMenuContext(YES, YES, NO)) containsObject:@"Add Option"]);
 }
 
 @end
