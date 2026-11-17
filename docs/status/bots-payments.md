@@ -45,3 +45,10 @@ release UI reads state and says purchase happens in an official client.
 | StoreKit purchases | missing | — | No StoreKit linkage; `canPurchaseFromStore` and `assignStoreTransaction` are never sent. |
 | Refund a Star payment | missing | — | `refundStarPayment` and `editUserStarSubscription` are never sent. |
 | Gift privacy | missing | — | No who-may-send, button or accepted-types rows; `setGiftSettings` is never sent. |
+
+## Data we had and did not show (17 November 2026)
+
+- The Stars transactions list follows official's row (StarsTransactionsListPanelComponent): a subscription charge says "Monthly Subscription Fee" before the date (subscription_period on the four subscription types), a Bot API charge says "250 Messages" (starTransactionTypeTelegramApiUsage.request_count), and a Fragment withdrawal adds "– Pending" or, in red, "– Not Completed" to its date (withdrawal_state).
+- The commission on paid messages, reactions and gift sales is shown on official's transaction details screen, which is not built; it stays `todo later`.
+- Compile-checked for armv7 and arm64 on Linux; host tests not run, not checked on a device.
+- Unique gift page (17 November 2026). From the profile Gifts tab a collectible now shows, after Date: Owner (owner_id name, else owner_name), Telegram (host_id), Model, Symbol and Backdrop each with its rarity (per mille as official's formatPercentage, or uncommon/rare/epic/legendary), Availability (Gift.Unique.Issued, "issued/total" grouped in the locale), Value, then the Gift.Unique.OriginalInfo line (sender, receiver, medium date, comment). Names missing from the cache are fetched and the rows rebuilt. Host tests: TGGiftFlattenTests, TGBotsChatMediaRowsTests (Linux). Not checked on a device.

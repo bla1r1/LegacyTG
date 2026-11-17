@@ -41,9 +41,30 @@ static inline NSDictionary *TGStarsTransactionRow(NSDictionary *transaction) {
 			? [transaction[@"starCount"] longLongValue] : 0;
 	BOOL outgoing = stars < 0;
 	NSString *amount = TGLocalizedFormat(@"%@ Stars", @(llabs(stars)));
+	// Official's row (StarsTransactionsListPanelComponent): the kind under
+	// the title, then the date with a pending or failed mark.
+	NSString *kindLine = nil;
+	NSInteger requests = [transaction[@"requestCount"] integerValue];
+	if ([transaction[@"isSubscription"] boolValue])
+		kindLine = TGLocalized(@"Monthly Subscription Fee");
+	else if (requests > 0)
+		kindLine = TGLocalizedPluralValue(@"%@ Message", @"%@ Messages",
+				[NSString stringWithFormat:@"%ld", (long)requests], requests);
+	NSString *date = [transaction[@"dateText"] isKindOfClass:NSString.class] ? transaction[@"dateText"] : @"";
+	NSString *withdrawal = [transaction[@"withdrawal"] isKindOfClass:NSString.class] ? transaction[@"withdrawal"] : @"";
+	BOOL failed = [withdrawal isEqualToString:@"failed"];
+	// A refund already says so in the title.
+	if ([withdrawal isEqualToString:@"pending"])
+		date = [date stringByAppendingFormat:@" – %@", TGLocalized(@"Pending")];
+	else if (failed)
+		date = [date stringByAppendingFormat:@" – %@", TGLocalized(@"Not Completed")];
+	NSString *subtitle = kindLine.length
+			? (date.length ? [NSString stringWithFormat:@"%@ · %@", kindLine, date] : kindLine)
+			: date;
 	return @{
 		@"title" : TGStarsTransactionTitle(transaction),
-		@"subtitle" : transaction[@"dateText"] ?: @"",
+		@"subtitle" : subtitle,
+		@"isFailed" : @(failed),
 		@"amount" : [(outgoing ? @"-" : @"+") stringByAppendingString:amount],
 		@"isOutgoing" : @(outgoing),
 		@"isRefund" : @([transaction[@"isRefund"] boolValue]),

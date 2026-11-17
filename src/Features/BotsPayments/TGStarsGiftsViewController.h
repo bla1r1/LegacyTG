@@ -14,6 +14,7 @@ static inline NSArray *TGStarsLedgerRowModels(NSArray *rows) {
 			@"subtitle" : row[@"subtitle"] ?: @"",
 			@"amount" : row[@"amount"] ?: @"",
 			@"isOutgoing" : @([row[@"isOutgoing"] boolValue]),
+			@"isFailed" : @([row[@"isFailed"] boolValue]),
 		}];
 	}
 	return models;

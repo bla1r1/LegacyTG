@@ -2,6 +2,42 @@
 // TGGiftFlatten.m - flatten TDLib receivedGift records down to row and viewer fields.
 //
 #import "TGGiftFlatten.h"
+#import "TGLocalization.h"
+
+NSString *TGGiftRarityText(NSDictionary *rarity) {
+	if (![rarity isKindOfClass:NSDictionary.class])
+		return @"";
+	NSString *type = [rarity[@"@type"] isKindOfClass:NSString.class] ? rarity[@"@type"] : @"";
+	if ([type isEqualToString:@"upgradedGiftAttributeRarityPerMille"]) {
+		NSInteger perMille = [rarity[@"per_mille"] integerValue];
+		if (perMille <= 0)
+			return @"<0.1%";
+		NSString *number = [NSString stringWithFormat:@"%0.1f", perMille * 0.1];
+		if ([number hasSuffix:@".0"])
+			number = [number substringToIndex:number.length - 2];
+		return [number stringByAppendingString:@"%"];
+	}
+	NSDictionary *names = @{
+		@"upgradedGiftAttributeRarityUncommon"  : @[@"Gift.Attribute.Uncommon", @"uncommon"],
+		@"upgradedGiftAttributeRarityRare"      : @[@"Gift.Attribute.Rare", @"rare"],
+		@"upgradedGiftAttributeRarityEpic"      : @[@"Gift.Attribute.Epic", @"epic"],
+		@"upgradedGiftAttributeRarityLegendary" : @[@"Gift.Attribute.Legendary", @"legendary"],
+	};
+	NSArray *name = names[type];
+	return name ? TGLocalizedKey(name[0], name[1]) : @"";
+}
+
+/// A MessageSender as @{userId} or @{chatId}; nil for none.
+static void TGGiftPutSender(NSMutableDictionary *out, NSString *prefix, id sender) {
+	if (![sender isKindOfClass:NSDictionary.class])
+		return;
+	int64_t userId = [sender[@"user_id"] longLongValue];
+	int64_t chatId = [sender[@"chat_id"] longLongValue];
+	if (userId)
+		out[[prefix stringByAppendingString:@"UserId"]] = @(userId);
+	else if (chatId)
+		out[[prefix stringByAppendingString:@"ChatId"]] = @(chatId);
+}
 
 /// Resolves still picture file id from a sticker: prefers an explicit still
 /// picture thumbnail (webp, jpeg, png), falling back to the sticker's own
@@ -222,6 +258,29 @@ NSDictionary *TGFlattenReceivedGift(NSDictionary *receivedGift) {
 		NSDictionary *backdrop = [giftObj[@"backdrop"] isKindOfClass:[NSDictionary class]] ? giftObj[@"backdrop"] : nil;
 		NSString *backdropName = [backdrop[@"name"] isKindOfClass:[NSString class]] ? backdrop[@"name"] : @"";
 		out[@"backdropName"] = backdropName;
+
+		// What official's unique gift table adds: the rarity beside each
+		// attribute, the owner and the chat hosting the gift, how many of
+		// the kind exist, and who first gave it (GiftViewScreen.swift).
+		out[@"modelRarity"] = TGGiftRarityText(model[@"rarity"]);
+		out[@"symbolRarity"] = TGGiftRarityText(symbol[@"rarity"]);
+		out[@"backdropRarity"] = TGGiftRarityText(backdrop[@"rarity"]);
+		out[@"issuedCount"] = @([giftObj[@"total_upgraded_count"] longLongValue]);
+		out[@"issuedTotal"] = @([giftObj[@"max_upgraded_count"] longLongValue]);
+		TGGiftPutSender(out, @"owner", giftObj[@"owner_id"]);
+		if ([giftObj[@"owner_name"] isKindOfClass:NSString.class])
+			out[@"ownerName"] = giftObj[@"owner_name"];
+		TGGiftPutSender(out, @"host", giftObj[@"host_id"]);
+		NSDictionary *original = [giftObj[@"original_details"] isKindOfClass:NSDictionary.class]
+				? giftObj[@"original_details"] : nil;
+		if (original) {
+			TGGiftPutSender(out, @"originalSender", original[@"sender_id"]);
+			TGGiftPutSender(out, @"originalReceiver", original[@"receiver_id"]);
+			out[@"originalDate"] = @([original[@"date"] longLongValue]);
+			NSDictionary *text = [original[@"text"] isKindOfClass:NSDictionary.class] ? original[@"text"] : nil;
+			if ([text[@"text"] isKindOfClass:NSString.class])
+				out[@"originalText"] = text[@"text"];
+		}
 
 		NSDictionary *colors = [backdrop[@"colors"] isKindOfClass:[NSDictionary class]]
 				? backdrop[@"colors"]

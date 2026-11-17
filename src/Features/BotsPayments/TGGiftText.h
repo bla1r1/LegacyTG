@@ -35,3 +35,43 @@ static inline NSString *TGGiftSenderText(NSString *name) {
 	NSString *from = [TGLocalizedKey(@"Gift.View.From", @"From") lowercaseString];
 	return [NSString stringWithFormat:@"%@ %@", from, name];
 }
+
+/// An attribute row's detail: the name, then its rarity where official puts
+/// the badge (GiftViewScreen, rarity beside Model, Backdrop and Symbol).
+static inline NSString *TGGiftAttributeDetail(NSString *name, NSString *rarity) {
+	if (![name isKindOfClass:NSString.class])
+		name = @"";
+	if (![rarity isKindOfClass:NSString.class] || !rarity.length)
+		return name;
+	return name.length ? [NSString stringWithFormat:@"%@ \u00B7 %@", name, rarity] : rarity;
+}
+
+/// Gift.Unique.Issued with "issued/total", grouped as official groups them.
+static inline NSString *TGGiftIssuedText(long long issued, long long total) {
+	NSNumberFormatter *f = [[NSNumberFormatter alloc] init];
+	f.numberStyle = NSNumberFormatterDecimalStyle;
+	NSString *pair = [NSString stringWithFormat:@"%@/%@",
+			[f stringFromNumber:@(issued)], [f stringFromNumber:@(total)]];
+	return [NSString stringWithFormat:TGLocalizedKey(@"Gift.Unique.Issued", @"%@ issued"), pair];
+}
+
+/// Gift.Unique.OriginalInfo[Sender][WithText]: who first gave the gift, to
+/// whom, when, and the comment. No sender when it was given anonymously.
+static inline NSString *TGGiftOriginalText(NSString *sender, NSString *receiver,
+		NSString *date, NSString *comment) {
+	receiver = receiver ?: @"";
+	date = date ?: @"";
+	BOOL hasComment = [comment isKindOfClass:NSString.class] && comment.length;
+	if (sender.length) {
+		return hasComment
+				? [NSString stringWithFormat:TGLocalizedKey(@"Gift.Unique.OriginalInfoSenderWithText",
+						@"Gifted by %1$@ to %2$@ on %3$@ with comment \"%4$@\"."), sender, receiver, date, comment]
+				: [NSString stringWithFormat:TGLocalizedKey(@"Gift.Unique.OriginalInfoSender",
+						@"Gifted by %1$@ to %2$@ on %3$@."), sender, receiver, date];
+	}
+	return hasComment
+			? [NSString stringWithFormat:TGLocalizedKey(@"Gift.Unique.OriginalInfoWithText",
+					@"Gifted to %1$@ on %2$@ with comment \"%3$@\"."), receiver, date, comment]
+			: [NSString stringWithFormat:TGLocalizedKey(@"Gift.Unique.OriginalInfo",
+					@"Gifted to %1$@ on %2$@."), receiver, date];
+}

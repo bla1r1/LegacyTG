@@ -49,6 +49,10 @@ static NSString *TGStarsTransactionDate(NSNumber *unix) {
 		row[TGRowAccessory] = model[@"amount"];
 		row[TGRowAccessoryColour] = [model[@"isOutgoing"] boolValue]
 				? [theme secondaryTextColour] : [theme accentColour];
+		// A withdrawal that did not go through reads in red, as official's
+		// date line does.
+		if ([model[@"isFailed"] boolValue])
+			row[TGRowDetailColour] = [theme destructiveColour];
 		[rows addObject:row];
 	}
 	self.sections = @[TGSection(nil, nil, rows)];

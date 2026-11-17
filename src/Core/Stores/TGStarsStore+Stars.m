@@ -9,6 +9,15 @@
 #import "TGClientInternal.h"
 #import "TGClient+AuditSupport.h"
 
+static NSString *TGStarsWithdrawalState(NSDictionary *state) {
+	NSString *type = [state isKindOfClass:NSDictionary.class] ? state[@"@type"] : nil;
+	if ([type isEqualToString:@"revenueWithdrawalStatePending"])
+		return @"pending";
+	if ([type isEqualToString:@"revenueWithdrawalStateFailed"])
+		return @"failed";
+	return @"";
+}
+
 @implementation TGStarsStore (Stars)
 
 #pragma mark - Stars
@@ -49,6 +58,12 @@
 				@"starCount" : TGAuditNumber(transaction[@"star_amount"], @"star_count"),
 				@"isRefund" : @([transaction[@"is_refund"] boolValue]),
 				@"type" : TGAuditShortType(transaction[@"type"][@"@type"]),
+				// What official's row says under the title and after the date
+				// (StarsTransactionsListPanelComponent): a subscription's fee,
+				// a Bot API charge's message count, a withdrawal's state.
+				@"isSubscription" : @([transaction[@"type"][@"subscription_period"] longLongValue] > 0),
+				@"requestCount" : @([transaction[@"type"][@"request_count"] longLongValue]),
+				@"withdrawal" : TGStarsWithdrawalState(transaction[@"type"][@"withdrawal_state"]),
 			}];
 		}
 		if (completion)

@@ -581,4 +581,44 @@ static NSDictionary *gfSampleCollectible(void) {
 	XCTAssertEqualObjects(d[@"emoji"], @"");
 }
 
+/// Official's unique table: rarity beside each attribute, owner, host,
+/// issued counts and who first gave the gift.
+- (void)testFlatten_CollectibleCarriesTheUniqueTable {
+	NSMutableDictionary *raw = [gfSampleCollectible() mutableCopy];
+	NSMutableDictionary *sent = [raw[@"gift"] mutableCopy];
+	NSMutableDictionary *gift = [sent[@"gift"] mutableCopy];
+	NSMutableDictionary *model = [gift[@"model"] mutableCopy];
+	model[@"rarity"] = @{@"@type" : @"upgradedGiftAttributeRarityPerMille", @"per_mille" : @12};
+	gift[@"model"] = model;
+	gift[@"symbol"] = @{@"name" : @"Ghost", @"rarity" : @{@"@type" : @"upgradedGiftAttributeRarityEpic"}};
+	gift[@"total_upgraded_count"] = @1500;
+	gift[@"max_upgraded_count"] = @20000;
+	gift[@"owner_id"] = @{@"@type" : @"messageSenderUser", @"user_id" : @77};
+	gift[@"owner_name"] = @"";
+	gift[@"host_id"] = @{@"@type" : @"messageSenderChat", @"chat_id" : @(-1009)};
+	gift[@"original_details"] = @{@"@type" : @"upgradedGiftOriginalDetails",
+		@"sender_id" : @{@"@type" : @"messageSenderUser", @"user_id" : @5},
+		@"receiver_id" : @{@"@type" : @"messageSenderUser", @"user_id" : @6},
+		@"text" : @{@"@type" : @"formattedText", @"text" : @"enjoy"}, @"date" : @1700000000};
+	sent[@"gift"] = gift; raw[@"gift"] = sent;
+	NSDictionary *d = TGFlattenReceivedGift(raw);
+	XCTAssertEqualObjects(d[@"modelRarity"], @"1.2%");
+	XCTAssertEqualObjects(d[@"symbolRarity"], @"epic");
+	XCTAssertEqualObjects(d[@"backdropRarity"], @"");
+	XCTAssertEqualObjects(d[@"issuedCount"], @1500);
+	XCTAssertEqualObjects(d[@"issuedTotal"], @20000);
+	XCTAssertEqualObjects(d[@"ownerUserId"], @77);
+	XCTAssertEqualObjects(d[@"hostChatId"], @(-1009));
+	XCTAssertEqualObjects(d[@"originalSenderUserId"], @5);
+	XCTAssertEqualObjects(d[@"originalReceiverUserId"], @6);
+	XCTAssertEqualObjects(d[@"originalText"], @"enjoy");
+}
+
+- (void)testRarityText_FollowsOfficialPercentages {
+	XCTAssertEqualObjects(TGGiftRarityText(@{@"@type" : @"upgradedGiftAttributeRarityPerMille", @"per_mille" : @50}), @"5%");
+	XCTAssertEqualObjects(TGGiftRarityText(@{@"@type" : @"upgradedGiftAttributeRarityPerMille", @"per_mille" : @0}), @"<0.1%");
+	XCTAssertEqualObjects(TGGiftRarityText(@{@"@type" : @"upgradedGiftAttributeRarityLegendary"}), @"legendary");
+	XCTAssertEqualObjects(TGGiftRarityText(nil), @"");
+}
+
 @end

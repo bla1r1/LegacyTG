@@ -344,6 +344,28 @@ static UIImage *TGGiftRadialGradient(int32_t centerColor, int32_t edgeColor, CGF
 	return @"";
 }
 
+/// The name of a person or chat the gift dictionary names as <prefix>UserId
+/// or <prefix>ChatId. An unknown user is fetched and the rows rebuilt.
+- (NSString *)nameForPrefix:(NSString *)prefix {
+	int64_t userId = [self.gift[[prefix stringByAppendingString:@"UserId"]] longLongValue];
+	if (userId) {
+		NSString *name = [[TGMessageStore shared] nameForUserId:userId];
+		if (name.length)
+			return name;
+		__weak typeof(self) weakSelf = self;
+		[[TGMessageStore shared] ensureUserName:userId completion:^{
+			dispatch_async(dispatch_get_main_queue(), ^{
+				TGGiftViewController *me = weakSelf;
+				if (me && [[TGMessageStore shared] nameForUserId:userId].length)
+					[me rebuildSections];
+			});
+		}];
+		return @"";
+	}
+	int64_t chatId = [self.gift[[prefix stringByAppendingString:@"ChatId"]] longLongValue];
+	return chatId ? ([[TGMessageStore shared] titleForChat:chatId] ?: @"") : @"";
+}
+
 - (NSString *)formattedDate {
 	NSNumber *unix = self.gift[@"date"];
 	double stamp = [unix isKindOfClass:[NSNumber class]] ? unix.doubleValue : 0;
@@ -356,14 +378,21 @@ static UIImage *TGGiftRadialGradient(int32_t centerColor, int32_t edgeColor, CGF
 	if ([title isEqualToString:TGLocalized(@"Date")])
 		return [self formattedDate];
 	if ([title isEqualToString:TGLocalized(@"Model")])
-		return [self.gift[@"modelName"] isKindOfClass:[NSString class]]
-				? self.gift[@"modelName"] : @"";
+		return TGGiftAttributeDetail(self.gift[@"modelName"], self.gift[@"modelRarity"]);
 	if ([title isEqualToString:TGLocalized(@"Symbol")])
-		return [self.gift[@"symbolName"] isKindOfClass:[NSString class]]
-				? self.gift[@"symbolName"] : @"";
+		return TGGiftAttributeDetail(self.gift[@"symbolName"], self.gift[@"symbolRarity"]);
 	if ([title isEqualToString:TGLocalized(@"Backdrop")])
-		return [self.gift[@"backdropName"] isKindOfClass:[NSString class]]
-				? self.gift[@"backdropName"] : @"";
+		return TGGiftAttributeDetail(self.gift[@"backdropName"], self.gift[@"backdropRarity"]);
+	if ([title isEqualToString:TGLocalizedKey(@"Gift.Unique.Owner", @"Owner")]) {
+		NSString *name = [self nameForPrefix:@"owner"];
+		return name.length ? name : ([self.gift[@"ownerName"] isKindOfClass:NSString.class]
+				? self.gift[@"ownerName"] : @"");
+	}
+	if ([title isEqualToString:TGLocalizedKey(@"Gift.Unique.Telegram", @"Telegram")])
+		return [self nameForPrefix:@"host"];
+	if ([title isEqualToString:TGLocalizedKey(@"Gift.Unique.Availability", @"Availability")])
+		return TGGiftIssuedText([self.gift[@"issuedCount"] longLongValue],
+				[self.gift[@"issuedTotal"] longLongValue]);
 	if ([self.gift[@"isCollectible"] boolValue])
 		return TGGiftValueText(self.gift);
 	NSInteger stars = [self.gift[@"starCount"] integerValue];
@@ -376,6 +405,20 @@ static UIImage *TGGiftRadialGradient(int32_t centerColor, int32_t edgeColor, CGF
 	NSMutableArray *rows = [NSMutableArray array];
 	for (NSString *title in TGGiftDetailRowTitles(self.gift))
 		[rows addObject:TGTapRow(title, [self detailForTitle:title], nil)];
+
+	// Official ends the table with who first gave the gift, as a line of text
+	// under the rows (GiftViewScreen originalInfo).
+	if ([self.gift[@"originalDate"] longLongValue] > 0) {
+		NSString *line = TGGiftOriginalText([self nameForPrefix:@"originalSender"],
+				[self nameForPrefix:@"originalReceiver"],
+				TGAppDate([self.gift[@"originalDate"] doubleValue], NSDateFormatterMediumStyle,
+						NSDateFormatterNoStyle) ?: @"",
+				self.gift[@"originalText"]);
+		NSMutableDictionary *row = [TGTapRow(line, nil, nil) mutableCopy];
+		row[TGRowTitleLines] = @0;
+		row[TGRowRawTitle] = @YES;
+		[rows addObject:row];
+	}
 
 	NSString *note = [self giftNote];
 	if (note.length){
