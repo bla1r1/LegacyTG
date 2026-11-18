@@ -271,6 +271,8 @@ NSDictionary *TGFlattenReceivedGift(NSDictionary *receivedGift) {
 		if ([giftObj[@"owner_name"] isKindOfClass:NSString.class])
 			out[@"ownerName"] = giftObj[@"owner_name"];
 		TGGiftPutSender(out, @"host", giftObj[@"host_id"]);
+		if ([giftObj[@"publisher_chat_id"] longLongValue])
+			out[@"publisherChatId"] = @([giftObj[@"publisher_chat_id"] longLongValue]);
 		NSDictionary *original = [giftObj[@"original_details"] isKindOfClass:NSDictionary.class]
 				? giftObj[@"original_details"] : nil;
 		if (original) {

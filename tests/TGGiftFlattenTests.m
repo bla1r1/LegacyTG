@@ -596,6 +596,7 @@ static NSDictionary *gfSampleCollectible(void) {
 	gift[@"owner_id"] = @{@"@type" : @"messageSenderUser", @"user_id" : @77};
 	gift[@"owner_name"] = @"";
 	gift[@"host_id"] = @{@"@type" : @"messageSenderChat", @"chat_id" : @(-1009)};
+	gift[@"publisher_chat_id"] = @(-1005);
 	gift[@"original_details"] = @{@"@type" : @"upgradedGiftOriginalDetails",
 		@"sender_id" : @{@"@type" : @"messageSenderUser", @"user_id" : @5},
 		@"receiver_id" : @{@"@type" : @"messageSenderUser", @"user_id" : @6},
@@ -612,6 +613,7 @@ static NSDictionary *gfSampleCollectible(void) {
 	XCTAssertEqualObjects(d[@"originalSenderUserId"], @5);
 	XCTAssertEqualObjects(d[@"originalReceiverUserId"], @6);
 	XCTAssertEqualObjects(d[@"originalText"], @"enjoy");
+	XCTAssertEqualObjects(d[@"publisherChatId"], @(-1005));
 }
 
 - (void)testRarityText_FollowsOfficialPercentages {

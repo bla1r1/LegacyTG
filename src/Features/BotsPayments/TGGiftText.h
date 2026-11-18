@@ -75,3 +75,13 @@ static inline NSString *TGGiftOriginalText(NSString *sender, NSString *receiver,
 			: [NSString stringWithFormat:TGLocalizedKey(@"Gift.Unique.OriginalInfo",
 					@"Gifted to %1$@ on %2$@."), receiver, date];
 }
+
+/// Gift.View.ReleasedBy with the channel's username: "released by @cats".
+/// Official shows it under the title only when no sender line takes the
+/// place (GiftViewScreen releasedBy, after the gift message's sender).
+static inline NSString *TGGiftReleasedByText(NSString *username) {
+	if (![username isKindOfClass:NSString.class] || !username.length)
+		return nil;
+	return [NSString stringWithFormat:TGLocalizedKey(@"Gift.View.ReleasedBy", @"released by %@"),
+			[@"@" stringByAppendingString:username]];
+}

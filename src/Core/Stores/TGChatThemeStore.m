@@ -240,7 +240,10 @@ static NSNumber *TGStoreFileIdFromDocument(NSDictionary *document) {
 	palette[@"bubbleMineText"] = TGStoreLuminance(palette[@"bubbleMine"]) < 0.55f
 			? [UIColor whiteColor] : TGClassicThemeRoleColours()[@"text"];
 
-	if (settings[@"outgoing_message_accent_color"])
+	// TDLib: the colour "must be ignored if has_outgoing_message_accent_color
+	// is false" - it is then 0, which drew outgoing links transparent black.
+	if ([settings[@"has_outgoing_message_accent_color"] boolValue] &&
+			settings[@"outgoing_message_accent_color"])
 		palette[@"outgoingAccent"] = TGStoreColour(
 				settings[@"outgoing_message_accent_color"]);
 

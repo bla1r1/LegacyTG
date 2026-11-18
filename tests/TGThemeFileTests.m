@@ -376,4 +376,17 @@ static void TGAssertColour(NSString *key, NSDictionary *palette,
 	XCTAssertNil([documents objectForKey:@(11)]);
 }
 
+/// TDLib's outgoing accent counts only when has_outgoing_message_accent_color
+/// says so; otherwise it is a 0 that drew outgoing links transparent black.
+- (void)testPalette_OutgoingAccentOnlyWhenTheThemeHasOne {
+	NSDictionary *without = [TGChatThemeStore paletteFromThemeSettings:@{
+		@"accent_color" : @(0xFF2481CC), @"has_outgoing_message_accent_color" : @NO,
+		@"outgoing_message_accent_color" : @0}];
+	XCTAssertNil(without[@"outgoingAccent"]);
+	NSDictionary *with = [TGChatThemeStore paletteFromThemeSettings:@{
+		@"accent_color" : @(0xFF2481CC), @"has_outgoing_message_accent_color" : @YES,
+		@"outgoing_message_accent_color" : @(0xFF00AA00)}];
+	XCTAssertNotNil(with[@"outgoingAccent"]);
+}
+
 @end

@@ -69,6 +69,8 @@ static UIImage *TGGiftRadialGradient(int32_t centerColor, int32_t edgeColor, CGF
 /// The sender line in the table header. The name may arrive after the header
 /// is built, and the header is not a cell, so it is updated in place.
 @property (nonatomic, weak) UILabel *senderLabel;
+/// The publishing channel's username, once asked for.
+@property (nonatomic, copy) NSString *releasedByUsername;
 @end
 
 @implementation TGGiftViewController
@@ -123,6 +125,7 @@ static UIImage *TGGiftRadialGradient(int32_t centerColor, int32_t edgeColor, CGF
 	[self applyTheme];
 	[self setupTableHeader];
 	[self rebuildSections];
+	[self requestPublisherIfNeeded];
 
 	// iOS 6 chrome: the navigation bar stays, with Back when pushed and Close
 	// when this is the first screen of a sheet. A bar-less page with a
@@ -299,7 +302,30 @@ static UIImage *TGGiftRadialGradient(int32_t centerColor, int32_t edgeColor, CGF
 
 - (NSString *)senderText {
 	NSString *name = [self senderDisplayName];
-	return TGGiftSenderText(name);
+	return TGGiftSenderText(name) ?: TGGiftReleasedByText(self.releasedByUsername);
+}
+
+/// The channel that published the gift names itself under the title by its
+/// username; a gift from a channel without one says nothing there.
+- (void)requestPublisherIfNeeded {
+	int64_t chatId = [self.gift[@"publisherChatId"] longLongValue];
+	if (!chatId)
+		return;
+	__weak typeof(self) weakSelf = self;
+	[[TGMessageStore shared] chatProfile:chatId completion:^(NSDictionary *info){
+		NSString *username = [info[@"username"] isKindOfClass:NSString.class] ? info[@"username"] : @"";
+		if (!username.length)
+			return;
+		dispatch_async(dispatch_get_main_queue(), ^{
+			TGGiftViewController *me = weakSelf;
+			if (!me)
+				return;
+			me.releasedByUsername = username;
+			// The header sized itself without the line; build it again.
+			if (!me.senderLabel.text.length)
+				[me setupTableHeader];
+		});
+	}];
 }
 
 - (void)requestSenderUserIfNeeded:(int64_t)userId {
