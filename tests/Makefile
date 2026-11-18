@@ -34,6 +34,7 @@ CFLAGS  := \
     $(SRC_INCLUDES) \
     -I$(ROOT)/third_party \
     -I$(ROOT)/third_party/nanosvg \
+    -I$(ROOT)/third_party/tlottie/include \
     -I$(ROOT)/vendor/libs \
     -I$(ROOT)/third_party/libtgvoip \
     -I$(TESTS) \
@@ -92,6 +93,9 @@ CLIENT_OBJC_SRCS := \
     $(ROOT)/third_party/nanosvg/nanosvg.c \
     src/Media/TGPatternImage.m \
     src/Media/TGLottieSupport.m \
+    src/Media/TGLottieRender.mm \
+    src/Media/TGTLottie.m \
+    src/Core/Platform/TGCrashGuard.c \
     src/Core/Support/TGBase64.m \
     src/Core/Support/TGLocalization.m \
     src/Core/Support/TGObservers.m \
@@ -104,6 +108,7 @@ CLIENT_OBJC_SRCS := \
     src/Features/Chat/Rendering/TGChatCellLogic.m \
     src/Features/Chat/Rendering/TGMessageMetrics.m \
     src/Features/Chat/Rendering/TGMessageRowLayout.m \
+    src/Features/Chat/Rendering/TGSlotMachine.m \
     src/Core/Support/TGUpdateType.c \
     src/Views/Icons/TGSVGPath.c \
     src/Views/Icons/TGIconPaths.m \
@@ -488,6 +493,10 @@ CLIENT_TEST_SRCS := \
     $(TESTS)/TGScreenLogicTests.m \
     $(TESTS)/TGMessageMetricsTests.m \
     $(TESTS)/TGLottieSupportTests.m \
+    $(TESTS)/TGLottieRenderTests.m \
+    $(TESTS)/TGTLottieTests.m \
+    $(TESTS)/TGCrashGuardTests.m \
+    $(TESTS)/TGSlotMachineTests.m \
     $(TESTS)/TGMessageRowLayoutTests.m \
     $(TESTS)/TGSVGPathTests.m \
     $(TESTS)/TGIconCatalogTests.m \
@@ -633,9 +642,16 @@ CLIENT_OBJS := $(call objs_of,$(CLIENT_OBJC_SRCS) $(CLIENT_HELPER_SRCS) $(TESTS)
 COREKIT_MAIN := $(ROOT)/tools/corekit/main.m
 COREKIT_OBJS := $(filter-out $(call objs_of,$(TESTS)/main_client.mm),$(CLIENT_OBJS)) $(call objs_of,$(COREKIT_MAIN))
 
-corekit: $(COREKIT_OBJS)
+# tlottie for macOS (std build); scripts/build_tlottie.sh makes it with the
+# iOS libraries.
+TLOTTIE_HOST := $(ROOT)/build/host/libtlottie.a
+$(TLOTTIE_HOST): $(ROOT)/scripts/build_tlottie.sh $(ROOT)/third_party/tlottie/Cargo.lock \
+		$(shell find $(ROOT)/third_party/tlottie/src -name '*.rs')
+	@$(ROOT)/scripts/build_tlottie.sh
+
+corekit: $(COREKIT_OBJS) $(TLOTTIE_HOST)
 	@mkdir -p $(BUILD)
-	$(CLANG) $(CFLAGS) $(COREKIT_OBJS) $(LDFLAGS) -o $(BUILD)/corekit
+	$(CLANG) $(CFLAGS) $(COREKIT_OBJS) $(TLOTTIE_HOST) $(LDFLAGS) -o $(BUILD)/corekit
 	@$(BUILD)/corekit
 
 
@@ -661,9 +677,9 @@ $(TEST_BINARY): $(TEST_OBJS)
 	$(CLANG) $(CFLAGS) $(TEST_OBJS) $(LDFLAGS) -o $@
 	@echo "  Built $(notdir $@)"
 
-$(CLIENT_BINARY): $(CLIENT_OBJS)
+$(CLIENT_BINARY): $(CLIENT_OBJS) $(TLOTTIE_HOST)
 	@mkdir -p $(BUILD)
-	$(CLANG) $(CFLAGS) $(CLIENT_OBJS) $(LDFLAGS) -o $@
+	$(CLANG) $(CFLAGS) $(CLIENT_OBJS) $(TLOTTIE_HOST) $(LDFLAGS) -o $@
 	@echo "  Built $(notdir $@)"
 
 $(SIM_BINARY): $(SIM_BINARY_DEPS)

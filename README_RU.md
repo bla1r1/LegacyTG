@@ -119,7 +119,7 @@ iTgLegacy/
 │   ├── CallEngine/   # tgcalls: Crypto/ Media/ Network/ Signaling/
 │   └── Compat/       # dyld TLV и шимы iOS 6/7
 ├── resources/        # Info.plist, картинки, шрифты, звуки, встроенные темы
-├── third_party/      # libtgvoip, libvpx, opus, ogg, yyjson, …
+├── third_party/      # libtgvoip, libvpx, opus, ogg, yyjson, tlottie, …
 ├── tdlib/td/         # TDLib (git submodule)
 ├── vendor/           # include/ (tg_config.h), libs/ (готовые, в .gitignore)
 ├── tools/            # machofix и утилиты для устройства

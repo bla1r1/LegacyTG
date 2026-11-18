@@ -20,6 +20,12 @@
 /// with "Loop Animated Stickers" off.
 - (void)playOnce;
 @property (nonatomic, copy) void (^onPlayedOnce)(void);
+/// playOnce ends on the last frame instead of the first: a slot machine reel
+/// stops on its result.
+@property (nonatomic, assign) BOOL holdsLastFrame;
+/// The last frame, not played: a reel already spun. Until the loop is
+/// rasterised the first frame stays, and the last replaces it when it lands.
+- (void)showLastFrame;
 
 /// Set while the chat table is scrolling on a single-core device. A sticker
 /// whose model is not built yet shows its emoji and the raster waits until the

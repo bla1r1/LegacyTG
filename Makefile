@@ -84,6 +84,7 @@ INCLUDES  := -I$(ROOT_DIR)/vendor/include \
              $(SRC_INCLUDES) \
              -I$(ROOT_DIR)/third_party \
              -I$(ROOT_DIR)/third_party/nanosvg \
+             -I$(ROOT_DIR)/third_party/tlottie/include \
              -I$(ROOT_DIR)/third_party/libvpx/include \
              -I$(ROOT_DIR)/third_party/nestegg/include \
              -I$(ROOT_DIR)/third_party/ogg \
@@ -158,7 +159,7 @@ TDLIB_LIBS_ARM64 := $(TDLIB_KEEP_ARM64) \
                     -ltde2e -ltdutils -ltdtl -lssl
 # libcrypto: TDLib brings its own copy inside the dylib, but libtgvoip is
 # linked into the app and needs AES and SHA here.
-DEPS_LIBS  := -lopus -lvpx -lstdc++ -lz -lcrypto
+DEPS_LIBS  := -lopus -lvpx -lstdc++ -lz -lcrypto -ltlottie
 # 9.0.0 needs DTLS, which lives in libssl. The armv7 tree has it beside
 # libcrypto; arm64 already names -lssl on its TDLib link line.
 ARMV7_SSL_LIBS := -L$(BUILD_DIR)/armv7/openssl -lssl
@@ -572,6 +573,7 @@ APP_SRC_M := \
 	src/Features/Chat/Rendering/TGChatCellLogic.m \
 	src/Features/Chat/Rendering/TGMessageMetrics.m \
 	src/Features/Chat/Rendering/TGMessageRowLayout.m \
+	src/Features/Chat/Rendering/TGSlotMachine.m \
 	src/Features/Chat/Rendering/TGChatViewController+ServiceCells.m \
 	src/Features/Chat/Composer/TGChatViewController+AudioCells.m \
 	src/Features/Chat/Composer/TGChatViewController+MediaCells.m \
@@ -746,6 +748,7 @@ APP_SRC_M := \
 	src/Media/TGPatternImage.m \
 	src/Media/TGStickerImage.m \
 	src/Media/TGLottieSupport.m \
+	src/Media/TGTLottie.m \
 	src/Media/TGWebMDecoder.m \
 	src/Media/TGSoftVideoPlayer.m \
 	src/Features/Media/TGMediaViewer.m \
@@ -790,6 +793,7 @@ APP_SRC_MM := \
 	src/Core/Stores/TGSettingsStore+Folders.mm \
 	src/Core/Support/TGUpdateBatcher.mm \
 	src/Features/Chat/Views/TGMessageLayout.mm \
+	src/Media/TGLottieRender.mm \
 	src/Features/Media/TGLottieView.mm
 
 APP_SRC_C := \
@@ -797,6 +801,7 @@ APP_SRC_C := \
 	src/Media/TGSoftVideoClock.c \
 	src/Views/Icons/TGSVGPath.c \
 	src/Core/Platform/TGSampler.c \
+	src/Core/Platform/TGCrashGuard.c \
 	src/Compat/tlv_polyfill.c \
 	src/CallEngine/Crypto/TGCallCrypto.c \
 	src/CallEngine/Crypto/TGCallSrtp.c
@@ -918,7 +923,15 @@ $(MACHOFIX): tools/machofix.c
 	@mkdir -p "$(BUILD_DIR)/tools"
 	cc -O2 -Wall -o $@ $<
 
-ipa-armv7: $(MACHOFIX) $(ARMV7_ALL_OBJS)
+# tlottie's static libraries for both architectures and the host tests, one
+# script run for all three (make 3.81 has no grouped targets).
+TLOTTIE_STAMP := $(BUILD_DIR)/tlottie/.stamp
+$(TLOTTIE_STAMP): scripts/build_tlottie.sh third_party/tlottie/Cargo.toml third_party/tlottie/Cargo.lock \
+		third_party/tlottie/armv7-apple-ios6.json $(shell find third_party/tlottie/src -name '*.rs')
+	scripts/build_tlottie.sh
+	@touch $@
+
+ipa-armv7: $(MACHOFIX) $(TLOTTIE_STAMP) $(ARMV7_ALL_OBJS)
 	@echo "[+] Building 32-bit armv7 app bundle..."
 	@mkdir -p "$(IPA_DIR)" "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app"
 	$(CC) -arch armv7 -isysroot $(SDK_PATH) $(MIN_IOS) -Wl,-dead_strip -ObjC -Wl,-pagezero_size,0x1000 \
@@ -949,7 +962,7 @@ ipa-armv7: $(MACHOFIX) $(ARMV7_ALL_OBJS)
 	@cd "$(BUILD_DIR)/stage-armv7" && zip -qr "$(IPA_ARMV7)" Payload
 	@rm -rf "$(BUILD_DIR)/stage-armv7"
 
-ipa-arm64: $(ARM64_ALL_OBJS)
+ipa-arm64: $(TLOTTIE_STAMP) $(ARM64_ALL_OBJS)
 	@echo "[+] Building 64-bit arm64 app bundle..."
 	@mkdir -p "$(IPA_DIR)" "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app"
 	$(CC) -arch arm64 -isysroot $(SDK_PATH) $(MIN_IOS) -Wl,-dead_strip \

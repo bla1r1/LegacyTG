@@ -26,6 +26,7 @@ Telegram client for iOS 6.0–12.5.7 on old hardware. Objective-C UI over TDLib 
 - `scripts/release.sh` — publish the Info.plist version: build_all, emulator smoke, deb, then on a yes the tag, push, GitHub Release (notes `build: N` + the CHANGELOG section, read by the update bot) and the Cydia repo; `--dry-run` publishes nothing. The Telegram channel post is the user's, from `build/ipa/telegram-post.txt`
 - `scripts/emu.sh` — iPhone 4 / iOS 6.1.3 emulator in `~/lt-emu`: `setup` once, then `test` builds ipa-armv7, installs, opens LegacyTG, prints AUTH STATE / connection lines; shots and syslog in `~/lt-emu/out`. armv7 and iOS 6 only, never a device substitute; never kill a running session (`prepare` recovers a dirty device)
 - `scripts/build_ffmpeg.sh` — FFmpeg for the Vintage software video player, into `build/armv7/ffmpeg`
+- `scripts/build_tlottie.sh` — tlottie (official Lottie renderer, Rust) as static libraries for armv7, arm64 and the host tests; needs nightly Rust with rust-src. `make` runs it when `third_party/tlottie` changes
 
 ## Architecture rules
 - UIKit stays in Objective-C. No C++ in `.h` files consumed by ViewControllers.

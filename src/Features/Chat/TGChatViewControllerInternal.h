@@ -88,6 +88,8 @@ UIImage *TGImageFromMinithumbnail(id mini);
 @property (nonatomic, strong) NSMutableDictionary *lottiePaths;   // fileId -> path
 /// Messages whose premium sticker effect already played in this visit.
 @property (nonatomic, strong) NSMutableSet *playedStickerEffects;
+/// Slot machines (message ids) that spun this chat visit; they rest on the result.
+@property (nonatomic, strong) NSMutableSet *spunSlotMachines;
 /// Animation files that have run their one loop since this chat was opened.
 @property (nonatomic, strong) NSMutableSet *playedAnimations;
 @property (nonatomic, strong) TGImageLruCache *maps;             // messageId -> UIImage (cap 20)

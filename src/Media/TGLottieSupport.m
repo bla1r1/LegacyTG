@@ -1,18 +1,21 @@
 #import "TGLottieSupport.h"
 
-/// Shape items TGDrawShapes handles; "tr" is a group's transform.
+/// Shape items TGDrawShapes handles; "tr" is a group's transform. "mm"
+/// (merge paths) is skipped: both of the official client's renderers skip it
+/// (tlottie, the default, parses it as ignored; rlottie warns "Merge Path is
+/// not supported yet"), so the files are drawn without it there too.
 static BOOL TGLottieShapeDrawn(NSString *ty) {
 	static NSSet *drawn;
 	static dispatch_once_t once;
 	dispatch_once(&once, ^{
-		drawn = [NSSet setWithObjects:@"gr", @"sh", @"el", @"rc", @"fl", @"gf", @"st", @"tr", nil];
+		drawn = [NSSet setWithObjects:@"gr", @"sh", @"el", @"rc", @"fl", @"gf", @"st", @"tr", @"mm", nil];
 	});
 	return [drawn containsObject:ty];
 }
 
 static NSString *TGLottieShapeName(NSString *ty) {
 	NSDictionary *names = @{ @"tm": @"trim path", @"rp": @"repeater", @"rd": @"round corners",
-			@"sr": @"star", @"mm": @"merge paths", @"gs": @"gradient stroke",
+			@"sr": @"star", @"gs": @"gradient stroke",
 			@"op": @"offset path", @"pb": @"pucker", @"tw": @"twist", @"zz": @"zig zag" };
 	return names[ty] ?: [@"shape " stringByAppendingString:ty];
 }
@@ -43,11 +46,12 @@ static NSString *TGLottieUnsupportedLayer(NSArray *layers) {
 	for (NSDictionary *layer in layers) {
 		if (![layer isKindOfClass:NSDictionary.class])
 			continue;
-		// 4 is a shape layer, 3 a null that only parents others.
+		// 4 is a shape layer, 3 a null that only parents others, 0 a precomp
+		// whose asset's layers are checked with the assets.
 		switch ([layer[@"ty"] intValue]) {
 			case 3: continue;
+			case 0:
 			case 4: break;
-			case 0: return @"precomp layer";
 			case 1: return @"solid layer";
 			case 2: return @"image layer";
 			case 5: return @"text layer";

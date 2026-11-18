@@ -29,7 +29,9 @@ die() { echo "[-] $*" >&2; exit 1; }
 arm_mac() { [ "$(sysctl -n hw.optional.arm64 2>/dev/null)" = 1 ]; }
 env_() { arm_mac || die "Apple Silicon Mac only (upstream LightTouch builds its macOS engine for arm64)"
 	[ -f "$W/env.sh" ] || die "emulator not built: scripts/emu.sh setup"; . "$W/env.sh"; }
-dev_id() { lighttouch list | awk '/n90ap 10B329/ && !/needs recovery/ {sub(/^\*/,"",$1); print $1; exit}'; }
+# awk reads to the end: an early exit closes the pipe, lighttouch panics on the broken pipe
+# and pipefail takes the whole script down with it.
+dev_id() { lighttouch list | awk '/n90ap 10B329/ && !/needs recovery/ && !id {sub(/^\*/,"",$1); id=$1} END {print id}'; }
 
 build() {
 	arm_mac || die "Apple Silicon Mac only (upstream LightTouch builds its macOS engine for arm64)"

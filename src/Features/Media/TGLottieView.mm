@@ -1,7 +1,10 @@
 //
-// TGLottieView.mm - High-performance C++ vector animation & WebM VP9 renderer for Telegram stickers.
+// TGLottieView.mm - plays Telegram stickers: Lottie loops rasterised by
+// TGLottieRender in the background, WebM through TGWebMDecoder.
 //
 #import "TGLottieSupport.h"
+#import "TGLottieRender.h"
+#import "TGTLottie.h"
 #import "TGLottieView.h"
 #import "TGStyle.h"
 #import "TGJson.h"
@@ -11,11 +14,7 @@
 #import "TGChatThemeStore.h"
 #import "TGPerf.h"
 #include <zlib.h>
-#include <vector>
 #include <cmath>
-#include <algorithm>
-#include <memory>
-#import <objc/runtime.h>
 
 #ifndef typeof
 #define typeof __typeof__
@@ -54,205 +53,15 @@ static NSData *TGGunzip(NSData *input) {
 	return out;
 }
 
-#pragma mark - fast keyframed evaluation (zero-allocation C++ LottieProperty binary search)
-
-struct LottieKeyframe {
-	double t;
-	float s[8];
-	int s_count;
-	float e[8];
-	int e_count;
-};
-
-struct LottieProperty {
-	enum Type { Empty, StaticNumber, StaticArray, Keyframed };
-	Type type = Empty;
-	float static_vals[8] = {0};
-	int static_count = 0;
-	std::vector<LottieKeyframe> keyframes;
-
-	int evaluate(double frame, float *outVals, int maxVals) const {
-		if (maxVals <= 0) return 0;
-		switch (type) {
-			case Empty:
-				return 0;
-			case StaticNumber:
-			case StaticArray: {
-				int n = std::min(static_count, maxVals);
-				for (int i = 0; i < n; i++) {
-					outVals[i] = static_vals[i];
-				}
-				return n;
-			}
-			case Keyframed: {
-				if (keyframes.empty()) return 0;
-				if (frame <= keyframes.front().t || keyframes.size() == 1) {
-					const auto &first = keyframes.front();
-					int n = std::min(first.s_count, maxVals);
-					for (int i = 0; i < n; i++) {
-						outVals[i] = first.s[i];
-					}
-					return n;
-				}
-
-				if (frame >= keyframes.back().t) {
-					const auto &last = keyframes.back();
-					int n = std::min(last.e_count > 0 ? last.e_count : last.s_count, maxVals);
-					const float *vals = (last.e_count > 0) ? last.e : last.s;
-					for (int i = 0; i < n; i++) {
-						outVals[i] = vals[i];
-					}
-					return n;
-				}
-
-				auto it = std::lower_bound(keyframes.begin(), keyframes.end(), frame,
-					[](const LottieKeyframe &kf, double val) {
-						return kf.t <= val;
-					});
-
-				const auto &after = *it;
-				const auto &before = *(it - 1);
-
-				double t0 = before.t;
-				double t1 = after.t;
-				double p = (t1 > t0) ? (frame - t0) / (t1 - t0) : 0.0;
-				if (p < 0.0) p = 0.0;
-				if (p > 1.0) p = 1.0;
-				float pf = (float)p;
-
-				int count = std::max(before.s_count, before.e_count);
-				if (!count) return 0;
-				count = std::min(count, maxVals);
-
-				for (int i = 0; i < count; i++) {
-					float a = (i < before.s_count) ? before.s[i] : (i < before.e_count ? before.e[i] : 0.0f);
-					float b = (i < before.e_count) ? before.e[i] : a;
-					outVals[i] = a + (b - a) * pf;
-				}
-				return count;
-			}
-		}
-		return 0;
-	}
-};
-
-static LottieProperty ParseLottieProperty(NSDictionary *prop) {
-	LottieProperty lp;
-	if (!prop) return lp;
-	id k = prop[@"k"];
-	if (!k) return lp;
-
-	if ([k isKindOfClass:[NSNumber class]]) {
-		lp.type = LottieProperty::StaticNumber;
-		lp.static_vals[0] = (float)[(NSNumber *)k doubleValue];
-		lp.static_count = 1;
-		return lp;
-	}
-
-	if ([k isKindOfClass:[NSArray class]]) {
-		NSArray *arr = (NSArray *)k;
-		if (!arr.count) return lp;
-		id first = arr[0];
-		if (![first isKindOfClass:[NSDictionary class]]) {
-			lp.type = LottieProperty::StaticArray;
-			lp.static_count = (int)MIN((NSUInteger)8, arr.count);
-			for (int i = 0; i < lp.static_count; i++) {
-				lp.static_vals[i] = (float)[arr[i] doubleValue];
-			}
-			return lp;
-		}
-
-		lp.type = LottieProperty::Keyframed;
-		lp.keyframes.reserve(arr.count);
-		for (NSUInteger idx = 0; idx < arr.count; idx++) {
-			NSDictionary *kf = arr[idx];
-			if (![kf isKindOfClass:[NSDictionary class]]) continue;
-			LottieKeyframe lkf;
-			lkf.t = [kf[@"t"] doubleValue];
-			lkf.s_count = 0;
-			lkf.e_count = 0;
-
-			id s = kf[@"s"];
-			if ([s isKindOfClass:[NSArray class]]) {
-				NSArray *sArr = (NSArray *)s;
-				lkf.s_count = (int)MIN((NSUInteger)8, sArr.count);
-				for (int i = 0; i < lkf.s_count; i++) {
-					lkf.s[i] = (float)[sArr[i] doubleValue];
-				}
-			} else if ([s isKindOfClass:[NSNumber class]]) {
-				lkf.s[0] = (float)[(NSNumber *)s doubleValue];
-				lkf.s_count = 1;
-			}
-
-			id e = kf[@"e"];
-			if (!e && idx + 1 < arr.count && [arr[idx + 1] isKindOfClass:[NSDictionary class]]) {
-				e = arr[idx + 1][@"s"];
-			}
-			if ([e isKindOfClass:[NSArray class]]) {
-				NSArray *eArr = (NSArray *)e;
-				lkf.e_count = (int)MIN((NSUInteger)8, eArr.count);
-				for (int i = 0; i < lkf.e_count; i++) {
-					lkf.e[i] = (float)[eArr[i] doubleValue];
-				}
-			} else if ([e isKindOfClass:[NSNumber class]]) {
-				lkf.e[0] = (float)[(NSNumber *)e doubleValue];
-				lkf.e_count = 1;
-			} else if (lkf.s_count > 0) {
-				lkf.e_count = lkf.s_count;
-				for (int i = 0; i < lkf.s_count; i++) {
-					lkf.e[i] = lkf.s[i];
-				}
-			}
-
-			lp.keyframes.push_back(lkf);
-		}
-		return lp;
-	}
-	return lp;
-}
-
-@interface TGLottiePropertyBox : NSObject
-@property (nonatomic, assign) std::shared_ptr<LottieProperty> prop;
-@end
-@implementation TGLottiePropertyBox
-@end
-
-static const char kLottiePropertyKey = 0;
-
-static inline const LottieProperty *GetOrParseLottieProperty(NSDictionary *prop) {
-	if (!prop) return nullptr;
-	TGLottiePropertyBox *box = objc_getAssociatedObject(prop, &kLottiePropertyKey);
-	if (!box) {
-		box = [[TGLottiePropertyBox alloc] init];
-		box.prop = std::make_shared<LottieProperty>(ParseLottieProperty(prop));
-		objc_setAssociatedObject(prop, &kLottiePropertyKey, box, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-	}
-	return box.prop.get();
-}
-
-static inline int TGValueAtFast(NSDictionary *prop, double frame, float *outVals, int maxVals) {
-	if (!prop || !maxVals)
-		return 0;
-	const LottieProperty *lp = GetOrParseLottieProperty(prop);
-	if (!lp)
-		return 0;
-	return lp->evaluate(frame, outVals, maxVals);
-}
-
-static inline float TGScalarAtFast(NSDictionary *prop, double frame, float fallback) {
-	float val = 0;
-	if (TGValueAtFast(prop, frame, &val, 1) > 0)
-		return val;
-	return fallback;
-}
-
 #pragma mark - model & cache
 
 @interface TGLottieModel : NSObject
 @property (nonatomic, copy) NSString *path;
-@property (nonatomic, strong) NSDictionary *anim;
-@property (nonatomic, strong) NSArray *layers;
-@property (nonatomic, strong) NSDictionary *layersByInd;
+/// tlottie's instance, or, for a file it would not take, TGLottieRender's
+/// layer tree; owned, freed with the model. Frames are drawn on one queue at a
+/// time (the build, then the loop pass), which is all tlottie asks.
+@property (nonatomic, assign) TGTLottie *tlottie;
+@property (nonatomic, assign) TGLottieScene *scene;
 @property (nonatomic, assign) double inPoint;
 @property (nonatomic, assign) double outPoint;
 @property (nonatomic, assign) double frameRate;
@@ -272,493 +81,21 @@ static inline float TGScalarAtFast(NSDictionary *prop, double frame, float fallb
 @end
 
 @implementation TGLottieModel
+- (void)dealloc {
+	TGTLottieFree(_tlottie);
+	TGLottieSceneFree(_scene);
+}
+
+- (CGImageRef)newFrame:(double)frame size:(CGSize)size CF_RETURNS_RETAINED {
+	if (_tlottie)
+		return TGTLottieRender(_tlottie, frame - _inPoint, size);
+	return TGLottieSceneRender(_scene, frame, size);
+}
+
+- (const char *)kind {
+	return _isWebM ? "webm" : _tlottie ? "tlottie" : "tgs";
+}
 @end
-
-#pragma mark - C++ Vector Render Helpers (usable in background threads)
-
-static void TGApplyTransform(NSDictionary *ks, double frame, CGContextRef ctx) {
-	if (!ks)
-		return;
-
-	float pos[2]    = {0};
-	float anchor[2] = {0};
-	float scale[2]  = {100.0f, 100.0f};
-
-	int posCount = 0;
-	if (ks[@"p"][@"x"] && ks[@"p"][@"y"]) {
-		pos[0] = TGScalarAtFast(ks[@"p"][@"x"], frame, 0.0f);
-		pos[1] = TGScalarAtFast(ks[@"p"][@"y"], frame, 0.0f);
-		posCount = 2;
-	} else {
-		posCount = TGValueAtFast(ks[@"p"], frame, pos, 2);
-	}
-	int anchorCount = TGValueAtFast(ks[@"a"], frame, anchor, 2);
-	int scaleCount  = TGValueAtFast(ks[@"s"], frame, scale, 2);
-	float rotation  = TGScalarAtFast(ks[@"r"], frame, 0.0f);
-	float opacity   = TGScalarAtFast(ks[@"o"], frame, 100.0f);
-
-	if (posCount >= 2)
-		CGContextTranslateCTM(ctx, pos[0], pos[1]);
-	if (rotation != 0.0f)
-		CGContextRotateCTM(ctx, rotation * (float)M_PI / 180.0f);
-	if (scaleCount >= 2)
-		CGContextScaleCTM(ctx, scale[0] / 100.0f, scale[1] / 100.0f);
-	if (anchorCount >= 2)
-		CGContextTranslateCTM(ctx, -anchor[0], -anchor[1]);
-
-	if (opacity < 100.0f)
-		CGContextSetAlpha(ctx, opacity / 100.0f);
-}
-
-// ── bezier shapes, flattened once at load ───────────────────────────────────
-// A shape's outline is three parallel NSArrays of two-element NSArrays of
-// NSNumbers - vertices, in-tangents, out-tangents. Reading one point meant
-// four objc_msgSends and two NSNumber unboxings, and the render loop did that
-// for every point of every shape of every layer, sixty times a second, off a
-// CADisplayLink. The geometry does not change between frames; only which
-// keyframe is current does. So it is parsed once into flat vectors and cached
-// on the property dictionary, exactly as the scalar properties already are.
-
-struct LottieBezierPath {
-	std::vector<CGPoint> v;
-	std::vector<CGPoint> in;
-	std::vector<CGPoint> out;
-	bool closed = false;
-};
-
-struct LottieBezierFrame {
-	double t = 0.0;
-	std::vector<LottieBezierPath> shapes;
-};
-
-struct LottieBezierSet {
-	/// One entry for a static shape, otherwise one per keyframe in order.
-	std::vector<LottieBezierFrame> frames;
-	bool keyframed = false;
-};
-
-static CGPoint ParseLottiePoint(id raw) {
-	if (![raw isKindOfClass:NSArray.class])
-		return CGPointZero;
-	NSArray *pair = (NSArray *)raw;
-	if (pair.count < 2)
-		return CGPointZero;
-	return CGPointMake([pair[0] doubleValue], [pair[1] doubleValue]);
-}
-
-/// One `{v, i, o, c}` outline into flat vectors. Shapes with fewer than two
-/// vertices draw nothing and are dropped here rather than per frame.
-static bool ParseLottieBezierPath(NSDictionary *shape, LottieBezierPath &out) {
-	if (![shape isKindOfClass:NSDictionary.class])
-		return false;
-	NSArray *v   = shape[@"v"];
-	NSArray *in  = shape[@"i"];
-	NSArray *tan = shape[@"o"];
-	NSUInteger count = [v isKindOfClass:NSArray.class] ? v.count : 0;
-	if (count < 2)
-		return false;
-
-	out.v.resize(count, CGPointZero);
-	out.in.resize(count, CGPointZero);
-	out.out.resize(count, CGPointZero);
-	for (NSUInteger i = 0; i < count; i++){
-		out.v[i] = ParseLottiePoint(v[i]);
-		if ([in isKindOfClass:NSArray.class] && i < in.count)
-			out.in[i] = ParseLottiePoint(in[i]);
-		if ([tan isKindOfClass:NSArray.class] && i < tan.count)
-			out.out[i] = ParseLottiePoint(tan[i]);
-	}
-	out.closed = [shape[@"c"] boolValue];
-	return true;
-}
-
-static void ParseLottieShapeList(id value, std::vector<LottieBezierPath> &out) {
-	if ([value isKindOfClass:NSDictionary.class]){
-		LottieBezierPath path;
-		if (ParseLottieBezierPath((NSDictionary *)value, path))
-			out.push_back(std::move(path));
-		return;
-	}
-	if (![value isKindOfClass:NSArray.class])
-		return;
-	for (id shape in (NSArray *)value){
-		LottieBezierPath path;
-		if (ParseLottieBezierPath(shape, path))
-			out.push_back(std::move(path));
-	}
-}
-
-static LottieBezierSet ParseLottieBezierSet(NSDictionary *ks) {
-	LottieBezierSet set;
-	id k = ks[@"k"];
-
-	BOOL isKeyframeList = [k isKindOfClass:NSArray.class] &&
-			[[k firstObject] isKindOfClass:NSDictionary.class] &&
-			[[k firstObject] objectForKey:@"t"];
-
-	if (isKeyframeList){
-		set.keyframed = true;
-		for (NSDictionary *kf in (NSArray *)k){
-			if (![kf isKindOfClass:NSDictionary.class])
-				continue;
-			LottieBezierFrame entry;
-			entry.t = [kf[@"t"] doubleValue];
-			ParseLottieShapeList(kf[@"s"], entry.shapes);
-			set.frames.push_back(std::move(entry));
-		}
-		if (set.frames.empty())
-			set.frames.push_back(LottieBezierFrame());
-		return set;
-	}
-
-	// A dictionary is one static shape; a plain array is a static list.
-	LottieBezierFrame entry;
-	ParseLottieShapeList(k, entry.shapes);
-	set.frames.push_back(std::move(entry));
-	return set;
-}
-
-@interface TGLottieBezierBox : NSObject
-@property (nonatomic, assign) std::shared_ptr<LottieBezierSet> set;
-@end
-@implementation TGLottieBezierBox
-@end
-
-static const char kLottieBezierKey = 0;
-
-static const LottieBezierSet *GetOrParseLottieBezier(NSDictionary *ks) {
-	if (!ks) return nullptr;
-	TGLottieBezierBox *box = objc_getAssociatedObject(ks, &kLottieBezierKey);
-	if (!box){
-		box = [[TGLottieBezierBox alloc] init];
-		box.set = std::make_shared<LottieBezierSet>(ParseLottieBezierSet(ks));
-		objc_setAssociatedObject(ks, &kLottieBezierKey, box,
-				OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-	}
-	return box.set.get();
-}
-
-static void TGAppendBezier(NSDictionary *ks, double frame, CGMutablePathRef path) {
-	const LottieBezierSet *set = GetOrParseLottieBezier(ks);
-	if (!set || set->frames.empty())
-		return;
-
-	// The keyframe in force is the last one that has started. Outlines are
-	// not interpolated here, which is what the dictionary walk did too.
-	const LottieBezierFrame *chosen = &set->frames.front();
-	if (set->keyframed){
-		for (const LottieBezierFrame &candidate : set->frames){
-			if (candidate.t <= frame)
-				chosen = &candidate;
-		}
-	}
-
-	for (const LottieBezierPath &shape : chosen->shapes){
-		size_t count = shape.v.size();
-		if (count < 2)
-			continue;
-
-		CGPathMoveToPoint(path, NULL, shape.v[0].x, shape.v[0].y);
-		for (size_t i = 1; i < count; i++){
-			size_t p = i - 1;
-			CGPathAddCurveToPoint(path, NULL,
-				shape.v[p].x + shape.out[p].x, shape.v[p].y + shape.out[p].y,
-				shape.v[i].x + shape.in[i].x,  shape.v[i].y + shape.in[i].y,
-				shape.v[i].x, shape.v[i].y);
-		}
-
-		if (shape.closed){
-			size_t last = count - 1;
-			CGPathAddCurveToPoint(path, NULL,
-				shape.v[last].x + shape.out[last].x,
-				shape.v[last].y + shape.out[last].y,
-				shape.v[0].x + shape.in[0].x, shape.v[0].y + shape.in[0].y,
-				shape.v[0].x, shape.v[0].y);
-			CGPathCloseSubpath(path);
-		}
-	}
-}
-
-static void TGFillPath(CGPathRef path, NSDictionary *shape, double frame, CGContextRef ctx) {
-	float c[4] = {0};
-	int cC = TGValueAtFast(shape[@"c"], frame, c, 4);
-	if (cC < 3 || CGPathIsEmpty(path))
-		return;
-
-	float alpha = TGScalarAtFast(shape[@"o"], frame, 100.0f) / 100.0f;
-	CGContextSetRGBFillColor(ctx, c[0], c[1], c[2], alpha);
-	CGContextAddPath(ctx, path);
-	CGContextEOFillPath(ctx);
-}
-
-static void TGStrokePath(CGPathRef path, NSDictionary *shape, double frame, CGContextRef ctx) {
-	float c[4] = {0};
-	int cC = TGValueAtFast(shape[@"c"], frame, c, 4);
-	if (cC < 3 || CGPathIsEmpty(path))
-		return;
-
-	float alpha = TGScalarAtFast(shape[@"o"], frame, 100.0f) / 100.0f;
-	float width = TGScalarAtFast(shape[@"w"], frame, 1.0f);
-	CGContextSetRGBStrokeColor(ctx, c[0], c[1], c[2], alpha);
-	CGContextSetLineWidth(ctx, width);
-	CGContextAddPath(ctx, path);
-	CGContextStrokePath(ctx);
-}
-
-static CGGradientRef TGGradientFromStops(NSArray *k, NSUInteger perStop, double alpha) {
-	NSUInteger stops = k.count / perStop;
-	if (stops > 64)
-		return nil;
-
-	CGFloat cLocations[64];
-	CGFloat cComponents[256];
-
-	for (NSUInteger i = 0; i < stops; i++){
-		NSUInteger base = i * perStop;
-		double offset = [k[base] doubleValue];
-		double colourAlpha = (perStop == 5) ? [k[base + 4] doubleValue] : 1.0;
-
-		cLocations[i] = (CGFloat)MAX(MIN(offset, 1.0), 0.0);
-		cComponents[i * 4 + 0] = (CGFloat)[k[base + 1] doubleValue];
-		cComponents[i * 4 + 1] = (CGFloat)[k[base + 2] doubleValue];
-		cComponents[i * 4 + 2] = (CGFloat)[k[base + 3] doubleValue];
-		cComponents[i * 4 + 3] = (CGFloat)(colourAlpha * alpha);
-	}
-
-	static CGColorSpaceRef space = NULL;
-	static dispatch_once_t onceToken;
-	dispatch_once(&onceToken, ^{
-		space = CGColorSpaceCreateDeviceRGB();
-	});
-	return CGGradientCreateWithColorComponents(space, cComponents, cLocations, (size_t)stops);
-}
-
-static void TGGradientFillPath(CGPathRef path, NSDictionary *shape, double frame, CGContextRef ctx) {
-	if (CGPathIsEmpty(path))
-		return;
-	// Telegram's files wrap the stops in {a, k} and may add opacity stops:
-	// read as a bare array, every gradient fill was skipped.
-	NSArray *k = TGLottieGradientStops(shape[@"g"], frame);
-	if (!k.count)
-		return;
-	NSUInteger perStop = 5;
-
-	float alpha = TGScalarAtFast(shape[@"o"], frame, 100.0f) / 100.0f;
-	CGGradientRef gradient = TGGradientFromStops(k, perStop, alpha);
-	if (!gradient)
-		return;
-
-	float from[2] = {0}, to[2] = {0};
-	int fromC = TGValueAtFast(shape[@"s"], frame, from, 2);
-	int toC   = TGValueAtFast(shape[@"e"], frame, to, 2);
-	if (fromC < 2 || toC < 2){
-		CGGradientRelease(gradient);
-		return;
-	}
-	CGPoint start  = CGPointMake(from[0], from[1]);
-	CGPoint finish = CGPointMake(to[0],   to[1]);
-
-	CGContextSaveGState(ctx);
-	CGContextAddPath(ctx, path);
-	CGContextClip(ctx);
-	if ([shape[@"t"] integerValue] == 2){
-		double radius = sqrt(pow(finish.x - start.x, 2) +
-							 pow(finish.y - start.y, 2));
-		CGContextDrawRadialGradient(ctx, gradient, start, 0,
-				finish, MAX(radius, 0.01), kCGGradientDrawsBeforeStartLocation |
-										   kCGGradientDrawsAfterEndLocation);
-	} else {
-		CGContextDrawLinearGradient(ctx, gradient, start, finish,
-				kCGGradientDrawsBeforeStartLocation |
-				kCGGradientDrawsAfterEndLocation);
-	}
-	CGContextRestoreGState(ctx);
-	CGGradientRelease(gradient);
-}
-
-static void TGCollectMaskPaths(NSArray *masks, double frame,
-							   CGMutablePathRef inside,
-							   CGMutablePathRef outside,
-							   NSUInteger *counted) {
-	for (NSDictionary *mask in masks){
-		if (![mask isKindOfClass:NSDictionary.class])
-			continue;
-		NSString *mode = mask[@"mode"] ?: @"";
-		if ([mode isEqualToString:@"n"] || !mode.length)
-			continue;
-		BOOL erase = [mode isEqualToString:@"s"] || [mode isEqualToString:@"d"];
-		if ([mask[@"inv"] boolValue] && !erase)
-			erase = YES;
-
-		CGMutablePathRef sink = erase ? outside : inside;
-		CGMutablePathRef maskPath = CGPathCreateMutable();
-		TGAppendBezier(mask[@"pt"], frame, maskPath);
-		CGPathAddPath(sink, NULL, maskPath);
-		CGPathRelease(maskPath);
-		(*counted)++;
-	}
-}
-
-static void TGClipByMasks(NSArray *masks, double frame, CGContextRef ctx) {
-	if (![masks isKindOfClass:NSArray.class] || !masks.count)
-		return;
-
-	NSUInteger counted = 0;
-	CGMutablePathRef inside  = CGPathCreateMutable();
-	CGMutablePathRef outside = CGPathCreateMutable();
-	TGCollectMaskPaths(masks, frame, inside, outside, &counted);
-
-	if (counted && !CGPathIsEmpty(inside)){
-		CGContextAddPath(ctx, inside);
-		CGContextClip(ctx);
-	}
-	CGPathRelease(inside);
-	CGPathRelease(outside);
-}
-
-static void TGEraseByMasks(NSArray *masks, double frame, CGContextRef ctx) {
-	if (![masks isKindOfClass:NSArray.class] || !masks.count)
-		return;
-
-	NSUInteger counted = 0;
-	CGMutablePathRef inside  = CGPathCreateMutable();
-	CGMutablePathRef outside = CGPathCreateMutable();
-	TGCollectMaskPaths(masks, frame, inside, outside, &counted);
-
-	if (!CGPathIsEmpty(outside)) {
-		CGContextSetBlendMode(ctx, kCGBlendModeClear);
-		CGContextSetRGBFillColor(ctx, 0, 0, 0, TGAlphaOpaque);
-		CGContextAddPath(ctx, outside);
-		CGContextFillPath(ctx);
-		CGContextSetBlendMode(ctx, kCGBlendModeNormal);
-	}
-
-	CGPathRelease(inside);
-	CGPathRelease(outside);
-}
-
-static void TGDrawShapes(NSArray *shapes, double frame, CGContextRef ctx) {
-	if (![shapes isKindOfClass:NSArray.class])
-		return;
-
-	CGMutablePathRef path = CGPathCreateMutable();
-
-	for (NSDictionary *shape in shapes){
-		NSString *ty = shape[@"ty"];
-
-		if ([ty isEqualToString:@"gr"]){
-			CGContextSaveGState(ctx);
-			NSArray *items = shape[@"it"];
-			for (NSDictionary *item in items)
-				if ([item[@"ty"] isEqualToString:@"tr"])
-					TGApplyTransform(item, frame, ctx);
-			TGDrawShapes(items, frame, ctx);
-			CGContextRestoreGState(ctx);
-
-		} else if ([ty isEqualToString:@"sh"]){
-			TGAppendBezier(shape[@"ks"], frame, path);
-
-		} else if ([ty isEqualToString:@"el"]){
-			float p[2] = {0}, s[2] = {0};
-			int pC = TGValueAtFast(shape[@"p"], frame, p, 2);
-			int sC = TGValueAtFast(shape[@"s"], frame, s, 2);
-			if (pC >= 2 && sC >= 2){
-				CGRect r = CGRectMake(p[0] - s[0] / 2.0f,
-									  p[1] - s[1] / 2.0f,
-									  s[0], s[1]);
-				CGPathAddEllipseInRect(path, NULL, r);
-			}
-
-		} else if ([ty isEqualToString:@"rc"]){
-			float p[2] = {0}, s[2] = {0};
-			int pC = TGValueAtFast(shape[@"p"], frame, p, 2);
-			int sC = TGValueAtFast(shape[@"s"], frame, s, 2);
-			float radius = TGScalarAtFast(shape[@"r"], frame, 0.0f);
-			if (pC >= 2 && sC >= 2){
-				CGRect r = CGRectMake(p[0] - s[0] / 2.0f,
-									  p[1] - s[1] / 2.0f,
-									  s[0], s[1]);
-				if (radius > 0.0f){
-					UIBezierPath *rounded = [UIBezierPath bezierPathWithRoundedRect:r cornerRadius:radius];
-					CGPathAddPath(path, NULL, rounded.CGPath);
-				} else {
-					CGPathAddRect(path, NULL, r);
-				}
-			}
-
-		} else if ([ty isEqualToString:@"fl"]){
-			TGFillPath(path, shape, frame, ctx);
-
-		} else if ([ty isEqualToString:@"gf"]){
-			TGGradientFillPath(path, shape, frame, ctx);
-
-		} else if ([ty isEqualToString:@"st"]){
-			TGStrokePath(path, shape, frame, ctx);
-		}
-	}
-
-	CGPathRelease(path);
-}
-
-static void TGDrawLottieLayer(NSDictionary *layer, NSDictionary *layersByInd, double frame, CGContextRef ctx) {
-	if ([layer[@"ty"] intValue] != 4)
-		return;
-
-	double ip = [layer[@"ip"] doubleValue];
-	double op = [layer[@"op"] doubleValue];
-	if (frame < ip || frame > op)
-		return;
-
-	CGContextSaveGState(ctx);
-
-	NSMutableArray *hierarchy = [NSMutableArray array];
-	NSDictionary *curr = layer;
-	while (curr) {
-		[hierarchy insertObject:curr atIndex:0];
-		id parentInd = curr[@"parent"];
-		curr = parentInd ? layersByInd[parentInd] : nil;
-	}
-
-	for (NSDictionary *l in hierarchy) {
-		TGApplyTransform(l[@"ks"], frame, ctx);
-	}
-
-	TGClipByMasks(layer[@"masksProperties"], frame, ctx);
-	TGDrawShapes(layer[@"shapes"], frame, ctx);
-	TGEraseByMasks(layer[@"masksProperties"], frame, ctx);
-	CGContextRestoreGState(ctx);
-}
-
-#pragma mark - Offscreen Bitmap Rasterization
-
-static CGImageRef TGRasterizeLottieFrame(TGLottieModel *model, double frame, CGSize targetSize) {
-	int w = (int)targetSize.width;
-	int h = (int)targetSize.height;
-	if (w <= 0 || h <= 0 || model.canvas.width <= 0 || model.canvas.height <= 0)
-		return NULL;
-
-	CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
-	CGContextRef ctx = CGBitmapContextCreate(NULL, w, h, 8, w * 4, cs,
-		kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big);
-	CGColorSpaceRelease(cs);
-	if (!ctx)
-		return NULL;
-
-	CGFloat scale = MIN((CGFloat)w / model.canvas.width, (CGFloat)h / model.canvas.height);
-	CGFloat ox = TGCenteredOrigin((CGFloat)w, model.canvas.width * scale);
-	CGFloat oy = TGCenteredOrigin((CGFloat)h, model.canvas.height * scale);
-
-	CGContextTranslateCTM(ctx, ox, oy);
-	CGContextScaleCTM(ctx, scale, scale);
-
-	for (NSDictionary *layer in [[model.layers reverseObjectEnumerator] allObjects]) {
-		TGDrawLottieLayer(layer, model.layersByInd, frame, ctx);
-	}
-
-	CGImageRef img = CGBitmapContextCreateImage(ctx);
-	CGContextRelease(ctx);
-	return img;
-}
 
 #pragma mark - View Implementation
 
@@ -818,6 +155,8 @@ static NSString *TGLottieKey(NSString *path, CGSize viewSize) {
 @property (nonatomic, assign) BOOL isPlaying;
 /// Stop after the loop now running.
 @property (nonatomic, assign) BOOL once;
+/// showLastFrame was asked before the loop was rasterised.
+@property (nonatomic, assign) BOOL wantsLastFrame;
 @end
 
 
@@ -960,7 +299,7 @@ static BOOL sBuildsDeferred = NO;
 - (BOOL)loadStickerFile:(NSString *)path {
 	double start = TGPerfNow();
 	BOOL ok = [self loadStickerFileInner:path];
-	const char *kind = self.model ? (self.model.isWebM ? "webm" : "tgs") : "?";
+	const char *kind = self.model ? [self.model kind] : "?";
 	TGPerfReport("sticker load", kind, start, 16.0);
 	return ok;
 }
@@ -1004,26 +343,42 @@ static BOOL sBuildsDeferred = NO;
 		} else {
 			NSData *gz = [NSData dataWithContentsOfFile:path];
 			NSData *json = TGGunzip(gz);
+			// tlottie first, as the official client draws: it takes every
+			// feature the stickers use and never builds the JSON into
+			// dictionaries. Frame 0 comes from the same queue: the sticker's
+			// very first appearance on the A4 was a synchronous raster inside
+			// the push burst.
+			static dispatch_once_t crashLogOnce;
+			dispatch_once(&crashLogOnce, ^{
+				NSString *caches = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES).firstObject;
+				TGTLottieUseCrashLog([caches stringByAppendingPathComponent:@"tlottie"]);
+			});
+			TGTLottie *tlottie = TGTLottieCreate(json, path.lastPathComponent);
+			CGImageRef tlottieFirst = tlottie ? TGTLottieRender(tlottie, 0, targetPxSize) : NULL;
+			if (tlottieFirst) {
+				model.tlottie = tlottie;
+				model.inPoint = 0;
+				model.outPoint = TGTLottieFrameCount(tlottie);
+				model.frameRate = TGTLottieFrameRate(tlottie) ?: 60.0;
+				model.firstFrame = [UIImage imageWithCGImage:tlottieFirst];
+				CGImageRelease(tlottieFirst);
+				ok = YES;
+			} else {
+				TGTLottieFree(tlottie);
+				if (json.length)
+					NSLog(@"TGLottie: tlottie refused %@, trying TGLottieRender", path.lastPathComponent);
+			}
 			NSError *err = nil;
 			NSDictionary *anim = nil;
-			if (json.length)
+			if (!ok && json.length)
 				anim = TGJsonParse((const char *)json.bytes, json.length, &err);
-			if (!anim || ![anim isKindOfClass:NSDictionary.class])
-				ok = NO;
-			else {
-				model.anim = anim;
-				model.layers = anim[@"layers"];
-				NSMutableDictionary *byInd = [NSMutableDictionary dictionary];
-				for (NSDictionary *l in anim[@"layers"]) {
-					id ind = l[@"ind"];
-					if (ind) byInd[ind] = l;
-				}
-				model.layersByInd = byInd;
+			if (!ok && [anim isKindOfClass:NSDictionary.class]) {
 				model.inPoint = [anim[@"ip"] doubleValue];
 				model.outPoint = [anim[@"op"] doubleValue];
 				model.frameRate = [anim[@"fr"] doubleValue] ?: 60.0;
 				model.canvas = CGSizeMake([anim[@"w"] doubleValue], [anim[@"h"] doubleValue]);
-				ok = model.layers.count > 0 && model.canvas.width > 0;
+				model.scene = TGLottieSceneCreate(anim);
+				ok = model.scene != NULL;
 				// Drawn without what it needs, the file is a wrong picture
 				// rather than none; the still is the right one.
 				NSString *missing = ok ? TGLottieUnsupportedFeature(anim) : nil;
@@ -1032,11 +387,8 @@ static BOOL sBuildsDeferred = NO;
 					NSLog(@"TGLottie: %@ needs a %@, keeping the still",
 							path.lastPathComponent, missing);
 				}
-				// Frame 0 comes from the same queue: the sticker's very first
-				// appearance on the A4 was a synchronous raster inside the
-				// push burst.
 				if (ok && !model.blank) {
-					CGImageRef f0 = TGRasterizeLottieFrame(model, model.inPoint, targetPxSize);
+					CGImageRef f0 = [model newFrame:model.inPoint size:targetPxSize];
 					if (f0) {
 						model.firstFrame = [UIImage imageWithCGImage:f0];
 						CGImageRelease(f0);
@@ -1048,7 +400,7 @@ static BOOL sBuildsDeferred = NO;
 		NSString *ext = path.pathExtension.lowercaseString;
 		dispatch_async(dispatch_get_main_queue(), ^{
 			[building removeObject:key];
-			const char *kind = isWebM ? "webm" : "tgs";
+			const char *kind = [model kind];
 			TGPerfReport("sticker build", kind, buildStart, 50.0);
 			if (!ok) {
 				NSLog(@"TGLottie: cannot parse %@ (%s)",
@@ -1136,6 +488,7 @@ static BOOL sBuildsDeferred = NO;
 
 	self.loadedPath = path;
 	self.model = model;
+	self.wantsLastFrame = NO;
 	self.currentFrame = model.inPoint;
 	self.currentFrameIndex = 0;
 	self.loaded = YES;
@@ -1183,18 +536,23 @@ static BOOL sBuildsDeferred = NO;
 				// The budget, not a guess, name the biggest loop this device
 				// may hold: the frame count is what decides the bytes.
 				if (totalFrames > budget.frameCap) totalFrames = budget.frameCap;
+				// tlottie counts a file that never moves as one frame: one
+				// picture, not 36 copies of it.
+				if (model.tlottie && model.outPoint - model.inPoint <= 1.0) totalFrames = 1;
 
 				double frameStep = (model.outPoint - model.inPoint) / (double)totalFrames;
 				NSMutableArray *rendered = [NSMutableArray arrayWithCapacity:totalFrames];
+				double loopStart = TGPerfNow();
 
 				for (int i = 0; i < totalFrames; i++) {
 					double f = model.inPoint + i * frameStep;
-					CGImageRef img = TGRasterizeLottieFrame(model, f, targetPxSize);
+					CGImageRef img = [model newFrame:f size:targetPxSize];
 					if (img) {
 						[rendered addObject:CFBridgingRelease(img)];
 					}
 				}
 
+				TGPerfReport("sticker loop", [model kind], loopStart, 500.0);
 				BOOL blank = TGLottieFramesAreBlank(rendered);
 				dispatch_async(dispatch_get_main_queue(), ^{
 					model.cachedFrames = rendered;
@@ -1225,7 +583,9 @@ static BOOL sBuildsDeferred = NO;
 						[TGLottieStickerCache() setObject:model forKey:key cost:cost];
 					}
 					if ([weakSelf.loadedPath isEqualToString:path]) {
-						if (rendered.count > 0 && !weakSelf.layer.contents) {
+						if (rendered.count > 0 && weakSelf.wantsLastFrame && !weakSelf.isPlaying)
+							weakSelf.layer.contents = rendered.lastObject;
+						else if (rendered.count > 0 && !weakSelf.layer.contents) {
 							weakSelf.layer.contents = (__bridge id)(__bridge CGImageRef)rendered[0];
 						}
 					}
@@ -1249,7 +609,19 @@ static BOOL sBuildsDeferred = NO;
 	[self startPlaying];
 }
 
+- (void)showLastFrame {
+	if (self.isPlaying)
+		return;
+	self.wantsLastFrame = YES;
+	NSArray *frames = self.model.cachedFrames;
+	if (frames.count > 0) {
+		self.currentFrameIndex = frames.count - 1;
+		self.layer.contents = frames.lastObject;
+	}
+}
+
 - (void)playOnce {
+	self.wantsLastFrame = NO;
 	// Already on its one loop: a table reload must not start it over.
 	if (self.once && self.isPlaying)
 		return;
@@ -1277,7 +649,10 @@ static BOOL sBuildsDeferred = NO;
 	[self stop];
 	self.currentFrameIndex = 0;
 	NSArray *frames = self.model.cachedFrames;
-	if (frames.count > 0)
+	if (frames.count > 0 && self.holdsLastFrame) {
+		self.currentFrameIndex = frames.count - 1;
+		self.layer.contents = frames.lastObject;
+	} else if (frames.count > 0)
 		self.layer.contents = frames[0];
 	else if (self.model.firstFrame)
 		self.layer.contents = (__bridge id)self.model.firstFrame.CGImage;

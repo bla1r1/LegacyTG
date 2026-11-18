@@ -6,6 +6,7 @@
 #import <QuartzCore/QuartzCore.h>
 #import "TGCapabilities.h"
 #import "TGLottieView.h"
+#import "TGSlotMachine.h"
 #import "TGDevice.h"
 #import "TGStyle.h"
 #import "TGLocalization.h"
@@ -148,14 +149,14 @@ static CGFloat TGChatMediaCorner(void) {
 		cell.lottie.frame = CGRectMake(TGMetricZero, TGMetricZero, side, side);
 		BOOL playable = [cell.lottie loadStickerFile:animPath];
 		cell.lottie.hidden = !playable;
-		[self placeSlotLayersIn:cell message:m playable:playable];
-		[self playStickerEffectIn:cell message:m playable:playable];
 		// On Vintage the VP9/vector decode and the scroll share one core: a
 		// sticker told to play mid-drag starts a decode that fights the scroll
 		// for it. It keeps its first frame (already decoded and cached) until
 		// the scroll settles and the settle reload starts the animation.
 		BOOL scrollSettled = [TGDevice tier] != TGDeviceTierVintage ||
 				!(self.table.isDragging || self.table.isDecelerating);
+		[self placeSlotLayersIn:cell message:m playable:playable settled:scrollSettled];
+		[self playStickerEffectIn:cell message:m playable:playable];
 		if (playable) {
 			[self playOnce:cell.lottie path:animPath settled:scrollSettled];
 		} else {
@@ -217,21 +218,18 @@ static CGFloat TGChatMediaCorner(void) {
 	return NO;
 }
 
-/// A slot machine's reels and lever over its background, in one frame and
-/// played together; drawn only once all four have arrived, so a half-built
-/// machine never shows. Any other sticker clears them from a reused cell.
-- (void)placeSlotLayersIn:(TGBubbleCell *)cell message:(NSDictionary *)m playable:(BOOL)playable {
+/// A slot machine's reels and lever over its background, in one frame. They
+/// spin once per message per chat visit and rest on the result, never while
+/// the A4 scrolls, and show only when all four load (TGSlotReelPlaybackFor).
+/// Any other sticker clears them from a reused cell.
+- (void)placeSlotLayersIn:(TGBubbleCell *)cell message:(NSDictionary *)m playable:(BOOL)playable
+				  settled:(BOOL)settled {
 	NSArray *layers = [m[@"slotLayers"] isKindOfClass:NSArray.class] ? m[@"slotLayers"] : @[];
-	NSMutableArray *paths = [NSMutableArray array];
-	for (NSNumber *layer in layers) {
-		NSString *path = self.lottiePaths[layer];
-		if (path)
-			[paths addObject:path];
-	}
-	BOOL draw = playable && layers.count && paths.count == layers.count;
+	NSUInteger loaded = 0;
 	for (NSUInteger i = 0; i < 4; i++) {
+		NSString *path = (playable && i < layers.count) ? self.lottiePaths[layers[i]] : nil;
 		TGLottieView *view = (TGLottieView *)[cell.bubble viewWithTag:TGBubbleSlotLayerTag + (NSInteger)i];
-		if (!draw || i >= paths.count) {
+		if (!path) {
 			view.hidden = YES;
 			continue;
 		}
@@ -239,12 +237,34 @@ static CGFloat TGChatMediaCorner(void) {
 			view = [[TGLottieView alloc] initWithFrame:cell.lottie.frame];
 			view.tag = TGBubbleSlotLayerTag + (NSInteger)i;
 			view.userInteractionEnabled = NO;
+			view.holdsLastFrame = YES;
+			// A reel still building answers NO; its readiness reloads the
+			// row, so the machine appears once all four are in.
+			__weak typeof(self) weakSelf = self;
+			view.onStickerReady = ^{ [weakSelf reloadTableDebounced]; };
 			[cell.bubble insertSubview:view aboveSubview:(i ? [cell.bubble viewWithTag:TGBubbleSlotLayerTag + (NSInteger)i - 1] : cell.lottie)];
 		}
 		view.frame = cell.lottie.frame;
-		view.hidden = ![view loadStickerFile:paths[i]];
-		if (!view.hidden)
-			[self playOnce:view path:paths[i] settled:YES];
+		if ([view loadStickerFile:path])
+			loaded++;
+	}
+	NSNumber *msgId = m[@"id"];
+	TGSlotReelPlayback playback = TGSlotReelPlaybackFor(loaded, playable ? layers.count : 0,
+			msgId && [self.spunSlotMachines containsObject:msgId], settled);
+	if (playback == TGSlotReelSpin && msgId) {
+		if (!self.spunSlotMachines)
+			self.spunSlotMachines = [NSMutableSet set];
+		[self.spunSlotMachines addObject:msgId];
+	}
+	for (NSUInteger i = 0; i < 4; i++) {
+		TGLottieView *view = (TGLottieView *)[cell.bubble viewWithTag:TGBubbleSlotLayerTag + (NSInteger)i];
+		view.hidden = playback == TGSlotReelHide || i >= layers.count;
+		if (view.hidden)
+			continue;
+		if (playback == TGSlotReelSpin)
+			[view playOnce];
+		else if (playback == TGSlotReelRest)
+			[view showLastFrame];
 	}
 }
 

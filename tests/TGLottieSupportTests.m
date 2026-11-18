@@ -30,13 +30,31 @@ static NSDictionary *lsGroup(NSArray *items) {
 	XCTAssertNil(TGLottieUnsupportedFeature(anim));
 }
 
-- (void)testHighVoltage_PrecompLayersKeepTheStill {
+- (void)testHighVoltage_TrimPathsInsideItsPrecompsKeepTheStill {
+	// Precomps are drawn now; what the asset holds is what decides.
 	NSDictionary *anim = @{
 		@"layers": @[ lsShapeLayer(@[ lsGroup(@[ @{ @"ty": @"sh" }, @{ @"ty": @"st" } ]) ]),
 					  @{ @"ty": @0, @"refId": @"comp_0" } ],
 		@"assets": @[ @{ @"id": @"comp_0", @"layers": @[ lsShapeLayer(@[ @{ @"ty": @"tm" } ]) ] } ],
 	};
-	XCTAssertEqualObjects(TGLottieUnsupportedFeature(anim), @"precomp layer");
+	XCTAssertEqualObjects(TGLottieUnsupportedFeature(anim), @"trim path");
+}
+
+- (void)testSlotMachineReel_PrecompsWithMergePathsAreDrawn {
+	// Slot_L_Lemon and the other reels: precomps whose shapes merge paths,
+	// which rlottie skips and so do we.
+	NSDictionary *anim = @{
+		@"layers": @[ @{ @"ty": @0, @"refId": @"comp_0" }, @{ @"ty": @3 } ],
+		@"assets": @[ @{ @"id": @"comp_0", @"layers": @[ lsShapeLayer(@[ lsGroup(@[
+				@{ @"ty": @"sh" }, @{ @"ty": @"sh" }, @{ @"ty": @"mm" }, @{ @"ty": @"st" },
+				@{ @"ty": @"fl" }, @{ @"ty": @"tr" } ]) ]) ] } ],
+	};
+	XCTAssertNil(TGLottieUnsupportedFeature(anim));
+}
+
+- (void)testPrecompWithATrackMatte_KeepsTheStill {
+	NSDictionary *anim = @{ @"layers": @[ @{ @"ty": @0, @"refId": @"comp_0", @"tt": @1 } ] };
+	XCTAssertEqualObjects(TGLottieUnsupportedFeature(anim), @"track matte");
 }
 
 - (void)testTrimPath_InsideANestedGroup {
@@ -47,11 +65,9 @@ static NSDictionary *lsGroup(NSArray *items) {
 	XCTAssertEqualObjects(TGLottieUnsupportedFeature(anim), @"trim path");
 }
 
-- (void)testTrackMatteAndMergePathsAndOtherLayers {
+- (void)testTrackMatteAndOtherLayers {
 	NSDictionary *matte = @{ @"layers": @[ @{ @"ty": @4, @"tt": @1, @"shapes": @[] } ] };
 	XCTAssertEqualObjects(TGLottieUnsupportedFeature(matte), @"track matte");
-	NSDictionary *merge = @{ @"layers": @[ lsShapeLayer(@[ lsGroup(@[ @{ @"ty": @"mm" } ]) ]) ] };
-	XCTAssertEqualObjects(TGLottieUnsupportedFeature(merge), @"merge paths");
 	XCTAssertEqualObjects(TGLottieUnsupportedFeature(@{ @"layers": @[ @{ @"ty": @2 } ] }),
 			@"image layer");
 	XCTAssertEqualObjects(TGLottieUnsupportedFeature(@{ @"layers": @[ @{ @"ty": @1 } ] }),

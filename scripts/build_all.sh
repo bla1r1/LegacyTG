@@ -38,6 +38,7 @@ step "$B/libs/libcrypto.a"                      "$S/build_deps.sh"
 step "$B/armv7/openssl/libcrypto.a"             "$S/build_openssl.sh"
 step "$B/arm64/libs/libvpx.a"                   "$S/build_libvpx.sh"
 step "$B/armv7/ffmpeg/lib/libavcodec.a"         "$S/build_ffmpeg.sh"
+step "$B/armv7/libs/libtlottie.a"              "$S/build_tlottie.sh"
 step "$B/tdlib/lib/libtdcore.a"                 "$S/build_tdlib.sh"
 step "$B/arm64/tdlib64/libtdcore.a"             "$S/repack_arm64_libs.sh"
 step "$B/armv7/tdlib/lib/libtdjson.dylib"       "$S/build_tdlib_dylib.sh" --install

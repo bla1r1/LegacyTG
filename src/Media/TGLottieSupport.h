@@ -1,8 +1,9 @@
 //
 // TGLottieSupport.h - what TGLottieView's renderer cannot draw.
 //
-// The renderer draws shape layers (path, ellipse, rectangle, fill, gradient
-// fill, stroke, group transforms) and masks. Anything else it skipped in
+// The renderer (TGLottieRender) draws shape layers (path, ellipse, rectangle,
+// fill, gradient fill, stroke, group transforms), precomp layers and masks,
+// and skips merge paths as the official renderers do. Anything else it skipped in
 // silence, and the animation came out wrong instead of failing: the "High
 // Voltage" custom emoji (6 precomp layers, 12 trim paths) drew as bare red
 // outlines, so of five equal emoji in a message only the fifth, past the
