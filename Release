@@ -1,16 +1,16 @@
 Origin: LegacyTG
 Label: LegacyTG
 Suite: stable
-Version: 1.4-4
+Version: 1.5-5
 Codename: ios
 Architectures: iphoneos-arm
 Components: main
 Description: LegacyTG: Telegram for iOS 6.0-12.5.7 on old iPhones and iPads.
 MD5Sum:
- 9bcdb90e8f53590f4c3f94bc9369f851 542 Packages
- 6b8690eaa7c3f45afcdc5a2b295779d4 410 Packages.bz2
- 884e6b5d6a9b9f79179d1b3e11cc3b0b 371 Packages.gz
+ 617af46e325b064b9627371169085663 542 Packages
+ 26a26836dc8fb7cc629276478e50b34b 415 Packages.bz2
+ 9c52c76340d69517ada23c4abeb839e4 368 Packages.gz
 SHA256:
- 61671655a2fe0adc131986f0984c78b66293c477466016a5095a2e3cacaf2f56 542 Packages
- 6550e9d752acca4dd2c4e5ba467119138f3b4f10b6a46d07514388f13f38ee2e 410 Packages.bz2
- e9e8ec5a0b2db639013da194ea5efe251eac81c094768587b635db4aeed95806 371 Packages.gz
+ fbf20e0091eab7bcd10ab2f2dc0e435b1e3343e9e2e189ce42498dd9fd40d0d1 542 Packages
+ 38865835d6c48e767259e4bc02f00bcc872e24a6e822a9a512310050b35f4b0e 415 Packages.bz2
+ a125ad39d896dd03f4cfa1d169053459b0be980defbb362e508816b1de9c3244 368 Packages.gz
