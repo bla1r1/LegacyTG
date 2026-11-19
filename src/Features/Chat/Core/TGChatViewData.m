@@ -104,7 +104,41 @@ static const double kTGHoldBottomSeconds = 6.0;
 /// clears when it still holds the text the client had cached: a stop must not
 /// wipe words typed after it. The table reloads either way, because the
 /// message being streamed may have changed too.
+/// Whether a row on screen draws one of these custom emoji: in its text or
+/// in a reaction under it.
+- (BOOL)visibleRowsShowCustomEmoji:(NSSet *)ids {
+	for (NSIndexPath *path in self.table.indexPathsForVisibleRows) {
+		if (path.row >= (NSInteger)self.messages.count)
+			continue;
+		NSDictionary *m = self.messages[(NSUInteger)path.row];
+		NSNumber *msgId = m[@"id"];
+		TGMessageLayout *layout = msgId ? self.layoutCache[msgId] : nil;
+		for (NSDictionary *rect in layout.customEmojiRects)
+			if ([ids containsObject:rect[@"id"] ?: @0])
+				return YES;
+		for (NSDictionary *group in m[@"reactionGroups"])
+			if ([group isKindOfClass:NSDictionary.class] && [ids containsObject:group[@"customEmojiId"] ?: @0])
+				return YES;
+		for (NSDictionary *entity in m[@"entities"]) {
+			NSDictionary *type = [entity isKindOfClass:NSDictionary.class] ? entity[@"type"] : nil;
+			if ([type isKindOfClass:NSDictionary.class] && [ids containsObject:type[@"custom_emoji_id"] ?: @0])
+				return YES;
+		}
+	}
+	return NO;
+}
+
 - (void)customEmojiLoaded:(NSNotification *)note {
+	// The sticker panel's custom emoji tab loads hundreds the chat behind it
+	// never draws, and each burst reloaded every row on screen: 36-57% of
+	// the panel's scroll frames dropped on the iPod touch 4.
+	NSMutableSet *ids = [NSMutableSet set];
+	if ([note.userInfo[@"id"] isKindOfClass:NSNumber.class])
+		[ids addObject:note.userInfo[@"id"]];
+	if ([note.userInfo[@"ids"] isKindOfClass:NSSet.class])
+		[ids unionSet:note.userInfo[@"ids"]];
+	if (ids.count && ![self visibleRowsShowCustomEmoji:ids])
+		return;
 	// A screenful of emoji lands as a burst: one redraw for all of it.
 	[NSObject cancelPreviousPerformRequestsWithTarget:self
 			selector:@selector(redrawVisibleRows) object:nil];

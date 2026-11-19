@@ -120,4 +120,17 @@
 	XCTAssertEqualObjects(cache[@"other_placeholder"], img2);
 }
 
+- (void)testImageLruCache_Int64KeysShareTheBound {
+	TGImageLruCache *cache = [[TGImageLruCache alloc] initWithCapacity:2];
+	UIImage *a = [[UIImage alloc] init], *b = [[UIImage alloc] init], *c = [[UIImage alloc] init];
+	[cache setObject:a forInt64Key:-5];
+	[cache setObject:b forInt64Key:INT64_MAX];
+	XCTAssertEqualObjects([cache objectForInt64Key:-5], a);
+	[cache setObject:c forInt64Key:7];
+	XCTAssertTrue([cache objectForInt64Key:INT64_MAX] == nil);
+	XCTAssertEqualObjects(cache[@(7)], c);
+	[cache setObject:nil forInt64Key:7];
+	XCTAssertEqual((int)cache.count, 1);
+}
+
 @end

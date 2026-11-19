@@ -16,6 +16,7 @@
 #import "TGCustomEmojiStore.h"
 #import <objc/runtime.h>
 #import "TGEmojiPanelInternal.h"
+#import "TGBitmapFile.h"
 
 
 static const char kTGItemDataKey = 0;
@@ -31,6 +32,80 @@ static const CGFloat   kPreviewSide = 110.0f;
 
 /// A still picture from a file TDLib downloaded: JPEG and PNG through UIKit,
 /// WebP through the decoder the app carries.
+/// Decoded pictures on disk, raw (TGBitmapFile), at the size the cell shows
+/// them: after a relaunch every tile asked TDLib for its file and decoded
+/// WebP again. ~100 KB a tile at 160 px, so the oldest go past this many.
+static const NSUInteger kTGPanelTilesKept = 240;
+
+/// One decode at a time: on the global queue a screen of tiles decoded at
+/// once and shared the A4's one core between a dozen of them.
+static dispatch_queue_t TGPanelDecodeQueue(void) {
+	static dispatch_queue_t queue;
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{
+		queue = dispatch_queue_create("org.legacy.itg.panel-decode", DISPATCH_QUEUE_SERIAL);
+		dispatch_set_target_queue(queue, dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0));
+	});
+	return queue;
+}
+
+static NSString *TGPanelCachesDirectory(void) {
+	return [NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES) firstObject];
+}
+
+static NSString *TGPanelTileDirectory(void) {
+	return [TGPanelCachesDirectory() stringByAppendingPathComponent:[NSString stringWithFormat:
+			@"sticker-tiles/%lld", [[TGStickerStore shared] myUserId]]];
+}
+
+/// The picture at the cell's pixel size. Sticker thumbnails come 320 px
+/// square (some 640): 400 KB to 1.6 MB of bitmap each, decoded, copied to
+/// a layer and scaled down 2-4x on every frame of a scroll, for an 80 pt
+/// cell. Scaled so its shorter side still covers `pixels`; never up.
+static UIImage *TGPanelShrink(UIImage *image, CGFloat pixels) {
+	CGImageRef source = image.CGImage;
+	size_t w = source ? CGImageGetWidth(source) : 0, h = source ? CGImageGetHeight(source) : 0;
+	if (!w || !h || pixels <= 0)
+		return image;
+	CGFloat factor = pixels / MIN(w, h);
+	if (factor >= 1)
+		return image;
+	size_t tw = MAX((size_t)1, (size_t)ceilf(w * factor)), th = MAX((size_t)1, (size_t)ceilf(h * factor));
+	CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
+	CGContextRef ctx = CGBitmapContextCreate(NULL, tw, th, 8, tw * 4, space, TGBitmapFileInfo());
+	CGColorSpaceRelease(space);
+	if (!ctx)
+		return image;
+	CGContextSetInterpolationQuality(ctx, kCGInterpolationMedium);
+	CGContextDrawImage(ctx, CGRectMake(0, 0, tw, th), source);
+	CGImageRef small = CGBitmapContextCreateImage(ctx);
+	CGContextRelease(ctx);
+	UIImage *out = small ? [UIImage imageWithCGImage:small] : image;
+	if (small)
+		CGImageRelease(small);
+	return out;
+}
+
+/// Keeps the newest kTGPanelTilesKept tiles; runs on the decode queue.
+static void TGPanelPruneTiles(NSString *dir) {
+	NSFileManager *fm = [NSFileManager defaultManager];
+	// Full-size tiles an earlier build kept (400 KB to 1.6 MB each).
+	[fm removeItemAtPath:[TGPanelCachesDirectory() stringByAppendingPathComponent:@"panel-tiles"] error:NULL];
+	NSArray *names = [fm contentsOfDirectoryAtPath:dir error:NULL];
+	if (names.count <= kTGPanelTilesKept)
+		return;
+	NSMutableArray *files = [NSMutableArray arrayWithCapacity:names.count];
+	for (NSString *name in names) {
+		NSString *path = [dir stringByAppendingPathComponent:name];
+		NSDate *date = [fm attributesOfItemAtPath:path error:NULL].fileModificationDate;
+		if (date)
+			[files addObject:@[ date, path ]];
+	}
+	[files sortUsingComparator:^NSComparisonResult(NSArray *a, NSArray *b) { return [b[0] compare:a[0]]; }];
+	for (NSUInteger i = kTGPanelTilesKept; i < files.count; i++)
+		[fm removeItemAtPath:files[i][1] error:NULL];
+}
+
 static UIImage *TGPanelDecode(NSString *path) {
 	if (!path.length)
 		return nil;
@@ -149,19 +224,43 @@ static UIImage *TGPanelDecode(NSString *path) {
 		apply(cached);
 		return;
 	}
-	[[TGStickerStore shared] downloadFile:fileId completion:^(NSString *path){
-		if (!path.length)
-			return;
-		dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
-			UIImage *image = TGPanelDecode(path);
-			if (!image)
-				return;
-			dispatch_async(dispatch_get_main_queue(), ^{
-				[TGPanelImageCache() setObject:image forKey:@(fileId)];
-				apply(image);
-			});
+	static BOOL pruned;
+	CGSize cell = [self cellSize];
+	CGFloat pixels = ceilf(MAX(cell.width, cell.height) * [UIScreen mainScreen].scale);
+	NSString *dir = TGPanelTileDirectory();
+	NSString *tile = [dir stringByAppendingPathComponent:[NSString stringWithFormat:@"%ld.bgra", (long)fileId]];
+	BOOL prune = !pruned;
+	pruned = YES;
+	void (^show)(UIImage *) = ^(UIImage *image){
+		dispatch_async(dispatch_get_main_queue(), ^{
+			[TGPanelImageCache() setObject:image forKey:@(fileId)];
+			apply(image);
 		});
-	}];
+	};
+	dispatch_async(TGPanelDecodeQueue(), ^{
+		if (prune)
+			TGPanelPruneTiles(dir);
+		CGImageRef saved = TGBitmapCreate(tile);
+		if (saved) {
+			UIImage *image = [UIImage imageWithCGImage:saved];
+			CGImageRelease(saved);
+			show(image);
+			return;
+		}
+		dispatch_async(dispatch_get_main_queue(), ^{
+			[[TGStickerStore shared] downloadFile:fileId completion:^(NSString *path){
+				if (!path.length)
+					return;
+				dispatch_async(TGPanelDecodeQueue(), ^{
+					UIImage *image = TGPanelShrink(TGPanelDecode(path), pixels);
+					if (!image)
+						return;
+					TGBitmapWrite(image.CGImage, tile);
+					show(image);
+				});
+			}];
+		});
+	});
 }
 
 /// Holding a sticker or a GIF opens the same kind of card the rest of the

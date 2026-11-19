@@ -261,9 +261,9 @@ static NSDictionary *cesRow(int64_t emojiId, int64_t fileId, NSString *format, i
 	XCTAssertNil([store imageForId:5151LL side:20]);
 	XCTAssertFalse([store.queued containsObject:@(5151LL)], @"no server ask for a saved picture");
 	NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:1.0];
-	while (!store.pictures[TGPictureKey(5151LL, 20)] && [deadline timeIntervalSinceNow] > 0)
+	while (![store.pictures objectForInt64Key:TGPictureCacheKey(5151LL, 20)] && [deadline timeIntervalSinceNow] > 0)
 		[[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-	XCTAssertNotNil(store.pictures[TGPictureKey(5151LL, 20)]);
+	XCTAssertNotNil([store.pictures objectForInt64Key:TGPictureCacheKey(5151LL, 20)]);
 	XCTAssertNotNil([store imageForId:5151LL side:20]);
 	[[NSFileManager defaultManager] removeItemAtPath:file error:NULL];
 }
@@ -288,12 +288,12 @@ static NSDictionary *cesRow(int64_t emojiId, int64_t fileId, NSString *format, i
 	XCTAssertNil([store imageForId:5252LL side:20.3f]);
 	[store receivePath:source forId:5252LL];
 	NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:1.0];
-	while (!store.pictures[TGPictureKey(5252LL, 20)] && [deadline timeIntervalSinceNow] > 0)
+	while (![store.pictures objectForInt64Key:TGPictureCacheKey(5252LL, 20)] && [deadline timeIntervalSinceNow] > 0)
 		[[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
 	// TDLib answers again (another batch) after the picture landed.
 	[store receivePath:source forId:5252LL];
 	[[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.2]];
-	XCTAssertNotNil(store.pictures[TGPictureKey(5252LL, 20)]);
+	XCTAssertNotNil([store.pictures objectForInt64Key:TGPictureCacheKey(5252LL, 20)]);
 	XCTAssertFalse([store.failed containsObject:@(5252LL)], @"the source was decoded a second time");
 	[NSObject cancelPreviousPerformRequestsWithTarget:store];
 	[[NSFileManager defaultManager] removeItemAtPath:file error:NULL];
@@ -313,19 +313,19 @@ static NSDictionary *cesRow(int64_t emojiId, int64_t fileId, NSString *format, i
 	[store setDecodesHeld:YES];
 	XCTAssertNil([store imageForId:5555LL side:20]);
 	[[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.2]];
-	XCTAssertNil(store.pictures[TGPictureKey(5555LL, 20)]);
+	XCTAssertNil([store.pictures objectForInt64Key:TGPictureCacheKey(5555LL, 20)]);
 	[store setDecodesHeld:NO];
 	NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:1.0];
-	while (!store.pictures[TGPictureKey(5555LL, 20)] && [deadline timeIntervalSinceNow] > 0)
+	while (![store.pictures objectForInt64Key:TGPictureCacheKey(5555LL, 20)] && [deadline timeIntervalSinceNow] > 0)
 		[[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-	XCTAssertNotNil(store.pictures[TGPictureKey(5555LL, 20)]);
+	XCTAssertNotNil([store.pictures objectForInt64Key:TGPictureCacheKey(5555LL, 20)]);
 	[[NSFileManager defaultManager] removeItemAtPath:file error:NULL];
 }
 
 /// A picture saved raw comes back with the same pixels and no decoder.
 - (void)testSavedBitmap_RoundTripsThePixels {
 	CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
-	CGContextRef ctx = CGBitmapContextCreate(NULL, 3, 2, 8, 0, space, TGBitmapInfo());
+	CGContextRef ctx = CGBitmapContextCreate(NULL, 3, 2, 8, 0, space, TGBitmapFileInfo());
 	CGContextSetRGBFillColor(ctx, 1, 0, 0, 0.5);
 	CGContextFillRect(ctx, CGRectMake(0, 0, 2, 2));
 	CGImageRef image = CGBitmapContextCreateImage(ctx);
@@ -337,8 +337,8 @@ static NSDictionary *cesRow(int64_t emojiId, int64_t fileId, NSString *format, i
 	XCTAssertEqual(CGImageGetWidth(back), (size_t)3);
 	XCTAssertEqual(CGImageGetHeight(back), (size_t)2);
 	uint32_t a[6] = {0}, b[6] = {0};
-	CGContextRef ca = CGBitmapContextCreate(a, 3, 2, 8, 12, space, TGBitmapInfo());
-	CGContextRef cb = CGBitmapContextCreate(b, 3, 2, 8, 12, space, TGBitmapInfo());
+	CGContextRef ca = CGBitmapContextCreate(a, 3, 2, 8, 12, space, TGBitmapFileInfo());
+	CGContextRef cb = CGBitmapContextCreate(b, 3, 2, 8, 12, space, TGBitmapFileInfo());
 	CGContextDrawImage(ca, CGRectMake(0, 0, 3, 2), image);
 	CGContextDrawImage(cb, CGRectMake(0, 0, 3, 2), back);
 	XCTAssertEqual(memcmp(a, b, sizeof(a)), 0);
@@ -359,7 +359,7 @@ static NSDictionary *cesRow(int64_t emojiId, int64_t fileId, NSString *format, i
 	NSString *file = TGCustomEmojiThumbnailPath(5353LL, 20);
 	XCTAssertEqualObjects(file.pathExtension, @"bgra");
 	CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
-	CGContextRef ctx = CGBitmapContextCreate(NULL, 4, 4, 8, 0, space, TGBitmapInfo());
+	CGContextRef ctx = CGBitmapContextCreate(NULL, 4, 4, 8, 0, space, TGBitmapFileInfo());
 	CGImageRef image = CGBitmapContextCreateImage(ctx);
 	XCTAssertTrue(TGBitmapWrite(image, file));
 	CGImageRelease(image);
@@ -368,10 +368,27 @@ static NSDictionary *cesRow(int64_t emojiId, int64_t fileId, NSString *format, i
 	XCTAssertNil([store imageForId:5353LL side:20]);
 	XCTAssertFalse([store.queued containsObject:@(5353LL)]);
 	NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:1.0];
-	while (!store.pictures[TGPictureKey(5353LL, 20)] && [deadline timeIntervalSinceNow] > 0)
+	while (![store.pictures objectForInt64Key:TGPictureCacheKey(5353LL, 20)] && [deadline timeIntervalSinceNow] > 0)
 		[[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-	XCTAssertNotNil(store.pictures[TGPictureKey(5353LL, 20)]);
+	XCTAssertNotNil([store.pictures objectForInt64Key:TGPictureCacheKey(5353LL, 20)]);
 	[[NSFileManager defaultManager] removeItemAtPath:file error:NULL];
+}
+
+/// A saved picture the folder listing named but the system has since
+/// cleared away: the emoji is asked of its source again, not marked failed.
+- (void)testClearedSavedPicture_IsNotAFailedEmoji {
+	TGCustomEmojiStore *store = [TGCustomEmojiStore shared];
+	NSString *file = TGCustomEmojiThumbnailPath(5454LL, 20);
+	[[NSFileManager defaultManager] removeItemAtPath:file error:NULL];
+	NSMutableSet *before = store.savedNames;
+	store.savedNames = [NSMutableSet setWithObject:file.lastPathComponent];
+	XCTAssertNil([store imageForId:5454LL side:20]);
+	NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:1.0];
+	while ([store.savedNames containsObject:file.lastPathComponent] && [deadline timeIntervalSinceNow] > 0)
+		[[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+	XCTAssertFalse([store.savedNames containsObject:file.lastPathComponent]);
+	XCTAssertFalse([store.failed containsObject:@(5454LL)], @"a cleared file is not a broken emoji");
+	store.savedNames = before;
 }
 
 /// A burst of pictures is one notification, not one per picture.

@@ -2,7 +2,7 @@
 // TGChatPageCache.m - see TGChatPageCache.h.
 //
 #import "TGChatPageCache.h"
-#import "TGBase64.h"
+#import "TGJSONCache.h"
 
 /// A first screen and a little above it. Each message is measured before the
 /// page shows: thirty long posts were 315 ms of reading on the main thread
@@ -17,47 +17,6 @@ BOOL TGChatPageIsCurrent(NSArray *page, int64_t lastMessageId) {
 	NSDictionary *newest = page.lastObject;
 	return [newest isKindOfClass:NSDictionary.class] &&
 			[newest[@"id"] longLongValue] == lastMessageId;
-}
-
-/// A message's bytes (a voice note's waveform) as {"$data": base64}: JSON has
-/// no bytes, and every voice message would have kept its chat from a page.
-static id TGChatPageToJSON(id value) {
-	if ([value isKindOfClass:NSData.class])
-		return @{ @"$data" : TGBase64Encode(value) ?: @"" };
-	if ([value isKindOfClass:NSDictionary.class]) {
-		NSMutableDictionary *out = [NSMutableDictionary dictionaryWithCapacity:[value count]];
-		[(NSDictionary *)value enumerateKeysAndObjectsUsingBlock:^(id key, id obj, BOOL *stop) {
-			out[key] = TGChatPageToJSON(obj);
-		}];
-		return out;
-	}
-	if ([value isKindOfClass:NSArray.class]) {
-		NSMutableArray *out = [NSMutableArray arrayWithCapacity:[value count]];
-		for (id obj in (NSArray *)value)
-			[out addObject:TGChatPageToJSON(obj)];
-		return out;
-	}
-	return value;
-}
-
-static id TGChatPageFromJSON(id value) {
-	if ([value isKindOfClass:NSDictionary.class]) {
-		NSDictionary *dict = value;
-		if (dict.count == 1 && [dict[@"$data"] isKindOfClass:NSString.class])
-			return TGBase64Decode(dict[@"$data"]) ?: [NSData data];
-		NSMutableDictionary *out = [NSMutableDictionary dictionaryWithCapacity:dict.count];
-		[dict enumerateKeysAndObjectsUsingBlock:^(id key, id obj, BOOL *stop) {
-			out[key] = TGChatPageFromJSON(obj);
-		}];
-		return out;
-	}
-	if ([value isKindOfClass:NSArray.class]) {
-		NSMutableArray *out = [NSMutableArray arrayWithCapacity:[value count]];
-		for (id obj in (NSArray *)value)
-			[out addObject:TGChatPageFromJSON(obj)];
-		return out;
-	}
-	return value;
 }
 
 int64_t TGChatPageNewestId(NSArray *page) {
@@ -108,19 +67,11 @@ static NSString *TGChatPagePath(int64_t chatId, int64_t accountId) {
 	NSUInteger keep = MIN(messages.count, kTGChatPageMessages);
 	NSArray *page = [messages subarrayWithRange:NSMakeRange(messages.count - keep, keep)];
 	dispatch_async(TGChatPageQueue(), ^{
-		// JSON, not a keyed archive: unarchiving thirty long posts took
-		// 380-470 ms of the main thread on the iPod touch 4. A message JSON
-		// cannot hold (a date, data) means no page for this chat.
-		id json = TGChatPageToJSON(page);
-		if (![NSJSONSerialization isValidJSONObject:json])
-			return;
-		NSData *data = [NSJSONSerialization dataWithJSONObject:json options:0 error:NULL];
-		if (!data)
-			return;
+		NSString *path = TGChatPagePath(chatId, accountId);
+		if (!TGJSONCacheWrite(page, path))
+			return;   // something in a message with no JSON form: no page
 		NSString *dir = [self directoryForAccount:accountId];
 		NSFileManager *fm = [NSFileManager defaultManager];
-		[fm createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:NULL];
-		[data writeToFile:TGChatPagePath(chatId, accountId) atomically:YES];
 
 		NSArray *names = [fm contentsOfDirectoryAtPath:dir error:NULL];
 		if (names.count <= kTGChatPagesKept)
@@ -143,11 +94,8 @@ static NSString *TGChatPagePath(int64_t chatId, int64_t accountId) {
 + (NSArray *)pageForChat:(int64_t)chatId account:(int64_t)accountId {
 	if (!chatId || !accountId)
 		return nil;
-	NSData *data = [NSData dataWithContentsOfFile:TGChatPagePath(chatId, accountId)];
-	if (!data.length)
-		return nil;
-	id page = [NSJSONSerialization JSONObjectWithData:data options:0 error:NULL];
-	return [page isKindOfClass:NSArray.class] ? TGChatPageFromJSON(page) : nil;
+	id page = TGJSONCacheRead(TGChatPagePath(chatId, accountId));
+	return [page isKindOfClass:NSArray.class] ? page : nil;
 }
 
 @end

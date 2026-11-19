@@ -165,6 +165,11 @@ static NSString *cachesPath(NSString *name) {
 		NSInteger row = [num integerValue];
 		dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
 				dispatch_get_main_queue(), ^{ [b openRow:row window:window]; });
+	} else if ([mode isEqualToString:@"panel"]) {
+		// The chat's sticker panel grid, not the chat behind it:
+		// bench/panel/8 after stickers/stickers.
+		b.duration = num.length ? [num doubleValue] : 8.0;
+		[b scrollPanelIn:window];
 	} else {
 		b.duration = num.length ? [num doubleValue] : 8.0;
 		[b scrollIn:window];
@@ -222,6 +227,28 @@ static NSString *cachesPath(NSString *name) {
 		return;
 	}
 	self.what = [NSString stringWithFormat:@"scroll-%@", NSStringFromClass(vc.class)];
+	self.direction = 1;
+	TGPerfReportMemory("bench start");
+	[self begin];
+}
+
+- (void)scrollPanelIn:(UIWindow *)window {
+	Class panelClass = NSClassFromString(@"TGEmojiPanel");
+	NSMutableArray *queue = [NSMutableArray arrayWithObject:window];
+	UIView *panel = nil;
+	while (queue.count && !panel) {
+		UIView *v = queue[0];
+		[queue removeObjectAtIndex:0];
+		if (panelClass && [v isKindOfClass:panelClass] && !v.hidden)
+			panel = v;
+		[queue addObjectsFromArray:v.subviews];
+	}
+	self.scroll = panel ? largestScroll(panel) : nil;
+	if (!self.scroll) {
+		NSLog(@"[bench] no sticker panel open");
+		return;
+	}
+	self.what = @"scroll-TGEmojiPanel";
 	self.direction = 1;
 	TGPerfReportMemory("bench start");
 	[self begin];

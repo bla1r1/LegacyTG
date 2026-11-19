@@ -7,6 +7,7 @@
 #import <TargetConditionals.h>
 #import "TGClient.h"
 #import "TGImageLruCache.h"
+#import "TGBitmapFile.h"
 #if TARGET_OS_IPHONE
 #import "TGIcons.h"
 #import "UIImage+WebP.h"
@@ -36,6 +37,10 @@ static const NSUInteger kBatchLimit = 200;
 /// each was still decoding: the WebP decoded and the PNG re-encoded on
 /// every launch, ~1 s of the iPod touch 4's one core in a chat's first scroll.
 @property (nonatomic, strong) NSMutableSet *decoding;
+/// The names in the saved pictures' folder, read once off the main thread;
+/// nil until then. Asking the disk for each picture not in memory (two
+/// stats) was 27% of the main thread scrolling the panel's custom emoji tab.
+@property (nonatomic, strong) NSMutableSet *savedNames;
 @property (nonatomic, strong) NSMutableDictionary *animations; // id -> @{@"fileId": @(fileId), @"format": fmt}
 /// id -> still picture's path from earlier runs. getCustomEmojiStickers
 /// waits seconds behind the chat load at launch; a picture already on disk
@@ -77,53 +82,6 @@ static NSString *TGCustomEmojiPngThumbnailPath(int64_t emojiId, CGFloat side) {
 			[NSString stringWithFormat:@"%lld_%.0f.png", (long long)emojiId, side]];
 }
 
-typedef struct { uint32_t magic, width, height, bytesPerRow; } TGBitmapHeader;
-static const uint32_t kTGBitmapMagic = 0x31424754; // "TGB1"
-
-static CGBitmapInfo TGBitmapInfo(void) {
-	return kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little;
-}
-
-static BOOL TGBitmapWrite(CGImageRef image, NSString *path) {
-	size_t w = image ? CGImageGetWidth(image) : 0, h = image ? CGImageGetHeight(image) : 0;
-	if (!w || !h)
-		return NO;
-	NSMutableData *data = [NSMutableData dataWithLength:sizeof(TGBitmapHeader) + w * 4 * h];
-	TGBitmapHeader *header = (TGBitmapHeader *)data.mutableBytes;
-	*header = (TGBitmapHeader){ kTGBitmapMagic, (uint32_t)w, (uint32_t)h, (uint32_t)(w * 4) };
-	CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
-	CGContextRef ctx = CGBitmapContextCreate((uint8_t *)data.mutableBytes + sizeof(TGBitmapHeader),
-			w, h, 8, w * 4, space, TGBitmapInfo());
-	CGColorSpaceRelease(space);
-	if (!ctx)
-		return NO;
-	CGContextDrawImage(ctx, CGRectMake(0, 0, w, h), image);
-	CGContextRelease(ctx);
-	return [data writeToFile:path atomically:YES];
-}
-
-/// +1 image over the file's bytes, NULL when it is not one of ours.
-static CGImageRef TGBitmapCreate(NSString *path) {
-	NSData *data = [NSData dataWithContentsOfFile:path options:NSDataReadingMappedIfSafe error:NULL];
-	if (data.length < sizeof(TGBitmapHeader))
-		return NULL;
-	TGBitmapHeader header;
-	memcpy(&header, data.bytes, sizeof(header));
-	if (header.magic != kTGBitmapMagic || !header.width || !header.height ||
-			header.bytesPerRow < header.width * 4 ||
-			data.length < sizeof(header) + (NSUInteger)header.bytesPerRow * header.height)
-		return NULL;
-	CFDataRef pixels = CFDataCreate(NULL, (const UInt8 *)data.bytes + sizeof(header),
-			(CFIndex)header.bytesPerRow * header.height);
-	CGDataProviderRef provider = CGDataProviderCreateWithCFData(pixels);
-	CFRelease(pixels);
-	CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
-	CGImageRef image = CGImageCreate(header.width, header.height, 8, 32, header.bytesPerRow, space,
-			TGBitmapInfo(), provider, NULL, false, kCGRenderingIntentDefault);
-	CGColorSpaceRelease(space);
-	CGDataProviderRelease(provider);
-	return image;
-}
 
 @implementation TGCustomEmojiStore
 
@@ -161,6 +119,13 @@ static CGImageRef TGBitmapCreate(NSString *path) {
 	// its size never needs it, so the paths can arrive a moment later.
 	__weak typeof(self) weakSelf = self;
 	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_BACKGROUND, 0), ^{
+		NSArray *names = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:TGCustomEmojiDiskCacheDir() error:NULL];
+		NSMutableSet *nameSet = [NSMutableSet setWithArray:names ?: @[]];
+		dispatch_async(dispatch_get_main_queue(), ^{
+			TGCustomEmojiStore *me = weakSelf;
+			if (me.knownPaths == known && !me.savedNames)
+				me.savedNames = nameSet;
+		});
 		NSDictionary *saved = [NSDictionary dictionaryWithContentsOfFile:TGCustomEmojiPathsFile()];
 		if (![saved isKindOfClass:NSDictionary.class])
 			return;
@@ -173,6 +138,14 @@ static CGImageRef TGBitmapCreate(NSString *path) {
 					known[key] = saved[key];
 		});
 	});
+}
+
+/// Whether a saved picture is on disk: from the folder's names once read,
+/// from the disk until then.
+- (BOOL)pictureSavedAt:(NSString *)path {
+	NSSet *names = self.savedNames;
+	return names ? [names containsObject:path.lastPathComponent]
+			: [[NSFileManager defaultManager] fileExistsAtPath:path];
 }
 
 - (void)saveKnownPaths {
@@ -239,11 +212,18 @@ static NSString *TGPictureKey(int64_t emojiId, CGFloat side) {
 	return [NSString stringWithFormat:@"%lld:%.0f", emojiId, side];
 }
 
+/// The picture cache's key. Asked for every visible cell on every scroll
+/// frame: building the "id:side" string there was 9-15% of the custom emoji
+/// tab's scroll on the iPod touch 4. Ids are random 64-bit numbers, so the
+/// mix collides no more often than the string's hash did.
+static int64_t TGPictureCacheKey(int64_t emojiId, CGFloat side) {
+	return (int64_t)((uint64_t)emojiId ^ ((uint64_t)lround(side) * 0x9E3779B97F4A7C15ULL));
+}
+
 - (UIImage *)imageForId:(int64_t)emojiId side:(CGFloat)side {
 	if (emojiId == 0 || side <= 0)
 		return nil;
-	NSString *picKey = TGPictureKey(emojiId, side);
-	UIImage *picture = self.pictures[picKey];
+	UIImage *picture = [self.pictures objectForInt64Key:TGPictureCacheKey(emojiId, side)];
 	if (picture)
 		return picture;
 
@@ -263,9 +243,9 @@ static NSString *TGPictureKey(int64_t emojiId, CGFloat side) {
 	// the main thread like any other. Read here, the PNG decoded at first
 	// draw, 4% of the first scroll of a chat on the iPod touch 4.
 	NSString *thumbFile = TGCustomEmojiThumbnailPath(emojiId, side);
-	if (![[NSFileManager defaultManager] fileExistsAtPath:thumbFile])
+	if (![self pictureSavedAt:thumbFile])
 		thumbFile = TGCustomEmojiPngThumbnailPath(emojiId, side);
-	if ([[NSFileManager defaultManager] fileExistsAtPath:thumbFile]) {
+	if ([self pictureSavedAt:thumbFile]) {
 		[self decodePath:thumbFile forId:emojiId side:side];
 		return nil;
 	}
@@ -451,7 +431,10 @@ static NSString *TGPictureKey(int64_t emojiId, CGFloat side) {
 			picture = raw ? [TGIcons decodedImage:raw fittingSize:CGSizeMake(side, side)
 											 fill:NO scale:scale] : nil;
 			if (picture)
-				TGBitmapWrite(picture.CGImage, thumbFile);
+				if (TGBitmapWrite(picture.CGImage, thumbFile)) {
+					NSString *name = thumbFile.lastPathComponent;
+					dispatch_async(dispatch_get_main_queue(), ^{ [weakSelf.savedNames addObject:name]; });
+				}
 		}
 		dispatch_async(dispatch_get_main_queue(), ^{
 			TGCustomEmojiStore *me = weakSelf;
@@ -462,10 +445,16 @@ static NSString *TGPictureKey(int64_t emojiId, CGFloat side) {
 			if (![me.wanted[@(emojiId)] count])
 				[me.wanted removeObjectForKey:@(emojiId)];
 			if (!picture) {
+				// A saved file the system cleared away: not a failed emoji,
+				// the next ask goes to its source.
+				if ([me.savedNames containsObject:path.lastPathComponent]) {
+					[me.savedNames removeObject:path.lastPathComponent];
+					return;
+				}
 				[me.failed addObject:@(emojiId)];
 				return;
 			}
-			me.pictures[TGPictureKey(emojiId, side)] = picture;
+			[me.pictures setObject:picture forInt64Key:TGPictureCacheKey(emojiId, side)];
 			[me noteLoaded:@(emojiId)];
 		});
 	});
@@ -488,10 +477,16 @@ static NSString *TGPictureKey(int64_t emojiId, CGFloat side) {
 			if (![me.wanted[@(emojiId)] count])
 				[me.wanted removeObjectForKey:@(emojiId)];
 			if (!picture) {
+				// A saved file the system cleared away: not a failed emoji,
+				// the next ask goes to its source.
+				if ([me.savedNames containsObject:path.lastPathComponent]) {
+					[me.savedNames removeObject:path.lastPathComponent];
+					return;
+				}
 				[me.failed addObject:@(emojiId)];
 				return;
 			}
-			me.pictures[TGPictureKey(emojiId, side)] = picture;
+			[me.pictures setObject:picture forInt64Key:TGPictureCacheKey(emojiId, side)];
 			[me noteLoaded:@(emojiId)];
 		});
 	});

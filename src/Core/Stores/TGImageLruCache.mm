@@ -86,6 +86,18 @@ static inline int64_t TGKeyToInt64(id key) {
 	return [self objectForKeyedSubscript:key];
 }
 
+- (UIImage *)objectForInt64Key:(int64_t)key {
+	UIImage *val = nil;
+	return _cache.get(key, val) ? val : nil;
+}
+
+- (void)setObject:(UIImage *)image forInt64Key:(int64_t)key {
+	if (image)
+		_cache.put(key, image);
+	else
+		_cache.remove(key);
+}
+
 - (void)setObject:(UIImage *)image forKey:(id)key {
 	[self setObject:image forKeyedSubscript:key];
 }

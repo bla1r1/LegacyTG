@@ -63,7 +63,8 @@
 				[self loadStickerFeed];
 			break;
 		case TGEmojiPanelTabGIFs: {
-			show(@[], nil);
+			if (self.gifQuery)
+				show(@[], nil);
 			void (^got)(NSArray *) = ^(NSArray *gifs){
 				show(gifs, weakSelf.gifQuery ? @"Nothing found" : @"GIFs you save show up here");
 			};

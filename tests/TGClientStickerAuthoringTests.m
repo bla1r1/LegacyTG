@@ -664,4 +664,61 @@ static NSDictionary *cpCustomEmojiSetRaw(id setId, NSString *title, NSArray *sti
 	XCTAssertEqualObjects(received[0][@"emojis"][0][@"customEmojiId"], @(999));
 }
 
+/// A shelf of the Stickers screen answers at once with what it last got,
+/// and only once more when Telegram's answer differs.
+static void clearShelvesS(void) {
+	NSString *caches = [NSSearchPathForDirectoriesInDomains(NSCachesDirectory,
+			NSUserDomainMask, YES) firstObject];
+	[[NSFileManager defaultManager] removeItemAtPath:
+			[caches stringByAppendingPathComponent:@"sticker-shelves"] error:NULL];
+}
+
+- (void)testShelf_AnswersAtOnceWithWhatItKnew {
+	clearShelvesS();
+	TGClient *c = S();
+	NSMutableArray *answers = [NSMutableArray array];
+	[[TGStickerStore shared] shelf:TGStickerShelfFavorite completion:^(NSArray *items){ [answers addObject:items]; }];
+	XCTAssertEqual(answers.count, (NSUInteger)0, @"nothing known yet");
+	NSDictionary *sticker = @{@"@type" : @"sticker", @"id" : @(9), @"sticker" : @{@"@type" : @"file", @"id" : @(9)}};
+	answerS(c, @{@"@type" : @"stickers", @"stickers" : @[sticker]});
+	XCTAssertEqual(answers.count, (NSUInteger)1);
+
+	[answers removeAllObjects];
+	[[TGStickerStore shared] shelf:TGStickerShelfFavorite completion:^(NSArray *items){ [answers addObject:items]; }];
+	XCTAssertEqual(answers.count, (NSUInteger)1, @"what it knew, before the server answers");
+	answerS(c, @{@"@type" : @"stickers", @"stickers" : @[sticker]});
+	XCTAssertEqual(answers.count, (NSUInteger)1, @"the same answer is not shown twice");
+	answerS(c, @{@"@type" : @"stickers", @"stickers" : @[]});
+	XCTAssertEqual(answers.count, (NSUInteger)1, @"one request, one answer");
+	clearShelvesS();
+}
+
+/// A trending pack says how many stickers it has: TDLib calls it "size".
+- (void)testTrendingPack_CountsItsStickers {
+	TGClient *c = S();
+	__block NSArray *sets = nil;
+	[[TGStickerStore shared] trendingStickerSetsWithCompletion:^(NSArray *got){ sets = got; }];
+	answerS(c, @{@"@type" : @"trendingStickerSets", @"sets" : @[
+		@{@"@type" : @"stickerSetInfo", @"id" : @(5), @"title" : @"Duck", @"size" : @(24)}]});
+	XCTAssertEqual([sets.firstObject[@"count"] integerValue], 24);
+}
+
+- (void)testSavedAnimations_AnswersAtOnceWithWhatItKnew {
+	clearShelvesS();
+	TGClient *c = S();
+	NSMutableArray *answers = [NSMutableArray array];
+	[[TGStickerStore shared] savedAnimationsWithCompletion:^(NSArray *items){ [answers addObject:items]; }];
+	XCTAssertEqual(answers.count, (NSUInteger)0, @"nothing known yet");
+	NSDictionary *anim = @{@"@type" : @"animation", @"animation" : @{@"@type" : @"file", @"id" : @(42)}};
+	answerS(c, @{@"@type" : @"animations", @"animations" : @[anim]});
+	XCTAssertEqual(answers.count, (NSUInteger)1);
+
+	[answers removeAllObjects];
+	[[TGStickerStore shared] savedAnimationsWithCompletion:^(NSArray *items){ [answers addObject:items]; }];
+	XCTAssertEqual(answers.count, (NSUInteger)1, @"what it knew, before the server answers");
+	answerS(c, @{@"@type" : @"animations", @"animations" : @[anim]});
+	XCTAssertEqual(answers.count, (NSUInteger)1, @"the same answer is not shown twice");
+	clearShelvesS();
+}
+
 @end

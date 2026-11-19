@@ -58,7 +58,10 @@
 	// has Favourites and Recently Used, because the sets are not here yet.
 	if (tab == TGEmojiPanelTabStickers){
 		__weak typeof(self) weakSelf = self;
-		[[TGStickerStore shared] installedStickerSetsWithCompletion:^(NSArray *sets){
+		// What the panel showed last comes at once and the server's answer
+		// after it, only if it differs: on the iPod touch 4 the tab read
+		// "None" for 2-3 s on every open while TDLib answered.
+		[[TGStickerStore shared] shelf:TGStickerShelfInstalled completion:^(NSArray *sets){
 			TGEmojiPanel *me = weakSelf;
 			if (!me || me.tab != TGEmojiPanelTabStickers)
 				return;

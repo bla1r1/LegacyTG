@@ -12,12 +12,16 @@
 #import "TGTheme.h"
 #import "TGRows.h"
 
+/// How long the lists shown are taken as current when the screen comes back.
+static const double kTGStickerPacksRefreshSeconds = 30.0;
+
 @implementation TGStickerPacksViewController {
 	NSArray *_ownedSets;
 	NSArray *_trendingSets;
 	NSArray *_archivedSets;
 	NSArray *_recentStickers;
 	NSArray *_favoriteStickers;
+	double _loadedAt;
 }
 
 - (void)viewDidLoad {
@@ -35,6 +39,13 @@
 
 - (void)viewWillAppear:(BOOL)animated {
 	[super viewWillAppear:animated];
+	// Back from a pack the lists are as they were: asking again queued five
+	// server round trips behind the last five (8 s on the iPod touch 4). A
+	// change made here (archive, install) reloads its own list.
+	double now = CACurrentMediaTime();
+	if (_loadedAt > 0 && now - _loadedAt < kTGStickerPacksRefreshSeconds)
+		return;
+	_loadedAt = now;
 	[self reloadOwnedPacks];
 	[self reloadTrending];
 	[self reloadArchived];
@@ -45,7 +56,7 @@
 
 - (void)reloadOwnedPacks {
 	__weak typeof(self) weakSelf = self;
-	[[TGStickerStore shared] ownedStickerSetsWithCompletion:^(NSArray *sets){
+	[[TGStickerStore shared] shelf:TGStickerShelfOwned completion:^(NSArray *sets){
 		TGStickerPacksViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -59,7 +70,7 @@
 /// moment the rows are drawn rather than at app launch.
 - (void)reloadTrending {
 	__weak typeof(self) weakSelf = self;
-	[[TGStickerStore shared] trendingStickerSetsWithCompletion:^(NSArray *sets){
+	[[TGStickerStore shared] shelf:TGStickerShelfTrending completion:^(NSArray *sets){
 		TGStickerPacksViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -77,7 +88,7 @@
 
 - (void)reloadArchived {
 	__weak typeof(self) weakSelf = self;
-	[[TGStickerStore shared] archivedStickerSetsWithCompletion:^(NSArray *sets){
+	[[TGStickerStore shared] shelf:TGStickerShelfArchived completion:^(NSArray *sets){
 		TGStickerPacksViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -88,14 +99,14 @@
 
 - (void)reloadStickerShelves {
 	__weak typeof(self) weakSelf = self;
-	[[TGStickerStore shared] recentStickersWithCompletion:^(NSArray *stickers){
+	[[TGStickerStore shared] shelf:TGStickerShelfRecent completion:^(NSArray *stickers){
 		TGStickerPacksViewController *me = weakSelf;
 		if (!me)
 			return;
 		_recentStickers = stickers ?: @[];
 		[me rebuildSections];
 	}];
-	[[TGStickerStore shared] favoriteStickersWithCompletion:^(NSArray *stickers){
+	[[TGStickerStore shared] shelf:TGStickerShelfFavorite completion:^(NSArray *stickers){
 		TGStickerPacksViewController *me = weakSelf;
 		if (!me)
 			return;

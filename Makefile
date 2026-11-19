@@ -413,6 +413,8 @@ APP_SRC_M := \
 	src/Core/Stores/TGMessageStore.m \
 	src/Core/Stores/TGMessageStore+History.m \
 	src/Core/Stores/TGChatPageCache.m \
+	src/Core/Support/TGJSONCache.m \
+	src/Core/Support/TGBitmapFile.m \
 	src/Core/Stores/TGSettingsStore.m \
 	src/Core/Stores/TGSettingsStore+Options.m \
 	src/Core/Stores/TGSettingsStore+Autosave.m \

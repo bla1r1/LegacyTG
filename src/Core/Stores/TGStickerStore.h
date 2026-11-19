@@ -10,6 +10,17 @@
 #import <Foundation/Foundation.h>
 #import "TGDownloadPriority.h"
 
+/// The lists Settings > Stickers shows.
+typedef NS_ENUM(NSInteger, TGStickerShelf) {
+	TGStickerShelfOwned = 0,
+	TGStickerShelfTrending,
+	TGStickerShelfArchived,
+	TGStickerShelfRecent,
+	TGStickerShelfFavorite,
+	/// The installed packs, which the chat's sticker panel walks.
+	TGStickerShelfInstalled,
+};
+
 @interface TGStickerStore : NSObject
 
 + (TGStickerStore *)shared;
@@ -33,6 +44,15 @@ extern NSString *const TGStickerListsChangedNotification;
 /// Stickers of one set; `setId` is the set's NSNumber id.
 - (void)stickersInSet:(id)setId completion:(void (^)(NSArray *stickers))completion;
 - (void)favoriteStickersWithCompletion:(void (^)(NSArray *stickers))completion;
+/// A shelf of the Stickers screen, answered at once with what was last
+/// fetched (memory, then disk) and again when Telegram's answer differs.
+/// Each list is a server round trip TDLib does not keep: the screen stood
+/// empty 3.6-8 s on every open on the iPod touch 4. Main thread.
+- (void)shelf:(TGStickerShelf)shelf completion:(void (^)(NSArray *items))completion;
+/// A pack's stickers the same way: at once with what was last fetched, and
+/// again when it differs. The panel walks every installed pack in turn, one
+/// round trip each, before its feed is whole.
+- (void)stickersInSetKept:(id)setId completion:(void (^)(NSArray *stickers))completion;
 - (void)recentStickersWithCompletion:(void (^)(NSArray *stickers))completion;
 /// Stickers for an emoji, out of the installed sets.
 - (void)stickersForEmoji:(NSString *)emoji
@@ -57,6 +77,7 @@ extern NSString *const TGStickerListsChangedNotification;
 					   completion:(void (^)(NSArray *sets))completion;
 /// Saved GIFs, shaped as "fileId", "width", "height", "duration", "thumbId".
 - (void)savedAnimationsWithCompletion:(void (^)(NSArray *animations))completion;
+- (void)fetchSavedAnimationsWithCompletion:(void (^)(NSArray *animations))completion;
 /// GIF search; the @gif bot answers per chat.
 - (void)searchAnimations:(NSString *)query
 				  inChat:(int64_t)chatId

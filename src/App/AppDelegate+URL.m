@@ -49,6 +49,7 @@ static const CGFloat kIconDumpSide = 52.0f;
 #import "TGForwardPicker.h"
 #import "TGPrivacyRuleViewController.h"
 #import "TGStickerEditorViewController.h"
+#import "TGStickerPacksViewController.h"
 #import "TGProfilePhotosViewController.h"
 #import "TGProfileStore.h"
 #include <dlfcn.h>
@@ -338,6 +339,8 @@ static NSUInteger TGChatsIndex(UITabBarController *tabs) {
 				int64_t userId = value.longLongValue ?:
 						[[TGProfileStore shared].me[@"id"] longLongValue];
 				screen = [[TGProfilePhotosViewController alloc] initWithUserId:userId];
+			} else if ([name isEqualToString:@"stickerpacks"]){
+				screen = [[TGStickerPacksViewController alloc] init];
 			} else if ([name isEqualToString:@"stickereditor"]){
 				TGStickerEditorViewController *editor = [[TGStickerEditorViewController alloc] init];
 				editor.creating = YES;

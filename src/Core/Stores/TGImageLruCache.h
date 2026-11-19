@@ -21,6 +21,11 @@
 - (void)removeObjectForKey:(id)key;
 - (void)removeAllObjects;
 
+/// The key the object forms hash to anyway, for a lookup made per cell per
+/// scroll frame where building an NSString key costs more than the lookup.
+- (id)objectForInt64Key:(int64_t)key;
+- (void)setObject:(id)image forInt64Key:(int64_t)key;
+
 @property (nonatomic, readonly) NSUInteger count;
 @property (nonatomic, readonly) NSUInteger capacity;
 

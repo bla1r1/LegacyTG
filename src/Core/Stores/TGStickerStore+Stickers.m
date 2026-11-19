@@ -107,7 +107,9 @@ static NSArray *TGSFlattenStickerSets(NSArray *sets) {
 		NSMutableDictionary *info = [NSMutableDictionary dictionary];
 		info[@"id"] = set[@"id"];
 		info[@"title"] = set[@"title"] ?: @"";
-		info[@"count"] = set[@"count"] ?: @(0);
+		// stickerSetInfo says "size"; "count" is what older fixtures carry.
+		// Read as count only, every trending pack said "0 stickers".
+		info[@"count"] = set[@"count"] ?: (set[@"size"] ?: @(0));
 		info[@"installed"] = @([set[@"is_installed"] boolValue]);
 		info[@"archived"] = @([set[@"is_archived"] boolValue]);
 		info[@"owned"] = @([set[@"is_owned"] boolValue]);
@@ -357,7 +359,7 @@ static NSArray *TGSFlattenStickerSets(NSArray *sets) {
 	}];
 }
 
-- (void)savedAnimationsWithCompletion:(void (^)(NSArray *))completion {
+- (void)fetchSavedAnimationsWithCompletion:(void (^)(NSArray *))completion {
 	[[TGClient shared] request:@{@"@type" : @"getSavedAnimations"}
 	   completion:^(NSDictionary *result){
 		NSMutableArray *out = [NSMutableArray array];
@@ -377,16 +379,11 @@ static NSArray *TGSFlattenStickerSets(NSArray *sets) {
 				  inChat:(int64_t)chatId
 			  completion:(void (^)(NSArray *))completion {
 	void (^fail)(void) = ^{ if (completion) completion(@[]); };
-	// The provider is Telegram's to move; updateAnimationSearchParameters is
-	// what says where, and "gif" is only the name it starts at.
 	NSString *provider = [TGClient shared].animationSearchProvider;
-	[[TGClient shared] request:@{@"@type" : @"searchPublicChat", @"username" : provider}
-	   completion:^(NSDictionary *bot){
-		NSNumber *botUserId = bot[@"type"][@"user_id"];
-		if (!botUserId){
-			fail();
-			return;
-		}
+	static NSString *cachedProvider;
+	static NSNumber *cachedBotUserId;
+
+	void (^queryWithBot)(NSNumber *) = ^(NSNumber *botUserId) {
 		[[TGClient shared] request:@{@"@type"       : @"getInlineQueryResults",
 						@"bot_user_id" : botUserId,
 						@"chat_id"     : @(chatId),
@@ -408,6 +405,23 @@ static NSArray *TGSFlattenStickerSets(NSArray *sets) {
 			}
 			if (completion) completion(out);
 		}];
+	};
+
+	if (cachedBotUserId && [cachedProvider isEqualToString:provider]) {
+		queryWithBot(cachedBotUserId);
+		return;
+	}
+
+	[[TGClient shared] request:@{@"@type" : @"searchPublicChat", @"username" : provider}
+	   completion:^(NSDictionary *bot){
+		NSNumber *botUserId = bot[@"type"][@"user_id"];
+		if (!botUserId){
+			fail();
+			return;
+		}
+		cachedProvider = provider;
+		cachedBotUserId = botUserId;
+		queryWithBot(botUserId);
 	}];
 }
 

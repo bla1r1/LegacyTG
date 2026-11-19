@@ -261,8 +261,14 @@ static NSUInteger TGEmojiPanelFirstVisibleIndex(NSArray *frames, CGFloat minY) {
 		tile.hidden = NO;
 		NSDictionary *dict = [item isKindOfClass:NSDictionary.class] ? (NSDictionary *)item : nil;
 		UIImage *cached = dict[@"thumbId"] ? [TGPanelImageCache() objectForKey:dict[@"thumbId"]] : nil;
-		if (!cached && dict[@"minithumbnail"])
-			cached = [UIImage imageWithData:dict[@"minithumbnail"]];
+		if (!cached) {
+			cached = dict[@"miniImage"];
+			if (!cached && dict[@"minithumbnail"]) {
+				cached = [UIImage imageWithData:dict[@"minithumbnail"]];
+				if (cached && [dict isKindOfClass:NSMutableDictionary.class])
+					((NSMutableDictionary *)dict)[@"miniImage"] = cached;
+			}
+		}
 		tile.image = cached;
 	}
 	self.cells[@(index)] = button;

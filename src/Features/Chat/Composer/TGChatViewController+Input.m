@@ -1207,6 +1207,8 @@ static NSInteger const kTGRepeatPeriods[] = {0, 86400, 604800, 2592000};
 		tab = TGEmojiPanelTabStickers;
 	else if ([name isEqualToString:@"gifs"])
 		tab = TGEmojiPanelTabGIFs;
+	else if ([name isEqualToString:@"custom"])
+		tab = TGEmojiPanelTabCustomEmoji;
 	[self.stickerPanel selectTab:tab];
 }
 

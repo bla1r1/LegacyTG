@@ -273,7 +273,10 @@ static NSArray *TGPackSearchTiles(NSArray *sets) {
 		TGEmojiPanel *me = weakSelf;
 		if (!me || me.generation != generation || slot >= slots.count)
 			return;
-		slots[slot] = stickers ?: @[];
+		// A plain array, made once: a TGStickerPack builds a dictionary on
+		// every read, and the feed below is rebuilt from every slot each
+		// time one lands - hundreds of them per pack, 0.6 s of one frame.
+		slots[slot] = stickers ? [NSArray arrayWithArray:stickers] : @[];
 
 		NSMutableArray *flat = [NSMutableArray array];
 		NSMutableArray *sections = [NSMutableArray array];
@@ -301,17 +304,23 @@ static NSArray *TGPackSearchTiles(NSArray *sets) {
 			next = nil;
 			return;
 		}
+		// A kept list answers twice when the server's answer differs from
+		// what was saved: both fill the slot, the walk moves on once.
+		__block BOOL walked = NO;
 		void (^got)(NSArray *) = ^(NSArray *stickers){
 			fill(slot, stickers);
+			if (walked)
+				return;
+			walked = YES;
 			if (next)
 				next(slot + 1);
 		};
 		if (slot == 0)
-			[[TGStickerStore shared] favoriteStickersWithCompletion:got];
+			[[TGStickerStore shared] shelf:TGStickerShelfFavorite completion:got];
 		else if (slot == 1)
-			[[TGStickerStore shared] recentStickersWithCompletion:got];
+			[[TGStickerStore shared] shelf:TGStickerShelfRecent completion:got];
 		else
-			[[TGStickerStore shared] stickersInSet:me.stickerSets[slot - 2][@"id"] completion:got];
+			[[TGStickerStore shared] stickersInSetKept:me.stickerSets[slot - 2][@"id"] completion:got];
 	};
 	next(0);
 }
