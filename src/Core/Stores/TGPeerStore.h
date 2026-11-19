@@ -78,4 +78,7 @@ extern NSString *const TGPeerStoreChangedNotification;
 /// running account changes, because the same id is another person after it.
 - (void)reset;
 
+/// Drops decoded in-memory avatar bitmaps to reduce RAM footprint in background.
+- (void)clearMemoryCaches;
+
 @end

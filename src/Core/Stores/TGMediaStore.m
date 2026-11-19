@@ -151,6 +151,10 @@ NSString *value = name ?: @"";
 	[_buffers removeAllObjects];
 }
 
+- (void)clearMemoryCaches {
+	[_buffers removeAllObjects];
+}
+
 - (NSData *)cachedBufferForFileId:(NSInteger)fileId {
 	return [_buffers objectForKey:@(fileId)];
 }

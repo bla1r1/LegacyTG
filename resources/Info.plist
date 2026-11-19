@@ -50,6 +50,10 @@
 	</dict>
 	<key>CFBundleIdentifier</key>
 	<string>org.legacy.itg</string>
+	<key>SBAppTags</key>
+	<array>
+		<string>SBInternalAppTag</string>
+	</array>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>

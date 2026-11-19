@@ -521,6 +521,7 @@ APP_SRC_M := \
 	src/Features/ChatList/TGChatListViewController+Search.m \
 	src/Features/Chat/Views/TGRecordBar.m \
 	src/Core/Platform/TGGhostMode.m \
+	src/Core/Platform/TGBackgroundKeeper.m \
 	src/Core/Stores/TGPlaybackQueue.m \
 	src/Core/Model/TGProfileTabs.m \
 	src/Core/Platform/TGPasscode.m \

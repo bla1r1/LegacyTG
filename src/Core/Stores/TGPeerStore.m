@@ -10,6 +10,7 @@
 #import "TGClient.h"
 #import "TGClient+Peers.h"
 #import "TGImageLruCache.h"
+#import "TGDevice.h"
 #import "TGStatusText.h"
 #import "TGDownloadPriority.h"
 #import <math.h>
@@ -330,7 +331,9 @@ static void (^TGPeerStoreAvatarLoader)(NSInteger fileId,
 	self = [super init];
 	if (!self)
 		return nil;
-	_photos = [[TGImageLruCache alloc] initWithCapacity:120];
+	TGDeviceTier tier = [TGDevice tier];
+	_photos = [[TGImageLruCache alloc] initWithCapacity:
+			tier == TGDeviceTierVintage ? 30 : tier == TGDeviceTierLegacy ? 60 : 120];
 	_photoFileIds = [NSMutableDictionary dictionary];
 	_lookupWaiters = [NSMutableDictionary dictionary];
 	_downloadWaiters = [NSMutableDictionary dictionary];
@@ -560,6 +563,10 @@ static void (^TGPeerStoreAvatarLoader)(NSInteger fileId,
 	[_downloadWaiters removeAllObjects];
 	[_memberCounts removeAllObjects];
 	[_changedPeers removeAllObjects];
+}
+
+- (void)clearMemoryCaches {
+	[_photos removeAllObjects];
 }
 
 #pragma mark - coalesced change post

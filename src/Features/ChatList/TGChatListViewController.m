@@ -23,4 +23,8 @@
 	}
 }
 
+- (void)clearMemoryCaches {
+	[self.avatars removeAllObjects];
+}
+
 @end

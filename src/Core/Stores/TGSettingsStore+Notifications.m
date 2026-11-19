@@ -89,6 +89,17 @@ static NSString *TGScopeType(NSString *scope) {
 	}];
 }
 
+static NSString *const TGBackgroundKeepAliveKey = @"TGBackgroundKeepAliveEnabled";
+
+- (BOOL)keepAliveEnabled {
+	return [[NSUserDefaults standardUserDefaults] boolForKey:TGBackgroundKeepAliveKey];
+}
+
+- (void)setKeepAliveEnabled:(BOOL)enabled {
+	[[NSUserDefaults standardUserDefaults] setBool:enabled forKey:TGBackgroundKeepAliveKey];
+	[[NSUserDefaults standardUserDefaults] synchronize];
+}
+
 - (void)resetAllNotificationSettings {
 	[[TGClient shared] send:@{@"@type" : @"resetAllNotificationSettings"}];
 }

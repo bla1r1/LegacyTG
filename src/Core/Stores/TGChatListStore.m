@@ -7,6 +7,7 @@
 #import "TGMessageStore.h"
 #import "TGLocalization.h"
 #import "TGImageLruCache.h"
+#import "TGDevice.h"
 #import "TGDownloadStore.h"
 
 NSString *const TGChatListStoreChangedNotification = @"TGChatListStoreChangedNotification";
@@ -71,7 +72,9 @@ NSString *const TGChatListPreviewImageLoadedNotification = @"TGChatListPreviewIm
 	[[NSNotificationCenter defaultCenter] addObserver:self
 			selector:@selector(unreadTotalChanged:)
 				name:TGUnreadTotalChangedNotification object:nil];
-	_previewImages = [[TGImageLruCache alloc] initWithCapacity:80];
+	TGDeviceTier tier = [TGDevice tier];
+	_previewImages = [[TGImageLruCache alloc] initWithCapacity:
+			tier == TGDeviceTierVintage ? 20 : tier == TGDeviceTierLegacy ? 40 : 80];
 	_previewRequests = [NSMutableSet set];
 	// Keyed by TDLib file id, and every account's database numbers its files
 	// from the start: the same id is another picture after a switch.
@@ -84,6 +87,10 @@ NSString *const TGChatListPreviewImageLoadedNotification = @"TGChatListPreviewIm
 - (void)accountDidSwitch:(NSNotification *)note {
 	[_previewImages removeAllObjects];
 	[_previewRequests removeAllObjects];
+}
+
+- (void)clearMemoryCaches {
+	[_previewImages removeAllObjects];
 }
 
 - (void)unreadTotalChanged:(NSNotification *)note {

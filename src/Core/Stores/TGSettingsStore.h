@@ -71,6 +71,8 @@
 #pragma mark - Notifications
 @interface TGSettingsStore (Notifications)
 
+@property (nonatomic, assign) BOOL keepAliveEnabled;
+
 	- (void)notificationsMutedForScope:(NSString *)scope completion:(void (^)(BOOL muted))completion;
 	- (void)setScope:(NSString *)scope muted:(BOOL)muted;
 	- (void)notificationPreviewForScope:(NSString *)scope completion:(void (^)(BOOL show))completion;

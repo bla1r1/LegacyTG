@@ -39,6 +39,9 @@ typedef const char *(*td_exec_fn)(void *client, const char *request);
 /// Marks the receive loop finished when TDLib reports authorization closed.
 - (void)markClosed;
 
+/// Trims internal TDLib memory (e.g. SQLite page caches) under memory pressure or background.
+- (void)trimMemory;
+
 @property (nonatomic, readonly) BOOL available;
 @property (nonatomic, readonly) BOOL running;
 @property (nonatomic, readonly) NSMutableArray *outbox;

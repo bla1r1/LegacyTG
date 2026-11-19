@@ -121,6 +121,21 @@ static NSString *TGNotificationWhen(NSNumber *stamp) {
 		}),
 	];
 
+	NSArray *keepAliveRows = @[
+		TGSwitchRow(@"Background Connection", [TGSettingsStore shared].keepAliveEnabled, ^(BOOL on){
+			[TGSettingsStore shared].keepAliveEnabled = on;
+			if (on) {
+				UIApplication *app = [UIApplication sharedApplication];
+				if ([app respondsToSelector:@selector(registerUserNotificationSettings:)]) {
+					UIUserNotificationType types = UIUserNotificationTypeAlert | UIUserNotificationTypeBadge | UIUserNotificationTypeSound;
+					UIUserNotificationSettings *settings = [UIUserNotificationSettings settingsForTypes:types categories:nil];
+					[app registerUserNotificationSettings:settings];
+				}
+			}
+			[weakSelf rebuild];
+		}),
+	];
+
 	NSUInteger activeGroups = [TGSettingsStore shared].activeNotificationGroups.count;
 	(void)activeGroups;
 
@@ -128,6 +143,9 @@ static NSString *TGNotificationWhen(NSNumber *stamp) {
 		TGSection(@"MESSAGE NOTIFICATIONS", nil, show),
 		TGSection(@"IN-APP NOTIFICATIONS", nil, inAppRows),
 		TGSection(@"REACTIONS", nil, reactionRows),
+		TGSection(@"BACKGROUND NOTIFICATIONS",
+				@"Keeps a minimal connection in background for notifications without APNs certificate.",
+				keepAliveRows),
 
 		TGSection(nil,
 				@"Undo all custom notification settings for your contacts, groups and channels.",

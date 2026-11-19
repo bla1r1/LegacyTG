@@ -34,4 +34,7 @@ extern NSString *const TGCustomEmojiLoadedNotification;
 /// Forgets every picture and pending request, for an account switch.
 - (void)reset;
 
+/// Drops decoded in-memory emoji bitmaps to reduce RAM footprint in background.
+- (void)clearMemoryCaches;
+
 @end

@@ -19,8 +19,29 @@ typedef NSString *AVAudioSessionMode;
 typedef NSUInteger AVAudioSessionCategoryOptions;
 
 extern AVAudioSessionCategory const AVAudioSessionCategoryPlayAndRecord;
+extern AVAudioSessionCategory const AVAudioSessionCategoryPlayback;
 extern AVAudioSessionCategoryOptions const AVAudioSessionCategoryOptionAllowBluetooth;
+extern AVAudioSessionCategoryOptions const AVAudioSessionCategoryOptionMixWithOthers;
 extern AVAudioSessionMode const AVAudioSessionModeVoiceChat;
+extern NSString * const AVAudioSessionInterruptionNotification;
+extern NSString * const AVAudioSessionInterruptionTypeKey;
+typedef NS_ENUM(NSUInteger, AVAudioSessionInterruptionType) {
+	AVAudioSessionInterruptionTypeBegan = 1,
+	AVAudioSessionInterruptionTypeEnded = 0,
+};
+
+@protocol AVAudioPlayerDelegate <NSObject>
+@end
+
+@interface AVAudioPlayer : NSObject
+@property (nonatomic, assign) NSInteger numberOfLoops;
+@property (nonatomic, readonly, getter=isPlaying) BOOL playing;
+@property (nonatomic, weak) id<AVAudioPlayerDelegate> delegate;
+- (instancetype)initWithData:(NSData *)data error:(NSError **)outError;
+- (BOOL)prepareToPlay;
+- (BOOL)play;
+- (void)stop;
+@end
 
 typedef NS_ENUM(NSUInteger, AVAudioSessionPortOverride) {
 	AVAudioSessionPortOverrideNone = 0,
@@ -112,9 +133,12 @@ typedef NS_ENUM(NSInteger, AVCaptureVideoOrientation) {
 
 + (AVAudioSession *)sharedInstance;
 
+@property (nonatomic, copy) AVAudioSessionCategory category;
+
 - (BOOL)setCategory:(AVAudioSessionCategory)category
 		withOptions:(AVAudioSessionCategoryOptions)options
 			  error:(NSError **)outError;
+- (BOOL)setCategory:(AVAudioSessionCategory)category error:(NSError **)outError;
 - (BOOL)setMode:(AVAudioSessionMode)mode error:(NSError **)outError;
 - (BOOL)setActive:(BOOL)active error:(NSError **)outError;
 - (BOOL)overrideOutputAudioPort:(AVAudioSessionPortOverride)portOverride

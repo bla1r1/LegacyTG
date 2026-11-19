@@ -98,6 +98,10 @@ static NSString *TGCustomEmojiPngThumbnailPath(int64_t emojiId, CGFloat side) {
 	return self;
 }
 
+- (void)clearMemoryCaches {
+	[self.pictures removeAllObjects];
+}
+
 - (void)reset {
 	self.pictures = [[TGImageLruCache alloc] initWithCapacity:kCachedPictures];
 	self.paths = [NSMutableDictionary dictionary];

@@ -84,15 +84,17 @@ static char kTGTableContentSizeContext;
 	TGPerfReport("chat vc", "title", vcStart, 50.0);
 	self.streamStore = [[TGMessageStreamStore alloc] init];
 	self.messages = @[];
-	self.layoutCache = [[TGMessageLayoutCache alloc] initWithCapacity:500];
+	TGDeviceTier tier = [TGDevice tier];
+	self.layoutCache = [[TGMessageLayoutCache alloc] initWithCapacity:
+			tier == TGDeviceTierVintage ? 80 : 500];
 	self.gifPaths = [NSMutableDictionary dictionary];
 	self.gifsRequested = [NSMutableSet set];
-	self.senderAvatars = [[TGImageLruCache alloc] initWithCapacity:120];
+	self.senderAvatars = [[TGImageLruCache alloc] initWithCapacity:
+			tier == TGDeviceTierVintage ? 24 : tier == TGDeviceTierLegacy ? 60 : 120];
 	self.senderAvatarsRequested = [NSMutableSet set];
 	// About 1.1 MB a photo (a 400 px decode plus its rounded copy): forty of
 	// them were 45 MB, past where jetsam kills the app on a 256 MB phone. Rows
 	// fetch an evicted photo again, so a small window is enough.
-	TGDeviceTier tier = [TGDevice tier];
 	self.images = [[TGImageLruCache alloc] initWithCapacity:
 			tier == TGDeviceTierVintage ? 12 : tier == TGDeviceTierLegacy ? 24 : 40];
 	self.imagesRequested = [NSMutableSet set];
@@ -100,7 +102,8 @@ static char kTGTableContentSizeContext;
 			name:UIApplicationDidReceiveMemoryWarningNotification object:nil];
 	self.lottiePaths = [NSMutableDictionary dictionary];
 	self.playedAnimations = [NSMutableSet set];
-	self.maps = [[TGImageLruCache alloc] initWithCapacity:20];
+	self.maps = [[TGImageLruCache alloc] initWithCapacity:
+			tier == TGDeviceTierVintage ? 5 : 20];
 	self.mapsRequested = [NSMutableSet set];
 	self.quotes = [NSMutableDictionary dictionary];
 	self.quotesRequested = [NSMutableSet set];

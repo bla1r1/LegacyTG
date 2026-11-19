@@ -4,4 +4,5 @@
 #import <UIKit/UIKit.h>
 
 @interface TGChatListViewController : UITableViewController
+- (void)clearMemoryCaches;
 @end

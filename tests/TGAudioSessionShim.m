@@ -6,8 +6,25 @@
 #import <AVFoundation/AVFoundation.h>
 
 AVAudioSessionCategory const AVAudioSessionCategoryPlayAndRecord = @"AVAudioSessionCategoryPlayAndRecord";
+AVAudioSessionCategory const AVAudioSessionCategoryPlayback = @"AVAudioSessionCategoryPlayback";
 AVAudioSessionCategoryOptions const AVAudioSessionCategoryOptionAllowBluetooth = 1 << 2;
+AVAudioSessionCategoryOptions const AVAudioSessionCategoryOptionMixWithOthers = 1 << 0;
 AVAudioSessionMode const AVAudioSessionModeVoiceChat = @"AVAudioSessionModeVoiceChat";
+NSString * const AVAudioSessionInterruptionNotification = @"AVAudioSessionInterruptionNotification";
+NSString * const AVAudioSessionInterruptionTypeKey = @"AVAudioSessionInterruptionTypeKey";
+
+@implementation AVAudioPlayer {
+	BOOL _playing;
+}
+- (instancetype)initWithData:(NSData *)data error:(NSError **)outError {
+	if (outError) *outError = nil;
+	return [super init];
+}
+- (BOOL)prepareToPlay { return YES; }
+- (BOOL)play { _playing = YES; return YES; }
+- (void)stop { _playing = NO; }
+- (BOOL)isPlaying { return _playing; }
+@end
 
 AVCaptureSessionPreset const AVCaptureSessionPreset640x480 = @"AVCaptureSessionPreset640x480";
 AVCaptureSessionPreset const AVCaptureSessionPreset352x288 = @"AVCaptureSessionPreset352x288";
@@ -77,6 +94,13 @@ NSString * const AVMediaTypeVideo = @"vide";
 - (BOOL)setCategory:(AVAudioSessionCategory)category
 		withOptions:(AVAudioSessionCategoryOptions)options
 			  error:(NSError **)outError {
+	_category = [category copy];
+	if (outError) *outError = nil;
+	return YES;
+}
+
+- (BOOL)setCategory:(AVAudioSessionCategory)category error:(NSError **)outError {
+	_category = [category copy];
 	if (outError) *outError = nil;
 	return YES;
 }

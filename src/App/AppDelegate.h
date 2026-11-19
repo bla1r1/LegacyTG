@@ -20,6 +20,7 @@
 
 + (AppDelegate *)sharedDelegate;
 + (void)openChatWithId:(int64_t)chatId;
++ (void)purgeMemoryCaches;
 
 - (void)showMainUI;
 - (void)showLoginUI;

@@ -261,6 +261,7 @@ CLIENT_OBJC_SRCS := \
     src/Features/Contacts/TGContactSort.m \
     src/Features/Groups/Core/TGGroupLogic.m \
     src/Core/Platform/TGGhostMode.m \
+    src/Core/Platform/TGBackgroundKeeper.m \
     src/Core/Client/TGClient+Business.m \
     src/Core/Client/Features/TGClient+FeatureSupport.m \
     src/Core/Client/Features/TGClient+Communities.m \
@@ -383,6 +384,7 @@ TEST_HELPER_SRCS := \
 # Stand-ins around the real TGClient for the second binary (see
 # TGClientTestSupport.m).
 CLIENT_HELPER_SRCS := \
+    $(TESTS)/TGAudioSessionShim.m \
     $(TESTS)/shim/UIKit/UIKitShim.m \
     $(TESTS)/TGClientTestSupport.m
 
@@ -457,6 +459,7 @@ CLIENT_TEST_SRCS := \
     $(TESTS)/TGClientEmojiReactionsTests.m \
     $(TESTS)/TGClientAppearanceDiagnosticsTests.m \
     $(TESTS)/TGClientMiscTests.m \
+    $(TESTS)/TGBackgroundKeeperTests.m \
     $(TESTS)/TGClientStoriesTests.m \
     $(TESTS)/TGClientTier2Tests.m \
     $(TESTS)/TGClientTier3AuditTests.m \

@@ -40,6 +40,17 @@
 #import "TGAccountStore.h"
 #import "TGAccountSession.h"
 #import "TGSettingsStore.h"
+#import "TGBackgroundKeeper.h"
+#import "TGPeerStore.h"
+#import "TGChatListStore.h"
+#import "TGMediaStore.h"
+#import "TGChatListViewController.h"
+#import "TGDevice.h"
+#include <dlfcn.h>
+#if defined(__APPLE__)
+#import <malloc/malloc.h>
+#import <mach/mach.h>
+#endif
 #include <stdio.h>
 
 @interface AppDelegate ()
@@ -150,6 +161,15 @@ static UIImage *TGCustomEmojiFromStore(int64_t emojiId, CGFloat side) {
 	[fm removeItemAtPath:logPath error:nil];
 	self.log = freopen(logPath.UTF8String, "a+", stderr);
 
+	TGDeviceTier tier = [TGDevice tier];
+	if (tier <= TGDeviceTierLegacy) {
+		int64_t (*setLimit)(int64_t) = (int64_t (*)(int64_t))dlsym(RTLD_DEFAULT, "tdsqlite3_soft_heap_limit64");
+		if (!setLimit) setLimit = (int64_t (*)(int64_t))dlsym(RTLD_DEFAULT, "sqlite3_soft_heap_limit64");
+		if (setLimit) {
+			setLimit(tier == TGDeviceTierVintage ? (4 * 1024 * 1024) : (8 * 1024 * 1024));
+		}
+	}
+
 	NSLog(@"[LegacyTG] Starting application...");
 	double launchStart = TGPerfNow();
 #if TG_DEV
@@ -248,12 +268,22 @@ static UIImage *TGCustomEmojiFromStore(int64_t emojiId, CGFloat side) {
 		NSNumber *chatIdNum = n.userInfo[@"chatId"];
 		if (!chatIdNum) return;
 		int64_t chatId = [chatIdNum longLongValue];
-		if (chatId == [TGChatViewController activeChatId])
+		BOOL inBackground = ([UIApplication sharedApplication].applicationState != UIApplicationStateActive);
+		if (!inBackground && chatId == [TGChatViewController activeChatId])
 			return;
 		NSDictionary *m = n.userInfo[@"message"];
 		NSDictionary *chat = [[TGClient shared].chatsById objectForKey:chatIdNum];
 		NSString *title = chat[@"title"] ?: @"Telegram";
 		NSString *text = TGMessagePreview(m) ?: @"";
+
+		if (inBackground) {
+			[weakSelf presentLocalNotificationForChatId:chatId
+												  title:title
+												   text:text
+											  messageId:[m[@"id"] longLongValue]];
+			return;
+		}
+
 		[TGInAppNotificationBanner showForChatId:chatId
 										  title:title
 										   text:text
@@ -340,7 +370,71 @@ static UIImage *TGCustomEmojiFromStore(int64_t emojiId, CGFloat side) {
 	// One line if the launch itself misbehaves; silent when it is healthy.
 	TGPerfReport("launch", "didFinishLaunching", launchStart, 300.0);
 
+	UILocalNotification *launchNotif = launchOptions[UIApplicationLaunchOptionsLocalNotificationKey];
+	if (launchNotif) {
+		NSNumber *chatIdNum = launchNotif.userInfo[@"chatId"];
+		if (chatIdNum && [chatIdNum longLongValue] != 0) {
+			int64_t launchChatId = [chatIdNum longLongValue];
+			dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(500 * NSEC_PER_MSEC)),
+					dispatch_get_main_queue(), ^{
+				[AppDelegate openChatWithId:launchChatId];
+			});
+		}
+	}
+
 	return YES;
+}
+
+static void TGRecursivePurgeVC(UIViewController *vc) {
+	if (!vc) return;
+	if ([vc respondsToSelector:@selector(clearMemoryCaches)]) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+		[vc performSelector:@selector(clearMemoryCaches)];
+#pragma clang diagnostic pop
+	}
+	if ([vc isKindOfClass:[UINavigationController class]]) {
+		for (UIViewController *child in [(UINavigationController *)vc viewControllers]) {
+			TGRecursivePurgeVC(child);
+		}
+	} else if ([vc isKindOfClass:[UITabBarController class]]) {
+		for (UIViewController *child in [(UITabBarController *)vc viewControllers]) {
+			TGRecursivePurgeVC(child);
+		}
+	}
+	if (vc.presentedViewController) {
+		TGRecursivePurgeVC(vc.presentedViewController);
+	}
+}
+
++ (void)purgeMemoryCaches {
+	[[TGPeerStore shared] clearMemoryCaches];
+	[[TGChatListStore shared] clearMemoryCaches];
+	[[TGCustomEmojiStore shared] clearMemoryCaches];
+	[[TGMediaStore shared] clearMemoryCaches];
+
+	UIWindow *window = [UIApplication sharedApplication].keyWindow;
+	if (window.rootViewController) {
+		TGRecursivePurgeVC(window.rootViewController);
+	}
+
+	[[TGClient shared] trimMemory];
+
+#if defined(__APPLE__)
+	vm_address_t *zones = NULL;
+	unsigned zoneCount = 0;
+	if (malloc_get_all_zones(mach_task_self(), NULL, &zones, &zoneCount) == KERN_SUCCESS) {
+		for (unsigned i = 0; i < zoneCount; i++) {
+			malloc_zone_pressure_relief((malloc_zone_t *)zones[i], 0);
+		}
+	} else {
+		malloc_zone_pressure_relief(malloc_default_zone(), 0);
+	}
+#endif
+}
+
+- (void)applicationDidReceiveMemoryWarning:(UIApplication *)application {
+	[AppDelegate purgeMemoryCaches];
 }
 
 #pragma mark - TDLib
@@ -348,6 +442,12 @@ static UIImage *TGCustomEmojiFromStore(int64_t emojiId, CGFloat side) {
 - (void)applicationDidEnterBackground:(UIApplication *)application {
 	[TGPasscode noteAppBackgrounded];
 	[TGUpdateStore sessionDidEnd];
+	[AppDelegate purgeMemoryCaches];
+
+	if ([TGSettingsStore shared].keepAliveEnabled) {
+		[[TGBackgroundKeeper shared] start];
+		return;
+	}
 
 	// B13: the close has to finish before iOS suspends us.
 	__block UIBackgroundTaskIdentifier task = UIBackgroundTaskInvalid;
@@ -362,6 +462,7 @@ static UIImage *TGCustomEmojiFromStore(int64_t emojiId, CGFloat side) {
 }
 
 - (void)applicationWillEnterForeground:(UIApplication *)application {
+	[[TGBackgroundKeeper shared] stop];
 	[TGUpdateStore sessionDidStart];
 	if ([TGPasscode shouldLockOnForeground]) {
 		[TGPasscodeViewController presentUnlockIfLocked];
@@ -655,6 +756,35 @@ static UIImage *TGCustomEmojiFromStore(int64_t emojiId, CGFloat side) {
 			return;
 		[[TGAccountStore shared] processPushPayload:userInfo];
 	}];
+}
+
+#pragma mark - local notifications
+
+- (void)presentLocalNotificationForChatId:(int64_t)chatId
+                                    title:(NSString *)title
+                                     text:(NSString *)text
+                                messageId:(int64_t)messageId {
+	NSLog(@"[AppDelegate] local notification: chatId=%lld title='%@' text='%@'", chatId, title, text);
+	UILocalNotification *local = [[UILocalNotification alloc] init];
+	if (!local)
+		return;
+	local.alertBody = text.length ? [NSString stringWithFormat:@"%@: %@", title, text] : title;
+	local.soundName = UILocalNotificationDefaultSoundName;
+	local.userInfo = @{
+		@"chatId" : @(chatId),
+		@"messageId" : @(messageId),
+	};
+	local.applicationIconBadgeNumber = [UIApplication sharedApplication].applicationIconBadgeNumber + 1;
+	[[UIApplication sharedApplication] presentLocalNotificationNow:local];
+	NSLog(@"[AppDelegate] presentLocalNotificationNow sent");
+}
+
+- (void)application:(UIApplication *)application
+		didReceiveLocalNotification:(UILocalNotification *)notification {
+	NSNumber *chatIdNum = notification.userInfo[@"chatId"];
+	if (chatIdNum && [chatIdNum longLongValue] != 0) {
+		[AppDelegate openChatWithId:[chatIdNum longLongValue]];
+	}
 }
 
 /// Official presents the update controller from the account context as soon

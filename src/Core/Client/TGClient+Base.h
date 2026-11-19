@@ -89,6 +89,9 @@
 
 - (void)resumeFromBackground;
 
+/// Trims internal TDLib memory (e.g. SQLite page caches).
+- (void)trimMemory;
+
 /// Request with a reply. `completion` runs on the main queue with the raw
 /// TDLib object, or an object of @type "error".
 - (void)request:(NSDictionary *)request completion:(void (^)(NSDictionary *result))completion;

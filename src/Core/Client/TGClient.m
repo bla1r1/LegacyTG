@@ -343,6 +343,10 @@ NSString *const TGSuggestedActionsChangedNotification = @"TGSuggestedActionsChan
 	[[TGAccountSession shared] resumeFromBackground];
 }
 
+- (void)trimMemory {
+	[[TGTransport shared] trimMemory];
+}
+
 
 
 - (void)clientClosed {
@@ -582,12 +586,10 @@ NSDictionary *TGFormattedText(NSString *text) {
 - (void)handleInAppNotificationForNewMessage:(NSDictionary *)m {
 	if (!m || [m[@"is_outgoing"] boolValue])
 		return;
-	if (self.authState != TGAuthStateReady || self.connectionState != TGConnectionStateReady)
-		return;
-	if (self.readyAt <= 0)
+	if (self.authState != TGAuthStateReady)
 		return;
 	NSTimeInterval msgDate = [m[@"date"] doubleValue];
-	if (msgDate < self.readyAt)
+	if (self.readyAt > 0 && msgDate < (self.readyAt - 15.0))
 		return;
 	NSNumber *chatIdNum = m[@"chat_id"];
 	if (!chatIdNum)
@@ -595,6 +597,7 @@ NSDictionary *TGFormattedText(NSString *text) {
 	int64_t chatId = [chatIdNum longLongValue];
 	if ([self isChatMuted:chatId])
 		return;
+	NSLog(@"[TGClient] notify for chat %lld msg %lld", chatId, [m[@"id"] longLongValue]);
 	[[NSNotificationCenter defaultCenter]
 			postNotificationName:TGInAppNotificationReceivedNotification
 						  object:self

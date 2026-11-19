@@ -99,4 +99,7 @@ extern NSString *const TGChatListPreviewImageLoadedNotification;
 /// Ask for one; the image notification follows on the main queue.
 - (void)loadPreviewImageForFileId:(NSNumber *)fileId;
 
+/// Drops decoded in-memory preview thumbnails to reduce RAM footprint in background.
+- (void)clearMemoryCaches;
+
 @end

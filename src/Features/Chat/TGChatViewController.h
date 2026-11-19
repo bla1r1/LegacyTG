@@ -50,4 +50,6 @@
 		 navigation:(UINavigationController *)navigation
 			 inView:(UIView *)view;
 
+- (void)clearMemoryCaches;
+
 @end

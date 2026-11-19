@@ -62,6 +62,7 @@
 #import "TGClientEmojiReactionsTests.m"
 #import "TGClientAppearanceDiagnosticsTests.m"
 #import "TGClientMiscTests.m"
+#import "TGBackgroundKeeperTests.m"
 #import "TGClientStoriesTests.m"
 #import "TGClientTier2Tests.m"
 #import "TGClientTier3AuditTests.m"

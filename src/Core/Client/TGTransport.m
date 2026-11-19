@@ -2,6 +2,7 @@
 // TGTransport.m - the only place that loads and talks to libtdjson.
 //
 #import "TGTransport.h"
+#import "TGDevice.h"
 #import "TGGhostMode.h"
 #import "TGJson.h"
 #include <dlfcn.h>
@@ -69,11 +70,23 @@ static const int64_t kIdlePollNanoseconds = 20 * NSEC_PER_MSEC;
 	// limit and no dylib was ever built for it, so there TDLib is linked in
 	// and the symbols are already in this image - which is what RTLD_DEFAULT
 	// searches. One lookup handles both.
-	self.handle = dlopen(path.UTF8String, RTLD_NOW | RTLD_LOCAL);
+	self.handle = dlopen(path.UTF8String, RTLD_NOW | RTLD_GLOBAL);
 	void *lookup = self.handle ?: RTLD_DEFAULT;
 	if (!self.handle)
 		NSLog(@"TGClient: no libtdjson.dylib (%s) - looking in the app itself",
 				dlerror());
+
+	// Enforce SQLite soft heap limit on TDLib's embedded SQLite engine
+	TGDeviceTier tier = [TGDevice tier];
+	int64_t (*setLimit)(int64_t) = dlsym(lookup, "tdsqlite3_soft_heap_limit64");
+	if (!setLimit) setLimit = dlsym(lookup, "sqlite3_soft_heap_limit64");
+	if (setLimit) {
+		int64_t target = (tier == TGDeviceTierVintage ? (3LL * 1024 * 1024) :
+		                  tier == TGDeviceTierLegacy ? (6LL * 1024 * 1024) : (16LL * 1024 * 1024));
+		int64_t old = setLimit(target);
+		NSLog(@"[TGTransport] tdsqlite3_soft_heap_limit64 set to %lld MB (was %lld MB)",
+		      (long long)(target / (1024 * 1024)), (long long)(old / (1024 * 1024)));
+	}
 
 	td_create_fn create = dlsym(lookup, "td_json_client_create");
 	td_exec_fn   exec   = dlsym(lookup, "td_json_client_execute");
@@ -257,6 +270,16 @@ static const int64_t kIdlePollNanoseconds = 20 * NSEC_PER_MSEC;
 
 - (void)markClosed {
 	self.running = NO;
+}
+
+- (void)trimMemory {
+	void *lookup = self.handle ?: RTLD_DEFAULT;
+	int (*relMem)(int) = dlsym(lookup, "tdsqlite3_release_memory");
+	if (!relMem) relMem = dlsym(lookup, "sqlite3_release_memory");
+	if (relMem) {
+		int released = relMem(0);
+		NSLog(@"[TGTransport] tdsqlite3_release_memory released %d bytes", released);
+	}
 }
 
 - (NSDictionary *)executeSynchronously:(NSDictionary *)request {

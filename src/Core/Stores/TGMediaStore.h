@@ -38,5 +38,6 @@
 /// Decoded buffers kept for the media viewer, bounded to 16 MB on 32-bit.
 - (NSData *)cachedBufferForFileId:(NSInteger)fileId;
 - (void)cacheBuffer:(NSData *)data forFileId:(NSInteger)fileId;
+- (void)clearMemoryCaches;
 
 @end
