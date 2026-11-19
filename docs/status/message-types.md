@@ -1,11 +1,11 @@
-Every `MessageContent` type in `tdlib/td/td/generate/scheme/td_api.tl` (108 on 7 November 2026), in schema order, plus the content features the parity audit names. Checked against `src/` on 7 November 2026.
+Every `MessageContent` type in `tdlib/td/td/generate/scheme/td_api.tl` (109 on 18 November 2026, TDLib 1.8.70), in schema order, plus the content features the parity audit names. Checked against `src/` on 18 November 2026.
 
-Counts: 87 done, 25 partial, 8 missing, 0 dev-only.
+Counts: 87 done, 25 partial, 9 missing, 0 dev-only.
 
 Built: M16 (service sentences for ~75 types, a preview for every content,
 structured flatten fields, `TGMessageCard`, `TGMediaVeil`, rebuilt polls), M17
-(custom emoji in text, reactions, names). All 108 `MessageContent` types draw
-except stake dice. Open: M36 (member-row status emoji), M44 (rich-message
+(custom emoji in text, reactions, names). All 109 `MessageContent` types draw
+except stake dice and the HTML widget. Open: M36 (member-row status emoji), M44 (rich-message
 blocks, story card picture, poll option media, animated gift artwork,
 countdowns, service-action buttons).
 
@@ -36,6 +36,7 @@ countdowns, service-action buttons).
 | messagePoll | done | `Core/Model/TGMessageFlatten.m:642` | Question, options, share bars, quiz marks, retract, voters, close, statistics. |
 | messageStakeDice | missing | `Core/Model/TGMessageFlatten.m:774` | No branch and no service text; falls back to the derived phrase "Stake dice". |
 | messageStory | partial | `Core/Model/TGMessageFlatten.m:700` | Card says "Story by …" and Open plays it; the story's own picture is not in the card. |
+| messageWidget | missing | `Core/Model/TGMessageFlatten.m:1074` | No widget renderer: the caption shows as text, or the derived phrase "Widget" as a service line. |
 | messageChecklist | partial | `Core/Model/TGMessageFlatten.m:737` | Title, tasks and completed count; tapping toggles, adding tasks is missing. |
 | messageInvoice | partial | `Core/Model/TGMessageFlatten.m:686` | Card with product, description and picture; the Pay button is removed (no payment form). |
 | messageCall | done | `Core/Model/TGMessageFlatten.m:564` | Row names direction, video and duration; a call is startable from the call screen. |

@@ -345,6 +345,56 @@ The screens are UIKit and need a device pass; every request shape behind them is
 
 ---
 
+## TDLib version
+
+`tdlib/td` at `03220f6` (TDLib 1.8.70, 16 November 2026), up from `9d92b49`
+(1.8.69). Schema: `inputStoryAreaTypeFoundVenue` removed (never sent here);
+the TON wallet amounts (`messageTonWalletTransfer.amount`, `tonWallet*.gram_amount`,
+`tonWalletTransaction.fee_amount`, …) moved from int53 to int64, so the JSON now
+carries them as strings: `TGServiceMessageText` reads them with `longLongValue`,
+which takes either, and `testTonWalletTransfer` feeds the string form.
+`replyToCallbackQueryWithEphemeralMessage` answers a `message` instead of `ok`;
+the dev store only checks for `error`. `toggleSupergroupIsForum` gained
+`has_forum_sidebar`, left out (false). The 38 new fields are triaged in
+`scripts/tdlib_fields.txt`.
+
+Checked on 18 November 2026: host suite 2643/2643, every `scripts/lint_*.sh`,
+`check_release.sh`, `make -j8`, `make -j8 DEV=1`; `scripts/emu.sh test` reaches
+`authorizationStateReady` and `connectionStateReady` and draws the chat list.
+Not yet run on a real device.
+
+The armv7 dylib's `__TEXT` grew from 0xfb4000 to 0xfec000: 80 KB left under
+the 16 MB Thumb branch limit `build_tdlib_dylib.sh` enforces. The next TDLib
+update will likely not fit without trimming the build.
+
+### armv7 dylib size
+
+TDLib ships as the armv7
+`libtdjson.dylib` from `scripts/build_tdlib_dylib.sh`. Its `__TEXT` has to stay
+under 0x1000000: a Thumb BL reaches ±16 MB and the armv7 linker inserts no branch
+islands. The script refuses a larger candidate.
+
+`-dead_strip` and the `td_*` export list were already on (TDLib's own CMake on
+Apple). What was not: `CMAKE_BUILD_TYPE=MinSizeRel` appends `-Os` after
+`CMAKE_CXX_FLAGS`, so the flags the script passed never decided the level. The
+per-config flags now carry only `-DNDEBUG`, the script passes `-Oz`, and
+`-ffile-prefix-map` drops the checkout path from the 569 `__FILE__` strings, so
+the size no longer depends on where the tree lives.
+
+| Build | `__text` | `__cstring` | `__TEXT` vmsize | Below 16 MB |
+|---|---|---|---|---|
+| `-Os` (before) | 15 022 264 | 1 196 090 | 0xfbc000 | 272 KB |
+| `-Oz` + prefix map | 12 927 760 | 1 126 026 | 0xdac000 | 2.3 MB |
+
+Measured on 1.8.69 (`9d92b49`), before the 1.8.70 merge: 0xfec000 was
+reported for 1.8.70 at `-Os`, a clean `-Os` build of 1.8.69 measured 0xfbc000.
+1.8.70 at `-Oz` is not measured yet. `scripts/emu.sh test` with the `-Oz` dylib in the
+IPA: `authorizationStateReady`, signed in, `connectionStateReady`, no crash in
+the syslog. Not yet checked on a real device; `-Oz` may cost CPU on the A4.
+`TD_OPT=-Os scripts/build_tdlib_dylib.sh` builds the old level for comparison.
+
+---
+
 ## Testing: feature × device matrix
 
 Run `scripts/devrun.sh` for device-side checks. Host suite: `make -f tests/Makefile test`.

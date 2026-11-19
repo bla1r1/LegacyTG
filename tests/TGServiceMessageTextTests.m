@@ -949,7 +949,8 @@ static NSDictionary *svcGiveawayDone(int64_t winners, int64_t unclaimed, BOOL st
 		@"sender_user_id" : @(1001),
 		@"transaction_id" : @"tx",
 		@"peer_address" : @"EQC...",
-		@"amount" : @(5000000000LL),
+		// int64 since TDLib 1.8.70, so the JSON carries it as a string
+		@"amount" : @"5000000000",
 		@"comment" : @"",
 		@"is_comment_encrypted" : @NO,
 	}), @"Alice transferred 5 TON");

@@ -69,14 +69,15 @@ for patch in "${PATCH_DIR}"/*.patch; do
 	echo "[+] patch: $(basename "${patch}")"
 done
 
-# TDLib needs host-side code generation before it can cross-compile
-if [ ! -d "${ROOT_DIR}/tdlib/native-build" ]; then
-	echo "[+] pregenerating sources"
-	mkdir -p "${ROOT_DIR}/tdlib/native-build"
-	cd "${ROOT_DIR}/tdlib/native-build"
-	cmake -DTD_GENERATE_SOURCE_FILES=ON "${TDLIB_SRC}"
-	cmake --build . --target prepare_cross_compiling
-fi
+# TDLib needs host-side code generation before it can cross-compile. Run it
+# every time, as build_tdlib.sh does: it is a no-op while the schema is the
+# same, and when only the folder's existence was checked, a submodule update
+# kept the old telegram_api.h and the build failed on the new updates.
+echo "[+] pregenerating sources"
+mkdir -p "${ROOT_DIR}/tdlib/native-build"
+cd "${ROOT_DIR}/tdlib/native-build"
+cmake -DTD_GENERATE_SOURCE_FILES=ON "${TDLIB_SRC}"
+cmake --build . --target prepare_cross_compiling
 
 mkdir -p "${BUILD_DIR}" "${OUT_DIR}"
 
@@ -100,6 +101,26 @@ if [ ! -f "${OPENSSL_LIBS}/libcrypto.a" ]; then
 fi
 echo "[+] OpenSSL: ${OPENSSL_LIBS}"
 
+# Size, so the next TDLib bumps stay clear of the 16MB thumb limit (TDLib 1.8.70):
+#   -Os everywhere                                   0xfec000
+#   -Oz                                              0xdd4000
+#   -Oz, STRIP_LOG=1, ThinLTO                        0xc10000
+#   that, with the hot libraries at -Os (default)    0xc98000
+# STRIP_LOG=1 compiles out TDLib's logs above ERROR (the app runs TDLib at
+# verbosity 1, so nothing printed is lost; the dev "verbose" switch shows
+# errors only now). ThinLTO drops what no caller reaches across files. The hot
+# libraries (scripts/tdlib_hot.cmake: tdutils, tdactor, tdnet, tddb, sqlite,
+# mtproto, the JSON API) get -Os back for speed; at -O2 they pushed __TEXT to
+# 0xf1c000. On the iPod touch 4 the warm chat scroll measured 26-55% dropped
+# frames with this build against 37-79% with -Os everywhere: TDLib's threads
+# take 0.2-0.6 s of a 9 s scroll, so the level shows in size, not in frames.
+# MinSizeRel appends its own -Os after CMAKE_CXX_FLAGS, so the per-config flags
+# carry only NDEBUG. The prefix map keeps checkout paths out of __FILE__ strings.
+# TD_OPT, TD_LTO and TD_HOT_OPT override each part (TD_HOT_OPT= for none).
+OPT_FLAGS="${TD_OPT:--Oz -DSTRIP_LOG=1} -ffile-prefix-map=${TDLIB_SRC}/=td/"
+TD_LTO="${TD_LTO:-ON}"
+TD_HOT_OPT="${TD_HOT_OPT--Os}"
+
 cd "${BUILD_DIR}"
 rm -f CMakeCache.txt
 
@@ -116,14 +137,17 @@ cmake "${TDLIB_SRC}" \
 	-DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY \
 	-DATOMICS_FOUND=TRUE \
 	-DATOMICS_LIBRARIES="" \
-	-DCMAKE_C_FLAGS="-Wno-error -mthumb -Os" \
-	-DCMAKE_CXX_FLAGS="-Wno-error -mthumb -Os ${CXX_STDLIB_INC}" \
+	-DCMAKE_C_FLAGS="-Wno-error -mthumb ${OPT_FLAGS}" \
+	-DCMAKE_C_FLAGS_MINSIZEREL="-DNDEBUG" \
+	-DCMAKE_CXX_FLAGS_MINSIZEREL="-DNDEBUG" \
+	-DCMAKE_CXX_FLAGS="-Wno-error -mthumb ${OPT_FLAGS} ${CXX_STDLIB_INC}" \
 	-DCMAKE_SHARED_LINKER_FLAGS="-install_name @executable_path/libtdjson.dylib ${COMPAT_O}" \
 	-DOPENSSL_INCLUDE_DIR="${OPENSSL_INC}" \
 	-DOPENSSL_CRYPTO_LIBRARY="${OPENSSL_LIBS}/libcrypto.a" \
 	-DOPENSSL_SSL_LIBRARY="${OPENSSL_LIBS}/libssl.a" \
 	-DBUILD_SHARED_LIBS=ON \
-	-DTD_ENABLE_LTO=OFF \
+	-DTD_ENABLE_LTO="${TD_LTO:-OFF}" \
+	${TD_HOT_OPT:+-DCMAKE_PROJECT_INCLUDE="${SCRIPT_DIR}/tdlib_hot.cmake" -DTG_HOT_OPT="${TD_HOT_OPT}"} \
 	-DCMAKE_POLICY_DEFAULT_CMP0074=NEW
 
 cmake --build . --target tdjson -- -j"$(sysctl -n hw.logicalcpu)"

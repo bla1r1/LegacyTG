@@ -564,3 +564,41 @@ skip  -         updateNewInlineQuery.user_location  bot accounts only
 skip  -         updateNewPreCheckoutQuery.invoice_payload  bot accounts only
 skip  -         updateNewPreCheckoutQuery.shipping_option_id  bot accounts only
 skip  -         updateNewShippingQuery.invoice_payload  bot accounts only
+todo  later     community.are_chats_collapsed  official folds a collapsed community's chats into one chat list entry; our chat list shows each chat on its own row
+skip  -         inputMessageSharedWidget.chat_data  for bots only; a user account cannot send widgets
+skip  -         inputMessageSharedWidget.widget_id  for bots only; a user account cannot send widgets
+skip  -         inputMessageWidget.allow_queries  for bots only; a user account cannot send widgets
+skip  -         inputMessageWidget.chat_data  for bots only; a user account cannot send widgets
+skip  -         inputMessageWidget.html  for bots only; a user account cannot send widgets
+skip  -         inputMessageWidget.is_shared  for bots only; a user account cannot send widgets
+skip  -         inputMessageWidget.public_data  for bots only; a user account cannot send widgets
+todo  later     messageWidget.can_send_background_queries  official draws the bot's HTML widget inside the bubble; we have no widget renderer, the message shows its caption, or a "Widget" service line without one (TGMessageFlatten)
+todo  later     messageWidget.can_send_queries  official draws the bot's HTML widget inside the bubble; we have no widget renderer, the message shows its caption, or a "Widget" service line without one (TGMessageFlatten)
+todo  later     messageWidget.chat_data  official draws the bot's HTML widget inside the bubble; we have no widget renderer, the message shows its caption, or a "Widget" service line without one (TGMessageFlatten)
+todo  later     messageWidget.html  official draws the bot's HTML widget inside the bubble; we have no widget renderer, the message shows its caption, or a "Widget" service line without one (TGMessageFlatten)
+todo  later     messageWidget.is_copy  official draws the bot's HTML widget inside the bubble; we have no widget renderer, the message shows its caption, or a "Widget" service line without one (TGMessageFlatten)
+todo  later     messageWidget.public_data  official draws the bot's HTML widget inside the bubble; we have no widget renderer, the message shows its caption, or a "Widget" service line without one (TGMessageFlatten)
+todo  later     messageWidget.widget_id  official draws the bot's HTML widget inside the bubble; we have no widget renderer, the message shows its caption, or a "Widget" service line without one (TGMessageFlatten)
+todo  later     supergroup.has_forum_sidebar  official shows the forum's topics in a sidebar instead of tabs; we only have the topic list and tabs
+skip  -         updateNewInlineWidgetQuery.chat_instance  bot accounts only
+skip  -         updateNewInlineWidgetQuery.chat_type  bot accounts only
+skip  -         updateNewInlineWidgetQuery.query_type  bot accounts only
+skip  -         updateNewInlineWidgetQuery.wallet_card  bot accounts only
+skip  -         updateNewInlineWidgetQuery.widget_id  bot accounts only
+skip  -         updateNewWidgetCopyQuery.query_type  bot accounts only
+skip  -         updateNewWidgetCopyQuery.wallet_card  bot accounts only
+skip  -         updateNewWidgetCopyQuery.widget_id  bot accounts only
+skip  -         updateNewWidgetQuery.chat_instance  bot accounts only
+skip  -         updateNewWidgetQuery.chat_type  bot accounts only
+skip  -         updateNewWidgetQuery.query_type  bot accounts only
+skip  -         updateNewWidgetQuery.wallet_card  bot accounts only
+skip  -         updateNewWidgetQuery.widget_id  bot accounts only
+skip  -         updateSpeechRecognitionInFile.recognition_id  answers recognizeSpeechInFile, which we never send; voice notes go through recognizeSpeech
+todo  later     userTypeBot.has_topic_sidebar  official shows a bot's topics in a sidebar; bot chats with topics open as a plain chat here
+skip  -         widgetQueryTypeData.with_wallet  part of a widget query, which only bots receive
+skip  -         widgetQueryTypeSentTransaction.msg_hash  part of a widget query, which only bots receive
+skip  -         widgetQueryTypeSentTransaction.wallet  part of a widget query, which only bots receive
+skip  -         widgetQueryTypeSignData.sign_data  part of a widget query, which only bots receive
+skip  -         widgetQueryTypeSignData.wallet  part of a widget query, which only bots receive
+skip  -         widgetQueryWallet.public_key  part of a widget query, which only bots receive
+skip  -         widgetQueryWallet.state_init  part of a widget query, which only bots receive
