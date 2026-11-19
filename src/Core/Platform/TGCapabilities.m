@@ -168,7 +168,9 @@ static BOOL TGEmojiFontHasGlyphs(CTFontRef font, NSString *s) {
 	static dispatch_once_t once;
 	dispatch_once(&once, ^{
 		answers = [NSMutableDictionary dictionary];
-		font = CTFontCreateWithName(CFSTR("AppleColorEmoji"), 20, NULL);
+		font = CTFontCreateWithName(CFSTR("AppleColorEmojiCompat"), 20, NULL);
+		if (!font)
+			font = CTFontCreateWithName(CFSTR("AppleColorEmoji"), 20, NULL);
 	});
 	NSNumber *known;
 	@synchronized (answers){
@@ -196,7 +198,7 @@ static BOOL TGEmojiFontHasGlyphs(CTFontRef font, NSString *s) {
 				CGGlyph glyph = 0;
 				if (CTRunGetGlyphCount(run) == 1)
 					CTRunGetGlyphs(run, CFRangeMake(0, 1), &glyph);
-				ok = glyph != 0 && [name isEqualToString:@"AppleColorEmoji"];
+				ok = glyph != 0 && ([name isEqualToString:@"AppleColorEmoji"] || [name isEqualToString:@"AppleColorEmojiCompat"]);
 			}
 			CFRelease(line);
 		}

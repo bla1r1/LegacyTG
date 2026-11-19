@@ -701,4 +701,22 @@ static BOOL tlOnlyRussia(UTF32Char a, UTF32Char b) {
 	XCTAssertEqual(TGUnsupportedFlagRanges(@"\U0001F1EE", tlOnlyRussia).count, (NSUInteger)0, @"half a flag");
 }
 
+- (void)testEmojiFont_CompatFontResolvesOrFallsBackSafely {
+	UIFont *font = TGEmojiFontOfSize(16.0f);
+	// On host test environments without bundled UIAppFonts it may be nil,
+	// but when present or system-fallback it must have the requested size.
+	if (font) {
+		XCTAssertTrue(fabsf(font.pointSize - 16.0f) < 0.5f);
+	}
+}
+
+- (void)testCanDrawEmoji_ModernEmojiAnswersWithoutCrash {
+	// Unicode 11.0+ emojis and regional indicators
+	NSArray *emojis = @[@"🥳", @"🥺", @"🥑", @"🦖", @"🇺🇦", @"🇵🇱", @"🇨🇦"];
+	for (NSString *e in emojis) {
+		BOOL ans = [TGCapabilities canDrawEmoji:e];
+		(void)ans; // returns BOOL deterministically without crash
+	}
+}
+
 @end

@@ -121,8 +121,8 @@ void TGWarmFonts(CGFloat bodySize) {
 			[UIFont systemFontOfSize:bodySize].fontName,
 			[UIFont boldSystemFontOfSize:bodySize].fontName,
 			[UIFont italicSystemFontOfSize:bodySize].fontName, nil];
-	// Not the bundled OpenMoji: CoreText and UIKit's text system each load
-	// their own 6.4 MB copy of its glyph tables, so warming it here doubled
+	// Not the bundled AppleColorEmojiCompat: CoreText and UIKit's text system each load
+	// their own copy of its glyph tables, so warming it here doubled
 	// it for good rather than sharing it.
 	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
 			dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
@@ -130,7 +130,7 @@ void TGWarmFonts(CGFloat bodySize) {
 		// Advances for every Latin and Cyrillic letter: CGFreetype reads
 		// metrics from disk in pieces as glyphs first appear, and a cold open
 		// spent 84 ms in fread under its first text measures. Not every glyph
-		// and no drawing: all of OpenMojiColor's glyphs took 6 s, and drawing
+		// and no drawing: all of the emoji face's glyphs took 6 s, and drawing
 		// a sample line with an emoji 300 ms per face.
 		UniChar chars[0x60 + 0x100];
 		CGGlyph ids[0x60 + 0x100];

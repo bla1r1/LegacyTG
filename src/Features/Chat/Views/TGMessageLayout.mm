@@ -174,7 +174,9 @@ static pthread_mutex_t sTextCachesLock = PTHREAD_MUTEX_INITIALIZER;
 
 UIFont *TGEmojiFontOfSize(CGFloat size) {
 	static BOOL logged = NO;
-	UIFont *font = [UIFont fontWithName:@"OpenMojiColor" size:size];
+	UIFont *font = [UIFont fontWithName:@"AppleColorEmojiCompat" size:size];
+	if (!font) font = [UIFont fontWithName:@"Apple Color Emoji Compat" size:size];
+	if (!font) font = [UIFont fontWithName:@"OpenMojiColor" size:size];
 	if (!font) font = [UIFont fontWithName:@"OpenMoji Color" size:size];
 	if (!font) font = [UIFont fontWithName:@"OpenMoji" size:size];
 	if (!logged){
@@ -473,7 +475,7 @@ NSAttributedString *TGEmojiAttributedText(NSString *text, UIFont *base) {
 }
 
 /// The bundled face's size for a flag against the text's.
-static const CGFloat kTGFlagFaceScale = 0.85f;
+static const CGFloat kTGFlagFaceScale = 1.0f;
 
 static BOOL TGIsRegionalIndicator(UTF32Char c) {
 	return c >= 0x1F1E6 && c <= 0x1F1FF;

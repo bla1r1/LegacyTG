@@ -13,7 +13,7 @@
 	<key>CFBundleVersion</key><string>1</string>
 	<key>LSMinimumSystemVersion</key><string>11.0</string>
 	<key>LSApplicationCategoryType</key><string>public.app-category.social-networking</string>
-	<key>UIAppFonts</key><array><string>OpenMoji.ttf</string></array>
+	<key>UIAppFonts</key><array><string>AppleColorEmojiCompat.ttf</string></array>
 	<key>NSHighResolutionCapable</key><true/>
 	<key>UIApplicationSceneManifest</key>
 	<dict>

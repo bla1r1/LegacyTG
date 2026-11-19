@@ -127,7 +127,7 @@ xcrun clang++ \
 	-o "$APP/Contents/MacOS/LegacyTG" || exit 1
 
 cp -f "$ROOT/tools/catalyst/Info.plist" "$APP/Contents/Info.plist"
-cp -f "$ROOT/resources/fonts/OpenMoji.ttf" "$APP/Contents/Resources/"
+cp -f "$ROOT/resources/fonts/AppleColorEmojiCompat.ttf" "$APP/Contents/Resources/"
 codesign -s - --force --deep "$APP" >/dev/null 2>&1
 echo "    $APP  ($(du -h "$APP/Contents/MacOS/LegacyTG" | cut -f1))"
 

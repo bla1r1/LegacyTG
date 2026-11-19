@@ -209,6 +209,7 @@ static NSUInteger TGEmojiPanelFirstVisibleIndex(NSArray *frames, CGFloat minY) {
 	id item = (index < self.items.count) ? self.items[index] : nil;
 	TGSetButtonItemData(button, item);
 	[button setTitle:nil forState:UIControlStateNormal];
+	[button setAttributedTitle:nil forState:UIControlStateNormal];
 	[button setImage:nil forState:UIControlStateNormal];
 	UIImageView *tile = (UIImageView *)[button viewWithTag:1];
 	tile.hidden = YES;
@@ -217,7 +218,12 @@ static NSUInteger TGEmojiPanelFirstVisibleIndex(NSArray *frames, CGFloat minY) {
 	if (self.tab == TGEmojiPanelTabEmoji){
 		button.titleLabel.font = TGFontEmoji();
 		NSString *str = [item isKindOfClass:NSString.class] ? (NSString *)item : @"";
-		[button setTitle:str forState:UIControlStateNormal];
+		NSAttributedString *attr = TGEmojiAttributedText(str, TGFontEmoji());
+		if (attr) {
+			[button setAttributedTitle:attr forState:UIControlStateNormal];
+		} else {
+			[button setTitle:str forState:UIControlStateNormal];
+		}
 	} else if (self.tab == TGEmojiPanelTabCustomEmoji){
 		button.imageEdgeInsets = UIEdgeInsetsZero;
 		button.imageView.contentMode = UIViewContentModeScaleAspectFit;

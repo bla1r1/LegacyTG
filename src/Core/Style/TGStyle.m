@@ -41,14 +41,28 @@ UIFont *TGFontGlyph(void)         { return [UIFont systemFontOfSize:TGSizeGlyph]
 UIFont *TGFontGlyphSmall(void)    { return [UIFont systemFontOfSize:TGSizeGlyphSm]; }
 UIFont *TGFontPlate(void)         { return [UIFont boldSystemFontOfSize:TGSizePlate]; }
 UIFont *TGFontSwitchTag(void)     { return [UIFont boldSystemFontOfSize:TGSizeSwitchTag]; }
-UIFont *TGFontEmoji(void)         { return [UIFont systemFontOfSize:TGSizeEmoji]; }
-UIFont *TGFontEmojiSmall(void)    { return [UIFont systemFontOfSize:TGSizeEmojiSm]; }
+UIFont *TGFontEmoji(void) {
+	return [UIFont fontWithName:@"AppleColorEmojiCompat" size:TGSizeEmoji]
+		?: [UIFont fontWithName:@"Apple Color Emoji Compat" size:TGSizeEmoji]
+		?: [UIFont systemFontOfSize:TGSizeEmoji];
+}
+UIFont *TGFontEmojiSmall(void) {
+	return [UIFont fontWithName:@"AppleColorEmojiCompat" size:TGSizeEmojiSm]
+		?: [UIFont fontWithName:@"Apple Color Emoji Compat" size:TGSizeEmojiSm]
+		?: [UIFont systemFontOfSize:TGSizeEmojiSm];
+}
 UIFont *TGFontEmojiMeta(void)     {
-	return [UIFont fontWithName:@"OpenMojiColor" size:TGSizeMeta]
+	return [UIFont fontWithName:@"AppleColorEmojiCompat" size:TGSizeMeta]
+		?: [UIFont fontWithName:@"Apple Color Emoji Compat" size:TGSizeMeta]
+		?: [UIFont fontWithName:@"OpenMojiColor" size:TGSizeMeta]
 		?: [UIFont fontWithName:@"OpenMoji" size:TGSizeMeta]
 		?: [UIFont systemFontOfSize:TGSizeMeta];
 }
-UIFont *TGFontEmojiLarge(void)    { return [UIFont systemFontOfSize:TGSizeEmojiLg]; }
+UIFont *TGFontEmojiLarge(void) {
+	return [UIFont fontWithName:@"AppleColorEmojiCompat" size:TGSizeEmojiLg]
+		?: [UIFont fontWithName:@"Apple Color Emoji Compat" size:TGSizeEmojiLg]
+		?: [UIFont systemFontOfSize:TGSizeEmojiLg];
+}
 
 UIColor *TGColourSecretKey(NSInteger index) {
 	static const unsigned int rgb[] = {0xFFFFFF, 0xD5E6F3, 0x2D5775, 0x2F99C9};

@@ -105,7 +105,7 @@
 	</array>
 	<key>UIAppFonts</key>
 	<array>
-		<string>OpenMoji.ttf</string>
+		<string>AppleColorEmojiCompat.ttf</string>
 	</array>
 	<key>UIDeviceFamily</key>
 	<array>
