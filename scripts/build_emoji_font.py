@@ -173,4 +173,4 @@ if __name__ == '__main__':
         src = '/tmp/AppleColorEmoji-LQ.ttc'
         offset = 20
     dst = 'resources/fonts/AppleColorEmojiCompat.ttf'
-    build_ttf(src, offset, dst, strikes_to_keep=(40, 64))
+    build_ttf(src, offset, dst, strikes_to_keep=(32,))

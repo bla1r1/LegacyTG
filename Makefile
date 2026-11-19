@@ -900,6 +900,7 @@ deploy-full:
 
 ipa: ipa-armv7 ipa-arm64
 	@echo "[+] Packaging universal fat IPA $(IPA_FILE)..."
+	@rm -rf "$(BUILD_DIR)/fat_app"
 	@mkdir -p "$(IPA_DIR)" "$(BUILD_DIR)/fat_app/$(APP_NAME).app"
 	@cp -rf "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app/"* "$(BUILD_DIR)/fat_app/$(APP_NAME).app/"
 	@lipo -create "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/$(APP_NAME)" "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app/$(APP_NAME)" -output "$(BUILD_DIR)/fat_app/$(APP_NAME).app/$(APP_NAME)"
@@ -914,7 +915,7 @@ ipa: ipa-armv7 ipa-arm64
 	@rm -rf "$(BUILD_DIR)/stage-fat"
 	@mkdir -p "$(BUILD_DIR)/stage-fat/Payload"
 	@cp -rf "$(BUILD_DIR)/fat_app/$(APP_NAME).app" "$(BUILD_DIR)/stage-fat/Payload/"
-	@cd "$(BUILD_DIR)/stage-fat" && zip -qr "$(IPA_FILE)" Payload
+	@cd "$(BUILD_DIR)/stage-fat" && zip -9 -qr "$(IPA_FILE)" Payload
 	@rm -rf "$(BUILD_DIR)/stage-fat" "$(BUILD_DIR)/fat_app"
 	@echo ""
 	@echo "================================================================="
@@ -938,10 +939,13 @@ $(TLOTTIE_STAMP): scripts/build_tlottie.sh third_party/tlottie/Cargo.toml third_
 
 ipa-armv7: $(MACHOFIX) $(TLOTTIE_STAMP) $(ARMV7_ALL_OBJS)
 	@echo "[+] Building 32-bit armv7 app bundle..."
-	@mkdir -p "$(IPA_DIR)" "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app"
+	@mkdir -p "$(IPA_DIR)"
+	@rm -rf "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app"
+	@mkdir -p "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app"
 	$(CC) -arch armv7 -isysroot $(SDK_PATH) $(MIN_IOS) -Wl,-dead_strip -ObjC -Wl,-pagezero_size,0x1000 \
 		-L$(BUILD_DIR)/armv7/libs -L$(BUILD_DIR)/armv7/tdlib/lib -L$(ROOT_DIR)/third_party/opus/lib \
 		$(ARMV7_ALL_OBJS) $(FRAMEWORKS) $(WEBP_ARMV7) $(ARMV7_FFMPEG_LIBS) $(TDLIB_LIBS) $(DEPS_LIBS) $(ARMV7_SSL_LIBS) -o "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/$(APP_NAME)"
+	@strip -x "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/$(APP_NAME)"
 	@cp -f "$(ROOT_DIR)/resources/Info.plist" "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/Info.plist" 2>/dev/null || true
 	@$(call ADD_DEV_SCHEMES,$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/Info.plist)
 	@cp -f "$(ROOT_DIR)/resources/fonts/"*.ttf "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
@@ -964,15 +968,18 @@ ipa-armv7: $(MACHOFIX) $(TLOTTIE_STAMP) $(ARMV7_ALL_OBJS)
 	@rm -rf "$(BUILD_DIR)/stage-armv7" "$(IPA_ARMV7)"
 	@mkdir -p "$(BUILD_DIR)/stage-armv7/Payload"
 	@cp -rf "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app" "$(BUILD_DIR)/stage-armv7/Payload/"
-	@cd "$(BUILD_DIR)/stage-armv7" && zip -qr "$(IPA_ARMV7)" Payload
+	@cd "$(BUILD_DIR)/stage-armv7" && zip -9 -qr "$(IPA_ARMV7)" Payload
 	@rm -rf "$(BUILD_DIR)/stage-armv7"
 
 ipa-arm64: $(TLOTTIE_STAMP) $(ARM64_ALL_OBJS)
 	@echo "[+] Building 64-bit arm64 app bundle..."
-	@mkdir -p "$(IPA_DIR)" "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app"
+	@mkdir -p "$(IPA_DIR)"
+	@rm -rf "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app"
+	@mkdir -p "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app"
 	$(CC) -arch arm64 -isysroot $(SDK_PATH) $(MIN_IOS) -Wl,-dead_strip \
 		-L$(BUILD_DIR)/arm64/libs -L$(BUILD_DIR)/arm64/tdlib64 -L$(ROOT_DIR)/third_party/opus/lib \
 		$(ARM64_ALL_OBJS) $(FRAMEWORKS) $(WEBP_ARM64) $(TDLIB_LIBS_ARM64) $(DEPS_LIBS) -o "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app/$(APP_NAME)"
+	@strip -x "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app/$(APP_NAME)"
 	@cp -f "$(ROOT_DIR)/resources/Info.plist" "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app/Info.plist" 2>/dev/null || true
 	@$(call ADD_DEV_SCHEMES,$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app/Info.plist)
 	@cp -f "$(ROOT_DIR)/resources/fonts/"*.ttf "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
@@ -988,7 +995,7 @@ ipa-arm64: $(TLOTTIE_STAMP) $(ARM64_ALL_OBJS)
 	@rm -rf "$(BUILD_DIR)/stage-arm64" "$(IPA_ARM64)"
 	@mkdir -p "$(BUILD_DIR)/stage-arm64/Payload"
 	@cp -rf "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app" "$(BUILD_DIR)/stage-arm64/Payload/"
-	@cd "$(BUILD_DIR)/stage-arm64" && zip -qr "$(IPA_ARM64)" Payload
+	@cd "$(BUILD_DIR)/stage-arm64" && zip -9 -qr "$(IPA_ARM64)" Payload
 	@rm -rf "$(BUILD_DIR)/stage-arm64"
 
 # ------------------------------------------------------------------------------
