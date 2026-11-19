@@ -33,6 +33,11 @@ FOUNDATION_EXPORT TGMessageCellKind TGMessageCellKindForMessage(
 FOUNDATION_EXPORT NSString *TGMessageCellReuseIdentifierForKind(
 		TGMessageCellKind kind);
 
+/// A bubble's pool by what it shows: text, media, audio, sticker or round,
+/// card. A cell then keeps meeting rows that show the same views, so they
+/// rarely enter or leave the tree (TGBubbleCell settleHiddenViews).
+FOUNDATION_EXPORT NSString *TGBubbleReuseIdentifier(TGMessageLayout *layout);
+
 @interface TGMessageCellFactory : NSObject
 
 /// The configured cell for a message row. No allocation beyond the first cell

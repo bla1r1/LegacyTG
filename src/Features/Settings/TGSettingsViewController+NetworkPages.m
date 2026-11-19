@@ -388,7 +388,8 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 	NSArray *model = TGPowerSavingPageModel(
 			[TGCapabilities animatedStickersWanted],
 			[TGCapabilities gifAutoplayWanted],
-			[TGCapabilities wallpaperWanted]);
+			[TGCapabilities wallpaperWanted],
+			[TGDevice tier] == TGDeviceTierVintage);
 	NSMutableArray *sectionRows = [NSMutableArray array];
 	for (NSDictionary *section in model){
 		NSMutableArray *rows = [NSMutableArray array];

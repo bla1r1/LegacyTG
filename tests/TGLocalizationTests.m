@@ -83,6 +83,29 @@
 	XCTAssertEqualObjects((id)TGLocalized(@"chat"), (id)@"chat");
 }
 
+- (void)testRememberedMissTranslatesOnceThePackHasTheString {
+	// A miss is remembered (every chat label used to fold and search again);
+	// a pack that arrives after it, exact or only by case, still wins.
+	XCTAssertEqualObjects(TGLocalized(@"Zebra crossing"), @"Zebra crossing");
+	XCTAssertEqualObjects(TGLocalized(@"ZEBRA CROSSING"), @"ZEBRA CROSSING");
+	XCTAssertEqualObjects(TGLocalized(@"Zebra crossing"), @"Zebra crossing");
+	TGSetTelegramLanguageLookup(@{@"Zebra crossing" : @"Зебра"});
+	XCTAssertEqualObjects(TGLocalized(@"Zebra crossing"), @"Зебра");
+	XCTAssertEqualObjects(TGLocalized(@"ZEBRA CROSSING"), @"Зебра");
+	TGSetTelegramLanguageLookup(nil);
+	XCTAssertEqualObjects(TGLocalized(@"Zebra crossing"), @"Zebra crossing");
+}
+
+- (void)testLongMessageTextStaysEnglishAndIntact {
+	// Message bodies reach TGLocalized through UILabel; the hash walks long
+	// ones in 128-unit chunks.
+	NSMutableString *body = [NSMutableString string];
+	for (int i = 0; i < 300; i++)
+		[body appendFormat:@"word%d ", i];
+	XCTAssertEqualObjects(TGLocalized(body), body);
+	XCTAssertEqualObjects(TGLocalized(body), body);
+}
+
 - (void)testUnknownStaysEnglish {
 	TGSetTelegramLanguageLookup(@{@"Settings" : @"НАСТРОЙКИ"});
 	XCTAssertEqualObjects((id)TGLocalized(@"LegacyTG only"), (id)@"LegacyTG only");

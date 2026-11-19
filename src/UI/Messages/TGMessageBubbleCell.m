@@ -2,6 +2,8 @@
 // TGMessageBubbleCell.m - the shared chat message bubble.
 //
 #import "TGMessageBubbleCell.h"
+#import "TGRenderedLabel.h"
+#import "TGTextRender.h"
 #import "TGTheme.h"
 #import "TGIcons.h"
 #import <AVFoundation/AVFoundation.h>
@@ -19,16 +21,11 @@ static const CGFloat kSendRingMinimum = 0.2f;
 static const NSUInteger kMaxCustomEmojiViews = 3;
 
 @interface TGBubbleCell () {
-	CTFrameRef _textFrame;          // the laid-out body text, for hit-testing
-	CGSize     _textFrameSize;      // the box it was laid out in
 	CGSize     _waveSize;           // the box the bars were laid out in
-	// Parked views, their superviews and indices, in the order they left.
-	// Strong: a few (the reactions label, poll rows) are held by nothing else.
-	NSMutableArray *_parkedViews;
-	NSMutableArray *_parkedParents;
-	NSUInteger _parkedIndex[64];
+	// The views init built, in the order it stacked them, and their parents.
+	NSMutableArray *_built;
+	NSMutableArray *_builtParents;
 }
-@property (nonatomic, strong) NSAttributedString *textFrameString;
 @property (nonatomic, strong) CAShapeLayer *waveUnplayedLayer;
 @property (nonatomic, strong) CALayer *wavePlayedClip;
 @property (nonatomic, strong) CAShapeLayer *wavePlayedLayer;
@@ -74,7 +71,9 @@ static const NSUInteger kMaxCustomEmojiViews = 3;
 	self.picture.layer.cornerRadius = TGMetricCornerSmall;
 	[self.bubble addSubview:self.picture];
 
-	self.body = [[UILabel alloc] init];
+	// On iOS 6 the body's text is a picture TGTextRender drew, usually ahead
+	// of time on another thread; elsewhere UILabel draws it.
+	self.body = [TGRenderedLabel wanted] ? [[TGRenderedLabel alloc] init] : [[UILabel alloc] init];
 	self.body.numberOfLines = 0;
 	self.body.lineBreakMode = NSLineBreakByWordWrapping;
 	self.body.font = TGFontAtSize(theme.messageFontSize);
@@ -332,7 +331,64 @@ static const NSUInteger kMaxCustomEmojiViews = 3;
 	bodyTap.delegate = (id<UIGestureRecognizerDelegate>)self;
 	[self.body addGestureRecognizer:bodyTap];
 
+	_built = [NSMutableArray array];
+	_builtParents = [NSMutableArray array];
+	for (UIView *v in self.bubble.subviews) {
+		[_built addObject:v];
+		[_builtParents addObject:self.bubble];
+	}
+	for (UIView *v in self.contentView.subviews) {
+		if (v == self.bubble)
+			continue;
+		[_built addObject:v];
+		[_builtParents addObject:self.contentView];
+	}
+	[self settleHiddenViews];
 	return self;
+}
+
+- (void)settleHiddenViews {
+	NSUInteger count = _built.count;
+	for (NSUInteger i = 0; i < count; i++) {
+		UIView *v = _built[i];
+		UIView *home = _builtParents[i];
+		UIView *parent = v.superview;
+		if (v.hidden) {
+			if (parent == home)
+				[v removeFromSuperview];
+			continue;
+		}
+		if (parent)
+			continue;   // in its place, or moved by its branch (a round note)
+		[self insertBuiltAt:i];
+	}
+}
+
+- (void)ensureInTree:(UIView *)view {
+	if (view.superview)
+		return;
+	NSUInteger i = [_built indexOfObjectIdenticalTo:view];
+	if (i != NSNotFound)
+		[self insertBuiltAt:i];
+}
+
+/// Back at its depth: under the next built view that is in, else over the
+/// last one before it, so views a branch added later stay on top.
+- (void)insertBuiltAt:(NSUInteger)i {
+	NSUInteger count = _built.count;
+	UIView *v = _built[i];
+	UIView *home = _builtParents[i];
+	for (NSUInteger j = i + 1; j < count; j++)
+		if (_builtParents[j] == home && ((UIView *)_built[j]).superview == home) {
+			[home insertSubview:v belowSubview:_built[j]];
+			return;
+		}
+	for (NSInteger j = (NSInteger)i - 1; j >= 0; j--)
+		if (_builtParents[(NSUInteger)j] == home && ((UIView *)_built[(NSUInteger)j]).superview == home) {
+			[home insertSubview:v aboveSubview:_built[(NSUInteger)j]];
+			return;
+		}
+	[home insertSubview:v atIndex:0];
 }
 
 - (void)configureWithLayout:(TGMessageLayout *)layout theme:(TGTheme *)theme {
@@ -350,86 +406,12 @@ static const NSUInteger kMaxCustomEmojiViews = 3;
 	self.body.textColor = mine ? [theme bubbleMineTextColour] : [theme bubbleTheirsTextColour];
 }
 
-/// The frame CoreText laid the label's text out in, kept until the text or
-/// the box changes. A tap used to stand up an NSTextStorage, an
-/// NSLayoutManager and an NSTextContainer - the whole TextKit stack - only to
-/// ask which character was under a finger, and then throw all three away
-/// again; on a 4S that is milliseconds of work per touch, and two touches
-/// inside the same bubble did it twice.
-- (CTFrameRef)layoutFrameForLabel:(UILabel *)label {
-	NSAttributedString *attr = label.attributedText;
-	CGSize box = label.bounds.size;
-	if (_textFrame && _textFrameString == attr &&
-			CGSizeEqualToSize(_textFrameSize, box))
-		return _textFrame;
-
-	if (_textFrame){
-		CFRelease(_textFrame);
-		_textFrame = NULL;
-	}
-	_textFrameString = nil;
-	_textFrameSize = CGSizeZero;
-	if (!attr.length || box.width <= 0 || box.height <= 0)
-		return NULL;
-
-	CTFramesetterRef setter = CTFramesetterCreateWithAttributedString(
-			(CFAttributedStringRef)attr);
-	if (!setter)
-		return NULL;
-	CGMutablePathRef path = CGPathCreateMutable();
-	CGPathAddRect(path, NULL, CGRectMake(0, 0, box.width, box.height));
-	_textFrame = CTFramesetterCreateFrame(setter, CFRangeMake(0, 0), path, NULL);
-	CGPathRelease(path);
-	CFRelease(setter);
-
-	if (_textFrame){
-		_textFrameString = attr;
-		_textFrameSize = box;
-	}
-	return _textFrame;
-}
-
-/// Which character sits under `point`, or NSNotFound when the point is past
-/// the end of its line. CoreText answers this directly from the line it
-/// already measured: no objects, no allocation, sub-microsecond.
+/// Which character sits under `point`, or NSNotFound off any glyph. The
+/// layout is TGTextRender's, the one the iOS 6 body is drawn from and the
+/// custom emoji are placed by; handed the label's UIFont, iOS 6 CoreText had
+/// laid the text out in 12 pt and missed links on long messages.
 - (NSUInteger)characterIndexAtPoint:(CGPoint)point inLabel:(UILabel *)label {
-	CTFrameRef frame = [self layoutFrameForLabel:label];
-	if (!frame)
-		return NSNotFound;
-
-	CFArrayRef lines = CTFrameGetLines(frame);
-	CFIndex count = lines ? CFArrayGetCount(lines) : 0;
-	if (count <= 0)
-		return NSNotFound;
-
-	// CoreText measures from the bottom left of the box it was given; UIKit
-	// hands the touch down from the top left.
-	CGFloat height = label.bounds.size.height;
-	CGPoint flipped = CGPointMake(point.x, height - point.y);
-
-	CGPoint origins[count];
-	CTFrameGetLineOrigins(frame, CFRangeMake(0, count), origins);
-
-	for (CFIndex i = 0; i < count; i++){
-		CTLineRef line = (CTLineRef)CFArrayGetValueAtIndex(lines, i);
-		CGFloat ascent = 0, descent = 0, leading = 0;
-		double width = CTLineGetTypographicBounds(line, &ascent, &descent, &leading);
-		CGFloat top = origins[i].y + ascent;
-		CGFloat bottom = origins[i].y - descent;
-		if (flipped.y > top || flipped.y < bottom)
-			continue;
-		// Past the last glyph of the line is not on any character: tapping
-		// the empty run-off after a link must not open it.
-		if (flipped.x < origins[i].x || flipped.x > origins[i].x + width)
-			return NSNotFound;
-
-		CFIndex index = CTLineGetStringIndexForPosition(line,
-				CGPointMake(flipped.x - origins[i].x, 0));
-		if (index == kCFNotFound || index < 0)
-			return NSNotFound;
-		return (NSUInteger)index;
-	}
-	return NSNotFound;
+	return TGTextRenderIndexAtPoint(label.attributedText, label.bounds.size, point);
 }
 
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer shouldReceiveTouch:(UITouch *)touch {
@@ -649,43 +631,6 @@ static const NSUInteger kMaxCustomEmojiViews = 3;
 
 - (void)dealloc {
 	[self stopLoopingVideo];
-	if (_textFrame)
-		CFRelease(_textFrame);
-}
-
-- (void)parkIn:(UIView *)container {
-	NSArray *subs = container.subviews;
-	// Last to first, so removing one never shifts an index still to come.
-	for (NSInteger i = (NSInteger)subs.count - 1; i >= 0; i--) {
-		UIView *v = subs[i];
-		if (!v.hidden || _parkedViews.count >= 64)
-			continue;
-		_parkedIndex[_parkedViews.count] = (NSUInteger)i;
-		[_parkedViews addObject:v];
-		[_parkedParents addObject:container];
-		[v removeFromSuperview];
-	}
-}
-
-- (void)parkHiddenViews {
-	if (!_parkedViews) {
-		_parkedViews = [[NSMutableArray alloc] initWithCapacity:48];
-		_parkedParents = [[NSMutableArray alloc] initWithCapacity:48];
-	}
-	[self parkIn:self.bubble];
-	[self parkIn:self.contentView];
-}
-
-/// Puts the parked views back last-in first-out, so each goes to the index it
-/// left from: everything below it is back in place by then.
-- (void)unparkViews {
-	for (NSInteger i = (NSInteger)_parkedViews.count - 1; i >= 0; i--) {
-		UIView *parent = _parkedParents[i];
-		NSUInteger at = MIN(_parkedIndex[i], parent.subviews.count);
-		[parent insertSubview:_parkedViews[i] atIndex:at];
-	}
-	[_parkedViews removeAllObjects];
-	[_parkedParents removeAllObjects];
 }
 
 - (void)prepareForReuse {
@@ -694,7 +639,6 @@ static const NSUInteger kMaxCustomEmojiViews = 3;
 }
 
 - (void)resetForReuse {
-	[self unparkViews];
 	for (NSInteger i = 0; i < 4; i++)
 		[self.bubble viewWithTag:TGBubbleSlotLayerTag + i].hidden = YES;
 	[[self.contentView viewWithTag:TGBubbleStickerEffectTag] removeFromSuperview];
@@ -726,6 +670,8 @@ static const NSUInteger kMaxCustomEmojiViews = 3;
 	for (UIImageView *cv in self.collageViews)
 		[TGIcons setRoundedImage:nil inView:cv size:CGSizeZero radius:0];
 	self.body.hidden = YES;
+	if ([self.body isKindOfClass:TGRenderedLabel.class])
+		((TGRenderedLabel *)self.body).renderKey = nil;
 	self.body.text = nil;
 	self.body.attributedText = nil;
 	self.body.numberOfLines = 0;
@@ -770,15 +716,19 @@ static const NSUInteger kMaxCustomEmojiViews = 3;
 	// A round note moves the clock and the ticks out of the bubble, because a
 	// circle clips them away. Every other kind places them in the bubble's
 	// own coordinates, so a reused cell has to get them back first.
-	if (self.time.superview != self.bubble)
+	// A view out of the tree because it was hidden is settleHiddenViews' to
+	// put back, at its depth.
+	if (self.time.superview && self.time.superview != self.bubble)
 		[self.bubble addSubview:self.time];
-	if (self.viewsEye.superview != self.bubble)
+	if (self.viewsEye.superview && self.viewsEye.superview != self.bubble)
 		[self.bubble addSubview:self.viewsEye];
-	if (self.ticks.superview != self.bubble)
+	if (self.ticks.superview && self.ticks.superview != self.bubble)
 		[self.bubble addSubview:self.ticks];
-	if (self.stampPlate.superview != self.bubble)
+	if (self.stampPlate.superview && self.stampPlate.superview != self.bubble) {
+		[self ensureInTree:self.time];
 		[self.bubble insertSubview:self.stampPlate belowSubview:self.time];
-	if (self.mediaStamp.superview != self.bubble) {
+	}
+	if (self.mediaStamp.superview && self.mediaStamp.superview != self.bubble) {
 		[self.bubble addSubview:self.mediaStamp];
 		self.mediaStamp.layer.cornerRadius = TGMetricCornerControl;
 		self.mediaStamp.textColor = [[TGTheme shared] onMediaColour];

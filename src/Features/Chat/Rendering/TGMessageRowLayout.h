@@ -77,6 +77,15 @@ FOUNDATION_EXPORT TGMessageTapPart TGMessageTapPartAt(TGMessageLayout *layout, C
 
 /// The text's size inside a bubble; zero for a sticker or no text.
 FOUNDATION_EXPORT CGSize TGMessageBodySize(NSDictionary *m, CGFloat fontSize);
+/// The texts of a page of history, copied on the main thread so the measure
+/// can run on another one: kind, text and entities of each message with text.
+/// Custom emoji measure off the main thread too: there they get the empty
+/// stand-in picture, the size is the attachment's bounds either way.
+FOUNDATION_EXPORT NSArray *TGMessageTextsToMeasure(NSArray *messages);
+/// Measures those bodies into the text size cache the row layout reads, on
+/// any thread. iOS 6 asks for every row's height in reloadData, so a page of
+/// older history measured there cost 1.5 s of main thread on the iPod touch 4.
+FOUNDATION_EXPORT void TGMeasureMessageTexts(NSArray *texts, CGFloat fontSize);
 
 /// A picture with no caption, an album with none, or a caption above the
 /// picture carries the stamp on the picture.

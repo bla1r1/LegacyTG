@@ -53,7 +53,7 @@ static NSString *TGProxyDetail(NSDictionary *proxy, BOOL connected) {
 			ping, type);
 }
 
-NSArray *TGPowerSavingPageModel(BOOL stickersOn, BOOL gifsOn, BOOL wallpaperOn) {
+NSArray *TGPowerSavingPageModel(BOOL stickersOn, BOOL gifsOn, BOOL wallpaperOn, BOOL vintage) {
 	NSMutableArray *rows = [NSMutableArray array];
 
 	// EnergySavingSettingsScreen lists videos, GIFs, stickers, emoji,
@@ -68,6 +68,8 @@ NSArray *TGPowerSavingPageModel(BOOL stickersOn, BOOL gifsOn, BOOL wallpaperOn) 
 	gifs[TGPageModelRowColour] = @"orchid";
 	gifs[TGPageModelRowOn] = @(gifsOn);
 	[rows addObject:gifs];
+	if (vintage)
+		return @[TGPageSection(@"Options", nil, rows)];
 
 	NSMutableDictionary *stickers = TGPageRow(@"switchinfo",
 			@"Loop Animated Stickers", @"stickers");

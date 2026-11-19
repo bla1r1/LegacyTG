@@ -194,10 +194,18 @@ static const CGFloat kListStoryGap     = TGMetricPadSmall;
 - (void)viewWillAppear:(BOOL)animated {
 	[super viewWillAppear:animated];
 	[self buildHeaderButtons];
+	if (self.visibleRowsStale) {
+		self.visibleRowsStale = NO;
+		NSArray *visible = [self.tableView indexPathsForVisibleRows];
+		if (visible.count)
+			[self.tableView reloadRowsAtIndexPaths:visible withRowAnimation:UITableViewRowAnimationNone];
+	}
 }
 
 - (void)viewDidAppear:(BOOL)animated {
 	[super viewDidAppear:animated];
+	if (self.storyRowsStale)
+		[self reloadStoriesIfNeeded];
 	// The header cannot be parked inside viewDidLoad: the table has no
 	// height yet there, so the first layout left the search field on screen.
 	if (!self.userRevealed && !self.searchResults && !self.showsArchive &&

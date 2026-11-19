@@ -5,6 +5,7 @@
 #include <dlfcn.h>
 #include <mach/mach.h>
 #include <pthread.h>
+#include <sched.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -61,6 +62,11 @@ static int takeSample(uintptr_t *out) {
 
 static void *samplerLoop(void *unused) {
 	(void)unused;
+	// Above the main thread, or the samples go missing exactly while main
+	// holds the one core: a 1.5 s reloadData on the iPod touch 4 left no
+	// trace, and a run of 9 s got 1800 samples of the 4500 asked for.
+	struct sched_param param = { .sched_priority = sched_get_priority_max(SCHED_RR) };
+	pthread_setschedparam(pthread_self(), SCHED_RR, &param);
 	while (sRunning && sCount < sMax) {
 		if (thread_suspend(sMain) == KERN_SUCCESS) {
 			int d = takeSample(sFrames + (size_t)sCount * kDepth);
@@ -185,7 +191,7 @@ static void hostTicks(unsigned long long out[CPU_STATE_MAX]) {
 	vm_deallocate(mach_task_self(), (vm_address_t)info, n * sizeof(integer_t));
 }
 
-typedef struct { char name[24]; double sec; } ThreadUse;
+typedef struct { char name[24]; double sec; int pri; } ThreadUse;
 
 static int byUse(const void *a, const void *b) {
 	double x = ((const ThreadUse *)a)->sec, y = ((const ThreadUse *)b)->sec;
@@ -219,6 +225,12 @@ int TGCpuSplit(char *out, size_t cap) {
 		ThreadUse *u = &use[used++];
 		u->sec = d;
 		u->name[0] = 0;
+		// The base priority says who wins the one core: a thread at the main
+		// thread's level shares it with the scroll in 10 ms slices.
+		struct policy_timeshare_info pinfo;
+		mach_msg_type_number_t pcount = POLICY_TIMESHARE_INFO_COUNT;
+		u->pri = thread_info(threads[i], THREAD_SCHED_TIMESHARE_INFO, (thread_info_t)&pinfo, &pcount)
+				== KERN_SUCCESS ? pinfo.base_priority : -1;
 		pthread_t pt = pthread_from_mach_thread_np(threads[i]);
 		if (pt)
 			pthread_getname_np(pt, u->name, sizeof(u->name));
@@ -245,7 +257,7 @@ int TGCpuSplit(char *out, size_t cap) {
 				(busy + idle) / hz, appTotal, other < 0 ? 0 : other, idle / hz);
 		qsort(use, used, sizeof(ThreadUse), byUse);
 		for (int k = 0; k < used && k < 6 && len > 0 && (size_t)len < cap; k++)
-			len += snprintf(out + len, cap - len, " %s=%.2f", use[k].name, use[k].sec);
+			len += snprintf(out + len, cap - len, " %s=%.2f/p%d", use[k].name, use[k].sec, use[k].pri);
 		wrote = 1;
 	}
 	memcpy(sHostBase, host, sizeof(host));

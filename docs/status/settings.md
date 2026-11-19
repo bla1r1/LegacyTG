@@ -35,7 +35,7 @@ M34 harness pages and TDLib footers.
 | Privacy and Security | done | `Features/Settings/TGSettingsViewController+PrivacyPages.m:500` | Security, six rules, messages, close friends, contacts, account status, payments, link. |
 | Data and Storage | partial | `Features/Settings/TGSettingsViewController+NetworkPages.m:27` | All pages exist; File Tools and the network state page are still on the user's path. |
 | Appearance | partial | `Features/Settings/TGSettingsViewController+AppearancePages.m:37` | Themes (light and dark official files), text size, wallpaper, defaults, emoji themes and Your Color; no Auto-Night, bubbles or icons. |
-| Power Saving | partial | `Features/Settings/TGSettingsViewController+NetworkPages.m:192` | Sticker animation, wallpaper, GIF autoplay and media preloading; no master or threshold. |
+| Power Saving | partial | `Features/Settings/TGSettingsViewController+NetworkPages.m:192` | Sticker animation, wallpaper, GIF autoplay and media preloading; no master or threshold. On Vintage (iPod touch 4, 3GS) the page keeps only Autoplay GIFs: that tier shows still stickers and no chat wallpaper whatever the switches say, and Settings > Device says so (19 November 2026). |
 | Language | partial | `src/Features/Settings/Pages/TGSettingsPagesCore.m:258` | Pack picker changes TDLib's language; the app's own ~2200 strings stay English. |
 | Language row value | partial | `Features/Settings/TGSettingsViewController.m:95` | Uses the pack's `name`, never `native_name`. |
 | Language pack tools | dev-only | `src/Features/Settings/Pages/TGSettingsPagesCore.m:289` | The string editor lives on the dev language page. |

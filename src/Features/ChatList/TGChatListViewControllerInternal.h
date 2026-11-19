@@ -21,6 +21,8 @@
 
 @property (nonatomic, strong) TGEmptyView *emptyView;
 @property (nonatomic, strong) NSArray *chats;
+/// A row update arrived while the list was off screen.
+@property (nonatomic, assign) BOOL visibleRowsStale;
 @property (nonatomic, assign) BOOL showsArchive;      // this IS the archive screen
 @property (nonatomic, assign) NSInteger folderId;     // 0 = no folder
 @property (nonatomic, assign) BOOL editingChats;
@@ -88,6 +90,8 @@ UIImage *TGChatListLockIcon(CGFloat side, UIColor *colour);
 @property (nonatomic, strong) NSArray *storyRows;
 @property (nonatomic, strong) NSDate *storyRowsReadAt;
 @property (nonatomic, assign) BOOL storyRowsLoading;
+/// A strip reload came while the list was covered; it runs on the way back.
+@property (nonatomic, assign) BOOL storyRowsStale;
 
 - (void)reload;
 - (void)reloadStoriesIfNeeded;

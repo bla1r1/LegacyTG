@@ -1,4 +1,6 @@
 #import "TGChatCellLogic.h"
+#import "TGRenderedLabel.h"
+#import "TGTextRender.h"
 #import "TGBubbleBackImage.h"
 #import "TGPerf.h"
 #import "TGLocalization.h"
@@ -68,6 +70,9 @@ static UIImage *TGLinkFillImage(NSArray *colours) {
 
 static const NSUInteger kMaxCustomEmojiPerBubble = 3;
 static char kTGReactionChipInfoKey;
+/// Rows on each side of the one coming into view whose body text is drawn ahead.
+static const NSInteger kTGBodyPrefetchRows = 4;
+static char kTGReactionChipsShownKey;
 
 #pragma mark - table
 
@@ -262,11 +267,25 @@ static char kTGReactionChipInfoKey;
 	cell.body.font = TGFontAtSize([TGTheme shared].messageFontSize);
 	NSArray *entities = m[@"entities"];
 	if (entities.count) {
-		cell.body.attributedText = TGAttributedMessageTextRevealing(m[@"text"], entities, TGFontAtSize([TGTheme shared].messageFontSize), bodyColor, [self.revealedSpoilers containsObject:m[@"id"] ?: @0]);
+		// A revealed spoiler is rare and changes the text; it is not kept.
+		BOOL revealed = [self.revealedSpoilers containsObject:m[@"id"] ?: @0];
+		NSAttributedString *body = !revealed && [layout.attributedBodyColour isEqual:bodyColor]
+				? layout.attributedBody : nil;
+		if (!body) {
+			body = TGAttributedMessageTextRevealing(m[@"text"], entities,
+					TGFontAtSize([TGTheme shared].messageFontSize), bodyColor, revealed);
+			layout.attributedBody = revealed ? nil : body;
+			layout.attributedBodyColour = revealed ? nil : bodyColor;
+		}
+		cell.body.attributedText = body;
 	} else {
 		TGSetBodyText(cell.body, m[@"text"], bodyColor);
 	}
 	cell.body.frame = layout.bodyFrame;
+	if ([cell.body isKindOfClass:TGRenderedLabel.class])
+		((TGRenderedLabel *)cell.body).renderKey = cell.body.hidden ? nil
+				: [self bodyRenderKeyFor:m layout:layout mine:mine
+						revealed:[self.revealedSpoilers containsObject:m[@"id"] ?: @0]];
 	[self configureCustomEmojiInCell:cell message:m layout:layout];
 
 	// 7b. Link preview block
@@ -481,6 +500,7 @@ static char kTGReactionChipInfoKey;
 		cell.stampPlate.frame = CGRectMake(group.origin.x - TGMetricPadSmall,
 				CGRectGetMidY(layout.timeFrame) - TGHalf(TGMetricLineCaption),
 				group.size.width + TGDoubled(TGMetricPadSmall), TGMetricLineCaption);
+		[cell ensureInTree:cell.time];
 		[cell.bubble insertSubview:cell.stampPlate belowSubview:cell.time];
 	}
 	cell.viewsEye.hidden = !(viewCount > 0 && !hideStamp && !CGRectIsEmpty(layout.stampEyeFrame));
@@ -577,6 +597,11 @@ static char kTGReactionChipInfoKey;
 	}
 
 	NSArray *emojiRects = layout.customEmojiRects;
+	if (!emojiRects && [cell.body isKindOfClass:TGRenderedLabel.class]) {
+		emojiRects = TGTextRenderCachedEmojiRects(((TGRenderedLabel *)cell.body).renderKey);
+		if (emojiRects)
+			layout.customEmojiRects = emojiRects;
+	}
 	if (!emojiRects) {
 		emojiRects = TGCustomEmojiRectsInText(cell.body.attributedText, layout.bodyFrame.size.width);
 		layout.customEmojiRects = emojiRects ?: @[];
@@ -896,6 +921,7 @@ UIImage *TGBubbleBackImage(TGTheme *theme, BOOL mine, BOOL first, BOOL last) {
 	NSDictionary *m = self.messages[indexPath.row];
 	[self noteUnreadMarksOfMessage:m];
 	TGMessageLayout *layout = [self layoutForMessage:m atRow:indexPath.row];
+	[self prefetchBodyTextsAroundRow:indexPath.row];
 	[self startGifIfWantedIn:cell message:m];
 	NSInteger row = indexPath.row;
 	BOOL first = [self runStartsAtRow:row];
@@ -925,7 +951,7 @@ UIImage *TGBubbleBackImage(TGTheme *theme, BOOL mine, BOOL first, BOOL last) {
 	UIColor *fill = cell.bubble.backgroundColor;
 	BOOL plain = !fill || CGColorGetAlpha(fill.CGColor) < TGAlphaEpsilon;
 	if (plain || layout.isService || layout.isSticker || layout.isRound) {
-		[cell parkHiddenViews];
+		[cell settleHiddenViews];
 		return;
 	}
 
@@ -950,8 +976,7 @@ UIImage *TGBubbleBackImage(TGTheme *theme, BOOL mine, BOOL first, BOOL last) {
 	cell.shineGradientLayer.hidden = YES;
 
 	cell.tail.hidden = YES;
-
-	[cell parkHiddenViews];
+	[cell settleHiddenViews];
 }
 
 /// The chips under a bubble. One group per pill; a group with exactly one
@@ -973,15 +998,37 @@ UIImage *TGBubbleBackImage(TGTheme *theme, BOOL mine, BOOL first, BOOL last) {
 		holder = [[UIView alloc] initWithFrame:CGRectZero];
 		holder.tag = 0x9005;
 		holder.backgroundColor = [UIColor clearColor];
+		holder.userInteractionEnabled = YES;
+		[holder addGestureRecognizer:[[UITapGestureRecognizer alloc]
+				initWithTarget:self action:@selector(reactionChipTapped:)]];
 		[cell.contentView addSubview:holder];
 	}
 	holder.hidden = NO;
-	holder.frame = layout.reactionChipsFrame;
-	for (UIView *old in [holder.subviews copy])
-		[old removeFromSuperview];
-
+	// A row scrolled back into view, or redrawn for a picture elsewhere in
+	// it, usually has the chips it shows. Kept only while every picture in
+	// them was there when they were drawn.
 	TGTheme *theme = [TGTheme shared];
-	CGFloat maxW = holder.bounds.size.width;
+	NSArray *shown = objc_getAssociatedObject(holder, &kTGReactionChipsShownKey);
+	if (shown.firstObject == groups && [shown.lastObject isEqual:[theme currentThemeId] ?: @""] &&
+			CGRectEqualToRect(holder.frame, layout.reactionChipsFrame))
+		return;
+	objc_setAssociatedObject(holder, &kTGReactionChipsShownKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+	holder.frame = layout.reactionChipsFrame;
+	BOOL complete = YES;
+
+	// The whole row of chips is one picture on one layer: as views, a
+	// holder, a view, a label and a picture per chip were 7-10 of a text
+	// row's ~20 layers, and backboardd composites every layer every frame.
+	CGSize size = holder.bounds.size;
+	if (size.width <= 0 || size.height <= 0) {
+		holder.layer.contents = nil;
+		return;
+	}
+	UIFont *font = TGFontCaption();
+	UIColor *textColour = [theme primaryTextColour];
+	NSMutableArray *chips = [NSMutableArray array];
+	UIGraphicsBeginImageContextWithOptions(size, NO, 0);
+	CGFloat maxW = size.width;
 	CGFloat x = TGMetricZero;
 	for (NSDictionary *group in groups){
 		NSString *emoji = group[@"emoji"];
@@ -994,6 +1041,8 @@ UIImage *TGBubbleBackImage(TGTheme *theme, BOOL mine, BOOL first, BOOL last) {
 		CGFloat emojiSide = TGMetricReactionChipAvatar;
 		UIImage *customEmojiImg = isCustom
 				? [[TGCustomEmojiStore shared] imageForId:customEmojiId side:emojiSide] : nil;
+		if (isCustom && !customEmojiImg)
+			complete = NO;
 
 		NSString *text = nil;
 		CGFloat chipW = TGMetricZero;
@@ -1010,13 +1059,12 @@ UIImage *TGBubbleBackImage(TGTheme *theme, BOOL mine, BOOL first, BOOL last) {
 			if (single)
 				chipW += TGMetricReactionChipAvatar + TGMetricReactionChipGap;
 			if (text.length)
-				chipW += TGMetricReactionChipGap + TGTextSize(text, TGFontCaption(), 0).width;
+				chipW += TGMetricReactionChipGap + TGTextSize(text, font, 0).width;
 		} else {
 			NSString *glyph = emoji.length ? emoji : @"\u2605";
 			text = (single || (tagLabel && !tagLabel.length)) ? glyph
 					: [NSString stringWithFormat:@"%@ %@", glyph, countText];
-			chipW = TGTextSize(text, TGFontCaption(), 0).width
-					+ TGDoubled(TGMetricReactionChipInset);
+			chipW = TGTextSize(text, font, 0).width + TGDoubled(TGMetricReactionChipInset);
 			if (single)
 				chipW += TGMetricReactionChipAvatar + TGMetricReactionChipGap;
 		}
@@ -1026,70 +1074,77 @@ UIImage *TGBubbleBackImage(TGTheme *theme, BOOL mine, BOOL first, BOOL last) {
 			break;
 
 		BOOL chosen = [group[@"chosen"] boolValue];
-		UIView *chip = [[UIView alloc] initWithFrame:CGRectMake(x, TGMetricZero,
-				chipW, TGMetricReactionChipHeight)];
-		chip.backgroundColor = chosen ? [theme reactionChipMineColour]
-									  : [theme reactionChipColour];
-		chip.layer.cornerRadius = TGHalf(TGMetricReactionChipHeight);
-		chip.layer.borderWidth = TGMetricBorderWidth;
-		chip.layer.borderColor = (chosen ? [theme reactionChipMineBorderColour]
-										 : [theme reactionChipBorderColour]).CGColor;
-		chip.userInteractionEnabled = YES;
+		CGRect chip = CGRectMake(x, TGMetricZero, chipW, TGMetricReactionChipHeight);
+		// The plate and its rim as the layer drew them: the border inside the
+		// bounds, the corners a half circle.
+		CGFloat rim = TGMetricBorderWidth;
+		UIBezierPath *plate = [UIBezierPath bezierPathWithRoundedRect:CGRectInset(chip, TGHalf(rim), TGHalf(rim))
+				cornerRadius:TGHalf(TGMetricReactionChipHeight - rim)];
+		[(chosen ? [theme reactionChipMineColour] : [theme reactionChipColour]) setFill];
+		[plate fill];
+		if (rim > 0) {
+			plate.lineWidth = rim;
+			[(chosen ? [theme reactionChipMineBorderColour] : [theme reactionChipBorderColour]) setStroke];
+			[plate stroke];
+		}
 
-		CGFloat textX = TGMetricReactionChipInset;
+		CGFloat textX = chip.origin.x + TGMetricReactionChipInset;
 		if (single){
 			UIImage *avatar = [self avatarForUser:userId name:group[@"name"]];
+			if (!self.senderAvatars[@(userId)])
+				complete = NO;
 			CGFloat side = TGMetricReactionChipAvatar;
-			UIImageView *face = [[UIImageView alloc] initWithFrame:CGRectMake(
-					TGMetricReactionChipInset,
-					TGCenteredOrigin(TGMetricReactionChipHeight, side), side, side)];
-			face.image = [TGIcons roundedImage:avatar
-										  size:CGSizeMake(side, side)
-										radius:TGHalf(side)
-									   corners:UIRectCornerAllCorners];
-			face.contentMode = UIViewContentModeScaleAspectFill;
-			[chip addSubview:face];
+			[[TGIcons roundedImage:avatar size:CGSizeMake(side, side) radius:TGHalf(side)
+					corners:UIRectCornerAllCorners]
+					drawInRect:CGRectMake(textX, TGCenteredOrigin(TGMetricReactionChipHeight, side), side, side)];
 			textX += side + TGMetricReactionChipGap;
 		}
 
 		if (customEmojiImg) {
-			UIImageView *emojiView = [[UIImageView alloc] initWithFrame:CGRectMake(
-					textX, TGCenteredOrigin(TGMetricReactionChipHeight, emojiSide),
-					emojiSide, emojiSide)];
-			emojiView.image = customEmojiImg;
-			emojiView.contentMode = UIViewContentModeScaleAspectFit;
-			[chip addSubview:emojiView];
+			CGSize fit = customEmojiImg.size;
+			CGFloat k = (fit.width > 0 && fit.height > 0) ? MIN(emojiSide / fit.width, emojiSide / fit.height) : 1;
+			CGSize drawn = CGSizeMake(fit.width * k, fit.height * k);
+			[customEmojiImg drawInRect:CGRectMake(textX + TGHalf(emojiSide - drawn.width),
+					TGCenteredOrigin(TGMetricReactionChipHeight, drawn.height), drawn.width, drawn.height)];
 			textX += emojiSide;
 			if (text.length)
 				textX += TGMetricReactionChipGap;
 		}
 
 		if (text.length) {
-			UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(textX,
-					TGMetricZero, chipW - textX - TGMetricReactionChipInset,
-					TGMetricReactionChipHeight)];
-			label.font = TGFontCaption();
-			label.text = text;
-			label.textColor = [theme primaryTextColour];
-			label.backgroundColor = [UIColor clearColor];
-			[chip addSubview:label];
+			[textColour setFill];
+			CGFloat room = CGRectGetMaxX(chip) - TGMetricReactionChipInset - textX;
+			[text drawInRect:CGRectMake(textX, TGCenteredOrigin(TGMetricReactionChipHeight, font.lineHeight),
+					room, font.lineHeight)
+					withFont:font lineBreakMode:NSLineBreakByTruncatingTail];
 		}
 
-		[chip addGestureRecognizer:[[UITapGestureRecognizer alloc]
-				initWithTarget:self action:@selector(reactionChipTapped:)]];
-		objc_setAssociatedObject(chip, &kTGReactionChipInfoKey, @{
+		[chips addObject:@{
+			@"frame"         : [NSValue valueWithCGRect:chip],
 			@"message"       : m,
 			@"emoji"         : emoji ?: @"",
 			@"customEmojiId" : group[@"customEmojiId"] ?: @(0),
-		}, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-
-		[holder addSubview:chip];
+		}];
 		x += chipW + TGMetricReactionChipGap;
 	}
+	UIImage *picture = UIGraphicsGetImageFromCurrentImageContext();
+	UIGraphicsEndImageContext();
+	holder.layer.contents = (__bridge id)picture.CGImage;
+	objc_setAssociatedObject(holder, &kTGReactionChipInfoKey, chips, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+	if (complete)
+		objc_setAssociatedObject(holder, &kTGReactionChipsShownKey,
+				@[ groups, [theme currentThemeId] ?: @"" ], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
 - (void)reactionChipTapped:(UITapGestureRecognizer *)tap {
-	NSDictionary *info = objc_getAssociatedObject(tap.view, &kTGReactionChipInfoKey);
+	NSArray *chips = objc_getAssociatedObject(tap.view, &kTGReactionChipInfoKey);
+	CGPoint point = [tap locationInView:tap.view];
+	NSDictionary *info = nil;
+	for (NSDictionary *chip in chips)
+		if (CGRectContainsPoint([chip[@"frame"] CGRectValue], point)) {
+			info = chip;
+			break;
+		}
 	if (!info)
 		return;
 	// Where Telegram keeps who reacted to itself (a channel), a chip is the
@@ -1103,6 +1158,65 @@ UIImage *TGBubbleBackImage(TGTheme *theme, BOOL mine, BOOL first, BOOL last) {
 	[self showReactorsOfMessage:message
 						  emoji:info[@"emoji"]
 				  customEmojiId:[info[@"customEmojiId"] longLongValue]];
+}
+
+#pragma mark - body text pictures (iOS 6)
+
+/// Everything the body's picture depends on: a message edited, resized,
+/// recoloured by the theme or revealed is another picture.
+- (NSString *)bodyRenderKeyFor:(NSDictionary *)m layout:(TGMessageLayout *)layout
+						  mine:(BOOL)mine revealed:(BOOL)revealed {
+	NSString *text = m[@"text"];
+	CGSize size = layout.bodyFrame.size;
+	return [NSString stringWithFormat:@"%@|%d|%d|%.0fx%.0f|%lu|%lu|%lu|%.1f|%@",
+			m[@"id"], mine, revealed, size.width, size.height,
+			(unsigned long)text.hash, (unsigned long)text.length, (unsigned long)[m[@"entities"] count],
+			[TGTheme shared].messageFontSize, [[TGTheme shared] currentThemeId] ?: @""];
+}
+
+/// The rows a scroll is about to show get their body pictures drawn on the
+/// render queue now, while the main thread waits on the render server, so
+/// their cells only hand a finished picture to a layer. Only rows whose
+/// layout is known: reloadData has measured every row already.
+- (void)prefetchBodyTextsAroundRow:(NSInteger)row {
+	if (![TGRenderedLabel wanted])
+		return;
+	NSArray *messages = self.messages;
+	TGTheme *theme = [TGTheme shared];
+	CGFloat scale = [UIScreen mainScreen].scale;
+	UIFont *font = TGFontAtSize(theme.messageFontSize);
+	for (NSInteger offset = -kTGBodyPrefetchRows; offset <= kTGBodyPrefetchRows; offset++) {
+		NSInteger r = row + offset;
+		if (offset == 0 || r < 0 || r >= (NSInteger)messages.count)
+			continue;
+		NSDictionary *m = messages[(NSUInteger)r];
+		NSNumber *msgId = m[@"id"];
+		TGMessageLayout *layout = msgId ? self.layoutCache[msgId] : nil;
+		NSString *text = m[@"text"];
+		if (!layout || layout.bodyPrefetched || layout.isService || layout.isVoice || layout.isSticker ||
+				layout.bodySize.height <= 0 || ![text isKindOfClass:NSString.class] || !text.length)
+			continue;
+		layout.bodyPrefetched = YES;
+		BOOL mine = [m[@"outgoing"] boolValue];
+		BOOL revealed = [self.revealedSpoilers containsObject:msgId];
+		UIColor *colour = mine ? [theme bubbleMineTextColour] : [theme bubbleTheirsTextColour];
+		NSArray *entities = [m[@"entities"] isKindOfClass:NSArray.class] ? m[@"entities"] : nil;
+		NSAttributedString *built = !revealed && [layout.attributedBodyColour isEqual:colour]
+				? layout.attributedBody : nil;
+		TGTextRenderPrefetch([self bodyRenderKeyFor:m layout:layout mine:mine revealed:revealed],
+				layout.bodyFrame.size, scale, ^NSAttributedString *{
+			if (built)
+				return built;
+			if (entities.count)
+				return TGAttributedMessageTextRevealing(text, entities, font, colour, revealed);
+			// As TGSetBodyText puts it on the label: emoji in their own face.
+			NSMutableAttributedString *plain = [TGEmojiAttributedText(text, font) mutableCopy]
+					?: [[NSMutableAttributedString alloc] initWithString:text
+							attributes:@{ NSFontAttributeName : font }];
+			[plain addAttribute:NSForegroundColorAttributeName value:colour range:NSMakeRange(0, plain.length)];
+			return plain;
+		});
+	}
 }
 
 @end

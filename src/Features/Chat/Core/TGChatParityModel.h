@@ -19,6 +19,11 @@ NSArray<NSNumber *> *TGChangedMessageIds(NSArray *oldMessages, NSArray *newMessa
 /// "5 November 2026" in the pack's own month and order. `now` is explicit so
 /// the test does not depend on the machine's clock.
 NSString *TGChatDateSeparatorTitle(NSTimeInterval stamp, NSTimeInterval now);
+/// The same title, kept per day until the day or the language changes: a
+/// channel posts on a different day nearly every time, and each title asked
+/// NSCalendar twice, ~100 ms of every page grouped on the iPod touch 4.
+/// Main thread.
+NSString *TGChatDayTitle(NSTimeInterval stamp, NSTimeInterval now);
 
 /// Chat.InputTextPaidMessagePlaceholder: "Message for 10 Stars" when the
 /// person charges for messages; nil when they do not.

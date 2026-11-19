@@ -3,6 +3,18 @@
 //
 #import <Foundation/Foundation.h>
 
+/// How long the table must have stood still before rows rebuilt for pictures
+/// that arrived meanwhile: each rebuild relaid every visible row, and a burst
+/// of custom emoji landing mid-scroll cost 10% of the first scroll on the A4.
+static const double TGChatRedrawSettleSeconds = 0.25;
+/// Seconds to wait before that rebuild, 0 when it may run now.
+FOUNDATION_EXPORT double TGChatRedrawDelay(double now, double lastScroll);
+/// A still table is looked at twice, this far apart.
+static const double TGChatStillRecheckSeconds = 0.1;
+/// Whether the second look, at `now`, came soon enough after the first, at
+/// `firstLook`, to confirm it: within twice the recheck interval.
+FOUNDATION_EXPORT BOOL TGChatStillConfirmed(double now, double firstLook);
+
 /// What one custom emoji in a bubble shows this pass. The still picture is
 /// the answer until an animation file is on disk and can play: dropped as
 /// soon as TDLib named the animation, the emoji was a hole for the seconds

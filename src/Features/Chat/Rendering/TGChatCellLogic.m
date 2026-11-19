@@ -6,3 +6,13 @@ TGCustomEmojiShow TGCustomEmojiChoose(BOOL animatedAllowed, NSUInteger playing,
 		return TGCustomEmojiShowStill;
 	return fileLocal ? TGCustomEmojiShowAnimation : TGCustomEmojiShowStillAndFetch;
 }
+
+double TGChatRedrawDelay(double now, double lastScroll) {
+	double still = now - lastScroll;
+	return still >= TGChatRedrawSettleSeconds ? 0 : TGChatRedrawSettleSeconds - still;
+}
+
+BOOL TGChatStillConfirmed(double now, double firstLook) {
+	double since = now - firstLook;
+	return since >= TGChatStillRecheckSeconds && since <= 2 * TGChatStillRecheckSeconds;
+}

@@ -3,6 +3,7 @@
 // still thumbnail of each, decoded off the main thread at the size asked for.
 //
 #import "TGCustomEmojiStore.h"
+#include <pthread.h>
 #import <TargetConditionals.h>
 #import "TGClient.h"
 #import "TGImageLruCache.h"
@@ -29,6 +30,12 @@ static const NSUInteger kBatchLimit = 200;
 /// downloads, three decodes, and a redraw of the screen after each.
 @property (nonatomic, strong) NSMutableSet *asked;
 @property (nonatomic, strong) NSMutableSet *failed;          // ids TDLib gave no picture for
+@property (nonatomic, strong) NSMutableSet *loadedSoFar;     // ids ready since the last notification
+/// "id:side" pictures on the decode queue. TDLib's answer to the launch
+/// batch asked for every wanted size again while the saved thumbnail of
+/// each was still decoding: the WebP decoded and the PNG re-encoded on
+/// every launch, ~1 s of the iPod touch 4's one core in a chat's first scroll.
+@property (nonatomic, strong) NSMutableSet *decoding;
 @property (nonatomic, strong) NSMutableDictionary *animations; // id -> @{@"fileId": @(fileId), @"format": fmt}
 /// id -> still picture's path from earlier runs. getCustomEmojiStickers
 /// waits seconds behind the chat load at launch; a picture already on disk
@@ -55,9 +62,67 @@ static NSString *TGCustomEmojiDiskCacheDir(void) {
 	return dir;
 }
 
+/// A picture saved at its size as raw premultiplied BGRA. Saved as PNG, the
+/// ~70 pictures of a chat's first screens took ~14 ms each to decode again
+/// after every launch on the iPod touch 4, 1 s of its one core competing
+/// with the first scroll; raw, a read and a CGImage around the bytes.
 static NSString *TGCustomEmojiThumbnailPath(int64_t emojiId, CGFloat side) {
 	return [TGCustomEmojiDiskCacheDir() stringByAppendingPathComponent:
+			[NSString stringWithFormat:@"%lld_%.0f.bgra", (long long)emojiId, side]];
+}
+
+/// What earlier builds saved; decoded once more and saved raw.
+static NSString *TGCustomEmojiPngThumbnailPath(int64_t emojiId, CGFloat side) {
+	return [TGCustomEmojiDiskCacheDir() stringByAppendingPathComponent:
 			[NSString stringWithFormat:@"%lld_%.0f.png", (long long)emojiId, side]];
+}
+
+typedef struct { uint32_t magic, width, height, bytesPerRow; } TGBitmapHeader;
+static const uint32_t kTGBitmapMagic = 0x31424754; // "TGB1"
+
+static CGBitmapInfo TGBitmapInfo(void) {
+	return kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little;
+}
+
+static BOOL TGBitmapWrite(CGImageRef image, NSString *path) {
+	size_t w = image ? CGImageGetWidth(image) : 0, h = image ? CGImageGetHeight(image) : 0;
+	if (!w || !h)
+		return NO;
+	NSMutableData *data = [NSMutableData dataWithLength:sizeof(TGBitmapHeader) + w * 4 * h];
+	TGBitmapHeader *header = (TGBitmapHeader *)data.mutableBytes;
+	*header = (TGBitmapHeader){ kTGBitmapMagic, (uint32_t)w, (uint32_t)h, (uint32_t)(w * 4) };
+	CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
+	CGContextRef ctx = CGBitmapContextCreate((uint8_t *)data.mutableBytes + sizeof(TGBitmapHeader),
+			w, h, 8, w * 4, space, TGBitmapInfo());
+	CGColorSpaceRelease(space);
+	if (!ctx)
+		return NO;
+	CGContextDrawImage(ctx, CGRectMake(0, 0, w, h), image);
+	CGContextRelease(ctx);
+	return [data writeToFile:path atomically:YES];
+}
+
+/// +1 image over the file's bytes, NULL when it is not one of ours.
+static CGImageRef TGBitmapCreate(NSString *path) {
+	NSData *data = [NSData dataWithContentsOfFile:path options:NSDataReadingMappedIfSafe error:NULL];
+	if (data.length < sizeof(TGBitmapHeader))
+		return NULL;
+	TGBitmapHeader header;
+	memcpy(&header, data.bytes, sizeof(header));
+	if (header.magic != kTGBitmapMagic || !header.width || !header.height ||
+			header.bytesPerRow < header.width * 4 ||
+			data.length < sizeof(header) + (NSUInteger)header.bytesPerRow * header.height)
+		return NULL;
+	CFDataRef pixels = CFDataCreate(NULL, (const UInt8 *)data.bytes + sizeof(header),
+			(CFIndex)header.bytesPerRow * header.height);
+	CGDataProviderRef provider = CGDataProviderCreateWithCFData(pixels);
+	CFRelease(pixels);
+	CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
+	CGImageRef image = CGImageCreate(header.width, header.height, 8, 32, header.bytesPerRow, space,
+			TGBitmapInfo(), provider, NULL, false, kCGRenderingIntentDefault);
+	CGColorSpaceRelease(space);
+	CGDataProviderRelease(provider);
+	return image;
 }
 
 @implementation TGCustomEmojiStore
@@ -82,13 +147,32 @@ static NSString *TGCustomEmojiThumbnailPath(int64_t emojiId, CGFloat side) {
 	self.queued = [NSMutableSet set];
 	self.asked = [NSMutableSet set];
 	self.failed = [NSMutableSet set];
+	self.loadedSoFar = [NSMutableSet set];
+	self.decoding = [NSMutableSet set];
 	self.animations = [NSMutableDictionary dictionary];
 	// Keyed by emoji id, which is global, but the files belong to this
 	// account's TDLib directory: an account switch (reset) starts empty.
-	NSDictionary *saved = self.knownPaths ? nil
-			: [NSDictionary dictionaryWithContentsOfFile:TGCustomEmojiPathsFile()];
-	self.knownPaths = [saved isKindOfClass:NSDictionary.class]
-			? [saved mutableCopy] : [NSMutableDictionary dictionary];
+	BOOL first = self.knownPaths == nil;
+	NSMutableDictionary *known = self.knownPaths = [NSMutableDictionary dictionary];
+	if (!first)
+		return;
+	// The first use is a chat's first cellForRow: parsing the plist there
+	// was 92 ms of one 458 ms frame on the iPod touch 4. A picture saved at
+	// its size never needs it, so the paths can arrive a moment later.
+	__weak typeof(self) weakSelf = self;
+	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_BACKGROUND, 0), ^{
+		NSDictionary *saved = [NSDictionary dictionaryWithContentsOfFile:TGCustomEmojiPathsFile()];
+		if (![saved isKindOfClass:NSDictionary.class])
+			return;
+		dispatch_async(dispatch_get_main_queue(), ^{
+			TGCustomEmojiStore *me = weakSelf;
+			if (me.knownPaths != known)
+				return;
+			for (NSString *key in saved)
+				if (!known[key])
+					known[key] = saved[key];
+		});
+	});
 }
 
 - (void)saveKnownPaths {
@@ -138,6 +222,19 @@ static NSString *TGNormalizeStickerFormat(id formatObj) {
 	return info;
 }
 
+/// One picture at a time. On the global queue a screenful of emoji became
+/// five threads decoding at once on the A4's one core, 1.5 s of CPU switched
+/// between them while the chat's first scroll needed it.
+static dispatch_queue_t TGCustomEmojiDecodeQueue(void) {
+	static dispatch_queue_t queue;
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{
+		queue = dispatch_queue_create("org.legacy.itg.emoji-decode", DISPATCH_QUEUE_SERIAL);
+		dispatch_set_target_queue(queue, dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_BACKGROUND, 0));
+	});
+	return queue;
+}
+
 static NSString *TGPictureKey(int64_t emojiId, CGFloat side) {
 	return [NSString stringWithFormat:@"%lld:%.0f", emojiId, side];
 }
@@ -150,19 +247,6 @@ static NSString *TGPictureKey(int64_t emojiId, CGFloat side) {
 	if (picture)
 		return picture;
 
-	NSString *thumbFile = TGCustomEmojiThumbnailPath(emojiId, side);
-	if ([[NSFileManager defaultManager] fileExistsAtPath:thumbFile]) {
-#if TARGET_OS_IPHONE
-		picture = [UIImage imageWithContentsOfFile:thumbFile];
-#else
-		picture = [[NSImage alloc] initWithContentsOfFile:thumbFile];
-#endif
-		if (picture) {
-			self.pictures[picKey] = picture;
-			return picture;
-		}
-	}
-
 	NSNumber *key = @(emojiId);
 	if ([self.failed containsObject:key])
 		return nil;
@@ -174,6 +258,17 @@ static NSString *TGPictureKey(int64_t emojiId, CGFloat side) {
 	if ([sides containsObject:@(side)])
 		return nil;
 	[sides addObject:@(side)];
+
+	// A picture an earlier run saved at this size: read and decode it off
+	// the main thread like any other. Read here, the PNG decoded at first
+	// draw, 4% of the first scroll of a chat on the iPod touch 4.
+	NSString *thumbFile = TGCustomEmojiThumbnailPath(emojiId, side);
+	if (![[NSFileManager defaultManager] fileExistsAtPath:thumbFile])
+		thumbFile = TGCustomEmojiPngThumbnailPath(emojiId, side);
+	if ([[NSFileManager defaultManager] fileExistsAtPath:thumbFile]) {
+		[self decodePath:thumbFile forId:emojiId side:side];
+		return nil;
+	}
 
 	// The file is already here for another size: only the decode is new.
 	NSString *path = self.paths[key];
@@ -198,6 +293,25 @@ static NSString *TGPictureKey(int64_t emojiId, CGFloat side) {
 	return nil;
 }
 
+/// A screenful of pictures lands within a few hundred ms, and every open
+/// screen (the chat, its title, contacts, the chat list) answered each one:
+/// 7% of a chat's first scroll on the iPod touch 4. One notification per
+/// 0.1 s carries them all: "id" when there is one, "ids" when there are more.
+- (void)noteLoaded:(NSNumber *)emojiId {
+	[self.loadedSoFar addObject:emojiId];
+	if (self.loadedSoFar.count == 1)
+		[self performSelector:@selector(postLoaded) withObject:nil afterDelay:0.1];
+}
+
+- (void)postLoaded {
+	NSSet *ids = [self.loadedSoFar copy];
+	[self.loadedSoFar removeAllObjects];
+	if (!ids.count)
+		return;
+	[[NSNotificationCenter defaultCenter] postNotificationName:TGCustomEmojiLoadedNotification object:self
+			userInfo:ids.count == 1 ? @{ @"id" : ids.anyObject } : @{ @"ids" : ids }];
+}
+
 - (void)sendBatch {
 	[NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(sendBatch) object:nil];
 	NSArray *ids = [[self.queued allObjects] subarrayWithRange:
@@ -207,9 +321,6 @@ static NSString *TGPictureKey(int64_t emojiId, CGFloat side) {
 	if (self.queued.count)
 		[self performSelector:@selector(sendBatch) withObject:nil afterDelay:0.15];
 
-#if TG_DEV
-	NSLog(@"custom emoji: asking for %lu", (unsigned long)ids.count);
-#endif
 	__weak typeof(self) weakSelf = self;
 	[[TGClient shared] customEmojiStickersForIds:ids completion:^(NSArray *stickers){
 		dispatch_async(dispatch_get_main_queue(), ^{
@@ -257,9 +368,7 @@ static NSString *TGPictureKey(int64_t emojiId, CGFloat side) {
 
 		if (![thumb isKindOfClass:NSNumber.class] || !thumb.integerValue) {
 			if ([fmt isEqualToString:@"tgs"] || [fmt isEqualToString:@"webm"]) {
-				[[NSNotificationCenter defaultCenter]
-						postNotificationName:TGCustomEmojiLoadedNotification object:self
-									userInfo:@{@"id" : key}];
+				[self noteLoaded:key];
 			}
 			continue;
 		}
@@ -276,10 +385,6 @@ static NSString *TGPictureKey(int64_t emojiId, CGFloat side) {
 	// An animated emoji with no still thumbnail, or an id TDLib does not
 	// know: the plain emoji in the text stays, and nobody asks again.
 	[self.failed unionSet:missing];
-#if TG_DEV
-	NSLog(@"custom emoji: %lu stickers, %lu without a still picture",
-			(unsigned long)stickers.count, (unsigned long)missing.count);
-#endif
 }
 
 - (void)receivePath:(NSString *)path forId:(int64_t)emojiId {
@@ -299,29 +404,61 @@ static NSString *TGPictureKey(int64_t emojiId, CGFloat side) {
 		[self decodePath:path forId:emojiId side:side.floatValue];
 }
 
+/// Sides a text layout measured (16.6, 17.0) share one picture; a side left
+/// wanted after its picture landed was decoded again from the source later.
+- (void)forgetWantedSidesOf:(int64_t)emojiId key:(NSString *)picKey {
+	NSMutableSet *sides = self.wanted[@(emojiId)];
+	for (NSNumber *s in [sides allObjects])
+		if ([TGPictureKey(emojiId, s.floatValue) isEqualToString:picKey])
+			[sides removeObject:s];
+}
+
+- (void)setDecodesHeld:(BOOL)held {
+	static BOOL sHeld;
+	if (held == sHeld)
+		return;
+	sHeld = held;
+	if (held)
+		dispatch_suspend(TGCustomEmojiDecodeQueue());
+	else
+		dispatch_resume(TGCustomEmojiDecodeQueue());
+}
+
 - (void)decodePath:(NSString *)path forId:(int64_t)emojiId side:(CGFloat)side {
+	NSString *picKey = TGPictureKey(emojiId, side);
+	if ([self.decoding containsObject:picKey])
+		return;
+	[self.decoding addObject:picKey];
 #if TARGET_OS_IPHONE
 	CGFloat scale = [UIScreen mainScreen].scale;
 	__weak typeof(self) weakSelf = self;
-	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_BACKGROUND, 0), ^{
-		UIImage *raw = nil;
-		if ([path.pathExtension.lowercaseString isEqualToString:@"webp"]) {
-			raw = [UIImage convertFromWebP:path compressedData:nil error:nil];
+	dispatch_async(TGCustomEmojiDecodeQueue(), ^{
+		pthread_setname_np("tg.emoji-decode");
+		NSString *thumbFile = TGCustomEmojiThumbnailPath(emojiId, side);
+		UIImage *picture = nil;
+		CGImageRef saved = [path isEqualToString:thumbFile] ? TGBitmapCreate(path) : NULL;
+		if (saved) {
+			picture = [UIImage imageWithCGImage:saved scale:scale orientation:UIImageOrientationUp];
+			CGImageRelease(saved);
 		} else {
-			raw = [UIImage imageWithContentsOfFile:path]
-					?: [UIImage convertFromWebP:path compressedData:nil error:nil];
-		}
-		UIImage *picture = raw ? [TGIcons decodedImage:raw fittingSize:CGSizeMake(side, side)
-												   fill:NO scale:scale] : nil;
-		if (picture) {
-			NSData *png = UIImagePNGRepresentation(picture);
-			[png writeToFile:TGCustomEmojiThumbnailPath(emojiId, side) atomically:YES];
+			UIImage *raw = nil;
+			if ([path.pathExtension.lowercaseString isEqualToString:@"webp"]) {
+				raw = [UIImage convertFromWebP:path compressedData:nil error:nil];
+			} else {
+				raw = [UIImage imageWithContentsOfFile:path]
+						?: [UIImage convertFromWebP:path compressedData:nil error:nil];
+			}
+			picture = raw ? [TGIcons decodedImage:raw fittingSize:CGSizeMake(side, side)
+											 fill:NO scale:scale] : nil;
+			if (picture)
+				TGBitmapWrite(picture.CGImage, thumbFile);
 		}
 		dispatch_async(dispatch_get_main_queue(), ^{
 			TGCustomEmojiStore *me = weakSelf;
 			if (!me)
 				return;
-			[me.wanted[@(emojiId)] removeObject:@(side)];
+			[me.decoding removeObject:picKey];
+			[me forgetWantedSidesOf:emojiId key:picKey];
 			if (![me.wanted[@(emojiId)] count])
 				[me.wanted removeObjectForKey:@(emojiId)];
 			if (!picture) {
@@ -329,22 +466,25 @@ static NSString *TGPictureKey(int64_t emojiId, CGFloat side) {
 				return;
 			}
 			me.pictures[TGPictureKey(emojiId, side)] = picture;
-			[[NSNotificationCenter defaultCenter]
-					postNotificationName:TGCustomEmojiLoadedNotification object:me
-								userInfo:@{@"id" : @(emojiId)}];
+			[me noteLoaded:@(emojiId)];
 		});
 	});
 #else
 	CGFloat scale = 2.0f;
 	__weak typeof(self) weakSelf = self;
-	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_BACKGROUND, 0), ^{
-		UIImage *raw = [[NSImage alloc] initWithContentsOfFile:path];
-		UIImage *picture = raw;
+	dispatch_async(TGCustomEmojiDecodeQueue(), ^{
+		pthread_setname_np("tg.emoji-decode");
+		CGImageRef saved = TGBitmapCreate(path);
+		UIImage *picture = saved ? [[NSImage alloc] initWithCGImage:saved size:NSZeroSize]
+				: [[NSImage alloc] initWithContentsOfFile:path];
+		if (saved)
+			CGImageRelease(saved);
 		dispatch_async(dispatch_get_main_queue(), ^{
 			TGCustomEmojiStore *me = weakSelf;
 			if (!me)
 				return;
-			[me.wanted[@(emojiId)] removeObject:@(side)];
+			[me.decoding removeObject:picKey];
+			[me forgetWantedSidesOf:emojiId key:picKey];
 			if (![me.wanted[@(emojiId)] count])
 				[me.wanted removeObjectForKey:@(emojiId)];
 			if (!picture) {
@@ -352,9 +492,7 @@ static NSString *TGPictureKey(int64_t emojiId, CGFloat side) {
 				return;
 			}
 			me.pictures[TGPictureKey(emojiId, side)] = picture;
-			[[NSNotificationCenter defaultCenter]
-					postNotificationName:TGCustomEmojiLoadedNotification object:me
-								userInfo:@{@"id" : @(emojiId)}];
+			[me noteLoaded:@(emojiId)];
 		});
 	});
 #endif

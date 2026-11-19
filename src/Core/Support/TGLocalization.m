@@ -1,4 +1,5 @@
 #include <string.h>
+#include <pthread.h>
 #import "TGLocalization.h"
 
 NSString *const TGAppLanguageChangedNotification = @"TGAppLanguageChangedNotification";
@@ -12,6 +13,76 @@ static NSDictionary *TGTelegramLookup = nil;
 static NSDictionary *TGTelegramLookupFolded = nil;
 /// English plural other-value -> the pack's one/few/many/other forms.
 static NSDictionary *TGTelegramPlurals = nil;
+
+#pragma mark - strings no table translates
+
+// Every UILabel text goes through TGLocalized (TGLocalizationUIKit), and in a
+// chat that is times, names and message text the pack has no entry for. Each
+// such miss folded the string (trim, lowercase, eight searches) and read the
+// app table, whose language comes from NSUserDefaults: 3-5% of the main
+// thread scrolling a chat on the iPod touch 4. A miss is remembered by a
+// 64-bit hash of its UTF-16 in a fixed table, plain C, no allocation; any
+// change to the tables starts a new generation, which empties it.
+#define TG_MISS_SLOTS 4096
+static uint64_t sMissHash[TG_MISS_SLOTS];
+static uint32_t sMissGeneration[TG_MISS_SLOTS];
+static uint32_t sMissCount, sMissCountGeneration;
+static volatile uint32_t sTablesGeneration = 1;
+static pthread_mutex_t sMissLock = PTHREAD_MUTEX_INITIALIZER;
+
+static void TGLocalizationTablesChanged(void) {
+	__sync_fetch_and_add(&sTablesGeneration, 1);
+}
+
+/// FNV-1a over the string's UTF-16 code units; never 0.
+static uint64_t TGLocalizationHash(NSString *text) {
+	CFStringRef string = (__bridge CFStringRef)text;
+	CFIndex length = CFStringGetLength(string);
+	const UniChar *direct = CFStringGetCharactersPtr(string);
+	UniChar buffer[128];
+	uint64_t hash = 1469598103934665603ULL;
+	for (CFIndex at = 0; at < length;) {
+		CFIndex count = MIN(length - at, (CFIndex)128);
+		const UniChar *chunk = direct ? direct + at : buffer;
+		if (!direct)
+			CFStringGetCharacters(string, CFRangeMake(at, count), buffer);
+		for (CFIndex i = 0; i < count; i++) {
+			hash ^= chunk[i];
+			hash *= 1099511628211ULL;
+		}
+		at += count;
+	}
+	return hash ? hash : 1;
+}
+
+/// Looks `hash` up among this generation's misses; with `insert`, adds it.
+static BOOL TGLocalizationMiss(uint64_t hash, BOOL insert) {
+	uint32_t generation = sTablesGeneration;
+	BOOL found = NO;
+	pthread_mutex_lock(&sMissLock);
+	if (sMissCountGeneration != generation || (insert && sMissCount >= TG_MISS_SLOTS * 3 / 4)) {
+		memset(sMissGeneration, 0, sizeof(sMissGeneration));
+		sMissCount = 0;
+		sMissCountGeneration = generation;
+	}
+	for (uint32_t probe = 0; probe < TG_MISS_SLOTS; probe++) {
+		uint32_t slot = (uint32_t)(hash + probe) & (TG_MISS_SLOTS - 1);
+		if (sMissGeneration[slot] != generation) {
+			if (insert) {
+				sMissHash[slot] = hash;
+				sMissGeneration[slot] = generation;
+				sMissCount++;
+			}
+			break;
+		}
+		if (sMissHash[slot] == hash) {
+			found = YES;
+			break;
+		}
+	}
+	pthread_mutex_unlock(&sMissLock);
+	return found;
+}
 
 static NSString *TGLocalizationFoldKey(NSString *text) {
 	if (!text.length)
@@ -74,6 +145,7 @@ static void TGBuildFoldedLookup(void) {
 	for (NSString *fold in ambiguous)
 		[folded removeObjectForKey:fold];
 	TGTelegramLookupFolded = folded.count ? [folded copy] : nil;
+	TGLocalizationTablesChanged();
 }
 
 static NSString *TGLocalizationCachePath(NSString *packId) {
@@ -160,6 +232,7 @@ static void TGBuildFoldedLookupInBackground(NSString *packId) {
 }
 
 static void TGLoadCachedLookup(void) {
+	TGLocalizationTablesChanged();
 	NSString *packId = TGAppLanguage();
 	if (!packId.length || [packId isEqualToString:@"en"]){
 		TGTelegramLookup = nil;
@@ -219,6 +292,7 @@ void TGSetAppLanguage(NSString *packId) {
 void TGSetTelegramLanguageLookup(NSDictionary *englishToTranslated) {
 	TGTelegramLookup = [englishToTranslated isKindOfClass:NSDictionary.class]
 			? [englishToTranslated copy] : nil;
+	TGLocalizationTablesChanged();
 	if (!TGTelegramLookup) {
 		TGTelegramPlurals = nil;
 		TGTelegramLookupFolded = nil;
@@ -281,6 +355,9 @@ static NSDictionary *TGAppStringsTable(void) {
 NSString *TGLocalized(NSString *english) {
 	if (!english.length)
 		return @"";
+	uint64_t hash = TGLocalizationHash(english);
+	if (TGLocalizationMiss(hash, NO))
+		return english;
 	NSString *translated = TGTelegramLookup[english];
 	if (!translated.length){
 		NSString *fold = TGLocalizationFoldKey(english);
@@ -288,6 +365,8 @@ NSString *TGLocalized(NSString *english) {
 	}
 	if (!translated.length)
 		translated = TGAppStringsTable()[english];
+	if (!translated.length)
+		TGLocalizationMiss(hash, YES);
 	return translated.length ? translated : english;
 }
 

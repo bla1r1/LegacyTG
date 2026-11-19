@@ -152,6 +152,13 @@ static NSString *TGChatDate(NSTimeInterval unix) {
 }
 
 - (void)reloadVisibleRows {
+	// Off screen (a chat pushed over the list) every status update rebuilt the
+	// rows nobody sees: ~2% of the main thread in a chat scroll on the iPod
+	// touch 4. The list catches up once in viewWillAppear.
+	if (!self.isViewLoaded || !self.view.window) {
+		self.visibleRowsStale = YES;
+		return;
+	}
 	NSArray *visible = [self.tableView indexPathsForVisibleRows];
 	if (visible.count)
 		[self.tableView reloadRowsAtIndexPaths:visible

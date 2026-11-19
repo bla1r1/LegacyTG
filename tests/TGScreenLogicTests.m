@@ -98,6 +98,20 @@
 
 #pragma mark - custom emoji still or animated
 
+- (void)testStillCheck_ALateSecondLookDoesNotConfirm {
+	XCTAssertTrue(TGChatStillConfirmed(10.12, 10.0));
+	XCTAssertFalse(TGChatStillConfirmed(10.05, 10.0));
+	// Held up by a 0.4 s frame: the bench's next scroll step may not have run.
+	XCTAssertFalse(TGChatStillConfirmed(10.5, 10.0));
+}
+
+- (void)testEmojiRedraw_WaitsForTheTableToStandStill {
+	// Pictures landing mid-scroll relaid every visible row each time.
+	XCTAssertTrue(fabs(TGChatRedrawDelay(10.1, 10.0) - 0.15) < 0.0001);
+	XCTAssertEqual(TGChatRedrawDelay(10.25, 10.0), 0.0);
+	XCTAssertEqual(TGChatRedrawDelay(20.0, 0.0), 0.0);
+}
+
 - (void)testEmoji_StillUntilTheAnimationIsOnDisk {
 	// The emoji was dropped as soon as TDLib named the animation and stayed a
 	// hole while it downloaded (on iOS 6 for good, if it would not parse).

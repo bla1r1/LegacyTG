@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # bench_report.py DUMP BINARY [ARCH] - rank functions in a TGSampler dump.
+# FOCUS=substring also lists what that function called.
 #
 # "self" is where the main thread was when sampled, "total" counts a function
 # once per sample anywhere on the stack. App frames go through atos against
@@ -56,3 +57,20 @@ for k, v in total_c.most_common():
         shown += 1
         if shown == 40:
             break
+
+# FOCUS=name: what the matching function called, one level down, so a heavy
+# "total" can be split without opening the dump by hand.
+import os
+focus = os.environ.get("FOCUS")
+if focus:
+    kids, hits = collections.Counter(), 0
+    for s in samples:
+        names_s = [name(a) for a in s]
+        idx = next((i for i, x in enumerate(names_s) if focus in x), None)
+        if idx is None:
+            continue
+        hits += 1
+        kids[names_s[idx - 1] if idx > 0 else "(self)"] += 1
+    print(f"\n-- inside {focus}: {100 * hits / n:.1f}% of samples")
+    for k, v in kids.most_common(20):
+        print(f"{100 * v / n:5.1f}%  {k}")

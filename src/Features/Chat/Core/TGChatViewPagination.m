@@ -8,6 +8,9 @@
 #import "TGProfileViewController.h"
 #import "TGThemeFile.h"
 #import "TGCapabilities.h"
+#import "TGTextRender.h"
+#import "TGCustomEmojiStore.h"
+#import "TGChatCellLogic.h"
 #import "TGDevice.h"
 #import <AddressBookUI/AddressBookUI.h>
 #import <CoreLocation/CoreLocation.h>
@@ -75,7 +78,9 @@
 - (void)resumeGifAutoplayAfterScrolling {
 	if ([TGDevice tier] != TGDeviceTierVintage)
 		return;
-	if (self.table.isDragging || self.table.isDecelerating)
+	// A frame that held the main thread past the delay looked like a stop
+	// and let every held sticker build loose mid-scroll.
+	if (![self tableStillOrRetry:@selector(resumeGifAutoplayAfterScrolling)])
 		return;
 
 	// The scroll has settled: let deferred sticker builds run and redraw the
@@ -118,6 +123,7 @@
 		if ([self.messages[path.row][@"kind"] isEqualToString:@"messageAnimation"]) {
 			bubble.disc.hidden = NO;
 			bubble.disc.image = [TGIcons mediaDiscOfSide:kGifDisc playing:NO];
+			[bubble settleHiddenViews];
 		}
 	}
 
@@ -136,8 +142,22 @@
 	[self.input resignFirstResponder];
 }
 
+- (void)releaseBackgroundWhenStill {
+	double wait = TGChatRedrawDelay(CACurrentMediaTime(), self.lastScrollTime);
+	if (wait > 0) {
+		[self performSelector:@selector(releaseBackgroundWhenStill) withObject:nil
+				   afterDelay:wait inModes:@[ NSRunLoopCommonModes ]];
+		return;
+	}
+	self.backgroundHeld = NO;
+	TGTextRenderHold(NO);
+	[[TGCustomEmojiStore shared] setDecodesHeld:NO];
+}
+
 - (void)scrollViewWillBeginDragging:(UIScrollView *)scrollView {
 	if (scrollView == self.table) {
+		// The reader takes the chat from here: the bottom hold lets go.
+		self.anchorToBottom = NO;
 		[self hideStickerPanel];
 		[self.input resignFirstResponder];
 	}
@@ -145,6 +165,20 @@
 
 - (void)scrollViewDidScroll:(UIScrollView *)scrollView {
 	if (scrollView == self.table) {
+		self.lastScrollTime = CACurrentMediaTime();
+		// Moved a screen up without a finger (a jump, the bench): not held.
+		if (self.anchorToBottom && scrollView.contentOffset.y < scrollView.contentSize.height +
+				scrollView.contentInset.bottom - TGDoubled(scrollView.bounds.size.height))
+			self.anchorToBottom = NO;
+		if (!self.backgroundHeld) {
+			// The core and CoreGraphics' glyph lock go to the frames while
+			// the table moves; what was asked meanwhile is drawn after.
+			self.backgroundHeld = YES;
+			TGTextRenderHold(YES);
+			[[TGCustomEmojiStore shared] setDecodesHeld:YES];
+			[self performSelector:@selector(releaseBackgroundWhenStill) withObject:nil
+					   afterDelay:TGChatRedrawSettleSeconds inModes:@[ NSRunLoopCommonModes ]];
+		}
 		[self chromeDidScroll];
 		[self scheduleGifAutoplayAfterScrolling];
 	}
@@ -153,23 +187,33 @@
 
 	// Older: the stream owns the request, the "is there more" flag and the
 	// duplicate filter; the table only keeps its offset around the insert.
-	if (scrollView.contentOffset.y < (CGFloat)TGMetricHistoryTopGate &&
+	// Over the saved page the real one is on its way with the older messages;
+	// asking for them too measured a page twice mid-scroll.
+	if (scrollView.contentOffset.y < (CGFloat)TGMetricHistoryTopGate && !self.pageFromCache &&
 		!self.streamStore.loadingOlder && !self.streamStore.reachedStart){
-		CGFloat oldHeight = self.table.contentSize.height;
-		CGFloat oldOffset = self.table.contentOffset.y;
 		__weak typeof(self) weakScroll = self;
 		[self.streamStore loadOlderInChat:self.chatId limit:60 completion:^(BOOL added){
 			TGChatViewController *me = weakScroll;
 			if (!me || !added)
 				return;
-			me.rawMessages = [me.streamStore messages];
-			me.messages = [me groupedMessagesFromMessages:me.rawMessages];
-			[UIView setAnimationsEnabled:NO];
-			[me.table reloadData];
-			me.table.contentOffset = CGPointMake(0,
-					oldOffset + (me.table.contentSize.height - oldHeight));
-			[UIView setAnimationsEnabled:YES];
-			[me fetchMissingImages];
+			NSArray *raw = [me.streamStore messages];
+			[me measureTextsOf:raw then:^{
+				TGChatViewController *again = weakScroll;
+				if (!again)
+					return;
+				// Read where the reader is now: the page was measured while
+				// they kept scrolling.
+				CGFloat oldHeight = again.table.contentSize.height;
+				CGFloat oldOffset = again.table.contentOffset.y;
+				again.rawMessages = [again.streamStore messages];
+				again.messages = [again groupedMessagesFromMessages:again.rawMessages];
+				[UIView setAnimationsEnabled:NO];
+				[again.table reloadData];
+				again.table.contentOffset = CGPointMake(0,
+						oldOffset + (again.table.contentSize.height - oldHeight));
+				[UIView setAnimationsEnabled:YES];
+				[again fetchMissingImages];
+			}];
 		}];
 	}
 
@@ -183,12 +227,17 @@
 			TGChatViewController *me = weakScroll;
 			if (!me || !added)
 				return;
-			me.rawMessages = [me.streamStore messages];
-			me.messages = [me groupedMessagesFromMessages:me.rawMessages];
-			[UIView setAnimationsEnabled:NO];
-			[me.table reloadData];
-			[UIView setAnimationsEnabled:YES];
-			[me fetchMissingImages];
+			[me measureTextsOf:[me.streamStore messages] then:^{
+				TGChatViewController *again = weakScroll;
+				if (!again)
+					return;
+				again.rawMessages = [again.streamStore messages];
+				again.messages = [again groupedMessagesFromMessages:again.rawMessages];
+				[UIView setAnimationsEnabled:NO];
+				[again.table reloadData];
+				[UIView setAnimationsEnabled:YES];
+				[again fetchMissingImages];
+			}];
 		}];
 	}
 }

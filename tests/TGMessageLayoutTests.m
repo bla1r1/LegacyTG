@@ -663,4 +663,42 @@ static NSDictionary *spSpoilerEntity(NSInteger offset, NSInteger length, NSStrin
 	XCTAssertEqualObjects([out attribute:@"TGLinkURL" atIndex:6 effectiveRange:NULL], @"https://telegram.org");
 }
 
+- (void)testLayoutCacheGeneration_MovesOnlyWhenALayoutChanges {
+	// The chat keeps its row heights while this stays put: a reloadData used
+	// to measure every row again. A new layout, or one evicted for room, must
+	// not throw the heights away; a replaced or dropped one must.
+	TGMessageLayoutCache *cache = [[TGMessageLayoutCache alloc] initWithCapacity:2];
+	NSUInteger start = cache.generation;
+	[cache setLayout:[[TGMessageLayout alloc] init] forMessageId:1];
+	[cache setLayout:[[TGMessageLayout alloc] init] forMessageId:2];
+	[cache setLayout:[[TGMessageLayout alloc] init] forMessageId:3];   // evicts 1
+	XCTAssertEqual(cache.generation, start);
+	[cache setLayout:[[TGMessageLayout alloc] init] forMessageId:3];
+	XCTAssertEqual(cache.generation, start + 1);
+	[cache removeLayoutForMessageId:2];
+	XCTAssertEqual(cache.generation, start + 2);
+	cache[@(4)] = [[TGMessageLayout alloc] init];
+	XCTAssertEqual(cache.generation, start + 2);
+	[cache removeObjectForKey:@(4)];
+	[cache removeAllObjects];
+	XCTAssertEqual(cache.generation, start + 4);
+}
+
+static BOOL tlOnlyRussia(UTF32Char a, UTF32Char b) {
+	return a == 0x1F1F7 && b == 0x1F1FA;   // R U
+}
+
+/// iOS 6 draws ten flags; the rest came out as two boxed letters in every
+/// label but the bubbles. The ranges are what goes to the bundled face.
+- (void)testFlags_OnlyTheOnesTheSystemCannotDrawAreFound {
+	NSString *text = @"a \U0001F1EE\U0001F1F6 b \U0001F1F7\U0001F1FA c \U0001F1FA\U0001F1E6";
+	NSArray *ranges = TGUnsupportedFlagRanges(text, tlOnlyRussia);
+	XCTAssertEqual(ranges.count, (NSUInteger)2);
+	XCTAssertEqual([ranges[0] rangeValue].location, (NSUInteger)2);
+	XCTAssertEqual([ranges[0] rangeValue].length, (NSUInteger)4);
+	XCTAssertEqualObjects([text substringWithRange:[ranges[1] rangeValue]], @"\U0001F1FA\U0001F1E6");
+	XCTAssertEqual(TGUnsupportedFlagRanges(@"plain text, no flags \U0001F600", tlOnlyRussia).count, (NSUInteger)0);
+	XCTAssertEqual(TGUnsupportedFlagRanges(@"\U0001F1EE", tlOnlyRussia).count, (NSUInteger)0, @"half a flag");
+}
+
 @end

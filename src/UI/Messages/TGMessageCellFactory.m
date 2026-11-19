@@ -15,7 +15,8 @@
 							  message:(NSDictionary *)message
 							   layout:(TGMessageLayout *)layout {
 	TGMessageCellKind kind = TGMessageCellKindForMessage(message, layout);
-	NSString *reuse = TGMessageCellReuseIdentifierForKind(kind);
+	NSString *reuse = kind == TGMessageCellKindBubble ? TGBubbleReuseIdentifier(layout)
+			: TGMessageCellReuseIdentifierForKind(kind);
 	UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:reuse];
 	if (!cell) {
 		switch (kind) {

@@ -37,7 +37,7 @@ static const CGFloat kReplyHintInset   = 24.0f;
 /// floating date read. The month word and its order come from the pack, not
 /// the device locale or a hardcoded English order.
 static NSString *TGDayTitle(NSTimeInterval stamp) {
-	return TGChatDateSeparatorTitle(stamp, [[NSDate date] timeIntervalSince1970]);
+	return TGChatDayTitle(stamp, [[NSDate date] timeIntervalSince1970]);
 }
 
 - (NSArray *)messagesWithSeparators:(NSArray *)grouped {

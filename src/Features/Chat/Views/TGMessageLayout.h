@@ -49,12 +49,27 @@ BOOL TGDropEmojiSelectors(NSMutableAttributedString *text, BOOL (*lacking)(UTF32
 /// depend on the fonts of the machine it runs on.
 NSString *TGStripScalars(NSString *text, BOOL (*drawable)(UTF32Char));
 NSAttributedString *TGEmojiAttributedText(NSString *text, UIFont *base);
+/// The ranges (two regional indicators, four UTF-16 units each) of flags
+/// `has` says the system emoji face cannot draw. NSValue ranges; empty for
+/// text without flags, which is found by one pass over its UTF-16 units.
+NSArray *TGUnsupportedFlagRanges(NSString *text, BOOL (*has)(UTF32Char first, UTF32Char second));
+/// Whether Apple Color Emoji makes one glyph of this pair: iOS 6 knows ten
+/// flags and draws the rest as two boxed letters. Cached per pair. Main thread.
+BOOL TGAppleEmojiHasFlag(UTF32Char first, UTF32Char second);
+/// `text` in `base` and `colour` with the flags this device cannot draw in
+/// the bundled emoji face; nil when there are none. For any label: the chat
+/// list's previews, names and titles drew [I][Q] for an Iraqi flag.
+NSAttributedString *TGFlagFallbackText(NSString *text, UIFont *base, UIColor *colour);
 /// Where the message text gets a custom emoji's picture: the app points this
 /// at TGCustomEmojiStore at launch; nil (host tests) draws the clear stand-in.
 typedef UIImage *(*TGCustomEmojiProvider)(int64_t emojiId, CGFloat side);
 void TGSetCustomEmojiProvider(TGCustomEmojiProvider provider);
 /// The square a custom emoji takes in text set in `font`: one line high.
 CGFloat TGCustomEmojiSide(UIFont *font);
+/// What stands in the text for a custom emoji where the OS draws no inline
+/// picture (iOS 6): one clear character as wide as the picture, carrying the
+/// emoji's id for TGCustomEmojiRectsCoreText.
+NSAttributedString *TGCustomEmojiSpacer(int64_t emojiId, UIFont *font);
 /// Rects and custom emoji IDs for attachments in attributed text laid out at `width`.
 /// Returns an array of dictionaries: @{ @"id": @(emojiId), @"rect": [NSValue valueWithCGRect:rect] }.
 NSArray *TGCustomEmojiRectsInText(NSAttributedString *text, CGFloat width);
@@ -65,6 +80,10 @@ NSArray *TGCustomEmojiRectsInText(NSAttributedString *text, CGFloat width);
 BOOL TGCustomEmojiInlineSupported(void);
 /// The iOS 6 path of TGCustomEmojiRectsInText (no TextKit), by CoreText.
 NSArray *TGCustomEmojiRectsCoreText(NSAttributedString *text, CGFloat width);
+/// The string with every font attribute as a CTFont of the same name and
+/// size, which CoreText needs on iOS 6 (a UIFont there is ignored); the same
+/// object when nothing needed it.
+NSAttributedString *TGCoreTextFonts(NSAttributedString *text);
 NSAttributedString *TGAttributedMessageText(NSString *text, NSArray *entities, UIFont *baseFont, UIColor *textColor);
 /// The same text with spoiler runs either drawn under an opaque plate or, once
 /// the reader has tapped the bubble, left as plain text. The plain call above
@@ -171,7 +190,14 @@ CGFloat TGInlineStampY(CGRect bodyFrame);
 @property (nonatomic, assign) BOOL runStart;
 @property (nonatomic, assign) BOOL runEnd;
 @property (nonatomic, strong) NSArray *entities;
+/// The body with its entities as the cell last set it, and the colour it was
+/// set in: rebuilt for every configure, it was 4% of a chat's first scroll on
+/// the iPod touch 4. Dropped with the layout (a picture arrived, an edit).
 @property (nonatomic, strong) NSAttributedString *attributedBody;
+@property (nonatomic, strong) UIColor *attributedBodyColour;
+/// Its body picture was sent to TGTextRender ahead of the cell (iOS 6); the
+/// key is built once per layout, not on every row that scrolls in near it.
+@property (nonatomic, assign) BOOL bodyPrefetched;
 @property (nonatomic, strong) NSArray *customEmojiRects;
 @end
 
@@ -183,6 +209,11 @@ CGFloat TGInlineStampY(CGRect bodyFrame);
 - (void)removeLayoutForMessageId:(int64_t)msgId;
 - (void)clear;
 - (NSUInteger)count;
+/// Moves when a cached layout is replaced or dropped (remove, clear), not
+/// when one is added or evicted for room: a height measured from a layout
+/// stays right until that layout changes. TGChatViewController keeps its row
+/// heights while this and the message array stay the same.
+@property (nonatomic, readonly) NSUInteger generation;
 
 - (TGMessageLayout *)objectForKeyedSubscript:(id)key;
 - (void)setObject:(TGMessageLayout *)obj forKeyedSubscript:(id)key;

@@ -42,6 +42,24 @@ static NSDictionary *cesRow(int64_t emojiId, int64_t fileId, NSString *format, i
 	[[NSFileManager defaultManager] removeItemAtPath:file error:NULL];
 }
 
+/// The first use is inside a chat's first scroll: the saved paths are read
+/// off the main thread and arrive a moment later, not inside the call.
+- (void)testSavedPaths_LoadOffTheCallingThread {
+	NSString *file = TGCustomEmojiPathsFile();
+	NSData *before = [NSData dataWithContentsOfFile:file];
+	[@{ @"7171" : @"/tmp/ces-7171.webp" } writeToFile:file atomically:YES];
+	TGCustomEmojiStore *store = [[TGCustomEmojiStore alloc] init];
+	XCTAssertNil(store.knownPaths[@"7171"], @"plist parsed inside init");
+	NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:1.0];
+	while (!store.knownPaths[@"7171"] && [deadline timeIntervalSinceNow] > 0)
+		[[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+	XCTAssertEqualObjects(store.knownPaths[@"7171"], @"/tmp/ces-7171.webp");
+	if (before)
+		[before writeToFile:file atomically:YES];
+	else
+		[[NSFileManager defaultManager] removeItemAtPath:file error:NULL];
+}
+
 /// A path that has gone (TDLib cleaned its files) falls back to the server.
 - (void)testImageForId_MissingKnownFileAsksTheServer {
 	TGCustomEmojiStore *store = [TGCustomEmojiStore shared];
@@ -150,6 +168,9 @@ static NSDictionary *cesRow(int64_t emojiId, int64_t fileId, NSString *format, i
 		cesRow(1006LL, 5006LL, @"tgs", 0),
 	];
 	[store receiveStickers:stickers forIds:@[@(1006LL)]];
+	NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:1.0];
+	while (!notified && [deadline timeIntervalSinceNow] > 0)
+		[[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
 
 	[[NSNotificationCenter defaultCenter] removeObserver:observer];
 	XCTAssertTrue(notified);
@@ -223,6 +244,155 @@ static NSDictionary *cesRow(int64_t emojiId, int64_t fileId, NSString *format, i
 	}
 	XCTAssertNil(store.wanted[@(9999LL)], @"failed decode must be removed from wanted");
 	XCTAssertTrue([store.failed containsObject:@(9999LL)], @"failed decode must be recorded in failed");
+}
+
+/// A picture an earlier run saved is read off the main thread: answered
+/// synchronously, the PNG read and decode cost 4% of a chat's first scroll.
+- (void)testSavedPicture_ArrivesLaterNotInTheCall {
+	TGCustomEmojiStore *store = [TGCustomEmojiStore shared];
+	NSString *file = TGCustomEmojiPngThumbnailPath(5151LL, 20);
+	[[NSFileManager defaultManager] createDirectoryAtPath:[file stringByDeletingLastPathComponent]
+			withIntermediateDirectories:YES attributes:nil error:NULL];
+	NSBitmapImageRep *rep = [[NSBitmapImageRep alloc] initWithBitmapDataPlanes:NULL pixelsWide:2 pixelsHigh:2
+			bitsPerSample:8 samplesPerPixel:4 hasAlpha:YES isPlanar:NO
+			colorSpaceName:NSDeviceRGBColorSpace bytesPerRow:0 bitsPerPixel:0];
+	[[rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}] writeToFile:file atomically:YES];
+
+	XCTAssertNil([store imageForId:5151LL side:20]);
+	XCTAssertFalse([store.queued containsObject:@(5151LL)], @"no server ask for a saved picture");
+	NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:1.0];
+	while (!store.pictures[TGPictureKey(5151LL, 20)] && [deadline timeIntervalSinceNow] > 0)
+		[[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+	XCTAssertNotNil(store.pictures[TGPictureKey(5151LL, 20)]);
+	XCTAssertNotNil([store imageForId:5151LL side:20]);
+	[[NSFileManager defaultManager] removeItemAtPath:file error:NULL];
+}
+
+/// TDLib's answer for an emoji whose saved picture is still decoding does
+/// not decode the source file again for the same size.
+- (void)testSavedPictureDecoding_IsNotDecodedAgainFromTheSource {
+	TGCustomEmojiStore *store = [TGCustomEmojiStore shared];
+	NSString *file = TGCustomEmojiPngThumbnailPath(5252LL, 20);
+	[[NSFileManager defaultManager] createDirectoryAtPath:[file stringByDeletingLastPathComponent]
+			withIntermediateDirectories:YES attributes:nil error:NULL];
+	NSBitmapImageRep *rep = [[NSBitmapImageRep alloc] initWithBitmapDataPlanes:NULL pixelsWide:2 pixelsHigh:2
+			bitsPerSample:8 samplesPerPixel:4 hasAlpha:YES isPlanar:NO
+			colorSpaceName:NSDeviceRGBColorSpace bytesPerRow:0 bitsPerPixel:0];
+	[[rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}] writeToFile:file atomically:YES];
+	// Not a picture: decoding it would mark the emoji failed.
+	NSString *source = [NSTemporaryDirectory() stringByAppendingPathComponent:@"ces-5252.webp"];
+	[[NSData dataWithBytes:"x" length:1] writeToFile:source atomically:YES];
+
+	XCTAssertNil([store imageForId:5252LL side:20]);
+	// The same picture measured a fraction larger elsewhere in the text.
+	XCTAssertNil([store imageForId:5252LL side:20.3f]);
+	[store receivePath:source forId:5252LL];
+	NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:1.0];
+	while (!store.pictures[TGPictureKey(5252LL, 20)] && [deadline timeIntervalSinceNow] > 0)
+		[[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+	// TDLib answers again (another batch) after the picture landed.
+	[store receivePath:source forId:5252LL];
+	[[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.2]];
+	XCTAssertNotNil(store.pictures[TGPictureKey(5252LL, 20)]);
+	XCTAssertFalse([store.failed containsObject:@(5252LL)], @"the source was decoded a second time");
+	[NSObject cancelPreviousPerformRequestsWithTarget:store];
+	[[NSFileManager defaultManager] removeItemAtPath:file error:NULL];
+	[[NSFileManager defaultManager] removeItemAtPath:source error:NULL];
+}
+
+/// Decodes asked while the table moves wait for it to stand still.
+- (void)testHeldDecodes_LandAfterRelease {
+	TGCustomEmojiStore *store = [TGCustomEmojiStore shared];
+	NSString *file = TGCustomEmojiPngThumbnailPath(5555LL, 20);
+	[[NSFileManager defaultManager] createDirectoryAtPath:[file stringByDeletingLastPathComponent]
+			withIntermediateDirectories:YES attributes:nil error:NULL];
+	NSBitmapImageRep *rep = [[NSBitmapImageRep alloc] initWithBitmapDataPlanes:NULL pixelsWide:2 pixelsHigh:2
+			bitsPerSample:8 samplesPerPixel:4 hasAlpha:YES isPlanar:NO
+			colorSpaceName:NSDeviceRGBColorSpace bytesPerRow:0 bitsPerPixel:0];
+	[[rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}] writeToFile:file atomically:YES];
+	[store setDecodesHeld:YES];
+	XCTAssertNil([store imageForId:5555LL side:20]);
+	[[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.2]];
+	XCTAssertNil(store.pictures[TGPictureKey(5555LL, 20)]);
+	[store setDecodesHeld:NO];
+	NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:1.0];
+	while (!store.pictures[TGPictureKey(5555LL, 20)] && [deadline timeIntervalSinceNow] > 0)
+		[[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+	XCTAssertNotNil(store.pictures[TGPictureKey(5555LL, 20)]);
+	[[NSFileManager defaultManager] removeItemAtPath:file error:NULL];
+}
+
+/// A picture saved raw comes back with the same pixels and no decoder.
+- (void)testSavedBitmap_RoundTripsThePixels {
+	CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
+	CGContextRef ctx = CGBitmapContextCreate(NULL, 3, 2, 8, 0, space, TGBitmapInfo());
+	CGContextSetRGBFillColor(ctx, 1, 0, 0, 0.5);
+	CGContextFillRect(ctx, CGRectMake(0, 0, 2, 2));
+	CGImageRef image = CGBitmapContextCreateImage(ctx);
+	CGContextRelease(ctx);
+	NSString *file = [NSTemporaryDirectory() stringByAppendingPathComponent:@"ces-rt.bgra"];
+	XCTAssertTrue(TGBitmapWrite(image, file));
+	CGImageRef back = TGBitmapCreate(file);
+	XCTAssertTrue(back != NULL);
+	XCTAssertEqual(CGImageGetWidth(back), (size_t)3);
+	XCTAssertEqual(CGImageGetHeight(back), (size_t)2);
+	uint32_t a[6] = {0}, b[6] = {0};
+	CGContextRef ca = CGBitmapContextCreate(a, 3, 2, 8, 12, space, TGBitmapInfo());
+	CGContextRef cb = CGBitmapContextCreate(b, 3, 2, 8, 12, space, TGBitmapInfo());
+	CGContextDrawImage(ca, CGRectMake(0, 0, 3, 2), image);
+	CGContextDrawImage(cb, CGRectMake(0, 0, 3, 2), back);
+	XCTAssertEqual(memcmp(a, b, sizeof(a)), 0);
+	XCTAssertTrue(TGBitmapCreate(@"/nonexistent/x.bgra") == NULL);
+	[[NSData dataWithBytes:"not a bitmap at all" length:19] writeToFile:file atomically:YES];
+	XCTAssertTrue(TGBitmapCreate(file) == NULL);
+	CGContextRelease(ca);
+	CGContextRelease(cb);
+	CGImageRelease(back);
+	CGImageRelease(image);
+	CGColorSpaceRelease(space);
+	[[NSFileManager defaultManager] removeItemAtPath:file error:NULL];
+}
+
+/// A raw picture saved at this size is what imageForId reads.
+- (void)testSavedBitmap_ArrivesWithoutTheServer {
+	TGCustomEmojiStore *store = [TGCustomEmojiStore shared];
+	NSString *file = TGCustomEmojiThumbnailPath(5353LL, 20);
+	XCTAssertEqualObjects(file.pathExtension, @"bgra");
+	CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
+	CGContextRef ctx = CGBitmapContextCreate(NULL, 4, 4, 8, 0, space, TGBitmapInfo());
+	CGImageRef image = CGBitmapContextCreateImage(ctx);
+	XCTAssertTrue(TGBitmapWrite(image, file));
+	CGImageRelease(image);
+	CGContextRelease(ctx);
+	CGColorSpaceRelease(space);
+	XCTAssertNil([store imageForId:5353LL side:20]);
+	XCTAssertFalse([store.queued containsObject:@(5353LL)]);
+	NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:1.0];
+	while (!store.pictures[TGPictureKey(5353LL, 20)] && [deadline timeIntervalSinceNow] > 0)
+		[[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+	XCTAssertNotNil(store.pictures[TGPictureKey(5353LL, 20)]);
+	[[NSFileManager defaultManager] removeItemAtPath:file error:NULL];
+}
+
+/// A burst of pictures is one notification, not one per picture.
+- (void)testLoadedBurst_IsOneNotification {
+	TGCustomEmojiStore *store = [TGCustomEmojiStore shared];
+	__block NSUInteger posts = 0;
+	__block NSSet *ids = nil;
+	id observer = [[NSNotificationCenter defaultCenter] addObserverForName:TGCustomEmojiLoadedNotification
+			object:store queue:nil usingBlock:^(NSNotification *note) {
+		posts++;
+		ids = note.userInfo[@"ids"];
+	}];
+	[store receiveStickers:@[ cesRow(2001LL, 6001LL, @"tgs", 0), cesRow(2002LL, 6002LL, @"webm", 0),
+			cesRow(2003LL, 6003LL, @"tgs", 0) ] forIds:@[ @(2001LL), @(2002LL), @(2003LL) ]];
+	XCTAssertEqual(posts, (NSUInteger)0);
+	NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:0.5];
+	while ([deadline timeIntervalSinceNow] > 0)
+		[[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+	[[NSNotificationCenter defaultCenter] removeObserver:observer];
+	XCTAssertEqual(posts, (NSUInteger)1);
+	XCTAssertEqual(ids.count, (NSUInteger)3);
 }
 
 @end

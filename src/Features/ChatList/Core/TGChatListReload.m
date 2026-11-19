@@ -168,6 +168,15 @@
 - (void)reloadStoriesIfNeeded {
 	if (self.storyRowsLoading)
 		return;
+	// Under an open chat the list reloads on every chat update, and with no
+	// story anywhere (an empty answer earns no cooldown) each one asked
+	// TDLib again: loadActiveStories and a getChatActiveStories per chat,
+	// queued on its one thread in front of the chat's own history.
+	if (!self.view.window) {
+		self.storyRowsStale = YES;
+		return;
+	}
+	self.storyRowsStale = NO;
 	if (self.storyRowsReadAt &&
 		-[self.storyRowsReadAt timeIntervalSinceNow] < 30.0)
 		return;

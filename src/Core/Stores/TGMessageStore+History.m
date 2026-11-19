@@ -68,10 +68,27 @@
 	}];
 }
 
+- (int64_t)lastMessageIdInChat:(int64_t)chatId {
+	return [[TGClient shared].chatsById[@(chatId)][@"lastId"] longLongValue];
+}
+
+/// From the chat's last message, offset -1 so the page holds it (offset 0
+/// leaves from_message_id out, B28), and a backward walk after it.
+static const NSInteger kTGHistoryFromLastOffset = -1;
+
 - (void)historyForChat:(int64_t)chatId
                  limit:(NSInteger)limit
             completion:(void (^)(NSArray *))completion {
-	[self historyForChat:chatId fromMessageId:0 limit:limit completion:completion];
+	// From 0 TDLib answers a chat it has not loaded with the one message it
+	// holds (0.7 s on the iPod touch 4), and the page comes on the second
+	// call: from the last message the first call reads a whole batch.
+	int64_t last = [self lastMessageIdInChat:chatId];
+	if (last <= 0){
+		[self historyForChat:chatId fromMessageId:0 limit:limit completion:completion];
+		return;
+	}
+	[self fetchHistoryChunkForChat:chatId fromMessageId:last offset:kTGHistoryFromLastOffset
+							 limit:limit collected:[NSMutableArray array] completion:completion];
 }
 
 - (void)historyForChat:(int64_t)chatId
@@ -144,7 +161,7 @@
 		for (NSDictionary *m in msgs)
 			[collected addObject:TGFlattenMessage(m)];
 
-		if (offset < 0){
+		if (offset < 0 && offset != kTGHistoryFromLastOffset){
 			// Fetching newer messages: TDLib returns messages newest first.
 			// Reverse them so they are in chronological order (oldest first).
 			if (completion)

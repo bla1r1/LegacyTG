@@ -107,6 +107,7 @@ static const int64_t kIdlePollNanoseconds = 20 * NSEC_PER_MSEC;
 }
 
 - (void)receiveLoop {
+	[[NSThread currentThread] setName:@"tg.receive"];
 	while (self.running){
 		@autoreleasepool {
 			[self drainOutbox];

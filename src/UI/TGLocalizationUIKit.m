@@ -1,4 +1,6 @@
 #import "TGLocalizationUIKit.h"
+#import "TGMessageLayout.h"
+#import "TGTextRender.h"
 #import "TGLocalization.h"
 #import <objc/runtime.h>
 
@@ -109,12 +111,142 @@ void TGLocalizeInterface(void) {
 
 #pragma mark - labels, buttons, fields
 
+static char kTGFlagSourceKey;
+static char kTGFlagLineBreakKey;
+static char kTGFlagFontKey;
+
+/// A plain UILabel while it shows a flag the system face lacks: iOS 6 UIKit
+/// drew such text with stretched gaps and dropped characters, so this one
+/// draws it with TGTextRender (CoreText), which joins the bundled face's
+/// flags. No ivars: a label goes in and out of this class by object_setClass.
+@interface TGFlagLabel : UILabel
+@end
+
+@implementation TGFlagLabel
+/// The face the lines are spaced by: the label's own, not the first run's
+/// emoji face UIKit gave it.
+- (UIFont *)tg_pitchFont {
+	return objc_getAssociatedObject(self, &kTGFlagFontKey) ?: self.font;
+}
+
+- (CGFloat)tg_linePitch {
+	return ceilf([self tg_pitchFont].lineHeight);
+}
+
+- (void)drawTextInRect:(CGRect)rect {
+	UIFont *face = [self tg_pitchFont];
+	TGTextRenderDrawLabel(UIGraphicsGetCurrentContext(), self.attributedText, self.bounds, self.numberOfLines,
+			self.textAlignment, [self tg_linePitch], face.ascender, [UIScreen mainScreen].scale);
+}
+
+// UIKit measured this text with the emoji face's metrics and gave a two-line
+// preview a frame its second line did not fit in. Measured as it is drawn.
+- (CGSize)sizeThatFits:(CGSize)size {
+	NSUInteger lines = TGTextRenderLineCount(self.attributedText, size.width);
+	if (self.numberOfLines > 0)
+		lines = MIN(lines, (NSUInteger)self.numberOfLines);
+	return CGSizeMake(size.width, lines * [self tg_linePitch]);
+}
+@end
+
+/// Set while this file itself hands a label its flag text: UIKit then sets
+/// the label's font to the first run's, OpenMoji when the text opens with a
+/// flag, and taken for the app's own font that set the whole text in it.
+static BOOL sApplyingFlags;
+
+/// Leaves flag mode: the source forgotten, the line break and the font the
+/// label had before put back (UIKit gave it the first run's face).
+static void TGLeaveFlagMode(UILabel *label) {
+	objc_setAssociatedObject(label, &kTGFlagSourceKey, nil, OBJC_ASSOCIATION_COPY_NONATOMIC);
+	NSNumber *mode = objc_getAssociatedObject(label, &kTGFlagLineBreakKey);
+	UIFont *font = objc_getAssociatedObject(label, &kTGFlagFontKey);
+	objc_setAssociatedObject(label, &kTGFlagLineBreakKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+	objc_setAssociatedObject(label, &kTGFlagFontKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+	sApplyingFlags = YES;
+	if (mode)
+		label.lineBreakMode = (NSLineBreakMode)mode.integerValue;
+	if (font)
+		label.font = font;
+	sApplyingFlags = NO;
+	if (object_getClass(label) == TGFlagLabel.class) {
+		object_setClass(label, UILabel.class);
+		[label setNeedsDisplay];
+	}
+}
+
 @implementation UILabel (TGLocalization)
 + (void)load {
 	TGLocalizationSwap(self, @selector(setText:), @selector(tg_setText:));
+	TGLocalizationSwap(self, @selector(setTextColor:), @selector(tg_setTextColor:));
+	TGLocalizationSwap(self, @selector(setFont:), @selector(tg_setFont:));
+	TGLocalizationSwap(self, @selector(setAttributedText:), @selector(tg_setAttributedText:));
 }
+
 - (void)tg_setText:(NSString *)text {
-	[self tg_setText:TGLocalizedOrNil(text)];
+	NSString *shown = TGLocalizedOrNil(text);
+	// iOS 6 draws most flags as two boxed letters; any label with one gets
+	// it from the bundled emoji face (TGFlagFallbackText). The rest of the
+	// text keeps the label's own face, colour and layout.
+	UIFont *base = objc_getAssociatedObject(self, &kTGFlagFontKey) ?: self.font;
+	NSAttributedString *flags = TGFlagFallbackText(shown, base, self.textColor);
+	if (!flags) {
+		if (objc_getAssociatedObject(self, &kTGFlagSourceKey) || objc_getAssociatedObject(self, &kTGFlagFontKey))
+			TGLeaveFlagMode(self);
+		[self tg_setText:shown];
+		return;
+	}
+	objc_setAssociatedObject(self, &kTGFlagFontKey, base, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+	sApplyingFlags = YES;
+	// iOS 6 lays an attributed string out with a truncating line break on
+	// one line, on a path that leaves the flag's two letters unjoined: a
+	// two-line chat preview came out one line with two circled letters. A
+	// label of more than one line wraps by words while it shows a flag and
+	// clips at its last line.
+	if (self.numberOfLines != 1 && self.lineBreakMode != NSLineBreakByWordWrapping &&
+			!objc_getAssociatedObject(self, &kTGFlagLineBreakKey)) {
+		objc_setAssociatedObject(self, &kTGFlagLineBreakKey, @(self.lineBreakMode), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+		self.lineBreakMode = NSLineBreakByWordWrapping;
+	}
+	[self tg_setAttributedText:flags];
+	sApplyingFlags = NO;
+	// Only a plain UILabel: a subclass keeps its own drawing.
+	if (object_getClass(self) == UILabel.class) {
+		object_setClass(self, TGFlagLabel.class);
+		[self setNeedsDisplay];
+	}
+	objc_setAssociatedObject(self, &kTGFlagSourceKey, shown, OBJC_ASSOCIATION_COPY_NONATOMIC);
+}
+
+// A colour or a font the app sets after the text rebuilds an attributed
+// label from the label's own properties on iOS 6, the flag's face with it:
+// the chat row sets its colour right after its preview.
+- (void)tg_setTextColor:(UIColor *)colour {
+	[self tg_setTextColor:colour];
+	NSString *source = sApplyingFlags ? nil : objc_getAssociatedObject(self, &kTGFlagSourceKey);
+	if (source)
+		[self tg_setText:source];
+}
+
+- (void)tg_setFont:(UIFont *)font {
+	[self tg_setFont:font];
+	if (sApplyingFlags)
+		return;
+	NSString *source = objc_getAssociatedObject(self, &kTGFlagSourceKey);
+	if (!source) {
+		// Not showing a flag: no font to remember beyond the label's own.
+		if (objc_getAssociatedObject(self, &kTGFlagFontKey))
+			objc_setAssociatedObject(self, &kTGFlagFontKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+		return;
+	}
+	objc_setAssociatedObject(self, &kTGFlagFontKey, font, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+	[self tg_setText:source];
+}
+
+// Attributed text from anyone else replaces the flag text for good.
+- (void)tg_setAttributedText:(NSAttributedString *)text {
+	if (!sApplyingFlags && objc_getAssociatedObject(self, &kTGFlagSourceKey))
+		TGLeaveFlagMode(self);
+	[self tg_setAttributedText:text];
 }
 @end
 

@@ -350,6 +350,9 @@ FOUNDATION_EXPORT NSArray *TGBotCommandRows(NSArray *sets);
 - (void)groupFullInfoForChat:(int64_t)chatId
 				  completion:(void (^)(NSDictionary *info))completion;
 
+/// The id of the chat's newest message as the client knows it, 0 if unknown.
+- (int64_t)lastMessageIdInChat:(int64_t)chatId;
+
 - (void)historyForChat:(int64_t)chatId
        aroundMessageId:(int64_t)messageId
                  limit:(NSInteger)limit

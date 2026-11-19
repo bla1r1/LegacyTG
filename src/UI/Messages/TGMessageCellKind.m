@@ -30,3 +30,16 @@ NSString *TGMessageCellReuseIdentifierForKind(TGMessageCellKind kind) {
 			return @"TGBubbleCell";
 	}
 }
+
+NSString *TGBubbleReuseIdentifier(TGMessageLayout *layout) {
+	if (layout.isSticker || layout.isRound)
+		return @"TGBubbleCell.sticker";
+	if (layout.isVoice || layout.isTrack || layout.isCall)
+		return @"TGBubbleCell.audio";
+	if (layout.isPoll || layout.isChecklist || layout.isCard || layout.isDoc ||
+			layout.isContact || layout.isLocation)
+		return @"TGBubbleCell.card";
+	if (layout.isAlbum || !CGRectIsEmpty(layout.pictureFrame))
+		return @"TGBubbleCell.media";
+	return @"TGBubbleCell.text";
+}

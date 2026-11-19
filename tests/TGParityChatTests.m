@@ -711,4 +711,16 @@ static NSDictionary *TGProps(NSDictionary *extra) {
 	XCTAssertFalse([TGMenuActions(mine, TGMenuContext(YES, YES, NO)) containsObject:@"Add Option"]);
 }
 
+/// The kept day title is the computed one, and a pack change renames it.
+- (void)testDayTitle_KeptUntilTheLanguageChanges {
+	NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
+	XCTAssertEqualObjects(TGChatDayTitle(now, now), TGChatDateSeparatorTitle(now, now));
+	XCTAssertEqualObjects(TGChatDayTitle(now - 40 * 86400, now),
+			TGChatDateSeparatorTitle(now - 40 * 86400, now));
+	TGSetTelegramLanguageLookup(@{@"Today" : @"Сегодня"});
+	XCTAssertEqualObjects(TGChatDayTitle(now, now), @"Сегодня");
+	TGSetTelegramLanguageLookup(nil);
+	XCTAssertEqualObjects(TGChatDayTitle(now, now), @"Today");
+}
+
 @end

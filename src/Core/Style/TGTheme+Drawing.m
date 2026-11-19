@@ -360,9 +360,41 @@ static void TGDrawVertical(CGContextRef ctx, UIColor *top, UIColor *bottom,
 	return [img resizableImageWithCapInsets:UIEdgeInsetsMake(radius, radius, radius, radius)];
 }
 
+// Five styles, two states and a handful of heights, and the image used to be
+// painted again for every badge in every chat list row (5% of the main thread
+// scrolling the list on the iPod touch 4). Scalar keys, so a lookup allocates
+// nothing; the chrome flag is in the key because iOS 7+ draws flat.
+#define TG_BUTTON_IMAGE_CACHE 32
+typedef struct {
+	TGButtonStyle style;
+	BOOL highlighted, skeuomorphic;
+	CGFloat height;
+} TGButtonImageKey;
+static TGButtonImageKey sButtonImageKeys[TG_BUTTON_IMAGE_CACHE];
+static UIImage *sButtonImages[TG_BUTTON_IMAGE_CACHE];
+static NSUInteger sButtonImageCount;
+
 + (UIImage *)buttonImageForStyle:(TGButtonStyle)style
                      highlighted:(BOOL)highlighted
                           height:(CGFloat)height {
+	BOOL skeuomorphic = [TGTheme drawsSkeuomorphicChrome];
+	for (NSUInteger i = 0; i < sButtonImageCount; i++) {
+		TGButtonImageKey key = sButtonImageKeys[i];
+		if (key.style == style && key.highlighted == highlighted && key.height == height &&
+				key.skeuomorphic == skeuomorphic)
+			return sButtonImages[i];
+	}
+	UIImage *image = [self uncachedButtonImageForStyle:style highlighted:highlighted height:height];
+	NSUInteger slot = sButtonImageCount < TG_BUTTON_IMAGE_CACHE ? sButtonImageCount++
+			: (NSUInteger)(style + (highlighted ? 5 : 0)) % TG_BUTTON_IMAGE_CACHE;
+	sButtonImageKeys[slot] = (TGButtonImageKey){style, highlighted, skeuomorphic, height};
+	sButtonImages[slot] = image;
+	return image;
+}
+
++ (UIImage *)uncachedButtonImageForStyle:(TGButtonStyle)style
+                             highlighted:(BOOL)highlighted
+                                  height:(CGFloat)height {
 	UIColor *tint = nil;
 	switch (style) {
 		case TGButtonStyleAction:

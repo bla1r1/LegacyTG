@@ -75,6 +75,7 @@ OBJC_SRCS := \
     src/CallEngine/Media/TGCallVideoEngine.mm \
     src/CallEngine/TGCall.mm \
     src/Features/Chat/Views/TGMessageLayout.mm \
+    src/Features/Chat/Views/TGTextRender.mm \
     src/UI/Format/TGUIFormat.m \
     src/Features/Chat/Views/TGMessageCardLayout.m \
     src/UI/Messages/TGMessageCellKind.m \
@@ -140,6 +141,7 @@ CLIENT_OBJC_SRCS := \
     src/Core/Stores/TGMessageStreamStore.mm \
     src/Core/Stores/TGMessageStore.m \
     src/Core/Stores/TGMessageStore+History.m \
+    src/Core/Stores/TGChatPageCache.m \
     src/Core/Stores/TGSendStore.mm \
     src/Core/Stores/TGSettingsStore.m \
     src/Core/Stores/TGSettingsStore+Options.m \
@@ -350,6 +352,7 @@ CLIENT_OBJC_SRCS := \
     src/UI/Controllers/TGRowsDataSource.m \
     src/Features/Calls/TGGroupCallParticipantCell.m \
     src/Features/Chat/Views/TGMessageLayout.mm \
+    src/Features/Chat/Views/TGTextRender.mm \
     src/Features/Chat/Views/TGMessageCardLayout.m \
     src/UI/Messages/TGMessageCellKind.m \
     src/Features/Chat/TGPollPresentation.m \
@@ -498,10 +501,12 @@ CLIENT_TEST_SRCS := \
     $(TESTS)/TGCrashGuardTests.m \
     $(TESTS)/TGSlotMachineTests.m \
     $(TESTS)/TGMessageRowLayoutTests.m \
+    $(TESTS)/TGTextRenderTests.m \
     $(TESTS)/TGSVGPathTests.m \
     $(TESTS)/TGIconCatalogTests.m \
     $(TESTS)/TGUIFormatTests.m \
     $(TESTS)/TGCustomEmojiStoreTests.m \
+    $(TESTS)/TGChatPageCacheTests.m \
     $(TESTS)/TGParityRestTests.m \
     $(TESTS)/TGParityPeopleTests.m \
     $(TESTS)/TGRowModelTests.m \

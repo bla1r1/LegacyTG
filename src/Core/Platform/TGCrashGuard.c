@@ -30,14 +30,17 @@ static void TGCrashGuardHandler(int sig) {
 		}
 	}
 	// Whoever handled the signal before (the system's crash report) still
-	// gets it: put their handler back and raise again.
+	// gets it: their handler goes back and this one returns. A fault then
+	// runs its instruction again and faults under them, so the report names
+	// the thread and the frame that faulted; abort() raises SIGABRT again by
+	// itself. A raise() here made every crash report a SIGSEGV on whichever
+	// idle thread ran this handler, with the real stack gone.
 	for (size_t i = 0; i < TG_CRASH_SIGNAL_COUNT; i++) {
 		if (kTGCrashSignals[i] == sig) {
 			sigaction(sig, &sPrevious[i], NULL);
 			break;
 		}
 	}
-	raise(sig);
 }
 
 int TGCrashGuardInstall(const char *markerPath) {

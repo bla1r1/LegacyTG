@@ -5,10 +5,20 @@
 // unread band) from the resolved layout flags. The choice is pure, so it is
 // pinned here without a live table.
 #import "TGTestRunner.h"
+#import <CoreText/CoreText.h>
 #import "TGMessageCellFactory.h"
 #import "TGMessageLayout.h"
 
 @interface TGMessageCellFactoryTests : XCTestCase @end
+
+@interface TGFakeUIFont : NSObject
+@property (nonatomic, readonly) NSString *fontName;
+@property (nonatomic, readonly) CGFloat pointSize;
+@end
+@implementation TGFakeUIFont
+- (NSString *)fontName { return @"Helvetica"; }
+- (CGFloat)pointSize { return 19; }
+@end
 
 @implementation TGMessageCellFactoryTests
 
@@ -103,6 +113,57 @@
 		lastX = rect.origin.x;
 	}
 	XCTAssertEqualObjects([rects.lastObject objectForKey:@"id"], @(78));
+}
+
+/// iOS 6's UIFont is not a CTFont, and CoreText ignored it: the emoji rects
+/// came from a 12 pt layout of 13 pt text. A stand-in with a UIFont's
+/// fontName and pointSize plays that UIFont here, where NSFont is bridged.
+- (void)testCoreTextFonts_TurnsAForeignFontIntoACTFont {
+	TGFakeUIFont *fake = [[TGFakeUIFont alloc] init];
+	NSMutableAttributedString *text = [[NSMutableAttributedString alloc] initWithString:@"ab cd"];
+	[text addAttribute:NSFontAttributeName value:fake range:NSMakeRange(0, 2)];
+	NSAttributedString *out = TGCoreTextFonts(text);
+	id font = [out attribute:NSFontAttributeName atIndex:0 effectiveRange:NULL];
+	XCTAssertTrue(font && CFGetTypeID((__bridge CFTypeRef)font) == CTFontGetTypeID());
+	XCTAssertEqual(CTFontGetSize((__bridge CTFontRef)font), (CGFloat)19);
+	XCTAssertNil([out attribute:NSFontAttributeName atIndex:3 effectiveRange:NULL]);
+	NSAttributedString *plain = [[NSAttributedString alloc] initWithString:@"x"];
+	XCTAssertTrue(TGCoreTextFonts(plain) == plain);
+}
+
+/// The iOS 6 stand-in for a custom emoji is no space: UIKit hung a space at
+/// a line's end past the margin while CoreText wrapped it, and every emoji
+/// after it in Paul Durov's posts drew a line low on the iPod touch 4.
+- (void)testCustomEmojiSpacer_IsNotWhitespace {
+	UIFont *font = TGFontAtSize(13);
+	NSAttributedString *spacer = TGCustomEmojiSpacer(42, font);
+	XCTAssertEqual(spacer.length, (NSUInteger)1);
+	unichar c = [spacer.string characterAtIndex:0];
+	XCTAssertFalse([[NSCharacterSet whitespaceAndNewlineCharacterSet] characterIsMember:c]);
+	XCTAssertEqualObjects([spacer attribute:@"TGCustomEmojiId" atIndex:0 effectiveRange:NULL], @42);
+	NSMutableAttributedString *line = [[NSMutableAttributedString alloc] initWithString:@"aaaa "
+			attributes:@{ NSFontAttributeName : font }];
+	[line appendAttributedString:spacer];
+	XCTAssertEqual(TGCustomEmojiRectsCoreText(line, 200).count, (NSUInteger)1);
+}
+
+/// A bubble's pool follows what it shows, so its cells keep the same views.
+- (void)testBubblePool_ByWhatTheRowShows {
+	TGMessageLayout *text = [[TGMessageLayout alloc] init];
+	XCTAssertEqualObjects(TGBubbleReuseIdentifier(text), @"TGBubbleCell.text");
+	TGMessageLayout *photo = [[TGMessageLayout alloc] init];
+	photo.pictureFrame = CGRectMake(0, 0, 200, 150);
+	XCTAssertEqualObjects(TGBubbleReuseIdentifier(photo), @"TGBubbleCell.media");
+	TGMessageLayout *voice = [[TGMessageLayout alloc] init];
+	voice.isVoice = YES;
+	XCTAssertEqualObjects(TGBubbleReuseIdentifier(voice), @"TGBubbleCell.audio");
+	TGMessageLayout *round = [[TGMessageLayout alloc] init];
+	round.isRound = YES;
+	round.pictureFrame = CGRectMake(0, 0, 200, 200);
+	XCTAssertEqualObjects(TGBubbleReuseIdentifier(round), @"TGBubbleCell.sticker");
+	TGMessageLayout *poll = [[TGMessageLayout alloc] init];
+	poll.isPoll = YES;
+	XCTAssertEqualObjects(TGBubbleReuseIdentifier(poll), @"TGBubbleCell.card");
 }
 
 @end

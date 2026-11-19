@@ -23,7 +23,7 @@
 }
 
 - (void)testPowerSaving_OptionsHeaderIsNotThePollString {
-	NSArray *model = TGPowerSavingPageModel(YES, YES, NO);
+	NSArray *model = TGPowerSavingPageModel(YES, YES, NO, NO);
 	XCTAssertEqual(model.count, (NSUInteger)1);
 	NSDictionary *section = model[0];
 	XCTAssertEqualObjects(section[TGPageModelHeader], @"Options");
@@ -37,8 +37,14 @@
 	TGSetTelegramLanguageLookup(nil);
 }
 
+/// Vintage shows still stickers and no wallpaper: no switch pretends otherwise.
+- (void)testPowerSaving_VintageKeepsOnlyTheSwitchesItHonours {
+	NSArray *model = TGPowerSavingPageModel(YES, YES, YES, YES);
+	XCTAssertEqualObjects([self titlesInSection:model[0]], (@[@"Autoplay GIFs"]));
+}
+
 - (void)testPowerSaving_RowsFollowTheOfficialOrder {
-	NSArray *model = TGPowerSavingPageModel(YES, NO, YES);
+	NSArray *model = TGPowerSavingPageModel(YES, NO, YES, NO);
 	NSArray *titles = [self titlesInSection:model[0]];
 	XCTAssertEqualObjects(titles, (@[@"Autoplay GIFs",
 			@"Loop Animated Stickers", @"Chat Wallpaper"]));

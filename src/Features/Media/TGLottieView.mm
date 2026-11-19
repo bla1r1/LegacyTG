@@ -6,6 +6,7 @@
 #import "TGLottieRender.h"
 #import "TGTLottie.h"
 #import "TGLottieView.h"
+#include <pthread.h>
 #import "TGStyle.h"
 #import "TGJson.h"
 #import "TGWebMDecoder.h"
@@ -98,6 +99,29 @@ static NSData *TGGunzip(NSData *input) {
 @end
 
 #pragma mark - View Implementation
+
+/// Where sticker models are built (`loop` NO) and loops rasterised (YES). On a
+/// multi-core phone the global queue, as before. On one core (A4, 3GS) ten
+/// builds at once shared the core with the scroll: each took 2-3 s of wall
+/// time on the iPod touch 4 and the chat scroll lost 63% of its frames, while
+/// tlottie's own lock ran them one at a time anyway. There a serial queue per
+/// kind: builds at LOW, so a sticker's first frame does not wait behind a
+/// loop, and loops at BACKGROUND, so they run when the main thread is idle.
+static dispatch_queue_t TGLottieRasterQueue(BOOL loop) {
+	static dispatch_queue_t builds, loops;
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{
+		if ([NSProcessInfo processInfo].processorCount < 2) {
+			builds = dispatch_queue_create("org.legacy.itg.lottie-build", DISPATCH_QUEUE_SERIAL);
+			dispatch_set_target_queue(builds, dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0));
+			loops = dispatch_queue_create("org.legacy.itg.lottie-loop", DISPATCH_QUEUE_SERIAL);
+			dispatch_set_target_queue(loops, dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_BACKGROUND, 0));
+		} else {
+			builds = loops = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0);
+		}
+	});
+	return loop ? loops : builds;
+}
 
 /// One serial queue builds every WebM player: the A4 has one core, and a
 /// screen of emoji asking at once would only add context switches.
@@ -328,7 +352,10 @@ static BOOL sBuildsDeferred = NO;
 			MIN((CGFloat)budget.pixelSideCap, viewSize.height * scale));
 
 	__weak typeof(self) weakSelf = self;
-	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+	dispatch_async(TGLottieRasterQueue(NO), ^{
+		// Named for the bench's per-thread CPU line; a pool thread keeps
+		// the name after, so it reads "last ran a sticker build".
+		pthread_setname_np("tg.sticker-build");
 		TGLottieModel *model = [[TGLottieModel alloc] init];
 		model.path = path;
 		model.isWebM = isWebM;
@@ -434,6 +461,17 @@ static BOOL sBuildsDeferred = NO;
 - (BOOL)loadStickerFileInner:(NSString *)path {
 	if (!path.length) return NO;
 	if ([self.loadedPath isEqualToString:path] && self.loaded && !self.model.blank) {
+		TGLottieModel *shown = self.model;
+		if (!shown.isWebM && !shown.cachedFrames.count && !shown.isRasterizing && !sBuildsDeferred) {
+			// Its loop was held while the table scrolled: the reload after
+			// the scroll settles is the time to raster it. The rest of the
+			// load is idempotent; only the held last frame must survive it.
+			BOOL wantsLast = self.wantsLastFrame;
+			self.loadedPath = nil;
+			BOOL ok = [self loadStickerFileInner:path];
+			self.wantsLastFrame = wantsLast;
+			return ok;
+		}
 		if (self.isPlaying) {
 			if (self.model.isWebM) {
 				[self ensureWebMPlayer];
@@ -523,11 +561,17 @@ static BOOL sBuildsDeferred = NO;
 		if (model.firstFrame)
 			self.layer.contents = (__bridge id)model.firstFrame.CGImage;
 
-		// Asynchronously pre-rasterize the animation loop on a background thread
-		if (!model.isRasterizing) {
+		// Asynchronously pre-rasterize the animation loop on a background thread.
+		// Not while a single core scrolls: each loop is 0.5 s or more of
+		// raster, and the stickers coming into view during the first scroll
+		// of a chat took ~2 s of the CPU the scroll and backboardd needed.
+		// Frame 0 shows meanwhile; the row reload after the scroll settles
+		// comes back here.
+		if (!model.isRasterizing && !sBuildsDeferred) {
 			model.isRasterizing = YES;
 			__weak typeof(self) weakSelf = self;
-			dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+			dispatch_async(TGLottieRasterQueue(YES), ^{
+				pthread_setname_np("tg.sticker-loop");
 				double targetFps = 18.0;
 				double duration = (model.outPoint - model.inPoint) / (model.frameRate ?: 60.0);
 				if (duration <= 0.05) duration = 2.0;

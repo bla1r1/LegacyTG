@@ -214,6 +214,25 @@ UIImage *TGImageFromMinithumbnail(id mini);
 @property (nonatomic, strong) UIButton *stickerButton;
 @property (nonatomic, strong) TGEmojiPanel *stickerPanel;   // emoji, stickers, GIFs
 @property (nonatomic, strong) TGMessageLayoutCache *layoutCache;
+/// Row heights (CGFloat per row, 0 = not measured yet) for `heightsMessages`
+/// while the layout cache's generation, the table width and the font size are
+/// the ones they were measured with. Every debounced reloadData asked the
+/// height of every row again, and each answer ran the run checks and the
+/// layout lookup: ~15% of the main thread scrolling a chat on the iPod touch 4.
+@property (nonatomic, strong) NSMutableData *rowHeights;
+@property (nonatomic, strong) NSArray *heightsMessages;
+@property (nonatomic, assign) NSUInteger heightsGeneration;
+@property (nonatomic, assign) CGFloat heightsWidth;
+@property (nonatomic, assign) CGFloat heightsFontSize;
+/// When the table last moved; rows waiting for a redraw wait for it to stop.
+@property (nonatomic, assign) double lastScrollTime;
+/// Text pictures and emoji decodes are held while the table moves.
+@property (nonatomic, assign) BOOL backgroundHeld;
+- (void)releaseBackgroundWhenStill;
+/// lastScrollTime as the last still check saw it (tableStillOrRetry:).
+@property (nonatomic, assign) double stillCheckedAt;
+/// When that check ran; a late second look does not confirm it.
+@property (nonatomic, assign) double stillCheckedWhen;
 @property (nonatomic, strong) NSMutableDictionary *gifPaths;       // docId -> local MP4
 /// Draft answers of a multiple-answer poll, per message id, before the Vote
 /// button sends them all at once.
@@ -228,6 +247,23 @@ UIImage *TGImageFromMinithumbnail(id mini);
 @property (nonatomic, assign) int64_t readInboxAtOpen;   // where you had read up to
 @property (nonatomic, assign) int64_t unreadFromId;      // the "Unread Messages" bar goes above it
 @property (nonatomic, assign) BOOL unreadChecked;
+/// The chat's saved newest page is on screen until TDLib's answer replaces it.
+@property (nonatomic, assign) BOOL pageFromCache;
+/// TDLib answered the first history request (a saved page measured later is dropped).
+@property (nonatomic, assign) BOOL historyArrived;
+/// TDLib's first page, waiting for the table to stand still over a saved one.
+@property (nonatomic, strong) NSArray *pendingHistoryPage;
+@property (nonatomic, assign) BOOL pendingHistoryMeasured;
+/// The saved page lacks newer messages and was all read: TDLib's page finds
+/// the unread line and scrolls there, as a first load does.
+@property (nonatomic, assign) BOOL unreadLeftToTDLib;
+/// When the current bottom hold ends (holdBottomWhileMediaSettles).
+@property (nonatomic, assign) double anchorToBottomUntil;
+- (void)holdBottomWhileMediaSettles;
+/// When the screen began to load and whether a page reached it: the open's
+/// time to first content, which is what a reader waits for.
+@property (nonatomic, assign) double openStart;
+@property (nonatomic, assign) BOOL firstPageShown;
 @property (nonatomic, strong) UILabel *floatingDate;
 @property (nonatomic, strong) UIButton *jumpButton;
 @property (nonatomic, strong) UILabel *jumpBadge;
@@ -556,6 +592,19 @@ UIImage *TGImageFromMinithumbnail(id mini);
 - (void)fetchImageForMessage:(NSDictionary *)m;
 - (CGSize)imageSizeFor:(NSDictionary *)m;
 - (TGMessageLayout *)layoutForMessage:(NSDictionary *)m atRow:(NSInteger)row;
+/// Measures the bodies of `messages` off the main thread, then runs `then`
+/// on it: the reloadData after is left with cache hits.
+- (void)measureTextsOf:(NSArray *)messages then:(dispatch_block_t)then;
+/// YES when the table has stood still long enough to rebuild rows or start
+/// held work; otherwise `action` is scheduled to ask again.
+- (BOOL)tableStillOrRetry:(SEL)action;
+/// -reload once the table stands still; for changes that arrive on their own.
+- (void)reloadWhenStill;
+/// The cache key of a message body's picture (TGRenderedLabel, iOS 6).
+- (NSString *)bodyRenderKeyFor:(NSDictionary *)m layout:(TGMessageLayout *)layout
+						  mine:(BOOL)mine revealed:(BOOL)revealed;
+/// Draws the body pictures of the rows next to `row` ahead, off the main thread.
+- (void)prefetchBodyTextsAroundRow:(NSInteger)row;
 /// Runs: neighbouring bubbles from one sender a few minutes apart.
 - (BOOL)runStartsAtRow:(NSInteger)row;
 - (BOOL)runEndsAtRow:(NSInteger)row;

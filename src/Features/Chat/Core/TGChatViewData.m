@@ -1,4 +1,5 @@
 #import "TGPerf.h"
+#import "TGChatCellLogic.h"
 #import "TGLocalization.h"
 #import "TGGroupStore.h"
 #import "TGChatViewController.h"
@@ -46,6 +47,7 @@
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
 #import "TGDMTopicsViewController.h"
+#import "TGChatPageCache.h"
 
 #if TG_DEV
 #endif
@@ -64,6 +66,9 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 
 #pragma mark - controller
 
+
+/// How long an opened chat holds its bottom while its media settles.
+static const double kTGHoldBottomSeconds = 6.0;
 
 @implementation TGChatViewController (TGChatViewData)
 
@@ -107,6 +112,8 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 }
 
 - (void)redrawVisibleRows {
+	if (![self tableStillOrRetry:@selector(redrawVisibleRows)])
+		return;
 	NSArray *visible = [self.table indexPathsForVisibleRows];
 	if (visible.count) {
 		for (NSIndexPath *ip in visible) {
@@ -117,6 +124,10 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 			}
 		}
 		[self.table reloadRowsAtIndexPaths:visible withRowAnimation:UITableViewRowAnimationNone];
+		// A row redrawn taller (its emoji, its picture) must not lift a chat
+		// that is holding its bottom.
+		if (self.anchorToBottom)
+			[self scrollToBottomAnimated:NO];
 	}
 }
 
@@ -146,9 +157,49 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 	[TGSnackbar showInView:self.view text:@"Video published" seconds:2 onCommit:nil];
 }
 
+/// For what arrived on its own (a picture, a sticker, a read mark): none of
+/// the callers changes the message array, so the reload can wait for the
+/// table to stop. Each one mid-scroll relaid and reconfigured every visible
+/// row; downloads finishing through the first scroll of a chat kept it at
+/// ~90% dropped frames on the iPod touch 4.
 - (void)reloadTableDebounced {
-	[NSObject cancelPreviousPerformRequestsWithTarget:self.table selector:@selector(reloadData) object:nil];
-	[self.table performSelector:@selector(reloadData) withObject:nil afterDelay:0.05];
+	[NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(reloadTableWhenStill) object:nil];
+	[self performSelector:@selector(reloadTableWhenStill) withObject:nil
+			afterDelay:MAX(0.05, TGChatRedrawDelay(CACurrentMediaTime(), self.lastScrollTime))];
+}
+
+- (void)reloadWhenStill {
+	if ([self tableStillOrRetry:@selector(reloadWhenStill)])
+		[self reload];
+}
+
+- (void)reloadTableWhenStill {
+	if ([self tableStillOrRetry:@selector(reloadTableWhenStill)])
+		[self.table reloadData];
+}
+
+/// YES when the table has stood still long enough to rebuild rows; otherwise
+/// `action` runs again later. A main thread blocked for 0.3 s mid-scroll
+/// leaves no scroll events behind and looks still, so the first still look
+/// is checked again 0.1 s on: a scroll that goes on has moved by then. That
+/// second look counts only if it came on time; one held up by another
+/// stall can run before the frame that would have moved the table.
+- (BOOL)tableStillOrRetry:(SEL)action {
+	double now = CACurrentMediaTime();
+	double wait = TGChatRedrawDelay(now, self.lastScrollTime);
+	if (self.table.isDragging || self.table.isDecelerating)
+		wait = MAX(wait, TGChatRedrawSettleSeconds);
+	if (wait == 0 && (self.stillCheckedAt != self.lastScrollTime ||
+			!TGChatStillConfirmed(now, self.stillCheckedWhen))) {
+		self.stillCheckedAt = self.lastScrollTime;
+		self.stillCheckedWhen = now;
+		wait = TGChatStillRecheckSeconds;
+	}
+	if (wait == 0)
+		return YES;
+	[NSObject cancelPreviousPerformRequestsWithTarget:self selector:action object:nil];
+	[self performSelector:action withObject:nil afterDelay:wait];
+	return NO;
 }
 
 - (NSDictionary *)compositeAlbumMessageFromMessages:(NSArray *)albumMsgs {
@@ -274,16 +325,131 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 	}
 #endif
 
+	// The page this chat showed last, at once, while TDLib reads its database
+	// (2.3-2.5 s on the iPod touch 4). Only on a first open of a plain chat
+	// and only if no message came since: the unread separator, a link's target
+	// and new messages are the real answer's.
+	int64_t account = [[TGMessageStore shared].me[@"id"] longLongValue];
+	self.historyArrived = NO;
+	BOOL cacheOff = NO;
+#if TG_DEV
+	// A/B the saved page on one binary: bench/pref/TGChatPageCacheOff/1
+	cacheOff = [[NSUserDefaults standardUserDefaults] boolForKey:@"TGChatPageCacheOff"];
+#endif
+	if (!cacheOff && !self.threadId && !self.initialMessageId && !self.unreadChecked && !self.pageFromCache) {
+		double cacheStart = TGPerfNow();
+		NSArray *saved = [TGChatPageCache pageForChat:self.chatId account:account];
+		int64_t last = [[TGMessageStore shared] lastMessageIdInChat:self.chatId];
+		if (TGChatPageIsUsable(saved, last)) {
+			// Messages came since and the reader had read all of this page:
+			// where the unread ones start is for TDLib's page to say, which
+			// then opens there, under these, as a first load does.
+			self.unreadLeftToTDLib = !TGChatPageIsCurrent(saved, last) &&
+					!TGChatPageHasUnread(saved, self.readInboxAtOpen);
+			[self applyHistoryPage:saved cached:YES];
+		}
+		TGPerfReport("chat load", "saved page", cacheStart, 50.0);
+	}
+
 	__weak typeof(self) weakSelf = self;
 	double chatStart = TGPerfNow();
-	[[TGMessageStore shared] historyForChat:self.chatId thread:self.threadId limit:60 completion:^(NSArray *messages){
+	int64_t threadId = self.threadId;
+	[[TGMessageStore shared] historyForChat:self.chatId thread:self.threadId limit:60 completion:^(NSArray *loaded){
+		TGPerfReport("chat load", "history wait", chatStart, 300.0);
 		TGChatViewController *me = weakSelf;
 		if (!me)
 			return;
-		TGPerfReport("chat load", "history wait", chatStart, 300.0);
+		me.historyArrived = YES;
+		if (!threadId && loaded.count)
+			[TGChatPageCache savePage:loaded chat:me.chatId account:account];
+		if (!me.pageFromCache) {
+			[me applyHistoryPage:loaded cached:NO];
+			return;
+		}
+		// The saved page is up: a reader may already be scrolling it, and a
+		// reload under a moving table cost a 500 ms frame on the iPod.
+		me.pendingHistoryPage = loaded;
+		[me applyPendingHistoryPage];
+	}];
+}
+
+/// Both of its main-thread steps wait for a still table: gathering the
+/// rows' inputs for the measure (~0.3 s for a page on the iPod touch 4) and
+/// the reload once measured. Measured, the rows' layouts are cached and the
+/// page's own measure only finds them.
+- (void)applyPendingHistoryPage {
+	if (!self.pendingHistoryPage || ![self tableStillOrRetry:@selector(applyPendingHistoryPage)])
+		return;
+	NSArray *page = self.pendingHistoryPage;
+	if (!self.pendingHistoryMeasured) {
+		__weak typeof(self) weakSelf = self;
+		[self measureTextsOf:page then:^{
+			weakSelf.pendingHistoryMeasured = YES;
+			[weakSelf applyPendingHistoryPage];
+		}];
+		return;
+	}
+	self.pendingHistoryPage = nil;
+	self.pendingHistoryMeasured = NO;
+	[self applyHistoryPage:page cached:NO];
+}
+
+/// Six seconds of keeping the bottom while pictures and emoji land. A later
+/// hold (TDLib's page after a saved one) extends it: the first one's timer
+/// let go of the bottom halfway through the second.
+- (void)holdBottomWhileMediaSettles {
+	self.anchorToBottom = YES;
+	double until = CACurrentMediaTime() + kTGHoldBottomSeconds;
+	self.anchorToBottomUntil = until;
+	__weak typeof(self) weakSelf = self;
+	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kTGHoldBottomSeconds * NSEC_PER_SEC)),
+			dispatch_get_main_queue(), ^{
+		if (weakSelf.anchorToBottomUntil <= until)
+			weakSelf.anchorToBottom = NO;
+	});
+}
+
+/// What a row is across two pages: its message, or its separator and day.
+static NSString *TGChatRowKey(NSDictionary *row) {
+	if (row[@"id"])
+		return [NSString stringWithFormat:@"m%@", row[@"id"]];
+	return [NSString stringWithFormat:@"%@|%@", row[@"separator"] ?: @"", row[@"text"] ?: @""];
+}
+
+/// A page of history on screen: TDLib's answer, or (cached) the page this
+/// chat showed last. TDLib's answer after a saved page replaces it where the
+/// reader is: no scroll to the bottom or to the unread line a second time.
+- (void)applyHistoryPage:(NSArray *)loaded cached:(BOOL)cached {
+	__weak typeof(self) weakSelf = self;
+	// Edited messages lose their layouts before the page is laid out
+	// anew, so the new ones are not thrown away after.
+	for (NSNumber *messageId in TGChangedMessageIds(self.rawMessages ?: @[], loaded))
+		[self.layoutCache removeLayoutForMessageId:messageId.longLongValue];
+	[self measureTextsOf:loaded then:^{
+		NSArray *messages = loaded;
+		TGChatViewController *me = weakSelf;
+		if (!me)
+			return;
+		// Measured after the real answer was shown: nothing to add.
+		if (cached && me.historyArrived)
+			return;
+		BOOL keepPlace = !cached && me.pageFromCache && !me.unreadLeftToTDLib;
+		// The row at the top of the screen and how far it sits from the top,
+		// to put it back after the switch (official's keepInPlaceAnchor):
+		// messages join both above and under the saved page.
+		NSIndexPath *anchorPath = keepPlace ? me.table.indexPathsForVisibleRows.firstObject : nil;
+		NSString *anchorKey = anchorPath && anchorPath.row < (NSInteger)me.messages.count
+				? TGChatRowKey(me.messages[(NSUInteger)anchorPath.row]) : nil;
+		CGFloat anchorShift = anchorKey
+				? [me.table rectForRowAtIndexPath:anchorPath].origin.y - me.table.contentOffset.y : 0;
+		me.pageFromCache = cached;
 		BOOL firstLoad = !me.unreadChecked;
-		[me noteFirstUnreadIn:messages];
-		NSArray *oldRaw = me.rawMessages ?: @[];
+		if (cached && me.unreadLeftToTDLib)
+			firstLoad = NO;   // the unread line is the real page's to find
+		else
+			[me noteFirstUnreadIn:messages];
+		if (!cached)
+			me.unreadLeftToTDLib = NO;
 		[me.streamStore resetWithMessages:messages];
 		// A failed send from before this screen opened is already in the
 		// history; seed the store so the bubble's mark and its retry agree.
@@ -295,23 +461,60 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 		// hold the bottom until the media has settled - unless the chat opens
 		// at what you have not read yet
 		// Opened on one message, the pin would pull the table away from it.
-		me.anchorToBottom = unreadRow == NSNotFound && !me.initialMessageId;
-		if (me.anchorToBottom)
-			dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(6.0 * NSEC_PER_SEC)),
-					dispatch_get_main_queue(), ^{ me.anchorToBottom = NO; });
-		// kinds only - the content is the user's, the log is read remotely
-		NSMutableArray *kinds = [NSMutableArray array];
-		for (NSDictionary *m in messages)
-			[kinds addObject:m[@"kind"] ?: @"?"];
-		NSLog(@"TDLIB HISTORY: %lu msgs: %@",
-				(unsigned long)messages.count, [kinds componentsJoinedByString:@", "]);
+		if (!keepPlace) {
+			if (unreadRow == NSNotFound && !me.initialMessageId)
+				[me holdBottomWhileMediaSettles];
+			else
+				me.anchorToBottom = NO;
+		}
+		if (!cached) {
+			// kinds only - the content is the user's, the log is read remotely
+			NSMutableArray *kinds = [NSMutableArray array];
+			for (NSDictionary *m in messages)
+				[kinds addObject:m[@"kind"] ?: @"?"];
+			NSLog(@"TDLIB HISTORY: %lu msgs: %@",
+					(unsigned long)messages.count, [kinds componentsJoinedByString:@", "]);
+		}
 		// The layout of thirty visible rows is what a first paint on the A4
 		// really pays for; the network wait is logged on its own.
 		double tableStart = TGPerfNow();
-		for (NSNumber *messageId in TGChangedMessageIds(oldRaw, me.rawMessages))
+		// Changed layouts went before the page was laid out (above);
+		// what changed since, while it was laid out, goes now.
+		for (NSNumber *messageId in TGChangedMessageIds(loaded, me.rawMessages))
 			[me.layoutCache removeLayoutForMessageId:messageId.longLongValue];
+		// TDLib's page adds the older messages above the saved few: keep the
+		// rows the reader sees where they are, measured from the bottom.
+		CGFloat fromBottom = me.table.contentSize.height - me.table.contentOffset.y;
+		UIEdgeInsets oldInset = me.table.contentInset;
+		BOOL wasAtBottom = me.table.contentOffset.y >=
+				me.table.contentSize.height + oldInset.bottom - me.table.bounds.size.height - 1;
 		[me.table reloadData];
+		if (keepPlace && wasAtBottom) {
+			// At the bottom it stays at the bottom, the way official sticks
+			// to it: TDLib's page can lay the last rows out taller.
+			[me scrollToBottomAnimated:NO];
+			[me holdBottomWhileMediaSettles];
+		} else if (keepPlace) {
+			[me.table layoutIfNeeded];
+			NSUInteger anchorRow = NSNotFound;
+			for (NSUInteger i = 0; anchorKey && i < me.messages.count && anchorRow == NSNotFound; i++)
+				if ([TGChatRowKey(me.messages[i]) isEqualToString:anchorKey])
+					anchorRow = i;
+			CGFloat top = anchorRow != NSNotFound
+					? [me.table rectForRowAtIndexPath:[NSIndexPath indexPathForRow:(NSInteger)anchorRow inSection:0]].origin.y - anchorShift
+					: me.table.contentSize.height - fromBottom;
+			// The input bar sits over the table's foot: its inset is part of
+			// where the bottom is.
+			UIEdgeInsets inset = me.table.contentInset;
+			CGFloat bottom = MAX(-inset.top, me.table.contentSize.height + inset.bottom - me.table.bounds.size.height);
+			me.table.contentOffset = CGPointMake(me.table.contentOffset.x, MIN(MAX(-inset.top, top), bottom));
+		}
+
 		TGPerfReport("chat table", "reloadData", tableStart, 100.0);
+		if (!me.firstPageShown) {
+			me.firstPageShown = YES;
+			TGPerfReport("chat open", cached ? "first page (saved)" : "first page (TDLib)", me.openStart, 0);
+		}
 		[me refreshActionBar];
 		[me updateTitleEmojiStatus];
 		if (me.initialMessageId){
@@ -324,14 +527,18 @@ static const NSInteger kChatChannelBottomBarTag = 0x9024;
 			[me resolveUnknownSenders];
 			return;
 		}
-		if (unreadRow != NSNotFound)
-			[me.table scrollToRowAtIndexPath:[NSIndexPath indexPathForRow:unreadRow inSection:0]
-							atScrollPosition:UITableViewScrollPositionTop animated:NO];
-		else
-			[me scrollToBottomAnimated:NO];
+		if (!keepPlace) {
+			if (unreadRow != NSNotFound)
+				[me.table scrollToRowAtIndexPath:[NSIndexPath indexPathForRow:unreadRow inSection:0]
+								atScrollPosition:UITableViewScrollPositionTop animated:NO];
+			else
+				[me scrollToBottomAnimated:NO];
+		}
 		[me fetchMissingImages];
 		[me resolveUnknownSenders];
 		[me fetchMissingQuotes];
+		if (cached)
+			return;   // read marks come with what TDLib says is there
 
 		NSMutableArray *ids = [NSMutableArray array];
 		for (NSDictionary *m in messages)

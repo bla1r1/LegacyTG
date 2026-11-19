@@ -10,6 +10,7 @@
 #import "TGUIFormat.h"
 #include <time.h>
 #include <string.h>
+#include <pthread.h>
 
 #ifndef typeof
 #define typeof __typeof__
@@ -42,6 +43,9 @@
 }
 
 - (void)setLayout:(TGMessageLayout *)layout forMessageId:(int64_t)msgId {
+	TGMessageLayout *old = nil;
+	if (_lru.get(msgId, old))
+		_generation++;
 	if (layout) {
 		_lru.put(msgId, layout);
 	} else {
@@ -51,10 +55,12 @@
 
 - (void)removeLayoutForMessageId:(int64_t)msgId {
 	_lru.remove(msgId);
+	_generation++;
 }
 
 - (void)clear {
 	_lru.clear();
+	_generation++;
 }
 
 - (NSUInteger)count {
@@ -75,12 +81,12 @@
 }
 
 - (void)removeAllObjects {
-	_lru.clear();
+	[self clear];
 }
 
 - (void)removeObjectForKey:(id)key {
 	if ([key respondsToSelector:@selector(longLongValue)]) {
-		_lru.remove([key longLongValue]);
+		[self removeLayoutForMessageId:[key longLongValue]];
 	}
 }
 
@@ -158,6 +164,11 @@ namespace std {
 
 static TGLruCache<EmojiKey, id> sEmojiCache(500);
 static TGLruCache<TextSizeKey, CGSize> sTextSizeCache(1000);
+// The chat measures a page of history on a background queue before the table
+// reloads (TGMeasureMessageTexts), so both caches are read from two threads.
+// Only the lookups hold it: a measure takes up to 300 ms on the A4 and the
+// main thread must not wait for one.
+static pthread_mutex_t sTextCachesLock = PTHREAD_MUTEX_INITIALIZER;
 
 // ─── Font & Emoji helpers ─────────────────────────────────────────────────────
 
@@ -422,12 +433,16 @@ NSAttributedString *TGEmojiAttributedText(NSString *text, UIFont *base) {
 
 	EmojiKey key = { TGFNV1a64(text), (uint32_t)(base.pointSize * 10.0f) };
 	id hit = nil;
-	if (sEmojiCache.get(key, hit)) {
+	pthread_mutex_lock(&sTextCachesLock);
+	BOOL known = sEmojiCache.get(key, hit);
+	pthread_mutex_unlock(&sTextCachesLock);
+	if (known)
 		return (hit == [NSNull null]) ? nil : (NSAttributedString *)hit;
-	}
 
 	if (!TGTextContainsEmoji(text)) {
+		pthread_mutex_lock(&sTextCachesLock);
 		sEmojiCache.put(key, [NSNull null]);
+		pthread_mutex_unlock(&sTextCachesLock);
 		return nil;
 	}
 
@@ -451,8 +466,95 @@ NSAttributedString *TGEmojiAttributedText(NSString *text, UIFont *base) {
 		}];
 	}
 
+	pthread_mutex_lock(&sTextCachesLock);
 	sEmojiCache.put(key, styled ?: (id)[NSNull null]);
+	pthread_mutex_unlock(&sTextCachesLock);
 	return styled;
+}
+
+/// The bundled face's size for a flag against the text's.
+static const CGFloat kTGFlagFaceScale = 0.85f;
+
+static BOOL TGIsRegionalIndicator(UTF32Char c) {
+	return c >= 0x1F1E6 && c <= 0x1F1FF;
+}
+
+NSArray *TGUnsupportedFlagRanges(NSString *text, BOOL (*has)(UTF32Char, UTF32Char)) {
+	NSUInteger length = text.length;
+	if (length < 4)
+		return @[];
+	// Most strings have no flag: one pass for the high surrogate all regional
+	// indicators share (U+1F1E6-1F1FF are D83C DDE6-DDFF) before any work.
+	const UniChar *units = CFStringGetCharactersPtr((__bridge CFStringRef)text);
+	NSMutableData *copy = nil;
+	if (!units) {
+		copy = [NSMutableData dataWithLength:length * sizeof(UniChar)];
+		[text getCharacters:(UniChar *)copy.mutableBytes range:NSMakeRange(0, length)];
+		units = (const UniChar *)copy.bytes;
+	}
+	NSMutableArray *ranges = nil;
+	for (NSUInteger i = 0; i + 3 < length; i++) {
+		if (units[i] != 0xD83C || units[i + 2] != 0xD83C)
+			continue;
+		UTF32Char first = CFStringGetLongCharacterForSurrogatePair(units[i], units[i + 1]);
+		UTF32Char second = CFStringGetLongCharacterForSurrogatePair(units[i + 2], units[i + 3]);
+		if (!TGIsRegionalIndicator(first) || !TGIsRegionalIndicator(second))
+			continue;
+		if (!has(first, second)) {
+			if (!ranges)
+				ranges = [NSMutableArray array];
+			[ranges addObject:[NSValue valueWithRange:NSMakeRange(i, 4)]];
+		}
+		i += 3;
+	}
+	return ranges ?: @[];
+}
+
+BOOL TGAppleEmojiHasFlag(UTF32Char first, UTF32Char second) {
+	// 2 bits per pair of the 26 x 26: known, and the answer.
+	static uint8_t answers[26 * 26];
+	static CTFontRef emoji = NULL;
+	if (!TGIsRegionalIndicator(first) || !TGIsRegionalIndicator(second))
+		return NO;
+	size_t pair = (first - 0x1F1E6) * 26 + (second - 0x1F1E6);
+	if (answers[pair])
+		return answers[pair] == 2;
+	if (!emoji)
+		emoji = CTFontCreateWithName(CFSTR("AppleColorEmoji"), 20, NULL);
+	UniChar units[4];
+	CFStringGetSurrogatePairForLongCharacter(first, units);
+	CFStringGetSurrogatePairForLongCharacter(second, units + 2);
+	BOOL drawn = NO;
+	if (emoji) {
+		NSString *flag = [NSString stringWithCharacters:units length:4];
+		NSAttributedString *shaped = [[NSAttributedString alloc] initWithString:flag
+				attributes:@{ (__bridge NSString *)kCTFontAttributeName : (__bridge id)emoji }];
+		CTLineRef line = CTLineCreateWithAttributedString((__bridge CFAttributedStringRef)shaped);
+		// One glyph from the emoji face is the flag; two are the letters.
+		drawn = line && CTLineGetGlyphCount(line) == 1;
+		if (line)
+			CFRelease(line);
+	}
+	answers[pair] = drawn ? 2 : 1;
+	return drawn;
+}
+
+NSAttributedString *TGFlagFallbackText(NSString *text, UIFont *base, UIColor *colour) {
+	NSArray *ranges = TGUnsupportedFlagRanges(text, TGAppleEmojiHasFlag);
+	if (!ranges.count || !base)
+		return nil;
+	// OpenMoji fills its whole em; at the text's size the flag stood well
+	// above the letters and the system emoji around it.
+	UIFont *emojiFont = TGEmojiFontOfSize(roundf(base.pointSize * kTGFlagFaceScale));
+	if (!emojiFont)
+		return nil;
+	NSMutableAttributedString *out = [[NSMutableAttributedString alloc] initWithString:text
+			attributes:@{ NSFontAttributeName : base }];
+	if (colour)
+		[out addAttribute:NSForegroundColorAttributeName value:colour range:NSMakeRange(0, out.length)];
+	for (NSValue *range in ranges)
+		[out addAttribute:NSFontAttributeName value:emojiFont range:range.rangeValue];
+	return out;
 }
 
 static TGCustomEmojiProvider sCustomEmojiProvider = NULL;
@@ -466,9 +568,25 @@ void TGSetCustomEmojiProvider(TGCustomEmojiProvider provider) {
 /// nothing is drawn in the gap. A nil image would draw iOS's file icon.
 static UIImage *TGEmptyPicture(void) {
 	static UIImage *empty = nil;
-	if (!empty)
-		empty = [[UIImage alloc] init];
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{ empty = [[UIImage alloc] init]; });
 	return empty;
+}
+
+NSAttributedString *TGCustomEmojiSpacer(int64_t emojiId, UIFont *font) {
+	// A clear symbol, not a space: UIKit hangs a space at the end of a line
+	// past the margin, CoreText (which places the pictures) wraps it to the
+	// next line, and every custom emoji after one that ended a line drew a
+	// line low. "@" breaks no line and is about as wide as the em space was;
+	// no kern to widen it, because CoreText versions disagree on where a kern
+	// goes, and the two engines agreeing is the whole point.
+	NSMutableAttributedString *spacer = [[NSMutableAttributedString alloc] initWithString:@"@"];
+	NSRange all = NSMakeRange(0, 1);
+	[spacer addAttribute:@"TGCustomEmojiId" value:@(emojiId) range:all];
+	[spacer addAttribute:@"TGCustomEmojiSide" value:@(TGCustomEmojiSide(font)) range:all];
+	[spacer addAttribute:NSFontAttributeName value:font range:all];
+	[spacer addAttribute:NSForegroundColorAttributeName value:[UIColor clearColor] range:all];
+	return spacer;
 }
 
 CGFloat TGCustomEmojiSide(UIFont *font) {
@@ -632,7 +750,11 @@ NSAttributedString *TGAttributedMessageTextRevealing(NSString *text, NSArray *en
 			for (NSArray *entry in customEmoji) {
 				NSRange range = NSMakeRange([entry[0] unsignedIntegerValue], [entry[1] unsignedIntegerValue]);
 				int64_t emojiId = [entry[2] longLongValue];
-				UIImage *picture = sCustomEmojiProvider ? sCustomEmojiProvider(emojiId, side) : nil;
+				// Off the main thread the text is only being measured
+				// (TGMeasureMessageTexts): the attachment's bounds decide
+				// the size, and the store that has the pictures lives on main.
+				UIImage *picture = sCustomEmojiProvider && [NSThread isMainThread]
+						? sCustomEmojiProvider(emojiId, side) : nil;
 				NSTextAttachment *attachment = [[NSClassFromString(@"NSTextAttachment") alloc] init];
 				attachment.image = picture ?: TGEmptyPicture();
 				// Sat on the baseline like a glyph, its bottom at the descender.
@@ -648,12 +770,7 @@ NSAttributedString *TGAttributedMessageTextRevealing(NSString *text, NSArray *en
 			for (NSArray *entry in customEmoji) {
 				NSRange range = NSMakeRange([entry[0] unsignedIntegerValue], [entry[1] unsignedIntegerValue]);
 				int64_t emojiId = [entry[2] longLongValue];
-				NSMutableAttributedString *spacer = [[NSMutableAttributedString alloc] initWithString:@"\u2003"];
-				[spacer addAttribute:@"TGCustomEmojiId" value:@(emojiId) range:NSMakeRange(0, 1)];
-				[spacer addAttribute:@"TGCustomEmojiSide" value:@(side) range:NSMakeRange(0, 1)];
-				[spacer addAttribute:NSFontAttributeName value:baseFont range:NSMakeRange(0, 1)];
-				[spacer addAttribute:NSForegroundColorAttributeName value:[UIColor clearColor] range:NSMakeRange(0, 1)];
-				[str replaceCharactersInRange:range withAttributedString:spacer];
+				[str replaceCharactersInRange:range withAttributedString:TGCustomEmojiSpacer(emojiId, baseFont)];
 			}
 		}
 	}
@@ -685,7 +802,42 @@ BOOL TGCustomEmojiInlineSupported(void) {
 // upward from the frame's bottom while the label draws downward, so a line's
 // top sits at frameH - origin.y - ascent; the frame is made tall enough that
 // the first line still lands at the top.
+NSAttributedString *TGCoreTextFonts(NSAttributedString *text) {
+	if (!text.length)
+		return text;
+	NSMutableAttributedString *out = nil;
+	NSMutableDictionary *made = [NSMutableDictionary dictionary];
+	NSRange all = NSMakeRange(0, text.length);
+	NSRange range;
+	for (NSUInteger i = 0; i < text.length; i = NSMaxRange(range)) {
+		id font = [text attribute:NSFontAttributeName atIndex:i longestEffectiveRange:&range inRange:all];
+		if (!font || CFGetTypeID((__bridge CFTypeRef)font) == CTFontGetTypeID())
+			continue;
+		if (![font respondsToSelector:@selector(fontName)] || ![font respondsToSelector:@selector(pointSize)])
+			continue;
+		NSString *name = [font fontName];
+		CGFloat size = [font pointSize];
+		NSString *key = [NSString stringWithFormat:@"%@/%.2f", name, size];
+		id ctFont = made[key];
+		if (!ctFont) {
+			ctFont = CFBridgingRelease(CTFontCreateWithName((__bridge CFStringRef)name, size, NULL));
+			if (!ctFont)
+				continue;
+			made[key] = ctFont;
+		}
+		if (!out)
+			out = [text mutableCopy];
+		[out addAttribute:(__bridge NSString *)kCTFontAttributeName value:ctFont range:range];
+	}
+	return out ?: text;
+}
+
 NSArray *TGCustomEmojiRectsCoreText(NSAttributedString *text, CGFloat width) {
+	// iOS 6 has no toll-free UIFont/CTFont bridge: handed the label's string
+	// as is, CoreText laid it out in its default 12 pt face, wrapped it in
+	// other places than the label did, and every custom emoji after the first
+	// few lines landed a line or more off its fallback characters.
+	text = TGCoreTextFonts(text);
 	CTFramesetterRef framesetter = CTFramesetterCreateWithAttributedString(
 			(__bridge CFAttributedStringRef)text);
 	if (!framesetter)
@@ -868,9 +1020,11 @@ CGSize TGTextSizeWithEntities(NSString *text, NSArray *entities, UIFont *font, C
 	};
 
 	CGSize cachedSize;
-	if (sTextSizeCache.get(key, cachedSize)) {
+	pthread_mutex_lock(&sTextCachesLock);
+	BOOL known = sTextSizeCache.get(key, cachedSize);
+	pthread_mutex_unlock(&sTextCachesLock);
+	if (known)
 		return cachedSize;
-	}
 
 	CGSize size = CGSizeZero;
 	// Over budget, the measure itself says it was the cost: text measures
@@ -905,7 +1059,9 @@ CGSize TGTextSizeWithEntities(NSString *text, NSArray *entities, UIFont *font, C
 		}
 	}
 
+	pthread_mutex_lock(&sTextCachesLock);
 	sTextSizeCache.put(key, size);
+	pthread_mutex_unlock(&sTextCachesLock);
 	TGPerfReport("text measure", NULL, measureStart, 10.0);
 	return size;
 }
@@ -985,8 +1141,8 @@ NSString *TGMessageStamp(NSTimeInterval timestamp, BOOL edited) {
 	// The app's own clock: the device's 12/24-hour choice and separator, not
 	// a hand-written %02d:%02d that ignored both.
 	// One formatter for every bubble: building one costs ~1 ms on the A4.
-	// Its only caller is cell layout on the main thread (iOS 6 formatters
-	// are not thread-safe).
+	// Row layouts of a history page run on a background queue as well as on
+	// main, and an iOS 6 formatter is not thread-safe: one at a time.
 	static NSDateFormatter *clock = nil;
 	static dispatch_once_t once;
 	dispatch_once(&once, ^{
@@ -994,7 +1150,10 @@ NSString *TGMessageStamp(NSTimeInterval timestamp, BOOL edited) {
 		clock.dateStyle = NSDateFormatterNoStyle;
 		clock.timeStyle = NSDateFormatterShortStyle;
 	});
-	NSString *time = [clock stringFromDate:date] ?: @"";
+	NSString *time;
+	@synchronized (clock) {
+		time = [clock stringFromDate:date] ?: @"";
+	}
 	if (edited)
 		return [NSString stringWithFormat:@"%@ %@", TGLocalized(@"edited"), time];
 	return time;

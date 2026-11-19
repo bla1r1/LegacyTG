@@ -53,6 +53,8 @@ static int64_t sActiveChatId = 0;
 #pragma mark - controller
 
 
+static char kTGTableContentSizeContext;
+
 @implementation TGChatViewController (TGChatViewLayout)
 
 + (int64_t)activeChatId {
@@ -77,6 +79,7 @@ static int64_t sActiveChatId = 0;
 
 	[[TGTheme shared] styleNavigationBar:self.navigationController.navigationBar];
 	double vcStart = TGPerfNow();
+	self.openStart = vcStart;
 	[self buildTitleView];
 	TGPerfReport("chat vc", "title", vcStart, 50.0);
 	self.streamStore = [[TGMessageStreamStore alloc] init];
@@ -110,6 +113,10 @@ static int64_t sActiveChatId = 0;
 			CGRectMake(0, 0, b.size.width, b.size.height - kInputHeight)];
 	self.table.dataSource = self;
 	self.table.delegate = self;
+	// Rows laid out again after the first paint (a picture's size, an emoji,
+	// a reaction) grew the page under a chat holding its bottom, and the
+	// newest messages ended up below the input bar: the hold follows them.
+	[self.table addObserver:self forKeyPath:@"contentSize" options:0 context:&kTGTableContentSizeContext];
 	self.table.separatorStyle = UITableViewCellSeparatorStyleNone;
 	self.table.backgroundColor = [UIColor clearColor];
 	self.table.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
@@ -450,8 +457,13 @@ FOUNDATION_EXPORT void TGBubbleFlushCache(void);
 				[me.table reloadData];
 				return;
 			}
-			// edited or unknown deletion - re-read
-			[me reload];
+			// Edited or unknown deletion: re-read, once the table stands
+			// still. Reactions and views in a busy channel arrive every few
+			// hundred ms, and each re-read rebuilt the whole table (1.5 s of
+			// main thread on the iPod touch 4) in the middle of a scroll.
+			[NSObject cancelPreviousPerformRequestsWithTarget:me
+					selector:@selector(reloadWhenStill) object:nil];
+			[me performSelector:@selector(reloadWhenStill) withObject:nil afterDelay:0.1];
 		}
 		onChatAction:^(NSString *action){
 			[weakSelf showChatAction:action resting:weakSelf.restingSubtitle];
@@ -552,7 +564,28 @@ FOUNDATION_EXPORT void TGBubbleFlushCache(void);
 	NSLog(@"memory warning: chat kept %lu photos", (unsigned long)keepIds.count);
 }
 
+- (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object
+						change:(NSDictionary *)change context:(void *)context {
+	if (context != &kTGTableContentSizeContext) {
+		[super observeValueForKeyPath:keyPath ofObject:object change:change context:context];
+		return;
+	}
+	if (self.anchorToBottom && !self.table.isTracking && !self.table.isDecelerating)
+		[self scrollToBottomAnimated:NO];
+}
+
 - (void)dealloc {
+	[self.table removeObserver:self forKeyPath:@"contentSize" context:&kTGTableContentSizeContext];
+	// iOS 6 holds these delegates unretained. The table outlives this screen
+	// while a pop or a scroll animation finishes, and its next layout pass
+	// asked a freed controller for rows: SIGSEGV in objc_msgSend under
+	// CoreAnimation's commit, twice on the iPod touch 4 on 18-19 November.
+	self.table.delegate = nil;
+	self.table.dataSource = nil;
+	self.input.delegate = nil;
+	self.chatSearchBar.delegate = nil;
+	self.touchRecorder.delegate = nil;
+	self.locationManager.delegate = nil;
 	[NSObject cancelPreviousPerformRequestsWithTarget:self.table];
 	[NSObject cancelPreviousPerformRequestsWithTarget:self];
 	[self.playbackTimer invalidate];

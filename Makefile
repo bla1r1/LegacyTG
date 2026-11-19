@@ -412,6 +412,7 @@ APP_SRC_M := \
 	src/Core/Stores/TGSearchStore.m \
 	src/Core/Stores/TGMessageStore.m \
 	src/Core/Stores/TGMessageStore+History.m \
+	src/Core/Stores/TGChatPageCache.m \
 	src/Core/Stores/TGSettingsStore.m \
 	src/Core/Stores/TGSettingsStore+Options.m \
 	src/Core/Stores/TGSettingsStore+Autosave.m \
@@ -543,6 +544,7 @@ APP_SRC_M := \
 	src/Features/Chat/Views/TGAttachSheet.m \
 	src/Features/Profile/TGMemberCell.m \
 	src/UI/Messages/TGMessageBubbleCell.m \
+	src/UI/Messages/TGRenderedLabel.m \
 	src/UI/Messages/TGMessageServiceCell.m \
 	src/UI/Messages/TGMessageDateHeaderCell.m \
 	src/UI/Messages/TGMessageUnreadSeparatorCell.m \
@@ -793,6 +795,7 @@ APP_SRC_MM := \
 	src/Core/Stores/TGSettingsStore+Folders.mm \
 	src/Core/Support/TGUpdateBatcher.mm \
 	src/Features/Chat/Views/TGMessageLayout.mm \
+	src/Features/Chat/Views/TGTextRender.mm \
 	src/Media/TGLottieRender.mm \
 	src/Features/Media/TGLottieView.mm
 

@@ -183,9 +183,10 @@ static BOOL TGNotificationsWarning(void) {
 			[weakSelf openPage:TGSettingsPageAppearance];
 		}),
 		TGIconTapOpenRow(TGLocalized(@"Power Saving"),
-				(![TGCapabilities animatedStickersWanted] ||
-				 ![TGCapabilities wallpaperWanted] ||
-				 ![TGCapabilities gifAutoplayWanted]) ? @"On" : @"Off",
+				(![TGCapabilities gifAutoplayWanted] ||
+				 ([TGDevice tier] > TGDeviceTierVintage &&
+				  (![TGCapabilities animatedStickersWanted] || ![TGCapabilities wallpaperWanted])))
+						? @"On" : @"Off",
 				@"battery", TGIconTileAmber(), ^{
 			[weakSelf openPage:TGSettingsPagePowerSaving];
 		}),

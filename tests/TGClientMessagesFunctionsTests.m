@@ -419,6 +419,29 @@ static NSDictionary *altV(int side, NSString *codec, int fileId) {
 	XCTAssertEqual([got.lastObject[@"id"] longLongValue], 501LL);
 }
 
+/// A chat whose last message is known is read from it: from 0 TDLib answers
+/// a chat it has not loaded with one message, and the page came a call later.
+- (void)testHistory_StartsFromTheKnownLastMessage {
+	TGClient *c = M();
+	c.chatsById[@(33)] = [@{@"lastId" : @(900)} mutableCopy];
+	__block NSArray *got = nil;
+	[[TGMessageStore shared] historyForChat:33 thread:0 limit:2 completion:^(NSArray *rows){ got = rows; }];
+	NSDictionary *r = lastM(c, @"getChatHistory");
+	XCTAssertEqual([r[@"from_message_id"] longLongValue], 900LL);
+	XCTAssertEqual([r[@"offset"] integerValue], -1, @"offset 0 would leave the last message out");
+	answerM(c, @{@"@type" : @"messages", @"messages" : @[
+		@{@"@type" : @"message", @"id" : @(900), @"content" : @{@"@type" : @"messageText"}}]});
+	// One short of the limit: the walk goes on backwards from the oldest.
+	NSDictionary *next = lastM(c, @"getChatHistory");
+	XCTAssertEqual([next[@"from_message_id"] longLongValue], 900LL);
+	XCTAssertEqual([next[@"offset"] integerValue], 0);
+	answerM(c, @{@"@type" : @"messages", @"messages" : @[
+		@{@"@type" : @"message", @"id" : @(899), @"content" : @{@"@type" : @"messageText"}}]});
+	XCTAssertEqual(got.count, (NSUInteger)2);
+	XCTAssertEqual([got.lastObject[@"id"] longLongValue], 900LL, @"oldest first");
+	[c.chatsById removeObjectForKey:@(33)];
+}
+
 - (void)testMessageCount_TopicOrWholeChat {
 	TGClient *c = M();
 	__block NSInteger count = -1;

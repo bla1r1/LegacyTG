@@ -143,6 +143,11 @@ static NSArray *TGContactSections(NSArray *users) {
 }
 
 - (void)reloadVisibleRows {
+	// Off screen (a chat pushed over the tabs) every presence update still
+	// rebuilt these rows: ~1% of the main thread in a chat scroll on the iPod
+	// touch 4. viewWillAppear loads the contacts again anyway.
+	if (!self.isViewLoaded || !self.view.window)
+		return;
 	NSArray *visible = [self.tableView indexPathsForVisibleRows];
 	if (visible.count) {
 		[self.tableView reloadRowsAtIndexPaths:visible withRowAnimation:UITableViewRowAnimationNone];

@@ -350,6 +350,9 @@ static const CGFloat TGMetricChatBadgeTop       = 43.0f;
 static const CGFloat TGMetricFolderPillInset    = TGMetricPadSmall;
 static const CGFloat TGMetricHistoryPageAroundPinned = 40.0f;
 static const CGFloat TGMetricHistoryTopGate          = 100.0f;
+/// A body taller than this is drawn ahead even while the table moves: on
+/// the main thread a 1050 pt post (3.8 MB at 2x) took one 2.3 s frame.
+static const CGFloat TGMetricTextHoldMaxHeight       = 480.0f;
 static const CGFloat TGMetricFloatingDateHeight = 22.0f;
 static const CGFloat TGMetricVoicePillWidth     = 32.0f;
 static const CGFloat TGMetricVoicePillHeight    = 62.0f;

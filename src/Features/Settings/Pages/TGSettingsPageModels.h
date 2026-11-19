@@ -33,7 +33,9 @@ extern NSString *const TGPageModelRowIndex;
 /// Power Saving, in the order EnergySavingSettingsScreen lists its options.
 /// The master threshold and the battery row need a settings store this app
 /// does not have, so only the switches the app can honour are returned.
-NSArray *TGPowerSavingPageModel(BOOL stickersOn, BOOL gifsOn, BOOL wallpaperOn);
+/// `vintage`: the device shows still stickers and no wallpaper whatever the
+/// switches say, so those two rows are left out.
+NSArray *TGPowerSavingPageModel(BOOL stickersOn, BOOL gifsOn, BOOL wallpaperOn, BOOL vintage);
 
 /// Folders: the page intro (folder icon and the official sentence), Create
 /// New Folder, the account's folders, the recommended list, then the tag

@@ -5,7 +5,8 @@
 //
 
 /// Posted on the main thread when a picture asked for earlier is ready.
-/// userInfo "id" is the custom emoji id as an NSNumber.
+/// userInfo "id" is the custom emoji id as an NSNumber, or "ids" an NSSet of
+/// them when several were ready within 0.1 s.
 #import <Foundation/Foundation.h>
 #import <CoreGraphics/CoreGraphics.h>
 extern NSString *const TGCustomEmojiLoadedNotification;
@@ -25,6 +26,10 @@ extern NSString *const TGCustomEmojiLoadedNotification;
 
 /// Ingest stickers returned by TDLib (e.g. from getCustomEmojiStickers or tests).
 - (void)receiveStickers:(NSArray *)stickers forIds:(NSArray *)ids;
+
+/// Holds the decode queue while a table moves; pictures asked meanwhile
+/// decode once it stands still. Main thread.
+- (void)setDecodesHeld:(BOOL)held;
 
 /// Forgets every picture and pending request, for an account switch.
 - (void)reset;

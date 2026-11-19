@@ -105,6 +105,7 @@ static CGFloat TGChatMediaCorner(void) {
 		if (mine)
 			group = CGRectUnion(group, ticksFrame);
 		if (stamp.length){
+			[cell ensureInTree:cell.time];
 			[cell.contentView insertSubview:cell.stampPlate belowSubview:cell.time];
 			cell.stampPlate.hidden = NO;
 			cell.stampPlate.backgroundColor = [theme mediaStampColour];
@@ -195,6 +196,7 @@ static CGFloat TGChatMediaCorner(void) {
 		cell.stampPlate.hidden = NO;
 		cell.stampPlate.backgroundColor = [theme mediaStampColour];
 		cell.stampPlate.frame = plate;
+		[cell ensureInTree:cell.time];
 		[cell.bubble insertSubview:cell.stampPlate belowSubview:cell.time];
 		cell.time.text = layout.stamp;
 		cell.time.textColor = [theme onMediaColour];
@@ -242,6 +244,7 @@ static CGFloat TGChatMediaCorner(void) {
 			// row, so the machine appears once all four are in.
 			__weak typeof(self) weakSelf = self;
 			view.onStickerReady = ^{ [weakSelf reloadTableDebounced]; };
+			[cell ensureInTree:cell.lottie];
 			[cell.bubble insertSubview:view aboveSubview:(i ? [cell.bubble viewWithTag:TGBubbleSlotLayerTag + (NSInteger)i - 1] : cell.lottie)];
 		}
 		view.frame = cell.lottie.frame;

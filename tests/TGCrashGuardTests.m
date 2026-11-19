@@ -79,4 +79,29 @@ static int cgAbortInChild(const char *marker, const char *name, BOOL leave) {
 	TGTLottieUseCrashLog(cgTempDirectory());
 }
 
+/// A real fault still dies of SIGSEGV with the marker written, and dies of
+/// the fault itself, not of a signal the handler raised again.
+- (void)testFault_DiesOfTheFaultWithTheMarker {
+	NSString *marker = [cgTempDirectory() stringByAppendingPathComponent:@"tlottie.crashed"];
+	fflush(stdout);
+	fflush(stderr);
+	pid_t pid = fork();
+	if (pid == 0) {
+		task_set_exception_ports(mach_task_self(), EXC_MASK_CRASH | EXC_MASK_BAD_ACCESS, MACH_PORT_NULL,
+				EXCEPTION_DEFAULT, THREAD_STATE_NONE);
+		TGCrashGuardInstall(marker.fileSystemRepresentation);
+		TGCrashGuardEnter("fault.tgs");
+		volatile int *nowhere = (volatile int *)(uintptr_t)8;
+		*nowhere = 1;
+		_exit(0);
+	}
+	int status = 0;
+	waitpid(pid, &status, 0);
+	XCTAssertTrue(WIFSIGNALED(status));
+	int sig = WIFSIGNALED(status) ? WTERMSIG(status) : 0;
+	XCTAssertTrue(sig == SIGSEGV || sig == SIGBUS, @"%d", sig);
+	NSString *written = [NSString stringWithContentsOfFile:marker encoding:NSUTF8StringEncoding error:NULL];
+	XCTAssertEqualObjects(written, @"fault.tgs");
+}
+
 @end

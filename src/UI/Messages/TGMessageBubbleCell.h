@@ -142,12 +142,15 @@ static const NSInteger TGBubbleStickerEffectTag = 0x9330;
 @property (nonatomic, readonly) NSString *loopingPath;
 
 - (void)resetForReuse;
-/// Takes every hidden subview of the bubble and the content view out of the
-/// tree; resetForReuse puts them back where they were. Call once the row is
-/// configured. A chat row holds 46 layers and shows about 10, and backboardd
-/// walked and composited all 46 on every frame of a scroll: parking the
-/// hidden ones took the iPod touch 4 from 10-26% dropped frames to 1%.
-- (void)parkHiddenViews;
+/// Takes the views init built out of the tree while they are hidden and puts
+/// a shown one back at its depth; call once the row is configured. Only what
+/// changed moves: a chat row built ~46 views and shows ~10, and backboardd
+/// walks hidden layers on every frame, while taking them all out and back on
+/// every reuse was ~26% of the main thread on a mixed chat.
+- (void)settleHiddenViews;
+/// Puts a view init built back in the tree now, at its depth, for a branch
+/// that places another view against it before the row is settled.
+- (void)ensureInTree:(UIView *)view;
 - (void)applyTheme;
 
 @end

@@ -65,6 +65,28 @@ CGSize TGMessageBodySize(NSDictionary *m, CGFloat fontSize) {
 			kBubbleMaxW - TGDoubled(kPadH));
 }
 
+NSArray *TGMessageTextsToMeasure(NSArray *messages) {
+	NSMutableArray *texts = [NSMutableArray arrayWithCapacity:messages.count];
+	for (NSDictionary *m in messages) {
+		NSString *text = m[@"text"];
+		if (![m isKindOfClass:NSDictionary.class] || ![text isKindOfClass:NSString.class] || !text.length)
+			continue;
+		NSArray *entities = m[@"entities"];
+		NSMutableDictionary *copy = [NSMutableDictionary dictionaryWithObject:[text copy] forKey:@"text"];
+		if (m[@"kind"])
+			copy[@"kind"] = m[@"kind"];
+		if ([entities isKindOfClass:NSArray.class])
+			copy[@"entities"] = [entities copy];
+		[texts addObject:copy];
+	}
+	return texts;
+}
+
+void TGMeasureMessageTexts(NSArray *texts, CGFloat fontSize) {
+	for (NSDictionary *m in texts)
+		TGMessageBodySize(m, fontSize);
+}
+
 BOOL TGMessageStampOnPicture(NSDictionary *m, CGSize imageSize, CGFloat fontSize) {
 	if ([m[@"captionAbove"] isKindOfClass:[NSNumber class]] && [m[@"captionAbove"] boolValue])
 		return YES;
@@ -289,6 +311,12 @@ TGMessageLayout *TGMessageRowLayout(TGMessageRowInput *in) {
 	}
 
 	CGSize body = TGMessageBodySize(m, in.fontSize);
+	// The width the body was wrapped at. Buttons, a link preview or the
+	// stamp can make the bubble up to 2 * kPadH wider than that; a label
+	// that wide wraps into fewer lines than were measured, centres them in
+	// the taller frame, and every custom emoji drawn from the top of the
+	// frame on iOS 6 sat a line or more above its place.
+	CGFloat bodyW = kBubbleMaxW - TGDoubled(kPadH);
 	CGSize pic  = in.imageSize;
 	layout.bodySize = body;
 	layout.picSize = pic;
@@ -456,8 +484,9 @@ TGMessageLayout *TGMessageRowLayout(TGMessageRowInput *in) {
 			natural = MAX(natural, kBubbleMinW);
 		bubbleW = MIN(natural, kBubbleMaxW + TGDoubled(kPadH));
 		if (body.height > 0){
+			bodyW = bubbleW - TGDoubled(kPadH);
 			body = TGTextSizeWithEntities(m[@"text"] ?: @"", m[@"entities"],
-					TGFontAtSize(in.fontSize), bubbleW - TGDoubled(kPadH));
+					TGFontAtSize(in.fontSize), bodyW);
 			layout.bodySize = body;
 			// Measured for the full width, the last line may not have room
 			// for the stamp at this one: it gets its own line.
@@ -581,14 +610,14 @@ TGMessageLayout *TGMessageRowLayout(TGMessageRowInput *in) {
 			layout.stampTicksFrame = plate.ticks;
 		}
 		y += collageH + TGMetricPadSmall;
-		layout.bodyFrame = CGRectMake(kPadH, y, innerW, body.height);
+		layout.bodyFrame = CGRectMake(kPadH, y, MIN(innerW, bodyW), body.height);
 		if (body.height > 0)
 			y += body.height + (hasLinkPreview ? TGMetricPadSmall : TGMetricZero);
 	} else if (pic.height > 0) {
 		BOOL captionAbove = [m[@"captionAbove"] isKindOfClass:[NSNumber class]] &&
 				[m[@"captionAbove"] boolValue] && body.height > 0;
 		if (captionAbove) {
-			layout.bodyFrame = CGRectMake(kPadH, y, innerW, body.height);
+			layout.bodyFrame = CGRectMake(kPadH, y, MIN(innerW, bodyW), body.height);
 			y += body.height + TGMetricPadSmall;
 		}
 		CGFloat picW = fillsBubble ? mediaW : ((body.height > 0) ? innerW : pic.width);
@@ -605,12 +634,12 @@ TGMessageLayout *TGMessageRowLayout(TGMessageRowInput *in) {
 			y += pic.height + (hasLinkPreview ? TGMetricPadSmall : TGMetricZero);
 		} else {
 			y += pic.height + TGMetricPadSmall;
-			layout.bodyFrame = CGRectMake(kPadH, y, innerW, body.height);
+			layout.bodyFrame = CGRectMake(kPadH, y, MIN(innerW, bodyW), body.height);
 			if (body.height > 0)
 				y += body.height + (hasLinkPreview ? TGMetricPadSmall : TGMetricZero);
 		}
 	} else {
-		layout.bodyFrame = CGRectMake(kPadH, y, innerW, body.height);
+		layout.bodyFrame = CGRectMake(kPadH, y, MIN(innerW, bodyW), body.height);
 		if (body.height > 0)
 			y += body.height + (hasLinkPreview ? TGMetricPadSmall : TGMetricZero);
 	}

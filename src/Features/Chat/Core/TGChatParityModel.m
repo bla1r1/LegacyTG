@@ -1,4 +1,5 @@
 #import "TGChatParityModel.h"
+#import "TGDateFormat.h"
 #import "TGLocalization.h"
 #import "TGUIFormat.h"
 #import "TGMessageStore.h"
@@ -59,6 +60,31 @@ NSString *TGChatDateSeparatorTitle(NSTimeInterval stamp, NSTimeInterval now) {
 	return [NSString stringWithFormat:
 			TGLocalizedKey(@"Date.ChatDateHeaderYear", @"%1$@ %2$@, %3$@"),
 			month, dayText, [NSString stringWithFormat:@"%ld", (long)day.year]];
+}
+
+NSString *TGChatDayTitle(NSTimeInterval stamp, NSTimeInterval now) {
+	static NSMutableDictionary *titles;
+	static long titlesToday;
+	static id languageObserver;
+	if (!titles) {
+		titles = [NSMutableDictionary dictionary];
+		languageObserver = [[NSNotificationCenter defaultCenter]
+				addObserverForName:TGAppLanguageChangedNotification object:nil queue:nil
+				usingBlock:^(NSNotification *note) { [titles removeAllObjects]; }];
+	}
+	long today = TGFastDayNumber((time_t)now);
+	if (today != titlesToday) {
+		[titles removeAllObjects];
+		titlesToday = today;
+	}
+	NSNumber *day = @(TGFastDayNumber((time_t)stamp));
+	NSString *title = titles[day];
+	if (!title) {
+		title = TGChatDateSeparatorTitle(stamp, now);
+		if (title)
+			titles[day] = title;
+	}
+	return title;
 }
 
 NSString *TGChatComposerPlaceholder(BOOL isChannel, BOOL silentPosting,

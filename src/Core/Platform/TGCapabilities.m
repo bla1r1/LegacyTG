@@ -60,13 +60,17 @@ static void TGSetWanted(NSString *key, BOOL wanted) {
 + (BOOL)canPlayAnimatedStickers {
 	// TGLottieView renders vector animations with C++ optimization.
 	// Dual-core runs at 18 fps, single-core (A4) throttles to 12 fps with model caching.
-	// Every tier can. "Loop Animated Stickers" off is the official meaning,
-	// one loop and then rest - it used to switch the animation off entirely.
-	return YES;
+	// "Loop Animated Stickers" off is the official meaning, one loop and then
+	// rest. Vintage shows the still: on the iPod touch 4 even one loop per
+	// sticker took 12 points of a chat's first scroll (59% to 47% dropped
+	// with loops off), the builds and rasters sharing its one core.
+	return [TGDevice tier] > TGDeviceTierVintage;
 }
 
 + (BOOL)canShowWallpaper {
-	return [self wallpaperWanted];
+	// Not on Vintage: backboardd blends the pattern under every bubble on each
+	// scrolled frame, 5-7 points of a chat scroll on the iPod touch 4.
+	return [TGDevice tier] > TGDeviceTierVintage && [self wallpaperWanted];
 }
 
 /// One TDLib client runs at a time and each account keeps its own database, so
@@ -210,10 +214,10 @@ static BOOL TGEmojiFontHasGlyphs(CTFontRef font, NSString *s) {
 		@[@"Messages, media, groups", @YES,  @"every device"],
 		@[@"WebP stickers",           @YES,  @"every device"],
 		@[@"Voice notes",             @YES,  @"every device"],
-		@[@"Animated stickers",       @([self canPlayAnimatedStickers]), @"every device, 12 fps on an A4"],
+		@[@"Animated stickers",       @([self canPlayAnimatedStickers]), @"Legacy+ - the A4 shows the still picture"],
 		@[@"Recent photos in attach", @YES,  @"every device"],
 		@[@"Swipe actions in chats",  @YES,  @"every device"],
-		@[@"Chat wallpaper",          @([self canShowWallpaper]),      @"every device, off by default on the oldest"],
+		@[@"Chat wallpaper",          @([self canShowWallpaper]),      @"Legacy+ - the A4 blends it under every bubble on each scrolled frame"],
 		@[@"GIF autoplay",            @([self canAutoplayGIFs]),       @"every device, one at a time on the oldest"],
 		@[@"Video profile pictures",  @([self canPlayVideoAvatars]),   @"Modern+ - the A7's decoder; older devices show the still"],
 		@[@"Premium sticker effects", @([self canPlayStickerEffects]), @"Full - a second, larger animation over the list"],

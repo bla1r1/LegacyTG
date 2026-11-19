@@ -28,6 +28,23 @@ static const double kPopWatchSeconds = 1.0;
 @property (nonatomic, copy) void (^afterWatch)(void);
 @end
 
+/// The result lines also go to Caches/bench-results.txt: idevicesyslog
+/// drops a run's lines now and then, and a lost run costs a minute.
+static void TGBenchKeep(NSString *line) {
+	NSLog(@"%@", line);
+	NSString *caches = [NSSearchPathForDirectoriesInDomains(NSCachesDirectory,
+			NSUserDomainMask, YES) firstObject];
+	NSString *path = [caches stringByAppendingPathComponent:@"bench-results.txt"];
+	NSFileHandle *file = [NSFileHandle fileHandleForWritingAtPath:path];
+	if (!file) {
+		[[NSFileManager defaultManager] createFileAtPath:path contents:nil attributes:nil];
+		file = [NSFileHandle fileHandleForWritingAtPath:path];
+	}
+	[file seekToEndOfFile];
+	[file writeData:[[line stringByAppendingString:@"\n"] dataUsingEncoding:NSUTF8StringEncoding]];
+	[file closeFile];
+}
+
 @implementation TGDevBench {
 	double _frames[kMaxFrames];     // intervals in seconds
 	unsigned _count;
@@ -293,14 +310,32 @@ static int cmpDouble(const void *a, const void *b) {
 		worst = MAX(worst, f);
 		busy += f;
 	}
+	// Where in the run the frames went: the first scroll pays for new rows
+	// at the start, history pages and pictures arriving later.
+	char bySecond[256] = "";
+	double clock = 0;
+	unsigned bucketDropped = 0;
+	int bucket = 0;
+	size_t used = 0;
+	for (unsigned i = 0; i < _count && used < sizeof(bySecond) - 8; i++) {
+		long missed = lround(_frames[i] / kFrameSeconds) - 1;
+		bucketDropped += missed > 0 ? (unsigned)missed : 0;
+		clock += _frames[i];
+		if (clock >= bucket + 1 || i + 1 == _count) {
+			used += (size_t)snprintf(bySecond + used, sizeof(bySecond) - used, " %u", bucketDropped);
+			bucketDropped = 0;
+			bucket = (int)clock;
+		}
+	}
 	qsort(_frames, _count, sizeof(double), cmpDouble);
 	double p50 = _count ? _frames[_count / 2] : 0;
 	double p95 = _count ? _frames[(_count * 95) / 100] : 0;
 	unsigned expected = _count + dropped;
-	NSLog(@"[bench] %@ first=%.0fms frames=%u dropped=%u (%.0f%%) janky=%u worst=%.0fms p50=%.1fms p95=%.1fms fps=%.1f samples=%d",
+	TGBenchKeep([NSString stringWithFormat:@"[bench] %@ dropped by second:%s", self.what, bySecond]);
+	TGBenchKeep([NSString stringWithFormat:@"[bench] %@ first=%.0fms frames=%u dropped=%u (%.0f%%) janky=%u worst=%.0fms p50=%.1fms p95=%.1fms fps=%.1f samples=%d",
 			self.what, _firstFrameMs, _count, dropped,
 			expected ? 100.0 * dropped / expected : 0.0, janky, worst * 1000.0,
-			p50 * 1000.0, p95 * 1000.0, busy > 0 ? _count / busy : 0.0, samples);
+			p50 * 1000.0, p95 * 1000.0, busy > 0 ? _count / busy : 0.0, samples]);
 	// Layers per visible row, all and shown: backboardd's work tracks the
 	// layer tree, hidden layers included, more than anything drawn.
 	if ([self.scroll isKindOfClass:UITableView.class]) {
@@ -322,10 +357,34 @@ static int cmpDouble(const void *a, const void *b) {
 		}
 		if (rows)
 			NSLog(@"[bench] %@ layers/row all=%u shown=%u", self.what, all / rows, shown / rows);
+		// What the shown layers of the busiest row are, to see which to merge.
+		NSString *busiest = nil;
+		NSUInteger most = 0;
+		for (UITableViewCell *c in ((UITableView *)self.scroll).visibleCells) {
+			NSMutableArray *names = [NSMutableArray array];
+			NSMutableArray *q = [NSMutableArray arrayWithObject:c.layer];
+			while (q.count) {
+				CALayer *l = q.lastObject;
+				[q removeLastObject];
+				if (l.hidden)
+					continue;
+				[names addObject:[NSString stringWithFormat:@"%@%@%.0fx%.0f",
+						NSStringFromClass([l.delegate class] ?: [l class]),
+						l.contents ? @"*" : @"", l.bounds.size.width, l.bounds.size.height]];
+				[q addObjectsFromArray:l.sublayers];
+			}
+			if (names.count > most) {
+				most = names.count;
+				busiest = [names componentsJoinedByString:@" "];
+			}
+		}
+		if (busiest)
+			TGBenchKeep([NSString stringWithFormat:@"[bench] %@ busiest row %lu: %@", self.what,
+					(unsigned long)most, busiest]);
 	}
 	char cpu[512];
 	if (TGCpuSplit(cpu, sizeof(cpu)))
-		NSLog(@"[bench] %@ cpu %s", self.what, cpu);
+		TGBenchKeep([NSString stringWithFormat:@"[bench] %@ cpu %s", self.what, cpu]);
 	if (dump)
 		NSLog(@"[bench] dump %@", dump);
 	char mem[512];

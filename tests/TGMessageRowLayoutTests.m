@@ -319,4 +319,110 @@ static TGMessageRowInput *rlInput(NSDictionary *m) {
 	XCTAssertTrue(CGRectIsEmpty(plain.linkActionFrame));
 }
 
+- (void)testTextsToMeasure_CopiesEveryText {
+	NSMutableString *text = [NSMutableString stringWithString:@"hello"];
+	NSArray *messages = @[
+		@{ @"id" : @1, @"kind" : @"messageText", @"text" : text,
+		   @"entities" : @[ @{ @"type" : @{ @"@type" : @"textEntityTypeBold" }, @"offset" : @0, @"length" : @5 } ] },
+		@{ @"id" : @2, @"kind" : @"messageText", @"text" : @"\U0001F600",
+		   @"entities" : @[ @{ @"type" : @{ @"@type" : @"textEntityTypeCustomEmoji", @"custom_emoji_id" : @"7" },
+							  @"offset" : @0, @"length" : @2 } ] },
+		@{ @"id" : @3, @"kind" : @"messagePhoto" },
+		@{ @"id" : @4, @"kind" : @"messagePhoto", @"text" : @"caption" },
+	];
+	NSArray *texts = TGMessageTextsToMeasure(messages);
+	XCTAssertEqual(texts.count, (NSUInteger)3);
+	XCTAssertEqualObjects(texts[0][@"text"], @"hello");
+	XCTAssertEqual([texts[0][@"entities"] count], (NSUInteger)1);
+	XCTAssertEqualObjects(texts[2][@"text"], @"caption");
+	// A later edit of the store's string does not reach the measure.
+	[text appendString:@" world"];
+	XCTAssertEqualObjects(texts[0][@"text"], @"hello");
+}
+
+- (void)testMeasureOffMain_GivesTheSizeTheRowLayoutReads {
+	NSMutableArray *messages = [NSMutableArray array];
+	for (int i = 0; i < 200; i++)
+		[messages addObject:@{ @"kind" : @"messageText",
+				@"text" : [NSString stringWithFormat:@"line %d of a page measured on another thread \U0001F600", i] }];
+	NSArray *texts = TGMessageTextsToMeasure(messages);
+	dispatch_group_t group = dispatch_group_create();
+	dispatch_group_async(group, dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
+		TGMeasureMessageTexts(texts, 16);
+	});
+	// The main thread measures the same page meanwhile, as reloadData would.
+	CGFloat heights[200];
+	for (NSUInteger i = 0; i < messages.count; i++)
+		heights[i] = TGMessageBodySize(messages[i], 16).height;
+	dispatch_group_wait(group, DISPATCH_TIME_FOREVER);
+	for (NSUInteger i = 0; i < messages.count; i++) {
+		CGSize after = TGMessageBodySize(messages[i], 16);
+		XCTAssertEqual(heights[i], after.height);
+		XCTAssertTrue(after.height > 0);
+	}
+}
+
+/// A message with custom emoji measures off the main thread to the size the
+/// main thread gets: on the iPod touch 4 they were left for reloadData, 16%
+/// of the first scroll of a chat full of them.
+- (void)testCustomEmojiOffMain_SameSizeAsOnMain {
+	NSDictionary *m = @{ @"kind" : @"messageText", @"text" : @"ab \U0001F600 cd",
+		@"entities" : @[ @{ @"type" : @{ @"@type" : @"textEntityTypeCustomEmoji", @"custom_emoji_id" : @"77" },
+						   @"offset" : @3, @"length" : @2 } ] };
+	__block CGSize off = CGSizeZero;
+	dispatch_sync(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
+		TGMeasureMessageTexts(TGMessageTextsToMeasure(@[ m ]), 17);
+		off = TGMessageBodySize(m, 17);
+	});
+	XCTAssertTrue(off.height > 0);
+	CGSize on = TGMessageBodySize(m, 17);
+	XCTAssertEqual(on.width, off.width);
+	XCTAssertEqual(on.height, off.height);
+}
+
+/// Buttons widen the bubble past the width the text was wrapped at. A body
+/// frame that wide rewraps into fewer lines than it is tall: UILabel centres
+/// them, and the custom emoji drawn from the frame's top sat lines above
+/// their places in long channel posts on the iPod touch 4.
+- (void)testWideBubble_BodyKeepsTheWidthItWasMeasuredAt {
+	NSMutableString *text = [NSMutableString string];
+	for (int i = 0; i < 40; i++)
+		[text appendString:@"words that wrap across several lines "];
+	TGMessageLayout *l = TGMessageRowLayout(rlInput(@{ @"kind": @"messageText", @"text": text,
+			@"inlineRows": @[ @[ @{ @"text": @"Open" } ] ] }));
+	CGFloat measured = kBubbleMaxW - TGDoubled(kPadH);
+	XCTAssertTrue(l.bubbleFrame.size.width > measured + TGDoubled(kPadH),
+			@"the buttons are what make this bubble wide: %f", l.bubbleFrame.size.width);
+	XCTAssertEqual(l.bodyFrame.size.width, measured);
+	XCTAssertEqual(l.bodyFrame.size.height,
+			TGTextSizeWithEntities(text, nil, TGFontAtSize(rlInput(@{}).fontSize), measured).height);
+}
+
+/// A page of history is laid out on a background queue while the main
+/// thread lays out rows of its own: the same answers, and the shared clock
+/// formatter (not thread-safe on iOS 6) taken one at a time.
+- (void)testRowLayout_OffMainMatchesMainUnderContention {
+	NSMutableArray *inputs = [NSMutableArray array];
+	for (int i = 0; i < 40; i++) {
+		NSString *text = [NSString stringWithFormat:@"message %d with some words to wrap across a line or two", i];
+		[inputs addObject:rlInput(@{ @"id": @(i + 1), @"date": @(1700000000 + i * 61), @"text": text,
+				@"edited": @(i % 3 == 0), @"outgoing": @(i % 2) })];
+	}
+	NSMutableArray *main = [NSMutableArray array];
+	for (TGMessageRowInput *in in inputs)
+		[main addObject:TGMessageRowLayout(in)];
+	__block BOOL same = YES;
+	dispatch_apply(4, dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^(size_t worker) {
+		for (int round = 0; round < 5; round++)
+			for (NSUInteger i = 0; i < inputs.count; i++) {
+				TGMessageLayout *l = TGMessageRowLayout(inputs[i]);
+				TGMessageLayout *m = main[i];
+				if (l.rowHeight != m.rowHeight || !CGRectEqualToRect(l.bodyFrame, m.bodyFrame) ||
+						![l.stamp isEqualToString:m.stamp])
+					same = NO;
+			}
+	});
+	XCTAssertTrue(same);
+}
+
 @end
