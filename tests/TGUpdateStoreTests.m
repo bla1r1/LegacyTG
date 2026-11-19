@@ -163,4 +163,59 @@ static NSString *TGUSUpdateJSON(NSInteger build, BOOL blocking) {
 			[NSDate dateWithTimeInterval:60.0 * 60.0 sinceDate:now]));
 }
 
+- (void)testParseDatacenterFromBinlogData_ReturnsZeroForNilOrEmpty {
+	XCTAssertEqual(TGUpdateParseDatacenterFromBinlogData(nil), 0);
+	XCTAssertEqual(TGUpdateParseDatacenterFromBinlogData([NSData data]), 0);
+	XCTAssertEqual(TGUpdateParseDatacenterFromBinlogData([@"random garbage" dataUsingEncoding:NSUTF8StringEncoding]), 0);
+}
+
+- (void)testParseDatacenterFromBinlogData_ParsesValidDatacenter {
+	// TL encoded string: len(10) + "main_dc_id" + 1 pad byte + len(1) + "2" + 2 pad bytes
+	const uint8_t raw[] = {
+		0x00, 0x01, 0x02, // dummy prefix
+		0x0A, 'm', 'a', 'i', 'n', '_', 'd', 'c', '_', 'i', 'd', 0x00,
+		0x01, '2', 0x00, 0x00,
+		0xFF, 0xFE // dummy suffix
+	};
+	NSData *data = [NSData dataWithBytes:raw length:sizeof(raw)];
+	XCTAssertEqual(TGUpdateParseDatacenterFromBinlogData(data), 2);
+}
+
+- (void)testParseDatacenterFromBinlogData_ReturnsLatestWhenMultiplePresent {
+	// First DC 1, later updated to DC 4
+	const uint8_t raw[] = {
+		0x0A, 'm', 'a', 'i', 'n', '_', 'd', 'c', '_', 'i', 'd', 0x00,
+		0x01, '1', 0x00, 0x00,
+		0xAA, 0xBB, 0xCC,
+		0x0A, 'm', 'a', 'i', 'n', '_', 'd', 'c', '_', 'i', 'd', 0x00,
+		0x01, '4', 0x00, 0x00
+	};
+	NSData *data = [NSData dataWithBytes:raw length:sizeof(raw)];
+	XCTAssertEqual(TGUpdateParseDatacenterFromBinlogData(data), 4);
+}
+
+- (void)testParseDatacenterFromBinlogData_IgnoresInvalidDigits {
+	const uint8_t raw[] = {
+		0x0A, 'm', 'a', 'i', 'n', '_', 'd', 'c', '_', 'i', 'd', 0x00,
+		0x01, '9', 0x00, 0x00
+	};
+	NSData *data = [NSData dataWithBytes:raw length:sizeof(raw)];
+	XCTAssertEqual(TGUpdateParseDatacenterFromBinlogData(data), 0);
+}
+
+- (void)testCurrentDatacenterId_FallsBackToDefaults {
+	NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+	NSString *key = @"TGAccountMainDC";
+	NSInteger prev = [defaults integerForKey:key];
+
+	[defaults setInteger:3 forKey:key];
+	XCTAssertEqual([TGUpdateStore currentDatacenterId], 3);
+
+	if (prev > 0) {
+		[defaults setInteger:prev forKey:key];
+	} else {
+		[defaults removeObjectForKey:key];
+	}
+}
+
 @end

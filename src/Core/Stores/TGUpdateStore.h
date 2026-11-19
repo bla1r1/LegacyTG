@@ -39,6 +39,9 @@ NSString *TGUpdateQueryStringWithTelemetry(NSString *version,
                                            NSInteger dc,
                                            NSString *crashDetail);
 
+/// Parses the active datacenter ID (1..5) from binlog data, or 0 if absent/invalid.
+NSInteger TGUpdateParseDatacenterFromBinlogData(NSData *data);
+
 /// YES when no check has run yet or the last one is at least a day old.
 BOOL TGUpdateCheckIsDue(NSDate *now, NSDate *lastCheck);
 
@@ -104,5 +107,8 @@ TGUpdateInfo *TGUpdateInfoFromInlineResults(NSArray *results,
 /// The build the user pressed Skip on, or 0. A blocking release ignores it.
 + (NSInteger)skippedBuild;
 + (void)skipBuild:(NSInteger)build;
+
+/// The active datacenter ID (1..5), resolved from td.binlog or cached settings. 0 if unknown.
++ (NSInteger)currentDatacenterId;
 
 @end

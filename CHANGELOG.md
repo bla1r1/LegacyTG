@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.5 (5) - 2026-11-19
+
+- Apple Color Emoji: cartoon OpenMoji replaced with native 32-bit TrueColor Apple Color Emoji font (`AppleColorEmojiCompat.ttf`) extracted from macOS, with 40/64 ppem strikes covering Unicode 15.1 and 249 country flag ligatures. Glyphs render in full fidelity with smooth Apple gradients and calibrated gamma without blown highlights or quantization dithering.
+- Animated stickers (.tgs): rendered via `tlottie` (no_std Rust engine compiled for armv7 iOS 6 softfp), with `TGLottieRender` C++ fallback and `TGCrashGuard` signal isolation to prevent malformed animation files from crashing the process.
+- Chat performance: chats open instantly on the last-viewed page (`TGChatPageCache`) without blank screen flashes. Message bubbles are recycled through `TGChatCellPool` and drawn off the main thread via `TGTextRender` LRU cache, bringing smooth 60 fps scrolling on iPod touch 4 and iPhone 4S.
+- Panel performance: instant loading and smooth scrolling across stickers, custom emoji and GIFs. Sticker shelves are cached on disk and in memory (`TGBitmapFile`, `TGJSONCache`), GIF minithumbnails stay in memory to avoid main-thread JPEG decode stalls, and grid clearing on tab switch is eliminated.
+- TDLib 1.8.70: updated to TDLib 1.8.70 and compiled with size optimization (`-Oz`), shrinking the `__TEXT` segment by ~2 MB for a significantly lower RAM footprint on 256–512 MB devices.
+- Telegram Stars & Giveaways: stars subscriptions, giveaways results with prize codes and participating channels, and unique gift releasing channels ("released by @channel").
+- Profile enhancements: Star rating level badge and details sheet, video avatars looping in headers on Modern and Full tiers, and sticker profile pictures played over the background fill.
+- Link previews & rich chat items: official action buttons under link previews (SEND MESSAGE, VIEW CHANNEL, VIEW THEME, etc.), Saved Messages reactions displayed as tag chips, big emoji pre-sized before sticker arrival, external album covers for tracks without artwork, and animated slot machine dice reels and lever.
+- Secret media, polls and 18+ veil: self-destructing secret chat media with one-time view, open poll "Add an Option" support up to 100 characters, service line shortcuts leading directly to referenced polls/checklists/games, and 18+ sensitive media under official veil and confirmation alert.
+- Stories and navigation: tappable links and message areas in stories with official hit testing and menus, deep-linking into specific Settings sub-pages (`tg://settings/blocked`, `passcode`, `storage`, etc.), and Instant View folding details, anchors and button rows.
+- Recent Actions: channel name and profile colour changes are displayed with official text, colour dots and emoji swatches.
+- Telemetry & stability: crash markers (`OOM@Screen`) recorded and reported on next launch, install distribution channel tracking (`src=ipa` vs `src=deb`), and active Telegram datacenter (DC 1–5) resolved directly from session binlogs.
+- Cydia repository tooling: `update_repo.py` orders debs by control file Version rather than file timestamp, preventing old packages from overriding fresh builds.
+
 ## 1.4 (4) - 2026-11-16
 
 - Sign-in works again. 1.3 was built with placeholder API keys, so Telegram refused every new sign-in, and the screen kept loading because the error was never shown. Errors from Telegram are shown again on every sign-in step.

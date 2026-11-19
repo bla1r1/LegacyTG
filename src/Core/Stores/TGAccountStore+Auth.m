@@ -403,6 +403,10 @@ static NSString *TGAuthError(NSDictionary *result) {
 - (void)checkAuthenticationWebToken:(NSString *)token
 							   dcId:(NSInteger)dcId
 						 completion:(void (^)(NSString *error))completion {
+	if (dcId >= 1 && dcId <= 5) {
+		[[NSUserDefaults standardUserDefaults] setInteger:dcId forKey:@"TGAccountMainDC"];
+		[[NSUserDefaults standardUserDefaults] synchronize];
+	}
 	[[TGClient shared] request:@{@"@type" : @"checkAuthenticationWebToken",
 					@"token" : token ?: @"",
 					@"dc_id" : @((int32_t)dcId)}

@@ -75,6 +75,33 @@ NSString *TGUpdateQueryStringWithTelemetry(NSString *version,
 	return TGUpdateTruncate(query, TGUpdateQueryLimit);
 }
 
+NSInteger TGUpdateParseDatacenterFromBinlogData(NSData *data) {
+	if (!data.length)
+		return 0;
+	const uint8_t *bytes = (const uint8_t *)data.bytes;
+	NSUInteger len = data.length;
+	const char key[] = "main_dc_id";
+	const NSUInteger keyLen = sizeof(key) - 1;
+
+	if (len < keyLen + 2)
+		return 0;
+
+	for (NSInteger i = (NSInteger)(len - keyLen - 2); i >= 0; i--) {
+		if (memcmp(bytes + i, key, keyLen) == 0) {
+			NSUInteger searchEnd = MIN(len - 1, (NSUInteger)(i + keyLen + 8));
+			for (NSUInteger j = (NSUInteger)(i + keyLen); j < searchEnd; j++) {
+				if (bytes[j] == 0x01 && (j + 1 < len)) {
+					uint8_t val = bytes[j + 1];
+					if (val >= '1' && val <= '5') {
+						return (NSInteger)(val - '0');
+					}
+				}
+			}
+		}
+	}
+	return 0;
+}
+
 NSString *TGUpdateQueryString(NSString *version,
                               NSString *build,
                               NSString *ios,
@@ -311,6 +338,38 @@ static BOOL TGUpdateStatisticsEnabled(void) {
 	[defaults synchronize];
 }
 
++ (NSInteger)currentDatacenterId {
+	NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+	NSString *defaultsKey = @"TGAccountMainDC";
+
+	NSString *db = TGAccountResolvedDatabaseDirectory([TGClient activeAccountSlot]);
+	NSString *binlogPath = [db stringByAppendingPathComponent:@"td.binlog"];
+
+	NSFileHandle *handle = [NSFileHandle fileHandleForReadingAtPath:binlogPath];
+	if (handle) {
+		unsigned long long fileSize = [handle seekToEndOfFile];
+		unsigned long long readLen = MIN(fileSize, (unsigned long long)131072);
+		if (readLen > 0) {
+			[handle seekToFileOffset:fileSize - readLen];
+			NSData *chunk = [handle readDataToEndOfFile];
+			[handle closeFile];
+			NSInteger dc = TGUpdateParseDatacenterFromBinlogData(chunk);
+			if (dc >= 1 && dc <= 5) {
+				[defaults setInteger:dc forKey:defaultsKey];
+				return dc;
+			}
+		} else {
+			[handle closeFile];
+		}
+	}
+
+	NSInteger cached = [defaults integerForKey:defaultsKey];
+	if (cached >= 1 && cached <= 5)
+		return cached;
+
+	return 0;
+}
+
 - (void)checkIfDue:(BOOL)forced {
 	if (![NSThread isMainThread]){
 		dispatch_async(dispatch_get_main_queue(), ^{
@@ -354,6 +413,7 @@ static BOOL TGUpdateStatisticsEnabled(void) {
 	NSString *crashDetail = [defaults stringForKey:TGUpdateCrashMarkerKey];
 	BOOL crashed = crashDetail.length > 0;
 	NSString *source = [TGUpdateStore distributionSource];
+	NSInteger dc = [TGUpdateStore currentDatacenterId];
 
 	NSString *query = TGUpdateQueryStringWithTelemetry(
 			TGUpdateBundleValue(@"CFBundleShortVersionString"),
@@ -366,7 +426,7 @@ static BOOL TGUpdateStatisticsEnabled(void) {
 			[TGUpdateStore usageStatisticsEnabled],
 			crashed,
 			source,
-			0,
+			dc,
 			crashDetail);
 
 	_checking = YES;
