@@ -5,6 +5,7 @@
 #import <UIKit/UIKit.h>
 
 @class UIWindow;
+@class UIViewController;
 
 #if TG_DEV
 
@@ -34,6 +35,7 @@ CGRect TGiPadCanvasRectForScreen(CGSize canvasSize, CGSize screenSize);
 @property (nonatomic, strong, readonly) UIView *canvasView;
 
 - (void)setOrientation:(TGiPadOrientation)orientation inWindow:(UIWindow *)window;
+- (void)updateContentViewController:(UIViewController *)vc inWindow:(UIWindow *)window;
 - (void)toggleModeInWindow:(UIWindow *)window;
 - (void)toggleOrientationInWindow:(UIWindow *)window;
 - (UIImage *)captureScreenshotAtScale:(CGFloat)scale;

@@ -122,7 +122,8 @@ touch(72, 0, 0.85, 0.5)
 for i in range(1, 12): touch(72 + i * .04, 1, 0.85 - i * .06, 0.5)
 touch(72.5, 2, 0.2, 0.5)
 touch(76, 0, 0.62, 0.125); touch(76.15, 2, 0.62, 0.125)
-for t in range(90, secs - 5, 30): L.append((t, {"cmd": "screenshot", "path": f"{out}/shot-{t:03d}.bmp"}))
+for t in [68, 74, 90, 105]:
+	if t < secs - 5: L.append((t, {"cmd": "screenshot", "path": f"{out}/shot-{t:03d}.bmp"}))
 for t, c in L: print(t, json.dumps(c))
 EOF
 	# Syslog over the run's own USB bridge (it prints "usb bridge at ..."); stopped when the run ends.

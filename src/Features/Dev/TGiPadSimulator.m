@@ -71,6 +71,9 @@ CGRect TGiPadCanvasRectForScreen(CGSize canvasSize, CGSize screenSize) {
 	_orientation = orientation;
 }
 
+- (void)updateContentViewController:(UIViewController *)vc inWindow:(UIWindow *)window {
+}
+
 - (void)toggleModeInWindow:(UIWindow *)window {
 	self.orientation = self.isActive ? TGiPadOrientationOff : TGiPadOrientationPortrait;
 }
@@ -155,6 +158,14 @@ static void TGiPadInstallDeviceSwizzle(void) {
 	self.canvasView.backgroundColor = [UIColor blackColor];
 	[self.view addSubview:self.canvasView];
 
+	if (self.contentViewController && self.contentViewController.view.superview != self.canvasView) {
+		self.contentViewController.view.frame = self.canvasView.bounds;
+		self.contentViewController.view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+		[self.canvasView addSubview:self.contentViewController.view];
+		[self.contentViewController.view setNeedsLayout];
+		[self.contentViewController.view layoutIfNeeded];
+	}
+
 	[self setupToolbar];
 	[self applyOrientationLayout];
 }
@@ -226,7 +237,8 @@ static void TGiPadInstallDeviceSwizzle(void) {
 }
 
 - (void)setContentViewController:(UIViewController *)vc {
-	if (_contentViewController == vc) return;
+	(void)self.view;
+	if (_contentViewController == vc && vc.view.superview == self.canvasView) return;
 	if (_contentViewController) {
 		[_contentViewController willMoveToParentViewController:nil];
 		[_contentViewController.view removeFromSuperview];
@@ -240,6 +252,8 @@ static void TGiPadInstallDeviceSwizzle(void) {
 		[self.canvasView addSubview:vc.view];
 		[vc didMoveToParentViewController:self];
 		[self.canvasView bringSubviewToFront:vc.view];
+		[vc.view setNeedsLayout];
+		[vc.view layoutIfNeeded];
 	}
 }
 
@@ -361,6 +375,8 @@ static void TGiPadInstallDeviceSwizzle(void) {
 	_orientation = orientation;
 	self.containerVC.orientation = orientation;
 
+	(void)self.containerVC.view;
+
 	if (window && window.rootViewController != self.containerVC) {
 		window.rootViewController = self.containerVC;
 	}
@@ -373,6 +389,23 @@ static void TGiPadInstallDeviceSwizzle(void) {
 	NSLog(@"[TGiPadSimulator] Virtual iPad mode set to %s (%@)",
 	      (orientation == TGiPadOrientationLandscape ? "Landscape" : "Portrait"),
 	      NSStringFromCGSize(TGiPadCanvasSizeForOrientation(orientation)));
+}
+
+- (void)updateContentViewController:(UIViewController *)vc inWindow:(UIWindow *)window {
+	if (!self.isActive || !vc) return;
+	self.originalRootVC = vc;
+	if (!self.containerVC) {
+		self.containerVC = [[TGiPadSimulatorContainerViewController alloc] init];
+		self.containerVC.orientation = self.orientation;
+	}
+	(void)self.containerVC.view;
+	if (!window) window = [UIApplication sharedApplication].keyWindow;
+	if (window && window.rootViewController != self.containerVC) {
+		window.rootViewController = self.containerVC;
+	}
+	[self.containerVC setContentViewController:vc];
+	[self.containerVC applyOrientationLayout];
+	[window layoutIfNeeded];
 }
 
 - (void)toggleModeInWindow:(UIWindow *)window {

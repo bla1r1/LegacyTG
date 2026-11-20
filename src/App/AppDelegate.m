@@ -356,9 +356,10 @@ static UIImage *TGCustomEmojiFromStore(int64_t emojiId, CGFloat side) {
 	TGPerfReport("launch", "makeKeyAndVisible", stepStart, 100.0);
 #if TG_DEV
 	[TGDevFeedback installInWindow:self.window];
-	TGiPadOrientation savedPadOrientation = (TGiPadOrientation)[[NSUserDefaults standardUserDefaults] integerForKey:@"TGiPadOrientation"];
-	if (savedPadOrientation != TGiPadOrientationOff) {
-		[[TGiPadSimulator shared] setOrientation:savedPadOrientation inWindow:self.window];
+	id savedPad = [[NSUserDefaults standardUserDefaults] objectForKey:@"TGiPadOrientation"];
+	TGiPadOrientation padOrientation = savedPad ? (TGiPadOrientation)[savedPad integerValue] : TGiPadOrientationPortrait;
+	if (padOrientation != TGiPadOrientationOff) {
+		[[TGiPadSimulator shared] setOrientation:padOrientation inWindow:self.window];
 	}
 #endif
 
@@ -640,12 +641,25 @@ static void TGRecursivePurgeVC(UIViewController *vc) {
 	// The login screen leaves the window here; kept, showLoginUI would see it
 	// as still up and the spinner would stay (Reset Session from login).
 	self.loginVC = nil;
+#if TG_DEV
+	if ([[TGiPadSimulator shared] isActive]) {
+		[[TGiPadSimulator shared] updateContentViewController:vc inWindow:self.window];
+		return;
+	}
+#endif
 	[self.window setRootViewController:vc];
 }
 
 - (void)showMainUI {
 	if (!self.rootViewController)
 		self.rootViewController = [[RootViewController alloc] init];
+#if TG_DEV
+	if ([[TGiPadSimulator shared] isActive]) {
+		self.loginVC = nil;
+		[[TGiPadSimulator shared] updateContentViewController:self.rootViewController inWindow:self.window];
+		return;
+	}
+#endif
 	if (self.window.rootViewController != self.rootViewController){
 		self.loginVC = nil;
 		[self.window setRootViewController:self.rootViewController];
@@ -691,6 +705,13 @@ static void TGRecursivePurgeVC(UIViewController *vc) {
 	UINavigationController *nav =
 		[[TGNavController alloc] initWithRootViewController:loginVC];
 	[[TGTheme shared] styleNavigationBar:nav.navigationBar];
+#if TG_DEV
+	if ([[TGiPadSimulator shared] isActive]) {
+		[[TGiPadSimulator shared] updateContentViewController:nav inWindow:self.window];
+		self.rootViewController = nil;
+		return;
+	}
+#endif
 	[self.window setRootViewController:nav];
 	self.rootViewController = nil;
 }
