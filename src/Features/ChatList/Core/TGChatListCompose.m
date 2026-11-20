@@ -14,6 +14,8 @@
 #import "TGPasscode.h"
 #import "TGPasscodeViewController.h"
 #import "TGChatListRowGeometry.h"
+#import "TGiPadSplitViewController.h"
+#import "TGiPadSimulator.h"
 
 
 // Height of the folder pill strip above the chat list (official-style tabs).
@@ -28,9 +30,25 @@
 	int64_t chatId = [[TGChatListStore shared] savedMessagesChatId];
 	if (!chatId)
 		return;
+#if TG_DEV
+	if ([[TGiPadSimulator shared] isActive]) {
+		[[TGiPadSplitViewController shared] showChatWithId:chatId
+		                                             title:TGLocalized(@"Saved Messages")
+		                                           isGroup:NO
+		                                           isForum:NO];
+		return;
+	}
+#endif
+	if (TGIsPad()) {
+		[[TGiPadSplitViewController shared] showChatWithId:chatId
+		                                             title:TGLocalized(@"Saved Messages")
+		                                           isGroup:NO
+		                                           isForum:NO];
+		return;
+	}
 	TGChatViewController *vc = [[TGChatViewController alloc] init];
 	vc.chatId = chatId;
-	vc.chatTitle = @"Saved Messages";
+	vc.chatTitle = TGLocalized(@"Saved Messages");
 	vc.hidesBottomBarWhenPushed = YES;
 	[self.navigationController pushViewController:vc animated:YES];
 }

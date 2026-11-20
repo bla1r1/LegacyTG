@@ -99,6 +99,8 @@ CGRect TGiPadCanvasRectForScreen(CGSize canvasSize, CGSize screenSize) {
 #else
 
 #import "TGTheme.h"
+#import "TGiPadSplitViewController.h"
+#import "RootViewController.h"
 #import <objc/runtime.h>
 #import <QuartzCore/QuartzCore.h>
 
@@ -351,12 +353,18 @@ static void TGiPadInstallDeviceSwizzle(void) {
 	if (orientation == TGiPadOrientationOff) {
 		if (self.containerVC && self.originalRootVC) {
 			[self.containerVC setContentViewController:nil];
-			window.rootViewController = self.originalRootVC;
-			self.originalRootVC.view.transform = CGAffineTransformIdentity;
-			self.originalRootVC.view.frame = window.bounds;
+			UIViewController *restoreVC = self.originalRootVC;
+			if ([restoreVC isKindOfClass:[TGiPadSplitViewController class]]) {
+				TGiPadSplitViewController *split = (TGiPadSplitViewController *)restoreVC;
+				restoreVC = split.masterViewController;
+				split.masterViewController = nil;
+			}
+			window.rootViewController = restoreVC;
+			restoreVC.view.transform = CGAffineTransformIdentity;
+			restoreVC.view.frame = window.bounds;
 			[window layoutIfNeeded];
-			[self.originalRootVC.view setNeedsLayout];
-			[self.originalRootVC.view layoutIfNeeded];
+			[restoreVC.view setNeedsLayout];
+			[restoreVC.view layoutIfNeeded];
 		}
 		self.containerVC = nil;
 		self.originalRootVC = nil;
@@ -368,7 +376,14 @@ static void TGiPadInstallDeviceSwizzle(void) {
 	}
 
 	if (!self.isActive) {
-		self.originalRootVC = window.rootViewController;
+		UIViewController *root = window.rootViewController;
+		if ([root isKindOfClass:[RootViewController class]]) {
+			TGiPadSplitViewController *split = [TGiPadSplitViewController shared];
+			split.masterViewController = root;
+			self.originalRootVC = split;
+		} else {
+			self.originalRootVC = root;
+		}
 		self.containerVC = [[TGiPadSimulatorContainerViewController alloc] init];
 	}
 
@@ -446,7 +461,11 @@ static void TGiPadInstallDeviceSwizzle(void) {
 	NSData *data = UIImagePNGRepresentation(img);
 	if (!data) return nil;
 
-	NSString *path = @"/tmp/ipad_screenshot.png";
+	// The app's own tmp, numbered: afcclient --container can pull it, and
+	// a run of several shots keeps every one.
+	NSString *name = [NSString stringWithFormat:@"ipad_%.0f.png",
+			[NSDate timeIntervalSinceReferenceDate]];
+	NSString *path = [NSTemporaryDirectory() stringByAppendingPathComponent:name];
 	BOOL ok = [data writeToFile:path atomically:YES];
 	if (ok) {
 		NSLog(@"[TGiPadSimulator] Saved iPad screenshot (%.0fx%.0f @ %.0fx) to %@",

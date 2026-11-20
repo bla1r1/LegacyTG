@@ -853,6 +853,26 @@ static UIImage *TGChatRowStoryRingImage(CGSize side, UIColor *colour) {
 	[super setSelected:selected animated:animated];
 	if (selected)
 		[self closeSwipeActionsAnimated:NO];
+	TGTheme *theme = [TGTheme shared];
+	if (selected) {
+		self.contentView.backgroundColor = [theme accentColour];
+		self.titleLabel.backgroundColor = [UIColor clearColor];
+		self.titleLabel.textColor = [UIColor whiteColor];
+		self.previewLabel.backgroundColor = [UIColor clearColor];
+		self.previewLabel.textColor = [UIColor whiteColor];
+		self.dateLabel.backgroundColor = [UIColor clearColor];
+		self.dateLabel.textColor = [UIColor whiteColor];
+	} else {
+		BOOL pinnedRow = [self.row[TGRowChatPinned] boolValue];
+		UIColor *bg = pinnedRow ? [theme cardBackgroundColour] : [theme listBackgroundColour];
+		self.contentView.backgroundColor = bg;
+		self.titleLabel.backgroundColor = bg;
+		self.titleLabel.textColor = [theme primaryTextColour];
+		self.previewLabel.backgroundColor = bg;
+		self.previewLabel.textColor = [theme secondaryTextColour];
+		self.dateLabel.backgroundColor = bg;
+		self.dateLabel.textColor = [theme listDateColour];
+	}
 }
 
 - (void)prepareForReuse {

@@ -398,6 +398,22 @@ static TGMessageRowInput *rlInput(NSDictionary *m) {
 			TGTextSizeWithEntities(text, nil, TGFontAtSize(rlInput(@{}).fontSize), measured).height);
 }
 
+- (void)testIPadDetail_ProportionalBubbleWidth {
+	NSMutableString *text = [NSMutableString string];
+	for (int i = 0; i < 40; i++)
+		[text appendString:@"iPad message words that wrap across wide lines "];
+	TGMessageRowInput *in = rlInput(@{ @"kind": @"messageText", @"text": text });
+	in.tableWidth = 447.0f;
+	TGMessageLayout *l = TGMessageRowLayout(in);
+
+	CGFloat expectedMaxBubble = TGMetricBubbleMaxWidthForTableWidth(447.0f);
+	CGFloat expectedTextMax = TGMetricBubbleTextWidthForTableWidth(447.0f);
+	XCTAssertTrue(l.bubbleFrame.size.width <= expectedMaxBubble);
+	XCTAssertTrue(l.bubbleFrame.size.width > 280.0f, @"iPad bubble must be proportional and wider than iPhone 280pt cap: %f", l.bubbleFrame.size.width);
+	XCTAssertTrue(l.bodyFrame.size.width <= expectedTextMax);
+	XCTAssertTrue(l.bodyFrame.size.width > 250.0f, @"iPad body width wraps wider than iPhone 226pt: %f", l.bodyFrame.size.width);
+}
+
 /// A page of history is laid out on a background queue while the main
 /// thread lays out rows of its own: the same answers, and the shared clock
 /// formatter (not thread-safe on iOS 6) taken one at a time.

@@ -163,6 +163,7 @@ FOUNDATION_EXPORT CGRect TGMessageStampPlate(NSDictionary *m, CGFloat right,
 /// Telegram puts the stamp at the end of a one-line message when it fits
 /// there, and on its own line only when it does not.
 FOUNDATION_EXPORT BOOL TGMessageStampFitsInline(NSDictionary *m, CGFloat fontSize);
+FOUNDATION_EXPORT BOOL TGMessageStampFitsInlineForWidth(NSDictionary *m, CGFloat fontSize, CGFloat room);
 
 /// The text of the checklist task a reply answers (reply_to.checklist_task_id),
 /// or nil when it answers the whole message.

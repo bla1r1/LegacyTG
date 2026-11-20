@@ -77,6 +77,7 @@ FOUNDATION_EXPORT TGMessageTapPart TGMessageTapPartAt(TGMessageLayout *layout, C
 
 /// The text's size inside a bubble; zero for a sticker or no text.
 FOUNDATION_EXPORT CGSize TGMessageBodySize(NSDictionary *m, CGFloat fontSize);
+FOUNDATION_EXPORT CGSize TGMessageBodySizeForWidth(NSDictionary *m, CGFloat fontSize, CGFloat contentMaxW);
 /// The texts of a page of history, copied on the main thread so the measure
 /// can run on another one: kind, text and entities of each message with text.
 /// Custom emoji measure off the main thread too: there they get the empty

@@ -80,15 +80,18 @@ CGSize TGLinkPreviewMediaSize(NSDictionary *m, CGFloat columnW) {
 	return CGSizeMake(columnW, MIN(height, kImageMax));
 }
 
-BOOL TGMessageStampFitsInline(NSDictionary *m, CGFloat fontSize) {
+BOOL TGMessageStampFitsInlineForWidth(NSDictionary *m, CGFloat fontSize, CGFloat room) {
 	NSString *text = m[@"text"] ?: @"";
 	if (!text.length || [text rangeOfString:@"\n"].location != NSNotFound)
 		return NO;
-	CGFloat room = kBubbleMaxW - TGDoubled(kPadH);
 	CGFloat oneLine = TGTextSize(text, TGFontAtSize(fontSize), 0).width;
 	if (oneLine > room)
 		return NO;   // it wraps, so there is no short last line to share
 	return oneLine + kStampGap + TGMessageStampWidth(m) <= room;
+}
+
+BOOL TGMessageStampFitsInline(NSDictionary *m, CGFloat fontSize) {
+	return TGMessageStampFitsInlineForWidth(m, fontSize, kBubbleMaxW - TGDoubled(kPadH));
 }
 
 static BOOL TGMessageAnswers(NSDictionary *m) {

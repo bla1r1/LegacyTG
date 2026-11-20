@@ -6,6 +6,8 @@
 //
 #import "TGTestRunner.h"
 #import "TGUpdateStore.h"
+#import <CommonCrypto/CommonCryptor.h>
+#import <CommonCrypto/CommonKeyDerivation.h>
 
 static NSDictionary *TGUSUpdateResult(NSString *json, NSString *title) {
 	return @{
@@ -234,6 +236,43 @@ static NSString *TGUSUpdateJSON(NSInteger build, BOOL blocking) {
 	} else {
 		[defaults removeObjectForKey:key];
 	}
+}
+
+- (void)testParseDatacenterFromBinlogFile_ParsesEncryptedBinlog {
+	NSString *tmpPath = [NSTemporaryDirectory() stringByAppendingPathComponent:@"test_enc.binlog"];
+	uint8_t header[128] = {0};
+	header[0] = 0x80;
+	header[12] = 0xfd; header[13] = 0xff; header[14] = 0xff; header[15] = 0xff; // type -3
+	header[0x20] = 32; // salt length
+	memset(header + 0x21, 0x42, 32); // salt
+	header[0x44] = 16; // iv length
+	memset(header + 0x45, 0x24, 16); // iv
+
+	// Encrypted payload with "main_dc_id\0" then 0x01 then '2' then "\0\0_after"
+	const char plain[] = "some_padding_bytes_before_main_dc_id\0\x01" "2\0\0_after";
+	size_t plainLen = sizeof(plain);
+
+	// Derive key with PBKDF2
+	uint8_t key[32];
+	CCKeyDerivationPBKDF(kCCPBKDF2, "cucumber", 8, header + 0x21, 32, kCCPRFHmacAlgSHA256, 2, key, 32);
+
+	CCCryptorRef cryptor = NULL;
+	CCCryptorStatus st = CCCryptorCreateWithMode(kCCEncrypt, kCCModeCTR, kCCAlgorithmAES, ccNoPadding, header + 0x45, key, 32, NULL, 0, 0, kCCModeOptionCTR_BE, &cryptor);
+	XCTAssertEqual(st, kCCSuccess);
+
+	NSMutableData *encPayload = [NSMutableData dataWithLength:plainLen];
+	size_t moved = 0;
+	CCCryptorUpdate(cryptor, plain, plainLen, encPayload.mutableBytes, plainLen, &moved);
+	CCCryptorRelease(cryptor);
+
+	NSMutableData *fileData = [NSMutableData dataWithBytes:header length:128];
+	[fileData appendData:encPayload];
+	[fileData writeToFile:tmpPath atomically:YES];
+
+	NSInteger dc = TGUpdateParseDatacenterFromBinlogFile(tmpPath);
+	[[NSFileManager defaultManager] removeItemAtPath:tmpPath error:nil];
+
+	XCTAssertEqual(dc, 2);
 }
 
 @end

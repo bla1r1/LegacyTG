@@ -36,6 +36,7 @@
 #import "TGTextDraw.h"
 #import "TGDevFeedback.h"
 #import "TGiPadSimulator.h"
+#import "TGiPadSplitViewController.h"
 #import "TGUpdateStore.h"
 #import "TGUpdateInfoViewController.h"
 #import "TGAccountStore.h"
@@ -73,15 +74,37 @@
 	UINavigationController *nc = [tabs chatsNavigationController];
 	if (!nc) return;
 	[tabs switchToTab:[tabs chatsTabIndex] popToRoot:NO];
+
+	NSDictionary *c = [[TGClient shared].chatsById objectForKey:@(chatId)];
+	NSString *title = c[@"title"] ?: @"";
+	BOOL isGroup = [c[@"isGroup"] boolValue];
+	BOOL isForum = [c[@"isForum"] boolValue];
+
+#if TG_DEV
+	if ([[TGiPadSimulator shared] isActive]) {
+		[[TGiPadSplitViewController shared] showChatWithId:chatId
+		                                             title:title
+		                                           isGroup:isGroup
+		                                           isForum:isForum];
+		return;
+	}
+#endif
+	if (TGIsPad()) {
+		[[TGiPadSplitViewController shared] showChatWithId:chatId
+		                                             title:title
+		                                           isGroup:isGroup
+		                                           isForum:isForum];
+		return;
+	}
+
 	if ([nc.topViewController isKindOfClass:[TGChatViewController class]]) {
 		TGChatViewController *current = (TGChatViewController *)nc.topViewController;
 		if (current.chatId == chatId) return;
 	}
-	NSDictionary *c = [[TGClient shared].chatsById objectForKey:@(chatId)];
 	TGChatViewController *vc = [[TGChatViewController alloc] init];
 	vc.chatId = chatId;
-	vc.chatTitle = c[@"title"] ?: @"";
-	vc.isGroup = [c[@"isGroup"] boolValue];
+	vc.chatTitle = title;
+	vc.isGroup = isGroup;
 	vc.hidesBottomBarWhenPushed = YES;
 	[nc pushViewController:vc animated:YES];
 }
@@ -656,10 +679,21 @@ static void TGRecursivePurgeVC(UIViewController *vc) {
 #if TG_DEV
 	if ([[TGiPadSimulator shared] isActive]) {
 		self.loginVC = nil;
-		[[TGiPadSimulator shared] updateContentViewController:self.rootViewController inWindow:self.window];
+		TGiPadSplitViewController *split = [TGiPadSplitViewController shared];
+		split.masterViewController = self.rootViewController;
+		[[TGiPadSimulator shared] updateContentViewController:split inWindow:self.window];
 		return;
 	}
 #endif
+	if (TGIsPad()) {
+		self.loginVC = nil;
+		TGiPadSplitViewController *split = [TGiPadSplitViewController shared];
+		split.masterViewController = self.rootViewController;
+		if (self.window.rootViewController != split) {
+			[self.window setRootViewController:split];
+		}
+		return;
+	}
 	if (self.window.rootViewController != self.rootViewController){
 		self.loginVC = nil;
 		[self.window setRootViewController:self.rootViewController];

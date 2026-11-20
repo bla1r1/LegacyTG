@@ -240,18 +240,47 @@ static char kTGTableContentSizeContext;
 
 - (void)viewDidLayoutSubviews {
 	[super viewDidLayoutSubviews];
-	// The table started framed under the input bar, and autoresizing holds
-	// only the width against a rotation - left alone the height would spread
-	// the rows under the composer. The bar's own top edge is the honest
-	// bottom: keyboard up or down, the table ends where the composer begins.
-	if (!self.inputBar || CGRectIsEmpty(self.inputBar.frame))
-		return;
 	CGFloat width = self.view.bounds.size.width;
-	CGFloat height = CGRectGetMinY(self.inputBar.frame);
-	if (CGRectEqualToRect(self.table.frame, CGRectMake(0, 0, width, height)))
+	CGFloat viewH = self.view.bounds.size.height;
+	if (width <= 0.0f || viewH <= 0.0f)
 		return;
+
+	CGFloat defaultBarH = TGIsPad() ? TGMetricTabBarHeight : kInputHeight;
+	CGFloat barH = (self.composerBarHeight > 0.0f && !self.inputBar.hidden) ? self.composerBarHeight : defaultBarH;
+	CGRect bottomBarFrame = CGRectMake(0, viewH - barH, width, barH);
+
+	if (self.inputBar) {
+		self.inputBar.frame = bottomBarFrame;
+	}
+	UIView *channelBar = [self.view viewWithTag:kChatChannelBottomBarTag];
+	if (channelBar) {
+		channelBar.frame = bottomBarFrame;
+		UIView *centreBtn = [channelBar viewWithTag:kChatMuteBarTag] ?: [channelBar viewWithTag:kChatJoinChannelBarTag];
+		if (centreBtn) {
+			CGFloat side = barH;
+			CGFloat leftW = 0.0f;
+			if (self.directMessagesChatId != 0) leftW += side;
+			if (self.linkedChatId != 0) leftW += side;
+			CGFloat inset = MAX(leftW, side);
+			CGFloat centreW = width - TGDoubled(inset);
+			if (centreW > 0.0f) {
+				centreBtn.frame = CGRectMake(inset, 0.0f, centreW, side);
+			}
+		}
+	}
+	NSArray *standInTags = @[@(kChatUnblockBarTag), @(kChatJoinGroupBarTag)];
+	for (NSNumber *tag in standInTags) {
+		UIView *standIn = [self.view viewWithTag:[tag integerValue]];
+		if (standIn && standIn.superview == self.view) {
+			standIn.frame = bottomBarFrame;
+		}
+	}
+
+	CGFloat tableHeight = viewH - barH;
+	if (tableHeight < 0.0f) tableHeight = 0.0f;
 	BOOL widthChanged = self.table.frame.size.width != width;
-	self.table.frame = CGRectMake(0, 0, width, height);
+	self.table.frame = CGRectMake(0, 0, width, tableHeight);
+
 	if (widthChanged) {
 		// Every bubble measured itself against the old width.
 		[self.layoutCache removeAllObjects];

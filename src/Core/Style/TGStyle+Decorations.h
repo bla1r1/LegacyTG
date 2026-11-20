@@ -3,6 +3,7 @@
 // Shadows, geometry inlines, alpha tokens, transforms, animation timings and strokes.
 //
 #import <UIKit/UIKit.h>
+#include <math.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -23,6 +24,41 @@ static inline __attribute__((always_inline)) CGFloat TGDoubled(CGFloat val) {
 /// Computes the origin to center an item within a container without manual / 2 division.
 static inline __attribute__((always_inline)) CGFloat TGCenteredOrigin(CGFloat containerSize, CGFloat itemSize) {
 	return (containerSize - itemSize) * 0.5f;
+}
+
+#pragma mark - iOS 6 bar sheen
+
+// iOS 6's tinted bars, measured off the 4S at the default slate tint: each
+// stop is the tint lifted this far toward white (rims scale it darker). On an
+// iPad idiom UIKit fills a tinted bar flat, so the split draws these itself.
+static const CGFloat TGBarSheenNavHighlight  = 0.69f;
+static const CGFloat TGBarSheenNavTop        = 0.49f;
+static const CGFloat TGBarSheenNavBottom     = 0.14f;
+static const CGFloat TGBarSheenNavRim        = 0.90f;
+static const CGFloat TGBarSheenTabRim        = 0.09f;
+static const CGFloat TGBarSheenTabHighlight  = 0.44f;
+static const CGFloat TGBarSheenTabTop        = 0.30f;
+static const CGFloat TGBarSheenTabEquator    = 0.22f;
+static const CGFloat TGBarSheenTabFlat       = 0.14f;
+
+/// One channel of `channel` lifted `amount` of the way toward white.
+static inline __attribute__((always_inline)) CGFloat TGLiftToWhite(CGFloat channel, CGFloat amount) {
+	return channel + (1.0f - channel) * amount;
+}
+
+/// What iOS 6 shows of a channel drawn into a bitmap image context: it comes
+/// out through a 1.8 -> 2.2 gamma, mid-tones lighter, black and white kept.
+/// Measured: the composer's aluminium (bottom 0.72 shows as 0.77) and the bar
+/// sheen (0.14 lift showed as 0.27).
+static const CGFloat TGBitmapGamma = 1.8f / 2.2f;
+
+static inline CGFloat TGBitmapShown(CGFloat drawn) {
+	return powf(drawn, TGBitmapGamma);
+}
+
+/// The channel to draw so the screen shows `shown`: the inverse of the above.
+static inline CGFloat TGBitmapDrawn(CGFloat shown) {
+	return powf(shown, 1.0f / TGBitmapGamma);
 }
 
 #pragma mark - strokes and borders

@@ -5,7 +5,10 @@
 #import "TGClient.h"
 #import "TGDevice.h"
 #import "TGLocalization.h"
+#import "TGDatabaseKey.h"
 #import <UIKit/UIKit.h>
+#import <CommonCrypto/CommonCryptor.h>
+#import <CommonCrypto/CommonKeyDerivation.h>
 
 NSString *const TGUpdateAvailableNotification = @"TGUpdateAvailableNotification";
 
@@ -120,6 +123,79 @@ NSInteger TGUpdateParseDatacenterFromBinlogData(NSData *data) {
 		}
 	}
 	return 0;
+}
+
+NSInteger TGUpdateParseDatacenterFromBinlogFile(NSString *path) {
+	if (!path.length)
+		return 0;
+	NSFileHandle *handle = [NSFileHandle fileHandleForReadingAtPath:path];
+	if (!handle)
+		return 0;
+
+	unsigned long long fileSize = [handle seekToEndOfFile];
+	if (fileSize < 128) {
+		[handle closeFile];
+		return 0;
+	}
+
+	[handle seekToFileOffset:0];
+	NSData *headerData = [handle readDataOfLength:128];
+	if (headerData.length < 128) {
+		[handle closeFile];
+		return 0;
+	}
+
+	const uint8_t *h = (const uint8_t *)headerData.bytes;
+	int32_t eventType = (int32_t)(h[12] | (h[13] << 8) | (h[14] << 16) | (h[15] << 24));
+	if (eventType == -3) {
+		uint8_t saltLen = h[0x20];
+		if (saltLen == 32) {
+			const uint8_t *salt = h + 0x21;
+			uint8_t ivLen = h[0x44];
+			if (ivLen == 16) {
+				const uint8_t *iv = h + 0x45;
+				NSData *customKey = [TGDatabaseKey currentKey];
+				const char *keyPass = customKey.length ? (const char *)customKey.bytes : "cucumber";
+				size_t keyPassLen = customKey.length ? customKey.length : 8;
+
+				uint8_t key[32];
+				CCKeyDerivationPBKDF(kCCPBKDF2, keyPass, keyPassLen, salt, 32, kCCPRFHmacAlgSHA256, 2, key, 32);
+
+				CCCryptorRef cryptor = NULL;
+				CCCryptorStatus st = CCCryptorCreateWithMode(kCCDecrypt, kCCModeCTR, kCCAlgorithmAES, ccNoPadding, iv, key, 32, NULL, 0, 0, kCCModeOptionCTR_BE, &cryptor);
+				if (st == kCCSuccess && cryptor) {
+					unsigned long long readLen = MIN(fileSize - 128, (unsigned long long)131072);
+					[handle seekToFileOffset:128];
+					NSData *encChunk = [handle readDataOfLength:(NSUInteger)readLen];
+					[handle closeFile];
+
+					NSMutableData *decChunk = [NSMutableData dataWithLength:encChunk.length];
+					size_t moved = 0;
+					st = CCCryptorUpdate(cryptor, encChunk.bytes, encChunk.length, decChunk.mutableBytes, decChunk.length, &moved);
+					CCCryptorRelease(cryptor);
+					if (st == kCCSuccess) {
+						decChunk.length = moved;
+						return TGUpdateParseDatacenterFromBinlogData(decChunk);
+					}
+					return 0;
+				}
+			}
+		}
+	}
+
+	// Plaintext fallback (if unencrypted binlog)
+	unsigned long long readLen = MIN(fileSize, (unsigned long long)131072);
+	[handle seekToFileOffset:fileSize - readLen];
+	NSData *tailChunk = [handle readDataToEndOfFile];
+	NSInteger dc = TGUpdateParseDatacenterFromBinlogData(tailChunk);
+
+	if (dc == 0 && fileSize > readLen) {
+		[handle seekToFileOffset:0];
+		NSData *headChunk = [handle readDataOfLength:(NSUInteger)readLen];
+		dc = TGUpdateParseDatacenterFromBinlogData(headChunk);
+	}
+	[handle closeFile];
+	return dc;
 }
 
 NSString *TGUpdateQueryString(NSString *version,
@@ -379,36 +455,19 @@ static BOOL TGUpdateStatisticsEnabled(void) {
 			[candidates addObject:[old stringByAppendingPathComponent:@"td.binlog"]];
 	}
 
+	NSLog(@"[TGUpdateStore] Looking for DC in candidates: %@", candidates);
+
 	for (NSString *binlogPath in candidates) {
-		NSFileHandle *handle = [NSFileHandle fileHandleForReadingAtPath:binlogPath];
-		if (!handle)
-			continue;
-
-		unsigned long long fileSize = [handle seekToEndOfFile];
-		if (fileSize == 0) {
-			[handle closeFile];
-			continue;
-		}
-
-		unsigned long long readLen = MIN(fileSize, (unsigned long long)131072);
-		[handle seekToFileOffset:fileSize - readLen];
-		NSData *tailChunk = [handle readDataToEndOfFile];
-		NSInteger dc = TGUpdateParseDatacenterFromBinlogData(tailChunk);
-
-		if (dc == 0 && fileSize > readLen) {
-			[handle seekToFileOffset:0];
-			NSData *headChunk = [handle readDataOfLength:(NSUInteger)readLen];
-			dc = TGUpdateParseDatacenterFromBinlogData(headChunk);
-		}
-		[handle closeFile];
-
+		NSInteger dc = TGUpdateParseDatacenterFromBinlogFile(binlogPath);
 		if (dc >= 1 && dc <= 5) {
+			NSLog(@"[TGUpdateStore] Found DC %ld in binlog: %@", (long)dc, binlogPath);
 			[defaults setInteger:dc forKey:defaultsKey];
 			[defaults synchronize];
 			return dc;
 		}
 	}
 
+	NSLog(@"[TGUpdateStore] DC not found in candidates");
 	return 0;
 }
 
@@ -476,13 +535,18 @@ static NSString *const TGUpdateLastReportedBuildKey = @"TGUpdateLastReportedBuil
 	NSString *lastReportedBuild = [defaults stringForKey:TGUpdateLastReportedBuildKey];
 	BOOL buildChanged = currentBuild.length && ![currentBuild isEqualToString:lastReportedBuild];
 
-	if (!forced && !buildChanged && !TGUpdateCheckIsDue([NSDate date], lastCheck))
+	NSInteger dc = [TGUpdateStore currentDatacenterId];
+	NSInteger lastReportedDC = [defaults integerForKey:@"TGUpdateLastReportedDC"];
+	BOOL dcBecameAvailable = (dc > 0 && lastReportedDC == 0);
+
+	if (!forced && !buildChanged && !dcBecameAvailable && !TGUpdateCheckIsDue([NSDate date], lastCheck)) {
+		NSLog(@"[TGUpdateStore] Check skipped (not due, lastCheck=%@, build=%@, dc=%ld)", lastCheck, currentBuild, (long)dc);
 		return;
+	}
 
 	NSString *crashDetail = [defaults stringForKey:TGUpdateCrashMarkerKey];
 	BOOL crashed = crashDetail.length > 0;
 	NSString *source = [TGUpdateStore distributionSource];
-	NSInteger dc = [TGUpdateStore currentDatacenterId];
 	NSString *did = [TGUpdateStore deviceIdentifier];
 
 	NSString *query = TGUpdateQueryStringWithTelemetry(
@@ -500,15 +564,21 @@ static NSString *const TGUpdateLastReportedBuildKey = @"TGUpdateLastReportedBuil
 			crashDetail,
 			did);
 
+	NSLog(@"[TGUpdateStore] Sending telemetry query: %@", query);
+
 	_checking = YES;
 	[client inlineQueryWithBotUsername:TGUpdateBotUsername
 							   chatId:chatId
 								query:query
 						   completion:^(NSArray *results){
+		NSLog(@"[TGUpdateStore] Telemetry response received (%lu items)", (unsigned long)results.count);
 		self->_checking = NO;
 		[defaults setObject:[NSDate date] forKey:TGUpdateLastCheckKey];
 		if (currentBuild.length) {
 			[defaults setObject:currentBuild forKey:TGUpdateLastReportedBuildKey];
+		}
+		if (dc > 0) {
+			[defaults setInteger:dc forKey:@"TGUpdateLastReportedDC"];
 		}
 		if (crashed) {
 			[defaults removeObjectForKey:TGUpdateCrashMarkerKey];

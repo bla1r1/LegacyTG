@@ -15,6 +15,8 @@
 #import "TGPasscodeViewController.h"
 #import "TGChatListRowGeometry.h"
 #import "TGChatParityModel.h"
+#import "TGiPadSplitViewController.h"
+#import "TGiPadSimulator.h"
 
 
 // Height of the folder pill strip above the chat list (official-style tabs).
@@ -35,11 +37,45 @@
 	[self.tableView.layer addAnimation:fade forKey:@"tg.folderList"];
 }
 
+- (void)reselectActiveChatIfPad {
+	BOOL isPadMode = TGIsPad();
+#if TG_DEV
+	if ([[TGiPadSimulator shared] isActive]) isPadMode = YES;
+#endif
+	if (!isPadMode) return;
+
+	int64_t activeId = [TGiPadSplitViewController shared].activeChatId;
+	if (activeId == 0) return;
+
+	NSArray *header = [self headerRows];
+	int64_t savedId = [[TGChatListStore shared] savedMessagesChatId];
+	if (savedId != 0 && activeId == savedId) {
+		NSUInteger idx = [header indexOfObject:@"saved"];
+		if (idx != NSNotFound) {
+			NSIndexPath *ip = [NSIndexPath indexPathForRow:(NSInteger)idx inSection:0];
+			[self.tableView selectRowAtIndexPath:ip animated:NO scrollPosition:UITableViewScrollPositionNone];
+			return;
+		}
+	}
+
+	NSArray *visible = [self visibleChats];
+	for (NSUInteger i = 0; i < visible.count; i++) {
+		NSDictionary *c = visible[i];
+		if ([c[@"id"] longLongValue] == activeId) {
+			NSIndexPath *ip = [NSIndexPath indexPathForRow:(NSInteger)(i + header.count) inSection:0];
+			[self.tableView selectRowAtIndexPath:ip animated:NO scrollPosition:UITableViewScrollPositionNone];
+			return;
+		}
+	}
+}
+
 - (void)reload {
 	if (self.showsArchive){
 		self.chats = [TGChatListStore shared].archivedChats;
 		[self reloadStoriesIfNeeded];
 		[self.tableView reloadData];
+	[self reselectActiveChatIfPad];
+		[self reselectActiveChatIfPad];
 		[self fetchMissingAvatars];
 		return;
 	}
@@ -58,6 +94,7 @@
 			[weakSelf applyFolderListFadeIfNeeded];
 			[weakSelf reloadStoriesIfNeeded];
 			[weakSelf.tableView reloadData];
+			[weakSelf reselectActiveChatIfPad];
 			[weakSelf fetchMissingAvatars];
 		}];
 		return;
@@ -77,6 +114,7 @@
 	[self reloadStoriesIfNeeded];
 	[self applyFolderListFadeIfNeeded];
 	[self.tableView reloadData];
+	[self reselectActiveChatIfPad];
 	[self rebuildTableHeader];
 	// The search field is a pull-down: Telegram opens on the stories row,
 	// not on a search bar. Park past the header once the table has a real

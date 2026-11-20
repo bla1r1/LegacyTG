@@ -36,6 +36,13 @@
 #import "TGChatParityModel.h"
 #import "TGUIFormat.h"
 
+static const NSInteger kChatMuteBarTag = 0x9020;
+static const NSInteger kChatJoinGroupBarTag = 0x9021;
+static const NSInteger kChatUnblockBarTag = 0x9025;
+static const NSInteger kChatJoinChannelBarTag = 0x9022;
+static const NSInteger kChatDiscussBarTag = 0x9023;
+static const NSInteger kChatChannelBottomBarTag = 0x9024;
+
 @class TGMessageStreamStore;
 
 FOUNDATION_EXPORT TGMessageCard *TGChatCardForRow(NSDictionary *m);
@@ -456,6 +463,7 @@ UIImage *TGImageFromMinithumbnail(id mini);
 - (void)reloadTableDebounced;
 - (void)playOnce:(TGLottieView *)view path:(NSString *)path settled:(BOOL)settled;
 - (void)showChannelBottomBar;
+- (UIImage *)composerBarBackgroundImageForHeight:(CGFloat)height;
 - (void)directMessagesFromChat:(UIButton *)sender;
 - (void)showViewersOfActionMessage;
 - (void)showPublicForwardsOfActionMessage;

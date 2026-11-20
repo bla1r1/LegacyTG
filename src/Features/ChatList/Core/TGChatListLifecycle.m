@@ -85,6 +85,11 @@ static const CGFloat kListStoryGap     = TGMetricPadSmall;
 		[weakSelf refreshListTitleView];
 		[weakSelf rebuildTableHeader];
 		[weakSelf.tableView reloadData];
+		[weakSelf reselectActiveChatIfPad];
+	}];
+
+	[TGObservers observe:@"TGiPadActiveChatChangedNotification" owner:self usingBlock:^(NSNotification *note){
+		[weakSelf reselectActiveChatIfPad];
 	}];
 
 	// Observers, not the store's single slots: the Archive is another

@@ -14,6 +14,8 @@
 #import "TGPasscodeViewController.h"
 #import "TGChatListRowGeometry.h"
 #import "TGSettingsViewController.h"
+#import "TGiPadSplitViewController.h"
+#import "TGiPadSimulator.h"
 
 
 // Height of the folder pill strip above the chat list (official-style tabs).
@@ -32,7 +34,14 @@
 		[self refreshListTitleView];
 		return;
 	}
-	[tableView deselectRowAtIndexPath:indexPath animated:YES];
+
+	BOOL isPadMode = TGIsPad();
+#if TG_DEV
+	if ([[TGiPadSimulator shared] isActive]) isPadMode = YES;
+#endif
+	if (!isPadMode) {
+		[tableView deselectRowAtIndexPath:indexPath animated:YES];
+	}
 
 	NSArray *header = [self headerRows];
 	if (indexPath.row < (NSInteger)header.count){
@@ -73,19 +82,41 @@
 /// The one place a chat dictionary becomes a screen: the forum check is what
 /// decides a topics list from a plain chat, and both push the same way.
 - (void)openChatInfo:(NSDictionary *)c {
-	if ([c[@"isForum"] boolValue]){
+	int64_t chatId = [c[@"id"] longLongValue];
+	NSString *title = c[@"title"];
+	BOOL isGroup = [c[@"isGroup"] boolValue];
+	BOOL isForum = [c[@"isForum"] boolValue];
+
+#if TG_DEV
+	if ([[TGiPadSimulator shared] isActive]) {
+		[[TGiPadSplitViewController shared] showChatWithId:chatId
+		                                             title:title
+		                                           isGroup:isGroup
+		                                           isForum:isForum];
+		return;
+	}
+#endif
+	if (TGIsPad()) {
+		[[TGiPadSplitViewController shared] showChatWithId:chatId
+		                                             title:title
+		                                           isGroup:isGroup
+		                                           isForum:isForum];
+		return;
+	}
+
+	if (isForum){
 		TGTopicsViewController *topics = [[TGTopicsViewController alloc] init];
-		topics.chatId = [c[@"id"] longLongValue];
-		topics.chatTitle = c[@"title"];
+		topics.chatId = chatId;
+		topics.chatTitle = title;
 		topics.hidesBottomBarWhenPushed = YES;
 		[self.navigationController pushViewController:topics animated:YES];
 		return;
 	}
 
 	TGChatViewController *vc = [[TGChatViewController alloc] init];
-	vc.chatId = [c[@"id"] longLongValue];
-	vc.chatTitle = c[@"title"];
-	vc.isGroup = [c[@"isGroup"] boolValue];
+	vc.chatId = chatId;
+	vc.chatTitle = title;
+	vc.isGroup = isGroup;
 	vc.hidesBottomBarWhenPushed = YES;
 	[self.navigationController pushViewController:vc animated:YES];
 }

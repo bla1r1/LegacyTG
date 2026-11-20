@@ -526,8 +526,11 @@ static char kTabOffMaskKey;
 	// iOS <= 6 keeps the native skeuomorphic glossy tab bar tinted to the theme; iOS 7+ sets barTintColor.
 	if ([TGTheme drawsSkeuomorphicChrome]) {
 		bar.tintColor = barBg;
+		// The iPad's chat bar beside it is drawn from the same image, so the
+		// bottom edge reads as one strip across the split.
 		if ([bar respondsToSelector:@selector(setBackgroundImage:)])
-			bar.backgroundImage = nil;
+			bar.backgroundImage = TGIsPad() ? [TGTheme skeuomorphicTabBarImageWithColor:barBg
+					height:TGMetricTabBarHeight] : nil;
 		if ([bar respondsToSelector:@selector(setSelectionIndicatorImage:)])
 			bar.selectionIndicatorImage = nil;
 		if ([bar respondsToSelector:@selector(setSelectedImageTintColor:)])
@@ -741,8 +744,12 @@ static char kTabOffMaskKey;
 	// and its Back and Done buttons match it because they come from the same
 	// place.
 	if ([TGTheme drawsSkeuomorphicChrome]) {
+		// On an iPad idiom iOS 6 fills a tinted bar flat, so the list's bar and
+		// the chat's beside it differed; both get the phone's gloss, drawn here.
+		UIImage *padBar = TGIsPad() ? [TGTheme skeuomorphicBarImageWithColor:[self barColour]
+				height:TGMetricNavigationBarHeight] : nil;
 		if ([bar respondsToSelector:@selector(setBackgroundImage:forBarMetrics:)])
-			[bar setBackgroundImage:nil forBarMetrics:UIBarMetricsDefault];
+			[bar setBackgroundImage:padBar forBarMetrics:UIBarMetricsDefault];
 		if ([bar respondsToSelector:@selector(setShadowImage:)])
 			[bar setShadowImage:nil];
 		bar.tintColor = [self barColour];

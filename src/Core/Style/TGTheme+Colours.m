@@ -344,6 +344,34 @@ static inline BOOL TGColourIsDark(UIColor *colour) {
 	return TGRole(@"separator", TG_STEEL_LIGHT3);
 }
 
+- (UIColor *)padSplitDividerColour {
+	UIColor *imported = [self importedColour:@"padSplitDivider"];
+	if (imported) return imported;
+	return [self isDark] ? [UIColor colorWithWhite:0.0f alpha:0.6f]
+	                     : [UIColor colorWithRed:0.70f green:0.73f blue:0.78f alpha:1.0f];
+}
+
+- (UIColor *)padSplitBarDividerColour {
+	UIColor *imported = [self importedColour:@"padSplitBarDivider"];
+	if (imported) return imported;
+	return [self isDark] ? [UIColor colorWithWhite:0.0f alpha:0.85f]
+	                     : [UIColor colorWithRed:0.22f green:0.28f blue:0.36f alpha:1.0f];
+}
+
+- (UIColor *)padSplitHighlightColour {
+	UIColor *imported = [self importedColour:@"padSplitHighlight"];
+	if (imported) return imported;
+	return [self isDark] ? [UIColor colorWithWhite:1.0f alpha:0.08f]
+	                     : [UIColor colorWithWhite:1.0f alpha:0.65f];
+}
+
+- (UIColor *)padSplitBarHighlightColour {
+	UIColor *imported = [self importedColour:@"padSplitBarHighlight"];
+	if (imported) return imported;
+	return [self isDark] ? [UIColor colorWithWhite:1.0f alpha:0.12f]
+	                     : [UIColor colorWithWhite:1.0f alpha:0.22f];
+}
+
 #pragma mark - service messages
 
 - (UIColor *)serviceBubbleColour {
@@ -351,6 +379,32 @@ static inline BOOL TGColourIsDark(UIColor *colour) {
 	UIColor *imported = [self importedColour:@"service"];
 	if (imported) return imported;
 	return [UIColor colorWithWhite:0.0f alpha:0.30f];
+}
+
+#pragma mark - chat bottom bar
+
+- (BOOL)composerOnBarChrome {
+	return TGIsPad() && [TGTheme drawsSkeuomorphicChrome] && ![self isDark];
+}
+
+- (UIColor *)composerAccentColour {
+	return [self composerOnBarChrome] ? [self barTitleColour] : [self accentColour];
+}
+
+- (UIColor *)composerGlyphColour {
+	return [self composerOnBarChrome] ? [self barTitleColour] : [self secondaryTextColour];
+}
+
+- (UIColor *)composerTextColour {
+	return [self composerOnBarChrome] ? [self barTitleColour] : [self primaryTextColour];
+}
+
+- (UIColor *)composerHairlineColour {
+	return [self composerOnBarChrome] ? [UIColor clearColor] : [self separatorColour];
+}
+
+- (UIColor *)composerTextShadowColour {
+	return [self composerOnBarChrome] ? [self navBarTextShadowColour] : [self etchedTextShadowColour];
 }
 
 - (UIColor *)unreadSeparatorColour {

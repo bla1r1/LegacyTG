@@ -91,11 +91,11 @@ static const NSTimeInterval kRecordHintSeconds = 1.6;
 		self.recordPanel = [[TGRecordBar alloc] initWithFrame:bar];
 
 		self.recordCancelSlideLabel = [[UILabel alloc] initWithFrame:
-				CGRectMake(kRecordSlideX, TGCenteredOrigin(kInputHeight, TGMetricLineRow),
+				CGRectMake(kRecordSlideX, TGCenteredOrigin(bar.size.height, TGMetricLineRow),
 						bar.size.width - kRecordSlideRoom, TGMetricLineRow)];
 		self.recordCancelSlideLabel.text = @"Slide to cancel";
 		self.recordCancelSlideLabel.font = TGFontBody();
-		self.recordCancelSlideLabel.textColor = [theme secondaryTextColour];
+		self.recordCancelSlideLabel.textColor = [theme composerGlyphColour];
 		self.recordCancelSlideLabel.backgroundColor = [UIColor clearColor];
 		self.recordCancelSlideLabel.autoresizingMask = UIViewAutoresizingFlexibleWidth;
 		[self.recordPanel addSubview:self.recordCancelSlideLabel];
@@ -141,7 +141,7 @@ static const NSTimeInterval kRecordHintSeconds = 1.6;
 		// The pause disc keeps the state of the last recording on it; a fresh
 		// one starts unpaused.
 		[self.recordPauseButton setImage:[TGIcons pause] forState:UIControlStateNormal];
-		[TGIcons tintButton:self.recordPauseButton colour:[[TGTheme shared] primaryTextColour]];
+		[TGIcons tintButton:self.recordPauseButton colour:[[TGTheme shared] composerTextColour]];
 	}
 	self.recordCancelSlideLabel.hidden = NO;
 	self.recordCancelSlideLabel.transform = CGAffineTransformIdentity;
@@ -250,13 +250,13 @@ static const NSTimeInterval kRecordHintSeconds = 1.6;
 
 - (void)updateRecordModeIcon {
 	UIImage *video = [TGIcons glyphNamed:@"video"
-								  colour:[[TGTheme shared] secondaryTextColour]
+								  colour:[[TGTheme shared] composerGlyphColour]
 									side:TGMetricMenuGlyph];
 	[self.micButton setImage:(self.videoNoteMode ? video : [TGIcons microphone])
 					forState:UIControlStateNormal];
 	// A fresh image loses the baked colour: iOS 6 has to fill again.
 	if (!self.videoNoteMode)
-		[TGIcons tintButton:self.micButton colour:[[TGTheme shared] secondaryTextColour]];
+		[TGIcons tintButton:self.micButton colour:[[TGTheme shared] composerGlyphColour]];
 }
 
 /// The mode outlives the chat: Telegram writes it down the moment it changes,
@@ -801,11 +801,11 @@ static const NSTimeInterval kRecordHintSeconds = 1.6;
 	if (recorder.paused){
 		[recorder resume];
 		[self.recordPauseButton setImage:[TGIcons pause] forState:UIControlStateNormal];
-		[TGIcons tintButton:self.recordPauseButton colour:[[TGTheme shared] primaryTextColour]];
+		[TGIcons tintButton:self.recordPauseButton colour:[[TGTheme shared] composerTextColour]];
 	} else {
 		[recorder pause];
 		[self.recordPauseButton setImage:[TGIcons play] forState:UIControlStateNormal];
-		[TGIcons tintButton:self.recordPauseButton colour:[[TGTheme shared] primaryTextColour]];
+		[TGIcons tintButton:self.recordPauseButton colour:[[TGTheme shared] composerTextColour]];
 	}
 }
 

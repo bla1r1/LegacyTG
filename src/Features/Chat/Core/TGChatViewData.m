@@ -57,12 +57,7 @@
 /// The bar that stands in for the composer: mute for a channel you follow,
 /// join for one you have not joined yet. One tag per state, so a second answer
 /// replaces the bar instead of stacking another one on top.
-static const NSInteger kChatMuteBarTag = 0x9020;
-static const NSInteger kChatJoinGroupBarTag = 0x9021;
-static const NSInteger kChatUnblockBarTag = 0x9025;
-static const NSInteger kChatJoinChannelBarTag = 0x9022;
-static const NSInteger kChatDiscussBarTag = 0x9023;
-static const NSInteger kChatChannelBottomBarTag = 0x9024;
+
 
 #pragma mark - controller
 
@@ -912,7 +907,8 @@ static NSMutableDictionary *TGChatProfileMemo(void) {
 	self.inputBar.hidden = YES;
 	[self removeComposerStandIn];
 
-	CGRect barFrame = self.inputBar.frame;
+	CGFloat barH = TGIsPad() ? TGMetricTabBarHeight : kInputHeight;
+	CGRect barFrame = CGRectMake(0, self.view.bounds.size.height - barH, self.view.bounds.size.width, barH);
 	TGTheme *theme = [TGTheme shared];
 
 	UIView *container = [[UIView alloc] initWithFrame:barFrame];
@@ -921,18 +917,23 @@ static NSMutableDictionary *TGChatProfileMemo(void) {
 	container.autoresizingMask = UIViewAutoresizingFlexibleWidth |
 								 UIViewAutoresizingFlexibleTopMargin;
 
+	UIImageView *barBg = [[UIImageView alloc] initWithFrame:CGRectMake(0, 0, barFrame.size.width, barH)];
+	barBg.image = [self composerBarBackgroundImageForHeight:barH];
+	barBg.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+	[container addSubview:barBg];
+
 	UIView *hair = [[UIView alloc] initWithFrame:CGRectMake(0, 0, barFrame.size.width,
 															TGMetricBorderWidth)];
-	hair.backgroundColor = [theme separatorColour];
+	hair.backgroundColor = [theme composerHairlineColour];
 	hair.autoresizingMask = UIViewAutoresizingFlexibleWidth;
 	[container addSubview:hair];
 
-	CGFloat side = barFrame.size.height;
+	CGFloat side = barH;
 	UIButton *(^iconButton)(NSString *, SEL, CGFloat) = ^UIButton *(NSString *glyph, SEL action, CGFloat x){
 		UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
 		button.frame = CGRectMake(x, 0, side, side);
 		button.showsTouchWhenHighlighted = YES;
-		[button setImage:[TGIcons glyphNamed:glyph colour:[theme accentColour] side:kChannelBarIconSide]
+		[button setImage:[TGIcons glyphNamed:glyph colour:[theme composerAccentColour] side:kChannelBarIconSide]
 				forState:UIControlStateNormal];
 		[button addTarget:self action:action forControlEvents:UIControlEventTouchUpInside];
 		[container addSubview:button];
@@ -962,8 +963,10 @@ static NSMutableDictionary *TGChatProfileMemo(void) {
 	centre.frame = CGRectMake(inset, 0, barFrame.size.width - TGDoubled(inset), side);
 	centre.autoresizingMask = UIViewAutoresizingFlexibleWidth;
 	centre.titleLabel.font = TGFontBody();
-	[centre setTitleColor:[theme accentColour] forState:UIControlStateNormal];
-	[centre setTitleColor:[theme secondaryTextColour] forState:UIControlStateHighlighted];
+	[centre setTitleColor:[theme composerAccentColour] forState:UIControlStateNormal];
+	[centre setTitleColor:[theme composerGlyphColour] forState:UIControlStateHighlighted];
+	[centre setTitleShadowColor:[theme composerTextShadowColour] forState:UIControlStateNormal];
+	centre.titleLabel.shadowOffset = TGMetricShadowOffsetEtched;
 	if (!self.isChannelMember){
 		centre.tag = kChatJoinChannelBarTag;
 		[centre setTitle:@"Join Channel" forState:UIControlStateNormal];
@@ -1034,16 +1037,28 @@ static NSMutableDictionary *TGChatProfileMemo(void) {
 
 - (void)showComposerStandIn:(NSString *)title action:(SEL)action tag:(NSInteger)tag {
 	self.inputBar.hidden = YES;
+	CGFloat barH = TGIsPad() ? TGMetricTabBarHeight : kInputHeight;
+	CGRect barFrame = CGRectMake(0, self.view.bounds.size.height - barH, self.view.bounds.size.width, barH);
+	TGTheme *theme = [TGTheme shared];
 	UIButton *bar = [UIButton buttonWithType:UIButtonTypeCustom];
-	bar.frame = self.inputBar.frame;
+	bar.frame = barFrame;
 	bar.tag = tag;
-	bar.backgroundColor = [[TGTheme shared] inputBarColour];
+	bar.backgroundColor = [theme inputBarColour];
 	bar.autoresizingMask = UIViewAutoresizingFlexibleWidth |
 						   UIViewAutoresizingFlexibleTopMargin;
-	[bar setTitleColor:[[TGTheme shared] accentColour] forState:UIControlStateNormal];
+	[bar setBackgroundImage:[self composerBarBackgroundImageForHeight:barH] forState:UIControlStateNormal];
+	[bar setTitleColor:[theme composerAccentColour] forState:UIControlStateNormal];
+	[bar setTitleShadowColor:[theme composerTextShadowColour] forState:UIControlStateNormal];
+	bar.titleLabel.shadowOffset = TGMetricShadowOffsetEtched;
 	bar.titleLabel.font = TGFontBody();
 	[bar setTitle:title forState:UIControlStateNormal];
 	[bar addTarget:self action:action forControlEvents:UIControlEventTouchUpInside];
+
+	UIView *hair = [[UIView alloc] initWithFrame:CGRectMake(0, 0, barFrame.size.width, TGMetricBorderWidth)];
+	hair.backgroundColor = [theme composerHairlineColour];
+	hair.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+	[bar addSubview:hair];
+
 	[self.view addSubview:bar];
 }
 

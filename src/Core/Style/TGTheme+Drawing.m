@@ -193,6 +193,18 @@ static UIColor *TGLiftedColour(UIColor *colour, CGFloat toward, CGFloat amount) 
 							blue:b + (toward - b) * amount alpha:a];
 }
 
+/// The colour to draw so the screen shows the tint lifted (`lift` > 0) toward
+/// white or scaled (`lift` < 0, by -lift) toward black: bar sheen matched to
+/// UIKit's own bars, which do not pass through the bitmap gamma.
+static UIColor *TGSheenColour(UIColor *tint, CGFloat lift) {
+	CGFloat c[4] = { 0, 0, 0, 1.0f };
+	if (![tint getRed:&c[0] green:&c[1] blue:&c[2] alpha:&c[3]])
+		return tint;
+	for (int i = 0; i < 3; i++)
+		c[i] = TGBitmapDrawn(lift >= 0 ? TGLiftToWhite(c[i], lift) : c[i] * -lift);
+	return [UIColor colorWithRed:c[0] green:c[1] blue:c[2] alpha:c[3]];
+}
+
 /// A vertical gradient from `top` to `bottom` over [y0, y1] in the current
 /// context. Two stops cover every plate here; the longer ones stay inline.
 static void TGDrawVertical(CGContextRef ctx, UIColor *top, UIColor *bottom,
@@ -208,7 +220,9 @@ static void TGDrawVertical(CGContextRef ctx, UIColor *top, UIColor *bottom,
 @implementation TGTheme (Skeuomorphism)
 
 + (UIImage *)skeuomorphicBarImageWithColor:(UIColor *)tint height:(CGFloat)height {
-	CGFloat width = 8.0f;
+	// A point of stretchable middle between the caps: with none, UIKit blended
+	// the edges and the bar came out a shade lighter than the tab bar beside it.
+	CGFloat width = TGDoubled(kSkeuoCapInset) + TGMetricBorderWidth;
 	CGFloat scale = [UIScreen mainScreen].scale;
 	UIGraphicsBeginImageContextWithOptions(CGSizeMake(width, height), NO, scale);
 	CGContextRef ctx = UIGraphicsGetCurrentContext();
@@ -233,10 +247,9 @@ static void TGDrawVertical(CGContextRef ctx, UIColor *top, UIColor *bottom,
 		topY = TGMetricPadWide; // 20pt status bar area on attached bar
 	}
 
-	CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
-
 	// 1. Status bar area (if attached)
 	if (topY > 0.0f) {
+		CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
 		CGFloat statusComps[] = {
 			r * 0.85f, g * 0.85f, b * 0.85f, a,
 			MIN(1.0f, r * 1.42f), MIN(1.0f, g * 1.42f), MIN(1.0f, b * 1.42f), a
@@ -245,27 +258,44 @@ static void TGDrawVertical(CGContextRef ctx, UIColor *top, UIColor *bottom,
 		CGGradientRef statusGrad = CGGradientCreateWithColorComponents(cs, statusComps, statusLocs, 2);
 		CGContextDrawLinearGradient(ctx, statusGrad, CGPointMake(0, 0), CGPointMake(0, topY), 0);
 		CGGradientRelease(statusGrad);
+		CGColorSpaceRelease(cs);
 	}
 
-	// 2. Continuous smooth metallic gradient (authentic iOS 6 slate sheen - Picture 3)
-	CGFloat barComps[] = {
-		MIN(1.0f, r * 1.42f), MIN(1.0f, g * 1.42f), MIN(1.0f, b * 1.42f), a,
-		MIN(1.0f, r * 1.08f), MIN(1.0f, g * 1.08f), MIN(1.0f, b * 1.08f), a,
-		r * 0.75f, g * 0.75f, b * 0.75f, a
-	};
-	CGFloat barLocs[] = { 0.0f, 0.45f, 1.0f };
-	CGGradientRef barGrad = CGGradientCreateWithColorComponents(cs, barComps, barLocs, 3);
-	CGContextDrawLinearGradient(ctx, barGrad, CGPointMake(0, topY), CGPointMake(0, height), 0);
-	CGGradientRelease(barGrad);
+	// 2. The phone's tinted bar: a one-pixel highlight, the sheen fading down,
+	// a darker rim along the bottom.
+	CGFloat pixel = 1.0f / scale;
+	[TGSheenColour(tint, TGBarSheenNavHighlight) setFill];
+	UIRectFill(CGRectMake(0, topY, width, pixel));
+	TGDrawVertical(ctx, TGSheenColour(tint, TGBarSheenNavTop),
+			TGSheenColour(tint, TGBarSheenNavBottom), topY + pixel,
+			height - TGMetricBorderWidth);
+	[TGSheenColour(tint, -TGBarSheenNavRim) setFill];
+	UIRectFill(CGRectMake(0, height - TGMetricBorderWidth, width, TGMetricBorderWidth));
 
-	CGColorSpaceRelease(cs);
+	UIImage *img = UIGraphicsGetImageFromCurrentImageContext();
+	UIGraphicsEndImageContext();
+	return [img resizableImageWithCapInsets:UIEdgeInsetsMake(0, kSkeuoCapInset, 0, kSkeuoCapInset)];
+}
 
-	// Bottom dark hairline
-	CGContextSetRGBStrokeColor(ctx, 0.11f, 0.11f, 0.11f, 0.95f);
-	CGContextMoveToPoint(ctx, 0, height - 0.5f);
-	CGContextAddLineToPoint(ctx, width, height - 0.5f);
-	CGContextStrokePath(ctx);
-
++ (UIImage *)skeuomorphicTabBarImageWithColor:(UIColor *)tint height:(CGFloat)height {
+	CGFloat width = TGDoubled(kSkeuoCapInset) + TGMetricBorderWidth;
+	CGFloat scale = [UIScreen mainScreen].scale;
+	UIGraphicsBeginImageContextWithOptions(CGSizeMake(width, height), YES, scale);
+	CGContextRef ctx = UIGraphicsGetCurrentContext();
+	// iOS 6's tinted tab bar: a near-black rim on top, a pixel of light under
+	// it, the upper half glossy and the lower half flat.
+	CGFloat pixel = 1.0f / scale;
+	CGFloat equator = TGHalf(height);
+	// Near black the gamma model overshoots (it drew 040406 for 0b1015);
+	// the plain scale already lands on the phone's rim.
+	[TGScaledColour(tint, TGBarSheenTabRim) setFill];
+	UIRectFill(CGRectMake(0, 0, width, TGMetricBorderWidth));
+	[TGSheenColour(tint, TGBarSheenTabHighlight) setFill];
+	UIRectFill(CGRectMake(0, TGMetricBorderWidth, width, pixel));
+	TGDrawVertical(ctx, TGSheenColour(tint, TGBarSheenTabTop),
+			TGSheenColour(tint, TGBarSheenTabEquator), TGMetricBorderWidth + pixel, equator);
+	[TGSheenColour(tint, TGBarSheenTabFlat) setFill];
+	UIRectFill(CGRectMake(0, equator, width, height - equator));
 	UIImage *img = UIGraphicsGetImageFromCurrentImageContext();
 	UIGraphicsEndImageContext();
 	return [img resizableImageWithCapInsets:UIEdgeInsetsMake(0, kSkeuoCapInset, 0, kSkeuoCapInset)];
@@ -989,6 +1019,13 @@ static NSUInteger sButtonImageCount;
 }
 
 + (UIImage *)skeuomorphicInputBarImageWithHeight:(CGFloat)height {
+	// On the iPad the composer sits beside the list's tab bar at its height;
+	// a light strip there broke the bottom edge in two.
+	if ([[TGTheme shared] composerOnBarChrome]) {
+		TGTheme *theme = [TGTheme shared];
+		UIColor *tabBar = [theme importedColour:@"tabBar"] ?: [theme barColour];
+		return [TGTheme skeuomorphicTabBarImageWithColor:tabBar height:height];
+	}
 	CGFloat width = TGMetricPadSmall;
 	CGFloat scale = [UIScreen mainScreen].scale;
 	UIGraphicsBeginImageContextWithOptions(CGSizeMake(width, height), YES, scale);

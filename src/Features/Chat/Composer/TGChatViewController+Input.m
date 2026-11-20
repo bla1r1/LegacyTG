@@ -143,32 +143,33 @@
 
 - (void)buildInputBar:(CGRect)b {
 	CGFloat scale = [UIScreen mainScreen].scale;
+	CGFloat initBarH = TGIsPad() ? TGMetricTabBarHeight : kInputHeight;
 
 	self.inputBar = [[UIView alloc] initWithFrame:
-			CGRectMake(0, b.size.height - kInputHeight, b.size.width, kInputHeight)];
+			CGRectMake(0, b.size.height - initBarH, b.size.width, initBarH)];
 	self.inputBar.backgroundColor = [[TGTheme shared] inputBarColour];
 	self.inputBar.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleTopMargin;
 
-	UIImageView *barBg = [[UIImageView alloc] initWithFrame:CGRectMake(0, 0, b.size.width, kInputHeight)];
-	barBg.image = [TGTheme skeuomorphicInputBarImageWithHeight:kInputHeight];
+	UIImageView *barBg = [[UIImageView alloc] initWithFrame:CGRectMake(0, 0, b.size.width, initBarH)];
+	barBg.image = [TGTheme skeuomorphicInputBarImageWithHeight:initBarH];
 	barBg.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
 	[self.inputBar addSubview:barBg];
 
 	UIView *hair = [[UIView alloc] initWithFrame:CGRectMake(0, 0, b.size.width,
 			TGMetricBorderWidth)];
-	hair.backgroundColor = [[TGTheme shared] separatorColour];
+	hair.backgroundColor = [[TGTheme shared] composerHairlineColour];
 	hair.autoresizingMask = UIViewAutoresizingFlexibleWidth;
 	[self.inputBar addSubview:hair];
 
 	CGFloat fieldH = TGChatComposerFieldHeightForLines(1);
-	CGRect sendFrame = TGChatComposerSendFrame(b.size.width, kInputHeight);
-	CGRect fieldFrame = TGChatComposerFieldFrame(b.size.width, kInputHeight, fieldH);
+	CGRect sendFrame = TGChatComposerSendFrame(b.size.width, initBarH);
+	CGRect fieldFrame = TGChatComposerFieldFrame(b.size.width, initBarH, fieldH);
 	CGFloat sendY = CGRectGetMinY(sendFrame);
 
 	UIButton *attach = [UIButton buttonWithType:UIButtonTypeCustom];
 	attach.frame = CGRectMake(kComposerInset, sendY, kAttachWidth, kSendSide);
 	[attach setImage:[TGIcons attach] forState:UIControlStateNormal];
-	[TGIcons tintButton:attach colour:[[TGTheme shared] accentColour]];
+	[TGIcons tintButton:attach colour:[[TGTheme shared] composerAccentColour]];
 	[attach addTarget:self action:@selector(attachTapped)
 			forControlEvents:UIControlEventTouchUpInside];
 	[self.inputBar addSubview:attach];
@@ -260,7 +261,7 @@
 	self.micButton = [UIButton buttonWithType:UIButtonTypeCustom];
 	self.micButton.frame = sendFrame;
 	[self.micButton setImage:[TGIcons microphone] forState:UIControlStateNormal];
-	[TGIcons tintButton:self.micButton colour:[[TGTheme shared] secondaryTextColour]];
+	[TGIcons tintButton:self.micButton colour:[[TGTheme shared] composerGlyphColour]];
 	self.micButton.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin;
 	[self.micButton addTarget:self action:@selector(recordTouchDown:withEvent:)
 			 forControlEvents:UIControlEventTouchDown];
@@ -283,7 +284,7 @@
 	self.aiButton.hidden = YES;
 	self.aiButton.alpha = TGAlphaTransparent;
 	[self.aiButton setImage:[TGIcons glyphNamed:@"edit"
-			colour:[[TGTheme shared] accentColour] side:TGMetricMenuGlyph]
+			colour:[[TGTheme shared] composerAccentColour] side:TGMetricMenuGlyph]
 			forState:UIControlStateNormal];
 	self.aiButton.autoresizingMask = UIViewAutoresizingFlexibleTopMargin;
 	[self.aiButton addTarget:self action:@selector(aiComposeTapped)
@@ -299,12 +300,16 @@
 												 name:TGCustomEmojiLoadedNotification
 											   object:nil];
 
-	self.composerBarHeight = kInputHeight;
+	self.composerBarHeight = initBarH;
 	[self inputChanged];
 	[self updateComposerPlaceholder];
 
 	[self.view addSubview:self.inputBar];
 	[self updateComposerHeightAnimated:NO];
+}
+
+- (UIImage *)composerBarBackgroundImageForHeight:(CGFloat)height {
+	return [TGTheme skeuomorphicInputBarImageWithHeight:height];
 }
 
 /// Official picks the field's word from the chat kind: a channel broadcasts,

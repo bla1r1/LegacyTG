@@ -83,6 +83,7 @@ UIImage *TGChatListLockIcon(CGFloat side, UIColor *colour);
 /// Tokens of the store observers; removed in dealloc.
 @property (nonatomic, strong) NSArray *storeObservers;
 @property (nonatomic, assign) NSTimeInterval snapshotWrittenAt;
+- (void)reselectActiveChatIfPad;
 /// The stories strip's rows, newest first. Loaded from -activeStoryRowsForList:
 /// and only re-read when the last read is a few seconds old, because the
 /// chat list reloads for every chat update and each strip read is up to 60

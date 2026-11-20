@@ -55,14 +55,17 @@ NSString *TGMessageSenderLine(NSString *name, NSDictionary *m) {
 	return name;
 }
 
-CGSize TGMessageBodySize(NSDictionary *m, CGFloat fontSize) {
+CGSize TGMessageBodySizeForWidth(NSDictionary *m, CGFloat fontSize, CGFloat contentMaxW) {
 	if ([m[@"kind"] isEqualToString:@"messageSticker"] || [m[@"kind"] isEqualToString:@"messageAnimatedEmoji"])
 		return CGSizeZero;
 	NSString *text = m[@"text"] ?: @"";
 	if (!text.length)
 		return CGSizeZero;
-	return TGTextSizeWithEntities(text, m[@"entities"], TGFontAtSize(fontSize),
-			kBubbleMaxW - TGDoubled(kPadH));
+	return TGTextSizeWithEntities(text, m[@"entities"], TGFontAtSize(fontSize), contentMaxW);
+}
+
+CGSize TGMessageBodySize(NSDictionary *m, CGFloat fontSize) {
+	return TGMessageBodySizeForWidth(m, fontSize, kBubbleMaxW - TGDoubled(kPadH));
 }
 
 NSArray *TGMessageTextsToMeasure(NSArray *messages) {
@@ -119,6 +122,9 @@ TGMessageLayout *TGMessageRowLayout(TGMessageRowInput *in) {
 	layout.runEnd = in.runEnd;
 	CGFloat tableW = in.tableWidth;
 	if (tableW <= 0) tableW = TGMetricScreenWidth;
+	CGFloat bubbleMaxW = TGMetricBubbleMaxWidthForTableWidth(tableW);
+	CGFloat maxContentW = TGMetricBubbleMaxContentWidthForTableWidth(tableW);
+	CGFloat textMaxW = TGMetricBubbleTextWidthForTableWidth(tableW);
 
 	BOOL mine = [m[@"outgoing"] boolValue];
 	layout.mine = mine;
@@ -202,7 +208,7 @@ TGMessageLayout *TGMessageRowLayout(TGMessageRowInput *in) {
 	}
 
 	if (card) {
-		CGFloat width = kBubbleMaxW;
+		CGFloat width = maxContentW;
 		CGFloat x = mine ? (tableW - width - TGMetricPad) : TGMetricPad;
 		CGFloat cardH = TGMessageCardLayout(card, width - TGDoubled(kPadH)).size.height;
 		CGFloat height = TGPlaceGroupSender(layout, in.senderName, width, kPadV + cardH + kPadV + kPollStampRoom, &x);
@@ -212,7 +218,7 @@ TGMessageLayout *TGMessageRowLayout(TGMessageRowInput *in) {
 	}
 
 	if (isChecklist) {
-		CGFloat width = kBubbleMaxW;
+		CGFloat width = maxContentW;
 		CGFloat x = mine ? (tableW - width - TGMetricPad) : TGMetricPad;
 		CGFloat height = TGPlaceGroupSender(layout, in.senderName, width, TGMessageChecklistHeight(m), &x);
 		layout.bubbleFrame = CGRectMake(x, TGMetricBubbleRowInset, width, height);
@@ -221,7 +227,7 @@ TGMessageLayout *TGMessageRowLayout(TGMessageRowInput *in) {
 	}
 
 	if (isPoll) {
-		CGFloat width = kBubbleMaxW;
+		CGFloat width = maxContentW;
 		CGFloat x = mine ? (tableW - width - TGMetricPad) : TGMetricPad;
 		CGFloat height = TGPlaceGroupSender(layout, in.senderName, width, TGMessagePollHeight(m, in.pendingVotes), &x);
 		layout.bubbleFrame = CGRectMake(x, TGMetricBubbleRowInset, width, height);
@@ -232,7 +238,7 @@ TGMessageLayout *TGMessageRowLayout(TGMessageRowInput *in) {
 	if (isCall) {
 		NSString *line = m[@"text"] ?: @"Call";
 		CGFloat textW = TGTextSize(line, TGFontSubheadStrong(), 0).width;
-		CGFloat width = MIN(kBubbleMaxW, textW + kCallBubbleRoom);
+		CGFloat width = MIN(maxContentW, textW + kCallBubbleRoom);
 		width = MAX(kCallBubbleMin, width);
 		CGFloat height = kCallBubble + forwarded;
 		CGFloat x = mine ? (tableW - width - TGMetricPad) : TGMetricPad;
@@ -310,13 +316,13 @@ TGMessageLayout *TGMessageRowLayout(TGMessageRowInput *in) {
 		return layout;
 	}
 
-	CGSize body = TGMessageBodySize(m, in.fontSize);
+	CGSize body = TGMessageBodySizeForWidth(m, in.fontSize, textMaxW);
 	// The width the body was wrapped at. Buttons, a link preview or the
 	// stamp can make the bubble up to 2 * kPadH wider than that; a label
 	// that wide wraps into fewer lines than were measured, centres them in
 	// the taller frame, and every custom emoji drawn from the top of the
 	// frame on iOS 6 sat a line or more above its place.
-	CGFloat bodyW = kBubbleMaxW - TGDoubled(kPadH);
+	CGFloat bodyW = textMaxW;
 	CGSize pic  = in.imageSize;
 	layout.bodySize = body;
 	layout.picSize = pic;
@@ -382,7 +388,7 @@ TGMessageLayout *TGMessageRowLayout(TGMessageRowInput *in) {
 	// A track's empty caption "fits" the stamp and put it on the title line;
 	// its time belongs at the bubble's bottom right, as a file's does.
 	BOOL inlineStamp = !stampOnPicture && ![kind isEqualToString:@"messageAudio"]
-			&& TGMessageStampFitsInline(m, in.fontSize);
+			&& TGMessageStampFitsInlineForWidth(m, in.fontSize, bodyW);
 	NSString *lpSite = m[@"linkPreviewSite"];
 	NSString *lpTitle = m[@"linkPreviewTitle"];
 	NSString *lpDesc = m[@"linkPreviewDesc"];
@@ -412,26 +418,26 @@ TGMessageLayout *TGMessageRowLayout(TGMessageRowInput *in) {
 		layout.linkDesc = lpDesc;
 		layout.linkUrl = lpUrl;
 
-		CGFloat textMaxW = kBubbleMaxW - TGDoubled(kPadH) - kQuoteBarWidth - TGMetricPadSmall;
-		linkMedia = TGLinkPreviewMediaSize(m, textMaxW);
+		CGFloat lpTextMaxW = maxContentW - kQuoteBarWidth - TGMetricPadSmall;
+		linkMedia = TGLinkPreviewMediaSize(m, lpTextMaxW);
 		linkMediaLarge = [m[@"linkPreviewLarge"] boolValue] && linkMedia.width > 0;
 		// A picture makes the preview as wide as a bubble gets; the small
 		// one takes its corner out of the words' width.
 		if (linkMedia.width > 0)
-			contentW = MAX(contentW, kBubbleMaxW);
+			contentW = MAX(contentW, maxContentW);
 		if (linkMedia.width > 0 && !linkMediaLarge)
-			textMaxW -= linkMedia.width + TGMetricPadSmall;
+			lpTextMaxW -= linkMedia.width + TGMetricPadSmall;
 		if (lpSite.length) {
 			linkSiteH = TGMetricLineCaption;
 			linkPreviewH += linkSiteH;
 		}
 		if (lpTitle.length) {
-			CGSize ts = TGTextSize(lpTitle, TGFontCaptionStrong(), textMaxW);
+			CGSize ts = TGTextSize(lpTitle, TGFontCaptionStrong(), lpTextMaxW);
 			linkTitleH = MIN(ts.height, TGMetricLineCaption * 2.0f);
 			linkPreviewH += linkTitleH;
 		}
 		if (lpDesc.length) {
-			CGSize ds = TGTextSize(lpDesc, TGFontCaption(), textMaxW);
+			CGSize ds = TGTextSize(lpDesc, TGFontCaption(), lpTextMaxW);
 			linkDescH = MIN(ds.height, TGMetricLineCaption * 2.0f);
 			linkPreviewH += linkDescH;
 		}
@@ -457,7 +463,7 @@ TGMessageLayout *TGMessageRowLayout(TGMessageRowInput *in) {
 	// Buttons share the bubble's width; a short question would squeeze them
 	// to a few points each.
 	if ([m[@"inlineRows"] count])
-		contentW = kBubbleMaxW;
+		contentW = maxContentW;
 	CGFloat senderH = senderName.length ? TGMetricSenderLineHeight : TGMetricZero;
 	CGFloat senderW = TGMetricZero;
 	if (senderName.length){
@@ -467,7 +473,7 @@ TGMessageLayout *TGMessageRowLayout(TGMessageRowInput *in) {
 
 	CGFloat bubbleW = MAX(contentW + TGDoubled(kPadH),
 			timeW + TGDoubled(kPadH) + TGMetricPad);
-	bubbleW = MIN(bubbleW, kBubbleMaxW + TGDoubled(kPadH));
+	bubbleW = MIN(bubbleW, bubbleMaxW);
 
 	// A photo or an album fills its bubble to kMediaInset of the edge, as
 	// the official bubbles do; the text padding round it read as a heavy
@@ -482,7 +488,7 @@ TGMessageLayout *TGMessageRowLayout(TGMessageRowInput *in) {
 			natural = MAX(natural, senderW + TGDoubled(kPadH));
 		if (body.height > 0)
 			natural = MAX(natural, kBubbleMinW);
-		bubbleW = MIN(natural, kBubbleMaxW + TGDoubled(kPadH));
+		bubbleW = MIN(natural, bubbleMaxW);
 		if (body.height > 0){
 			bodyW = bubbleW - TGDoubled(kPadH);
 			body = TGTextSizeWithEntities(m[@"text"] ?: @"", m[@"entities"],
@@ -740,7 +746,7 @@ TGMessageLayout *TGMessageRowLayout(TGMessageRowInput *in) {
 		rowH = MAX(rowH, bubbleH);
 		// Outgoing chips grow leftwards from the bubble's right edge, the way
 		// Telegram keeps a narrow own message from clipping its own reaction.
-		CGFloat chipsW = MIN(kBubbleMaxW, tableW - TGDoubled(TGMetricPad));
+		CGFloat chipsW = MIN(bubbleMaxW, tableW - TGDoubled(TGMetricPad));
 		CGFloat chipsX = mine ? (tableW - TGMetricPad - chipsW) : x;
 		layout.reactionChipsFrame = CGRectMake(chipsX,
 				top + bubbleH + TGMetricReactionChipTop,

@@ -24,7 +24,8 @@ static const CGFloat kRecordCancelH = 32.0f;
 	if ((self = [super initWithFrame:frame])){
 		TGTheme *theme = [TGTheme shared];
 		CGFloat width = frame.size.width;
-		CGFloat height = TGMetricInputBarHeight;
+		// The bar it covers: the tab bar's height on the iPad.
+		CGFloat height = TGIsPad() ? TGMetricTabBarHeight : TGMetricInputBarHeight;
 		self.backgroundColor = [theme inputBarColour];
 		self.autoresizingMask = UIViewAutoresizingFlexibleWidth |
 				UIViewAutoresizingFlexibleTopMargin;
@@ -39,7 +40,7 @@ static const CGFloat kRecordCancelH = 32.0f;
 
 		UIView *hair = [[UIView alloc] initWithFrame:CGRectMake(0, 0, width,
 				TGMetricBorderWidth)];
-		hair.backgroundColor = [theme separatorColour];
+		hair.backgroundColor = [theme composerHairlineColour];
 		hair.autoresizingMask = UIViewAutoresizingFlexibleWidth;
 		[self addSubview:hair];
 
@@ -54,7 +55,7 @@ static const CGFloat kRecordCancelH = 32.0f;
 				CGRectMake(kRecordClockX, TGCenteredOrigin(height, TGMetricLineRow),
 						kRecordClockW, TGMetricLineRow)];
 		self.clock.font = TGFontRow();
-		self.clock.textColor = [theme primaryTextColour];
+		self.clock.textColor = [theme composerTextColour];
 		self.clock.backgroundColor = [UIColor clearColor];
 		[self addSubview:self.clock];
 
@@ -62,7 +63,7 @@ static const CGFloat kRecordCancelH = 32.0f;
 		self.cancelButton.frame = CGRectMake(TGCenteredOrigin(width, kRecordCancelW),
 				TGCenteredOrigin(height, kRecordCancelH), kRecordCancelW, kRecordCancelH);
 		[self.cancelButton setTitle:@"Cancel" forState:UIControlStateNormal];
-		[self.cancelButton setTitleColor:[theme accentColour] forState:UIControlStateNormal];
+		[self.cancelButton setTitleColor:[theme composerAccentColour] forState:UIControlStateNormal];
 		self.cancelButton.titleLabel.font = TGFontRow();
 		[self addSubview:self.cancelButton];
 

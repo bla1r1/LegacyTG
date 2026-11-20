@@ -497,6 +497,8 @@ APP_SRC_M := \
 	src/Features/Chat/TGInstantViewController.m \
 	src/Features/Dev/TGDevGalleryViewController.m \
 	src/UI/Controllers/TGPlaceholderViewController.m \
+	src/UI/Controllers/TGiPadChatPlaceholderViewController.m \
+	src/UI/Controllers/TGiPadSplitViewController.m \
 	src/Features/Auth/TGQRViewController.m \
 	src/UI/Format/TGUIFormat.m \
 	src/Features/Chat/TGPollPresentation.m \

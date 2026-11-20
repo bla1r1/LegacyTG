@@ -4,12 +4,49 @@
 //
 #import "TGTestRunner.h"
 #import "TGiPadSimulator.h"
+#import "TGStyle.h"
 #include <math.h>
 
 @interface TGiPadSimulatorTests : XCTestCase
 @end
 
 @implementation TGiPadSimulatorTests
+
+/// On the iPad idiom iOS 6 filled the chat's navigation bar flat (7f96b1)
+/// beside the list's glossy one. The split draws the gloss itself; these are
+/// the phone's own pixels at the default tint 6d84a2, read off the 4S.
+static BOOL TGSheenMatches(CGFloat amount, int r, int g, int b) {
+	CGFloat tint[3] = { 109.0f / 255.0f, 132.0f / 255.0f, 162.0f / 255.0f };
+	int want[3] = { r, g, b };
+	for (int i = 0; i < 3; i++)
+		if (fabs(TGLiftToWhite(tint[i], amount) * 255.0f - want[i]) > 3.0)
+			return NO;
+	return YES;
+}
+
+- (void)testBarSheenMatchesThePhonesTintedBars {
+	XCTAssertTrue(TGSheenMatches(TGBarSheenNavTop, 0xb3, 0xc0, 0xd0), @"nav bar top");
+	XCTAssertTrue(TGSheenMatches(TGBarSheenNavBottom, 0x80, 0x96, 0xb1), @"nav bar bottom");
+	XCTAssertTrue(TGSheenMatches(TGBarSheenNavHighlight, 0xd1, 0xd9, 0xe2), @"nav bar highlight");
+	XCTAssertTrue(TGSheenMatches(TGBarSheenTabTop, 0x98, 0xaa, 0xc0), @"tab bar top");
+	XCTAssertTrue(TGSheenMatches(TGBarSheenTabFlat, 0x7f, 0x96, 0xb1), @"tab bar lower half");
+	XCTAssertTrue(TGBarSheenNavTop > TGBarSheenNavBottom, @"a flat bar has no gloss");
+}
+
+/// The first drawn sheen came out lighter than UIKit's bars beside it: iOS 6
+/// shows a bitmap-context image through a 1.8 -> 2.2 gamma. The composer's
+/// aluminium bottom stop (0.72, 0.74, 0.77) shows as c4c9cf on the 4S.
+- (void)testBitmapGammaMatchesWhatTheDeviceShows {
+	CGFloat drawn[3] = { 0.72f, 0.74f, 0.77f };
+	int shown[3] = { 0xc4, 0xc9, 0xcf };
+	for (int i = 0; i < 3; i++)
+		XCTAssertTrue(fabs(TGBitmapShown(drawn[i]) * 255.0f - shown[i]) <= 3.0,
+				@"aluminium channel %d", i);
+	// Drawing the compensated value shows the sheen UIKit's tab bar has.
+	CGFloat flat = TGLiftToWhite(109.0f / 255.0f, TGBarSheenTabFlat);
+	XCTAssertTrue(fabs(TGBitmapShown(TGBitmapDrawn(flat)) - flat) < 0.002f);
+	XCTAssertTrue(TGBitmapDrawn(flat) < flat, @"compensation draws darker");
+}
 
 - (void)testCanvasSizeForOrientation {
 	CGSize zero = TGiPadCanvasSizeForOrientation(TGiPadOrientationOff);

@@ -171,8 +171,12 @@ typedef NS_ENUM(NSInteger, TGButtonStyle) {
 /// Applies classic recessed well styling to a text field.
 + (void)applySkeuomorphicInputStyle:(UITextField *)field;
 
+/// iOS 6's tinted tab bar: dark rim, glossy upper half, flat lower half.
++ (UIImage *)skeuomorphicTabBarImageWithColor:(UIColor *)tint height:(CGFloat)height;
+
 /// Brushed aluminum satin metal image for chat composer bar. A flat bar with
-/// a top hairline from iOS 7.
+/// a top hairline from iOS 7. On the iPad's iOS 6 chrome it is the tab bar
+/// (see -composerOnBarChrome).
 + (UIImage *)skeuomorphicInputBarImageWithHeight:(CGFloat)height;
 
 /// A stretchable plate of `colour` for a card, sheet or toast, `height` tall so
@@ -305,6 +309,10 @@ typedef NS_ENUM(NSInteger, TGButtonStyle) {
 - (UIColor *)onlineColour;          ///< the dot on an avatar
 - (UIColor *)ticksColour;           ///< delivery checkmarks in outgoing bubble
 - (UIColor *)separatorColour;       ///< hairlines between rows and around bars
+- (UIColor *)padSplitDividerColour;  ///< vertical divider between master and detail on iPad
+- (UIColor *)padSplitBarDividerColour; ///< vertical divider between navigation bars on iPad
+- (UIColor *)padSplitHighlightColour; ///< subtle specular highlight on iPad split divider
+- (UIColor *)padSplitBarHighlightColour; ///< subtle specular highlight on iPad nav bar divider
 
 #pragma mark - service messages
 
@@ -381,6 +389,23 @@ typedef NS_ENUM(NSInteger, TGButtonStyle) {
 - (UIColor *)etchedTextShadowColour;
 /// Dark text shadow under embossed navigation titles.
 - (UIColor *)navBarTextShadowColour;
+
+#pragma mark - chat bottom bar
+
+/// The iPad split on iOS 6 chrome in a light theme: the chat's bottom bar
+/// (composer, channel bar, recorder) stands next to the list's tab bar and is
+/// drawn as one, so what sits on it takes the bar's colours.
+- (BOOL)composerOnBarChrome;
+/// Words and the attach glyph on the bottom bar: accent, white on bar chrome.
+- (UIColor *)composerAccentColour;
+/// Quieter glyphs (sticker, mic) on the bottom bar.
+- (UIColor *)composerGlyphColour;
+/// Plain text on the bottom bar (the recorder's clock).
+- (UIColor *)composerTextColour;
+/// The line along the bar's top; the tab bar image carries its own rim.
+- (UIColor *)composerHairlineColour;
+/// Shadow under words on the bottom bar: etched, or dark like a bar title.
+- (UIColor *)composerTextShadowColour;
 /// Highlighted tint for action buttons.
 - (UIColor *)buttonHighlightColour;
 

@@ -68,8 +68,13 @@ static void TGSetWanted(NSString *key, BOOL wanted) {
 }
 
 + (BOOL)canShowWallpaper {
-	// Not on Vintage: backboardd blends the pattern under every bubble on each
+	// Not on Vintage iPhone: backboardd blends the pattern under every bubble on each
 	// scrolled frame, 5-7 points of a chat scroll on the iPod touch 4.
+	// On iPad, always allow wallpaper as iPads running iOS 6 have dual-core GPU/CPU.
+#if TARGET_OS_IPHONE
+	BOOL isPad = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad);
+	if (isPad) return YES;
+#endif
 	return [TGDevice tier] > TGDeviceTierVintage && [self wallpaperWanted];
 }
 

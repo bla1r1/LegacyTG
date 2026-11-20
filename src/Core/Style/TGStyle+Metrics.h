@@ -31,7 +31,36 @@ static const CGFloat TGMetricTextPadH          = TGMetricPadTiny;
 /// Measuring allowance for CoreText rounding.
 static const CGFloat TGMetricTextPadV          = 1.0f;
 
+/// Standard master column width on iPad in Master-Detail split (320 pt).
+static const CGFloat TGMetricPadMasterWidth    = 320.0f;
+
+/// The list column of the iPad split, as official splitMasterWidth: a third
+/// of the screen, never under 320 pt (a phone-width list) or over half.
+/// Portrait 768 gives 320, landscape 1024 gives 341. A container too narrow
+/// for two columns (the first layout runs at phone size) is all list: half
+/// of 320 laid the bar out at 160 pt and left the title off centre.
+static inline CGFloat TGMetricPadMasterWidthForWidth(CGFloat width) {
+	if (width < 2.0f * TGMetricPadMasterWidth)
+		return width;
+	CGFloat third = floorf(width / 3.0f);
+	return MIN(MAX(TGMetricPadMasterWidth, third), floorf(width / 2.0f));
+}
+
+/// Returns YES if running on an iPad.
+static inline BOOL TGIsPad(void) {
+#if TARGET_OS_IPHONE
+	return UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad;
+#else
+	return NO;
+#endif
+}
+
 #pragma mark - metrics
+
+/// Standard navigation bar height.
+static const CGFloat TGMetricNavigationBarHeight = 44.0f;
+/// Standard tab bar height.
+static const CGFloat TGMetricTabBarHeight        = 49.0f;
 
 /// One row of a list or a settings group.
 static const CGFloat TGMetricRow        = 44.0f;
@@ -450,6 +479,39 @@ static const CGFloat TGFontMessageBaseCap          = 14.0f;
 static const CGFloat TGMetricFontSizeDeltaThreshold = 14.0f;
 
 static const CGFloat TGMetricBubbleMaxW         = 246.0f;
+
+/// Proportional factor for chat bubbles on iPad / wide viewports (70% of table width).
+static const CGFloat TGMetricBubblePadWidthRatio = 0.70f;
+
+/// Maximum bubble total width for a given table width.
+/// On iPhone portrait (tableWidth <= 320 pt), returns 266 pt (~83% of screen).
+/// On iPad detail / wide tables, scales proportionally up to 70% of table width.
+static inline CGFloat TGMetricBubbleMaxWidthForTableWidth(CGFloat tableWidth) {
+	CGFloat baseBubbleMax = TGMetricBubbleMaxW + (TGMetricBubblePadH * 2.0f); // 266.0f
+	if (tableWidth <= TGMetricPadMasterWidth) {
+		return baseBubbleMax;
+	}
+	CGFloat proportional = floorf(tableWidth * TGMetricBubblePadWidthRatio);
+	return MAX(baseBubbleMax, proportional);
+}
+
+/// Maximum inner content width (cards, polls, checklists, buttons, media) for a given table width.
+/// On iPhone portrait, returns 246 pt (TGMetricBubbleMaxW).
+/// On iPad detail / wide tables, returns bubble max width minus bubble padding.
+static inline CGFloat TGMetricBubbleMaxContentWidthForTableWidth(CGFloat tableWidth) {
+	return TGMetricBubbleMaxWidthForTableWidth(tableWidth) - (TGMetricBubblePadH * 2.0f);
+}
+
+/// Text wrap width for a given table width.
+/// On iPhone portrait, returns 226 pt (TGMetricBubbleMaxW - 2 * TGMetricBubblePadH).
+/// On iPad detail / wide tables, returns content max width.
+static inline CGFloat TGMetricBubbleTextWidthForTableWidth(CGFloat tableWidth) {
+	if (tableWidth <= TGMetricPadMasterWidth) {
+		return TGMetricBubbleMaxW - (TGMetricBubblePadH * 2.0f); // 226.0f
+	}
+	return TGMetricBubbleMaxContentWidthForTableWidth(tableWidth);
+}
+
 static const CGFloat TGMetricBubbleTailHeight   = 13.0f;
 static const CGFloat TGMetricBubbleTailWidth    = 6.0f;
 static const CGFloat TGMetricChatAvatar         = 60.0f;
