@@ -13,6 +13,7 @@
 #
 #   rustup toolchain install nightly --profile minimal --component rust-src
 set -euo pipefail
+export PATH="$HOME/.cargo/bin:$PATH"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SRC="$ROOT/third_party/tlottie"
 TARGET_DIR="$ROOT/build/tlottie"

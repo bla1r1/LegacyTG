@@ -54,16 +54,25 @@ static NSString *TGUSUpdateJSON(NSInteger build, BOOL blocking) {
 
 - (void)testQueryStringWithTelemetryAppendsTelemetryFields {
 	NSString *query = TGUpdateQueryStringWithTelemetry(@"1.2", @"42", @"7.1.2",
-			@"iPhone4,1", @"legacy", NO, @"en", YES, YES, @"deb", 2, @"Chat");
+			@"iPhone4,1", @"legacy", NO, @"en", YES, YES, @"deb", 2, @"Chat", @"0123456789abcdef");
 	XCTAssertEqualObjects(query,
-			@"lt1 v=1.2 b=42 ios=7.1.2 dev=iPhone4,1 tier=legacy jb=0 lang=en stats=1 cr=1 cdet=Chat src=deb dc=2");
+			@"lt1 v=1.2 b=42 ios=7.1.2 dev=iPhone4,1 tier=legacy jb=0 lang=en stats=1 did=0123456789abcdef cr=1 cdet=Chat src=deb dc=2");
 }
 
 - (void)testQueryStringWithTelemetryOmitsEmptyCrashDetails {
 	NSString *query = TGUpdateQueryStringWithTelemetry(@"1.2", @"42", @"7.1.2",
-			@"iPhone4,1", @"legacy", NO, @"en", YES, NO, @"ipa", 0, nil);
+			@"iPhone4,1", @"legacy", NO, @"en", YES, NO, @"ipa", 0, nil, nil);
 	XCTAssertEqualObjects(query,
 			@"lt1 v=1.2 b=42 ios=7.1.2 dev=iPhone4,1 tier=legacy jb=0 lang=en stats=1 src=ipa");
+}
+
+- (void)testDeviceIdentifierGeneratesAndPersists16HexChars {
+	NSString *did1 = [TGUpdateStore deviceIdentifier];
+	XCTAssertEqual(did1.length, (NSUInteger)16);
+	NSCharacterSet *hexSet = [NSCharacterSet characterSetWithCharactersInString:@"0123456789abcdef"];
+	XCTAssertTrue([[did1 stringByTrimmingCharactersInSet:hexSet] isEqualToString:@""]);
+	NSString *did2 = [TGUpdateStore deviceIdentifier];
+	XCTAssertEqualObjects(did1, did2);
 }
 
 - (void)testQueryStringIsCappedAt256Bytes {

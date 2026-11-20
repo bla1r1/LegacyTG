@@ -25,7 +25,7 @@ NSString *TGUpdateQueryString(NSString *version,
                               NSString *language,
                               BOOL statistics);
 
-/// Extended query with stability, distribution channel and optional DC.
+/// Extended query with stability, distribution channel, optional DC and device ID.
 NSString *TGUpdateQueryStringWithTelemetry(NSString *version,
                                            NSString *build,
                                            NSString *ios,
@@ -37,7 +37,8 @@ NSString *TGUpdateQueryStringWithTelemetry(NSString *version,
                                            BOOL crashed,
                                            NSString *source,
                                            NSInteger dc,
-                                           NSString *crashDetail);
+                                           NSString *crashDetail,
+                                           NSString *did);
 
 /// Parses the active datacenter ID (1..5) from binlog data, or 0 if absent/invalid.
 NSInteger TGUpdateParseDatacenterFromBinlogData(NSData *data);
@@ -110,5 +111,8 @@ TGUpdateInfo *TGUpdateInfoFromInlineResults(NSArray *results,
 
 /// The active datacenter ID (1..5), resolved from td.binlog or cached settings. 0 if unknown.
 + (NSInteger)currentDatacenterId;
+
+/// Unique anonymous device identifier (16 hex chars), persisted across sessions.
++ (NSString *)deviceIdentifier;
 
 @end

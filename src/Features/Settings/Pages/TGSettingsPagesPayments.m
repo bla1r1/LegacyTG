@@ -25,6 +25,7 @@
 #import "TGChatListStore.h"
 #import "TGSessionsStore.h"
 #import "TGSettingsStore.h"
+#import "TGiPadSimulator.h"
 
 
 
@@ -408,6 +409,27 @@ static NSString *TGOrderLines(NSDictionary *order) {
 				TGDevGalleryViewController *gallery = [[TGDevGalleryViewController alloc] init];
 				gallery.hidesBottomBarWhenPushed = YES;
 				[weakSelf.navigationController pushViewController:gallery animated:YES];
+			}),
+		]),
+
+		TGSection(@"iPad Layout Simulator", nil, @[
+			TGTapRow(@"iPad Portrait (768x1024)", nil, ^{
+				UIWindow *win = [AppDelegate sharedDelegate].window;
+				[[TGiPadSimulator shared] setOrientation:TGiPadOrientationPortrait inWindow:win];
+			}),
+			TGTapRow(@"iPad Landscape (1024x768)", nil, ^{
+				UIWindow *win = [AppDelegate sharedDelegate].window;
+				[[TGiPadSimulator shared] setOrientation:TGiPadOrientationLandscape inWindow:win];
+			}),
+			TGTapRow(@"Turn Off (Standard iPhone)", nil, ^{
+				UIWindow *win = [AppDelegate sharedDelegate].window;
+				[[TGiPadSimulator shared] setOrientation:TGiPadOrientationOff inWindow:win];
+			}),
+			TGTapRow(@"Save Retina Screenshot", nil, ^{
+				NSString *p = [[TGiPadSimulator shared] saveScreenshotRetina:YES];
+				if (p) {
+					[TGAlertSheet showMessage:[NSString stringWithFormat:@"Saved to %@", p] title:@"iPad Screenshot" inView:weakSelf.view];
+				}
 			}),
 		]),
 

@@ -53,12 +53,16 @@ NSString *TGUpdateQueryStringWithTelemetry(NSString *version,
                                            BOOL crashed,
                                            NSString *source,
                                            NSInteger dc,
-                                           NSString *crashDetail) {
+                                           NSString *crashDetail,
+                                           NSString *did) {
 	NSMutableString *query = [NSMutableString stringWithFormat:
 			@"lt1 v=%@ b=%@ ios=%@ dev=%@ tier=%@ jb=%d lang=%@ stats=%d",
 			version ?: @"", build ?: @"", ios ?: @"", device ?: @"",
 			tier ?: @"", jailbroken ? 1 : 0, language ?: @"", statistics ? 1 : 0];
 
+	if (did.length) {
+		[query appendFormat:@" did=%@", did];
+	}
 	if (crashed) {
 		[query appendString:@" cr=1"];
 		if (crashDetail.length) {
@@ -112,7 +116,7 @@ NSString *TGUpdateQueryString(NSString *version,
                               BOOL statistics) {
 	return TGUpdateQueryStringWithTelemetry(version, build, ios, device, tier,
 	                                        jailbroken, language, statistics,
-	                                        NO, nil, 0, nil);
+	                                        NO, nil, 0, nil, nil);
 }
 
 BOOL TGUpdateCheckIsDue(NSDate *now, NSDate *lastCheck) {
@@ -370,6 +374,28 @@ static BOOL TGUpdateStatisticsEnabled(void) {
 	return 0;
 }
 
+static NSString *const TGUpdateDeviceIdentifierKey = @"TGUpdateDeviceIdentifier";
+static NSString *const TGUpdateLastReportedBuildKey = @"TGUpdateLastReportedBuild";
+
++ (NSString *)deviceIdentifier {
+	NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+	NSString *did = [defaults stringForKey:TGUpdateDeviceIdentifierKey];
+	if (did.length == 16)
+		return did;
+
+	uint8_t bytes[8];
+	arc4random_buf(bytes, sizeof(bytes));
+	char hex[17];
+	for (int i = 0; i < 8; i++) {
+		sprintf(hex + i * 2, "%02x", bytes[i]);
+	}
+	hex[16] = '\0';
+	did = [NSString stringWithUTF8String:hex];
+	[defaults setObject:did forKey:TGUpdateDeviceIdentifierKey];
+	[defaults synchronize];
+	return did;
+}
+
 - (void)checkIfDue:(BOOL)forced {
 	if (![NSThread isMainThread]){
 		dispatch_async(dispatch_get_main_queue(), ^{
@@ -407,17 +433,23 @@ static BOOL TGUpdateStatisticsEnabled(void) {
 	NSDate *lastCheck = [defaults objectForKey:TGUpdateLastCheckKey];
 	if (![lastCheck isKindOfClass:NSDate.class])
 		lastCheck = nil;
-	if (!forced && !TGUpdateCheckIsDue([NSDate date], lastCheck))
+
+	NSString *currentBuild = TGUpdateBundleValue(@"CFBundleVersion");
+	NSString *lastReportedBuild = [defaults stringForKey:TGUpdateLastReportedBuildKey];
+	BOOL buildChanged = currentBuild.length && ![currentBuild isEqualToString:lastReportedBuild];
+
+	if (!forced && !buildChanged && !TGUpdateCheckIsDue([NSDate date], lastCheck))
 		return;
 
 	NSString *crashDetail = [defaults stringForKey:TGUpdateCrashMarkerKey];
 	BOOL crashed = crashDetail.length > 0;
 	NSString *source = [TGUpdateStore distributionSource];
 	NSInteger dc = [TGUpdateStore currentDatacenterId];
+	NSString *did = [TGUpdateStore deviceIdentifier];
 
 	NSString *query = TGUpdateQueryStringWithTelemetry(
 			TGUpdateBundleValue(@"CFBundleShortVersionString"),
-			TGUpdateBundleValue(@"CFBundleVersion"),
+			currentBuild,
 			[UIDevice currentDevice].systemVersion,
 			[TGDevice machine],
 			TGUpdateTier(),
@@ -427,7 +459,8 @@ static BOOL TGUpdateStatisticsEnabled(void) {
 			crashed,
 			source,
 			dc,
-			crashDetail);
+			crashDetail,
+			did);
 
 	_checking = YES;
 	[client inlineQueryWithBotUsername:TGUpdateBotUsername
@@ -436,6 +469,9 @@ static BOOL TGUpdateStatisticsEnabled(void) {
 						   completion:^(NSArray *results){
 		self->_checking = NO;
 		[defaults setObject:[NSDate date] forKey:TGUpdateLastCheckKey];
+		if (currentBuild.length) {
+			[defaults setObject:currentBuild forKey:TGUpdateLastReportedBuildKey];
+		}
 		if (crashed) {
 			[defaults removeObjectForKey:TGUpdateCrashMarkerKey];
 		}

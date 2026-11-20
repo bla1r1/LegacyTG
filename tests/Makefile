@@ -110,6 +110,7 @@ CLIENT_OBJC_SRCS := \
     src/Features/Chat/Rendering/TGMessageMetrics.m \
     src/Features/Chat/Rendering/TGMessageRowLayout.m \
     src/Features/Chat/Rendering/TGSlotMachine.m \
+    src/Features/Dev/TGiPadSimulator.m \
     src/Core/Support/TGUpdateType.c \
     src/Views/Icons/TGSVGPath.c \
     src/Views/Icons/TGIconPaths.m \
@@ -485,6 +486,7 @@ CLIENT_TEST_SRCS := \
     $(TESTS)/TGContactsStoreTests.m \
     $(TESTS)/TGChannelStoreTests.m \
     $(TESTS)/TGDevStoreTests.m \
+    $(TESTS)/TGiPadSimulatorTests.m \
     $(TESTS)/TGUpdateStoreTests.m \
     $(TESTS)/TGSendStoreTests.m \
     $(TESTS)/TGStarsStoreTests.m \

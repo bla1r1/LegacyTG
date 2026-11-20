@@ -92,6 +92,7 @@
 #import "TGContactsStoreTests.m"
 #import "TGChannelStoreTests.m"
 #import "TGDevStoreTests.m"
+#import "TGiPadSimulatorTests.m"
 #import "TGUpdateStoreTests.m"
 #import "TGSendStoreTests.m"
 #import "TGStarsStoreTests.m"

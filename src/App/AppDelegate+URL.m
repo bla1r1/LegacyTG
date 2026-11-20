@@ -24,6 +24,7 @@ static const CGFloat kIconDumpSide = 52.0f;
 #import "TGProfileViewControllerInternal.h"
 #import "TGDevShowcase.h"
 #import "TGDevModeViewController.h"
+#import "TGiPadSimulator.h"
 #import "TGTopicsViewController.h"
 #import "TGDevGalleryViewController.h"
 #import "TGVideoNoteRecorder.h"
@@ -190,6 +191,27 @@ static NSUInteger TGChatsIndex(UITabBarController *tabs) {
 				[root dismissViewControllerAnimated:NO completion:nil];
 			else
 				[TGDevModeViewController presentFrom:root];
+		});
+		return YES;
+	}
+
+	// itglegacy://ipad/[portrait|landscape|off|toggle|shot] - virtual iPad layout preview.
+	if ([host isEqualToString:@"ipad"]){
+		dispatch_async(dispatch_get_main_queue(), ^{
+			UIWindow *win = self.window ?: [UIApplication sharedApplication].keyWindow;
+			if ([arg isEqualToString:@"landscape"]){
+				[[TGiPadSimulator shared] setOrientation:TGiPadOrientationLandscape inWindow:win];
+			} else if ([arg isEqualToString:@"off"]){
+				[[TGiPadSimulator shared] setOrientation:TGiPadOrientationOff inWindow:win];
+			} else if ([arg isEqualToString:@"toggle"]){
+				[[TGiPadSimulator shared] toggleModeInWindow:win];
+			} else if ([arg isEqualToString:@"shot"] || [arg isEqualToString:@"screenshot"]){
+				NSString *path = [[TGiPadSimulator shared] saveScreenshotRetina:YES];
+				NSLog(@"[iPad URL] Screenshot saved to %@", path);
+			} else {
+				// default "portrait" or "on"
+				[[TGiPadSimulator shared] setOrientation:TGiPadOrientationPortrait inWindow:win];
+			}
 		});
 		return YES;
 	}

@@ -35,6 +35,7 @@
 #import "TGPerf.h"
 #import "TGTextDraw.h"
 #import "TGDevFeedback.h"
+#import "TGiPadSimulator.h"
 #import "TGUpdateStore.h"
 #import "TGUpdateInfoViewController.h"
 #import "TGAccountStore.h"
@@ -355,6 +356,10 @@ static UIImage *TGCustomEmojiFromStore(int64_t emojiId, CGFloat side) {
 	TGPerfReport("launch", "makeKeyAndVisible", stepStart, 100.0);
 #if TG_DEV
 	[TGDevFeedback installInWindow:self.window];
+	TGiPadOrientation savedPadOrientation = (TGiPadOrientation)[[NSUserDefaults standardUserDefaults] integerForKey:@"TGiPadOrientation"];
+	if (savedPadOrientation != TGiPadOrientationOff) {
+		[[TGiPadSimulator shared] setOrientation:savedPadOrientation inWindow:self.window];
+	}
 #endif
 
 	if ([TGPasscode hasPasscode]) {
