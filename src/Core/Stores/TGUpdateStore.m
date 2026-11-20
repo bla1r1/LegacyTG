@@ -92,12 +92,28 @@ NSInteger TGUpdateParseDatacenterFromBinlogData(NSData *data) {
 
 	for (NSInteger i = (NSInteger)(len - keyLen - 2); i >= 0; i--) {
 		if (memcmp(bytes + i, key, keyLen) == 0) {
-			NSUInteger searchEnd = MIN(len - 1, (NSUInteger)(i + keyLen + 8));
+			NSUInteger searchEnd = MIN(len, (NSUInteger)(i + keyLen + 12));
 			for (NSUInteger j = (NSUInteger)(i + keyLen); j < searchEnd; j++) {
+				// 1. TL string format: length 0x01 followed by ASCII digit '1'..'5'
 				if (bytes[j] == 0x01 && (j + 1 < len)) {
 					uint8_t val = bytes[j + 1];
 					if (val >= '1' && val <= '5') {
 						return (NSInteger)(val - '0');
+					}
+				}
+				// 2. Direct ASCII digit '1'..'5' preceded by delimiter
+				if (bytes[j] >= '1' && bytes[j] <= '5') {
+					if (j > 0) {
+						uint8_t prev = bytes[j - 1];
+						if (prev == 0x00 || prev == 0x01 || prev == ':' || prev == '=' || prev == ' ') {
+							return (NSInteger)(bytes[j] - '0');
+						}
+					}
+				}
+				// 3. Binary int32 (1..5 followed by three zero bytes)
+				if (bytes[j] >= 1 && bytes[j] <= 5 && j + 3 < len) {
+					if (bytes[j + 1] == 0 && bytes[j + 2] == 0 && bytes[j + 3] == 0) {
+						return (NSInteger)bytes[j];
 					}
 				}
 			}
@@ -346,30 +362,52 @@ static BOOL TGUpdateStatisticsEnabled(void) {
 	NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
 	NSString *defaultsKey = @"TGAccountMainDC";
 
-	NSString *db = TGAccountResolvedDatabaseDirectory([TGClient activeAccountSlot]);
-	NSString *binlogPath = [db stringByAppendingPathComponent:@"td.binlog"];
-
-	NSFileHandle *handle = [NSFileHandle fileHandleForReadingAtPath:binlogPath];
-	if (handle) {
-		unsigned long long fileSize = [handle seekToEndOfFile];
-		unsigned long long readLen = MIN(fileSize, (unsigned long long)131072);
-		if (readLen > 0) {
-			[handle seekToFileOffset:fileSize - readLen];
-			NSData *chunk = [handle readDataToEndOfFile];
-			[handle closeFile];
-			NSInteger dc = TGUpdateParseDatacenterFromBinlogData(chunk);
-			if (dc >= 1 && dc <= 5) {
-				[defaults setInteger:dc forKey:defaultsKey];
-				return dc;
-			}
-		} else {
-			[handle closeFile];
-		}
-	}
-
 	NSInteger cached = [defaults integerForKey:defaultsKey];
 	if (cached >= 1 && cached <= 5)
 		return cached;
+
+	NSInteger slot = [TGClient activeAccountSlot];
+	NSMutableArray *candidates = [NSMutableArray array];
+	NSString *db = TGAccountResolvedDatabaseDirectory(slot);
+	if (db.length)
+		[candidates addObject:[db stringByAppendingPathComponent:@"td.binlog"]];
+
+	NSString *documents = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
+	if (documents.length) {
+		NSString *old = TGAccountDatabaseDirectory(documents, slot);
+		if (old.length)
+			[candidates addObject:[old stringByAppendingPathComponent:@"td.binlog"]];
+	}
+
+	for (NSString *binlogPath in candidates) {
+		NSFileHandle *handle = [NSFileHandle fileHandleForReadingAtPath:binlogPath];
+		if (!handle)
+			continue;
+
+		unsigned long long fileSize = [handle seekToEndOfFile];
+		if (fileSize == 0) {
+			[handle closeFile];
+			continue;
+		}
+
+		unsigned long long readLen = MIN(fileSize, (unsigned long long)131072);
+		[handle seekToFileOffset:fileSize - readLen];
+		NSData *tailChunk = [handle readDataToEndOfFile];
+		NSInteger dc = TGUpdateParseDatacenterFromBinlogData(tailChunk);
+
+		if (dc == 0 && fileSize > readLen) {
+			[handle seekToFileOffset:0];
+			NSData *headChunk = [handle readDataOfLength:(NSUInteger)readLen];
+			dc = TGUpdateParseDatacenterFromBinlogData(headChunk);
+		}
+		[handle closeFile];
+
+		if (dc >= 1 && dc <= 5) {
+			[defaults setInteger:dc forKey:defaultsKey];
+			[defaults synchronize];
+			return dc;
+		}
+	}
 
 	return 0;
 }

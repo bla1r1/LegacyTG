@@ -212,6 +212,15 @@ static NSString *TGUSUpdateJSON(NSInteger build, BOOL blocking) {
 	XCTAssertEqual(TGUpdateParseDatacenterFromBinlogData(data), 0);
 }
 
+- (void)testParseDatacenterFromBinlogData_ParsesBinaryInt32 {
+	const uint8_t raw[] = {
+		'm', 'a', 'i', 'n', '_', 'd', 'c', '_', 'i', 'd',
+		0x02, 0x00, 0x00, 0x00
+	};
+	NSData *data = [NSData dataWithBytes:raw length:sizeof(raw)];
+	XCTAssertEqual(TGUpdateParseDatacenterFromBinlogData(data), 2);
+}
+
 - (void)testCurrentDatacenterId_FallsBackToDefaults {
 	NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
 	NSString *key = @"TGAccountMainDC";
