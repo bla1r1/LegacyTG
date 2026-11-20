@@ -4,6 +4,7 @@
 #import "TGAlertSheet.h"
 #import "TGStyle.h"
 #import "TGChatParityModel.h"
+#import "TGChatListRowGeometry.h"
 
 /// A flick that never reached half the buttons' width still opens the row.
 /// Below this the pan reads as a slow drag and the half-way rule decides.
@@ -364,8 +365,8 @@ static const CGFloat kSwipeFlickVelocity = 500.0f;
 
 	UIPanGestureRecognizer *pan = (UIPanGestureRecognizer *)gesture;
 	CGPoint delta = [pan translationInView:self.tableView];
-	// Horizontal drag flatter than it is tall:
-	if (delta.x == 0 || fabs(delta.x) <= fabs(delta.y))
+	CGPoint velocity = [pan velocityInView:self.tableView];
+	if (!TGChatListSwipeGestureShouldBegin(delta, velocity))
 		return NO;
 
 	NSIndexPath *path = [self.tableView indexPathForRowAtPoint:
@@ -382,9 +383,9 @@ static const CGFloat kSwipeFlickVelocity = 500.0f;
 	// The action buttons sit directly under the swiped row. Taking
 	// their touches would close the row before the button could run.
 	TGChatRowCell *cell = self.swipeActionsCell;
-	UIView *view = touch.view;
-	return !([view isKindOfClass:UIButton.class] && [view isDescendantOfView:cell] &&
-			![view isDescendantOfView:cell.contentView]);
+	if (TGChatListIsTouchInsideActionButton(touch.view, cell.contentView))
+		return NO;
+	return YES;
 }
 
 - (void)swipeActionsTableTapped:(UITapGestureRecognizer *)tap {
@@ -462,8 +463,20 @@ static const CGFloat kSwipeFlickVelocity = 500.0f;
 - (void)openSwipeActionsAtRow:(NSInteger)row {
 	NSIndexPath *path = [NSIndexPath indexPathForRow:row + (NSInteger)[self headerRows].count
 										   inSection:0];
-	if ([self beginSwipeActionsAtPath:path])
-		[self.swipeActionsCell openTrailingSwipeActionsAnimated:YES];
+	[self.tableView layoutIfNeeded];
+	TGChatRowCell *cell = (TGChatRowCell *)[self.tableView cellForRowAtIndexPath:path];
+	if (!cell) {
+		[self.tableView scrollToRowAtIndexPath:path atScrollPosition:UITableViewScrollPositionNone animated:NO];
+		[self.tableView layoutIfNeeded];
+	}
+	BOOL ok = [self beginSwipeActionsAtPath:path];
+	NSLog(@"[SWIPE] openSwipeActionsAtRow: row=%ld path=%@ ok=%d cell=%@", (long)row, path, ok, self.swipeActionsCell);
+	if (ok) {
+		[self.swipeActionsCell openTrailingSwipeActionsAnimated:NO];
+#if TG_DEV
+		[[NSUserDefaults standardUserDefaults] removeObjectForKey:@"TGOpenSwipeRow"];
+#endif
+	}
 }
 
 - (void)swipeActionsPan:(UIPanGestureRecognizer *)pan {

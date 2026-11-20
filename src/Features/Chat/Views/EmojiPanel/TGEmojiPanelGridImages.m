@@ -144,6 +144,7 @@ static UIImage *TGPanelDecode(NSString *path) {
 			if (image){
 				UIButton *button = self.cells[key];
 				button.imageView.contentMode = UIViewContentModeScaleAspectFit;
+				[button setTitle:nil forState:UIControlStateNormal];
 				[button setImage:image forState:UIControlStateNormal];
 			}
 		}
@@ -167,8 +168,17 @@ static UIImage *TGPanelDecode(NSString *path) {
 - (void)customEmojiLoaded:(NSNotification *)note {
 	if (self.tab != TGEmojiPanelTabCustomEmoji)
 		return;
+	NSMutableSet *loadedSet = [NSMutableSet set];
 	id rawLoaded = [note.userInfo isKindOfClass:NSDictionary.class] ? note.userInfo[@"id"] : nil;
-	int64_t loadedId = [rawLoaded respondsToSelector:@selector(longLongValue)] ? [rawLoaded longLongValue] : 0;
+	if ([rawLoaded respondsToSelector:@selector(longLongValue)])
+		[loadedSet addObject:@([rawLoaded longLongValue])];
+	id rawIds = [note.userInfo isKindOfClass:NSDictionary.class] ? note.userInfo[@"ids"] : nil;
+	if ([rawIds isKindOfClass:NSSet.class] || [rawIds isKindOfClass:NSArray.class]) {
+		for (id item in rawIds) {
+			if ([item respondsToSelector:@selector(longLongValue)])
+				[loadedSet addObject:@([item longLongValue])];
+		}
+	}
 	for (NSNumber *key in [self.cells allKeys]){
 		NSUInteger index = key.unsignedIntegerValue;
 		if (index >= self.items.count)
@@ -180,12 +190,13 @@ static UIImage *TGPanelDecode(NSString *path) {
 		if (![rawId respondsToSelector:@selector(longLongValue)])
 			continue;
 		int64_t emojiId = [rawId longLongValue];
-		if (loadedId > 0 && emojiId != loadedId)
+		if (loadedSet.count > 0 && ![loadedSet containsObject:@(emojiId)])
 			continue;
 		UIButton *button = self.cells[key];
 		UIImage *image = [[TGCustomEmojiStore shared] imageForId:emojiId side:TGMetricListAvatar];
 		if (image){
 			button.imageView.contentMode = UIViewContentModeScaleAspectFit;
+			[button setTitle:nil forState:UIControlStateNormal];
 			[button setImage:image forState:UIControlStateNormal];
 		}
 	}

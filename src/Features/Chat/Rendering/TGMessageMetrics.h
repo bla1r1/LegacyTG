@@ -16,7 +16,7 @@ extern "C" {
 #endif
 
 /// The gap between the last word of a message and the stamp on its line.
-static const CGFloat kStampGap        = TGMetricPad;
+static const CGFloat kStampGap        = TGMetricPadLarge;
 /// A quote block: the author's line, then what they said, then a gap.
 static const CGFloat kQuoteLine       = TGMetricLineSubhead;
 static const CGFloat kQuoteBlock      = TGMetricLineSubhead + TGMetricLineSubhead + TGMetricPadSmall;

@@ -115,6 +115,26 @@
 	XCTAssertEqualObjects([rects.lastObject objectForKey:@"id"], @(78));
 }
 
+- (void)testCustomEmojiRects_ConsecutiveSpacersDoNotOverlap {
+	UIFont *font = TGFontAtSize(16);
+	NSMutableAttributedString *text = [[NSMutableAttributedString alloc] init];
+	[text appendAttributedString:TGCustomEmojiSpacer(101, font)];
+	[text appendAttributedString:TGCustomEmojiSpacer(102, font)];
+	[text appendAttributedString:TGCustomEmojiSpacer(103, font)];
+
+	NSArray *rects = TGCustomEmojiRectsCoreText(text, 300);
+	XCTAssertEqual(rects.count, (NSUInteger)3);
+	for (NSUInteger i = 1; i < rects.count; i++) {
+		CGRect prev = CGRectZero;
+		CGRect curr = CGRectZero;
+		[rects[i - 1][@"rect"] getValue:&prev];
+		[rects[i][@"rect"] getValue:&curr];
+		XCTAssertTrue(CGRectGetMinX(curr) >= CGRectGetMaxX(prev) - 0.5f,
+				@"Custom emoji %lu (x=%.1f) must not overlap previous emoji (maxX=%.1f)",
+				(unsigned long)i, CGRectGetMinX(curr), CGRectGetMaxX(prev));
+	}
+}
+
 /// iOS 6's UIFont is not a CTFont, and CoreText ignored it: the emoji rects
 /// came from a 12 pt layout of 13 pt text. A stand-in with a UIFont's
 /// fontName and pointSize plays that UIFont here, where NSFont is bridged.

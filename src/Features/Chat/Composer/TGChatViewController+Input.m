@@ -1494,8 +1494,13 @@ static NSInteger const kTGRepeatPeriods[] = {0, 86400, 604800, 2592000};
 		CGFloat side = rect.size.height > 0 ? rect.size.height : TGMetricLineBody;
 		UIImage *image = [[TGCustomEmojiStore shared] imageForId:emojiId side:side];
 
-		CGFloat x = rect.origin.x + TGHalf(rect.size.width - side);
+		CGFloat x = (rect.size.width >= side) ? (rect.origin.x + TGHalf(rect.size.width - side)) : rect.origin.x;
 		CGFloat y = rect.origin.y + TGHalf(rect.size.height - side);
+		if (frames.count > 0 && rect.size.height > 0) {
+			CGRect lastFrame = [frames.lastObject CGRectValue];
+			if (fabs(y - lastFrame.origin.y) < side / 2.0f && x < CGRectGetMaxX(lastFrame))
+				x = CGRectGetMaxX(lastFrame);
+		}
 		CGRect imgFrame = (rect.size.height > 0) ? CGRectMake(x, y, side, side) : CGRectZero;
 
 		[images addObject:(image ?: [NSNull null])];

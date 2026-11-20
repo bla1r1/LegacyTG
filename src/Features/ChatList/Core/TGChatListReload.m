@@ -75,6 +75,15 @@
 		[self reloadStoriesIfNeeded];
 		[self.tableView reloadData];
 	[self reselectActiveChatIfPad];
+#if TG_DEV
+	id openRow = [[NSUserDefaults standardUserDefaults] objectForKey:@"TGOpenSwipeRow"];
+	if (openRow && self.chats.count > [openRow integerValue]) {
+		NSInteger rowIdx = [openRow integerValue];
+		dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+			[self openSwipeActionsAtRow:rowIdx];
+		});
+	}
+#endif
 		[self reselectActiveChatIfPad];
 		[self fetchMissingAvatars];
 		return;
@@ -115,6 +124,15 @@
 	[self applyFolderListFadeIfNeeded];
 	[self.tableView reloadData];
 	[self reselectActiveChatIfPad];
+#if TG_DEV
+	id openRow = [[NSUserDefaults standardUserDefaults] objectForKey:@"TGOpenSwipeRow"];
+	if (openRow && self.chats.count > [openRow integerValue]) {
+		NSInteger rowIdx = [openRow integerValue];
+		dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+			[self openSwipeActionsAtRow:rowIdx];
+		});
+	}
+#endif
 	[self rebuildTableHeader];
 	// The search field is a pull-down: Telegram opens on the stories row,
 	// not on a search bar. Park past the header once the table has a real

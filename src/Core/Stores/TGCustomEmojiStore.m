@@ -349,6 +349,9 @@ static int64_t TGPictureCacheKey(int64_t emojiId, CGFloat side) {
 		if (!thumb && [sticker[@"thumbnail"] isKindOfClass:NSDictionary.class]) {
 			thumb = sticker[@"thumbnail"][@"file"][@"id"];
 		}
+		if ((!thumb || !thumb.integerValue) && fileId != 0 && [fmt isEqualToString:@"webp"]) {
+			thumb = @(fileId);
+		}
 
 		if (![thumb isKindOfClass:NSNumber.class] || !thumb.integerValue) {
 			if ([fmt isEqualToString:@"tgs"] || [fmt isEqualToString:@"webm"]) {

@@ -178,6 +178,11 @@ UIImage *TGImageFromMinithumbnail(id mini) {
 }
 
 - (CGSize)imageSizeFor:(NSDictionary *)m {
+	CGFloat tableW = self.table.bounds.size.width;
+	if (tableW <= 0) tableW = TGMetricScreenWidth;
+	CGFloat maxMediaW = TGMetricBubbleMaxContentWidthForTableWidth(tableW);
+	CGFloat maxMediaH = floorf(maxMediaW * 1.15f);
+
 	CGFloat w = 0, h = 0;
 	if ([m[@"paidPreview"] boolValue] && [m[@"mediaWidth"] floatValue] > 0 && [m[@"mediaHeight"] floatValue] > 0) {
 		w = [m[@"mediaWidth"] floatValue];
@@ -191,16 +196,26 @@ UIImage *TGImageFromMinithumbnail(id mini) {
 			w = [m[@"mediaWidth"] floatValue];
 			h = [m[@"mediaHeight"] floatValue];
 		} else if ([m[@"photoId"] isKindOfClass:NSNumber.class]) {
-			w = kImageMax;
-			h = kImageMax * TGMetricMediaRatioLandscape;
+			w = maxMediaW;
+			h = maxMediaW * TGMetricMediaRatioLandscape;
 		}
 	}
 	if (w <= 0 || h <= 0)
 		return CGSizeZero;
 
-	CGFloat scale = MIN(kImageMax / w, kImageMax / h);
+	CGFloat scale = MIN(maxMediaW / w, maxMediaH / h);
 	scale = MIN(scale, TGMetricScaleFull);
-	return CGSizeMake(floorf(w * scale), floorf(h * scale));
+	CGFloat resultW = floorf(w * scale);
+	CGFloat resultH = floorf(h * scale);
+
+	// Enforce minimum media width so vertical images are not crushed into narrow slivers.
+	CGFloat minMediaW = MIN(kBubbleMinW - TGDoubled(kMediaInset), maxMediaW);
+	if (resultW < minMediaW && w > 0) {
+		scale = minMediaW / w;
+		resultW = minMediaW;
+		resultH = MIN(maxMediaH, floorf(h * scale));
+	}
+	return CGSizeMake(resultW, resultH);
 }
 
 - (void)measureTextsOf:(NSArray *)messages then:(dispatch_block_t)then {

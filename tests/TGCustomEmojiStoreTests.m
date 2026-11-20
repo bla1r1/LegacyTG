@@ -412,4 +412,10 @@ static NSDictionary *cesRow(int64_t emojiId, int64_t fileId, NSString *format, i
 	XCTAssertEqual(ids.count, (NSUInteger)3);
 }
 
+- (void)testReceiveStickers_WebpWithoutThumbUsesFileId {
+	TGCustomEmojiStore *store = [TGCustomEmojiStore shared];
+	[store receiveStickers:@[ cesRow(3001LL, 7001LL, @"webp", 0) ] forIds:@[ @(3001LL) ]];
+	XCTAssertFalse([store.failed containsObject:@(3001LL)], @"webp without thumbId should download via fileId");
+}
+
 @end

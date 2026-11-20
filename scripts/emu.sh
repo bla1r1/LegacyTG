@@ -122,8 +122,20 @@ touch(72, 0, 0.85, 0.5)
 for i in range(1, 12): touch(72 + i * .04, 1, 0.85 - i * .06, 0.5)
 touch(72.5, 2, 0.2, 0.5)
 touch(76, 0, 0.62, 0.125); touch(76.15, 2, 0.62, 0.125)
-touch(95, 0, 0.20, 0.33); touch(95.15, 2, 0.20, 0.33)
-for t in [68, 74, 90, 98, 105]:
+# Swipe left on chat list row 1 (Dmytro) at 84s to reveal trailing buttons (Pin, Mute, Delete)
+touch(84, 0, 0.35, 0.25)
+for i in range(1, 15): touch(84 + i * .03, 1, 0.35 - i * .02, 0.25)
+touch(84.5, 2, 0.05, 0.25)
+# Also drag in iPhone full-screen coordinates just in case
+touch(85, 0, 0.85, 0.51)
+for i in range(1, 15): touch(85 + i * .03, 1, 0.85 - i * .04, 0.51)
+touch(85.5, 2, 0.25, 0.51)
+touch(94, 0, 0.20, 0.18); touch(94.15, 2, 0.20, 0.18)
+touch(101, 0, 0.84, 0.96); touch(101.15, 2, 0.84, 0.96)
+touch(108, 0, 0.5, 0.75)
+for i in range(1, 10): touch(108 + i * .04, 1, 0.5, 0.75 - i * .04)
+touch(108.5, 2, 0.5, 0.35)
+for t in [68, 74, 88, 90, 92, 98, 105, 114]:
 	if t < secs - 5: L.append((t, {"cmd": "screenshot", "path": f"{out}/shot-{t:03d}.bmp"}))
 for t, c in L: print(t, json.dumps(c))
 EOF
@@ -152,14 +164,68 @@ report() {
 	echo "--- shots: $(ls "$OUT"/shot-*.png 2>/dev/null | wc -l | tr -d ' ') in $OUT, syslog $OUT/syslog.txt"
 }
 
+fast_test_() {
+	env_; local ipa=$1 secs=${2:-118} id; id=$(dev_id); [ -n "$id" ] || die "no usable device: scripts/emu.sh prepare"
+	mkdir -p "$OUT"; rm -f "$OUT"/shot-* "$OUT/run.log" "$OUT/syslog.txt" "$OUT/.ended"
+	python3 -I - "$OUT" "$secs" > "$OUT/open.script" <<'EOF'
+import json, sys
+out, secs = sys.argv[1], int(sys.argv[2])
+L = []
+def touch(t, ph, x, y): L.append((t, {"cmd": "touch", "contacts": [{"id": 1, "phase": ph, "x": x, "y": y}]}))
+L += [(62, {"cmd": "button", "button": 0, "down": True}), (62.2, {"cmd": "button", "button": 0, "down": False})]
+touch(65, 0, 0.15, 0.89)
+for i in range(1, 15): touch(65 + i * .05, 1, 0.15 + i * .05, 0.89)
+touch(65.8, 2, 0.85, 0.89)
+touch(72, 0, 0.85, 0.5)
+for i in range(1, 12): touch(72 + i * .04, 1, 0.85 - i * .06, 0.5)
+touch(72.5, 2, 0.2, 0.5)
+touch(76, 0, 0.62, 0.125); touch(76.15, 2, 0.62, 0.125)
+# Chat list view (verify preview custom emoji fallback, no tofu):
+# Tap Saved Messages row (row 2 at y=0.46) to open chat view (at 85s):
+touch(85, 0, 0.5, 0.46); touch(85.15, 2, 0.5, 0.46)
+# Tap sticker / emoji toggle button at bottom right (at 95s):
+touch(95, 0, 0.84, 0.96); touch(95.15, 2, 0.84, 0.96)
+# Scroll sticker panel down (at 101s):
+touch(101, 0, 0.5, 0.75)
+for i in range(1, 12): touch(101 + i * .04, 1, 0.5, 0.75 - i * .04)
+touch(101.6, 2, 0.5, 0.32)
+# Tap "Emoji" tab on bottom tabs bar (x=0.23, y=0.96) at 106s:
+touch(106, 0, 0.23, 0.96); touch(106.15, 2, 0.23, 0.96)
+# Scroll emoji feed down across categories at 110s:
+touch(110, 0, 0.5, 0.75)
+for i in range(1, 12): touch(110 + i * .04, 1, 0.5, 0.75 - i * .04)
+touch(110.6, 2, 0.5, 0.32)
+for t in [82, 90, 100, 104, 109, 114]:
+	if t < secs - 3: L.append((t, {"cmd": "screenshot", "path": f"{out}/shot-{t:03d}.bmp"}))
+for t, c in L: print(t, json.dumps(c))
+EOF
+	( s=; for _ in $(seq 120); do
+		s=$(grep -o '/[^ ]*/lighttouch-usb-[^ ]*/mux.sock' "$OUT/run.log" 2>/dev/null | head -1 || true)
+		[ -n "$s" ] && break; sleep 1; done
+	  [ -n "$s" ] || exit 0
+	  for _ in $(seq 30); do sleep 5; USBMUXD_SOCKET_ADDRESS=UNIX:$s idevice_id -l | grep -q . && break; done
+	  USBMUXD_SOCKET_ADDRESS=UNIX:$s idevicesyslog > "$OUT/syslog.txt" 2>&1 & p=$!
+	  until grep -q 'exit clean=' "$OUT/run.log" || [ -f "$OUT/.ended" ]; do sleep 2; done
+	  kill $p 2>/dev/null || true ) &
+	echo "[+] single-boot install & run ${secs} s (install by ~38s, boot ~50s, open ~76s)"
+	lighttouch run "$id" --seconds "$secs" --no-audio --network direct --services --install "$ipa" --script "$OUT/open.script" > "$OUT/run.log" 2>&1 || true
+	touch "$OUT/.ended"
+	wait
+	local f; for f in "$OUT"/shot-*.bmp; do [ -f "$f" ] && sips -s format png "$f" --out "${f%.bmp}.png" >/dev/null && rm "$f"; done
+	grep -q 'exit clean=true' "$OUT/run.log" || echo "[!] session did not end clean, see $OUT/run.log"
+}
+
 case "${1:-}" in
-setup)   build; [ -n "$(env_; dev_id)" ] || prepare; echo "[+] emulator ready: scripts/emu.sh test" ;;
-prepare) prepare ;;
-install) [ -f "${2:-}" ] || die "usage: scripts/emu.sh install App.ipa"; install_ "$2" ;;
-open)    open_ "${2:-240}"; report ;;
-test)    echo "[+] make ipa-armv7"; make -C "$ROOT" -j"$(sysctl -n hw.logicalcpu)" ipa-armv7 > "$ROOT/build/emu-ipa.log" 2>&1 ||
+setup)     build; [ -n "$(env_; dev_id)" ] || prepare; echo "[+] emulator ready: scripts/emu.sh test" ;;
+prepare)   prepare ;;
+install)   [ -f "${2:-}" ] || die "usage: scripts/emu.sh install App.ipa"; install_ "$2" ;;
+open)      open_ "${2:-240}"; report ;;
+test)      echo "[+] make ipa-armv7"; make -C "$ROOT" -j"$(sysctl -n hw.logicalcpu)" ipa-armv7 > "$ROOT/build/emu-ipa.log" 2>&1 ||
 		{ grep -m5 'error:' "$ROOT/build/emu-ipa.log"; die "build failed, build/emu-ipa.log"; }
-	 install_ "$ROOT/build/ipa/LegacyTG-armv7.ipa"; open_ "${2:-240}"; report ;;
-gui)     env_; lighttouch ;;
-*)       sed -n 2,14p "$0"; exit 2 ;;
+	   install_ "$ROOT/build/ipa/LegacyTG-armv7.ipa"; open_ "${2:-240}"; report ;;
+test-fast) echo "[+] make ipa-armv7"; make -C "$ROOT" -j"$(sysctl -n hw.logicalcpu)" ipa-armv7 > "$ROOT/build/emu-ipa.log" 2>&1 ||
+		{ grep -m5 'error:' "$ROOT/build/emu-ipa.log"; die "build failed, build/emu-ipa.log"; }
+	   fast_test_ "$ROOT/build/ipa/LegacyTG-armv7.ipa" "${2:-118}"; report ;;
+gui)       env_; lighttouch ;;
+*)         sed -n 2,14p "$0"; exit 2 ;;
 esac

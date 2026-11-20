@@ -7,6 +7,7 @@
 #import "TGIcons.h"
 #import "TGPeerStore.h"
 #import "TGNameWithStatus.h"
+#import "TGMessageLayout.h"
 #import "TGStyle.h"
 #import "TGTheme.h"
 #import <math.h>
@@ -156,10 +157,22 @@ static void TGPeerRowAppendVerified(NSMutableAttributedString *name, UIFont *fon
 	if (![subtitle isKindOfClass:NSString.class])
 		subtitle = nil;
 	self.subtitleLabel.hidden = (subtitle.length == 0);
-	self.subtitleLabel.text = subtitle;
-	self.subtitleLabel.textColor = TGPeerRowSubtitleColour(
-			[row[TGRowOnline] boolValue], [theme accentColour],
-			[theme secondaryTextColour]);
+	if (subtitle.length) {
+		UIColor *subColour = TGPeerRowSubtitleColour(
+				[row[TGRowOnline] boolValue], [theme accentColour],
+				[theme secondaryTextColour]);
+		NSAttributedString *styled = TGEmojiAttributedText(subtitle, self.subtitleLabel.font);
+		if (styled) {
+			NSMutableAttributedString *mStyled = [styled mutableCopy];
+			[mStyled addAttribute:NSForegroundColorAttributeName value:subColour range:NSMakeRange(0, mStyled.length)];
+			self.subtitleLabel.attributedText = mStyled;
+		} else {
+			self.subtitleLabel.text = subtitle;
+			self.subtitleLabel.textColor = subColour;
+		}
+	} else {
+		self.subtitleLabel.text = nil;
+	}
 
 	self.pinView.hidden = ![row[TGRowPin] boolValue];
 	self.pinView.image = self.pinView.hidden ? nil

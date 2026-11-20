@@ -40,17 +40,12 @@
 
 	switch (self.tab){
 		case TGEmojiPanelTabEmoji: {
-			NSArray *categories = [self emojiCategories];
-			if (index == 0)
-				show(TGRecentEmoji(), nil);
-			else if (index == 1)
+			if (index == 1) {
 				[self loadEmojiSearch];
-			else if (index - 2 < (NSInteger)categories.count){
-				NSDictionary *category = categories[index - 2];
-				// Telegram's rows carry "emojis"; the built-in set from
-				// TGEmojiData calls the same list "emoji".
-				NSArray *emojis = category[@"emojis"] ?: category[@"emoji"];
-				show(emojis, nil);
+			} else if (self.emojiQuery.length) {
+				[self loadEmojiSearch];
+			} else {
+				[self loadEmojiFeed];
 			}
 			break;
 		}

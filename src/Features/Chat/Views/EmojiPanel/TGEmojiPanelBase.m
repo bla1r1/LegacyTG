@@ -45,6 +45,16 @@ static UIImage *TGBackspaceImage(UIColor *colour) {
 
 
 
+static TGEmojiPanelTab sLastSelectedEmojiPanelTab = TGEmojiPanelTabStickers;
+
+TGEmojiPanelTab TGEmojiPanelLastSelectedTab(void) {
+	return sLastSelectedEmojiPanelTab;
+}
+
+void TGEmojiPanelSetLastSelectedTab(TGEmojiPanelTab tab) {
+	sLastSelectedEmojiPanelTab = tab;
+}
+
 @implementation TGEmojiPanel (TGEmojiPanelBase)
 
 
@@ -144,7 +154,7 @@ static UIImage *TGBackspaceImage(UIColor *colour) {
 			selector:@selector(customEmojiLoaded:)
 				name:TGCustomEmojiLoadedNotification object:nil];
 	[self applyTheme];
-	[self selectTab:TGEmojiPanelTabEmoji];
+	[self selectTab:TGEmojiPanelLastSelectedTab()];
 	return self;
 }
 

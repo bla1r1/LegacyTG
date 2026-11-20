@@ -217,6 +217,16 @@ static const CGFloat kListStoryGap     = TGMetricPadSmall;
 			self.folderId == 0 && self.tableView.contentOffset.y < self.parkOffset - 1.0f &&
 			self.tableView.contentSize.height > self.tableView.bounds.size.height)
 		self.tableView.contentOffset = CGPointMake(TGMetricZero, self.parkOffset);
+
+#if TG_DEV
+	id openRow = [[NSUserDefaults standardUserDefaults] objectForKey:@"TGOpenSwipeRow"];
+	if (openRow) {
+		NSInteger rowIdx = [openRow integerValue];
+		dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+			[self openSwipeActionsAtRow:rowIdx];
+		});
+	}
+#endif
 }
 
 /// The two lines at the top of the list. The name is always there; the

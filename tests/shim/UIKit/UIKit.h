@@ -66,6 +66,13 @@ typedef NSImage UIImage;
 @property (nonatomic, strong) NSAttributedString *attributedText;
 @end
 
+@interface UIControl : UIView
+@end
+
+@interface UIButton : UIControl
+@property (nonatomic, strong) UILabel *titleLabel;
+@end
+
 // ─── NSString UIKit additions ────────────────────────────────────────────────
 @interface NSString (UIKitHostShim)
 - (CGSize)sizeWithFont:(UIFont *)font;

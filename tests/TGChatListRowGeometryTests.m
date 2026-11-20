@@ -137,4 +137,59 @@ static const CGFloat kGap = 8.0f;
 	XCTAssertEqualObjects(notice[@"title"], @"Protect Your Account");
 }
 
+- (void)testSwipeGestureShouldBegin_RejectsVerticalAndAcceptsHorizontal {
+	// Zero translation and zero velocity -> rejected
+	XCTAssertFalse(TGChatListSwipeGestureShouldBegin(CGPointZero, CGPointZero));
+	// Zero translation but vertical velocity -> rejected
+	XCTAssertFalse(TGChatListSwipeGestureShouldBegin(CGPointZero, CGPointMake(20.0f, 250.0f)));
+	// Zero translation but strong horizontal velocity -> accepted
+	XCTAssertTrue(TGChatListSwipeGestureShouldBegin(CGPointZero, CGPointMake(300.0f, 20.0f)));
+	// Flatter than tall horizontal delta -> accepted
+	XCTAssertTrue(TGChatListSwipeGestureShouldBegin(CGPointMake(25.0f, 5.0f), CGPointZero));
+	XCTAssertTrue(TGChatListSwipeGestureShouldBegin(CGPointMake(-40.0f, 10.0f), CGPointZero));
+	// Taller than flat delta -> rejected
+	XCTAssertFalse(TGChatListSwipeGestureShouldBegin(CGPointMake(5.0f, 30.0f), CGPointZero));
+	XCTAssertFalse(TGChatListSwipeGestureShouldBegin(CGPointMake(0.0f, 15.0f), CGPointZero));
+}
+
+- (void)testTouchInsideActionButton_DistinguishesButtonSubviewsFromContentView {
+	UIView *cell = [UIView new];
+	UIView *contentView = [UIView new];
+	[cell addSubview:contentView];
+
+	UILabel *titleLabel = [UILabel new];
+	[contentView addSubview:titleLabel];
+
+	UIButton *actionButton = [UIButton new];
+	[cell addSubview:actionButton];
+
+	UILabel *buttonTitle = [UILabel new];
+	[actionButton addSubview:buttonTitle];
+
+	// Direct button hit -> YES
+	XCTAssertTrue(TGChatListIsTouchInsideActionButton(actionButton, contentView));
+	// Subview of button (e.g. titleLabel of UIButton) -> YES
+	XCTAssertTrue(TGChatListIsTouchInsideActionButton(buttonTitle, contentView));
+	// Subview inside cell contentView -> NO
+	XCTAssertFalse(TGChatListIsTouchInsideActionButton(titleLabel, contentView));
+	// Cell background itself -> NO
+	XCTAssertFalse(TGChatListIsTouchInsideActionButton(cell, contentView));
+	// Nil view -> NO
+	XCTAssertFalse(TGChatListIsTouchInsideActionButton(nil, contentView));
+}
+
+- (void)testSafeEmojiFallback_MapsModernEmojisToIOS6Equivalents {
+	// Emojis from user bug report (custom emojis with modern fallback)
+	XCTAssertEqualObjects(TGChatListSafeEmojiFallback(@"🥳"), @"🎉");
+	XCTAssertEqualObjects(TGChatListSafeEmojiFallback(@"🥺"), @"😊");
+	XCTAssertEqualObjects(TGChatListSafeEmojiFallback(@"🥑"), @"🍏");
+	XCTAssertEqualObjects(TGChatListSafeEmojiFallback(@"🦖"), @"🐊");
+
+	// Empty string
+	XCTAssertEqualObjects(TGChatListSafeEmojiFallback(@""), @"");
+
+	// Unmapped modern emoji falls back to ✨ instead of tofu
+	XCTAssertEqualObjects(TGChatListSafeEmojiFallback(@"🪅"), @"✨");
+}
+
 @end

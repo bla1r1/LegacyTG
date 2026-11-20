@@ -99,6 +99,18 @@ static BOOL TGTestOldFonts(UTF32Char c) {
 	XCTAssertTrue([out attribute:@"TGCustomEmojiId" atIndex:5 effectiveRange:NULL] == nil);
 }
 
+- (void)testAttributedMessageText_CustomEmojiFlatEntityBecomesAttachment {
+	NSString *text = @"Hi \U0001F44D there";
+	NSArray *entities = @[
+		@{@"offset" : @(3), @"length" : @(2),
+		  @"type" : @"messageEntityCustomEmoji", @"customEmojiId" : @(5368324170671202286LL)},
+	];
+	UIFont *font = TGFontBody();
+	NSAttributedString *out = TGAttributedMessageText(text, entities, font, [UIColor blackColor]);
+	XCTAssertEqual([[out attribute:@"TGCustomEmojiId" atIndex:3 effectiveRange:NULL] longLongValue],
+			5368324170671202286LL);
+}
+
 - (void)testMessageLayout_CachesCustomEmojiRects {
 	TGMessageLayout *layout = [[TGMessageLayout alloc] init];
 	XCTAssertNil(layout.customEmojiRects);
@@ -207,6 +219,22 @@ static BOOL TGTestOldFonts(UTF32Char c) {
 	XCTAssertNotNil(body);
 	XCTAssertNotNil(inside);
 	XCTAssertNotEqual(inside, body, @"the bold run must carry a different font");
+}
+
+- (void)testAttributedMessageText_EmojiInsideBoldRetainsEmojiFont {
+	UIFont *font = [UIFont systemFontOfSize:15];
+	// "Bold 💸 Money" where entire string has bold entity
+	NSString *text = @"Bold \U0001F4B8 Money";
+	NSDictionary *ent = @{@"offset" : @0, @"length" : @(text.length),
+						  @"type" : @{@"@type" : @"textEntityTypeBold"}};
+	NSAttributedString *str = TGAttributedMessageText(text, @[ent], font, nil);
+
+	UIFont *boldText = [str attribute:NSFontAttributeName atIndex:0 effectiveRange:NULL];
+	UIFont *emojiFont = [str attribute:NSFontAttributeName atIndex:5 effectiveRange:NULL];
+	XCTAssertNotNil(boldText);
+	XCTAssertNotNil(emojiFont);
+	XCTAssertTrue([emojiFont.fontName rangeOfString:@"Emoji" options:NSCaseInsensitiveSearch].location != NSNotFound,
+			@"Emoji inside bold entity must retain emoji font, but got %@", emojiFont.fontName);
 }
 
 - (void)testAttributedMessageText_TextUrlCarriesItsTarget {

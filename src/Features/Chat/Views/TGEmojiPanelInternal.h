@@ -62,7 +62,11 @@
 - (void)applyTheme;
 - (void)loadCustomEmojiSetsIfNeeded;
 - (void)loadCustomEmojiFeed;
+- (void)loadEmojiFeed;
 - (NSArray *)emojiCategories;
+
+TGEmojiPanelTab TGEmojiPanelLastSelectedTab(void);
+void TGEmojiPanelSetLastSelectedTab(TGEmojiPanelTab tab);
 - (void)loadEmojiCategoriesIfNeeded;
 - (NSArray *)stripEntries;
 - (void)loadStickerFeed;

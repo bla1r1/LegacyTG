@@ -13,6 +13,8 @@
 #import <Foundation/Foundation.h>
 #import <CoreGraphics/CoreGraphics.h>
 
+@class UIView;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -55,6 +57,18 @@ NSRange TGAvatarWindow(NSInteger firstVisible, NSUInteger rows, NSUInteger total
 /// snapshot: { offset, length, customEmojiId } from either row shape, nil
 /// entries dropped. Without them the first paint drew fallback characters.
 NSArray *TGSnapshotCustomEmoji(id value);
+
+/// Checks whether a swipe pan gesture should begin given horizontal and vertical displacement
+/// and velocity. Pure function so swipe gesture initiation can be unit tested without UIKit touches.
+BOOL TGChatListSwipeGestureShouldBegin(CGPoint delta, CGPoint velocity);
+
+/// Checks whether a touch view hierarchy belongs to an action button rather than
+/// the row's content view or cell background, preventing dismiss gesture intercept.
+BOOL TGChatListIsTouchInsideActionButton(UIView *view, UIView *cellContentView);
+
+/// Converts modern or unsupported emoji characters (e.g. 🥳, 🥺, 🥑, 🦖) to clean,
+/// renderable iOS 6 fallback emojis (🎉, 😊, 🍏, 🐊) so tofu boxes (□□□□) never render.
+NSString *TGChatListSafeEmojiFallback(NSString *emoji);
 
 #ifdef __cplusplus
 }

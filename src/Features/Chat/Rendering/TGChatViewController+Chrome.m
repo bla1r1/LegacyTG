@@ -772,6 +772,7 @@ static UIImage *TGJumpChevron(UIColor *colour) {
 	}
 	UIEdgeInsets insets = self.table.contentInset;
 	insets.top = pinnedH + actionH;
+	insets.bottom = TGMetricPadSmall;
 	self.table.contentInset = insets;
 	self.table.scrollIndicatorInsets = insets;
 	// Clear of the reply / edit strip when one is showing over the table. The

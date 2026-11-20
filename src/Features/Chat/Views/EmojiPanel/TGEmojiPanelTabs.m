@@ -14,6 +14,7 @@
 #import "TGAlertSheet.h"
 #import "TGLottieView.h"
 #import "TGCustomEmojiStore.h"
+#import "TGLocalization.h"
 #import <objc/runtime.h>
 #import "TGEmojiPanelInternal.h"
 
@@ -30,6 +31,7 @@
 }
 
 - (void)selectTab:(TGEmojiPanelTab)tab {
+	TGEmojiPanelSetLastSelectedTab(tab);
 	self.tab = tab;
 	self.stripIndex = 0;
 	self.gifQuery = nil;
@@ -49,14 +51,14 @@
 	// Telegram's categories describe the strip better than the built-in list
 	// when the file database has them. The first draw keeps the built-in set;
 	// the answer rebuilds the strip when it lands.
-	if (tab == TGEmojiPanelTabEmoji)
+	if (tab == TGEmojiPanelTabEmoji) {
 		[self loadEmojiCategoriesIfNeeded];
-
-	// Asked for every time the tab is opened, not once: Favourites and the
-	// installed sets change from other clients, and a latched list never
-	// caught up. The feed is rebuilt once they land - the first build only
-	// has Favourites and Recently Used, because the sets are not here yet.
-	if (tab == TGEmojiPanelTabStickers){
+		[self reloadStrip];
+		if (self.emojiQuery.length)
+			[self loadEmojiSearch];
+		else
+			[self loadEmojiFeed];
+	} else if (tab == TGEmojiPanelTabStickers){
 		__weak typeof(self) weakSelf = self;
 		// What the panel showed last comes at once and the server's answer
 		// after it, only if it differs: on the iPod touch 4 the tab read
@@ -128,5 +130,46 @@
 	[self reloadGrid];
 }
 
+- (void)loadEmojiFeed {
+	self.generation++;
+	NSMutableArray *flat = [NSMutableArray array];
+	NSMutableArray *sections = [NSMutableArray array];
+
+	NSArray *recent = TGRecentEmoji();
+	if (recent.count) {
+		[sections addObject:[@{
+			@"title"    : TGLocalized(@"Recent"),
+			@"strip"    : @(0),
+			@"location" : @(flat.count),
+			@"length"   : @(recent.count)
+		} mutableCopy]];
+		[flat addObjectsFromArray:recent];
+	}
+
+	NSArray *categories = [self emojiCategories];
+	for (NSUInteger i = 0; i < categories.count; i++) {
+		NSDictionary *cat = categories[i];
+		if (![cat isKindOfClass:NSDictionary.class])
+			continue;
+		NSArray *emojis = cat[@"emojis"] ?: cat[@"emoji"];
+		if (![emojis isKindOfClass:NSArray.class] || !emojis.count)
+			continue;
+		NSString *title = [cat[@"name"] isKindOfClass:NSString.class] ? cat[@"name"]
+				: ([cat[@"title"] isKindOfClass:NSString.class] ? cat[@"title"] : @"");
+		[sections addObject:[@{
+			@"title"    : title,
+			@"strip"    : @(i + 2),
+			@"location" : @(flat.count),
+			@"length"   : @(emojis.count)
+		} mutableCopy]];
+		[flat addObjectsFromArray:emojis];
+	}
+
+	self.items = flat;
+	self.sections = sections;
+	self.emptyLabel.text = flat.count ? nil : @"No Emojis";
+	self.emptyLabel.hidden = flat.count > 0;
+	[self reloadGrid];
+}
 
 @end

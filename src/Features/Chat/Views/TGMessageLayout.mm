@@ -176,9 +176,12 @@ UIFont *TGEmojiFontOfSize(CGFloat size) {
 	static BOOL logged = NO;
 	UIFont *font = [UIFont fontWithName:@"AppleColorEmojiCompat" size:size];
 	if (!font) font = [UIFont fontWithName:@"Apple Color Emoji Compat" size:size];
+	if (!font) font = [UIFont fontWithName:@"AppleColorEmoji" size:size];
+	if (!font) font = [UIFont fontWithName:@"Apple Color Emoji" size:size];
 	if (!font) font = [UIFont fontWithName:@"OpenMojiColor" size:size];
 	if (!font) font = [UIFont fontWithName:@"OpenMoji Color" size:size];
 	if (!font) font = [UIFont fontWithName:@"OpenMoji" size:size];
+	if (!font) font = [UIFont systemFontOfSize:size];
 	if (!logged){
 		logged = YES;
 		NSLog(@"emoji font: %@", font ? font.fontName
@@ -188,9 +191,15 @@ UIFont *TGEmojiFontOfSize(CGFloat size) {
 }
 
 BOOL TGIsEmojiScalar(UTF32Char c) {
-	return (c >= 0x1F000 && c <= 0x1FAFF) ||   // pictographs, faces, flags
+	return (c >= 0x1F000 && c <= 0x1FAFF) ||   // pictographs, faces, flags, symbols
 		   (c >= 0x2600  && c <= 0x27BF)  ||   // misc symbols and dingbats
-		   (c >= 0x2B00  && c <= 0x2BFF);      // arrows and stars
+		   (c >= 0x2B00  && c <= 0x2BFF)  ||   // arrows and stars
+		   (c >= 0x2000  && c <= 0x23FF)  ||   // technical symbols, watch, hourglass
+		   (c >= 0x2900  && c <= 0x297F)  ||   // supplemental arrows
+		   (c >= 0x3000  && c <= 0x32FF)  ||   // CJK symbols / ideographs
+		   c == 0x00A9   || c == 0x00AE   ||   // copyright, registered
+		   c == 0x203C   || c == 0x2049   ||   // !!, !?
+		   c == 0x2122   || c == 0x2139;       // TM, info
 }
 
 /// Joiners, variation selectors, combining marks and tags have no glyph of
@@ -253,7 +262,9 @@ static NSArray *TGFallbackFonts(void) {
 					CFRelease(cascade);
 			}
 		}
-		CTFontRef emoji = CTFontCreateWithName(CFSTR("AppleColorEmoji"), body.pointSize, NULL);
+		CTFontRef emoji = CTFontCreateWithName(CFSTR("AppleColorEmojiCompat"), body.pointSize, NULL);
+		if (!emoji)
+			emoji = CTFontCreateWithName(CFSTR("AppleColorEmoji"), body.pointSize, NULL);
 		if (emoji)
 			[list addObject:(__bridge_transfer id)emoji];
 		fonts = list;
@@ -308,7 +319,9 @@ static BOOL TGAppleEmojiHasScalar(UTF32Char c) {
 	static dispatch_once_t once;
 	dispatch_once(&once, ^{
 		answers = [NSMutableDictionary dictionary];
-		emoji = CTFontCreateWithName(CFSTR("AppleColorEmoji"), TGFontBody().pointSize, NULL);
+		emoji = CTFontCreateWithName(CFSTR("AppleColorEmojiCompat"), TGFontBody().pointSize, NULL);
+		if (!emoji)
+			emoji = CTFontCreateWithName(CFSTR("AppleColorEmoji"), TGFontBody().pointSize, NULL);
 	});
 	NSNumber *key = @(c), *known;
 	@synchronized (answers){
@@ -522,6 +535,8 @@ BOOL TGAppleEmojiHasFlag(UTF32Char first, UTF32Char second) {
 	if (answers[pair])
 		return answers[pair] == 2;
 	if (!emoji)
+		emoji = CTFontCreateWithName(CFSTR("AppleColorEmojiCompat"), 20, NULL);
+	if (!emoji)
 		emoji = CTFontCreateWithName(CFSTR("AppleColorEmoji"), 20, NULL);
 	UniChar units[4];
 	CFStringGetSurrogatePairForLongCharacter(first, units);
@@ -579,20 +594,29 @@ NSAttributedString *TGCustomEmojiSpacer(int64_t emojiId, UIFont *font) {
 	// A clear symbol, not a space: UIKit hangs a space at the end of a line
 	// past the margin, CoreText (which places the pictures) wraps it to the
 	// next line, and every custom emoji after one that ended a line drew a
-	// line low. "@" breaks no line and is about as wide as the em space was;
-	// no kern to widen it, because CoreText versions disagree on where a kern
-	// goes, and the two engines agreeing is the whole point.
+	// line low. "@" breaks no line; kern expands the advance to match the
+	// full emoji side so consecutive emoji in a row do not collide.
+	CGFloat side = TGCustomEmojiSide(font);
+	CGFloat charW = [@"@" sizeWithFont:font].width;
+	CGFloat kern = MAX(0.0f, side - charW);
+
 	NSMutableAttributedString *spacer = [[NSMutableAttributedString alloc] initWithString:@"@"];
 	NSRange all = NSMakeRange(0, 1);
 	[spacer addAttribute:@"TGCustomEmojiId" value:@(emojiId) range:all];
-	[spacer addAttribute:@"TGCustomEmojiSide" value:@(TGCustomEmojiSide(font)) range:all];
+	[spacer addAttribute:@"TGCustomEmojiSide" value:@(side) range:all];
 	[spacer addAttribute:NSFontAttributeName value:font range:all];
 	[spacer addAttribute:NSForegroundColorAttributeName value:[UIColor clearColor] range:all];
+	if (kern > 0.0f) {
+		[spacer addAttribute:NSKernAttributeName value:@(kern) range:all];
+		[spacer addAttribute:(__bridge NSString *)kCTKernAttributeName value:@(kern) range:all];
+	}
 	return spacer;
 }
 
 CGFloat TGCustomEmojiSide(UIFont *font) {
-	return ceilf(font.ascender - font.descender);
+	CGFloat natural = ceilf(font.ascender - font.descender);
+	CGFloat emojiScale = ceilf(font.pointSize * 1.35f);
+	return MAX(natural, emojiScale);
 }
 
 BOOL TGEntitiesHaveSpoiler(NSArray *entities) {
@@ -733,11 +757,37 @@ NSAttributedString *TGAttributedMessageTextRevealing(NSString *text, NSArray *en
 				[str addAttribute:NSBackgroundColorAttributeName value:plate range:range];
 				[str addAttribute:NSForegroundColorAttributeName value:plate range:range];
 			}
-		} else if ([type isEqualToString:@"textEntityTypeCustomEmoji"] && [typeObj isKindOfClass:NSDictionary.class]) {
-			int64_t emojiId = [typeObj[@"custom_emoji_id"] longLongValue];
+		} else if ([type isEqualToString:@"textEntityTypeCustomEmoji"] || [type isEqualToString:@"messageEntityCustomEmoji"]) {
+			int64_t emojiId = 0;
+			if ([typeObj isKindOfClass:NSDictionary.class]) {
+				emojiId = [typeObj[@"custom_emoji_id"] longLongValue];
+			}
+			if (emojiId == 0) {
+				id eid = ent[@"customEmojiId"] ?: ent[@"custom_emoji_id"];
+				if ([eid respondsToSelector:@selector(longLongValue)])
+					emojiId = [eid longLongValue];
+			}
 			if (emojiId)
 				[customEmoji addObject:@[@(offset), @(length), @(emojiId)]];
 		}
+	}
+
+	// Entities above (bold, italic, code) apply text fonts across their whole range,
+	// which overwrites the emoji font on any emoji in that range. Re-apply the
+	// system emoji font to any emoji character runs without changing the string.
+	UIFont *emojiFont = TGEmojiFontOfSize(size);
+	if (emojiFont) {
+		NSString *stringVal = str.string;
+		[stringVal enumerateSubstringsInRange:NSMakeRange(0, stringVal.length)
+									  options:NSStringEnumerationByComposedCharacterSequences
+								   usingBlock:^(NSString *piece, NSRange r, NSRange enclosing, BOOL *stop) {
+			UTF32Char first = [piece characterAtIndex:0];
+			if (piece.length >= 2 && CFStringIsSurrogateHighCharacter(first))
+				first = (UTF32Char)CFStringGetLongCharacterForSurrogatePair(first, [piece characterAtIndex:1]);
+			if (TGIsEmojiScalar(first)) {
+				[str addAttribute:NSFontAttributeName value:emojiFont range:r];
+			}
+		}];
 	}
 
 	// Custom emoji last, from the end backwards: each one turns its fallback
@@ -866,6 +916,7 @@ NSArray *TGCustomEmojiRectsCoreText(NSAttributedString *text, CGFloat width) {
 			CTLineGetTypographicBounds(line, &ascent, &descent, &leading);
 			CGFloat lineTop = frameHeight - origins[i].y - ascent;
 			CGFloat lineHeight = ascent + descent;
+			CGFloat prevEmojiMaxX = -CGFLOAT_MAX;
 			for (NSInteger j = 0; j < runCount; j++) {
 				CTRunRef run = (CTRunRef)CFArrayGetValueAtIndex(runs, j);
 				NSDictionary *attributes = (__bridge NSDictionary *)CTRunGetAttributes(run);
@@ -893,8 +944,12 @@ NSArray *TGCustomEmojiRectsCoreText(NSAttributedString *text, CGFloat width) {
 					CGFloat width = CTLineGetOffsetForStringIndex(line, k + 1, NULL) - x;
 					if (width <= 0)
 						continue;
-					CGRect emojiRect = CGRectIntegral(CGRectMake(x + TGHalf(width - side),
+					CGFloat emojiX = (width >= side) ? (x + TGHalf(width - side)) : x;
+					if (emojiX < prevEmojiMaxX)
+						emojiX = prevEmojiMaxX;
+					CGRect emojiRect = CGRectIntegral(CGRectMake(emojiX,
 							lineTop + TGHalf(lineHeight - side), side, side));
+					prevEmojiMaxX = CGRectGetMaxX(emojiRect);
 					NSValue *rectVal = nil;
 #if TARGET_OS_IPHONE
 					rectVal = [NSValue valueWithCGRect:emojiRect];
@@ -1041,10 +1096,24 @@ CGSize TGTextSizeWithEntities(NSString *text, NSArray *entities, UIFont *font, C
 
 	if (width > 0) {
 		if (rich) {
-			CGRect rect = [rich boundingRectWithSize:CGSizeMake(width, TGMetricTextMeasureHeight)
-											 options:NSStringDrawingUsesLineFragmentOrigin | NSStringDrawingUsesFontLeading
-											 context:nil];
-			size = CGSizeMake(ceilf(rect.size.width) + TGMetricTextPadH, ceilf(rect.size.height) + TGMetricTextPadV);
+			CTFramesetterRef setter = CTFramesetterCreateWithAttributedString((__bridge CFAttributedStringRef)TGCoreTextFonts(rich));
+			CGSize ctSize = CGSizeZero;
+			if (setter) {
+				CFRange fitRange;
+				ctSize = CTFramesetterSuggestFrameSizeWithConstraints(
+						setter, CFRangeMake(0, 0), NULL,
+						CGSizeMake(width, CGFLOAT_MAX), &fitRange);
+				CFRelease(setter);
+			}
+			CGRect rect = CGRectZero;
+			if ([rich respondsToSelector:@selector(boundingRectWithSize:options:context:)]) {
+				rect = [rich boundingRectWithSize:CGSizeMake(width, TGMetricTextMeasureHeight)
+										 options:NSStringDrawingUsesLineFragmentOrigin | NSStringDrawingUsesFontLeading
+										 context:nil];
+			}
+			CGFloat w = MAX(ceilf(rect.size.width), ceilf(ctSize.width));
+			CGFloat h = MAX(ceilf(rect.size.height), ceilf(ctSize.height));
+			size = CGSizeMake(w + TGMetricTextPadH, h + TGMetricTextPadV);
 		} else {
 			size = [text sizeWithFont:font
 					constrainedToSize:CGSizeMake(width, TGMetricTextMeasureHeight)
@@ -1053,8 +1122,21 @@ CGSize TGTextSizeWithEntities(NSString *text, NSArray *entities, UIFont *font, C
 		}
 	} else {
 		if (rich) {
-			size = [rich size];
-			size = CGSizeMake(ceilf(size.width) + TGMetricTextPadH, ceilf(size.height) + TGMetricTextPadV);
+			CTFramesetterRef setter = CTFramesetterCreateWithAttributedString((__bridge CFAttributedStringRef)TGCoreTextFonts(rich));
+			CGSize ctSize = CGSizeZero;
+			if (setter) {
+				CFRange fitRange;
+				ctSize = CTFramesetterSuggestFrameSizeWithConstraints(
+						setter, CFRangeMake(0, 0), NULL,
+						CGSizeMake(CGFLOAT_MAX, CGFLOAT_MAX), &fitRange);
+				CFRelease(setter);
+			}
+			CGSize rSize = CGSizeZero;
+			if ([rich respondsToSelector:@selector(size)])
+				rSize = [rich size];
+			CGFloat w = MAX(ceilf(rSize.width), ceilf(ctSize.width));
+			CGFloat h = MAX(ceilf(rSize.height), ceilf(ctSize.height));
+			size = CGSizeMake(w + TGMetricTextPadH, h + TGMetricTextPadV);
 		} else {
 			size = [text sizeWithFont:font];
 			size = CGSizeMake(ceilf(size.width) + TGMetricTextPadH, ceilf(size.height) + TGMetricTextPadV);

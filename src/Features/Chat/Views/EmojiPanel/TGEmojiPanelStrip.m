@@ -183,9 +183,9 @@ static const CGFloat kStripHeight = TGMetricEmojiStripHeight;   // categories / 
 	if (self.tab == TGEmojiPanelTabGIFs)
 		self.gifQuery = nil;   // "Saved"
 
-	// Stickers and custom emoji are feeds: the strip moves within them rather than swapping
+	// Stickers, emoji and custom emoji are feeds: the strip moves within them rather than swapping
 	// what the grid holds. A set still loading has no section yet.
-	if ((self.tab == TGEmojiPanelTabStickers || self.tab == TGEmojiPanelTabCustomEmoji) && self.sections.count){
+	if ((self.tab == TGEmojiPanelTabEmoji || self.tab == TGEmojiPanelTabStickers || self.tab == TGEmojiPanelTabCustomEmoji) && self.sections.count){
 		for (NSDictionary *section in self.sections){
 			if ([section[@"strip"] integerValue] != button.tag)
 				continue;

@@ -122,7 +122,7 @@ static char kTGTableContentSizeContext;
 	[self.table addObserver:self forKeyPath:@"contentSize" options:0 context:&kTGTableContentSizeContext];
 	self.table.separatorStyle = UITableViewCellSeparatorStyleNone;
 	self.table.backgroundColor = [UIColor clearColor];
-	self.table.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+	self.table.autoresizingMask = UIViewAutoresizingFlexibleWidth;
 	// The wallpaper goes behind the table, which is transparent over it.
 	self.wallpaperView = [[UIImageView alloc] initWithFrame:self.view.bounds];
 	self.wallpaperView.contentMode = UIViewContentModeScaleAspectFill;

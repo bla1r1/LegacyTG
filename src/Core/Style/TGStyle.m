@@ -44,16 +44,22 @@ UIFont *TGFontSwitchTag(void)     { return [UIFont boldSystemFontOfSize:TGSizeSw
 UIFont *TGFontEmoji(void) {
 	return [UIFont fontWithName:@"AppleColorEmojiCompat" size:TGSizeEmoji]
 		?: [UIFont fontWithName:@"Apple Color Emoji Compat" size:TGSizeEmoji]
+		?: [UIFont fontWithName:@"AppleColorEmoji" size:TGSizeEmoji]
+		?: [UIFont fontWithName:@"Apple Color Emoji" size:TGSizeEmoji]
 		?: [UIFont systemFontOfSize:TGSizeEmoji];
 }
 UIFont *TGFontEmojiSmall(void) {
 	return [UIFont fontWithName:@"AppleColorEmojiCompat" size:TGSizeEmojiSm]
 		?: [UIFont fontWithName:@"Apple Color Emoji Compat" size:TGSizeEmojiSm]
+		?: [UIFont fontWithName:@"AppleColorEmoji" size:TGSizeEmojiSm]
+		?: [UIFont fontWithName:@"Apple Color Emoji" size:TGSizeEmojiSm]
 		?: [UIFont systemFontOfSize:TGSizeEmojiSm];
 }
 UIFont *TGFontEmojiMeta(void)     {
 	return [UIFont fontWithName:@"AppleColorEmojiCompat" size:TGSizeMeta]
 		?: [UIFont fontWithName:@"Apple Color Emoji Compat" size:TGSizeMeta]
+		?: [UIFont fontWithName:@"AppleColorEmoji" size:TGSizeMeta]
+		?: [UIFont fontWithName:@"Apple Color Emoji" size:TGSizeMeta]
 		?: [UIFont fontWithName:@"OpenMojiColor" size:TGSizeMeta]
 		?: [UIFont fontWithName:@"OpenMoji" size:TGSizeMeta]
 		?: [UIFont systemFontOfSize:TGSizeMeta];
@@ -61,6 +67,8 @@ UIFont *TGFontEmojiMeta(void)     {
 UIFont *TGFontEmojiLarge(void) {
 	return [UIFont fontWithName:@"AppleColorEmojiCompat" size:TGSizeEmojiLg]
 		?: [UIFont fontWithName:@"Apple Color Emoji Compat" size:TGSizeEmojiLg]
+		?: [UIFont fontWithName:@"AppleColorEmoji" size:TGSizeEmojiLg]
+		?: [UIFont fontWithName:@"Apple Color Emoji" size:TGSizeEmojiLg]
 		?: [UIFont systemFontOfSize:TGSizeEmojiLg];
 }
 

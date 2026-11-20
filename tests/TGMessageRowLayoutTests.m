@@ -200,18 +200,29 @@ static TGMessageRowInput *rlInput(NSDictionary *m) {
 	XCTAssertEqual(l.bubbleFrame.size.width, (CGFloat)(150 + 2 * kPadH));
 }
 
-- (void)testPhoto_TheCaptionWrapsUnderThePictureInsteadOfWideningIt {
-	// Sized by its caption, a photo was stretched to the widest line and came
-	// out twice as tall.
+- (void)testPhoto_LongCaptionExpandsBubbleWithoutSquishingText {
+	// In official Telegram, a long caption is not squeezed down to a narrow photo's width;
+	// the bubble expands to comfortably fit the text rather than collapsing to the 200 pt photo.
 	NSString *caption = [@"" stringByPaddingToLength:400 withString:@"word " startingAtIndex:0];
 	TGMessageRowInput *in = rlInput(@{ @"kind" : @"messagePhoto", @"photoId" : @9, @"text" : caption });
 	in.imageSize = CGSizeMake(200, 150);
 	TGMessageLayout *l = TGMessageRowLayout(in);
-	XCTAssertEqual(l.bubbleFrame.size.width, (CGFloat)(200 + 2 * kMediaInset));
-	XCTAssertEqual(l.pictureFrame.size.height, (CGFloat)150);
+	XCTAssertGreaterThan(l.bubbleFrame.size.width, (CGFloat)(200 + 2 * kMediaInset));
+	CGFloat mediaW = l.bubbleFrame.size.width - 2 * kMediaInset;
+	XCTAssertEqual(l.pictureFrame.size.width, mediaW);
+	XCTAssertEqual(l.pictureFrame.size.height, floorf(150.0f * mediaW / 200.0f));
 	XCTAssertEqual(l.bodyFrame.size.width, l.bubbleFrame.size.width - 2 * kPadH);
 	XCTAssertFalse(l.inlineStamp);
 	XCTAssertGreaterThanOrEqual(l.timeFrame.origin.y, CGRectGetMaxY(l.bodyFrame));
+}
+
+- (void)testPhoto_ShortCaptionKeepsBubbleAtPhotoWidth {
+	// When text is shorter than the photo, the photo width sets the bubble width.
+	TGMessageRowInput *in = rlInput(@{ @"kind" : @"messagePhoto", @"photoId" : @9, @"text" : @"Hi" });
+	in.imageSize = CGSizeMake(200, 150);
+	TGMessageLayout *l = TGMessageRowLayout(in);
+	XCTAssertEqual(l.bubbleFrame.size.width, (CGFloat)(200 + 2 * kMediaInset));
+	XCTAssertEqual(l.pictureFrame.size.height, (CGFloat)150);
 }
 
 #pragma mark - the stamp
@@ -439,6 +450,24 @@ static TGMessageRowInput *rlInput(NSDictionary *m) {
 			}
 	});
 	XCTAssertTrue(same);
+}
+
+- (void)testEmojiMessage_StampDoesNotOverlapLastCharacter {
+	NSString *text = @"\U0001F973 \U0001F97A \U0001F951 \U0001F996 \U0001F1FA\U0001F1E6";
+	TGMessageLayout *l = TGMessageRowLayout(rlInput(@{
+		@"text": text,
+		@"outgoing": @YES,
+		@"date": @1700000000
+	}));
+
+	if (l.inlineStamp) {
+		CGFloat textRight = l.bodyFrame.origin.x + l.bodySize.width;
+		CGFloat stampLeft = l.timeFrame.origin.x;
+		if (!CGRectIsEmpty(l.stampEyeFrame))
+			stampLeft = MIN(stampLeft, l.stampEyeFrame.origin.x);
+		XCTAssertTrue(stampLeft >= textRight,
+				@"Stamp (left %f) must not overlap or collide with text (right %f)", stampLeft, textRight);
+	}
 }
 
 @end

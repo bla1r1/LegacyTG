@@ -102,21 +102,38 @@ static const double kTGHoldBottomSeconds = 6.0;
 /// Whether a row on screen draws one of these custom emoji: in its text or
 /// in a reaction under it.
 - (BOOL)visibleRowsShowCustomEmoji:(NSSet *)ids {
+	NSMutableSet *idNumbers = [NSMutableSet setWithCapacity:ids.count];
+	for (id item in ids) {
+		if ([item respondsToSelector:@selector(longLongValue)])
+			[idNumbers addObject:@([item longLongValue])];
+	}
 	for (NSIndexPath *path in self.table.indexPathsForVisibleRows) {
 		if (path.row >= (NSInteger)self.messages.count)
 			continue;
 		NSDictionary *m = self.messages[(NSUInteger)path.row];
 		NSNumber *msgId = m[@"id"];
 		TGMessageLayout *layout = msgId ? self.layoutCache[msgId] : nil;
-		for (NSDictionary *rect in layout.customEmojiRects)
-			if ([ids containsObject:rect[@"id"] ?: @0])
+		for (NSDictionary *rect in layout.customEmojiRects) {
+			id rId = rect[@"id"];
+			if (rId && [idNumbers containsObject:@([rId longLongValue])])
 				return YES;
-		for (NSDictionary *group in m[@"reactionGroups"])
-			if ([group isKindOfClass:NSDictionary.class] && [ids containsObject:group[@"customEmojiId"] ?: @0])
-				return YES;
+		}
+		for (NSDictionary *group in m[@"reactionGroups"]) {
+			if ([group isKindOfClass:NSDictionary.class]) {
+				id rId = group[@"customEmojiId"];
+				if (rId && [idNumbers containsObject:@([rId longLongValue])])
+					return YES;
+			}
+		}
 		for (NSDictionary *entity in m[@"entities"]) {
 			NSDictionary *type = [entity isKindOfClass:NSDictionary.class] ? entity[@"type"] : nil;
-			if ([type isKindOfClass:NSDictionary.class] && [ids containsObject:type[@"custom_emoji_id"] ?: @0])
+			if ([type isKindOfClass:NSDictionary.class]) {
+				id cId = type[@"custom_emoji_id"];
+				if (cId && [idNumbers containsObject:@([cId longLongValue])])
+					return YES;
+			}
+			id directId = entity[@"customEmojiId"] ?: entity[@"custom_emoji_id"];
+			if (directId && [idNumbers containsObject:@([directId longLongValue])])
 				return YES;
 		}
 	}

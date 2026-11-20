@@ -235,8 +235,12 @@ static NSUInteger TGEmojiPanelFirstVisibleIndex(NSArray *frames, CGFloat minY) {
 		}
 		if (emojiId > 0){
 			UIImage *image = [[TGCustomEmojiStore shared] imageForId:emojiId side:TGMetricListAvatar];
-			if (image)
+			if (image) {
 				[button setImage:image forState:UIControlStateNormal];
+			} else if ([item[@"emoji"] isKindOfClass:NSString.class] && [TGCapabilities canDrawEmoji:item[@"emoji"]]) {
+				button.titleLabel.font = TGFontEmoji();
+				[button setTitle:item[@"emoji"] forState:UIControlStateNormal];
+			}
 		}
 	} else if (self.tab == TGEmojiPanelTabStickers){
 		button.imageEdgeInsets = UIEdgeInsetsMake(TGMetricAlertTextGap, TGMetricAlertTextGap, TGMetricAlertTextGap, TGMetricAlertTextGap);

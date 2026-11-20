@@ -166,6 +166,8 @@ CGImageRef TGTextRenderCreateImage(NSAttributedString *text, CGSize size, CGFloa
 			CGPoint origin = CGPointMake(origins[(size_t)i].x, origins[(size_t)i].y + shift);
 			CGFloat ascent = 0, descent = 0, leading = 0;
 			CTLineGetTypographicBounds(line, &ascent, &descent, &leading);
+			if (origin.y - descent < 0)
+				origin.y = descent;
 			if (origin.y + ascent < 0)
 				break;
 			if (origin.y - descent > size.height)

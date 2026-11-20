@@ -384,6 +384,8 @@ static UIImage *TGCustomEmojiFromStore(int64_t emojiId, CGFloat side) {
 	if (padOrientation != TGiPadOrientationOff) {
 		[[TGiPadSimulator shared] setOrientation:padOrientation inWindow:self.window];
 	}
+	[[NSUserDefaults standardUserDefaults] setInteger:1 forKey:@"TGOpenSwipeRow"];
+	[[NSUserDefaults standardUserDefaults] synchronize];
 #endif
 
 	if ([TGPasscode hasPasscode]) {

@@ -46,7 +46,10 @@ static UIDevice *TGSharedDevice = nil;
 
 #pragma mark - UIView & UILabel
 
-@implementation UIView
+@implementation UIView {
+	__weak UIView *_superview;
+}
+@synthesize superview = _superview;
 - (instancetype)init {
 	self = [super init];
 	if (self) {
@@ -62,11 +65,23 @@ static UIDevice *TGSharedDevice = nil;
 	}
 	return self;
 }
-- (void)addSubview:(UIView *)view {}
-- (void)removeFromSuperview {}
+- (void)addSubview:(UIView *)view {
+	if (view) {
+		view->_superview = self;
+	}
+}
+- (void)removeFromSuperview {
+	_superview = nil;
+}
 @end
 
 @implementation UILabel
+@end
+
+@implementation UIControl
+@end
+
+@implementation UIButton
 @end
 
 #pragma mark - NSString UIKit additions

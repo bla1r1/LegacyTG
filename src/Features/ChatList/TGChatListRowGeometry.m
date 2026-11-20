@@ -1,3 +1,4 @@
+#import <UIKit/UIKit.h>
 #import "TGChatListRowGeometry.h"
 #import "TGLocalization.h"
 
@@ -96,4 +97,102 @@ NSArray *TGSnapshotCustomEmoji(id value) {
 		[out addObject:@{@"offset" : offset, @"length" : length, @"customEmojiId" : emojiId}];
 	}
 	return out;
+}
+
+BOOL TGChatListSwipeGestureShouldBegin(CGPoint delta, CGPoint velocity) {
+	if (delta.x == 0 && delta.y == 0) {
+		if (fabs(velocity.x) <= fabs(velocity.y) || fabs(velocity.x) < 10.0f)
+			return NO;
+		return YES;
+	}
+	if (delta.x == 0 || fabs(delta.x) <= fabs(delta.y))
+		return NO;
+	return YES;
+}
+
+BOOL TGChatListIsTouchInsideActionButton(UIView *view, UIView *cellContentView) {
+	if (!view)
+		return NO;
+	for (UIView *v = view; v != nil; v = v.superview) {
+		if (cellContentView && v == cellContentView)
+			return NO;
+		if ([v isKindOfClass:NSClassFromString(@"UIButton")] || [v isKindOfClass:[UIButton class]])
+			return YES;
+	}
+	return NO;
+}
+
+NSString *TGChatListSafeEmojiFallback(NSString *emoji) {
+	if (!emoji.length) return @"";
+	static NSDictionary *sMap = nil;
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{
+		sMap = @{
+			@"🥳" : @"🎉",
+			@"🥺" : @"😊",
+			@"🥑" : @"🍏",
+			@"🦖" : @"🐊",
+			@"🦕" : @"🐊",
+			@"🥰" : @"😍",
+			@"🤩" : @"😍",
+			@"🤪" : @"😜",
+			@"🤗" : @"😊",
+			@"🤔" : @"💭",
+			@"🤭" : @"🙈",
+			@"🤫" : @"😶",
+			@"🤤" : @"😋",
+			@"🤢" : @"😷",
+			@"🤮" : @"😷",
+			@"🤧" : @"😷",
+			@"🥵" : @"♨️",
+			@"🥶" : @"❄️",
+			@"🥴" : @"😵",
+			@"🤯" : @"💥",
+			@"🥱" : @"😪",
+			@"🥲" : @"🙂",
+			@"🥸" : @"👓",
+			@"🤌" : @"👌",
+			@"🤏" : @"👌",
+			@"🤞" : @"✌️",
+			@"🤟" : @"🤘",
+			@"🤙" : @"📞",
+			@"🤛" : @"👊",
+			@"🤜" : @"👊",
+			@"🧠" : @"💭",
+			@"🫀" : @"❤️",
+			@"🫁" : @"💨",
+			@"🦾" : @"💪",
+			@"🦿" : @"🦵",
+			@"🦄" : @"🐴",
+			@"🦇" : @"🐾",
+			@"🦉" : @"🐦",
+			@"🦅" : @"🐦",
+			@"🦆" : @"🐦",
+			@"🦢" : @"🐦",
+			@"🦈" : @"🐟",
+			@"🦑" : @"🐙",
+			@"🦞" : @"🦀",
+			@"🦐" : @"🍤",
+			@"🦚" : @"🐦",
+			@"🦜" : @"🐦",
+			@"🦔" : @"🐾",
+			@"🦘" : @"🐾",
+			@"🦡" : @"🐾",
+			@"🌮" : @"🥪",
+			@"🌯" : @"🥪",
+			@"🥙" : @"🥪",
+			@"🥗" : @"🍲",
+			@"🥘" : @"🍲",
+			@"🥫" : @"🍲",
+			@"🧇" : @"🥞",
+			@"🥞" : @"🍰",
+			@"🧈" : @"🧀",
+			@"🧁" : @"🎂",
+			@"🥧" : @"🍰"
+		};
+	});
+	NSString *mapped = sMap[emoji];
+	if (mapped)
+		return mapped;
+	return @"✨";
 }

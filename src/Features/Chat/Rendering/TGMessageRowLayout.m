@@ -480,14 +480,16 @@ TGMessageLayout *TGMessageRowLayout(TGMessageRowInput *in) {
 	// frame. The picture keeps its proportions: it grows with the width.
 	BOOL fillsBubble = (isAlbum || pic.height > 0) && !isSticker;
 	if (fillsBubble){
-		// The picture sets the bubble's width and the caption wraps under it,
-		// as in the official client; sized by the caption, a photo was
-		// stretched to the widest line and came out twice as tall.
+		// The picture sets the base width, but if a caption is present the bubble expands
+		// to accommodate the text up to bubbleMaxW (as in official Telegram), rather than
+		// squeezing the text into a narrow portrait media column.
 		CGFloat natural = (isAlbum ? collageW : pic.width) + TGDoubled(kMediaInset);
 		if (senderName.length)
 			natural = MAX(natural, senderW + TGDoubled(kPadH));
-		if (body.height > 0)
-			natural = MAX(natural, kBubbleMinW);
+		if (body.height > 0) {
+			CGFloat textNeeded = body.width + TGDoubled(kPadH);
+			natural = MAX(natural, textNeeded);
+		}
 		bubbleW = MIN(natural, bubbleMaxW);
 		if (body.height > 0){
 			bodyW = bubbleW - TGDoubled(kPadH);
@@ -514,7 +516,11 @@ TGMessageLayout *TGMessageRowLayout(TGMessageRowInput *in) {
 		layout.albumFrames = scaled;
 		collageW = mediaW;
 	} else if (fillsBubble && pic.width > 0){
-		pic = CGSizeMake(mediaW, floorf(pic.height * mediaW / pic.width));
+		CGFloat scaledH = floorf(pic.height * mediaW / pic.width);
+		CGFloat maxMediaH = floorf(bubbleMaxW * 1.15f);
+		if (scaledH > maxMediaH)
+			scaledH = maxMediaH;
+		pic = CGSizeMake(mediaW, scaledH);
 	}
 	BOOL captionAboveMedia = fillsBubble && body.height > 0 &&
 			[m[@"captionAbove"] isKindOfClass:NSNumber.class] && [m[@"captionAbove"] boolValue];

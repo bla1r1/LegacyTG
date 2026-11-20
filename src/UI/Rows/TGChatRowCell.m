@@ -7,6 +7,7 @@
 #import "TGChatListStore.h"
 #import "TGTheme.h"
 #import "TGCustomEmojiStore.h"
+#import "TGCapabilities.h"
 #import "TGIcons.h"
 #import <QuartzCore/QuartzCore.h>
 #import <math.h>
@@ -434,6 +435,15 @@ static UIImage *TGChatRowStoryRingImage(CGSize side, UIColor *colour) {
 	[self setPreview:text author:author customEmoji:nil];
 }
 
+static NSString *TGSafeEmojiFallback(NSString *emoji) {
+	if (!emoji.length) return @"";
+	if ([TGCapabilities canDrawEmoji:emoji]) return emoji;
+	NSString *fallback = TGChatListSafeEmojiFallback(emoji);
+	if (fallback.length && [TGCapabilities canDrawEmoji:fallback])
+		return fallback;
+	return [TGCapabilities canDrawEmoji:@"✨"] ? @"✨" : @"";
+}
+
 - (void)setPreview:(NSString *)text author:(NSString *)author customEmoji:(NSArray *)customEmoji {
 	TGTheme *theme = [TGTheme shared];
 	text = text ?: @"";
@@ -451,9 +461,6 @@ static UIImage *TGChatRowStoryRingImage(CGSize side, UIColor *colour) {
 	}
 
 	BOOL undrawable = TGTextHasUndrawableEmoji(text);
-	// UILabel takes the first run's font as its own once attributed text is
-	// set; a reused row would otherwise draw plain text, or build the next
-	// attributed line, in the OpenMoji face of the row before.
 	self.previewLabel.font = TGFontBody();
 	if (!author.length && !undrawable && (!canUseAttachments || customEmoji.count == 0)) {
 		self.previewLabel.text = text;
@@ -476,7 +483,11 @@ static UIImage *TGChatRowStoryRingImage(CGSize side, UIColor *colour) {
 					 range:NSMakeRange(0, authorOffset)];
 	}
 
-	if (canUseAttachments && customEmoji.count > 0) {
+	UIFont *font = TGFontBody();
+	CGFloat side = font.pointSize;
+	UIFont *emojiFont = TGEmojiFontOfSize(side);
+
+	if (customEmoji.count > 0) {
 		NSMutableArray *entries = [NSMutableArray array];
 		for (id item in customEmoji) {
 			NSInteger off = 0;
@@ -509,9 +520,6 @@ static UIImage *TGChatRowStoryRingImage(CGSize side, UIColor *colour) {
 			return [b[@"offset"] compare:a[@"offset"]];
 		}];
 
-		UIFont *font = TGFontBody();
-		CGFloat side = font.pointSize;
-
 		for (NSDictionary *entry in entries) {
 			NSUInteger off = [entry[@"offset"] unsignedIntegerValue] + authorOffset;
 			NSUInteger len = [entry[@"length"] unsignedIntegerValue];
@@ -521,31 +529,59 @@ static UIImage *TGChatRowStoryRingImage(CGSize side, UIColor *colour) {
 				continue;
 			}
 
-			UIImage *picture = [[TGCustomEmojiStore shared] imageForId:eid side:side];
-			if (!picture) {
-				// Picture still loading; keep fallback text.
-				continue;
-			}
+			UIImage *picture = canUseAttachments ? [[TGCustomEmojiStore shared] imageForId:eid side:side] : nil;
+			if (picture) {
+				id attachment = [[attachmentClass alloc] init];
+				if ([attachment respondsToSelector:@selector(setImage:)])
+					[attachment setImage:picture];
+				if ([attachment respondsToSelector:@selector(setBounds:)])
+					[attachment setBounds:CGRectMake(0, roundf(font.descender), side, side)];
 
-			id attachment = [[attachmentClass alloc] init];
-			if ([attachment respondsToSelector:@selector(setImage:)])
-				[attachment setImage:picture];
-			// -setBounds: arrived in iOS 7; on iOS 6 the attachment keeps its
-			// own size instead of taking an unknown selector.
-			if ([attachment respondsToSelector:@selector(setBounds:)])
-				[attachment setBounds:CGRectMake(0, roundf(font.descender), side, side)];
-
-			NSAttributedString *glyph = [NSAttributedString attributedStringWithAttachment:attachment];
-			if (glyph) {
-				[line replaceCharactersInRange:NSMakeRange(off, len) withAttributedString:glyph];
+				NSAttributedString *glyph = [NSAttributedString attributedStringWithAttachment:attachment];
+				if (glyph) {
+					[line replaceCharactersInRange:NSMakeRange(off, len) withAttributedString:glyph];
+				}
+			} else {
+				// No attachment (iOS 6 or picture still loading): ensure fallback is drawable without tofu.
+				NSString *fallback = [line.string substringWithRange:NSMakeRange(off, len)];
+				if (![TGCapabilities canDrawEmoji:fallback]) {
+					NSString *safe = TGSafeEmojiFallback(fallback);
+					[line replaceCharactersInRange:NSMakeRange(off, len) withString:safe];
+				}
 			}
 		}
 	}
 
-	// After the custom emoji: their offsets from TDLib count the U+FE0F, and
-	// dropping it first moved every picture after it onto the wrong character.
+	// Drop selectors and map any remaining undrawable emojis across the whole line.
 	if (undrawable)
 		TGMarkUndrawableEmoji(line, TGFontBody().pointSize);
+
+	// Ensure any remaining emoji characters in line have a safe fallback and use emojiFont.
+	NSString *curr = line.string;
+	NSUInteger currLen = curr.length;
+	for (NSUInteger i = 0; i < currLen; ) {
+		NSRange seqRange = [curr rangeOfComposedCharacterSequenceAtIndex:i];
+		NSString *seq = [curr substringWithRange:seqRange];
+		UTF32Char c = [seq characterAtIndex:0];
+		if (CFStringIsSurrogateHighCharacter((UniChar)c) && seq.length >= 2) {
+			c = CFStringGetLongCharacterForSurrogatePair((UniChar)c, [seq characterAtIndex:1]);
+		}
+		if (TGIsEmojiScalar(c)) {
+			if (![TGCapabilities canDrawEmoji:seq]) {
+				NSString *safe = TGSafeEmojiFallback(seq);
+				[line replaceCharactersInRange:seqRange withString:safe];
+				curr = line.string;
+				currLen = curr.length;
+				i += safe.length;
+				continue;
+			}
+			if (emojiFont) {
+				[line addAttribute:NSFontAttributeName value:emojiFont range:seqRange];
+			}
+		}
+		i = NSMaxRange(seqRange);
+	}
+
 	self.previewLabel.attributedText = line;
 }
 
@@ -693,9 +729,14 @@ static UIImage *TGChatRowStoryRingImage(CGSize side, UIColor *colour) {
 	self.swipeActionsGeneration++;
 	[self removeSwipeActionButtons];
 
+	CGFloat h = self.bounds.size.height > 0 ? self.bounds.size.height : kRowHeight;
+	CGFloat w = self.bounds.size.width > 0 ? self.bounds.size.width : (self.superview.bounds.size.width > 0 ? self.superview.bounds.size.width : 320.0f);
+
 	// Trailing buttons (shown when dragging left, offset < 0)
 	if (trailingTitles.count){
 		self.trailingActionButtons = [NSMutableArray arrayWithCapacity:trailingTitles.count];
+		self.trailingActionsWidth = (CGFloat)trailingTitles.count * kSwipeActionWidth;
+		CGFloat x = w - self.trailingActionsWidth;
 		for (NSUInteger i = 0; i < trailingTitles.count; i++){
 			UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
 			button.titleLabel.font = TGFontCaptionStrong();
@@ -707,15 +748,18 @@ static UIImage *TGChatRowStoryRingImage(CGSize side, UIColor *colour) {
 					forState:UIControlStateNormal];
 			if (i < trailingColours.count)
 				button.backgroundColor = trailingColours[i];
-			[self.contentView.superview insertSubview:button belowSubview:self.contentView];
+			button.frame = CGRectMake(x, 0, kSwipeActionWidth, h);
+			x += kSwipeActionWidth;
+			[self insertSubview:button belowSubview:self.contentView];
 			[self.trailingActionButtons addObject:button];
 		}
-		self.trailingActionsWidth = (CGFloat)trailingTitles.count * kSwipeActionWidth;
 	}
 
 	// Leading buttons (shown when dragging right, offset > 0)
 	if (leadingTitles.count){
 		self.leadingActionButtons = [NSMutableArray arrayWithCapacity:leadingTitles.count];
+		self.leadingActionsWidth = (CGFloat)leadingTitles.count * kSwipeActionWidth;
+		CGFloat x = 0;
 		for (NSUInteger i = 0; i < leadingTitles.count; i++){
 			UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
 			button.titleLabel.font = TGFontCaptionStrong();
@@ -727,10 +771,11 @@ static UIImage *TGChatRowStoryRingImage(CGSize side, UIColor *colour) {
 					forState:UIControlStateNormal];
 			if (i < leadingColours.count)
 				button.backgroundColor = leadingColours[i];
-			[self.contentView.superview insertSubview:button belowSubview:self.contentView];
+			button.frame = CGRectMake(x, 0, kSwipeActionWidth, h);
+			x += kSwipeActionWidth;
+			[self insertSubview:button belowSubview:self.contentView];
 			[self.leadingActionButtons addObject:button];
 		}
-		self.leadingActionsWidth = (CGFloat)leadingTitles.count * kSwipeActionWidth;
 	}
 
 	self.clipsToBounds = YES;
@@ -776,8 +821,15 @@ static UIImage *TGChatRowStoryRingImage(CGSize side, UIColor *colour) {
 	CGFloat width = self.trailingActionsWidth;
 	if (width <= 0)
 		return;
+	CGFloat h = self.bounds.size.height > 0 ? self.bounds.size.height : kRowHeight;
+	CGFloat w = self.bounds.size.width > 0 ? self.bounds.size.width : (self.superview.bounds.size.width > 0 ? self.superview.bounds.size.width : 320.0f);
+	CGFloat x = w - width;
+	for (UIButton *button in self.trailingActionButtons){
+		button.frame = CGRectMake(x, 0, kSwipeActionWidth, h);
+		x += kSwipeActionWidth;
+		button.hidden = NO;
+	}
 	for (UIButton *b in self.leadingActionButtons) b.hidden = YES;
-	for (UIButton *b in self.trailingActionButtons) b.hidden = NO;
 	self.swipeActionsOpen = YES;
 	self.currentSwipeOffset = -width;
 	if (!animated){
@@ -793,7 +845,13 @@ static UIImage *TGChatRowStoryRingImage(CGSize side, UIColor *colour) {
 	CGFloat width = self.leadingActionsWidth;
 	if (width <= 0)
 		return;
-	for (UIButton *b in self.leadingActionButtons) b.hidden = NO;
+	CGFloat h = self.bounds.size.height > 0 ? self.bounds.size.height : kRowHeight;
+	CGFloat x = 0;
+	for (UIButton *button in self.leadingActionButtons){
+		button.frame = CGRectMake(x, 0, kSwipeActionWidth, h);
+		x += kSwipeActionWidth;
+		button.hidden = NO;
+	}
 	for (UIButton *b in self.trailingActionButtons) b.hidden = YES;
 	self.swipeActionsOpen = YES;
 	self.currentSwipeOffset = width;
@@ -851,7 +909,7 @@ static UIImage *TGChatRowStoryRingImage(CGSize side, UIColor *colour) {
 
 - (void)setSelected:(BOOL)selected animated:(BOOL)animated {
 	[super setSelected:selected animated:animated];
-	if (selected)
+	if (selected && !self.swipeActionsOpen)
 		[self closeSwipeActionsAnimated:NO];
 	TGTheme *theme = [TGTheme shared];
 	if (selected) {

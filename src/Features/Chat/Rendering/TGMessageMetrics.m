@@ -84,7 +84,7 @@ BOOL TGMessageStampFitsInlineForWidth(NSDictionary *m, CGFloat fontSize, CGFloat
 	NSString *text = m[@"text"] ?: @"";
 	if (!text.length || [text rangeOfString:@"\n"].location != NSNotFound)
 		return NO;
-	CGFloat oneLine = TGTextSize(text, TGFontAtSize(fontSize), 0).width;
+	CGFloat oneLine = TGTextSizeWithEntities(text, m[@"entities"], TGFontAtSize(fontSize), 0).width;
 	if (oneLine > room)
 		return NO;   // it wraps, so there is no short last line to share
 	return oneLine + kStampGap + TGMessageStampWidth(m) <= room;
