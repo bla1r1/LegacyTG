@@ -4,7 +4,7 @@ Telegram client for iOS 6.0–12.5.7: TDLib (`libtdjson` at runtime), Objective-
 
 ## Done
 
-Done = matches the official client, with a row in [status/checks.md](status/checks.md) and, where possible, a host test. Each check names the tap, the screen, the wait and the log line (`scripts/devrun.sh`). Forbidden: "works", "looks fine", "doesn't crash for me". Calls and read receipts need a second device or account.
+Done = matches the official client, with a row in [CHECKS.md](CHECKS.md) and, where possible, a host test. Each check names the tap, the screen, the wait and the log line (`scripts/devrun.sh`). Forbidden: "works", "looks fine", "doesn't crash for me". Calls and read receipts need a second device or account.
 
 ## Tests
 
@@ -59,7 +59,7 @@ templates, pass the count as text to `TGLocalizedPluralValue`.
 
 ## Bugs and commits
 
-Every bug is a row in [status/bugs.md](status/bugs.md) until the closing fix names its regression test; long root causes are in git at `cf71bc9`. Commit as `fix(chat): …`, zone first, with `B1`–`Bn` in the body when one closes.
+Every bug is a row in [BUGS.md](BUGS.md) until the closing fix names its regression test; long root causes are in git at `cf71bc9`. Commit as `fix(chat): …`, zone first, with `B1`–`Bn` in the body when one closes.
 
 ## PR
 

@@ -1,6 +1,4 @@
-# Layers
-
-See [ARCHITECTURE_CORE.md](ARCHITECTURE_CORE.md) for the current core diagram.
+# Architecture & System Layers
 
 TDLib speaks JSON updates. `TGTransport` owns the socket and the receive loop;
 `TGClient`, `TGUpdateRouter`, `TGUpdateHandlers` and `TGState` turn those
@@ -119,3 +117,6 @@ settings or call store can land without touching either.
   BotsPayments.
 - `TGMessageStore.h`: 227 selectors and 14 properties, the whole surface the
   Chat feature actually asks for.
+- `src/Core/Platform/TGBackgroundKeeper.m`: background keep-alive architecture
+  via in-memory silent audio playback loop and `UILocalNotification` dispatch.
+  See [BACKGROUND_NOTIFICATIONS.md](BACKGROUND_NOTIFICATIONS.md) for protocol details.

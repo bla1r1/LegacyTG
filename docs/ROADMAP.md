@@ -3,7 +3,7 @@
 Status: `done` · `initial` (usable first version) · `partial` · `planned` · `deferred` · `wontfix`.
 
 LegacyTG is a Telegram client for iOS 6.0–12.5.7 on armv7 and arm64: an
-Objective-C UIKit UI over TDLib 1.8.66, loaded at runtime as
+Objective-C UIKit UI over TDLib 1.8.70, loaded at runtime as
 `libtdjson.dylib`. The hand-written libtg MTProto stack is gone; about 2500
 lines written for this app sit on the TDLib API. Features gate by device tier
 (Vintage, Legacy, Modern, Full), not by iOS version; Settings > This Device
@@ -13,16 +13,16 @@ explains every missing button. Vintage is the iPhone 3GS/4 and iPod touch 4
 stopped at 12.5); Full the 6s and later (2 GB+).
 
 The closed milestones below are the order the work landed. What each one built
-is described by subject in the area guides: [login and accounts](status/login-accounts.md),
-[chat list](status/chat-list.md), [chat](status/chat.md),
-[message types](status/message-types.md), [media](status/media.md),
-[profile](status/profile.md), [groups](status/groups.md),
-[channels](status/channels.md), [contacts](status/contacts.md),
-[calls](status/calls.md), [stories](status/stories.md),
-[settings](status/settings.md), [privacy and security](status/privacy-security.md),
-[notifications](status/notifications.md) and
-[bots and payments](status/bots-payments.md). Counts and the top gaps are in
-[status/README.md](status/README.md). Where this file and a status file
+is described by subject in the area guides: [login and accounts](STATUS.md#authentication--multi-account),
+[chat list](STATUS.md#chat-list--folders), [chat](STATUS.md#chat--composer),
+[message types](STATUS.md#message-types--cards), [media](STATUS.md#media-stickers--audio),
+[profile](STATUS.md#profiles--contacts), [groups](STATUS.md#groups--forums),
+[channels](STATUS.md#channels--comments), [contacts](STATUS.md#contacts--user-search),
+[calls](STATUS.md#voice--video-calls-tgcalls), [stories](STATUS.md#stories),
+[settings](STATUS.md#settings--appearance), [privacy and security](STATUS.md#privacy--security),
+[notifications](STATUS.md#notifications--keep-alive) and
+[bots and payments](STATUS.md#bots-stars--payments). Counts and the top gaps are in
+[STATUS.md](STATUS.md). Where this file and a status file
 disagree, the status file was checked against `src/` on 7 November 2026;
 open milestone states here were updated on 8 November after `ec1284a` and
 `9c93e8f`.
@@ -33,24 +33,24 @@ One line each; the linked guide describes what it built.
 
 | Milestone | Status | Summary |
 |---|---|---|
-| M1 Build and TDLib bridge | done | armv7 Makefile, TDLib submodule, `libtdjson.dylib` split (static linking exceeds the 16 MB branch limit), `tools/machofix.c`, opus, iOS 7 target. [status overview](status/README.md) |
-| M2 Login and accounts | done | Phone, code, 2FA, email and QR steps; sign-up, terms, password recovery; three account slots, each with its own TDLib directory. 1.3 s from launch to authorized on a 4S. [login-accounts](status/login-accounts.md) |
-| M3 Chat list | done | Snapshot first paint, 12 `loadChats` retries, live re-sort, rows, archive, folder strip, drag order, bulk actions. [chat-list](status/chat-list.md) |
-| M4 Chat core | done | Paged history, bubbles, reply/forward/edit/delete, drafts, typing, pins, reactions, multi-select, scheduled sends, secret chats. [chat](status/chat.md) |
-| M5 Media and files | done | Photo viewer, video and GIF playback, document preview, save to camera roll, downloads with cancel, file information. [media](status/media.md) |
-| M6 Stickers and GIFs | done | WebP stills, TGS Lottie, WebM VP9 alpha, pack install by link/search, favourites, editor, custom emoji packs. [media](status/media.md) |
-| M7 Groups, forums and channels | done | Member actions, permissions, invite links, forum topics, channel comments, direct messages, send-as, channel settings. [groups](status/groups.md), [channels](status/channels.md) |
-| M8 Voice and video notes | done | Opus record/play, waveform, speed, transcription line, round video recorder and player; 4 s records to 22 KB on a 4S. [media](status/media.md) |
-| M9 Themes, icons and design tokens | done | UIKit draws the chrome on every iOS version (`996512d`, `8e0d1b4`); the app draws only the chat, sheets, snackbars, viewer, player and call screen. Procedural SVG icon set (`6861366`) with outline/filled pairs; `TGStyle`, `TGTheme+Colours`, six-step spacing, light theme. [settings](status/settings.md) |
-| M10 Search | done | In-chat text search, global search over chats/messages/media, local-first and server results, no-match states. [chat](status/chat.md), [chat-list](status/chat-list.md) |
-| M11 Stories | done | 48 story functions on screens: strip, viewer, reactions, posting, period/privacy, albums, archive, statistics, public search. [stories](status/stories.md) |
-| M12 Profiles and contacts | done | User, group and channel profiles; own profile with three tiles, online line and Add a bio; editing, action tiles, media panes, music strip; contacts list, add, block, share. [profile](status/profile.md), [contacts](status/contacts.md) |
-| M13 1:1 calls | done | tgcalls 9.0.0 signalling and media, VoiceProcessingIO audio, call screen, emoji key, rating, recent calls. Modern clients still refuse this version; two peers that accept 2.4.4 still work. [calls](status/calls.md) |
-| M14 Settings and privacy | done | Telegram-shaped Settings, passcode, two-step, sessions, blocked users, visibility rules, storage, data and network pages. [settings](status/settings.md), [privacy-security](status/privacy-security.md) |
-| M15 Notifications and push | done | Three scopes and previews, exceptions, sounds, reaction and story settings, `registerDevice`, push routing to chat and message. Delivery needs the APNs certificate held for the official bundle ID. [notifications](status/notifications.md) |
-| M16 Message types, cards and veils | done | Service sentences for about 75 types, previews for every content type, structured fields, one card for commerce and shared peers, one veil for spoilers/view-once/paid media, polls rebuilt, protected chats block copy/forward/save. Checked on the 4S with dev showcase rows, not yet with real messages. [message-types](status/message-types.md) |
-| M17 Custom emoji | done | Composer keeps ids and sends or edits real custom emoji; picker tab; reactions, header and sender names; animation through the sticker pipeline, up to 3 per bubble; fallback emoji on iOS 6. Without Premium only Saved Messages accepts them. [chat](status/chat.md), [message-types](status/message-types.md) |
-| M18 Device tiers, delivery and iOS 6 | done | Tier gates and This Device, `scripts/devrun.sh`, `TG_DEV` fenced out of release, Mac Catalyst probe, iOS 6 selector/base64/image-decode fixes. [settings](status/settings.md) |
+| M1 Build and TDLib bridge | done | armv7 Makefile, TDLib submodule, `libtdjson.dylib` split (static linking exceeds the 16 MB branch limit), `tools/machofix.c`, opus, iOS 7 target. [status overview](STATUS.md) |
+| M2 Login and accounts | done | Phone, code, 2FA, email and QR steps; sign-up, terms, password recovery; three account slots, each with its own TDLib directory. 1.3 s from launch to authorized on a 4S. [login-accounts](STATUS.md#authentication--multi-account) |
+| M3 Chat list | done | Snapshot first paint, 12 `loadChats` retries, live re-sort, rows, archive, folder strip, drag order, bulk actions. [chat-list](STATUS.md#chat-list--folders) |
+| M4 Chat core | done | Paged history, bubbles, reply/forward/edit/delete, drafts, typing, pins, reactions, multi-select, scheduled sends, secret chats. [chat](STATUS.md#chat--composer) |
+| M5 Media and files | done | Photo viewer, video and GIF playback, document preview, save to camera roll, downloads with cancel, file information. [media](STATUS.md#media-stickers--audio) |
+| M6 Stickers and GIFs | done | WebP stills, TGS Lottie, WebM VP9 alpha, pack install by link/search, favourites, editor, custom emoji packs. [media](STATUS.md#media-stickers--audio) |
+| M7 Groups, forums and channels | done | Member actions, permissions, invite links, forum topics, channel comments, direct messages, send-as, channel settings. [groups](STATUS.md#groups--forums), [channels](STATUS.md#channels--comments) |
+| M8 Voice and video notes | done | Opus record/play, waveform, speed, transcription line, round video recorder and player; 4 s records to 22 KB on a 4S. [media](STATUS.md#media-stickers--audio) |
+| M9 Themes, icons and design tokens | done | UIKit draws the chrome on every iOS version (`996512d`, `8e0d1b4`); the app draws only the chat, sheets, snackbars, viewer, player and call screen. Procedural SVG icon set (`6861366`) with outline/filled pairs; `TGStyle`, `TGTheme+Colours`, six-step spacing, light theme. [settings](STATUS.md#settings--appearance) |
+| M10 Search | done | In-chat text search, global search over chats/messages/media, local-first and server results, no-match states. [chat](STATUS.md#chat--composer), [chat-list](STATUS.md#chat-list--folders) |
+| M11 Stories | done | 48 story functions on screens: strip, viewer, reactions, posting, period/privacy, albums, archive, statistics, public search. [stories](STATUS.md#stories) |
+| M12 Profiles and contacts | done | User, group and channel profiles; own profile with three tiles, online line and Add a bio; editing, action tiles, media panes, music strip; contacts list, add, block, share. [profile](STATUS.md#profiles--contacts), [contacts](STATUS.md#contacts--user-search) |
+| M13 1:1 calls | done | tgcalls 9.0.0 signalling and media, VoiceProcessingIO audio, call screen, emoji key, rating, recent calls. Modern clients still refuse this version; two peers that accept 2.4.4 still work. [calls](STATUS.md#voice--video-calls-tgcalls) |
+| M14 Settings and privacy | done | Telegram-shaped Settings, passcode, two-step, sessions, blocked users, visibility rules, storage, data and network pages. [settings](STATUS.md#settings--appearance), [privacy-security](STATUS.md#privacy--security) |
+| M15 Notifications and push | done | Three scopes and previews, exceptions, sounds, reaction and story settings, `registerDevice`, push routing to chat and message. Delivery needs the APNs certificate held for the official bundle ID. [notifications](STATUS.md#notifications--keep-alive) |
+| M16 Message types, cards and veils | done | Service sentences for about 75 types, previews for every content type, structured fields, one card for commerce and shared peers, one veil for spoilers/view-once/paid media, polls rebuilt, protected chats block copy/forward/save. Checked on the 4S with dev showcase rows, not yet with real messages. [message-types](STATUS.md#message-types--cards) |
+| M17 Custom emoji | done | Composer keeps ids and sends or edits real custom emoji; picker tab; reactions, header and sender names; animation through the sticker pipeline, up to 3 per bubble; fallback emoji on iOS 6. Without Premium only Saved Messages accepts them. [chat](STATUS.md#chat--composer), [message-types](STATUS.md#message-types--cards) |
+| M18 Device tiers, delivery and iOS 6 | done | Tier gates and This Device, `scripts/devrun.sh`, `TG_DEV` fenced out of release, Mac Catalyst probe, iOS 6 selector/base64/image-decode fixes. [settings](STATUS.md#settings--appearance) |
 | M19 Performance and C/C++ migration | done | yyjson zero-copy parsing, streaming Opus, vector Lottie math, TDLib update coalescing, controller decomposition, 1271 client and 185 call host tests. The migration plan is in git history at `c7149c0^:docs/C_CPP_MIGRATION_PLAN.md`. |
 
 ## Open milestones
@@ -61,7 +61,7 @@ already exist.
 
 | Milestone | Status | Left |
 |---|---|---|
-| M20 Payments, Stars and gifts | `planned` | Pay path, Premium purchase, Stars, gifts, TON, Passport, StoreKit. |
+| M20 Payments, Stars and gifts | `partial` | Pay path, Premium purchase, Stars, gifts, TON, Passport, StoreKit. |
 | M21 Group-call audio | `planned` | RTP mixing and AudioUnit playback in the group-call screen. |
 | M22 Video calls | `partial` | Dev-only engine; picture to an official client, release gate. |
 | M23 Sending files, music and send options | `done` | Document/audio picker, music streaming, silent and repeated sends, GIF caption. |
@@ -633,5 +633,5 @@ Releases.
 **Blocked by:** GitHub Pages for the Cydia repo. The BotFather bot, the
 Worker, D1 and `/stats` are live.
 
-**Closes:** nothing in `status/` yet; adds the delivery rows to M43.
+**Closes:** nothing in `STATUS.md` yet; adds the delivery rows to M43.
 

@@ -424,7 +424,7 @@ static NSString *TGOrderLines(NSDictionary *order) {
 		// The calls the old tier list called "never" but a user account can
 		// still send. Each screen names its request and shows Telegram's
 		// answer; the ones that stay impossible are documented in
-		// docs/status/bots-payments.md.
+		// docs/STATUS.md.
 		TGSection(@"Tier 3 Audit", nil, @[
 			TGOpenRow(@"Support", nil, ^{
 				TGSupportInfoViewController *support =

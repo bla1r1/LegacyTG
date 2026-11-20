@@ -92,46 +92,10 @@ IPA потом собирает `scripts/build_all.sh`.
 | `scripts/check_release.sh` | Падает, если что-то из-под `TG_DEV` попало в релиз, на ключах API из примера, без keychain-entitlements или с открытым хэшем API в срезе |
 | `scripts/release.sh` | Версия из `Info.plist` от сборки до публикации: проверки, IPA, прогон в эмуляторе, deb, затем (после вопроса) тег, пуш, GitHub Release с секцией из CHANGELOG, Cydia-репозиторий. `--dry-run` останавливается до публикации. Текст поста для канала: `build/ipa/telegram-post.txt` |
 
-## Структура репозитория
-
-```
-iTgLegacy/
-├── Makefile
-├── src/
-│   ├── App/          # main, AppDelegate, URL-роутинг, dev-бенч
-│   ├── Features/     # экраны по зонам
-│   │   ├── Auth/  BotsPayments/  Business/  Calls/  Channels/
-│   │   ├── Chat/         # Actions/ Composer/ Core/ Rendering/ Search/ Selection/ Views/
-│   │   ├── ChatList/  Contacts/  Groups/  Media/  Profile/
-│   │   ├── Settings/  Stories/
-│   │   └── Dev/          # меню разработчика и стенды, только TG_DEV
-│   ├── Core/
-│   │   ├── Client/       # TGClient, мост к TDLib: Account/ Audit/ Chats/ Features/ Messages/ Stories/
-│   │   ├── Model/        # разбор сообщений, карточки, текст
-│   │   ├── Stores/       # кэши, опции, стикеры, медиа, кастомные эмодзи
-│   │   ├── Style/        # метрики TGStyle, цвета TGTheme, файлы тем, отрисовка текста
-│   │   ├── Platform/     # классы устройств, capabilities, perf, код-пароль
-│   │   └── Support/      # JSON, пакеты обновлений, локализация, QR, даты
-│   ├── UI/           # общие Controllers/ Controls/ Format/ Overlays/
-│   ├── Views/Icons/  # процедурные иконки и SVG-пути
-│   ├── Media/        # декодеры WebP и WebM-стикеров
-│   ├── Audio/        # голосовые, музыкальный плеер
-│   ├── CallEngine/   # tgcalls: Crypto/ Media/ Network/ Signaling/
-│   └── Compat/       # dyld TLV и шимы iOS 6/7
-├── resources/        # Info.plist, картинки, шрифты, звуки, встроенные темы
-├── third_party/      # libtgvoip, libvpx, opus, ogg, yyjson, tlottie, …
-├── tdlib/td/         # TDLib (git submodule)
-├── vendor/           # include/ (tg_config.h), libs/ (готовые, в .gitignore)
-├── tools/            # machofix и утилиты для устройства
-├── scripts/          # сборка, устройство, линтеры, i18n
-├── tests/            # тесты на хосте
-└── docs/             # статус по зонам, роадмап, дизайн-спека
-```
-
 ## Документация
 
 Всё перечислено в [docs/README.md](docs/README.md). Что работает —
-[docs/status/README.md](docs/status/README.md), что дальше —
+[docs/STATUS.md](docs/STATUS.md), что дальше —
 [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Автор и лицензия

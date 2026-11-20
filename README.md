@@ -90,46 +90,10 @@ have to come from an earlier checkout.
 | `scripts/check_release.sh` | Fails if anything behind `TG_DEV` reached a release build, on placeholder API keys, missing keychain entitlements or a plain API hash in a slice |
 | `scripts/release.sh` | The version in `Info.plist`, from build to published: checks, IPAs, emulator smoke, deb, then (after a question) tag, push, GitHub Release with the CHANGELOG section, Cydia repo. `--dry-run` stops before publishing. The channel post text lands in `build/ipa/telegram-post.txt` |
 
-## Repository layout
-
-```
-iTgLegacy/
-├── Makefile
-├── src/
-│   ├── App/          # main, AppDelegate, URL routing, dev bench
-│   ├── Features/     # screens by area
-│   │   ├── Auth/  BotsPayments/  Business/  Calls/  Channels/
-│   │   ├── Chat/         # Actions/ Composer/ Core/ Rendering/ Search/ Selection/ Views/
-│   │   ├── ChatList/  Contacts/  Groups/  Media/  Profile/
-│   │   ├── Settings/  Stories/
-│   │   └── Dev/          # dev menu and harnesses, TG_DEV only
-│   ├── Core/
-│   │   ├── Client/       # TGClient, the TDLib bridge: Account/ Audit/ Chats/ Features/ Messages/ Stories/
-│   │   ├── Model/        # message flattening, cards, message text
-│   │   ├── Stores/       # caches, options, stickers, media, custom emoji
-│   │   ├── Style/        # TGStyle metrics, TGTheme colours, theme files, text drawing
-│   │   ├── Platform/     # device tiers, capabilities, perf, passcode
-│   │   └── Support/      # JSON, update batching, localisation, QR, dates
-│   ├── UI/           # shared Controllers/ Controls/ Format/ Overlays/
-│   ├── Views/Icons/  # procedural icons and SVG paths
-│   ├── Media/        # WebP and WebM sticker decoders
-│   ├── Audio/        # voice notes, music player
-│   ├── CallEngine/   # tgcalls: Crypto/ Media/ Network/ Signaling/
-│   └── Compat/       # dyld TLV and iOS 6/7 shims
-├── resources/        # Info.plist, images, fonts, sounds, built-in themes
-├── third_party/      # libtgvoip, libvpx, opus, ogg, yyjson, tlottie, …
-├── tdlib/td/         # TDLib (git submodule)
-├── vendor/           # include/ (tg_config.h), libs/ (prebuilt, git-ignored)
-├── tools/            # machofix and device helpers
-├── scripts/          # build, device, lint and i18n scripts
-├── tests/            # host tests
-└── docs/             # status by area, roadmap, design spec
-```
-
 ## Documentation
 
 [docs/README.md](docs/README.md) lists everything. Start with
-[docs/status/README.md](docs/status/README.md) for what works and
+[docs/STATUS.md](docs/STATUS.md) for what works and
 [docs/ROADMAP.md](docs/ROADMAP.md) for what comes next.
 
 ## Author & license

@@ -72,7 +72,7 @@ comm -23 "$TMP/upd_all" "$TMP/upd_used" > "$TMP/upd_gap"
 # Areas this client is not going to have: they need a browser engine, a
 # payment or wallet stack, a bot session, or a server feature that did not
 # exist when this OS did. Kept as one pattern so the relevant gap is a number
-# that can be watched, not a feeling. docs/status/README.md explains the
+# that can be watched, not a feeling. docs/STATUS.md explains the
 # coverage, and scripts/tdlib_tiers.py --tier3 prints the reason for every remaining
 # group. Speech recognition is not in this list: TDLib's recognizeSpeech asks
 # Telegram's own recognizer, so a user client can carry it.
@@ -133,7 +133,7 @@ printf '  reachable:       %s   (a screen calls the method)\n' "$wired"
 printf '  bare:            %s   (name added, nothing calls it)\n' "$bare"
 printf 'never called:      %s\n' "$((total - used))"
 relevant=$(grep -vcE "$SKIP" "$TMP/gap")
-printf '  of which wanted: %s   (see docs/status/README.md)\n' "$relevant"
+printf '  of which wanted: %s   (see docs/STATUS.md)\n' "$relevant"
 printf '  out of scope:    %s\n\n' "$((total - used - relevant))"
 
 upd_total=$(wc -l < "$TMP/upd_all" | tr -d ' ')
@@ -150,7 +150,7 @@ printf 'dropped:           %s\n' "$((upd_total - upd_used))"
 printf '  of which wanted: %s\n' "$upd_rel"
 printf '  out of scope:    %s\n\n' "$((upd_total - upd_used - upd_rel))"
 
-# Areas, grouped the way the docs/status files split them.
+# Areas, grouped the way docs/STATUS.md splits them.
 printf '%-22s %s\n' "area" "never called"
 for area in Message Chat User Story Business Bot Sticker Call Payment Star \
             Gift Poll Checklist Forum Topic Folder Reaction Notification \

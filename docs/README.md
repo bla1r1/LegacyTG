@@ -1,30 +1,16 @@
 # Documentation
 
-The docs are the area status files, plus three specs and two process notes.
+Overview of the LegacyTG architecture, design specs, verification checks and feature parity.
 
-| Where | What is in it |
+| Document | Description |
 |---|---|
-| [status/README.md](status/README.md) | Totals, milestones M1–M44, top gaps, TDLib coverage |
-| [ROADMAP.md](ROADMAP.md) | Open milestones M20–M44 as checklists, with the status rows each one closes |
-| [status/](status/) | One row per feature: `done` / `partial` / `missing` / `dev-only`, `file:line`, note |
-| [status/checks.md](status/checks.md) | Device checks: tap, see, wait, log. Host test where one exists |
-| [status/bugs.md](status/bugs.md) | Closed bug queue, B1 onwards, with the fix and the check |
-| [DESIGN_SPEC.md](DESIGN_SPEC.md) | iOS 6 Reimagined: UIKit chrome, what the app draws, metrics, colour roles |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | What "done" means, failing-test rule, tokens, bug queue, commit style |
-| [howto_push_cert.md](howto_push_cert.md) | APNs key, certificate and provisioning profile |
-| [AUTHORS](AUTHORS) | Copyright holders |
-
-Area files:
-
-- [chat-list](status/chat-list.md), [chat](status/chat.md), [message-types](status/message-types.md)
-- [profile](status/profile.md), [groups](status/groups.md), [channels](status/channels.md), [contacts](status/contacts.md)
-- [calls](status/calls.md) (with the tgcalls 9.0.0 protocol notes)
-- [stories](status/stories.md), [media](status/media.md)
-- [settings](status/settings.md), [privacy-security](status/privacy-security.md), [notifications](status/notifications.md)
-- [login-accounts](status/login-accounts.md), [bots-payments](status/bots-payments.md)
-
-Old planning files (`gaps.md`, `feature_backlog.md`, `acceptance_checklist.md`,
-`bug_registry.md`, `calls_notes.md`, `calls_v9_spec.md`) were folded into
-`status/` and removed on 7 November 2026; their full text is in git history at
-`cf71bc9`. `ROADMAP.md` was removed with them by mistake and restored in
-`8f4eb3c`.
+| [STATUS.md](STATUS.md) | Feature implementation & Telegram parity matrix across all 15 app areas |
+| [ROADMAP.md](ROADMAP.md) | High-level milestones (M1–M44) and future architectural roadmap |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | System layers, TDLib bridge, data flow, caching and domain stores |
+| [BACKGROUND_NOTIFICATIONS.md](BACKGROUND_NOTIFICATIONS.md) | Keep-alive engine, in-memory silent audio loop and local notifications |
+| [DESIGN_SPEC.md](DESIGN_SPEC.md) | iOS 6 Reimagined: UIKit chrome, custom CoreGraphics rendering, colour roles |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Guidelines for contributors, code style, token linters and testing rules |
+| [CHECKS.md](CHECKS.md) | Manual device test scripts, hardware benchmarks and log verifications |
+| [BUGS.md](BUGS.md) | Closed bug registry (B1–B40) with regression test mapping |
+| [howto_push_cert.md](howto_push_cert.md) | APNs keys, certificates and provisioning profile setup |
+| [AUTHORS](AUTHORS) | Project maintainers and credits |
