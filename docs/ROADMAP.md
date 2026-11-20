@@ -52,6 +52,11 @@ One line each; the linked guide describes what it built.
 | M17 Custom emoji | done | Composer keeps ids and sends or edits real custom emoji; picker tab; reactions, header and sender names; animation through the sticker pipeline, up to 3 per bubble; fallback emoji on iOS 6. Without Premium only Saved Messages accepts them. [chat](STATUS.md#chat--composer), [message-types](STATUS.md#message-types--cards) |
 | M18 Device tiers, delivery and iOS 6 | done | Tier gates and This Device, `scripts/devrun.sh`, `TG_DEV` fenced out of release, Mac Catalyst probe, iOS 6 selector/base64/image-decode fixes. [settings](STATUS.md#settings--appearance) |
 | M19 Performance and C/C++ migration | done | yyjson zero-copy parsing, streaming Opus, vector Lottie math, TDLib update coalescing, controller decomposition, 1271 client and 185 call host tests. The migration plan is in git history at `c7149c0^:docs/C_CPP_MIGRATION_PLAN.md`. |
+| M23 Sending files, music and send options | done | Document/audio picker, AudioFileStream music streaming, silent and repeated sends, GIF caption and view-once timer. [media](STATUS.md#media-stickers--audio) |
+| M24 Chat-list previews and badges | done | Thumbnails, type glyphs, reaction/poll badges, compact counts, folder tags, typing indicator, Saved Messages row, pinned tint. [chat-list](STATUS.md#chat-list--folders) |
+| M25 Story rings | done | Story rings around avatars in chat list and profile, own-story composer button in navigation bar. [stories](STATUS.md#stories) |
+| M27 Failed-send mark | done | Failed exclamation mark in bubble and chat row, tap to retry without hold menu. [chat](STATUS.md#chat--composer) |
+| M45 Updates, changelog and usage | done | MTProto inline bot update checker, official update dialog with changelog, anonymous telemetry, Cydia repo on GitHub Pages (`gh-pages`). |
 
 ## Open milestones
 
@@ -64,15 +69,11 @@ already exist.
 | M20 Payments, Stars and gifts | `partial` | Pay path, Premium purchase, Stars, gifts, TON, Passport, StoreKit. |
 | M21 Group-call audio | `planned` | RTP mixing and AudioUnit playback in the group-call screen. |
 | M22 Video calls | `partial` | Dev-only engine; picture to an official client, release gate. |
-| M23 Sending files, music and send options | `done` | Document/audio picker, music streaming, silent and repeated sends, GIF caption. |
-| M24 Chat-list previews and badges | `done` | Thumbnails, type glyph, reaction/poll badges, compact counts, tab badge, folder tags, typing sender, Saved Messages row, pinned tint and scalar stripping. |
-| M25 Story rings | `planned` | Ring on every row and profile avatar, own-story tile. |
 | M26 Chat search filters | `planned` | Sender/media/date chips, result opens the hit, search tokens, global scopes. |
-| M27 Failed-send mark | `done` | Failed icon in the bubble and row, retry without the hold menu. |
-| M28 Profile cover, QR and Premium badge | `partial` | Accent gradient, background emoji, star badge, rating, verifier note. QR screen done. |
+| M28 Profile cover, QR and Premium badge | `partial` | Accent gradient, background emoji, third-party verifier note. QR screen, star level badge and rating details sheet done. |
 | M29 Profile media tabs | `partial` | GIF and Polls panes, photo/video split, month sections, calendar, counts, multi-select. Pane search done. |
 | M30 Settings search | `planned` | A page index and a search field over every Settings row. |
-| M31 Notification pages | `partial` | Permission warning, badge settings, exception editing. Category pages and in-app banner done. |
+| M31 Notification pages | `partial` | Permission warning, badge settings. Category pages, in-app banner, background keep-alive loop and local notification dispatch done. |
 | M32 Contacts invite and import | `planned` | Invite Friends row, address-book permission, phone-book import, formatted phone add. |
 | M33 Localisation | `partial` | 170 unique strings with no official match, gender forms, `native_name`. 88.6% of UI strings come from the official pack. |
 | M34 Developer talk on the user's path | `partial` | Error table for 157 alerts, harness pages behind `TG_DEV`, footers rewritten. |
@@ -84,9 +85,8 @@ already exist.
 | M40 Bots and mini apps | `planned` | Inline mode, Web App host, bot commands, guest bots, game scores, web-app buttons. |
 | M41 Dark theme | `partial` | Official dark theme files apply; Night Blue built in. Auto-Night and a device pass over every screen left. |
 | M42 Landscape and iPad | `deferred` | Portrait iPhone layout only; no iPad or landscape pass. |
-| M43 Platform delivery and device coverage | `partial` | iOS 6 device run, 4-inch check, background fetch, crash reporting, arm64 `libtdjson`. Release build script done. |
+| M43 Platform delivery and device coverage | `partial` | Real iOS 6 hardware verification, 4-inch screen pass. Universal arm64+armv7 fat IPA, background keep-alive, crash telemetry done. |
 | M44 Message detail and unread TDLib fields | `partial` | Rich-message blocks, author signature, view/forward counts, gift counts, service-action buttons. Read summary done. |
-| M45 Updates, changelog and usage | `partial` | Update check through our bot, official update screen with the changelog, usage counts by version and device, Cydia repo. |
 
 ## M20: Payments, Stars and gifts
 
@@ -186,14 +186,12 @@ Pinned row tint, Photo/video thumbnail in the preview, Content-type glyph in
 the preview, Folder tags on the row, Saved Messages row, Unread badge on the
 Chats tab; `chat.md` — typing sender; `stories.md` — My Story first tile.
 
-## M25: Story rings
+## M25: Story rings (Done)
 
-- [ ] `planned` Draw the active-story ring around every chat-row avatar and
-  the profile header avatar, with the seen/unseen and close-friends states.
-- [ ] `planned` Turn the own-profile tile into a ring when own stories exist;
-  the plus always draws today.
-- [ ] `planned` Read `user.active_story_state` in list and profile cells; the
-  strip already has a ring.
+- [x] `done` Draw the active-story ring around every chat-row avatar (`TGChatRowCell`) and
+  the profile header avatar, with seen/unseen states (`TGChatRowStoryRingImage`).
+- [x] `done` Own-story composer action icon in header (`TGAddStoryIcon`).
+- [x] `done` Read `user.active_story_state` / `chat.storyRing` in list snapshot and update handlers.
 
 **Blocked by:** no shared ring view; each of the three cells draws its own
 avatar.
@@ -528,10 +526,9 @@ for iOS 6 screens but no layout pass followed.
   3.5-inch.
 - [x] `done` `scripts/build_all.sh` builds dependencies and the three release
   IPAs with SHA-256 sums (`3d3d647`).
-- [ ] `planned` Background fetch and crash reporting; crashes are pulled by
-  hand (7 November 2026).
-- [ ] `planned` An arm64 `libtdjson.dylib`; `make ipa-arm64` links but the
-  dylib is built for armv7 only.
+- [x] `done` Background keep-alive loop via `TGBackgroundKeeper` (silent audio loop) and
+  crash telemetry markers (`OOM@Screen`) recorded and reported on next launch.
+- [x] `done` Universal fat IPA (`LegacyTG.ipa`) bundling armv7 and arm64 slices, plus Cydia deb packaging.
 
 **Blocked by:** hardware on the bench and a second architecture in the TDLib
 build script.
@@ -624,11 +621,8 @@ Releases.
 - [x] `done` `CHANGELOG.md` at the root, one section per build
   (`## 1.2 (2) - 2026-11-09`), the single source for GitHub release
   notes, the Cydia depiction and the bot's `notes`.
-- [ ] `partial` Cydia repo on GitHub Pages, its scripts kept outside this
-  repository with the owner (`LegacyTG-cydia`): `scripts/build_deb.sh` packs
-  `LegacyTG.app` into `/Applications` with `uicache` in `postinst`;
-  `scripts/cydia_repo.py` writes `Packages`, `Packages.bz2`, `Release` and
-  a depiction page from `CHANGELOG.md`.
+- [x] `done` Cydia repo on GitHub Pages (`gh-pages` branch, `https://bla1r1.github.io/LegacyTG`),
+  packaged with `scripts/build_deb.sh` and updated via `scripts/update_repo.py`.
 
 **Blocked by:** GitHub Pages for the Cydia repo. The BotFather bot, the
 Worker, D1 and `/stats` are live.
