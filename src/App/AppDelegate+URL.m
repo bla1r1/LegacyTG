@@ -42,6 +42,7 @@ static const CGFloat kIconDumpSide = 52.0f;
 #import <QuartzCore/QuartzCore.h>
 #import <objc/runtime.h>
 #import "TGAccountStore.h"
+#import "TGCountryPickerViewController.h"
 #import "TGSessionsViewController.h"
 #import "TGSettingsStore.h"
 #import "TGLocalization.h"
@@ -326,6 +327,7 @@ static NSUInteger TGChatsIndex(UITabBarController *tabs) {
 	//   privacy/<key>   a privacy rule page, e.g. ShowStatus, ShowProfilePhoto
 	//   stickereditor   a new sticker set, before anything is created
 	//   photos/<userId> a user's profile photos (none: your own)
+	//   country         the sign-in Country list; picking one only logs it
 	if ([host isEqualToString:@"screen"] && arg.length){
 		NSArray *parts = [url.path componentsSeparatedByString:@"/"];
 		NSString *name = parts.count > 1 ? parts[1] : arg;
@@ -336,6 +338,17 @@ static NSUInteger TGChatsIndex(UITabBarController *tabs) {
 				return;
 			UINavigationController *nc = tabs.viewControllers[tabs.selectedIndex];
 			UIViewController *screen = nil;
+			if ([name isEqualToString:@"country"]){
+				[[TGAccountStore shared] countriesWithCompletion:^(NSArray *countries){
+					TGCountryPickerViewController *picker = [[TGCountryPickerViewController alloc]
+							initWithCountries:countries picked:^(NSDictionary *country){
+						NSLog(@"screen/country: picked %@", country[@"prefix"]);
+					}];
+					picker.hidesBottomBarWhenPushed = YES;
+					[nc pushViewController:picker animated:NO];
+				}];
+				return;
+			}
 			if ([name isEqualToString:@"gift"]){
 				screen = [[TGGiftViewController alloc] initWithGift:@{
 					@"starCount" : @50, @"date" : @((long long)time(NULL)),

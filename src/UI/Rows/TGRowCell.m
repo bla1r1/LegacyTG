@@ -171,6 +171,8 @@
 	if (row[TGRowIcon])
 		self.imageView.image = [TGIcons settingsIconNamed:row[TGRowIcon]
 												   color:row[TGRowColour]];
+	else if (row[TGRowAvatarImage])
+		self.imageView.image = row[TGRowAvatarImage];
 
 	if ([kind isEqualToString:TGKindToggle]){
 		self.switchToggleBlock = row[TGRowToggle];

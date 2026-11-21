@@ -43,6 +43,7 @@
 #import "TGAccountSession.h"
 #import "TGSettingsStore.h"
 #import "TGBackgroundKeeper.h"
+#import "TGAppActivity.h"
 #import "TGPeerStore.h"
 #import "TGChatListStore.h"
 #import "TGMediaStore.h"
@@ -57,10 +58,26 @@
 
 @interface AppDelegate ()
 @property (nonatomic, assign) BOOL updateInfoPresented;
+/// TDLib logged out or closed (Log Out, a revoked session) and no account has
+/// signed in since. Kept across launches, or a relaunch went back to the
+/// showcase instead of login.
+@property (nonatomic, assign) BOOL signedOutOfAccount;
 - (void)presentUpdateInfo:(TGUpdateInfo *)info;
 @end
 
 @implementation AppDelegate
+
+static NSString *const TGSignedOutKey = @"TGSignedOutOfAccount";
+
+- (BOOL)signedOutOfAccount {
+	return [[NSUserDefaults standardUserDefaults] boolForKey:TGSignedOutKey];
+}
+
+- (void)setSignedOutOfAccount:(BOOL)signedOut {
+	if (signedOut == self.signedOutOfAccount)
+		return;
+	[[NSUserDefaults standardUserDefaults] setBool:signedOut forKey:TGSignedOutKey];
+}
 
 + (AppDelegate *)sharedDelegate {
 	return (AppDelegate *)[UIApplication sharedApplication].delegate;
@@ -372,7 +389,8 @@ static UIImage *TGCustomEmojiFromStore(int64_t emojiId, CGFloat side) {
 	self.window.backgroundColor = [[TGTheme shared] listBackgroundColour];
 	// Signed out, the auth state picks login; the chat list waits for one
 	// that was signed in before.
-	[self showScreen:TGLaunchScreenForSession(TGHasAuthorizedSession(), TGDevShowcaseBuild())];
+	[self showScreen:TGLaunchScreenForSession(TGHasAuthorizedSession(),
+			TGAuthShowcaseStandsIn(TGDevShowcaseBuild(), self.signedOutOfAccount))];
 	TGPerfReport("launch", "showMainUI", stepStart, 100.0);
 	stepStart = TGPerfNow();
 	[self.window makeKeyAndVisible];
@@ -472,6 +490,8 @@ static void TGRecursivePurgeVC(UIViewController *vc) {
 	[TGPasscode noteAppBackgrounded];
 	[TGUpdateStore sessionDidEnd];
 	[AppDelegate purgeMemoryCaches];
+	TGAppSetInBackground(YES);
+	[[TGClient shared] send:TGOnlineOptionRequest(NO)];
 
 	if ([TGSettingsStore shared].keepAliveEnabled) {
 		[[TGBackgroundKeeper shared] start];
@@ -492,6 +512,9 @@ static void TGRecursivePurgeVC(UIViewController *vc) {
 
 - (void)applicationWillEnterForeground:(UIApplication *)application {
 	[[TGBackgroundKeeper shared] stop];
+	TGAppSetInBackground(NO);
+	// A paused TDLib is not running yet; it says online once it is ready.
+	[[TGClient shared] send:TGOnlineOptionRequest(YES)];
 	[TGUpdateStore sessionDidStart];
 	if ([TGPasscode shouldLockOnForeground]) {
 		[TGPasscodeViewController presentUnlockIfLocked];
@@ -569,12 +592,14 @@ static void TGRecursivePurgeVC(UIViewController *vc) {
 					[[TGSettingsStore shared] loadAppLanguagePack:TGAppLanguage() completion:nil];
 					[me askForPushToken];
 					TGSetAuthorizedSession(YES);
+					me.signedOutOfAccount = NO;
 					[me.loginVC setBusy:NO];
 					[me showMainUI];
 					[[TGUpdateStore shared] checkIfDue:NO];
 					break;
 				case TGAuthStateClosed:
 				case TGAuthStateLoggingOut:
+					me.signedOutOfAccount = YES;
 					TGSetAuthorizedSession(NO);
 					[me routeForAuthState:state];
 					break;
@@ -626,7 +651,8 @@ static void TGRecursivePurgeVC(UIViewController *vc) {
 /// The login screen is put up before its step is set: a step sent to a nil
 /// loginVC is lost, which left a fresh release install on an empty chat list.
 - (void)routeForAuthState:(TGAuthState)state {
-	[self showScreen:TGAuthScreenForState(state, self.loginVC != nil, TGDevShowcaseBuild())];
+	[self showScreen:TGAuthScreenForState(state, self.loginVC != nil,
+			TGAuthShowcaseStandsIn(TGDevShowcaseBuild(), self.signedOutOfAccount))];
 }
 
 - (void)showScreen:(TGAuthScreen)screen {

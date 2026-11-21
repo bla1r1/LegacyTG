@@ -8,6 +8,7 @@
 #import "TGIcons.h"
 #import <AVFoundation/AVFoundation.h>
 #import "TGStyle.h"
+#import "TGAppActivity.h"
 #import <CoreText/CoreText.h>
 
 /// How visible the part of a voice note nobody has heard yet is.
@@ -604,17 +605,32 @@ static const NSUInteger kMaxCustomEmojiViews = 3;
 				name:AVPlayerItemDidPlayToEndTimeNotification
 			  object:player.currentItem];
 
+	[[NSNotificationCenter defaultCenter] addObserver:self
+			selector:@selector(loopActivityChanged)
+				name:TGAppActivityChangedNotification object:nil];
+
 	self.loopPlayer = player;
 	self.loopLayer = layer;
 	self.loopingPath = path;
-	[player play];
+	if (!TGAppInBackground())
+		[player play];
+}
+
+/// A muted GIF loop kept decoding behind the Home screen while Background
+/// Connection held the app alive.
+- (void)loopActivityChanged {
+	if (TGAppInBackground())
+		[self.loopPlayer pause];
+	else
+		[self.loopPlayer play];
 }
 
 - (void)loopEnded:(NSNotification *)note {
 	if (note.object != self.loopPlayer.currentItem)
 		return;
 	[self.loopPlayer seekToTime:kCMTimeZero];
-	[self.loopPlayer play];
+	if (!TGAppInBackground())
+		[self.loopPlayer play];
 }
 
 - (void)stopLoopingVideo {
@@ -622,6 +638,8 @@ static const NSUInteger kMaxCustomEmojiViews = 3;
 		return;
 	[[NSNotificationCenter defaultCenter] removeObserver:self
 			name:AVPlayerItemDidPlayToEndTimeNotification object:self.loopPlayer.currentItem];
+	[[NSNotificationCenter defaultCenter] removeObserver:self
+			name:TGAppActivityChangedNotification object:nil];
 	[self.loopPlayer pause];
 	[self.loopLayer removeFromSuperlayer];
 	self.loopLayer = nil;

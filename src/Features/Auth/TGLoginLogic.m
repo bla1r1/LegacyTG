@@ -59,6 +59,11 @@ NSString *TGLoginEmailResetPendingText(NSInteger resetIn) {
 	return TGLocalizedFormat(@"Email will be reset %@", when);
 }
 
+NSString *TGCountryRowTitle(NSDictionary *country) {
+	NSString *name = country[@"name"];
+	return [name isKindOfClass:NSString.class] ? name : @"";
+}
+
 NSArray *TGCountrySections(NSArray *countries, NSString *query) {
 	NSArray *sorted = [countries sortedArrayUsingComparator:^NSComparisonResult(NSDictionary *a, NSDictionary *b){
 		return [a[@"name"] ?: @"" localizedCaseInsensitiveCompare:b[@"name"] ?: @""];

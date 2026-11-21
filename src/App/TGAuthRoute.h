@@ -20,6 +20,11 @@ typedef NS_ENUM(NSInteger, TGAuthScreen) {
 /// build's fixture chats should stay reachable while signed out.
 FOUNDATION_EXTERN TGAuthScreen TGAuthScreenForState(TGAuthState state, BOOL loginOpen, BOOL devShowcase);
 
+/// Whether the dev showcase may stand in for login. Only until this run signs
+/// out: after Log Out the dev build stayed on the old account's screens (an
+/// empty Saved Messages, the fixture chats) and never showed login.
+FOUNDATION_EXTERN BOOL TGAuthShowcaseStandsIn(BOOL devBuild, BOOL signedOut);
+
 /// The first screen, before TDLib has said anything. `authorized`: this
 /// account slot reached authorizationStateReady before. Without it the chat
 /// list would flash "Chats / Loading..." for ~1 s ahead of login.

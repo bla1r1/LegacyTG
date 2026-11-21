@@ -84,8 +84,12 @@ NSString *TGUIFormatScheduledRelative(NSTimeInterval sendDate, NSTimeInterval no
 NSString *TGUIFormatFullPhone(NSString *prefix, NSString *number) {
 	NSString *prefixDigits = TGUIDigits(prefix ?: @"");
 	NSString *numberDigits = TGUIDigits(number ?: @"");
+	// A whole number pasted under its code repeats the code; a national one
+	// may merely start with the same digits (Kyrgyz 996..., every Kazakh 7...),
+	// so only a number as long as a full international one loses it.
 	if (prefixDigits.length > 0 &&
-			[numberDigits rangeOfString:prefixDigits].location == 0)
+			numberDigits.length >= TGPhoneFullNumberMinDigits &&
+			[numberDigits hasPrefix:prefixDigits])
 		numberDigits = [numberDigits substringFromIndex:prefixDigits.length];
 	// A national number is often typed with its trunk zero ("067..." in
 	// Ukraine); E.164 drops it. Italy is the country where the zero is part

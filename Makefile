@@ -525,6 +525,7 @@ APP_SRC_M := \
 	src/Features/Chat/Views/TGRecordBar.m \
 	src/Core/Platform/TGGhostMode.m \
 	src/Core/Platform/TGBackgroundKeeper.m \
+	src/Core/Platform/TGAppActivity.m \
 	src/Core/Stores/TGPlaybackQueue.m \
 	src/Core/Model/TGProfileTabs.m \
 	src/Core/Platform/TGPasscode.m \

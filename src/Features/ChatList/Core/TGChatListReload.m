@@ -17,6 +17,7 @@
 #import "TGChatParityModel.h"
 #import "TGiPadSplitViewController.h"
 #import "TGiPadSimulator.h"
+#import "TGAppActivity.h"
 
 
 // Height of the folder pill strip above the chat list (official-style tabs).
@@ -61,6 +62,13 @@
 }
 
 - (void)reload {
+	// Behind the Home screen with Background Connection on, every chat that
+	// spoke re-laid out the whole list for nobody. One reload on return
+	// shows the same result.
+	if (TGAppInBackground()){
+		self.reloadStale = YES;
+		return;
+	}
 	if (self.showsArchive){
 		self.chats = [TGChatListStore shared].archivedChats;
 		[self reloadStoriesIfNeeded];
@@ -376,6 +384,10 @@
 /// reloadData drops the selection; on the iPad the open chat's row lost its
 /// highlight with every avatar that landed.
 - (void)reloadTableKeepingSelection {
+	if (TGAppInBackground()){
+		self.reloadStale = YES;
+		return;
+	}
 	[self.tableView reloadData];
 	[self reselectActiveChatIfPad];
 }

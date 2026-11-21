@@ -18,6 +18,7 @@
 #import "TGPasscodeViewController.h"
 #import "TGChatListRowGeometry.h"
 #import "TGSendStore.h"
+#import "TGAppActivity.h"
 
 
 // Height of the folder pill strip above the chat list (official-style tabs).
@@ -98,7 +99,7 @@ static const CGFloat kListStoryGap     = TGMetricPadSmall;
 	id chatsObserver = [center addObserverForName:TGChatListStoreChangedNotification
 			object:nil queue:nil usingBlock:^(NSNotification *note){
 		if ([note.userInfo[TGChatListStoreArchiveKey] boolValue]){
-			[weakSelf.tableView reloadData];
+			[weakSelf reloadTableKeepingSelection];
 			return;
 		}
 		// Reset signature so folder-merged chats refresh on new messages or new chats
@@ -122,6 +123,20 @@ static const CGFloat kListStoryGap     = TGMetricPadSmall;
 		[me performSelector:@selector(reloadVisibleRows) withObject:nil afterDelay:0.3];
 	}];
 	// The notice over the list comes and goes with TDLib's suggested actions.
+	// Back on screen: whatever was held while in the background, once.
+	[TGObservers observe:TGAppActivityChangedNotification owner:self usingBlock:^(NSNotification *note){
+		TGChatListViewController *me = weakSelf;
+		if (!me || TGAppInBackground())
+			return;
+		if (me.reloadStale){
+			me.reloadStale = NO;
+			me.visibleRowsStale = NO;
+			[me reload];
+		} else if (me.visibleRowsStale){
+			me.visibleRowsStale = NO;
+			[me reloadVisibleRows];    // sets it again if the list is covered
+		}
+	}];
 	[TGObservers observe:TGSuggestedActionsChangedNotification owner:self usingBlock:^(NSNotification *note){
 		[weakSelf reload];
 	}];

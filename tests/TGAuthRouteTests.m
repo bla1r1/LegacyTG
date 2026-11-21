@@ -63,4 +63,17 @@
 	XCTAssertEqual(TGLaunchScreenForSession(YES, YES), TGAuthScreenMain);
 }
 
+/// After Log Out the dev build kept the old account's screens and never
+/// opened login: the showcase stood in for login for the rest of the run.
+- (void)testLogOutOpensLoginEvenInTheDevBuild {
+	BOOL showcase = TGAuthShowcaseStandsIn(YES, YES);
+	XCTAssertFalse(showcase);
+	XCTAssertEqual(TGAuthScreenForState(TGAuthStateLoggingOut, NO, showcase), TGAuthScreenLoading);
+	XCTAssertEqual(TGAuthScreenForState(TGAuthStateClosed, NO, showcase), TGAuthScreenLoading);
+	XCTAssertEqual(TGAuthScreenForState(TGAuthStateWaitPhoneNumber, NO, showcase), TGAuthScreenLogin);
+	// A fresh dev launch with no account still opens on the showcase.
+	XCTAssertTrue(TGAuthShowcaseStandsIn(YES, NO));
+	XCTAssertFalse(TGAuthShowcaseStandsIn(NO, NO));
+}
+
 @end

@@ -2,6 +2,7 @@
 // TGLottieView.mm - plays Telegram stickers: Lottie loops rasterised by
 // TGLottieRender in the background, WebM through TGWebMDecoder.
 //
+#import "TGAppActivity.h"
 #import "TGLottieSupport.h"
 #import "TGLottieRender.h"
 #import "TGTLottie.h"
@@ -226,18 +227,23 @@ static NSString *TGLottieKey(NSString *path, CGSize viewSize) {
 		self.backgroundColor = [UIColor clearColor];
 		self.opaque = NO;
 		self.layer.contentsGravity = kCAGravityResizeAspect;
+		[[NSNotificationCenter defaultCenter] addObserver:self
+				selector:@selector(appActivityChanged)
+					name:TGAppActivityChangedNotification object:nil];
 	}
 	return self;
 }
 
 - (void)dealloc {
+	[[NSNotificationCenter defaultCenter] removeObserver:self
+			name:TGAppActivityChangedNotification object:nil];
 	[_webMPlayer stop];
 	_webMPlayer = nil;
 	[_timer invalidate];
 }
 
 - (void)startTimer {
-	if (self.timer || !self.loaded) return;
+	if (self.timer || !self.loaded || TGAppInBackground()) return;
 	double fps = self.model.isWebM ? self.model.frameRate : 20.0;
 	if (fps < 10.0) fps = 15.0;
 	if (fps > 30.0) fps = 30.0;
@@ -250,9 +256,20 @@ static NSString *TGLottieKey(NSString *path, CGSize viewSize) {
 	[[NSRunLoop mainRunLoop] addTimer:self.timer forMode:NSRunLoopCommonModes];
 }
 
+/// The window stays when the app leaves the screen, so a loop kept a 30 fps
+/// timer and a VP9 decode running behind the Home screen with Background
+/// Connection on. It holds its frame and picks up where it was.
+- (void)appActivityChanged {
+	[self syncPlaybackWithScreen];
+}
+
 - (void)didMoveToWindow {
 	[super didMoveToWindow];
-	if (self.window) {
+	[self syncPlaybackWithScreen];
+}
+
+- (void)syncPlaybackWithScreen {
+	if (self.window && !TGAppInBackground()) {
 		if (self.isPlaying && self.webMPlayer) {
 			[self.webMPlayer play];
 		} else if (self.isPlaying && self.loaded && self.model.isWebM) {
@@ -475,7 +492,8 @@ static BOOL sBuildsDeferred = NO;
 		if (self.isPlaying) {
 			if (self.model.isWebM) {
 				[self ensureWebMPlayer];
-				[self.webMPlayer play];
+				if (!TGAppInBackground())
+					[self.webMPlayer play];
 			} else if (!self.timer) {
 				[self startTimer];
 			}
@@ -639,7 +657,7 @@ static BOOL sBuildsDeferred = NO;
 	}
 
 	if (self.isPlaying) {
-		if (self.webMPlayer) [self.webMPlayer play];
+		if (self.webMPlayer && !TGAppInBackground()) [self.webMPlayer play];
 		else if (!self.timer) [self startTimer];
 	}
 
@@ -711,7 +729,8 @@ static BOOL sBuildsDeferred = NO;
 		return;
 	}
 	if (self.webMPlayer) {
-		[self.webMPlayer play];
+		if (!TGAppInBackground())
+			[self.webMPlayer play];
 		[self armOnceTimer];
 	} else if (self.loaded && !self.model.isWebM && !self.timer) {
 		[self startTimer];
@@ -741,7 +760,7 @@ static BOOL sBuildsDeferred = NO;
 				return;
 			me.webMPlayer = player;
 			player.targetLayer = me.layer;
-			if (me.isPlaying) {
+			if (me.isPlaying && !TGAppInBackground()) {
 				[player play];
 				[me armOnceTimer];
 			}

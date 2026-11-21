@@ -7,6 +7,7 @@
 #import "TGTheme.h"
 #import "TGLocalization.h"
 #import "TGStyle.h"
+#import "TGIcons.h"
 
 @interface TGCountryPickerViewController () <UISearchBarDelegate>
 @property (nonatomic, copy) NSArray *countries;
@@ -59,11 +60,12 @@
 	for (NSDictionary *group in groups){
 		NSMutableArray *rows = [NSMutableArray array];
 		for (NSDictionary *country in group[@"countries"]){
-			NSString *title = [NSString stringWithFormat:@"%@ %@", country[@"flag"] ?: @"", country[@"name"] ?: @""];
-			[rows addObject:TGTapRow([title stringByTrimmingCharactersInSet:
-					[NSCharacterSet whitespaceCharacterSet]], country[@"prefix"], ^{
-				[weakSelf pick:country];
-			})];
+			NSMutableDictionary *row = [TGTapRow(TGCountryRowTitle(country),
+					country[@"prefix"], ^{ [weakSelf pick:country]; }) mutableCopy];
+			UIImage *flag = [TGIcons emojiGlyph:country[@"flag"] side:TGMetricRowIconSide];
+			if (flag)
+				row[TGRowAvatarImage] = flag;
+			[rows addObject:row];
 		}
 		NSString *letter = group[@"title"];
 		[sections addObject:TGSection(letter.length ? letter : nil, nil, rows)];

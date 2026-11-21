@@ -1,3 +1,4 @@
+#import "TGAppActivity.h"
 #import "TGGhostMode.h"
 #import "TGClientInternal.h"
 #import "TGTransport.h"
@@ -539,6 +540,8 @@ NSDictionary *TGFormattedText(NSString *text) {
 		self.readyAt = [NSDate date].timeIntervalSince1970;
 		[self loadChats];
 		[self send:@{@"@type" : @"getMe"}];
+		if (!TGAppInBackground())
+			[self send:TGOnlineOptionRequest(YES)];
 	}
 	if (s == TGAuthStateWaitPhoneNumber)
 		[self flushPendingPhoneNumber];

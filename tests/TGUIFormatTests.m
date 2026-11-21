@@ -3,6 +3,7 @@
 // pinned here instead of being checked by eye on four screens.
 #import "TGTestRunner.h"
 #import "TGUIFormat.h"
+#import "TGPhoneNumberRules.h"
 
 @interface TGUIFormatTests : XCTestCase
 @end
@@ -14,6 +15,41 @@
 	XCTAssertEqualObjects(TGUIFormatCallDuration(65), @"1:05");
 	XCTAssertEqualObjects(TGUIFormatCallDuration(3729), @"1:02:09");
 	XCTAssertEqualObjects(TGUIFormatCallDuration(-4), @"0:00");
+}
+
+/// A national number that starts with its own calling code is not a pasted
+/// full number: Kyrgyz 996 xxx xxx lost its first 996, every Kazakh 7xx
+/// lost its 7, so Telegram was asked for a number that does not exist.
+- (void)testFullPhoneKeepsNationalDigitsThatRepeatTheCode {
+	XCTAssertEqualObjects(TGUIFormatFullPhone(@"+996", @"996 123 456"),
+			@"+996996123456");
+	XCTAssertEqualObjects(TGUIFormatFullPhone(@"+7", @"701 123 4567"),
+			@"+77011234567");
+	XCTAssertEqualObjects(TGUIFormatFullPhone(@"+996", @"996996123456"),
+			@"+996996123456");
+	XCTAssertEqualObjects(TGUIFormatFullPhone(@"+7", @"77011234567"),
+			@"+77011234567");
+}
+
+/// Typed digits never move to the code field on a guess: Kyrgyz 555... read
+/// as Brazil, 99x as a second +996, Russian 916... as India.
+- (void)testTypedNationalNumberIsNotInternational {
+	XCTAssertFalse(TGPhoneNumberLooksInternational(@"555123456"));
+	XCTAssertFalse(TGPhoneNumberLooksInternational(@"996123456"));
+	XCTAssertFalse(TGPhoneNumberLooksInternational(@"9161234567"));
+	XCTAssertFalse(TGPhoneNumberLooksInternational(@"631234567"));
+	XCTAssertTrue(TGPhoneNumberLooksInternational(@"+996555123456"));
+	XCTAssertTrue(TGPhoneNumberLooksInternational(@"00996555123456"));
+}
+
+/// The calling code of a number after +: one digit for +1 and +7, so
+/// +7 701... is Kazakhstan and not +770.
+- (void)testCallingCodeLength {
+	XCTAssertEqual(TGPhoneCallingCodeLength(@"996555123456"), (NSUInteger)3);
+	XCTAssertEqual(TGPhoneCallingCodeLength(@"77011234567"), (NSUInteger)1);
+	XCTAssertEqual(TGPhoneCallingCodeLength(@"15550109999"), (NSUInteger)1);
+	XCTAssertEqual(TGPhoneCallingCodeLength(@"4915112345678"), (NSUInteger)2);
+	XCTAssertEqual(TGPhoneCallingCodeLength(@""), (NSUInteger)0);
 }
 
 - (void)testFullPhoneKeepsOnePrefix {

@@ -4,6 +4,7 @@
 #import "TGSVGPath.h"
 #import "TGMessageLayout.h"
 #import "TGStyle.h"
+#import <CoreText/CoreText.h>
 
 static NSMutableDictionary *sCache = nil;
 
@@ -44,10 +45,28 @@ CGFloat TGMainScreenScale(void) {
 	if (cached)
 		return cached;
 
+	// CoreText, not UIKit string drawing: on iOS 6 UIKit drew a flag's two
+	// regional letters as nothing, and CoreText joins them into the bundled
+	// font's flag, as the chat does.
+	UIFont *font = TGEmojiFontOfSize(TGHalf(quantised));
+	CTFontRef ctFont = CTFontCreateWithName((__bridge CFStringRef)font.fontName,
+			font.pointSize, NULL);
+	NSAttributedString *text = [[NSAttributedString alloc] initWithString:emoji
+			attributes:@{(__bridge id)kCTFontAttributeName : (__bridge id)ctFont}];
+	CTLineRef line = CTLineCreateWithAttributedString((__bridge CFAttributedStringRef)text);
+	CGFloat ascent = 0, descent = 0;
+	CGFloat width = (CGFloat)CTLineGetTypographicBounds(line, &ascent, &descent, NULL);
+
 	UIGraphicsBeginImageContextWithOptions(CGSizeMake(quantised, quantised), NO, 0);
-	TGDrawText(emoji, CGRectMake(0.0f, 0.0f, quantised, quantised),
-			TGEmojiFontOfSize(TGHalf(quantised)), nil, NSTextAlignmentCenter, nil);
+	CGContextRef ctx = UIGraphicsGetCurrentContext();
+	CGContextTranslateCTM(ctx, 0, quantised);
+	CGContextScaleCTM(ctx, 1, -1);
+	CGContextSetTextPosition(ctx, TGCenteredOrigin(quantised, width),
+			TGCenteredOrigin(quantised, ascent + descent) + descent);
+	CTLineDraw(line, ctx);
 	UIImage *glyph = UIGraphicsGetImageFromCurrentImageContext();
+	CFRelease(line);
+	CFRelease(ctFont);
 	UIGraphicsEndImageContext();
 	TGIconsSetCached(key, glyph);
 	return glyph;

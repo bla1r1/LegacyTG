@@ -108,7 +108,6 @@ typedef NS_ENUM(NSInteger, TGLoginStep) {
 
 @interface TGLoginViewController (Phone)
 
-- (BOOL)containsKnownCountryPrefix:(NSString *)digits;
 - (BOOL)looksLikeInternationalNumber:(NSString *)text;
 - (void)processPastedPhoneNumber:(NSString *)raw;
 - (void)inputFieldChanged:(UITextField *)sender;

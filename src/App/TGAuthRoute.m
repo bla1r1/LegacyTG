@@ -30,6 +30,10 @@ TGAuthScreen TGAuthScreenForState(TGAuthState state, BOOL loginOpen, BOOL devSho
 	}
 }
 
+BOOL TGAuthShowcaseStandsIn(BOOL devBuild, BOOL signedOut) {
+	return devBuild && !signedOut;
+}
+
 TGAuthScreen TGLaunchScreenForSession(BOOL authorized, BOOL devShowcase) {
 	return (authorized || devShowcase) ? TGAuthScreenMain : TGAuthScreenLoading;
 }

@@ -40,3 +40,8 @@ FOUNDATION_EXPORT NSString *TGLoginEmailResetPendingText(NSInteger resetIn);
 /// countries whose name or calling code contains it, in one untitled section.
 /// Entries are TGAccountStore's ("code", "name", "prefix", "flag").
 FOUNDATION_EXPORT NSArray *TGCountrySections(NSArray *countries, NSString *query);
+
+/// A country row's title: the name alone. The flag is drawn apart in the
+/// bundled emoji font; as text the iOS 6 system font has ten flags and drew
+/// the rest as two boxed letters ("A F Afghanistan").
+FOUNDATION_EXPORT NSString *TGCountryRowTitle(NSDictionary *country);

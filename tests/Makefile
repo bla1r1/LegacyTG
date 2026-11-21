@@ -263,6 +263,7 @@ CLIENT_OBJC_SRCS := \
     src/Features/Groups/Core/TGGroupLogic.m \
     src/Core/Platform/TGGhostMode.m \
     src/Core/Platform/TGBackgroundKeeper.m \
+    src/Core/Platform/TGAppActivity.m \
     src/Core/Client/TGClient+Business.m \
     src/Core/Client/Features/TGClient+FeatureSupport.m \
     src/Core/Client/Features/TGClient+Communities.m \

@@ -1,3 +1,4 @@
+#import "TGAppActivity.h"
 #import "TGCustomEmojiStore.h"
 #import "TGLocalization.h"
 #import "TGNameWithStatus.h"
@@ -155,7 +156,7 @@ static NSString *TGChatDate(NSTimeInterval unix) {
 	// Off screen (a chat pushed over the list) every status update rebuilt the
 	// rows nobody sees: ~2% of the main thread in a chat scroll on the iPod
 	// touch 4. The list catches up once in viewWillAppear.
-	if (!self.isViewLoaded || !self.view.window) {
+	if (!self.isViewLoaded || !self.view.window || TGAppInBackground()) {
 		self.visibleRowsStale = YES;
 		return;
 	}

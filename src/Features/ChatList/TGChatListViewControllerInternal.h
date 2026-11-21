@@ -23,6 +23,8 @@
 @property (nonatomic, strong) NSArray *chats;
 /// A row update arrived while the list was off screen.
 @property (nonatomic, assign) BOOL visibleRowsStale;
+/// A reload asked for while the app was in the background; runs once on return.
+@property (nonatomic, assign) BOOL reloadStale;
 @property (nonatomic, assign) BOOL showsArchive;      // this IS the archive screen
 @property (nonatomic, assign) NSInteger folderId;     // 0 = no folder
 @property (nonatomic, assign) BOOL editingChats;
@@ -151,6 +153,7 @@ UIImage *TGChatListLockIcon(CGFloat side, UIColor *colour);
 - (NSArray *)visibleChats;
 - (void)configureStoriesCell:(TGStoryStripRowCell *)strip;
 - (void)reloadVisibleRows;
+- (void)reloadTableKeepingSelection;
 - (void)hideHeaderAboveFrom:(CGFloat)previousHeight;
 
 @end

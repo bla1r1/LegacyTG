@@ -264,4 +264,13 @@
 	XCTAssertEqual(TGCountrySections(countries, @"zz").count, (NSUInteger)0);
 }
 
+/// The flag went into the title as text, and the iOS 6 system font drew most
+/// flags as two boxed letters before the name: "A F Afghanistan".
+- (void)testCountryRowTitleIsTheNameWithoutTheFlag {
+	NSDictionary *kg = @{@"name" : @"Kyrgyzstan", @"flag" : @"\U0001F1F0\U0001F1EC",
+						 @"prefix" : @"+996"};
+	XCTAssertEqualObjects(TGCountryRowTitle(kg), @"Kyrgyzstan");
+	XCTAssertEqualObjects(TGCountryRowTitle(@{}), @"");
+}
+
 @end

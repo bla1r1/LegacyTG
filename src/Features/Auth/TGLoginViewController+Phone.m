@@ -148,31 +148,6 @@
     [self refreshPhoneNumberInfo];
 }
 
-- (BOOL)containsKnownCountryPrefix:(NSString *)digits {
-    static NSSet *knownPrefixes = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        knownPrefixes = [NSSet setWithObjects:
-            @"380", @"375", @"370", @"371", @"372", @"373", @"374", @"376", @"377", @"378",
-            @"381", @"382", @"385", @"386", @"387", @"389", @"420", @"421", @"423", @"992",
-            @"993", @"994", @"995", @"996", @"998", @"351", @"352", @"353", @"354", @"355",
-            @"356", @"357", @"358", @"359", @"852", @"853", @"855", @"856", @"880", @"886",
-            @"960", @"961", @"962", @"963", @"964", @"965", @"966", @"967", @"968", @"971",
-            @"972", @"973", @"974", @"975", @"976", @"977",
-            @"20", @"27", @"30", @"31", @"32", @"33", @"34", @"36", @"39", @"40",
-            @"41", @"43", @"44", @"45", @"46", @"47", @"48", @"49", @"51", @"52",
-            @"53", @"54", @"55", @"56", @"57", @"58", @"60", @"61", @"62", @"63",
-            @"64", @"65", @"66", @"81", @"82", @"84", @"86", @"90", @"91", @"92",
-            @"93", @"94", @"95", @"98", @"1", @"7", nil];
-    });
-
-    NSString *clean = [digits stringByReplacingOccurrencesOfString:@"\\D" withString:@"" options:NSRegularExpressionSearch range:NSMakeRange(0, digits.length)];
-    if (clean.length >= 3 && [knownPrefixes containsObject:[clean substringToIndex:3]]) return YES;
-    if (clean.length >= 2 && [knownPrefixes containsObject:[clean substringToIndex:2]]) return YES;
-    if (clean.length >= 1 && [knownPrefixes containsObject:[clean substringToIndex:1]]) return YES;
-    return NO;
-}
-
 - (void)processPastedPhoneNumber:(NSString *)raw {
     if (!raw.length) return;
 
@@ -203,43 +178,21 @@
     }
     if (!digits.length) return;
 
-    static NSSet *threeDigitCodes = nil;
-    static NSSet *twoDigitCodes = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        threeDigitCodes = [NSSet setWithObjects:
-            @"380", @"375", @"370", @"371", @"372", @"373", @"374", @"376", @"377", @"378",
-            @"381", @"382", @"385", @"386", @"387", @"389", @"420", @"421", @"423", @"992",
-            @"993", @"994", @"995", @"996", @"998", @"351", @"352", @"353", @"354", @"355",
-            @"356", @"357", @"358", @"359", @"852", @"853", @"855", @"856", @"880", @"886",
-            @"960", @"961", @"962", @"963", @"964", @"965", @"966", @"967", @"968", @"971",
-            @"972", @"973", @"974", @"975", @"976", @"977", nil];
-
-        twoDigitCodes = [NSSet setWithObjects:
-            @"20", @"27", @"30", @"31", @"32", @"33", @"34", @"36", @"39", @"40",
-            @"41", @"43", @"44", @"45", @"46", @"47", @"48", @"49", @"51", @"52",
-            @"53", @"54", @"55", @"56", @"57", @"58", @"60", @"61", @"62", @"63",
-            @"64", @"65", @"66", @"81", @"82", @"84", @"86", @"90", @"91", @"92",
-            @"93", @"94", @"95", @"98", nil];
-    });
-
-    NSString *prefix = nil;
-    NSString *rest = nil;
-
-    if (digits.length >= 3 && [threeDigitCodes containsObject:[digits substringToIndex:3]]) {
-        prefix = [digits substringToIndex:3];
-        rest = [digits substringFromIndex:3];
-    } else if (digits.length >= 2 && [twoDigitCodes containsObject:[digits substringToIndex:2]]) {
-        prefix = [digits substringToIndex:2];
-        rest = [digits substringFromIndex:2];
-    } else if (hadPlus) {
-        NSUInteger pLen = MIN((NSUInteger)3, digits.length);
-        prefix = [digits substringToIndex:pLen];
-        rest = [digits substringFromIndex:pLen];
-    } else {
+    // Without + or 00 the digits are a national number; its first digits
+    // say nothing about the country.
+    if (!hadPlus) {
         self.inputField.text = digits;
+        [self updateActionEnabled];
+        [self refreshPhoneNumberInfo];
         return;
     }
+    // A + typed key by key: "+9" is not yet +996, so wait for a digit past
+    // the longest code before splitting.
+    if (digits.length < 4)
+        return;
+    NSUInteger codeLength = TGPhoneCallingCodeLength(digits);
+    NSString *prefix = [digits substringToIndex:codeLength];
+    NSString *rest = [digits substringFromIndex:codeLength];
 
     self.phonePrefixField.text = [NSString stringWithFormat:@"+%@", prefix];
     self.prefixEdited = YES;

@@ -3,6 +3,7 @@
 //
 #import "TGTestRunner.h"
 #import "TGBackgroundKeeper.h"
+#import "TGAppActivity.h"
 #import "TGSettingsStore.h"
 #import "TGPeerStore.h"
 #import "TGChatListStore.h"
@@ -11,6 +12,34 @@
 @end
 
 @implementation TGBackgroundKeeperTests
+
+/// TDLib was never told the app left the screen: the "online" option was not
+/// set at all, so a kept-alive client looked in use all night.
+- (void)testOnlineOptionIsTDLibsBooleanOption {
+	NSDictionary *off = TGOnlineOptionRequest(NO);
+	XCTAssertEqualObjects(off[@"@type"], @"setOption");
+	XCTAssertEqualObjects(off[@"name"], @"online");
+	XCTAssertEqualObjects(off[@"value"][@"@type"], @"optionValueBoolean");
+	XCTAssertEqualObjects(off[@"value"][@"value"], @NO);
+	XCTAssertEqualObjects(TGOnlineOptionRequest(YES)[@"value"][@"value"], @YES);
+}
+
+/// Sticker loops, GIFs and the chat list pause on this notification and catch
+/// up on the next one, so it fires once per change and never on a repeat.
+- (void)testActivityChangePostsOncePerChange {
+	TGAppSetInBackground(NO);
+	__block NSInteger posts = 0;
+	id token = [[NSNotificationCenter defaultCenter]
+			addObserverForName:TGAppActivityChangedNotification object:nil
+			queue:nil usingBlock:^(NSNotification *note){ posts++; }];
+	TGAppSetInBackground(YES);
+	XCTAssertTrue(TGAppInBackground());
+	TGAppSetInBackground(YES);
+	TGAppSetInBackground(NO);
+	XCTAssertFalse(TGAppInBackground());
+	[[NSNotificationCenter defaultCenter] removeObserver:token];
+	XCTAssertEqual(posts, (NSInteger)2);
+}
 
 - (void)testBackgroundKeeperSingleton {
 	TGBackgroundKeeper *k1 = [TGBackgroundKeeper shared];

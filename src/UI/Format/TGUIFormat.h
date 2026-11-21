@@ -22,6 +22,10 @@ NSString *TGUIFormatScheduledWhen(NSTimeInterval sendDate, NSTimeInterval now);
 /// "in 2 h 15 min" under a scheduled message; empty for a stamp in the past.
 NSString *TGUIFormatScheduledRelative(NSTimeInterval sendDate, NSTimeInterval now);
 
+/// Digits from which a number typed under a prefix is taken to be a full
+/// international one: Kazakh 7011234567 is 10, +7 7011234567 is 11.
+enum { TGPhoneFullNumberMinDigits = 11 };
+
 /// The full number Telegram is asked to sign in: the prefix's digits, then
 /// the national number's, without repeating a prefix already typed into it.
 NSString *TGUIFormatFullPhone(NSString *prefix, NSString *number);
