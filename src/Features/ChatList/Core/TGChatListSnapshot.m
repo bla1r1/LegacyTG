@@ -107,6 +107,9 @@ static NSDictionary *TGChatSnapshotRow(NSDictionary *chat) {
 	// live in the sticky section header, so the table has to re-ask for it.
 	[self rebuildTableHeader];
 	[self.tableView reloadData];
+	[self reselectActiveChatIfPad];
+	// The other height changes how much the bottom inset must give.
+	[self parkHeaderIfNeeded];
 }
 
 

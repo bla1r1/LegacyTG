@@ -75,6 +75,41 @@ NSRange TGAvatarWindow(NSInteger firstVisible, NSUInteger rows, NSUInteger total
 	return NSMakeRange(start, MIN(rows, total - start));
 }
 
+BOOL TGChatListNeedsAvatarLoad(BOOL savedMessages, int64_t chatId, BOOL cached) {
+	return !savedMessages && chatId != 0 && !cached;
+}
+
+NSInteger TGChatListActiveRow(int64_t activeId, int64_t savedId,
+                              NSArray *headerRows, NSArray *chats) {
+	if (activeId == 0)
+		return NSNotFound;
+	if (activeId == savedId) {
+		NSUInteger idx = [headerRows indexOfObject:@"saved"];
+		if (idx != NSNotFound)
+			return (NSInteger)idx;
+	}
+	NSUInteger i = 0;
+	for (NSDictionary *chat in chats) {
+		if ([chat isKindOfClass:NSDictionary.class] && [chat[@"id"] longLongValue] == activeId)
+			return (NSInteger)(headerRows.count + i);
+		i++;
+	}
+	return NSNotFound;
+}
+
+CGFloat TGChatListParkOffset(CGFloat headerHeight, NSArray *headerRows,
+                             CGFloat archiveRowHeight) {
+	BOOL archiveFirst = [[headerRows firstObject] isEqual:@"archive"];
+	return headerHeight + (archiveFirst ? archiveRowHeight : 0);
+}
+
+CGFloat TGChatListParkBottomInset(CGFloat contentHeight, CGFloat boundsHeight,
+                                  CGFloat parkOffset) {
+	if (parkOffset <= 0)
+		return 0;
+	return MAX(0, boundsHeight - (contentHeight - parkOffset));
+}
+
 /// Custom emoji ranges as the row reads them, { offset, length, customEmojiId }
 /// or [offset, length, id], reduced to numbers so the list stays a plist.
 NSArray *TGSnapshotCustomEmoji(id value) {

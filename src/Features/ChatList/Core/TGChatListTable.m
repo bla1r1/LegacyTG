@@ -189,8 +189,8 @@ static NSString *TGChatDate(NSTimeInterval unix) {
 	// TDLib names the chat "Saved Messages" in English; the pack has it.
 	if (saved)
 		row[TGRowTitle] = TGLocalized(@"Saved Messages");
-	UIImage *photo = saved ? [TGIcons savedMessagesAvatarOfSide:kAvatar]
-			: [[TGPeerStore shared] cachedAvatarForPeer:cid side:kAvatar];
+	UIImage *cached = saved ? nil : [[TGPeerStore shared] cachedAvatarForPeer:cid side:kAvatar];
+	UIImage *photo = saved ? [TGIcons savedMessagesAvatarOfSide:kAvatar] : cached;
 	if (!photo){
 		NSString *title = c[@"title"] ?: @"";
 		NSString *initials = [TGIcons initialsForTitle:title];
@@ -199,7 +199,10 @@ static NSString *TGChatDate(NSTimeInterval unix) {
 								   colourId:cid];
 	}
 	row[TGRowChatAvatarImage] = photo;
-	if (!saved && cid != 0){
+	// A cached avatar answers loadAvatarForPeer at once, and the reload it
+	// asked for drew this cell again: reloadData about 12 times a second for
+	// as long as the list was on screen.
+	if (TGChatListNeedsAvatarLoad(saved, cid, cached != nil)){
 		__weak typeof(self) weakSelf = self;
 		[[TGPeerStore shared] loadAvatarForPeer:cid side:kAvatar
 									completion:^(UIImage *image){

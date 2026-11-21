@@ -574,7 +574,9 @@ UIImage *TGChatListLockIcon(CGFloat side, UIColor *colour) {
 		self.folderHighlightPending = NO;
 	}
 	self.headerHeight = height;
-	self.parkOffset = TGMetricZero;
+	// Was a constant zero, so nothing was ever hidden: the search field and
+	// the archive row sat on screen at every launch, phone and iPad alike.
+	self.parkOffset = TGChatListParkOffset(height, [self headerRows], kRowHeight);
 	[self refreshListTitleView];
 }
 

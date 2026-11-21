@@ -53,6 +53,31 @@ void TGChatListRowAccessories(CGFloat rightEdge,
 /// archive row that shifts the list by one, and `rows` from there on.
 NSRange TGAvatarWindow(NSInteger firstVisible, NSUInteger rows, NSUInteger total);
 
+/// The scroll that opens the main list on the chats: past the table header
+/// (search field, expanded stories, folder pills) and, when it is the first
+/// row, the archive row. Official Telegram opens with both hidden; a pull
+/// down brings them back.
+CGFloat TGChatListParkOffset(CGFloat headerHeight, NSArray *headerRows,
+                             CGFloat archiveRowHeight);
+
+/// Bottom inset that lets a short list still scroll to the park. Without it
+/// a list shorter than the screen (any iPad, a new account) cannot scroll and
+/// the search field and archive stay on screen.
+CGFloat TGChatListParkBottomInset(CGFloat contentHeight, CGFloat boundsHeight,
+                                  CGFloat parkOffset);
+
+/// The list row of the chat open in the iPad detail pane, or NSNotFound.
+/// Saved Messages is its own header row; other chats sit after the header
+/// rows. The split keeps the open chat highlighted, as official does, so
+/// every reload has to find the row again: reloadData drops the selection.
+NSInteger TGChatListActiveRow(int64_t activeId, int64_t savedId,
+                              NSArray *headerRows, NSArray *chats);
+
+/// Whether a chat row has to ask for its avatar. Only a miss does: a cached
+/// one is already drawn, and asking anyway reloads the table from inside
+/// the table's own reload.
+BOOL TGChatListNeedsAvatarLoad(BOOL savedMessages, int64_t chatId, BOOL cached);
+
 /// The preview's custom emoji ranges reduced to plain numbers for the launch
 /// snapshot: { offset, length, customEmojiId } from either row shape, nil
 /// entries dropped. Without them the first paint drew fallback characters.

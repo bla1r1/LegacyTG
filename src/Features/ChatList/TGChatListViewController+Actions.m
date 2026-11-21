@@ -566,6 +566,15 @@ static const CGFloat kSwipeFlickVelocity = 500.0f;
 		forRowAtIndexPath:(NSIndexPath *)indexPath {
 	if (self.swipeActionsCell)
 		[self closeSwipeActionsAnimated:NO];
+	// Every reloadData drops the selection and some of them (rotation, the
+	// folder merge) do not ask for it back. The row being drawn is the one
+	// place they all pass: the table's selection alone does not repaint a
+	// cell already being displayed, so the cell is told too.
+	if (!cell.selected && indexPath.row == [self activeChatRowIfPad]){
+		[tableView selectRowAtIndexPath:indexPath animated:NO
+				scrollPosition:UITableViewScrollPositionNone];
+		[cell setSelected:YES animated:NO];
+	}
 }
 
 @end

@@ -37,36 +37,27 @@
 	[self.tableView.layer addAnimation:fade forKey:@"tg.folderList"];
 }
 
-- (void)reselectActiveChatIfPad {
+/// Row of the chat open in the iPad detail pane, NSNotFound off the iPad.
+- (NSInteger)activeChatRowIfPad {
 	BOOL isPadMode = TGIsPad();
 #if TG_DEV
 	if ([[TGiPadSimulator shared] isActive]) isPadMode = YES;
 #endif
-	if (!isPadMode) return;
+	if (!isPadMode || self.editingChats)
+		return NSNotFound;
+	return TGChatListActiveRow([TGiPadSplitViewController shared].activeChatId,
+			[[TGChatListStore shared] savedMessagesChatId], [self headerRows],
+			[self visibleChats]);
+}
 
-	int64_t activeId = [TGiPadSplitViewController shared].activeChatId;
-	if (activeId == 0) return;
-
-	NSArray *header = [self headerRows];
-	int64_t savedId = [[TGChatListStore shared] savedMessagesChatId];
-	if (savedId != 0 && activeId == savedId) {
-		NSUInteger idx = [header indexOfObject:@"saved"];
-		if (idx != NSNotFound) {
-			NSIndexPath *ip = [NSIndexPath indexPathForRow:(NSInteger)idx inSection:0];
-			[self.tableView selectRowAtIndexPath:ip animated:NO scrollPosition:UITableViewScrollPositionNone];
-			return;
-		}
-	}
-
-	NSArray *visible = [self visibleChats];
-	for (NSUInteger i = 0; i < visible.count; i++) {
-		NSDictionary *c = visible[i];
-		if ([c[@"id"] longLongValue] == activeId) {
-			NSIndexPath *ip = [NSIndexPath indexPathForRow:(NSInteger)(i + header.count) inSection:0];
-			[self.tableView selectRowAtIndexPath:ip animated:NO scrollPosition:UITableViewScrollPositionNone];
-			return;
-		}
-	}
+- (void)reselectActiveChatIfPad {
+	NSInteger row = [self activeChatRowIfPad];
+	if (row == NSNotFound || row >= [self.tableView numberOfRowsInSection:0])
+		return;
+	NSIndexPath *ip = [NSIndexPath indexPathForRow:row inSection:0];
+	if (![[self.tableView indexPathsForSelectedRows] containsObject:ip])
+		[self.tableView selectRowAtIndexPath:ip animated:NO
+				scrollPosition:UITableViewScrollPositionNone];
 }
 
 - (void)reload {
@@ -137,12 +128,7 @@
 	// The search field is a pull-down: Telegram opens on the stories row,
 	// not on a search bar. Park past the header once the table has a real
 	// height; a deliberate pull brings it back (scrollViewWillEndDragging).
-	if (!self.userRevealed && !self.searchResults && !self.showsArchive &&
-			self.folderId == 0 && self.tableView.contentOffset.y < self.parkOffset - 1.0f){
-		[self.tableView layoutIfNeeded];
-		if (self.tableView.contentSize.height > self.tableView.bounds.size.height)
-			self.tableView.contentOffset = CGPointMake(TGMetricZero, self.parkOffset);
-	}
+	[self parkHeaderIfNeeded];
 	[self fetchMissingAvatars];
 	if ([TGChatListStore shared].chats.count)
 		[self saveChatSnapshot:baseChats];
@@ -203,16 +189,30 @@
 	if (self.searchResults || self.showsArchive || self.folderId != 0)
 		return @[];
 	NSMutableArray *rows = [NSMutableArray array];
-	// Official puts its notice above everything else in the list.
-	if (TGChatListNotice([TGChatListStore shared].suggestedActions))
-		[rows addObject:@"notice"];
+	// The archive goes first so the park can hide it with the search field;
+	// below a notice it would stay on screen at every launch.
 	if ([TGChatListStore shared].archivedChats.count > 0)
 		[rows addObject:@"archive"];
+	if (TGChatListNotice([TGChatListStore shared].suggestedActions))
+		[rows addObject:@"notice"];
 	// Saved Messages has its own row above the chats and is hidden from the
 	// live list by visibleChats; without this row it had no way in.
 	if ([TGChatListStore shared].savedMessagesChatId)
 		[rows addObject:@"saved"];
 	return rows;
+}
+
+- (void)parkHeaderIfNeeded {
+	BOOL mainList = !self.searchResults && !self.showsArchive && self.folderId == 0;
+	[self.tableView layoutIfNeeded];
+	UIEdgeInsets inset = self.tableView.contentInset;
+	inset.bottom = mainList ? TGChatListParkBottomInset(self.tableView.contentSize.height,
+			self.tableView.bounds.size.height, self.parkOffset) : TGMetricZero;
+	if (!UIEdgeInsetsEqualToEdgeInsets(inset, self.tableView.contentInset))
+		self.tableView.contentInset = inset;
+	if (mainList && !self.userRevealed && self.tableView.bounds.size.height > 0 &&
+			self.tableView.contentOffset.y < self.parkOffset - 1.0f)
+		self.tableView.contentOffset = CGPointMake(TGMetricZero, self.parkOffset);
 }
 
 - (BOOL)hasArchiveRow {
@@ -369,8 +369,15 @@
 }
 
 - (void)reloadTableDebounced {
-	[NSObject cancelPreviousPerformRequestsWithTarget:self.tableView selector:@selector(reloadData) object:nil];
-	[self.tableView performSelector:@selector(reloadData) withObject:nil afterDelay:0.05];
+	[NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(reloadTableKeepingSelection) object:nil];
+	[self performSelector:@selector(reloadTableKeepingSelection) withObject:nil afterDelay:0.05];
+}
+
+/// reloadData drops the selection; on the iPad the open chat's row lost its
+/// highlight with every avatar that landed.
+- (void)reloadTableKeepingSelection {
+	[self.tableView reloadData];
+	[self reselectActiveChatIfPad];
 }
 
 /// Avatars are fetched once each and cached by file id.

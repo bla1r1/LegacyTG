@@ -197,7 +197,11 @@ static const CGFloat kListStoryGap     = TGMetricPadSmall;
 }
 
 - (void)viewWillAppear:(BOOL)animated {
+	// UITableViewController clears the selection here, and on the iPad that
+	// is the open chat's highlight; the phone deselects on the tap itself.
+	self.clearsSelectionOnViewWillAppear = NO;
 	[super viewWillAppear:animated];
+	[self reselectActiveChatIfPad];
 	[self buildHeaderButtons];
 	if (self.visibleRowsStale) {
 		self.visibleRowsStale = NO;
@@ -213,10 +217,7 @@ static const CGFloat kListStoryGap     = TGMetricPadSmall;
 		[self reloadStoriesIfNeeded];
 	// The header cannot be parked inside viewDidLoad: the table has no
 	// height yet there, so the first layout left the search field on screen.
-	if (!self.userRevealed && !self.searchResults && !self.showsArchive &&
-			self.folderId == 0 && self.tableView.contentOffset.y < self.parkOffset - 1.0f &&
-			self.tableView.contentSize.height > self.tableView.bounds.size.height)
-		self.tableView.contentOffset = CGPointMake(TGMetricZero, self.parkOffset);
+	[self parkHeaderIfNeeded];
 
 #if TG_DEV
 	id openRow = [[NSUserDefaults standardUserDefaults] objectForKey:@"TGOpenSwipeRow"];
