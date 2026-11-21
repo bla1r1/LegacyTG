@@ -180,6 +180,8 @@ static const CGFloat kStripHeight = TGMetricEmojiStripHeight;   // categories / 
 	}
 	if (self.tab == TGEmojiPanelTabEmoji && button.tag != 1)
 		self.emojiQuery = nil;   // a category leaves the search behind
+	if (self.tab == TGEmojiPanelTabStickers && button.tag != 0)
+		self.stickerQuery = nil; // tapping a set leaves sticker search behind
 	if (self.tab == TGEmojiPanelTabGIFs)
 		self.gifQuery = nil;   // "Saved"
 

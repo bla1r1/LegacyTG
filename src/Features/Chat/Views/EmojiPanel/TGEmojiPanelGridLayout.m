@@ -126,10 +126,14 @@ static const CGFloat   kHeaderHeight = TGMetricEmojiHeader;
 
 	CGFloat previous = self.grid.contentOffset.y;
 	self.grid.contentSize = CGSizeMake(w, y);
-	// The feed fills in set by set, so keep where they are reading; only a
-	// fresh grid starts at the top.
-	CGFloat keep = self.sections.count ? MAX(0, MIN(previous, y - self.grid.bounds.size.height)) : 0;
-	self.grid.contentOffset = CGPointMake(0, keep);
+	// The feed fills in set by set; keep where the user is reading without
+	// clobbering active scroll deceleration.
+	CGFloat maxOffset = MAX(0.0f, y - self.grid.bounds.size.height);
+	if (self.sections.count == 0) {
+		self.grid.contentOffset = CGPointZero;
+	} else if (!self.grid.isDragging && !self.grid.isDecelerating && previous > maxOffset) {
+		self.grid.contentOffset = CGPointMake(0, maxOffset);
+	}
 	self.emptyLabel.hidden = self.items.count > 0 || !self.emptyLabel.text.length;
 	[self updateVisibleCells];
 	[self syncStripToScroll];
@@ -315,6 +319,9 @@ static NSUInteger TGEmojiPanelFirstVisibleIndex(NSArray *frames, CGFloat minY) {
 		button.backgroundColor = on ? [theme actionTileBackgroundColour] : [UIColor clearColor];
 		[button setTitleColor:on ? [theme accentColour] : [theme secondaryTextColour]
 					 forState:UIControlStateNormal];
+		if (on && !self.syncingStrip) {
+			[self.strip scrollRectToVisible:CGRectInset(button.frame, -TGMetricPadSmall, 0) animated:YES];
+		}
 	}
 }
 

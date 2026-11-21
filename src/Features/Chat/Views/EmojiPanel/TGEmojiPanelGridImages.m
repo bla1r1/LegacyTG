@@ -329,12 +329,12 @@ static UIImage *TGPanelDecode(NSString *path) {
 				: @{@"title" : @"Add to Favorites", @"icon" : @"pin"})];
 		[actions addObject:already ? @"unfav" : @"fav"];
 
-		if (strip == 1){   // Recently Used
+		if (strip == 2){   // Recently Used (strip 1 = Favorites, strip 2 = Recent)
 			[items addObject:@{@"title" : @"Remove from Recent", @"icon" : @"delete",
 							   @"destructive" : @YES}];
 			[actions addObject:@"unrecent"];
 		}
-		if (strip >= 2 && (NSUInteger)(strip - 2) < self.stickerSets.count){
+		if (strip >= 3 && (NSUInteger)(strip - 3) < self.stickerSets.count){
 			[items addObject:@{@"title" : @"Remove", @"icon" : @"delete",
 							   @"destructive" : @YES}];
 			[actions addObject:@"unset"];
@@ -403,8 +403,8 @@ static UIImage *TGPanelDecode(NSString *path) {
 		}];
 	}
 
-	id setId = (isSticker && strip >= 2 && (NSUInteger)(strip - 2) < self.stickerSets.count)
-			? self.stickerSets[strip - 2][@"id"] : nil;
+	id setId = (isSticker && strip >= 3 && (NSUInteger)(strip - 3) < self.stickerSets.count)
+			? self.stickerSets[strip - 3][@"id"] : nil;
 	__weak typeof(self) weakSelf = self;
 	[TGPopupMenu showItems:items atPoint:where inView:host headerView:header
 				  onChoice:^(NSInteger choice, NSString *title){

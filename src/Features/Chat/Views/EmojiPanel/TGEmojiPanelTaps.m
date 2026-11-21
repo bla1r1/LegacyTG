@@ -45,7 +45,7 @@ static const NSInteger kItemTagBase = 1000;  // grid buttons carry their index
 /// here without asking the server again.
 - (BOOL)stickerIsFavourite:(NSInteger)fileId {
 	for (NSDictionary *section in self.sections){
-		if ([section[@"strip"] integerValue] != 0)
+		if ([section[@"strip"] integerValue] != 1)
 			continue;
 		NSUInteger location = [section[@"location"] unsignedIntegerValue];
 		NSUInteger length = [section[@"length"] unsignedIntegerValue];

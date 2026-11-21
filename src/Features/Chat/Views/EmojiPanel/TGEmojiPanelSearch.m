@@ -295,34 +295,47 @@ static NSArray *TGPackSearchTiles(NSArray *sets) {
 		[me setNeedsFeedRelayout];
 	};
 
-	// One request at a time, walking the strip order. The block clears itself
-	// at the end, which is what releases it and the slots it holds.
-	__block void (^next)(NSUInteger);
-	next = ^(NSUInteger slot){
+	// Bounded concurrent fetching (up to 4 at a time): cached sets land
+	// immediately and coalesce into a single layout pass, while network
+	// fetches do not block other sets from loading and scrolling.
+	NSUInteger total = titles.count;
+	const NSUInteger maxConcurrent = 4;
+	__block NSUInteger current = 0;
+	__block NSUInteger active = 0;
+	__block void (^startNextBlock)(void);
+
+	void (^startNext)(void) = ^{
 		TGEmojiPanel *me = weakSelf;
-		if (!me || me.generation != generation || slot >= titles.count){
-			next = nil;
+		if (!me || me.generation != generation) {
+			startNextBlock = nil;
 			return;
 		}
-		// A kept list answers twice when the server's answer differs from
-		// what was saved: both fill the slot, the walk moves on once.
-		__block BOOL walked = NO;
-		void (^got)(NSArray *) = ^(NSArray *stickers){
-			fill(slot, stickers);
-			if (walked)
-				return;
-			walked = YES;
-			if (next)
-				next(slot + 1);
-		};
-		if (slot == 0)
-			[[TGStickerStore shared] shelf:TGStickerShelfFavorite completion:got];
-		else if (slot == 1)
-			[[TGStickerStore shared] shelf:TGStickerShelfRecent completion:got];
-		else
-			[[TGStickerStore shared] stickersInSetKept:me.stickerSets[slot - 2][@"id"] completion:got];
+		while (active < maxConcurrent && current < total) {
+			NSUInteger slot = current++;
+			active++;
+			__block BOOL walked = NO;
+			void (^got)(NSArray *) = ^(NSArray *stickers){
+				fill(slot, stickers);
+				if (!walked) {
+					walked = YES;
+					active--;
+					if (startNextBlock)
+						startNextBlock();
+				}
+			};
+			if (slot == 0)
+				[[TGStickerStore shared] shelf:TGStickerShelfFavorite completion:got];
+			else if (slot == 1)
+				[[TGStickerStore shared] shelf:TGStickerShelfRecent completion:got];
+			else
+				[[TGStickerStore shared] stickersInSetKept:me.stickerSets[slot - 2][@"id"] completion:got];
+		}
+		if (active == 0 && current >= total) {
+			startNextBlock = nil;
+		}
 	};
-	next(0);
+	startNextBlock = startNext;
+	startNext();
 }
 
 

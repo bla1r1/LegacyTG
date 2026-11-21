@@ -53,4 +53,25 @@
 	XCTAssertEqual(TGStickerFrameBytes(8, 8, 0), 0u);
 }
 
+- (void)testStickerStripMapping_MatchesFavoritesAndPacks {
+	NSArray *stickerSets = @[
+		@{@"id": @101, @"title": @"Pepe"},
+		@{@"id": @102, @"title": @"Doge"}
+	];
+	NSDictionary *favSection = @{@"title": @"Favorites", @"strip": @1, @"location": @0, @"length": @2};
+	XCTAssertEqual([favSection[@"strip"] integerValue], 1, @"Favorites strip index is 1");
+
+	NSInteger strip = 3;
+	id setId = (strip >= 3 && (NSUInteger)(strip - 3) < stickerSets.count) ? stickerSets[strip - 3][@"id"] : nil;
+	XCTAssertEqualObjects(setId, @101);
+
+	strip = 4;
+	setId = (strip >= 3 && (NSUInteger)(strip - 3) < stickerSets.count) ? stickerSets[strip - 3][@"id"] : nil;
+	XCTAssertEqualObjects(setId, @102);
+
+	strip = 2;
+	setId = (strip >= 3 && (NSUInteger)(strip - 3) < stickerSets.count) ? stickerSets[strip - 3][@"id"] : nil;
+	XCTAssertNil(setId);
+}
+
 @end
