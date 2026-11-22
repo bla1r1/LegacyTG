@@ -746,7 +746,10 @@ NSMutableDictionary *TGChatRow(NSDictionary *chat, NSString *dateText) {
 	row[TGRowChatMarkedUnread] = @([chat[@"markedUnread"] boolValue]);
 	row[TGRowChatMuted] = @([chat[@"isMuted"] boolValue]);
 	row[TGRowChatPinned] = @([chat[@"isPinned"] boolValue]);
-	row[TGRowChatOnline] = @([chat[@"isOnline"] boolValue]);
+	// Saved Messages is the account's own user, whom TDLib reports online;
+	// official never puts the dot on it.
+	row[TGRowChatOnline] = @([chat[@"isOnline"] boolValue] &&
+			![chat[@"isSaved"] boolValue]);
 	row[TGRowChatStoryRing] = @([chat[@"storyRing"] integerValue]);
 	row[TGRowChatSaved] = @([chat[@"isSaved"] boolValue]);
 	row[TGRowChatOutgoing] = @([chat[@"lastOutgoing"] boolValue]);

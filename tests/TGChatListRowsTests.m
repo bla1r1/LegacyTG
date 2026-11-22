@@ -144,4 +144,14 @@
 	XCTAssertEqualObjects(TGChatRowPreviewPrefix(@""), @"");
 }
 
+// Saved Messages now goes through the chat row, and TDLib reports the
+// account's own user as online: official never puts the dot on Saved.
+- (void)testChatRow_SavedMessagesHasNoOnlineDot {
+	NSDictionary *chat = @{@"id" : @42, @"title" : @"Saved Messages",
+		@"isSaved" : @YES, @"isOnline" : @YES};
+	NSMutableDictionary *row = TGChatRow(chat, @"Thu");
+	XCTAssertTrue([row[TGRowChatSaved] boolValue]);
+	XCTAssertFalse([row[TGRowChatOnline] boolValue]);
+}
+
 @end
