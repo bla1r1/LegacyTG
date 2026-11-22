@@ -298,6 +298,17 @@
 	XCTAssertTrue(small.size.width <= 30 && small.origin.x >= 15);
 }
 
+// D4: a centred title spans the cell, so the text lands in the middle.
+// UIKit's Value1 cell on iOS 6 sizes the label to its words, which left
+// "No posted stories" at the left edge of the profile pane.
+- (void)testCentredTitle_SpansTheCell {
+	CGRect title = TGRowCentredTitleFrame(CGRectMake(10, 20, 130, 22), 300);
+	XCTAssertTrue(fabs(CGRectGetMidX(title) - 150) < 0.5);
+	XCTAssertTrue(fabs(title.origin.x - 10) < 0.01 && fabs(title.size.width - 280) < 0.01);
+	XCTAssertTrue(fabs(title.origin.y - 20) < 0.01 && fabs(title.size.height - 22) < 0.01);
+	XCTAssertTrue(TGRowCentredTitleFrame(CGRectMake(200, 0, 50, 20), 300).size.width >= 0);
+}
+
 // D23: the box the next digit goes into is marked, as official's code
 // field; a full code marks none.
 - (void)testLoginCodeFocusedBox {

@@ -334,6 +334,10 @@ void TGRowCellStandOnPage(UITableViewCell *cell) {
 	[self keepValueWhole];
 	[self shiftIconToGutter];
 	[self layoutToggleInfo];
+	NSString *kind = self.row[TGRowKind];
+	if ([kind isEqualToString:TGKindEmptyPane] || [self.row[TGRowCentred] boolValue])
+		self.textLabel.frame = TGRowCentredTitleFrame(self.textLabel.frame,
+				self.contentView.bounds.size.width);
 }
 
 /// UIKit centres a subtitle cell's two labels as if each were one line. This

@@ -87,6 +87,11 @@ FOUNDATION_EXPORT TGCentredStack TGCentredStackPlace(CGFloat width, CGFloat top,
 FOUNDATION_EXPORT TGCentredStack TGEmptyStatePlace(CGSize size, CGFloat artSide,
 		CGFloat titleHeight, CGFloat subtitleHeight, CGSize button);
 
+/// A centred row title across the whole cell, keeping the left margin UIKit
+/// gave `title` on both sides. A Value1 cell on iOS 6 sizes its title label to
+/// the words, which leaves NSTextAlignmentCenter nothing to centre in.
+FOUNDATION_EXPORT CGRect TGRowCentredTitleFrame(CGRect title, CGFloat contentWidth);
+
 /// The width a centred line of the column may use.
 FOUNDATION_EXPORT CGFloat TGCentredStackTextWidth(CGFloat width);
 

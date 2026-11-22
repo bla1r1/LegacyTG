@@ -40,6 +40,12 @@ CGFloat TGGridRowHeightForCount(CGFloat width, NSInteger columns,
 			(CGFloat)(lines - 1) * TGMetricGridGap;
 }
 
+CGRect TGRowCentredTitleFrame(CGRect title, CGFloat contentWidth) {
+	CGFloat margin = MIN(title.origin.x, TGHalf(contentWidth));
+	return CGRectMake(margin, title.origin.y,
+			MAX(0, contentWidth - TGDoubled(margin)), title.size.height);
+}
+
 CGRect TGGridSelectedMarkFrame(CGFloat side) {
 	CGFloat mark = MAX(0, MIN(TGMetricGridSelectedMark,
 			side - TGDoubled(TGMetricPadLarge)));
