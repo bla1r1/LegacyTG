@@ -172,16 +172,31 @@ static NSString *TGChatDate(NSTimeInterval unix) {
 		return [TGRowCell cellForTableView:tableView row:[self noticeRow] rowIndex:0 totalRows:1];
 	if (indexPath.row < (NSInteger)header.count){
 		BOOL isArchive = [header[indexPath.row] isEqualToString:@"archive"];
-		NSUInteger archived = [TGChatListStore shared].archivedChats.count;
-		NSMutableDictionary *row = isArchive
-				? TGArchiveChatRow(TGLocalized(@"Archived Chats"),
-						TGChatListArchiveSubtitle(archived))
-				: TGSavedMessagesChatRow(TGLocalized(@"Saved Messages"),
-						TGLocalized(@"Your own notes and forwards"));
+		// Saved Messages reads like any chat (last message, date) once the
+		// chat is loaded; the stock line only covers the first launch.
+		NSDictionary *savedChat = isArchive ? nil : TGChatListSavedChat(self.chats,
+				[TGChatListStore shared].savedMessagesChatId);
+		if (savedChat)
+			return [self chatCellForChat:savedChat tableView:tableView];
+		NSMutableDictionary *row;
+		if (isArchive){
+			NSArray *archived = [TGChatListStore shared].archivedChats;
+			row = TGArchiveChatRow(TGLocalized(@"Archived Chats"), TGChatListArchiveText(archived));
+			row[TGRowChatUnread] = @(TGChatListArchiveUnread(archived));
+			row[TGRowChatMuted] = @YES;
+		} else {
+			row = TGSavedMessagesChatRow(TGLocalized(@"Saved Messages"),
+					TGLocalized(@"Your own notes and forwards"));
+		}
+		row[TGRowChatLayout] = [TGChatRowCell accessoriesValueForRow:row
+															   width:tableView.bounds.size.width];
 		return [TGChatRowCell cellForTableView:tableView row:row];
 	}
+	return [self chatCellForChat:[self visibleChats][indexPath.row - header.count]
+					   tableView:tableView];
+}
 
-	NSDictionary *c = [self visibleChats][indexPath.row - header.count];
+- (UITableViewCell *)chatCellForChat:(NSDictionary *)c tableView:(UITableView *)tableView {
 	double cellStart = TGPerfNow();
 	NSMutableDictionary *row = TGChatRow(c, TGChatDate([c[@"date"] doubleValue]));
 

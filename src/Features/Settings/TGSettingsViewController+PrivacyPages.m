@@ -13,6 +13,7 @@
 #import "TGListViewController.h"
 #import "TGAdminRightsViewController.h"
 #import "TGNotificationCategoryViewController.h"
+#import "TGUserPickerViewController.h"
 #import "TGUpdateStore.h"
 #import "TGAccountStore.h"
 #import "TGMessageStore.h"
@@ -149,7 +150,7 @@ static NSString *TGNotificationWhen(NSNumber *stamp) {
 				keepAliveRows),
 
 		TGSection(nil,
-				@"Undo all custom notification settings for your contacts, groups and channels.",
+				@"Undo all custom notification settings for all your contacts and groups.",
 				@[
 			TGRedRow(@"Reset All Notifications", ^{
 			[TGAlertSheet showConfirm:@"Are you sure you want to reset all notification settings to default?"
@@ -177,17 +178,11 @@ static NSString *TGNotificationWhen(NSNumber *stamp) {
 			[weakSelf showSavedSound:sound];
 		})];
 	}
-	if (!rows.count){
-		NSString *empty = self.savedSoundsLoaded
-				? @"Empty"
-				: @"Loading...";
-		[rows addObject:TGRow(TGKindPlain, empty)];
-	}
-
 	// Official has one cloud section: the installed tones, then the upload
-	// row. Adding a bundled sample or reading the sandbox's Documents folder
-	// are developer tools, not a user's upload path.
-	[rows addObject:TGActionRow(@"Upload Sound", ^{
+	// row, then the sentence on how a tone gets here; no "Empty" row when
+	// there are none. Adding a bundled sample or reading the sandbox's
+	// Documents folder are developer tools, not a user's upload path.
+	[rows addObject:TGAddRow(@"Upload Sound", ^{
 		[weakSelf addSoundFromDocuments];
 	})];
 
@@ -201,7 +196,9 @@ static NSString *TGNotificationWhen(NSNumber *stamp) {
 #endif
 
 	return @[
-		TGSection(@"Telegram Tones", nil, rows),
+		TGSection(@"Telegram Tones",
+				@"Press and hold a short voice note or mp3 file in any chat and select \"Save for Notifications\". It will appear here.",
+				rows),
 	];
 }
 
@@ -325,10 +322,8 @@ static NSString *TGNotificationWhen(NSNumber *stamp) {
 
 - (NSArray *)activeNotificationSections {
 	NSArray *groups = [TGSettingsStore shared].activeNotificationGroups;
-	if (!groups.count){
-		return @[TGSection(nil, nil,
-				@[TGRow(TGKindPlain, @"None")])];
-	}
+	if (!groups.count)
+		return @[];   // emptySentenceForPage says None in the middle
 
 	__weak typeof(self) weakSelf = self;
 	NSMutableArray *sections = [NSMutableArray array];
@@ -571,11 +566,10 @@ static NSString *TGNotificationWhen(NSNumber *stamp) {
 	// The official list has Edit only when there is something to edit.
 	self.navigationItem.rightBarButtonItem = self.blocked.count
 			? self.editButtonItem : nil;
-	if (!self.blocked.count)
-		return @[TGSection(nil, nil, @[TGRow(TGKindPlain,
-				@"Blocked users can't send you messages or add you to groups. They will not see your profile photos, stories, online and last seen status.")])];
-
+	// BlockedPeersController: Block User... first, then the people; the
+	// sentence on what blocking does is the footer.
 	NSMutableArray *rows = [NSMutableArray array];
+	[rows addObject:TGAddRow(@"Block User...", ^{ [weakSelf pickUserToBlock]; })];
 	for (NSDictionary *user in self.blocked){
 		int64_t userId = [user[@"id"] longLongValue];
 		// The shared person row: the photo through the peer store, the name
@@ -591,22 +585,46 @@ static NSString *TGNotificationWhen(NSNumber *stamp) {
 			row[TGRowAvatarUser] = @YES;
 		[rows addObject:row];
 	}
-	return @[TGSection(nil, nil, rows)];
+	return @[TGSection(nil,
+			@"Blocked users can't send you messages or add you to groups. They will not see your profile pictures, online and last seen status.",
+			rows)];
 }
 
-/// Only real peer rows can be swiped. The empty-state sentence is a text
-/// row, not a blocked user, and must not grow a delete control.
+- (void)pickUserToBlock {
+	TGUserPickerViewController *picker = [[TGUserPickerViewController alloc]
+			initWithSelectedUserIds:[NSSet set] title:TGLocalized(@"Block User")];
+	__weak typeof(self) weakSelf = self;
+	picker.onDone = ^(NSSet *chosenIds){
+		__block NSUInteger left = chosenIds.count;
+		for (NSNumber *userId in chosenIds)
+			[[TGAccountStore shared] setUser:userId.longLongValue blocked:YES
+								  completion:^(BOOL ok){
+				(void)ok;
+				if (--left == 0)
+					[weakSelf loadForPage];
+			}];
+	};
+	picker.hidesBottomBarWhenPushed = YES;
+	[self.navigationController pushViewController:picker animated:YES];
+}
+
+/// The add row is row 0; the people follow it, and only they can be swiped.
+static NSInteger TGBlockedPersonIndex(NSIndexPath *indexPath) {
+	return indexPath.row - 1;
+}
+
 - (BOOL)canEditBlockedRowAtIndexPath:(NSIndexPath *)indexPath {
-	return indexPath.row < (NSInteger)self.blocked.count;
+	NSInteger person = TGBlockedPersonIndex(indexPath);
+	return person >= 0 && person < (NSInteger)self.blocked.count;
 }
 
 - (void)commitBlockedEditingStyle:(UITableViewCellEditingStyle)editingStyle
 				forRowAtIndexPath:(NSIndexPath *)indexPath
 					  inTableView:(UITableView *)tableView {
 	if (editingStyle != UITableViewCellEditingStyleDelete ||
-		indexPath.row >= (NSInteger)self.blocked.count)
+			![self canEditBlockedRowAtIndexPath:indexPath])
 		return;
-	NSDictionary *user = self.blocked[(NSUInteger)indexPath.row];
+	NSDictionary *user = self.blocked[(NSUInteger)TGBlockedPersonIndex(indexPath)];
 	[[TGAccountStore shared] setUser:[user[@"id"] longLongValue] blocked:NO];
 	NSMutableArray *rest = [self.blocked mutableCopy];
 	[rest removeObject:user];

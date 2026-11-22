@@ -32,6 +32,7 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindForm;
 
 	self.title = self.creating ? TGLocalized(@"New Sticker Set")
 			: (self.setTitle.length ? self.setTitle : TGLocalized(@"Sticker"));

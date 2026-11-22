@@ -89,6 +89,14 @@ NSString *TGPageModelCompactBytes(long long bytes);
 NSArray *TGSessionsOtherThanCurrent(NSArray *sessions, BOOL unconfirmed,
 									BOOL confirmed);
 
+/// The pack key for a call's kind: Missed, Outgoing or Incoming Call.
+NSString *TGRecentCallKindKey(BOOL missed, BOOL outgoing);
+/// One Recent Calls row as CallListCallItem lays it out: the kind of call
+/// (and its length) under the name, the date alone on the right. All three
+/// strings arrive translated and formatted. Keys "subtitle", "trailing".
+NSDictionary *TGRecentCallRowText(NSString *kind, BOOL missed, NSString *when,
+		NSString *duration);
+
 #ifdef __cplusplus
 }
 #endif

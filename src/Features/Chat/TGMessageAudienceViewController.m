@@ -56,6 +56,7 @@ static NSString *TGAudienceDate(NSTimeInterval unix) {
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindDetail;
 
 	self.people = @[];
 	self.emptyText = TGLocalized(@"Loading...");

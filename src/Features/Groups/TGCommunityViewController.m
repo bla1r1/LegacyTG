@@ -41,6 +41,7 @@ static const CGFloat kCommunityPhotoBar  = 92.0f;
 - (void)viewDidLoad {
 	self.title = self.community[@"name"] ?: @"Community";
 	[super viewDidLoad];
+	self.pageKind = TGPageKindDetail;
 	[self buildPhotoHeader];
 	// A selector observer: the block form kept self alive for good, and
 	// removeObserver:self in dealloc does not remove a block observer.

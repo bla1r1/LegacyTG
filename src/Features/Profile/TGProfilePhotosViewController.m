@@ -37,6 +37,7 @@ static const NSInteger kPhotoGridColumns = 3;
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindGallery;
 	self.title = TGLocalized(@"Profile Photos");
 	[self applyTheme];
 	[self refresh];
@@ -105,8 +106,9 @@ static const NSInteger kPhotoGridColumns = 3;
 
 - (void)rebuildSections {
 	if (!self.photos.count){
-		self.sections = @[TGSection(nil, nil,
-				@[TGRow(TGKindPlain, TGLocalized(@"No Photos"))])];
+		// R8: the empty state in the middle of the page.
+		self.emptySubtitle = @"No Photos";
+		self.sections = @[];
 		[self reloadRows];
 		return;
 	}

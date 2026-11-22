@@ -6,6 +6,7 @@
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGIcons.h"
+#import "TGRowCell.h"
 
 /// The account header: the picture, the name under it, the phone under that.
 /// Same offsets as the header Settings grew privately, now in one place.
@@ -92,14 +93,16 @@ static const CGFloat kMeTextInset  = TGMetricPadMedium;
 
 - (void)applyTheme {
 	TGTheme *theme = [TGTheme shared];
-	[theme styleGroupedCell:self forRow:0 totalRows:1];
-	self.selectionStyle = self.row[TGRowTap]
-			? UITableViewCellSelectionStyleBlue
-			: UITableViewCellSelectionStyleNone;
+	// The account header stands on the page, not in a card (D1), like the
+	// header of a profile. The row still opens the profile through its tap.
+	TGRowCellStandOnPage(self);
 
 	NSString *name = self.row[TGRowTitle] ?: @"";
 	self.nameLabel.text = name;
-	self.nameLabel.textColor = [theme primaryTextColour];
+	// Your Color's preview shows the pending name colour here.
+	UIColor *nameColour = self.row[TGRowTitleColour];
+	self.nameLabel.textColor = [nameColour isKindOfClass:UIColor.class]
+			? nameColour : [theme primaryTextColour];
 	self.phoneLabel.text = self.row[TGRowDetail] ?: @"";
 	self.phoneLabel.textColor = [theme secondaryTextColour];
 

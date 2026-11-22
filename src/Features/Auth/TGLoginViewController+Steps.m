@@ -38,15 +38,23 @@
         NSForegroundColorAttributeName : self.boxTextColour
                 ?: [[TGTheme shared] primaryTextColour]
     };
+    NSInteger focus = TGLoginCodeFocusedBox(self.code.length, count);
     for (NSInteger i = 0; i < count; i++) {
         CGRect box = CGRectMake(x, 0, boxWidth, TGMetricRow);
         UIBezierPath *path = [UIBezierPath bezierPathWithRoundedRect:box
                 cornerRadius:TGMetricCornerControl];
+        // D23: a hairline on the page was all a box had, and it vanished on
+        // the grey login background. Each box is a white plate like the other
+        // fields, and the one the next digit goes into wears the accent.
+        [[[TGTheme shared] cardBackgroundColour] setFill];
+        [path fill];
+        BOOL focused = !self.errorState && i == focus;
         UIColor *border = self.errorState
                 ? [[TGTheme shared] destructiveColour]
-                : (self.boxBorderColour ?: [[TGTheme shared] separatorColour]);
+                : (focused ? [[TGTheme shared] accentColour]
+                        : (self.boxBorderColour ?: [[TGTheme shared] separatorColour]));
         [border setStroke];
-        path.lineWidth = self.errorState ? TGMetricBorderThick : TGMetricHairline;
+        path.lineWidth = (self.errorState || focused) ? TGMetricBorderThick : TGMetricHairline;
         [path stroke];
         if ((NSUInteger)i < self.code.length) {
             NSString *digit = [self.code substringWithRange:NSMakeRange((NSUInteger)i, 1)];
@@ -181,8 +189,20 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
             y - TGMetricStackStep + TGMetricPadLarge);
 }
 
+/// The heading every step but the QR opens with (D23): the code, password
+/// and email steps had none, so their subtitle started where another step's
+/// title is.
+- (CGFloat)placeHeadingAtY:(CGFloat)y width:(CGFloat)width {
+    if (self.headingLabel.hidden)
+        return y;
+    self.headingLabel.frame = CGRectMake(TGMetricGutter, y,
+            width - TGDoubled(TGMetricGutter), TGMetricLoginBrandLabel);
+    return y + TGMetricLoginBrandLabel + TGMetricPadMedium;
+}
+
 - (void)layoutCodeStepInWidth:(CGFloat)width {
-    CGFloat y = [self placeSubtitle] + TGMetricStackGroup;
+    CGFloat y = [self placeHeadingAtY:TGMetricStackTop width:width];
+    y = [self placeSubtitleAtY:y] + TGMetricStackGroup;
     y = TGStackPlace(self.inputContainer, y, TGMetricRow, width, TGMetricGutter);
     if (self.codeBoxesView) {
         self.codeBoxesView.frame = self.inputContainer.frame;
@@ -272,11 +292,7 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
         self.avatarImageView.frame = self.avatarButton.bounds;
         y += side + TGMetricPadMedium;
     }
-    if (!self.headingLabel.hidden) {
-        self.headingLabel.frame = CGRectMake(TGMetricGutter, y,
-                width - TGDoubled(TGMetricGutter), TGMetricLoginBrandLabel);
-        y += TGMetricLoginBrandLabel + TGMetricPadMedium;
-    }
+    y = [self placeHeadingAtY:y width:width];
     y = [self placeSubtitleAtY:y] + TGMetricStackGroup;
     y = TGStackPlace(self.inputContainer, y, TGMetricRow, width, TGMetricGutter);
     self.inputField.frame = CGRectMake(TGMetricPadMedium, 0,
@@ -590,8 +606,9 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
     self.codeSubmitPending = NO;
     self.codeErrorShown = NO;
     self.title = nil;
-    self.headingLabel.text = nil;
-    self.headingLabel.hidden = YES;
+    // AuthorizationSequenceCodeEntryControllerNode titles the step.
+    self.headingLabel.text = TGLocalized(@"Enter Code");
+    self.headingLabel.hidden = NO;
     if (phoneNumber.length > 0) {
         self.savedPhoneNumber = phoneNumber;
     }
@@ -942,7 +959,7 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
                subtitle:TGLocalized(@"Enter your Telegram 2-Step Verification password to continue.")
             placeholder:placeholder secure:YES keyboard:UIKeyboardTypeDefault
                  button:@"Continue"];
-    self.headingLabel.text = nil;
+    self.headingLabel.text = TGLocalized(@"Your Password");
     [self addStepLink:@"Forgot password?" action:@selector(forgotPasswordTapped) atY:0];
     [self layoutActiveStep];
 }
@@ -994,6 +1011,7 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
     [self showFieldStep:TGLoginStepEmailCode title:nil subtitle:subtitle
             placeholder:@"Code" secure:NO keyboard:UIKeyboardTypeNumberPad
                  button:@"Continue"];
+    self.headingLabel.text = TGLocalized(@"Check Your Email");
     self.expectedCodeLength = [info[@"code_info"][@"length"] integerValue];
     [self updateActionEnabled];
     // AuthorizationSequenceCodeEntryControllerNode: a reset that can start

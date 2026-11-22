@@ -97,6 +97,9 @@ FOUNDATION_EXPORT dispatch_semaphore_t TGIconsDecodeGate(void);
 /// The padlock on the recorder's lock capsule, drawn rather than set as an
 /// emoji - iOS 7 has no colour glyph for it on every device.
 + (UIImage *)lockOfSide:(CGFloat)side colour:(UIColor *)colour;
+/// The chosen wallpaper's mark: a check on a translucent disc, as official
+/// SettingsThemeWallpaperNode (its blur is dropped on iOS 6).
++ (UIImage *)gridSelectedMarkOfSide:(CGFloat)side;
 
 /// The bars of a voice message as one path, drawn from TDLib's
 /// five-bits-per-sample waveform. The played fraction is not baked in: the

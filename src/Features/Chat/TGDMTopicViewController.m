@@ -14,6 +14,7 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindList;
 	NSString *name = self.topic[@"senderName"];
 	self.title = name.length ? name : TGLocalized(@"Topic");
 	self.history = @[];

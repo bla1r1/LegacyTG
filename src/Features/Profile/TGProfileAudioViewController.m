@@ -62,6 +62,7 @@ static UIImage *TGProfileAudioArtwork(UIImage *cover, BOOL playing) {
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindList;
 	self.title = self.subjectTitle.length ? self.subjectTitle
 			: TGLocalized(@"Profile Music");
 	self.audios = @[];

@@ -34,6 +34,7 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindDetail;
 	self.title = TGLocalized(@"File");
 	self.tableView.tableFooterView = [[UIView alloc] initWithFrame:CGRectZero];
 	[self setupHeader];

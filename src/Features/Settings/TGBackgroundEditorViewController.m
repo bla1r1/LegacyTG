@@ -43,6 +43,7 @@ static const CGFloat kWallpaperDefaultHeight = 480.0f;
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindForm;
 	self.title = TGLocalized(@"Set a Color");
 	self.navigationItem.rightBarButtonItem =
 			[TGBarItem itemWithTitle:@"Apply" primary:YES

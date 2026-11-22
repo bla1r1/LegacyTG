@@ -60,6 +60,9 @@ NSString *const TGKindThemeGrid   = @"themegrid";
 NSString *const TGKindAction      = @"action";
 NSString *const TGKindToggleInfo  = @"switchinfo";
 NSString *const TGKindPeerRow     = @"peerrow";
+NSString *const TGKindAdd         = @"add";
+NSString *const TGKindEmptyPane   = @"emptypane";
+NSString *const TGRowAddGlyph     = @"addGlyph";
 
 NSDictionary *TGSection(NSString *header, NSString *footer, NSArray *rows) {
 	NSMutableDictionary *section = [NSMutableDictionary dictionary];
@@ -188,6 +191,14 @@ NSMutableDictionary *TGPageHeaderRow(UIImage *art, NSString *title, NSString *te
 	return row;
 }
 
+NSString *const TGRowInfoTap = @"infoTap";
+
+CGFloat TGPeerRowTrailingWidth(CGFloat labelWidth, CGFloat infoSide) {
+	if (labelWidth <= 0 || infoSide <= 0)
+		return MAX(labelWidth, infoSide);
+	return labelWidth + TGMetricPadSmall + infoSide;
+}
+
 BOOL TGPeerRowIsChecked(NSDictionary *row) {
 	return [row[TGRowChecked] boolValue];
 }
@@ -208,11 +219,16 @@ NSDictionary *TGButtonRow(NSString *title, NSString *detail,
 BOOL TGRowsSectionIconsConsistent(NSArray *rows) {
 	if (!rows.count)
 		return YES;
-	BOOL firstHasIcon = [rows[0][TGRowIcon] length] > 0;
-	for (NSUInteger i = 1; i < rows.count; i++){
-		BOOL hasIcon = [rows[i][TGRowIcon] length] > 0;
-		if (hasIcon != firstHasIcon)
+	// The add row brings its own + glyph in the icon column, so it sits in
+	// a section of icon rows and of plain rows alike.
+	int seen = -1;
+	for (NSDictionary *row in rows){
+		if ([row[TGRowKind] isEqual:TGKindAdd])
+			continue;
+		int hasIcon = [row[TGRowIcon] length] > 0;
+		if (seen >= 0 && hasIcon != seen)
 			return NO;
+		seen = hasIcon;
 	}
 	return YES;
 }
@@ -230,11 +246,7 @@ NSString *const TGRowRawTitle = @"rawTitle";
 NSString *const TGRowRawDetail = @"rawDetail";
 NSString *const TGRowAccessoryImage = @"accessoryImage";
 
-NSString *const TGKindAppearancePreview = @"appearancepreview";
 NSString *const TGKindSwatchStrip = @"swatchstrip";
-NSString *const TGRowPreviewImage = @"previewImage";
-NSString *const TGRowPreviewText = @"previewText";
-NSString *const TGRowPreviewTextColour = @"previewTextColour";
 NSString *const TGRowSwatches = @"swatches";
 NSString *const TGRowSwatchTap = @"swatchTap";
 
@@ -541,6 +553,59 @@ NSArray *TGRowsFromListEntries(NSArray *entries) {
 	for (NSDictionary *entry in entries)
 		[rows addObject:TGRowFromListEntry(entry)];
 	return rows;
+}
+
+#pragma mark - 2.0 page rules
+
+NSDictionary *TGAddRow(NSString *title, void (^tap)(void)) {
+	NSMutableDictionary *row = TGRow(TGKindAdd, title);
+	if (tap) row[TGRowTap] = [tap copy];
+	return row;
+}
+
+NSDictionary *TGAddGlyphRow(NSString *title, NSString *glyph, void (^tap)(void)) {
+	NSMutableDictionary *row = [TGAddRow(title, tap) mutableCopy];
+	if (glyph.length)
+		row[TGRowAddGlyph] = glyph;
+	return row;
+}
+
+NSDictionary *TGEmptyPaneRow(NSString *title) {
+	return TGRow(TGKindEmptyPane, title);
+}
+
+TGRowFontRole TGRowTitleFontRole(BOOL grouped) {
+	return grouped ? TGRowFontCard : TGRowFontList;
+}
+
+NSString *TGChatRowPreviewPrefix(NSString *author) {
+	if (![author isKindOfClass:NSString.class] || !author.length)
+		return @"";
+	// One line for the name: a newline inside it would push the text out.
+	NSString *name = [[author componentsSeparatedByCharactersInSet:
+			[NSCharacterSet newlineCharacterSet]] componentsJoinedByString:@" "];
+	return [name stringByAppendingString:@"\n"];
+}
+
+BOOL TGRowsSectionsHaveRows(NSArray *sections) {
+	for (NSDictionary *section in sections){
+		NSArray *rows = [section isKindOfClass:NSDictionary.class]
+				? section[@"rows"] : nil;
+		if (![rows isKindOfClass:NSArray.class])
+			continue;
+		// A page's intro (R7) is the page's own words, not content.
+		for (NSDictionary *row in rows)
+			if (![row[TGRowKind] isEqual:TGKindPageHeader])
+				return YES;
+	}
+	return NO;
+}
+
+NSArray *TGRowsListSections(NSArray *entries, NSString *footer) {
+	NSArray *rows = TGRowsFromListEntries(entries);
+	if (!rows.count)
+		return @[];
+	return @[TGSection(nil, footer, rows)];
 }
 
 NSString *TGContactSectionTitle(NSString *name) {

@@ -23,6 +23,7 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindSettings;
 	self.title = TGLocalized(@"File Tools");
 	self.stage = TGLocalized(@"Ready");
 	self.tableView.tableFooterView = [[UIView alloc] initWithFrame:CGRectZero];

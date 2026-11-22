@@ -75,13 +75,13 @@ States: `done` (matches official client), `partial` (partially implemented), `mi
 | Local title search | `done` | ``Features/ChatList/TGChatListViewController+Search.m`` | Case-insensitive title match, instant. |
 | Message search from the field | `done` | ``Features/ChatList/TGChatListViewController+Search.m`` | `searchMessages:` results are appended below title hits. |
 | Global search screen | `partial` | ``Features/ChatList/TGChatListViewController+Search.m`` | All/Chats/Messages/Media/Links/Files/Music/Voice; no Channels, Apps, Posts or Downloads. |
-| Search results use real rows | `missing` | ``Features/ChatList/TGSearchViewController.m`` | Generic subtitle cells with a disclosure chevron for every hit. |
+| Search results use real rows | `partial` | ``src/Features/ChatList/TGSearchViewController.m`` | People and chats are shared peer rows, messages `TGMessageResultRow`; a chat hit is not yet the full chat row with preview and badge. |
 | Search filter bar at the bottom | `partial` | ``Features/ChatList/TGSearchViewController.m`` | Scope pills sit in `tableHeaderView` and scroll away; selected pill is a plain accent fill. |
 | Search tokens for archive, folder, peer and date | `missing` | ``Features/ChatList/TGSearchViewController.m`` | No tokens; every query is global. |
 | Downloads shortcut in search | `missing` | ``Features/ChatList/TGSearchViewController.m`` | Nothing; downloads live only under Settings. |
 | Header notice panel | `missing` | ``src/Features/ChatList/Core/TGChatListHeader.m`` | `updateSuggestedActions` is read only by the Tier 2 hub, never on the list. |
 | Real peek on hold | `missing` | ``Features/ChatList/TGChatListViewController+Actions.m`` | A centred action menu only; no preview card. |
-| Group preview with an author prefix stays one line | `missing` | ``Features/Chat/Views/TGChatCell.m`` | `previewLabel.numberOfLines = 2` always, so "Ivan: …" can wrap under the author. |
+| Group preview with an author prefix stays one line | `done` | ``src/UI/Rows/TGChatRowCell.m`` | The author takes the first preview line and the text the second (`TGChatRowPreviewPrefix`), so the text never wraps back under the name. |
 | Archive intro pages | `missing` | `—` | No archive intro or empty-archive state. |
 
 ## Chat & Composer

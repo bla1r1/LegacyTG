@@ -31,6 +31,7 @@ static const NSTimeInterval kStatusTwoDays = 48 * kStatusHour;
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindPicker;
 	self.title = self.subjectTitle.length ? self.subjectTitle
 			: TGLocalized(@"Emoji Status");
 	self.stickerByEmojiId = [NSMutableDictionary dictionary];

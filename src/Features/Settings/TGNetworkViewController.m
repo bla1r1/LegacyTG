@@ -64,6 +64,7 @@ static NSString *TGConfigValueText(id value) {
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindSettings;
 	self.title = @"Network";
 	// TDLib does not remember the last setNetworkType across launches, so the
 	// page does. "Other" is what TDLib itself uses until it is told.

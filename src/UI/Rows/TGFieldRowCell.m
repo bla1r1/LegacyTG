@@ -2,6 +2,7 @@
 // TGFieldRowCell.m
 //
 #import "TGFieldRowCell.h"
+#import "TGRowCell.h"
 #import "TGRows.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
@@ -459,8 +460,9 @@
 
 - (void)applyTheme {
 	TGTheme *theme = [TGTheme shared];
-	[[TGTheme shared] styleCell:self];
-	self.selectionStyle = UITableViewCellSelectionStyleNone;
+	// The photo stands on the page as a profile's header does (D6), not in
+	// a card of its own.
+	TGRowCellStandOnPage(self);
 	self.avatarView.image = self.row[TGRowImage];
 	self.avatarView.layer.cornerRadius = TGHalf(TGMetricProfileAvatar);
 	self.avatarView.layer.borderColor = [theme separatorColour].CGColor;

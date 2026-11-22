@@ -43,6 +43,7 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindDetail;
 	self.title = self.mode == TGStoryInfoModeReport ? @"Report Story" : @"Story";
 	[[TGTheme shared] styleGroupedTable:self.tableView];
 

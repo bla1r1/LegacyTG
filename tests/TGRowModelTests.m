@@ -120,4 +120,48 @@
 	XCTAssertFalse(TGRowsSectionIconsConsistent(@[iconA, bad]));
 }
 
+#pragma mark - 2.0 page rules
+
+- (void)testAddRow_IsItsOwnKindAndCarriesTheTap {
+	__block BOOL tapped = NO;
+	NSDictionary *row = TGAddRow(@"Add Member", ^{ tapped = YES; });
+	XCTAssertEqualObjects(row[TGRowKind], TGKindAdd);
+	XCTAssertEqualObjects(row[TGRowTitle], @"Add Member");
+	// Not the centred action: Reset and Log out stay TGActionRow.
+	XCTAssertFalse([row[TGRowKind] isEqual:TGKindAction]);
+	((void (^)(void))row[TGRowTap])();
+	XCTAssertTrue(tapped);
+}
+
+- (void)testAddGlyphRow_KeepsTheAddKindWithItsGlyph {
+	NSDictionary *row = TGAddGlyphRow(@"New Group", @"contacts", nil);
+	XCTAssertEqualObjects(row[TGRowKind], TGKindAdd);
+	XCTAssertEqualObjects(row[TGRowAddGlyph], @"contacts");
+	XCTAssertNil(TGAddRow(@"Add Proxy", nil)[TGRowAddGlyph]);
+}
+
+- (void)testAddRow_SitsInIconAndPlainSectionsAlike {
+	NSDictionary *add = TGAddRow(@"Create New Folder", nil);
+	NSDictionary *folder = TGIconRow(@"Work", @"folder", nil, nil);
+	NSDictionary *proxy = TGTapRow(@"1.2.3.4:443", nil, nil);
+	XCTAssertTrue(TGRowsSectionIconsConsistent(@[add, folder, folder]));
+	XCTAssertTrue(TGRowsSectionIconsConsistent(@[add, proxy, proxy]));
+	XCTAssertFalse(TGRowsSectionIconsConsistent(@[add, folder, proxy]));
+}
+
+- (void)testFontRole_EveryCardRowTakesTheSystemFont {
+	// R6: switch-info rows in a card used TGFontRow, thin beside bold.
+	XCTAssertEqual(TGRowTitleFontRole(YES), TGRowFontCard);
+	XCTAssertEqual(TGRowTitleFontRole(NO), TGRowFontList);
+}
+
+- (void)testEmptyPane_IsItsOwnKindWithoutATap {
+	NSDictionary *row = TGEmptyPaneRow(@"No posted stories");
+	XCTAssertEqualObjects(row[TGRowKind], TGKindEmptyPane);
+	XCTAssertEqualObjects(row[TGRowTitle], @"No posted stories");
+	XCTAssertNil(row[TGRowTap]);
+	// Not the grey plain row the pane used to be.
+	XCTAssertFalse([row[TGRowKind] isEqual:TGKindPlain]);
+}
+
 @end

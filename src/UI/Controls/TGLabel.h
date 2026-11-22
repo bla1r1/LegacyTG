@@ -18,6 +18,7 @@ typedef NS_ENUM(NSInteger, TGLabelRole) {
 	TGLabelSubhead,        ///< a secondary line under a heading
 	TGLabelCaption,        ///< small grey text: footers, counts, notes
 	TGLabelCaptionStrong,  ///< a small badge label
+	TGLabelSectionHeader,  ///< a group's heading on the page, etched like a table's
 	TGLabelMeta,           ///< the smallest grey text in content
 	TGLabelMicro,          ///< a scale mark
 	TGLabelBarTitle,       ///< a title drawn into the navigation bar

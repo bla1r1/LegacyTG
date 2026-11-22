@@ -23,6 +23,7 @@ static NSString *TGNotificationDateText(NSNumber *timestamp) {
 - (void)viewDidLoad {
 	[super viewDidLoad];
 	self.title = TGLocalized(@"Notifications");
+	self.pageKind = TGPageKindSettings;
 	[self applyTheme];
 
 	self.navigationItem.rightBarButtonItem = [TGBarItem itemWithTitle:@"Clear All" primary:NO
@@ -63,12 +64,10 @@ static NSString *TGNotificationDateText(NSNumber *timestamp) {
 		])];
 	}
 
+	// No notifications: the empty state says None in the middle (R8).
+	self.emptySubtitle = @"None";
 	NSArray *groups = self.groups;
-	if (!groups.count){
-		[sections addObject:TGSection(TGLocalized(@"NOTIFICATIONS"), nil, @[
-			TGRow(TGKindPlain, TGLocalized(@"None")),
-		])];
-	} else {
+	if (groups.count){
 		for (NSDictionary *group in groups){
 			NSString *title = [[TGMessageStore shared] titleForChat:
 					[group[@"chatId"] longLongValue]] ?: TGLocalized(@"Notifications");

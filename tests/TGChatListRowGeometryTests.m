@@ -158,6 +158,36 @@ static const CGFloat kGap = 8.0f;
 	XCTAssertEqualObjects(TGChatListArchiveSubtitle(0), @"0 chats");
 }
 
+// Official ChatListItem draws the archive row's second line as the archived
+// chats' titles joined by ", ", not a count; a count stays only when no
+// chat has a title yet.
+- (void)testArchiveText_ListsArchivedTitles {
+	NSArray *archived = @[ @{ @"title" : @"Alice", @"unread" : @2 },
+						   @{ @"title" : @"" },
+						   @{ @"title" : @"Book club", @"isMuted" : @YES } ];
+	XCTAssertEqualObjects(TGChatListArchiveText(archived), @"Alice, Book club");
+	XCTAssertEqualObjects(TGChatListArchiveText(@[ @{ @"id" : @1 } ]), @"1 chat");
+	XCTAssertEqualObjects(TGChatListArchiveText(nil), @"0 chats");
+}
+
+// The archive badge counts unread chats, not messages, as official's group
+// reference; marked-unread chats count too.
+- (void)testArchiveUnread_CountsChatsNotMessages {
+	NSArray *archived = @[ @{ @"unread" : @40 }, @{ @"unread" : @0 },
+						   @{ @"markedUnread" : @YES }, @{ @"unread" : @1 } ];
+	XCTAssertEqual(TGChatListArchiveUnread(archived), (NSUInteger)3);
+	XCTAssertEqual(TGChatListArchiveUnread(@[]), (NSUInteger)0);
+}
+
+// The Saved Messages row above the list shows that chat's own last message,
+// as every other row does, once the chat is among the loaded ones.
+- (void)testSavedChat_FindsTheChatById {
+	NSArray *chats = @[ @{ @"id" : @5 }, @{ @"id" : @7, @"text" : @"note" } ];
+	XCTAssertEqualObjects(TGChatListSavedChat(chats, 7)[@"text"], @"note");
+	XCTAssertNil(TGChatListSavedChat(chats, 9));
+	XCTAssertNil(TGChatListSavedChat(chats, 0));
+}
+
 - (void)testAvatarWindow_CoversTheScreenAndNotTheWholeList {
 	NSRange top = TGAvatarWindow(0, 14, 176);
 	XCTAssertEqual(top.location, (NSUInteger)0);

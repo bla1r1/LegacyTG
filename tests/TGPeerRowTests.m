@@ -54,4 +54,13 @@
 	XCTAssertFalse(TGPeerRowIsChecked(row));
 }
 
+// Official CallListCallItem puts the date and then the info button at the
+// trailing edge; the name stops before both, not before the date alone.
+- (void)testTrailingWidth_ReservesInfoButtonAfterTheDate {
+	XCTAssertTrue(fabs(TGPeerRowTrailingWidth(40, 0) - 40) < 0.01);
+	CGFloat both = TGPeerRowTrailingWidth(40, 22);
+	XCTAssertTrue(both > 62, @"date, gap and button, got %f", both);
+	XCTAssertTrue(fabs(TGPeerRowTrailingWidth(0, 22) - 22) < 0.01);
+}
+
 @end

@@ -14,7 +14,10 @@ static NSArray *TGPacksFrom(NSDictionary *target) {
 		if (![pack[@"id"] length])
 			continue;
 		[out addObject:@{@"id"   : pack[@"id"],
-						 @"name" : pack[@"native_name"] ?: pack[@"name"] ?: pack[@"id"]}];
+						 @"name" : pack[@"native_name"] ?: pack[@"name"] ?: pack[@"id"],
+						 // The pack's English name, the first line official's
+						 // language list shows above the native one.
+						 @"englishName" : pack[@"name"] ?: @""}];
 	}
 	return out;
 }

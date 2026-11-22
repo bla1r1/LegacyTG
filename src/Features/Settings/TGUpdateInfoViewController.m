@@ -38,6 +38,7 @@ static UIImage *TGUpdateAppIcon(void) {
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindDetail;
 	self.title = TGLocalized(@"Update");
 	if (!self.info.isBlocking){
 		self.navigationItem.leftBarButtonItem = [TGBarItem itemWithTitle:@"Skip" primary:NO

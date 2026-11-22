@@ -87,8 +87,6 @@ static UIImage *TGAppearanceAvatar(UIImage *avatar, UIColor *ring) {
 /// content view. The screen owns the buttons, the cell family stays the one
 /// renderer; tags below its own range keep reuse from doubling the strip.
 static const NSInteger kSwatchButtonTag = 8100;
-static const NSInteger kPreviewAvatarTag = 8200;
-static const NSInteger kPreviewNameTag = 8201;
 
 @interface TGAppearanceSwatchButton : UIButton
 @property (nonatomic, copy) void (^onTap)(void);
@@ -133,6 +131,7 @@ static const NSInteger kPreviewNameTag = 8201;
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindForm;
 	self.title = TGLocalized(@"Your Color");
 	self.swatchCache = [[NSCache alloc] init];
 
@@ -202,25 +201,27 @@ static const NSInteger kPreviewNameTag = 8201;
 /// The one place the page's rows are built. A tab switch, a palette update and
 /// a chosen swatch all replace the list here and reload once.
 - (void)rebuildSections {
-	NSMutableDictionary *preview = [TGRow(TGKindAppearancePreview, @"")
-			mutableCopy];
+	// D21: the preview is the profile header the colour lands on (official
+	// PeerNameColorScreen previews the profile), not a one-line person row
+	// where a short name such as "." was lost.
 	NSDictionary *me = [TGProfileStore shared].me;
 	NSString *name = [me[@"first_name"] length] ? me[@"first_name"]
 			: TGLocalized(@"Name");
 	if ([me[@"last_name"] length])
 		name = [NSString stringWithFormat:@"%@ %@", name, me[@"last_name"]];
-	CGFloat side = TGMetricListAvatar;
 	UIImage *avatar = [TGIcons avatarWithInitials:[TGIcons initialsForTitle:name]
-											 size:side
+											 size:TGMetricProfileAvatar
 										 colourId:[me[@"id"] longLongValue]];
 	UIColor *profileColour = [[TGProfileStore shared] accentColourForId:self.pendingProfileId
 														  profile:YES];
-	preview[TGRowPreviewImage] = TGAppearanceAvatar(avatar,
-			profileColour ?: [[TGTheme shared] separatorColour]);
-	preview[TGRowPreviewText] = name;
-	preview[TGRowPreviewTextColour] = [[TGProfileStore shared]
-			accentColourForId:self.pendingAccentId profile:NO] ?:
-			[[TGTheme shared] primaryTextColour];
+	NSMutableDictionary *preview = TGProfileHeaderRow(me[@"id"], name,
+			TGLocalized(@"online"),
+			TGAppearanceAvatar(avatar, profileColour ?: [[TGTheme shared] separatorColour]),
+			nil, nil);
+	UIColor *nameColour = [[TGProfileStore shared] accentColourForId:self.pendingAccentId
+															 profile:NO];
+	if (nameColour)
+		preview[TGRowTitleColour] = nameColour;
 
 	NSArray *ids = self.activeIds;
 	NSInteger count = (NSInteger)ids.count;
@@ -251,12 +252,17 @@ static const NSInteger kPreviewNameTag = 8201;
 
 	NSMutableArray *sections = [NSMutableArray array];
 	[sections addObject:TGSection(nil, nil, @[preview])];
-	[sections addObject:TGSection(self.tab == kTabProfile
-			? TGLocalized(@"Profile") : TGLocalized(@"Name"), nil, swatchRows)];
+	// D21: "Profile" and "Name" are the tab titles, not section headers.
+	// Official puts the colours under the preview with its sentence as the
+	// footer (ProfileColorSetup, NameColor).
+	[sections addObject:TGSection(nil, self.tab == kTabProfile
+			? @"Choose a color for your profile"
+			: @"Your name and replies to your messages will be shown in the selected color.",
+			swatchRows)];
 	if (self.tab == kTabProfile){
 		__weak typeof(self) weakSelf = self;
 		[sections addObject:TGSection(nil, nil, @[
-			TGCentredDestructiveRow(TGLocalized(@"Reset"), ^{
+			TGCentredDestructiveRow(TGLocalized(@"Reset Profile Color"), ^{
 				weakSelf.pendingProfileId = -1;
 				weakSelf.profileChanged = YES;
 				[weakSelf rebuildSections];
@@ -300,8 +306,6 @@ static const NSInteger kPreviewNameTag = 8201;
 	NSDictionary *row = [self rowAtPath:path];
 	if ([row[TGRowKind] isEqualToString:TGKindSwatchStrip])
 		return kSwatchRow;
-	if ([row[TGRowKind] isEqualToString:TGKindAppearancePreview])
-		return TGMetricPersonRow;
 	return [super tableView:tableView heightForRowAtIndexPath:path];
 }
 
@@ -318,15 +322,11 @@ static const NSInteger kPreviewNameTag = 8201;
 		 cellForRowAtIndexPath:(NSIndexPath *)path {
 	NSDictionary *row = [self rowAtPath:path];
 	NSString *kind = row[TGRowKind];
-	if ([kind isEqualToString:TGKindAppearancePreview] ||
-			[kind isEqualToString:TGKindSwatchStrip]){
+	if ([kind isEqualToString:TGKindSwatchStrip]){
 		NSArray *rows = self.sections[(NSUInteger)path.section][@"rows"];
 		TGRowCell *cell = [TGRowCell cellForTableView:tableView row:row
 											 rowIndex:path.row totalRows:rows.count];
-		if ([kind isEqualToString:TGKindAppearancePreview])
-			[self decoratePreviewCell:cell row:row tableView:tableView];
-		else
-			[self decorateSwatchCell:cell row:row tableView:tableView];
+		[self decorateSwatchCell:cell row:row tableView:tableView];
 		return cell;
 	}
 	UITableViewCell *cell = [super tableView:tableView
@@ -334,36 +334,6 @@ static const NSInteger kPreviewNameTag = 8201;
 	if ([cell isKindOfClass:TGRowCell.class])
 		[(TGRowCell *)cell applyAppendedOptions:row];
 	return cell;
-}
-
-/// The live preview: the picture with the pending profile ring and the name in
-/// the pending accent colour. Both are baked by the screen, so the shared cell
-/// only carries them.
-- (void)decoratePreviewCell:(TGRowCell *)cell
-						row:(NSDictionary *)row
-				  tableView:(UITableView *)tableView {
-	for (UIView *view in [cell.contentView.subviews copy])
-		if (view.tag == kPreviewAvatarTag || view.tag == kPreviewNameTag)
-			[view removeFromSuperview];
-
-	CGFloat side = TGMetricListAvatar;
-	UIImageView *avatarView = [[UIImageView alloc] initWithFrame:
-			CGRectMake(TGMetricGutter,
-					TGCenteredOrigin(TGMetricPersonRow, side), side, side)];
-	avatarView.tag = kPreviewAvatarTag;
-	avatarView.image = row[TGRowPreviewImage];
-	[cell.contentView addSubview:avatarView];
-
-	CGFloat width = TGAppearanceContentWidth(tableView);
-	UILabel *nameLabel = TGLabelWith(TGLabelRowStrong, CGRectMake(TGMetricGutter + side + TGMetricPadMedium,
-					TGCenteredOrigin(TGMetricPersonRow, TGMetricLineRow),
-					width - TGMetricGutter - side - TGMetricPadMedium - TGMetricGutter,
-					TGMetricLineRow), nil);
-	nameLabel.tag = kPreviewNameTag;
-	nameLabel.text = row[TGRowPreviewText];
-	nameLabel.textColor = row[TGRowPreviewTextColour] ?:
-			[[TGTheme shared] primaryTextColour];
-	[cell.contentView addSubview:nameLabel];
 }
 
 /// The swatch strip: five discs to a row, each a button that reports its slot

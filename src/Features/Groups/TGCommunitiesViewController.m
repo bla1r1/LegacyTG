@@ -13,6 +13,7 @@
 - (void)viewDidLoad {
 	self.title = @"Community";
 	[super viewDidLoad];
+	self.pageKind = TGPageKindList;
 	// A selector observer: the block form kept self alive for good, and
 	// removeObserver:self in dealloc does not remove a block observer.
 	[[NSNotificationCenter defaultCenter] addObserver:self

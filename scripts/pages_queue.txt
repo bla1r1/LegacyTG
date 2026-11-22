@@ -1,0 +1,2 @@
+# Screens that do not say their page kind yet (R1). Read by
+# scripts/lint_pages.sh. Only shrinks; never add a line.

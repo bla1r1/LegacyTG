@@ -456,7 +456,7 @@ static NSString *TGSafeEmojiFallback(NSString *emoji) {
 			[NSAttributedString respondsToSelector:@selector(attributedStringWithAttachment:)]);
 
 	if (![self.previewLabel respondsToSelector:@selector(setAttributedText:)]) {
-		self.previewLabel.text = author.length ? [NSString stringWithFormat:@"%@: %@", author, text] : text;
+		self.previewLabel.text = [TGChatRowPreviewPrefix(author) stringByAppendingString:text];
 		return;
 	}
 
@@ -468,7 +468,7 @@ static NSString *TGSafeEmojiFallback(NSString *emoji) {
 		return;
 	}
 
-	NSString *prefix = author.length ? [author stringByAppendingString:@": "] : @"";
+	NSString *prefix = TGChatRowPreviewPrefix(author);
 	NSUInteger authorOffset = prefix.length;
 	NSString *fullText = authorOffset > 0 ? [prefix stringByAppendingString:text] : text;
 

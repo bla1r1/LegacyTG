@@ -47,6 +47,7 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindSettings;
 	self.title = @"Bot Console";
 	[self rebuildSections];
 }

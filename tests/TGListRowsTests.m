@@ -84,4 +84,26 @@
 	XCTAssertNil(TGRowFromListEntry(@{@"title" : @"plain"})[TGRowTitleSwatchColour]);
 }
 
+#pragma mark - empty state (R8)
+
+- (void)testListSections_EmptyListHasNoGreyRow {
+	// The old list drew "None" as a grey row inside a card.
+	XCTAssertEqual(TGRowsListSections(@[], @"footer").count, (NSUInteger)0);
+	XCTAssertEqual(TGRowsListSections(nil, nil).count, (NSUInteger)0);
+	NSArray *sections = TGRowsListSections(@[@{@"title" : @"A"}], @"Footer");
+	XCTAssertEqual(sections.count, (NSUInteger)1);
+	XCTAssertEqualObjects(sections[0][@"footer"], @"Footer");
+	XCTAssertEqual([sections[0][@"rows"] count], (NSUInteger)1);
+}
+
+- (void)testSectionsHaveRows_AnIntroAloneIsEmpty {
+	XCTAssertFalse(TGRowsSectionsHaveRows(@[]));
+	XCTAssertFalse(TGRowsSectionsHaveRows(@[TGSection(nil, nil, @[])]));
+	NSDictionary *intro = TGPageHeaderRow(nil, nil, @"Create folders");
+	XCTAssertFalse(TGRowsSectionsHaveRows(@[TGSection(nil, nil, @[intro]),
+			TGSection(@"Folders", nil, @[])]));
+	XCTAssertTrue(TGRowsSectionsHaveRows(@[TGSection(nil, nil, @[intro]),
+			TGSection(nil, nil, @[TGTapRow(@"Work", nil, nil)])]));
+}
+
 @end

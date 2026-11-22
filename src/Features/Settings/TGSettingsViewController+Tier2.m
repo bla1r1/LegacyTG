@@ -27,9 +27,10 @@
 #if TG_DEV
 - (NSDictionary *)tier2ProxyCarrierRow {
 	__weak typeof(self) weakSelf = self;
-	return TGIconTapOpenRow(@"Web Proxy Carrier",
-			@"Carrier messages and errors",
-			@"data", TGIconTileSlate(), ^{
+	// Plain rows like the rest of Consoles: two tiles among five rows broke
+	// TGRowsSectionIconsConsistent.
+	return TGSubtitleOpenRow(@"Web Proxy Carrier",
+			@"Carrier messages and errors", ^{
 		TGDevWebProxyCarrierViewController *carrier =
 				[[TGDevWebProxyCarrierViewController alloc] init];
 		carrier.hidesBottomBarWhenPushed = YES;
@@ -39,7 +40,7 @@
 
 - (NSDictionary *)tier2ToolsRow {
 	__weak typeof(self) weakSelf = self;
-	return TGIconOpenRow(@"Communities and Replies", @"folder", TGIconTileViolet(), ^{
+	return TGOpenRow(@"Communities and Replies", nil, ^{
 		TGDevHubViewController *screen = [[TGDevHubViewController alloc] init];
 		screen.hidesBottomBarWhenPushed = YES;
 		[weakSelf.navigationController pushViewController:screen animated:YES];

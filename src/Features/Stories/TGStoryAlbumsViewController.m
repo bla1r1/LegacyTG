@@ -67,6 +67,7 @@ static UIImage *TGStoryAlbumPicture(NSString *path, NSNumber *albumId) {
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindGallery;
 	self.title = TGLocalized(@"Albums");
 	self.navigationItem.rightBarButtonItems = @[
 		[TGBarItem itemWithRole:TGBarRoleAdd target:self action:@selector(createAlbum)],

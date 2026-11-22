@@ -136,4 +136,12 @@
 	XCTAssertNil(row[TGRowStoryTap], @"the screen attaches its own blocks");
 }
 
+- (void)testPreviewPrefix_AuthorOnItsOwnLine {
+	// "Ivan: text" wrapped its second line back under the name (D2).
+	XCTAssertEqualObjects(TGChatRowPreviewPrefix(@"Ivan"), @"Ivan\n");
+	XCTAssertEqualObjects(TGChatRowPreviewPrefix(@"Ivan\nPetrov"), @"Ivan Petrov\n");
+	XCTAssertEqualObjects(TGChatRowPreviewPrefix(nil), @"");
+	XCTAssertEqualObjects(TGChatRowPreviewPrefix(@""), @"");
+}
+
 @end

@@ -70,6 +70,7 @@ static NSArray *TGContactSections(NSArray *users) {
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindList;
 
 	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
 		self.edgesForExtendedLayout = UIRectEdgeNone;
@@ -195,20 +196,19 @@ static NSArray *TGContactSections(NSArray *users) {
 	NSMutableArray *sections = [NSMutableArray array];
 	if (self.onNewChannel && !self.isSearching){
 		__weak typeof(self) weakSelf = self;
-		// Official's compose rows: accent words above the contacts, no tile.
-		NSMutableDictionary *group = TGRow(TGKindAction, @"New Group");
-		group[TGRowTap] = ^{
+		// Official's compose rows (D7): a line glyph and accent words, left
+		// aligned over the contacts, as ContactListActionItem draws them.
+		NSDictionary *group = TGAddGlyphRow(@"New Group", @"contacts", ^{
 			TGContactsViewController *me = weakSelf;
 			TGContactsViewController *members = [[TGContactsViewController alloc] init];
 			members.picksGroupMembers = YES;
 			[me.navigationController pushViewController:members animated:YES];
-		};
-		NSMutableDictionary *channel = TGRow(TGKindAction, @"New Channel");
-		channel[TGRowTap] = ^{
+		});
+		NSDictionary *channel = TGAddGlyphRow(@"New Channel", @"chats", ^{
 			void (^run)(void) = weakSelf.onNewChannel;
 			if (run)
 				run();
-		};
+		});
 		[sections addObject:TGSection(nil, nil, @[group, channel])];
 	}
 	for (NSDictionary *group in [self sectionGroups]){

@@ -45,6 +45,7 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindList;
 	self.title = @"Links to Chat";
 	[self load];
 }

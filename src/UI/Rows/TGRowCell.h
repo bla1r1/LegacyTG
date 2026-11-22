@@ -31,3 +31,8 @@
 - (void)applyAppendedOptions:(NSDictionary *)row;
 
 @end
+
+/// A header row that stands on the page instead of in a card (the account
+/// header, Edit Profile's photo): no plate, no separator, no blue band on
+/// tap. Cells in a grouped table otherwise draw the card behind themselves.
+FOUNDATION_EXPORT void TGRowCellStandOnPage(UITableViewCell *cell);

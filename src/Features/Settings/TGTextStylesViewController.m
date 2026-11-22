@@ -17,6 +17,7 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindSettings;
 	self.title = @"Text Styles";
 	self.styles = [TGTextStylesStore shared].textCompositionStyles ?: @[];
 	// Search looks a style up by its exact name, so it asks rather than

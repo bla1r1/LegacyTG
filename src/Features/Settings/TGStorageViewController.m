@@ -56,6 +56,7 @@ static UIColor *TGSliceColour(NSUInteger index);
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindSettings;
 	self.title = TGLocalized(@"Storage Usage");
 	self.categories = @[];
 	self.selectedKinds = [NSMutableSet set];

@@ -161,7 +161,8 @@ static NSString *TGDefaultBackgroundDetail(NSDictionary *state) {
 	NSMutableArray *sections = [NSMutableArray array];
 	[sections addObject:TGSection(nil, nil, modeRows)];
 	if (mode == TGSettingsAutoNightModeScheduled){
-		[sections addObject:TGSection(nil, nil, @[
+		// ThemeAutoNightSettingsController heads the times with SCHEDULE.
+		[sections addObject:TGSection(@"SCHEDULE", nil, @[
 			TGTapRow(@"From", TGSettingsAutoNightTimeText(from), ^{
 				[weakSelf chooseAutoNightTimeFrom:YES];
 			}),

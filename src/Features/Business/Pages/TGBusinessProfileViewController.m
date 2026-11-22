@@ -49,6 +49,7 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindForm;
 	self.title = @"Business";
 	NSDictionary *me = [TGProfileStore shared].me;
 	self.firstName = me[@"first_name"] ?: @"";

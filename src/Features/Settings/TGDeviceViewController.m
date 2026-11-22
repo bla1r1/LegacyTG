@@ -18,6 +18,7 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindSettings;
 	self.title = TGLocalized(@"Device");
 	self.capabilities = [TGCapabilities all];
 	[self rebuildSections];

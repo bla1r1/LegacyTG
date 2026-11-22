@@ -29,6 +29,7 @@
 - (void)viewDidLoad {
 	self.title = self.shortcutName;
 	[super viewDidLoad];
+	self.pageKind = TGPageKindList;
 	[self loadMessages];
 }
 

@@ -28,6 +28,8 @@
 #import "TGAccountStore.h"
 #import "TGProfileStore.h"
 #import "TGSessionsStore.h"
+#import "TGSettingsPageModels.h"
+#import "TGProfileViewController.h"
 #import "TGSettingsStore.h"
 #import "TGOptions.h"
 
@@ -85,6 +87,17 @@ static BOOL TGNotificationsWarning(void) {
 		case TGSettingsPagePaymentDev:    return [self paymentDevSections];
 #endif
 		default:                          return [self rootSections];
+	}
+}
+
+- (NSString *)emptySentenceForPage {
+	switch (self.page){
+		case TGSettingsPageDownloads:
+			return @"No downloads yet. Files you download in chats will appear here.";
+		case TGSettingsPageActiveNotifications:
+			return @"None";
+		default:
+			return nil;
 	}
 }
 
@@ -240,6 +253,10 @@ static BOOL TGNotificationsWarning(void) {
 	[self rebuild];
 }
 
+- (void)searchBarSearchButtonClicked:(UISearchBar *)searchBar {
+	[searchBar resignFirstResponder];
+}
+
 - (NSArray *)languageSections {
 	__weak typeof(self) weakSelf = self;
 	NSString *appLanguage = TGAppLanguage();
@@ -261,15 +278,21 @@ static BOOL TGNotificationsWarning(void) {
 		if (!packId.length)
 			continue;
 		NSString *name = language[@"name"];
+		NSString *english = language[@"englishName"];
 		if (query.length &&
 			[name.lowercaseString rangeOfString:query].location == NSNotFound &&
+			[english.lowercaseString rangeOfString:query].location == NSNotFound &&
 			[packId.lowercaseString rangeOfString:query].location == NSNotFound)
 			continue;
 		// Official shows the language's native name and a checkmark. The
 		// pack id on the right read as "en" under "Русский".
 		// One checkmark: following the system is its own choice, not also
 		// the language the system happens to resolve to.
-		[rows addObject:TGCheckRow(name, nil,
+		// D12: LocalizationListItem's two lines, the English name over the
+		// native one, both as the server names them (not pack keys).
+		BOOL twoLines = english.length && ![english isEqualToString:name];
+		NSMutableDictionary *row = [TGCheckRow(twoLines ? english : name,
+				twoLines ? name : nil,
 				!TGAppLanguageIsSystem() && [packId isEqualToString:appLanguage], ^{
 			TGSetAppLanguage(packId);
 			TGSetTelegramLanguageLookup(nil);
@@ -282,7 +305,12 @@ static BOOL TGNotificationsWarning(void) {
 									title:@"Interface Language" inView:weakSelf.view];
 			}];
 			[weakSelf rebuild];
-		})];
+		}) mutableCopy];
+		row[TGRowRawTitle] = @YES;
+		row[TGRowRawDetail] = @YES;
+		if (twoLines)
+			row[TGRowSubtitle] = @YES;
+		[rows addObject:row];
 	}
 	if (!rows.count && !query.length)
 		for (NSUInteger i = 0; i < 8; i++)
@@ -765,7 +793,8 @@ static NSString *TGCallDebugText(NSDictionary *call) {
 
 	// Telegram's switch for its fourth tab sits with the list it shows, so
 	// the tab can be turned off from inside it.
-	NSDictionary *tabSection = TGSection(nil, nil, @[
+	NSDictionary *tabSection = TGSection(nil,
+			@"You can add a Calls Tab to the tab bar.", @[
 			TGSwitchRow(@"Show Calls Tab", [RootViewController showsCallsTab], ^(BOOL on){
 				[RootViewController setShowsCallsTab:on];
 			})]);
@@ -783,14 +812,12 @@ static NSString *TGCallDebugText(NSDictionary *call) {
 		NSInteger duration = [call[@"duration"] integerValue];
 		// Pack words and the chat list's date shapes (time today, weekday
 		// this week, date beyond), not English and the locale's 06/11/26.
-		NSString *typeLabel = TGLocalized(missed ? @"Missed Call"
-				: (outgoing ? @"Outgoing Call" : @"Incoming Call"));
 		NSString *when = TGLocalized(TGUIFormatChatDate([call[@"date"] doubleValue],
 				TGOptionNow()));
-		NSString *detail = (!missed && duration > 0)
-				? [NSString stringWithFormat:@"%@, %@ (%@)", typeLabel, when,
-						TGUIFormatCallDuration(duration)]
-				: [NSString stringWithFormat:@"%@, %@", typeLabel, when];
+		NSDictionary *text = TGRecentCallRowText(
+				TGLocalized(TGRecentCallKindKey(missed, outgoing)), missed, when,
+				duration > 0 ? TGUIFormatCallDuration(duration) : nil);
+		NSString *detail = text[@"subtitle"];
 		NSString *key = [NSString stringWithFormat:@"%lld:%lld",
 				(long long)[call[@"chatId"] longLongValue],
 				(long long)[call[@"messageId"] longLongValue]];
@@ -815,7 +842,18 @@ static NSString *TGCallDebugText(NSDictionary *call) {
 				[TGCallViewController presentForUserId:userId name:call[@"name"] outgoing:YES];
 		});
 		row[TGRowAvatarUser] = @YES;
-		row[TGRowAccessory] = TGRowAccessoryDisclosure;
+		// CallListCallItem: the date at the trailing edge, then the info
+		// button, which opens the person's profile (official openInfo).
+		row[TGRowAccessory] = text[@"trailing"];
+		if (userId){
+			NSString *name = call[@"name"] ?: @"";
+			row[TGRowInfoTap] = [^{
+				TGProfileViewController *profile = [[TGProfileViewController alloc]
+						initWithChatId:userId userId:userId title:name];
+				profile.hidesBottomBarWhenPushed = YES;
+				[weakSelf.navigationController pushViewController:profile animated:YES];
+			} copy];
+		}
 		if (missed)
 			row[TGRowTitleColour] = [[TGTheme shared] destructiveColour];
 		[rows addObject:row];

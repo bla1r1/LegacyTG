@@ -80,6 +80,7 @@ static NSString *TGStarsTransactionDate(NSNumber *unix) {
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindGallery;
 	self.title = @"Premium, Stars and Gifts";
 	[self rebuildSections];
 }

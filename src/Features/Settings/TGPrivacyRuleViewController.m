@@ -40,6 +40,7 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindSettings;
 	self.title = self.ruleTitle;
 	[self loadDetails];
 	[self loadPublicPhoto];

@@ -24,6 +24,7 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindSettings;
 	self.title = @"Web Proxy Carrier";
 	self.errorKind = @"unsupported";
 	self.answerLines = @[@"No message passed yet."];

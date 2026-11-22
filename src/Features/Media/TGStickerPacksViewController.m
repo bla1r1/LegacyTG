@@ -26,6 +26,7 @@ static const double kTGStickerPacksRefreshSeconds = 30.0;
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindGallery;
 	self.title = TGLocalized(@"Stickers");
 	// Edit reorders and archives the installed packs, as the official list.
 	self.navigationItem.rightBarButtonItem = self.editButtonItem;

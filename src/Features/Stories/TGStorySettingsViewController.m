@@ -22,6 +22,7 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindSettings;
 	self.listFooter = nil;
 	[self reloadExceptions];
 }

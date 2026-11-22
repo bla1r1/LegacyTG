@@ -41,6 +41,7 @@ static NSString *TGSavedTopicDateText(NSNumber *stamp) {
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindList;
 
 
 	self.title = @"Saved Messages";

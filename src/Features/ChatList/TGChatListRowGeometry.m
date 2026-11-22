@@ -34,6 +34,44 @@ NSString *TGChatListArchiveSubtitle(NSUInteger count) {
 	return TGLocalizedPlural(@"%d chat", @"%d chats", (NSInteger)count);
 }
 
+/// Ten titles fill the row on a 6 Plus; the label truncates the rest.
+static const NSUInteger kArchiveTextTitles = 10;
+
+NSString *TGChatListArchiveText(NSArray *archivedChats) {
+	NSMutableArray *titles = [NSMutableArray array];
+	for (NSDictionary *chat in archivedChats){
+		if (titles.count == kArchiveTextTitles)
+			break;
+		NSString *title = [chat isKindOfClass:NSDictionary.class] ? chat[@"title"] : nil;
+		if ([title isKindOfClass:NSString.class] && title.length)
+			[titles addObject:title];
+	}
+	if (!titles.count)
+		return TGChatListArchiveSubtitle(archivedChats.count);
+	return [titles componentsJoinedByString:@", "];
+}
+
+NSUInteger TGChatListArchiveUnread(NSArray *archivedChats) {
+	NSUInteger unread = 0;
+	for (NSDictionary *chat in archivedChats){
+		if (![chat isKindOfClass:NSDictionary.class])
+			continue;
+		if ([chat[@"unread"] integerValue] > 0 || [chat[@"markedUnread"] boolValue])
+			unread++;
+	}
+	return unread;
+}
+
+NSDictionary *TGChatListSavedChat(NSArray *chats, int64_t savedChatId) {
+	if (!savedChatId)
+		return nil;
+	for (NSDictionary *chat in chats)
+		if ([chat isKindOfClass:NSDictionary.class] &&
+				[chat[@"id"] longLongValue] == savedChatId)
+			return chat;
+	return nil;
+}
+
 void TGChatListRowAccessories(CGFloat rightEdge,
                               CGFloat top,
                               BOOL hasBadge,

@@ -71,6 +71,33 @@ static const CGFloat kTailHeight = TGMetricBubbleTailHeight;
 	return image;
 }
 
++ (UIImage *)gridSelectedMarkOfSide:(CGFloat)side {
+	TGTheme *theme = [TGTheme shared];
+	UIColor *disc = [theme mediaOverlayColour];
+	UIColor *tick = [theme onMediaColour];
+	NSString *key = [NSString stringWithFormat:@"gridMark_%.0f_%lu_%lu", side,
+			(unsigned long)[disc hash], (unsigned long)[tick hash]];
+	UIImage *cached = TGIconsGetCached(key);
+	if (cached) return cached;
+
+	UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), NO, 0);
+	CGContextRef ctx = UIGraphicsGetCurrentContext();
+	CGContextSetFillColorWithColor(ctx, disc.CGColor);
+	CGContextFillEllipseInRect(ctx, CGRectMake(0, 0, side, side));
+	CGContextSetFillColorWithColor(ctx, tick.CGColor);
+	// The tick path fills its box's middle third; half the disc reads as
+	// official's check.
+	CGFloat box = TGHalf(side);
+	if (TGIconAddPath(ctx, "ticksSingle", CGRectMake(TGCenteredOrigin(side, box),
+			TGCenteredOrigin(side, box), box, box)))
+		CGContextFillPath(ctx);
+
+	UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+	UIGraphicsEndImageContext();
+	TGIconsSetCached(key, image);
+	return image;
+}
+
 + (UIImage *)lockOfSide:(CGFloat)side colour:(UIColor *)colour {
 	NSString *key = [NSString stringWithFormat:@"lock_%.0f_%lu", side, (unsigned long)[colour hash]];
 	UIImage *cached = TGIconsGetCached(key);

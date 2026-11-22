@@ -6,8 +6,27 @@
 //
 #import <UIKit/UIKit.h>
 #import "TGTableViewController.h"
+#import "TGPageTemplate.h"
 
 @interface TGRowsViewController : TGTableViewController
+
+/// A screen of a List or Picker kind opens as white rows on the page; the
+/// others as cards. `init` is a Settings page.
+- (instancetype)initWithPageKind:(TGPageKind)kind;
+
+/// What kind of page this is (R1). scripts/lint_pages.sh fails on a screen
+/// that never says. Setting it later does not restyle the table.
+@property (nonatomic, assign) TGPageKind pageKind;
+
+/// A plain table's rows stay white on the page colour (List, Picker).
+/// initWithPageKind: turns it on for those kinds; a screen that only names
+/// its kind keeps the table it always had.
+@property (nonatomic, assign) BOOL whiteRowsOnPage;
+
+/// The empty state (R8): when no section has a row and one of these is set,
+/// TGEmptyView takes the middle of the page. There is no "None" row.
+@property (nonatomic, copy) NSString *emptyTitle;
+@property (nonatomic, copy) NSString *emptySubtitle;
 
 /// Each section is "header", "footer" and "rows".
 @property (nonatomic, strong) NSArray *sections;
@@ -24,7 +43,8 @@
 /// "opens" (NSNumber BOOL) and "tap" (a block). The name is listRows, not
 /// rows: a screen with its own `rows` array must keep it.
 @property (nonatomic, strong) NSArray *listRows;
-/// A sentence under the list when there are no rows.
+/// The empty state's sentence for a flat list once listRows is set and holds
+/// nothing; "None" when unset.
 @property (nonatomic, copy) NSString *emptyText;
 /// A sentence above the list, always shown when set.
 @property (nonatomic, copy) NSString *listFooter;

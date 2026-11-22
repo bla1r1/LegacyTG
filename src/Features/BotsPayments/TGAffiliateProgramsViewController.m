@@ -37,6 +37,7 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindList;
 	self.title = @"Affiliate Programs";
 	[self rebuildSections];
 }

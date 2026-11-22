@@ -11,6 +11,7 @@
 - (void)viewDidLoad {
 	self.title = @"Message Tools";
 	[super viewDidLoad];
+	self.pageKind = TGPageKindSettings;
 	[self rebuild];
 }
 

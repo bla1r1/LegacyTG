@@ -29,6 +29,7 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindSettings;
 	self.title = TGLocalized(@"Ephemeral");
 	self.receiverUserId = self.chatId > 0 ? self.chatId : 0;
 	self.replyId = 0;

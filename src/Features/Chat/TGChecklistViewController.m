@@ -43,6 +43,7 @@
 - (void)viewDidLoad {
 	self.title = self.messageId ? @"Checklist" : @"New Checklist";
 	[super viewDidLoad];
+	self.pageKind = TGPageKindForm;
 	if (self.messageId)
 		[self loadChecklist];
 	else

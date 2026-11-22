@@ -44,6 +44,7 @@ static const CGFloat kPickerPanelHeight = TGMetricRow;
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindPicker;
 	self.chats = [TGMessageStore shared].chats ?: @[];
 	self.recentChats = @[];
 	self.avatars = [NSMutableDictionary dictionary];

@@ -45,6 +45,7 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindForm;
 	self.title = @"Location";
 	__weak typeof(self) weakSelf = self;
 	[[TGBusinessStore shared] businessInfoWithCompletion:^(NSDictionary *info, NSString *error){

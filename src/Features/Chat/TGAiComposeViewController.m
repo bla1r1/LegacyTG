@@ -16,6 +16,7 @@
 #import "TGSegmentedControl.h"
 #import "TGLabel.h"
 #import "TGControls.h"
+#import "TGBarItem.h"
 
 static const CGFloat kAiTextAreaHeight = 118.0f;
 
@@ -109,7 +110,9 @@ static const CGFloat kAiTextAreaHeight = 118.0f;
 	self.languageButton.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeft;
 	[self.scrollView addSubview:self.languageButton];
 
-	self.sourceBadge = TGLabelWith(TGLabelCaptionStrong, CGRectZero, nil);
+	// D22: the two blocks are headed like sections of a grouped page, not
+	// with small badges.
+	self.sourceBadge = TGLabelWith(TGLabelSectionHeader, CGRectZero, nil);
 	self.sourceBadge.text = TGLocalized(@"Original");
 	[self.scrollView addSubview:self.sourceBadge];
 
@@ -117,7 +120,7 @@ static const CGFloat kAiTextAreaHeight = 118.0f;
 	self.sourceView.text = self.initialText ?: @"";
 	[self.scrollView addSubview:self.sourceView];
 
-	self.resultBadge = TGLabelWith(TGLabelCaptionStrong, CGRectZero, nil);
+	self.resultBadge = TGLabelWith(TGLabelSectionHeader, CGRectZero, nil);
 	self.resultBadge.text = TGLocalized(@"Result");
 	[self.scrollView addSubview:self.resultBadge];
 
@@ -129,9 +132,13 @@ static const CGFloat kAiTextAreaHeight = 118.0f;
 
 	self.applyButton = TGTextButton(TGLocalized(@"Apply"), TGFontHeader(),
 			self, @selector(applyTapped));
-	self.applyButton.autoresizingMask = UIViewAutoresizingFlexibleTopMargin |
-			UIViewAutoresizingFlexibleWidth;
-	[self.view addSubview:self.applyButton];
+	// Apply sits on the bar pinned under the page, as the shared pages'
+	// bottom action (R11), not as a big button under the fields.
+	self.applyButton.frame = CGRectMake(0, 0,
+			TGMetricScreenWidth - TGDoubled(TGMetricPadMedium),
+			TGMetricButtonHeightSmall);
+	self.toolbarItems = @[[TGBarItem flexibleSpace],
+			[TGBarItem itemWithView:self.applyButton], [TGBarItem flexibleSpace]];
 }
 
 - (UITextView *)textView {
@@ -156,8 +163,11 @@ static const CGFloat kAiTextAreaHeight = 118.0f;
 	// array literal below threw on the nil text views and killed the app.
 	if (!self.sourceView || !self.resultView)
 		return;
-	self.sourceBadge.textColor = [theme secondaryTextColour];
-	self.resultBadge.textColor = [theme secondaryTextColour];
+	self.sourceBadge.textColor = [theme sectionHeaderColour];
+	self.resultBadge.textColor = [theme sectionHeaderColour];
+	UIToolbar *toolbar = self.navigationController.toolbar;
+	toolbar.barStyle = [theme isDark] ? UIBarStyleBlack : UIBarStyleDefault;
+	toolbar.tintColor = [theme barColour];
 	self.emojiLabel.textColor = [theme primaryTextColour];
 	for (UITextView *view in @[self.sourceView, self.resultView]) {
 		view.backgroundColor = [theme cardBackgroundColour];
@@ -168,11 +178,11 @@ static const CGFloat kAiTextAreaHeight = 118.0f;
 							  forState:UIControlStateNormal];
 	[self.applyButton setBackgroundImage:
 			[TGTheme buttonImageForStyle:TGButtonStyleAction highlighted:NO
-								   height:TGMetricButtonHeight]
+								   height:TGMetricButtonHeightSmall]
 								forState:UIControlStateNormal];
 	[self.applyButton setBackgroundImage:
 			[TGTheme buttonImageForStyle:TGButtonStyleAction highlighted:YES
-								   height:TGMetricButtonHeight]
+								   height:TGMetricButtonHeightSmall]
 								forState:UIControlStateHighlighted];
 	[self.applyButton setTitleColor:[theme onAccentColour]
 						   forState:UIControlStateNormal];
@@ -350,18 +360,24 @@ static const CGFloat kAiTextAreaHeight = 118.0f;
 
 #pragma mark - layout
 
+- (void)viewWillAppear:(BOOL)animated {
+	[super viewWillAppear:animated];
+	[self.navigationController setToolbarHidden:NO animated:animated];
+}
+
+- (void)viewWillDisappear:(BOOL)animated {
+	[super viewWillDisappear:animated];
+	[self.navigationController setToolbarHidden:YES animated:animated];
+}
+
 - (void)viewDidLayoutSubviews {
 	[super viewDidLayoutSubviews];
 	CGFloat width = self.view.bounds.size.width;
 	CGFloat height = self.view.bounds.size.height;
 	CGFloat pad = TGMetricPadLarge;
 	CGFloat contentWidth = MAX(0.0f, width - TGDoubled(pad));
-	CGFloat applyHeight = TGMetricButtonHeight;
-	CGFloat applyY = height - applyHeight - pad;
-	CGFloat scrollBottom = applyY - TGMetricPadSmall;
 
-	self.scrollView.frame = CGRectMake(0, 0, width, MAX(0.0f, scrollBottom));
-	self.applyButton.frame = CGRectMake(pad, applyY, contentWidth, applyHeight);
+	self.scrollView.frame = CGRectMake(0, 0, width, height);
 
 	CGFloat y = pad;
 	self.modeControl.frame = CGRectMake(pad, y, contentWidth, TGMetricRow);
@@ -380,13 +396,15 @@ static const CGFloat kAiTextAreaHeight = 118.0f;
 	}
 
 	if (!self.emojiSwitch.hidden) {
-		self.emojiSwitch.frame = CGRectMake(pad, y +
-				TGCenteredOrigin(TGMetricRow, self.emojiSwitch.bounds.size.height),
-				self.emojiSwitch.bounds.size.width, self.emojiSwitch.bounds.size.height);
-		self.emojiLabel.frame = CGRectMake(CGRectGetMaxX(self.emojiSwitch.frame) +
-				TGMetricPadSmall, y,
-				contentWidth - self.emojiSwitch.bounds.size.width - TGMetricPadSmall,
+		// D22: the words first and the switch at the trailing edge, as every
+		// switch row in the app and in official's compose sheet.
+		CGSize switchSize = self.emojiSwitch.bounds.size;
+		self.emojiLabel.frame = CGRectMake(pad, y,
+				MAX(0.0f, contentWidth - switchSize.width - TGMetricPadSmall),
 				TGMetricRow);
+		self.emojiSwitch.frame = CGRectMake(pad + contentWidth - switchSize.width,
+				y + TGCenteredOrigin(TGMetricRow, switchSize.height),
+				switchSize.width, switchSize.height);
 		y += TGMetricRow + TGMetricPadSmall;
 	}
 
@@ -395,17 +413,17 @@ static const CGFloat kAiTextAreaHeight = 118.0f;
 		y += TGMetricRow + TGMetricPadSmall;
 	}
 
-	self.sourceBadge.frame = CGRectMake(pad, y, contentWidth, TGMetricLineSubhead);
-	y += TGMetricLineSubhead + TGMetricPadSmall;
+	self.sourceBadge.frame = CGRectMake(pad, y, contentWidth, TGMetricLineHeader);
+	y += TGMetricLineHeader + TGMetricPadSmall;
 	self.sourceView.frame = CGRectMake(pad, y, contentWidth, kAiTextAreaHeight);
 	y += kAiTextAreaHeight + TGMetricPadLarge;
 
-	self.resultBadge.frame = CGRectMake(pad, y, contentWidth, TGMetricLineSubhead);
+	self.resultBadge.frame = CGRectMake(pad, y, contentWidth, TGMetricLineHeader);
 	self.spinner.frame = CGRectMake(CGRectGetMaxX(self.resultBadge.frame) -
 			TGMetricRow, CGRectGetMinY(self.resultBadge.frame), TGMetricRow,
-			TGMetricLineSubhead);
+			TGMetricLineHeader);
 	self.spinner.activityIndicatorViewStyle = UIActivityIndicatorViewStyleGray;
-	y += TGMetricLineSubhead + TGMetricPadSmall;
+	y += TGMetricLineHeader + TGMetricPadSmall;
 	self.resultView.frame = CGRectMake(pad, y, contentWidth, kAiTextAreaHeight);
 	y += kAiTextAreaHeight + TGMetricPadLarge;
 

@@ -113,6 +113,7 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindSettings;
 	self.title = @"Messages";
 	self.connectionId = TGBusinessStoredConnectionId();
 	self.answerLines = @[@"None"];

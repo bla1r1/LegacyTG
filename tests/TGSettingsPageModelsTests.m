@@ -81,6 +81,8 @@
 			(@[@"Show Folder Tags"]));
 	// The folder count stays on the right, and a zero count is blank.
 	NSArray *rows = [self rowsInSection:section];
+	// R9: the add row, accent text after a +, not a centred action.
+	XCTAssertEqualObjects(rows[0][TGPageModelRowKind], @"add");
 	XCTAssertEqualObjects(rows[1][TGPageModelRowDetail], @"7");
 }
 
@@ -128,6 +130,7 @@
 	XCTAssertEqualObjects([self titlesInSection:model[1]],
 			(@[@"Add Proxy", @"1.2.3.4:1080", @"5.6.7.8:1081"]));
 	XCTAssertNil(model[1][TGPageModelFooter]);
+	XCTAssertEqualObjects([self rowsInSection:model[1]][0][TGPageModelRowKind], @"add");
 }
 
 - (void)testProxy_ReleaseHasNoCarrierConsole {
@@ -160,6 +163,18 @@
 	XCTAssertTrue(TGPrivacyOffersPublicPhoto(@"ShowProfilePhoto", @"everybody", 2));
 	XCTAssertTrue(TGPrivacyOffersPublicPhoto(@"ShowProfilePhoto", @"contacts", 0));
 	XCTAssertFalse(TGPrivacyOffersPublicPhoto(@"ShowStatus", @"nobody", 0));
+}
+
+- (void)testRecentCalls_DateOnTheRightKindUnderTheName {
+	// The date sat inside the subtitle ("Outgoing Call, 12:30 (1:02)").
+	XCTAssertEqualObjects(TGRecentCallKindKey(NO, YES), @"Outgoing Call");
+	XCTAssertEqualObjects(TGRecentCallKindKey(YES, YES), @"Missed Call");
+	NSDictionary *call = TGRecentCallRowText(@"Outgoing Call", NO, @"12:30", @"1:02");
+	XCTAssertEqualObjects(call[@"subtitle"], @"Outgoing Call (1:02)");
+	XCTAssertEqualObjects(call[@"trailing"], @"12:30");
+	NSDictionary *missed = TGRecentCallRowText(@"Missed Call", YES, @"Mon", @"0:00");
+	XCTAssertEqualObjects(missed[@"subtitle"], @"Missed Call");
+	XCTAssertEqualObjects(missed[@"trailing"], @"Mon");
 }
 
 @end

@@ -16,6 +16,7 @@
 - (void)viewDidLoad {
 	self.title = @"Communities and Replies";
 	[super viewDidLoad];
+	self.pageKind = TGPageKindSettings;
 	__weak typeof(self) weakSelf = self;
 	NSArray *names = @[TGCommunitiesChangedNotification,
 					   TGQuickRepliesChangedNotification,

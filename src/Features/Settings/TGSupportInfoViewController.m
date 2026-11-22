@@ -26,6 +26,7 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindSettings;
 	self.title = @"Support Info";
 	[self rebuildSections];
 }

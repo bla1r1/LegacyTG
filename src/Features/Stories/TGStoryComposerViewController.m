@@ -103,6 +103,7 @@ static BOOL sStoryFlowOpening = NO;
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindForm;
 	self.title = @"Story";
 	[[TGTheme shared] styleGroupedTable:self.tableView];
 	[self rebuildSections];

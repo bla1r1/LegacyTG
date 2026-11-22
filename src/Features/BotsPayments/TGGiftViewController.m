@@ -120,6 +120,7 @@ static UIImage *TGGiftRadialGradient(int32_t centerColor, int32_t edgeColor, CGF
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindDetail;
 	self.title = TGLocalized(@"Gift");
 
 

@@ -43,6 +43,7 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindDetail;
 	// A profile carries no title in the bar: the name in the header already
 	// says whose it is.
 	self.title = @"";

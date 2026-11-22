@@ -61,6 +61,7 @@ typedef NS_ENUM(NSInteger, TGGroupRowKind) {
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindSettings;
 	NSLog(@"TGGroupSettings: opened for chat %lld", self.chatId);
 	self.title = self.chatTitle.length ? self.chatTitle : @"Group Settings";
 	self.active = [NSMutableArray array];

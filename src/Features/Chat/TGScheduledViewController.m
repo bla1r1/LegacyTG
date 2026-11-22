@@ -30,6 +30,7 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindList;
 
 
 	self.title = TGLocalized(@"Scheduled Messages");

@@ -24,6 +24,7 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindSettings;
 	self.title = @"Telegram Business";
 	[self rebuildSections];
 }

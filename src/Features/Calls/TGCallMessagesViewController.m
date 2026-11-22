@@ -26,6 +26,7 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindList;
 	[self observe];
 	[self load];
 }

@@ -15,6 +15,7 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindList;
 	self.title = self.chatTitle.length
 			? [NSString stringWithFormat:@"%@ · %@", self.chatTitle,
 					TGLocalized(@"Direct")]

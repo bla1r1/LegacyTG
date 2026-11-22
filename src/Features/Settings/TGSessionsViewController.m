@@ -34,6 +34,7 @@ static NSDictionary *TGSessionRow(NSDictionary *row, NSDictionary *session) {
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindList;
 	self.title = TGLocalized(@"Devices");
 	[self refresh];
 

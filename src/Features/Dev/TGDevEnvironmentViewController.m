@@ -41,6 +41,7 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindSettings;
 	self.title = @"TDLib Environment";
 	[self rebuildSections];
 }

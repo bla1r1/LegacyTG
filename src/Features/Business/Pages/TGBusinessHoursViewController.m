@@ -46,6 +46,7 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindForm;
 	self.title = @"Business Hours";
 	self.startHour = 9;
 	self.endHour = 18;

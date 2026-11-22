@@ -134,8 +134,13 @@ static NSString *TGOrderLines(NSDictionary *order) {
 		})];
 	}
 
+	// The page is titled Payment Info and its row says it again; a third
+	// time as the section header was one too many (D16). The footer is the
+	// official sentence under Privacy > Payments.
 	return @[
-		TGSection(@"Payment Info", nil, orderRows),
+		TGSection(nil,
+				@"You can delete your shipping info and instruct all payment providers to remove your saved credit cards. Note that Telegram never stores your credit card data.",
+				orderRows),
 	];
 }
 

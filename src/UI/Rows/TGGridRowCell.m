@@ -2,6 +2,7 @@
 // TGGridRowCell.m - the shared picture grid row.
 //
 #import "TGGridRowCell.h"
+#import "TGRowGeometry.h"
 #import "TGRows.h"
 #import "TGTheme.h"
 #import "TGIcons.h"
@@ -97,8 +98,7 @@
 
 	self.checkView.hidden = ![item[TGGridItemChecked] boolValue];
 	self.checkView.image = self.checkView.hidden ? nil
-			: [TGIcons ticksColour:([theme isDark] ? [theme onMediaColour]
-					: [theme accentColour]) read:NO];
+			: [TGIcons gridSelectedMarkOfSide:TGMetricGridSelectedMark];
 
 	self.lockView.hidden = ![item[TGGridItemLocked] boolValue];
 	self.lockView.image = self.lockView.hidden ? nil
@@ -137,10 +137,7 @@
 	self.pictureView.frame = CGRectMake(0, 0, side, side);
 	self.placeholderLabel.frame = CGRectMake(0, 0, side, side);
 
-	CGFloat tickW = TGMetricTicksWidth;
-	CGFloat tickH = TGMetricTicksHeight;
-	self.checkView.frame = CGRectMake(TGMetricPadSmall, TGMetricPadSmall,
-			tickW, tickH);
+	self.checkView.frame = TGGridSelectedMarkFrame(side);
 
 	CGFloat lockSide = TGMetricMenuGlyph;
 	self.lockView.frame = CGRectMake(TGCenteredOrigin(side, lockSide),

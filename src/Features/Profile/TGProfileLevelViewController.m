@@ -26,6 +26,7 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindDetail;
 	self.title = TGLocalizedKey(@"ProfileLevelInfo.Title", @"Rating");
 	[self rebuildSections];
 }

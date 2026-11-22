@@ -28,8 +28,6 @@
 #import "TGSegmentedControl.h"
 
 
-static const CGFloat kSettingsSearchWidth = 200.0f;
-static const CGFloat kSettingsSearchHeight = 44.0f;
 
 /// The two pages that delete rows keep their own bookkeeping in their
 /// category; the base class owns the one delegate method UIKit keeps.
@@ -73,6 +71,7 @@ static const CGFloat kSettingsSearchHeight = 44.0f;
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindSettings;
 	// iOS 7 lays content out under the bars; these screens position their own
 	// frames and expect the old behaviour.
 	if ([self respondsToSelector:@selector(setEdgesForExtendedLayout:)])
@@ -108,14 +107,19 @@ static const CGFloat kSettingsSearchHeight = 44.0f;
 		self.navigationItem.rightBarButtonItem = [TGBarItem itemWithRole:TGBarRoleEdit
 				target:self action:@selector(openEditProfile)];
 	} else if (self.page == TGSettingsPageLanguage){
-		// Official puts the language search in the navigation bar.
+		// Official LocalizationListController keeps the "Language" title and
+		// puts the field under it (NavigationBarSearchContentNode, inline),
+		// where it scrolls away with the list: the table header here, as on
+		// Contacts.
 		UISearchBar *search = [[UISearchBar alloc] initWithFrame:
-				CGRectMake(0, 0, kSettingsSearchWidth, kSettingsSearchHeight)];
+				CGRectMake(0, 0, CGRectGetWidth(self.tableView.bounds) ?: TGMetricScreenWidth,
+						TGMetricRow)];
 		search.delegate = self;
-		search.placeholder = @"Search";
+		search.placeholder = TGLocalized(@"Search");
+		search.autoresizingMask = UIViewAutoresizingFlexibleWidth;
 		self.languageSearchBar = search;
-		[[TGTheme shared] styleNavigationSearchBar:search];
-		self.navigationItem.titleView = search;
+		[[TGTheme shared] styleSearchBar:search];
+		self.tableView.tableHeaderView = search;
 	}
 
 	[self rebuild];
@@ -217,7 +221,7 @@ static const CGFloat kSettingsSearchHeight = 44.0f;
 - (void)applyTheme {
 	[super applyTheme];
 	[[TGTheme shared] styleGroupedTable:self.tableView];
-	[[TGTheme shared] styleNavigationSearchBar:self.languageSearchBar];
+	[[TGTheme shared] styleSearchBar:self.languageSearchBar];
 }
 
 
@@ -400,6 +404,9 @@ static const CGFloat kSettingsSearchHeight = 44.0f;
 /// Everything that arrives asynchronously calls this rather than reaching into
 /// a cell by index.
 - (void)rebuild {
+	NSString *empty = [self emptySentenceForPage];
+	if (![empty isEqual:self.emptySubtitle])
+		self.emptySubtitle = empty;
 	self.sections = [self sectionsReplacingLegacyRows:[self buildSections]];
 	[self reloadRows];
 }

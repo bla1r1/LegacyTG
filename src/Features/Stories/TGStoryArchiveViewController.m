@@ -42,6 +42,7 @@ static NSString *TGStoryArchiveDateText(NSNumber *unixTime) {
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindGallery;
 	self.title = TGLocalized(@"Archived Stories");
 	[self loadMore];
 	[self rebuildSections];

@@ -39,6 +39,7 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindForm;
 	self.title = @"Username";
 	self.active = [NSMutableArray array];
 	self.disabled = [NSMutableArray array];

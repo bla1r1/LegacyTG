@@ -21,6 +21,7 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindSettings;
 	self.title = @"Telegram Anti-Spam";
 	[self load];
 }

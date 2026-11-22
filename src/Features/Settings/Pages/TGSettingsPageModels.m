@@ -95,7 +95,7 @@ NSArray *TGFoldersPageModel(NSArray *folders, NSArray *recommended,
 	NSMutableArray *rows = [NSMutableArray array];
 
 	// ChatListFilterPresetListController has one add row, before the list.
-	[rows addObject:TGPageRow(@"action", @"Create New Folder", @"createFolder")];
+	[rows addObject:TGPageRow(@"add", @"Create New Folder", @"createFolder")];
 
 	for (NSUInteger index = 0; index < folders.count; index++){
 		NSDictionary *folder = folders[index];
@@ -115,7 +115,7 @@ NSArray *TGFoldersPageModel(NSArray *folders, NSArray *recommended,
 
 #if TG_DEV
 	if (dev)
-		[rows addObject:TGPageRow(@"action", @"Add Folder", @"addFolderLink")];
+		[rows addObject:TGPageRow(@"add", @"Add Folder", @"addFolderLink")];
 #else
 	(void)dev;
 #endif
@@ -167,7 +167,7 @@ NSArray *TGProxyPageModel(NSArray *proxies, BOOL useProxy, BOOL connected,
 
 	NSMutableArray *rows = [NSMutableArray array];
 	// ProxyListSettingsController puts Add Proxy before the saved servers.
-	[rows addObject:TGPageRow(@"action", @"Add Proxy", @"addProxy")];
+	[rows addObject:TGPageRow(@"add", @"Add Proxy", @"addProxy")];
 
 	NSUInteger index = 0;
 	for (NSDictionary *proxy in proxies){
@@ -304,4 +304,15 @@ NSString *TGPrivacyRuleFooterText(NSString *setting) {
 BOOL TGPrivacyOffersPublicPhoto(NSString *setting, NSString *ruleType, NSUInteger neverCount) {
 	return [setting isEqualToString:@"ShowProfilePhoto"] &&
 			(![ruleType isEqualToString:@"everybody"] || neverCount > 0);
+}
+
+NSString *TGRecentCallKindKey(BOOL missed, BOOL outgoing) {
+	return missed ? @"Missed Call" : (outgoing ? @"Outgoing Call" : @"Incoming Call");
+}
+
+NSDictionary *TGRecentCallRowText(NSString *kind, BOOL missed, NSString *when,
+		NSString *duration) {
+	NSString *subtitle = (!missed && duration.length)
+			? [NSString stringWithFormat:@"%@ (%@)", kind, duration] : kind;
+	return @{@"subtitle" : subtitle ?: @"", @"trailing" : when ?: @""};
 }

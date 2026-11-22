@@ -19,6 +19,7 @@
 - (void)viewDidLoad {
 	self.title = @"Quick Replies";
 	[super viewDidLoad];
+	self.pageKind = TGPageKindList;
 	self.navigationItem.rightBarButtonItem = self.editButtonItem;
 	// A selector observer: the block form kept self alive for good, and
 	// removeObserver:self in dealloc does not remove a block observer.

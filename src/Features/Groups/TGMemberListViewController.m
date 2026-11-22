@@ -23,6 +23,7 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindList;
 	if (!self.listTitle.length)
 		self.listTitle = TGLocalized(@"Members");
 	self.title = self.listTitle;

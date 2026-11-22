@@ -307,7 +307,10 @@ static void TGStyleThemeCardsCell(UITableViewCell *cell) {
 		BOOL selected = [entry[@"id"] isEqualToString:self.currentId];
 		UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
 		button.tag = (NSInteger)i;
-		[button setImage:TGThemeCardImage(entry, selected, !self.showsNames)
+		// The carousel never writes a name inside a card: official
+		// ThemeCarouselItem marks each card with its glyph alone, and Classic
+		// was the one captioned card. Named rows put labels under every card.
+		[button setImage:TGThemeCardImage(entry, selected, NO)
 				forState:UIControlStateNormal];
 		[button addTarget:self action:@selector(cardTapped:)
 		 forControlEvents:UIControlEventTouchUpInside];

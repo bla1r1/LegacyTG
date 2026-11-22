@@ -30,6 +30,7 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindList;
 	self.listFooter = nil;
 	[self rebuildRows];
 	if (self.query.length)

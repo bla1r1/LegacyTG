@@ -19,6 +19,9 @@ FOUNDATION_EXPORT BOOL TGLoginUsesBarNext(CGFloat width);
 /// email, email code, recovery) laid out wide. The code step sends itself.
 FOUNDATION_EXPORT BOOL TGLoginShowsBottomButton(BOOL fieldStep, CGFloat width);
 
+/// The code box the next digit goes into, -1 once every box holds one.
+FOUNDATION_EXPORT NSInteger TGLoginCodeFocusedBox(NSUInteger typed, NSInteger boxes);
+
 /// Where the stack continues after the button's row: `y` unchanged when the
 /// button is not shown, else below the row and one stack step.
 FOUNDATION_EXPORT CGFloat TGLoginYAfterActionRow(CGFloat y, CGFloat width);

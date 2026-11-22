@@ -790,10 +790,10 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 
 - (NSArray *)downloadSections {
 	__weak typeof(self) weakSelf = self;
-	// An empty page read as broken; it now says why there is nothing to show.
+	// An empty page read as broken: it says why in the middle of the page
+	// (emptySentenceForPage), not as a footer pinned to the top.
 	if (!self.downloads.count)
-		return @[TGSection(nil,
-				@"No downloads yet. Files you download in chats will appear here.", @[])];
+		return @[];
 
 	// Official's list: Downloading, with Pause All or Resume All, then
 	// Recently Downloaded, newest first, with Clear (ChatListSearchListPaneNode).

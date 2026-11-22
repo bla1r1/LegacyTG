@@ -34,6 +34,7 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindForm;
 	// A caller that names the screen (Edit, or a form opened from a profile)
 	// keeps that title; only an unnamed form is a New Contact.
 	if (!self.title.length)

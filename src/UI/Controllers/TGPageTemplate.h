@@ -29,9 +29,10 @@ typedef NS_ENUM(NSInteger, TGPageKind) {
 
 typedef NS_ENUM(NSInteger, TGPageSearch) {
 	TGPageSearchNone = 0,
-	/// Under the navigation bar, scrolling with the rows (contacts, pickers).
+	/// Under the navigation bar, scrolling with the rows (contacts, pickers,
+	/// languages).
 	TGPageSearchInList,
-	/// In the navigation bar itself, with Cancel (global search, languages).
+	/// In the navigation bar itself, with Cancel (global search).
 	TGPageSearchInBar,
 };
 

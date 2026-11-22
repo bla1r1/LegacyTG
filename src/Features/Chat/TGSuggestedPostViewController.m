@@ -27,6 +27,7 @@
 - (void)viewDidLoad {
 	self.title = @"Suggest Post";
 	[super viewDidLoad];
+	self.pageKind = TGPageKindDetail;
 	[self loadPost];
 }
 

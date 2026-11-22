@@ -33,6 +33,7 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindForm;
 	self.listFooter = self.statusLine;
 	[self reload];
 }

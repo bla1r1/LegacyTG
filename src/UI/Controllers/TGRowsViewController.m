@@ -19,11 +19,16 @@
 #import "TGSnackbar.h"
 #import "TGStyle.h"
 #import "TGPageHeaderRowCell.h"
+#import "TGEmptyView.h"
+#import "TGTheme.h"
 
 @interface TGRowsViewController () <TGFieldRowCellDelegate>
 @property (nonatomic, strong) NSMutableDictionary *storedFieldText;
 @property (nonatomic, weak) TGFieldRowCell *activeFieldCell;
 @property (nonatomic, assign) BOOL reloadingFieldRows;
+/// The shown empty state is the one tg_updateEmptyState put up; a screen
+/// that shows its own (with a picture or a button) keeps it.
+@property (nonatomic, weak) UIView *ownEmptyView;
 @end
 
 @implementation TGRowsViewController
@@ -31,10 +36,23 @@
 @synthesize sections = _sections;
 
 - (id)init {
-	self = [super initWithStyle:UITableViewStyleGrouped];
-	if (self)
+	return [self initWithPageKind:TGPageKindSettings];
+}
+
+- (instancetype)initWithPageKind:(TGPageKind)kind {
+	BOOL grouped = TGPageChromeFor([TGPageTemplate templateWithKind:kind], NO).grouped;
+	self = [super initWithStyle:grouped ? UITableViewStyleGrouped
+										: UITableViewStylePlain];
+	if (self){
+		_pageKind = kind;
 		_checksSectionIcons = YES;
+		_whiteRowsOnPage = !grouped;
+	}
 	return self;
+}
+
+- (BOOL)tg_whiteRowsOnPage {
+	return self.whiteRowsOnPage && self.tableView.style == UITableViewStylePlain;
 }
 
 - (void)viewDidLoad {
@@ -58,11 +76,25 @@
 
 - (void)applyTheme {
 	[super applyTheme];
+	if ([self tg_whiteRowsOnPage]){
+		UIColor *pageColour = [[TGTheme shared] groupedBackgroundColour];
+		self.view.backgroundColor = pageColour;
+		self.tableView.backgroundColor = pageColour;
+	}
 	[self reloadRows];
+}
+
+- (void)tableView:(UITableView *)tableView willDisplayCell:(UITableViewCell *)cell
+		forRowAtIndexPath:(NSIndexPath *)indexPath {
+	[super tableView:tableView willDisplayCell:cell forRowAtIndexPath:indexPath];
+	if ([self tg_whiteRowsOnPage])
+		cell.backgroundColor = [[TGTheme shared] cardBackgroundColour];
 }
 
 - (void)setSections:(NSArray *)sections {
 	_sections = TGRowsApplyingFieldTexts(sections, self.storedFieldText);
+	if (self.isViewLoaded)
+		[self tg_updateEmptyState];
 #ifdef DEBUG
 	if (self.checksSectionIcons){
 		for (NSDictionary *section in sections){
@@ -77,7 +109,7 @@
 }
 
 - (void)reloadRows {
-	if (!self.sections.count && (self.listRows || self.emptyText || self.listFooter))
+	if (!self.sections.count && self.listRows)
 		[self rebuildListSections];
 	TGFieldRowCell *active = self.activeFieldCell;
 	NSString *activeKey = active.fieldIdentifier;
@@ -86,8 +118,60 @@
 	self.reloadingFieldRows = YES;
 	[self.tableView reloadData];
 	self.reloadingFieldRows = NO;
+	[self tg_updateEmptyState];
 	if (activeKey.length)
 		[self focusFieldWithIdentifier:activeKey];
+}
+
+#pragma mark - empty state
+
+/// What the empty page says, or nil when it should not show. emptyText
+/// keeps its old meaning (said whenever there are no rows); a flat list
+/// without one says "None" once its rows have arrived.
+- (NSArray *)tg_emptyWords {
+	if (self.emptyTitle.length || self.emptySubtitle.length)
+		return @[self.emptyTitle ?: @"", self.emptySubtitle ?: @""];
+	if (self.emptyText.length)
+		return @[@"", self.emptyText];
+	if (self.listRows)
+		return @[@"", @"None"];
+	return nil;
+}
+
+- (void)tg_updateEmptyState {
+	NSArray *words = [self tg_emptyWords];
+	UIView *background = self.tableView.backgroundView;
+	BOOL ours = background && background == self.ownEmptyView;
+	if (words && !TGRowsSectionsHaveRows(self.sections)){
+		if ([background isKindOfClass:TGEmptyView.class])
+			return;
+		NSString *title = [words[0] length] ? TGLocalized(words[0]) : nil;
+		NSString *subtitle = [words[1] length] ? TGLocalized(words[1]) : nil;
+		[self showEmptyWithImage:nil title:title subtitle:subtitle];
+		self.ownEmptyView = self.tableView.backgroundView;
+	} else if (ours){
+		[self hideEmpty];
+	}
+}
+
+- (void)setEmptyTitle:(NSString *)emptyTitle {
+	_emptyTitle = [emptyTitle copy];
+	[self tg_refreshEmptyWords];
+}
+
+- (void)setEmptySubtitle:(NSString *)emptySubtitle {
+	_emptySubtitle = [emptySubtitle copy];
+	[self tg_refreshEmptyWords];
+}
+
+/// New words replace a shown empty state rather than wait for the next one.
+- (void)tg_refreshEmptyWords {
+	if (!self.isViewLoaded)
+		return;
+	UIView *background = self.tableView.backgroundView;
+	if (background && background == self.ownEmptyView)
+		[self hideEmpty];
+	[self tg_updateEmptyState];
 }
 
 - (void)clearStoredFieldText {
@@ -340,9 +424,7 @@ didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (void)setEmptyText:(NSString *)emptyText {
 	_emptyText = [emptyText copy];
-	[self rebuildListSections];
-	if (self.isViewLoaded)
-		[self reloadRows];
+	[self tg_refreshEmptyWords];
 }
 
 - (void)setListFooter:(NSString *)listFooter {
@@ -384,18 +466,10 @@ didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
 	[self toast:TGLocalized(@"Copied to clipboard.")];
 }
 
-/// The flat entry list becomes one section, with the empty sentence as a
-/// secondary row and footer the way the old list showed it.
+/// The flat entry list becomes one section; an empty list has none, and
+/// the empty state says emptyText in the middle of the page (R8).
 - (void)rebuildListSections {
-	NSArray *source = self.listRows ?: @[];
-	NSArray *rows = TGRowsFromListEntries(source);
-	NSString *footer = source.count ? self.listFooter : self.emptyText;
-	if (!source.count){
-		NSString *text = self.emptyText.length ? self.emptyText
-				: TGLocalized(@"None");
-		rows = @[TGRow(TGKindPlain, text)];
-	}
-	self.sections = @[TGSection(nil, footer, rows)];
+	self.sections = TGRowsListSections(self.listRows, self.listFooter);
 }
 
 @end

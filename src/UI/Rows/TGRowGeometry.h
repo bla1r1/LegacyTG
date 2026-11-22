@@ -50,6 +50,11 @@ FOUNDATION_EXPORT CGFloat TGGridRowHeightForCount(CGFloat width,
 FOUNDATION_EXPORT CGRect TGGridTileFrame(NSUInteger index, CGFloat width,
 		NSInteger columns, BOOL captions);
 
+/// The check disc over the chosen tile of a square grid tile `side` wide:
+/// TGMetricGridSelectedMark across, centred, TGMetricPadLarge clear of the
+/// edges on a small tile.
+FOUNDATION_EXPORT CGRect TGGridSelectedMarkFrame(CGFloat side);
+
 /// A Value1 row's title and value side by side. The value keeps its full
 /// width as long as the title keeps its own words or half the row, whichever
 /// is less.

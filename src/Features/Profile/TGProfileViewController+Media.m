@@ -448,11 +448,9 @@ static NSString *TGProfileJoin(NSString *left, NSString *right) {
 				[self.loadedMediaKinds containsObject:kind]){
 			BOOL archive = [kind isEqualToString:@"archive"];
 			NSMutableArray *empty = [NSMutableArray array];
-			NSMutableDictionary *line = [TGRow(TGKindPlain,
-					archive ? TGLocalized(@"No Archived Stories")
-							: TGLocalized(@"No posted stories")) mutableCopy];
-			line[TGRowCentred] = @YES;
-			[empty addObject:line];
+			// D4: the pane's empty state, not a grey bold row.
+			[empty addObject:TGEmptyPaneRow(archive ? @"No Archived Stories"
+					: @"No posted stories")];
 			if (!archive && self.isOwnProfile)
 				[empty addObject:TGActionRow(TGLocalized(@"Add Story"),
 						^{ [weakSelf addStoryTapped]; })];
@@ -555,11 +553,8 @@ static NSString *TGProfileJoin(NSString *left, NSString *right) {
 	}
 	if (!rows.count && TGProfileTabIsStories(kind) &&
 			[self.loadedMediaKinds containsObject:kind]){
-		NSMutableDictionary *line = [TGRow(TGKindPlain,
-				[kind isEqualToString:@"archive"] ? TGLocalized(@"No Archived Stories")
-						: TGLocalized(@"No posted stories")) mutableCopy];
-		line[TGRowCentred] = @YES;
-		[rows addObject:line];
+		[rows addObject:TGEmptyPaneRow([kind isEqualToString:@"archive"]
+				? @"No Archived Stories" : @"No posted stories")];
 	}
 	return rows;
 }

@@ -23,6 +23,8 @@ static void TGPeerRowAppendVerified(NSMutableAttributedString *name, UIFont *fon
 @property (nonatomic, strong) UIImageView *checkView;
 @property (nonatomic, strong) UIImageView *chevronView;
 @property (nonatomic, strong) UISwitch *toggleSwitch;
+@property (nonatomic, strong) UIButton *infoButton;
+@property (nonatomic, copy) void (^infoTapBlock)(void);
 @property (nonatomic, strong) TGBadge *badgeView;
 @property (nonatomic, strong) NSDictionary *row;
 @property (nonatomic, assign) int64_t avatarPeer;
@@ -90,6 +92,13 @@ static void TGPeerRowAppendVerified(NSMutableAttributedString *name, UIFont *fon
 	_checkView.contentMode = UIViewContentModeCenter;
 	_checkView.hidden = YES;
 	[self.contentView addSubview:_checkView];
+
+	// iOS 6's own info glyph: official CallListCallItem has one per call.
+	_infoButton = [UIButton buttonWithType:UIButtonTypeInfoDark];
+	_infoButton.hidden = YES;
+	[_infoButton addTarget:self action:@selector(infoTapped:)
+		  forControlEvents:UIControlEventTouchUpInside];
+	[self.contentView addSubview:_infoButton];
 
 	_chevronView = [[UIImageView alloc] initWithFrame:CGRectZero];
 	_chevronView.contentMode = UIViewContentModeCenter;
@@ -192,6 +201,8 @@ static void TGPeerRowAppendVerified(NSMutableAttributedString *name, UIFont *fon
 	self.toggleSwitch.hidden = YES;
 	self.trailingLabel.text = nil;
 	self.switchToggleBlock = nil;
+	self.infoTapBlock = row[TGRowInfoTap];
+	self.infoButton.hidden = self.infoTapBlock == nil;
 
 	BOOL check = [accessory isEqualToString:TGRowAccessoryCheck];
 	if (!accessory && row[TGRowChecked] != nil)
@@ -217,6 +228,13 @@ static void TGPeerRowAppendVerified(NSMutableAttributedString *name, UIFont *fon
 		self.trailingLabel.text = accessory;
 		self.trailingLabel.textColor = [theme secondaryTextColour];
 	}
+}
+
+- (void)infoTapped:(UIButton *)sender {
+	(void)sender;
+	void (^tap)(void) = self.infoTapBlock;
+	if (tap)
+		tap();
 }
 
 - (void)configureBadge:(NSDictionary *)row theme:(TGTheme *)theme {
@@ -338,11 +356,13 @@ static void TGPeerRowAppendVerified(NSMutableAttributedString *name, UIFont *fon
 		accessoryWidth = MAX(accessoryWidth, TGMetricMenuGlyph);
 	if (!self.toggleSwitch.hidden)
 		accessoryWidth = MAX(accessoryWidth, self.toggleSwitch.bounds.size.width);
-	if (self.trailingLabel.text.length){
-		CGSize size = [self.trailingLabel sizeThatFits:
-				CGSizeMake(TGMetricCallLabelWidth, TGMetricLineCaption)];
-		accessoryWidth = MAX(accessoryWidth, size.width);
-	}
+	CGFloat infoSide = self.infoButton.hidden ? 0
+			: self.infoButton.bounds.size.width;
+	CGFloat labelWidth = 0;
+	if (self.trailingLabel.text.length)
+		labelWidth = [self.trailingLabel sizeThatFits:
+				CGSizeMake(TGMetricCallLabelWidth, TGMetricLineCaption)].width;
+	accessoryWidth = MAX(accessoryWidth, TGPeerRowTrailingWidth(labelWidth, infoSide));
 	BOOL inlineBadge = [self.row[TGRowBadgeInline] boolValue];
 	if (!self.badgeView.hidden && !inlineBadge){
 		CGSize size = [self.badgeView sizeThatFits:CGSizeZero];
@@ -380,10 +400,17 @@ static void TGPeerRowAppendVerified(NSMutableAttributedString *name, UIFont *fon
 		self.toggleSwitch.frame = CGRectMake(right - size.width,
 				TGCenteredOrigin(height, size.height), size.width, size.height);
 	}
+	CGFloat labelRight = right;
+	if (!self.infoButton.hidden){
+		CGSize size = self.infoButton.bounds.size;
+		self.infoButton.frame = CGRectMake(right - size.width,
+				TGCenteredOrigin(height, size.height), size.width, size.height);
+		labelRight = right - size.width - TGMetricPadSmall;
+	}
 	if (self.trailingLabel.text.length){
 		CGSize size = [self.trailingLabel sizeThatFits:
 				CGSizeMake(TGMetricCallLabelWidth, TGMetricLineCaption)];
-		self.trailingLabel.frame = CGRectMake(right - size.width, top,
+		self.trailingLabel.frame = CGRectMake(labelRight - size.width, top,
 				size.width, TGMetricLineCaption);
 	}
 

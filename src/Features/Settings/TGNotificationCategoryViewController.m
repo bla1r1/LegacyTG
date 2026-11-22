@@ -35,6 +35,7 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindSettings;
 	self.title = self.categoryTitle;
 	[self rebuildSections];
 	[self load];

@@ -36,6 +36,7 @@ static const CGFloat kChartHeight = 150.0f;
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindDetail;
 	self.title = TGLocalized(@"Statistics");
 	__weak typeof(self) weakSelf = self;
 	for (NSDictionary *row in self.statRows){

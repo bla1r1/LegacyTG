@@ -56,6 +56,7 @@ static NSString *TGWriteBackground(UIColor *colour) {
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindSettings;
 	self.title = TGLocalized(@"Chat Tools");
 	[self rebuild];
 	[self loadChat];

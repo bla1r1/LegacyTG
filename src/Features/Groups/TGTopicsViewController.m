@@ -62,6 +62,7 @@ static NSString *TGTopicDateText(NSNumber *stamp) {
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindList;
 
 	// iOS 7 lays content out under the bars; these screens position their own
 	// frames and expect the old behaviour.
@@ -191,14 +192,17 @@ static NSString *TGTopicDateText(NSNumber *stamp) {
 	NSString *generalTitle = hidden
 			? @"Show General Topic" : @"Hide General Topic";
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:@[@"New Topic", generalTitle]
-						title:@"Topics"
-			 destructiveIndex:-1
-					   inView:self.view
-					 onChoice:^(NSInteger index){
+	// An action menu on a bar button hangs under it (D31, group A), as
+	// official's forum menu does, rather than a sheet from the bottom.
+	[TGPresent showMenu:TGMenuItems(@[@"New Topic", generalTitle], -1)
+			fromBarItem:self.navigationItem.rightBarButtonItem
+				   side:TGBarSideRight
+		   onController:self
+			   onChoice:^(NSInteger index, NSString *title){
+		(void)title;
 		if (index == 0)
 			[weakSelf createTopicTapped];
-		else
+		else if (index == 1)
 			[weakSelf setGeneralTopicHidden:!hidden];
 	}];
 }

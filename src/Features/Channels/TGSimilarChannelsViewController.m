@@ -16,6 +16,7 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindList;
 	self.title = @"Similar Channels";
 	self.chatDetails = [NSMutableDictionary dictionary];
 	[self loadAllChannels];

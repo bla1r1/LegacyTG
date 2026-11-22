@@ -64,6 +64,20 @@
 	XCTAssertLessThanOrEqual(CGRectGetMaxX(rightmost), width - TGMetricGridInset);
 }
 
+- (void)testGrid_EqualMarginsOnBothSides {
+	// D19: the points floorf leaves over all went to the right margin.
+	for (CGFloat width = 280; width <= 310; width += 1){
+		for (NSInteger columns = 2; columns <= 5; columns++){
+			CGRect first = TGGridTileFrame(0, width, columns, NO);
+			CGRect last = TGGridTileFrame((NSUInteger)(columns - 1), width, columns, NO);
+			CGFloat left = CGRectGetMinX(first);
+			CGFloat right = width - CGRectGetMaxX(last);
+			XCTAssertTrue(fabs(left - right) <= 1.0, @"%.0f / %ld: %.1f vs %.1f",
+					width, (long)columns, left, right);
+		}
+	}
+}
+
 - (void)testGrid_NoRoomFallsBackToAPlainRow {
 	XCTAssertEqual(TGGridRowHeightForCount(10, 4, 3, NO), TGMetricRow);
 	XCTAssertTrue(CGRectIsEmpty(TGGridTileFrame(0, 10, 4, NO)));
@@ -271,6 +285,26 @@
 						 @"prefix" : @"+996"};
 	XCTAssertEqualObjects(TGCountryRowTitle(kg), @"Kyrgyzstan");
 	XCTAssertEqualObjects(TGCountryRowTitle(@{}), @"");
+}
+
+// Official SettingsThemeWallpaperNode marks the chosen wallpaper with a
+// 50 pt check disc in the middle of the tile, not a 12 pt tick in a corner.
+- (void)testGridSelectedMark_CentredDisc {
+	CGRect mark = TGGridSelectedMarkFrame(96);
+	XCTAssertTrue(fabs(CGRectGetMidX(mark) - 48) < 0.5 && fabs(CGRectGetMidY(mark) - 48) < 0.5);
+	XCTAssertTrue(fabs(mark.size.width - 50) < 0.01 && fabs(mark.size.height - 50) < 0.01);
+	// A tile smaller than the disc keeps a margin round it.
+	CGRect small = TGGridSelectedMarkFrame(60);
+	XCTAssertTrue(small.size.width <= 30 && small.origin.x >= 15);
+}
+
+// D23: the box the next digit goes into is marked, as official's code
+// field; a full code marks none.
+- (void)testLoginCodeFocusedBox {
+	XCTAssertEqual(TGLoginCodeFocusedBox(0, 5), 0);
+	XCTAssertEqual(TGLoginCodeFocusedBox(3, 5), 3);
+	XCTAssertEqual(TGLoginCodeFocusedBox(5, 5), -1);
+	XCTAssertEqual(TGLoginCodeFocusedBox(7, 5), -1);
 }
 
 @end

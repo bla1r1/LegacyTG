@@ -24,6 +24,7 @@ static NSString *const kChannelPresetKey = @"TGDefaultChannelAdminRights";
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindSettings;
 	self.title = @"Admin Rights";
 	[self rebuildSections];
 }

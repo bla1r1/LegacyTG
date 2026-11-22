@@ -24,6 +24,18 @@ extern "C" {
 /// the archive is the only row whose count can be one.
 NSString *TGChatListArchiveSubtitle(NSUInteger count);
 
+/// The archive row's second line as official ChatListItem draws a group
+/// reference: the archived chats' titles joined by ", ". Falls back to the
+/// count while no chat has a title.
+NSString *TGChatListArchiveText(NSArray *archivedChats);
+
+/// The archive row's badge: how many archived chats are unread (official
+/// counts chats here, and draws the badge muted).
+NSUInteger TGChatListArchiveUnread(NSArray *archivedChats);
+
+/// The Saved Messages chat among the loaded ones, nil when it is not loaded.
+NSDictionary *TGChatListSavedChat(NSArray *chats, int64_t savedChatId);
+
 /// The notice over the chat list from TDLib's suggested actions (rows of
 /// {title, action}), as official ChatListNoticeItem: "setupPassword" (no
 /// close) or "premiumGrace" (closable, opens the subscription page). Keys:

@@ -3,7 +3,6 @@
 //
 #import "TGPageViewController.h"
 #import "TGPageHeaderView.h"
-#import "TGEmptyView.h"
 #import "TGRows.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
@@ -30,6 +29,10 @@
 		return nil;
 	_page = page;
 	_chrome = chrome;
+	self.pageKind = page.kind;
+	self.whiteRowsOnPage = chrome.whiteRowsOnPage;
+	self.emptyTitle = page.emptyTitle;
+	self.emptySubtitle = page.emptySubtitle;
 	_bottomActionEnabled = YES;
 	self.checksSectionIcons = YES;
 	self.title = page.title.length ? TGLocalized(page.title) : nil;
@@ -163,13 +166,9 @@
 - (void)applyTheme {
 	[super applyTheme];
 	TGTheme *theme = [TGTheme shared];
-	if (self.chrome.whiteRowsOnPage){
-		UIColor *pageColour = [theme groupedBackgroundColour];
-		self.view.backgroundColor = pageColour;
-		self.tableView.backgroundColor = pageColour;
-		if ([self.tableView.backgroundView isMemberOfClass:UIView.class])
-			self.tableView.backgroundView.backgroundColor = pageColour;
-	}
+	if (self.chrome.whiteRowsOnPage &&
+			[self.tableView.backgroundView isMemberOfClass:UIView.class])
+		self.tableView.backgroundView.backgroundColor = [theme groupedBackgroundColour];
 	if (self.chrome.titleInBar)
 		[theme styleNavigationSearchBar:self.searchBar];
 	else
@@ -184,15 +183,6 @@
 	}
 }
 
-/// Plain rows stay white cards on the page: a plain cell otherwise takes the
-/// table's colour and the page shows through.
-- (void)tableView:(UITableView *)tableView willDisplayCell:(UITableViewCell *)cell
-		forRowAtIndexPath:(NSIndexPath *)indexPath {
-	[super tableView:tableView willDisplayCell:cell forRowAtIndexPath:indexPath];
-	if (self.chrome.whiteRowsOnPage)
-		cell.backgroundColor = [[TGTheme shared] cardBackgroundColour];
-}
-
 #pragma mark - content
 
 - (void)setSections:(NSArray *)sections {
@@ -205,17 +195,9 @@
 			intro[TGRowIcon] = self.page.introIcon;
 		shown = [@[TGSection(nil, nil, @[intro])] arrayByAddingObjectsFromArray:shown];
 	}
+	// The empty state is TGRowsViewController's; the intro row does not
+	// count as content there.
 	[super setSections:shown];
-	if (TGPageShowsEmpty(self.page, sections)){
-		if (![self.tableView.backgroundView isKindOfClass:TGEmptyView.class])
-			[self showEmptyWithImage:nil
-							   title:self.page.emptyTitle.length
-									? TGLocalized(self.page.emptyTitle) : nil
-							subtitle:self.page.emptySubtitle.length
-									? TGLocalized(self.page.emptySubtitle) : nil];
-	} else if ([self.tableView.backgroundView isKindOfClass:TGEmptyView.class]){
-		[self hideEmpty];
-	}
 }
 
 - (void)setHeaderArt:(UIImage *)headerArt {

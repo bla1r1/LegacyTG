@@ -16,7 +16,18 @@
 @property (nonatomic, copy) void (^switchToggleBlock)(BOOL on);
 @property (nonatomic, copy) void (^accessoryTapBlock)(void);
 @property (nonatomic, strong) UISwitch *toggleSwitch;
+/// The table's style, known at dequeue: R6 picks the title font by it.
+@property (nonatomic, assign) BOOL inCard;
 @end
+
+void TGRowCellStandOnPage(UITableViewCell *cell) {
+	UIView *clear = [[UIView alloc] initWithFrame:CGRectZero];
+	clear.backgroundColor = [UIColor clearColor];
+	cell.backgroundView = clear;
+	cell.backgroundColor = [UIColor clearColor];
+	cell.contentView.backgroundColor = [UIColor clearColor];
+	cell.selectionStyle = UITableViewCellSelectionStyleNone;
+}
 
 @implementation TGRowCell
 
@@ -56,7 +67,8 @@
 				NSFoundationVersionNumber <= NSFoundationVersionNumber_iOS_6_1,
 				row[TGRowIcon] != nil);
 		CGSize title = [TGLocalized(row[TGRowTitle] ?: @"")
-				sizeWithFont:TGFontRow()
+				sizeWithFont:[self toggleInfoTitleFontInCard:
+						tableView.style == UITableViewStyleGrouped]
 				constrainedToSize:CGSizeMake(width, TGMetricImageMax)
 				lineBreakMode:NSLineBreakByWordWrapping];
 		CGSize detail = [TGLocalized(row[TGRowDetail] ?: @"")
@@ -65,6 +77,8 @@
 				lineBreakMode:NSLineBreakByWordWrapping];
 		return TGRowsToggleInfoHeight(title.height, detail.height);
 	}
+	if ([kind isEqualToString:TGKindEmptyPane])
+		return TGDoubled(TGMetricRow);
 	if (row[TGRowTitleLines]){
 		CGFloat width = tableView.bounds.size.width - TGMetricPadLarge -
 				TGMetricViewerBottomBar;
@@ -88,6 +102,14 @@
 	return TGMetricRow;
 }
 
+/// R6: a card row's title is the system cell font, the same as the rows
+/// around it; a white list row keeps TGFontRow.
++ (UIFont *)toggleInfoTitleFontInCard:(BOOL)inCard {
+	if (TGRowTitleFontRole(inCard) == TGRowFontCard)
+		return [TGTheme systemCellOfStyle:UITableViewCellStyleSubtitle].textLabel.font;
+	return TGFontRow();
+}
+
 + (instancetype)cellForTableView:(UITableView *)tableView
 							 row:(NSDictionary *)row
 					   rowIndex:(NSInteger)rowIndex
@@ -99,6 +121,7 @@
 				? UITableViewCellStyleSubtitle : UITableViewCellStyleValue1;
 		cell = [[TGRowCell alloc] initWithStyle:style reuseIdentifier:reuse];
 	}
+	cell.inCard = tableView.style == UITableViewStyleGrouped;
 	[cell configureWithRow:row rowIndex:rowIndex totalRows:totalRows];
 	// Every screen wants its colour, raw text and accessory keys honoured;
 	// four screens overrode cellForRow just to call this.
@@ -194,12 +217,25 @@
 	} else if ([kind isEqualToString:TGKindAction]){
 		self.textLabel.textColor = [theme accentColour];
 		self.textLabel.textAlignment = NSTextAlignmentCenter;
+	} else if ([kind isEqualToString:TGKindAdd]){
+		// R9: the + sits in the icon column, the title follows it in the
+		// accent colour, left aligned like the rows below it.
+		self.textLabel.textColor = [theme accentColour];
+		NSString *glyph = row[TGRowAddGlyph];
+		self.imageView.image = [TGIcons glyphNamed:glyph.length ? glyph : @"plus"
+				colour:[theme accentColour] side:TGMetricRowIconSide];
+	} else if ([kind isEqualToString:TGKindEmptyPane]){
+		self.textLabel.font = TGFontBody();
+		self.textLabel.textColor = [theme secondaryTextColour];
+		self.textLabel.textAlignment = NSTextAlignmentCenter;
+		self.textLabel.numberOfLines = 2;
+		self.selectionStyle = UITableViewCellSelectionStyleNone;
 	} else if ([kind isEqualToString:TGKindPlain]){
 		self.textLabel.textColor = [theme secondaryTextColour];
 		self.selectionStyle = UITableViewCellSelectionStyleNone;
 	} else if ([kind isEqualToString:TGKindToggleInfo]){
 		self.textLabel.text = TGLocalized(row[TGRowTitle]);
-		self.textLabel.font = TGFontRow();
+		self.textLabel.font = [self.class toggleInfoTitleFontInCard:self.inCard];
 		self.textLabel.textAlignment = NSTextAlignmentLeft;
 		self.textLabel.textColor = [theme primaryTextColour];
 

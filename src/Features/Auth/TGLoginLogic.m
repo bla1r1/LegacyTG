@@ -8,6 +8,10 @@ BOOL TGLoginUsesBarNext(CGFloat width) {
 	return width < TGLoginNarrowWidth;
 }
 
+NSInteger TGLoginCodeFocusedBox(NSUInteger typed, NSInteger boxes) {
+	return (NSInteger)typed < boxes ? (NSInteger)typed : -1;
+}
+
 BOOL TGLoginShowsBottomButton(BOOL fieldStep, CGFloat width) {
 	return fieldStep && !TGLoginUsesBarNext(width);
 }

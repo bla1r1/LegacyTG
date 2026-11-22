@@ -29,6 +29,7 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindPicker;
 	self.title = self.pickerTitle;
 	self.navigationItem.rightBarButtonItem =
 			[TGBarItem itemWithRole:TGBarRoleDone

@@ -357,6 +357,8 @@ static const CGFloat TGMetricTextMeasureHeight   = 10000.0f;
 static const CGFloat TGMetricAttachTick         = 18.0f;
 static const CGFloat TGMetricTicksWidth         = 15.0f;
 static const CGFloat TGMetricTicksHeight        = 9.0f;
+/// The check disc over the chosen wallpaper tile (official progressDiameter).
+static const CGFloat TGMetricGridSelectedMark   = 50.0f;
 static const CGFloat TGMetricUnreadDotSide      = 7.0f;
 
 static const CGFloat TGMetricBubbleTitleHeight  = 19.0f;

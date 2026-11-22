@@ -227,6 +227,8 @@
 - (void)openResolvedChat:(int64_t)chatId title:(NSString *)title;
 
 - (NSArray *)buildSections;
+/// What the page says in the middle when it has no rows (R8), or nil.
+- (NSString *)emptySentenceForPage;
 - (NSArray *)rootSections;
 /// The one Settings row the Tier 2 hub hangs from. Built in
 /// TGSettingsViewController+Tier2.m so the root list stays a list.

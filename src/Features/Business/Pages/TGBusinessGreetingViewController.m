@@ -65,6 +65,7 @@ static NSDictionary *TGBusinessRecipients(BOOL existing, BOOL newChats,
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindForm;
 	self.title = @"Greeting Messages";
 	self.existing = YES;
 	self.newChats = YES;

@@ -23,6 +23,11 @@ UILabel *TGLabelMake(TGLabelRole role) {
 	case TGLabelCaptionStrong: font = TGFontCaptionStrong(); break;
 	case TGLabelMeta:          font = TGFontMeta(); colour = [theme secondaryTextColour]; break;
 	case TGLabelMicro:         font = TGFontMicro(); colour = [theme secondaryTextColour]; break;
+	case TGLabelSectionHeader:
+		font = TGFontHeader();
+		colour = [theme sectionHeaderColour];
+		TGLabelEtch(label);
+		break;
 	case TGLabelBarTitle:
 		font = TGFontHeader();
 		colour = [theme barTitleColour];

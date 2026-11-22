@@ -118,6 +118,14 @@ NSMutableDictionary *TGPageHeaderRow(UIImage *art, NSString *title, NSString *te
 /// YES when the row's check accessory is ticked.
 BOOL TGPeerRowIsChecked(NSDictionary *row);
 
+/// void(^)(void): an info button at the person row's trailing edge, after the
+/// trailing text, as official CallListCallItem (Recent Calls).
+extern NSString *const TGRowInfoTap;
+
+/// What a person row keeps clear at its trailing edge for the trailing text
+/// and the info button; 0 for either means it is absent.
+CGFloat TGPeerRowTrailingWidth(CGFloat labelWidth, CGFloat infoSide);
+
 /// A peer row's subtitle is the accent colour while the person is online and
 /// the secondary colour otherwise. Pure so the rule can be tested without a
 /// theme or a cell.
@@ -158,12 +166,8 @@ extern NSString *const TGRowRawDetail;
 /// is its block.
 extern NSString *const TGRowAccessoryImage;
 
-/// Your Color's live preview row and its strip of colour swatches.
-extern NSString *const TGKindAppearancePreview;
+/// Your Color's strip of colour swatches (its preview is a profile header).
 extern NSString *const TGKindSwatchStrip;
-extern NSString *const TGRowPreviewImage;      // UIImage
-extern NSString *const TGRowPreviewText;       // NSString, the account name
-extern NSString *const TGRowPreviewTextColour; // UIColor for the account name
 extern NSString *const TGRowSwatches;          // NSArray of UIImage
 extern NSString *const TGRowSwatchTap;         // void(^)(NSInteger)
 
@@ -451,6 +455,48 @@ extern NSString *const TGRowStoryHold;      // void(^)(NSDictionary *)
 
 NSMutableDictionary *TGStoryStripRow(NSArray *stories, NSDictionary *ownStory);
 
+
+#pragma mark - 2.0 page rules
+
+/// The "Add…" row (R9): accent text after a + glyph, left aligned, first in
+/// its section, as official ItemListPeerActionItem draws Add Member, Block
+/// User, Create New Folder. A lone centred action (Reset, Log out) stays
+/// TGActionRow.
+extern NSString *const TGKindAdd;
+NSDictionary *TGAddRow(NSString *title, void (^tap)(void));
+/// The same row with another line glyph in place of the + (TGIcons
+/// menuGlyphNamed:): New Group and New Channel over the contacts.
+extern NSString *const TGRowAddGlyph;
+NSDictionary *TGAddGlyphRow(NSString *title, NSString *glyph, void (^tap)(void));
+
+/// An empty pane inside a card (R8), where the page has other content so
+/// TGEmptyView cannot take the middle: a profile's empty Stories tab. The
+/// sentence is centred, regular weight, secondary colour, in a row twice the
+/// normal height, like the empty state it stands in for.
+extern NSString *const TGKindEmptyPane;
+NSDictionary *TGEmptyPaneRow(NSString *title);
+
+/// Which font a row title takes (R6). In a card every text row takes the
+/// system cell font, switch-info rows included, so one card never mixes bold
+/// and thin titles; on a white list it is TGFontRow with a TGFontCaption line.
+typedef NS_ENUM(NSInteger, TGRowFontRole) {
+	TGRowFontCard = 0,
+	TGRowFontList,
+};
+TGRowFontRole TGRowTitleFontRole(BOOL grouped);
+
+/// What goes before a group's preview text (D2): the author on a line of its
+/// own, as official ChatListItem draws it, so the text takes the next line
+/// and never wraps back under the name. Empty when there is no author.
+NSString *TGChatRowPreviewPrefix(NSString *author);
+
+/// YES when at least one section has a row other than a page intro.
+BOOL TGRowsSectionsHaveRows(NSArray *sections);
+
+/// A flat entry list as sections (R8): one section with the footer, or no
+/// section at all when the list is empty, so the empty state takes the page
+/// instead of a grey "None" row.
+NSArray *TGRowsListSections(NSArray *entries, NSString *footer);
 
 #ifdef __cplusplus
 }

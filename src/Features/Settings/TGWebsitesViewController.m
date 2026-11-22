@@ -23,6 +23,7 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindList;
 	self.title = @"Active Websites";
 	[self refresh];
 }

@@ -40,6 +40,13 @@ CGFloat TGGridRowHeightForCount(CGFloat width, NSInteger columns,
 			(CGFloat)(lines - 1) * TGMetricGridGap;
 }
 
+CGRect TGGridSelectedMarkFrame(CGFloat side) {
+	CGFloat mark = MAX(0, MIN(TGMetricGridSelectedMark,
+			side - TGDoubled(TGMetricPadLarge)));
+	return CGRectMake(TGCenteredOrigin(side, mark), TGCenteredOrigin(side, mark),
+			mark, mark);
+}
+
 CGRect TGGridTileFrame(NSUInteger index, CGFloat width, NSInteger columns,
 		BOOL captions) {
 	if (columns < 1)
@@ -50,7 +57,11 @@ CGRect TGGridTileFrame(NSUInteger index, CGFloat width, NSInteger columns,
 	CGFloat caption = TGGridCaptionHeight(captions);
 	NSInteger column = (NSInteger)index % columns;
 	NSInteger line = (NSInteger)index / columns;
-	return CGRectMake(TGMetricGridInset + (CGFloat)column * (side + TGMetricGridGap),
+	// The side is rounded down; the points that leaves are split between the
+	// two margins instead of all landing on the right (D19).
+	CGFloat used = (CGFloat)columns * side + (CGFloat)(columns - 1) * TGMetricGridGap;
+	CGFloat left = TGMetricGridInset + floorf(TGHalf(width - TGDoubled(TGMetricGridInset) - used));
+	return CGRectMake(left + (CGFloat)column * (side + TGMetricGridGap),
 			TGMetricGridInset + (CGFloat)line * (side + caption + TGMetricGridGap),
 			side, side + caption);
 }

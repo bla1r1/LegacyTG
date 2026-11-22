@@ -119,6 +119,7 @@ static BOOL TGBBackgroundIsCurrent(NSDictionary *background, int64_t currentId) 
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindGallery;
 	self.title = TGLocalized(@"Chat Wallpaper");
 	self.installed = @[];
 	self.previews = [NSMutableDictionary dictionary];

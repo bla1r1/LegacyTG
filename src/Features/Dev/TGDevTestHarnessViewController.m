@@ -38,6 +38,7 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindSettings;
 	self.title = @"TDLib Test Harness";
 	[self rebuildSections];
 }

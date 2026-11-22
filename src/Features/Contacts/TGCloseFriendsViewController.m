@@ -26,6 +26,7 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindList;
 	self.title = TGLocalized(@"Close Friends");
 
 	__weak typeof(self) weakSelf = self;

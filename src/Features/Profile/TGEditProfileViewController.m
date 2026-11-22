@@ -66,6 +66,7 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+	self.pageKind = TGPageKindForm;
 	self.title = @"";
 	[self applyTheme];
 
@@ -198,7 +199,11 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 	bio[TGRowFieldIdentifier] = @"bio";
 	if (self.bioLengthMax > 0)
 		bio[TGRowFieldMaxLength] = @(self.bioLengthMax);
-	[sections addObject:TGSection(@"Bio", nil, @[bio])];
+	// Official edit profile: the field's own placeholder says Bio, the hint
+	// is the footer; no header label over it (D6).
+	[sections addObject:TGSection(nil,
+			@"Any details such as age, occupation or city.\nExample: 23 y.o. designer from San Francisco.",
+			@[bio])];
 
 	NSMutableArray *birthdayRows = [NSMutableArray array];
 	[birthdayRows addObject:TGTapRow(@"Birthday", [self birthdayText], ^{
