@@ -14,6 +14,7 @@
 #import "TGLocalization.h"
 #import "TGIcons.h"
 #import "TGRows.h"
+#import "TGBarItem.h"
 
 @interface TGNewContactViewController ()
 @property (nonatomic, copy) NSString *firstText;
@@ -42,19 +43,14 @@
 	self.lastText = self.last ?: @"";
 	self.phoneText = self.phone ?: @"";
 
-	self.doneItem = [[UIBarButtonItem alloc]
-			initWithImage:[TGIcons glyphNamed:@"checkboxSelected"
-									   colour:[[TGTheme shared] accentColour]
-										 side:TGMetricMenuGlyph]
-			style:UIBarButtonItemStylePlain
-		   target:self action:@selector(save)];
+	self.doneItem = [TGBarItem itemWithRole:TGBarRoleDone
+			target:self action:@selector(save)];
 	self.navigationItem.rightBarButtonItem = self.doneItem;
-	// The form is modal, as official presents it: Close on the left, the
-	// Done check on the right, and no back chevron from a stack.
+	// The form is modal, as official presents it: Cancel on the left (its ✕),
+	// Done on the right (its ✓), and no back chevron from a stack.
 	if (self.navigationController.viewControllers.firstObject == self){
-		self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc]
-				initWithTitle:@"Close" style:UIBarButtonItemStylePlain
-					   target:self action:@selector(closeTapped)];
+		self.navigationItem.leftBarButtonItem = [TGBarItem itemWithRole:TGBarRoleCancel
+				target:self action:@selector(closeTapped)];
 	}
 
 	__weak typeof(self) weakSelf = self;
@@ -138,11 +134,9 @@
 - (void)beginSaving {
 	self.saving = YES;
 	[self.view endEditing:YES];
-	self.spinner = [[UIActivityIndicatorView alloc]
-			initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleGray];
-	[self.spinner startAnimating];
-	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
-			initWithCustomView:self.spinner];
+	UIBarButtonItem *activity = [TGBarItem activityItem];
+	self.spinner = (UIActivityIndicatorView *)activity.customView;
+	self.navigationItem.rightBarButtonItem = activity;
 	[self updateDoneState];
 }
 

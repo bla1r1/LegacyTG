@@ -44,6 +44,7 @@
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
 #import "TGDMTopicsViewController.h"
+#import "TGPresent.h"
 
 #if TG_DEV
 #endif
@@ -284,8 +285,8 @@
 					title = [[TGMessageStore shared] titleForChat:[chat[@"chatId"] longLongValue]];
 				[titles addObject:title.length ? title : @"Chat"];
 			}
-			[TGAlertSheet showChoices:titles title:@"Community" destructiveIndex:-1 inView:host
-							 onChoice:^(NSInteger index){
+			[TGPresent showList:titles title:@"Community" destructiveIndex:-1
+			from:[TGPresent topControllerFrom:nil] onPick:^(NSInteger index){
 				TGChatViewController *chat = [[TGChatViewController alloc] init];
 				chat.chatId = [chats[(NSUInteger)index][@"chatId"] longLongValue];
 				chat.chatTitle = titles[(NSUInteger)index];

@@ -48,6 +48,8 @@
 #import "TGAlertSheet.h"
 #import "TGDMTopicsViewController.h"
 #import "TGChatPageCache.h"
+#import "TGBarItem.h"
+#import "TGPresent.h"
 
 #if TG_DEV
 #endif
@@ -631,7 +633,7 @@ static NSString *TGChatRowKey(NSDictionary *row) {
 			forState:UIControlStateNormal];
 
 	self.navigationItem.rightBarButtonItem =
-			[[UIBarButtonItem alloc] initWithCustomView:button];
+			[TGBarItem itemWithView:button];
 
 	// Your own peer and a forum get a second right item: search is reachable
 	// from the bar, not only from the title hold.
@@ -654,10 +656,8 @@ static NSString *TGChatRowKey(NSDictionary *row) {
 		[search addTarget:self action:@selector(toggleChatSearch)
 		 forControlEvents:UIControlEventTouchUpInside];
 		search.accessibilityLabel = TGLocalized(@"Search");
-		UIBarButtonItem *searchItem = [[UIBarButtonItem alloc]
-				initWithCustomView:search];
 		self.navigationItem.rightBarButtonItems =
-				@[[[UIBarButtonItem alloc] initWithCustomView:button], searchItem];
+				@[[TGBarItem itemWithView:button], [TGBarItem itemWithView:search]];
 	}
 
 	// Your own photo is not what Saved Messages is known by; the bookmark set
@@ -1206,11 +1206,9 @@ static NSMutableDictionary *TGChatProfileMemo(void) {
 	[card addSubview:picker];
 	UIToolbar *bar = [[UIToolbar alloc] initWithFrame:CGRectMake(0, 0, card.bounds.size.width, TGMetricRow)];
 	bar.items = @[
-		[[UIBarButtonItem alloc] initWithTitle:@"Cancel" style:UIBarButtonItemStylePlain
-				target:sheet action:@selector(dismiss)],
-		[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace
-				target:nil action:nil],
-		[[UIBarButtonItem alloc] initWithTitle:@"Go" style:UIBarButtonItemStyleDone
+		[TGBarItem plainItemWithTitle:@"Cancel" target:sheet action:@selector(dismiss)],
+		[TGBarItem flexibleSpace],
+		[TGBarItem itemWithTitle:@"Go" primary:YES
 				target:self action:@selector(jumpToDateCommit:)],
 	];
 	UILabel *countLabel = [[UILabel alloc] initWithFrame:CGRectMake(
@@ -1547,10 +1545,9 @@ static NSMutableDictionary *TGChatProfileMemo(void) {
 		TGStoryViewerViewController *viewer = [[TGStoryViewerViewController alloc]
 				initWithChatId:card.actionChatId title:@"Story"
 					   stories:@[@(card.actionTargetId)] startIndex:0 canManage:NO];
-		UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:viewer];
+		UINavigationController *nav = [TGPresent presentModal:viewer kind:TGModalBare from:self];
 		nav.navigationBar.barStyle = UIBarStyleBlack;
 		nav.navigationBar.translucent = YES;
-		[self presentViewController:nav animated:YES completion:nil];
 		break;
 	}
 	case TGMessageCardActionPlayGame: {

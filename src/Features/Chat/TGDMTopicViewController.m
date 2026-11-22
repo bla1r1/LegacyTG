@@ -3,6 +3,7 @@
 #import "TGAlertSheet.h"
 #import "TGMessageStore.h"
 #import "TGRows.h"
+#import "TGBarItem.h"
 
 @interface TGDMTopicViewController ()
 @property (nonatomic, strong) NSArray *history;
@@ -16,9 +17,8 @@
 	NSString *name = self.topic[@"senderName"];
 	self.title = name.length ? name : TGLocalized(@"Topic");
 	self.history = @[];
-	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
-			initWithTitle:TGLocalized(@"Reply") style:UIBarButtonItemStylePlain
-				   target:self action:@selector(replyTapped)];
+	self.navigationItem.rightBarButtonItem = [TGBarItem itemWithTitle:@"Reply" primary:NO
+			target:self action:@selector(replyTapped)];
 	[self rebuildSections];
 	[self loadTopic];
 	[self loadHistory];

@@ -20,6 +20,7 @@
 #import "TGForwardPicker.h"
 #import "TGMessageLayout.h"
 #import "TGMediaViewerInternal.h"
+#import "TGPresent.h"
 
 
 // The chrome sits over the picture rather than beside it, which is what makes
@@ -79,11 +80,8 @@ static const NSInteger kZoomTag = 0x7001;
 		[choices addObject:@"Stickers"];
 
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:choices
-						title:@"File"
-			 destructiveIndex:2
-					   inView:self.backdrop
-					 onChoice:^(NSInteger index){
+	[TGPresent showMenu:TGMenuItems(choices, 2) atPoint:[hold locationInView:self.backdrop]
+				 inView:self.backdrop onChoice:^(NSInteger index, NSString *title){
 		TGMediaViewer *me = weakSelf;
 		UIView *host = me.backdrop ?: [UIApplication sharedApplication].keyWindow;
 		NSString *what = choices[(NSUInteger)index];
@@ -128,11 +126,8 @@ static const NSInteger kZoomTag = 0x7001;
 			NSString *state = [set[@"installed"] boolValue] ? @"" : @"  ·  tap to add";
 			[rows addObject:[NSString stringWithFormat:@"%@%@", title, state]];
 		}
-		[TGAlertSheet showChoices:rows
-							title:@"Stickers"
-				   destructiveIndex:-1
-						   inView:host
-						 onChoice:^(NSInteger index){
+		[TGPresent showList:rows title:@"Stickers" destructiveIndex:-1
+			from:[TGPresent topControllerFrom:nil] onPick:^(NSInteger index){
 			NSDictionary *set = list[(NSUInteger)index];
 			if ([set[@"installed"] boolValue])
 				return;

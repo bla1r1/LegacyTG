@@ -11,6 +11,7 @@
 #import "TGProfileStore.h"
 #import "TGIcons.h"
 #import "TGStyle.h"
+#import "TGPresent.h"
 
 
 @interface TGPrivacyRuleViewController ()
@@ -21,9 +22,6 @@
 @property (nonatomic, strong) NSMutableArray *restrictUserIds;
 @property (nonatomic, assign) BOOL loaded;
 @property (nonatomic, assign) int64_t publicPhotoId;
-@end
-
-@interface TGPrivacyRuleViewController () <UIImagePickerControllerDelegate, UINavigationControllerDelegate>
 @end
 
 @implementation TGPrivacyRuleViewController
@@ -142,19 +140,13 @@
 - (void)pickPublicPhoto {
 	if (![UIImagePickerController isSourceTypeAvailable:UIImagePickerControllerSourceTypePhotoLibrary])
 		return;
-	UIImagePickerController *picker = [[UIImagePickerController alloc] init];
-	picker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;
-	picker.delegate = self;
-	[self presentViewController:picker animated:YES completion:nil];
+	__weak typeof(self) weakSelf = self;
+	[TGPresent pickMediaFrom:self source:TGMediaSourceLibrary videos:NO sourceView:nil
+					  onPick:^(NSDictionary *info){ [weakSelf didPickMedia:info]; }];
 }
 
-- (void)imagePickerControllerDidCancel:(UIImagePickerController *)picker {
-	[picker dismissViewControllerAnimated:YES completion:nil];
-}
-
-- (void)imagePickerController:(UIImagePickerController *)picker
-		didFinishPickingMediaWithInfo:(NSDictionary *)info {
-	[picker dismissViewControllerAnimated:YES completion:nil];
+/// What the library handed back, once the picker has gone.
+- (void)didPickMedia:(NSDictionary *)info {
 	UIImage *image = info[UIImagePickerControllerOriginalImage];
 	if (!image)
 		return;

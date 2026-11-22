@@ -5,6 +5,8 @@
 #import "TGRows.h"
 #import "TGSendStore.h"
 #import "TGTextStylesStore.h"
+#import "TGBarItem.h"
+#import "TGPresent.h"
 
 
 @interface TGTextStylesViewController ()
@@ -17,12 +19,12 @@
 	[super viewDidLoad];
 	self.title = @"Text Styles";
 	self.styles = [TGTextStylesStore shared].textCompositionStyles ?: @[];
-	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
-			initWithBarButtonSystemItem:UIBarButtonSystemItemAdd
-								 target:self action:@selector(createTapped)];
-	self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc]
-			initWithTitle:@"Search" style:UIBarButtonItemStylePlain
-				   target:self action:@selector(searchTapped)];
+	// Search looks a style up by its exact name, so it asks rather than
+	// filtering the list: the magnifier beside Add, as official puts .search.
+	self.navigationItem.rightBarButtonItems = @[
+		[TGBarItem itemWithRole:TGBarRoleAdd target:self action:@selector(createTapped)],
+		[TGBarItem itemWithRole:TGBarRoleSearch target:self action:@selector(searchTapped)],
+	];
 
 	[[NSNotificationCenter defaultCenter] addObserver:self
 			selector:@selector(stylesChanged:)
@@ -65,11 +67,8 @@
 	else
 		[choices addObject:@"Remove from Composer"];
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:choices
-						title:(style[@"title"] ?: style[@"name"])
-			 destructiveIndex:(NSInteger)choices.count - 1
-					   inView:self.view
-					 onChoice:^(NSInteger index){
+	[TGPresent showMenuTitles:choices destructiveIndex:(NSInteger)choices.count - 1
+			fromView:nil onController:self onChoice:^(NSInteger index){
 		NSString *choice = choices[index];
 		if ([choice isEqualToString:@"Preview"]){
 			[weakSelf previewStyle:style];

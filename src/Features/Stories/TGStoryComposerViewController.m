@@ -8,6 +8,7 @@
 #import "TGRows.h"
 #import "TGProfileStore.h"
 #import "TGStoryStore.h"
+#import "TGPresent.h"
 
 /// Telegram accepts a 1080x1920 photo and a 720x1280 video. This client only
 /// re-sizes the photo; a picked video is sent as recorded.
@@ -93,12 +94,10 @@ static BOOL sStoryFlowOpening = NO;
 		TGStoryComposerViewController *composer = [[TGStoryComposerViewController alloc]
 				initWithChatId:chatId title:title];
 		composer.onPosted = onPosted;
-		// The caller may itself be sitting under a modal (the story viewer is).
-		UIViewController *top = host;
-		while (top.presentedViewController)
-			top = top.presentedViewController;
-		[top presentViewController:[TGStoryCameraViewController flowForComposer:composer]
-						  animated:YES completion:nil];
+		// The caller may itself be sitting under a modal (the story viewer
+		// is); TGPresent climbs to the top one.
+		[TGPresent presentFlow:[TGStoryCameraViewController flowForComposer:composer]
+						  from:host];
 	}];
 }
 

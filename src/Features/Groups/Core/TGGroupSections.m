@@ -8,6 +8,7 @@
 #import "TGRows.h"
 #import "TGRowCell.h"
 #import "TGGroupStore.h"
+#import "TGBarItem.h"
 
 //
 // TGGroupSettingsViewController (TGGroupSections) - the screen's data.
@@ -148,10 +149,8 @@
 		return;
 	}
 	self.navigationItem.rightBarButtonItem =
-			[[UIBarButtonItem alloc] initWithTitle:(self.editingNames
-					? TGLocalized(@"Done") : TGLocalized(@"Edit"))
-					style:UIBarButtonItemStylePlain
-					target:self action:@selector(toggleEditing)];
+			[TGBarItem itemWithRole:(self.editingNames ? TGBarRoleDone : TGBarRoleEdit)
+							 target:self action:@selector(toggleEditing)];
 }
 
 - (void)toggleEditing {

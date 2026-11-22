@@ -4,6 +4,7 @@
 #import "TGMessageStore.h"
 #import "TGDMTopicViewController.h"
 #import "TGRows.h"
+#import "TGBarItem.h"
 
 @interface TGDMTopicsViewController ()
 @property (nonatomic, strong) NSArray *topics;
@@ -21,9 +22,8 @@
 	self.topics = [[TGMessageStore shared] directMessagesChatTopicsForChat:self.chatId]
 			?: @[];
 	[self rebuildSections];
-	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
-			initWithTitle:TGLocalized(@"More") style:UIBarButtonItemStylePlain
-				   target:self action:@selector(loadMoreTapped)];
+	self.navigationItem.rightBarButtonItem = [TGBarItem itemWithTitle:@"More" primary:NO
+			target:self action:@selector(loadMoreTapped)];
 	[[NSNotificationCenter defaultCenter] addObserver:self
 			selector:@selector(topicsChanged:)
 				name:TGDirectMessagesTopicsChangedNotification object:nil];

@@ -7,6 +7,8 @@
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
 #import "TGRows.h"
+#import "TGBarItem.h"
+#import "TGLabel.h"
 #import <QuartzCore/QuartzCore.h>
 
 static const CGFloat kPreviewHeight = 130.0f;
@@ -43,10 +45,8 @@ static const CGFloat kWallpaperDefaultHeight = 480.0f;
 	[super viewDidLoad];
 	self.title = TGLocalized(@"Set a Color");
 	self.navigationItem.rightBarButtonItem =
-			[[UIBarButtonItem alloc] initWithTitle:TGLocalized(@"Apply")
-											 style:UIBarButtonItemStyleDone
-											target:self
-											action:@selector(applyTapped)];
+			[TGBarItem itemWithTitle:@"Apply" primary:YES
+							  target:self action:@selector(applyTapped)];
 	[self setupHeaderPreview];
 	[self rebuildSections];
 	[self applyTheme];
@@ -77,12 +77,9 @@ static const CGFloat kWallpaperDefaultHeight = 480.0f;
 	bubble.layer.cornerRadius = TGMetricCornerBubbleFlat;
 	bubble.layer.masksToBounds = YES;
 
-	UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(TGMetricPadSmall, kPreviewLabelTop,
-			bubble.bounds.size.width - TGDoubled(TGMetricPadSmall), kPreviewLabelHeight)];
+	UILabel *label = TGLabelWith(TGLabelRow, CGRectMake(TGMetricPadSmall, kPreviewLabelTop,
+			bubble.bounds.size.width - TGDoubled(TGMetricPadSmall), kPreviewLabelHeight), nil);
 	label.text = TGLocalized(@"Preview of your chat wallpaper");
-	label.font = TGFontRow();
-	label.textColor = [[TGTheme shared] primaryTextColour];
-	label.backgroundColor = [UIColor clearColor];
 	[bubble addSubview:label];
 	[box addSubview:bubble];
 

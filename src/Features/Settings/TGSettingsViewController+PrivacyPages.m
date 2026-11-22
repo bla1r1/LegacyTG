@@ -21,6 +21,7 @@
 #import "TGSettingsStore.h"
 #import "TGUIFormat.h"
 #import "TGSettingsPageModels.h"
+#import "TGPresent.h"
 
 
 /// Subscription flags are not exclusive: a canceled subscription can also
@@ -270,11 +271,8 @@ static NSString *TGNotificationWhen(NSNumber *stamp) {
 - (void)showSavedSound:(NSDictionary *)sound {
 	__weak typeof(self) weakSelf = self;
 	NSString *name = TGSoundName(sound);
-	[TGAlertSheet showChoices:@[@"Sound", @"Remove"]
-						title:name
-			 destructiveIndex:1
-					   inView:self.view
-					 onChoice:^(NSInteger index){
+	[TGPresent showMenuTitles:@[@"Sound", @"Remove"] destructiveIndex:1
+			fromView:nil onController:self onChoice:^(NSInteger index){
 		if (index == 1){
 			[weakSelf removeSavedSound:sound];
 			return;

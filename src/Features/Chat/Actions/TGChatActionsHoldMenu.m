@@ -17,6 +17,9 @@
 #import "TGPollPresentation.h"
 #import "TGChatActionMenuModel.h"
 #import "TGPerf.h"
+#import "TGPresent.h"
+#import "TGLabel.h"
+#import "TGControls.h"
 #import <CoreImage/CoreImage.h>
 #import <QuartzCore/QuartzCore.h>
 
@@ -121,14 +124,10 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 		return nil;
 
 	TGTheme *theme = [TGTheme shared];
-	_button = [UIButton buttonWithType:UIButtonTypeCustom];
+	_button = TGPlateButton(TGMetricMenuReadHeaderHeight, nil, NULL);
 	_button.frame = self.bounds;
 	_button.autoresizingMask = UIViewAutoresizingFlexibleWidth |
 			UIViewAutoresizingFlexibleHeight;
-	[_button setBackgroundImage:[TGTheme skeuomorphicButtonImageWithColor:
-			[theme accentColour] height:TGMetricMenuReadHeaderHeight
-			highlighted:YES cornerRadius:TGMetricCornerNone]
-			forState:UIControlStateHighlighted];
 	[self addSubview:_button];
 
 	_glyph = [[UIImageView alloc] initWithFrame:CGRectZero];
@@ -137,17 +136,11 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 	_glyph.contentMode = UIViewContentModeScaleAspectFit;
 	[self addSubview:_glyph];
 
-	_seen = [[UILabel alloc] initWithFrame:CGRectZero];
-	_seen.font = TGFontRowStrong();
-	_seen.textColor = [theme primaryTextColour];
-	_seen.backgroundColor = [UIColor clearColor];
+	_seen = TGLabelWith(TGLabelRowStrong, CGRectZero, nil);
 	[self addSubview:_seen];
 
-	_reactions = [[UILabel alloc] initWithFrame:CGRectZero];
-	_reactions.font = TGFontCaption();
-	_reactions.textColor = [theme secondaryTextColour];
+	_reactions = TGLabelWith(TGLabelCaption, CGRectZero, nil);
 	_reactions.textAlignment = NSTextAlignmentRight;
-	_reactions.backgroundColor = [UIColor clearColor];
 	[self addSubview:_reactions];
 
 	return self;
@@ -332,19 +325,16 @@ static const CGFloat kHoldBlurRadius = 28.0f;
 
 	NSInteger generation = ++self.holdGeneration;
 	__weak typeof(self) weakSelf = self;
-	[UIView animateWithDuration:TGAnimationDurationFast
-						  delay:0
-						options:UIViewAnimationOptionCurveEaseOut
-					 animations:^{
+	TGMotionLift(^{
 		backdrop.alpha = TGAlphaOpaque;
 		lift.frame = target;
-	} completion:^(BOOL finished){
+	}, ^(BOOL finished){
 		TGChatViewController *me = weakSelf;
 		if (!me || me.holdGeneration != generation || me.holdLiftView != lift)
 			return;
 		if (didLift)
 			didLift(target);
-	}];
+	});
 	return target;
 }
 
@@ -372,10 +362,10 @@ static const CGFloat kHoldBlurRadius = 28.0f;
 	UIView *backdrop = self.holdBackdropView;
 	UIImageView *lift = self.holdLiftView;
 	CGRect home = self.holdLiftOrigin;
-	[UIView animateWithDuration:TGAnimationDurationFast animations:^{
+	TGMotionQuick(^{
 		backdrop.alpha = TGAlphaTransparent;
 		lift.frame = home;
-	} completion:^(BOOL finished){
+	}, ^(BOOL finished){
 		[backdrop removeFromSuperview];
 		[lift removeFromSuperview];
 		if (generation != self.holdGeneration)
@@ -383,7 +373,7 @@ static const CGFloat kHoldBlurRadius = 28.0f;
 		self.holdBackdropView = nil;
 		self.holdLiftView = nil;
 		self.holdReturning = NO;
-	}];
+	});
 }
 
 /// The facts the message dictionary cannot carry: what the chat knows about
@@ -438,11 +428,8 @@ static const CGFloat kHoldBlurRadius = 28.0f;
 /// One quiet line across the top of the card: the copy-protection tip or
 /// when the message was read.
 - (UILabel *)holdCardNote:(NSString *)text {
-	UILabel *note = [[UILabel alloc] initWithFrame:CGRectMake(0.0f, 0.0f, TGMetricMenuWidth,
-			TGMetricMenuReadHeaderHeight)];
-	note.backgroundColor = [UIColor clearColor];
-	note.font = TGFontCaption();
-	note.textColor = [[TGTheme shared] secondaryTextColour];
+	UILabel *note = TGLabelWith(TGLabelCaption, CGRectMake(0.0f, 0.0f, TGMetricMenuWidth,
+			TGMetricMenuReadHeaderHeight), nil);
 	note.textAlignment = NSTextAlignmentCenter;
 	note.numberOfLines = 2;
 	note.text = text;
@@ -562,9 +549,7 @@ static const CGFloat kHoldBlurRadius = 28.0f;
 									  fromChat:weakSelf.chatId
 										toChat:targetChatId];
 		};
-		UINavigationController *nav = [[UINavigationController alloc]
-				initWithRootViewController:picker];
-		[self presentViewController:nav animated:YES completion:nil];
+		[TGPresent presentModal:picker kind:TGModalForm from:self];
 
 	} else if ([action isEqualToString:@"View Thread"]){
 		[self openCommentsForMessage:m];
@@ -725,11 +710,8 @@ static const CGFloat kHoldBlurRadius = 28.0f;
 				NSString *head = [NSString stringWithFormat:@"%@ · %lu%@",
 						titles[index], (unsigned long)voters.count,
 						end ? @"" : @"…"];
-				[TGAlertSheet showChoices:rows
-									title:head
-						 destructiveIndex:-1
-								   inView:me.view
-								 onChoice:^(NSInteger pick){}];
+				[TGPresent showList:rows title:head destructiveIndex:-1
+			from:self onPick:^(NSInteger pick){}];
 			}];
 		}];
 
@@ -1337,12 +1319,9 @@ static NSString *TGStatGraphLine(NSDictionary *graph, NSString *label) {
 		for (NSNumber *position in ids)
 			[rows addObject:[NSString stringWithFormat:@"Message %lld",
 					(long long)[position longLongValue]]];
-		[TGAlertSheet showChoices:rows
-							title:[NSString stringWithFormat:@"%lu positions",
-									(unsigned long)rows.count]
-				  destructiveIndex:-1
-						   inView:me.view
-						 onChoice:^(NSInteger index){
+		[TGPresent showList:rows title:[NSString stringWithFormat:@"%lu positions",
+									(unsigned long)rows.count] destructiveIndex:-1
+			from:self onPick:^(NSInteger index){
 			int64_t target = [ids[index] longLongValue];
 			[me showMessageId:target gone:nil];
 		}];

@@ -9,6 +9,7 @@
 #import "TGStyle.h"
 #import "TGRows.h"
 #import "TGRowsDataSource.h"
+#import "TGPresent.h"
 #import <QuartzCore/QuartzCore.h>
 
 #pragma mark - Constants
@@ -278,10 +279,9 @@ static NSString *TGPlayerFormatTime(NSTimeInterval seconds) {
 + (void)presentFromViewController:(UIViewController *)parent animated:(BOOL)animated {
 	if (!parent) return;
 	TGPlayerModalViewController *vc = [[TGPlayerModalViewController alloc] init];
-	UINavigationController *nc = [[UINavigationController alloc] initWithRootViewController:vc];
+	// ponytail: always animated; every caller asks for YES.
+	UINavigationController *nc = [TGPresent presentModal:vc kind:TGModalBare from:parent];
 	nc.navigationBarHidden = YES;
-	nc.modalPresentationStyle = UIModalPresentationFullScreen;
-	[parent presentViewController:nc animated:animated completion:nil];
 }
 
 // The deck is a portrait composition - artwork, scrubber, transport - about

@@ -17,6 +17,7 @@
 #import "TGGroupSettingsViewControllerInternal.h"
 #import "TGGroupStore.h"
 #import "TGProfileStore.h"
+#import "TGPresent.h"
 
 
 
@@ -137,15 +138,13 @@ typedef NS_ENUM(NSInteger, TGGroupRowKind) {
 		return;
 	}
 	self.pickingPhoto = YES;
-	UIImagePickerController *picker = [[UIImagePickerController alloc] init];
-	picker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;
-	picker.delegate = self;
-	[self presentViewController:picker animated:YES completion:nil];
+	__weak typeof(self) weakSelf = self;
+	[TGPresent pickMediaFrom:self source:TGMediaSourceLibrary videos:NO sourceView:nil
+					  onPick:^(NSDictionary *info){ [weakSelf didPickMedia:info]; }];
 }
 
-- (void)imagePickerController:(UIImagePickerController *)picker
-		didFinishPickingMediaWithInfo:(NSDictionary *)info {
-	[picker dismissViewControllerAnimated:YES completion:nil];
+/// What the library handed back, once the picker has gone.
+- (void)didPickMedia:(NSDictionary *)info {
 	if (!self.pickingPhoto)
 		return;
 	self.pickingPhoto = NO;
@@ -175,11 +174,6 @@ typedef NS_ENUM(NSInteger, TGGroupRowKind) {
 		[TGSnackbar showInView:me.view text:@"Group photo updated"
 					   seconds:2 onCommit:nil];
 	}];
-}
-
-- (void)imagePickerControllerDidCancel:(UIImagePickerController *)picker {
-	self.pickingPhoto = NO;
-	[picker dismissViewControllerAnimated:YES completion:nil];
 }
 
 - (void)chooseMainTab {

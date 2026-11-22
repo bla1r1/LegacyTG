@@ -5,7 +5,7 @@ not because the button exists. Each row says what to tap, what should be on
 screen, how long to wait and what to find in the log (`scripts/devrun.sh`).
 Process: [CONTRIBUTING.md](CONTRIBUTING.md). Closed bugs: [BUGS.md](BUGS.md).
 
-Token sizes and colours are checked by `scripts/lint_tokens.sh`, not by a row here.
+Token sizes and colours are checked by `scripts/lint_tokens.sh`, not by a row here. Who builds controls and how things open (modals, bar buttons, alerts) is checked by `scripts/lint_controls.sh` and `scripts/lint_presentation.sh` against `scripts/ui_ownership.txt`.
 
 ---
 

@@ -3,6 +3,7 @@
 #import "TGMessageStore.h"
 #import "TGMessageFlatten.h"
 #import "TGLocalization.h"
+#import "TGBarItem.h"
 
 @implementation TGChatViewController (Search)
 
@@ -31,11 +32,8 @@
 	self.searchSavedRightItems = self.navigationItem.rightBarButtonItems
 			?: (self.navigationItem.rightBarButtonItem ? @[self.navigationItem.rightBarButtonItem] : nil);
 	self.navigationItem.rightBarButtonItems = nil;
-	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
-			initWithTitle:TGLocalized(@"Cancel")
-					style:UIBarButtonItemStylePlain
-				   target:self
-				   action:@selector(endChatSearch)];
+	self.navigationItem.rightBarButtonItem = [TGBarItem itemWithRole:TGBarRoleCancel
+			target:self action:@selector(endChatSearch)];
 	[self.navigationItem setHidesBackButton:YES animated:NO];
 	self.navigationItem.titleView = self.chatSearchBar;
 	[self.chatSearchBar setShowsCancelButton:NO animated:NO];

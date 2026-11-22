@@ -3,6 +3,7 @@
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
+#import "TGBarItem.h"
 
 @implementation TGProfileBirthdaySuggestViewController {
 	UIDatePicker *_picker;
@@ -13,12 +14,10 @@
 	self.title = @"Suggest Birthday";
 	self.view.backgroundColor = [[TGTheme shared] groupedBackgroundColour];
 
-	self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc]
-			initWithTitle:@"Cancel" style:UIBarButtonItemStylePlain
-				   target:self action:@selector(cancel)];
-	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
-			initWithTitle:@"Suggest" style:UIBarButtonItemStyleDone
-				   target:self action:@selector(suggest)];
+	self.navigationItem.leftBarButtonItem = [TGBarItem itemWithRole:TGBarRoleCancel
+			target:self action:@selector(cancel)];
+	self.navigationItem.rightBarButtonItem = [TGBarItem itemWithTitle:@"Suggest" primary:YES
+			target:self action:@selector(suggest)];
 
 	_picker = [[UIDatePicker alloc] initWithFrame:CGRectMake(0, TGMetricPadLarge,
 			self.view.bounds.size.width, TGMetricPickerHeight)];

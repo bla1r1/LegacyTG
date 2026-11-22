@@ -8,6 +8,7 @@
 #import "TGProfileViewController.h"
 #import "TGDevShowcase.h"
 #import "TGForwardPicker.h"
+#import "TGPresent.h"
 
 @implementation TGChatViewController (Bots)
 
@@ -101,8 +102,7 @@
 				other.input.text = text;
 				[other inputChanged];
 			};
-			UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:picker];
-			[me presentViewController:nav animated:YES completion:nil];
+			[TGPresent presentModal:picker kind:TGModalForm from:me];
 		}];
 	} else if ([kind isEqualToString:@"copy"]) {
 		[UIPasteboard generalPasteboard].string = button[@"copy"] ?: @"";

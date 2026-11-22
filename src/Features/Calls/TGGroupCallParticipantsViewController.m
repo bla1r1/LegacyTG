@@ -7,6 +7,7 @@
 #import "TGMessageStore.h"
 #import "TGCallStore.h"
 #import "TGProfileStore.h"
+#import "TGPresent.h"
 
 @interface TGGroupCallParticipantsViewController ()
 @property (nonatomic, strong) NSArray *participants;
@@ -217,9 +218,8 @@
 	}
 
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:titles title:participant[@"name"]
-			destructiveIndex:-1 inView:self.view
-					 onChoice:^(NSInteger index){
+	[TGPresent showMenuTitles:titles destructiveIndex:-1
+			fromView:nil onController:self onChoice:^(NSInteger index){
 		TGGroupCallParticipantsViewController *me = weakSelf;
 		if (!me || index < 0 || index >= (NSInteger)keys.count)
 			return;

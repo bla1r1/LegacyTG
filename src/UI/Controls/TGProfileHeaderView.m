@@ -392,6 +392,7 @@ static UIImage *TGHeaderSolidImage(UIColor *colour) {
 	NSString *key = action[TGProfileHeaderActionKey];
 	if (!key.length)
 		key = [action[TGProfileHeaderActionTitle] lowercaseString];
+	_lastTappedTile = tile;
 	if (key.length && self.actionTap)
 		self.actionTap(key);
 }

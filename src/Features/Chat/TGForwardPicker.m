@@ -8,6 +8,9 @@
 #import "TGStyle.h"
 #import "TGChatParityModel.h"
 #import "TGRows.h"
+#import "TGBarItem.h"
+#import "TGLabel.h"
+#import "TGControls.h"
 
 /// The sheet's title view: "Share" over "Select Chats", as official has it.
 static const CGFloat kPickerTitleWidth  = TGMetricShareTitleWidth;
@@ -57,14 +60,10 @@ static const CGFloat kPickerPanelHeight = TGMetricRow;
 
 	// The sheet's bar: X on the left, a two-line Share / Select Chats title,
 	// no right item. The count lives on the Send button at the bottom.
-	UIButton *close = [UIButton buttonWithType:UIButtonTypeCustom];
-	close.frame = CGRectMake(0, 0, TGMetricRow, TGMetricRow);
-	[close setImage:[TGIcons glyphNamed:@"close"
-								 colour:[[TGTheme shared] barButtonColour]
-								   side:TGMetricMenuGlyph]
-		   forState:UIControlStateNormal];
-	[close addTarget:self action:@selector(cancel) forControlEvents:UIControlEventTouchUpInside];
-	self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc] initWithCustomView:close];
+	UIButton *close = TGGlyphButton([TGIcons glyphNamed:@"close"
+			colour:[[TGTheme shared] barButtonColour] side:TGMetricMenuGlyph],
+			CGRectMake(0, 0, TGMetricRow, TGMetricRow), self, @selector(cancel));
+	self.navigationItem.leftBarButtonItem = [TGBarItem itemWithView:close];
 	self.navigationItem.rightBarButtonItem = nil;
 
 	[self buildTitleView];
@@ -107,24 +106,16 @@ static const CGFloat kPickerPanelHeight = TGMetricRow;
 - (void)buildTitleView {
 	UIView *box = [[UIView alloc] initWithFrame:CGRectMake(0, 0, kPickerTitleWidth,
 			kPickerTitleHeight)];
-	UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(0, TGMetricBorderWidth,
-			kPickerTitleWidth, TGMetricLineRow)];
+	UILabel *title = TGLabelWith(TGLabelBarTitle, CGRectMake(0, TGMetricBorderWidth,
+			kPickerTitleWidth, TGMetricLineRow), nil);
 	title.text = @"Share";
-	title.font = TGFontHeader();
-	title.textColor = [[TGTheme shared] barTitleColour];
 	title.textAlignment = NSTextAlignmentCenter;
-	title.backgroundColor = [UIColor clearColor];
-	title.shadowColor = [[TGTheme shared] navBarTextShadowColour];
-	title.shadowOffset = TGMetricShadowOffsetNav;
 	[box addSubview:title];
 
-	UILabel *subtitle = [[UILabel alloc] initWithFrame:CGRectMake(0,
-			TGMetricBorderWidth + TGMetricLineRow, kPickerTitleWidth, TGMetricLineMicro)];
+	UILabel *subtitle = TGLabelWith(TGLabelBarSubtitle, CGRectMake(0,
+			TGMetricBorderWidth + TGMetricLineRow, kPickerTitleWidth, TGMetricLineMicro), nil);
 	subtitle.text = @"Select Chats";
-	subtitle.font = TGFontMeta();
-	subtitle.textColor = [[TGTheme shared] barSubtitleColour];
 	subtitle.textAlignment = NSTextAlignmentCenter;
-	subtitle.backgroundColor = [UIColor clearColor];
 	[box addSubview:subtitle];
 	self.navigationItem.titleView = box;
 }
@@ -143,25 +134,17 @@ static const CGFloat kPickerPanelHeight = TGMetricRow;
 	hair.autoresizingMask = UIViewAutoresizingFlexibleWidth;
 	[panel addSubview:hair];
 
-	self.sendButton = [UIButton buttonWithType:UIButtonTypeCustom];
+	self.sendButton = TGAccentButton(TGLocalized(@"Send"), TGFontBodyStrong(), self, @selector(send));
 	self.sendButton.frame = CGRectMake(TGMetricPadLarge, TGMetricPadSmall,
 			panel.bounds.size.width - TGDoubled(TGMetricPadLarge),
 			kPickerPanelHeight - TGDoubled(TGMetricPadSmall));
 	self.sendButton.autoresizingMask = UIViewAutoresizingFlexibleWidth;
-	self.sendButton.titleLabel.font = TGFontBodyStrong();
-	[self.sendButton setTitle:TGLocalized(@"Send") forState:UIControlStateNormal];
-	[self.sendButton setTitleColor:[[TGTheme shared] onAccentColour] forState:UIControlStateNormal];
-	self.sendButton.backgroundColor = [[TGTheme shared] accentColour];
-	self.sendButton.layer.cornerRadius = TGMetricCornerControl;
-	[self.sendButton addTarget:self action:@selector(send) forControlEvents:UIControlEventTouchUpInside];
 	[panel addSubview:self.sendButton];
 
-	self.sendCountLabel = [[UILabel alloc] initWithFrame:CGRectMake(CGRectGetMaxX(self.sendButton.frame) - TGMetricRow,
-			CGRectGetMinY(self.sendButton.frame), TGMetricPadLarge, self.sendButton.bounds.size.height)];
-	self.sendCountLabel.font = TGFontCaptionStrong();
+	self.sendCountLabel = TGLabelWith(TGLabelCaptionStrong, CGRectMake(CGRectGetMaxX(self.sendButton.frame) - TGMetricRow,
+			CGRectGetMinY(self.sendButton.frame), TGMetricPadLarge, self.sendButton.bounds.size.height), nil);
 	self.sendCountLabel.textColor = [[TGTheme shared] onAccentColour];
 	self.sendCountLabel.textAlignment = NSTextAlignmentCenter;
-	self.sendCountLabel.backgroundColor = [UIColor clearColor];
 	self.sendCountLabel.hidden = YES;
 	[panel addSubview:self.sendCountLabel];
 

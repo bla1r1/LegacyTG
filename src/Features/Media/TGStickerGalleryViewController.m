@@ -8,6 +8,7 @@
 #import "TGTheme.h"
 #import "TGIcons.h"
 #import "UIImage+WebP.h"
+#import "TGPresent.h"
 #import <QuartzCore/QuartzCore.h>
 
 @interface TGStickerGalleryViewController () <UIScrollViewDelegate>
@@ -207,9 +208,8 @@
 	NSArray *choices = @[@"Add to Favorites", @"Remove from Favorites",
 						 @"Copy", @"Done"];
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:choices title:emoji message:nil
-			 destructiveIndex:-1 inView:self.view
-					 onChoice:^(NSInteger choice){
+	[TGPresent showMenuTitles:choices destructiveIndex:-1
+			fromView:tile onController:self onChoice:^(NSInteger choice){
 		TGStickerGalleryViewController *me = weakSelf;
 		if (!me)
 			return;

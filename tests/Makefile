@@ -353,6 +353,7 @@ CLIENT_OBJC_SRCS := \
     src/Core/Platform/TGPerf.m \
     src/UI/Format/TGUIFormat.m \
     src/UI/Controllers/TGPageTemplate.m \
+    src/UI/Controllers/TGPresentRules.m \
     src/UI/Rows/TGRows.m \
     src/UI/Controllers/TGRowsDataSource.m \
     src/Features/Calls/TGGroupCallParticipantCell.m \
@@ -501,6 +502,7 @@ CLIENT_TEST_SRCS := \
     $(TESTS)/TGSettingsPageModelsTests.m \
     $(TESTS)/TGProfileScreenLogicTests.m \
     $(TESTS)/TGPageTemplateTests.m \
+    $(TESTS)/TGPresentRulesTests.m \
     $(TESTS)/TGScreenLogicTests.m \
     $(TESTS)/TGMessageMetricsTests.m \
     $(TESTS)/TGLottieSupportTests.m \
@@ -567,7 +569,7 @@ LIBTGVOIP_SRCS := \
 
 # ─── targets ──────────────────────────────────────────────────────────────────
 
-.PHONY: test build clean tokens sizes screens sim official_sim icons client methods ios6 fields preauth
+.PHONY: test build clean tokens sizes screens controls presentation sim official_sim icons client methods ios6 fields preauth
 
 icons:
 	@echo "\n════════ Icon catalogue lint ════════"
@@ -582,6 +584,15 @@ screens:
 	@echo "\n════════ Screen ownership lint ════════"
 	@chmod +x $(ROOT)/scripts/lint_screens.sh
 	@sh $(ROOT)/scripts/lint_screens.sh
+
+# Who builds and opens UI in src/Features: scripts/ui_ownership.txt.
+controls:
+	@echo "\n════════ UI controls lint ════════"
+	@sh $(ROOT)/scripts/lint_controls.sh
+
+presentation:
+	@echo "\n════════ UI presentation lint ════════"
+	@sh $(ROOT)/scripts/lint_presentation.sh
 
 # The design-token lint. Cheap, so it runs first: a literal size or colour
 # fails the suite the same way a broken assertion does.
@@ -625,7 +636,7 @@ SIM_BINARY_DEPS := $(TESTS)/call_sim.mm $(C_SRCS) $(OBJC_SRCS) $(TEST_HELPER_SRC
                 $(TESTS)/TGCallTestHelpers.h
 OFFICIAL_SIM_DEPS := $(TESTS)/official_tgvoip_sim.mm $(LIBTGVOIP_SRCS)
 
-test: tokens sizes screens layers methods ios6 fields preauth $(TEST_BINARY) $(CLIENT_BINARY)
+test: tokens sizes screens controls presentation layers methods ios6 fields preauth $(TEST_BINARY) $(CLIENT_BINARY)
 	@echo "\n════════ Running call stack tests ════════"
 	$(TEST_BINARY)
 	@echo "\n════════ Running TGClient regression tests ════════"

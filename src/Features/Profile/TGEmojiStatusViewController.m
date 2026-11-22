@@ -8,6 +8,7 @@
 #import "TGIcons.h"
 #import "TGRows.h"
 #import "TGGridRowCell.h"
+#import "TGBarItem.h"
 
 /// The status durations Telegram offers. Forever is 0, which is what TDLib
 /// stores for a status with no end.
@@ -40,10 +41,8 @@ static const NSTimeInterval kStatusTwoDays = 48 * kStatusHour;
 	[self applyTheme];
 
 	if (self.target != TGEmojiStatusTargetChat)
-		self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
-				initWithTitle:TGLocalized(@"Clear")
-						style:UIBarButtonItemStylePlain
-					   target:self action:@selector(clearTapped)];
+		self.navigationItem.rightBarButtonItem = [TGBarItem itemWithTitle:@"Clear" primary:NO
+				target:self action:@selector(clearTapped)];
 
 	[self loadLists];
 	[[NSNotificationCenter defaultCenter] addObserver:self

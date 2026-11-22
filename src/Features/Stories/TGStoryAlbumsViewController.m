@@ -9,6 +9,8 @@
 #import "TGRows.h"
 #import "TGStoryStore.h"
 #import "TGUIFormat.h"
+#import "TGBarItem.h"
+#import "TGPresent.h"
 
 /// Album story dates use the app language, not the device locale.
 static NSString *TGStoryAlbumDateText(NSNumber *unixTime) {
@@ -67,8 +69,7 @@ static UIImage *TGStoryAlbumPicture(NSString *path, NSNumber *albumId) {
 	[super viewDidLoad];
 	self.title = TGLocalized(@"Albums");
 	self.navigationItem.rightBarButtonItems = @[
-		[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemAdd
-				target:self action:@selector(createAlbum)],
+		[TGBarItem itemWithRole:TGBarRoleAdd target:self action:@selector(createAlbum)],
 		self.editButtonItem,
 	];
 	[self reloadAlbums];
@@ -292,11 +293,8 @@ static UIImage *TGStoryAlbumPicture(NSString *path, NSNumber *albumId) {
 	[super viewDidLoad];
 	self.title = self.albumName;
 	self.navigationItem.rightBarButtonItems = @[
-		[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemAdd
-				target:self action:@selector(addStory)],
-		[[UIBarButtonItem alloc] initWithTitle:TGLocalized(@"More")
-				style:UIBarButtonItemStylePlain
-				target:self action:@selector(albumMenu)],
+		[TGBarItem itemWithRole:TGBarRoleAdd target:self action:@selector(addStory)],
+		[TGBarItem itemWithRole:TGBarRoleMore target:self action:@selector(albumMenu:)],
 		self.editButtonItem,
 	];
 	[self reloadStories];
@@ -319,12 +317,12 @@ static UIImage *TGStoryAlbumPicture(NSString *path, NSNumber *albumId) {
 	}];
 }
 
-- (void)albumMenu {
-	NSArray *choices = @[TGLocalized(@"Rename Album"),
-			TGLocalized(@"Delete Album")];
+- (void)albumMenu:(UIBarButtonItem *)sender {
+	NSArray *choices = @[@{@"title" : @"Rename Album", @"icon" : @"edit"},
+			@{@"title" : @"Delete Album", @"icon" : @"delete", @"destructive" : @YES}];
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:choices title:self.albumName destructiveIndex:1
-					   inView:self.view onChoice:^(NSInteger choice){
+	[TGPresent showMenu:choices fromBarItem:sender side:TGBarSideRight onController:self
+			   onChoice:^(NSInteger choice, NSString *title){
 		TGStoryAlbumDetailViewController *me = weakSelf;
 		if (!me)
 			return;

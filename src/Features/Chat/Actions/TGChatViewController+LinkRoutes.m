@@ -18,6 +18,7 @@
 #import "TGContactsViewController.h"
 #import "TGNewContactViewController.h"
 #import "TGProfileViewController.h"
+#import "TGPresent.h"
 
 @implementation TGChatViewController (LinkRoutes)
 
@@ -185,9 +186,8 @@
 	}
 	if ([name isEqualToString:@"contacts"]) {
 		if ([section isEqualToString:@"new"]) {
-			UINavigationController *nav = [[UINavigationController alloc]
-					initWithRootViewController:[[TGNewContactViewController alloc] init]];
-			[self presentViewController:nav animated:YES completion:nil];
+			[TGPresent presentModal:[[TGNewContactViewController alloc] init]
+							   kind:TGModalForm from:self];
 			return;
 		}
 		[self pushLinkedScreen:[[TGContactsViewController alloc] init]];

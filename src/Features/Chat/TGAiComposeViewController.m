@@ -14,6 +14,8 @@
 #import "TGStyle.h"
 #import "TGTheme.h"
 #import "TGSegmentedControl.h"
+#import "TGLabel.h"
+#import "TGControls.h"
 
 static const CGFloat kAiTextAreaHeight = 118.0f;
 
@@ -88,78 +90,53 @@ static const CGFloat kAiTextAreaHeight = 118.0f;
 	NSArray *choices = TGAiComposeStyleChoices();
 	for (NSUInteger i = 0; i < choices.count; i++) {
 		NSDictionary *choice = choices[i];
-		UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
+		UIButton *button = TGTextButton(choice[@"title"], TGFontCaptionStrong(),
+				self, @selector(styleTapped:));
 		button.tag = (NSInteger)i;
-		button.titleLabel.font = TGFontCaptionStrong();
-		[button setTitle:choice[@"title"] forState:UIControlStateNormal];
-		[button addTarget:self action:@selector(styleTapped:)
-		 forControlEvents:UIControlEventTouchUpInside];
 		[self.scrollView addSubview:button];
 		[buttons addObject:button];
 	}
 	self.styleButtons = buttons;
 
-	self.emojiLabel = [[UILabel alloc] initWithFrame:CGRectZero];
-	self.emojiLabel.font = TGFontBody();
+	self.emojiLabel = TGLabelWith(TGLabelBody, CGRectZero, nil);
 	self.emojiLabel.text = TGLocalized(@"Add emoji");
-	self.emojiLabel.backgroundColor = [UIColor clearColor];
 	[self.scrollView addSubview:self.emojiLabel];
 
-	self.emojiSwitch = [[UISwitch alloc] initWithFrame:CGRectMake(0, 0,
-			TGMetricSwitchW, TGMetricSwitchH)];
-	self.emojiSwitch.on = self.addEmojis;
-	[self.emojiSwitch addTarget:self action:@selector(emojiChanged:)
-			   forControlEvents:UIControlEventValueChanged];
+	self.emojiSwitch = TGSwitchMake(self.addEmojis, self, @selector(emojiChanged:));
 	[self.scrollView addSubview:self.emojiSwitch];
 
-	self.languageButton = [UIButton buttonWithType:UIButtonTypeCustom];
+	self.languageButton = TGTextButton(nil, TGFontRow(), self, @selector(languageTapped));
 	self.languageButton.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeft;
-	self.languageButton.titleLabel.font = TGFontRow();
-	[self.languageButton addTarget:self action:@selector(languageTapped)
-				   forControlEvents:UIControlEventTouchUpInside];
 	[self.scrollView addSubview:self.languageButton];
 
-	self.sourceBadge = [[UILabel alloc] initWithFrame:CGRectZero];
-	self.sourceBadge.font = TGFontCaptionStrong();
+	self.sourceBadge = TGLabelWith(TGLabelCaptionStrong, CGRectZero, nil);
 	self.sourceBadge.text = TGLocalized(@"Original");
-	self.sourceBadge.backgroundColor = [UIColor clearColor];
 	[self.scrollView addSubview:self.sourceBadge];
 
 	self.sourceView = [self textView];
 	self.sourceView.text = self.initialText ?: @"";
 	[self.scrollView addSubview:self.sourceView];
 
-	self.resultBadge = [[UILabel alloc] initWithFrame:CGRectZero];
-	self.resultBadge.font = TGFontCaptionStrong();
+	self.resultBadge = TGLabelWith(TGLabelCaptionStrong, CGRectZero, nil);
 	self.resultBadge.text = TGLocalized(@"Result");
-	self.resultBadge.backgroundColor = [UIColor clearColor];
 	[self.scrollView addSubview:self.resultBadge];
 
 	self.resultView = [self textView];
 	[self.scrollView addSubview:self.resultView];
 
-	self.spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:
-			UIActivityIndicatorViewStyleGray];
-	self.spinner.hidesWhenStopped = YES;
+	self.spinner = TGSpinnerMake();
 	[self.scrollView addSubview:self.spinner];
 
-	self.applyButton = [UIButton buttonWithType:UIButtonTypeCustom];
-	self.applyButton.titleLabel.font = TGFontHeader();
-	[self.applyButton setTitle:TGLocalized(@"Apply") forState:UIControlStateNormal];
-	[self.applyButton addTarget:self action:@selector(applyTapped)
-			   forControlEvents:UIControlEventTouchUpInside];
+	self.applyButton = TGTextButton(TGLocalized(@"Apply"), TGFontHeader(),
+			self, @selector(applyTapped));
 	self.applyButton.autoresizingMask = UIViewAutoresizingFlexibleTopMargin |
 			UIViewAutoresizingFlexibleWidth;
 	[self.view addSubview:self.applyButton];
 }
 
 - (UITextView *)textView {
-	UITextView *view = [[UITextView alloc] initWithFrame:CGRectZero];
-	view.editable = NO;
-	if ([view respondsToSelector:@selector(setSelectable:)])
-		view.selectable = YES;
+	UITextView *view = TGReaderTextView(CGRectZero);
 	view.scrollEnabled = YES;
-	view.font = TGFontBody();
 	view.layer.cornerRadius = TGMetricCornerControl;
 	view.layer.borderWidth = TGMetricHairline;
 	if ([view respondsToSelector:@selector(textContainerInset)])

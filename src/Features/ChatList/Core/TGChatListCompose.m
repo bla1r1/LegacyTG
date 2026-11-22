@@ -54,14 +54,15 @@
 }
 
 - (void)composeTapped {
+	// Official's pencil opens New Message: New Group and New Channel above
+	// the contacts, not a menu of the three.
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:@[@"New Message", @"New Group", @"New Channel"]
-						title:nil
-			 destructiveIndex:-1
-					   inView:self.navigationController.view ?: self.view
-					 onChoice:^(NSInteger index){
+	TGContactsViewController *contacts = [[TGContactsViewController alloc] init];
+	contacts.title = @"New Message";
+	contacts.hidesBottomBarWhenPushed = YES;
+	contacts.onNewChannel = ^{
 		TGChatListViewController *me = weakSelf;
-		if (index == 2){
+		{
 			// A channel is a supergroup with one voice: TDLib names both with
 			// one request, and the is_channel flag is the whole difference.
 			[TGAlertSheet showInput:@"New Channel"
@@ -84,18 +85,9 @@
 					[me.navigationController pushViewController:vc animated:YES];
 				}];
 			}];
-			return;
 		}
-		if (index != 2){
-			TGContactsViewController *contacts = [[TGContactsViewController alloc] init];
-			if (index == 1)
-				contacts.picksGroupMembers = YES;
-			else
-				contacts.title = @"New Message";
-			[me.navigationController pushViewController:contacts animated:YES];
-			return;
-		}
-	}];
+	};
+	[self.navigationController pushViewController:contacts animated:YES];
 }
 
 /// A pill switch arms this before asking the folder for its chats; the answer

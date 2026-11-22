@@ -16,6 +16,8 @@
 #import "TGUIFormat.h"
 #import "TGStyle.h"
 #import "TGRows.h"
+#import "TGBarItem.h"
+#import "TGPresent.h"
 
 @interface TGScheduledViewController ()
 @property (nonatomic, strong) NSArray *messages;
@@ -116,11 +118,8 @@
 					TGLocalized(@"Delete"), nil]
 			: [NSMutableArray arrayWithObject:TGLocalized(@"Delete")];
 	NSInteger offset = canMove ? 0 : 2;
-	[TGAlertSheet showChoices:choices
-						title:what.length > 60 ? [what substringToIndex:60] : what
-			 destructiveIndex:(NSInteger)choices.count - 1
-					   inView:self.navigationController.view ?: self.view
-					 onChoice:^(NSInteger picked){
+	[TGPresent showMenuTitles:choices destructiveIndex:(NSInteger)choices.count - 1
+			fromView:nil onController:self onChoice:^(NSInteger picked){
 		NSInteger index = picked + offset;
 		void (^done)(BOOL) = ^(BOOL ok){
 			NSString *say = ok ? TGLocalized(@"Done")
@@ -192,13 +191,9 @@
 	UIToolbar *bar = [[UIToolbar alloc] initWithFrame:
 			CGRectMake(0, 0, card.bounds.size.width, kBar)];
 	bar.items = @[
-		[[UIBarButtonItem alloc] initWithTitle:TGLocalized(@"Cancel")
-				style:UIBarButtonItemStylePlain
-				target:self action:@selector(sheetDismissed)],
-		[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace
-				target:nil action:nil],
-		[[UIBarButtonItem alloc] initWithTitle:TGLocalized(@"Schedule")
-				style:UIBarButtonItemStyleDone
+		[TGBarItem plainItemWithTitle:@"Cancel" target:self action:@selector(sheetDismissed)],
+		[TGBarItem flexibleSpace],
+		[TGBarItem itemWithTitle:@"Schedule" primary:YES
 				target:self action:@selector(sheetCommitted)],
 	];
 	[card addSubview:bar];

@@ -14,6 +14,7 @@
 #import "TGRows.h"
 #import "TGAccountStore.h"
 #import "TGSettingsStore.h"
+#import "TGBarItem.h"
 
 
 @interface TGUsernameSettingsViewController ()
@@ -81,9 +82,8 @@
 - (void)updateEditButton {
 	BOOL canOrder = self.active.count > 1;
 	self.navigationItem.rightBarButtonItem = canOrder
-			? [[UIBarButtonItem alloc] initWithTitle:(self.tableView.editing ? @"Done" : @"Edit")
-											  style:UIBarButtonItemStylePlain
-											 target:self action:@selector(toggleEditing)]
+			? [TGBarItem itemWithRole:(self.tableView.editing ? TGBarRoleDone : TGBarRoleEdit)
+							   target:self action:@selector(toggleEditing)]
 			: nil;
 }
 

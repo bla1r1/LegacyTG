@@ -13,6 +13,9 @@
 #import "TGGameScoresViewController.h"
 #import "TGPollPresentation.h"
 #import "TGInternalLinkRoute.h"
+#import "TGPresent.h"
+#import "TGLabel.h"
+#import "TGControls.h"
 #import <CoreImage/CoreImage.h>
 #import <QuartzCore/QuartzCore.h>
 
@@ -30,7 +33,7 @@
 	// Without this the library shows photos only, and video cannot be sent.
 	picker.mediaTypes = @[(NSString *)kUTTypeImage, (NSString *)kUTTypeMovie];
 	picker.delegate = (id<UIImagePickerControllerDelegate, UINavigationControllerDelegate>)self;
-	[self presentViewController:picker animated:YES completion:nil];
+	[TGPresent presentSystem:picker from:self sourceView:nil];
 }
 
 /// A replacement picture, not a new one: the library is opened for an image
@@ -44,7 +47,7 @@
 	picker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;
 	picker.mediaTypes = @[(NSString *)kUTTypeImage];
 	picker.delegate = (id<UIImagePickerControllerDelegate, UINavigationControllerDelegate>)self;
-	[self presentViewController:picker animated:YES completion:nil];
+	[TGPresent presentSystem:picker from:self sourceView:nil];
 }
 
 /// One fix, or a trace that keeps moving: the sheet is where the two live
@@ -152,7 +155,7 @@
 	ABPeoplePickerNavigationController *picker =
 			[[ABPeoplePickerNavigationController alloc] init];
 	picker.peoplePickerDelegate = self;
-	[self presentViewController:picker animated:YES completion:nil];
+	[TGPresent presentSystem:picker from:self sourceView:nil];
 }
 
 - (BOOL)peoplePickerNavigationController:(ABPeoplePickerNavigationController *)picker
@@ -165,20 +168,20 @@
 			: nil;
 	if (phones) CFRelease(phones);
 
-	[picker dismissViewControllerAnimated:YES completion:nil];
+	[TGPresent dismissSystem:picker];
 	if (phone.length)
 		[[TGSendStore shared] sendContactNamed:name phone:phone toChat:self.chatId];
 	return NO;
 }
 
 - (void)peoplePickerNavigationControllerDidCancel:(ABPeoplePickerNavigationController *)picker {
-	[picker dismissViewControllerAnimated:YES completion:nil];
+	[TGPresent dismissSystem:picker];
 }
 
 - (void)imagePickerController:(UIImagePickerController *)picker
 		didFinishPickingMediaWithInfo:(NSDictionary *)info
 {
-	[picker dismissViewControllerAnimated:YES completion:nil];
+	[TGPresent dismissSystem:picker];
 
 	NSURL *movie = info[UIImagePickerControllerMediaURL];
 	if (movie){
@@ -347,7 +350,7 @@
 }
 
 - (void)imagePickerControllerDidCancel:(UIImagePickerController *)picker {
-	[picker dismissViewControllerAnimated:YES completion:nil];
+	[TGPresent dismissSystem:picker];
 }
 
 - (void)presentAddContactForMessage:(NSDictionary *)m {
@@ -466,25 +469,21 @@
 			initWithTarget:self action:@selector(saveFullScreenImage:)];
 	[backdrop addGestureRecognizer:hold];
 
-	UILabel *hint = [[UILabel alloc] initWithFrame:
-			CGRectMake(0, backdrop.bounds.size.height - TGMetricImageHintBottomOffset,
-					backdrop.bounds.size.width, TGMetricLineRow)];
+	UILabel *hint = TGLabelWith(TGLabelMeta, CGRectMake(0, backdrop.bounds.size.height - TGMetricImageHintBottomOffset,
+					backdrop.bounds.size.width, TGMetricLineRow), nil);
 	hint.text = nil;
-	hint.font = TGFontMeta();
 	hint.textAlignment = NSTextAlignmentCenter;
-	hint.textColor = [[TGTheme shared] secondaryTextColour];
-	hint.backgroundColor = [UIColor clearColor];
 	[backdrop addSubview:hint];
 
 	backdrop.alpha = TGAlphaTransparent;
 	[window addSubview:backdrop];
-	[UIView animateWithDuration:TGAnimationDurationNormal animations:^{ backdrop.alpha = TGAlphaOpaque; }];
+	TGMotionSheet(^{ backdrop.alpha = TGAlphaOpaque; }, nil);
 }
 
 - (void)dismissFullScreen:(UITapGestureRecognizer *)tap {
 	UIView *backdrop = tap.view;
-	[UIView animateWithDuration:TGAnimationDurationNormal animations:^{ backdrop.alpha = 0; }
-					 completion:^(BOOL done){ [backdrop removeFromSuperview]; }];
+	TGMotionSheet(^{ backdrop.alpha = 0; },
+					 ^(BOOL done){ [backdrop removeFromSuperview]; });
 }
 
 - (void)openChatWithUsername:(NSString *)username {
@@ -1038,7 +1037,7 @@
 	id picker = [[pickerClass alloc] initWithDocumentTypes:@[(NSString *)kUTTypeData]
 													 inMode:1 /* UIDocumentPickerModeImport */];
 	[picker setDelegate:(id<UIDocumentPickerDelegate>)self];
-	[self presentViewController:picker animated:YES completion:nil];
+	[TGPresent presentSystem:picker from:self sourceView:nil];
 }
 
 /// Music comes from the iPod library, which iOS 6 already had. The item is
@@ -1050,7 +1049,7 @@
 	picker.delegate = self;
 	picker.allowsPickingMultipleItems = NO;
 	picker.prompt = TGLocalized(@"Choose a track");
-	[self presentViewController:picker animated:YES completion:nil];
+	[TGPresent presentSystem:picker from:self sourceView:nil];
 }
 
 - (NSString *)attachmentCaption {

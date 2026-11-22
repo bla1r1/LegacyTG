@@ -38,6 +38,8 @@ extern NSString *const TGProfileHeaderLevel;       // NSNumber star rating level
 
 @property (nonatomic, copy) void (^avatarTap)(void);
 @property (nonatomic, copy) void (^actionTap)(NSString *key);
+/// The tile the last actionTap came from, for a menu to hang from it.
+@property (nonatomic, weak, readonly) UIView *lastTappedTile;
 @property (nonatomic, copy) void (^musicTap)(void);
 /// The star rating's level badge after the status line.
 @property (nonatomic, copy) void (^levelTap)(void);

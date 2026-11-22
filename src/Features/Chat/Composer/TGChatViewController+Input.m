@@ -21,6 +21,8 @@
 // on both sides of the input bar. Telegram keeps the choice made in one chat
 // for every other one.
 #import "TGVideoNoteRecorder.h"
+#import "TGPresent.h"
+#import "TGBarItem.h"
 
 @interface TGComposerInputField : UITextView
 @property (nonatomic, copy) void (^onLayout)(void);
@@ -973,10 +975,8 @@ static void TGTextFieldSetSelectedRange(UITextView *tf, NSRange range) {
 	UIToolbar *bar = [[UIToolbar alloc] initWithFrame:
 			CGRectMake(0, 0, card.bounds.size.width, kBar)];
 	bar.items = @[
-		[[UIBarButtonItem alloc] initWithTitle:@"Cancel" style:UIBarButtonItemStylePlain
-				target:sheet action:@selector(dismiss)],
-		[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace
-				target:nil action:nil],
+		[TGBarItem plainItemWithTitle:@"Cancel" target:sheet action:@selector(dismiss)],
+		[TGBarItem flexibleSpace],
 	];
 	[card addSubview:bar];
 
@@ -1279,7 +1279,7 @@ static NSInteger const kTGRepeatPeriods[] = {0, 86400, 604800, 2592000};
 	// Without the movie type the camera takes stills only.
 	picker.mediaTypes = @[(NSString *)kUTTypeImage, (NSString *)kUTTypeMovie];
 	picker.delegate = (id<UIImagePickerControllerDelegate, UINavigationControllerDelegate>)self;
-	[self presentViewController:picker animated:YES completion:nil];
+	[TGPresent presentSystem:picker from:self sourceView:nil];
 }
 
 - (void)attachTapped {

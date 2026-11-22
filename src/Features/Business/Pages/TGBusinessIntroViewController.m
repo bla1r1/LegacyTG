@@ -15,9 +15,9 @@
 #import "TGBusinessLocationViewController.h"
 #import "TGBusinessStore.h"
 #import "TGProfileStore.h"
+#import "TGPresent.h"
 
-@interface TGBusinessIntroViewController () <UIImagePickerControllerDelegate,
-		UINavigationControllerDelegate>
+@interface TGBusinessIntroViewController ()
 @property (nonatomic, copy) NSString *introTitle;
 @property (nonatomic, copy) NSString *introMessage;
 @property (nonatomic, copy) NSString *stickerPath;
@@ -132,15 +132,13 @@
 		return;
 	}
 	self.pickingSticker = YES;
-	UIImagePickerController *picker = [[UIImagePickerController alloc] init];
-	picker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;
-	picker.delegate = self;
-	[self presentViewController:picker animated:YES completion:nil];
+	__weak typeof(self) weakSelf = self;
+	[TGPresent pickMediaFrom:self source:TGMediaSourceLibrary videos:NO sourceView:nil
+					  onPick:^(NSDictionary *info){ [weakSelf didPickMedia:info]; }];
 }
 
-- (void)imagePickerController:(UIImagePickerController *)picker
-		didFinishPickingMediaWithInfo:(NSDictionary *)info {
-	[picker dismissViewControllerAnimated:YES completion:nil];
+/// What the library handed back, once the picker has gone.
+- (void)didPickMedia:(NSDictionary *)info {
 	if (!self.pickingSticker)
 		return;
 	self.pickingSticker = NO;
@@ -156,11 +154,6 @@
 	}
 	self.stickerPath = path;
 	[self rebuildSections];
-}
-
-- (void)imagePickerControllerDidCancel:(UIImagePickerController *)picker {
-	self.pickingSticker = NO;
-	[picker dismissViewControllerAnimated:YES completion:nil];
 }
 
 @end

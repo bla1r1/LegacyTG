@@ -15,9 +15,9 @@
 #import "TGBusinessIntroViewController.h"
 #import "TGBusinessStore.h"
 #import "TGProfileStore.h"
+#import "TGPresent.h"
 
-@interface TGBusinessProfileViewController () <UIImagePickerControllerDelegate,
-		UINavigationControllerDelegate>
+@interface TGBusinessProfileViewController ()
 @property (nonatomic, copy) NSString *firstName;
 @property (nonatomic, copy) NSString *lastName;
 @property (nonatomic, copy) NSString *bio;
@@ -174,15 +174,13 @@
 		return;
 	}
 	self.pickingPhoto = YES;
-	UIImagePickerController *picker = [[UIImagePickerController alloc] init];
-	picker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;
-	picker.delegate = self;
-	[self presentViewController:picker animated:YES completion:nil];
+	__weak typeof(self) weakSelf = self;
+	[TGPresent pickMediaFrom:self source:TGMediaSourceLibrary videos:NO sourceView:nil
+					  onPick:^(NSDictionary *info){ [weakSelf didPickMedia:info]; }];
 }
 
-- (void)imagePickerController:(UIImagePickerController *)picker
-		didFinishPickingMediaWithInfo:(NSDictionary *)info {
-	[picker dismissViewControllerAnimated:YES completion:nil];
+/// What the library handed back, once the picker has gone.
+- (void)didPickMedia:(NSDictionary *)info {
 	if (!self.pickingPhoto)
 		return;
 	self.pickingPhoto = NO;
@@ -207,11 +205,6 @@
 												   completion:^(BOOL ok, NSString *error){
 		[weakSelf finishProfileChange:ok error:error title:@"Edit Profile Photo"];
 	}];
-}
-
-- (void)imagePickerControllerDidCancel:(UIImagePickerController *)picker {
-	self.pickingPhoto = NO;
-	[picker dismissViewControllerAnimated:YES completion:nil];
 }
 
 @end

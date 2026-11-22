@@ -16,6 +16,8 @@
 #import "TGLocalization.h"
 #import "TGRows.h"
 #import "TGGridRowCell.h"
+#import "TGBarItem.h"
+#import "TGPresent.h"
 #import <QuartzCore/QuartzCore.h>
 
 /// The current theme's wallpaper is the first cell in the gallery, the way
@@ -103,8 +105,7 @@ static BOOL TGBBackgroundIsCurrent(NSDictionary *background, int64_t currentId) 
 	return identifier == currentId || [background[@"isDefault"] boolValue];
 }
 
-@interface TGBackgroundsViewController () <UINavigationControllerDelegate,
-		UIImagePickerControllerDelegate>
+@interface TGBackgroundsViewController ()
 @property (nonatomic, strong) NSArray *installed;
 @property (nonatomic, strong) NSMutableDictionary *previews;
 @property (nonatomic, strong) NSMutableSet *requested;
@@ -122,10 +123,8 @@ static BOOL TGBBackgroundIsCurrent(NSDictionary *background, int64_t currentId) 
 	self.installed = @[];
 	self.previews = [NSMutableDictionary dictionary];
 	self.requested = [NSMutableSet set];
-	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
-			initWithTitle:TGLocalized(@"Edit")
-					style:UIBarButtonItemStylePlain
-				   target:self action:@selector(toggleEditing)];
+	self.navigationItem.rightBarButtonItem = [TGBarItem itemWithRole:TGBarRoleEdit
+			target:self action:@selector(toggleEditing)];
 	[[NSNotificationCenter defaultCenter] addObserver:self
 			selector:@selector(patternThumbnailReady:)
 				name:TGBackgroundStoreChangedNotification object:nil];
@@ -295,8 +294,9 @@ static BOOL TGBBackgroundIsCurrent(NSDictionary *background, int64_t currentId) 
 
 - (void)toggleEditing {
 	self.editingBackgrounds = !self.editingBackgrounds;
-	self.navigationItem.rightBarButtonItem.title = self.editingBackgrounds
-			? TGLocalized(@"Done") : TGLocalized(@"Edit");
+	self.navigationItem.rightBarButtonItem = [TGBarItem
+			itemWithRole:(self.editingBackgrounds ? TGBarRoleDone : TGBarRoleEdit)
+				  target:self action:@selector(toggleEditing)];
 	[self rebuild];
 }
 
@@ -358,24 +358,18 @@ static BOOL TGBBackgroundIsCurrent(NSDictionary *background, int64_t currentId) 
 	if (![UIImagePickerController isSourceTypeAvailable:
 			UIImagePickerControllerSourceTypePhotoLibrary])
 		return;
-	UIImagePickerController *picker = [[UIImagePickerController alloc] init];
-	picker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;
-	picker.delegate = self;
-	[self presentViewController:picker animated:YES completion:nil];
+	__weak typeof(self) weakSelf = self;
+	[TGPresent pickMediaFrom:self source:TGMediaSourceLibrary videos:NO sourceView:nil
+					  onPick:^(NSDictionary *info){ [weakSelf didPickMedia:info]; }];
 }
 
-- (void)imagePickerController:(UIImagePickerController *)picker
-		didFinishPickingMediaWithInfo:(NSDictionary *)info {
-	[picker dismissViewControllerAnimated:YES completion:nil];
+/// What the library handed back, once the picker has gone.
+- (void)didPickMedia:(NSDictionary *)info {
 	UIImage *image = info[UIImagePickerControllerOriginalImage];
 	if (!image)
 		return;
 	[[TGTheme shared] setWallpaperImage:image];
 	[self loadInstalled];
-}
-
-- (void)imagePickerControllerDidCancel:(UIImagePickerController *)picker {
-	[picker dismissViewControllerAnimated:YES completion:nil];
 }
 
 @end

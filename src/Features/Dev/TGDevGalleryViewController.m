@@ -91,10 +91,8 @@ static const CGFloat kAvatarLargeSide = TGMetricChatAvatar;
 	[theme styleNavigationBar:self.navigationController.navigationBar];
 
 	if (self.navigationController.viewControllers.firstObject == self) {
-		UIBarButtonItem *doneItem = [[UIBarButtonItem alloc] initWithTitle:@"Done"
-                                                                     style:UIBarButtonItemStyleDone
-                                                                    target:self
-                                                                    action:@selector(dismissSelf)];
+		UIBarButtonItem *doneItem = [TGBarItem itemWithRole:TGBarRoleDone
+				target:self action:@selector(dismissSelf)];
 		self.navigationItem.rightBarButtonItem = doneItem;
 	}
 

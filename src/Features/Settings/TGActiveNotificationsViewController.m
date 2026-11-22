@@ -7,6 +7,8 @@
 #import "TGSessionsStore.h"
 #import "TGSettingsStore.h"
 #import "TGUIFormat.h"
+#import "TGBarItem.h"
+#import "TGPresent.h"
 
 
 /// One date format for every row; creating one per cell was the usual
@@ -23,10 +25,8 @@ static NSString *TGNotificationDateText(NSNumber *timestamp) {
 	self.title = TGLocalized(@"Notifications");
 	[self applyTheme];
 
-	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
-			initWithTitle:TGLocalized(@"Clear All")
-					style:UIBarButtonItemStylePlain
-				   target:self action:@selector(clearAll)];
+	self.navigationItem.rightBarButtonItem = [TGBarItem itemWithTitle:@"Clear All" primary:NO
+			target:self action:@selector(clearAll)];
 
 	__weak typeof(self) weakSelf = self;
 	[TGObservers observe:TGActiveNotificationsChangedNotification owner:self usingBlock:^(NSNotification *note){
@@ -98,11 +98,8 @@ static NSString *TGNotificationDateText(NSNumber *timestamp) {
 	int32_t groupId = (int32_t)[group[@"id"] intValue];
 	int32_t notificationId = (int32_t)[note[@"id"] intValue];
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:@[TGLocalized(@"Delete")]
-						title:note[@"text"] ?: TGLocalized(@"Notifications")
-			 destructiveIndex:0
-					   inView:self.view
-					 onChoice:^(NSInteger choice){
+	[TGPresent showMenuTitles:@[TGLocalized(@"Delete")] destructiveIndex:0
+			fromView:nil onController:self onChoice:^(NSInteger choice){
 		[[TGSettingsStore shared] removeNotification:notificationId inGroup:groupId
 								   completion:^(BOOL ok, NSString *error){
 			if (!ok)

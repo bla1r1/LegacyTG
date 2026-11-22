@@ -14,6 +14,8 @@
 #import "TGPasscode.h"
 #import "TGPasscodeViewController.h"
 #import "TGChatListRowGeometry.h"
+#import "TGBarItem.h"
+#import "TGControls.h"
 
 
 // Height of the folder pill strip above the chat list (official-style tabs).
@@ -25,27 +27,7 @@ static const CGFloat kFolderPillPad = 26.0f;
 static const CGFloat kFolderPillMax = 150.0f;
 static const CGFloat kFolderPillGap = 6.0f;
 
-/// One pill's two states. The strip rebuilds on every switch, so the old and
-/// new chosen pills are repainted here after the new header is on screen.
-static void TGPaintFolderPill(UIButton *pill, BOOL active) {
-	TGTheme *theme = [TGTheme shared];
-	if (active){
-		[pill setBackgroundColor:[theme accentColour]];
-		[pill setTitleColor:[theme onAccentColour] forState:UIControlStateNormal];
-		pill.layer.borderWidth = TGMetricBorderNone;
-	} else {
-		[pill setBackgroundColor:[theme cardBackgroundColour]];
-		[pill setTitleColor:[theme primaryTextColour] forState:UIControlStateNormal];
-		pill.layer.borderWidth = TGMetricHairline;
-		pill.layer.borderColor = [theme separatorColour].CGColor;
-	}
-}
 
-
-/// The add-story control: the official story ring with a plus, from TGIconPaths.
-static UIImage *TGAddStoryIcon(CGFloat side, UIColor *colour) {
-	return [TGIcons glyphNamed:@"addStory" colour:colour side:side];
-}
 
 /// The lock in the title view: passcode users could lock the app from the
 /// list before the bar item was removed.
@@ -85,11 +67,9 @@ UIImage *TGChatListLockIcon(CGFloat side, UIColor *colour) {
 	if (self.showsArchive || self.folderId != 0)
 		return;
 
-	UIBarButtonItem *edit = [[UIBarButtonItem alloc]
-			initWithTitle:(self.editingChats ? TGLocalized(@"Done") : TGLocalized(@"Edit"))
-					style:(self.editingChats ? UIBarButtonItemStyleDone : UIBarButtonItemStylePlain)
-				   target:self
-				   action:@selector(toggleChatListEditing)];
+	UIBarButtonItem *edit = [TGBarItem
+			itemWithRole:(self.editingChats ? TGBarRoleDone : TGBarRoleEdit)
+				  target:self action:@selector(toggleChatListEditing)];
 	self.navigationItem.leftBarButtonItems = @[edit];
 	self.navigationItem.leftBarButtonItem = edit;
 
@@ -97,21 +77,10 @@ UIImage *TGChatListLockIcon(CGFloat side, UIColor *colour) {
 		self.navigationItem.rightBarButtonItems = nil;
 		self.navigationItem.rightBarButtonItem = nil;
 	} else {
-		UIBarButtonItem *compose = [[UIBarButtonItem alloc]
-				initWithBarButtonSystemItem:UIBarButtonSystemItemCompose
-									 target:self
-									 action:@selector(composeTapped)];
-		UIButton *storyButton = [UIButton buttonWithType:UIButtonTypeCustom];
-		CGFloat side = TGMetricButtonMediumH;
-		storyButton.frame = CGRectMake(0, 0, side, side);
-		// Bar items take the bar-button role; the accent is the bar itself in
-		// Classic, so the circle vanished into it.
-		[storyButton setImage:TGAddStoryIcon(side, [[TGTheme shared] barButtonColour])
-					 forState:UIControlStateNormal];
-		[storyButton addTarget:self action:@selector(openStoryComposer)
-			 forControlEvents:UIControlEventTouchUpInside];
-		UIBarButtonItem *story = [[UIBarButtonItem alloc]
-				initWithCustomView:storyButton];
+		UIBarButtonItem *compose = [TGBarItem itemWithRole:TGBarRoleCompose
+				target:self action:@selector(composeTapped)];
+		UIBarButtonItem *story = [TGBarItem itemWithRole:TGBarRoleAddStory
+				target:self action:@selector(openStoryComposer)];
 		// The first right item sits at the edge; compose is the outermost.
 		self.navigationItem.rightBarButtonItems = @[compose, story];
 	}
@@ -155,9 +124,9 @@ UIImage *TGChatListLockIcon(CGFloat side, UIColor *colour) {
 	}
 	// A bar that was already on screen is at identity, so this only moves
 	// one that is arriving or reversing a hide that was still running.
-	[UIView animateWithDuration:TGAnimationDurationFast animations:^{
+	TGMotionQuick(^{
 		self.editBar.transform = CGAffineTransformIdentity;
-	}];
+	}, nil);
 	[self refreshEditToolbar];
 }
 
@@ -170,15 +139,15 @@ UIImage *TGChatListLockIcon(CGFloat side, UIColor *colour) {
 		return;
 	CGFloat h = bar.bounds.size.height;
 	__weak typeof(self) weakSelf = self;
-	[UIView animateWithDuration:TGAnimationDurationFast animations:^{
+	TGMotionQuick(^{
 		bar.transform = CGAffineTransformMakeTranslation(0, h);
-	} completion:^(BOOL finished){
+	}, ^(BOOL finished){
 		TGChatListViewController *me = weakSelf;
 		if (!me || me.editingChats || me.editBar != bar)
 			return;
 		[bar removeFromSuperview];
 		me.editBar = nil;
-	}];
+	});
 }
 
 /// The toolbar follows the selection: a selection reads Read, no selection
@@ -188,20 +157,13 @@ UIImage *TGChatListLockIcon(CGFloat side, UIColor *colour) {
 	// Official's bar carries the three list-wide verbs; selecting a row is a
 	// tap, not a mode, so All/None, Mute and Pin do not belong here. Read is
 	// Read All or Read, never Unread: the toolbar has no mark-as-unread verb.
-	NSString *readTitle = selected.count ? TGLocalized(@"Read")
-			: TGLocalized(@"Read All");
-	UIBarButtonItem *read = [[UIBarButtonItem alloc]
-			initWithTitle:readTitle
-					style:UIBarButtonItemStyleBordered target:self
-				   action:@selector(readSelectedChats)];
-	UIBarButtonItem *archive = [[UIBarButtonItem alloc]
-			initWithTitle:TGLocalized(@"Archive")
-					style:UIBarButtonItemStyleBordered
-				   target:self action:@selector(archiveSelectedChats)];
-	UIBarButtonItem *delete = [[UIBarButtonItem alloc]
-			initWithTitle:TGLocalized(@"Delete")
-					style:UIBarButtonItemStyleBordered
-				   target:self action:@selector(deleteSelectedChats)];
+	NSString *readTitle = selected.count ? @"Read" : @"Read All";
+	UIBarButtonItem *read = [TGBarItem itemWithTitle:readTitle primary:NO
+			target:self action:@selector(readSelectedChats)];
+	UIBarButtonItem *archive = [TGBarItem itemWithTitle:@"Archive" primary:NO
+			target:self action:@selector(archiveSelectedChats)];
+	UIBarButtonItem *delete = [TGBarItem itemWithTitle:@"Delete" primary:NO
+			target:self action:@selector(deleteSelectedChats)];
 	if (self.editBar)
 		[self.editBar setItems:@[read, archive, delete] animated:NO];
 }
@@ -308,19 +270,11 @@ UIImage *TGChatListLockIcon(CGFloat side, UIColor *colour) {
 		BOOL builtIn = (i == 0) || !title.length;
 		NSString *shown = builtIn ? TGLocalized(label) : label;
 		CGFloat w = MIN([shown sizeWithFont:font].width + kFolderPillPad, kFolderPillMax);
-		UIButton *pill = [UIButton buttonWithType:UIButtonTypeCustom];
-		// One expression for the height, used again for the radius below: a
-		// capsule is half of whatever this comes to.
 		CGFloat pillHeight = kFolderTabRow - TGDoubled(TGMetricFolderPillInset);
-		pill.frame = CGRectMake(x, TGMetricFolderPillInset, w, pillHeight);
+		UIButton *pill = TGPillButton(shown, font,
+				CGRectMake(x, TGMetricFolderPillInset, w, pillHeight), shownActive,
+				self, @selector(folderTabTapped:));
 		pill.tag = 100 + i;
-		[pill setTitle:shown forState:UIControlStateNormal];
-		pill.titleLabel.font = font;
-		pill.titleLabel.lineBreakMode = NSLineBreakByTruncatingTail;
-		pill.layer.cornerRadius = TGHalf(pillHeight);
-		TGPaintFolderPill(pill, shownActive);
-		[pill addTarget:self action:@selector(folderTabTapped:)
-			  forControlEvents:UIControlEventTouchUpInside];
 		if (i > 0){
 			// A folder pill can be picked up and put elsewhere: held long
 			// enough it follows the finger, and wherever it drops is the
@@ -342,21 +296,12 @@ UIImage *TGChatListLockIcon(CGFloat side, UIColor *colour) {
 	if ([TGChatListStore shared].archivedChats.count > 0){
 		NSString *label = TGLocalized(@"Archived");
 		CGFloat w = MIN([label sizeWithFont:font].width + kFolderPillPad, kFolderPillMax);
-		UIButton *pill = [UIButton buttonWithType:UIButtonTypeCustom];
+		// The archive is never the chosen folder: it opens a list of its own.
 		CGFloat pillHeight = kFolderTabRow - TGDoubled(TGMetricFolderPillInset);
-		pill.frame = CGRectMake(x, TGMetricFolderPillInset, w, pillHeight);
+		UIButton *pill = TGPillButton(label, font,
+				CGRectMake(x, TGMetricFolderPillInset, w, pillHeight), NO,
+				self, @selector(folderTabTapped:));
 		pill.tag = kFolderArchiveTag;
-		[pill setTitle:label forState:UIControlStateNormal];
-		pill.titleLabel.font = font;
-		pill.titleLabel.lineBreakMode = NSLineBreakByTruncatingTail;
-		pill.layer.cornerRadius = TGHalf(pillHeight);
-		[pill setBackgroundColor:[[TGTheme shared] cardBackgroundColour]];
-		[pill setTitleColor:[[TGTheme shared] primaryTextColour]
-				   forState:UIControlStateNormal];
-		pill.layer.borderWidth = TGMetricHairline;
-		pill.layer.borderColor = [[TGTheme shared] separatorColour].CGColor;
-		[pill addTarget:self action:@selector(folderTabTapped:)
-			  forControlEvents:UIControlEventTouchUpInside];
 		[strip addSubview:pill];
 		x += w + kFolderPillGap;
 	}
@@ -539,9 +484,9 @@ UIImage *TGChatListLockIcon(CGFloat side, UIColor *colour) {
 		// enough - the space for it is already part of the new header.
 		UIView *content = self.headerStoriesCell.contentView;
 		content.alpha = TGAlphaTransparent;
-		[UIView animateWithDuration:TGAnimationDurationFast animations:^{
+		TGMotionQuick(^{
 			content.alpha = TGAlphaOpaque;
-		}];
+		}, nil);
 	}
 	if (self.folderHighlightPending){
 		NSArray *folders = [TGChatListStore shared].folders;
@@ -563,7 +508,7 @@ UIImage *TGChatListLockIcon(CGFloat side, UIColor *colour) {
 			fade.type = kCATransitionFade;
 			fade.duration = TGAnimationDurationFast;
 			[pill.layer addAnimation:fade forKey:@"tg.folderHighlight"];
-			TGPaintFolderPill(pill, active);
+			TGPillPaint(pill, active);
 		};
 		// The old and new chosen pills are already in the header; only their
 		// colours change, so one fade covers both halves of the move.

@@ -5,6 +5,9 @@
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
 #import "TGChatParityModel.h"
+#import "TGBarItem.h"
+#import "TGPresent.h"
+#import "TGControls.h"
 #import <QuartzCore/QuartzCore.h>
 
 /// finalizeCell runs for every row that scrolls past, so the entrance pop is
@@ -33,9 +36,9 @@ static void TGAnimateSelectionCheckbox(TGChatViewController *chat, int64_t messa
 	pop.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseOut];
 	[cell.checkbox.layer addAnimation:pop forKey:@"tg.selection.pop"];
 
-	[UIView animateWithDuration:TGAnimationDurationFast animations:^{
+	TGMotionQuick(^{
 		cell.checkbox.alpha = TGAlphaOpaque;
-	}];
+	}, nil);
 }
 
 @implementation TGChatViewController (Selection)
@@ -58,14 +61,11 @@ static void TGAnimateSelectionCheckbox(TGChatViewController *chat, int64_t messa
 
 	if (!self.editToolbar) {
 		CGRect b = self.view.bounds;
-		self.editToolbar = [[UIView alloc] initWithFrame:CGRectMake(0, b.size.height - kInputHeight, b.size.width, kInputHeight)];
-		self.editToolbar.backgroundColor = [[TGTheme shared] inputBarColour];
+		// The composer's own chrome: the panel takes the composer's place, so
+		// it wears the same gloss and top line instead of a flat white strip.
+		self.editToolbar = TGComposerStripView(CGRectMake(0, b.size.height - kInputHeight,
+				b.size.width, kInputHeight));
 		self.editToolbar.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleTopMargin;
-
-		UIView *hair = [[UIView alloc] initWithFrame:CGRectMake(0, 0, b.size.width, TGMetricHairline)];
-		hair.backgroundColor = [[TGTheme shared] separatorColour];
-		hair.autoresizingMask = UIViewAutoresizingFlexibleWidth;
-		[self.editToolbar addSubview:hair];
 
 		// Official's selection panel is icon-only circles, not two text
 		// buttons: Delete, then Forward, with the count living in the title.
@@ -73,44 +73,18 @@ static void TGAnimateSelectionCheckbox(TGChatViewController *chat, int64_t messa
 		CGFloat side = TGMetricSelectionActionSide;
 		CGFloat glyph = TGMetricSelectionActionGlyphSide;
 
-		self.editDeleteButton = [UIButton buttonWithType:UIButtonTypeCustom];
+		self.editDeleteButton = TGRoundGlyphButton(@"delete", [theme destructiveColour],
+				side, glyph, @"Delete", self, @selector(deleteSelectedMessages));
 		self.editDeleteButton.frame = CGRectMake(TGMetricPadLarge,
 				TGCenteredOrigin(kInputHeight, side), side, side);
 		self.editDeleteButton.autoresizingMask = UIViewAutoresizingFlexibleRightMargin;
-		[self.editDeleteButton setBackgroundImage:[TGTheme
-				skeuomorphicButtonImageWithColor:[theme destructiveColour]
-				height:side highlighted:NO cornerRadius:TGHalf(side)]
-				forState:UIControlStateNormal];
-		[self.editDeleteButton setBackgroundImage:[TGTheme
-				skeuomorphicButtonImageWithColor:[theme destructiveColour]
-				height:side highlighted:YES cornerRadius:TGHalf(side)]
-				forState:UIControlStateHighlighted];
-		[self.editDeleteButton setImage:[TGIcons glyphNamed:@"delete"
-				colour:[theme onAccentColour] side:glyph]
-				forState:UIControlStateNormal];
-		self.editDeleteButton.adjustsImageWhenHighlighted = NO;
-		self.editDeleteButton.accessibilityLabel = TGLocalized(@"Delete");
-		[self.editDeleteButton addTarget:self action:@selector(deleteSelectedMessages) forControlEvents:UIControlEventTouchUpInside];
 		[self.editToolbar addSubview:self.editDeleteButton];
 
-		self.editForwardButton = [UIButton buttonWithType:UIButtonTypeCustom];
+		self.editForwardButton = TGRoundGlyphButton(@"forward", [theme accentColour],
+				side, glyph, @"Forward", self, @selector(forwardSelectedMessages));
 		self.editForwardButton.frame = CGRectMake(b.size.width - side - TGMetricPadLarge,
 				TGCenteredOrigin(kInputHeight, side), side, side);
 		self.editForwardButton.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin;
-		[self.editForwardButton setBackgroundImage:[TGTheme
-				skeuomorphicButtonImageWithColor:[theme accentColour]
-				height:side highlighted:NO cornerRadius:TGHalf(side)]
-				forState:UIControlStateNormal];
-		[self.editForwardButton setBackgroundImage:[TGTheme
-				skeuomorphicButtonImageWithColor:[theme accentColour]
-				height:side highlighted:YES cornerRadius:TGHalf(side)]
-				forState:UIControlStateHighlighted];
-		[self.editForwardButton setImage:[TGIcons glyphNamed:@"forward"
-				colour:[theme onAccentColour] side:glyph]
-				forState:UIControlStateNormal];
-		self.editForwardButton.adjustsImageWhenHighlighted = NO;
-		self.editForwardButton.accessibilityLabel = TGLocalized(@"Forward");
-		[self.editForwardButton addTarget:self action:@selector(forwardSelectedMessages) forControlEvents:UIControlEventTouchUpInside];
 		[self.editToolbar addSubview:self.editForwardButton];
 
 		[self.view addSubview:self.editToolbar];
@@ -123,14 +97,10 @@ static void TGAnimateSelectionCheckbox(TGChatViewController *chat, int64_t messa
 	self.savedRightBarButtonItem = self.navigationItem.rightBarButtonItem;
 
 	self.navigationItem.titleView = nil;
-	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:TGLocalized(@"Cancel")
-																		 style:UIBarButtonItemStylePlain
-																		target:self
-																		action:@selector(exitEditMode)];
-	self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:TGLocalized(@"Clear All")
-																		 style:UIBarButtonItemStylePlain
-																		target:self
-																		action:@selector(clearHistoryFromSelection)];
+	self.navigationItem.rightBarButtonItem = [TGBarItem itemWithRole:TGBarRoleCancel
+			target:self action:@selector(exitEditMode)];
+	self.navigationItem.leftBarButtonItem = [TGBarItem itemWithTitle:@"Clear All" primary:NO
+			target:self action:@selector(clearHistoryFromSelection)];
 
 	[self updateEditToolbar];
 	[self.table reloadData];
@@ -139,15 +109,15 @@ static void TGAnimateSelectionCheckbox(TGChatViewController *chat, int64_t messa
 	// relayouts every button inside it, which is the expensive part on an A4.
 	// The composer fades out underneath at the same time.
 	__weak typeof(self) weakSelf = self;
-	[UIView animateWithDuration:TGAnimationDurationNormal animations:^{
+	TGMotionSheet(^{
 		weakSelf.editToolbar.transform = CGAffineTransformIdentity;
 		weakSelf.inputBar.alpha = TGAlphaTransparent;
-	} completion:^(BOOL finished){
+	}, ^(BOOL finished){
 		// Selecting again during this fade must not hide the composer.
 		TGChatViewController *me = weakSelf;
 		if (me && me.isEditingMessages)
 			me.inputBar.hidden = YES;
-	}];
+	});
 }
 
 - (void)exitEditMode {
@@ -168,17 +138,17 @@ static void TGAnimateSelectionCheckbox(TGChatViewController *chat, int64_t messa
 	// It is hidden only after the animation, and only if the mode is still off,
 	// so a fast Select-again does not expose the composer under it.
 	__weak typeof(self) weakSelf = self;
-	[UIView animateWithDuration:TGAnimationDurationNormal animations:^{
+	TGMotionSheet(^{
 		weakSelf.editToolbar.transform = CGAffineTransformMakeTranslation(0,
 				weakSelf.editToolbar.bounds.size.height);
 		weakSelf.inputBar.alpha = TGAlphaOpaque;
-	} completion:^(BOOL finished){
+	}, ^(BOOL finished){
 		TGChatViewController *me = weakSelf;
 		if (!me || me.isEditingMessages)
 			return;
 		me.editToolbar.hidden = YES;
 		me.editToolbar.transform = CGAffineTransformIdentity;
-	}];
+	});
 }
 
 - (void)clearSelectedMessages {
@@ -387,9 +357,7 @@ static void TGAnimateSelectionCheckbox(TGChatViewController *chat, int64_t messa
 		text = [text stringByReplacingOccurrencesOfString:@"**" withString:@""];
 		[TGSnackbar showInView:weakSelf.view text:text seconds:3 onCommit:^{}];
 	};
-	UINavigationController *nav = [[UINavigationController alloc]
-			initWithRootViewController:picker];
-	[self presentViewController:nav animated:YES completion:nil];
+	[TGPresent presentModal:picker kind:TGModalForm from:self];
 }
 
 - (TGBubbleCell *)finalizeCell:(TGBubbleCell *)cell message:(NSDictionary *)m layout:(TGMessageLayout *)layout isMine:(BOOL)mine {

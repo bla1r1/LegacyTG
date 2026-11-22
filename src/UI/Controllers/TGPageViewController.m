@@ -8,6 +8,7 @@
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGLocalization.h"
+#import "TGSegmentedControl.h"
 
 @interface TGPageViewController () <UISearchBarDelegate>
 @property (nonatomic, strong, readwrite) TGPageTemplate *page;
@@ -131,9 +132,7 @@
 		self.scopeStrip = [[UIToolbar alloc] initWithFrame:CGRectMake(0, y, width,
 				TGMetricSearchScopeRow)];
 		self.scopeStrip.autoresizingMask = UIViewAutoresizingFlexibleWidth;
-		UISegmentedControl *segments = [[UISegmentedControl alloc]
-				initWithItems:self.page.scopeTitles];
-		segments.segmentedControlStyle = UISegmentedControlStyleBar;
+		UISegmentedControl *segments = TGBarSegments(self.page.scopeTitles);
 		segments.selectedSegmentIndex = self.selectedScope;
 		segments.frame = CGRectMake(TGMetricPad, TGCenteredOrigin(TGMetricSearchScopeRow,
 				TGMetricSearchScopeHeight), width - TGDoubled(TGMetricPad),

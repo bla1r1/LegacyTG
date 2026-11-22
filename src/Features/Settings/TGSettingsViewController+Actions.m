@@ -12,6 +12,9 @@
 #import "TGProfileStore.h"
 #import "TGSessionsStore.h"
 #import "TGSettingsStore.h"
+#import "TGPresent.h"
+#import "TGLabel.h"
+#import "TGControls.h"
 
 #include <time.h>
 
@@ -57,14 +60,11 @@ static UIImage *TGSettingsQRIcon(void) {
 			UIViewAutoresizingFlexibleRightMargin;
 	image.image = TGQRCodeImage(self.code, side);
 	[self.view addSubview:image];
-	UILabel *caption = [[UILabel alloc] initWithFrame:CGRectMake(TGMetricPadLarge,
+	UILabel *caption = TGLabelWith(TGLabelBodySecondary, CGRectMake(TGMetricPadLarge,
 			CGRectGetMaxY(image.frame) + TGMetricPadLarge,
-			self.view.bounds.size.width - TGDoubled(TGMetricPadLarge), TGMetricLineRow)];
+			self.view.bounds.size.width - TGDoubled(TGMetricPadLarge), TGMetricLineRow), nil);
 	caption.autoresizingMask = UIViewAutoresizingFlexibleWidth;
 	caption.textAlignment = NSTextAlignmentCenter;
-	caption.font = TGFontBody();
-	caption.textColor = [[TGTheme shared] secondaryTextColour];
-	caption.backgroundColor = [UIColor clearColor];
 	caption.text = self.code;
 	[self.view addSubview:caption];
 }
@@ -92,47 +92,28 @@ static UIImage *TGSettingsQRIcon(void) {
 	TGTheme *theme = [TGTheme shared];
 	_step = TGMessageFontSizeStep(theme.messageFontSize);
 
-	_sample = [[UILabel alloc] initWithFrame:
-			CGRectMake(TGMetricPadLarge, TGMetricPadLarge, sliderW,
-					TGMetricLineTitle + TGMetricPadLarge)];
-	_sample.text = TGLocalized(@"Hello");
+	// The sample's size follows the slider; sizeChanged: sets its font.
+	_sample = TGLabelWith(TGLabelBody, CGRectMake(TGMetricPadLarge, TGMetricPadLarge,
+			sliderW, TGMetricLineTitle + TGMetricPadLarge), TGLocalized(@"Hello"));
 	_sample.textAlignment = NSTextAlignmentCenter;
-	_sample.textColor = [theme primaryTextColour];
-	_sample.backgroundColor = [UIColor clearColor];
 	_sample.adjustsFontSizeToFitWidth = YES;
 	[self.view addSubview:_sample];
 
-	UILabel *small = [[UILabel alloc] initWithFrame:
-			CGRectMake(TGMetricPadLarge, CGRectGetMaxY(_sample.frame) + TGMetricPadLarge,
-					TGMetricLineRow, TGMetricLineRow)];
+	UILabel *small = TGLabelWith(TGLabelMicro, CGRectMake(TGMetricPadLarge, CGRectGetMaxY(_sample.frame) + TGMetricPadLarge,
+					TGMetricLineRow, TGMetricLineRow), nil);
 	small.text = @"A";
-	small.font = TGFontMicro();
-	small.textColor = [theme secondaryTextColour];
-	small.backgroundColor = [UIColor clearColor];
 	[self.view addSubview:small];
 
-	UILabel *large = [[UILabel alloc] initWithFrame:
-			CGRectMake(width - TGMetricPadLarge - TGMetricLineRow,
-					CGRectGetMinY(small.frame), TGMetricLineRow, TGMetricLineRow)];
+	UILabel *large = TGLabelWith(TGLabelHeader, CGRectMake(width - TGMetricPadLarge - TGMetricLineRow,
+					CGRectGetMinY(small.frame), TGMetricLineRow, TGMetricLineRow), nil);
 	large.text = @"A";
-	large.font = TGFontHeader();
 	large.textAlignment = NSTextAlignmentRight;
-	large.textColor = [theme primaryTextColour];
-	large.backgroundColor = [UIColor clearColor];
 	[self.view addSubview:large];
 
 	CGFloat sliderX = CGRectGetMaxX(small.frame) + TGMetricPad;
-	_slider = [[UISlider alloc] initWithFrame:
-			CGRectMake(sliderX, TGCenteredOrigin(TGMetricLineRow, TGMetricSliderH) +
-					CGRectGetMinY(small.frame), width - TGDoubled(sliderX), TGMetricSliderH)];
-	_slider.minimumValue = 0;
-	_slider.maximumValue = TGMetricMessageSizeSteps - 1;
-	_slider.value = (float)_step;
-	if ([_slider respondsToSelector:@selector(setMinimumTrackTintColor:)])
-		_slider.minimumTrackTintColor = [theme accentColour];
-	_slider.continuous = YES;
-	[_slider addTarget:self action:@selector(sizeChanged:)
-	  forControlEvents:UIControlEventValueChanged];
+	_slider = TGStepSlider(CGRectMake(sliderX, TGCenteredOrigin(TGMetricLineRow, TGMetricSliderH) +
+					CGRectGetMinY(small.frame), width - TGDoubled(sliderX), TGMetricSliderH),
+			TGMetricMessageSizeSteps, _step, self, @selector(sizeChanged:));
 	[self.view addSubview:_slider];
 	[self updateSample];
 }
@@ -261,14 +242,13 @@ static UIImage *TGSettingsQRIcon(void) {
 }
 
 - (void)pickProfilePhoto {
-	if (![UIImagePickerController isSourceTypeAvailable:
-			UIImagePickerControllerSourceTypePhotoLibrary])
-		return;
-	self.pickingProfilePhoto = YES;
-	UIImagePickerController *picker = [[UIImagePickerController alloc] init];
-	picker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;
-	picker.delegate = self;
-	[self presentViewController:picker animated:YES completion:nil];
+	__weak typeof(self) weakSelf = self;
+	[TGPresent pickMediaFrom:self source:TGMediaSourceLibrary videos:NO sourceView:nil
+					  onPick:^(NSDictionary *info){
+		UIImage *image = info[UIImagePickerControllerOriginalImage];
+		if (image)
+			[weakSelf uploadProfilePhoto:image];
+	}];
 }
 
 - (void)pushPlaceholder:(NSString *)featureName {
@@ -714,33 +694,15 @@ static UIImage *TGSettingsQRIcon(void) {
 }
 
 - (void)presentWallpaperPicker {
-	if (![UIImagePickerController isSourceTypeAvailable:
-			UIImagePickerControllerSourceTypePhotoLibrary])
-		return;
-	UIImagePickerController *picker = [[UIImagePickerController alloc] init];
-	picker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;
-	picker.delegate = self;
-	[self presentViewController:picker animated:YES completion:nil];
-}
-
-- (void)imagePickerController:(UIImagePickerController *)picker
-		didFinishPickingMediaWithInfo:(NSDictionary *)info {
-	[picker dismissViewControllerAnimated:YES completion:nil];
-	UIImage *image = info[UIImagePickerControllerOriginalImage];
-	if (!image){
-		self.pickingProfilePhoto = NO;
-		return;
-	}
-
-	// One picker serves the wallpaper and the profile picture, so it has to
-	// know which row opened it.
-	if (self.pickingProfilePhoto){
-		self.pickingProfilePhoto = NO;
-		[self uploadProfilePhoto:image];
-		return;
-	}
-	[[TGTheme shared] setWallpaperImage:image];
-	[self rebuild];
+	__weak typeof(self) weakSelf = self;
+	[TGPresent pickMediaFrom:self source:TGMediaSourceLibrary videos:NO sourceView:nil
+					  onPick:^(NSDictionary *info){
+		UIImage *image = info[UIImagePickerControllerOriginalImage];
+		if (!image)
+			return;
+		[[TGTheme shared] setWallpaperImage:image];
+		[weakSelf rebuild];
+	}];
 }
 
 /// TDLib uploads from a file, and a camera frame is far larger than a picture
@@ -766,11 +728,6 @@ static UIImage *TGSettingsQRIcon(void) {
 		weakSelf.profileCell = nil;
 		[weakSelf rebuild];
 	}];
-}
-
-- (void)imagePickerControllerDidCancel:(UIImagePickerController *)picker {
-	self.pickingProfilePhoto = NO;
-	[picker dismissViewControllerAnimated:YES completion:nil];
 }
 
 #pragma mark - password recovery inside the account

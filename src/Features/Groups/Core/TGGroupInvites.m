@@ -20,6 +20,7 @@
 #import "TGGroupStore.h"
 #import "TGProfileStore.h"
 #import "TGUIFormat.h"
+#import "TGPresent.h"
 
 
 
@@ -123,9 +124,8 @@ typedef NS_ENUM(NSInteger, TGGroupRowKind) {
 		[rows addObject:@"Invite Links"];
 		[rows addObject:@"Delete All Revoked Links"];
 
-		[TGAlertSheet showChoices:rows title:@"Invite Links"
-				 destructiveIndex:(NSInteger)rows.count - 1 inView:me.view
-						 onChoice:^(NSInteger index){
+		[TGPresent showList:rows title:@"Invite Links" destructiveIndex:(NSInteger)rows.count - 1
+			from:me onPick:^(NSInteger index){
 			if (index == (NSInteger)links.count){
 				[me showInviteLinkCounts];
 				return;
@@ -159,8 +159,8 @@ typedef NS_ENUM(NSInteger, TGGroupRowKind) {
 											: @"Edit Name & Limit"];
 		[choices addObject:(revoked ? @"Delete Link"
 									: (primary ? @"Replace" : @"Revoke"))];
-		[TGAlertSheet showChoices:choices title:url destructiveIndex:-1
-						   inView:me.view onChoice:^(NSInteger index){
+		[TGPresent showMenuTitles:choices destructiveIndex:-1
+			fromView:nil onController:me onChoice:^(NSInteger index){
 			NSString *action = choices[(NSUInteger)index];
 			if ([action isEqualToString:@"Copy Link"]){
 				[UIPasteboard generalPasteboard].string = url;
@@ -278,8 +278,8 @@ static NSString *TGInviteLinkDateText(NSDate *date) {
 					member[@"name"] ?: @"Member",
 					TGLocalizedFormat(@"joined %@", when)]];
 		}
-		[TGAlertSheet showChoices:rows title:@"Members"
-				 destructiveIndex:-1 inView:me.view onChoice:^(NSInteger index){
+		[TGPresent showList:rows title:@"Members" destructiveIndex:-1
+			from:me onPick:^(NSInteger index){
 			if (index < 0 || index >= (NSInteger)members.count)
 				return;
 			[TGGroupMemberActions openProfileForMember:members[(NSUInteger)index]
@@ -302,8 +302,8 @@ static NSString *TGInviteLinkDateText(NSDate *date) {
 			[rows addObject:[NSString stringWithFormat:@"%@: %@ active, %@ revoked",
 					count[@"name"] ?: @"Admin",
 					count[@"active"] ?: @(0), count[@"revoked"] ?: @(0)]];
-		[TGAlertSheet showChoices:rows title:@"Invite Links"
-				 destructiveIndex:-1 inView:me.view onChoice:^(NSInteger index){
+		[TGPresent showList:rows title:@"Invite Links" destructiveIndex:-1
+			from:me onPick:^(NSInteger index){
 			(void)index;
 		}];
 	}];

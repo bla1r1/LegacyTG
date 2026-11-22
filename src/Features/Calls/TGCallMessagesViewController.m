@@ -3,6 +3,7 @@
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
 #import "TGCallStore.h"
+#import "TGPresent.h"
 
 @interface TGCallMessagesViewController ()
 @property (nonatomic, strong) NSDictionary *call;
@@ -150,9 +151,8 @@
 		[keys addObject:@"deleteSender"];
 	}
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:titles title:message[@"senderName"]
-			destructiveIndex:-1 inView:self.view
-					 onChoice:^(NSInteger index){
+	[TGPresent showMenuTitles:titles destructiveIndex:-1
+			fromView:nil onController:self onChoice:^(NSInteger index){
 		TGCallMessagesViewController *me = weakSelf;
 		if (!me || index < 0 || index >= (NSInteger)keys.count)
 			return;

@@ -7,6 +7,8 @@
 #import <AssetsLibrary/AssetsLibrary.h>
 #import <QuartzCore/QuartzCore.h>
 #import "TGStyle.h"
+#import "TGBarItem.h"
+#import "TGLabel.h"
 
 /// The most photos the grid reads. A C array of this size holds the tick
 /// order, so ticking a tile never allocates.
@@ -182,9 +184,8 @@ static NSString *const kTileIdentifier = @"tile";
 	UINavigationBar *bar = [[UINavigationBar alloc] initWithFrame:CGRectMake(0, 0, w, kRow)];
 	[[TGTheme shared] styleNavigationBar:bar];
 	self.header = [[UINavigationItem alloc] initWithTitle:@"Recent"];
-	self.header.leftBarButtonItem = [[UIBarButtonItem alloc]
-			initWithBarButtonSystemItem:UIBarButtonSystemItemCancel
-								 target:self action:@selector(dismiss)];
+	self.header.leftBarButtonItem = [TGBarItem itemWithRole:TGBarRoleCancel
+			target:self action:@selector(dismiss)];
 	bar.items = @[self.header];
 	[card addSubview:bar];
 }
@@ -212,14 +213,9 @@ static NSString *const kTileIdentifier = @"tile";
 }
 
 - (UIBarButtonItem *)itemWithGlyph:(NSString *)glyph choice:(TGAttachChoice)choice label:(NSString *)label {
-	UIBarButtonItem *item = [[UIBarButtonItem alloc]
-			initWithImage:[TGIcons glyphNamed:glyph
-									   colour:[[TGTheme shared] barButtonColour]
-										 side:TGMetricMenuGlyph]
-					style:UIBarButtonItemStylePlain
-				   target:self action:@selector(choiceTapped:)];
+	UIBarButtonItem *item = [TGBarItem itemWithGlyph:glyph label:label
+			target:self action:@selector(choiceTapped:)];
 	item.tag = (NSInteger)choice;
-	item.accessibilityLabel = TGLocalized(label);
 	return item;
 }
 
@@ -231,25 +227,17 @@ static NSString *const kTileIdentifier = @"tile";
 		self.toolbar.tintColor = [[TGTheme shared] barButtonColour];
 	}
 	UIBarButtonItem *(^gap)(void) = ^{
-		return [[UIBarButtonItem alloc]
-				initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace
-									 target:nil action:nil];
+		return [TGBarItem flexibleSpace];
 	};
-	UIBarButtonItem *more = [[UIBarButtonItem alloc]
-			initWithImage:[TGIcons glyphNamed:@"more"
-									   colour:[[TGTheme shared] barButtonColour]
-										 side:TGMetricMenuGlyph]
-					style:UIBarButtonItemStylePlain
-				   target:self action:@selector(moreTapped)];
-	more.accessibilityLabel = TGLocalized(@"More");
+	UIBarButtonItem *more = [TGBarItem itemWithRole:TGBarRoleMore
+			target:self action:@selector(moreTapped)];
 	self.choiceItems = @[gap(),
 			[self itemWithGlyph:@"folder" choice:TGAttachChoiceGallery label:@"Gallery"], gap(),
 			[self itemWithGlyph:@"pin" choice:TGAttachChoiceLocation label:@"Location"], gap(),
 			[self itemWithGlyph:@"call" choice:TGAttachChoiceContact label:@"Contact"], gap(),
 			more, gap()];
-	self.sendItem = [[UIBarButtonItem alloc] initWithTitle:@"Send"
-													 style:UIBarButtonItemStyleDone
-													target:self action:@selector(sendSelected)];
+	self.sendItem = [TGBarItem itemWithTitle:@"Send" primary:YES
+			target:self action:@selector(sendSelected)];
 	self.toolbar.items = self.choiceItems;
 	[card addSubview:self.toolbar];
 }
@@ -276,11 +264,8 @@ static NSString *const kTileIdentifier = @"tile";
 	self.header.title = _ticked ? TGLocalizedFormat(@"%@ Selected", @(_ticked))
 								: @"Recent";
 	if (added && _ticked == 1){
-		UIBarButtonItem *gapLeft = [[UIBarButtonItem alloc]
-				initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil];
-		UIBarButtonItem *gapRight = [[UIBarButtonItem alloc]
-				initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil];
-		[self.toolbar setItems:@[gapLeft, self.sendItem, gapRight] animated:YES];
+		[self.toolbar setItems:@[[TGBarItem flexibleSpace], self.sendItem,
+				[TGBarItem flexibleSpace]] animated:YES];
 	} else if (!added && _ticked == 0){
 		[self.toolbar setItems:self.choiceItems animated:YES];
 	}
@@ -396,15 +381,12 @@ static NSString *const kTileIdentifier = @"tile";
 /// One line under the camera tile, where the photos would have been.
 - (void)showMessage:(NSString *)text {
 	CGFloat top = _gridTop + _tile + kGridGap;
-	self.message = [[UILabel alloc] initWithFrame:CGRectMake(TGMetricPadLarge, top,
+	self.message = TGLabelWith(TGLabelSubhead, CGRectMake(TGMetricPadLarge, top,
 			self.grid.bounds.size.width - TGDoubled(TGMetricPadLarge),
-			_gridTop + _gridHeight - top)];
+			_gridTop + _gridHeight - top), nil);
 	self.message.text = text;
 	self.message.numberOfLines = 1;
 	self.message.textAlignment = NSTextAlignmentCenter;
-	self.message.font = TGFontSubhead();
-	self.message.textColor = [[TGTheme shared] secondaryTextColour];
-	self.message.backgroundColor = [UIColor clearColor];
 	[self.grid.superview addSubview:self.message];
 }
 

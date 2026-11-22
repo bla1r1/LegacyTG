@@ -21,6 +21,7 @@
 #import "TGRows.h"
 #import "TGUIFormat.h"
 #import "TGOptions.h"
+#import "TGPresent.h"
 
 static NSString *TGSavedTopicDateText(NSNumber *stamp) {
 	return TGUIFormatChatDate([stamp isKindOfClass:NSNumber.class] ? stamp.doubleValue : 0, TGOptionNow());
@@ -194,11 +195,8 @@ static NSString *TGSavedTopicDateText(NSNumber *stamp) {
 								 @"Clear Before Month", @"Clear All"]];
 
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:items
-						title:name
-			 destructiveIndex:(NSInteger)[items indexOfObject:@"Clear All"]
-					   inView:self.view
-					 onChoice:^(NSInteger index){
+	[TGPresent showMenuTitles:items destructiveIndex:(NSInteger)[items indexOfObject:@"Clear All"]
+			fromView:[self.tableView cellForRowAtIndexPath:path] onController:self onChoice:^(NSInteger index){
 		NSString *what = items[(NSUInteger)index];
 		if ([what isEqualToString:@"Pin"] || [what isEqualToString:@"Unpin"]){
 			[[TGMessageStore shared] toggleSavedTopicPinned:topicId pinned:!pinned];
@@ -320,12 +318,8 @@ static NSString *TGSavedTopicDateText(NSNumber *stamp) {
 			[rows addObject:[NSString stringWithFormat:@"%@  ×%@", label,
 							 tag[@"count"] ?: @(0)]];
 		}
-		[TGAlertSheet showChoices:rows
-							title:(name.length ? name : @"Topic")
-						  message:nil
-				   destructiveIndex:-1
-						   inView:me.view
-						 onChoice:^(NSInteger index){
+		[TGPresent showList:rows title:(name.length ? name : @"Topic") destructiveIndex:-1
+			from:self onPick:^(NSInteger index){
 			NSDictionary *tag = list[(NSUInteger)index];
 			[TGAlertSheet showInput:@"Tag"
 							message:nil

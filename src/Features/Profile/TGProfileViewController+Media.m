@@ -15,6 +15,7 @@
 #import "TGPictureRowCell.h"
 #import "TGMusicPlayer.h"
 #import "TGUIFormat.h"
+#import "TGPresent.h"
 
 static NSString *TGProfileFileSizeText(NSNumber *bytes) {
 	return [bytes longLongValue] > 0 ? TGBytes([bytes longLongValue]) : nil;
@@ -603,9 +604,8 @@ static NSString *TGProfileJoin(NSString *left, NSString *right) {
 	NSInteger destructiveIndex = (deleteIndex != NSNotFound) ? (NSInteger)deleteIndex
 			: (posted ? 0 : -1);
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:choices
-						title:nil destructiveIndex:destructiveIndex inView:self.view
-					 onChoice:^(NSInteger choice){
+	[TGPresent showMenuTitles:choices destructiveIndex:destructiveIndex
+			fromView:nil onController:self onChoice:^(NSInteger choice){
 		if (choice < 0 || choice >= (NSInteger)choices.count)
 			return;
 		NSString *picked = choices[(NSUInteger)choice];
@@ -659,11 +659,9 @@ static NSString *TGProfileJoin(NSString *left, NSString *right) {
 				   stories:rows
 				startIndex:index
 				 canManage:self.chatId == [[TGProfileStore shared] savedMessagesChatId]];
-	UINavigationController *nav = [[UINavigationController alloc]
-			initWithRootViewController:viewer];
+	UINavigationController *nav = [TGPresent presentModal:viewer kind:TGModalBare from:self];
 	nav.navigationBar.barStyle = UIBarStyleBlack;
 	nav.navigationBar.translucent = YES;
-	[self presentViewController:nav animated:YES completion:nil];
 }
 
 - (void)loadMoreMediaForCurrentTab {

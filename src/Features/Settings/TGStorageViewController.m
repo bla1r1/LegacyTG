@@ -8,6 +8,7 @@
 #import "TGRows.h"
 #import "TGRowCell.h"
 #import "TGSettingsStore.h"
+#import "TGLabel.h"
 
 
 // Their storage page opens with a ring: the total in the middle, one arc per
@@ -246,29 +247,19 @@ static UIColor *TGSliceColour(NSUInteger index) {
 		[header.layer addSublayer:empty];
 	}
 
-	UILabel *totalLabel = [[UILabel alloc] initWithFrame:
-			CGRectMake(box.origin.x, centre.y - TGHalf(kRingTotalLine), kRingSide,
-					kRingTotalLine)];
+	UILabel *totalLabel = TGLabelWith(TGLabelTitle, CGRectMake(box.origin.x, centre.y - TGHalf(kRingTotalLine), kRingSide,
+					kRingTotalLine), nil);
+	TGLabelEtch(totalLabel);
 	totalLabel.text = self.loaded ? self.totalText : @"...";
-	totalLabel.font = TGFontTitle();
 	totalLabel.textAlignment = NSTextAlignmentCenter;
-	totalLabel.textColor = [theme primaryTextColour];
-	totalLabel.backgroundColor = [UIColor clearColor];
 	totalLabel.adjustsFontSizeToFitWidth = YES;
-	totalLabel.shadowColor = [theme etchedTextShadowColour];
-	totalLabel.shadowOffset = TGMetricShadowOffsetEtched;
 	[header addSubview:totalLabel];
 
-	UILabel *caption = [[UILabel alloc] initWithFrame:
-			CGRectMake(TGMetricPadMedium, kRingSide + TGMetricPadLarge,
-					width - TGDoubled(TGMetricPadMedium), TGMetricLineRow)];
+	UILabel *caption = TGLabelWith(TGLabelCaption, CGRectMake(TGMetricPadMedium, kRingSide + TGMetricPadLarge,
+					width - TGDoubled(TGMetricPadMedium), TGMetricLineRow), nil);
+	TGLabelEtch(caption);
 	caption.text = self.loaded ? @"Telegram Cache" : @"Loading...";
-	caption.font = TGFontCaption();
 	caption.textAlignment = NSTextAlignmentCenter;
-	caption.textColor = [theme secondaryTextColour];
-	caption.backgroundColor = [UIColor clearColor];
-	caption.shadowColor = [theme etchedTextShadowColour];
-	caption.shadowOffset = TGMetricShadowOffsetEtched;
 	[header addSubview:caption];
 
 	return header;

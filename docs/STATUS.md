@@ -1045,3 +1045,24 @@ States: `done` (matches official client), `partial` (partially implemented), `mi
 | Refund a Star payment | `missing` | `—` | `refundStarPayment` and `editUserStarSubscription` are never sent. |
 | Gift privacy | `missing` | `—` | No who-may-send, button or accepted-types rows; `setGiftSettings` is never sent. |
 
+
+## Unified UI (bar buttons, modals, menus)
+
+Screens in `src/Features` ask `src/UI` for a bar button by role (`TGBarItem`) and open things through `TGPresent`; the action → presentation table is in `docs/DESIGN_SPEC.md`. Counts are `scripts/ui_ownership.txt`, presents in all files and controls in queue files.
+
+| Step | presents | controls (queue) |
+|---|---|---|
+| Start, fbb5a97e | 143 | 68 |
+| Bar buttons, batch 1: 27 places in 22 files (Cancel, Done, Edit, Close, Add, named actions) | 116 | 68 |
+| Bar buttons, batch 2: 16 edits in 12 files (chat list Edit/Done and edit bar, profile Edit, selection, Instant View ⋯ and share, albums, login Next, two spinners) | 97 | 66 |
+| System pickers: share sheets (4) and photo pickers (12) through `TGPresent`, the library and share sheet in a popover on iPads before iOS 8 | 75 | 66 |
+| Bar buttons, batch 3: 21 edits in 15 files (picker toolbars, attach sheet, login Cancel, compose, media search, dev screens) | 46 | 66 |
+| Approved list: Done bold after Edit (Usernames, Backgrounds, group names); New Contact Cancel / Done; Close on the left of read-only modals (file info, QR, a screen opened from a group without a stack); system + in Topics; magnifier in Text Styles; Instant View and album ⋯ open the drawn menu under the button | 46 | 66 |
+| Modals: 13 hand-built navigation controllers through `TGPresent presentModal:` (forms get Cancel, read-only pages Close, story viewers and the player stay bare); custom-view bar items through `TGBarItem itemWithView:`; camera and dev flows through `presentFlow:` | 1 | 66 |
+| Controls: text by role (`TGLabel`: title, header, caption, bar title…), buttons, reader and editor text views, the key catcher, switch, step slider, spinner and the two motion speeds in `TGControls`; bar and content segments in `TGSegmentedControl.h`; the story ring as `TGBarRoleAddStory`; a table's loading spinner in `TGTableViewController showLoading`. The queue in `scripts/ui_ownership.txt` is empty | 1 | 0 |
+| Action menus on an object (long press on a chat, profile More, a member, a topic, a scheduled message, a task, an invite or folder link, a download, a proxy, a sound, a sticker, a held photo, …): 27 system action sheets became the drawn card under the row through `TGPresent showMenuTitles:` / `showMenu:atPoint:`; the row glyph comes from the first word (`TGMenuGlyphForTitle`) | 1 | 0 |
+| Lists shown as a sheet (poll voters, message positions, public forwards, reactions, recent locations, Saved tags, invite links and their members, member search, join requests, community chats, a file's sticker sets, sent files, folder links): 17 sheets became a pushed list of rows through `TGPresent showList:` ("Name · detail" splits into a title and the row's detail on the right, `TGListEntries`) | 1 | 0 |
+| The pencil opens New Message: New Group and New Channel above the contacts, as official's compose screen (was a three-item sheet). A menu card closes when its screen is pushed or popped (`TGNavController`) | 1 | 0 |
+| Menus from a source (profile More, a chat row) follow official's context menu: the screen dims in four bands round the source, which stays lit as it is, and the card hangs under it. The selection panel wears the composer's gloss and top line. New Message's rows are accent action rows, no tiles | 1 | 0 |
+
+Checked on the emulator through dev routes injected as `devwalk.txt` (the emulator has no shell): the chat list menu, profile More, New Message and New Group, selection bar, AI compose, forward picker, storage, terms, background editor, ephemeral, profile colours, text styles, passcode, update, a list screen and a menu card from `screen/demolist` and `screen/demomenu`. The batches keep the look: on the iPhone 4 / iOS 6.1.3 emulator, HEAD and the migrated build shot the chat list, its Edit mode and edit bar, Contacts, New Contact, Settings, Edit Profile, a chat and the attach sheet pixel for pixel the same (`scripts/shotdiff.py`). Not yet on a real device, iPad or iOS 7+. The one place left is the call screen, which keeps its design on purpose.

@@ -10,6 +10,7 @@
 #import "TGLocalization.h"
 #import "TGRows.h"
 #import "UIImage+WebP.h"
+#import "TGPresent.h"
 
 typedef NS_ENUM(NSInteger, TGStickerPick) {
 	TGStickerPickNone = 0,
@@ -420,11 +421,8 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 
 	NSUInteger removeIndex = [titles indexOfObject:TGLocalized(@"Remove")];
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:titles title:[sticker[@"emoji"] length]
-			? sticker[@"emoji"] : TGLocalized(@"Sticker")
-			destructiveIndex:(NSInteger)removeIndex
-					   inView:self.view
-					 onChoice:^(NSInteger choice){
+	[TGPresent showMenuTitles:titles destructiveIndex:(NSInteger)removeIndex
+			fromView:nil onController:self onChoice:^(NSInteger choice){
 		TGStickerEditorViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -600,7 +598,7 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 	UIImagePickerController *picker = [[UIImagePickerController alloc] init];
 	picker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;
 	picker.delegate = self;
-	[self presentViewController:picker animated:YES completion:nil];
+	[TGPresent presentSystem:picker from:self sourceView:nil];
 }
 
 /// Static stickers are sent as WebP and Telegram checks the bytes: a PNG
@@ -620,7 +618,7 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 
 - (void)imagePickerController:(UIImagePickerController *)picker
 		didFinishPickingMediaWithInfo:(NSDictionary *)info {
-	[picker dismissViewControllerAnimated:YES completion:nil];
+	[TGPresent dismissSystem:picker];
 	UIImage *image = info[UIImagePickerControllerOriginalImage];
 	TGStickerPick what = self.picking;
 	self.picking = TGStickerPickNone;
@@ -733,7 +731,7 @@ typedef NS_ENUM(NSInteger, TGStickerPick) {
 
 - (void)imagePickerControllerDidCancel:(UIImagePickerController *)picker {
 	self.picking = TGStickerPickNone;
-	[picker dismissViewControllerAnimated:YES completion:nil];
+	[TGPresent dismissSystem:picker];
 }
 
 #pragma mark - deleting

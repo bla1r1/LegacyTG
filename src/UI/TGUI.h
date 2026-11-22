@@ -12,6 +12,8 @@
 #import "TGSegmentedControl.h"
 #import "TGCardView.h"
 #import "TGBadge.h"
+#import "TGLabel.h"
+#import "TGControls.h"
 
 // Identity & Search
 #import "TGAvatarView.h"
@@ -27,6 +29,10 @@
 #import "TGStatusBanner.h"
 #import "TGInAppNotificationBanner.h"
 #import "TGEmptyView.h"
+
+// Bar buttons and how things open: by what they mean, not how they look
+#import "TGBarItem.h"
+#import "TGPresent.h"
 
 // TGDevGalleryViewController is a controller, not a control: import
 // "TGDevGalleryViewController.h" where it is pushed.

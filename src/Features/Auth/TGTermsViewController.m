@@ -11,6 +11,7 @@
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGButton.h"
+#import "TGControls.h"
 
 @interface TGTermsViewController ()
 @property (nonatomic, strong) UITextView *body;
@@ -38,12 +39,9 @@
 
 	// The body keeps its own scroll, because the text can run to pages and
 	// the acceptance is only meaningful if it can be read.
-	UITextView *body = [[UITextView alloc] initWithFrame:
-			CGRectMake(0, 0, width, height - barHeight)];
+	UITextView *body = TGReaderTextView(CGRectMake(0, 0, width, height - barHeight));
 	body.autoresizingMask = UIViewAutoresizingFlexibleWidth |
 							UIViewAutoresizingFlexibleHeight;
-	body.editable = NO;
-	body.font = TGFontBody();
 	body.text = self.termsText ?: @"";
 	// iOS 7's property; iOS 6 has no text container and pads with contentInset.
 	if ([body respondsToSelector:@selector(setTextContainerInset:)])

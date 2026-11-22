@@ -11,6 +11,7 @@
 #import "TGChatThemeStore.h"
 #import "TGStyle.h"
 #import "TGSettingsStore.h"
+#import "TGBarItem.h"
 
 
 static NSString *TGDefaultBackgroundDetail(NSDictionary *state) {
@@ -194,10 +195,8 @@ static NSString *TGDefaultBackgroundDetail(NSDictionary *state) {
 	CGFloat width = self.view.bounds.size.width;
 	picker.frame = CGRectMake(0, TGMetricPadLarge, width, TGMetricPickerHeight);
 	[page.view addSubview:picker];
-	page.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
-			initWithTitle:TGLocalized(@"Done")
-					style:UIBarButtonItemStyleDone
-				   target:self action:@selector(saveAutoNightTime)];
+	page.navigationItem.rightBarButtonItem = [TGBarItem itemWithRole:TGBarRoleDone
+			target:self action:@selector(saveAutoNightTime)];
 	self.autoNightPicker = picker;
 	self.autoNightPickingFrom = from;
 	page.hidesBottomBarWhenPushed = YES;

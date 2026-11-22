@@ -18,4 +18,9 @@
 /// Removes the empty state view.
 - (void)hideEmpty;
 
+/// A grey spinner behind the rows until the first answer, so a pushed blank
+/// table does not read as a tap that did nothing. hideEmpty, or setting
+/// backgroundView, removes it.
+- (void)showLoading;
+
 @end

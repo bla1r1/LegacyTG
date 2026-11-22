@@ -9,6 +9,8 @@
 #import "TGQRCode.h"
 #import "TGAccountStore.h"
 #import "TGSettingsStore.h"
+#import "TGPresent.h"
+#import "TGBarItem.h"
 
 /// The code step is a row of digit boxes, as official draws it. The real text
 /// field stays behind them so the number pad and the paste menu keep working;
@@ -537,11 +539,8 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
     self.resendTimer = nil;
     [self.view endEditing:YES];
 
-    self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc]
-        initWithTitle:@"Cancel"
-        style:UIBarButtonItemStylePlain
-        target:self
-        action:@selector(showPhoneStep)];
+    self.navigationItem.leftBarButtonItem = [TGBarItem itemWithRole:TGBarRoleCancel
+        target:self action:@selector(showPhoneStep)];
     // Nothing to submit here: the other device does the work.
     self.navigationItem.rightBarButtonItem = nil;
 
@@ -708,7 +707,7 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
     CGFloat side = TGMetricRow;
     button.frame = CGRectMake(0, 0, side, side);
     [button addTarget:self action:action forControlEvents:UIControlEventTouchUpInside];
-    return [[UIBarButtonItem alloc] initWithCustomView:button];
+    return [TGBarItem itemWithView:button];
 }
 
 - (void)confirmStopVerification {
@@ -772,11 +771,8 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
     self.headingLabel.hidden = NO;
     self.subtitleLabel.text = @"First and Last Name";
 
-    self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc]
-        initWithTitle:@"Cancel"
-        style:UIBarButtonItemStylePlain
-        target:self
-        action:@selector(showPhoneStep)];
+    self.navigationItem.leftBarButtonItem = [TGBarItem itemWithRole:TGBarRoleCancel
+        target:self action:@selector(showPhoneStep)];
 
     if (self.resendButton) {
         [self.resendButton removeFromSuperview];
@@ -884,13 +880,13 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
     UIImagePickerController *picker = [[UIImagePickerController alloc] init];
     picker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;
     picker.delegate = self;
-    [self presentViewController:picker animated:YES completion:nil];
+    [TGPresent presentSystem:picker from:self sourceView:nil];
 }
 
 - (void)imagePickerController:(UIImagePickerController *)picker
         didFinishPickingMediaWithInfo:(NSDictionary *)info {
     UIImage *image = info[UIImagePickerControllerOriginalImage];
-    [self dismissViewControllerAnimated:YES completion:nil];
+    [TGPresent dismissSystem:picker];
     if (!image)
         return;
     NSData *data = UIImageJPEGRepresentation(image, 0.9f);
@@ -904,7 +900,7 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
 }
 
 - (void)imagePickerControllerDidCancel:(UIImagePickerController *)picker {
-    [self dismissViewControllerAnimated:YES completion:nil];
+    [TGPresent dismissSystem:picker];
 }
 
 - (void)lastNameChanged:(UITextField *)sender {

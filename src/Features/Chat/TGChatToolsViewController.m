@@ -10,6 +10,7 @@
 #import "TGListViewController.h"
 #import "TGChatViewController.h"
 #import "TGRows.h"
+#import "TGPresent.h"
 
 /// A colour as TDLib's RGB integer: 0xRRGGBB.
 static NSInteger TGRGB(UIColor *colour) {
@@ -540,11 +541,8 @@ static NSString *TGWriteBackground(UIColor *colour) {
 			NSString *name = request[@"name"];
 			[titles addObject:name.length ? name : @"Someone"];
 		}
-		[TGAlertSheet showChoices:titles
-							title:@"Join Requests"
-				 destructiveIndex:-1
-						   inView:me.view
-						 onChoice:^(NSInteger index){
+		[TGPresent showList:titles title:@"Join Requests" destructiveIndex:-1
+			from:me onPick:^(NSInteger index){
 			NSDictionary *request = requests[(NSUInteger)index];
 			int64_t userId = [request[@"id"] longLongValue];
 			[TGAlertSheet showChoices:@[@"Approve", @"Decline"]

@@ -31,9 +31,7 @@
 - (NSArray *)tier2Sections;
 @end
 
-@interface TGSettingsViewController () <
-		UIImagePickerControllerDelegate, UINavigationControllerDelegate,
-		UISearchBarDelegate>
+@interface TGSettingsViewController () <UISearchBarDelegate>
 
 @property (nonatomic, strong) NSMutableDictionary *privacy;    // setting -> value
 @property (nonatomic, strong) NSMutableDictionary *muted;      // scope -> NSNumber
@@ -75,7 +73,6 @@
 @property (nonatomic, assign) long long networkSent;
 @property (nonatomic, assign) long long networkReceived;
 @property (nonatomic, strong) NSString *tdlibVersion;
-@property (nonatomic, assign) BOOL pickingProfilePhoto;
 @property (nonatomic, assign) CGFloat lastScrollY;
 /// The folders page: the account's own folders and Telegram's suggestions,
 /// each loaded once the page opens.

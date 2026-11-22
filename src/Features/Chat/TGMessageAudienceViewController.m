@@ -18,6 +18,7 @@
 #import "TGProfileViewController.h"
 #import "TGRows.h"
 #import "TGUIFormat.h"
+#import "TGBarItem.h"
 
 /// The same three shapes the chat list and the chat sheets use for a time.
 static NSString *TGAudienceDate(NSTimeInterval unix) {
@@ -69,9 +70,8 @@ static NSString *TGAudienceDate(NSTimeInterval unix) {
 	// An explicit back item, not only the system chevron: the list is also
 	// opened from a URL-driven chat, where the stack is not always what the
 	// bar assumes. It pops when it can and dismisses when it cannot.
-	self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc]
-			initWithTitle:TGLocalized(@"Back") style:UIBarButtonItemStylePlain
-				   target:self action:@selector(closeScreen)];
+	self.navigationItem.leftBarButtonItem = [TGBarItem itemWithRole:TGBarRoleBack
+			target:self action:@selector(closeScreen)];
 
 	// Reaction rows keep the administrator's removal that used to live in a
 	// tiny action sheet: a hold asks before taking one person's reactions

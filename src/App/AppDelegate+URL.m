@@ -54,6 +54,14 @@ static const CGFloat kIconDumpSide = 52.0f;
 #import "TGStickerPacksViewController.h"
 #import "TGProfilePhotosViewController.h"
 #import "TGProfileStore.h"
+#import "TGTextStylesViewController.h"
+#import "TGEphemeralViewController.h"
+#import "TGBackgroundEditorViewController.h"
+#import "TGTermsViewController.h"
+#import "TGPasscodeViewController.h"
+#import "TGStorageViewController.h"
+#import "TGContactsViewController.h"
+#import "TGPresent.h"
 #include <dlfcn.h>
 
 @implementation AppDelegate (URL)
@@ -380,6 +388,47 @@ static NSUInteger TGChatsIndex(UITabBarController *tabs) {
 				TGStickerEditorViewController *editor = [[TGStickerEditorViewController alloc] init];
 				editor.creating = YES;
 				screen = editor;
+			}
+			// The shared UI's pieces where a finger reaches them only deep in
+			// an account: a menu card, a list screen, and the screens moved
+			// onto src/UI's controls.
+			if ([name isEqualToString:@"demomenu"]){
+				UIViewController *top = nc.topViewController;
+				[TGPresent showMenuTitles:@[@"Edit", @"Copy Link", @"Pin", @"Jump to Date", @"Delete"]
+						 destructiveIndex:4 fromView:nil onController:top
+								 onChoice:^(NSInteger index){ NSLog(@"demomenu: %ld", (long)index); }];
+				return;
+			}
+			if ([name isEqualToString:@"demolist"]){
+				[TGPresent showList:@[@"Anna Petrova · 2 votes", @"Bob · 1 vote",
+						@"A name long enough to be cut short in a sheet · 1 vote", @"Revoke All"]
+							  title:@"Voters" destructiveIndex:3 from:nc.topViewController
+							 onPick:^(NSInteger index){ NSLog(@"demolist: %ld", (long)index); }];
+				return;
+			}
+			if ([name isEqualToString:@"newmessage"]){
+				TGContactsViewController *contacts = [[TGContactsViewController alloc] init];
+				contacts.title = @"New Message";
+				contacts.onNewChannel = ^{ NSLog(@"screen/newmessage: New Channel"); };
+				screen = contacts;
+			} else if ([name isEqualToString:@"storage"]){
+				screen = [[TGStorageViewController alloc] init];
+			} else if ([name isEqualToString:@"passcode"]){
+				screen = [[TGPasscodeViewController alloc] init];
+			} else if ([name isEqualToString:@"terms"]){
+				TGTermsViewController *terms = [[TGTermsViewController alloc] init];
+				terms.termsText = @"By signing up for Telegram, you accept our Terms of Service and Privacy Policy.";
+				screen = terms;
+			} else if ([name isEqualToString:@"bgeditor"]){
+				screen = [[TGBackgroundEditorViewController alloc] init];
+			} else if ([name isEqualToString:@"ephemeral"]){
+				TGEphemeralViewController *note = [[TGEphemeralViewController alloc] init];
+				note.chatTitle = @"Saved Messages";
+				screen = note;
+			} else if ([name isEqualToString:@"appearance"]){
+				screen = [[TGProfileAppearanceViewController alloc] initWithProfileTab:YES];
+			} else if ([name isEqualToString:@"textstyles"]){
+				screen = [[TGTextStylesViewController alloc] init];
 			}
 			if (!screen){
 				NSLog(@"screen: no screen named %@", name);

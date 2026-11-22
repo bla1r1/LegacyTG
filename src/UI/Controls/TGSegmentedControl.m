@@ -213,3 +213,20 @@ static const NSTimeInterval kSegmentAnimDuration = 0.20;
 }
 
 @end
+
+UISegmentedControl *TGBarSegments(NSArray *items) {
+	UISegmentedControl *segments = [[UISegmentedControl alloc] initWithItems:items];
+	// Before iOS 7 a segmented control is the tall plain style unless told it
+	// sits in a bar; in a 44 pt bar that drew two overlapping words.
+	if (NSFoundationVersionNumber <= NSFoundationVersionNumber_iOS_6_1){
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+		segments.segmentedControlStyle = UISegmentedControlStyleBar;
+#pragma clang diagnostic pop
+	}
+	return segments;
+}
+
+UISegmentedControl *TGContentSegments(NSArray *items) {
+	return [[UISegmentedControl alloc] initWithItems:items];
+}

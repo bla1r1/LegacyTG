@@ -4,6 +4,7 @@
 //
 #import "TGNavController.h"
 #import "TGTheme.h"
+#import "TGPopupMenu.h"
 
 @implementation TGNavController
 
@@ -28,6 +29,9 @@
 	// reads as the button's fate carrying the outgoing screen's name (a
 	// folder, "Chats", "Info"), which says nothing about where pressing it
 	// actually goes.
+	// A menu belongs to the screen it opened on; the next screen does not
+	// inherit it, however the push was asked for.
+	[TGPopupMenu dismiss];
 	UIViewController *under = self.topViewController;
 	if (under)
 		under.navigationItem.backBarButtonItem =
@@ -36,6 +40,11 @@
 					target:nil
 					action:NULL];
 	[super pushViewController:vc animated:animated];
+}
+
+- (UIViewController *)popViewControllerAnimated:(BOOL)animated {
+	[TGPopupMenu dismiss];
+	return [super popViewControllerAnimated:animated];
 }
 
 @end

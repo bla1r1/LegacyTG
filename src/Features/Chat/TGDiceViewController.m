@@ -2,6 +2,7 @@
 #import "TGAlertSheet.h"
 #import "TGMessageStore.h"
 #import "TGRows.h"
+#import "TGBarItem.h"
 
 @interface TGDiceViewController ()
 @property (nonatomic, strong) NSDictionary *state;
@@ -16,10 +17,8 @@
 					TGLocalized(@"Dice")]
 			: TGLocalized(@"Stake");
 	[self rebuildSections];
-	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
-			initWithTitle:TGLocalized(@"Update")
-					style:UIBarButtonItemStylePlain
-				   target:self action:@selector(refreshTapped)];
+	self.navigationItem.rightBarButtonItem = [TGBarItem itemWithTitle:@"Update" primary:NO
+			target:self action:@selector(refreshTapped)];
 	[[NSNotificationCenter defaultCenter] addObserver:self
 			selector:@selector(stateChanged:)
 				name:TGStakeDiceStateChangedNotification object:nil];

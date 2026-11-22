@@ -6,6 +6,9 @@
 #import "TGStyle.h"
 #import "TGUIFormat.h"
 #import "TGInstantPageActions.h"
+#import "TGBarItem.h"
+#import "TGPresent.h"
+#import "TGControls.h"
 
 static NSString *const TGInstantRule = @"────────────────────────────────";
 
@@ -479,25 +482,14 @@ static void TGInstantAppendBlocks(NSMutableAttributedString *out,
 			: (self.pageTitle.length ? self.pageTitle : @"Instant View");
 
 	// Site name in the bar with two icon actions; no text "Action".
-	UIBarButtonItem *more = [[UIBarButtonItem alloc]
-			initWithImage:[TGIcons glyphNamed:@"more"
-										 colour:[theme barButtonColour]
-										   side:TGMetricMenuGlyph]
-				   style:UIBarButtonItemStylePlain
-				  target:self action:@selector(showActions)];
-	UIBarButtonItem *share = [[UIBarButtonItem alloc]
-			initWithImage:[TGIcons glyphNamed:@"forward"
-										 colour:[theme barButtonColour]
-										   side:TGMetricMenuGlyph]
-				   style:UIBarButtonItemStylePlain
-				  target:self action:@selector(sharePage)];
+	UIBarButtonItem *more = [TGBarItem itemWithRole:TGBarRoleMore
+			target:self action:@selector(showActions)];
+	UIBarButtonItem *share = [TGBarItem itemWithRole:TGBarRoleShare
+			target:self action:@selector(sharePage)];
 	self.navigationItem.rightBarButtonItems = @[more, share];
 
-	UITextView *reader = [[UITextView alloc] initWithFrame:self.view.bounds];
+	UITextView *reader = TGReaderTextView(self.view.bounds);
 	reader.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-	reader.editable = NO;
-	if ([reader respondsToSelector:@selector(setSelectable:)])
-		reader.selectable = YES;
 	reader.delegate = self;
 	reader.backgroundColor = [theme listBackgroundColour];
 	reader.textColor = [theme primaryTextColour];
@@ -666,15 +658,14 @@ static void TGInstantAppendBlocks(NSMutableAttributedString *out,
 }
 
 - (void)showActions {
-	NSMutableArray *choices = [NSMutableArray arrayWithObject:@"Open in Browser"];
+	NSMutableArray *choices = [NSMutableArray arrayWithObject:
+			@{@"title" : @"Open in Browser", @"icon" : @"forward"}];
 	if (self.sourceURL.length)
-		[choices addObject:@"Copy Link"];
+		[choices addObject:@{@"title" : @"Copy Link", @"icon" : @"copy"}];
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:choices
-						title:self.pageTitle ?: @"Instant View"
-			 destructiveIndex:-1
-					   inView:self.view
-					 onChoice:^(NSInteger index){
+	[TGPresent showMenu:choices fromBarItem:self.navigationItem.rightBarButtonItems.firstObject
+				   side:TGBarSideRight onController:self
+			   onChoice:^(NSInteger index, NSString *title){
 		TGInstantViewController *me = weakSelf;
 		if (!me)
 			return;
@@ -698,13 +689,7 @@ static void TGInstantAppendBlocks(NSMutableAttributedString *out,
 	NSURL *url = [NSURL URLWithString:self.sourceURL ?: @""];
 	if (!url)
 		return;
-	UIActivityViewController *share = [[UIActivityViewController alloc]
-			initWithActivityItems:@[url] applicationActivities:nil];
-	if ([share respondsToSelector:@selector(popoverPresentationController)]) {
-		share.popoverPresentationController.sourceView = self.view;
-		share.popoverPresentationController.sourceRect = self.view.bounds;
-	}
-	[self presentViewController:share animated:YES completion:nil];
+	[TGPresent shareItems:@[url] from:self sourceView:self.view];
 }
 
 @end

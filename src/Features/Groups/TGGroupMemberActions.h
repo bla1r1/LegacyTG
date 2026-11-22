@@ -23,10 +23,4 @@
 /// every other user profile is: the user id stands in for the chat id.
 + (void)openProfileForMember:(NSDictionary *)member from:(UIViewController *)host;
 
-/// The navigation fallback the group surfaces share: push when `host` is on
-/// a stack, otherwise present `controller` inside its own navigation
-/// controller with a Done button. Never a no-op.
-FOUNDATION_EXPORT void TGPresentControllerFrom(UIViewController *controller,
-											   UIViewController *host);
-
 @end

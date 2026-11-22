@@ -13,12 +13,12 @@
 #import "TGGroupStore.h"
 #import "TGProfileStore.h"
 #import "TGMessageStore.h"
+#import "TGPresent.h"
 
 static const CGFloat kCommunityPhotoSide = 72.0f;
 static const CGFloat kCommunityPhotoBar  = 92.0f;
 
-@interface TGCommunityViewController () <
-		UIImagePickerControllerDelegate, UINavigationControllerDelegate>
+@interface TGCommunityViewController ()
 @property (nonatomic, assign) int64_t communityId;
 @property (nonatomic, strong) NSMutableDictionary *community;
 @property (nonatomic, strong) NSDictionary *fullInfo;
@@ -246,17 +246,15 @@ static const CGFloat kCommunityPhotoBar  = 92.0f;
 }
 
 - (void)pickPhoto {
-	UIImagePickerController *picker = [[UIImagePickerController alloc] init];
-	picker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;
-	picker.delegate = self;
-	[self presentViewController:picker animated:YES completion:nil];
+	__weak typeof(self) weakSelf = self;
+	[TGPresent pickMediaFrom:self source:TGMediaSourceLibrary videos:NO sourceView:nil
+					  onPick:^(NSDictionary *info){ [weakSelf didPickMedia:info]; }];
 }
 
-- (void)imagePickerController:(UIImagePickerController *)picker
-		didFinishPickingMediaWithInfo:(NSDictionary *)info {
+/// What the library handed back, once the picker has gone.
+- (void)didPickMedia:(NSDictionary *)info {
 	UIImage *image = info[UIImagePickerControllerEditedImage] ?:
 			info[UIImagePickerControllerOriginalImage];
-	[picker dismissViewControllerAnimated:YES completion:nil];
 	if (!image)
 		return;
 	UIImage *scaled = [TGIcons decodedImage:image
@@ -281,10 +279,6 @@ static const CGFloat kCommunityPhotoBar  = 92.0f;
 		}
 		[weakSelf loadFullInfo];
 	}];
-}
-
-- (void)imagePickerControllerDidCancel:(UIImagePickerController *)picker {
-	[picker dismissViewControllerAnimated:YES completion:nil];
 }
 
 - (void)confirmDelete {

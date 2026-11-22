@@ -24,6 +24,8 @@
 #import "TGSessionsStore.h"
 #import "TGSettingsStore.h"
 #import "TGSettingsPageModels.h"
+#import "TGBarItem.h"
+#import "TGSegmentedControl.h"
 
 
 static const CGFloat kSettingsSearchWidth = 200.0f;
@@ -91,16 +93,7 @@ static const CGFloat kSettingsSearchHeight = 44.0f;
 	self.title = TGLocalized([self pageTitle]);
 
 	if (self.page == TGSettingsPageRecentCalls) {
-		UISegmentedControl *filter = [[UISegmentedControl alloc] initWithItems:@[@"All", @"Missed"]];
-		// Before iOS 7 a segmented control is the tall "plain" style unless
-		// told it sits in a bar; in the title view that drew two overlapping
-		// words in a 44 pt box.
-		if (NSFoundationVersionNumber <= NSFoundationVersionNumber_iOS_6_1) {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-			filter.segmentedControlStyle = UISegmentedControlStyleBar;
-#pragma clang diagnostic pop
-		}
+		UISegmentedControl *filter = TGBarSegments(@[@"All", @"Missed"]);
 		[filter sizeToFit];
 		filter.selectedSegmentIndex = self.recentCallsFilter;
 		[filter addTarget:self action:@selector(recentCallsFilterChanged:) forControlEvents:UIControlEventValueChanged];
@@ -110,13 +103,10 @@ static const CGFloat kSettingsSearchHeight = 44.0f;
 		// Only the bar's title is cleared: self.title = nil also blanked the
 		// tab bar's "Settings" label and the subpages' back button.
 		self.navigationItem.title = @"";
-		self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc]
-				initWithImage:[self qrBarIcon]
-				style:UIBarButtonItemStylePlain
-				target:self action:@selector(openQRCode)];
-		self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
-				initWithTitle:@"Edit" style:UIBarButtonItemStylePlain
-					   target:self action:@selector(openEditProfile)];
+		self.navigationItem.leftBarButtonItem = [TGBarItem itemWithImage:[self qrBarIcon]
+				label:@"QR Code" target:self action:@selector(openQRCode)];
+		self.navigationItem.rightBarButtonItem = [TGBarItem itemWithRole:TGBarRoleEdit
+				target:self action:@selector(openEditProfile)];
 	} else if (self.page == TGSettingsPageLanguage){
 		// Official puts the language search in the navigation bar.
 		UISearchBar *search = [[UISearchBar alloc] initWithFrame:
@@ -655,11 +645,7 @@ static const CGFloat kSettingsSearchHeight = 44.0f;
 	if (self.page == TGSettingsPagePrivacy){
 		// Official shows an activity item in the bar until the account answers.
 		if (!self.navigationItem.rightBarButtonItem){
-			UIActivityIndicatorView *spinner = [[UIActivityIndicatorView alloc]
-					initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleGray];
-			[spinner startAnimating];
-			self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
-					initWithCustomView:spinner];
+			self.navigationItem.rightBarButtonItem = [TGBarItem activityItem];
 		}
 		for (NSString *setting in [TGSettingsViewController privacySettings])
 			[[TGSettingsStore shared] privacyRule:setting completion:^(NSString *value){

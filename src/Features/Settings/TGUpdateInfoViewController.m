@@ -8,6 +8,8 @@
 #import "TGStyle.h"
 #import "TGLocalization.h"
 #import "TGRows.h"
+#import "TGBarItem.h"
+#import "TGLabel.h"
 
 static UIImage *TGUpdateAppIcon(void) {
 	for (NSString *name in @[@"Icon-60@2x.png", @"Icon@2x.png", @"Icon.png"]){
@@ -38,11 +40,8 @@ static UIImage *TGUpdateAppIcon(void) {
 	[super viewDidLoad];
 	self.title = TGLocalized(@"Update");
 	if (!self.info.isBlocking){
-		self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc]
-				initWithTitle:TGLocalized(@"Skip")
-						style:UIBarButtonItemStylePlain
-					   target:self
-					   action:@selector(skipTapped:)];
+		self.navigationItem.leftBarButtonItem = [TGBarItem itemWithTitle:@"Skip" primary:NO
+				target:self action:@selector(skipTapped:)];
 	}
 	[self buildHeader];
 	self.sections = @[TGSection(nil, nil, @[
@@ -80,25 +79,17 @@ static UIImage *TGUpdateAppIcon(void) {
 			? [NSString stringWithFormat:@"LegacyTG %@", self.info.version]
 			: @"LegacyTG";
 	CGFloat titleX = TGMetricGutter + TGMetricFileInfoIcon + TGMetricPad;
-	UILabel *versionLabel = [[UILabel alloc] initWithFrame:
-			CGRectMake(titleX,
+	UILabel *versionLabel = TGLabelWith(TGLabelHeader, CGRectMake(titleX,
 					TGMetricPadLarge + TGCenteredOrigin(TGMetricFileInfoIcon,
 							TGMetricLineHeader),
-					width - titleX - TGMetricGutter, TGMetricLineHeader)];
+					width - titleX - TGMetricGutter, TGMetricLineHeader), nil);
 	versionLabel.text = version;
-	versionLabel.font = TGFontHeader();
-	versionLabel.textColor = [theme primaryTextColour];
-	versionLabel.backgroundColor = [UIColor clearColor];
 	[header addSubview:versionLabel];
 
 	CGFloat bodyY = TGMetricPadLarge + TGMetricFileInfoIcon + TGMetricPad;
-	UILabel *changelog = [[UILabel alloc] initWithFrame:
-			CGRectMake(TGMetricGutter, bodyY, bodyWidth, bodySize.height)];
+	UILabel *changelog = TGLabelWith(TGLabelBody, CGRectMake(TGMetricGutter, bodyY, bodyWidth, bodySize.height), nil);
 	changelog.text = self.info.changelog;
-	changelog.font = TGFontBody();
 	changelog.numberOfLines = 0;
-	changelog.textColor = [theme primaryTextColour];
-	changelog.backgroundColor = [UIColor clearColor];
 	[header addSubview:changelog];
 
 	self.tableView.tableHeaderView = header;

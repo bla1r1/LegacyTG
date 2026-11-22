@@ -19,6 +19,8 @@
 #import "TGChatListRowGeometry.h"
 #import "TGSendStore.h"
 #import "TGAppActivity.h"
+#import "TGLabel.h"
+#import "TGControls.h"
 
 
 // Height of the folder pill strip above the chat list (official-style tabs).
@@ -253,27 +255,18 @@ static const CGFloat kListStoryGap     = TGMetricPadSmall;
 			kListTitleWidth, kListTitleHeight)];
 	box.backgroundColor = [UIColor clearColor];
 
-	UILabel *name = [[UILabel alloc] initWithFrame:CGRectMake(TGMetricZero,
-			TGMetricBorderWidth, kListTitleWidth, TGMetricLineRow)];
-	name.font = TGFontHeader();
-	name.textColor = [[TGTheme shared] barTitleColour];
-	name.backgroundColor = [UIColor clearColor];
+	UILabel *name = TGLabelWith(TGLabelBarTitle, CGRectMake(TGMetricZero,
+			TGMetricBorderWidth, kListTitleWidth, TGMetricLineRow), nil);
 	name.textAlignment = NSTextAlignmentCenter;
 	name.lineBreakMode = NSLineBreakByTruncatingTail;
-	name.shadowColor = [[TGTheme shared] navBarTextShadowColour];
-	name.shadowOffset = TGMetricShadowOffsetNav;
 	[box addSubview:name];
 
 	// The passcode lock used to be a left bar item. Official keeps it beside
 	// the title, so it lives here and the bar keeps only Edit.
-	UIButton *lock = [UIButton buttonWithType:UIButtonTypeCustom];
 	CGFloat lockSide = TGMetricLineSubhead;
-	lock.frame = CGRectMake(TGMetricPadTiny, TGCenteredOrigin(kListTitleHeight,
-			lockSide), lockSide, lockSide);
-	[lock setImage:TGChatListLockIcon(lockSide, [[TGTheme shared] barTitleColour])
-		  forState:UIControlStateNormal];
-	[lock addTarget:self action:@selector(lockAppTapped)
-   forControlEvents:UIControlEventTouchUpInside];
+	UIButton *lock = TGGlyphButton(TGChatListLockIcon(lockSide, [[TGTheme shared] barTitleColour]),
+			CGRectMake(TGMetricPadTiny, TGCenteredOrigin(kListTitleHeight, lockSide),
+					lockSide, lockSide), self, @selector(lockAppTapped));
 	lock.hidden = ![TGPasscode hasPasscode];
 	[box addSubview:lock];
 	self.listLockButton = lock;
@@ -283,23 +276,18 @@ static const CGFloat kListStoryGap     = TGMetricPadSmall;
 
 	// The collapsed story: an active peer's face appears beside the title
 	// once the strip is scrolled away, and tapping it opens that story.
-	UIButton *story = [UIButton buttonWithType:UIButtonTypeCustom];
-	story.frame = CGRectMake(TGMetricZero, TGCenteredOrigin(kListTitleHeight,
-			kListStorySide), kListStorySide, kListStorySide);
+	UIButton *story = TGGlyphButton(nil, CGRectMake(TGMetricZero,
+			TGCenteredOrigin(kListTitleHeight, kListStorySide), kListStorySide,
+			kListStorySide), self, @selector(openCollapsedStory));
 	story.layer.cornerRadius = TGHalf(kListStorySide);
 	story.clipsToBounds = YES;
 	story.hidden = YES;
-	[story addTarget:self action:@selector(openCollapsedStory)
-   forControlEvents:UIControlEventTouchUpInside];
 	[box addSubview:story];
 	self.listStoryAvatar = story;
 
-	UILabel *subtitle = [[UILabel alloc] initWithFrame:CGRectMake(TGMetricZero,
+	UILabel *subtitle = TGLabelWith(TGLabelBarSubtitle, CGRectMake(TGMetricZero,
 			TGMetricBorderWidth + TGMetricLineRow, kListTitleWidth,
-			TGMetricLineMicro)];
-	subtitle.font = TGFontMeta();
-	subtitle.textColor = [[TGTheme shared] barSubtitleColour];
-	subtitle.backgroundColor = [UIColor clearColor];
+			TGMetricLineMicro), nil);
 	subtitle.textAlignment = NSTextAlignmentCenter;
 	subtitle.lineBreakMode = NSLineBreakByTruncatingTail;
 	subtitle.hidden = YES;

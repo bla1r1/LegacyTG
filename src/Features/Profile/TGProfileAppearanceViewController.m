@@ -14,6 +14,9 @@
 #import "TGRows.h"
 #import "TGRowCell.h"
 #import "TGRowGeometry.h"
+#import "TGBarItem.h"
+#import "TGSegmentedControl.h"
+#import "TGLabel.h"
 
 /// Telegram's swatch is 44 pt on a phone, per the parity spec; the gap and
 /// gutter come from the spacing scale.
@@ -133,12 +136,10 @@ static const NSInteger kPreviewNameTag = 8201;
 	self.title = TGLocalized(@"Your Color");
 	self.swatchCache = [[NSCache alloc] init];
 
-	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
-			initWithTitle:TGLocalized(@"Apply") style:UIBarButtonItemStyleDone
-				   target:self action:@selector(applyTapped)];
+	self.navigationItem.rightBarButtonItem = [TGBarItem itemWithTitle:@"Apply" primary:YES
+			target:self action:@selector(applyTapped)];
 
-	UISegmentedControl *tabs = [[UISegmentedControl alloc]
-			initWithItems:@[TGLocalized(@"Profile"), TGLocalized(@"Name")]];
+	UISegmentedControl *tabs = TGContentSegments(@[TGLocalized(@"Profile"), TGLocalized(@"Name")]);
 	tabs.selectedSegmentIndex = self.tab;
 	[tabs addTarget:self action:@selector(tabChanged:)
    forControlEvents:UIControlEventValueChanged];
@@ -354,17 +355,14 @@ static const NSInteger kPreviewNameTag = 8201;
 	[cell.contentView addSubview:avatarView];
 
 	CGFloat width = TGAppearanceContentWidth(tableView);
-	UILabel *nameLabel = [[UILabel alloc] initWithFrame:
-			CGRectMake(TGMetricGutter + side + TGMetricPadMedium,
+	UILabel *nameLabel = TGLabelWith(TGLabelRowStrong, CGRectMake(TGMetricGutter + side + TGMetricPadMedium,
 					TGCenteredOrigin(TGMetricPersonRow, TGMetricLineRow),
 					width - TGMetricGutter - side - TGMetricPadMedium - TGMetricGutter,
-					TGMetricLineRow)];
+					TGMetricLineRow), nil);
 	nameLabel.tag = kPreviewNameTag;
 	nameLabel.text = row[TGRowPreviewText];
-	nameLabel.font = TGFontRowStrong();
 	nameLabel.textColor = row[TGRowPreviewTextColour] ?:
 			[[TGTheme shared] primaryTextColour];
-	nameLabel.backgroundColor = [UIColor clearColor];
 	[cell.contentView addSubview:nameLabel];
 }
 

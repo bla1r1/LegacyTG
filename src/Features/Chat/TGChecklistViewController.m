@@ -5,6 +5,7 @@
 #import "TGMessageStore.h"
 #import "TGSendStore.h"
 #import "TGAlertSheet.h"
+#import "TGPresent.h"
 
 @interface TGChecklistViewController ()
 @property (nonatomic, assign) int64_t chatId;
@@ -180,11 +181,8 @@
 	__weak typeof(self) weakSelf = self;
 	BOOL isDone = [task[@"done"] boolValue];
 	NSString *title = isDone ? @"Undo" : @"Done";
-	[TGAlertSheet showChoices:@[title, @"Rename"]
-						title:task[@"text"] ?: @"Task"
-			 destructiveIndex:-1
-					   inView:self.view
-					 onChoice:^(NSInteger index){
+	[TGPresent showMenuTitles:@[title, @"Rename"] destructiveIndex:-1
+			fromView:nil onController:self onChoice:^(NSInteger index){
 		if (index == 0){
 			[weakSelf toggleTask:task];
 			return;

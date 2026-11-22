@@ -10,6 +10,8 @@
 #import "TGIcons.h"
 #import "TGLocalization.h"
 #import "TGRows.h"
+#import "TGBarItem.h"
+#import "TGPresent.h"
 
 /// One page of the saved-music list. The old screen asked for 100 once and
 /// showed the total above it, so anything past the first 100 never appeared.
@@ -67,9 +69,8 @@ static UIImage *TGProfileAudioArtwork(UIImage *cover, BOOL playing) {
 	self.coversRequested = [NSMutableSet set];
 	[self applyTheme];
 	if ([self isOwnProfile])
-		self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
-				initWithBarButtonSystemItem:UIBarButtonSystemItemAdd
-									 target:self action:@selector(addTapped)];
+		self.navigationItem.rightBarButtonItem = [TGBarItem itemWithRole:TGBarRoleAdd
+				target:self action:@selector(addTapped)];
 	// A row's verbs do not fit on a tap: the hold is the menu.
 	UILongPressGestureRecognizer *hold = [[UILongPressGestureRecognizer alloc]
 			initWithTarget:self action:@selector(rowHeld:)];
@@ -277,11 +278,8 @@ static UIImage *TGProfileAudioArtwork(UIImage *cover, BOOL playing) {
 		[choices addObject:TGLocalized(@"Remove from Profile")];
 	}
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:choices
-						title:(audio[@"title"] ?: TGLocalized(@"Audio"))
-			 destructiveIndex:(own ? (NSInteger)choices.count - 1 : -1)
-					   inView:self.view
-					 onChoice:^(NSInteger index){
+	[TGPresent showMenuTitles:choices destructiveIndex:(own ? (NSInteger)choices.count - 1 : -1)
+			fromView:[self.tableView cellForRowAtIndexPath:path] onController:self onChoice:^(NSInteger index){
 		NSString *choice = choices[(NSUInteger)index];
 		if ([choice isEqualToString:TGLocalized(@"Play")]){
 			[weakSelf playAtIndex:path.row];

@@ -20,6 +20,9 @@
 #import "TGOptions.h"
 #import "TGSearchScope.h"
 #import "TGEmptyView.h"
+#import "TGBarItem.h"
+#import "TGSegmentedControl.h"
+#import "TGPresent.h"
 
 
 @interface TGSearchViewController () <UISearchBarDelegate>
@@ -91,8 +94,8 @@ static NSString *TGSearchDateText(NSNumber *stamp) {
 	// field (seen three times on the iPod touch 4). A left item replaces the
 	// back button outright, and an empty one leaves the field the room.
 	self.navigationItem.hidesBackButton = YES;
-	self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc]
-			initWithCustomView:[[UIView alloc] initWithFrame:CGRectZero]];
+	self.navigationItem.leftBarButtonItem = [TGBarItem
+			itemWithView:[[UIView alloc] initWithFrame:CGRectZero]];
 	return self;
 }
 
@@ -123,9 +126,8 @@ static NSString *TGSearchDateText(NSNumber *stamp) {
 	self.bar.placeholder = @"Search";
 	self.navigationItem.titleView = self.bar;
 	self.navigationItem.hidesBackButton = YES;
-	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
-			initWithTitle:@"Cancel" style:UIBarButtonItemStylePlain
-				   target:self action:@selector(cancel)];
+	self.navigationItem.rightBarButtonItem = [TGBarItem itemWithRole:TGBarRoleCancel
+			target:self action:@selector(cancel)];
 
 	[self applyTheme];
 
@@ -267,9 +269,7 @@ static NSString *TGSearchDateText(NSNumber *stamp) {
 	self.scopeStrip.autoresizingMask = UIViewAutoresizingFlexibleWidth;
 	[strip addSubview:self.scopeStrip];
 
-	UISegmentedControl *segments = [[UISegmentedControl alloc]
-			initWithItems:TGSearchScopeTitles()];
-	segments.segmentedControlStyle = UISegmentedControlStyleBar;
+	UISegmentedControl *segments = TGBarSegments(TGSearchScopeTitles());
 	segments.selectedSegmentIndex = self.scope;
 	[segments addTarget:self action:@selector(scopeChanged:)
 	   forControlEvents:UIControlEventValueChanged];
@@ -472,11 +472,8 @@ static NSString *TGSearchDateText(NSNumber *stamp) {
 			return;
 		NSString *tag = self.recentTags[path.row];
 		__weak typeof(self) weakSelf = self;
-		[TGAlertSheet showChoices:@[@"Remove from Recent", @"Remove"]
-							title:[NSString stringWithFormat:@"#%@", tag]
-				 destructiveIndex:-1
-						   inView:self.view
-						 onChoice:^(NSInteger index){
+		[TGPresent showMenuTitles:@[@"Remove from Recent", @"Remove"] destructiveIndex:-1
+			fromView:[self.tableView cellForRowAtIndexPath:path] onController:self onChoice:^(NSInteger index){
 			TGSearchViewController *me = weakSelf;
 			if (!me)
 				return;

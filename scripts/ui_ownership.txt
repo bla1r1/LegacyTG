@@ -1,0 +1,59 @@
+# Who builds UI in src/Features. Read by scripts/lint_ui_ownership.sh:
+#   lint_controls.sh      column `controls`: labels, buttons, fields, switches,
+#                         sliders, spinners, hand-rolled animations
+#   lint_presentation.sh  column `presents`: modals, navigation controllers,
+#                         bar buttons, system alerts and sheets
+#
+# A Feature file not listed here has none of either. A screen describes itself
+# (TGRows, TGRowsViewController) and src/UI draws and opens it, so two screens
+# cannot open the same kind of thing two ways.
+#
+#   canvas  draws its own picture: its controls are not counted (`-`); its
+#           presentation is, because a canvas takes the shared bar, menus and
+#           modals too. Needs a reason. Add one only with the user's yes.
+#   queue   still builds UI itself. The numbers are what is left; they only
+#           fall (`lint_ui_ownership.sh controls|presents --update` lowers
+#           them), and a line goes when both reach 0. Never add a queue line.
+#
+# kind   controls presents file  reason
+canvas         -        0  src/Features/Auth/TGLoginViewController+Steps.m  login: phone, code and QR steps are drawn, not rows
+canvas         -        0  src/Features/Auth/TGLoginViewController.m  login: phone, code and QR steps are drawn, not rows
+canvas         -        0  src/Features/Auth/TGQRViewController.m  login: phone, code and QR steps are drawn, not rows
+canvas         -        1  src/Features/Calls/TGCallViewController.m  call screen keeps its design on purpose
+canvas         -        0  src/Features/Calls/TGGroupCallViewController.m  call screen keeps its design on purpose
+canvas         -        0  src/Features/Calls/Views/TGCallMiniBar.m  call screen keeps its design on purpose
+canvas         -        0  src/Features/Chat/Composer/TGChatAudioPlayback.m  chat: bubbles, composer and chrome are drawn
+canvas         -        0  src/Features/Chat/Composer/TGChatAudioVoice.m  chat: bubbles, composer and chrome are drawn
+canvas         -        0  src/Features/Chat/Composer/TGChatViewController+Bots.m  chat: bubbles, composer and chrome are drawn
+canvas         -        0  src/Features/Chat/Composer/TGChatViewController+Input.m  chat: bubbles, composer and chrome are drawn
+canvas         -        0  src/Features/Chat/Composer/TGChatViewController+Media.m  chat: bubbles, composer and chrome are drawn
+canvas         -        0  src/Features/Chat/Core/TGChatViewData.m  chat: bubbles, composer and chrome are drawn
+canvas         -        0  src/Features/Chat/Core/TGChatViewLayout.m  chat: bubbles, composer and chrome are drawn
+canvas         -        0  src/Features/Chat/Core/TGChatViewPinned.m  chat: bubbles, composer and chrome are drawn
+canvas         -        0  src/Features/Chat/Rendering/TGChatViewController+Cells.m  chat: bubbles, composer and chrome are drawn
+canvas         -        0  src/Features/Chat/Rendering/TGChatViewController+Chrome.m  chat: bubbles, composer and chrome are drawn
+canvas         -        0  src/Features/Chat/Rendering/TGChatViewController+ServiceCells.m  chat: bubbles, composer and chrome are drawn
+canvas         -        0  src/Features/Chat/Views/EmojiPanel/TGEmojiPanelBase.m  chat: panel, record bar and cards are drawn
+canvas         -        0  src/Features/Chat/Views/EmojiPanel/TGEmojiPanelEmojiCards.m  chat: panel, record bar and cards are drawn
+canvas         -        0  src/Features/Chat/Views/EmojiPanel/TGEmojiPanelGridLayout.m  chat: panel, record bar and cards are drawn
+canvas         -        0  src/Features/Chat/Views/EmojiPanel/TGEmojiPanelStickerSheets.m  chat: panel, record bar and cards are drawn
+canvas         -        0  src/Features/Chat/Views/EmojiPanel/TGEmojiPanelStrip.m  chat: panel, record bar and cards are drawn
+canvas         -        0  src/Features/Chat/Views/TGMessageCardView.m  chat: panel, record bar and cards are drawn
+canvas         -        0  src/Features/Chat/Views/TGRecordBar.m  chat: panel, record bar and cards are drawn
+canvas         -        0  src/Features/Dev/TGDevFeedback.m  developer tools behind TG_DEV
+canvas         -        0  src/Features/Dev/TGDevGalleryViewController.m  developer tools behind TG_DEV
+canvas         -        0  src/Features/Dev/TGDevModeViewController.m  developer tools behind TG_DEV
+canvas         -        0  src/Features/Dev/TGiPadSimulator.m  developer tools behind TG_DEV
+canvas         -        0  src/Features/Media/Core/TGMediaViewerChrome.m  media viewer, player and editors are drawn
+canvas         -        0  src/Features/Media/Core/TGMediaViewerMoreSheet.m  media viewer, player and editors are drawn
+canvas         -        0  src/Features/Media/Core/TGMediaViewerProgress.m  media viewer, player and editors are drawn
+canvas         -        0  src/Features/Media/Core/TGMediaViewerTransitions.m  media viewer, player and editors are drawn
+canvas         -        0  src/Features/Media/TGFileInfoViewController.m  media viewer, player and editors are drawn
+canvas         -        0  src/Features/Media/TGMediaVeil.m  media viewer, player and editors are drawn
+canvas         -        0  src/Features/Media/TGPlayerView.m  media viewer, player and editors are drawn
+canvas         -        0  src/Features/Media/TGStickerEditorViewController.m  media viewer, player and editors are drawn
+canvas         -        0  src/Features/Media/TGStickerGalleryViewController.m  media viewer, player and editors are drawn
+canvas         -        0  src/Features/Media/TGVideoNoteViewController.m  media viewer, player and editors are drawn
+canvas         -        0  src/Features/Stories/TGStoriesCell.m  story viewer, camera and the stories strip are drawn
+canvas         -        0  src/Features/Stories/TGStoryCameraViewController.m  story viewer, camera and the stories strip are drawn
+canvas         -        0  src/Features/Stories/TGStoryViewerViewController.m  story viewer, camera and the stories strip are drawn

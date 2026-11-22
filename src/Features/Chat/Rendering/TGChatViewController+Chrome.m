@@ -21,6 +21,7 @@
 #import "TGStatisticsViewController.h"
 #import "TGChatListStore.h"
 #import "TGRows.h"
+#import "TGPresent.h"
 
 static const CGFloat kJumpSide = TGMetricJumpSide;
 /// The widest the unread count on the jump button goes before it truncates.
@@ -1113,10 +1114,8 @@ static const CGFloat kReplyPull = TGMetricReplyPull;   // how far a bubble trave
 		[items addObject:TGLocalized(@"Close")];
 	}
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:items title:nil
-			 destructiveIndex:(secret ? (NSInteger)items.count - 1 : -1)
-					   inView:self.navigationController.view ?: self.view
-					 onChoice:^(NSInteger index){
+	[TGPresent showMenuTitles:items destructiveIndex:(secret ? (NSInteger)items.count - 1 : -1)
+			fromView:hold.view onController:self onChoice:^(NSInteger index){
 		TGChatViewController *me = weakSelf;
 		if (!me)
 			return;

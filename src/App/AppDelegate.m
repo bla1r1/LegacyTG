@@ -416,6 +416,9 @@ static UIImage *TGCustomEmojiFromStore(int64_t emojiId, CGFloat side) {
 	[TGUpdateStore sessionDidStart];
 	// One line if the launch itself misbehaves; silent when it is healthy.
 	TGPerfReport("launch", "didFinishLaunching", launchStart, 300.0);
+#if TG_DEV
+	[self tg_runBundledWalk];
+#endif
 
 	UILocalNotification *launchNotif = launchOptions[UIApplicationLaunchOptionsLocalNotificationKey];
 	if (launchNotif) {
@@ -952,5 +955,31 @@ static void TGRecursivePurgeVC(UIViewController *vc) {
 			initWithRootViewController:terms];
 	[top presentViewController:nav animated:YES completion:nil];
 }
+
+#if TG_DEV
+/// A device with no shell to send URLs through (the emulator) gets them from
+/// devwalk.txt in the bundle: one "seconds itglegacy://route" per line, the
+/// seconds counted from launch. scripts/emu walks inject the file.
+- (void)tg_runBundledWalk {
+	NSString *path = [[NSBundle mainBundle] pathForResource:@"devwalk" ofType:@"txt"];
+	NSString *text = path ? [NSString stringWithContentsOfFile:path
+			encoding:NSUTF8StringEncoding error:NULL] : nil;
+	for (NSString *line in [text componentsSeparatedByString:@"\n"]){
+		NSArray *parts = [line componentsSeparatedByString:@" "];
+		if (parts.count < 2 || [line hasPrefix:@"#"])
+			continue;
+		double at = [parts[0] doubleValue];
+		NSURL *url = [NSURL URLWithString:parts[1]];
+		if (!url)
+			continue;
+		dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(at * NSEC_PER_SEC)),
+				dispatch_get_main_queue(), ^{
+			NSLog(@"devwalk: %@", url);
+			[self application:[UIApplication sharedApplication] handleOpenURL:url];
+		});
+	}
+}
+
+#endif
 
 @end

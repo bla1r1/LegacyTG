@@ -7,6 +7,7 @@
 #import "TGLocalization.h"
 #import "TGAccountStore.h"
 #import "TGProfileStore.h"
+#import "TGBarItem.h"
 
 @implementation TGLoginViewController
 
@@ -17,10 +18,8 @@
     // in the content, where it can be the 28 pt line the node draws.
     self.title = nil;
 
-    self.nextItem = [[UIBarButtonItem alloc] initWithTitle:@"Next"
-                                                     style:UIBarButtonItemStyleDone
-                                                    target:self
-                                                    action:@selector(actionButtonTapped)];
+    self.nextItem = [TGBarItem itemWithTitle:@"Next" primary:YES
+                                       target:self action:@selector(actionButtonTapped)];
 
     [self setupUI];
     [self applyTheme];

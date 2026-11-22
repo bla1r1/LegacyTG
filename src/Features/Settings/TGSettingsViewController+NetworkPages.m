@@ -20,6 +20,7 @@
 #import "TGMessageStore.h"
 #import "TGProfileStore.h"
 #import "TGSettingsStore.h"
+#import "TGPresent.h"
 
 
 static char TGAutoDownloadBaselineKey;
@@ -506,11 +507,8 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 						 @"Share Folder", @"New Chats",
 						 @"Default Icon", @"Chat Count", @"Delete Folder"];
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:choices
-							title:title
-				 destructiveIndex:7
-						   inView:self.view
-						 onChoice:^(NSInteger index){
+	[TGPresent showMenuTitles:choices destructiveIndex:7
+			fromView:nil onController:self onChoice:^(NSInteger index){
 		TGSettingsViewController *me = weakSelf;
 		if (index == 0){
 			[TGAlertSheet showInput:@"Edit Folder" message:nil
@@ -635,8 +633,8 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 			[rows addObject:[NSString stringWithFormat:@"%@%@",
 					[link[@"name"] length] ? [link[@"name"] stringByAppendingString:@" · "] : @"",
 					link[@"link"]]];
-		[TGAlertSheet showChoices:rows title:title destructiveIndex:-1
-						   inView:me.view onChoice:^(NSInteger index){
+		[TGPresent showList:rows title:title destructiveIndex:-1
+			from:me onPick:^(NSInteger index){
 			if (index == 0){
 				[me createInviteLinkForFolder:folderId named:title];
 				return;
@@ -666,9 +664,8 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 	if (!url.length)
 		return;
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:@[@"Copy Link", @"Rename", @"Delete"]
-							title:url destructiveIndex:2 inView:self.view
-						 onChoice:^(NSInteger index){
+	[TGPresent showMenuTitles:@[@"Copy Link", @"Rename", @"Delete"] destructiveIndex:2
+			fromView:nil onController:self onChoice:^(NSInteger index){
 		if (index == 0){
 			[UIPasteboard generalPasteboard].string = url;
 			[weakSelf toast:@"Link copied."];
@@ -861,11 +858,8 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 	[choices addObject:@"Remove"];
 	[choices addObject:@"Delete"];
 
-	[TGAlertSheet showChoices:choices
-						title:download[@"name"]
-			 destructiveIndex:(NSInteger)choices.count - 1
-					   inView:self.view
-					 onChoice:^(NSInteger index){
+	[TGPresent showMenuTitles:choices destructiveIndex:(NSInteger)choices.count - 1
+			fromView:nil onController:self onChoice:^(NSInteger index){
 		NSString *choice = choices[(NSUInteger)index];
 		if ([choice isEqualToString:@"Pause"] || [choice isEqualToString:@"Resume"]){
 			[[TGSettingsStore shared] setDownloadOfFile:fileId
@@ -1032,12 +1026,9 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 			proxy[@"server"] ?: @"?", proxy[@"port"] ?: @0];
 	__weak typeof(self) weakSelf = self;
 
-	[TGAlertSheet showChoices:@[@"Use Proxy", @"Proxy Details",
-								@"Proxy Details", @"Remove"]
-						title:name
-			 destructiveIndex:3
-					   inView:self.view
-					 onChoice:^(NSInteger index){
+	[TGPresent showMenuTitles:@[@"Use Proxy", @"Proxy Details",
+								@"Proxy Details", @"Remove"] destructiveIndex:3
+			fromView:nil onController:self onChoice:^(NSInteger index){
 		TGSettingsViewController *me = weakSelf;
 		if (index == 0){
 			[[TGSettingsStore shared] enableProxy:proxyId];
@@ -1148,11 +1139,8 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 				line = [line stringByAppendingFormat:@" — %@", chat];
 			[rows addObject:line];
 		}
-		[TGAlertSheet showChoices:rows
-							title:@"Files"
-				 destructiveIndex:-1
-						   inView:me.view
-						 onChoice:^(NSInteger index){
+		[TGPresent showList:rows title:@"Files" destructiveIndex:-1
+			from:self onPick:^(NSInteger index){
 			if (index >= (NSInteger)messages.count)
 				return;
 			NSDictionary *m = messages[index];

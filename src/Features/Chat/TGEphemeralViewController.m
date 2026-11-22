@@ -6,6 +6,9 @@
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGRows.h"
+#import "TGBarItem.h"
+#import "TGLabel.h"
+#import "TGControls.h"
 
 @interface TGEphemeralViewController ()
 @property (nonatomic, strong) UITextView *composer;
@@ -32,32 +35,25 @@
 	self.lastEphemeralId = 0;
 	self.lastMessageId = 0;
 	self.resultText = TGLocalized(@"None");
-	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
-			initWithTitle:TGLocalized(@"Receiver") style:UIBarButtonItemStylePlain
-				   target:self action:@selector(changeReceiver)];
+	self.navigationItem.rightBarButtonItem = [TGBarItem itemWithTitle:@"Receiver" primary:NO
+			target:self action:@selector(changeReceiver)];
 
 	CGFloat height = TGMetricRow * 3;
 	UIView *header = [[UIView alloc] initWithFrame:
 			CGRectMake(0, 0, self.tableView.bounds.size.width,
 					   height + TGMetricPadLarge)];
 	header.backgroundColor = [UIColor clearColor];
-	self.composer = [[UITextView alloc] initWithFrame:
-			CGRectMake(TGMetricPadMedium, TGMetricPad,
-					   header.bounds.size.width - TGDoubled(TGMetricPadMedium),
-					   height)];
-	self.composer.font = TGFontBody();
+	self.composer = TGEditorTextView(CGRectMake(TGMetricPadMedium, TGMetricPad,
+			header.bounds.size.width - TGDoubled(TGMetricPadMedium), height));
 	self.composer.autoresizingMask = UIViewAutoresizingFlexibleWidth;
 	self.composer.layer.cornerRadius = TGMetricCornerControl;
 	self.composer.clipsToBounds = YES;
 	[header addSubview:self.composer];
 
-	self.placeholder = [[UILabel alloc] initWithFrame:
-			CGRectMake(TGMetricPadLarge, TGMetricPad,
+	self.placeholder = TGLabelWith(TGLabelBody, CGRectMake(TGMetricPadLarge, TGMetricPad,
 					   self.composer.bounds.size.width - TGDoubled(TGMetricPadLarge),
-					   TGMetricLineBody)];
+					   TGMetricLineBody), nil);
 	self.placeholder.text = TGLocalized(@"Message");
-	self.placeholder.font = TGFontBody();
-	self.placeholder.backgroundColor = [UIColor clearColor];
 	self.placeholder.userInteractionEnabled = NO;
 	[header addSubview:self.placeholder];
 	self.tableView.tableHeaderView = header;

@@ -99,4 +99,11 @@
 	self.tg_emptyView = nil;
 }
 
+- (void)showLoading {
+	UIActivityIndicatorView *spinner = [[UIActivityIndicatorView alloc]
+			initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleGray];
+	[spinner startAnimating];
+	self.tableView.backgroundView = spinner;
+}
+
 @end

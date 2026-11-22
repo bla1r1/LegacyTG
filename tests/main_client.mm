@@ -106,6 +106,7 @@
 #import "TGSettingsPageModelsTests.m"
 #import "TGProfileScreenLogicTests.m"
 #import "TGPageTemplateTests.m"
+#import "TGPresentRulesTests.m"
 #import "TGScreenLogicTests.m"
 #import "TGMessageMetricsTests.m"
 #import "TGLottieSupportTests.m"

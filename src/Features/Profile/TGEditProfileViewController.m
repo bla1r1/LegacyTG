@@ -11,6 +11,9 @@
 #import "TGUsernameSettingsViewController.h"
 #import "TGEmojiStatusViewController.h"
 #import "TGRows.h"
+#import "TGBarItem.h"
+#import "TGPresent.h"
+#import "TGSegmentedControl.h"
 
 // Profile editing: avatar photo, names, bio, birthday, phone, username and the
 // profile's default tab.
@@ -28,7 +31,6 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 }
 
 @interface TGEditProfileViewController ()
-		<UIImagePickerControllerDelegate, UINavigationControllerDelegate>
 @property (nonatomic, copy) NSString *firstText;
 @property (nonatomic, copy) NSString *lastText;
 @property (nonatomic, copy) NSString *bioText;
@@ -67,12 +69,10 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 	self.title = @"";
 	[self applyTheme];
 
-	self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc]
-			initWithTitle:@"Cancel" style:UIBarButtonItemStylePlain
-				   target:self action:@selector(cancel)];
-	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
-			initWithTitle:@"Done" style:UIBarButtonItemStyleDone
-				   target:self action:@selector(save)];
+	self.navigationItem.leftBarButtonItem = [TGBarItem itemWithRole:TGBarRoleCancel
+			target:self action:@selector(cancel)];
+	self.navigationItem.rightBarButtonItem = [TGBarItem itemWithRole:TGBarRoleDone
+			target:self action:@selector(save)];
 
 	NSDictionary *me = [TGProfileStore shared].me;
 	self.firstText = me[@"first_name"] ?: @"";
@@ -403,8 +403,7 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 	UIView *card = [sheet addCardOfHeight:kBar + kBirthdayYearRow + kPicker
 							 edgeToEdge:YES];
 
-	UISegmentedControl *year = [[UISegmentedControl alloc]
-			initWithItems:@[@"Year", @"No"]];
+	UISegmentedControl *year = TGContentSegments(@[@"Year", @"No"]);
 	year.selectedSegmentIndex = (self.birthDay > 0 && self.birthYear <= 0) ? 1 : 0;
 	year.frame = CGRectMake(TGMetricGutter, kBar,
 			card.bounds.size.width - TGDoubled(TGMetricGutter),
@@ -430,12 +429,10 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 	UIToolbar *bar = [[UIToolbar alloc] initWithFrame:
 			CGRectMake(0, 0, card.bounds.size.width, kBar)];
 	bar.items = @[
-		[[UIBarButtonItem alloc] initWithTitle:(self.birthDay > 0 ? @"Remove" : @"Cancel")
-				style:UIBarButtonItemStylePlain target:self action:@selector(clearBirthday)],
-		[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace
-				target:nil action:nil],
-		[[UIBarButtonItem alloc] initWithTitle:@"Done"
-				style:UIBarButtonItemStyleDone target:self action:@selector(commitBirthday)],
+		[TGBarItem plainItemWithTitle:(self.birthDay > 0 ? @"Remove" : @"Cancel")
+				target:self action:@selector(clearBirthday)],
+		[TGBarItem flexibleSpace],
+		[TGBarItem itemWithRole:TGBarRoleDone target:self action:@selector(commitBirthday)],
 	];
 	[card addSubview:bar];
 
@@ -494,15 +491,13 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 	if (![UIImagePickerController isSourceTypeAvailable:
 			UIImagePickerControllerSourceTypePhotoLibrary])
 		return;
-	UIImagePickerController *picker = [[UIImagePickerController alloc] init];
-	picker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;
-	picker.delegate = self;
-	[self presentViewController:picker animated:YES completion:nil];
+	__weak typeof(self) weakSelf = self;
+	[TGPresent pickMediaFrom:self source:TGMediaSourceLibrary videos:NO sourceView:nil
+					  onPick:^(NSDictionary *info){ [weakSelf didPickMedia:info]; }];
 }
 
-- (void)imagePickerController:(UIImagePickerController *)picker
-		didFinishPickingMediaWithInfo:(NSDictionary *)info {
-	[picker dismissViewControllerAnimated:YES completion:nil];
+/// What the library handed back, once the picker has gone.
+- (void)didPickMedia:(NSDictionary *)info {
 	UIImage *image = info[UIImagePickerControllerOriginalImage];
 	if (!image)
 		return;
@@ -524,10 +519,6 @@ static NSString *TGBirthdayPrivacyLabel(NSString *value) {
 		[TGAlertSheet showMessage:@"An error occurred."
 							title:@"Set Profile Photo" inView:weakSelf.view];
 	}];
-}
-
-- (void)imagePickerControllerDidCancel:(UIImagePickerController *)picker {
-	[picker dismissViewControllerAnimated:YES completion:nil];
 }
 
 #pragma mark - account actions

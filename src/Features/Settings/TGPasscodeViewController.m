@@ -6,6 +6,9 @@
 #import "TGTheme.h"
 #import "TGStyle.h"
 #import "TGLocalization.h"
+#import "TGBarItem.h"
+#import "TGLabel.h"
+#import "TGControls.h"
 #import <AudioToolbox/AudioToolbox.h>
 #import <QuartzCore/QuartzCore.h>
 
@@ -87,24 +90,16 @@ static const CGFloat kBorderWidth = 1.5f;
 
 	if (self.mode != TGPasscodeModeUnlock && self.navigationController) {
 		self.title = @"Passcode Lock";
-		self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc]
-				initWithBarButtonSystemItem:UIBarButtonSystemItemCancel
-									 target:self
-									 action:@selector(cancelTapped)];
+		self.navigationItem.leftBarButtonItem = [TGBarItem itemWithRole:TGBarRoleCancel
+				target:self action:@selector(cancelTapped)];
 	}
 
-	self.titleLabel = [[UILabel alloc] init];
-	self.titleLabel.font = TGFontTitle();
-	self.titleLabel.textColor = [[TGTheme shared] primaryTextColour];
+	self.titleLabel = TGLabelMake(TGLabelTitle);
 	self.titleLabel.textAlignment = NSTextAlignmentCenter;
-	self.titleLabel.backgroundColor = [UIColor clearColor];
 	[self.view addSubview:self.titleLabel];
 
-	self.subtitleLabel = [[UILabel alloc] init];
-	self.subtitleLabel.font = TGFontCaption();
-	self.subtitleLabel.textColor = [[TGTheme shared] secondaryTextColour];
+	self.subtitleLabel = TGLabelMake(TGLabelCaption);
 	self.subtitleLabel.textAlignment = NSTextAlignmentCenter;
-	self.subtitleLabel.backgroundColor = [UIColor clearColor];
 	[self.view addSubview:self.subtitleLabel];
 
 	self.dotsContainer = [[UIView alloc] init];
@@ -122,10 +117,8 @@ static const CGFloat kBorderWidth = 1.5f;
 		[self.dots addObject:dot];
 	}
 
-	self.hiddenInput = [[UITextField alloc] initWithFrame:CGRectZero];
-	self.hiddenInput.keyboardType = UIKeyboardTypeNumberPad;
+	self.hiddenInput = TGKeyCatcher(UIKeyboardTypeNumberPad, self, @selector(textDidChange:));
 	self.hiddenInput.delegate = self;
-	[self.hiddenInput addTarget:self action:@selector(textDidChange:) forControlEvents:UIControlEventEditingChanged];
 	[self.view addSubview:self.hiddenInput];
 
 	[self updateStepTitle];

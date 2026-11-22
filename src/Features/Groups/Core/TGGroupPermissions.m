@@ -18,6 +18,7 @@
 #import "TGGroupSettingsViewControllerInternal.h"
 #import "TGGroupStore.h"
 #import "TGMessageStore.h"
+#import "TGPresent.h"
 
 
 
@@ -147,9 +148,8 @@ typedef NS_ENUM(NSInteger, TGGroupRowKind) {
 		[rows addObject:@"Approve"];
 		[rows addObject:@"Decline All"];
 
-		[TGAlertSheet showChoices:rows title:@"Join Requests"
-				 destructiveIndex:(NSInteger)rows.count - 1 inView:me.view
-						 onChoice:^(NSInteger index){
+		[TGPresent showList:rows title:@"Join Requests" destructiveIndex:(NSInteger)rows.count - 1
+			from:me onPick:^(NSInteger index){
 			if (index == (NSInteger)requests.count ||
 				index == (NSInteger)requests.count + 1){
 				BOOL approve = index == (NSInteger)requests.count;

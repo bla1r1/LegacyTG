@@ -5,6 +5,7 @@
 #import "TGStyle.h"
 #import "TGChatParityModel.h"
 #import "TGChatListRowGeometry.h"
+#import "TGPresent.h"
 
 /// A flick that never reached half the buttons' width still opens the row.
 /// Below this the pan reads as a slow drag and the half-way rule decides.
@@ -99,14 +100,13 @@ static const CGFloat kSwipeFlickVelocity = 500.0f;
 		items = more;
 	}
 
-	CGRect rect = [self.tableView rectForRowAtIndexPath:
+	// The row stays lit over the dimmed list and the card hangs from it, as
+	// official's chat list hold does.
+	UITableViewCell *cell = [self.tableView cellForRowAtIndexPath:
 			[NSIndexPath indexPathForRow:row inSection:0]];
-	CGPoint where = [self.tableView convertPoint:
-			CGPointMake(TGMetricChatListMenuX, CGRectGetMaxY(rect) - TGMetricPadMedium) toView:self.navigationController.view];
-
 	__weak typeof(self) weakSelf = self;
-	[TGPopupMenu showItems:items atPoint:where inView:self.navigationController.view
-				  onChoice:^(NSInteger choice, NSString *title){
+	[TGPresent showMenu:items fromView:cell onController:self
+			   onChoice:^(NSInteger choice, NSString *title){
 		[weakSelf runChatAction:title];
 	}];
 }

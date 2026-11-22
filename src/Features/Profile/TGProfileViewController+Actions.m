@@ -20,6 +20,9 @@
 #import "TGDevBotConsoleViewController.h"
 #import "TGAffiliateProgramsViewController.h"
 #import "TGGroupLogic.h"
+#import "TGBarItem.h"
+#import "TGPresent.h"
+#import "TGLabel.h"
 #import <CoreImage/CoreImage.h>
 
 @implementation TGProfileViewController (Actions)
@@ -139,7 +142,7 @@
 	} else if ([action isEqualToString:@"search"]){
 		if (self.onSearchTapped) self.onSearchTapped();
 	} else {
-		[self showMoreMenuFrom:(self.headerView ?: self.view)];
+		[self showMoreMenuFrom:(self.headerView.lastTappedTile ?: self.headerView ?: self.view)];
 	}
 }
 
@@ -158,9 +161,7 @@
 	contact.phone = self.phoneNumber ?: @"";
 	contact.offersPhoneShare = self.offersPhoneShare;
 	contact.shareName = words.firstObject ?: @"";
-	UINavigationController *nav = [[UINavigationController alloc]
-			initWithRootViewController:contact];
-	[self presentViewController:nav animated:YES completion:nil];
+	[TGPresent presentModal:contact kind:TGModalForm from:self];
 }
 
 /// Stop is the bot's block: Telegram marks the bot stopped so it cannot
@@ -375,12 +376,11 @@
 						   @"icon" : @"privacy", @"destructive" : @YES}];
 	}
 
-	CGPoint where = [tile convertPoint:CGPointMake(TGHalf(tile.bounds.size.width),
-												   tile.bounds.size.height)
-								toView:self.navigationController.view];
+	// Official's More: the page dims, the More tile stays lit and the card
+	// hangs from it.
 	__weak typeof(self) weakSelf = self;
-	[TGPopupMenu showItems:items atPoint:where inView:self.navigationController.view
-				  onChoice:^(NSInteger index, NSString *title){
+	[TGPresent showMenu:items fromView:tile onController:self
+			   onChoice:^(NSInteger index, NSString *title){
 		[weakSelf runMoreAction:title];
 	}];
 }
@@ -488,9 +488,7 @@
 		[card writeToFile:path atomically:YES
 				 encoding:NSUTF8StringEncoding error:NULL];
 		NSURL *url = [NSURL fileURLWithPath:path];
-		UIActivityViewController *share = [[UIActivityViewController alloc]
-				initWithActivityItems:@[url] applicationActivities:nil];
-		[self presentViewController:share animated:YES completion:nil];
+		[TGPresent shareItems:@[url] from:self sourceView:nil];
 		return;
 	}
 
@@ -557,7 +555,7 @@
 				[[TGSponsoredMessagesViewController alloc] init];
 		ads.chatId = self.chatId;
 		ads.hidesBottomBarWhenPushed = YES;
-		TGPresentControllerFrom(ads, self);
+		[TGPresent openController:ads from:self];
 		return;
 	}
 	if ([title isEqualToString:@"Affiliate Program"]){
@@ -571,14 +569,14 @@
 			affiliate.chatId = self.chatId;
 		}
 		affiliate.hidesBottomBarWhenPushed = YES;
-		TGPresentControllerFrom(affiliate, self);
+		[TGPresent openController:affiliate from:self];
 		return;
 	}
 	if ([title isEqualToString:@"Bot Settings"]){
 		TGDevBotConsoleViewController *bots = [[TGDevBotConsoleViewController alloc] init];
 		bots.botUserId = self.userId;
 		bots.hidesBottomBarWhenPushed = YES;
-		TGPresentControllerFrom(bots, self);
+		[TGPresent openController:bots from:self];
 		return;
 	}
 	if ([title isEqualToString:@"Help"]){
@@ -594,7 +592,7 @@
 		TGGroupCallViewController *screen = [[TGGroupCallViewController alloc]
 				initWithChatId:self.chatId groupCallId:0];
 		screen.hidesBottomBarWhenPushed = YES;
-		TGPresentControllerFrom(screen, self);
+		[TGPresent openController:screen from:self];
 		return;
 	}
 	if ([title isEqualToString:@"Group Settings"] ||
@@ -620,7 +618,7 @@
 		// Pushing is right when this profile is on a stack. A profile shown
 		// modally has none, and `[nil pushViewController:]` is the tap that
 		// does nothing; the shared helper presents it instead.
-		TGPresentControllerFrom(settings, self);
+		[TGPresent openController:settings from:self];
 		return;
 	}
 
@@ -709,11 +707,8 @@
 			write();
 			return;
 		}
-		[TGAlertSheet showChoices:@[@"Edit Note", @"Remove"]
-							title:@"Note"
-				 destructiveIndex:1
-						   inView:self.view
-						 onChoice:^(NSInteger index){
+		[TGPresent showMenuTitles:@[@"Edit Note", @"Remove"] destructiveIndex:1
+			fromView:nil onController:self onChoice:^(NSInteger index){
 			if (index == 0){
 				write();
 				return;
@@ -752,7 +747,7 @@
 		UIImagePickerController *picker = [[UIImagePickerController alloc] init];
 		picker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;
 		picker.delegate = self;
-		[self presentViewController:picker animated:YES completion:nil];
+		[TGPresent presentSystem:picker from:self sourceView:nil];
 		return;
 	}
 
@@ -960,7 +955,7 @@
 /// does with its avatar.
 - (void)imagePickerController:(UIImagePickerController *)picker
 		didFinishPickingMediaWithInfo:(NSDictionary *)info {
-	[picker dismissViewControllerAnimated:YES completion:nil];
+	[TGPresent dismissSystem:picker];
 	if (self.pendingPhotoAction.length){
 		NSString *action = self.pendingPhotoAction;
 		self.pendingPhotoAction = nil;
@@ -1045,32 +1040,19 @@
 		image.hidden = YES;
 	[sheet.view addSubview:image];
 
-	UILabel *label = [[UILabel alloc] initWithFrame:
-			CGRectMake(TGMetricPadLarge, CGRectGetMaxY(image.frame) + TGMetricPad,
-					width - TGDoubled(TGMetricPadLarge), TGDoubled(TGMetricLineBody))];
+	UILabel *label = TGLabelWith(TGLabelBodySecondary, CGRectMake(TGMetricPadLarge, CGRectGetMaxY(image.frame) + TGMetricPad,
+					width - TGDoubled(TGMetricPadLarge), TGDoubled(TGMetricLineBody)), nil);
 	label.numberOfLines = 2;
 	label.textAlignment = NSTextAlignmentCenter;
-	label.font = TGFontBody();
-	label.textColor = [[TGTheme shared] secondaryTextColour];
-	label.backgroundColor = [UIColor clearColor];
 	label.text = address;
 	[sheet.view addSubview:label];
 
-	sheet.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
-			initWithTitle:@"Close" style:UIBarButtonItemStylePlain
-				   target:self action:@selector(closeQRCode:)];
-	UINavigationController *nav = [[UINavigationController alloc]
-			initWithRootViewController:sheet];
-	[self presentViewController:nav animated:YES completion:nil];
-}
-
-- (void)closeQRCode:(id)sender {
-	[self dismissViewControllerAnimated:YES completion:nil];
+	[TGPresent presentModal:sheet kind:TGModalInfo from:self];
 }
 
 - (void)imagePickerControllerDidCancel:(UIImagePickerController *)picker {
 	self.pendingPhotoAction = nil;
-	[picker dismissViewControllerAnimated:YES completion:nil];
+	[TGPresent dismissSystem:picker];
 }
 
 @end

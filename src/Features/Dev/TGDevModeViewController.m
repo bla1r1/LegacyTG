@@ -12,6 +12,8 @@
 #import "TGIcons.h"
 #import "TGRowsViewController.h"
 #import "TGRows.h"
+#import "TGBarItem.h"
+#import "TGPresent.h"
 
 /// The fixture chats. They live here and not in the chat list, so a real account's
 /// list is only that account's.
@@ -58,7 +60,7 @@
 + (void)presentFrom:(UIViewController *)host {
 	if (host.presentedViewController)
 		return;
-	[host presentViewController:[[self alloc] init] animated:YES completion:nil];
+	[TGPresent presentFlow:[[self alloc] init] from:host];
 }
 
 - (void)viewDidLoad {
@@ -75,9 +77,8 @@
 	settingsNC.tabBarItem = [[UITabBarItem alloc] initWithTitle:@"Dev Settings"
 														  image:[TGIcons settings] tag:1];
 	for (UIViewController *root in @[chats, settings])
-		root.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc]
-				initWithTitle:@"Close" style:UIBarButtonItemStylePlain
-					   target:self action:@selector(closeTapped)];
+		root.navigationItem.leftBarButtonItem = [TGBarItem itemWithRole:TGBarRoleClose
+				target:self action:@selector(closeTapped)];
 	self.viewControllers = @[chatsNC, settingsNC];
 	[self applyTheme];
 	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(applyTheme)

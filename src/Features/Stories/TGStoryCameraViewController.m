@@ -11,6 +11,7 @@
 #import <MobileCoreServices/MobileCoreServices.h>
 #import <QuartzCore/QuartzCore.h>
 #import "TGUIFormat.h"
+#import "TGPresent.h"
 
 /// The shutter: a ring around a disc, drawn once. 76 pt is the thumb-sized
 /// target the official camera uses on a 320 pt screen.
@@ -645,7 +646,7 @@ static void TGStoryCrossFade(UINavigationController *navigation) {
 	picker.mediaTypes = [UIImagePickerController
 			availableMediaTypesForSourceType:picker.sourceType] ?: @[];
 	picker.allowsEditing = NO;
-	[self presentViewController:picker animated:YES completion:nil];
+	[TGPresent presentSystem:picker from:self sourceView:nil];
 }
 
 #pragma mark - the picker
@@ -677,7 +678,7 @@ static void TGStoryCrossFade(UINavigationController *navigation) {
 	}
 	self.handingOver = YES;
 	__weak typeof(self) weakSelf = self;
-	[picker dismissViewControllerAnimated:YES completion:^{
+	[TGPresent dismissSystem:picker completion:^{
 		TGStoryCrossFade(weakSelf.navigationController);
 		[weakSelf.navigationController pushViewController:editor animated:NO];
 	}];
@@ -691,7 +692,7 @@ static void TGStoryCrossFade(UINavigationController *navigation) {
 		[self.navigationController dismissViewControllerAnimated:YES completion:nil];
 		return;
 	}
-	[picker dismissViewControllerAnimated:YES completion:nil];
+	[TGPresent dismissSystem:picker];
 }
 
 @end

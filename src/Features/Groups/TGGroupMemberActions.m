@@ -14,48 +14,7 @@
 #import "TGProfileStore.h"
 #import "TGMessageStore.h"
 #import "TGUIFormat.h"
-
-/// Pushes `controller` when the host is on a navigation stack; otherwise
-/// wraps it in one and presents that. A profile opened from a popover or a
-/// modal has no stack to push onto, and pushing nil there is the silent tap
-/// this exists to remove. The Done button is kept alive with the wrapper.
-@interface TGControllerDismisser : NSObject
-@property (nonatomic, weak) UIViewController *wrapper;
-@end
-
-static NSMutableArray *sDismissers;
-
-@implementation TGControllerDismisser
-- (void)close:(id)sender {
-	UIViewController *me = self.wrapper;
-	[me dismissViewControllerAnimated:YES completion:nil];
-	[sDismissers removeObject:self];
-}
-@end
-
-void TGPresentControllerFrom(UIViewController *controller, UIViewController *host) {
-	if (!controller || !host)
-		return;
-	UINavigationController *stack = host.navigationController;
-	if (stack){
-		[stack pushViewController:controller animated:YES];
-		return;
-	}
-	NSLog(@"TGPresentControllerFrom: %@ has no navigation stack; presenting",
-		  NSStringFromClass(host.class));
-	UINavigationController *wrapper = [[UINavigationController alloc]
-			initWithRootViewController:controller];
-	TGControllerDismisser *closer = [[TGControllerDismisser alloc] init];
-	closer.wrapper = wrapper;
-	if (!sDismissers)
-		sDismissers = [NSMutableArray array];
-	[sDismissers addObject:closer];
-	if (!controller.navigationItem.leftBarButtonItem)
-		controller.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc]
-				initWithBarButtonSystemItem:UIBarButtonSystemItemDone
-									 target:closer action:@selector(close:)];
-	[host presentViewController:wrapper animated:YES completion:nil];
-}
+#import "TGPresent.h"
 
 @interface TGGroupMemberActions ()
 + (void)runAction:(NSString *)action
@@ -90,7 +49,7 @@ void TGPresentControllerFrom(UIViewController *controller, UIViewController *hos
 		return;
 	}
 	profile.hidesBottomBarWhenPushed = YES;
-	TGPresentControllerFrom(profile, host);
+	[TGPresent openController:profile from:host];
 }
 
 + (void)showForMember:(NSDictionary *)member
@@ -133,12 +92,9 @@ void TGPresentControllerFrom(UIViewController *controller, UIViewController *hos
 			[choices addObject:@"Remove"];
 		}
 
-		[TGAlertSheet showChoices:choices
-							title:name.length ? name : @"Member"
-				 destructiveIndex:(iCanEdit
+		[TGPresent showMenuTitles:choices destructiveIndex:(iCanEdit
 						 ? (NSInteger)[choices indexOfObject:@"Remove"] : -1)
-						   inView:me.view
-						 onChoice:^(NSInteger index){
+			fromView:nil onController:me onChoice:^(NSInteger index){
 			[self runAction:choices[(NSUInteger)index]
 					 onUser:userId named:name inChat:chatId
 					   from:me onChanged:onChanged];

@@ -15,6 +15,7 @@
 #import "TGBusinessIntroViewController.h"
 #import "TGBusinessStore.h"
 #import "TGProfileStore.h"
+#import "TGPresent.h"
 
 @interface TGBusinessChatLinksViewController ()
 @property (nonatomic, strong) NSArray *links;
@@ -121,11 +122,8 @@
 
 - (void)showActionsForLink:(NSDictionary *)link {
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:@[@"Edit", @"Info", @"Delete"]
-						title:link[@"title"] ?: @"Link to Chat"
-			 destructiveIndex:2
-					   inView:self.view
-					 onChoice:^(NSInteger index){
+	[TGPresent showMenuTitles:@[@"Edit", @"Info", @"Delete"] destructiveIndex:2
+			fromView:nil onController:self onChoice:^(NSInteger index){
 		TGBusinessChatLinksViewController *page = weakSelf;
 		if (!page)
 			return;

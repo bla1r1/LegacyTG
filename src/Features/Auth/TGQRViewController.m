@@ -8,6 +8,7 @@
 #import "TGQRCodeLink.h"
 #import "TGAccountStore.h"
 #import "TGSearchStore.h"
+#import "TGBarItem.h"
 
 /// The four corner brackets Telegram draws around the aiming window. A full
 /// border rectangle reads as a frame; the broken one reads as a target.
@@ -67,8 +68,8 @@ static const CGFloat kQRTextInset = 24.0f;
 	self.title = @"Scan QR Code";
 	self.view.backgroundColor = [[TGTheme shared] mediaViewerBackdropColour];
 
-	self.torchItem = [[UIBarButtonItem alloc] initWithTitle:@"Light"
-			style:UIBarButtonItemStylePlain target:self action:@selector(toggleTorch)];
+	self.torchItem = [TGBarItem itemWithTitle:@"Light" primary:NO
+			target:self action:@selector(toggleTorch)];
 	self.navigationItem.rightBarButtonItem = self.torchItem;
 
 	[self startCamera];

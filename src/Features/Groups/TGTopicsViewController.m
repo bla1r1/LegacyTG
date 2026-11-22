@@ -16,6 +16,8 @@
 #import "TGUIFormat.h"
 #import "TGOptions.h"
 #import "TGGroupLogic.h"
+#import "TGBarItem.h"
+#import "TGPresent.h"
 
 /// A topic row is a chat row in miniature: a coloured icon made from the
 /// topic's own id, the name, the last message, the time and the unread count.
@@ -78,8 +80,7 @@ static NSString *TGTopicDateText(NSNumber *stamp) {
 	// Making a topic is the one thing the list needs beyond its rows; the
 	// plus sits where a mail folder's compose sits.
 	__weak typeof(self) weakSelf = self;
-	UIBarButtonItem *plus = [[UIBarButtonItem alloc] initWithTitle:@"+"
-			style:UIBarButtonItemStylePlain
+	UIBarButtonItem *plus = [TGBarItem itemWithRole:TGBarRoleAdd
 			target:self action:@selector(plusTapped)];
 	self.navigationItem.rightBarButtonItem = plus;
 
@@ -312,12 +313,9 @@ static NSString *TGTopicDateText(NSNumber *stamp) {
 		return;
 
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:@[@"Edit Topic", @"Rename", @"Set Cover Icon", @"Pin", @"Close",
-								@"Manage Topics", @"Delete"]
-						title:name
-			  destructiveIndex:6
-					   inView:self.view
-					 onChoice:^(NSInteger index){
+	[TGPresent showMenuTitles:@[@"Edit Topic", @"Rename", @"Set Cover Icon", @"Pin", @"Close",
+								@"Manage Topics", @"Delete"] destructiveIndex:6
+			fromView:[self.tableView cellForRowAtIndexPath:path] onController:self onChoice:^(NSInteger index){
 		void (^refresh)(void) = ^{
 			[weakSelf reloadTopics];
 		};

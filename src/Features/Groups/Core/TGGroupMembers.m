@@ -17,6 +17,7 @@
 #import "TGGroupSettingsViewControllerInternal.h"
 #import "TGMemberListViewController.h"
 #import "TGGroupStore.h"
+#import "TGPresent.h"
 
 
 
@@ -75,7 +76,7 @@ typedef NS_ENUM(NSInteger, TGGroupRowKind) {
 	list.canAddMembers = self.canInvite && !self.isChannelChat;
 	list.listTitle = self.isChannelChat ? @"Subscribers" : @"Members";
 	list.hidesBottomBarWhenPushed = YES;
-	TGPresentControllerFrom(list, self);
+	[TGPresent openController:list from:self];
 }
 
 /// getChatMembers is a page, not a search; searchChatMembers answers the
@@ -98,9 +99,8 @@ typedef NS_ENUM(NSInteger, TGGroupRowKind) {
 			for (NSDictionary *member in members)
 				[names addObject:[member[@"name"] length]
 						? member[@"name"] : @"Member"];
-			[TGAlertSheet showChoices:names title:@"Search Members"
-					 destructiveIndex:-1 inView:me.view
-							 onChoice:^(NSInteger index){
+			[TGPresent showList:names title:@"Search Members" destructiveIndex:-1
+			from:me onPick:^(NSInteger index){
 				NSDictionary *member = members[(NSUInteger)index];
 				int64_t userId = [member[@"id"] longLongValue];
 				if (!userId)

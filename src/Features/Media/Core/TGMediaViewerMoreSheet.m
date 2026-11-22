@@ -23,6 +23,7 @@
 #import "TGForwardPicker.h"
 #import "TGMessageLayout.h"
 #import "TGMediaViewerInternal.h"
+#import "TGPresent.h"
 
 
 // The chrome sits over the picture rather than beside it, which is what makes
@@ -167,16 +168,7 @@ static const NSInteger kZoomTag = 0x7001;
 	UIViewController *top = [self hostController];
 	if (!top || !items.count)
 		return;
-	UIActivityViewController *share = [[UIActivityViewController alloc]
-			initWithActivityItems:items applicationActivities:nil];
-	if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad &&
-		[share respondsToSelector:@selector(popoverPresentationController)]){
-		share.popoverPresentationController.sourceView = self.backdrop;
-		share.popoverPresentationController.sourceRect = CGRectMake(
-				TGHalf(self.backdrop.bounds.size.width),
-				TGHalf(self.backdrop.bounds.size.height), 0, 0);
-	}
-	[top presentViewController:share animated:YES completion:nil];
+	[TGPresent shareItems:items from:top sourceView:nil];
 }
 
 - (void)forwardCurrent {
@@ -203,9 +195,7 @@ static const NSInteger kZoomTag = 0x7001;
 		UIView *host = me.backdrop ?: [UIApplication sharedApplication].keyWindow;
 		[TGSnackbar showInView:host text:@"Forward" seconds:2 onCommit:nil];
 	};
-	UINavigationController *nav = [[UINavigationController alloc]
-			initWithRootViewController:picker];
-	[top presentViewController:nav animated:YES completion:nil];
+	[TGPresent presentModal:picker kind:TGModalForm from:top];
 }
 
 - (void)copyCaption {

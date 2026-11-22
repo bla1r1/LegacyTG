@@ -18,6 +18,7 @@
 #import "TGiPadSplitViewController.h"
 #import "TGiPadSimulator.h"
 #import "TGAppActivity.h"
+#import "TGPresent.h"
 
 
 // Height of the folder pill strip above the chat list (official-style tabs).
@@ -297,11 +298,9 @@
 		me.storyRowsReadAt = nil;
 		[me reloadStoriesIfNeeded];
 	};
-	UINavigationController *nav = [[UINavigationController alloc]
-			initWithRootViewController:viewer];
+	UINavigationController *nav = [TGPresent presentModal:viewer kind:TGModalBare from:self];
 	nav.navigationBar.barStyle = UIBarStyleBlack;
 	nav.navigationBar.translucent = YES;
-	[self presentViewController:nav animated:YES completion:nil];
 }
 
 /// Held stories bubble: move the chat's stories between the main strip and
@@ -316,8 +315,8 @@
 	NSArray *choices = archived
 			? @[@"Restore"] : @[@"Hide"];
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showChoices:choices title:row[@"title"] ?: @"Stories"
-				destructiveIndex:-1 inView:self.view onChoice:^(NSInteger choice){
+	[TGPresent showMenuTitles:choices destructiveIndex:-1
+			fromView:nil onController:self onChoice:^(NSInteger choice){
 		TGChatListViewController *me = weakSelf;
 		if (!me)
 			return;

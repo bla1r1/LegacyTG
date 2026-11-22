@@ -16,6 +16,9 @@
 #import "TGContactSort.h"
 #import "TGPeerRowCell.h"
 #import "TGRows.h"
+#import "TGBarItem.h"
+#import "TGPresent.h"
+#import "TGLabel.h"
 
 @interface TGContactsViewController () <UISearchBarDelegate>
 @property (nonatomic, strong) TGEmptyView *emptyView;
@@ -87,21 +90,15 @@ static NSArray *TGContactSections(NSArray *users) {
 				? (self.addingToChatId ? @"Add Members" : @"New Group")
 				: @"Contacts";
 	if ([self isPicking]){
-		self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
-				initWithTitle:(self.addingToChatId ? @"Add" : @"Create")
-						style:UIBarButtonItemStyleDone
+		self.navigationItem.rightBarButtonItem = [TGBarItem
+				itemWithTitle:(self.addingToChatId ? @"Add" : @"Create") primary:YES
 					   target:self action:@selector(commitPicking)];
 		self.navigationItem.rightBarButtonItem.enabled = NO;
 	} else if (!newMessagePicker) {
-		self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc]
-				initWithTitle:@"Sort"
-						style:UIBarButtonItemStylePlain
-					   target:self
-					   action:@selector(sortTapped)];
-		self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
-				initWithBarButtonSystemItem:UIBarButtonSystemItemAdd
-									 target:self
-									 action:@selector(addContactTapped)];
+		self.navigationItem.leftBarButtonItem = [TGBarItem itemWithTitle:@"Sort" primary:NO
+				target:self action:@selector(sortTapped)];
+		self.navigationItem.rightBarButtonItem = [TGBarItem itemWithRole:TGBarRoleAdd
+				target:self action:@selector(addContactTapped)];
 	}
 	[[TGTheme shared] styleNavigationBar:self.navigationController.navigationBar];
 	self.users = @[];
@@ -196,6 +193,24 @@ static NSArray *TGContactSections(NSArray *users) {
 
 - (void)rebuildSections {
 	NSMutableArray *sections = [NSMutableArray array];
+	if (self.onNewChannel && !self.isSearching){
+		__weak typeof(self) weakSelf = self;
+		// Official's compose rows: accent words above the contacts, no tile.
+		NSMutableDictionary *group = TGRow(TGKindAction, @"New Group");
+		group[TGRowTap] = ^{
+			TGContactsViewController *me = weakSelf;
+			TGContactsViewController *members = [[TGContactsViewController alloc] init];
+			members.picksGroupMembers = YES;
+			[me.navigationController pushViewController:members animated:YES];
+		};
+		NSMutableDictionary *channel = TGRow(TGKindAction, @"New Channel");
+		channel[TGRowTap] = ^{
+			void (^run)(void) = weakSelf.onNewChannel;
+			if (run)
+				run();
+		};
+		[sections addObject:TGSection(nil, nil, @[group, channel])];
+	}
 	for (NSDictionary *group in [self sectionGroups]){
 		NSArray *users = group[@"users"];
 		NSMutableArray *rows = [NSMutableArray arrayWithCapacity:users.count];
@@ -243,25 +258,19 @@ static NSArray *TGContactSections(NSArray *users) {
 
 - (void)addContactTapped {
 	TGNewContactViewController *vc = [[TGNewContactViewController alloc] init];
-	UINavigationController *nav = [[UINavigationController alloc]
-			initWithRootViewController:vc];
-	[self presentViewController:nav animated:YES completion:nil];
+	[TGPresent presentModal:vc kind:TGModalForm from:self];
 }
 
 /// The count is the account's, not the list's: TDLib answers it separately,
 /// and after an import it is the only place the result is visible.
 - (void)updateImportedFooter {
-	UILabel *footer = [[UILabel alloc] initWithFrame:
-			CGRectMake(0, 0, self.view.bounds.size.width, TGMetricLineRow)];
+	UILabel *footer = TGLabelWith(TGLabelCaption, CGRectMake(0, 0, self.view.bounds.size.width, TGMetricLineRow), nil);
 	footer.text = self.importedCount
 			? TGLocalizedPluralValue(@"%@ contact", @"%@ contacts",
 					[NSString stringWithFormat:@"%ld", (long)self.importedCount],
 					self.importedCount)
 			: @"Contacts";
-	footer.font = TGFontCaption();
 	footer.textAlignment = NSTextAlignmentCenter;
-	footer.textColor = [[TGTheme shared] secondaryTextColour];
-	footer.backgroundColor = [UIColor clearColor];
 	self.tableView.tableFooterView = footer;
 }
 

@@ -8,6 +8,7 @@
 #import "TGRows.h"
 #import "TGStoryStore.h"
 #import "TGMessageStore.h"
+#import "TGControls.h"
 
 /// The mappings live in TGStoryText.h so the host tests exercise the same
 /// function the screen calls.
@@ -45,13 +46,10 @@
 	self.title = self.mode == TGStoryInfoModeReport ? @"Report Story" : @"Story";
 	[[TGTheme shared] styleGroupedTable:self.tableView];
 
-	self.closeButton = [UIButton buttonWithType:UIButtonTypeCustom];
-	[self.closeButton setImage:[TGIcons glyphNamed:@"close"
+	self.closeButton = TGGlyphButton([TGIcons glyphNamed:@"close"
 			colour:[[TGTheme shared] primaryTextColour]
-			side:TGMetricStoryCloseSide - TGMetricPadSmall]
-			forState:UIControlStateNormal];
-	[self.closeButton addTarget:self action:@selector(doneTapped)
-			forControlEvents:UIControlEventTouchUpInside];
+			side:TGMetricStoryCloseSide - TGMetricPadSmall], CGRectZero,
+			self, @selector(doneTapped));
 	[self.view addSubview:self.closeButton];
 	[self buildRows];
 }

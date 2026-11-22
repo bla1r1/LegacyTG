@@ -14,6 +14,7 @@
 #import "TGLocalization.h"
 #import "TGLocalization.h"
 #import "TGIcons.h"
+#import "TGPresent.h"
 #import <AVFoundation/AVFoundation.h>
 
 /// The card's own height is the label over the value, with the value wrapping
@@ -259,8 +260,7 @@ heightForHeaderInSection:(NSInteger)section {
 					[TGAlertSheet showMessage:TGLocalized(@"An error occurred.") title:nil inView:me.view];
 			}];
 		};
-		[self presentViewController:[[UINavigationController alloc] initWithRootViewController:picker]
-						   animated:YES completion:nil];
+		[TGPresent presentModal:picker kind:TGModalForm from:self];
 	} else if ([kind isEqualToString:@"block"]){
 		[self runMoreAction:(self.blocked ? @"Unblock" : @"Block")];
 	} else if ([kind isEqualToString:@"addBio"]){

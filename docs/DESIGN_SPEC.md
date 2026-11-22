@@ -74,3 +74,52 @@ The navigation bar has no metric of ours — the system draws it.
 | `TGStatusBanner` | Pinned under nav bar — Connecting / Updating + native spinner |
 | `TGEmptyView` | Centered illustration, headline, action button |
 | Form errors | Red input border, red caption + warning glyph |
+
+## Action → presentation
+
+One kind of action opens one way everywhere. A screen calls the left column's
+API and never builds the thing itself (`scripts/lint_presentation.sh`). The
+right column is where official Telegram iOS does it (`submodules/…`), which is
+what each row was checked against.
+
+### Navigation bar
+
+| Action | Call | Official |
+|---|---|---|
+| Leave a pushed screen | system Back from `TGNavController` | `NavigationController`, title "Back" (`Common.Back`) |
+| Leave a form without saving | `TGBarItem TGBarRoleCancel`, left | `ItemListController` left `.icon(.close)` / `Common.Cancel` |
+| Save a form, end editing | `TGBarRoleDone`, right, bold | right `.icon(.done)` / `Common.Done`, `.bold` |
+| Edit a list | `TGBarRoleEdit`, right; Done replaces it | `Common.Edit`, `.regular`, right (12 lists) |
+| Leave a sheet with nothing to save | `TGBarRoleClose`, left | left `.icon(.close)` / `Common.Close` |
+| A screen's actions (⋯) | `TGBarRoleMore` → `TGPresent showMenu:fromBarItem:` | `MoreHeaderButton` → `ContextController` `.reference` (PeerInfoScreen, ChatListController header) |
+| Add to the list | `TGBarRoleAdd`, right, UIKit's own + | `.icon(.add)` |
+| Share what is shown | `TGBarRoleShare`, right | `.icon(.action)` |
+| Search the screen | `TGBarRoleSearch`, UIKit's magnifier | `.icon(.search)` |
+| New message | `TGBarRoleCompose`, UIKit's compose | chat list compose button |
+| Cancel and Done over a picker in a toolbar | `TGBarItem plainItemWithTitle:` + `itemWithTitle:primary:YES` | date and time pickers |
+| Next step of a flow, Send, Create | `TGBarItem itemWithTitle:primary:YES` | `Common.Next` / `Compose.Create` / `ShareMenu.Send`, `.bold` |
+| Saving in progress | `TGBarItem activityItem` | `.activity` |
+
+### Opening things
+
+| Action | Call | Official |
+|---|---|---|
+| A form to fill in (new contact, edit profile, new link) | `TGPresent presentModal:kind:TGModalForm` | modal `ItemListController`, Cancel left, Done/Create right |
+| A page to read over the current one (file info) | `presentModal:kind:TGModalInfo` | modal with Close left |
+| A screen from a place with or without a stack | `TGPresent openController:from:` | `push` on the nearest `NavigationController` |
+| Actions of a long-pressed row (chat list, member, link) | `TGPresent showMenu:fromView:` / `showMenuTitles:` → `TGPopupMenu` card | `ContextController` `.extracted` (ChatContextMenus, PeerInfoScreen) |
+| Actions of a long-pressed message, with reactions | `TGPopupMenu showItems:anchoredAt:…reactions:` | `ContextController` with the reaction bar (ChatControllerNode) |
+| Actions of the media viewer and stories (⋯) | `showMenu:fromBarItem:` / `fromView:` | `ContextController` `.reference` (GalleryUI, StoryContainerScreen) |
+| Confirming a delete, leave, block, clear | `TGAlertSheet showConfirm:… destructive:YES` | `ActionSheetController`, red button + Cancel (ChatListController delete, ChatControllerReport) |
+| Delete for me / for everyone, other 2–4 way picks | `TGAlertSheet showChoices:` | `ActionSheetController` buttons (ChatList.DeleteForCurrentUser / DeleteForEveryone) |
+| Something to read, one OK | `TGAlertSheet showMessage:` | `textAlertController` with `Common.OK` |
+| A question with two real answers | `TGAlertSheet showAlertActions:` / `showConfirm:… destructive:NO` | `textAlertController` (LogoutOptionsController, ChangePhoneNumberController) |
+| A list of things (voters, reactions, members, links) | `TGPresent showList:` → pushed `TGRowsViewController` | peer / item list screens |
+| Attachments, scheduled messages, bottom pickers | a `TGSheet` subclass | `AttachmentController` / sheet screens |
+| A photo or video from the library, the camera | `TGPresent pickMediaFrom:` | `MediaPickerScreen` (ours: the system picker; iPad before iOS 8 in a popover) |
+| Sharing a file or link outside Telegram | `TGPresent shareItems:` | `ShareController` → system activity sheet for external apps |
+| A file another app opens | `TGPresent openDocument:` | Quick Look, else Open In |
+
+Our differences on purpose: the bar uses iOS 6 bordered text buttons where
+official now draws round glass ✕ / ✓ icons, and the photo picker is the
+system one, since `MediaPickerScreen`'s live grid does not run on the A4.

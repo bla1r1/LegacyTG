@@ -12,6 +12,7 @@
 #import "TGSponsoredMessagesViewController.h"
 #import "TGGameScoresViewController.h"
 #import "TGPollPresentation.h"
+#import "TGPresent.h"
 #import <CoreImage/CoreImage.h>
 #import <QuartzCore/QuartzCore.h>
 
@@ -81,11 +82,8 @@ static NSString *TGSheetDate(NSTimeInterval unix) {
 				[rows addObject:[NSString stringWithFormat:@"%@  ·  #%@",
 						title, copy[@"message_id"] ?: @""]];
 			}
-			[TGAlertSheet showChoices:rows
-								title:@"Forwarded Messages"
-					 destructiveIndex:-1
-							   inView:me.view
-							 onChoice:^(NSInteger index){
+			[TGPresent showList:rows title:@"Forwarded Messages" destructiveIndex:-1
+			from:self onPick:^(NSInteger index){
 				NSDictionary *copy = forwards[(NSUInteger)index];
 				int64_t where = [copy[@"chat_id"] longLongValue];
 				int64_t copyId = [copy[@"message_id"] longLongValue];
@@ -134,11 +132,8 @@ static NSString *TGSheetDate(NSTimeInterval unix) {
 		[lines addObject:[NSString stringWithFormat:@"%@  ×%@", name,
 						  group[@"count"] ?: @(0)]];
 	}
-	[TGAlertSheet showChoices:lines
-						title:@"Reactions"
-			 destructiveIndex:-1
-					   inView:self.view
-					 onChoice:^(NSInteger index){
+	[TGPresent showList:lines title:@"Reactions" destructiveIndex:-1
+			from:self onPick:^(NSInteger index){
 		NSDictionary *group = groups[(NSUInteger)index];
 		[weakSelf showReactorsOfMessage:m
 								  emoji:group[@"emoji"]
@@ -300,11 +295,8 @@ static NSString *TGSheetDate(NSTimeInterval unix) {
 						who ?: @"Location", day.length ? @" · " : @"", day ?: @""];
 				[rows addObject:[line stringByAppendingString:live]];
 			}
-			[TGAlertSheet showChoices:rows
-								title:@"Recent"
-					 destructiveIndex:-1
-							   inView:me.view
-							 onChoice:^(NSInteger index){
+			[TGPresent showList:rows title:@"Recent" destructiveIndex:-1
+			from:self onPick:^(NSInteger index){
 				if (index >= (NSInteger)messages.count)
 					return;
 				[weakSelf showMessageId:[messages[index][@"id"] longLongValue]

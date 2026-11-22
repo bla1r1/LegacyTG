@@ -5,6 +5,7 @@
 #import "TGLocalization.h"
 #import "TGRows.h"
 #import "TGAccountStore.h"
+#import "TGBarItem.h"
 
 
 @interface TGUserPickerViewController ()
@@ -30,9 +31,8 @@
 	[super viewDidLoad];
 	self.title = self.pickerTitle;
 	self.navigationItem.rightBarButtonItem =
-			[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemDone
-														  target:self
-														  action:@selector(doneTapped)];
+			[TGBarItem itemWithRole:TGBarRoleDone
+					target:self action:@selector(doneTapped)];
 	[self rebuildSections];
 	[self loadContacts];
 }

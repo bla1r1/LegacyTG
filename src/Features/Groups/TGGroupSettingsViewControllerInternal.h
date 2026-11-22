@@ -1,8 +1,7 @@
 #import "TGGroupSettingsViewController.h"
 #import <UIKit/UIKit.h>
 
-@interface TGGroupSettingsViewController () <UIImagePickerControllerDelegate,
-		UINavigationControllerDelegate>
+@interface TGGroupSettingsViewController ()
 /// The chat record: its type says which rows this chat supports.
 @property (nonatomic, strong) NSDictionary *chat;
 /// chatProfile: description, member count, the primary invite link.

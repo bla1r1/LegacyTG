@@ -20,6 +20,8 @@
 #import "TGLocalization.h"
 #import "TGGroupSettingsViewController.h"
 #import "TGProfileLogic.h"
+#import "TGBarItem.h"
+#import "TGPresent.h"
 
 
 
@@ -126,15 +128,8 @@
 	if (self.isOwnProfile){
 		// Same control as the chat list's: the official ring at the bar's
 		// button size, in the bar-button colour.
-		UIButton *storyButton = [UIButton buttonWithType:UIButtonTypeCustom];
-		CGFloat side = TGMetricButtonMediumH;
-		storyButton.frame = CGRectMake(0, 0, side, side);
-		[storyButton setImage:[TGIcons glyphNamed:@"addStory"
-				colour:[[TGTheme shared] barButtonColour] side:side]
-				forState:UIControlStateNormal];
-		[storyButton addTarget:self action:@selector(addStoryTapped)
-				forControlEvents:UIControlEventTouchUpInside];
-		UIBarButtonItem *story = [[UIBarButtonItem alloc] initWithCustomView:storyButton];
+		UIBarButtonItem *story = [TGBarItem itemWithRole:TGBarRoleAddStory
+				target:self action:@selector(addStoryTapped)];
 		[items addObject:story];
 	}
 	// A creator or administrator can edit a group/channel profile too; the
@@ -143,18 +138,14 @@
 	BOOL canEdit = self.isOwnProfile || self.isContact ||
 			(self.chatId && self.canManage);
 	if (canEdit){
-		[items addObject:[[UIBarButtonItem alloc]
-				initWithTitle:TGLocalized(@"Edit")
-						style:UIBarButtonItemStylePlain
-					   target:self
-					   action:@selector(editProfileTapped)]];
+		[items addObject:[TGBarItem itemWithRole:TGBarRoleEdit
+				target:self action:@selector(editProfileTapped)]];
 	}
 	// Files, Music and Links search from the bar while their pane is open.
 	NSString *kind = [self selectedMediaKind];
 	if (!self.mediaSearchActive && TGProfileMediaKindSupportsSearch(kind)){
-		[items addObject:[[UIBarButtonItem alloc]
-				initWithBarButtonSystemItem:UIBarButtonSystemItemSearch
-									 target:self action:@selector(mediaSearchTapped)]];
+		[items addObject:[TGBarItem itemWithRole:TGBarRoleSearch
+				target:self action:@selector(mediaSearchTapped)]];
 	}
 	self.navigationItem.rightBarButtonItems = items.count ? items : nil;
 }
@@ -171,7 +162,7 @@
 		settings.chatId = self.chatId;
 		settings.chatTitle = self.name;
 		settings.hidesBottomBarWhenPushed = YES;
-		TGPresentControllerFrom(settings, self);
+		[TGPresent openController:settings from:self];
 		return;
 	}
 	if (!self.isOwnProfile && self.isContact){
@@ -184,9 +175,7 @@
 				? [[words subarrayWithRange:NSMakeRange(1, words.count - 1)]
 						componentsJoinedByString:@" "] : @"";
 		edit.phone = self.phoneNumber ?: @"";
-		UINavigationController *nav = [[UINavigationController alloc]
-				initWithRootViewController:edit];
-		[self presentViewController:nav animated:YES completion:nil];
+		[TGPresent presentModal:edit kind:TGModalForm from:self];
 		return;
 	}
 	TGEditProfileViewController *edit = [[TGEditProfileViewController alloc] init];

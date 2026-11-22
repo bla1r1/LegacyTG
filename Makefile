@@ -483,6 +483,8 @@ APP_SRC_M := \
 	src/UI/Overlays/TGStatusBanner.m \
 	src/UI/Overlays/TGInAppNotificationBanner.m \
 	src/UI/Controls/TGButton.m \
+	src/UI/Controls/TGLabel.m \
+	src/UI/Controls/TGControls.m \
 	src/UI/Controls/TGSlider.m \
 	src/UI/Controls/TGTextField.m \
 	src/UI/Controls/TGSegmentedControl.m \
@@ -490,6 +492,9 @@ APP_SRC_M := \
 	src/UI/Controls/TGPageHeaderView.m \
 	src/UI/Controllers/TGPageTemplate.m \
 	src/UI/Controllers/TGPageViewController.m \
+	src/UI/Controllers/TGPresentRules.m \
+	src/UI/Controllers/TGBarItem.m \
+	src/UI/Controllers/TGPresent.m \
 	src/UI/Controls/TGBadge.m \
 	src/UI/Overlays/TGReactionPicker.m \
 	src/UI/Controls/TGAvatarView.m \

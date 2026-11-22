@@ -15,6 +15,7 @@
 #import "TGDownloadPriority.h"
 #import "TGUIFormat.h"
 #import "TGPageHeaderView.h"
+#import "TGBarItem.h"
 
 static const CGFloat kArtSide = TGMetricProfilePhotoSide;
 static const CGFloat kRGBDivisor = 255.0f;
@@ -131,9 +132,8 @@ static UIImage *TGGiftRadialGradient(int32_t centerColor, int32_t edgeColor, CGF
 	// when this is the first screen of a sheet. A bar-less page with a
 	// floating X was the later iOS look.
 	if (self.navigationController.viewControllers.firstObject == self)
-		self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc]
-				initWithTitle:TGLocalized(@"Close") style:UIBarButtonItemStyleBordered
-					   target:self action:@selector(closeTapped)];
+		self.navigationItem.leftBarButtonItem = [TGBarItem itemWithRole:TGBarRoleClose
+				target:self action:@selector(closeTapped)];
 
 }
 

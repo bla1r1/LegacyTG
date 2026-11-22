@@ -7,6 +7,8 @@
 #import "TGRows.h"
 #import "UIImage+WebP.h"
 #import "TGPageHeaderView.h"
+#import "TGBarItem.h"
+#import "TGPresent.h"
 
 @interface TGFileInfoViewController ()
 @property (nonatomic, strong) NSDictionary *info;
@@ -21,24 +23,9 @@
 
 + (void)presentForFile:(NSInteger)fileId fromView:(UIView *)host {
 	UIWindow *window = host.window ?: [UIApplication sharedApplication].keyWindow;
-	UIViewController *top = window.rootViewController;
-	while (top.presentedViewController)
-		top = top.presentedViewController;
-	if (!top)
-		return;
-
 	TGFileInfoViewController *info = [[TGFileInfoViewController alloc] init];
 	info.fileId = fileId;
-	UINavigationController *nav = [[UINavigationController alloc]
-			initWithRootViewController:info];
-	info.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
-			initWithBarButtonSystemItem:UIBarButtonSystemItemDone
-								 target:info action:@selector(dismissSelf)];
-	[top presentViewController:nav animated:YES completion:nil];
-}
-
-- (void)dismissSelf {
-	[self dismissViewControllerAnimated:YES completion:nil];
+	[TGPresent presentModal:info kind:TGModalInfo from:window.rootViewController];
 }
 
 - (instancetype)init {
@@ -211,15 +198,7 @@
 	NSString *path = [self localPath];
 	if (!path.length)
 		return;
-	UIActivityViewController *share = [[UIActivityViewController alloc]
-			initWithActivityItems:@[[NSURL fileURLWithPath:path]]
-			applicationActivities:nil];
-	if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad &&
-		[share respondsToSelector:@selector(popoverPresentationController)]){
-		share.popoverPresentationController.sourceView = self.view;
-		share.popoverPresentationController.sourceRect = self.view.bounds;
-	}
-	[self presentViewController:share animated:YES completion:nil];
+	[TGPresent shareItems:@[[NSURL fileURLWithPath:path]] from:self sourceView:self.view];
 }
 
 - (void)saveFile {
