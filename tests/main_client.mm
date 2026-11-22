@@ -93,6 +93,7 @@
 #import "TGChannelStoreTests.m"
 #import "TGDevStoreTests.m"
 #import "TGiPadSimulatorTests.m"
+#import "TGDevScreenRouteTests.m"
 #import "TGUpdateStoreTests.m"
 #import "TGSendStoreTests.m"
 #import "TGStarsStoreTests.m"

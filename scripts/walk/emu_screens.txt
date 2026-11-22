@@ -1,0 +1,140 @@
+# Every screen the emulator can reach without a finger, for scripts/emu.sh walk.
+# One "[section]" is one boot: a crash loses only the rest of its section.
+# A step is "name route [route ...]"; the routes go 0.7 s apart, the shot is
+# taken WALK_SHOT seconds after the first. tab/N pops that tab to its root:
+# 0 Contacts, 1 Chats, 2 Settings on the bench account (no Calls tab).
+# Public chats stand in for the account's own: telegram (channel), tdlibchat
+# (supergroup). Nothing here sends, joins or changes a setting.
+
+[tabs]
+contacts            tab/0
+chats               tab/1
+chats-hold          tab/1 holdrow/2
+chats-swipe         tab/1 swiperow/2
+compose             tab/1 screen/newmessage
+search              tab/1 search
+settings            tab/2
+saved               tab/1 saved
+saved-attach        tab/1 saved sendsheet
+snackbar            tab/1 snackbar
+status-password     tab/1 suggest/password
+device              tab/2 device
+update              tab/2 updatescreen
+
+[settings-a]
+appearance          settings/1
+data                settings/2
+notifications       settings/3
+privacy             settings/4
+language            settings/5
+blocked             settings/6
+power               settings/7
+calls               settings/8
+folders             settings/9
+proxy               settings/10
+downloads           settings/11
+wallpaper           settings/wallpaper
+chat-themes         settings/13
+auto-night          settings/14
+
+[settings-b]
+autosave            settings/15
+payment-data        settings/16
+sounds              settings/17
+active-notif        settings/18
+passcode            settings/19
+sessions            settings/sessions
+storage             tab/2 screen/storage
+bg-editor           tab/2 screen/bgeditor
+text-styles         tab/2 screen/textstyles
+privacy-lastseen    tab/2 screen/privacy/ShowStatus
+privacy-phone       tab/2 screen/privacy/ShowPhoneNumber
+data-usage          tab/2 vc/TGDataUsageViewController
+autodl-conn         tab/2 vc/TGAutoDownloadConnectionViewController
+network             tab/2 vc/TGNetworkViewController
+websites            tab/2 vc/TGWebsitesViewController
+usernames           tab/2 vc/TGUsernameSettingsViewController
+
+[profile]
+profile-me          tab/2 profile/me
+profile-me-media    tab/2 profile/me:Media
+edit-profile        ownscreen/edit
+your-color          ownscreen/colours
+appearance-tab      tab/2 screen/appearance
+emoji-status        tab/2 vc/TGEmojiStatusViewController
+my-photos           tab/2 screen/photos
+account-qr          tab/2 vc/TGSettingsAccountQRViewController
+text-size           tab/2 vc/TGTextSizeViewController
+close-friends       tab/2 vc/TGCloseFriendsViewController
+new-contact         tab/0 vc/TGNewContactViewController
+support-info        tab/2 vc/TGSupportInfoViewController
+birthday            tab/2 vc/TGProfileBirthdaySuggestViewController
+music               tab/2 vc/TGProfileAudioViewController
+
+[business-stars]
+business            tab/2 vc/TGBusinessViewController
+biz-location        tab/2 vc/TGBusinessLocationViewController
+biz-hours           tab/2 vc/TGBusinessHoursViewController
+biz-quick           tab/2 vc/TGQuickRepliesViewController
+biz-greeting        tab/2 vc/TGBusinessGreetingViewController
+biz-away            tab/2 vc/TGBusinessAwayViewController
+biz-intro           tab/2 vc/TGBusinessIntroViewController
+biz-links           tab/2 vc/TGBusinessChatLinksViewController
+biz-bots            tab/2 vc/TGBusinessConnectionViewController
+biz-profile         tab/2 vc/TGBusinessProfileViewController
+stars-gifts         tab/2 vc/TGStarsGiftsViewController
+stars-history       tab/2 vc/TGStarsTransactionsViewController
+affiliate           tab/2 vc/TGAffiliateProgramsViewController
+gift                tab/2 screen/gift
+
+[media-stickers]
+sticker-packs       tab/2 screen/stickerpacks
+sticker-gallery     tab/2 vc/TGStickerGalleryViewController
+sticker-editor      tab/2 screen/stickereditor
+forward             tab/1 screen/forward
+ephemeral           tab/1 screen/ephemeral
+country             tab/2 screen/country
+terms               tab/2 screen/terms
+communities         tab/1 vc/TGCommunitiesViewController
+story-settings      tab/2 vc/TGStorySettingsViewController
+story-camera        tab/1 storycam
+story-post          tab/1 storypost
+saved-stickers      tab/1 saved stickers
+saved-select        tab/1 saved edit select/1
+ai-compose          tab/1 saved aicompose
+
+[channel]
+channel             chat/telegram
+channel-profile     chat/telegram profile
+channel-files       profile/telegram:Files
+channel-stats       chat/telegram vc/TGStatisticsViewController/current
+channel-similar     chat/telegram vc/TGSimilarChannelsViewController/current
+channel-scheduled   chat/telegram vc/TGScheduledViewController/current
+channel-tools       chat/telegram vc/TGChatToolsViewController/current
+channel-sponsored   chat/telegram vc/TGSponsoredMessagesViewController/current
+channel-affiliate   chat/telegram vc/TGChannelAffiliateViewController/current
+channel-stories     chat/telegram vc/TGStoryArchiveViewController/current
+channel-albums      chat/telegram vc/TGStoryAlbumsViewController/current
+channel-members     chat/telegram vc/TGMemberListViewController/current
+channel-msgtools    chat/telegram vc/TGMessageToolsViewController/current
+
+[group]
+group               chat/tdlibchat
+group-profile       chat/tdlibchat profile
+group-settings      chat/tdlibchat groupsettings
+group-members       chat/tdlibchat vc/TGMemberListViewController/current
+group-admin         chat/tdlibchat vc/TGAdminRightsViewController/current
+group-antispam      chat/tdlibchat vc/TGAntiSpamViewController/current
+group-topics        chat/tdlibchat vc/TGSavedTopicsViewController/current
+group-dice          chat/tdlibchat vc/TGDiceViewController/current
+group-checklist     chat/tdlibchat vc/TGChecklistViewController/current
+group-vchat-setup   chat/tdlibchat vc/TGVideoChatSetupViewController/current
+group-call-list     chat/tdlibchat vc/TGGroupCallParticipantsViewController/current
+group-games         chat/tdlibchat vc/TGGameScoresViewController/current
+group-dm-topics     chat/tdlibchat vc/TGDMTopicsViewController/current
+
+[login]
+login-code          loginstep/code
+login-password      loginstep/password
+login-email         loginstep/email
+login-recovery      loginstep/recovery

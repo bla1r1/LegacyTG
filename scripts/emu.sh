@@ -7,6 +7,11 @@
 #   scripts/emu.sh open [SECONDS]  boot, unlock, open LegacyTG, screenshots + syslog in ~/lt-emu/out
 #   scripts/emu.sh prepare         (re)make the device from the IPSW; also the cure for "needs recovery"
 #   scripts/emu.sh gui             the emulator window, by hand
+#   scripts/emu.sh walk [FILE] [SECTION...]
+#                                  DEV build, then one boot per [section] of FILE (default
+#                                  scripts/walk/emu_screens.txt) that opens each step's
+#                                  itglegacy:// routes and shoots it; PNGs in
+#                                  build/devlogs/emuwalk-<stamp>/<section>/ (~4 min a section)
 #
 # Covers the Vintage tier only (armv7, iOS 6): no arm64, no iOS 8-12, no timing. It does not
 # replace the real-device check. Never kill a running session: the NAND is left dirty and the
@@ -215,6 +220,49 @@ EOF
 	grep -q 'exit clean=true' "$OUT/run.log" || echo "[!] session did not end clean, see $OUT/run.log"
 }
 
+# One boot per section: the DEV ipa with that section's devwalk.txt added, installed and
+# opened in the same run, shot on the emulator's own clock. A crash ends only its section.
+walk_() {
+	env_; local file=${1:-$ROOT/scripts/walk/emu_screens.txt}; [ $# -gt 0 ] && shift
+	[ -f "$file" ] || die "no walk file $file"
+	local id; id=$(dev_id); [ -n "$id" ] || die "no usable device: scripts/emu.sh prepare"
+	local planner=$ROOT/scripts/walk/emu_walk.py dest
+	dest=$ROOT/build/devlogs/emuwalk-$(date +%Y%m%d-%H%M%S)
+	echo "[+] make DEV=1 ipa-armv7"
+	make -C "$ROOT" -j"$(sysctl -n hw.logicalcpu)" DEV=1 ipa-armv7 > "$ROOT/build/emu-ipa.log" 2>&1 ||
+		{ grep -m5 'error:' "$ROOT/build/emu-ipa.log"; die "build failed, build/emu-ipa.log"; }
+	local ipa=$ROOT/build/ipa/LegacyTG-armv7-dev.ipa sec secs want failed=
+	for sec in $(python3 -I "$planner" sections "$file"); do
+		if [ $# -gt 0 ]; then want=; for w in "$@"; do [ "$w" = "$sec" ] && want=1; done; [ -n "$want" ] || continue; fi
+		mkdir -p "$OUT" "$dest/$sec"; rm -rf "$OUT"/shot-* "$OUT"/*.bmp "$OUT/run.log" "$OUT/syslog.txt" "$OUT/.ended" "$OUT/stage"
+		secs=$(python3 -I "$planner" plan "$file" "$sec" "$OUT")
+		mkdir -p "$OUT/stage/Payload/LegacyTG.app"; cp "$OUT/devwalk.txt" "$OUT/stage/Payload/LegacyTG.app/"
+		cp "$ipa" "$OUT/walk.ipa"; (cd "$OUT/stage" && zip -q "$OUT/walk.ipa" Payload/LegacyTG.app/devwalk.txt)
+		( s=; for _ in $(seq 120); do
+			s=$(grep -o '/[^ ]*/lighttouch-usb-[^ ]*/mux.sock' "$OUT/run.log" 2>/dev/null | head -1 || true)
+			[ -n "$s" ] && break; sleep 1; done
+		  [ -n "$s" ] || exit 0
+		  for _ in $(seq 30); do sleep 5; USBMUXD_SOCKET_ADDRESS=UNIX:$s idevice_id -l | grep -q . && break; done
+		  USBMUXD_SOCKET_ADDRESS=UNIX:$s idevicesyslog > "$OUT/syslog.txt" 2>&1 & p=$!
+		  until grep -q 'exit clean=' "$OUT/run.log" || [ -f "$OUT/.ended" ]; do sleep 2; done
+		  kill $p 2>/dev/null || true ) &
+		echo "[+] $sec: $(grep -c 'screenshot' "$OUT/walk.script") screens, ${secs} s"
+		lighttouch run "$id" --seconds "$secs" --no-audio --network direct --services \
+			--install "$OUT/walk.ipa" --script "$OUT/walk.script" > "$OUT/run.log" 2>&1 || true
+		touch "$OUT/.ended"; wait
+		local f; for f in "$OUT"/[0-9]*.bmp; do [ -f "$f" ] &&
+			sips -s format png "$f" --out "$dest/$sec/$(basename "${f%.bmp}").png" >/dev/null && rm "$f"; done
+		cp "$OUT/syslog.txt" "$dest/$sec/syslog.txt" 2>/dev/null || true
+		grep -q 'exit clean=true' "$OUT/run.log" || echo "[!] $sec: session did not end clean, see $OUT/run.log"
+		if grep -qE 'LegacyTG.*(Terminating|SIGABRT|unrecognized selector)' "$OUT/syslog.txt" 2>/dev/null; then
+			failed+=" $sec"
+			echo "[!] $sec: LegacyTG died after $(grep -o 'devwalk: [^ ]*' "$OUT/syslog.txt" | tail -1)"
+		fi
+		grep -hE 'vc: no screen|screen: no screen|has no row menu|no chat is open' "$OUT/syslog.txt" 2>/dev/null | cut -c17- | sed "s/^/    $sec: /" || true
+	done
+	echo "--- $(find "$dest" -name '*.png' | wc -l | tr -d ' ') shots in $dest${failed:+, crashed in:$failed}"
+}
+
 case "${1:-}" in
 setup)     build; [ -n "$(env_; dev_id)" ] || prepare; echo "[+] emulator ready: scripts/emu.sh test" ;;
 prepare)   prepare ;;
@@ -227,5 +275,6 @@ test-fast) echo "[+] make ipa-armv7"; make -C "$ROOT" -j"$(sysctl -n hw.logicalc
 		{ grep -m5 'error:' "$ROOT/build/emu-ipa.log"; die "build failed, build/emu-ipa.log"; }
 	   fast_test_ "$ROOT/build/ipa/LegacyTG-armv7.ipa" "${2:-118}"; report ;;
 gui)       env_; lighttouch ;;
-*)         sed -n 2,14p "$0"; exit 2 ;;
+walk)      shift; walk_ "$@" ;;
+*)         sed -n 2,19p "$0"; exit 2 ;;
 esac

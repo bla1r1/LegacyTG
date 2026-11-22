@@ -229,12 +229,14 @@ VENDOR_SRC_C := \
 APP_SRC_M := \
 	src/App/AppDelegate.m \
 	src/App/AppDelegate+URL.m \
+	src/App/AppDelegate+Walk.m \
 	src/App/RootViewController.m \
 	src/App/TGAuthRoute.m \
 	src/App/main.m \
 	src/Features/Dev/TGDevBench.m \
 	src/Features/Dev/TGDevFeedback.m \
 	src/Features/Dev/TGiPadSimulator.m \
+	src/Features/Dev/TGDevScreenRoute.m \
 	src/Core/Client/TGClient.m \
 	src/Core/Client/TGTransport.m \
 	src/Core/Client/TGUpdateRouter.m \
@@ -837,6 +839,7 @@ DEV_SRC_M := \
 	src/Features/Groups/TGCommunityViewController.m \
 	src/Features/Dev/TGDevWebProxyCarrierViewController.m \
 	src/Features/Dev/TGiPadSimulator.m \
+	src/Features/Dev/TGDevScreenRoute.m \
 	src/Features/Settings/TGTextStylesViewController.m \
 	src/Features/Chat/TGMessageToolsViewController.m
 ifneq ($(DEV),1)

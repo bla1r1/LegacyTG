@@ -1,4 +1,5 @@
 #import "AppDelegate+URL.h"
+#import "AppDelegate+Walk.h"
 
 /// The side the debug icon dump draws a sized avatar at - a preview for the
 /// gallery, not a size any screen uses.
@@ -466,6 +467,10 @@ static NSUInteger TGChatsIndex(UITabBarController *tabs) {
 
 	// itglegacy://ownscreen/<colours|edit> - a screen of your own profile, which
 	// changes nothing until something on it is tapped.
+	// itglegacy://reset and itglegacy://vc/<Class>: the emulator walk's routes.
+	if ([self tg_handleWalkURL:url])
+		return YES;
+
 	if ([host isEqualToString:@"ownscreen"]){
 		dispatch_async(dispatch_get_main_queue(), ^{
 			UITabBarController *tabs = [self activeTabBarController];
