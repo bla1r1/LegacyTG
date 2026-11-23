@@ -171,9 +171,14 @@ recording flags are already wired.
   dropped audio behind video.
 - [x] `done` Network changes on the reflector path: `--switch-at/--outage` on
   the stand; the screen shows Connecting... while nothing comes.
-- [ ] `planned` P2P: own socket, host and STUN candidates from the servers in
-  `callStateReady`, direct ICE checks, fall back to the reflector, honour
-  `allow_p2p`.
+- [x] `done` P2P (`TGCallDirectPath`): own socket, host candidates and a
+  srflx one through the call's STUN server (given by name, resolved by DNS),
+  direct ICE checks, media on the direct pair once one answers, back to the
+  reflector after 3 s of silence, only when `allow_p2p`. Stand
+  (`CALL_BENCH_P2P=1`) both roles; live iPod touch 4 to Telegram on a Mac on
+  the same Wi-Fi went direct within a second. Official WebRTC stops gathering
+  once a pair works, so it has no reflector candidate to fall back to unless
+  its network changes and it gathers again.
 - [ ] `planned` Signalling 12.0.0/13.0.0 (compressed, over SCTP). 10/11/18/19
   speak SDP over a PeerConnection and are another stack.
 - [ ] `planned` A call from a device to the official iOS and Android apps and

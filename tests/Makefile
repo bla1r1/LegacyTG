@@ -71,6 +71,7 @@ C_SRCS := src/CallEngine/Crypto/TGCallCrypto.c src/CallEngine/Crypto/TGCallSrtp.
 # ObjC sources under test
 OBJC_SRCS := \
     src/CallEngine/Network/TGCallStun.m \
+	src/CallEngine/Network/TGCallDirectPath.m \
     src/CallEngine/Signaling/TGCallMessages.m \
     src/CallEngine/Network/TGCallIce.m \
     src/CallEngine/Network/TGCallReflector.m \

@@ -6,6 +6,7 @@
 # between us and the reflector (both ways; percent, ms, ms, kbit/s).
 # --switch-at MS --outage MS in CALL_BENCH_NET plays a network change: that long with
 # nothing through, then the reflector hears us from a new port.
+# CALL_BENCH_P2P=1 lets both sides go peer to peer (the reflector stays as the fallback).
 # CALL_BENCH_PCM=file keeps what our playout produced (s16le 48 kHz, plus file.steps);
 # CALL_BENCH_ARRIVALS=1 logs each audio packet's arrival.
 # CALL_BENCH_VIDEO=1 turns both cameras on (9.0.0 only) and reports the frames each
@@ -35,7 +36,7 @@ for version in $VERSIONS; do
 		[ "$ours" = caller ] && THEIR_TAG="01${TAG:2}" || THEIR_TAG="00${TAG:2}"
 		"$CLI" --mode bridge --version "$version" --reflector "$REFLECTOR" --duration "$((DURATION + 4))" \
 			--role "$theirs" --key-hex "$KEY" --tag-hex "$THEIR_TAG" --signal-port "$PORT" \
-			--rtc-log "$LOGS/$NAME.rtc.log" ${CALL_BENCH_VIDEO:+--video} \
+			--rtc-log "$LOGS/$NAME.rtc.log" ${CALL_BENCH_VIDEO:+--video} ${CALL_BENCH_P2P:+--p2p} \
 			> "$LOGS/$NAME.theirs.out" 2> "$LOGS/$NAME.theirs.log" &
 		PEER=$!
 		"$BENCH" --role "$ours" --version "$version" --reflector "$REFLECTOR" --duration "$DURATION" \

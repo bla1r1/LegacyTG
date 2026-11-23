@@ -19,6 +19,7 @@
 #import "TGCallJitter.h"
 #import "TGDevice.h"
 #import "TGCallVideoIntake.h"
+#import "TGCallDirectPath.h"
 
 #include "libtgvoip/VoIPController.h"
 #include <openssl/aes.h>
@@ -170,6 +171,7 @@ static void TGInstallCrypto(void) {
 @property (nonatomic, assign) BOOL loggedHeader;
 @property (nonatomic, assign) BOOL sentMediaState;
 @property (nonatomic, strong) TGCallVideoIntake *videoIntake;
+@property (nonatomic, strong) TGCallDirectPath *direct;
 @property (nonatomic, assign) uint32_t videoParametersSeq;
 @property (nonatomic, assign) uint32_t mediaStateSeq;
 @property (nonatomic, strong) NSTimer *mediaStateTimer;
@@ -194,11 +196,7 @@ static void TGInstallCrypto(void) {
 @property (nonatomic, strong) NSMutableArray *pendingSignalingData;
 @end
 
-
 static const char *kBuildMarker = "BUILD_MARKER_AUDIO_FIX_V8";
-
-
-
 
 @implementation TGCall {
 	double _lastAudioIn;   // uptime of the last packet of the peer's audio
@@ -222,8 +220,6 @@ static const char *kBuildMarker = "BUILD_MARKER_AUDIO_FIX_V8";
 	BOOL _speakerEnabled;
 }
 
-
-
 + (instancetype)shared {
 	static TGCall *s = nil;
 	static dispatch_once_t once;
@@ -233,7 +229,6 @@ static const char *kBuildMarker = "BUILD_MARKER_AUDIO_FIX_V8";
 	});
 	return s;
 }
-
 
 - (NSTimeInterval)duration {
 	if (!self.establishedAt)
@@ -338,6 +333,7 @@ static const char *kBuildMarker = "BUILD_MARKER_AUDIO_FIX_V8";
 					@"ufrag %@ network-id 9 network-cost 50",
 					reflector.localTag, hostname, reflector.port, self.localUfrag]];
 		}
+		[v2Candidates addObjectsFromArray:[self.direct hostCandidates] ?: @[]];
 		[self.v2 sendCandidates:v2Candidates];
 		NSLog(@"TGCallV2: sent our candidates, ufrag=%@", self.localUfrag);
 		return;
@@ -748,13 +744,10 @@ static const char *kBuildMarker = "BUILD_MARKER_AUDIO_FIX_V8";
 		@"udp_reflector"    : @YES,
 		@"min_layer"        : @(65),
 		@"max_layer"        : @(92),
-		// 9.0.0 first: on iOS a 5.0.0 call connects and stays silent both ways, because
-		// InstanceImpl gets the shared audio device's root module, whose
-		// RegisterAudioCallback does nothing; only 7.0.0 and up get a child that has
-		// sound. 5.0.0 and 2.7.7 stay for clients with their own audio device.
-		// Only what the stand checks against tgcalls: a peer took 3.0.0, which
-		// tgcalls does not have and this engine never spoke, and the call
-		// connected with nothing coming back (2026-11-23, iPod touch 4).
+		// 9.0.0 first: official iOS is silent both ways on 5.0.0 (its shared audio
+		// device gives InstanceImpl no sound). 5.0.0 and 2.7.7 stay for clients
+		// with their own. Only what the stand checks: a peer took 3.0.0, which
+		// this engine never spoke, and nothing came back (iPod touch 4).
 		@"library_versions" : @[@"9.0.0", @"5.0.0", @"2.7.7"],
 	};
 }
@@ -839,7 +832,6 @@ static const char *kBuildMarker = "BUILD_MARKER_AUDIO_FIX_V8";
 	[session setMode:AVAudioSessionModeVoiceChat error:nil];
 	[session setActive:YES error:nil];
 
-
 	NSData *key = TGBase64Decode(state[@"encryption_key"]);
 	if (key.length != 256){
 		NSLog(@"TGCall: encryption key is %lu bytes, expected 256",
@@ -859,6 +851,7 @@ static const char *kBuildMarker = "BUILD_MARKER_AUDIO_FIX_V8";
 		self.localUfrag = self.localUfrag ?: [self randomIceStringOfLength:4];
 		self.localPwd = self.localPwd ?: [self randomIceStringOfLength:24];
 		[self startV2Session];
+		[self startDirectPathFrom:state];
 	}
 
 	if (self.pendingSignalingData.count) {
@@ -903,11 +896,14 @@ static const char *kBuildMarker = "BUILD_MARKER_AUDIO_FIX_V8";
 		for (NSString *candidate in candidates){
 			[weakSelf readPeerTagFromCandidate:candidate];
 			[weakSelf.ice addPeerCandidate:candidate];
+			[weakSelf.direct addPeerCandidate:candidate];
 		}
 	};
 	v2.onPeerCredentials = ^(NSString *ufrag, NSString *pwd){
 		weakSelf.ice.peerUfrag = ufrag;
 		weakSelf.ice.peerPwd = pwd;
+		weakSelf.direct.peerUfrag = ufrag;
+		weakSelf.direct.peerPwd = pwd;
 	};
 	v2.onAudioSendLoss = ^(uint8_t fraction){
 		[weakSelf.audioEngine peerReportedLoss:fraction];
@@ -955,7 +951,31 @@ static const char *kBuildMarker = "BUILD_MARKER_AUDIO_FIX_V8";
 	}
 }
 
+/// One reader at a time: the reflector's and the direct path's overlap.
+- (void)feedV2:(const uint8_t *)bytes length:(size_t)length {
+	@synchronized (self.v2) {
+		[self.v2 handlePacket:bytes length:length];
+	}
+}
+
+- (void)startDirectPathFrom:(NSDictionary *)state {
+	[self.direct stop];
+	__weak __typeof__(self) weakSelf = self;
+	self.direct = [TGCallDirectPath pathForCallState:state ufrag:self.localUfrag pwd:self.localPwd
+			controlling:self.outgoing media:^(const uint8_t *bytes, size_t length){ [weakSelf feedV2:bytes length:length]; }
+			candidate:^(NSString *line){ [weakSelf.v2 sendCandidates:@[line]]; }];
+	// A peer that takes the direct pair at once never answers on the
+	// reflector, and the caller's DTLS starts only when ICE connects.
+	self.direct.onPathChanged = ^(BOOL isDirect){
+		NSLog(@"TGCall: media %@", isDirect ? @"direct, peer to peer" : @"back on the reflector");
+		if (isDirect)
+			[weakSelf.v2 iceConnected];
+	};
+}
+
 - (void)sendV2Media:(const uint8_t *)bytes length:(size_t)length {
+	if ([self.direct send:bytes length:length])
+		return;
 	uint32_t tag = self.verifiedMediaTag ?: self.currentSenderTag;
 	if (!tag || !length)
 		return;
@@ -1101,7 +1121,6 @@ static const char *kBuildMarker = "BUILD_MARKER_AUDIO_FIX_V8";
 		[self sendRtcpReceiverReport];
 	}
 
-
 	// Send encrypted packet over reflector transport
 	uint32_t targetTag = self.verifiedMediaTag ?: (self.nominatedSenderTag ?: self.currentSenderTag);
 	TGCallReflector *targetReflector = self.verifiedReflector ?: (self.currentReflector ?: self.reflector);
@@ -1219,8 +1238,6 @@ static const char *kBuildMarker = "BUILD_MARKER_AUDIO_FIX_V8";
 									 sequence:rtpSeq timestamp:timestamp];
 }
 
-
-
 /// The first two bits of a STUN message are zero and the magic cookie sits at
 /// bytes 4..7 - the same test TGCallStun makes, read straight off the
 /// datagram. The media fast path below checks this first: holding a
@@ -1280,7 +1297,6 @@ static inline BOOL TGLooksLikeStun(const uint8_t *bytes) {
 		[self sendMediaStateMessage];
 	}
 
-
 	// The reflector pads the payload out to a multiple of four and states the
 	// real length at offset 20. Handing the padding to the decryptor as if it
 	// were part of the message makes the hash over the plaintext disagree, and
@@ -1295,7 +1311,7 @@ static inline BOOL TGLooksLikeStun(const uint8_t *bytes) {
 		size_t available = packet.length - 24;
 		if (declared > 0 && declared <= available)
 			available = declared;
-		[self.v2 handlePacket:bytes + 24 length:available];
+		[self feedV2:bytes + 24 length:available];
 		return;
 	}
 
@@ -1698,7 +1714,6 @@ static inline BOOL TGLooksLikeStun(const uint8_t *bytes) {
 	NSLog(@"TGCall: sent RemoteNetworkStatusMessage (type 10)");
 }
 
-
 - (void)setMuted:(BOOL)muted {
 	// ponytail: the mic keeps running and the frames are dropped on the way out.
 	// Stopping the input queue would mean restarting it, for no audible gain.
@@ -1710,6 +1725,8 @@ static inline BOOL TGLooksLikeStun(const uint8_t *bytes) {
 	_lastAudioIn = 0;
 	[self.videoIntake stop];
 	self.videoIntake = nil;
+	[self.direct stop];
+	self.direct = nil;
 #if TG_DEV
 	if (_benchSocket > 0){
 		close(_benchSocket);
@@ -1774,7 +1791,6 @@ static inline BOOL TGLooksLikeStun(const uint8_t *bytes) {
 	self.emojis = nil;
 	[[AVAudioSession sharedInstance] setActive:NO error:nil];
 }
-
 
 @end
 

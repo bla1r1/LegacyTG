@@ -423,6 +423,8 @@ int main(int argc, const char *argv[]) {
 								@"peer_tag" : [tag base64EncodedStringWithOptions:0]},
 				}],
 				@"protocol" : @{@"@type" : @"callProtocol", @"library_versions" : @[version]},
+				// CALL_BENCH_P2P=1: P2P allowed, as a user who has not turned it off.
+				@"allow_p2p" : @(getenv("CALL_BENCH_P2P") != NULL),
 			},
 		}];
 

@@ -754,6 +754,7 @@ APP_SRC_M := \
 	src/Audio/TGStreamingVoicePlayer.m \
 	src/CallEngine/Network/TGCallIce.m \
 	src/CallEngine/Network/TGCallStun.m \
+	src/CallEngine/Network/TGCallDirectPath.m \
 	src/CallEngine/Signaling/TGCallMessages.m \
 	src/CallEngine/Network/TGCallReflector.m \
 	src/CallEngine/Signaling/TGCallV2Signaling.m \

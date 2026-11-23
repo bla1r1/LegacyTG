@@ -15,6 +15,7 @@
 #import "TGCallJitter.h"
 #import "TGCallExpand.h"
 #import "TGCallH264Config.h"
+#import "TGCallDirectPath.h"
 #import <VideoToolbox/VideoToolbox.h>
 #import "TGCallVP8Codec.h"
 #import "TGCallVP8Rtp.h"
@@ -919,6 +920,51 @@ static void h264Decoded(void *ref, void *frame, OSStatus status, VTDecodeInfoFla
     for (size_t cut = 0; cut < n; cut++)
         XCTAssertFalse(TGAvcCParse(avcc, cut, &s, &sl, &p, &pl), @"cut at %zu", cut);
     XCTAssertEqual(TGAvcCBuild(sps, sizeof(sps), pps, sizeof(pps), avcc, 10), 0u);
+}
+
+
+#pragma mark - P2P
+
+- (void)testTwoDirectPathsFindEachOtherAndCarryMedia {
+    TGCallDirectPath *caller = [[TGCallDirectPath alloc] init], *callee = [[TGCallDirectPath alloc] init];
+    caller.localUfrag = @"aaaa"; caller.localPwd = @"caller-password-0123456789";
+    callee.localUfrag = @"bbbb"; callee.localPwd = @"callee-password-0123456789";
+    caller.controlling = YES;
+    caller.peerUfrag = callee.localUfrag; caller.peerPwd = callee.localPwd;
+    callee.peerUfrag = caller.localUfrag; callee.peerPwd = caller.localPwd;
+    __block NSData *received = nil;
+    callee.onMedia = ^(const uint8_t *bytes, size_t length){
+        if (!received) received = [NSData dataWithBytes:bytes length:length];
+    };
+    XCTAssertTrue([caller startWithStunServers:@[]]);
+    XCTAssertTrue([callee startWithStunServers:@[]]);
+    NSArray *callerLines = [caller hostCandidates], *calleeLines = [callee hostCandidates];
+    XCTAssertTrue(callerLines.count > 0, @"a machine with a network has a host candidate");
+    XCTAssertTrue([callerLines[0] rangeOfString:@" typ host "].location != NSNotFound);
+    for (NSString *line in calleeLines) [caller addPeerCandidate:line];
+    for (NSString *line in callerLines) [callee addPeerCandidate:line];
+    // Relay and IPv6 lines are not ours to check directly.
+    [caller addPeerCandidate:@"candidate:1 1 udp 41877760 reflector-1-2.reflector 598 typ relay generation 0"];
+    [caller addPeerCandidate:@"candidate:2 1 udp 2130706431 fe80::1 5000 typ host generation 0"];
+    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:3];
+    while (!(caller.active && callee.active) && [deadline timeIntervalSinceNow] > 0)
+        [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.05]];
+    XCTAssertTrue(caller.active, @"the controlling side's check was answered");
+    XCTAssertTrue(callee.active, @"and the controlled side took the nomination");
+    uint8_t rtp[20] = { 0x80, 111, 0, 1 };
+    XCTAssertTrue([caller send:rtp length:sizeof(rtp)]);
+    deadline = [NSDate dateWithTimeIntervalSinceNow:1];
+    while (!received && [deadline timeIntervalSinceNow] > 0)
+        [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.05]];
+    XCTAssertEqual(received.length, sizeof(rtp), @"non-STUN goes to onMedia");
+    [caller stop];
+    [callee stop];
+}
+
+- (void)testNoDirectPathWithoutAllowP2P {
+    XCTAssertNil([TGCallDirectPath pathForCallState:@{ @"allow_p2p" : @NO } ufrag:@"a" pwd:@"b"
+                                        controlling:YES media:nil candidate:nil],
+                 @"the user's P2P setting keeps our addresses from the peer");
 }
 
 @end

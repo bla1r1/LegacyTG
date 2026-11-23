@@ -83,11 +83,9 @@ skip  -         businessConnection.user_chat_id  bot-side Business API; a user c
 skip  -         businessMessage.reply_to_message  bot-side Business API; a user client receives none
 skip  -         callServer.ipv6_address  call engine internals: reflectors over IPv4 UDP, no WebRTC, no debug log upload
 skip  -         callServerTypeTelegramReflector.is_tcp  call engine internals: reflectors over IPv4 UDP, no WebRTC, no debug log upload
-skip  -         callServerTypeWebrtc.supports_stun  call engine internals: reflectors over IPv4 UDP, no WebRTC, no debug log upload
 skip  -         callServerTypeWebrtc.supports_turn  call engine internals: reflectors over IPv4 UDP, no WebRTC, no debug log upload
 skip  -         callStateDiscarded.need_debug_information  call engine internals: reflectors over IPv4 UDP, no WebRTC, no debug log upload
 skip  -         callStateDiscarded.need_log  call engine internals: reflectors over IPv4 UDP, no WebRTC, no debug log upload
-skip  -         callStateReady.allow_p2p  call engine internals: reflectors over IPv4 UDP, no WebRTC, no debug log upload
 skip  -         callStateReady.config  call engine internals: reflectors over IPv4 UDP, no WebRTC, no debug log upload
 skip  -         callStateReady.custom_parameters  call engine internals: reflectors over IPv4 UDP, no WebRTC, no debug log upload
 skip  -         callStateReady.is_group_call_supported  call engine internals: reflectors over IPv4 UDP, no WebRTC, no debug log upload

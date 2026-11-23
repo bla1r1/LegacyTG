@@ -195,6 +195,10 @@ static void TGV2DeliverVideo(void *context, const uint8_t *rtp, size_t length) {
 }
 
 - (void)iceConnected {
+	// Either path may say so first, the reflector's ICE or the direct one;
+	// the handshake starts once.
+	if (self.iceIsConnected)
+		return;
 	self.iceIsConnected = YES;
 	if (self.havePeerSetup){
 		@synchronized (_dtlsLock){
