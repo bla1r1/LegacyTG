@@ -34,6 +34,38 @@ NSString *TGAccountDatabaseDirectory(NSString *documents, NSInteger slot) {
 			[NSString stringWithFormat:@"tdlib-%ld", (long)slot]];
 }
 
+/// Every file under the data root is locked until the phone is first
+/// unlocked after a boot: databases, the binlog, downloaded media, secret
+/// chat files. iOS 7 gives new files their directory's class; iOS 6 does not,
+/// so the walk runs on every launch, off the main thread, and touches only
+/// files that are not in the class yet.
+static void TGAccountProtectData(NSString *root) {
+#if TARGET_OS_IPHONE
+	NSString *const protection = NSFileProtectionCompleteUntilFirstUserAuthentication;
+	NSDictionary *attributes = @{NSFileProtectionKey : protection};
+	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_BACKGROUND, 0), ^{
+		NSFileManager *fm = [NSFileManager new];
+		NSUInteger changed = 0, failed = 0;
+		[fm setAttributes:attributes ofItemAtPath:root error:NULL];
+		NSDirectoryEnumerator *walk = [fm enumeratorAtPath:root];
+		for (NSString *relative in walk){
+			@autoreleasepool {
+				if ([walk.fileAttributes[NSFileProtectionKey] isEqualToString:protection])
+					continue;
+				NSString *path = [root stringByAppendingPathComponent:relative];
+				if ([fm setAttributes:attributes ofItemAtPath:path error:NULL])
+					changed++;
+				else
+					failed++;
+			}
+		}
+		if (changed || failed)
+			NSLog(@"TGClient: data protection set on %lu files, %lu refused",
+					(unsigned long)changed, (unsigned long)failed);
+	});
+#endif
+}
+
 NSString *TGAccountDataRootInLibrary(NSString *library) {
 	if (!library.length)
 		return nil;
@@ -53,6 +85,7 @@ NSString *TGAccountDataRootInLibrary(NSString *library) {
 	if (![[NSURL fileURLWithPath:path isDirectory:YES] setResourceValue:@YES
 			forKey:NSURLIsExcludedFromBackupKey error:&error])
 		NSLog(@"TGClient: cannot exclude %@ from backup: %@", path, error);
+	TGAccountProtectData(path);
 	return path;
 }
 

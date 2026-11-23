@@ -22,6 +22,7 @@
 // for every other one.
 #import "TGVideoNoteRecorder.h"
 #import "TGPresent.h"
+#import "TGPollComposeViewController.h"
 #import "TGBarItem.h"
 
 @interface TGComposerInputField : UITextView
@@ -1294,8 +1295,14 @@ static NSInteger const kTGRepeatPeriods[] = {0, 86400, 604800, 2592000};
 	sheet.onPhotos = ^(NSArray *images){
 		[weakSelf sendImageAlbum:images];
 	};
+	sheet.hidesPoll = self.secretChatId != 0;
 	sheet.onChoice = ^(TGAttachChoice choice){
 		switch (choice){
+			case TGAttachChoicePoll:
+				[TGPresent presentModal:[[TGPollComposeViewController alloc]
+						initWithChatId:weakSelf.chatId isChannel:weakSelf.isChannel]
+								   kind:TGModalForm from:weakSelf];
+				break;
 			case TGAttachChoiceGallery:  [weakSelf pickMedia]; break;
 			case TGAttachChoiceCamera:   [weakSelf pickCamera]; break;
 			case TGAttachChoiceDocument: [weakSelf pickDocument]; break;
@@ -1347,8 +1354,12 @@ static NSInteger const kTGRepeatPeriods[] = {0, 86400, 604800, 2592000};
 		[self hideStickerPanel];
 	[self hideBotKeyboard];
 	[self hideBotCommands];
+	// The frame is the screen's, unrotated: in landscape its height is the
+	// keyboard's width. What counts is how much of this view it covers.
 	CGRect kb = [[note.userInfo objectForKey:UIKeyboardFrameEndUserInfoKey] CGRectValue];
-	[self shiftForKeyboardHeight:kb.size.height];
+	CGRect covered = [self.view convertRect:kb fromView:nil];
+	[self shiftForKeyboardHeight:MAX(TGMetricZero,
+			CGRectGetMaxY(self.view.bounds) - CGRectGetMinY(covered))];
 }
 
 - (void)keyboardWillHide:(NSNotification *)note {
@@ -1367,6 +1378,7 @@ static NSInteger const kTGRepeatPeriods[] = {0, 86400, 604800, 2592000};
 }
 
 - (void)shiftForKeyboardHeight:(CGFloat)height {
+	self.composerLift = height;
 	CGRect b = self.view.bounds;
 	CGFloat barH = self.composerBarHeight > 0.0f
 			? self.composerBarHeight : kInputHeight;

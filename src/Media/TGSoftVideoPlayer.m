@@ -8,6 +8,26 @@
 //
 #import "TGSoftVideoPlayer.h"
 
+BOOL TGSoftVideoValidateDimensions(int width, int height) {
+	if (width <= 0 || height <= 0 || width > 4096 || height > 4096)
+		return NO;
+	if ((uint64_t)width * (uint64_t)height * 4ull > 16ull * 1024 * 1024)
+		return NO;
+	return YES;
+}
+
+void TGSoftCopyPlane(uint8_t *dst, const uint8_t *src, int stride,
+                     int width, int height) {
+	if (!dst || !src || width <= 0 || height <= 0 || stride < width)
+		return;
+	if (stride == width){
+		memcpy(dst, src, (size_t)width * (size_t)height);
+		return;
+	}
+	for (int row = 0; row < height; row++)
+		memcpy(dst + (size_t)row * width, src + (ptrdiff_t)row * stride, (size_t)width);
+}
+
 #if __arm__
 
 #import "TGSoftVideoClock.h"
@@ -486,16 +506,6 @@ static void TGSoftVideoAudioCallback(void *userData, AudioQueueRef queue,
 	[player handleAudioBuffer:buffer];
 }
 
-static void TGSoftCopyPlane(uint8_t *dst, const uint8_t *src, int stride,
-							int width, int height) {
-	if (stride == width){
-		memcpy(dst, src, (size_t)width * (size_t)height);
-		return;
-	}
-	for (int row = 0; row < height; row++)
-		memcpy(dst + (size_t)row * width, src + (ptrdiff_t)row * stride, (size_t)width);
-}
-
 @implementation TGSoftVideoPlayer
 
 - (instancetype)initWithPath:(NSString *)path {
@@ -552,6 +562,10 @@ static void TGSoftCopyPlane(uint8_t *dst, const uint8_t *src, int stride,
 	if (_videoIndex < 0 || !videoCodec)
 		return NO;
 	AVStream *videoStream = _format->streams[_videoIndex];
+	if (!videoStream || !videoStream->codecpar)
+		return NO;
+	if (!TGSoftVideoValidateDimensions(videoStream->codecpar->width, videoStream->codecpar->height))
+		return NO;
 	_videoCtx = avcodec_alloc_context3(videoCodec);
 	if (!_videoCtx)
 		return NO;
@@ -626,10 +640,12 @@ static void TGSoftCopyPlane(uint8_t *dst, const uint8_t *src, int stride,
 - (BOOL)allocateFrameBuffers {
 	int width = _videoCtx->width;
 	int height = _videoCtx->height;
-	if (width <= 0 || height <= 0)
+	if (!TGSoftVideoValidateDimensions(width, height))
 		return NO;
 	size_t ySize = (size_t)width * (size_t)height;
 	size_t uvSize = (size_t)((width + 1) / 2) * (size_t)((height + 1) / 2);
+	if (width > SIZE_MAX / height)
+		return NO;
 	for (int i = 0; i < kTGSoftFrameCount; i++){
 		_slots[i].width = width;
 		_slots[i].height = height;
@@ -649,7 +665,7 @@ static void TGSoftCopyPlane(uint8_t *dst, const uint8_t *src, int stride,
 - (BOOL)setupAudio {
 	int rate = _audioCtx->sample_rate;
 	int channels = _audioCtx->ch_layout.nb_channels;
-	if (rate <= 0 || channels <= 0)
+	if (rate < 8000 || rate > 192000 || channels <= 0 || channels > 8)
 		return NO;
 	_audioSampleRate = rate;
 	_audioChannels = MIN(channels, 2);
@@ -1005,6 +1021,12 @@ static void TGSoftCopyPlane(uint8_t *dst, const uint8_t *src, int stride,
 }
 
 - (void)handleVideoFrame:(AVFrame *)frame {
+	if (!frame || !frame->data[0] || !frame->data[1] || !frame->data[2])
+		return;
+	if (frame->width <= 0 || frame->height <= 0 ||
+		frame->width != _slots[0].width || frame->height != _slots[0].height)
+		return;
+
 	enum AVPixelFormat format = (enum AVPixelFormat)frame->format;
 	if (format != AV_PIX_FMT_YUV420P && format != AV_PIX_FMT_YUVJ420P){
 		[self reportFailure:@"Unsupported video pixel format"];
@@ -1180,6 +1202,8 @@ static void TGSoftCopyPlane(uint8_t *dst, const uint8_t *src, int stride,
 	if (frames <= 0)
 		return;
 	int needed = frames * outChannels;
+	if (needed > _pcmCapacity)
+		return;
 
 	[_lock lock];
 	while (_pcmCapacity - _pcmCount < needed && !_stopped)

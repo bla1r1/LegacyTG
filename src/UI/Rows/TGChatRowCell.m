@@ -44,6 +44,7 @@ static const CGFloat kSwipeActionWidth = 76.0f;
 @property (nonatomic, strong) UIImageView *tick;   // your own last message
 @property (nonatomic, strong) UIImageView *pin;   // pinned to the top
 @property (nonatomic, strong) UIImageView *statusIcon; // the emoji status after the title
+@property (nonatomic, strong) UIImageView *lockIcon;   // a secret chat's padlock before it
 @property (nonatomic, strong) UIImageView *muteIcon;   // beside the title of a muted chat
 @property (nonatomic, strong) UIView *separator;   // starts under the text, not the picture
 
@@ -270,6 +271,11 @@ static UIImage *TGChatRowStoryRingImage(CGSize side, UIColor *colour) {
 	self.statusIcon.hidden = YES;
 	[self.contentView addSubview:self.statusIcon];
 
+	self.lockIcon = [[UIImageView alloc] init];
+	self.lockIcon.contentMode = UIViewContentModeScaleAspectFit;
+	self.lockIcon.hidden = YES;
+	[self.contentView addSubview:self.lockIcon];
+
 	self.muteIcon = [[UIImageView alloc] init];
 	self.muteIcon.contentMode = UIViewContentModeScaleAspectFit;
 	self.muteIcon.hidden = YES;
@@ -341,8 +347,12 @@ static UIImage *TGChatRowStoryRingImage(CGSize side, UIColor *colour) {
 	BOOL saved = [row[TGRowChatSaved] boolValue];
 	int64_t statusId = saved ? 0
 			: [row[TGRowChatStatusEmojiId] longLongValue];
+	BOOL secret = [row[TGRowChatSecret] boolValue];
+	self.lockIcon.hidden = !secret;
+	self.lockIcon.image = secret ? [TGIcons glyphNamed:@"lock" colour:[theme onlineColour]
+												  side:kMuteGlyph] : nil;
 	self.titleLabel.attributedText = TGNameWithStatus(title, statusId,
-			self.titleLabel.font, [theme primaryTextColour]);
+			self.titleLabel.font, [self titleColour]);
 
 	NSString *date = row[TGRowChatDate];
 	self.dateLabel.text = [date isKindOfClass:NSString.class] ? date : @"";
@@ -633,7 +643,13 @@ static NSString *TGSafeEmojiFallback(NSString *emoji) {
 	// Title, then the status, then the mute glyph: the title gives way to both.
 	CGFloat muteW = self.muteIcon.hidden ? 0 : kMuteRoom;
 	CGFloat statusW = self.statusIcon.hidden ? 0 : kStatusRoom;
-	CGFloat titleRoom = MAX(0, titleRight - kTextLeft - muteW - statusW);
+	CGFloat titleLeft = kTextLeft;
+	if (!self.lockIcon.hidden){
+		self.lockIcon.frame = CGRectMake(kTextLeft, kFirstLineTop + TGMetricPadTiny,
+				kMuteGlyph, kMuteGlyph);
+		titleLeft += kMuteRoom;
+	}
+	CGFloat titleRoom = MAX(0, titleRight - titleLeft - muteW - statusW);
 	CGFloat textW = 0;
 	if (self.titleLabel.attributedText.length > 0 && [self.titleLabel.attributedText respondsToSelector:@selector(boundingRectWithSize:options:context:)]) {
 		CGRect r = [self.titleLabel.attributedText boundingRectWithSize:CGSizeMake(CGFLOAT_MAX, TGMetricLineRow)
@@ -644,8 +660,8 @@ static NSString *TGSafeEmojiFallback(NSString *emoji) {
 		textW = ceilf(TGChatRowCellTextSize(self.titleLabel.text, self.titleLabel.font).width);
 	}
 	CGFloat titleW = MIN(textW, titleRoom);
-	self.titleLabel.frame = CGRectMake(kTextLeft, kFirstLineTop, titleW, TGMetricLineRow);
-	CGFloat afterTitle = kTextLeft + titleW + TGMetricBubbleRowInset;
+	self.titleLabel.frame = CGRectMake(titleLeft, kFirstLineTop, titleW, TGMetricLineRow);
+	CGFloat afterTitle = titleLeft + titleW + TGMetricBubbleRowInset;
 	if (!self.statusIcon.hidden){
 		self.statusIcon.frame = CGRectMake(afterTitle,
 				kFirstLineTop + TGCenteredOrigin(TGMetricLineRow, kStatusGlyph), kStatusGlyph, kStatusGlyph);
@@ -706,7 +722,7 @@ static NSString *TGSafeEmojiFallback(NSString *emoji) {
 	self.titleLabel.backgroundColor = bg;
 	self.previewLabel.backgroundColor = bg;
 	self.dateLabel.backgroundColor = bg;
-	self.titleLabel.textColor = [theme primaryTextColour];
+	self.titleLabel.textColor = [self titleColour];
 	self.previewLabel.textColor = [theme secondaryTextColour];
 	self.dateLabel.textColor = [theme listDateColour];
 	self.badge.backgroundColor = [theme badgeColour];
@@ -907,6 +923,12 @@ static NSString *TGSafeEmojiFallback(NSString *emoji) {
 		[self closeSwipeActionsAnimated:NO];
 }
 
+/// Official marks a secret chat with a green padlock and a green name.
+- (UIColor *)titleColour {
+	TGTheme *theme = [TGTheme shared];
+	return [self.row[TGRowChatSecret] boolValue] ? [theme onlineColour] : [theme primaryTextColour];
+}
+
 - (void)setSelected:(BOOL)selected animated:(BOOL)animated {
 	[super setSelected:selected animated:animated];
 	if (selected && !self.swipeActionsOpen)
@@ -925,7 +947,7 @@ static NSString *TGSafeEmojiFallback(NSString *emoji) {
 		UIColor *bg = pinnedRow ? [theme cardBackgroundColour] : [theme listBackgroundColour];
 		self.contentView.backgroundColor = bg;
 		self.titleLabel.backgroundColor = bg;
-		self.titleLabel.textColor = [theme primaryTextColour];
+		self.titleLabel.textColor = [self titleColour];
 		self.previewLabel.backgroundColor = bg;
 		self.previewLabel.textColor = [theme secondaryTextColour];
 		self.dateLabel.backgroundColor = bg;

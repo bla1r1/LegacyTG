@@ -77,6 +77,7 @@ static char kTGReactionChipsShownKey;
 #pragma mark - table
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
+	self.secretPlaceholder.hidden = self.messages.count > 0;
 	return (NSInteger)self.messages.count;
 }
 

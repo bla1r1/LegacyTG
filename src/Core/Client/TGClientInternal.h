@@ -51,6 +51,9 @@ NSArray *TGMediaPageAppending(NSArray *existing, NSArray *more);
 @property (nonatomic, copy) NSString *registrationTermsText;
 @property (nonatomic, assign) TGAuthState authState;
 @property (nonatomic, assign) NSTimeInterval readyAt;
+/// The database opened only with the empty key: an install from before
+/// encryption was the default. Re-keyed once the account is ready.
+@property (nonatomic, assign) BOOL databaseOpenedWithoutKey;
 @property (nonatomic, readonly) BOOL running;
 /// The background close: asked for, finished, and a return that came first.
 @property (nonatomic, assign) BOOL pausing;

@@ -518,28 +518,27 @@
 
 	if ([title isEqualToString:@"Start Secret Chat"]){
 		int64_t userId = self.userId;
-		NSString *name = self.name;
+		NSString *name = self.name ?: @"";
 		__weak typeof(self) weakSelf = self;
-		[[TGProfileStore shared] createSecretChatWithUser:userId
-										completion:^(int64_t chatId){
-			TGProfileViewController *me = weakSelf;
-			if (!chatId){
-				[TGAlertSheet showMessage:@"An error occurred."
-									title:@"Secret Chat" inView:me.view];
-				return;
-			}
-			// It exists but is not usable until their device answers the key
-			// exchange, and a chat that silently refuses to send reads as a
-			// bug rather than as waiting.
-			Class chatClass = NSClassFromString(@"TGChatViewController");
-			UIViewController *chat = [[chatClass alloc] init];
-			[chat setValue:@(chatId) forKey:@"chatId"];
-			[chat setValue:[NSString stringWithFormat:@"%@ (secret)",
-					name.length ? name : @"Secret"] forKey:@"chatTitle"];
-			chat.hidesBottomBarWhenPushed = YES;
-			[me.navigationController pushViewController:chat animated:YES];
-			[TGAlertSheet showMessage:@"An error occurred."
-								title:@"Secret Chat" inView:chat.view];
+		// Official asks first, then opens the new chat; it says "waiting for
+		// the other side" with the padlock and the empty-chat panel.
+		[TGAlertSheet showConfirm:TGLocalizedFormat(@"Are you sure you want to start a secret chat with %@?", name)
+							 title:nil action:TGLocalized(@"Start") destructive:NO
+							inView:self.navigationController.view ?: self.view onConfirm:^{
+			[[TGProfileStore shared] createSecretChatWithUser:userId completion:^(int64_t chatId){
+				TGProfileViewController *me = weakSelf;
+				if (!chatId){
+					[TGAlertSheet showMessage:TGLocalized(@"An error occurred.")
+										title:nil inView:me.view];
+					return;
+				}
+				Class chatClass = NSClassFromString(@"TGChatViewController");
+				UIViewController *chat = [[chatClass alloc] init];
+				[chat setValue:@(chatId) forKey:@"chatId"];
+				[chat setValue:name forKey:@"chatTitle"];
+				chat.hidesBottomBarWhenPushed = YES;
+				[me.navigationController pushViewController:chat animated:YES];
+			}];
 		}];
 		return;
 	}

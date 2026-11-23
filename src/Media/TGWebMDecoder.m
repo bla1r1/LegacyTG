@@ -39,13 +39,17 @@ static void TGFrameSlotProviderRelease(void *info, const void *data, size_t size
 #pragma mark - NestEgg File I/O Callbacks
 
 static const CGFloat kTGWebMDefaultSide = 256.0f;
+static const uint64_t kTGWebMMaxDecodedBytes = 16ull * 1024 * 1024;
+static const unsigned int kTGWebMMaxSide = 4096;
+static const NSUInteger kTGWebMMaxFrames = 600;
+static const unsigned int kTGWebMMaxPackets = 4000;
 
-static int webm_io_read(void *buffer, size_t length, void *userdata) {
+static int64_t webm_io_read(void *buffer, size_t length, void *userdata) {
 	FILE *fp = (FILE *)userdata;
 	size_t r = fread(buffer, 1, length, fp);
 	if (r == 0 && ferror(fp))
 		return -1;
-	return (int)r;
+	return (int64_t)r;
 }
 
 static int webm_io_seek(int64_t offset, int whence, void *userdata) {
@@ -64,15 +68,24 @@ static int64_t webm_io_tell(void *userdata) {
 /// it converts every frame of every playing sticker again before upload.
 static void ConvertYUV420ToRGBA(vpx_image_t *img, vpx_image_t *alphaImg, uint8_t *dstRgba,
 								unsigned int width, unsigned int height, size_t rgbaStride) {
+	if (!img || !dstRgba || width == 0 || height == 0)
+		return;
+
 	const uint8_t *yPlane = img->planes[VPX_PLANE_Y];
 	const uint8_t *uPlane = img->planes[VPX_PLANE_U];
 	const uint8_t *vPlane = img->planes[VPX_PLANE_V];
+	if (!yPlane || !uPlane || !vPlane)
+		return;
+
 	int yStride = img->stride[VPX_PLANE_Y];
 	int uStride = img->stride[VPX_PLANE_U];
 	int vStride = img->stride[VPX_PLANE_V];
 
 	const uint8_t *aPlane = (alphaImg ? alphaImg->planes[VPX_PLANE_Y] : NULL);
 	int aStride = (alphaImg ? alphaImg->stride[VPX_PLANE_Y] : 0);
+	if (alphaImg && (alphaImg->d_w < width || alphaImg->d_h < height || !aPlane)) {
+		aPlane = NULL;
+	}
 
 	for (unsigned int y = 0; y < height; y++) {
 		const uint8_t *py = yPlane + y * yStride;
@@ -191,11 +204,15 @@ static CGImageRef CreateCGImageFromVpxImages(vpx_image_t *img, vpx_image_t *alph
 
 	unsigned int width = img->d_w;
 	unsigned int height = img->d_h;
-	if (width == 0 || height == 0)
+	if (width == 0 || height == 0 || width > kTGWebMMaxSide || height > kTGWebMMaxSide)
 		return NULL;
 
-	size_t rgbaStride = width * 4;
-	size_t dataLen = rgbaStride * height;
+	// Refuse bitmaps over the 16 MB cache ceiling or that overflow on 32-bit.
+	if ((uint64_t)width * (uint64_t)height * 4ull > kTGWebMMaxDecodedBytes)
+		return NULL;
+
+	size_t rgbaStride = (size_t)width * 4;
+	size_t dataLen = rgbaStride * (size_t)height;
 	uint8_t *rgba = (uint8_t *)malloc(dataLen);
 	if (!rgba)
 		return NULL;
@@ -258,7 +275,7 @@ static CGImageRef CreateCGImageFromVpxImages(vpx_image_t *img, vpx_image_t *alph
 
 	uint64_t durNs = 0;
 	nestegg_duration(demux, &durNs);
-	NSTimeInterval durSec = (durNs > 0) ? ((double)durNs / 1000000000.0) : 2.0;
+	NSTimeInterval durSec = (durNs > 0 && durNs < 3600ull * 1000000000ull) ? ((double)durNs / 1000000000.0) : 2.0;
 
 	vpx_codec_ctx_t codec;
 	vpx_codec_dec_cfg_t cfg = {0};
@@ -276,8 +293,9 @@ static CGImageRef CreateCGImageFromVpxImages(vpx_image_t *img, vpx_image_t *alph
 
 	NSMutableArray *frames = [NSMutableArray array];
 	nestegg_packet *pkt = NULL;
+	unsigned int packetCount = 0;
 
-	while (nestegg_read_packet(demux, &pkt) > 0) {
+	while (packetCount++ < kTGWebMMaxPackets && nestegg_read_packet(demux, &pkt) > 0) {
 		unsigned int track = 0;
 		nestegg_packet_track(pkt, &track);
 		if ((int)track == videoTrack) {
@@ -314,13 +332,19 @@ static CGImageRef CreateCGImageFromVpxImages(vpx_image_t *img, vpx_image_t *alph
 						CGImageRef cg = CreateCGImageFromVpxImages(img, alphaImg);
 						if (cg) {
 							[frames addObject:CFBridgingRelease(cg)];
+							if (frames.count >= kTGWebMMaxFrames)
+								break;
 						}
 					}
 				}
+				if (frames.count >= kTGWebMMaxFrames)
+					break;
 			}
 		}
 		nestegg_free_packet(pkt);
 		pkt = NULL;
+		if (frames.count >= kTGWebMMaxFrames)
+			break;
 	}
 
 	if (hasAlphaCodec) {
@@ -392,8 +416,9 @@ static CGImageRef CreateCGImageFromVpxImages(vpx_image_t *img, vpx_image_t *alph
 	BOOL hasAlphaCodec = NO;
 	nestegg_packet *pkt = NULL;
 	CGImageRef firstCG = NULL;
+	unsigned int packetCount = 0;
 
-	while (nestegg_read_packet(demux, &pkt) > 0) {
+	while (packetCount++ < 500 && nestegg_read_packet(demux, &pkt) > 0) {
 		unsigned int track = 0;
 		nestegg_packet_track(pkt, &track);
 		if ((int)track == videoTrack) {
@@ -521,7 +546,7 @@ static dispatch_queue_t TGWebMDecodeQueue(void) {
 
 	uint64_t durNs = 0;
 	nestegg_duration(_demux, &durNs);
-	_duration = (durNs > 0) ? ((double)durNs / 1000000000.0) : 2.0;
+	_duration = (durNs > 0 && durNs < 3600ull * 1000000000ull) ? ((double)durNs / 1000000000.0) : 2.0;
 
 	vpx_codec_dec_cfg_t cfg = {0};
 	cfg.threads = 1;
@@ -578,6 +603,7 @@ static dispatch_queue_t TGWebMDecodeQueue(void) {
 - (void)play {
 	if (_isPlaying) return;
 	_isPlaying = YES;
+#if TARGET_OS_IPHONE
 	if (!_displayLink) {
 		_displayLink = [CADisplayLink displayLinkWithTarget:self selector:@selector(tick:)];
 		int interval = (int)round(60.0 / (_fps > 0 ? _fps : 30.0));
@@ -585,14 +611,17 @@ static dispatch_queue_t TGWebMDecodeQueue(void) {
 		_displayLink.frameInterval = interval;
 		[_displayLink addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
 	}
+#endif
 }
 
 - (void)stop {
 	_isPlaying = NO;
+#if TARGET_OS_IPHONE
 	if (_displayLink) {
 		[_displayLink invalidate];
 		_displayLink = nil;
 	}
+#endif
 }
 
 - (void)pause {
@@ -608,8 +637,9 @@ static dispatch_queue_t TGWebMDecodeQueue(void) {
 
 	nestegg_packet *pkt = NULL;
 	int loopCount = 0;
+	int packetCount = 0;
 
-	while (loopCount < 2) {
+	while (loopCount < 2 && packetCount++ < 1000) {
 		int r = nestegg_read_packet(_demux, &pkt);
 		if (r <= 0) {
 			// Loop around when EOF is reached
@@ -661,9 +691,14 @@ static dispatch_queue_t TGWebMDecodeQueue(void) {
 					vpx_codec_iter_t iter = NULL;
 					vpx_image_t *img = vpx_codec_get_frame(&_codec, &iter);
 					if (img) {
+						if ((int)img->d_w <= 0 || (int)img->d_h <= 0 ||
+							img->d_w > kTGWebMMaxSide || img->d_h > kTGWebMMaxSide) {
+							nestegg_free_packet(pkt);
+							return _currentImage;
+						}
 						unsigned int w = (unsigned int)MIN(512, (int)img->d_w);
 						unsigned int h = (unsigned int)MIN(512, (int)img->d_h);
-						if (w > 0 && h > 0) {
+						if (w > 0 && h > 0 && (uint64_t)w * (uint64_t)h * 4ull <= kTGWebMMaxDecodedBytes) {
 							_ringSlot = (_ringSlot + 1) % 3;
 							size_t rgbaStride = w * 4;
 							size_t need = rgbaStride * h;

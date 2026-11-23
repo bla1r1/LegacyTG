@@ -30,15 +30,23 @@ static void TGWebPFreeBuffer(void *ptr) {
 		free(ptr);
 }
 
+static const uint64_t kTGStickerMaxBytes = 16ull * 1024 * 1024;
+static const size_t kTGStickerMaxSide = 4096;
+
 const size_t TGStickerImageSide = 512;
 
 CGImageRef TGStickerImageCreatePadded(CGImageRef source, size_t side) {
-	if (!source || side == 0)
+	if (!source || side == 0 || side > kTGStickerMaxSide)
 		return NULL;
 
 	size_t width = CGImageGetWidth(source);
 	size_t height = CGImageGetHeight(source);
-	if (!width || !height)
+	if (!width || !height || width > kTGStickerMaxSide || height > kTGStickerMaxSide)
+		return NULL;
+
+	// Sticker allocations cannot exceed the 16 MB cache ceiling.
+	if ((uint64_t)side * (uint64_t)side * 4ull > kTGStickerMaxBytes ||
+		(uint64_t)width * (uint64_t)height * 4ull > kTGStickerMaxBytes)
 		return NULL;
 
 	CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
@@ -72,6 +80,10 @@ CGImageRef TGStickerImageCreatePadded(CGImageRef source, size_t side) {
 }
 
 NSData *TGStickerImageWebPData(CGImageRef source, size_t side, float quality) {
+	if (!source || side == 0 || side > kTGStickerMaxSide ||
+		(uint64_t)side * (uint64_t)side * 4ull > kTGStickerMaxBytes)
+		return nil;
+
 	CGImageRef padded = TGStickerImageCreatePadded(source, side);
 	if (!padded)
 		return nil;

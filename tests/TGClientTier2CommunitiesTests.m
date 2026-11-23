@@ -410,6 +410,50 @@ static NSDictionary *t2Message(NSDictionary *content) {
 						  @"Passport");
 }
 
+/// The New Poll screen's draft: empty option fields (the trailing "Add an
+/// Option" one) are not options, and every inputMessagePoll field TDLib
+/// requires is present, or the send is refused before it reaches Telegram.
+- (void)testSendPoll_RegularPollCarriesTheSwitches {
+	TGClient *c = T2();
+	[c sendPoll:@{@"question" : @" Lunch? ", @"options" : @[@"Pizza", @"", @"Sushi", @""],
+				  @"anonymous" : @NO, @"multiple" : @YES, @"addingOptions" : @YES,
+				  @"revoting" : @YES, @"shuffle" : @NO}
+		 toChat:77 completion:nil];
+	NSDictionary *poll = t2Last(c, @"sendMessage")[@"input_message_content"];
+	XCTAssertEqualObjects(poll[@"@type"], @"inputMessagePoll");
+	XCTAssertEqualObjects(poll[@"question"][@"text"], @"Lunch?");
+	XCTAssertEqual([poll[@"options"] count], (NSUInteger)2);
+	XCTAssertEqualObjects(poll[@"options"][1][@"text"][@"text"], @"Sushi");
+	XCTAssertEqualObjects(poll[@"is_anonymous"], @NO);
+	XCTAssertEqualObjects(poll[@"allows_multiple_answers"], @YES);
+	XCTAssertEqualObjects(poll[@"allows_revoting"], @YES);
+	XCTAssertEqualObjects(poll[@"type"][@"@type"], @"inputPollTypeRegular");
+	XCTAssertEqualObjects(poll[@"type"][@"allow_adding_options"], @YES);
+	for (NSString *key in @[@"description", @"media", @"members_only", @"country_codes",
+			@"shuffle_options", @"hide_results_until_closes", @"open_period", @"close_date", @"is_closed"])
+		XCTAssertNotNil(poll[key], @"%@", key);
+}
+
+- (void)testSendPoll_QuizCarriesTheAnswerAndExplanation {
+	TGClient *c = T2();
+	[c sendPoll:@{@"question" : @"2+2", @"options" : @[@"3", @"4"], @"quiz" : @YES,
+				  @"correct" : @[@1], @"explanation" : @"Count"}
+		 toChat:77 completion:nil];
+	NSDictionary *type = t2Last(c, @"sendMessage")[@"input_message_content"][@"type"];
+	XCTAssertEqualObjects(type[@"@type"], @"inputPollTypeQuiz");
+	XCTAssertEqualObjects(type[@"correct_option_ids"], @[@1]);
+	XCTAssertEqualObjects(type[@"explanation"][@"text"], @"Count");
+}
+
+- (void)testSendPoll_NoQuestionSendsNothing {
+	TGClient *c = T2();
+	__block NSString *error = nil;
+	[c sendPoll:@{@"question" : @"  ", @"options" : @[@"A"]} toChat:77
+	 completion:^(BOOL ok, NSString *why){ error = why; }];
+	XCTAssertNil(t2Last(c, @"sendMessage"));
+	XCTAssertNotNil(error);
+}
+
 #pragma mark - suggested posts and actions
 
 - (void)testSuggestedPostForMessage_ReadsPriceDateStateAndFlags {

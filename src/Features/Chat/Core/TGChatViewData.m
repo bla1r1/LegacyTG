@@ -681,7 +681,8 @@ static NSString *TGChatRowKey(NSDictionary *row) {
 - (void)openProfile {
 	// A private chat id is the user id, which is what the profile needs to
 	// look up a photo and a phone number; a group has no single user.
-	int64_t userId = (self.isGroup || self.chatId < 0) ? 0 : self.chatId;
+	int64_t userId = self.secretChatId ? self.secretUserId
+			: (self.isGroup || self.chatId < 0) ? 0 : self.chatId;
 	TGProfileViewController *profile = [[TGProfileViewController alloc]
 			initWithChatId:self.chatId userId:userId title:self.chatTitle];
 	__weak typeof(self) weakSelf = self;

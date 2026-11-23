@@ -1,5 +1,135 @@
 #!/usr/bin/env python3
-import struct, math, os, sys
+import struct, math, os, sys, zlib
+
+# iOS before 9 reads every sbix glyph as a PNG. Apple's font stores the
+# right-facing people of Unicode 15.1 as 'flip' (mirror another glyph), and
+# iOS 7 handed that pointer to ImageIO: SIGSEGV under CoreText as soon as the
+# emoji panel drew one. Each 'flip' becomes the mirrored PNG itself.
+_PNG_SIG = b'\x89PNG\r\n\x1a\n'
+_BPP = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}
+
+
+def _png_chunks(png):
+    i = 8
+    while i < len(png):
+        length, tag = struct.unpack('>I4s', png[i:i + 8])
+        yield tag, png[i + 8:i + 8 + length]
+        i += 12 + length
+
+
+def _chunk(tag, data):
+    return struct.pack('>I', len(data)) + tag + data + struct.pack('>I', zlib.crc32(tag + data) & 0xFFFFFFFF)
+
+
+def mirror_png(png):
+    """The same 8-bit non-interlaced PNG flipped left to right."""
+    chunks = list(_png_chunks(png))
+    ihdr = dict(chunks)[b'IHDR']
+    w, h, depth, ctype, _, _, interlace = struct.unpack('>IIBBBBB', ihdr)
+    if depth != 8 or interlace or ctype not in _BPP:
+        raise ValueError(f'unsupported PNG: depth {depth} type {ctype} interlace {interlace}')
+    bpp = _BPP[ctype]
+    raw = zlib.decompress(b''.join(d for t, d in chunks if t == b'IDAT'))
+    stride = w * bpp
+    rows, prev = [], bytearray(stride)
+    for y in range(h):
+        f = raw[y * (stride + 1)]
+        line = bytearray(raw[y * (stride + 1) + 1:(y + 1) * (stride + 1)])
+        for x in range(stride):
+            a = line[x - bpp] if x >= bpp else 0
+            b = prev[x]
+            c = prev[x - bpp] if x >= bpp else 0
+            if f == 1: line[x] = (line[x] + a) & 0xFF
+            elif f == 2: line[x] = (line[x] + b) & 0xFF
+            elif f == 3: line[x] = (line[x] + ((a + b) >> 1)) & 0xFF
+            elif f == 4:
+                pa, pb, pc = abs(b - c), abs(a - c), abs(a + b - 2 * c)
+                line[x] = (line[x] + (a if pa <= pb and pa <= pc else b if pb <= pc else c)) & 0xFF
+        rows.append(line)
+        prev = line
+    out = bytearray()
+    for line in rows:
+        px = [line[i:i + bpp] for i in range(0, stride, bpp)]
+        out.append(0)
+        out.extend(b''.join(reversed(px)))
+    keep = [_chunk(t, d) for t, d in chunks if t in (b'PLTE', b'tRNS')]
+    return (_PNG_SIG + _chunk(b'IHDR', ihdr) + b''.join(keep) +
+            _chunk(b'IDAT', zlib.compress(bytes(out), 9)) + _chunk(b'IEND', b''))
+
+
+def plain_png(png):
+    """Only the blocks that draw the picture: Apple's PNGs also carry gAMA,
+    cHRM, sRGB, eXIf and iCCP, and iOS 7's ImageIO copied past the end of one
+    of them (SIGSEGV in memmove under CoreText, iPhone 4S, iOS 7.1). The
+    pixel data is kept byte for byte."""
+    keep = [_chunk(t, d) for t, d in _png_chunks(png)
+            if t in (b'IHDR', b'PLTE', b'tRNS', b'IDAT', b'IEND')]
+    return _PNG_SIG + b''.join(keep)
+
+
+def resolve_flips(sbix, num_glyphs):
+    """sbix with every 'flip' glyph replaced by the mirrored PNG it names."""
+    ver, flags, num_strikes = struct.unpack('>HHI', sbix[:8])
+    strike_offs = struct.unpack(f'>{num_strikes}I', sbix[8:8 + 4 * num_strikes])
+    strikes, flipped = [], 0
+    for so in strike_offs:
+        ppem, ppi = struct.unpack('>HH', sbix[so:so + 4])
+        offs = struct.unpack(f'>{num_glyphs + 1}I', sbix[so + 4:so + 8 + 4 * num_glyphs])
+        glyphs = [sbix[so + offs[g]:so + offs[g + 1]] for g in range(num_glyphs)]
+
+        def png_of(g, depth=0):
+            d = glyphs[g]
+            if len(d) <= 8 or depth > 4:
+                return None
+            if d[4:8] == b'png ':
+                return d[8:]
+            if d[4:8] in (b'flip', b'dupe'):
+                src = png_of(struct.unpack('>H', d[8:10])[0], depth + 1)
+                if src is None:
+                    return None
+                return mirror_png(src) if d[4:8] == b'flip' else src
+            return None
+
+        fixed = []
+        for g, d in enumerate(glyphs):
+            if len(d) > 8 and d[4:8] in (b'flip', b'dupe'):
+                png = png_of(g)
+                d = d[:4] + b'png ' + png if png else b''
+                flipped += 1
+            if len(d) > 8 and d[4:8] == b'png ':
+                d = d[:8] + plain_png(d[8:])
+            fixed.append(d)
+        body = bytearray(struct.pack('>HH', ppem, ppi))
+        pos = 4 + 4 * (num_glyphs + 1)
+        table = []
+        for d in fixed:
+            table.append(pos)
+            pos += len(d)
+        table.append(pos)
+        body.extend(struct.pack(f'>{num_glyphs + 1}I', *table))
+        for d in fixed:
+            body.extend(d)
+        strikes.append(bytes(body))
+    header = 8 + 4 * num_strikes
+    out = bytearray(struct.pack('>HHI', ver, flags, num_strikes))
+    cur = header
+    for st in strikes:
+        out.extend(struct.pack('>I', cur))
+        cur += len(st)
+    for st in strikes:
+        out.extend(st)
+    print(f'sbix: {flipped} flip/dupe glyphs made plain PNG, every PNG cut to its drawing blocks')
+    return bytes(out)
+
+
+def read_tables(path):
+    data = open(path, 'rb').read()
+    num = struct.unpack('>H', data[4:6])[0]
+    tables = {}
+    for i in range(num):
+        tag, _, off, length = struct.unpack('>4sIII', data[12 + 16 * i:28 + 16 * i])
+        tables[tag.decode('latin1')] = data[off:off + length]
+    return tables
 
 def make_name_table(family, subfamily, full_name, ps_name):
     records = []
@@ -111,6 +241,14 @@ def build_ttf(input_ttc, font_offset, output_ttf, strikes_to_keep=(40, 64)):
         new_sbix.extend(body)
         tables['sbix'] = bytes(new_sbix)
 
+    if 'sbix' in tables:
+        num_glyphs = struct.unpack('>H', tables['maxp'][4:6])[0]
+        tables['sbix'] = resolve_flips(tables['sbix'], num_glyphs)
+
+    write_ttf(tables, output_ttf)
+
+
+def write_ttf(tables, output_ttf):
     sorted_tags = sorted(tables.keys())
     num_t = len(sorted_tags)
     
@@ -167,6 +305,13 @@ def build_ttf(input_ttc, font_offset, output_ttf, strikes_to_keep=(40, 64)):
     print(f'Successfully built {output_ttf}: {len(out)} bytes ({len(out)/(1024*1024):.2f} MB)')
 
 if __name__ == '__main__':
+    # --fix FONT: only the flip pass, on a font already built.
+    if len(sys.argv) == 3 and sys.argv[1] == '--fix':
+        tables = read_tables(sys.argv[2])
+        num_glyphs = struct.unpack('>H', tables['maxp'][4:6])[0]
+        tables['sbix'] = resolve_flips(tables['sbix'], num_glyphs)
+        write_ttf(tables, sys.argv[2])
+        sys.exit(0)
     src = '/System/Library/Fonts/Apple Color Emoji.ttc'
     offset = 32
     if not os.path.exists(src):

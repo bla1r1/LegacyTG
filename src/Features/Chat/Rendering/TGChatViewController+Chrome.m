@@ -1090,7 +1090,52 @@ static const CGFloat kReplyPull = TGMetricReplyPull;   // how far a bubble trave
 		// marks the state with a lock; the long sentences were ours.
 		(void)resting;
 		[me titleSubtitleOwnerChanged:nil];
+		[me showSecretPlaceholderOutgoing:outgoing];
 	}];
+}
+
+/// Official's panel in an empty secret chat: who invited whom, and what a
+/// secret chat does. It goes as soon as there is a message to show.
+- (void)showSecretPlaceholderOutgoing:(BOOL)outgoing {
+	[self.secretPlaceholder removeFromSuperview];
+	TGTheme *theme = [TGTheme shared];
+	NSString *who = self.chatTitle ?: @"";
+	NSString *invite = outgoing
+			? TGLocalizedFormat(@"You have invited %@ to join a secret chat.", who)
+			: TGLocalizedFormat(@"%@ invited you to join a secret chat.", who);
+	NSArray *lines = @[invite, @"", TGLocalized(@"Secret chats:"),
+			[@"• " stringByAppendingString:TGLocalized(@"Use end-to-end encryption")],
+			[@"• " stringByAppendingString:TGLocalized(@"Leave no trace on our servers")],
+			[@"• " stringByAppendingString:TGLocalized(@"Have a self-destruct timer")],
+			[@"• " stringByAppendingString:TGLocalized(@"Do not allow forwarding")]];
+	CGFloat width = MIN(CGRectInset(self.view.bounds, TGMetricPadWide, TGMetricZero).size.width,
+			TGMetricPadMasterWidth);
+	UILabel *label = [[UILabel alloc] init];
+	label.numberOfLines = 0;
+	label.font = TGFontSubhead();
+	label.textColor = [theme serviceTextColour];
+	label.backgroundColor = [UIColor clearColor];
+	label.text = [lines componentsJoinedByString:@"\n"];
+	CGSize text = [label sizeThatFits:CGSizeMake(width - TGMetricPadLarge - TGMetricPadLarge, CGFLOAT_MAX)];
+	CGRect textRect = {CGPointZero, {ceilf(text.width), ceilf(text.height)}};
+	UIView *panel = [[UIView alloc] initWithFrame:CGRectInset(textRect, -TGMetricPadLarge, -TGMetricPad)];
+	panel.backgroundColor = [theme serviceBubbleColour];
+	panel.layer.cornerRadius = TGMetricCornerCard;
+	label.frame = CGRectInset(panel.bounds, TGMetricPadLarge, TGMetricPad);
+	[panel addSubview:label];
+	panel.center = CGPointMake(CGRectGetMidX(self.table.frame), CGRectGetMidY(self.table.frame));
+	panel.frame = CGRectIntegral(panel.frame);
+	panel.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin |
+			UIViewAutoresizingFlexibleTopMargin | UIViewAutoresizingFlexibleBottomMargin;
+	panel.userInteractionEnabled = NO;
+	panel.hidden = self.messages.count > 0;
+	[self.view insertSubview:panel aboveSubview:self.table];
+	self.secretPlaceholder = panel;
+}
+
+- (void)secretScreenshotTaken:(NSNotification *)note {
+	if (self.secretChatId && self.isViewLoaded && self.view.window)
+		[[TGMessageStore shared] sendScreenshotTakenInChat:self.chatId];
 }
 
 - (void)titleHeld:(UILongPressGestureRecognizer *)hold {

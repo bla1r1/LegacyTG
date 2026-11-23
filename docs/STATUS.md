@@ -3,11 +3,11 @@ Unified status of Telegram feature parity on legacy iOS (iOS 6.0–12.5.7).
 States: `done` (matches official client), `partial` (partially implemented), `missing` (not yet implemented), `dev-only` (gated under `TG_DEV`).
 
 ### Overall Summary
-- **Done:** 508
-- **Partial:** 248
+- **Done:** 515
+- **Partial:** 252
 - **Missing:** 185
 - **Dev-only:** 18
-- **Total tracked features:** 959
+- **Total tracked features:** 970
 
 ---
 
@@ -27,6 +27,7 @@ States: `done` (matches official client), `partial` (partially implemented), `mi
 | Compact counts ("99+") | `done` | ``src/Features/ChatList/Core/TGChatListTable.m`` | `TGChatListStore compactBadgeTextForCount:` caps at 99+. |
 | Pinned mark beside a badge | `done` | ``src/Features/ChatList/Core/TGChatListTable.m`` | Pin and unread count both draw; geometry keeps them apart. |
 | Pinned row tint | `done` | ``src/UI/Rows/TGChatRowCell.m`` | A pinned row keeps the card plate behind it; the theme repaint follows the row flag. |
+| Secret chat row | `done` | ``src/UI/Rows/TGChatRowCell.m`` | Green padlock and green name, as official. |
 | Muted speaker | `done` | ``src/Features/ChatList/Core/TGChatListTable.m`` | Mute icon after the title. |
 | Online dot on the row | `done` | ``src/Features/ChatList/Core/TGChatListTable.m`` | Shown when the chat row says the peer is online. |
 | Emoji status after the title | `done` | ``src/Features/ChatList/Core/TGChatListTable.m`` | Custom emoji picture, skipped for Saved Messages. |
@@ -88,6 +89,7 @@ States: `done` (matches official client), `partial` (partially implemented), `mi
 
 | Feature | State | Component / Source | Notes |
 |---|---|---|---|
+| Composer above the keyboard and panels | `done` | ``Features/Chat/Core/TGChatViewLayout.m`` | Every layout pass places the bar from `composerLift` (keyboard, emoji panel or bot keyboard height); the keyboard's height is what it covers of the view, so landscape is right too. On iOS 7 a later layout pass had put the bar back behind the keyboard. Checked turning an iPhone 4S (iOS 7.1) with each open. |
 | History load, 60 messages | `done` | ``src/Features/Chat/Core/TGChatViewData.m`` | `historyForChat:limit:60` fills the table on open. |
 | Older paging | `done` | ``src/Features/Chat/Core/TGChatViewDocumentDelegate.m`` | Scrolling up prepends 60-message pages and keeps the offset. |
 | New messages live | `done` | ``src/Features/Chat/Core/TGChatViewLayout.m`` | `onNewMessage` appends and reloads when away from the bottom. |
@@ -157,7 +159,8 @@ States: `done` (matches official client), `partial` (partially implemented), `mi
 | View-once and timer media | `done` | ``Features/Chat/Composer/TGChatViewController+MediaCells.m`` | Blurred veil, one open, `openMessageContent`, no save/share. |
 | Paid media preview | `partial` | ``Features/Chat/Composer/TGChatViewController+MediaCells.m`` | Blur and price show; tap says Stars are not available. |
 | Polls | `done` | ``src/Features/Chat/Core/TGChatViewData.m`` | Vote, multi-answer, quiz, retract, voters, close, statistics. |
-| Poll creation | `missing` | ``Features/Chat/Views/TGAttachSheet.m`` | The attach sheet has no Poll row and no `inputMessagePoll` request. |
+| Poll creation | `partial` | ``Features/Chat/TGPollComposeViewController.m`` | Attach menu → Poll opens official's New Poll as a modal form: question and description, growing options with the count footer, Show Who Voted, Multiple Answers, Adding Options, Revoting, Shuffle, Set Correct Answer with an explanation; "Discard Poll?" on Cancel. Not yet: media on the poll or its options, Limit Duration, subscriber and country limits; the right answer is picked in a row of checks, not a circle inside the option field. Sent a poll and a quiz from the iPod touch 4. |
+| Quiz explanation media | `missing` | ``Core/Model/TGMessageFlatten.m`` | `pollTypeQuiz.explanation_media` is not drawn; official opens it from the quiz answer bubble. |
 | Poll option links | `partial` | ``Core/Model/TGMessageFlatten.m`` | Option text is flattened to a plain string; entities are dropped. |
 | Poll vote timestamps | `partial` | ``src/Features/Chat/Actions/TGChatActionsHoldMenu.m`` | `pollVoter.date` is stored but the voter sheet prints names only. |
 | Checklists | `partial` | ``src/Features/Chat/Core/TGChatViewData.m`` | Tasks toggle; adding tasks from the bubble is not implemented. |
@@ -173,7 +176,10 @@ States: `done` (matches official client), `partial` (partially implemented), `mi
 | Message effects | `missing` | ``src/Features/Chat/Actions/TGChatActionsHoldMenu.m`` | The effect id is only read for a metadata alert; no send option or playback. |
 | Time and date entities | `missing` | ``Features/Chat/Views/TGMessageLayout.mm`` | No DateTime branch; it renders as plain text. |
 | Coloured bot buttons | `partial` | ``Core/Model/TGMessageFlatten.m`` | Style and icon are dropped; every button uses the default style. |
-| Secret chat | `done` | ``Features/Profile/TGProfileViewController+Actions.m`` | Starts through `createSecretChatWithUser:`; header states the secret state. |
+| Secret chat | `done` | ``Features/Chat/Rendering/TGChatViewController+Chrome.m`` | `use_secret_chats` is on. Padlock in the title; official's "invited you" panel with the four "Secret chats:" lines while empty; the composer hides while pending or closed. Checked on the iPod touch 4 against Telegram for macOS on 23 November. |
+| Secret chat encryption key | `partial` | ``Features/Chat/Rendering/TGChatViewController+Chrome.m`` | The 12x12 picture, hex and official sentence; reached from the header menu, not from the profile row official uses. |
+| Secret chat self-destruct timer | `partial` | ``Features/Profile/TGProfileViewController+Actions.m`` | `setChatMessageAutoDeleteTime` through the profile's Auto-Delete row; official also has a timer button in the composer. |
+| Secret chat screenshot notice | `partial` | ``Core/Client/TGClient+Secret.m`` | iOS 7+ sends `sendChatScreenshotTakenNotification` from `UIApplicationUserDidTakeScreenshotNotification`; iOS 6 has no screenshot notice to act on. |
 | Auto-delete timer | `done` | ``Features/Profile/TGProfileViewController+Actions.m`` | Per-chat TTL from the profile menu. |
 | Read on open and scroll | `done` | ``src/Features/Chat/Core/TGChatViewData.m`` | Batched `viewMessages` marks what is visible. |
 | Message links open in-app | `done` | ``Features/Chat/Actions/TGChatViewController+Attachments.m`` | `tg://` and `t.me` links route to chat/message/profile. |
@@ -310,6 +316,8 @@ States: `done` (matches official client), `partial` (partially implemented), `mi
 
 | Feature | State | Component / Source | Notes |
 |---|---|---|---|
+| Emoji on iOS 7 | `done` | ``Core/Support/TGEmojiPictures.m`` | iOS 7's ImageIO crashed drawing the bundled emoji face through CoreText under load (the panel turned on a 4S), though each of its 3844 glyphs draws alone. There the face is read as bytes: `scripts/build_emoji_map.m` maps every Unicode 15.1 sequence to its glyph with macOS CoreText (flags, keycaps, skin tones, ZWJ), and messages, labels and the emoji panel show the glyph's PNG as a picture. The panel grid draws cached pictures, so a rotation no longer redraws hundreds of emoji. iOS 6 and later iOS keep the face. |
+| Bundled emoji face | `done` | ``scripts/build_emoji_font.py`` | Apple's 'flip' glyphs (right-facing people) are stored as real mirrored PNGs and every PNG keeps only its drawing blocks; `TGEmojiFontTests` checks both. |
 | Photo viewer | `done` | ``src/Features/Media/Core/TGMediaViewerTransitions.m`` | Paging scroll view, double-tap zoom, one page built lazily per item. |
 | Video playback | `done` | ``src/Features/Media/Core/TGMediaViewerVideo.m`` | `AVPlayer` with `TGSoftVideoPlayer` fallback on Vintage. |
 | Video cover and scrub preview | `partial` | ``src/Features/Media/Core/TGMediaViewerChrome.m`` | A working scrubber exists; no thumbnail preview while scrubbing. |
@@ -410,7 +418,7 @@ States: `done` (matches official client), `partial` (partially implemented), `mi
 | Mute tile | `partial` | ``src/Features/Profile/Core/TGProfileLifecycle.m`` | Tile toggles and redraws; `isChatMuted:` reads the chat cache, not global defaults or thread settings. |
 | Share contact | `done` | ``Features/Profile/TGProfileViewController+Actions.m`` | Opens the share sheet. |
 | Copy profile link | `done` | ``Features/Profile/TGProfileViewController+Actions.m`` | Own and other profiles. |
-| Start secret chat | `done` | ``Features/Profile/TGProfileViewController+Actions.m`` | Confirms and creates the secret chat. |
+| Start secret chat | `done` | ``Features/Profile/TGProfileViewController+Actions.m`` | Official's "Are you sure you want to start a secret chat with %@?", then the new chat; the profile opened from it gets the person's user id. |
 | Personal note / suggest photo / suggest birthday | `done` | ``Features/Profile/TGProfileViewController+Actions.m`` | Requests go through `setPersonalNote`, `suggestProfilePhoto`, `suggestBirthday`. |
 | Personal photo | `done` | ``Features/Profile/TGProfileViewController+Actions.m`` | Set, change and remove. |
 | Share theme | `done` | ``Features/Profile/TGProfileViewController+Actions.m`` | Sends a theme link. |
@@ -767,6 +775,7 @@ States: `done` (matches official client), `partial` (partially implemented), `mi
 
 | Feature | State | Component / Source | Notes |
 |---|---|---|---|
+| Tab bar follows an emoji theme | `done` | ``Core/Style/TGTheme.m`` | The tab bar's colour is part of its repaint check: an emoji theme's palette arrives after launch with the same theme id, and the bar had kept the fallback blue. |
 | Root list | `done` | ``src/Features/Settings/Pages/TGSettingsPagesCore.m`` | Profile card, account rows, app settings, help, This Device, Log out. |
 | Settings tab icon is the account photo | `missing` | ``App/RootViewController.m`` | Always the sliders glyph; no badge or avatar. |
 | Settings search | `missing` | ``src/Features/Settings/Pages/TGSettingsPagesCore.m`` | No search field or page index. |
@@ -856,6 +865,8 @@ States: `done` (matches official client), `partial` (partially implemented), `mi
 
 | Feature | State | Component / Source | Notes |
 |---|---|---|---|
+| Encrypted local database | `done` | ``Core/Client/TGClient.m`` | Every install: a 32-byte key in the keychain (after first unlock) goes to `setTdlibParameters`. A database from an older build answers 401, opens with the empty key and is re-keyed once the account is ready; on the iPod touch 4 the next launch reached ready 1.0 s after the parameters. |
+| Data protection on app files | `done` | ``Core/Client/TGClient+Accounts.m`` | `NSFileProtectionCompleteUntilFirstUserAuthentication` on the data root and everything in it, walked on each launch off the main thread because iOS 6 does not pass a directory's class to new files; 3381 files on the first iPod launch, none after. |
 | Passcode row at the top of Security | `done` | ``Features/Settings/TGSettingsViewController+PrivacyPages.m`` | Passcode Lock is the first Security row; the page has on/off/change and auto-lock. |
 | Passcode on / off / change | `done` | ``Features/Settings/TGSettingsViewController+PrivacyPages.m`` | 4-digit code with a confirmation step. |
 | Auto-lock timeout | `done` | ``Features/Settings/TGSettingsViewController+PrivacyPages.m`` | Immediately, 1 min, 5 min, 1 hour or disabled. |

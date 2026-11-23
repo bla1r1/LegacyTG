@@ -25,6 +25,7 @@
 #import "TGMessageLayoutTests.m"
 #import "TGMessageCardLayoutTests.m"
 #import "TGSoftVideoClockTests.m"
+#import "TGMediaHardeningTests.m"
 
 int main(int argc, char *argv[]) {
     @autoreleasepool {

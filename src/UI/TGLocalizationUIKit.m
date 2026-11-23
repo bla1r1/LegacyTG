@@ -2,6 +2,7 @@
 #import "TGMessageLayout.h"
 #import "TGTextRender.h"
 #import "TGLocalization.h"
+#import "TGEmojiPictures.h"
 #import <objc/runtime.h>
 
 // UI chrome is translated at the point UIKit receives the text. Message
@@ -246,6 +247,13 @@ static void TGLeaveFlagMode(UILabel *label) {
 - (void)tg_setAttributedText:(NSAttributedString *)text {
 	if (!sApplyingFlags && objc_getAssociatedObject(self, &kTGFlagSourceKey))
 		TGLeaveFlagMode(self);
+	// iOS 7 draws emoji from the bundled face's pictures; a label set with
+	// attributed text (names with a status, previews) gets them here.
+	if (!sApplyingFlags && TGEmojiPicturesActive() && text.length){
+		NSAttributedString *pictures = TGEmojiPictureText(text, self.font);
+		if (pictures)
+			text = pictures;
+	}
 	[self tg_setAttributedText:text];
 }
 @end

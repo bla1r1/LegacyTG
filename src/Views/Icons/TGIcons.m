@@ -4,6 +4,7 @@
 #import "TGSVGPath.h"
 #import "TGMessageLayout.h"
 #import "TGStyle.h"
+#import "TGEmojiPictures.h"
 #import <CoreText/CoreText.h>
 
 static NSMutableDictionary *sCache = nil;
@@ -34,6 +35,19 @@ CGFloat TGMainScreenScale(void) {
 
 @implementation TGIcons
 
+/// The emoji pictures apart from the icon cache: the emoji panel asks for
+/// hundreds of them, and the icon cache is never trimmed.
+// ponytail: 6 MB, about 120 panel cells at 2x; a page holds ~40.
+static NSCache *TGEmojiGlyphCache(void) {
+	static NSCache *cache;
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{
+		cache = [[NSCache alloc] init];
+		cache.totalCostLimit = 6 * 1024 * 1024;
+	});
+	return cache;
+}
+
 + (UIImage *)emojiGlyph:(NSString *)emoji side:(CGFloat)side {
 	if (!emoji.length || side <= 0.0f)
 		return nil;
@@ -41,9 +55,26 @@ CGFloat TGMainScreenScale(void) {
 	// widths differ by a point between rows.
 	CGFloat quantised = ceilf(side / 8.0f) * 8.0f;
 	NSString *key = [NSString stringWithFormat:@"emoji_%@_%.0f", emoji, quantised];
-	UIImage *cached = TGIconsGetCached(key);
+	UIImage *cached = [TGEmojiGlyphCache() objectForKey:key];
 	if (cached)
 		return cached;
+
+	// iOS 7 reads the picture out of the bundled face itself
+	// (TGEmojiPictures): its CoreText path crashed in ImageIO under load.
+	if (TGEmojiPicturesActive()){
+		UIImage *picture = TGEmojiPicture(emoji, TGHalf(quantised));
+		if (!picture)
+			return nil;
+		UIGraphicsBeginImageContextWithOptions(CGSizeMake(quantised, quantised), NO, 0);
+		[picture drawAtPoint:CGPointMake(TGCenteredOrigin(quantised, picture.size.width),
+				TGCenteredOrigin(quantised, picture.size.height))];
+		UIImage *glyph = UIGraphicsGetImageFromCurrentImageContext();
+		UIGraphicsEndImageContext();
+		if (glyph)
+			[TGEmojiGlyphCache() setObject:glyph forKey:key
+					cost:(NSUInteger)(quantised * quantised * glyph.scale * glyph.scale * 4)];
+		return glyph;
+	}
 
 	// CoreText, not UIKit string drawing: on iOS 6 UIKit drew a flag's two
 	// regional letters as nothing, and CoreText joins them into the bundled
@@ -68,7 +99,9 @@ CGFloat TGMainScreenScale(void) {
 	CFRelease(line);
 	CFRelease(ctFont);
 	UIGraphicsEndImageContext();
-	TGIconsSetCached(key, glyph);
+	if (glyph)
+		[TGEmojiGlyphCache() setObject:glyph forKey:key
+				cost:(NSUInteger)(glyph.size.width * glyph.size.height * glyph.scale * glyph.scale * 4)];
 	return glyph;
 }
 

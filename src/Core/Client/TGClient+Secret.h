@@ -11,12 +11,14 @@
 - (void)secretChatState:(NSInteger)secretChatId
 			 completion:(void (^)(NSString *state, BOOL outgoing))completion;
 
+- (void)sendScreenshotTakenInChat:(int64_t)chatId;
+
 /// Final: the key is gone and the chat cannot be reopened.
 - (void)closeSecretChat:(NSInteger)secretChatId;
 
 /// The secret chat id behind a chat, or 0 when it is not a secret chat. Every
 /// other call here takes that rather than the chat id.
 - (void)secretChatIdForChat:(int64_t)chatId
-				 completion:(void (^)(NSInteger secretChatId))completion;
+				 completion:(void (^)(NSInteger secretChatId, int64_t userId))completion;
 
 @end

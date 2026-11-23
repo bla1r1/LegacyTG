@@ -2,9 +2,12 @@
 // TGTLottie.m - see TGTLottie.h.
 //
 #import "TGTLottie.h"
+#import "TGLottieSupport.h"
 #import "TGCrashGuard.h"
 #include "tlottie.h"
 #include <pthread.h>
+
+FOUNDATION_EXPORT NSData *TGLottieGunzip(NSData *data);
 
 struct TGTLottie {
 	TLottieInstance *instance;
@@ -44,9 +47,23 @@ void TGTLottieUseCrashLog(NSString *directory) {
 	pthread_mutex_unlock(&sLock);
 }
 
+static const uint64_t kTGLottieMaxDecodedBytes = 16ull * 1024 * 1024;
+static const uint32_t kTGLottieMaxSide = 4096;
+
 TGTLottie *TGTLottieCreate(NSData *json, NSString *name) {
 	if (!json.length)
 		return NULL;
+
+	// Decompress gzipped .tgs files and refuse JSON past 4 MB.
+	const uint8_t *rawBytes = (const uint8_t *)json.bytes;
+	if (json.length >= 2 && ((rawBytes[0] == 0x1f && rawBytes[1] == 0x8b) || rawBytes[0] == 0x78)) {
+		json = TGLottieGunzip(json);
+		if (!json.length)
+			return NULL;
+	} else if (json.length > 4 * 1024 * 1024) {
+		return NULL;
+	}
+
 	const char *cname = name.UTF8String ?: "";
 	pthread_mutex_lock(&sLock);
 	if ([sRefused containsObject:name ?: @""]) {
@@ -60,6 +77,13 @@ TGTLottie *TGTLottieCreate(NSData *json, NSString *name) {
 	uint32_t height = instance ? tlottie_height(instance) : 0;
 	uint32_t frames = instance ? tlottie_frame_count(instance) : 0;
 	pthread_mutex_unlock(&sLock);
+
+	if (width > kTGLottieMaxSide || height > kTGLottieMaxSide ||
+		(uint64_t)width * (uint64_t)height * 4ull > kTGLottieMaxDecodedBytes) {
+		if (instance)
+			tlottie_drop(instance);
+		return NULL;
+	}
 
 	TGTLottie *animation = (instance && width && height && frames) ? calloc(1, sizeof(TGTLottie)) : NULL;
 	if (!animation) {
@@ -94,13 +118,28 @@ static void TGTLottieReleasePixels(void *info, const void *data, size_t size) {
 }
 
 CGImageRef TGTLottieRender(TGTLottie *animation, double frame, CGSize pixelSize) {
-	if (!animation || pixelSize.width < 1 || pixelSize.height < 1)
+	if (!animation || pixelSize.width < 1 || pixelSize.height < 1 ||
+		pixelSize.width > kTGLottieMaxSide || pixelSize.height > kTGLottieMaxSide ||
+		(uint64_t)pixelSize.width * (uint64_t)pixelSize.height * 4ull > kTGLottieMaxDecodedBytes)
 		return NULL;
+	if (animation->width == 0 || animation->height == 0)
+		return NULL;
+
 	// tlottie stretches to the size it is given; fit the canvas instead, as
 	// TGLottieRender does, and the layer's aspect gravity centres it.
 	double scale = MIN(pixelSize.width / animation->width, pixelSize.height / animation->height);
+	if (isnan(scale) || scale <= 0.0)
+		return NULL;
+
 	size_t w = (size_t)MAX(1.0, floor(animation->width * scale));
 	size_t h = (size_t)MAX(1.0, floor(animation->height * scale));
+	if (w > kTGLottieMaxSide || h > kTGLottieMaxSide ||
+		(uint64_t)w * (uint64_t)h * 4ull > kTGLottieMaxDecodedBytes)
+		return NULL;
+
+	if (w > SIZE_MAX / h || (w * h) > SIZE_MAX / sizeof(uint32_t))
+		return NULL;
+
 	uint32_t *pixels = malloc(w * h * sizeof(uint32_t));
 	if (!pixels)
 		return NULL;

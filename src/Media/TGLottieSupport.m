@@ -1,4 +1,52 @@
 #import "TGLottieSupport.h"
+#import <zlib.h>
+
+static const size_t kTGLottieMaxDecompressed = 4 * 1024 * 1024;
+static const int kTGLottieMaxGroupDepth = 16;
+
+NSData *TGLottieGunzip(NSData *data) {
+	if (!data.length)
+		return nil;
+
+	const uint8_t *bytes = (const uint8_t *)data.bytes;
+	BOOL isGzip = (data.length >= 2 && bytes[0] == 0x1f && bytes[1] == 0x8b);
+	BOOL isZlib = (data.length >= 2 && bytes[0] == 0x78);
+	if (!isGzip && !isZlib) {
+		if (bytes[0] == '{')
+			return data.length <= kTGLottieMaxDecompressed ? data : nil;
+		return nil;
+	}
+
+	z_stream stream;
+	memset(&stream, 0, sizeof(stream));
+	if (inflateInit2(&stream, 15 + 32) != Z_OK)
+		return nil;
+
+	stream.next_in = (Bytef *)data.bytes;
+	stream.avail_in = (uInt)MIN(data.length, (NSUInteger)UINT_MAX);
+
+	NSMutableData *output = [NSMutableData data];
+	uint8_t chunk[16384];
+	int status = Z_OK;
+	while (status == Z_OK) {
+		stream.next_out = chunk;
+		stream.avail_out = (uInt)sizeof(chunk);
+		status = inflate(&stream, Z_NO_FLUSH);
+		NSUInteger produced = sizeof(chunk) - stream.avail_out;
+		if (produced)
+			[output appendBytes:chunk length:produced];
+		if (output.length > kTGLottieMaxDecompressed) {
+			status = Z_MEM_ERROR;
+			break;
+		}
+		if (stream.avail_in == 0 && produced == 0)
+			break;
+	}
+	inflateEnd(&stream);
+	if (status != Z_OK && status != Z_STREAM_END)
+		return nil;
+	return output.length ? output : nil;
+}
 
 /// Shape items TGDrawShapes handles; "tr" is a group's transform. "mm"
 /// (merge paths) is skipped: both of the official client's renderers skip it
@@ -20,9 +68,9 @@ static NSString *TGLottieShapeName(NSString *ty) {
 	return names[ty] ?: [@"shape " stringByAppendingString:ty];
 }
 
-static NSString *TGLottieUnsupportedShape(NSArray *shapes) {
-	if (![shapes isKindOfClass:NSArray.class])
-		return nil;
+static NSString *TGLottieUnsupportedShapeDepth(NSArray *shapes, int depth) {
+	if (![shapes isKindOfClass:NSArray.class] || depth > kTGLottieMaxGroupDepth)
+		return depth > kTGLottieMaxGroupDepth ? @"group recursion limit" : nil;
 	for (NSDictionary *shape in shapes) {
 		if (![shape isKindOfClass:NSDictionary.class])
 			continue;
@@ -32,12 +80,16 @@ static NSString *TGLottieUnsupportedShape(NSArray *shapes) {
 		if (!TGLottieShapeDrawn(ty))
 			return TGLottieShapeName(ty);
 		if ([ty isEqualToString:@"gr"]) {
-			NSString *inner = TGLottieUnsupportedShape(shape[@"it"]);
+			NSString *inner = TGLottieUnsupportedShapeDepth(shape[@"it"], depth + 1);
 			if (inner)
 				return inner;
 		}
 	}
 	return nil;
+}
+
+static NSString *TGLottieUnsupportedShape(NSArray *shapes) {
+	return TGLottieUnsupportedShapeDepth(shapes, 0);
 }
 
 static NSString *TGLottieUnsupportedLayer(NSArray *layers) {
@@ -113,8 +165,10 @@ NSArray *TGLottieGradientStops(NSDictionary *g, double frame) {
 	if (![g isKindOfClass:NSDictionary.class])
 		return nil;
 	NSInteger count = [g[@"p"] integerValue];
+	if (count < 2 || count > 256)
+		return nil;
 	NSArray *k = TGLottieArrayAtFrame(g[@"k"], frame);
-	if (count < 2 || k.count < (NSUInteger)count * 4)
+	if (k.count < (NSUInteger)count * 4 || k.count > 4096)
 		return nil;
 	NSUInteger colourEnd = (NSUInteger)count * 4;
 	NSUInteger opacityCount = (k.count - colourEnd) / 2;

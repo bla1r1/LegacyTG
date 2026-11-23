@@ -141,8 +141,17 @@ static const CGFloat kStripHeight = TGMetricEmojiStripHeight;   // categories / 
 		} else if (!entry[@"thumbId"] || self.tab == TGEmojiPanelTabEmoji){
 			// A set with a cover waits for it blank, for the same reason the
 			// sticker cells do; the emoji tab's category icons are all drawable.
-			button.titleLabel.font = TGFontEmojiSmall();
-			[button setTitle:entry[@"emoji"] forState:UIControlStateNormal];
+			// A picture, as the grid's cells: iOS 7's own face has none for
+			// the newer category emoji and drew a boxed alien.
+			UIImage *picture = [TGIcons emojiGlyph:entry[@"emoji"]
+					side:TGDoubled(TGFontEmojiSmall().pointSize)];
+			if (picture){
+				button.imageView.contentMode = UIViewContentModeCenter;
+				[button setImage:picture forState:UIControlStateNormal];
+			} else {
+				button.titleLabel.font = TGFontEmojiSmall();
+				[button setTitle:entry[@"emoji"] forState:UIControlStateNormal];
+			}
 		}
 		[button addTarget:self action:@selector(stripTapped:) forControlEvents:UIControlEventTouchUpInside];
 		// A set can be picked up and put elsewhere: held, it follows the

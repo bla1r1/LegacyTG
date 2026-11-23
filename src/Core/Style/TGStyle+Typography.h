@@ -55,6 +55,12 @@ UIFont *TGFontGlyph(void);
 UIFont *TGFontGlyphSmall(void);
 UIFont *TGFontPlate(void);
 UIFont *TGFontSwitchTag(void);
+/// The face every emoji is drawn in: the bundled AppleColorEmojiCompat
+/// (Unicode 15.1), except on iOS 7, where the system's Apple Color Emoji
+/// draws them. iOS 7's ImageIO crashed reading the bundled face's glyphs while
+/// the UI redrew under load (turning a 4S with the emoji panel open), though
+/// every one of its 3844 glyphs draws alone; iOS 6 and iOS 10 draw it fine.
+NSString *TGEmojiFaceName(void);
 UIFont *TGFontEmoji(void);
 UIFont *TGFontEmojiSmall(void);
 UIFont *TGFontEmojiMeta(void);

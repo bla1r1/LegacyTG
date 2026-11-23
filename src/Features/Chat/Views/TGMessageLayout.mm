@@ -4,6 +4,7 @@
 #import "TGMessageLayout.h"
 #import "TGLocalization.h"
 #import "TGStyle.h"
+#import "TGEmojiPictures.h"
 #import <CoreText/CoreText.h>
 #import "TGLruCache.hpp"
 #import "TGPerf.h"
@@ -174,8 +175,7 @@ static pthread_mutex_t sTextCachesLock = PTHREAD_MUTEX_INITIALIZER;
 
 UIFont *TGEmojiFontOfSize(CGFloat size) {
 	static BOOL logged = NO;
-	UIFont *font = [UIFont fontWithName:@"AppleColorEmojiCompat" size:size];
-	if (!font) font = [UIFont fontWithName:@"Apple Color Emoji Compat" size:size];
+	UIFont *font = [UIFont fontWithName:TGEmojiFaceName() size:size];
 	if (!font) font = [UIFont fontWithName:@"AppleColorEmoji" size:size];
 	if (!font) font = [UIFont fontWithName:@"Apple Color Emoji" size:size];
 	if (!font) font = [UIFont fontWithName:@"OpenMojiColor" size:size];
@@ -262,7 +262,7 @@ static NSArray *TGFallbackFonts(void) {
 					CFRelease(cascade);
 			}
 		}
-		CTFontRef emoji = CTFontCreateWithName(CFSTR("AppleColorEmojiCompat"), body.pointSize, NULL);
+		CTFontRef emoji = CTFontCreateWithName((__bridge CFStringRef)TGEmojiFaceName(), body.pointSize, NULL);
 		if (!emoji)
 			emoji = CTFontCreateWithName(CFSTR("AppleColorEmoji"), body.pointSize, NULL);
 		if (emoji)
@@ -319,7 +319,7 @@ static BOOL TGAppleEmojiHasScalar(UTF32Char c) {
 	static dispatch_once_t once;
 	dispatch_once(&once, ^{
 		answers = [NSMutableDictionary dictionary];
-		emoji = CTFontCreateWithName(CFSTR("AppleColorEmojiCompat"), TGFontBody().pointSize, NULL);
+		emoji = CTFontCreateWithName((__bridge CFStringRef)TGEmojiFaceName(), TGFontBody().pointSize, NULL);
 		if (!emoji)
 			emoji = CTFontCreateWithName(CFSTR("AppleColorEmoji"), TGFontBody().pointSize, NULL);
 	});
@@ -535,7 +535,7 @@ BOOL TGAppleEmojiHasFlag(UTF32Char first, UTF32Char second) {
 	if (answers[pair])
 		return answers[pair] == 2;
 	if (!emoji)
-		emoji = CTFontCreateWithName(CFSTR("AppleColorEmojiCompat"), 20, NULL);
+		emoji = CTFontCreateWithName((__bridge CFStringRef)TGEmojiFaceName(), 20, NULL);
 	if (!emoji)
 		emoji = CTFontCreateWithName(CFSTR("AppleColorEmoji"), 20, NULL);
 	UniChar units[4];
@@ -557,6 +557,17 @@ BOOL TGAppleEmojiHasFlag(UTF32Char first, UTF32Char second) {
 }
 
 NSAttributedString *TGFlagFallbackText(NSString *text, UIFont *base, UIColor *colour) {
+	// iOS 7: every emoji, not only flags, as a picture from the bundled face.
+	if (TGEmojiPicturesActive()){
+		if (!text.length || !base)
+			return nil;
+		NSMutableDictionary *attributes = [NSMutableDictionary dictionaryWithObject:base
+				forKey:NSFontAttributeName];
+		if (colour)
+			attributes[NSForegroundColorAttributeName] = colour;
+		return TGEmojiPictureText([[NSAttributedString alloc] initWithString:text
+				attributes:attributes], base);
+	}
 	NSArray *ranges = TGUnsupportedFlagRanges(text, TGAppleEmojiHasFlag);
 	if (!ranges.count || !base)
 		return nil;
@@ -827,6 +838,13 @@ NSAttributedString *TGAttributedMessageTextRevealing(NSString *text, NSArray *en
 		}
 	}
 
+	// iOS 7 last of all, once every entity has its range: the emoji become
+	// pictures read from the bundled face (TGEmojiPictures).
+	if (TGEmojiPicturesActive()){
+		NSAttributedString *pictures = TGEmojiPictureText(str, baseFont);
+		if (pictures)
+			return pictures;
+	}
 	return str;
 }
 

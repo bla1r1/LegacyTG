@@ -150,3 +150,5 @@ static CGSize TGWrappedSize(NSString *text, UIFont *font, CGSize max) {
 
 @implementation UITabBar
 @end
+
+NSString *const UIApplicationProtectedDataDidBecomeAvailable = @"UIApplicationProtectedDataDidBecomeAvailable";

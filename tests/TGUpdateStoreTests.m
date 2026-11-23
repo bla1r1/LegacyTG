@@ -5,6 +5,7 @@
 // reached, and no UIKit is involved.
 //
 #import "TGTestRunner.h"
+#import "TGDatabaseKey.h"
 #import "TGUpdateStore.h"
 #import <CommonCrypto/CommonCryptor.h>
 #import <CommonCrypto/CommonKeyDerivation.h>
@@ -239,6 +240,9 @@ static NSString *TGUSUpdateJSON(NSInteger build, BOOL blocking) {
 }
 
 - (void)testParseDatacenterFromBinlogFile_ParsesEncryptedBinlog {
+	// The binlog below is under TDLib's empty-key password; a key another
+	// test left in the store would be tried instead.
+	[TGDatabaseKey storeKey:nil error:nil];
 	NSString *tmpPath = [NSTemporaryDirectory() stringByAppendingPathComponent:@"test_enc.binlog"];
 	uint8_t header[128] = {0};
 	header[0] = 0x80;

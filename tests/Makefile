@@ -94,6 +94,7 @@ OBJC_SRCS := \
     src/Core/Style/TGStyle.m \
     src/Core/Support/TGBase64.m \
     src/Core/Support/TGLocalization.m \
+    src/Core/Support/TGEmojiPictures.m \
     src/Core/Platform/TGPerf.m \
     src/Core/Platform/TGDevice.m \
     src/Core/Platform/TGCapabilities.m
@@ -110,6 +111,7 @@ CLIENT_OBJC_SRCS := \
     src/Core/Platform/TGCrashGuard.c \
     src/Core/Support/TGBase64.m \
     src/Core/Support/TGLocalization.m \
+    src/Core/Support/TGEmojiPictures.m \
     src/Core/Support/TGObservers.m \
     src/Core/Style/TGStyle.m \
     src/Features/Settings/Pages/TGSettingsPageModels.m \
@@ -417,7 +419,8 @@ TEST_SRCS := \
     $(TESTS)/TGLibTgvoipHooksTests.m \
     $(TESTS)/TGMessageLayoutTests.m \
     $(TESTS)/TGMessageCardLayoutTests.m \
-    $(TESTS)/TGSoftVideoClockTests.m
+    $(TESTS)/TGSoftVideoClockTests.m \
+    $(TESTS)/TGMediaHardeningTests.m
 
 CLIENT_TEST_SRCS := \
     $(TESTS)/TGJsonTests.m \
@@ -484,6 +487,8 @@ CLIENT_TEST_SRCS := \
     $(TESTS)/TGClientBusinessTests.m \
     $(TESTS)/TGClientNotificationsForumTests.m \
     $(TESTS)/TGThemeFileTests.m \
+    $(TESTS)/TGEmojiFontTests.m \
+    $(TESTS)/TGEmojiPicturesTests.m \
     $(TESTS)/TGPatternTests.m \
     $(TESTS)/TGUpdatesTests.mm \
     $(TESTS)/TGP1MigrationTests.mm \

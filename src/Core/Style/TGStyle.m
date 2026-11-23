@@ -41,23 +41,29 @@ UIFont *TGFontGlyph(void)         { return [UIFont systemFontOfSize:TGSizeGlyph]
 UIFont *TGFontGlyphSmall(void)    { return [UIFont systemFontOfSize:TGSizeGlyphSm]; }
 UIFont *TGFontPlate(void)         { return [UIFont boldSystemFontOfSize:TGSizePlate]; }
 UIFont *TGFontSwitchTag(void)     { return [UIFont boldSystemFontOfSize:TGSizeSwitchTag]; }
+NSString *TGEmojiFaceName(void) {
+#if TARGET_OS_IPHONE
+	if (NSFoundationVersionNumber > NSFoundationVersionNumber_iOS_6_1 &&
+			NSFoundationVersionNumber < NSFoundationVersionNumber_iOS_8_0)
+		return @"AppleColorEmoji";
+#endif
+	return @"AppleColorEmojiCompat";
+}
+
 UIFont *TGFontEmoji(void) {
-	return [UIFont fontWithName:@"AppleColorEmojiCompat" size:TGSizeEmoji]
-		?: [UIFont fontWithName:@"Apple Color Emoji Compat" size:TGSizeEmoji]
+	return [UIFont fontWithName:TGEmojiFaceName() size:TGSizeEmoji]
 		?: [UIFont fontWithName:@"AppleColorEmoji" size:TGSizeEmoji]
 		?: [UIFont fontWithName:@"Apple Color Emoji" size:TGSizeEmoji]
 		?: [UIFont systemFontOfSize:TGSizeEmoji];
 }
 UIFont *TGFontEmojiSmall(void) {
-	return [UIFont fontWithName:@"AppleColorEmojiCompat" size:TGSizeEmojiSm]
-		?: [UIFont fontWithName:@"Apple Color Emoji Compat" size:TGSizeEmojiSm]
+	return [UIFont fontWithName:TGEmojiFaceName() size:TGSizeEmojiSm]
 		?: [UIFont fontWithName:@"AppleColorEmoji" size:TGSizeEmojiSm]
 		?: [UIFont fontWithName:@"Apple Color Emoji" size:TGSizeEmojiSm]
 		?: [UIFont systemFontOfSize:TGSizeEmojiSm];
 }
 UIFont *TGFontEmojiMeta(void)     {
-	return [UIFont fontWithName:@"AppleColorEmojiCompat" size:TGSizeMeta]
-		?: [UIFont fontWithName:@"Apple Color Emoji Compat" size:TGSizeMeta]
+	return [UIFont fontWithName:TGEmojiFaceName() size:TGSizeMeta]
 		?: [UIFont fontWithName:@"AppleColorEmoji" size:TGSizeMeta]
 		?: [UIFont fontWithName:@"Apple Color Emoji" size:TGSizeMeta]
 		?: [UIFont fontWithName:@"OpenMojiColor" size:TGSizeMeta]
@@ -65,8 +71,7 @@ UIFont *TGFontEmojiMeta(void)     {
 		?: [UIFont systemFontOfSize:TGSizeMeta];
 }
 UIFont *TGFontEmojiLarge(void) {
-	return [UIFont fontWithName:@"AppleColorEmojiCompat" size:TGSizeEmojiLg]
-		?: [UIFont fontWithName:@"Apple Color Emoji Compat" size:TGSizeEmojiLg]
+	return [UIFont fontWithName:TGEmojiFaceName() size:TGSizeEmojiLg]
 		?: [UIFont fontWithName:@"AppleColorEmoji" size:TGSizeEmojiLg]
 		?: [UIFont fontWithName:@"Apple Color Emoji" size:TGSizeEmojiLg]
 		?: [UIFont systemFontOfSize:TGSizeEmojiLg];

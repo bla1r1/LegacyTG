@@ -19,7 +19,8 @@ typedef NS_ENUM(NSInteger, TGAttachChoice) {
 	TGAttachChoiceAudio,
 	/// The first tile of the grid. Last in the enum so the values the strip
 	/// maps to its tiles keep their numbers.
-	TGAttachChoiceCamera
+	TGAttachChoiceCamera,
+	TGAttachChoicePoll
 };
 
 @interface TGAttachSheet : TGSheet
@@ -32,6 +33,8 @@ typedef NS_ENUM(NSInteger, TGAttachChoice) {
 /// while anything is ticked.
 @property (nonatomic, copy) void (^onPhotos)(NSArray *images);
 @property (nonatomic, copy) void (^onChoice)(TGAttachChoice choice);
+/// A secret chat cannot carry a poll; official leaves the row out there.
+@property (nonatomic, assign) BOOL hidesPoll;
 
 /// Covers `view` with a dimmed backdrop and slides the sheet up from the
 /// bottom, both TGSheet's. The photos are read once the slide is over, so

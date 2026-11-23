@@ -547,4 +547,57 @@ static NSDictionary *ADBackground(void) {
 	XCTAssertEqualObjects([TGDatabaseKey currentKey], old);
 }
 
+/// A fresh install never writes an unencrypted database: the first
+/// setTdlibParameters already carries a 32-byte key, the one the keychain kept.
+- (void)testTdlibParameters_AFreshInstallMakesAndSendsAKey {
+	TGClient *c = ADClient();
+	[c handleAuthState:@{@"@type" : @"authorizationStateWaitTdlibParameters"}];
+	NSData *key = [TGDatabaseKey currentKey];
+	XCTAssertEqual(key.length, (NSUInteger)32);
+	XCTAssertEqualObjects(ADLast(c, @"setTdlibParameters")[@"database_encryption_key"],
+			TGBase64Encode(key));
+	[c handleAuthState:@{@"@type" : @"authorizationStateReady"}];
+	XCTAssertEqual(ADCount(c, @"setDatabaseEncryptionKey"), (NSUInteger)0);
+}
+
+/// An install from before the default: TDLib refuses the new key with 401,
+/// the empty key opens the old database, and on ready it is re-keyed with the
+/// key the keychain holds, so the next launch opens it with that key.
+- (void)testTdlibParameters_AnOldDatabaseOpensEmptyThenIsReKeyed {
+	TGClient *c = ADClient();
+	[c handleAuthState:@{@"@type" : @"authorizationStateWaitTdlibParameters"}];
+	NSData *key = [TGDatabaseKey currentKey];
+	ADAnswer(c, @"setTdlibParameters", @{@"@type" : @"error", @"code" : @401,
+			@"message" : @"Wrong database encryption key"});
+	XCTAssertEqual(ADCount(c, @"setTdlibParameters"), (NSUInteger)2);
+	XCTAssertEqualObjects(ADLast(c, @"setTdlibParameters")[@"database_encryption_key"], @"");
+	// The empty key failing too must not loop.
+	ADAnswer(c, @"setTdlibParameters", @{@"@type" : @"error", @"code" : @401, @"message" : @"x"});
+	XCTAssertEqual(ADCount(c, @"setTdlibParameters"), (NSUInteger)2);
+
+	[c handleAuthState:@{@"@type" : @"authorizationStateReady"}];
+	XCTAssertEqualObjects(ADLast(c, @"setDatabaseEncryptionKey")[@"new_encryption_key"],
+			TGBase64Encode(key));
+	ADAnswer(c, @"setDatabaseEncryptionKey", @{@"@type" : @"ok"});
+	XCTAssertFalse(c.databaseOpenedWithoutKey);
+	XCTAssertEqualObjects([TGDatabaseKey currentKey], key);
+}
+
+/// Launched before the first unlock, the keychain cannot answer: no
+/// setTdlibParameters (the empty key would be refused for good), and the
+/// key goes out once iOS says protected data is readable.
+- (void)testTdlibParameters_WaitForTheFirstUnlock {
+	TGClient *c = ADClient();
+	[NSUserDefaults.standardUserDefaults setBool:YES forKey:@"TGDatabaseKeyLockedForTests"];
+	[c handleAuthState:@{@"@type" : @"authorizationStateWaitTdlibParameters"}];
+	XCTAssertEqual(ADCount(c, @"setTdlibParameters"), (NSUInteger)0);
+	[NSUserDefaults.standardUserDefaults removeObjectForKey:@"TGDatabaseKeyLockedForTests"];
+	[[NSNotificationCenter defaultCenter]
+			postNotificationName:UIApplicationProtectedDataDidBecomeAvailable object:nil];
+	XCTAssertEqual(ADCount(c, @"setTdlibParameters"), (NSUInteger)1);
+	XCTAssertEqual([ADLast(c, @"setTdlibParameters")[@"database_encryption_key"] length],
+			TGBase64Encode([TGDatabaseKey currentKey]).length);
+	XCTAssertEqual([TGDatabaseKey currentKey].length, (NSUInteger)32);
+}
+
 @end

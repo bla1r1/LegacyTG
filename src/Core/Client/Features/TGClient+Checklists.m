@@ -167,5 +167,62 @@
 	}];
 }
 
+- (void)sendPoll:(NSDictionary *)draft
+          toChat:(int64_t)chatId
+      completion:(void (^)(BOOL, NSString *))completion {
+	NSDictionary *content = TGInputMessagePoll(draft);
+	if (!content){
+		if (completion)
+			completion(NO, @"Enter a question");
+		return;
+	}
+	[self request:@{@"@type" : @"sendMessage", @"chat_id" : @(chatId),
+					@"input_message_content" : content}
+	   completion:^(NSDictionary *result){
+		BOOL ok = TGFeatureOK(result);
+		if (completion)
+			completion(ok, ok ? nil : TGFeatureErrorText(result));
+	}];
+}
 
 @end
+
+NSDictionary *TGInputMessagePoll(NSDictionary *draft) {
+	NSString *question = [TGFeatureString(draft[@"question"])
+			stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+	NSMutableArray *options = [NSMutableArray array];
+	for (id text in draft[@"options"]){
+		NSString *option = [TGFeatureString(text)
+				stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+		if (option.length)
+			[options addObject:@{@"@type" : @"inputPollOption",
+								 @"text" : TGFormattedText(option), @"media" : [NSNull null]}];
+	}
+	if (!question.length || !options.count)
+		return nil;
+	BOOL quiz = [draft[@"quiz"] boolValue];
+	NSDictionary *type = quiz
+		? @{@"@type" : @"inputPollTypeQuiz", @"correct_option_ids" : draft[@"correct"] ?: @[],
+			@"explanation" : TGFormattedText(TGFeatureString(draft[@"explanation"]) ?: @""),
+			@"explanation_media" : [NSNull null]}
+		: @{@"@type" : @"inputPollTypeRegular",
+			@"allow_adding_options" : @([draft[@"addingOptions"] boolValue])};
+	return @{
+		@"@type"                     : @"inputMessagePoll",
+		@"question"                  : TGFormattedText(question),
+		@"options"                   : options,
+		@"description"               : TGFormattedText(TGFeatureString(draft[@"description"]) ?: @""),
+		@"media"                     : [NSNull null],
+		@"is_anonymous"              : @([draft[@"anonymous"] boolValue]),
+		@"allows_multiple_answers"   : @([draft[@"multiple"] boolValue]),
+		@"allows_revoting"           : @([draft[@"revoting"] boolValue]),
+		@"members_only"              : @NO,
+		@"country_codes"             : @[],
+		@"shuffle_options"           : @([draft[@"shuffle"] boolValue]),
+		@"hide_results_until_closes" : @NO,
+		@"type"                      : type,
+		@"open_period"               : @0,
+		@"close_date"                : @0,
+		@"is_closed"                 : @NO,
+	};
+}

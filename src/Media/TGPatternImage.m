@@ -16,6 +16,7 @@
 
 static const size_t TGPatternMaxInflated = 8 * 1024 * 1024;
 static const CGFloat TGPatternMaxSide = 4096.0f;
+static const uint64_t TGPatternMaxDecodedBytes = 16ull * 1024 * 1024;
 
 static BOOL TGPatternHasPrefix(NSData *data, const uint8_t *bytes, NSUInteger count) {
 	if (!data || data.length < count)
@@ -37,14 +38,14 @@ NSData *TGPatternGunzip(NSData *data) {
 	static const uint8_t gzipMagic[] = {0x1f, 0x8b};
 	static const uint8_t svgMagic[] = {'<', 's', 'v', 'g'};
 	if (TGPatternHasPrefix(data, svgMagic, sizeof(svgMagic)))
-		return data;
+		return data.length <= TGPatternMaxInflated ? data : nil;
 	BOOL wrapped = TGPatternHasPrefix(data, gzipMagic, sizeof(gzipMagic));
 	if (!wrapped && data.length > 1){
 		const uint8_t *head = data.bytes;
 		wrapped = head[0] == 0x78;
 	}
 	if (!wrapped)
-		return data;
+		return data.length <= TGPatternMaxInflated ? data : nil;
 
 	z_stream stream;
 	memset(&stream, 0, sizeof(stream));
@@ -111,10 +112,13 @@ static NSString *TGPatternInlineStyles(NSString *svg) {
 
 static CGContextRef TGPatternCreateContext(CGSize size, BOOL opaque) {
 	if (size.width <= 0 || size.height <= 0 ||
-			size.width > TGPatternMaxSide || size.height > TGPatternMaxSide)
+			size.width > TGPatternMaxSide || size.height > TGPatternMaxSide ||
+			(uint64_t)size.width * (uint64_t)size.height * 4ull > TGPatternMaxDecodedBytes)
 		return NULL;
 	size_t width = (size_t)size.width;
 	size_t height = (size_t)size.height;
+	if (width > SIZE_MAX / 4 || (width * 4) > SIZE_MAX / height)
+		return NULL;
 	CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
 	CGBitmapInfo info = (CGBitmapInfo)(kCGImageAlphaPremultipliedLast |
 			kCGBitmapByteOrder32Big);
@@ -132,10 +136,12 @@ static CGContextRef TGPatternCreateContext(CGSize size, BOOL opaque) {
 static void TGPatternAddShapePath(CGContextRef context, NSVGshape *shape) {
 	BOOL first = YES;
 	for (NSVGpath *path = shape->paths; path; path = path->next){
+		if (!path->pts || path->npts < 4)
+			continue;
 		if (!first && path->closed)
 			CGContextBeginPath(context);
 		CGContextMoveToPoint(context, path->pts[0], path->pts[1]);
-		for (int i = 0; i < path->npts - 1; i += 3){
+		for (int i = 0; i + 3 < path->npts; i += 3){
 			float *point = &path->pts[i * 2];
 			CGContextAddCurveToPoint(context, point[2], point[3],
 					point[4], point[5], point[6], point[7]);
@@ -171,9 +177,11 @@ static void TGPatternRenderShape(CGContextRef context, NSVGshape *shape) {
 			default: CGContextSetLineJoin(context, kCGLineJoinMiter); break;
 		}
 		for (NSVGpath *path = shape->paths; path; path = path->next){
+			if (!path->pts || path->npts < 4)
+				continue;
 			CGContextBeginPath(context);
 			CGContextMoveToPoint(context, path->pts[0], path->pts[1]);
-			for (int i = 0; i < path->npts - 1; i += 3){
+			for (int i = 0; i + 3 < path->npts; i += 3){
 				float *point = &path->pts[i * 2];
 				CGContextAddCurveToPoint(context, point[2], point[3],
 						point[4], point[5], point[6], point[7]);
@@ -200,7 +208,9 @@ CGImageRef TGPatternCreateMask(NSData *tgvData, CGSize size) {
 	uint8_t terminator = 0;
 	[input appendBytes:&terminator length:1];
 	NSVGimage *image = nsvgParse((char *)input.bytes, "px", 96);
-	if (!image || image->width < 1.0f || image->height < 1.0f){
+	if (!image || image->width < 1.0f || image->height < 1.0f ||
+		image->width > TGPatternMaxSide || image->height > TGPatternMaxSide ||
+		(uint64_t)image->width * (uint64_t)image->height * 4ull > TGPatternMaxDecodedBytes){
 		if (image)
 			nsvgDelete(image);
 		return NULL;
@@ -225,7 +235,8 @@ CGImageRef TGPatternCreateMask(NSData *tgvData, CGSize size) {
 			(size.width - drawn.width) / (2.0f * scale),
 			(size.height - drawn.height) / (2.0f * scale));
 
-	for (NSVGshape *shape = image->shapes; shape; shape = shape->next){
+	int shapeCount = 0;
+	for (NSVGshape *shape = image->shapes; shape && shapeCount++ < 10000; shape = shape->next){
 		if (!(shape->flags & NSVG_FLAGS_VISIBLE) || shape->opacity <= 0)
 			continue;
 		TGPatternRenderShape(context, shape);

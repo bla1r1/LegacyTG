@@ -169,3 +169,6 @@ typedef NS_ENUM(NSInteger, UIImageRenderingMode) {
 @property (nonatomic, strong) UIColor *tintColor;
 @property (nonatomic, strong) NSArray *items;
 @end
+
+// Posted when the keychain and protected files become readable (first unlock).
+FOUNDATION_EXPORT NSString *const UIApplicationProtectedDataDidBecomeAvailable;

@@ -21,6 +21,11 @@
 /// it then could lock the database for good, so the caller refuses.
 + (BOOL)keyStateKnown;
 
+/// The key, made now (32 random bytes) when there is none and the storage
+/// answered. Nil only when the storage cannot be read or written; the
+/// database then stays as it is.
++ (NSData *)ensureKey;
+
 /// Saves a new key. Nil or empty removes the key. Returns NO and fills
 /// `error` when the storage refused; the caller must not send a key it could
 /// not save.

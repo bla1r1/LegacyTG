@@ -246,14 +246,21 @@ static NSString *const kTileIdentifier = @"tile";
 - (void)moreTapped {
 	UIView *host = self.superview;
 	void (^onChoice)(TGAttachChoice) = self.onChoice;
-	static const TGAttachChoice rest[] = {TGAttachChoiceDocument, TGAttachChoiceAudio,
-			TGAttachChoiceChecklist, TGAttachChoiceQuickReply,
-			TGAttachChoiceDice, TGAttachChoiceEphemeral};
+	// Official's order puts Poll before the checklist.
+	NSMutableArray *titles = [@[@"File", @"Music", @"Poll", @"Checklist", @"Add Quick Reply",
+			@"Stake", @"Ephemeral Message"] mutableCopy];
+	NSMutableArray *rest = [@[@(TGAttachChoiceDocument), @(TGAttachChoiceAudio),
+			@(TGAttachChoicePoll), @(TGAttachChoiceChecklist), @(TGAttachChoiceQuickReply),
+			@(TGAttachChoiceDice), @(TGAttachChoiceEphemeral)] mutableCopy];
+	if (self.hidesPoll){
+		[titles removeObjectAtIndex:2];
+		[rest removeObjectAtIndex:2];
+	}
 	[self dismiss];
-	[TGAlertSheet showChoices:@[@"File", @"Music", @"Checklist", @"Add Quick Reply", @"Stake", @"Ephemeral Message"]
+	[TGAlertSheet showChoices:titles
 						title:nil destructiveIndex:-1 inView:host onChoice:^(NSInteger choice){
-		if (onChoice && choice >= 0 && choice < 6)
-			onChoice(rest[choice]);
+		if (onChoice && choice >= 0 && choice < (NSInteger)rest.count)
+			onChoice((TGAttachChoice)[rest[(NSUInteger)choice] integerValue]);
 	}];
 }
 

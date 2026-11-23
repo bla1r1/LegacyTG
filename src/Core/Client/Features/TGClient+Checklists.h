@@ -41,5 +41,15 @@
                toChat:(int64_t)chatId
            completion:(void (^)(BOOL ok, NSString *error))completion;
 
+/// Sends a new poll. `draft` is what the New Poll screen holds: question,
+/// description, options (strings, empty ones skipped), anonymous, multiple,
+/// addingOptions, revoting, shuffle, quiz, correct (option indexes among the
+/// non-empty ones) and explanation.
+- (void)sendPoll:(NSDictionary *)draft
+          toChat:(int64_t)chatId
+      completion:(void (^)(BOOL ok, NSString *error))completion;
 
 @end
+
+/// The inputMessagePoll for a draft, nil when it has no question or no option.
+NSDictionary *TGInputMessagePoll(NSDictionary *draft);

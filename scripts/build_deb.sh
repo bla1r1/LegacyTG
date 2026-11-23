@@ -40,22 +40,66 @@ Description: LegacyTG: Telegram for iOS 6.0-12.5.7 on old iPhones and iPads.
 Depiction: https://bla1r1.github.io/LegacyTG/depiction/$PKG/
 Icon: https://bla1r1.github.io/LegacyTG/CydiaIcon.png
 EOF
-for script in postinst postrm; do
-	cat > "$WORK/control/$script" <<'EOF'
+cat > "$WORK/control/postinst" <<'EOF'
 #!/bin/sh
-# SpringBoard caches installed app bundles; refresh it as the mobile user.
+APP="/Applications/LegacyTG.app"
+
+# 1. Register with uicache (targeted -p on iOS 8+, fallback to -a or bare uicache on iOS 6/7)
 if command -v uicache >/dev/null 2>&1; then
-	su mobile -c uicache 2>/dev/null || uicache || true
+	uicache -p "$APP" 2>/dev/null || uicache -a 2>/dev/null || uicache 2>/dev/null || su mobile -c uicache 2>/dev/null || true
 fi
+
+# 2. Tell Cydia / Zebra to prompt for SpringBoard restart so the icon appears immediately on all iOS versions
+if [ -n "$CYDIA" ]; then
+	CYFD="${CYDIA%% *}"
+	if [ -n "$CYFD" ]; then
+		eval "echo 'finish:restart' >&$CYFD" 2>/dev/null || true
+	fi
+fi
+
 exit 0
 EOF
-	chmod 755 "$WORK/control/$script"
-done
+chmod 755 "$WORK/control/postinst"
 
-# Owned by root as dpkg expects, without macOS extended attributes.
+cat > "$WORK/control/postrm" <<'EOF'
+#!/bin/sh
+APP="/Applications/LegacyTG.app"
+
+# 1. Unregister from uicache
+if command -v uicache >/dev/null 2>&1; then
+	uicache -u "$APP" 2>/dev/null || uicache -a 2>/dev/null || uicache 2>/dev/null || su mobile -c uicache 2>/dev/null || true
+fi
+
+# 2. Tell Cydia / Zebra to prompt for SpringBoard restart
+if [ -n "$CYDIA" ]; then
+	CYFD="${CYDIA%% *}"
+	if [ -n "$CYFD" ]; then
+		eval "echo 'finish:restart' >&$CYFD" 2>/dev/null || true
+	fi
+fi
+
+exit 0
+EOF
+chmod 755 "$WORK/control/postrm"
+
+# Strip all extended attributes recursively before packaging.
+xattr -rc "$WORK" 2>/dev/null || true
+
+# Owned by root as dpkg expects, in POSIX ustar format, without macOS extended attributes or PAX headers.
 export COPYFILE_DISABLE=1
-( cd "$WORK/control" && tar --uid 0 --gid 0 --uname root --gname wheel -czf ../control.tar.gz ./ )
-( cd "$WORK/data" && tar --uid 0 --gid 0 --uname root --gname wheel -czf ../data.tar.gz ./Applications )
+TAR_FLAGS=(--uid 0 --gid 0 --uname root --gname wheel)
+if tar --format ustar --version >/dev/null 2>&1; then
+	TAR_FLAGS+=(--format ustar)
+fi
+if tar --no-xattrs --version >/dev/null 2>&1; then
+	TAR_FLAGS+=(--no-xattrs)
+fi
+if tar --no-mac-metadata --version >/dev/null 2>&1; then
+	TAR_FLAGS+=(--no-mac-metadata)
+fi
+
+( cd "$WORK/control" && tar "${TAR_FLAGS[@]}" -czf ../control.tar.gz ./ )
+( cd "$WORK/data" && tar "${TAR_FLAGS[@]}" -czf ../data.tar.gz ./Applications )
 printf '2.0\n' > "$WORK/debian-binary"
 
 OUT="$(dirname "$IPA")/${PKG}_${DEBVER}_iphoneos-arm.deb"

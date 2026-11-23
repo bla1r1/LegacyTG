@@ -156,6 +156,8 @@ FOUNDATION_EXPORT NSArray *TGBotCommandRows(NSArray *sets);
 - (void)closeChat:(int64_t)chatId;
 
 - (void)closeSecretChat:(NSInteger)secretChatId;
+/// A secret chat's "took a screenshot" line for the other side (iOS 7+).
+- (void)sendScreenshotTakenInChat:(int64_t)chatId;
 
 - (void)commentThreadForChat:(int64_t)chatId
 				   messageId:(int64_t)messageId
@@ -687,7 +689,7 @@ FOUNDATION_EXPORT NSArray *TGBotCommandRows(NSArray *sets);
 			   completion:(void (^)(NSDictionary *user, NSString *error))completion;
 
 - (void)secretChatIdForChat:(int64_t)chatId
-				 completion:(void (^)(NSInteger secretChatId))completion;
+				 completion:(void (^)(NSInteger secretChatId, int64_t userId))completion;
 
 - (void)secretChatState:(NSInteger)secretChatId
 			 completion:(void (^)(NSString *state, BOOL outgoing))completion;

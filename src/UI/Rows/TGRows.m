@@ -688,6 +688,7 @@ NSString *const TGRowChatFailed        = @"chatFailed";
 NSString *const TGRowChatAction        = @"chatAction";
 NSString *const TGRowChatDraft         = @"chatDraft";
 NSString *const TGRowChatStatusEmojiId = @"chatStatusEmojiId";
+NSString *const TGRowChatSecret = @"chatSecret";
 NSString *const TGRowChatAvatarId      = @"chatAvatarId";
 NSString *const TGRowChatAvatarImage   = @"chatAvatarImage";
 NSString *const TGRowChatAvatarGlyph   = @"chatAvatarGlyph";
@@ -752,6 +753,7 @@ NSMutableDictionary *TGChatRow(NSDictionary *chat, NSString *dateText) {
 			![chat[@"isSaved"] boolValue]);
 	row[TGRowChatStoryRing] = @([chat[@"storyRing"] integerValue]);
 	row[TGRowChatSaved] = @([chat[@"isSaved"] boolValue]);
+	row[TGRowChatSecret] = @([chat[@"isSecret"] boolValue]);
 	row[TGRowChatOutgoing] = @([chat[@"lastOutgoing"] boolValue]);
 	row[TGRowChatRead] = @([chat[@"lastId"] longLongValue] <=
 			[chat[@"readOutbox"] longLongValue]);

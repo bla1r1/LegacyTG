@@ -307,6 +307,7 @@ APP_SRC_M := \
 	src/Core/Model/TGStatusText.m \
 	src/Core/Support/TGBase64.m \
 	src/Core/Support/TGLocalization.m \
+	src/Core/Support/TGEmojiPictures.m \
 	src/Core/Support/TGQRCode.m \
 	src/Core/Support/TGObservers.m \
 	src/App/TGNavController.m \
@@ -738,6 +739,7 @@ APP_SRC_M := \
 	src/Features/Chat/TGQuickRepliesViewController.m \
 	src/Features/Chat/TGQuickReplyMessagesViewController.m \
 	src/Features/Chat/TGChecklistViewController.m \
+	src/Features/Chat/TGPollComposeViewController.m \
 	src/Features/Chat/TGSuggestedPostViewController.m \
 	src/Features/Chat/TGAiComposeViewController.m \
 	src/Features/Chat/TGMessageToolsViewController.m \
@@ -978,6 +980,7 @@ ipa-armv7: $(MACHOFIX) $(TLOTTIE_STAMP) $(ARMV7_ALL_OBJS)
 	@cp -f "$(ROOT_DIR)/resources/Info.plist" "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/Info.plist" 2>/dev/null || true
 	@$(call ADD_DEV_SCHEMES,$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/Info.plist)
 	@cp -f "$(ROOT_DIR)/resources/fonts/"*.ttf "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
+	@cp -f "$(ROOT_DIR)/resources/fonts/"*.map "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
 	@cp -f "$(ROOT_DIR)/resources/sounds/"*.mp3 "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
 	@cp -f "$(ROOT_DIR)/resources/sounds/"*.wav "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
 	@cp -f "$(ROOT_DIR)/resources/strings/"*.plist "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
@@ -1013,6 +1016,7 @@ ipa-arm64: $(TLOTTIE_STAMP) $(ARM64_ALL_OBJS)
 	@cp -f "$(ROOT_DIR)/resources/Info.plist" "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app/Info.plist" 2>/dev/null || true
 	@$(call ADD_DEV_SCHEMES,$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app/Info.plist)
 	@cp -f "$(ROOT_DIR)/resources/fonts/"*.ttf "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
+	@cp -f "$(ROOT_DIR)/resources/fonts/"*.map "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
 	@cp -f "$(ROOT_DIR)/resources/sounds/"*.mp3 "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
 	@cp -f "$(ROOT_DIR)/resources/sounds/"*.wav "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
 	@cp -f "$(ROOT_DIR)/resources/strings/"*.plist "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true

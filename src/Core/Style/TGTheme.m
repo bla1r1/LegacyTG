@@ -510,8 +510,12 @@ static char kTabOffMaskKey;
 	// Launch styled the same bar three times (root build, chat list load and
 	// appear), re-tinting every glyph each time: 92 ms on an A5. Same theme,
 	// same items: nothing to repaint.
-	NSMutableString *signature = [NSMutableString stringWithFormat:@"%@|%d",
-			[self currentThemeId], [self isDark]];
+	// The colour is part of it: an emoji theme's palette arrives from TDLib
+	// after launch with the same theme id, and the bar kept the fallback
+	// blue it was first painted with (iPhone 4S, iOS 7.1).
+	UIColor *barBg = [self importedColour:@"tabBar"] ?: [self barColour];
+	NSMutableString *signature = [NSMutableString stringWithFormat:@"%@|%d|%@",
+			[self currentThemeId], [self isDark], barBg];
 	for (UITabBarItem *item in bar.items)
 		[signature appendFormat:@"|%p", item];
 	if ([objc_getAssociatedObject(bar, &kTabStyleKey) isEqualToString:signature])
@@ -519,7 +523,6 @@ static char kTabOffMaskKey;
 	objc_setAssociatedObject(bar, &kTabStyleKey, signature,
 			OBJC_ASSOCIATION_COPY_NONATOMIC);
 
-	UIColor *barBg = [self importedColour:@"tabBar"] ?: [self barColour];
 	UIColor *on = [self isDark] ? [self accentColour] : [UIColor whiteColor];
 	UIColor *off = [UIColor colorWithWhite:1.0f alpha:TGAlphaSecondary];
 

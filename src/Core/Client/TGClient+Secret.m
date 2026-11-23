@@ -40,6 +40,12 @@ static NSString *TGSecretStateName(NSString *type) {
 }
 
 /// Closing one is final: the key is gone and the chat cannot be reopened.
+/// iOS 7 tells the app about a screenshot; the other side sees "took a
+/// screenshot". iOS 6 has no such notice, so a secret chat there cannot.
+- (void)sendScreenshotTakenInChat:(int64_t)chatId {
+	[self send:@{@"@type" : @"sendChatScreenshotTakenNotification", @"chat_id" : @(chatId)}];
+}
+
 - (void)closeSecretChat:(NSInteger)secretChatId {
 	[self send:@{@"@type" : @"closeSecretChat",
 				 @"secret_chat_id" : @(secretChatId)}];
@@ -48,17 +54,17 @@ static NSString *TGSecretStateName(NSString *type) {
 /// The secret chat id behind a chat, or 0 if that chat is not a secret one.
 /// Every other secret-chat call takes this rather than the chat id.
 - (void)secretChatIdForChat:(int64_t)chatId
-				 completion:(void (^)(NSInteger secretChatId))completion {
+				 completion:(void (^)(NSInteger secretChatId, int64_t userId))completion {
 	[self request:@{@"@type" : @"getChat", @"chat_id" : @(chatId)}
 	   completion:^(NSDictionary *chat){
 		if (!completion)
 			return;
 		NSDictionary *type = chat[@"type"];
 		if (![type[@"@type"] isEqualToString:@"chatTypeSecret"]){
-			completion(0);
+			completion(0, 0);
 			return;
 		}
-		completion([type[@"secret_chat_id"] integerValue]);
+		completion([type[@"secret_chat_id"] integerValue], [type[@"user_id"] longLongValue]);
 	}];
 }
 

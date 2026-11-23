@@ -109,7 +109,7 @@ static LottieProperty ParseLottieProperty(NSDictionary *prop) {
 
 	if ([k isKindOfClass:[NSArray class]]) {
 		NSArray *arr = (NSArray *)k;
-		if (!arr.count) return lp;
+		if (!arr.count || arr.count > 10000) return lp;
 		id first = arr[0];
 		if (![first isKindOfClass:[NSDictionary class]]) {
 			lp.type = LottieProperty::StaticArray;
@@ -293,7 +293,7 @@ static bool ParseLottieBezierPath(NSDictionary *shape, LottieBezierPath &out) {
 	NSArray *in  = shape[@"i"];
 	NSArray *tan = shape[@"o"];
 	NSUInteger count = [v isKindOfClass:NSArray.class] ? v.count : 0;
-	if (count < 2)
+	if (count < 2 || count > 10000)
 		return false;
 
 	out.v.resize(count, CGPointZero);
@@ -746,7 +746,13 @@ TGLottieScene *TGLottieSceneCreate(NSDictionary *animation) {
 		return NULL;
 	NSArray *layers = animation[@"layers"];
 	CGSize canvas = CGSizeMake(TGNumber(animation[@"w"], 0), TGNumber(animation[@"h"], 0));
-	if (![layers isKindOfClass:NSArray.class] || !layers.count || canvas.width <= 0 || canvas.height <= 0)
+	if (![layers isKindOfClass:NSArray.class] || !layers.count ||
+		canvas.width <= 0 || canvas.height <= 0 ||
+		canvas.width > 4096 || canvas.height > 4096 ||
+		(uint64_t)canvas.width * (uint64_t)canvas.height * 4ull > 16ull * 1024 * 1024)
+		return NULL;
+
+	if (layers.count > 2000)
 		return NULL;
 
 	// Precomp assets get their indices first, so a layer can point at one
@@ -840,7 +846,10 @@ static void TGDrawComp(const TGLottieScene &scene, int compIndex, double frame,
 CGImageRef TGLottieSceneRender(const TGLottieScene *scene, double frame, CGSize pixelSize) {
 	int w = (int)pixelSize.width;
 	int h = (int)pixelSize.height;
-	if (!scene || w <= 0 || h <= 0)
+	if (!scene || w <= 0 || h <= 0 || w > 4096 || h > 4096 ||
+		(uint64_t)w * (uint64_t)h * 4ull > 16ull * 1024 * 1024)
+		return NULL;
+	if (scene->canvas.width <= 0 || scene->canvas.height <= 0)
 		return NULL;
 
 	CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();

@@ -1,3 +1,5 @@
+#import "TGStyle.h"
+#import "TGEmojiPictures.h"
 #import "TGCapabilities.h"
 #import <UIKit/UIKit.h>
 #import <CoreText/CoreText.h>
@@ -179,6 +181,9 @@ static BOOL TGEmojiFontHasGlyphs(CTFontRef font, NSString *s) {
 + (BOOL)canDrawEmoji:(NSString *)emoji {
 	if (!emoji.length)
 		return NO;
+	// iOS 7 draws what the bundled face has a picture for (TGEmojiPictures).
+	if (TGEmojiPicturesActive())
+		return TGEmojiPicturePNG(emoji) != nil;
 	// Asked from the main thread and from the warm-up queue (TGWarmEmojiData),
 	// so the cache is shared under a lock; the shaping itself runs outside it.
 	static NSMutableDictionary *answers = nil;
@@ -186,7 +191,7 @@ static BOOL TGEmojiFontHasGlyphs(CTFontRef font, NSString *s) {
 	static dispatch_once_t once;
 	dispatch_once(&once, ^{
 		answers = [NSMutableDictionary dictionary];
-		font = CTFontCreateWithName(CFSTR("AppleColorEmojiCompat"), 20, NULL);
+		font = CTFontCreateWithName((__bridge CFStringRef)TGEmojiFaceName(), 20, NULL);
 		if (!font)
 			font = CTFontCreateWithName(CFSTR("AppleColorEmoji"), 20, NULL);
 	});

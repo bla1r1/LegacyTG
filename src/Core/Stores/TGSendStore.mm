@@ -206,6 +206,11 @@ NSString *TGErrorMessage(NSDictionary *message, NSDictionary *fallback) {
 	[[TGClient shared] sendChecklist:title tasks:tasks toChat:chatId completion:completion];
 }
 
+- (void)sendPoll:(NSDictionary *)draft toChat:(int64_t)chatId
+	  completion:(void (^)(BOOL ok, NSString *error))completion {
+	[[TGClient shared] sendPoll:draft toChat:chatId completion:completion];
+}
+
 - (void)sendContactNamed:(NSString *)name phone:(NSString *)phone toChat:(int64_t)chatId {
 	if (!phone.length)
 		return;

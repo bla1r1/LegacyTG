@@ -91,8 +91,10 @@ static NSString *const TGDatabaseKeyAccount = @"tdlib";
 	return encoded.length ? TGBase64Decode(encoded) : nil;
 }
 
+/// The host has no keychain to be locked; a test sets this to stand in for
+/// a launch before the first unlock.
 + (BOOL)keyStateKnown {
-	return YES;
+	return ![NSUserDefaults.standardUserDefaults boolForKey:@"TGDatabaseKeyLockedForTests"];
 }
 
 + (BOOL)storeKey:(NSData *)key error:(NSString **)error {
@@ -106,5 +108,15 @@ static NSString *const TGDatabaseKeyAccount = @"tdlib";
 }
 
 #endif
+
++ (NSData *)ensureKey {
+	NSData *key = [self currentKey];
+	if (key.length || ![self keyStateKnown])
+		return key;
+	uint8_t bytes[32];
+	arc4random_buf(bytes, sizeof(bytes));
+	key = [NSData dataWithBytes:bytes length:sizeof(bytes)];
+	return [self storeKey:key error:NULL] ? key : nil;
+}
 
 @end

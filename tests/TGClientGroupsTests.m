@@ -418,16 +418,30 @@ static void answerG(TGClient *c, NSDictionary *answer) {
 - (void)testSecretChat_IdComesOutOfTheChatTypeAndIsZeroForAnythingElse {
 	TGClient *c = G();
 	__block NSInteger secretId = -1;
-	[c secretChatIdForChat:-900 completion:^(NSInteger found){ secretId = found; }];
+	__block int64_t userId = -1;
+	[c secretChatIdForChat:-900 completion:^(NSInteger found, int64_t user){
+		secretId = found; userId = user;
+	}];
 	answerG(c, @{@"@type" : @"chat", @"id" : @(-900),
 				 @"type" : @{@"@type" : @"chatTypeSecret",
 							 @"secret_chat_id" : @(12), @"user_id" : @(6)}});
 	XCTAssertEqual(secretId, (NSInteger)12);
+	// The profile opened from a secret chat needs the person, not the chat.
+	XCTAssertEqual(userId, (int64_t)6);
 
-	[c secretChatIdForChat:7 completion:^(NSInteger found){ secretId = found; }];
+	[c secretChatIdForChat:7 completion:^(NSInteger found, int64_t user){ secretId = found; }];
 	answerG(c, @{@"@type" : @"chat", @"id" : @(7),
 				 @"type" : @{@"@type" : @"chatTypePrivate", @"user_id" : @(6)}});
 	XCTAssertEqual(secretId, (NSInteger)0);
+}
+
+- (void)testSecretChat_ScreenshotNoticeGoesToTheChat {
+	TGClient *c = G();
+	[c sendScreenshotTakenInChat:-900];
+	NSData *last = c.outbox.lastObject;
+	NSString *json = [[NSString alloc] initWithData:last encoding:NSUTF8StringEncoding];
+	XCTAssertTrue([json rangeOfString:@"sendChatScreenshotTakenNotification"].location != NSNotFound);
+	XCTAssertTrue([json rangeOfString:@"-900"].location != NSNotFound);
 }
 
 #pragma mark - downloads

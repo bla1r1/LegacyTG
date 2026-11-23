@@ -1254,8 +1254,12 @@ NSArray *TGBotCommandRows(NSArray *sets) {
 	[[TGClient shared] searchUserByToken:token completion:completion];
 }
 
-- (void)secretChatIdForChat:(int64_t)chatId completion:(void (^)(NSInteger secretChatId))completion {
+- (void)secretChatIdForChat:(int64_t)chatId completion:(void (^)(NSInteger secretChatId, int64_t userId))completion {
 	[[TGClient shared] secretChatIdForChat:chatId completion:completion];
+}
+
+- (void)sendScreenshotTakenInChat:(int64_t)chatId {
+	[[TGClient shared] sendScreenshotTakenInChat:chatId];
 }
 
 - (void)secretChatState:(NSInteger)secretChatId completion:(void (^)(NSString *state, BOOL outgoing))completion {

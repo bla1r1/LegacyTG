@@ -375,11 +375,21 @@ UIImage *TGImageFromMinithumbnail(id mini);
 /// The secret chat behind this chat, 0 when it is not one. Its state is the
 /// header subtitle, and updates to it arrive while the chat is open.
 @property (nonatomic, assign) NSInteger secretChatId;
+/// How far the composer stands above the bottom: the keyboard's, the emoji
+/// panel's or the bot keyboard's height, 0 with none. Every layout pass
+/// places the bar from it; iOS 7 lays the chat out again after the keyboard
+/// arrives, and a pass that put the bar at the bottom hid it behind them.
+@property (nonatomic, assign) CGFloat composerLift;
+/// The other person in a secret chat: its chat id is not their user id.
+@property (nonatomic, assign) int64_t secretUserId;
+/// Official's "secret chats" panel while the chat has no messages.
+@property (nonatomic, strong) UIView *secretPlaceholder;
 /// The token of this chat's live feed (TGMessageStore addListenerForChat:).
 @property (nonatomic, strong) id liveListener;
 /// Ids of messages that arrived while this screen was covered.
 @property (nonatomic, strong) NSMutableArray *readWhenShown;
 - (void)refreshSecretState;
+- (void)secretScreenshotTaken:(NSNotification *)note;
 
 /// The scheduled queue's size, known when the send was last held, and the
 /// picker sheet the hold's "Send At a Time..." opens.

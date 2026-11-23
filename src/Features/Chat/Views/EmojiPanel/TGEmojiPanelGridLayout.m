@@ -220,14 +220,15 @@ static NSUInteger TGEmojiPanelFirstVisibleIndex(NSArray *frames, CGFloat minY) {
 	tile.image = nil;
 
 	if (self.tab == TGEmojiPanelTabEmoji){
-		button.titleLabel.font = TGFontEmoji();
+		// A picture drawn once, not a title: a title is laid out and drawn
+		// again on every layout pass, and turning a 4S with the panel open
+		// redrew every cell through TextKit for 32 s until the watchdog
+		// killed the app (iOS 7.1, 23 November).
 		NSString *str = [item isKindOfClass:NSString.class] ? (NSString *)item : @"";
-		NSAttributedString *attr = TGEmojiAttributedText(str, TGFontEmoji());
-		if (attr) {
-			[button setAttributedTitle:attr forState:UIControlStateNormal];
-		} else {
-			[button setTitle:str forState:UIControlStateNormal];
-		}
+		button.imageEdgeInsets = UIEdgeInsetsZero;
+		button.imageView.contentMode = UIViewContentModeCenter;
+		[button setImage:[TGIcons emojiGlyph:str side:TGDoubled(TGFontEmoji().pointSize)]
+				forState:UIControlStateNormal];
 	} else if (self.tab == TGEmojiPanelTabCustomEmoji){
 		button.imageEdgeInsets = UIEdgeInsetsZero;
 		button.imageView.contentMode = UIViewContentModeScaleAspectFit;

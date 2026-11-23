@@ -6,6 +6,7 @@
 #import "TGDevScreenRoute.h"
 #import "TGPopupMenu.h"
 #import "TGSheet.h"
+#import "TGProfileStore.h"
 
 /// AppDelegate+URL's: the tab bar the routes act on, dev mode's when it is up.
 @interface AppDelegate (WalkTabs)
@@ -70,6 +71,29 @@
 			[[TGClient shared] chatWithUsername:[target substringFromIndex:1] completion:push];
 		else
 			push(target.longLongValue, nil);
+		return YES;
+	}
+	// itglegacy://secret/<private chat title> - a new secret chat with that
+	// person, opened; the profile's Start Secret Chat without the taps.
+	if ([host isEqualToString:@"secret"]){
+		NSString *title = [[url.path substringFromIndex:MIN(url.path.length, 1)]
+				stringByReplacingPercentEscapesUsingEncoding:NSUTF8StringEncoding];
+		[[TGClient shared] searchChatsForQuery:title completion:^(NSArray *chats){
+			int64_t userId = 0;
+			for (NSDictionary *c in chats)
+				if ([c[@"id"] longLongValue] > 0 && [c[@"title"] isEqualToString:title])
+					userId = [c[@"id"] longLongValue];
+			[[TGProfileStore shared] createSecretChatWithUser:userId completion:^(int64_t chatId){
+				NSLog(@"secret: chat %lld with %@", chatId, title);
+				if (!chatId)
+					return;
+				UITabBarController *tabs = [self activeTabBarController];
+				UINavigationController *nc = tabs.viewControllers[tabs.selectedIndex];
+				UIViewController *chat = TGDevScreenMake(NSClassFromString(@"TGChatViewController"), chatId, title);
+				chat.hidesBottomBarWhenPushed = YES;
+				[nc pushViewController:chat animated:NO];
+			}];
+		}];
 		return YES;
 	}
 #endif

@@ -248,9 +248,12 @@ static char kTGTableContentSizeContext;
 	CGFloat defaultBarH = TGIsPad() ? TGMetricTabBarHeight : kInputHeight;
 	CGFloat barH = (self.composerBarHeight > 0.0f && !self.inputBar.hidden) ? self.composerBarHeight : defaultBarH;
 	CGRect bottomBarFrame = CGRectMake(0, viewH - barH, width, barH);
+	CGRect liftedBar = bottomBarFrame, liftedTable = CGRectZero;
+	TGChatComposerAboveKeyboard(self.view.bounds.size, barH, self.composerLift,
+			&liftedBar, &liftedTable);
 
 	if (self.inputBar) {
-		self.inputBar.frame = bottomBarFrame;
+		self.inputBar.frame = liftedBar;
 	}
 	UIView *channelBar = [self.view viewWithTag:kChatChannelBottomBarTag];
 	if (channelBar) {
@@ -276,7 +279,7 @@ static char kTGTableContentSizeContext;
 		}
 	}
 
-	CGFloat tableHeight = viewH - barH;
+	CGFloat tableHeight = viewH - barH - (self.inputBar ? self.composerLift : TGMetricZero);
 	if (tableHeight < 0.0f) tableHeight = 0.0f;
 	BOOL widthChanged = self.table.frame.size.width != width;
 	self.table.frame = CGRectMake(0, 0, width, tableHeight);
@@ -364,10 +367,15 @@ static char kTGTableContentSizeContext;
 
 	// A secret chat's state is its header, and it can change while you
 	// watch: the key exchange answers, or the other side closes the chat.
-	[[TGMessageStore shared] secretChatIdForChat:self.chatId completion:^(NSInteger secretId){
+	[[TGMessageStore shared] secretChatIdForChat:self.chatId completion:^(NSInteger secretId, int64_t userId){
 		if (!secretId)
 			return;
 		weakSelf.secretChatId = secretId;
+		weakSelf.secretUserId = userId;
+		if (&UIApplicationUserDidTakeScreenshotNotification)
+			[[NSNotificationCenter defaultCenter] addObserver:weakSelf
+					selector:@selector(secretScreenshotTaken:)
+						name:UIApplicationUserDidTakeScreenshotNotification object:nil];
 		[weakSelf refreshSecretState];
 	}];
 

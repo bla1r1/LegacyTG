@@ -20,20 +20,30 @@ static void tgFreePixels(void *info, const void *data, size_t size) {
 					   error:(NSError **)error
 {
 	NSData *data = [NSData dataWithContentsOfFile:filePath];
-	if (!data.length)
+	if (!data.length || data.length < 12)
 		return nil;
 	if (compressedData)
 		*compressedData = data;
 
+	const uint8_t *bytes = (const uint8_t *)data.bytes;
+	if (memcmp(bytes, "RIFF", 4) != 0 || memcmp(bytes + 8, "WEBP", 4) != 0)
+		return nil;
+
+	// The RIFF chunk size at offset 4 must not exceed the remaining file length.
+	uint32_t riffLen = (uint32_t)bytes[4] | ((uint32_t)bytes[5] << 8) |
+			((uint32_t)bytes[6] << 16) | ((uint32_t)bytes[7] << 24);
+	if ((uint64_t)riffLen + 8ull > (uint64_t)data.length)
+		return nil;
+
 	int width = 0, height = 0;
-	if (!WebPGetInfo(data.bytes, data.length, &width, &height) ||
-		width <= 0 || height <= 0)
+	if (!WebPGetInfo(bytes, data.length, &width, &height) ||
+		width <= 0 || height <= 0 || width > 4096 || height > 4096)
 		return nil;
 
 	// The header is the sender's claim. 16383 x 16383 is a valid WebP and a
 	// 1 GB bitmap; nothing this app draws from WebP is past 512 px, so a
-	// picture over the 16 MB cache ceiling is refused, not decoded.
-	if ((uint64_t)width * (uint64_t)height * 4 > kTGWebPMaxDecodedBytes)
+	// picture over 4096 on a side or past the 16 MB cache ceiling is refused.
+	if ((uint64_t)width * (uint64_t)height * 4ull > kTGWebPMaxDecodedBytes)
 		return nil;
 
 	// RGBA, 4 bytes per pixel, straight into a buffer CGImage can own.
@@ -83,9 +93,12 @@ static void tgFreePixels(void *info, const void *data, size_t size) {
 	if (!image)
 		return nil;
 	CGSize size = image.size;
-	if (size.width <= 0 || size.height <= 0)
+	if (size.width <= 0 || size.height <= 0 ||
+		size.width > 4096 || size.height > 4096 ||
+		(uint64_t)size.width * (uint64_t)size.height * 4ull > kTGWebPMaxDecodedBytes)
 		return nil;
 
+#if TARGET_OS_IPHONE
 	CGFloat side = TGMetricStickerSide;
 	UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), NO, 1.0f);
 	if (!UIGraphicsGetCurrentContext())
@@ -101,6 +114,9 @@ static void tgFreePixels(void *info, const void *data, size_t size) {
 	if (!padded)
 		return nil;
 	return TGStickerImageWebPData(padded.CGImage, (size_t)side, (float)quality);
+#else
+	return nil;
+#endif
 }
 
 @end

@@ -59,6 +59,9 @@ extern NSString *const TGSendStoreCanRetryKey;
 			  toChat:(int64_t)chatId thread:(int64_t)threadId;
 - (void)sendChecklist:(NSString *)title tasks:(NSArray *)tasks
 			   toChat:(int64_t)chatId completion:(void (^)(BOOL ok, NSString *error))completion;
+/// A new poll from the New Poll screen's draft (TGClient+Checklists.h).
+- (void)sendPoll:(NSDictionary *)draft toChat:(int64_t)chatId
+	  completion:(void (^)(BOOL ok, NSString *error))completion;
 - (void)sendContactNamed:(NSString *)name phone:(NSString *)phone toChat:(int64_t)chatId;
 - (void)sendEphemeralText:(NSString *)text toChat:(int64_t)chatId
 			 receiverUserId:(int64_t)receiverUserId

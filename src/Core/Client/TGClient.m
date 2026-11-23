@@ -540,6 +540,7 @@ NSDictionary *TGFormattedText(NSString *text) {
 		self.readyAt = [NSDate date].timeIntervalSince1970;
 		[self loadChats];
 		[self send:@{@"@type" : @"getMe"}];
+		[self encryptDatabaseIfNeeded];
 		if (!TGAppInBackground())
 			[self send:TGOnlineOptionRequest(YES)];
 	}
@@ -556,17 +557,41 @@ NSDictionary *TGFormattedText(NSString *text) {
 	// runs on WaitTdlibParameters, before TDLib has opened anything.
 	NSString *db = TGAccountResolvedDatabaseDirectory([TGClient activeAccountSlot]);
 
+	// Before the first unlock after a boot (a keep-alive launch) the keychain
+	// cannot be read; the empty key would only earn a 401 and leave TDLib
+	// stuck. The database waits for the unlock instead.
+	if (![TGDatabaseKey keyStateKnown]){
+		NSLog(@"TGClient: keychain locked, the database waits for the first unlock");
+		[[NSNotificationCenter defaultCenter] removeObserver:self
+				name:UIApplicationProtectedDataDidBecomeAvailable object:nil];
+		[[NSNotificationCenter defaultCenter] addObserver:self
+				selector:@selector(protectedDataBecameAvailable:)
+					name:UIApplicationProtectedDataDidBecomeAvailable object:nil];
+		return;
+	}
+
+	// Every database is encrypted; the key sits in the keychain. One made
+	// before encryption was the default opens only with the empty key: TDLib
+	// answers 401 to ours, the empty key opens it, and it is re-keyed once
+	// the account is ready.
+	NSData *databaseKey = [TGDatabaseKey ensureKey];
+	[self sendTdlibParametersWithDirectory:db key:databaseKey];
+}
+
+- (void)protectedDataBecameAvailable:(NSNotification *)note {
+	[[NSNotificationCenter defaultCenter] removeObserver:self
+			name:UIApplicationProtectedDataDidBecomeAvailable object:nil];
+	[self sendTdlibParameters];
+}
+
+- (void)sendTdlibParametersWithDirectory:(NSString *)db key:(NSData *)databaseKey {
 	int apiId = TGApiId();
 	char apiHash[TG_API_HASH_LEN + 1];
 	TGApiHash(apiHash);
-
 	UIDevice *dev = [UIDevice currentDevice];
+	self.databaseOpenedWithoutKey = !databaseKey.length;
 
-	// The key this app set through Debug Menu, if any. An empty string is
-	// TDLib's unencrypted database, which is how every install starts.
-	NSData *databaseKey = [TGDatabaseKey currentKey];
-
-	[self send:@{
+	[self request:@{
 		@"@type"                  : @"setTdlibParameters",
 		@"database_directory"     : db,
 		@"files_directory"        : [db stringByAppendingPathComponent:@"files"],
@@ -576,13 +601,35 @@ NSDictionary *TGFormattedText(NSString *text) {
 		// start is a cold sync: the list, avatars and media are fetched again.
 		@"use_chat_info_database" : @YES,
 		@"use_file_database"      : @YES,
-		@"use_secret_chats"       : @NO,
+		@"use_secret_chats"       : @YES,
 		@"api_id"                 : @(apiId),
 		@"api_hash"               : [NSString stringWithUTF8String:apiHash],
 		@"system_language_code"   : @"en",
 		@"device_model"           : dev.model ?: @"iPhone",
 		@"system_version"         : dev.systemVersion ?: @"7.1.2",
 		@"application_version"    : @"1.0",
+	} completion:^(NSDictionary *result){
+		if (databaseKey.length && [result[@"@type"] isEqualToString:@"error"] &&
+			[result[@"code"] intValue] == 401){
+			NSLog(@"TGClient: database key refused, opening an unencrypted database");
+			[self sendTdlibParametersWithDirectory:db key:nil];
+		}
+	}];
+}
+
+/// An unencrypted database from an older build gets the keychain key. If the
+/// re-key fails, the next launch opens it unencrypted again and retries.
+- (void)encryptDatabaseIfNeeded {
+	NSData *key = self.databaseOpenedWithoutKey ? [TGDatabaseKey currentKey] : nil;
+	if (!key.length)
+		return;
+	[self request:@{@"@type" : @"setDatabaseEncryptionKey",
+					@"new_encryption_key" : TGBase64Encode(key)}
+	   completion:^(NSDictionary *result){
+		BOOL ok = ![result[@"@type"] isEqualToString:@"error"];
+		if (ok)
+			self.databaseOpenedWithoutKey = NO;
+		NSLog(@"TGClient: database encryption %@", ok ? @"on" : result[@"message"]);
 	}];
 }
 

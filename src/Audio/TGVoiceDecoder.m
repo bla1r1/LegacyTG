@@ -2,9 +2,19 @@
 // TGVoiceDecoder - decodes Ogg Opus voice notes to 16-bit PCM WAV for AVAudioPlayer.
 //
 #import "TGVoiceDecoder.h"
+#if __has_include(<ogg/ogg.h>) || TARGET_OS_IPHONE
 #include "opusfile/opusfile.h"
+#else
+typedef struct OggOpusFile OggOpusFile;
+typedef int16_t opus_int16;
+extern OggOpusFile *op_open_file(const char *_path, int *_error);
+extern int op_read_stereo(OggOpusFile *_of, opus_int16 *_pcm, int _buf_size);
+extern void op_free(OggOpusFile *_of);
+#endif
 #include <stdio.h>
 #include <string.h>
+
+static const uint32_t kTGVoiceMaxDecodedBytes = 64 * 1024 * 1024;
 
 /// Little-endian writers - WAV headers are LE regardless of the host.
 static void put32(unsigned char *p, uint32_t v) {
@@ -19,6 +29,16 @@ static void put16(unsigned char *p, uint16_t v) {
 
 + (NSString *)wavFromOpusFile:(NSString *)opusPath {
 	if (!opusPath.length)
+		return nil;
+
+	// Refuse files that do not exist, are empty, or lack the Ogg container magic.
+	FILE *checkFp = fopen(opusPath.UTF8String, "rb");
+	if (!checkFp)
+		return nil;
+	char magic[4] = {0};
+	size_t readMagic = fread(magic, 1, 4, checkFp);
+	fclose(checkFp);
+	if (readMagic < 4 || memcmp(magic, "OggS", 4) != 0)
 		return nil;
 
 	int err = 0;
@@ -46,18 +66,28 @@ static void put16(unsigned char *p, uint16_t v) {
 	if (fwrite(header, 1, sizeof(header), fp) != sizeof(header)) {
 		NSLog(@"TGVoiceDecoder: failed to write header placeholder");
 		fclose(fp);
+		[[NSFileManager defaultManager] removeItemAtPath:out error:nil];
 		op_free(of);
 		return nil;
 	}
 
 	opus_int16 buffer[1920 * 2];   // 40ms at 48kHz, stereo (<8 KB stack buffer)
 	uint32_t totalBytesWritten = 0;
+	NSUInteger loopCount = 0;
 
 	for (;;){
+		if (++loopCount > 200000) {
+			fclose(fp);
+			[[NSFileManager defaultManager] removeItemAtPath:out error:nil];
+			op_free(of);
+			return nil;
+		}
+
 		int samples = op_read_stereo(of, buffer, (int)(sizeof(buffer) / sizeof(buffer[0])));
 		if (samples < 0){
 			NSLog(@"TGVoiceDecoder: op_read_stereo failed (%d)", samples);
 			fclose(fp);
+			[[NSFileManager defaultManager] removeItemAtPath:out error:nil];
 			op_free(of);
 			return nil;
 		}
@@ -65,9 +95,18 @@ static void put16(unsigned char *p, uint16_t v) {
 			break;
 
 		size_t bytes = (size_t)samples * channels * sizeof(opus_int16);
+		// Cap output to 64 MB to prevent filling device storage or integer overflow in WAV header.
+		if ((uint64_t)totalBytesWritten + (uint64_t)bytes > (uint64_t)kTGVoiceMaxDecodedBytes) {
+			fclose(fp);
+			[[NSFileManager defaultManager] removeItemAtPath:out error:nil];
+			op_free(of);
+			return nil;
+		}
+
 		if (fwrite(buffer, 1, bytes, fp) != bytes) {
 			NSLog(@"TGVoiceDecoder: failed to write audio chunk");
 			fclose(fp);
+			[[NSFileManager defaultManager] removeItemAtPath:out error:nil];
 			op_free(of);
 			return nil;
 		}
@@ -103,6 +142,7 @@ static void put16(unsigned char *p, uint16_t v) {
 	if (fseek(fp, 0, SEEK_SET) != 0 || fwrite(header, 1, sizeof(header), fp) != sizeof(header)) {
 		NSLog(@"TGVoiceDecoder: failed to write finalized WAV header");
 		fclose(fp);
+		[[NSFileManager defaultManager] removeItemAtPath:out error:nil];
 		return nil;
 	}
 

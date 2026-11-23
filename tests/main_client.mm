@@ -72,6 +72,8 @@
 #import "TGClientNotificationsForumTests.m"
 #import "TGMessageStreamStoreTests.m"
 #import "TGThemeFileTests.m"
+#import "TGEmojiFontTests.m"
+#import "TGEmojiPicturesTests.m"
 #import "TGSVGPathTests.m"
 #import "TGIconCatalogTests.m"
 #import "TGUpdatesTests.mm"

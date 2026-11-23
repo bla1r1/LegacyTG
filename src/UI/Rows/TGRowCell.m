@@ -105,8 +105,13 @@ void TGRowCellStandOnPage(UITableViewCell *cell) {
 /// R6: a card row's title is the system cell font, the same as the rows
 /// around it; a white list row keeps TGFontRow.
 + (UIFont *)toggleInfoTitleFontInCard:(BOOL)inCard {
-	if (TGRowTitleFontRole(inCard) == TGRowFontCard)
-		return [TGTheme systemCellOfStyle:UITableViewCellStyleSubtitle].textLabel.font;
+	if (TGRowTitleFontRole(inCard) == TGRowFontCard){
+		// iOS 6 leaves a cell's bold font at size 0 until a table lays the
+		// cell out: the height pass measured the title as 0 pt tall and the
+		// row came out a whole line short, its note under the next row.
+		UIFont *font = [TGTheme systemCellOfStyle:UITableViewCellStyleSubtitle].textLabel.font;
+		return font.pointSize > 0 ? font : TGFontRowStrong();
+	}
 	return TGFontRow();
 }
 

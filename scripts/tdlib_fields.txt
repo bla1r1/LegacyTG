@@ -310,9 +310,7 @@ todo  later     paymentReceiptTypeRegular.payment_provider_user_id  payment rece
 todo  later     paymentReceiptTypeRegular.shipping_option  payment receipt
 todo  later     paymentReceiptTypeRegular.tip_amount  payment receipt
 skip  -         photoSize.progressive_sizes  progressive JPEG sizes; the whole file is decoded
-skip  -         poll.members_only  official uses it only to work out that voting is restricted (AccountContext ChatController.swift isPollVotingRestricted, restrictToSubscribers); TDLib reports that outcome in vote_restriction_reason, which the bubble reads
 skip  -         pollMediaVideo.storyboards  scrubbing storyboards are not drawn
-todo  later     pollTypeQuiz.explanation_media  official shows the explanation with its picture in a quiz answer bubble that opens the media in the gallery (ChatMessagePollBubbleContentNode ChatMessageQuizAnswerBubbleContentNode.swift, openPollMedia .solution); our poll bubble carries the explanation as text and has no quiz answer bubble
 skip  -         premiumPaymentOption.discount_percentage  Premium is bought outside this client
 skip  -         premiumPaymentOption.store_product_id  Premium is bought outside this client
 skip  -         premiumState.business_animations  Premium is bought outside this client
@@ -530,15 +528,10 @@ skip  -         inputMessageInvoice.photo_url  we send it; nothing to draw
 skip  -         inputMessageInvoice.photo_width  we send it; nothing to draw
 skip  -         inputMessageInvoice.provider_data  we send it; nothing to draw
 skip  -         inputMessageInvoice.provider_token  we send it; nothing to draw
-skip  -         inputMessagePoll.hide_results_until_closes  we send it; nothing to draw
-skip  -         inputMessagePoll.members_only  we send it; nothing to draw
-skip  -         inputMessagePoll.shuffle_options  we send it; nothing to draw
 skip  -         inputPageBlockTable.is_bordered  we send it; nothing to draw
 skip  -         inputPageBlockTable.is_compact  we send it; nothing to draw
 skip  -         inputPageBlockTable.is_striped  we send it; nothing to draw
 skip  -         inputPaidMediaTypeVideo.supports_streaming  we send it; nothing to draw
-skip  -         inputPollTypeQuiz.explanation_media  we send it; nothing to draw
-skip  -         inputPollTypeRegular.allow_adding_options  we send it; nothing to draw
 skip  -         inputTextQuote.rich_texts  we send it; nothing to draw
 skip  -         inputVideo.supports_streaming  we send it; nothing to draw
 skip  -         message.chat_instance  bot accounts only

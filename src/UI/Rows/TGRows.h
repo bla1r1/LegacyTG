@@ -417,6 +417,7 @@ extern NSString *const TGRowChatPinned;         // NSNumber BOOL
 extern NSString *const TGRowChatOnline;         // NSNumber BOOL
 extern NSString *const TGRowChatStoryRing;      // NSNumber 0 none, 1 seen, 2 unseen
 extern NSString *const TGRowChatSaved;          // NSNumber BOOL, Saved Messages
+extern NSString *const TGRowChatSecret;         // NSNumber BOOL, secret chat: lock, green title
 extern NSString *const TGRowChatOutgoing;       // NSNumber BOOL, your last message
 extern NSString *const TGRowChatRead;           // NSNumber BOOL, read outbox
 extern NSString *const TGRowChatFailed;         // NSNumber BOOL, last message refused
