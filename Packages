@@ -10,6 +10,6 @@ Description: LegacyTG: Telegram for iOS 6.0-12.5.7 on old iPhones and iPads.
 Depiction: https://bla1r1.github.io/LegacyTG/depiction/org.legacy.itg/
 Icon: https://bla1r1.github.io/LegacyTG/CydiaIcon.png
 Filename: debs/org.legacy.itg_1.5-5_iphoneos-arm.deb
-Size: 37780406
-MD5sum: 2659d5e0fc5bfda925f430439e4951c4
-SHA256: 39bce9cf90f3ebfc5e0cb466f2286e82f2fe8c93bd9c2bc9722493bf666cbdd8
+Size: 37780384
+MD5sum: d0376ccf22fc83e76dec238b61ec3207
+SHA256: d0dc997649c2145e3d8b8c6c518d642ca3b47664afaaf6f4ed5f125bb48b42e3
