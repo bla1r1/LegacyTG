@@ -80,8 +80,11 @@ OBJC_SRCS := \
     src/CallEngine/Signaling/TGCallDtls.m \
     src/CallEngine/Media/TGCallVideoRtp.m \
 	src/CallEngine/Media/TGCallVideoIntake.m \
+	src/CallEngine/Media/TGCallRinger.m \
+	src/CallEngine/Media/TGCallAudioRoute.m \
     src/CallEngine/Media/TGCallVideoEngine.mm \
     src/CallEngine/TGCall.mm \
+    src/CallEngine/TGCall+Candidates.mm \
     src/Features/Chat/Views/TGMessageLayout.mm \
     src/Features/Chat/Views/TGTextRender.mm \
     src/UI/Format/TGUIFormat.m \

@@ -41,6 +41,9 @@ static NSMutableArray<NSArray *> *TGIncomingArrivals(void) {
 - (void)peerReportedLoss:(uint8_t)fraction {
 }
 
+- (void)resume {
+}
+
 - (void)handleIncomingOpusFrame:(NSData *)opusFrame {
 	if (opusFrame)
 		[TGIncomingFrames() addObject:opusFrame];

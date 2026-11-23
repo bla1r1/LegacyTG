@@ -35,6 +35,7 @@
 //
 #import "TGTestRunner.h"
 #import "TGCall.h"
+#import "TGCallRinger.h"
 #import "TGCallAudioEngine.h"
 #import "TGCallMessages.h"
 #import "TGCallPeer.h"
@@ -275,6 +276,31 @@
     XCTAssertFalse([TGCall shared].canPlaceCall, @"one call at a time");
     XCTAssertNil([TGCall shared].endReason, @"the last call's reason is gone");
     [[TGCall shared] teardown];
+    [[TGCall shared] reset];
+}
+
+- (void)testRingsWhileAnIncomingCallWaitsAndStopsAfter {
+    [[TGCall shared] handleUpdate:@{ @"@type" : @"call", @"id" : @(11), @"user_id" : @(42LL), @"is_outgoing" : @NO,
+        @"state" : @{ @"@type" : @"callStatePending", @"is_created" : @YES, @"is_received" : @YES } }];
+    [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.05]];
+    XCTAssertEqual([TGCallRinger shared].sounding, 1, @"the incoming ring");
+    [[TGCall shared] handleUpdate:@{ @"@type" : @"call", @"id" : @(11), @"user_id" : @(42LL), @"is_outgoing" : @NO,
+        @"state" : @{ @"@type" : @"callStateDiscarded", @"reason" : @{ @"@type" : @"callDiscardReasonMissed" } } }];
+    [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.05]];
+    XCTAssertEqual([TGCallRinger shared].sounding, 0, @"silent once it stops ringing");
+    [[TGCall shared] reset];
+
+    [[TGCall shared] callUser:42 video:NO];
+    [[TGCall shared] handleUpdate:@{ @"@type" : @"call", @"id" : @(12), @"user_id" : @(42LL), @"is_outgoing" : @YES,
+        @"state" : @{ @"@type" : @"callStatePending", @"is_created" : @YES, @"is_received" : @NO } }];
+    [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.05]];
+    XCTAssertEqual([TGCallRinger shared].sounding, 0, @"nothing until the peer's phone rings");
+    [[TGCall shared] handleUpdate:@{ @"@type" : @"call", @"id" : @(12), @"user_id" : @(42LL), @"is_outgoing" : @YES,
+        @"state" : @{ @"@type" : @"callStatePending", @"is_created" : @YES, @"is_received" : @YES } }];
+    [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.05]];
+    XCTAssertEqual([TGCallRinger shared].sounding, 2, @"then the ringback");
+    [[TGCall shared] teardown];
+    XCTAssertEqual([TGCallRinger shared].sounding, 0);
     [[TGCall shared] reset];
 }
 

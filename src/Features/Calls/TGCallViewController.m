@@ -418,6 +418,7 @@ static UIImage *TGCallCircleImage(CGFloat side, UIColor *colour, TGCallCircleSty
             self.isBeingDismissed) {
         [self.ticker invalidate];
         self.ticker = nil;
+        [UIDevice currentDevice].proximityMonitoringEnabled = NO;
     }
 }
 
@@ -768,7 +769,23 @@ static UIImage *TGCallCircleImage(CGFloat side, UIColor *colour, TGCallCircleSty
     return TGUIFormatCallDuration([[TGCall shared] duration]);
 }
 
+/// The screen goes dark at the ear: an audio call in the earpiece, as on
+/// any phone. Not on the speaker, not in a video call, not once it is over.
+- (void)updateProximity {
+    TGCall *call = [TGCall shared];
+    BOOL live = call.state != TGCallStateEnded && call.state != TGCallStateFailed && call.state != TGCallStateNone;
+    BOOL atEar = live && self.view.window && !call.speakerEnabled && !call.isVideoCall && !call.videoActive;
+    if ([UIDevice currentDevice].proximityMonitoringEnabled != atEar)
+        [UIDevice currentDevice].proximityMonitoringEnabled = atEar;
+}
+
 - (void)tick {
+    // Headphones in or out change the speaker under the button.
+    if (self.speakerOn != [TGCall shared].speakerEnabled) {
+        self.speakerOn = [TGCall shared].speakerEnabled;
+        [self refreshControls];
+    }
+    [self updateProximity];
     if ([TGCall shared].state != TGCallStateEstablished)
         return;
     self.statusLabel.text = [TGCall shared].isReconnecting ? @"Connecting..." : [self talkTimeText];
@@ -780,6 +797,7 @@ static UIImage *TGCallCircleImage(CGFloat side, UIColor *colour, TGCallCircleSty
     self.speakerOn = !self.speakerOn;
     [[TGCall shared] setSpeaker:self.speakerOn];
     [self refreshControls];
+    [self updateProximity];
 }
 
 - (void)toggleMute {
@@ -1131,6 +1149,7 @@ static UIImage *TGCallCircleImage(CGFloat side, UIColor *colour, TGCallCircleSty
 /// second before the screen closes shows what happened.
 - (void)windDown {
     [self setStatusPulsing:NO];
+    [UIDevice currentDevice].proximityMonitoringEnabled = NO;
     self.bgLayer.colors = TGCallGradient([[TGTheme shared] callGradientColoursFailed]);
     [UIView animateWithDuration:TGAnimationDurationMedium animations:^{
         for (UIView *view in @[self.speakerBtn, self.videoBtn, self.micBtn,

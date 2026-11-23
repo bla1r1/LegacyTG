@@ -762,6 +762,8 @@ APP_SRC_M := \
 	src/CallEngine/Signaling/TGCallDtls.m \
 	src/CallEngine/Media/TGCallVideoRtp.m \
 	src/CallEngine/Media/TGCallVideoIntake.m \
+	src/CallEngine/Media/TGCallRinger.m \
+	src/CallEngine/Media/TGCallAudioRoute.m \
 	src/Media/UIImage+WebP.m \
 	src/Media/TGPatternImage.m \
 	src/Media/TGStickerImage.m \
@@ -792,6 +794,7 @@ APP_SRC_MM := \
 	src/CallEngine/Media/TGCallAudioEngine.mm \
 	src/CallEngine/Media/TGCallVideoEngine.mm \
 	src/CallEngine/TGCall.mm \
+	src/CallEngine/TGCall+Candidates.mm \
 	src/Core/Stores/TGImageLruCache.mm \
 	src/Core/Stores/TGDownloadStore.mm \
 	src/Core/Client/Chats/TGClient+ChatsSupport.mm \
@@ -976,6 +979,7 @@ ipa-armv7: $(MACHOFIX) $(TLOTTIE_STAMP) $(ARMV7_ALL_OBJS)
 	@$(call ADD_DEV_SCHEMES,$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/Info.plist)
 	@cp -f "$(ROOT_DIR)/resources/fonts/"*.ttf "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
 	@cp -f "$(ROOT_DIR)/resources/sounds/"*.mp3 "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
+	@cp -f "$(ROOT_DIR)/resources/sounds/"*.wav "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
 	@cp -f "$(ROOT_DIR)/resources/strings/"*.plist "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
 	@cp -f "$(ROOT_DIR)/resources/"*.tgios-theme "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
 	@cp -rf "$(ROOT_DIR)/resources/images/"* "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
@@ -1010,6 +1014,7 @@ ipa-arm64: $(TLOTTIE_STAMP) $(ARM64_ALL_OBJS)
 	@$(call ADD_DEV_SCHEMES,$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app/Info.plist)
 	@cp -f "$(ROOT_DIR)/resources/fonts/"*.ttf "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
 	@cp -f "$(ROOT_DIR)/resources/sounds/"*.mp3 "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
+	@cp -f "$(ROOT_DIR)/resources/sounds/"*.wav "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
 	@cp -f "$(ROOT_DIR)/resources/strings/"*.plist "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
 	@cp -f "$(ROOT_DIR)/resources/"*.tgios-theme "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true
 	@cp -rf "$(ROOT_DIR)/resources/images/"* "$(BUILD_DIR)/arm64/app$(DEV_SUFFIX)/$(APP_NAME).app/" 2>/dev/null || true

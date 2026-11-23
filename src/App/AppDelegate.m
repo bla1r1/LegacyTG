@@ -10,6 +10,7 @@
 #import "TGNavController.h"
 #import "TGClient.h"
 #import "TGLocalization.h"
+#import "TGCallRinger.h"
 #import "TGLocalizationUIKit.h"
 #import "TGTheme.h"
 #import "TGCall.h"
@@ -126,15 +127,57 @@ static NSString *const TGSignedOutKey = @"TGSignedOutOfAccount";
 	[nc pushViewController:vc animated:YES];
 }
 
+/// The call that is ringing, on screen: on an incoming call in front, and
+/// when the app comes to the front (its notification tapped, or opened) while
+/// one still rings.
+static void TGPresentRingingCall(void) {
+	TGCall *call = [TGCall shared];
+	if (call.state != TGCallStatePending || call.outgoing || !call.peerUserId)
+		return;
+	[[TGCallRinger shared] ring];
+	[TGCallViewController presentForUserId:call.peerUserId
+									  name:[[TGClient shared] nameForUserId:call.peerUserId]
+								  outgoing:NO];
+}
+
 /// An incoming call is the one thing that takes over the screen on its own.
+/// Behind another app (kept running by the keep-alive) it can only ask: a
+/// notification with the ring, once per call, taken back when the call
+/// stops ringing.
 static void TGWatchForIncomingCalls(void) {
+	static UILocalNotification *ringing;
+	static int32_t notifiedCallId;
 	[TGCall shared].onIncomingCall = ^(int64_t userId, int32_t callId){
-		dispatch_async(dispatch_get_main_queue(), ^{
-			[TGCallViewController presentForUserId:userId
-											  name:[[TGClient shared] nameForUserId:userId]
-										  outgoing:NO];
-		});
+		if ([UIApplication sharedApplication].applicationState == UIApplicationStateActive){
+			TGPresentRingingCall();
+			return;
+		}
+		if (notifiedCallId == callId)
+			return;
+		notifiedCallId = callId;
+		UILocalNotification *local = [[UILocalNotification alloc] init];
+		NSString *what = [TGCall shared].isVideoCall ? TGLocalized(@"Incoming Video Call") : TGLocalized(@"Incoming Call");
+		local.alertBody = [NSString stringWithFormat:@"%@: %@", [[TGClient shared] nameForUserId:userId], what];
+		local.alertAction = TGLocalized(@"Answer");
+		local.soundName = @"call_ring.wav";
+		local.userInfo = @{ @"call" : @(callId) };
+		[[UIApplication sharedApplication] presentLocalNotificationNow:local];
+		ringing = local;
 	};
+	[[NSNotificationCenter defaultCenter] addObserverForName:TGCallStateDidChangeNotification object:nil
+			queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note){
+		TGCallState state = [TGCall shared].state;
+		// A call that ended behind another app gives the session back: the
+		// keep-alive deferred to it and has to start again, or iOS suspends us.
+		if ((state == TGCallStateEnded || state == TGCallStateFailed) &&
+		    [UIApplication sharedApplication].applicationState != UIApplicationStateActive &&
+		    [TGSettingsStore shared].keepAliveEnabled)
+			[[TGBackgroundKeeper shared] start];
+		if (state == TGCallStatePending || !ringing)
+			return;
+		[[UIApplication sharedApplication] cancelLocalNotification:ringing];
+		ringing = nil;
+	}];
 }
 
 /// The per-slot "this account has signed in" flag. Slot 0 keeps the original
@@ -514,6 +557,7 @@ static void TGRecursivePurgeVC(UIViewController *vc) {
 }
 
 - (void)applicationWillEnterForeground:(UIApplication *)application {
+	dispatch_async(dispatch_get_main_queue(), ^{ TGPresentRingingCall(); });
 	[[TGBackgroundKeeper shared] stop];
 	TGAppSetInBackground(NO);
 	// A paused TDLib is not running yet; it says online once it is ready.
@@ -870,6 +914,10 @@ static void TGRecursivePurgeVC(UIViewController *vc) {
 
 - (void)application:(UIApplication *)application
 		didReceiveLocalNotification:(UILocalNotification *)notification {
+	if (notification.userInfo[@"call"]){
+		TGPresentRingingCall();
+		return;
+	}
 	NSNumber *chatIdNum = notification.userInfo[@"chatId"];
 	if (chatIdNum && [chatIdNum longLongValue] != 0) {
 		[AppDelegate openChatWithId:[chatIdNum longLongValue]];

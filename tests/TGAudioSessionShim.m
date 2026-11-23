@@ -12,6 +12,19 @@ AVAudioSessionCategoryOptions const AVAudioSessionCategoryOptionMixWithOthers = 
 AVAudioSessionMode const AVAudioSessionModeVoiceChat = @"AVAudioSessionModeVoiceChat";
 NSString * const AVAudioSessionInterruptionNotification = @"AVAudioSessionInterruptionNotification";
 NSString * const AVAudioSessionInterruptionTypeKey = @"AVAudioSessionInterruptionTypeKey";
+AVAudioSessionCategory const AVAudioSessionCategorySoloAmbient = @"AVAudioSessionCategorySoloAmbient";
+NSString * const AVAudioSessionRouteChangeNotification = @"AVAudioSessionRouteChangeNotification";
+NSString * const AVAudioSessionRouteChangeReasonKey = @"AVAudioSessionRouteChangeReasonKey";
+AVAudioSessionPort const AVAudioSessionPortHeadphones = @"Headphones";
+AVAudioSessionPort const AVAudioSessionPortBluetoothHFP = @"BluetoothHFP";
+AVAudioSessionPort const AVAudioSessionPortBluetoothA2DP = @"BluetoothA2DPOutput";
+AVAudioSessionPort const AVAudioSessionPortUSBAudio = @"USBAudio";
+
+@implementation AVAudioSessionPortDescription
+@end
+@implementation AVAudioSessionRouteDescription
+- (NSArray *)outputs { return @[]; }
+@end
 
 @implementation AVAudioPlayer {
 	BOOL _playing;
@@ -19,6 +32,9 @@ NSString * const AVAudioSessionInterruptionTypeKey = @"AVAudioSessionInterruptio
 - (instancetype)initWithData:(NSData *)data error:(NSError **)outError {
 	if (outError) *outError = nil;
 	return [super init];
+}
+- (instancetype)initWithContentsOfURL:(NSURL *)url error:(NSError **)outError {
+	return [self initWithData:nil error:outError];
 }
 - (BOOL)prepareToPlay { return YES; }
 - (BOOL)play { _playing = YES; return YES; }
@@ -103,6 +119,10 @@ NSString * const AVMediaTypeVideo = @"vide";
 	_category = [category copy];
 	if (outError) *outError = nil;
 	return YES;
+}
+
+- (AVAudioSessionRouteDescription *)currentRoute {
+	return [[AVAudioSessionRouteDescription alloc] init];
 }
 
 - (BOOL)setMode:(AVAudioSessionMode)mode error:(NSError **)outError {

@@ -16,6 +16,10 @@ typedef NS_ENUM(NSInteger, TGCallState) {
 
 @class TGCallVideoEngine;
 
+/// Posted on the main queue whenever TGCall.state changes, for whoever is
+/// not the call screen (the incoming-call notification, the keep-alive).
+extern NSString *const TGCallStateDidChangeNotification;
+
 @interface TGCall : NSObject
 
 + (instancetype)shared;
@@ -70,6 +74,9 @@ typedef NS_ENUM(NSInteger, TGCallState) {
 /// Established, but nothing from the peer for 2 s: the screen says
 /// Connecting... over the timer until it comes back, as official does.
 @property (nonatomic, readonly) BOOL isReconnecting;
+/// The loudspeaker is on (by the button, a video call, or not since
+/// headphones came in).
+@property (nonatomic, readonly) BOOL speakerEnabled;
 /// No call is up. Ended and Failed count: they stay until the next call,
 /// and a check for None alone stopped every second call in one launch.
 @property (nonatomic, readonly) BOOL canPlaceCall;

@@ -20,6 +20,24 @@ typedef NSUInteger AVAudioSessionCategoryOptions;
 
 extern AVAudioSessionCategory const AVAudioSessionCategoryPlayAndRecord;
 extern AVAudioSessionCategory const AVAudioSessionCategoryPlayback;
+extern AVAudioSessionCategory const AVAudioSessionCategorySoloAmbient;
+extern NSString * const AVAudioSessionRouteChangeNotification;
+extern NSString * const AVAudioSessionRouteChangeReasonKey;
+typedef NS_ENUM(NSUInteger, AVAudioSessionRouteChangeReason) {
+	AVAudioSessionRouteChangeReasonNewDeviceAvailable = 1,
+	AVAudioSessionRouteChangeReasonOldDeviceUnavailable = 2,
+};
+typedef NSString *AVAudioSessionPort;
+extern AVAudioSessionPort const AVAudioSessionPortHeadphones;
+extern AVAudioSessionPort const AVAudioSessionPortBluetoothHFP;
+extern AVAudioSessionPort const AVAudioSessionPortBluetoothA2DP;
+extern AVAudioSessionPort const AVAudioSessionPortUSBAudio;
+@interface AVAudioSessionPortDescription : NSObject
+@property (nonatomic, readonly) AVAudioSessionPort portType;
+@end
+@interface AVAudioSessionRouteDescription : NSObject
+@property (nonatomic, readonly) NSArray<AVAudioSessionPortDescription *> *outputs;
+@end
 extern AVAudioSessionCategoryOptions const AVAudioSessionCategoryOptionAllowBluetooth;
 extern AVAudioSessionCategoryOptions const AVAudioSessionCategoryOptionMixWithOthers;
 extern AVAudioSessionMode const AVAudioSessionModeVoiceChat;
@@ -38,6 +56,7 @@ typedef NS_ENUM(NSUInteger, AVAudioSessionInterruptionType) {
 @property (nonatomic, readonly, getter=isPlaying) BOOL playing;
 @property (nonatomic, weak) id<AVAudioPlayerDelegate> delegate;
 - (instancetype)initWithData:(NSData *)data error:(NSError **)outError;
+- (instancetype)initWithContentsOfURL:(NSURL *)url error:(NSError **)outError;
 - (BOOL)prepareToPlay;
 - (BOOL)play;
 - (void)stop;
@@ -134,6 +153,7 @@ typedef NS_ENUM(NSInteger, AVCaptureVideoOrientation) {
 + (AVAudioSession *)sharedInstance;
 
 @property (nonatomic, copy) AVAudioSessionCategory category;
+@property (nonatomic, readonly) AVAudioSessionRouteDescription *currentRoute;
 
 - (BOOL)setCategory:(AVAudioSessionCategory)category
 		withOptions:(AVAudioSessionCategoryOptions)options

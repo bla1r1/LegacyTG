@@ -468,6 +468,11 @@ static void *TGEncodeThread(void *context) {
 	}
 }
 
+- (void)resume {
+	if (_running && _audioUnit)
+		NSLog(@"TGCallAudioEngine: resumed (%d)", (int)AudioOutputUnitStart(_audioUnit));
+}
+
 - (void)peerReportedLoss:(uint8_t)fraction {
 	_lossPercent = TGOpusLossPercent(fraction);
 }

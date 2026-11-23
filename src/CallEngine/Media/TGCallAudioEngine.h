@@ -26,6 +26,8 @@
 
 - (BOOL)start;
 - (void)stop;
+/// Starts the unit again after an interruption stopped it.
+- (void)resume;
 
 /// Pass an incoming Opus audio frame to be decoded and played through the speaker/earpiece.
 - (void)handleIncomingOpusFrame:(NSData *)opusFrame;

@@ -179,6 +179,10 @@ recording flags are already wired.
   the same Wi-Fi went direct within a second. Official WebRTC stops gathering
   once a pair works, so it has no reflector candidate to fall back to unless
   its network changes and it gathers again.
+- [x] `done` Around the call: ring and vibration, ringback, the incoming-call
+  notification in the background, interruptions, headphones and Bluetooth,
+  the proximity sensor. Checked live: the ring on the iPod touch 4; not yet
+  the ringback's sound, interruptions or headphones.
 - [ ] `planned` Signalling 12.0.0/13.0.0 (compressed, over SCTP). 10/11/18/19
   speak SDP over a PeerConnection and are another stack.
 - [ ] `planned` A call from a device to the official iOS and Android apps and

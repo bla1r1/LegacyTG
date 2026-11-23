@@ -3,6 +3,7 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #import "TGCall.h"
+#import "TGCall+Internal.h"
 #import "TGBase64.h"
 #import "TGClient.h"
 #import "TGCallReflector.h"
@@ -20,6 +21,8 @@
 #import "TGDevice.h"
 #import "TGCallVideoIntake.h"
 #import "TGCallDirectPath.h"
+#import "TGCallRinger.h"
+#import "TGCallAudioRoute.h"
 
 #include "libtgvoip/VoIPController.h"
 #include <openssl/aes.h>
@@ -141,62 +144,10 @@ static void TGInstallCrypto(void) {
 
 #pragma mark -
 
-@interface TGCall ()
-@property (nonatomic, assign) TGCallState state;
-@property (nonatomic, copy) NSString *pendingStatus;
-@property (nonatomic, assign) BOOL needsRating;
-@property (nonatomic, assign) int32_t callId;
-@property (nonatomic, assign) int32_t lastCallId;
-@property (nonatomic, assign) int64_t peerUserId;
-@property (nonatomic, assign) BOOL outgoing;
-@property (nonatomic, assign) BOOL muted;
-@property (nonatomic, assign) BOOL videoActive;
-@property (nonatomic, assign) BOOL peerVideoActive;
-@property (nonatomic, assign) BOOL peerCameraOn;
-@property (nonatomic, assign) BOOL isVideoCall;
-@property (nonatomic, strong) TGCallVideoEngine *videoEngine;
-@property (nonatomic, strong) NSDate *establishedAt;
-@property (nonatomic, strong) NSString *endReason;
-@property (nonatomic, strong) TGCallReflector *reflector;      // the chosen one
-@property (nonatomic, strong) NSMutableArray *reflectors;      // all of them
-@property (nonatomic, strong) NSData *callKey;
-@property (nonatomic, strong) NSString *localUfrag;
-@property (nonatomic, strong) NSString *localPwd;
-@property (nonatomic, strong) NSString *reflectorHost;
-@property (nonatomic, assign) uint16_t reflectorPort;
-@property (nonatomic, assign) int64_t reflectorId;
-@property (nonatomic, assign) uint32_t signallingSeq;
-@property (nonatomic, assign) BOOL sentCandidates;
-@property (nonatomic, assign) BOOL sentVideoFormatsAnswer;
-@property (nonatomic, assign) BOOL loggedHeader;
-@property (nonatomic, assign) BOOL sentMediaState;
-@property (nonatomic, strong) TGCallVideoIntake *videoIntake;
-@property (nonatomic, strong) TGCallDirectPath *direct;
-@property (nonatomic, assign) uint32_t videoParametersSeq;
-@property (nonatomic, assign) uint32_t mediaStateSeq;
-@property (nonatomic, strong) NSTimer *mediaStateTimer;
-@property (nonatomic, assign) uint32_t audioProbeSeq;
-@property (nonatomic, assign) BOOL audioFramingProven;
-@property (nonatomic, assign) uint32_t currentSenderTag;
-@property (nonatomic, assign) uint32_t nominatedSenderTag;
-@property (nonatomic, assign) uint32_t verifiedMediaTag;
-@property (nonatomic, strong) TGCallReflector *currentReflector;
-@property (nonatomic, strong) TGCallReflector *verifiedReflector;
-@property (nonatomic, strong) NSString *peerUfrag;
-@property (nonatomic, strong) NSString *peerPwd;
-@property (nonatomic, strong) TGCallIce *ice;
-@property (nonatomic, strong) TGCallAudioEngine *audioEngine;
-@property (nonatomic, strong) TGCallV2Session *v2;
-@property (nonatomic, assign) BOOL isV2;
-@property (nonatomic, assign) uint32_t mediaSeqOut;
-@property (nonatomic, assign) uint16_t rtpSeqOut;
-@property (nonatomic, assign) uint32_t rtpTimestampOut;
-@property (nonatomic, assign) uint16_t transportSeqOut;
-@property (nonatomic, strong) NSArray *emojis;
-@property (nonatomic, strong) NSMutableArray *pendingSignalingData;
-@end
 
 static const char *kBuildMarker = "BUILD_MARKER_AUDIO_FIX_V8";
+
+NSString *const TGCallStateDidChangeNotification = @"TGCallStateDidChange";
 
 @implementation TGCall {
 	double _lastAudioIn;   // uptime of the last packet of the peer's audio
@@ -237,13 +188,12 @@ static const char *kBuildMarker = "BUILD_MARKER_AUDIO_FIX_V8";
 }
 
 - (void)setSpeaker:(BOOL)speaker {
-    _speakerEnabled = speaker;
-    AVAudioSession *session = [AVAudioSession sharedInstance];
-    if (speaker) {
-        [session overrideOutputAudioPort:AVAudioSessionPortOverrideSpeaker error:nil];
-    } else {
-        [session overrideOutputAudioPort:AVAudioSessionPortOverrideNone error:nil];
-    }
+	_speakerEnabled = speaker;
+	[TGCallAudioRoute setSpeaker:speaker];
+}
+
+- (BOOL)speakerEnabled {
+	return _speakerEnabled;
 }
 
 - (void)setState:(TGCallState)state {
@@ -253,8 +203,11 @@ static const char *kBuildMarker = "BUILD_MARKER_AUDIO_FIX_V8";
 	if (state == TGCallStateEstablished && !self.establishedAt)
 		self.establishedAt = [NSDate date];
 	void (^notify)(void) = ^{
+		if (state != TGCallStatePending)
+			[[TGCallRinger shared] stop];
 		if (self.onStateChanged)
 			self.onStateChanged(state);
+		[[NSNotificationCenter defaultCenter] postNotificationName:TGCallStateDidChangeNotification object:self];
 	};
 	if ([NSThread isMainThread]) {
 		notify();
@@ -275,104 +228,6 @@ static const char *kBuildMarker = "BUILD_MARKER_AUDIO_FIX_V8";
 	return out;
 }
 
-/// Our only route is the reflector, so that is the one candidate we offer -
-/// a relay candidate pointing at it. The peer will send its checks there and
-/// the reflector will hand them to us, because both ends share the tag.
-- (void)sendOurCandidates {
-	if (self.sentCandidates || !self.reflectorHost.length)
-		return;
-	self.sentCandidates = YES;
-
-	self.localUfrag = self.localUfrag ?: [self randomIceStringOfLength:4];
-	self.localPwd = self.localPwd ?: [self randomIceStringOfLength:24];
-
-	self.ice = [[TGCallIce alloc] init];
-	self.ice.controlling = !self.isV2 || self.outgoing;
-	self.ice.localUfrag = self.localUfrag;
-	self.ice.localPwd = self.localPwd;
-	__weak __typeof__(self) weakSelf = self;
-	self.ice.transport = ^(NSData *packet){
-		TGCall *me = weakSelf;
-		// An answer goes to the port that asked; anything else - our own
-		// checks - goes to every tag the peer has shown us.
-		uint32_t targetTag = me.nominatedSenderTag ?: me.currentSenderTag;
-		if (targetTag){
-			[me.currentReflector ?: me.reflector sendPayload:packet
-													   toTag:targetTag];
-			return;
-		}
-		for (TGCallReflector *reflector in me.reflectors)
-			[reflector sendPayload:packet];
-	};
-	self.ice.onConnected = ^(NSString *address, uint16_t port){
-		NSLog(@"TGCall: media path is %@:%u", address, port);
-		// 9.0.0 is not usable until DTLS has produced SRTP keys; the session
-		// calls back when that happens. Starting the engine here would play
-		// audio before there is a key to decrypt it with.
-		if (weakSelf.isV2){
-			[weakSelf.v2 iceConnected];
-			return;
-		}
-		weakSelf.state = TGCallStateEstablished;
-		[weakSelf startAudioEngine];
-	};
-	[self.ice start];
-
-	if (self.isV2){
-		// 9.0.0 patches every relay candidate to component 1 and priority
-		// 41877760 before serializing, and carries the candidate as JSON.
-		NSMutableArray *v2Candidates = [NSMutableArray array];
-		NSInteger v2Index = 0;
-		for (TGCallReflector *reflector in self.reflectors){
-			v2Index++;
-			uint32_t serverId = reflector.serverId ?: (uint32_t)v2Index;
-			NSString *hostname = [NSString stringWithFormat:@"reflector-%u-%u.reflector",
-					serverId, reflector.localTag];
-			[v2Candidates addObject:[NSString stringWithFormat:
-					@"candidate:%u 1 udp 41877760 %@ %u typ relay generation 0 "
-					@"ufrag %@ network-id 9 network-cost 50",
-					reflector.localTag, hostname, reflector.port, self.localUfrag]];
-		}
-		[v2Candidates addObjectsFromArray:[self.direct hostCandidates] ?: @[]];
-		[self.v2 sendCandidates:v2Candidates];
-		NSLog(@"TGCallV2: sent our candidates, ufrag=%@", self.localUfrag);
-		return;
-	}
-
-	// The address is a name rather than an IP: the peer reads our four-byte
-	// tag out of it and uses that to address us through the reflector.
-	NSMutableArray *candidates = [NSMutableArray array];
-	NSInteger index = 0;
-	for (TGCallReflector *reflector in self.reflectors){
-		index++;
-		uint32_t serverId = reflector.serverId ?: (uint32_t)index;
-		NSString *hostname = [NSString stringWithFormat:@"reflector-%u-%u.reflector",
-				serverId, reflector.localTag];
-		// Written exactly the way the peer writes its own: component 0, no
-		// raddr or rport. A line their parser rejects takes the whole message
-		// with it, and then they never learn our credentials at all.
-		[candidates addObject:[NSString stringWithFormat:
-				@"candidate:%u 0 udp 41878272 %@ %u typ relay generation 0 "
-				@"ufrag %@ network-id 9 network-cost 50",
-				reflector.localTag, hostname, reflector.port, self.localUfrag]];
-	}
-
-	NSData *body = [TGCallMessages candidatesBody:candidates
-											ufrag:self.localUfrag
-											  pwd:self.localPwd];
-	NSData *message = [TGCallMessages messageWithType:TGCallMessageCandidates body:body];
-	[self sendSignalling:message
-					 seq:[TGCallMessages markSeq:++self.signallingSeq requiresAck:YES]];
-	NSLog(@"TGCall: sent our candidates, ufrag=%@", self.localUfrag);
-
-	// Video runs over 9.0.0 only. An empty format list still has to go out:
-	// the 5.0.0 peer waits for one before it moves on.
-	uint8_t formats[2] = { 0, 0 };
-	NSData *videoFormats = [TGCallMessages messageWithType:TGCallMessageVideoFormats
-													  body:[NSData dataWithBytes:formats length:2]];
-	[self sendSignalling:videoFormats
-					 seq:[TGCallMessages markSeq:++self.signallingSeq requiresAck:YES]];
-}
 
 - (NSMutableArray *)pendingSignalingData {
 	if (!_pendingSignalingData) {
@@ -540,33 +395,6 @@ static const char *kBuildMarker = "BUILD_MARKER_AUDIO_FIX_V8";
 }
 
 // Extract remote reflector tag from candidate
-- (void)readPeerTagFromCandidate:(NSString *)candidate {
-	NSRange marker = [candidate rangeOfString:@"reflector-"];
-	if (marker.location == NSNotFound)
-		return;
-
-	NSString *tail = [candidate substringFromIndex:marker.location + marker.length];
-	NSArray *parts = [[tail componentsSeparatedByString:@".reflector"][0]
-			componentsSeparatedByString:@"-"];
-	if (parts.count < 2)
-		return;
-
-	NSInteger reflectorIndex = [parts[0] integerValue] - 1;
-	uint32_t tag = (uint32_t)[parts[1] longLongValue];
-	if (!tag)
-		return;
-
-	if (reflectorIndex >= 0 && reflectorIndex < (NSInteger)self.reflectors.count){
-		TGCallReflector *reflector = self.reflectors[reflectorIndex];
-		reflector.remoteTag = tag;
-	} else {
-		for (TGCallReflector *reflector in self.reflectors)
-			reflector.remoteTag = tag;
-	}
-	if (!self.currentSenderTag)
-		self.currentSenderTag = tag;
-	NSLog(@"TGCall: peer reflector tag %u (reflector %ld)", tag, (long)(reflectorIndex + 1));
-}
 
 - (void)sendSignalling:(NSData *)plaintext seq:(uint32_t)seq {
 	if (!self.callKey.length)
@@ -633,6 +461,7 @@ static const char *kBuildMarker = "BUILD_MARKER_AUDIO_FIX_V8";
 - (void)accept {
 	if (!self.callId)
 		return;
+	[[TGCallRinger shared] stop];
 	[[TGClient shared] send:@{
 		@"@type"    : @"acceptCall",
 		@"call_id"  : @(self.callId),
@@ -774,12 +603,15 @@ static const char *kBuildMarker = "BUILD_MARKER_AUDIO_FIX_V8";
 				if (self.onStateChanged)
 					self.onStateChanged(TGCallStatePending);
 			});
-		if (!self.outgoing) {
-			dispatch_async(dispatch_get_main_queue(), ^{
+		dispatch_async(dispatch_get_main_queue(), ^{
+			if (!self.outgoing) {
+				[[TGCallRinger shared] ring];
 				if (self.onIncomingCall)
 					self.onIncomingCall(self.peerUserId, self.callId);
-			});
-		}
+			} else if ([status isEqualToString:@"Ringing..."]) {
+				[[TGCallRinger shared] ringback];
+			}
+		});
 	} else if ([kind isEqualToString:@"callStateExchangingKeys"]){
 		self.state = TGCallStateExchangingKeys;
 	} else if ([kind isEqualToString:@"callStateReady"]){
@@ -1036,12 +868,14 @@ static const char *kBuildMarker = "BUILD_MARKER_AUDIO_FIX_V8";
 
 	self.audioEngine = [[TGCallAudioEngine alloc] init];
 	__weak __typeof__(self) weakSelf = self;
-	// ponytail: both on while the call path is being proved out, two lines to
-	// drop once it is. The loopback feeds our own encoded frames back into the
-	// decoder so the speaker proves the encode-decode-play chain works without
-	// the peer having to send anything - it has never sent us a frame, so that
-	// half of the engine has never once run.
-	self.audioEngine.loopbackToSpeaker = NO;   // proved; anything heard now is theirs
+	// Headphones take over from the speaker, as on any phone call; pulled
+	// out, a video call goes back to the speaker and an audio one to the ear.
+	self.audioRoute = [[TGCallAudioRoute alloc] init];
+	self.audioRoute.onResume = ^{ [weakSelf.audioEngine resume]; };
+	self.audioRoute.onHeadset = ^(BOOL attached){
+		[weakSelf setSpeaker:!attached && weakSelf.isVideoCall];
+	};
+	[self.audioRoute start];
 	self.audioEngine.onOutgoingOpusFrame = ^(NSData *opusFrame) {
 		[weakSelf sendOutgoingAudioFrame:opusFrame];
 	};
@@ -1723,6 +1557,9 @@ static inline BOOL TGLooksLikeStun(const uint8_t *bytes) {
 
 - (void)teardown {
 	_lastAudioIn = 0;
+	[self.audioRoute stop];
+	self.audioRoute = nil;
+	[[TGCallRinger shared] stop];
 	[self.videoIntake stop];
 	self.videoIntake = nil;
 	[self.direct stop];
