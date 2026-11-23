@@ -1,5 +1,5 @@
 diff --git a/tools/cli/main.cpp b/tools/cli/main.cpp
-index 637d859..7997600 100644
+index 637d859..4267465 100644
 --- a/tools/cli/main.cpp
 +++ b/tools/cli/main.cpp
 @@ -19,12 +19,19 @@
@@ -22,7 +22,30 @@ index 637d859..7997600 100644
  #include "FakeAudioDeviceModule.h"
  #include "VideoCaptureInterface.h"
  #include "StaticThreads.h"
-@@ -158,6 +165,168 @@ public:
+@@ -134,11 +141,21 @@ public:
+         return frame;
+     }
+ 
++    // On a schedule, not 10 ms after each frame: sleeping a fixed 10 ms on top of
++    // the work ran the sender ~25% slow, which a phone never does.
+     int32_t WaitForUs() override {
+-        return 10000; // 10ms
++        auto now = std::chrono::steady_clock::now();
++        if (frames_ == 0)
++            start_ = now;
++        frames_++;
++        auto due = start_ + std::chrono::microseconds(frames_ * 10000);
++        auto wait = std::chrono::duration_cast<std::chrono::microseconds>(due - now).count();
++        return wait > 0 ? static_cast<int32_t>(wait) : 0;
+     }
+ 
+ private:
++    std::chrono::steady_clock::time_point start_;
++    int64_t frames_ = 0;
+     static constexpr size_t kSampleRate = 48000;
+     static constexpr size_t kChannels = 2;
+     static constexpr size_t kFrameSamples = 480; // 10ms at 48kHz
+@@ -158,6 +175,222 @@ public:
      bool Render(const tgcalls::AudioFrame&) override { return true; }
  };
  
@@ -34,14 +57,31 @@ index 637d859..7997600 100644
 +
 +class ToneMeter : public tgcalls::FakeAudioDeviceModule::Renderer {
 +public:
++    // Pulled on the clock like a sound card; a fixed 10 ms after each frame
++    // played 25% slow and NetEq time-stretched the tone to keep up.
++    int32_t WaitForUs() override {
++        auto now = std::chrono::steady_clock::now();
++        if (pulls_ == 0)
++            pullStart_ = now;
++        pulls_++;
++        auto wait = std::chrono::duration_cast<std::chrono::microseconds>(
++            pullStart_ + std::chrono::microseconds(pulls_ * 10000) - now).count();
++        return wait > 0 ? static_cast<int32_t>(wait) : 0;
++    }
++    std::chrono::steady_clock::time_point pullStart_;
++    int64_t pulls_ = 0;
++
 +    bool Render(const tgcalls::AudioFrame& frame) override {
 +        const size_t step = frame.num_channels ? frame.num_channels : 1;
++        // NeedMorePlayData counts samples over all channels, not per channel:
++        // reading num_samples frames ran past the buffer for the second half.
++        const size_t count = frame.num_samples / step;
 +        double energy = 0;
 +        double g1000[2] = {0, 0}, g440[2] = {0, 0}, g800[2] = {0, 0};
 +        const double c1000 = 2.0 * std::cos(2.0 * M_PI * 1000.0 / 48000.0);
 +        const double c440 = 2.0 * std::cos(2.0 * M_PI * 440.0 / 48000.0);
 +        const double c800 = 2.0 * std::cos(2.0 * M_PI * 800.0 / 48000.0);
-+        for (size_t i = 0; i < frame.num_samples; ++i) {
++        for (size_t i = 0; i < count; ++i) {
 +            const double s = frame.audio_samples[i * step];
 +            energy += s * s;
 +            double next = s + c1000 * g1000[0] - g1000[1];
@@ -54,13 +94,19 @@ index 637d859..7997600 100644
 +            g800[1] = g800[0];
 +            g800[0] = next;
 +        }
-+        const double n = frame.num_samples ? double(frame.num_samples) : 1.0;
++        const double n = count ? double(count) : 1.0;
 +        // Goertzel power as a share of the frame's energy: 1.0 is a pure tone.
 +        const double p1000 = (g1000[0] * g1000[0] + g1000[1] * g1000[1] - c1000 * g1000[0] * g1000[1]) * 2.0 / n;
 +        const double p440 = (g440[0] * g440[0] + g440[1] * g440[1] - c440 * g440[0] * g440[1]) * 2.0 / n;
 +        const double p800 = (g800[0] * g800[0] + g800[1] * g800[1] - c800 * g800[0] * g800[1]) * 2.0 / n;
 +        std::lock_guard<std::mutex> lock(mutex_);
++        // BRIDGE_PCM=path keeps what was played, first channel, raw s16le 48 kHz.
++        static FILE *pcm = getenv("BRIDGE_PCM") ? fopen(getenv("BRIDGE_PCM"), "wb") : nullptr;
++        if (pcm)
++            for (size_t i = 0; i < count; ++i)
++                fwrite(&frame.audio_samples[i * step], sizeof(int16_t), 1, pcm);
 +        ++frames_;
++        blocks_.push_back(energy);
 +        energy_ += energy;
 +        power800_ += p800;
 +        power1000_ += p1000;
@@ -73,12 +119,29 @@ index 637d859..7997600 100644
 +               state, mediaStates, frames_, energy_ / 1e6,
 +               energy_ > 0 ? power1000_ / energy_ : 0.0, energy_ > 0 ? power800_ / energy_ : 0.0,
 +               energy_ > 0 ? power440_ / energy_ : 0.0);
++        // Dropouts the way OURS_PLAYOUT counts them: 10 ms blocks after the
++        // first sound under 1% of the median block's energy.
++        size_t first = 0;
++        while (first < blocks_.size() && blocks_[first] == 0)
++            first++;
++        std::vector<double> sorted(blocks_.begin() + first, blocks_.end());
++        std::sort(sorted.begin(), sorted.end());
++        const double floor = sorted.empty() ? 0 : sorted[sorted.size() / 2] * 0.01;
++        // Up to the last sound: the bridge outlives the bench by 4 s.
++        size_t last = blocks_.size();
++        while (last > first && blocks_[last - 1] < floor)
++            last--;
++        size_t gaps = 0;
++        for (size_t i = first; i < last; ++i)
++            gaps += blocks_[i] < floor;
++        printf("BRIDGE_PLAYOUT gaps_ms=%zu\n", gaps * 10);
 +        fflush(stdout);
 +    }
 +private:
 +    std::mutex mutex_;
 +    long long frames_ = 0;
 +    double energy_ = 0, power1000_ = 0, power800_ = 0, power440_ = 0;
++    std::vector<double> blocks_;
 +};
 +
 +static std::vector<uint8_t> hexDecode(const std::string& hex) {
@@ -101,6 +164,15 @@ index 637d859..7997600 100644
 +        else if (name == "--tag-hex") tagHex = argv[i + 1];
 +        else if (name == "--rtc-log") logFile = argv[i + 1];
 +    }
++    // --video: this side's camera is on from the start (a fake 640x360 feed)
++    // and every decoded frame from the client is counted.
++    bool withVideo = false;
++    for (int i = 1; i < argc; ++i)
++        if (std::string(argv[i]) == "--video") withVideo = true;
++    std::shared_ptr<tgcalls::VideoCaptureInterface> videoCapture;
++    if (withVideo)
++        videoCapture = tgcalls::VideoCaptureInterface::Create(tgcalls::StaticThreads::getThreads(), "bridge");
++    auto videoSink = std::make_shared<FakeVideoSink>();
 +    const auto keyBytes = hexDecode(keyHex);
 +    const auto tagBytes = hexDecode(tagHex);
 +    if (keyBytes.size() != 256 || tagBytes.size() != 16 || !signalPort) {
@@ -145,6 +217,7 @@ index 637d859..7997600 100644
 +        },
 +        .rtcServers = std::vector<tgcalls::RtcServer>{makeReflectorServer(host, port, tag)},
 +        .encryptionKey = tgcalls::EncryptionKey(keyData, isOutgoing),
++        .videoCapture = videoCapture,
 +        .stateUpdated = [lastState](tgcalls::State state) {
 +            logMsg("Bridge", "state -> %s", stateName(state));
 +            lastState->store(static_cast<int>(state));
@@ -170,6 +243,7 @@ index 637d859..7997600 100644
 +        fprintf(stderr, "Error: unknown version '%s'\n", version.c_str());
 +        return 1;
 +    }
++    instance->setIncomingVideoOutput(videoSink);
 +    std::thread([fd, instance]() {
 +        for (;;) {
 +            uint32_t size = 0;
@@ -184,6 +258,9 @@ index 637d859..7997600 100644
 +    std::this_thread::sleep_for(std::chrono::seconds(duration));
 +    const int state = lastState->load();
 +    meter->report(state >= 0 ? stateName(static_cast<tgcalls::State>(state)) : "none", mediaStates->load());
++    printf("BRIDGE_VIDEO rx_video_frames=%d size=%dx%d\n", videoSink->frameCount(),
++           videoSink->lastWidth(), videoSink->lastHeight());
++    fflush(stdout);
 +    // The process is done; a clean teardown proves nothing here and can hang.
 +    _exit(0);
 +}
@@ -191,7 +268,7 @@ index 637d859..7997600 100644
  // ---------------------------------------------------------------------------
  // SignalingBridge
  // ---------------------------------------------------------------------------
-@@ -423,7 +592,7 @@ int main(int argc, char* argv[]) {
+@@ -423,7 +656,7 @@ int main(int argc, char* argv[]) {
          fprintf(stderr, "Error: --mode is required (p2p, reflector, group, or group-churn)\n");
          return 1;
      }
@@ -200,7 +277,7 @@ index 637d859..7997600 100644
          fprintf(stderr, "Error: --mode must be 'p2p', 'reflector', 'group', or 'group-churn'\n");
          return 1;
      }
-@@ -444,6 +613,9 @@ int main(int argc, char* argv[]) {
+@@ -444,6 +677,9 @@ int main(int argc, char* argv[]) {
          return 1;
      }
  
@@ -210,7 +287,7 @@ index 637d859..7997600 100644
      // Parse reflector address
      std::string reflectorHost;
      uint16_t reflectorPort = 0;
-@@ -461,6 +633,18 @@ int main(int argc, char* argv[]) {
+@@ -461,6 +697,18 @@ int main(int argc, char* argv[]) {
          }
      }
  
@@ -229,7 +306,7 @@ index 637d859..7997600 100644
      // Generate peer tags for reflector mode
      std::array<uint8_t, 16> callerPeerTag{};
      std::array<uint8_t, 16> calleePeerTag{};
-@@ -477,6 +661,7 @@ int main(int argc, char* argv[]) {
+@@ -477,6 +725,7 @@ int main(int argc, char* argv[]) {
      }
  
      // Register implementations

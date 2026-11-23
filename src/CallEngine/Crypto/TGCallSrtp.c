@@ -39,6 +39,15 @@ void TGSrtpContextInit(TGSrtpContext *ctx,
 	TGSrtpDerive(masterKey, masterSalt, 0x02, ctx->salt, sizeof(ctx->salt));
 }
 
+void TGSrtcpContextInit(TGSrtpContext *ctx,
+                        const uint8_t masterKey[TGSrtpKeyLength],
+                        const uint8_t masterSalt[TGSrtpSaltLength]) {
+	memset(ctx, 0, sizeof(*ctx));
+	TGSrtpDerive(masterKey, masterSalt, 0x03, ctx->encKey, sizeof(ctx->encKey));
+	TGSrtpDerive(masterKey, masterSalt, 0x04, ctx->authKey, sizeof(ctx->authKey));
+	TGSrtpDerive(masterKey, masterSalt, 0x05, ctx->salt, sizeof(ctx->salt));
+}
+
 void TGSrtpSplitExporter(const uint8_t exporter[60], int isClient,
                          uint8_t sendKey[TGSrtpKeyLength],
                          uint8_t sendSalt[TGSrtpSaltLength],
@@ -107,7 +116,10 @@ static void TGSrtpTag(const TGSrtpContext *ctx, const uint8_t *data,
 	HMAC_CTX *hmac = HMAC_CTX_new();
 	HMAC_Init_ex(hmac, ctx->authKey, sizeof(ctx->authKey), EVP_sha1(), NULL);
 	HMAC_Update(hmac, data, length);
-	HMAC_Update(hmac, roc, 4);
+	// SRTP authenticates the ROC after the packet; SRTCP carries its index
+	// inside the authenticated part and appends nothing (RFC 3711 3.4).
+	if (roc)
+		HMAC_Update(hmac, roc, 4);
 	HMAC_Final(hmac, digest, &digestLength);
 	HMAC_CTX_free(hmac);
 	memcpy(tag, digest, 10);
@@ -124,14 +136,32 @@ static int TGSrtpTagMatches(const TGSrtpContext *ctx, const uint8_t *data,
 	return differs == 0 ? 0 : -1;
 }
 
-/// RFC 3711 3.3.1: a sequence number far below the highest one belongs to the
-/// next ROC. 32768 is the window that separates reordering from a wrap.
+/// RFC 3711 appendix A: the ROC that puts this sequence number closest to the
+/// highest one seen. A late packet from before a wrap gets the old ROC, an
+/// early one after a wrap the next.
 static uint32_t TGSrtpRocForSequence(const TGSrtpContext *ctx, uint16_t seq) {
 	if (!ctx->haveHighest)
 		return 0;
-	if (seq < ctx->highestSeq && (uint16_t)(ctx->highestSeq - seq) > 32768)
+	if (ctx->highestSeq < 32768){
+		if (seq > ctx->highestSeq && seq - ctx->highestSeq > 32768 && ctx->roc > 0)
+			return ctx->roc - 1;
+		return ctx->roc;
+	}
+	if (seq < ctx->highestSeq - 32768)
 		return ctx->roc + 1;
 	return ctx->roc;
+}
+
+/// Only a packet past the highest one moves it: a retransmission or a late
+/// packet must not drag the counter back.
+static void TGSrtpAdvance(TGSrtpContext *ctx, uint32_t roc, uint16_t seq) {
+	uint64_t index = ((uint64_t)roc << 16) | seq;
+	uint64_t highest = ((uint64_t)ctx->roc << 16) | ctx->highestSeq;
+	if (ctx->haveHighest && index <= highest)
+		return;
+	ctx->roc = roc;
+	ctx->highestSeq = seq;
+	ctx->haveHighest = 1;
 }
 
 int TGSrtpProtect(TGSrtpContext *ctx, uint8_t *packet, size_t length,
@@ -158,9 +188,7 @@ int TGSrtpProtect(TGSrtpContext *ctx, uint8_t *packet, size_t length,
 	TGSrtpTag(ctx, packet, length, rocBytes, tag);
 	memcpy(packet + length, tag, 10);
 
-	ctx->roc = roc;
-	ctx->highestSeq = seq;
-	ctx->haveHighest = 1;
+	TGSrtpAdvance(ctx, roc, seq);
 	if (outLength)
 		*outLength = length + TGSrtpTagLength;
 	return 0;
@@ -193,9 +221,7 @@ int TGSrtpUnprotect(TGSrtpContext *ctx, uint8_t *packet, size_t length,
 	TGSrtpIv(ctx, ssrc, index, iv);
 	TGSrtpCtr(ctx, iv, packet + 12, plainLength - 12);
 
-	ctx->roc = roc;
-	ctx->highestSeq = seq;
-	ctx->haveHighest = 1;
+	TGSrtpAdvance(ctx, roc, seq);
 	if (outLength)
 		*outLength = plainLength;
 	return 0;
@@ -218,9 +244,8 @@ int TGSrtcpProtect(TGSrtpContext *ctx, uint8_t *packet, size_t length,
 	packet[length + 2] = (uint8_t)(word >> 8);
 	packet[length + 3] = (uint8_t)word;
 
-	uint8_t zero[4] = {0, 0, 0, 0};
 	uint8_t tag[10];
-	TGSrtpTag(ctx, packet, length + 4, zero, tag);
+	TGSrtpTag(ctx, packet, length + 4, NULL, tag);
 	memcpy(packet + length + 4, tag, 10);
 
 	if (outLength)
@@ -241,8 +266,7 @@ int TGSrtcpUnprotect(TGSrtpContext *ctx, uint8_t *packet, size_t length,
 		return -1;
 	uint32_t index = word & 0x7FFFFFFFu;
 
-	uint8_t zero[4] = {0, 0, 0, 0};
-	if (TGSrtpTagMatches(ctx, packet, plainLength + 4, zero,
+	if (TGSrtpTagMatches(ctx, packet, plainLength + 4, NULL,
 	                     packet + plainLength + 4) != 0)
 		return -1;
 

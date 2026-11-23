@@ -146,6 +146,13 @@
         receivedKeyframe = isKeyframe;
     };
 
+    // A delta frame before any keyframe is dropped; after one it goes through.
+    [depacketizer processRtpPacket:(const uint8_t *)rtpPkt.bytes length:rtpPkt.length];
+    XCTAssertFalse(received, @"no delta frame before the first keyframe");
+    uint8_t idr[] = { 0x80, 0x80 | 96, 0x03, 0xE7, 0, 0, 0, 1, 0x11, 0x22, 0x33, 0x44, 0x65, 0xAA };
+    [depacketizer processRtpPacket:idr length:sizeof(idr)];
+    XCTAssertTrue(received, @"keyframe emitted");
+    received = NO;
     [depacketizer processRtpPacket:(const uint8_t *)rtpPkt.bytes length:rtpPkt.length];
 
     XCTAssertTrue(received, @"depacketizer should emit frame on marker bit");
@@ -240,7 +247,7 @@
     uint8_t ppsBytes[] = { 0x68, 0xCE, 0x38, 0x80 };
     NSData *pps = [NSData dataWithBytes:ppsBytes length:sizeof(ppsBytes)];
 
-    NSData *stapPkt = [packetizer packetizeStapA:@[sps, pps] timestamp:ts isLastNal:YES];
+    NSData *stapPkt = [packetizer packetizeStapA:@[sps, pps] timestamp:ts isLastNal:NO];
     XCTAssertNotNil(stapPkt);
     XCTAssertEqual((int)stapPkt.length, 12 + 1 + (2 + (int)sizeof(spsBytes)) + (2 + (int)sizeof(ppsBytes)));
 
@@ -259,6 +266,9 @@
     };
 
     [depacketizer processRtpPacket:(const uint8_t *)stapPkt.bytes length:stapPkt.length];
+    XCTAssertFalse(received, @"parameter sets alone are no picture");
+    uint8_t idr[] = { 0x80, 0x80 | 96, 0, 2, 0x00, 0x04, 0x1E, 0xB0, 0xAA, 0xBB, 0xCC, 0xDD, 0x65, 0x01 };
+    [depacketizer processRtpPacket:idr length:sizeof(idr)];
 
     XCTAssertTrue(received);
     XCTAssertNotNil(receivedSps);
@@ -308,7 +318,49 @@
     XCTAssertTrue(outKeyframe);
     XCTAssertEqualObjects(outSps, sps);
     XCTAssertEqualObjects(outPps, pps);
-    XCTAssertEqual((int)outFrame.length, (4 + 4) + (4 + 3) + (4 + 1500));
+    // SPS and PPS travel in the format description; VideoToolbox rejects a
+    // sample that also carries them.
+    XCTAssertEqual((int)outFrame.length, 4 + 1500);
+}
+
+- (void)testPaddingIsCutAndPaddingOnlyPacketsCarryNothing {
+    TGCallVideoRtpDepacketizer *depacketizer = [[TGCallVideoRtpDepacketizer alloc] init];
+    __block NSData *frame = nil;
+    __block int frames = 0;
+    depacketizer.onFrameReceived = ^(NSData *avccFrame, uint32_t timestamp, BOOL isKeyframe, NSData *sps, NSData *pps) {
+        frame = avccFrame;
+        frames++;
+    };
+    // IDR of 3 bytes plus 4 bytes of padding, the last byte counting them.
+    uint8_t padded[] = { 0xA0, 0x80 | 96, 0, 1, 0, 0, 0, 9, 0, 0, 0, 1, 0x65, 0x11, 0x22, 0, 0, 0, 4 };
+    [depacketizer processRtpPacket:padded length:sizeof(padded)];
+    XCTAssertEqual(frames, 1);
+    XCTAssertEqual((int)frame.length, 4 + 3);
+    // WebRTC's bandwidth probe: nothing but 255 bytes of padding.
+    uint8_t probe[12 + 255] = { 0xA0, 96, 0, 2, 0, 0, 0, 10, 0, 0, 0, 1 };
+    probe[sizeof(probe) - 1] = 255;
+    [depacketizer processRtpPacket:probe length:sizeof(probe)];
+    XCTAssertEqual(frames, 1);
+}
+
+- (void)testLossDropsFramesUntilTheNextKeyframe {
+    TGCallVideoRtpDepacketizer *depacketizer = [[TGCallVideoRtpDepacketizer alloc] init];
+    __block int frames = 0;
+    depacketizer.onFrameReceived = ^(NSData *avccFrame, uint32_t timestamp, BOOL isKeyframe, NSData *sps, NSData *pps) {
+        frames++;
+    };
+    uint8_t idr[]   = { 0x80, 0x80 | 96, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0x65, 0x01 };
+    uint8_t delta[] = { 0x80, 0x80 | 96, 0, 2, 0, 0, 0, 2, 0, 0, 0, 1, 0x41, 0x02 };
+    [depacketizer processRtpPacket:idr length:sizeof(idr)];
+    [depacketizer processRtpPacket:delta length:sizeof(delta)];
+    XCTAssertEqual(frames, 2);
+    [depacketizer dropUntilKeyframe];
+    delta[7] = 3;
+    [depacketizer processRtpPacket:delta length:sizeof(delta)];
+    XCTAssertEqual(frames, 2, @"delta after a loss is dropped");
+    idr[7] = 4;
+    [depacketizer processRtpPacket:idr length:sizeof(idr)];
+    XCTAssertEqual(frames, 3, @"the next keyframe gets through");
 }
 
 - (void)testDepacketizerRejectsGarbage {
@@ -329,17 +381,23 @@
     XCTAssertFalse(received);
 }
 
-// Video calls are dev-only while they are unfinished: the dev build (the one
-// the host suite compiles, TG_DEV=1) follows the hardware, and the "This
-// device" row says so. scripts/check_release.sh checks the release side.
-- (void)testVideoCallsFollowHardwareInDevBuilds {
-    XCTAssertEqual([TGCapabilities canEncodeVideoCall], [TGCapabilities hasVideoCallHardware]);
+// Video calls follow the hardware on any iOS: H.264 wherever VideoToolbox's
+// functions are there, iOS 6 and 7 included, whatever the version says.
+// "This device" says so.
+- (void)testVideoCallsFollowHardwareAndSystem {
+    XCTAssertEqual([TGCapabilities canEncodeVideoCall],
+                   [TGCapabilities hasVideoCallHardware] || [TGCapabilities hasHardwareH264]);
+    XCTAssertTrue([TGCapabilities systemVersion] < 8.0, @"the shim plays iOS 7");
+    XCTAssertTrue([TGCapabilities hasHardwareH264], @"VideoToolbox is there, so H.264 is");
+    setenv("TG_SHIM_NO_VIDEOTOOLBOX", "1", 1);
+    XCTAssertFalse([TGCapabilities hasHardwareH264]);
+    unsetenv("TG_SHIM_NO_VIDEOTOOLBOX");
     BOOL listed = NO;
     for (TGCapability *row in [TGCapabilities all]) {
         if (![row.name isEqualToString:@"Video calls"]) continue;
         listed = YES;
-        XCTAssertEqual(row.available, [TGCapabilities hasVideoCallHardware]);
-        XCTAssertTrue([row.requirement rangeOfString:@"dev builds only"].location != NSNotFound);
+        XCTAssertEqual(row.available, [TGCapabilities canEncodeVideoCall]);
+        XCTAssertTrue([row.requirement rangeOfString:@"dev builds"].location == NSNotFound);
     }
     XCTAssertTrue(listed);
 }

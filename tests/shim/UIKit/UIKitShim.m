@@ -17,7 +17,12 @@ static UIDevice *TGSharedDevice = nil;
 	return TGSharedDevice;
 }
 - (NSString *)model { return @"iPhone"; }
-- (NSString *)systemVersion { return @"7.1.2"; }
+// The bench phone's version unless a run asks for another: call_bench --video
+// needs iOS 8 or later for video to be offered at all.
+- (NSString *)systemVersion {
+    const char *version = getenv("TG_SHIM_IOS");
+    return version ? @(version) : @"7.1.2";
+}
 @end
 
 #pragma mark - host gaps

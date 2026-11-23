@@ -1,6 +1,8 @@
 #!/bin/bash
-# libvpx 1.17.0 for video stickers (.webm VP9 with alpha): VP9 decoder only, no
-# VP8, no encoder. NEON through intrinsics; --disable-neon-asm because the .S
+# libvpx 1.17.0: the VP9 decoder for video stickers (.webm VP9 with alpha) and
+# VP8 both ways for video calls on devices without VideoToolbox (iOS 6 and 7).
+# Real-time only: the call encoder never uses the good/best modes, and leaving
+# them out keeps the archive smaller. NEON through intrinsics; --disable-neon-asm because the .S
 # files are ARM mode and machofix sets the Thumb bit on every pointer into __text.
 # Output: build/{armv7,arm64}/libs/libvpx.a. Headers stay in third_party/libvpx.
 set -e
@@ -31,7 +33,7 @@ for arch in armv7 arm64; do
 	rm -rf "$OBJ"; mkdir -p "$OBJ" "$ROOT/build/$arch/libs"; cd "$OBJ"
 	"$SRC/configure" --target="$arch-darwin-gcc" --libc="$SDK" \
 		--disable-neon-asm --disable-examples --disable-tools --disable-unit-tests --disable-docs \
-		--disable-vp8 --disable-vp9-encoder --enable-vp9-decoder \
+		--enable-vp8 --disable-vp9-encoder --enable-vp9-decoder --enable-realtime-only \
 		--enable-static --disable-shared > configure.log
 	make -j"$(sysctl -n hw.logicalcpu)" libvpx.a > make.log
 	cp -f libvpx.a "$ROOT/build/$arch/libs/libvpx.a"

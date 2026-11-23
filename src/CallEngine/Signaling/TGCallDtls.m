@@ -159,19 +159,23 @@ static int TGAcceptCertificate(int preverifyOk, X509_STORE_CTX *store) {
 }
 
 - (void)readApplicationData {
-	// SCTP INIT from the peer arrives here. This client has no data channel,
-	// so reading and dropping it is the whole job; leaving it unread fills
-	// OpenSSL's buffers and breaks the record layer.
-	uint8_t scratch[1200];
+	// SCTP for the data channel. Left unread it fills OpenSSL's buffers and
+	// breaks the record layer, so it is read even with no one listening.
+	uint8_t scratch[1500];
 	for (;;){
 		int got = SSL_read(self.ssl, scratch, sizeof(scratch));
-		if (got > 0)
-			continue;
-		int error = SSL_get_error(self.ssl, got);
-		if (error == SSL_ERROR_WANT_READ || error == SSL_ERROR_WANT_WRITE)
+		if (got <= 0)
 			return;
-		return;
+		if (self.onApplicationData)
+			self.onApplicationData(scratch, (size_t)got);
 	}
+}
+
+- (void)sendApplicationData:(const uint8_t *)bytes length:(size_t)length {
+	if (!self.ssl || !self.connected || !bytes || !length)
+		return;
+	if (SSL_write(self.ssl, bytes, (int)length) > 0)
+		[self drain];
 }
 
 - (void)pump {
@@ -241,6 +245,7 @@ static int TGAcceptCertificate(int preverifyOk, X509_STORE_CTX *store) {
 	self.sendRecord = nil;
 	self.onConnected = nil;
 	self.onFailure = nil;
+	self.onApplicationData = nil;
 }
 
 - (void)dealloc {

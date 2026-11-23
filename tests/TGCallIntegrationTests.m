@@ -246,6 +246,52 @@
     [[TGCall shared] teardown];
 }
 
+- (void)testOnlyVersionsTheStandChecksAreOffered {
+    // A peer took 3.0.0, which tgcalls does not have and this engine never
+    // spoke: the call connected and nothing came back.
+    [TGClient resetSentRequests];
+    [[TGCall shared] callUser:42];
+    NSDictionary *create = nil;
+    for (NSDictionary *request in [TGClient sentRequests])
+        if ([request[@"@type"] isEqualToString:@"createCall"])
+            create = request;
+    XCTAssertEqualObjects(create[@"protocol"][@"library_versions"], (@[@"9.0.0", @"5.0.0", @"2.7.7"]));
+    [[TGCall shared] teardown];
+}
+
+- (void)testACallCanBePlacedAfterOneTimedOut {
+    // Ended and Failed stay until the next call; the call screen asked for
+    // None and so placed nothing the second time in one launch.
+    [[TGCall shared] handleUpdate:@{
+        @"@type" : @"call", @"id" : @(7), @"user_id" : @(42LL), @"is_outgoing" : @YES,
+        @"state" : @{ @"@type" : @"callStateError",
+                      @"error" : @{ @"@type" : @"error", @"code" : @(4005000), @"message" : @"Call timeout expired" } },
+    }];
+    XCTAssertEqual([TGCall shared].state, TGCallStateFailed);
+    XCTAssertTrue([TGCall shared].canPlaceCall);
+    [TGClient resetSentRequests];
+    [[TGCall shared] callUser:42 video:NO];
+    XCTAssertEqual([TGCall shared].state, TGCallStatePending);
+    XCTAssertFalse([TGCall shared].canPlaceCall, @"one call at a time");
+    XCTAssertNil([TGCall shared].endReason, @"the last call's reason is gone");
+    [[TGCall shared] teardown];
+    [[TGCall shared] reset];
+}
+
+- (void)testReconnectingIsTwoSecondsWithoutThePeersAudio {
+    TGCall *call = [TGCall shared];
+    [call setValue:@(TGCallStateEstablished) forKey:@"state"];
+    double now = [NSProcessInfo processInfo].systemUptime;
+    [call setValue:@(now) forKey:@"lastAudioIn"];
+    XCTAssertFalse(call.isReconnecting);
+    [call setValue:@(now - 3) forKey:@"lastAudioIn"];
+    XCTAssertTrue(call.isReconnecting, @"the screen says Connecting...");
+    [call setValue:@0 forKey:@"lastAudioIn"];
+    XCTAssertFalse(call.isReconnecting, @"no audio yet is still connecting, not reconnecting");
+    [call teardown];
+    [call reset];
+}
+
 /// Feeding TGCall a callStatePending update must move it to Pending.
 - (void)testHandleUpdate_PendingState {
     NSDictionary *update = @{

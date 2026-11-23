@@ -760,6 +760,7 @@ APP_SRC_M := \
 	src/CallEngine/Signaling/TGCallV2Session.m \
 	src/CallEngine/Signaling/TGCallDtls.m \
 	src/CallEngine/Media/TGCallVideoRtp.m \
+	src/CallEngine/Media/TGCallVideoIntake.m \
 	src/Media/UIImage+WebP.m \
 	src/Media/TGPatternImage.m \
 	src/Media/TGStickerImage.m \
@@ -820,8 +821,18 @@ APP_SRC_C := \
 	src/Core/Platform/TGSampler.c \
 	src/Core/Platform/TGCrashGuard.c \
 	src/Compat/tlv_polyfill.c \
+	src/Compat/clock_compat.c \
 	src/CallEngine/Crypto/TGCallCrypto.c \
-	src/CallEngine/Crypto/TGCallSrtp.c
+	src/CallEngine/Crypto/TGCallSrtp.c \
+	src/CallEngine/Signaling/TGCallSctp.c \
+	src/CallEngine/Media/TGCallRtcp.c \
+	src/CallEngine/Media/TGCallVideoReorder.c \
+	src/CallEngine/Media/TGCallJitter.c \
+	src/CallEngine/Media/TGCallExpand.c \
+	src/CallEngine/Media/TGCallH264Config.c \
+	src/CallEngine/Media/TGCallPlayout.c \
+	src/CallEngine/Media/TGCallVP8Rtp.c \
+	src/CallEngine/Media/TGCallVP8Codec.c
 
 # Object mapping for armv7
 # Reached only from dev mode.

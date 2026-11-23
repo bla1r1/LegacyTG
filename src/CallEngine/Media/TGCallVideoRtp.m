@@ -164,6 +164,7 @@
     NSData *_cachedPps;
     uint16_t _lastSeq;
     BOOL _hasLastSeq;
+    BOOL _waitingForKeyframe;
 }
 @end
 
@@ -187,10 +188,30 @@
     _cachedSps = nil;
     _cachedPps = nil;
     _hasLastSeq = NO;
+    _waitingForKeyframe = YES;
+}
+
+- (BOOL)waitingForKeyframe {
+    return _waitingForKeyframe;
+}
+
+- (void)dropUntilKeyframe {
+    [_currentFrameNals removeAllObjects];
+    _currentFrameIsKeyframe = NO;
+    [_fuBuffer setLength:0];
+    _fuInProgress = NO;
+    _waitingForKeyframe = YES;
 }
 
 - (void)flushFrame {
     if (_currentFrameNals.count == 0) return;
+    // A delta frame after a loss refers to a picture the decoder never had;
+    // decoding it only smears the last good one. Wait for the next IDR.
+    if (_waitingForKeyframe && !_currentFrameIsKeyframe) {
+        [_currentFrameNals removeAllObjects];
+        return;
+    }
+    _waitingForKeyframe = NO;
 
     // Build AVCC frame: 4-byte length prefix before each NAL unit
     size_t totalLen = 0;
@@ -224,15 +245,17 @@
     uint8_t nalType = nalBytes[0] & 0x1F;
     NSData *nalData = [NSData dataWithBytes:nalBytes length:nalLength];
 
+    // Parameter sets go to the format description, not into the sample:
+    // VideoToolbox rejects a sample that carries them.
     if (nalType == TGCallNalUnitTypeSPS) {
         _cachedSps = nalData;
     } else if (nalType == TGCallNalUnitTypePPS) {
         _cachedPps = nalData;
-    } else if (nalType == TGCallNalUnitTypeSliceIDR) {
-        _currentFrameIsKeyframe = YES;
+    } else {
+        if (nalType == TGCallNalUnitTypeSliceIDR)
+            _currentFrameIsKeyframe = YES;
+        [_currentFrameNals addObject:nalData];
     }
-
-    [_currentFrameNals addObject:nalData];
 
     if (marker) {
         [self flushFrame];
@@ -257,10 +280,15 @@
         headerLen += 4 + 4 * extLen;
     }
 
-    if (length <= headerLen) return;
+    // WebRTC probes bandwidth with padding: the last byte counts what to cut,
+    // and a packet of nothing but padding carries no video at all.
+    size_t paddingLen = 0;
+    if ((bytes[0] & 0x20) != 0)
+        paddingLen = bytes[length - 1];
+    if (length <= headerLen + paddingLen) return;
 
     const uint8_t *payload = bytes + headerLen;
-    size_t payloadLen = length - headerLen;
+    size_t payloadLen = length - headerLen - paddingLen;
 
     _lastSeq = seq;
     _hasLastSeq = YES;

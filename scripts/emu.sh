@@ -234,7 +234,7 @@ walk_() {
 	local ipa=$ROOT/build/ipa/LegacyTG-armv7-dev.ipa sec secs want failed=
 	for sec in $(python3 -I "$planner" sections "$file"); do
 		if [ $# -gt 0 ]; then want=; for w in "$@"; do [ "$w" = "$sec" ] && want=1; done; [ -n "$want" ] || continue; fi
-		mkdir -p "$OUT" "$dest/$sec"; rm -rf "$OUT"/shot-* "$OUT"/*.bmp "$OUT/run.log" "$OUT/syslog.txt" "$OUT/.ended" "$OUT/stage"
+		mkdir -p "$OUT" "$dest/$sec"; rm -rf "$OUT/crashes" "$OUT"/shot-* "$OUT"/*.bmp "$OUT/run.log" "$OUT/syslog.txt" "$OUT/.ended" "$OUT/stage"
 		secs=$(python3 -I "$planner" plan "$file" "$sec" "$OUT")
 		mkdir -p "$OUT/stage/Payload/LegacyTG.app"; cp "$OUT/devwalk.txt" "$OUT/stage/Payload/LegacyTG.app/"
 		cp "$ipa" "$OUT/walk.ipa"; (cd "$OUT/stage" && zip -q "$OUT/walk.ipa" Payload/LegacyTG.app/devwalk.txt)
@@ -244,7 +244,13 @@ walk_() {
 		  [ -n "$s" ] || exit 0
 		  for _ in $(seq 30); do sleep 5; USBMUXD_SOCKET_ADDRESS=UNIX:$s idevice_id -l | grep -q . && break; done
 		  USBMUXD_SOCKET_ADDRESS=UNIX:$s idevicesyslog > "$OUT/syslog.txt" 2>&1 & p=$!
-		  until grep -q 'exit clean=' "$OUT/run.log" || [ -f "$OUT/.ended" ]; do sleep 2; done
+		  # A crash report has to come off while the device is up; it names the frame.
+		  until grep -q 'exit clean=' "$OUT/run.log" || [ -f "$OUT/.ended" ]; do
+			if grep -q 'Saved crashreport to .*LegacyTG' "$OUT/syslog.txt" 2>/dev/null && [ ! -d "$OUT/crashes" ]; then
+				mkdir -p "$OUT/crashes"; sleep 2
+				USBMUXD_SOCKET_ADDRESS=UNIX:$s idevicecrashreport -e -k -f LegacyTG "$OUT/crashes" >/dev/null 2>&1 || true
+			fi
+			sleep 2; done
 		  kill $p 2>/dev/null || true ) &
 		echo "[+] $sec: $(grep -c 'screenshot' "$OUT/walk.script") screens, ${secs} s"
 		lighttouch run "$id" --seconds "$secs" --no-audio --network direct --services \
@@ -253,8 +259,9 @@ walk_() {
 		local f; for f in "$OUT"/[0-9]*.bmp; do [ -f "$f" ] &&
 			sips -s format png "$f" --out "$dest/$sec/$(basename "${f%.bmp}").png" >/dev/null && rm "$f"; done
 		cp "$OUT/syslog.txt" "$dest/$sec/syslog.txt" 2>/dev/null || true
+		[ -d "$OUT/crashes" ] && cp -R "$OUT/crashes" "$dest/$sec/" && echo "[!] $sec: crash reports in $dest/$sec/crashes"
 		grep -q 'exit clean=true' "$OUT/run.log" || echo "[!] $sec: session did not end clean, see $OUT/run.log"
-		if grep -qE 'LegacyTG.*(Terminating|SIGABRT|unrecognized selector)' "$OUT/syslog.txt" 2>/dev/null; then
+		if grep -qE 'LegacyTG.*(Terminating|SIGABRT|unrecognized selector)|Saved crashreport to .*LegacyTG' "$OUT/syslog.txt" 2>/dev/null; then
 			failed+=" $sec"
 			echo "[!] $sec: LegacyTG died after $(grep -o 'devwalk: [^ ]*' "$OUT/syslog.txt" | tail -1)"
 		fi

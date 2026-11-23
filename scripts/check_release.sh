@@ -147,6 +147,23 @@ rm -f "$TMPBIN.sels"
 echo "[check_release] selector audit: PASSED"
 
 # -----------------------------------------------------------------
+# 1b) No weak import from libSystem. Against a modern SDK a function newer
+#    than iOS 6 links weak and dyld leaves it NULL on older systems: libvpx's
+#    clock_gettime branched to 0 on the first VP8 frame. src/Compat defines
+#    such functions strongly instead.
+# -----------------------------------------------------------------
+for arch in armv7 arm64; do
+	slice="$ROOT/build/$arch/app/LegacyTG.app/LegacyTG"
+	[ -f "$slice" ] || continue
+	weak=$(nm -m "$slice" | grep 'weak external' | grep '(from libSystem)' || true)
+	if [ -n "$weak" ]; then
+		echo "[check_release] $arch weak libSystem imports, NULL before the iOS that added them:"
+		echo "$weak"
+		exit 1
+	fi
+done
+
+# -----------------------------------------------------------------
 # 2) Dev-mode content gate: the linked binary must carry no dev symbols.
 #    Reuses the binary the selector audit built (same build, same path).
 # -----------------------------------------------------------------

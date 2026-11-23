@@ -68,7 +68,7 @@ already exist.
 |---|---|---|
 | M20 Payments, Stars and gifts | `partial` | Pay path, Premium purchase, Stars, gifts, TON, Passport, StoreKit. |
 | M21 Group-call audio | `planned` | RTP mixing and AudioUnit playback in the group-call screen. |
-| M22 Video calls | `partial` | Dev-only engine; picture to an official client, release gate. |
+| M22 Video calls | `partial` | H.264 and VP8 engine, data channel, UI and release gate in; device call to an official app left. |
 | M26 Chat search filters | `planned` | Sender/media/date chips, result opens the hit, search tokens, global scopes. |
 | M28 Profile cover, QR and Premium badge | `partial` | Accent gradient, background emoji, third-party verifier note. QR screen, star level badge and rating details sheet done. |
 | M29 Profile media tabs | `partial` | GIF and Polls panes, photo/video split, month sections, calendar, counts, multi-select. Pane search done. |
@@ -135,15 +135,49 @@ recording flags are already wired.
 
 ## M22: Video calls
 
-- [ ] `partial` `TGCallVideoEngine` captures camera frames, sends H.264 RTP and
-  draws the remote preview; `canEncodeVideoCall` returns NO without `TG_DEV`.
-- [ ] `planned` A call to an official client and back, plus a video stand on
-  the Mac; neither exists, so the engine has only been exercised locally.
-- [ ] `planned` Release gate in `TGCapabilities` and the "in progress" label
-  replaced by the real tile.
-
-**Blocked by:** the missing second-party test and the same tgcalls/WebRTC
-stack limit as M21.
+- [x] `done` H.264 over the 9.0.0 session: video content in NegotiateChannels,
+  per-stream SRTP, RTCP receiver reports, PLI and NACK both ways, SRTCP keyed
+  from labels 3-5.
+- [x] `done` SCTP data channel for MediaState (`TGCallSctp`), so camera and
+  mute state reach the peer.
+- [x] `done` Video stand on the Mac: `CALL_BENCH_VIDEO=1 scripts/call_bench.sh
+  9.0.0` against `tgcalls_cli --mode bridge --video` (patch in
+  `tests/call_bench/tgcalls_cli_bridge.patch`); both roles decode ~378 of 400
+  frames each way.
+- [x] `done` VP8 through libvpx where VideoToolbox is not public (iOS 6 and 7):
+  offered alone there, taken from the peer's offer; `CALL_BENCH_CODEC=vp8`.
+- [x] `done` Release gate: Legacy+ on any iOS; the Video tile, the call
+  screen's Video button, the preview sheet and incoming video calls.
+- [x] `done` Bad-network stand: `CALL_BENCH_NET="--loss 8 --delay 120 --jitter
+  100 --rate 300"` puts a lossy, jittery, capped link between us and the
+  reflector; the bench reports audio dropouts (ours, the old engine's, the
+  official side's) and video freezes. Playout buffer with FEC, RTT-based NACK
+  waits, repeated PLI, loss-based send rate and a resend cap came out of it.
+- [x] `done` Audio expand for long losses (`TGCallExpand`), 60 ms packets out,
+  FEC share from the peer's reports: 40 ms of dropouts per 20 s at 8% loss
+  where the official client has 5.
+- [x] `done` Hardware H.264 on iOS 6 and 7: VideoToolbox's encoder and decoder
+  are there though not public (iPod touch 4, iOS 6.1.6, `bench/codec`: 288x352
+  encode 4.4 ms, decode 4.0 ms a frame, against VP8's 16.4 and 5.6 ms). Before
+  iOS 8 the peer's frames go through VTDecompressionSession into the GL view;
+  on iOS 6 the parameter sets travel through the avcC atom
+  (`TGCallH264Config`), since the iOS 7 calls for them are NULL there.
+  `bench/callvideo` runs the call's whole H.264 path on the phone: 90 of 90
+  frames decoded and on screen. VP8 stays for a peer that offers no H.264.
+- [x] `done` Live calls iPod touch 4 (iOS 6.1.6, hardware H.264) to official
+  iOS: video and audio both ways; the A4 is in the video gate when
+  VideoToolbox is there. Found on the way: every second call in one launch
+  never started, the audio thread overran on the A4, the reader thread
+  dropped audio behind video.
+- [x] `done` Network changes on the reflector path: `--switch-at/--outage` on
+  the stand; the screen shows Connecting... while nothing comes.
+- [ ] `planned` P2P: own socket, host and STUN candidates from the servers in
+  `callStateReady`, direct ICE checks, fall back to the reflector, honour
+  `allow_p2p`.
+- [ ] `planned` Signalling 12.0.0/13.0.0 (compressed, over SCTP). 10/11/18/19
+  speak SDP over a PeerConnection and are another stack.
+- [ ] `planned` A call from a device to the official iOS and Android apps and
+  back, both roles, front and back camera, phone held both ways.
 
 **Closes:** `calls.md` — Private video calls, Video call engine, Local/remote
 video layout, Switch camera; `profile.md` — Video call tile.

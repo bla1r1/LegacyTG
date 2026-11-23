@@ -822,6 +822,19 @@ static NSUInteger TGChatsIndex(UITabBarController *tabs) {
 		return YES;
 	}
 
+	// itglegacy://videocall/<chat title> - a video call to that private chat (id > 0).
+	if ([host isEqualToString:@"videocall"]){
+		NSString *title = [arg stringByReplacingPercentEscapesUsingEncoding:NSUTF8StringEncoding];
+		[[TGClient shared] searchChatsForQuery:title completion:^(NSArray *chats){
+			for (NSDictionary *c in chats)
+				if ([c[@"id"] longLongValue] > 0 && [c[@"title"] isEqualToString:title])
+					return [TGCallViewController presentForUserId:[c[@"id"] longLongValue] name:title
+					                                     outgoing:YES video:YES];
+			NSLog(@"videocall: no private chat named %@", title);
+		}];
+		return YES;
+	}
+
 	// itglegacy://call/<user id> - placing a call needs a tap otherwise.
 	if ([host isEqualToString:@"call"]){
 		dispatch_async(dispatch_get_main_queue(), ^{

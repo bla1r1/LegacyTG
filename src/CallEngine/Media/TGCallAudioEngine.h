@@ -19,16 +19,22 @@
 
 @property (nonatomic, copy) void (^onOutgoingOpusFrame)(NSData *opusFrame);
 
+/// The peer's loss report on our audio (of 256). The share of each packet
+/// spent on the FEC copy of the one before follows it; any thread, applied
+/// on the next packet. Without reports (5.0.0) it stays at 10%.
+- (void)peerReportedLoss:(uint8_t)fraction;
+
 - (BOOL)start;
 - (void)stop;
 
 /// Pass an incoming Opus audio frame to be decoded and played through the speaker/earpiece.
 - (void)handleIncomingOpusFrame:(NSData *)opusFrame;
 
-/// The same, straight off the decrypted packet buffer. The call path reaches
-/// this 50 times a second and an NSData per frame is an allocation it does
-/// not need: the bytes are only read, and only here.
-- (void)handleIncomingOpusBytes:(const uint8_t *)bytes length:(size_t)length;
+/// The same, straight off the decrypted packet buffer, with the RTP sequence
+/// and timestamp the playout buffer orders and paces it by. Copied into the
+/// buffer; decoded on the audio thread when its turn comes.
+- (void)handleIncomingOpusBytes:(const uint8_t *)bytes length:(size_t)length
+					   sequence:(uint16_t)sequence timestamp:(uint32_t)timestamp;
 
 @end
 

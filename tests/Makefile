@@ -39,10 +39,15 @@ CFLAGS  := \
     -I$(ROOT)/third_party/libtgvoip \
     -I$(TESTS) \
     -I$(OPENSSL)/include \
+    -I$(ROOT)/third_party/libvpx/include \
     -fobjc-arc \
     -fmodules \
     -O0 -g \
     -DDEBUG=1 -DTG_DEV=1
+
+# VP8 for calls without VideoToolbox: Homebrew's libvpx, the same 1.17.0 the
+# device builds (scripts/build_libvpx.sh), linked static.
+VPX_HOST := $(shell brew --prefix libvpx 2>/dev/null || echo /opt/homebrew/opt/libvpx)/lib/libvpx.a
 
 LDFLAGS := \
     $(if $(SDK),-isysroot $(SDK),) \
@@ -51,6 +56,7 @@ LDFLAGS := \
     -lcrypto \
     -lssl \
     -lwebp \
+    $(VPX_HOST) \
     -lz \
     -lc++ \
     -framework Foundation \
@@ -60,7 +66,7 @@ LDFLAGS := \
 # ─── sources ──────────────────────────────────────────────────────────────────
 
 # Pure C (no ARC)
-C_SRCS := src/CallEngine/Crypto/TGCallCrypto.c src/CallEngine/Crypto/TGCallSrtp.c $(SRC)/Media/TGSoftVideoClock.c
+C_SRCS := src/CallEngine/Crypto/TGCallCrypto.c src/CallEngine/Crypto/TGCallSrtp.c src/CallEngine/Signaling/TGCallSctp.c src/CallEngine/Media/TGCallRtcp.c src/CallEngine/Media/TGCallVideoReorder.c src/CallEngine/Media/TGCallJitter.c src/CallEngine/Media/TGCallExpand.c src/CallEngine/Media/TGCallH264Config.c src/CallEngine/Media/TGCallVP8Rtp.c src/CallEngine/Media/TGCallVP8Codec.c $(SRC)/Media/TGSoftVideoClock.c
 
 # ObjC sources under test
 OBJC_SRCS := \
@@ -72,6 +78,7 @@ OBJC_SRCS := \
     src/CallEngine/Signaling/TGCallV2Session.m \
     src/CallEngine/Signaling/TGCallDtls.m \
     src/CallEngine/Media/TGCallVideoRtp.m \
+	src/CallEngine/Media/TGCallVideoIntake.m \
     src/CallEngine/Media/TGCallVideoEngine.mm \
     src/CallEngine/TGCall.mm \
     src/Features/Chat/Views/TGMessageLayout.mm \
@@ -400,6 +407,7 @@ TEST_SRCS := \
     $(TESTS)/TGCallIceTests.m \
     $(TESTS)/TGCallReflectorTests.m \
     $(TESTS)/TGCallV2Tests.m \
+    $(TESTS)/TGCallV2VideoTests.m \
     $(TESTS)/TGCallIntegrationTests.m \
     $(TESTS)/TGCallVideoTests.m \
     $(TESTS)/TGLibTgvoipHooksTests.m \
@@ -719,10 +727,10 @@ $(SIM_BINARY): $(SIM_BINARY_DEPS)
 	    -o $@
 	@echo "  Built $(notdir $@)"
 
-$(BUILD)/call_bench: $(TESTS)/call_bench.mm $(C_SRCS) $(OBJC_SRCS) $(TEST_HELPER_SRCS)
+$(BUILD)/call_bench: $(TESTS)/call_bench.mm $(C_SRCS) $(OBJC_SRCS) $(TEST_HELPER_SRCS) $(ROOT)/src/CallEngine/Media/TGCallPlayout.c
 	@mkdir -p $(BUILD)
 	$(CLANG) $(CFLAGS) -I$(OPUS)/include/opus \
-	    $(C_SRCS) \
+	    $(C_SRCS) $(ROOT)/src/CallEngine/Media/TGCallPlayout.c \
 	    $(OBJC_SRCS) \
 	    $(TEST_HELPER_SRCS) \
 	    $(TESTS)/call_bench.mm \

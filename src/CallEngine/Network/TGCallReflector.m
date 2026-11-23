@@ -92,6 +92,12 @@
 	struct timeval timeout = { 0, 100000 };   // 100 ms
 	setsockopt(self.socketHandle, SOL_SOCKET, SO_RCVTIMEO,
 			   &timeout, sizeof(timeout));
+	// A keyframe of the peer's video lands as 10-20 datagrams at once; with
+	// the default buffer the audio behind them was dropped by the kernel
+	// while this thread was busy (100 of ~500 audio packets reached an iPod
+	// touch 4 in a video call).
+	int bufferSize = 512 * 1024;
+	setsockopt(self.socketHandle, SOL_SOCKET, SO_RCVBUF, &bufferSize, sizeof(bufferSize));
 
 	NSLog(@"TGCallReflector: %@:%u, our tag %08x", self.host, self.port, self.localTag);
 
@@ -213,6 +219,7 @@
 	// a view over it and is only read inside the call, so nothing is copied.
 	uint8_t buffer[2048];
 	uint32_t received = 0;
+	[NSThread setThreadPriority:0.9];
 	for (;;) {
 		[_lifecycle lock];
 		BOOL stopping = _stopping;
@@ -227,7 +234,19 @@
 			// shutdown cannot wake an unconnected UDP socket.
 			if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
 				continue;
-			break;
+			// Anything else while the socket is open is the network, not
+			// the call: Wi-Fi going away gives ENETDOWN and friends. Ending
+			// the thread here left the call deaf after the network came back;
+			// waiting it out is what lets the reflector, which knows us by
+			// tag and not by address, pick the call up again (20 s outages
+			// with a new address survive on the stand).
+			if (errno == EBADF || errno == ENOTSOCK)
+				break;
+			static int told;
+			if (told++ < 3)
+				NSLog(@"TGCallReflector: recv failed (%d), waiting for the network", errno);
+			usleep(100000);
+			continue;
 		}
 		if (got == 0)
 			continue;   // an empty datagram, not end of stream

@@ -18,6 +18,7 @@
 @property (nonatomic, assign) int64_t userId;
 @property (nonatomic, strong) NSString *peerName;
 @property (nonatomic, assign) BOOL outgoing;
+@property (nonatomic, assign) BOOL video;
 
 @property (nonatomic, strong) UIView *bgContainer;
 @property (nonatomic, strong) CAGradientLayer *bgLayer;
@@ -55,6 +56,11 @@
 @property (nonatomic, strong) UIView *remoteVideoContainer;
 @property (nonatomic, strong) UIView *pipContainer;
 @property (nonatomic, strong) UIButton *flipCameraBtn;
+
+/// Official's "Video Preview": your camera before it goes to the other side.
+@property (nonatomic, strong) UIView *videoPreview;
+@property (nonatomic, strong) UIView *videoPreviewFrame;
+@property (nonatomic, strong) UIButton *videoPreviewCamera;
 
 @property (nonatomic, strong) NSTimer *ticker;
 /// When the call was answered, for the rating prompt after it; TGCall's own
@@ -173,6 +179,10 @@ static UIImage *TGCallCircleImage(CGFloat side, UIColor *colour, TGCallCircleSty
 }
 
 + (void)presentForUserId:(int64_t)userId name:(NSString *)name outgoing:(BOOL)outgoing {
+    [self presentForUserId:userId name:name outgoing:outgoing video:NO];
+}
+
++ (void)presentForUserId:(int64_t)userId name:(NSString *)name outgoing:(BOOL)outgoing video:(BOOL)video {
     dispatch_async(dispatch_get_main_queue(), ^{
         UIWindow *window = [UIApplication sharedApplication].keyWindow;
         if (!window.rootViewController) {
@@ -194,6 +204,7 @@ static UIImage *TGCallCircleImage(CGFloat side, UIColor *colour, TGCallCircleSty
 
         TGCallViewController *screen = [[TGCallViewController alloc]
                 initWithUserId:userId name:name outgoing:outgoing];
+        screen.video = video;
         [top presentViewController:screen animated:YES completion:nil];
     });
 }
@@ -308,9 +319,7 @@ static UIImage *TGCallCircleImage(CGFloat side, UIColor *colour, TGCallCircleSty
               forControlEvents:UIControlEventTouchUpInside];
     [self.view addSubview:self.backButton];
 
-    // Shown wherever the hardware could do it; a release build answers the
-    // tap with "in progress" (toggleVideo) until video calls are finished.
-    BOOL canVideo = [TGCapabilities hasVideoCallHardware];
+    BOOL canVideo = [TGCapabilities canEncodeVideoCall];
 
     // Not "unmute": the icon table draws that one as the notifications bell.
     self.speakerBtn = [self createButtonWithTitle:@"Speaker" icon:@"speaker"];
@@ -371,8 +380,12 @@ static UIImage *TGCallCircleImage(CGFloat side, UIColor *colour, TGCallCircleSty
 
     // A screen presented again from the minimised bar must not place a second
     // call: TGCall already has one.
-    if (self.outgoing && [TGCall shared].state == TGCallStateNone)
-        [[TGCall shared] callUser:self.userId];
+    if (self.outgoing && [TGCall shared].canPlaceCall)
+        [[TGCall shared] callUser:self.userId video:self.video];
+    // A video call is a speakerphone call, as in official: the phone is held
+    // out in front, not at the ear.
+    if ([TGCall shared].isVideoCall && !self.speakerOn)
+        [self toggleSpeaker];
 
     [self applyState:[TGCall shared].state];
 #if TG_DEV
@@ -395,6 +408,8 @@ static UIImage *TGCallCircleImage(CGFloat side, UIColor *colour, TGCallCircleSty
     // The same row variant the call state chose, at the new width.
     [self updateLayoutForCallActive:self.callRowActive];
     [self updateVideoLayoutAnimated:NO];
+    if (self.videoPreview.superview)
+        [self layoutVideoPreview];
 }
 
 - (void)viewWillDisappear:(BOOL)animated {
@@ -545,7 +560,7 @@ static UIImage *TGCallCircleImage(CGFloat side, UIColor *colour, TGCallCircleSty
     // thumb goes for, and it should not be somewhere else on the screen.
     NSMutableArray *row = [NSMutableArray arrayWithObject:self.speakerBtn];
     NSMutableArray *captions = [NSMutableArray arrayWithObject:self.speakerLbl];
-    if ([TGCapabilities hasVideoCallHardware]){
+    if ([TGCapabilities canEncodeVideoCall]){
         [row addObject:self.videoBtn];
         [captions addObject:self.videoLbl];
     } else {
@@ -582,7 +597,8 @@ static UIImage *TGCallCircleImage(CGFloat side, UIColor *colour, TGCallCircleSty
     switch (state){
         case TGCallStatePending:
             [self setStatusText:(self.outgoing ? TGLocalized([TGCall shared].pendingStatus ?: @"Contacting...")
-                                               : TGLocalized(@"Incoming call"))];
+                                               : [TGCall shared].isVideoCall ? TGLocalized(@"Incoming Video Call")
+                                                                             : TGLocalized(@"Incoming call"))];
             [self setStatusPulsing:YES];
             break;
         case TGCallStateExchangingKeys:
@@ -614,6 +630,9 @@ static UIImage *TGCallCircleImage(CGFloat side, UIColor *colour, TGCallCircleSty
         default:
             break;
     }
+    // The camera of a video call may have started since the last layout,
+    // after the access prompt.
+    [self updateVideoLayoutAnimated:NO];
 }
 
 - (NSString *)emojiKeyText {
@@ -752,7 +771,7 @@ static UIImage *TGCallCircleImage(CGFloat side, UIColor *colour, TGCallCircleSty
 - (void)tick {
     if ([TGCall shared].state != TGCallStateEstablished)
         return;
-    self.statusLabel.text = [self talkTimeText];
+    self.statusLabel.text = [TGCall shared].isReconnecting ? @"Connecting..." : [self talkTimeText];
 }
 
 #pragma mark - controls
@@ -770,13 +789,159 @@ static UIImage *TGCallCircleImage(CGFloat side, UIColor *colour, TGCallCircleSty
 
 - (void)toggleVideo {
     TGCall *call = [TGCall shared];
-    if (![TGCapabilities canEncodeVideoCall]) {
-        [TGAlertSheet showMessage:@"An error occurred."
-                            title:@"Video" inView:self.view];
+    if (call.videoActive){
+        [call setVideoEnabled:NO];
+        [self refreshControls];
+        [self updateVideoLayoutAnimated:YES];
         return;
     }
-    BOOL willEnable = !call.videoActive;
-    [call setVideoEnabled:willEnable];
+    if (!call.videoAvailable)
+        return;
+    if (![call startCameraPreview]){
+        [self showCameraAccessDenied];
+        return;
+    }
+    [self showVideoPreview];
+}
+
+- (void)showCameraAccessDenied {
+    [TGAlertSheet showConfirm:TGLocalized(@"Telegram needs access to your camera to make video calls.\n\nPlease go to Settings > Privacy > Camera and set Telegram to ON.")
+                        title:TGLocalized(@"Please Allow Access")
+                       action:TGLocalized(@"Settings")
+                  destructive:NO
+                       inView:self.view
+                    onConfirm:^{
+        // iOS 8 has the app's own Settings page; before it there is no URL
+        // that reaches Privacy, so the alert alone has to say where.
+        if (&UIApplicationOpenSettingsURLString != NULL)
+            [[UIApplication sharedApplication] openURL:
+                    [NSURL URLWithString:UIApplicationOpenSettingsURLString]];
+    }];
+}
+
+/// Official asks with a full-screen preview of the camera before the first
+/// frame goes out: Cancel, the picture, the camera choice, Continue.
+- (void)showVideoPreview {
+    TGTheme *theme = [TGTheme shared];
+    if (!self.videoPreview){
+        UIView *sheet = [[UIView alloc] initWithFrame:self.view.bounds];
+        sheet.backgroundColor = [theme mediaViewerBackdropColour];
+        sheet.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+
+        self.videoPreviewFrame = [[UIView alloc] initWithFrame:CGRectZero];
+        self.videoPreviewFrame.clipsToBounds = YES;
+        self.videoPreviewFrame.layer.cornerRadius = TGMetricCornerCard;
+        [sheet addSubview:self.videoPreviewFrame];
+
+        UILabel *title = [[UILabel alloc] initWithFrame:CGRectZero];
+        title.tag = 0xF1;
+        title.text = TGLocalized(@"Video Preview");
+        title.font = TGFontHeader();
+        title.textColor = [theme onMediaColour];
+        title.textAlignment = NSTextAlignmentCenter;
+        title.backgroundColor = [UIColor clearColor];
+        [sheet addSubview:title];
+
+        UIButton *cancel = [UIButton buttonWithType:UIButtonTypeCustom];
+        cancel.tag = 0xF2;
+        [cancel setTitle:TGLocalized(@"Cancel") forState:UIControlStateNormal];
+        [cancel setTitleColor:[theme onMediaColour] forState:UIControlStateNormal];
+        cancel.titleLabel.font = TGFontRow();
+        cancel.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeft;
+        [cancel addTarget:self action:@selector(cancelVideoPreview)
+                forControlEvents:UIControlEventTouchUpInside];
+        [sheet addSubview:cancel];
+
+        // Official's wheel offers Phone Screen, Front Camera and Back Camera.
+        // Screen sharing cannot run here, so the camera choice is one button
+        // that names the camera in use and flips to the other.
+        self.videoPreviewCamera = [UIButton buttonWithType:UIButtonTypeCustom];
+        [self.videoPreviewCamera setTitleColor:[theme onMediaColour] forState:UIControlStateNormal];
+        self.videoPreviewCamera.titleLabel.font = TGFontRow();
+        [self.videoPreviewCamera addTarget:self action:@selector(flipVideoPreview)
+                         forControlEvents:UIControlEventTouchUpInside];
+        [sheet addSubview:self.videoPreviewCamera];
+
+        UIButton *go = [UIButton buttonWithType:UIButtonTypeCustom];
+        go.tag = 0xF3;
+        go.backgroundColor = [theme accentColour];
+        go.layer.cornerRadius = TGMetricCornerControl;
+        [go setTitle:TGLocalized(@"Continue") forState:UIControlStateNormal];
+        [go setTitleColor:[theme onAccentColour] forState:UIControlStateNormal];
+        go.titleLabel.font = TGFontRowStrong();
+        [go addTarget:self action:@selector(confirmVideoPreview)
+                forControlEvents:UIControlEventTouchUpInside];
+        [sheet addSubview:go];
+
+        self.videoPreview = sheet;
+    }
+    [self updateVideoPreviewCameraTitle];
+    UIView *camera = [TGCall shared].videoEngine.localPreviewView;
+    [self.videoPreviewFrame addSubview:camera];
+    self.videoPreview.frame = self.view.bounds;
+    [self layoutVideoPreview];
+    self.videoPreview.alpha = TGAlphaTransparent;
+    [self.view addSubview:self.videoPreview];
+    [UIView animateWithDuration:TGAnimationDurationFast animations:^{
+        self.videoPreview.alpha = TGAlphaOpaque;
+    }];
+}
+
+- (void)layoutVideoPreview {
+    CGRect b = self.videoPreview.bounds;
+    CGFloat statusTop = [self respondsToSelector:@selector(topLayoutGuide)]
+            ? self.topLayoutGuide.length : 0;
+    CGFloat gutter = TGMetricPadMedium;
+    CGFloat width = b.size.width - TGDoubled(gutter);
+    [self.videoPreview viewWithTag:0xF2].frame = CGRectMake(gutter, statusTop,
+            TGMetricCallLabelWidth, TGMetricRow);
+    [self.videoPreview viewWithTag:0xF1].frame = CGRectMake(gutter, statusTop, width, TGMetricRow);
+
+    CGFloat buttonY = b.size.height - TGMetricPadLarge - TGMetricButtonHeight;
+    [self.videoPreview viewWithTag:0xF3].frame = CGRectMake(gutter, buttonY, width, TGMetricButtonHeight);
+    CGFloat cameraY = buttonY - TGMetricPadSmall - TGMetricRow;
+    self.videoPreviewCamera.frame = CGRectMake(gutter, cameraY, width, TGMetricRow);
+
+    CGFloat top = statusTop + TGMetricRow + TGMetricPadSmall;
+    self.videoPreviewFrame.frame = CGRectMake(gutter, top, width,
+            cameraY - TGMetricPadSmall - top);
+    for (UIView *camera in self.videoPreviewFrame.subviews)
+        camera.frame = self.videoPreviewFrame.bounds;
+}
+
+- (void)updateVideoPreviewCameraTitle {
+    BOOL front = [TGCall shared].videoEngine.cameraPosition != AVCaptureDevicePositionBack;
+    [self.videoPreviewCamera setTitle:(front ? TGLocalized(@"Front Camera") : TGLocalized(@"Back Camera"))
+                             forState:UIControlStateNormal];
+}
+
+- (void)flipVideoPreview {
+    [[TGCall shared] switchCamera];
+    [self updateVideoPreviewCameraTitle];
+}
+
+- (void)dismissVideoPreview {
+    UIView *sheet = self.videoPreview;
+    [UIView animateWithDuration:TGAnimationDurationFast animations:^{
+        sheet.alpha = TGAlphaTransparent;
+    } completion:^(BOOL done){
+        [sheet removeFromSuperview];
+        sheet.alpha = TGAlphaOpaque;
+        [self updateVideoLayoutAnimated:NO];
+    }];
+}
+
+- (void)cancelVideoPreview {
+    [[TGCall shared] stopCameraPreview];
+    [self dismissVideoPreview];
+}
+
+- (void)confirmVideoPreview {
+    TGCall *call = [TGCall shared];
+    [call setVideoEnabled:YES];
+    if (!self.speakerOn)
+        [self toggleSpeaker];
+    [self dismissVideoPreview];
     [self refreshControls];
     [self updateVideoLayoutAnimated:YES];
 }
@@ -787,7 +952,9 @@ static UIImage *TGCallCircleImage(CGFloat side, UIColor *colour, TGCallCircleSty
 
 - (void)updateVideoLayoutAnimated:(BOOL)animated {
     TGCall *call = [TGCall shared];
-    BOOL hasLocalVideo = call.videoActive;
+    // The camera also runs while an outgoing video call rings, and the picture
+    // shows then too; the preview sheet borrows the same view while it is up.
+    BOOL hasLocalVideo = call.videoEngine.isCapturing && !self.videoPreview.superview;
     BOOL hasRemoteVideo = call.peerVideoActive && call.videoEngine && call.videoEngine.hasRemoteVideo;
 
     CGRect b = self.view.bounds;
@@ -816,7 +983,7 @@ static UIImage *TGCallCircleImage(CGFloat side, UIColor *colour, TGCallCircleSty
         }
 
         UIView *localPreview = call.videoEngine.localPreviewView;
-        if (localPreview) {
+        if (localPreview && !self.videoPreview.superview) {
             localPreview.frame = self.pipContainer.bounds;
             localPreview.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
             if (localPreview.superview != self.pipContainer) {
@@ -829,6 +996,8 @@ static UIImage *TGCallCircleImage(CGFloat side, UIColor *colour, TGCallCircleSty
 
     [self.view bringSubviewToFront:self.pipContainer];
     [self.view bringSubviewToFront:self.flipCameraBtn];
+    if (self.videoPreview.superview)
+        [self.view bringSubviewToFront:self.videoPreview];
 
     if (hasLocalVideo) {
         self.pipContainer.hidden = NO;
@@ -900,6 +1069,12 @@ static UIImage *TGCallCircleImage(CGFloat side, UIColor *colour, TGCallCircleSty
 	[self setGlyph:mic activeGlyph:micActive on:self.micBtn active:muted];
 	[self setGlyph:spk activeGlyph:spkActive on:self.speakerBtn active:self.speakerOn];
 	[self setGlyph:vid activeGlyph:vidActive on:self.videoBtn active:videoActive];
+	// Until the call has a 9.0.0 session there is no channel for a picture;
+	// an older peer never gets one.
+	BOOL videoPossible = [TGCall shared].videoAvailable;
+	self.videoBtn.enabled = videoPossible;
+	self.videoBtn.alpha = videoPossible ? TGAlphaOpaque : TGAlphaDisabled;
+	self.videoLbl.alpha = self.videoBtn.alpha;
 
 	self.micLbl.text = muted ? @"Unmute" : @"Mute";
 	self.speakerLbl.text = @"Speaker";

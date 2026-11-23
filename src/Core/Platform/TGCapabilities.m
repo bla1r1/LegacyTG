@@ -1,6 +1,8 @@
 #import "TGCapabilities.h"
 #import <UIKit/UIKit.h>
 #import <CoreText/CoreText.h>
+#import <VideoToolbox/VideoToolbox.h>
+#include <stdlib.h>
 
 @implementation TGCapability
 @end
@@ -85,20 +87,31 @@ static void TGSetWanted(NSString *key, BOOL wanted) {
 }
 
 + (BOOL)hasVideoCallHardware {
-	// The single-core A4 cannot encode and decode a call's video while the
-	// audio runs; making it fit would mean cutting the pipeline down the way
-	// stickers were cut for the iPod, and that is not planned.
+	// Dual-core A5 and later: enough CPU for VP8 in software when the peer
+	// offers no H.264.
 	return [TGDevice tier] > TGDeviceTierVintage;
 }
 
 + (BOOL)canEncodeVideoCall {
-#if TG_DEV
-	return [self hasVideoCallHardware];
-#else
-	// Video calls are in progress. A release offers no video formats in the
-	// call's signalling, so the other side never sends any.
-	return NO;
+	// Dual-core A5 and later on any iOS: H.264 through VideoToolbox, VP8 in
+	// software when the peer offers no H.264. The single-core A4 only with
+	// VideoToolbox: on an iPod touch 4 it encodes a 288x352 frame in 4.4 ms
+	// and decodes one in 4.0, where VP8 took 16.4 and 5.6 of its one core.
+	return [self hasVideoCallHardware] || [self hasHardwareH264];
+}
+
++ (BOOL)hasHardwareH264 {
+	// Public from iOS 8, but iOS 6 and 7 carry the same encoder and decoder:
+	// on an iPod touch 4 with 6.1.6 both ran, 4.4 and 4.0 ms for a 288x352
+	// frame, where VP8 in software took 16.4 and 5.6. The symbols are weak
+	// imports, so their presence is the test.
+#if !TARGET_OS_IPHONE
+	// The host bench plays a phone without it (CALL_BENCH_CODEC=vp8).
+	if (getenv("TG_SHIM_NO_VIDEOTOOLBOX"))
+		return NO;
 #endif
+	return &VTCompressionSessionCreate != NULL && &VTDecompressionSessionCreate != NULL &&
+	       &VTCompressionSessionEncodeFrame != NULL && &VTDecompressionSessionDecodeFrame != NULL;
 }
 
 + (int)maxVideoSide {
@@ -232,11 +245,7 @@ static BOOL TGEmojiFontHasGlyphs(CTFontRef font, NSString *s) {
 		@[@"Custom emoji",            @YES,  @"every device, static on Vintage"],
 		@[@"Mini apps",               @([self canRunWebApps]),         @"iOS 9 or later"],
 		@[@"H.264 High video",        @([TGDevice tier] > TGDeviceTierVintage), @"Legacy - the A4's decoder stops at Main Profile, 720p, 30 fps"],
-#if TG_DEV
-		@[@"Video calls",             @([self canEncodeVideoCall]),    @"Legacy+ - dual-core A5 and later, dev builds only"],
-#else
-		@[@"Video calls",             @NO,                             @"in progress"],
-#endif
+		@[@"Video calls",             @([self canEncodeVideoCall]),    @"H.264 in hardware (VideoToolbox); VP8 in software on A5 and later"],
 	];
 
 	NSMutableArray *out = [NSMutableArray array];

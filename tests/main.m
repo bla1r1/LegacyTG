@@ -18,6 +18,7 @@
 #import "TGCallIceTests.m"
 #import "TGCallReflectorTests.m"
 #import "TGCallV2Tests.m"
+#import "TGCallV2VideoTests.m"
 #import "TGCallIntegrationTests.m"
 #import "TGCallVideoTests.m"
 #import "TGLibTgvoipHooksTests.m"

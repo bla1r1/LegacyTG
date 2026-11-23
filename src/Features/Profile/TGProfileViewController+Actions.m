@@ -123,7 +123,8 @@
 	} else if ([action isEqualToString:@"call"] || [action isEqualToString:@"video"]){
 		[TGCallViewController presentForUserId:self.userId
 										  name:self.name
-									  outgoing:YES];
+									  outgoing:YES
+										 video:[action isEqualToString:@"video"]];
 	} else if ([action isEqualToString:@"stop"]){
 		[self stopBot];
 	} else if ([action isEqualToString:@"message"]){

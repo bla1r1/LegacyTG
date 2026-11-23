@@ -55,6 +55,13 @@ typedef NS_ENUM(uint8_t, TGCallNalUnitType) {
 
 - (void)reset;
 
+/// Packets were lost: throw away the picture being assembled and every frame
+/// until the next keyframe. A fresh depacketizer starts in this state.
+- (void)dropUntilKeyframe;
+
+/// YES between a loss (or the start) and the next keyframe.
+@property (nonatomic, readonly) BOOL waitingForKeyframe;
+
 /// Feed one raw RTP packet (starting with 12-byte RTP header).
 - (void)processRtpPacket:(const uint8_t *)bytes length:(size_t)length;
 

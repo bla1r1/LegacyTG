@@ -35,6 +35,12 @@ void TGSrtpContextInit(TGSrtpContext *ctx,
                        const uint8_t masterKey[TGSrtpKeyLength],
                        const uint8_t masterSalt[TGSrtpSaltLength]);
 
+/// The same for SRTCP, whose keys come from labels 3, 4 and 5 (RFC 3711 4.3.2).
+/// TGSrtcpProtect / TGSrtcpUnprotect take a context made by this.
+void TGSrtcpContextInit(TGSrtpContext *ctx,
+                        const uint8_t masterKey[TGSrtpKeyLength],
+                        const uint8_t masterSalt[TGSrtpSaltLength]);
+
 /// Split the 60-byte DTLS exporter block into the two directions. The DTLS
 /// client writes the first half, the server the second; reading is the other.
 void TGSrtpSplitExporter(const uint8_t exporter[60], int isClient,

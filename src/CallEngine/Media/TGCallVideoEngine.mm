@@ -3,6 +3,22 @@
 //
 #import "TGCallVideoEngine.h"
 #import "TGCallVideoRtp.h"
+#include "TGCallVP8Codec.h"
+#include "TGCallRtcp.h"
+#include "TGCallH264Config.h"
+
+/// The iOS 7 parameter-set functions, where they are. On iOS 6 they are NULL
+/// and the avcC atom does their job; TG_SHIM_IOS6_H264 makes the host take
+/// that road too, so the bench runs the code an iOS 6 phone runs.
+static BOOL TGHasParameterSetAPIs(void) {
+#if !TARGET_OS_IPHONE
+    if (getenv("TG_SHIM_IOS6_H264"))
+        return NO;
+#endif
+    return &CMVideoFormatDescriptionGetH264ParameterSetAtIndex != NULL &&
+           &CMVideoFormatDescriptionCreateFromH264ParameterSets != NULL;
+}
+#include "TGCallVP8Rtp.h"
 #import "TGStyle.h"
 #import "TGDevice.h"
 #include <arpa/inet.h>
@@ -69,19 +85,22 @@ static const char *kTGVertexShader =
     "    v_texCoord = texCoord;\n"
     "}\n";
 
+// Range: (luma offset, luma scale, chroma scale) - video range is
+// (16/255, 255/219, 255/224), full range (0, 1, 1); BT.601 either way.
 static const char *kTGFragmentShaderNV12 =
     "precision mediump float;\n"
     "varying highp vec2 v_texCoord;\n"
     "uniform sampler2D SamplerY;\n"
     "uniform sampler2D SamplerUV;\n"
+    "uniform mediump vec3 Range;\n"
     "void main() {\n"
     "    mediump vec3 yuv;\n"
     "    highp vec3 rgb;\n"
-    "    yuv.x = texture2D(SamplerY, v_texCoord).r;\n"
-    "    yuv.yz = texture2D(SamplerUV, v_texCoord).ra - vec2(0.5, 0.5);\n"
-    "    rgb = mat3( 1.164,  1.164,  1.164,\n"
-    "                0.0,   -0.392,  2.017,\n"
-    "                1.596, -0.813,  0.0 ) * (yuv - vec3(0.0625, 0.0, 0.0));\n"
+    "    yuv.x = (texture2D(SamplerY, v_texCoord).r - Range.x) * Range.y;\n"
+    "    yuv.yz = (texture2D(SamplerUV, v_texCoord).ra - vec2(0.5, 0.5)) * Range.z;\n"
+    "    rgb = mat3( 1.0,    1.0,    1.0,\n"
+    "                0.0,   -0.344,  1.772,\n"
+    "                1.402, -0.714,  0.0 ) * yuv;\n"
     "    gl_FragColor = vec4(rgb, 1.0);\n"
     "}\n";
 
@@ -115,6 +134,7 @@ static const char *kTGFragmentShaderYUV =
     GLint _texNV12;
     GLint _ySamplerNV12;
     GLint _uvSamplerNV12;
+    GLint _rangeNV12;
 
     GLuint _programYUV;
     GLint _posYUV;
@@ -169,6 +189,7 @@ static const char *kTGFragmentShaderYUV =
         _texNV12 = glGetAttribLocation(_programNV12, "texCoord");
         _ySamplerNV12 = glGetUniformLocation(_programNV12, "SamplerY");
         _uvSamplerNV12 = glGetUniformLocation(_programNV12, "SamplerUV");
+        _rangeNV12 = glGetUniformLocation(_programNV12, "Range");
     }
 
     _programYUV = CreateProgram(kTGVertexShader, kTGFragmentShaderYUV);
@@ -307,6 +328,10 @@ static const char *kTGFragmentShaderYUV =
     glUseProgram(_programNV12);
     glUniform1i(_ySamplerNV12, 0);
     glUniform1i(_uvSamplerNV12, 1);
+    if (CVPixelBufferGetPixelFormatType(pixelBuffer) == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange)
+        glUniform3f(_rangeNV12, 0.0f, 1.0f, 1.0f);
+    else
+        glUniform3f(_rangeNV12, 16.0f / 255.0f, 255.0f / 219.0f, 255.0f / 224.0f);
 
     static const GLfloat vertices[] = {
         -1.0f, -1.0f,
@@ -485,6 +510,10 @@ static const char *kTGFragmentShaderYUV =
 }
 
 - (void)displaySampleBuffer:(CMSampleBufferRef)sampleBuffer {
+    // One undecodable sample parks the layer in Failed for good; the next
+    // keyframe can only show after a flush.
+    if (_sampleLayer && _sampleLayer.status == AVQueuedSampleBufferRenderingStatusFailed)
+        [_sampleLayer flush];
     if (_sampleLayer && [_sampleLayer isReadyForMoreMediaData]) {
         CFArrayRef attachments = CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, true);
         if (attachments && CFArrayGetCount(attachments) > 0) {
@@ -504,6 +533,14 @@ static const char *kTGFragmentShaderYUV =
 - (void)displayYUV420pY:(const uint8_t *)y U:(const uint8_t *)u V:(const uint8_t *)v
                strideY:(int)strideY strideU:(int)strideU strideV:(int)strideV
                  width:(int)width height:(int)height {
+    // VP8 from the peer has no sample-buffer path: on iOS 8 and later the
+    // GL view is made the first time a VP8 picture comes. Before iOS 8 it
+    // is always there, and H.264 reaches it decoded by VideoToolbox.
+    if (!_eaglView) {
+        _eaglView = [[TGCallEAGLVideoView alloc] initWithFrame:self.bounds];
+        _eaglView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+        [self addSubview:_eaglView];
+    }
     if (_eaglView) {
         [_eaglView renderYUV420pY:y U:u V:v strideY:strideY strideU:strideU strideV:strideV width:width height:height];
     }
@@ -550,11 +587,30 @@ static const char *kTGFragmentShaderYUV =
     VTCompressionSessionRef _compressionSession;
     VTDecompressionSessionRef _decompressionSession;
     CMVideoFormatDescriptionRef _decompFormatDesc;
+    NSData *_decoderSps;
+    NSData *_decoderPps;
+    volatile uint32_t _decodedFrames;
+
+    // VP8: the encoder on the capture queue, the decoder on the reflector
+    // thread; each buffer belongs to one of them.
+    TGVP8Encoder *_vp8Encoder;
+    int _vp8Width;
+    int _vp8Height;
+    uint16_t _vp8PictureId;
+    uint8_t *_vp8Encoded;
+    uint8_t *_vp8Payloads;
+    TGVP8Decoder *_vp8Decoder;
+    TGVP8Depacketizer _vp8Depacketizer;
+    uint8_t *_vp8Frame;
 
     dispatch_queue_t _captureQueue;
     uint32_t _targetWidth;
     uint32_t _targetHeight;
     BOOL _forceKeyframeNext;
+    CVPixelBufferRef _pendingPicture;   // the next picture to draw; under @synchronized(self)
+    int _sendKbps;      // 0 until the first report: the tier's ceiling
+    int _appliedKbps;   // encoder thread
+    double _lastRateChange;
     BOOL _compressionFailed;
 
 #if HAS_FFMPEG_FALLBACK
@@ -600,13 +656,27 @@ static void DecompressionCallback(void *decompressionOutputRefCon,
                                   CVImageBufferRef imageBuffer,
                                   CMTime presentationTimeStamp,
                                   CMTime presentationDuration) {
+    TGCallVideoEngine *engine = (__bridge TGCallVideoEngine *)decompressionOutputRefCon;
     if (status != noErr || !imageBuffer) {
+        // A frame VideoToolbox refused leaves its references wrong until a
+        // keyframe, as on the VP8 path.
+        if (status != noErr)
+            NSLog(@"TGCallVideoEngine: VideoToolbox refused a peer frame: %d", (int)status);
+        if (status != noErr && engine.onUndecodableFrame)
+            engine.onUndecodableFrame();
         return;
     }
 
-    TGCallVideoEngine *engine = (__bridge TGCallVideoEngine *)decompressionOutputRefCon;
     [engine didDecodePixelBuffer:(CVPixelBufferRef)imageBuffer];
 }
+
+// What the other phone sends grows with our reports, from 360x640 up to
+// 720x1280; a bigger keyframe is refused before libvpx allocates for it.
+static const int kTGVP8DecodeMaxPixels = 720 * 1280;
+static const size_t kTGVP8FrameMax = 512 * 1024;
+static const size_t kTGVP8EncodedMax = 128 * 1024;
+static const size_t kTGVP8Payload = 1100;
+static const int kTGVP8MaxPackets = 128;
 
 @implementation TGCallVideoEngine
 
@@ -623,6 +693,10 @@ static void DecompressionCallback(void *decompressionOutputRefCon,
             _targetHeight = 640;
         }
         _packetizer = [[TGCallVideoRtpPacketizer alloc] initWithSsrc:_ssrc];
+        _vp8Encoded = (uint8_t *)malloc(kTGVP8EncodedMax);
+        _vp8Payloads = (uint8_t *)malloc(kTGVP8MaxPackets * kTGVP8Payload);
+        _vp8Frame = (uint8_t *)malloc(kTGVP8FrameMax);
+        TGVP8DepacketizerInit(&_vp8Depacketizer, _vp8Frame, kTGVP8FrameMax);
         _depacketizer = [[TGCallVideoRtpDepacketizer alloc] init];
         _captureQueue = dispatch_queue_create("com.itglegacy.call.video.capture", DISPATCH_QUEUE_SERIAL);
 
@@ -748,7 +822,10 @@ static void DecompressionCallback(void *decompressionOutputRefCon,
     _previewLayer.videoGravity = AVLayerVideoGravityResizeAspectFill;
 #endif
 
-    [self initCompressionSession];
+    // VP8 opens its encoder on the first frame; VideoToolbox is touched
+    // only when the call settled on H.264.
+    if (self.sendCodec == TGCallVideoCodecH264)
+        [self initCompressionSession];
 
     [_captureSession startRunning];
     _isCapturing = YES;
@@ -783,6 +860,10 @@ static void DecompressionCallback(void *decompressionOutputRefCon,
 
     _compressionFailed = NO;
     _isCapturing = NO;
+    dispatch_sync(_captureQueue, ^{
+        TGVP8EncoderClose(self->_vp8Encoder);
+        self->_vp8Encoder = NULL;
+    });
 }
 
 - (void)switchCamera {
@@ -879,6 +960,7 @@ static void DecompressionCallback(void *decompressionOutputRefCon,
     VTSessionSetProperty(_compressionSession, kVTCompressionPropertyKey_AllowFrameReordering, kCFBooleanFalse);
     VTSessionSetProperty(_compressionSession, kVTCompressionPropertyKey_MaxKeyFrameInterval, (__bridge CFTypeRef)@(keyframeInterval));
     VTSessionSetProperty(_compressionSession, kVTCompressionPropertyKey_AverageBitRate, (__bridge CFTypeRef)@(bitrate));
+    _appliedKbps = bitrate / 1000;
 }
 
 - (void)captureOutput:(AVCaptureOutput *)output
@@ -886,18 +968,29 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
        fromConnection:(AVCaptureConnection *)connection {
     CVImageBufferRef imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer);
     if (!imageBuffer) return;
+    [self encodePixelBuffer:(CVPixelBufferRef)imageBuffer
+           presentationTime:CMSampleBufferGetPresentationTimeStamp(sampleBuffer)];
+}
 
-    size_t width = CVPixelBufferGetWidth(imageBuffer);
-    size_t height = CVPixelBufferGetHeight(imageBuffer);
+- (void)encodePixelBuffer:(CVPixelBufferRef)pixelBuffer presentationTime:(CMTime)pts {
+    if (self.sendCodec == TGCallVideoCodecVP8) {
+        [self encodeVP8:pixelBuffer presentationTime:pts];
+        return;
+    }
+    size_t width = CVPixelBufferGetWidth(pixelBuffer);
+    size_t height = CVPixelBufferGetHeight(pixelBuffer);
     if ((!_compressionSession && !_compressionFailed) || _targetWidth != width || _targetHeight != height) {
         _targetWidth = (uint32_t)width;
         _targetHeight = (uint32_t)height;
         [self initCompressionSession];
     }
     if (!_compressionSession) return;
-
-    CMTime pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer);
-    CMTime duration = CMSampleBufferGetDuration(sampleBuffer);
+    int kbps = _sendKbps;
+    if (kbps && kbps != _appliedKbps) {
+        VTSessionSetProperty(_compressionSession, kVTCompressionPropertyKey_AverageBitRate,
+                             (__bridge CFTypeRef)@(kbps * 1000));
+        _appliedKbps = kbps;
+    }
 
     NSDictionary *frameProps = nil;
     if (_forceKeyframeNext) {
@@ -907,13 +1000,119 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
 
     VTCompressionSessionEncodeFrame(
         _compressionSession,
-        imageBuffer,
+        pixelBuffer,
         pts,
-        duration,
+        kCMTimeInvalid,
         (__bridge CFDictionaryRef)frameProps,
         NULL,
         NULL
     );
+}
+
+- (void)encodeVP8:(CVPixelBufferRef)pixelBuffer presentationTime:(CMTime)pts {
+    if (!CVPixelBufferIsPlanar(pixelBuffer) || CVPixelBufferGetPlaneCount(pixelBuffer) < 2)
+        return;
+    int width = (int)CVPixelBufferGetWidth(pixelBuffer) & ~1;
+    int height = (int)CVPixelBufferGetHeight(pixelBuffer) & ~1;
+    if (!_vp8Encoder || width != _vp8Width || height != _vp8Height) {
+        TGVP8EncoderClose(_vp8Encoder);
+        int kbps = ([TGDevice tier] <= TGDeviceTierLegacy) ? 250 : 400;
+        int fps = ([TGDevice tier] <= TGDeviceTierLegacy) ? 15 : 20;
+        _vp8Encoder = TGVP8EncoderOpen(width, height, fps, kbps);
+        _vp8Width = width;
+        _vp8Height = height;
+        _forceKeyframeNext = YES;
+        _appliedKbps = kbps;
+        NSLog(@"TGCallVideoEngine: VP8 encoder %dx%d %d kbps: %@", width, height, kbps,
+              _vp8Encoder ? @"open" : @"refused");
+    }
+    if (!_vp8Encoder)
+        return;
+    int target = _sendKbps;
+    if (target && target != _appliedKbps) {
+        TGVP8EncoderSetRate(_vp8Encoder, target);
+        _appliedKbps = target;
+    }
+
+    BOOL force = _forceKeyframeNext;
+    _forceKeyframeNext = NO;
+    int keyframe = 0;
+    int64_t ticks = pts.timescale ? pts.value * 90000 / pts.timescale : 0;
+    CVPixelBufferLockBaseAddress(pixelBuffer, kCVPixelBufferLock_ReadOnly);
+    size_t length = TGVP8EncodeNV12(_vp8Encoder,
+            (const uint8_t *)CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 0),
+            CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 0),
+            (const uint8_t *)CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 1),
+            CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 1),
+            ticks, force, _vp8Encoded, kTGVP8EncodedMax, &keyframe);
+    CVPixelBufferUnlockBaseAddress(pixelBuffer, kCVPixelBufferLock_ReadOnly);
+    if (!length)
+        return;
+
+    size_t lengths[kTGVP8MaxPackets];
+    int count = TGVP8Packetize(_vp8Encoded, length, (uint16_t)(_vp8PictureId++ & 0x7FFF),
+                               _vp8Payloads, kTGVP8Payload, lengths, kTGVP8MaxPackets);
+    uint32_t timestamp = (uint32_t)ticks;
+    @synchronized (_packetizer) {
+        for (int i = 0; i < count; i++) {
+            NSMutableData *packet = [NSMutableData dataWithLength:12 + lengths[i]];
+            uint8_t *bytes = (uint8_t *)packet.mutableBytes;
+            uint16_t seq = _packetizer.sequenceNumber;
+            _packetizer.sequenceNumber = (uint16_t)(seq + 1);
+            bytes[0] = 0x80;
+            bytes[1] = (uint8_t)((i == count - 1) ? 0x80 : 0x00);   // marker; the session sets the type
+            bytes[2] = (uint8_t)(seq >> 8);
+            bytes[3] = (uint8_t)seq;
+            bytes[4] = (uint8_t)(timestamp >> 24);
+            bytes[5] = (uint8_t)(timestamp >> 16);
+            bytes[6] = (uint8_t)(timestamp >> 8);
+            bytes[7] = (uint8_t)timestamp;
+            memcpy(bytes + 12, _vp8Payloads + i * kTGVP8Payload, lengths[i]);
+            if (self.sendVideoRtpBlock)
+                self.sendVideoRtpBlock(packet);
+        }
+    }
+    static NSUInteger vp8Count = 0;
+    if (++vp8Count % 60 == 1 || keyframe)
+        NSLog(@"TGCallVideoEngine: VP8 frame #%lu, %lu bytes, key %d, %d packets",
+              (unsigned long)vp8Count, (unsigned long)length, keyframe, count);
+}
+
+- (void)requestKeyframe {
+    _forceKeyframeNext = YES;
+}
+
+- (int)maxSendKbps {
+    BOOL legacy = [TGDevice tier] <= TGDeviceTierLegacy;
+    if (self.sendCodec == TGCallVideoCodecVP8)
+        return legacy ? 250 : 400;
+    return legacy ? 220 : 350;
+}
+
+- (void)peerReportedLoss:(uint8_t)fraction {
+    // A report rides on every NACK too, several a second on a lossy link;
+    // WebRTC moves the rate up at most once a second and down at most every
+    // 300 ms, and so do we.
+    double t = [NSProcessInfo processInfo].systemUptime;
+    if (t - _lastRateChange < (fraction < 5 ? 1.0 : 0.3))
+        return;
+    int max = [self maxSendKbps];
+    int now = _sendKbps ? _sendKbps : max;
+    int next = TGRateAfterLoss(now, 80, max, fraction);
+    if (next != now)
+        _lastRateChange = t;
+    if (next != now && (next * 10 < now * 9 || next == max || _sendKbps == 0))
+        NSLog(@"TGCallVideoEngine: send rate %d kbps after %u/256 lost", next, fraction);
+    _sendKbps = next;
+}
+
+- (void)remoteVideoLost {
+    [_depacketizer dropUntilKeyframe];
+    TGVP8DepacketizerDrop(&_vp8Depacketizer);
+}
+
+- (uint32_t)decodedFrames {
+    return _decodedFrames;
 }
 
 - (void)didCompressSampleBuffer:(CMSampleBufferRef)sampleBuffer {
@@ -925,11 +1124,24 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     CFArrayRef attachments = CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, false);
     if (attachments && CFArrayGetCount(attachments) > 0) {
         CFDictionaryRef dict = (CFDictionaryRef)CFArrayGetValueAtIndex(attachments, 0);
-        BOOL notKey = CFDictionaryContainsKey(dict, kCMSampleAttachmentKey_NotSync);
-        isKeyframe = !notKey;
+        // The key can be present and false: only a true value means "not a
+        // keyframe". Reading presence alone sent IDRs without SPS and PPS.
+        CFBooleanRef notSync = (CFBooleanRef)CFDictionaryGetValue(dict, kCMSampleAttachmentKey_NotSync);
+        isKeyframe = !(notSync && CFBooleanGetValue(notSync));
     }
 
-    if (isKeyframe && formatDesc) {
+    if (isKeyframe && formatDesc && !TGHasParameterSetAPIs()) {
+        CFDictionaryRef atoms = (CFDictionaryRef)CMFormatDescriptionGetExtension(
+            formatDesc, kCMFormatDescriptionExtension_SampleDescriptionExtensionAtoms);
+        CFDataRef avcc = atoms ? (CFDataRef)CFDictionaryGetValue(atoms, CFSTR("avcC")) : NULL;
+        const uint8_t *spsPtr = NULL, *ppsPtr = NULL;
+        size_t spsSize = 0, ppsSize = 0;
+        if (avcc && TGAvcCParse(CFDataGetBytePtr(avcc), (size_t)CFDataGetLength(avcc),
+                                &spsPtr, &spsSize, &ppsPtr, &ppsSize)) {
+            sps = [NSData dataWithBytes:spsPtr length:spsSize];
+            pps = [NSData dataWithBytes:ppsPtr length:ppsSize];
+        }
+    } else if (isKeyframe && formatDesc) {
         size_t spsSize = 0, spsCount = 0;
         const uint8_t *spsPtr = NULL;
         OSStatus status = CMVideoFormatDescriptionGetH264ParameterSetAtIndex(
@@ -995,18 +1207,24 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     CMTime pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer);
     uint32_t rtpTimestamp = (uint32_t)(pts.value * 90000 / pts.timescale);
 
-    NSArray<NSData *> *rtpPackets = [_packetizer packetizeAccessUnit:nalUnits
-                                                           timestamp:rtpTimestamp];
+    // VideoToolbox calls back on whichever thread it likes, and two frames'
+    // callbacks can overlap. The packetizer's sequence numbers and the
+    // session's SRTP context are one stream each: interleaved, the peer saw
+    // a tenth of our packets as lost.
+    @synchronized (_packetizer) {
+        NSArray<NSData *> *rtpPackets = [_packetizer packetizeAccessUnit:nalUnits
+                                                               timestamp:rtpTimestamp];
 
-    static NSUInteger compressCount = 0;
-    if (++compressCount % 30 == 1) {
-        NSLog(@"TGCallVideoEngine: compressed frame #%lu (%lu NALs, %lu bytes, isKey=%d, pkts=%lu)",
-              (unsigned long)compressCount, (unsigned long)nalUnits.count, (unsigned long)totalLength, isKeyframe, (unsigned long)rtpPackets.count);
-    }
+        static NSUInteger compressCount = 0;
+        if (++compressCount % 30 == 1 || isKeyframe) {
+            NSLog(@"TGCallVideoEngine: compressed frame #%lu (%lu NALs, %lu bytes, isKey=%d, pkts=%lu)",
+                  (unsigned long)compressCount, (unsigned long)nalUnits.count, (unsigned long)totalLength, isKeyframe, (unsigned long)rtpPackets.count);
+        }
 
-    if (self.sendVideoRtpBlock) {
-        for (NSData *pkt in rtpPackets) {
-            self.sendVideoRtpBlock(pkt);
+        if (self.sendVideoRtpBlock) {
+            for (NSData *pkt in rtpPackets) {
+                self.sendVideoRtpBlock(pkt);
+            }
         }
     }
 }
@@ -1014,14 +1232,97 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
 #pragma mark - Incoming RTP & Decoding Pipeline
 
 - (void)handleIncomingVideoRtp:(const uint8_t *)bytes length:(size_t)length {
-    [_depacketizer processRtpPacket:bytes length:length];
+    BOOL vp8 = self.receiveCodec == TGCallVideoCodecVP8;
+    // Waiting for a keyframe keeps asking for one: a single PLI lost on the
+    // way left the picture frozen until the sender's next periodic keyframe,
+    // 6 s on the stand at 8% loss. The session sends at most two a second.
+    if ((vp8 ? _vp8Depacketizer.waitingForKeyframe : _depacketizer.waitingForKeyframe) &&
+        self.onUndecodableFrame)
+        self.onUndecodableFrame();
+    if (!vp8) {
+        [_depacketizer processRtpPacket:bytes length:length];
+        return;
+    }
+    int keyframe = 0;
+    if (!TGVP8DepacketizerPush(&_vp8Depacketizer, bytes, length, &keyframe))
+        return;
+    if (!_vp8Decoder)
+        _vp8Decoder = TGVP8DecoderOpen(kTGVP8DecodeMaxPixels);
+    TGVP8Image image;
+    if (!TGVP8Decode(_vp8Decoder, _vp8Depacketizer.frame, _vp8Depacketizer.length, &image)) {
+        // A frame that does not decode leaves the decoder's references wrong
+        // until a keyframe; ask for one instead of drawing garbage.
+        TGVP8DepacketizerDrop(&_vp8Depacketizer);
+        if (self.onUndecodableFrame)
+            self.onUndecodableFrame();
+        return;
+    }
+    _decodedFrames++;
+#if TARGET_OS_IPHONE
+    // libvpx reuses the planes on the next decode; the drawing is on the main
+    // queue, so it gets its own copy.
+    int w = image.width, h = image.height;
+    NSData *y = [NSData dataWithBytes:image.plane[0] length:(size_t)(image.stride[0] * h)];
+    NSData *u = [NSData dataWithBytes:image.plane[1] length:(size_t)(image.stride[1] * ((h + 1) / 2))];
+    NSData *v = [NSData dataWithBytes:image.plane[2] length:(size_t)(image.stride[2] * ((h + 1) / 2))];
+    int sy = image.stride[0], su = image.stride[1], sv = image.stride[2];
+    __weak TGCallVideoEngine *weakSelf = self;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        TGCallVideoEngine *strongSelf = weakSelf;
+        if (!strongSelf) return;
+        [strongSelf->_remoteView displayYUV420pY:(const uint8_t *)y.bytes U:(const uint8_t *)u.bytes
+                                               V:(const uint8_t *)v.bytes
+                                         strideY:sy strideU:su strideV:sv width:w height:h];
+    });
+#endif
+    [self markRemoteVideo];
+}
+
+- (void)markRemoteVideo {
+    if (_hasRemoteVideo)
+        return;
+    _hasRemoteVideo = YES;
+    __weak TGCallVideoEngine *weakSelf = self;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (weakSelf.onRemoteVideoStateChanged)
+            weakSelf.onRemoteVideoStateChanged(YES);
+    });
 }
 
 - (void)didDecodePixelBuffer:(CVPixelBufferRef)pixelBuffer {
+    if (++_decodedFrames == 1 || _decodedFrames % 50 == 0) {
+        OSType f = CVPixelBufferGetPixelFormatType(pixelBuffer);
+        NSLog(@"TGCallVideoEngine: %u peer frames decoded, %dx%d, format %c%c%c%c, iosurface %d", _decodedFrames,
+              (int)CVPixelBufferGetWidth(pixelBuffer), (int)CVPixelBufferGetHeight(pixelBuffer),
+              (char)(f >> 24), (char)(f >> 16), (char)(f >> 8), (char)f, CVPixelBufferGetIOSurface(pixelBuffer) != NULL);
+    }
 #if TARGET_OS_IPHONE
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [self->_remoteView displayPixelBuffer:pixelBuffer];
-    });
+    // One picture waits for the main thread at most; a newer one takes its
+    // place. A draw queued per frame held a buffer each while the A4's main
+    // thread fell behind, VideoToolbox's pool ran dry, and every decode call
+    // waited ~54 ms for a buffer to come back - the picture fell seconds
+    // behind and the receive thread with it.
+    CVPixelBufferRetain(pixelBuffer);
+    BOOL queued;
+    @synchronized (self) {
+        queued = _pendingPicture != NULL;
+        if (_pendingPicture)
+            CVPixelBufferRelease(_pendingPicture);
+        _pendingPicture = pixelBuffer;
+    }
+    if (!queued) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            CVPixelBufferRef picture;
+            @synchronized (self) {
+                picture = self->_pendingPicture;
+                self->_pendingPicture = NULL;
+            }
+            if (picture) {
+                [self->_remoteView displayPixelBuffer:picture];
+                CVPixelBufferRelease(picture);
+            }
+        });
+    }
 #endif
     if (self.onDecodedPixelBuffer) {
         self.onDecodedPixelBuffer(pixelBuffer);
@@ -1033,29 +1334,57 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
                            sps:(NSData *)sps
                            pps:(NSData *)pps {
     if (!avccFrame || avccFrame.length == 0) return;
+    static unsigned assembled, keys, rebuilds;
+    static double tRebuild, tDecode;
+    keys += isKeyframe;
+    if (++assembled % 50 == 1)
+        NSLog(@"TGCallVideoEngine: %u peer frames assembled (%u key), %u decoded, decoder %s; %u rebuilds %.0f ms, decode calls %.0f ms",
+              assembled, keys, _decodedFrames, _decompressionSession ? "VT" : "none", rebuilds, tRebuild * 1000, tDecode * 1000);
+    double tStart = CACurrentMediaTime();
 
-    if (isKeyframe && sps && pps) {
+    // Parameter sets come with every keyframe; the decoder is rebuilt only
+    // when they change, which is a new resolution or a camera switch.
+    if (isKeyframe && sps && pps &&
+        (!_decompFormatDesc || ![sps isEqualToData:_decoderSps] || ![pps isEqualToData:_decoderPps])) {
+        _decoderSps = sps;
+        _decoderPps = pps;
         if (_decompFormatDesc) {
             CFRelease(_decompFormatDesc);
             _decompFormatDesc = NULL;
         }
 
-        const uint8_t *pointers[2] = { (const uint8_t *)sps.bytes, (const uint8_t *)pps.bytes };
-        const size_t sizes[2] = { sps.length, pps.length };
-
-        OSStatus status = CMVideoFormatDescriptionCreateFromH264ParameterSets(
-            kCFAllocatorDefault,
-            2,
-            pointers,
-            sizes,
-            4,
-            &_decompFormatDesc
-        );
+        OSStatus status;
+        if (TGHasParameterSetAPIs()) {
+            const uint8_t *pointers[2] = { (const uint8_t *)sps.bytes, (const uint8_t *)pps.bytes };
+            const size_t sizes[2] = { sps.length, pps.length };
+            status = CMVideoFormatDescriptionCreateFromH264ParameterSets(
+                kCFAllocatorDefault, 2, pointers, sizes, 4, &_decompFormatDesc);
+        } else {
+            // iOS 6: the same description, built from an avcC atom the way
+            // decoders did before iOS 7.
+            uint8_t avcc[512];
+            size_t avccLength = TGAvcCBuild((const uint8_t *)sps.bytes, sps.length,
+                                            (const uint8_t *)pps.bytes, pps.length, avcc, sizeof(avcc));
+            int width = 0, height = 0;
+            if (!avccLength || !TGH264SpsSize((const uint8_t *)sps.bytes, sps.length, &width, &height)) {
+                NSLog(@"TGCallVideoEngine: SPS of %lu bytes not understood", (unsigned long)sps.length);
+                return;
+            }
+            NSDictionary *extensions = @{
+                (id)kCMFormatDescriptionExtension_SampleDescriptionExtensionAtoms :
+                    @{ @"avcC" : [NSData dataWithBytes:avcc length:avccLength] },
+            };
+            status = CMVideoFormatDescriptionCreate(kCFAllocatorDefault, kCMVideoCodecType_H264,
+                                                    width, height, (__bridge CFDictionaryRef)extensions,
+                                                    &_decompFormatDesc);
+        }
         if (status != noErr) {
             NSLog(@"TGCallVideoEngine: CreateFromH264ParameterSets failed: %d", (int)status);
             return;
         }
         [self initDecompressionSession];
+        rebuilds++;
+        tRebuild += CACurrentMediaTime() - tStart;
     }
 
     if (!_decompFormatDesc) return;
@@ -1093,12 +1422,22 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     if (status != noErr || !sampleBuffer) return;
 
 #if TARGET_OS_IPHONE
-    [_remoteView displaySampleBuffer:sampleBuffer];
+    if (_remoteView.sampleLayer) {
+        // iOS 8 and later: the layer decodes in hardware and draws. Decoding
+        // here as well would do the same work twice.
+        [_remoteView displaySampleBuffer:sampleBuffer];
+        _decodedFrames++;
+    } else
 #endif
-
     if (_decompressionSession) {
-        VTDecodeFrameFlags flags = kVTDecodeFrame_1xRealTimePlayback;
+        // Asynchronous, and no 1xRealTimePlayback: with it VideoToolbox held
+        // each call ~75 ms on the iPod touch 4 (the receive thread was busy
+        // 99% with the CPU two-thirds idle) and the picture fell seconds
+        // behind. The output callback draws whenever a frame is done.
+        VTDecodeFrameFlags flags = kVTDecodeFrame_EnableAsynchronousDecompression;
+        double t0 = CACurrentMediaTime();
         VTDecompressionSessionDecodeFrame(_decompressionSession, sampleBuffer, flags, NULL, NULL);
+        tDecode += CACurrentMediaTime() - t0;
     }
 #if HAS_FFMPEG_FALLBACK
     else if (_ffmpegCodecCtx) {
@@ -1130,8 +1469,11 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     callbackRecord.decompressionOutputCallback = DecompressionCallback;
     callbackRecord.decompressionOutputRefCon = (__bridge void *)self;
 
+    // IOSurface for the GL texture cache, and no pixel format: the decoder's
+    // own is 420f for a full-range stream (official iOS sends one), and
+    // asking for 420v had every frame converted - ~55-85 ms a frame on the
+    // iPod touch 4 against ~3 ms decoded natively. The shader takes either.
     NSDictionary *destinationImageBufferAttributes = @{
-        (id)kCVPixelBufferPixelFormatTypeKey: @(kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange),
         (id)kCVPixelBufferIOSurfacePropertiesKey: @{}
     };
 
@@ -1272,6 +1614,9 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     }
 
     [_depacketizer reset];
+    TGVP8DepacketizerDrop(&_vp8Depacketizer);
+    TGVP8DecoderClose(_vp8Decoder);
+    _vp8Decoder = NULL;
 
 #if TARGET_OS_IPHONE
     [_remoteView flushAndRemoveImage];
@@ -1290,6 +1635,13 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
 
 - (void)dealloc {
     [self stop];
+    if (_pendingPicture)
+        CVPixelBufferRelease(_pendingPicture);
+    // The capture queue has nothing left to run once capture has stopped.
+    TGVP8EncoderClose(_vp8Encoder);
+    free(_vp8Encoded);
+    free(_vp8Payloads);
+    free(_vp8Frame);
 }
 
 @end

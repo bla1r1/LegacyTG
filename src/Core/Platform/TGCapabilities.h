@@ -34,6 +34,8 @@
 /// Video calls are switched on: the hardware is there and this is a dev
 /// build. Release builds say NO until video calls are finished.
 + (BOOL)canEncodeVideoCall;
+/// H.264 through VideoToolbox (iOS 8+). Without it video calls use VP8.
++ (BOOL)hasHardwareH264;
 /// The longest side, in pixels, the H.264 decoder here plays: 720p on the A4,
 /// 1080p to the A8, 4K from the A9. A larger file plays no picture at all.
 + (int)maxVideoSide;

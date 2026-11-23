@@ -12,6 +12,8 @@
 
 /// Present over whatever is on screen, which is what a call does.
 + (void)presentForUserId:(int64_t)userId name:(NSString *)name outgoing:(BOOL)outgoing;
+/// An outgoing video call: the camera is on from the start.
++ (void)presentForUserId:(int64_t)userId name:(NSString *)name outgoing:(BOOL)outgoing video:(BOOL)video;
 
 /// The minimised bar with no call behind it, for checking its look from
 /// itglegacy://callbar. Nil takes it away.

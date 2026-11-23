@@ -16,6 +16,9 @@
 #import <AVFoundation/AVFoundation.h>
 
 #import "TGCallAudioEngine.h"
+#import "TGCallJitter.h"
+#import "TGDevice.h"
+#import "TGCallVideoIntake.h"
 
 #include "libtgvoip/VoIPController.h"
 #include <openssl/aes.h>
@@ -148,7 +151,8 @@ static void TGInstallCrypto(void) {
 @property (nonatomic, assign) BOOL muted;
 @property (nonatomic, assign) BOOL videoActive;
 @property (nonatomic, assign) BOOL peerVideoActive;
-@property (nonatomic, assign) BOOL peerSupportsVideo;
+@property (nonatomic, assign) BOOL peerCameraOn;
+@property (nonatomic, assign) BOOL isVideoCall;
 @property (nonatomic, strong) TGCallVideoEngine *videoEngine;
 @property (nonatomic, strong) NSDate *establishedAt;
 @property (nonatomic, strong) NSString *endReason;
@@ -165,6 +169,7 @@ static void TGInstallCrypto(void) {
 @property (nonatomic, assign) BOOL sentVideoFormatsAnswer;
 @property (nonatomic, assign) BOOL loggedHeader;
 @property (nonatomic, assign) BOOL sentMediaState;
+@property (nonatomic, strong) TGCallVideoIntake *videoIntake;
 @property (nonatomic, assign) uint32_t videoParametersSeq;
 @property (nonatomic, assign) uint32_t mediaStateSeq;
 @property (nonatomic, strong) NSTimer *mediaStateTimer;
@@ -196,6 +201,7 @@ static const char *kBuildMarker = "BUILD_MARKER_AUDIO_FIX_V8";
 
 
 @implementation TGCall {
+	double _lastAudioIn;   // uptime of the last packet of the peer's audio
 #if TG_DEV
 	int _benchSocket;
 	BOOL _benchMorse;
@@ -363,20 +369,13 @@ static const char *kBuildMarker = "BUILD_MARKER_AUDIO_FIX_V8";
 					 seq:[TGCallMessages markSeq:++self.signallingSeq requiresAck:YES]];
 	NSLog(@"TGCall: sent our candidates, ufrag=%@", self.localUfrag);
 
-	// Announce video formats: H.264 up to 480p if hardware encoding is available,
-	// or an empty format list on vintage/unsupported devices to acknowledge signaling.
-	NSData *videoFormatsBody = nil;
-	if ([TGCapabilities canEncodeVideoCall]) {
-		videoFormatsBody = [TGCallMessages videoFormatsBodyWithMaxResolution:TGCallVideoResolution480p];
-	} else {
-		uint8_t formats[2] = { 0, 0 };
-		videoFormatsBody = [NSData dataWithBytes:formats length:2];
-	}
+	// Video runs over 9.0.0 only. An empty format list still has to go out:
+	// the 5.0.0 peer waits for one before it moves on.
+	uint8_t formats[2] = { 0, 0 };
 	NSData *videoFormats = [TGCallMessages messageWithType:TGCallMessageVideoFormats
-													  body:videoFormatsBody];
+													  body:[NSData dataWithBytes:formats length:2]];
 	[self sendSignalling:videoFormats
 					 seq:[TGCallMessages markSeq:++self.signallingSeq requiresAck:YES]];
-	NSLog(@"TGCall: sent our video formats (%@)", [TGCapabilities canEncodeVideoCall] ? @"H.264 480p" : @"none");
 }
 
 - (NSMutableArray *)pendingSignalingData {
@@ -430,25 +429,13 @@ static const char *kBuildMarker = "BUILD_MARKER_AUDIO_FIX_V8";
 		[self sendSignalling:[TGCallMessages ackForSeq:messageSeq]
 						 seq:++self.signallingSeq];
 
-		if (type == TGCallMessageVideoFormats) {
-			NSDictionary *parsed = [TGCallMessages parseVideoFormats:message[@"body"]];
-			self.peerSupportsVideo = [parsed[@"supported"] boolValue];
-			NSLog(@"TGCall: peer sent VideoFormats (type 2), peerSupportsVideo=%d", self.peerSupportsVideo);
-
-			if (!self.sentVideoFormatsAnswer) {
-				self.sentVideoFormatsAnswer = YES;
-				NSData *videoFormatsBody = nil;
-				if ([TGCapabilities canEncodeVideoCall]) {
-					videoFormatsBody = [TGCallMessages videoFormatsBodyWithMaxResolution:TGCallVideoResolution480p];
-				} else {
-					uint8_t formats[2] = { 0, 0 };
-					videoFormatsBody = [NSData dataWithBytes:formats length:2];
-				}
-				NSData *videoFormats = [TGCallMessages messageWithType:TGCallMessageVideoFormats
-																  body:videoFormatsBody];
-				[self sendSignalling:videoFormats
-								 seq:[TGCallMessages markSeq:++self.signallingSeq requiresAck:YES]];
-			}
+		if (type == TGCallMessageVideoFormats && !self.sentVideoFormatsAnswer) {
+			self.sentVideoFormatsAnswer = YES;
+			uint8_t formats[2] = { 0, 0 };
+			NSData *videoFormats = [TGCallMessages messageWithType:TGCallMessageVideoFormats
+															  body:[NSData dataWithBytes:formats length:2]];
+			[self sendSignalling:videoFormats
+							 seq:[TGCallMessages markSeq:++self.signallingSeq requiresAck:YES]];
 		}
 
 		if (type != TGCallMessageCandidates){
@@ -615,14 +602,35 @@ static const char *kBuildMarker = "BUILD_MARKER_AUDIO_FIX_V8";
 }
 
 - (void)callUser:(int64_t)userId {
+	[self callUser:userId video:NO];
+}
+
+- (BOOL)isReconnecting {
+	// The peer's audio never stops while a call is up (no DTX), so 2 s
+	// without it is the path gone: a network change, a tunnel.
+	return self.state == TGCallStateEstablished && _lastAudioIn > 0 &&
+	       [NSProcessInfo processInfo].systemUptime - _lastAudioIn > 2.0;
+}
+
+- (BOOL)canPlaceCall {
+	TGCallState state = self.state;
+	return state == TGCallStateNone || state == TGCallStateEnded || state == TGCallStateFailed;
+}
+
+- (void)callUser:(int64_t)userId video:(BOOL)video {
+	self.endReason = nil;
 	self.peerUserId = userId;
+	self.isVideoCall = video && [TGCapabilities canEncodeVideoCall];
+	// Official shows your own picture while it rings.
+	if (self.isVideoCall)
+		[self startCameraPreview];
 	self.outgoing = YES;
 	self.state = TGCallStatePending;
 	[[TGClient shared] send:@{
 		@"@type"     : @"createCall",
 		@"user_id"   : @(userId),
 		@"protocol"  : [self protocol],
-		@"is_video"  : @NO,
+		@"is_video"  : @(self.isVideoCall),
 	}];
 }
 
@@ -693,7 +701,7 @@ static const char *kBuildMarker = "BUILD_MARKER_AUDIO_FIX_V8";
 			@"call_id"         : @(self.callId),
 			@"is_disconnected" : @NO,
 			@"duration"        : @((int)[self duration]),
-			@"is_video"        : @NO,
+			@"is_video"        : @(self.isVideoCall),
 			@"connection_id"   : @(0),
 		}];
 	[self teardown];
@@ -744,7 +752,10 @@ static const char *kBuildMarker = "BUILD_MARKER_AUDIO_FIX_V8";
 		// InstanceImpl gets the shared audio device's root module, whose
 		// RegisterAudioCallback does nothing; only 7.0.0 and up get a child that has
 		// sound. 5.0.0 and 2.7.7 stay for clients with their own audio device.
-		@"library_versions" : @[@"9.0.0", @"5.0.0", @"2.7.7", @"3.0.0", @"2.4.4"],
+		// Only what the stand checks against tgcalls: a peer took 3.0.0, which
+		// tgcalls does not have and this engine never spoke, and the call
+		// connected with nothing coming back (2026-11-23, iPod touch 4).
+		@"library_versions" : @[@"9.0.0", @"5.0.0", @"2.7.7"],
 	};
 }
 
@@ -752,6 +763,7 @@ static const char *kBuildMarker = "BUILD_MARKER_AUDIO_FIX_V8";
 	self.callId = [call[@"id"] intValue];
 	self.peerUserId = [call[@"user_id"] longLongValue];
 	self.outgoing = [call[@"is_outgoing"] boolValue];
+	self.isVideoCall = [call[@"is_video"] boolValue] && [TGCapabilities canEncodeVideoCall];
 
 	NSDictionary *state = call[@"state"];
 	NSString *kind = state[@"@type"];
@@ -877,6 +889,8 @@ static const char *kBuildMarker = "BUILD_MARKER_AUDIO_FIX_V8";
 	// incoming audio channel and throws our RTP away.
 	uint32_t ssrc = arc4random();
 	v2.localSsrc = ssrc ? ssrc : 1;
+	v2.videoCapable = [TGCapabilities canEncodeVideoCall];
+	v2.h264Capable = [TGCapabilities hasHardwareH264];
 
 	__weak __typeof__(self) weakSelf = self;
 	v2.sendSignaling = ^(NSData *plaintext, uint32_t seq){
@@ -895,6 +909,12 @@ static const char *kBuildMarker = "BUILD_MARKER_AUDIO_FIX_V8";
 		weakSelf.ice.peerUfrag = ufrag;
 		weakSelf.ice.peerPwd = pwd;
 	};
+	v2.onAudioSendLoss = ^(uint8_t fraction){
+		[weakSelf.audioEngine peerReportedLoss:fraction];
+	};
+	v2.onSendLoss = ^(uint8_t fraction){
+		[weakSelf.videoEngine peerReportedLoss:fraction];
+	};
 	v2.onAudio = ^(const uint8_t *rtp, size_t length){
 		[weakSelf handleIncomingRTPBytes:rtp length:length];
 	};
@@ -905,8 +925,34 @@ static const char *kBuildMarker = "BUILD_MARKER_AUDIO_FIX_V8";
 	v2.onFailure = ^(NSString *reason){
 		[weakSelf failV2:reason];
 	};
+	[self.videoIntake stop];
+	TGCallVideoIntake *intake = self.videoIntake = [[TGCallVideoIntake alloc] initWithSession:v2
+			engine:^TGCallVideoEngine *{ return weakSelf.videoEngine; }
+			ceilingKbps:(int[]){400, 700, 1500, 0}[[TGDevice tier]]];
+	v2.onVideo = ^(const uint8_t *rtp, size_t length){ [intake push:rtp length:length]; };
+	v2.onVideoLoss = ^{ [intake lost]; };
+	v2.onKeyframeRequest = ^{
+		[weakSelf.videoEngine requestKeyframe];
+	};
+	v2.onVideoCodecs = ^(BOOL sendVP8, BOOL receiveVP8){
+		weakSelf.videoEngine.sendCodec = sendVP8 ? TGCallVideoCodecVP8 : TGCallVideoCodecH264;
+		weakSelf.videoEngine.receiveCodec = receiveVP8 ? TGCallVideoCodecVP8 : TGCallVideoCodecH264;
+		NSLog(@"TGCall: video codecs: send %@, receive %@", sendVP8 ? @"VP8" : @"H.264",
+		      receiveVP8 ? @"VP8" : @"H.264");
+	};
+	v2.onPeerMediaState = ^(BOOL muted, BOOL videoActive){
+		weakSelf.peerCameraOn = videoActive;
+		[weakSelf peerVideoMayHaveChanged];
+	};
 	self.v2 = v2;
 	[v2 start];
+	if (v2.videoCapable){
+		[self makeVideoEngine];
+		// A video call starts with the camera on, as official does; an audio
+		// call can turn it on later over the same channel.
+		if (self.isVideoCall)
+			[self setVideoEnabled:YES];
+	}
 }
 
 - (void)sendV2Media:(const uint8_t *)bytes length:(size_t)length {
@@ -1019,7 +1065,8 @@ static const char *kBuildMarker = "BUILD_MARKER_AUDIO_FIX_V8";
 	rtpHeader[3] = (uint8_t)(seq);
 
 	uint32_t ts = self.rtpTimestampOut;
-	self.rtpTimestampOut += 960;
+	int samples = TGOpusPacketSamples((const uint8_t *)opusFrame.bytes, opusFrame.length);
+	self.rtpTimestampOut += (uint32_t)(samples > 0 ? samples : 960);
 	rtpHeader[4] = (uint8_t)(ts >> 24);
 	rtpHeader[5] = (uint8_t)(ts >> 16);
 	rtpHeader[6] = (uint8_t)(ts >> 8);
@@ -1126,33 +1173,12 @@ static const char *kBuildMarker = "BUILD_MARKER_AUDIO_FIX_V8";
 
 		if (type == TGCallMessageAudioData){
 			[self handleIncomingRTPBytes:slices[i].bodyPtr length:slices[i].bodyLen];
-		} else if (type == TGCallMessageVideoData){
-			[self handleIncomingVideoRTPBytes:slices[i].bodyPtr length:slices[i].bodyLen];
 		} else {
 			// Log ALL non-audio types (they are rare enough)
 			NSLog(@"TGCall: peer media msg type %d seq %08x, %lu bytes", type,
 					messageSeq, (unsigned long)slices[i].bodyLen);
-			if (type == TGCallMessageMediaState && slices[i].bodyLen >= 1){
-				uint8_t state = slices[i].bodyPtr[0];
-				BOOL peerAudio = (state & 1) != 0;
-				uint8_t peerVideoState = (state >> 1) & 3;
-				BOOL peerVideo = (peerVideoState == 2) || (peerVideoState == 1);
-				NSLog(@"TGCall: peer MediaState byte: %02x (audio=%d videoState=%u videoActive=%d)",
-						state, peerAudio, peerVideoState, peerVideo);
-				if (peerVideo != self.peerVideoActive) {
-					self.peerVideoActive = peerVideo;
-					__weak TGCall *weakSelf = self;
-					dispatch_async(dispatch_get_main_queue(), ^{
-						if (weakSelf.onPeerVideoChanged) {
-							weakSelf.onPeerVideoChanged(peerVideo);
-						}
-					});
-				}
-			}
-			if (type == 8 && slices[i].bodyLen >= 4) {
-				const uint8_t *vp = slices[i].bodyPtr;
-				NSLog(@"TGCall: peer videoParameters (type 8): %02x %02x %02x %02x", vp[0], vp[1], vp[2], vp[3]);
-			}
+			if (type == TGCallMessageMediaState && slices[i].bodyLen >= 1)
+				NSLog(@"TGCall: peer MediaState byte: %02x", slices[i].bodyPtr[0]);
 		}
 	}
 }
@@ -1162,6 +1188,7 @@ static const char *kBuildMarker = "BUILD_MARKER_AUDIO_FIX_V8";
 - (void)handleIncomingRTPBytes:(const uint8_t *)rtp length:(size_t)rtpLen {
 	if (!rtp || rtpLen < 12)
 		return;
+	_lastAudioIn = [NSProcessInfo processInfo].systemUptime;
 
 	uint16_t rtpSeq = ((uint16_t)rtp[2] << 8) | rtp[3];
 	if (rtpSeq > _highestRtpSeqIn)
@@ -1184,9 +1211,12 @@ static const char *kBuildMarker = "BUILD_MARKER_AUDIO_FIX_V8";
 		NSLog(@"TGCall: %u audio frames in, last %lu bytes", _audioFramesIn,
 				(unsigned long)frameLen);
 
-	// Straight from the decrypted buffer into opus_decode. The engine only
-	// reads these bytes, and only inside this call.
-	[self.audioEngine handleIncomingOpusBytes:rtp + headerLen length:frameLen];
+	// Straight from the decrypted buffer into the playout buffer, which
+	// copies what it keeps.
+	uint32_t timestamp = ((uint32_t)rtp[4] << 24) | ((uint32_t)rtp[5] << 16) |
+	                     ((uint32_t)rtp[6] << 8) | rtp[7];
+	[self.audioEngine handleIncomingOpusBytes:rtp + headerLen length:frameLen
+									 sequence:rtpSeq timestamp:timestamp];
 }
 
 
@@ -1429,106 +1459,82 @@ static inline BOOL TGLooksLikeStun(const uint8_t *bytes) {
 	}
 }
 
-- (void)handleIncomingVideoRTPBytes:(const uint8_t *)rtp length:(size_t)rtpLen {
-	if (!rtp || rtpLen < 12) return;
-	static NSUInteger videoPacketsRecv = 0;
-	if (++videoPacketsRecv % 30 == 1) {
-		NSLog(@"TGCall: received video RTP packet #%lu (%lu bytes)",
-		      (unsigned long)videoPacketsRecv, (unsigned long)rtpLen);
-	}
-	if (!_videoEngine) {
-		uint32_t videoSsrc = self.outgoing ? 4 : 3;
-		_videoEngine = [[TGCallVideoEngine alloc] initWithSsrc:videoSsrc];
-		__weak TGCall *weakSelf = self;
-		_videoEngine.sendVideoRtpBlock = ^(NSData *rtpPacket) {
-			[weakSelf sendVideoRTPPacket:rtpPacket];
-		};
-		_videoEngine.onRemoteVideoStateChanged = ^(BOOL active) {
-			weakSelf.peerVideoActive = active;
-			if (weakSelf.onPeerVideoChanged) {
-				weakSelf.onPeerVideoChanged(active);
-			}
-		};
-	}
-	if (!self.peerVideoActive) {
-		self.peerVideoActive = YES;
-		__weak TGCall *weakSelf = self;
-		dispatch_async(dispatch_get_main_queue(), ^{
-			if (weakSelf.onPeerVideoChanged) {
-				weakSelf.onPeerVideoChanged(YES);
-			}
-		});
-	}
-	[_videoEngine handleIncomingVideoRtp:rtp length:rtpLen];
+/// The engine exists for the whole of a 9.0.0 call on a capable device, so
+/// the reader thread only ever finds one, never creates it.
+- (void)makeVideoEngine {
+	if (_videoEngine)
+		return;
+	// The session stamps its own ssrc and payload type on every packet.
+	_videoEngine = [[TGCallVideoEngine alloc] initWithSsrc:0];
+	__weak __typeof__(self) weakSelf = self;
+	_videoEngine.sendVideoRtpBlock = ^(NSData *rtpPacket){
+		// The camera also runs for the preview and while an outgoing video
+		// call rings; nothing leaves until the user has turned video on.
+		if (weakSelf.videoActive)
+			[weakSelf.v2 sendVideoRtp:rtpPacket];
+	};
+	_videoEngine.onRemoteVideoStateChanged = ^(BOOL active){
+		[weakSelf peerVideoMayHaveChanged];
+	};
+	_videoEngine.onUndecodableFrame = ^{
+		[weakSelf.v2 requestKeyframe];
+	};
+	// Until the answer says otherwise: the codec this device can make.
+	_videoEngine.sendCodec = [TGCapabilities hasHardwareH264] ? TGCallVideoCodecH264 : TGCallVideoCodecVP8;
+}
+
+- (void)peerVideoMayHaveChanged {
+	// The peer's MediaState says whether its camera is on; the first decoded
+	// frame says there is a picture to show. Both, or the screen would show a
+	// black rectangle while the first keyframe is on its way.
+	BOOL active = self.peerCameraOn && self.videoEngine.hasRemoteVideo;
+	if (active == self.peerVideoActive)
+		return;
+	self.peerVideoActive = active;
+	if (self.onPeerVideoChanged)
+		self.onPeerVideoChanged(active);
+}
+
+- (BOOL)videoAvailable {
+	return self.isV2 && self.v2.videoCapable;
 }
 
 - (void)setVideoEnabled:(BOOL)enabled {
-	if (![TGCapabilities canEncodeVideoCall] && enabled) {
-		NSLog(@"TGCall: video calls not supported on this device/OS");
+	if (enabled && ![self videoAvailable]){
+		NSLog(@"TGCall: no video on this call");
 		return;
 	}
-	if (_videoActive == enabled) return;
-	_videoActive = enabled;
-
-	if (_videoActive) {
-		if (!_videoEngine) {
-			uint32_t videoSsrc = self.outgoing ? 4 : 3;
-			_videoEngine = [[TGCallVideoEngine alloc] initWithSsrc:videoSsrc];
-			__weak TGCall *weakSelf = self;
-			_videoEngine.sendVideoRtpBlock = ^(NSData *rtpPacket) {
-				[weakSelf sendVideoRTPPacket:rtpPacket];
-			};
-			_videoEngine.onRemoteVideoStateChanged = ^(BOOL active) {
-				weakSelf.peerVideoActive = active;
-				if (weakSelf.onPeerVideoChanged) {
-					weakSelf.onPeerVideoChanged(active);
-				}
-			};
-		}
-		[_videoEngine startCapture];
+	if (_videoActive == enabled)
+		return;
+	if (enabled){
+		[self makeVideoEngine];
+		// No camera access: the call goes on as voice, and the peer is not
+		// told about a camera that will never send.
+		if (![self.videoEngine startCapture])
+			return;
+		_videoActive = YES;
+		[self.videoEngine requestKeyframe];
 	} else {
-		[_videoEngine stopCapture];
+		_videoActive = NO;
+		[self.videoEngine stopCapture];
 	}
-
-	// Re-bundle media state to announce videoActive state change
-	self.videoParametersSeq = ++self.mediaSeqOut;
-	self.mediaStateSeq = ++self.mediaSeqOut;
-	[self sendMediaStateMessage];
+	[self.v2 setMediaStateMuted:self.muted videoActive:enabled];
 }
 
 - (void)switchCamera {
-	if (_videoEngine) {
-		[_videoEngine switchCamera];
-	}
+	[self.videoEngine switchCamera];
 }
 
-- (void)sendVideoRTPPacket:(NSData *)rtpPacket {
-	uint32_t targetTag = self.verifiedMediaTag ?: (self.nominatedSenderTag ?: self.currentSenderTag);
-	TGCallReflector *targetReflector = self.verifiedReflector ?: (self.currentReflector ?: self.reflector);
-	if (!self.callKey.length || !targetTag || !rtpPacket.length)
-		return;
+- (BOOL)startCameraPreview {
+	if (![TGCapabilities canEncodeVideoCall])
+		return NO;
+	[self makeVideoEngine];
+	return [self.videoEngine startCapture];
+}
 
-	NSMutableData *packet = [NSMutableData dataWithCapacity:1 + rtpPacket.length];
-	uint8_t type = TGCallMessageVideoData; // 6
-	[packet appendBytes:&type length:1];
-	[packet appendData:rtpPacket];
-
-	uint32_t mediaSeq = [TGCallMessages markSeq:++self.mediaSeqOut requiresAck:NO];
-	NSMutableData *encrypted = [NSMutableData dataWithLength:packet.length + 32];
-	int encSize = TGCallEncryptPacket((const uint8_t *)self.callKey.bytes,
-									  self.outgoing, 0 /* media */,
-									  (const uint8_t *)packet.bytes, packet.length,
-									  mediaSeq,
-									  (uint8_t *)encrypted.mutableBytes);
-	if (encSize <= 0) return;
-	encrypted.length = encSize;
-	[targetReflector sendPayload:encrypted toTag:targetTag];
-
-	static NSUInteger videoPacketsSent = 0;
-	if (++videoPacketsSent % 30 == 1) {
-		NSLog(@"TGCall: sent video RTP packet #%lu (%lu bytes) to tag %u",
-		      (unsigned long)videoPacketsSent, (unsigned long)rtpPacket.length, targetTag);
-	}
+- (void)stopCameraPreview {
+	if (!_videoActive)
+		[self.videoEngine stopCapture];
 }
 
 /// Our opening pair on the media channel. The peer sends its own once a second
@@ -1536,6 +1542,10 @@ static inline BOOL TGLooksLikeStun(const uint8_t *bytes) {
 /// sequence numbers are allocated once and the same packet goes out until an
 /// acknowledgement for the media state comes back.
 - (void)sendMediaStateMessage {
+	// 9.0.0 says this over the data channel; this 5.0.0 packet would reach a
+	// 9.0.0 peer as a datagram it cannot parse, once a second all call long.
+	if (self.isV2)
+		return;
 	uint32_t targetTag = self.verifiedMediaTag ?: (self.nominatedSenderTag ?: self.currentSenderTag);
 	TGCallReflector *targetReflector = self.verifiedReflector ?: (self.currentReflector ?: self.reflector);
 	if (!self.callKey.length || !targetTag){
@@ -1554,7 +1564,7 @@ static inline BOOL TGLooksLikeStun(const uint8_t *bytes) {
 								stateSeq:[TGCallMessages markSeq:self.mediaStateSeq
 													 requiresAck:YES]
 							 audioActive:!self.muted
-							 videoActive:self.videoActive];
+							 videoActive:NO];
 
 	// The packet carries an empty message first, so its own sequence number is a
 	// bare counter - no single-message bit, nothing asking to be acknowledged.
@@ -1693,9 +1703,13 @@ static inline BOOL TGLooksLikeStun(const uint8_t *bytes) {
 	// ponytail: the mic keeps running and the frames are dropped on the way out.
 	// Stopping the input queue would mean restarting it, for no audible gain.
 	_muted = muted;
+	[self.v2 setMediaStateMuted:muted videoActive:self.videoActive];
 }
 
 - (void)teardown {
+	_lastAudioIn = 0;
+	[self.videoIntake stop];
+	self.videoIntake = nil;
 #if TG_DEV
 	if (_benchSocket > 0){
 		close(_benchSocket);
@@ -1725,7 +1739,8 @@ static inline BOOL TGLooksLikeStun(const uint8_t *bytes) {
 	}
 	self.videoActive = NO;
 	self.peerVideoActive = NO;
-	self.peerSupportsVideo = NO;
+	self.peerCameraOn = NO;
+	self.isVideoCall = NO;
 	[self.v2 stop];
 	self.v2 = nil;
 	self.isV2 = NO;

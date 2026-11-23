@@ -1,5 +1,6 @@
 //
-// TGCall - voice call controller using TDLib for signalling and libtgvoip for audio.
+// TGCall - 1:1 call controller: TDLib for signalling, tgcalls 9.0.0 (or
+// libtgvoip for older peers) for audio and video.
 //
 #import <Foundation/Foundation.h>
 
@@ -28,7 +29,13 @@ typedef NS_ENUM(NSInteger, TGCallState) {
 @property (nonatomic, readonly) BOOL outgoing;
 @property (nonatomic, readonly) BOOL muted;
 @property (nonatomic, readonly) BOOL videoActive;
+/// The peer's camera is on and its first frame is decoded.
 @property (nonatomic, readonly) BOOL peerVideoActive;
+/// The call was placed or offered as a video call (TDLib is_video).
+@property (nonatomic, readonly) BOOL isVideoCall;
+/// The call runs on 9.0.0 and this device can do video: the camera can be
+/// turned on.
+@property (nonatomic, readonly) BOOL videoAvailable;
 @property (nonatomic, strong, readonly) TGCallVideoEngine *videoEngine;
 @property (nonatomic, readonly) NSData *callKey;
 @property (nonatomic, readonly) NSArray *emojis;
@@ -36,6 +43,11 @@ typedef NS_ENUM(NSInteger, TGCallState) {
 - (void)setSpeaker:(BOOL)speaker;
 - (void)setVideoEnabled:(BOOL)enabled;
 - (void)switchCamera;
+/// Camera on for the local preview only; nothing is sent until
+/// -setVideoEnabled:YES. NO when camera access is denied or there is no video.
+- (BOOL)startCameraPreview;
+/// Undoes -startCameraPreview unless video was turned on meanwhile.
+- (void)stopCameraPreview;
 
 /// An outgoing call's progress before it is answered, as official words it:
 /// "Contacting..." until the server made it, "Waiting..." until the other
@@ -55,7 +67,16 @@ typedef NS_ENUM(NSInteger, TGCallState) {
 @property (nonatomic, copy) void (^onPeerVideoChanged)(BOOL active);
 
 /// Ask TDLib to place a call. The rest arrives through -handleUpdate:.
+/// Established, but nothing from the peer for 2 s: the screen says
+/// Connecting... over the timer until it comes back, as official does.
+@property (nonatomic, readonly) BOOL isReconnecting;
+/// No call is up. Ended and Failed count: they stay until the next call,
+/// and a check for None alone stopped every second call in one launch.
+@property (nonatomic, readonly) BOOL canPlaceCall;
 - (void)callUser:(int64_t)userId;
+/// A video call starts with our camera on; the flag also reaches the peer,
+/// whose phone then rings as a video call.
+- (void)callUser:(int64_t)userId video:(BOOL)video;
 - (void)accept;
 #if TG_DEV
 /// A call against tgcalls_cli --mode bridge with no account: signaling over a local

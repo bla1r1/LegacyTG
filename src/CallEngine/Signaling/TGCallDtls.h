@@ -42,6 +42,11 @@
 @property (nonatomic, copy) void (^sendRecord)(const uint8_t *bytes, size_t length);
 @property (nonatomic, copy) void (^onConnected)(void);
 @property (nonatomic, copy) void (^onFailure)(NSString *reason);
+/// One decrypted application-data record: an SCTP packet of the data channel.
+@property (nonatomic, copy) void (^onApplicationData)(const uint8_t *bytes, size_t length);
+
+/// Encrypts one SCTP packet as an application-data record and sends it.
+- (void)sendApplicationData:(const uint8_t *)bytes length:(size_t)length;
 
 - (void)stop;
 

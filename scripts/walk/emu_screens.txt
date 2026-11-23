@@ -138,3 +138,14 @@ login-code          loginstep/code
 login-password      loginstep/password
 login-email         loginstep/email
 login-recovery      loginstep/recovery
+
+[extra]
+dev-settings        settings/20
+dev-consoles        settings/20 scroll/700
+profile-stories     tab/2 profile/me:stories
+profile-archive     tab/2 profile/me:archive
+
+# Not a screen: VP8 encode and decode on armv7 (scripts/emu.sh walk FILE codec).
+# The emulator proves the build runs and decodes right; its ms are QEMU's.
+[codec]
+codec-cif           bench/codec/288x352/45/250

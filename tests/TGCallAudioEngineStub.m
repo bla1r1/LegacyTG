@@ -15,6 +15,14 @@ static NSMutableArray<NSData *> *TGIncomingFrames(void) {
 	return frames;
 }
 
+/// [sequence, timestamp, arrival ms] for each frame, in arrival order.
+static NSMutableArray<NSArray *> *TGIncomingArrivals(void) {
+	static NSMutableArray *arrivals = nil;
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{ arrivals = [NSMutableArray array]; });
+	return arrivals;
+}
+
 @interface TGCallAudioEngine ()
 @property (nonatomic, assign) BOOL running;
 @end
@@ -30,16 +38,26 @@ static NSMutableArray<NSData *> *TGIncomingFrames(void) {
 	self.running = NO;
 }
 
+- (void)peerReportedLoss:(uint8_t)fraction {
+}
+
 - (void)handleIncomingOpusFrame:(NSData *)opusFrame {
 	if (opusFrame)
 		[TGIncomingFrames() addObject:opusFrame];
 }
 
-- (void)handleIncomingOpusBytes:(const uint8_t *)bytes length:(size_t)length {
+- (void)handleIncomingOpusBytes:(const uint8_t *)bytes length:(size_t)length
+					   sequence:(uint16_t)sequence timestamp:(uint32_t)timestamp {
 	// The call path uses this one; copy here so a test can still compare the
-	// frame after the packet buffer is gone.
-	if (bytes && length)
+	// frame after the packet buffer is gone. The bench replays arrivals
+	// through the real playout buffer, so when each came is kept too.
+	if (!bytes || !length)
+		return;
+	@synchronized (TGIncomingFrames()){
 		[TGIncomingFrames() addObject:[NSData dataWithBytes:bytes length:length]];
+		[TGIncomingArrivals() addObject:@[@(sequence), @(timestamp),
+				@((int64_t)([NSProcessInfo processInfo].systemUptime * 1000.0))]];
+	}
 }
 
 @end
@@ -50,8 +68,13 @@ static NSMutableArray<NSData *> *TGIncomingFrames(void) {
 	return [TGIncomingFrames() copy];
 }
 
++ (NSArray<NSArray *> *)receivedArrivals {
+	return [TGIncomingArrivals() copy];
+}
+
 + (void)resetReceivedFrames {
 	[TGIncomingFrames() removeAllObjects];
+	[TGIncomingArrivals() removeAllObjects];
 }
 
 @end
