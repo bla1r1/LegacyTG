@@ -162,6 +162,21 @@ NSString *TGErrorMessage(NSDictionary *message, NSDictionary *fallback) {
 	}];
 }
 
+- (void)sendInlineQueryResult:(NSString *)resultId
+                      queryId:(int64_t)queryId
+                       toChat:(int64_t)chatId
+                       thread:(int64_t)threadId {
+	if (!resultId.length || !queryId)
+		return;
+	[[TGClient shared] send:@{
+		@"@type"             : @"sendInlineQueryResultMessage",
+		@"chat_id"           : @(chatId),
+		@"message_thread_id" : @(threadId),
+		@"query_id"          : @(queryId),
+		@"result_id"         : resultId,
+	}];
+}
+
 - (void)sendAnimation:(NSDictionary *)animation toChat:(int64_t)chatId thread:(int64_t)threadId {
 	[self sendAnimation:animation caption:@"" toChat:chatId thread:threadId];
 }

@@ -357,4 +357,168 @@
 	}
 }
 
+#pragma mark - inline bot mode
+
+- (void)checkInlineBotQuery {
+	NSString *text = self.input.text ?: @"";
+	[NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(performInlineBotQuery) object:nil];
+
+	if (![text hasPrefix:@"@"]) {
+		[self hideInlineBotResults];
+		return;
+	}
+
+	static NSRegularExpression *regex = nil;
+	static dispatch_once_t onceToken;
+	dispatch_once(&onceToken, ^{
+		regex = [NSRegularExpression regularExpressionWithPattern:@"^@([A-Za-z0-9_]{3,32})\\s+(.*)$"
+		                                                  options:0
+		                                                    error:nil];
+	});
+
+	NSTextCheckingResult *match = [regex firstMatchInString:text options:0 range:NSMakeRange(0, text.length)];
+	if (!match || match.numberOfRanges < 3) {
+		[self hideInlineBotResults];
+		return;
+	}
+
+	[self performSelector:@selector(performInlineBotQuery) withObject:nil afterDelay:0.35];
+}
+
+- (void)performInlineBotQuery {
+	NSString *text = self.input.text ?: @"";
+	static NSRegularExpression *regex = nil;
+	static dispatch_once_t onceToken;
+	dispatch_once(&onceToken, ^{
+		regex = [NSRegularExpression regularExpressionWithPattern:@"^@([A-Za-z0-9_]{3,32})\\s+(.*)$"
+		                                                  options:0
+		                                                    error:nil];
+	});
+
+	NSTextCheckingResult *match = [regex firstMatchInString:text options:0 range:NSMakeRange(0, text.length)];
+	if (!match || match.numberOfRanges < 3) {
+		[self hideInlineBotResults];
+		return;
+	}
+
+	NSString *botName = [text substringWithRange:[match rangeAtIndex:1]];
+	NSString *query = [text substringWithRange:[match rangeAtIndex:2]];
+
+	__weak typeof(self) weakSelf = self;
+	[[TGMessageStore shared] queryInlineBot:botName query:query inChat:self.chatId completion:^(NSArray *results, int64_t queryId){
+		TGChatViewController *me = weakSelf;
+		if (!me)
+			return;
+		if (![me.input.text hasPrefix:[NSString stringWithFormat:@"@%@", botName]]) {
+			[me hideInlineBotResults];
+			return;
+		}
+		[me showInlineBotResults:results queryId:queryId];
+	}];
+}
+
+- (void)hideInlineBotResults {
+	if (self.inlineBotPanel) {
+		[self.inlineBotPanel removeFromSuperview];
+		self.inlineBotPanel = nil;
+		self.inlineBotResults = nil;
+		self.inlineBotQueryId = 0;
+	}
+}
+
+- (void)showInlineBotResults:(NSArray *)results queryId:(int64_t)queryId {
+	if (!results.count) {
+		[self hideInlineBotResults];
+		return;
+	}
+
+	self.inlineBotResults = results;
+	self.inlineBotQueryId = queryId;
+
+	TGTheme *theme = [TGTheme shared];
+	CGFloat width = self.view.bounds.size.width;
+	CGFloat rowH = TGMetricRow;
+	CGFloat maxRows = 4.0f;
+	CGFloat height = MIN((CGFloat)results.count, maxRows) * rowH;
+	CGFloat bottom = CGRectGetMinY(self.inputBar.frame);
+
+	if (!self.inlineBotPanel) {
+		UIScrollView *panel = [[UIScrollView alloc] initWithFrame:CGRectMake(0, bottom - height, width, height)];
+		panel.backgroundColor = [theme inputBarColour];
+		panel.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleTopMargin;
+		[self.view addSubview:panel];
+		self.inlineBotPanel = panel;
+	} else {
+		self.inlineBotPanel.frame = CGRectMake(0, bottom - height, width, height);
+		for (UIView *sub in [self.inlineBotPanel.subviews copy]) {
+			[sub removeFromSuperview];
+		}
+	}
+
+	self.inlineBotPanel.contentSize = CGSizeMake(width, results.count * rowH);
+
+	for (NSUInteger i = 0; i < results.count; i++) {
+		NSDictionary *item = results[i];
+		UIButton *row = [UIButton buttonWithType:UIButtonTypeCustom];
+		row.frame = CGRectMake(0, i * rowH, width, rowH);
+		row.tag = (NSInteger)i;
+		[row addTarget:self action:@selector(inlineBotResultTapped:) forControlEvents:UIControlEventTouchUpInside];
+
+		NSString *title = item[@"title"];
+		NSString *desc = item[@"description"] ?: item[@"performer"];
+		if (!title.length && !desc.length) {
+			title = [item[@"@type"] stringByReplacingOccurrencesOfString:@"inlineQueryResult" withString:@""];
+		}
+
+		CGFloat textX = TGMetricPadLarge;
+		CGFloat textW = width - textX - TGMetricPadLarge;
+
+		if (desc.length && title.length) {
+			UILabel *titleLabel = [[UILabel alloc] initWithFrame:CGRectMake(textX, 0, textW, TGHalf(rowH) + TGMetricPadSmall)];
+			titleLabel.backgroundColor = [UIColor clearColor];
+			titleLabel.font = TGFontBodyStrong();
+			titleLabel.textColor = [theme primaryTextColour];
+			titleLabel.text = title;
+			[row addSubview:titleLabel];
+
+			UILabel *descLabel = [[UILabel alloc] initWithFrame:CGRectMake(textX, TGHalf(rowH), textW, TGHalf(rowH) - TGMetricPadSmall)];
+			descLabel.backgroundColor = [UIColor clearColor];
+			descLabel.font = TGFontCaption();
+			descLabel.textColor = [theme secondaryTextColour];
+			descLabel.text = desc;
+			[row addSubview:descLabel];
+		} else {
+			UILabel *titleLabel = [[UILabel alloc] initWithFrame:CGRectMake(textX, 0, textW, rowH)];
+			titleLabel.backgroundColor = [UIColor clearColor];
+			titleLabel.font = TGFontBody();
+			titleLabel.textColor = [theme primaryTextColour];
+			titleLabel.text = title.length ? title : desc;
+			[row addSubview:titleLabel];
+		}
+
+		UIView *sep = [[UIView alloc] initWithFrame:CGRectMake(textX, rowH - TGMetricHairline, textW, TGMetricHairline)];
+		sep.backgroundColor = [theme separatorColour];
+		[row addSubview:sep];
+
+		[self.inlineBotPanel addSubview:row];
+	}
+}
+
+- (void)inlineBotResultTapped:(UIButton *)btn {
+	NSInteger index = btn.tag;
+	if (index < 0 || index >= (NSInteger)self.inlineBotResults.count)
+		return;
+	NSDictionary *item = self.inlineBotResults[(NSUInteger)index];
+	NSString *resultId = item[@"id"];
+	if (resultId.length && self.inlineBotQueryId) {
+		[[TGSendStore shared] sendInlineQueryResult:resultId
+		                                    queryId:self.inlineBotQueryId
+		                                     toChat:self.chatId
+		                                     thread:self.threadId];
+	}
+	self.input.text = @"";
+	[self inputChanged];
+	[self hideInlineBotResults];
+}
+
 @end

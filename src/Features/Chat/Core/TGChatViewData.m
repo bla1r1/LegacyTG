@@ -47,6 +47,7 @@
 #import "TGStyle.h"
 #import "TGAlertSheet.h"
 #import "TGDMTopicsViewController.h"
+#import "TGPinnedMessagesViewController.h"
 #import "TGChatPageCache.h"
 #import "TGBarItem.h"
 #import "TGPresent.h"
@@ -1178,23 +1179,44 @@ static NSMutableDictionary *TGChatProfileMemo(void) {
 	}];
 }
 
-/// Holding the strip offers the one thing a tap cannot: taking every pinned
-/// message down at once.
+/// Holding the strip offers the choices: viewing all pinned messages or
+/// taking every pinned message down at once.
 - (void)pinnedBannerHeld:(UILongPressGestureRecognizer *)hold {
 	if (hold.state != UIGestureRecognizerStateBegan)
 		return;
 	int64_t chatId = self.chatId, threadId = self.threadId;
 	__weak typeof(self) weakSelf = self;
-	[TGAlertSheet showConfirm:nil
-						title:@"Unpin All Messages"
-					   action:@"Unpin All Messages"
-				  destructive:YES
-					   inView:self.view
-					onConfirm:^{
-		[[TGMessageStore shared] unpinAllMessagesInChat:chatId thread:threadId];
-		weakSelf.pinnedMessageId = 0;
-		[weakSelf hidePinnedBanner];
+	[TGPresent showMenuTitles:@[TGLocalized(@"Pinned Messages"), TGLocalized(@"Unpin All Messages")]
+	         destructiveIndex:1
+	                 fromView:self.pinnedBannerView
+	             onController:self
+	                 onChoice:^(NSInteger picked){
+		if (picked == 0) {
+			[weakSelf openPinnedMessagesList];
+		} else if (picked == 1) {
+			[TGAlertSheet showConfirm:nil
+								title:TGLocalized(@"Unpin All Messages")
+							   action:TGLocalized(@"Unpin All Messages")
+						  destructive:YES
+							   inView:weakSelf.view
+							onConfirm:^{
+				[[TGMessageStore shared] unpinAllMessagesInChat:chatId thread:threadId];
+				weakSelf.pinnedMessageId = 0;
+				[weakSelf hidePinnedBanner];
+			}];
+		}
 	}];
+}
+
+- (void)openPinnedMessagesList {
+	TGPinnedMessagesViewController *vc = [[TGPinnedMessagesViewController alloc] init];
+	vc.chatId = self.chatId;
+	vc.threadId = self.threadId;
+	__weak typeof(self) weakSelf = self;
+	vc.onSelectMessage = ^(int64_t messageId){
+		[weakSelf showMessageId:messageId gone:@"Message Deleted."];
+	};
+	[self.navigationController pushViewController:vc animated:YES];
 }
 
 /// A day to go to: the last message sent on or before the end of it.

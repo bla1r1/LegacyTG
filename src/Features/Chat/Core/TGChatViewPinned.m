@@ -247,6 +247,7 @@ static const NSInteger kPinnedThumbTag = 0x9011;
 
 	// The X unpins, as the official strip's close control does.
 	CGFloat closeSide = TGMetricButtonMediumH;
+	CGFloat controlsWidth = TGDoubled(closeSide);
 	UIButton *close = [UIButton buttonWithType:UIButtonTypeCustom];
 	close.frame = CGRectMake(b.size.width - closeSide, TGCenteredOrigin(kPinnedBanner,
 			closeSide), closeSide, closeSide);
@@ -256,10 +257,21 @@ static const NSInteger kPinnedThumbTag = 0x9011;
 	[close addTarget:self action:@selector(pinnedCloseTapped)
 			forControlEvents:UIControlEventTouchUpInside];
 	[banner addSubview:close];
+
+	UIButton *listBtn = [UIButton buttonWithType:UIButtonTypeCustom];
+	listBtn.frame = CGRectMake(b.size.width - controlsWidth, TGCenteredOrigin(kPinnedBanner,
+			closeSide), closeSide, closeSide);
+	listBtn.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin;
+	[listBtn setImage:[TGIcons glyphNamed:@"pin" colour:[theme secondaryTextColour]
+								     side:TGMetricMenuGlyph] forState:UIControlStateNormal];
+	[listBtn addTarget:self action:@selector(openPinnedMessagesList)
+			forControlEvents:UIControlEventTouchUpInside];
+	[banner addSubview:listBtn];
+
 	label.frame = CGRectMake(textX, TGMetricPadSmall,
-			b.size.width - textX - closeSide - TGMetricPad, TGMetricLineBody);
+			b.size.width - textX - controlsWidth - TGMetricPad, TGMetricLineBody);
 	body.frame = CGRectMake(textX, TGMetricPadSmall + TGMetricLineBody,
-			b.size.width - textX - closeSide - TGMetricPad, TGMetricLineBody);
+			b.size.width - textX - controlsWidth - TGMetricPad, TGMetricLineBody);
 
 	UIView *hair = [[UIView alloc] initWithFrame:CGRectMake(0,
 			kPinnedBanner - TGMetricBorderWidth, b.size.width, TGMetricBorderWidth)];

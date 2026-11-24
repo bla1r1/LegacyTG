@@ -218,6 +218,14 @@
 	if (indexPath.row < 0 || indexPath.row >= (NSInteger)self.messages.count)
 		return;
 	NSDictionary *m = self.messages[indexPath.row];
+	if (self.chatSearchBar) {
+		int64_t msgId = [m[@"id"] longLongValue];
+		if (msgId) {
+			[self endChatSearch];
+			[self showMessageId:msgId gone:@"Message Deleted."];
+			return;
+		}
+	}
 	if (self.isEditingMessages) {
 		if ([m[@"service"] boolValue])
 			return;

@@ -342,5 +342,15 @@ static void TGSSAnswer(TGClient *c, NSDictionary *answer) {
 	XCTAssertEqual([destruct[@"self_destruct_time"] integerValue], 30LL);
 }
 
+- (void)testSendInlineQueryResultBuildsCorrectRequest {
+	TGClient *c = TGSSClient();
+	[[TGSendStore shared] sendInlineQueryResult:@"res123" queryId:987654 toChat:42 thread:100];
+	NSDictionary *req = TGSSRequest(c, @"sendInlineQueryResultMessage", NO);
+	XCTAssertNotNil(req);
+	XCTAssertEqualObjects(req[@"chat_id"], @(42));
+	XCTAssertEqualObjects(req[@"message_thread_id"], @(100));
+	XCTAssertEqualObjects(req[@"query_id"], @(987654));
+	XCTAssertEqualObjects(req[@"result_id"], @"res123");
+}
 
 @end

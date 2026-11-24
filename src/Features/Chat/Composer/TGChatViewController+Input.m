@@ -390,6 +390,11 @@
 		self.sendButton.frame = f.send;
 		self.micButton.frame = f.send;
 		self.table.frame = f.table;
+		if (self.inlineBotPanel) {
+			CGRect ibf = self.inlineBotPanel.frame;
+			ibf.origin.y = CGRectGetMinY(f.bar) - ibf.size.height;
+			self.inlineBotPanel.frame = ibf;
+		}
 		[self layoutChrome];
 	};
 
@@ -1387,6 +1392,11 @@ static NSInteger const kTGRepeatPeriods[] = {0, 86400, 604800, 2592000};
 	[UIView animateWithDuration:TGAnimationDurationMedium animations:^{
 		self.inputBar.frame = barFrame;
 		self.table.frame = tableFrame;
+		if (self.inlineBotPanel) {
+			CGRect ibf = self.inlineBotPanel.frame;
+			ibf.origin.y = CGRectGetMinY(barFrame) - ibf.size.height;
+			self.inlineBotPanel.frame = ibf;
+		}
 		[self layoutChrome];
 	} completion:^(BOOL done){
 		[self scrollToBottomAnimated:NO];

@@ -57,6 +57,10 @@ extern NSString *const TGSendStoreCanRetryKey;
 - (void)sendAnimation:(NSDictionary *)animation toChat:(int64_t)chatId thread:(int64_t)threadId;
 - (void)sendAnimation:(NSDictionary *)animation caption:(NSString *)caption
 			  toChat:(int64_t)chatId thread:(int64_t)threadId;
+- (void)sendInlineQueryResult:(NSString *)resultId
+                      queryId:(int64_t)queryId
+                       toChat:(int64_t)chatId
+                       thread:(int64_t)threadId;
 - (void)sendChecklist:(NSString *)title tasks:(NSArray *)tasks
 			   toChat:(int64_t)chatId completion:(void (^)(BOOL ok, NSString *error))completion;
 /// A new poll from the New Poll screen's draft (TGClient+Checklists.h).

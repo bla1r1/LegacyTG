@@ -42,6 +42,7 @@ static const NSTimeInterval kRecordHintSeconds = 1.6;
 	// programmatic edits (formatting, drafts, send) resize the bar too.
 	[self updateComposerHeightAnimated:NO];
 	[self reportTyping];
+	[self checkInlineBotQuery];
 	// Asked after the typing settles rather than per keystroke: one request
 	// per link, and the answer is thrown away if the text moved on.
 	[NSObject cancelPreviousPerformRequestsWithTarget:self

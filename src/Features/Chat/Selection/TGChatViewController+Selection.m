@@ -80,6 +80,13 @@ static void TGAnimateSelectionCheckbox(TGChatViewController *chat, int64_t messa
 		self.editDeleteButton.autoresizingMask = UIViewAutoresizingFlexibleRightMargin;
 		[self.editToolbar addSubview:self.editDeleteButton];
 
+		self.editCopyButton = TGRoundGlyphButton(@"copy", [theme accentColour],
+				side, glyph, @"Copy", self, @selector(copySelectedMessages));
+		self.editCopyButton.frame = CGRectMake(TGCenteredOrigin(b.size.width, side),
+				TGCenteredOrigin(kInputHeight, side), side, side);
+		self.editCopyButton.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin;
+		[self.editToolbar addSubview:self.editCopyButton];
+
 		self.editForwardButton = TGRoundGlyphButton(@"forward", [theme accentColour],
 				side, glyph, @"Forward", self, @selector(forwardSelectedMessages));
 		self.editForwardButton.frame = CGRectMake(b.size.width - side - TGMetricPadLarge,
@@ -198,6 +205,8 @@ static void TGAnimateSelectionCheckbox(TGChatViewController *chat, int64_t messa
 	}
 	self.editForwardButton.enabled = forwardable;
 	self.editForwardButton.alpha = forwardable ? TGAlphaOpaque : TGAlphaDisabled;
+	self.editCopyButton.enabled = forwardable;
+	self.editCopyButton.alpha = forwardable ? TGAlphaOpaque : TGAlphaDisabled;
 
 	if (count == 0) {
 		self.title = TGLocalized(@"Select Messages");
@@ -336,6 +345,41 @@ static void TGAnimateSelectionCheckbox(TGChatViewController *chat, int64_t messa
 		dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.0 * NSEC_PER_SEC)),
 				dispatch_get_main_queue(), ^{ [weakSelf reload]; });
 	}
+}
+
+- (void)copySelectedMessages {
+	if (!self.selectedMessageIds.count) return;
+
+	NSMutableArray *selected = [NSMutableArray array];
+	for (NSDictionary *m in self.messages) {
+		if ([self.selectedMessageIds containsObject:m[@"id"]]) {
+			[selected addObject:m];
+		}
+	}
+	if (!selected.count) return;
+
+	NSMutableArray *texts = [NSMutableArray arrayWithCapacity:selected.count];
+	for (NSDictionary *m in selected) {
+		NSString *t = m[@"text"];
+		if (!t.length) {
+			t = m[@"caption"];
+		}
+		if (t.length) {
+			[texts addObject:t];
+		}
+	}
+
+	if (texts.count > 0) {
+		NSString *joined = [texts componentsJoinedByString:@"\n\n"];
+		[UIPasteboard generalPasteboard].string = joined;
+	}
+
+	NSUInteger count = selected.count;
+	[self exitEditMode];
+
+	NSString *notice = TGLocalizedPlural(@"Message Copied",
+			@"%d Messages Copied", (NSInteger)count);
+	[TGSnackbar showInView:self.view text:notice seconds:2 onCommit:^{}];
 }
 
 - (void)forwardSelectedMessages {

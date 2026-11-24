@@ -122,4 +122,35 @@
 	XCTAssertEqual(TGBotCommandRows((id)[NSNull null]).count, (NSUInteger)0);
 }
 
+- (void)testPinnedMessagesBuildsSearchFilter {
+	[[TGMessageStore shared] pinnedMessagesForChat:555 completion:nil];
+	NSDictionary *request = nil;
+	for (NSData *data in [TGClient shared].outbox){
+		NSString *json = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+		NSString *trimmed = [json componentsSeparatedByString:@"\0"][0];
+		NSDictionary *parsed = [NSJSONSerialization JSONObjectWithData:
+				[trimmed dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil];
+		if ([parsed[@"@type"] isEqualToString:@"searchChatMessages"])
+			request = parsed;
+	}
+	XCTAssertNotNil(request);
+	XCTAssertEqualObjects(request[@"chat_id"], @(555));
+	XCTAssertEqualObjects(request[@"filter"][@"@type"], @"searchMessagesFilterPinned");
+}
+
+- (void)testQueryInlineBotBuildsSearchPublicChatRequest {
+	[[TGMessageStore shared] queryInlineBot:@"gif" query:@"cat" inChat:777 completion:nil];
+	NSDictionary *request = nil;
+	for (NSData *data in [TGClient shared].outbox){
+		NSString *json = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+		NSString *trimmed = [json componentsSeparatedByString:@"\0"][0];
+		NSDictionary *parsed = [NSJSONSerialization JSONObjectWithData:
+				[trimmed dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil];
+		if ([parsed[@"@type"] isEqualToString:@"searchPublicChat"])
+			request = parsed;
+	}
+	XCTAssertNotNil(request);
+	XCTAssertEqualObjects(request[@"username"], @"gif");
+}
+
 @end

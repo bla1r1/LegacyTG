@@ -545,6 +545,14 @@ FOUNDATION_EXPORT NSArray *TGBotCommandRows(NSArray *sets);
 - (void)pinnedMessageForChat:(int64_t)chatId
                   completion:(void (^)(NSDictionary *message))completion;
 
+- (void)pinnedMessagesForChat:(int64_t)chatId
+                   completion:(void (^)(NSArray *messages))completion;
+
+- (void)queryInlineBot:(NSString *)botUsername
+                 query:(NSString *)query
+                inChat:(int64_t)chatId
+            completion:(void (^)(NSArray *results, int64_t queryId))completion;
+
 - (void)pollVoteStatisticsOfMessage:(int64_t)messageId
 							 inChat:(int64_t)chatId
 						 completion:(void (^)(NSDictionary *graph))completion;

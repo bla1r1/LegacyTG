@@ -32,7 +32,7 @@ States: `done` (matches official client), `partial` (partially implemented), `mi
 | Online dot on the row | `done` | ``src/Features/ChatList/Core/TGChatListTable.m`` | Shown when the chat row says the peer is online. |
 | Emoji status after the title | `done` | ``src/Features/ChatList/Core/TGChatListTable.m`` | Custom emoji picture, skipped for Saved Messages. |
 | Verified and Premium marks beside the title | `partial` | ``src/Features/ChatList/Core/TGChatListTable.m`` | Emoji status draws; `is_verified` and `is_premium` are not read on a row. |
-| Story ring on every row avatar | `missing` | ``Features/Chat/Views/TGChatCell.m`` | Only the strip tile has a ring; rows draw a plain avatar. |
+| Story ring on every row avatar | `done` | ``src/UI/Rows/TGChatRowCell.m`` | TGChatRowStoryRingImage draws accent/gray ring around avatar when storyRing is set. |
 | Avatar or initials | `done` | ``src/Features/ChatList/Core/TGChatListTable.m`` | Downloaded photo, Saved Messages glyph, or stable initials. |
 | Preview text | `done` | ``src/Features/ChatList/Core/TGChatListTable.m`` | `previewText`, sender prefix, two lines. |
 | Draft preview | `done` | ``src/Features/ChatList/Core/TGChatListTable.m`` | Draft wins over the last message and is coloured destructive. |
@@ -137,12 +137,12 @@ States: `done` (matches official client), `partial` (partially implemented), `mi
 | Delete for me / for everyone | `done` | ``Features/Chat/Selection/TGChatViewController+Selection.m`` | One sheet chooses revoke or local delete. |
 | Copy text and copy link | `done` | ``src/Features/Chat/Actions/TGChatActionsHoldMenu.m`` | Copy uses the flattened caption/text; Copy Link uses the t.me link. |
 | Multi-select mode | `done` | ``Features/Chat/Selection/TGChatViewController+Selection.m`` | Checkboxes, count title, Delete and Forward toolbar. |
-| Copy in multi-select | `missing` | ``Features/Chat/Selection/TGChatViewController+Selection.m`` | Toolbar has only Delete and Forward. |
+| Copy in multi-select | `done` | ``Features/Chat/Selection/TGChatViewController+Selection.m`` | Three buttons: Delete, Copy, Forward. Copies joined text to generalPasteboard with snackbar notice. |
 | Pin / unpin a message | `done` | ``src/Features/Chat/Actions/TGChatActionsHoldMenu.m`` | `pinChatMessage` / `unpinChatMessage`. |
 | Pinned banner and Unpin All | `done` | ``src/Features/Chat/Core/TGChatViewData.m`` | Banner loads the pinned message; hold offers `unpinAllMessagesInChat`. |
-| Pinned message list | `missing` | ``src/Features/Chat/Core/TGChatViewData.m`` | The banner loads one message only; no list or index. |
+| Pinned message list | `done` | ``src/Features/Chat/TGPinnedMessagesViewController.m`` | Pinned messages sheet with jump to message, individual swipe-to-unpin and Unpin All. |
 | Search in chat | `partial` | ``Features/Chat/Search/TGChatViewController+Search.m`` | Text-only `searchChatMessages`; no sender, media, date or filter chips. |
-| Search result opens the message | `missing` | ``Features/Chat/Search/TGChatViewController+Search.m`` | Results replace the feed; ending search returns to the bottom. |
+| Search result opens the message | `done` | ``Features/Chat/Core/TGChatViewTaps.m`` | Tapping a search result exits search and scrolls to the message via showMessageId:. |
 | Scheduled send | `done` | ``Features/Chat/Composer/TGChatViewController+Input.m`` | Long-press Send offers a time or "When Online". |
 | Scheduled queue screen | `done` | ``Features/Chat/TGScheduledViewController.m`` | Lists, reschedules and deletes scheduled messages. |
 | Repeated scheduled message | `done` | ``Core/Stores/TGMessageStore.m`` | `scheduledAtDate:repeatPeriod:` and the composer's Repeat row carry the period. |
@@ -167,7 +167,7 @@ States: `done` (matches official client), `partial` (partially implemented), `mi
 | Cards (invoice/gift/game/story/group call) | `partial` | ``Features/Chat/Rendering/TGChatViewController+ServiceCells.m`` | Card draws; Pay and Join buttons are deliberately removed because the follow-up does not exist. |
 | Bot reply keyboard | `done` | ``Features/Chat/Composer/TGChatViewController+Bots.m`` | Keyboard rows/one-time/placeholder are drawn and send text. |
 | Bot inline buttons | `partial` | ``Features/Chat/Composer/TGChatViewController+Bots.m`` | Web App, Pay, Game and password callbacks answer "needs a newer Telegram". |
-| Inline bot mode (`@bot query`) | `missing` | ``Features/Chat/Composer/TGChatViewController+Bots.m`` | Switch-inline only types the mention; no inline result list or `sendInlineQueryResult`. |
+| Inline bot mode (`@bot query`) | `done` | ``Features/Chat/Composer/TGChatViewController+Bots.m`` | Debounced `@bot query` queries inline results via `getInlineQueryResults`, presents floating strip and sends via `sendInlineQueryResult`. |
 | Bot Web Apps | `missing` | ``Features/Dev/TGDevBotConsoleViewController.m`` | No Web App host; the debug console copies the URL. |
 | Ephemeral bot replies | `missing` | ``Core/Model/TGMessageFlatten.m`` | `ephemeral_message_id` is carried; `ephemeral_content` is never read and no "Only you" mark is drawn. |
 | Rich message | `partial` | ``Core/Model/TGMessageFlatten.m`` | Paragraphs, headings and lists flatten to plain lines; no formatting, tables, media or button rows. |
@@ -1024,7 +1024,7 @@ States: `done` (matches official client), `partial` (partially implemented), `mi
 |---|---|---|---|
 | Bot reply keyboard | `done` | ``Features/Chat/Composer/TGChatViewController+Bots.m`` | Keyboard rows/one-time/placeholder are drawn and send text. |
 | Bot inline buttons | `partial` | ``Features/Chat/Composer/TGChatViewController+Bots.m`` | Web App, Pay, Game and password callbacks answer "needs a newer Telegram". |
-| Inline bot mode (`@bot query`) | `missing` | ``Features/Chat/Composer/TGChatViewController+Bots.m`` | Switch-inline only types the mention; no inline result list or `sendInlineQueryResult`. |
+| Inline bot mode (`@bot query`) | `done` | ``Features/Chat/Composer/TGChatViewController+Bots.m`` | Debounced `@bot query` queries inline results via `getInlineQueryResults`, presents floating strip and sends via `sendInlineQueryResult`. |
 | Bot Web Apps | `missing` | ``Features/Dev/TGDevBotConsoleViewController.m`` | No Web App host; the console copies the URL. |
 | Bot info card | `partial` | ``src/Core/Client/Account/TGClient+AccountLocalNotifications.m`` | Short description can stand in for a missing bio; no commands or Add to Chat. |
 | Bot commands and menu button | `dev-only` | ``Features/Dev/TGDevBotConsoleViewController.m`` | `getCommands` / `setCommands` / `getMenuButton` are console rows, not a bot settings screen. |
