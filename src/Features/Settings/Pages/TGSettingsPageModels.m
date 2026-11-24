@@ -103,6 +103,9 @@ NSArray *TGFoldersPageModel(NSArray *folders, NSArray *recommended,
 		if (!title.length)
 			continue;
 		NSNumber *count = chatCounts[@([folder[@"id"] integerValue])];
+		if (!count && [folder[@"included_chat_ids"] isKindOfClass:[NSArray class]]){
+			count = @([folder[@"included_chat_ids"] count]);
+		}
 		NSString *detail = count ? (count.integerValue ? count.stringValue : @"") : nil;
 		NSMutableDictionary *row = TGPageRow(@"disclosure", title, @"openFolder");
 		if (detail)

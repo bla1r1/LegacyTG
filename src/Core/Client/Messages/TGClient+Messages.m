@@ -244,9 +244,19 @@
 		},
 	} mutableCopy];
 
-	if (replyToId != 0)
-		request[@"reply_to"] = @{@"@type" : @"inputMessageReplyToMessage",
-								 @"message_id" : @(replyToId)};
+	if (replyToId != 0){
+		NSMutableDictionary *replyTo = [@{@"@type" : @"inputMessageReplyToMessage",
+										  @"message_id" : @(replyToId)} mutableCopy];
+		NSString *quote = options[@"quote"];
+		if ([quote isKindOfClass:[NSString class]] && quote.length){
+			replyTo[@"quote"] = @{
+				@"@type" : @"inputTextQuote",
+				@"text" : @{@"@type" : @"formattedText", @"text" : quote, @"entities" : @[]},
+				@"position" : @0
+			};
+		}
+		request[@"reply_to"] = replyTo;
+	}
 	if (schedulingState[@"@type"])
 		request[@"scheduling_state"] = schedulingState;
 	NSDictionary *sendOptions = options[@"@type"] ? options
@@ -380,9 +390,19 @@
 		},
 	} mutableCopy];
 
-	if (replyToId != 0)
-		request[@"reply_to"] = @{@"@type" : @"inputMessageReplyToMessage",
-								 @"message_id" : @(replyToId)};
+	if (replyToId != 0){
+		NSMutableDictionary *replyTo = [@{@"@type" : @"inputMessageReplyToMessage",
+										  @"message_id" : @(replyToId)} mutableCopy];
+		NSString *quote = options[@"quote"];
+		if ([quote isKindOfClass:[NSString class]] && quote.length){
+			replyTo[@"quote"] = @{
+				@"@type" : @"inputTextQuote",
+				@"text" : @{@"@type" : @"formattedText", @"text" : quote, @"entities" : @[]},
+				@"position" : @0
+			};
+		}
+		request[@"reply_to"] = replyTo;
+	}
 	if (schedulingState[@"@type"])
 		request[@"scheduling_state"] = schedulingState;
 	NSDictionary *sendOptions = options[@"@type"] ? options

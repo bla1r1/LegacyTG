@@ -124,7 +124,7 @@
 	XCTAssertEqualObjects(ids(TGSearchScopeVoice), (@[@5]));
 	XCTAssertEqualObjects(ids(TGSearchScopeLinks), (@[@6]));
 	XCTAssertEqual(TGSearchScopedMessages(hits, TGSearchScopeMessages).count, hits.count);
-	XCTAssertEqual(TGSearchScopeTitles().count, (NSUInteger)(TGSearchScopeVoice + 1));
+	XCTAssertEqual(TGSearchScopeTitles().count, (NSUInteger)(TGSearchScopeDownloads + 1));
 }
 
 - (void)testSearch_WhichListsAScopeShows {

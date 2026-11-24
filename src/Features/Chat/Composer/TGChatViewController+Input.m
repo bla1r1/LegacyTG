@@ -546,6 +546,7 @@ static NSString *TGFirstLinkIn(NSString *text) {
 /// missing, and reached from the recorder and from the banner's own cancel.
 - (void)clearComposeState {
 	self.replyToId = 0;
+	self.replyQuoteText = nil;
 	self.editingId = 0;
 	self.editingIsCaption = NO;
 	self.previewedLink = nil;
@@ -758,12 +759,17 @@ static void TGTextFieldSetSelectedRange(UITextView *tf, NSRange range) {
 										   inChat:self.chatId
 									formattedText:ft];
 		} else {
+			NSMutableDictionary *opts = [NSMutableDictionary dictionary];
+			if (self.silentPosting)
+				[opts addEntriesFromDictionary:[TGClient messageSendOptionsSilent:YES schedulingState:nil]];
+			if (self.replyQuoteText.length)
+				opts[@"quote"] = self.replyQuoteText;
 			[[TGSendStore shared] sendFormattedText:ft
 											toChat:self.chatId
 											thread:self.threadId
 										   replyTo:self.replyToId
 								   schedulingState:nil
-											silent:self.silentPosting];
+										   options:opts.count ? opts : nil];
 		}
 	}
 

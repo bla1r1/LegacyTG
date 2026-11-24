@@ -176,4 +176,30 @@
 	XCTAssertEqualObjects(request[@"remove_caption"], @YES);
 }
 
+- (void)testSendFormattedTextWithQuoteBuildsInputTextQuote {
+	[[TGSendStore shared] sendFormattedText:@{@"@type" : @"formattedText", @"text" : @"replying"}
+	                                 toChat:42
+	                                 thread:0
+	                                replyTo:99
+	                        schedulingState:nil
+	                                options:@{@"quote" : @"quoted excerpt"}];
+	NSDictionary *request = nil;
+	for (NSData *data in [TGClient shared].outbox){
+		NSString *json = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+		NSString *trimmed = [json componentsSeparatedByString:@"\0"][0];
+		NSDictionary *parsed = [NSJSONSerialization JSONObjectWithData:
+				[trimmed dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil];
+		if ([parsed[@"@type"] isEqualToString:@"sendMessage"] && [parsed[@"chat_id"] isEqual:@(42)])
+			request = parsed;
+	}
+	XCTAssertNotNil(request);
+	NSDictionary *replyTo = request[@"reply_to"];
+	XCTAssertEqualObjects(replyTo[@"@type"], @"inputMessageReplyToMessage");
+	XCTAssertEqualObjects(replyTo[@"message_id"], @(99));
+	NSDictionary *quote = replyTo[@"quote"];
+	XCTAssertNotNil(quote);
+	XCTAssertEqualObjects(quote[@"@type"], @"inputTextQuote");
+	XCTAssertEqualObjects(quote[@"text"][@"text"], @"quoted excerpt");
+}
+
 @end

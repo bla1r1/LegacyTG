@@ -23,6 +23,7 @@
 #import "TGBarItem.h"
 #import "TGSegmentedControl.h"
 #import "TGPresent.h"
+#import "TGSettingsViewController.h"
 
 
 @interface TGSearchViewController () <UISearchBarDelegate>
@@ -321,6 +322,14 @@ static NSString *TGSearchDateText(NSNumber *stamp) {
 	NSInteger picked = segments.selectedSegmentIndex;
 	if (picked < 0 || picked >= (NSInteger)TGSearchScopeTitles().count)
 		return;
+	if (picked == TGSearchScopeDownloads){
+		TGSettingsViewController *vc = [[TGSettingsViewController alloc] init];
+		vc.page = TGSettingsPageDownloads;
+		vc.hidesBottomBarWhenPushed = YES;
+		[self.navigationController pushViewController:vc animated:YES];
+		segments.selectedSegmentIndex = self.scope;
+		return;
+	}
 	self.scope = picked;
 	[self reloadSearchRows];
 	[self.tableView scrollRectToVisible:CGRectMake(0, 0, 1, 1) animated:YES];

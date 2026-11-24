@@ -34,6 +34,7 @@ NSString *const TGRowAvatarUser   = @"avatarUser";
 NSString *const TGRowAvatarImage  = @"avatarImage";
 NSString *const TGRowStatusEmojiId = @"statusEmojiId";
 NSString *const TGRowVerified     = @"verified";
+NSString *const TGRowPremium      = @"premium";
 NSString *const TGRowOnline       = @"online";
 NSString *const TGRowPin          = @"pin";
 NSString *const TGRowAccessory    = @"accessory";
@@ -769,6 +770,8 @@ NSMutableDictionary *TGChatRow(NSDictionary *chat, NSString *dateText) {
 		row[TGRowChatDraft] = TGChatRowClean(chat[@"draft"]);
 	if ([chat[@"emojiStatusId"] isKindOfClass:NSNumber.class])
 		row[TGRowChatStatusEmojiId] = chat[@"emojiStatusId"];
+	row[TGRowVerified] = @([chat[@"isVerified"] boolValue] || [chat[@"is_verified"] boolValue]);
+	row[TGRowPremium] = @([chat[@"isPremium"] boolValue] || [chat[@"is_premium"] boolValue]);
 
 	// M24: the media kind, its thumbnail and the compact trailing facts.
 	TGChatListStore *list = [TGChatListStore shared];

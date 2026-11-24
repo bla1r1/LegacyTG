@@ -3,6 +3,7 @@
 #import "TGMessageLayout.h"
 #import "TGLocalization.h"
 #import "TGNameWithStatus.h"
+#import "TGPeerStore.h"
 #import "TGChatListRowGeometry.h"
 #import "TGChatListStore.h"
 #import "TGTheme.h"
@@ -472,7 +473,19 @@ static UIImage *TGChatRowStoryRingImage(CGSize side, UIColor *colour) {
 		_lockIcon.hidden = YES;
 		_lockIcon.image = nil;
 	}
-	self.titleLabel.attributedText = TGNameWithStatus(title, statusId,
+	BOOL verified = [row[TGRowVerified] boolValue];
+	BOOL premium = [row[TGRowPremium] boolValue];
+	if (!verified || !premium){
+		int64_t peerId = [row[TGRowChatId] longLongValue];
+		if (peerId){
+			TGPeer *peer = [[TGPeerStore shared] peerForId:peerId];
+			if (peer){
+				if (!verified) verified = peer.verified;
+				if (!premium) premium = peer.isPremium;
+			}
+		}
+	}
+	self.titleLabel.attributedText = TGNameWithBadges(title, statusId, verified, premium,
 			self.titleLabel.font, [self titleColour]);
 
 	NSString *date = row[TGRowChatDate];

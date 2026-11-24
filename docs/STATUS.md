@@ -3,11 +3,11 @@ Unified status of Telegram feature parity on legacy iOS (iOS 6.0–12.5.7).
 States: `done` (matches official client), `partial` (partially implemented), `missing` (not yet implemented), `dev-only` (gated under `TG_DEV`).
 
 ### Overall Summary
-- **Done:** 515
-- **Partial:** 252
-- **Missing:** 185
-- **Dev-only:** 18
-- **Total tracked features:** 970
+- **Done:** 546
+- **Partial:** 246
+- **Missing:** 167
+- **Dev-only:** 14
+- **Total tracked features:** 973
 
 ---
 
@@ -31,7 +31,7 @@ States: `done` (matches official client), `partial` (partially implemented), `mi
 | Muted speaker | `done` | ``src/Features/ChatList/Core/TGChatListTable.m`` | Mute icon after the title. |
 | Online dot on the row | `done` | ``src/Features/ChatList/Core/TGChatListTable.m`` | Shown when the chat row says the peer is online. |
 | Emoji status after the title | `done` | ``src/Features/ChatList/Core/TGChatListTable.m`` | Custom emoji picture, skipped for Saved Messages. |
-| Verified and Premium marks beside the title | `partial` | ``src/Features/ChatList/Core/TGChatListTable.m`` | Emoji status draws; `is_verified` and `is_premium` are not read on a row. |
+| Verified and Premium marks beside the title | `done` | ``src/Features/ChatList/Core/TGChatListTable.m`` | `TGChatRowCell` draws verified badge and premium star badge. |
 | Story ring on every row avatar | `done` | ``src/UI/Rows/TGChatRowCell.m`` | TGChatRowStoryRingImage draws accent/gray ring around avatar when storyRing is set. |
 | Avatar or initials | `done` | ``src/Features/ChatList/Core/TGChatListTable.m`` | Downloaded photo, Saved Messages glyph, or stable initials. |
 | Preview text | `done` | ``src/Features/ChatList/Core/TGChatListTable.m`` | `previewText`, sender prefix, two lines. |
@@ -66,7 +66,7 @@ States: `done` (matches official client), `partial` (partially implemented), `mi
 | Folder list on the title chevron | `done` | ``Features/ChatList/TGChatListViewController+Actions.m`` | Lists folders plus "Mark All Read". |
 | Folder tabs with counts | `partial` | ``src/Features/ChatList/Core/TGChatListHeader.m`` | Pills draw without a per-folder unread count or edit/delete. |
 | Folder bar stays pinned and capsule-selected | `missing` | ``src/Features/ChatList/Core/TGChatListHeader.m`` | The strip scrolls away and the selected pill is a solid accent fill. |
-| Title stays "Chats" | `missing` | ``src/Features/ChatList/Core/TGChatListLifecycle.m`` | The title is replaced by the selected folder's name. |
+| Title stays "Chats" | `done` | ``src/Features/ChatList/Core/TGChatListLifecycle.m`` | Title remains "Chats" (or "Archived Chats") across folder switches. |
 | Long-press folder reorder | `done` | ``src/Features/ChatList/Core/TGChatListHeader.m`` | Drags the strip and persists the order. |
 | Create / rename / delete folders | `done` | ``Features/Settings/TGSettingsViewController+NetworkPages.m`` | Create, rename, add/remove chats, counts, icons, delete. |
 | Folder edit/delete in the strip | `missing` | ``src/Features/ChatList/Core/TGChatListHeader.m`` | Editing lives only in Settings; the strip has no edit/delete. |
@@ -79,7 +79,7 @@ States: `done` (matches official client), `partial` (partially implemented), `mi
 | Search results use real rows | `partial` | ``src/Features/ChatList/TGSearchViewController.m`` | People and chats are shared peer rows, messages `TGMessageResultRow`; a chat hit is not yet the full chat row with preview and badge. |
 | Search filter bar at the bottom | `partial` | ``Features/ChatList/TGSearchViewController.m`` | Scope pills sit in `tableHeaderView` and scroll away; selected pill is a plain accent fill. |
 | Search tokens for archive, folder, peer and date | `missing` | ``Features/ChatList/TGSearchViewController.m`` | No tokens; every query is global. |
-| Downloads shortcut in search | `missing` | ``Features/ChatList/TGSearchViewController.m`` | Nothing; downloads live only under Settings. |
+| Downloads shortcut in search | `done` | ``Features/ChatList/TGSearchViewController.m`` | Downloads scope pill routes to Downloads page in Settings. |
 | Header notice panel | `missing` | ``src/Features/ChatList/Core/TGChatListHeader.m`` | `updateSuggestedActions` is read only by the Tier 2 hub, never on the list. |
 | Real peek on hold | `missing` | ``Features/ChatList/TGChatListViewController+Actions.m`` | A centred action menu only; no preview card. |
 | Group preview with an author prefix stays one line | `done` | ``src/UI/Rows/TGChatRowCell.m`` | The author takes the first preview line and the text the second (`TGChatRowPreviewPrefix`), so the text never wraps back under the name. |
@@ -108,7 +108,7 @@ States: `done` (matches official client), `partial` (partially implemented), `mi
 | Sending clock | `done` | ``Features/Chat/Rendering/TGChatViewController+Cells.m`` | `sending` replaces the ticks with a clock. |
 | Failed delivery mark | `done` | ``Features/Chat/Rendering/TGChatViewController+Cells.m`` | Error glyph from `TGSendStore`; tap on the bubble resends and the hold menu keeps Retry. |
 | Reply block and swipe-to-reply | `done` | ``Features/Chat/Rendering/TGChatViewController+Chrome.m`` | Quote strip draws author and text; pan on a bubble starts a reply. |
-| Reply with a chosen quote | `missing` | ``Core/Client/Messages/TGClient+Messages.m`` | Reply stores only `replyToId`; no text selection or `inputTextQuote`. |
+| Reply with a chosen quote | `done` | ``Core/Client/Messages/TGClient+Messages.m`` | Quote action in hold menu pre-fills compose banner and passes `inputTextQuote`. |
 | Forward attribution line | `done` | ``Features/Chat/Rendering/TGChatViewController+Layout.m`` | "Forwarded from …" is drawn above the body. |
 | Link preview card | `partial` | ``Features/Chat/Rendering/TGChatViewController+Layout.m`` | Title, site and description only; `linkPreview.type` picture is never fetched. |
 | Spoiler text reveal | `done` | ``Features/Chat/Rendering/TGChatViewController+Cells.m`` | Per-message reveal set drives `TGAttributedMessageTextRevealing`. |
@@ -244,7 +244,7 @@ States: `done` (matches official client), `partial` (partially implemented), `mi
 | messageChatRemovedFromCommunity | `done` | ``Core/Model/TGServiceMessageText.m`` | Sentence. |
 | messageChatUpgradeTo | `done` | ``Core/Model/TGServiceMessageText.m`` | Sentence about the supergroup upgrade. |
 | messageChatUpgradeFrom | `done` | ``Core/Model/TGServiceMessageText.m`` | Sentence naming the old group title. |
-| messagePinMessage | `partial` | ``Core/Model/TGServiceMessageText.m`` | Sentence only; tapping it does not jump to the pinned message. |
+| messagePinMessage | `done` | ``Core/Model/TGServiceMessageText.m`` | Sentence; tapping jumps to the pinned message via `showMessageId:gone:`. |
 | messageScreenshotTaken | `done` | ``Core/Model/TGServiceMessageText.m`` | Sentence. |
 | messageChatSetBackground | `done` | ``Core/Model/TGServiceMessageText.m`` | Sentence. |
 | messageChatSetTheme | `done` | ``Core/Model/TGServiceMessageText.m`` | Sentence with the theme emoji or name. |
@@ -791,7 +791,7 @@ States: `done` (matches official client), `partial` (partially implemented), `mi
 | Devices / sessions | `partial` | ``src/Features/Settings/Pages/TGSettingsPagesCore.m`` | Pushes `TGSessionsViewController`; rows show app name + platform + IP. |
 | Devices row value | `partial` | ``Features/Settings/TGSettingsViewController.m`` | "N active" counts only other sessions. |
 | Chat Folders page | `partial` | ``Features/Settings/TGSettingsViewController+NetworkPages.m`` | Most editing exists; counts are behind a "Chat Count" alert and creation is the last row. |
-| Folder rows | `partial` | ``Features/Settings/TGSettingsViewController+NetworkPages.m`` | Names only; count is not printed on the row. |
+| Folder rows | `done` | ``Features/Settings/TGSettingsViewController+NetworkPages.m`` | Rows display formatted chat count (N chats). |
 | My Stories | `done` | ``src/Features/Settings/Pages/TGSettingsPagesCore.m`` | Opens the profile's Stories tab. |
 | Proxy | `done` | ``Features/Settings/TGSettingsViewController+NetworkPages.m`` | Add, enable, edit and remove proxies. |
 | Proxy row value | `partial` | ``Features/Settings/TGSettingsViewController.m`` | Shows the server hostname or "On"/"Off"; the row is always present. |
@@ -802,7 +802,7 @@ States: `done` (matches official client), `partial` (partially implemented), `mi
 | Appearance | `partial` | ``Features/Settings/TGSettingsViewController+AppearancePages.m`` | Themes (light and dark official files), text size, wallpaper, defaults, emoji themes and Your Color; no Auto-Night, bubbles or icons. |
 | Power Saving | `partial` | ``Features/Settings/TGSettingsViewController+NetworkPages.m`` | Sticker animation, wallpaper, GIF autoplay and media preloading; no master or threshold. On Vintage (iPod touch 4, 3GS) the page keeps only Autoplay GIFs: that tier shows still stickers and no chat wallpaper whatever the switches say, and Settings > Device says so (19 November 2026). |
 | Language | `partial` | ``src/Features/Settings/Pages/TGSettingsPagesCore.m`` | Pack picker changes TDLib's language; the app's own ~2200 strings stay English. |
-| Language row value | `partial` | ``Features/Settings/TGSettingsViewController.m`` | Uses the pack's `name`, never `native_name`. |
+| Language row value | `done` | ``Features/Settings/TGSettingsViewController.m`` | Uses the pack's `native_name` ("Русский", etc.) when available. |
 | Language pack tools | `dev-only` | ``src/Features/Settings/Pages/TGSettingsPagesCore.m`` | The string editor lives on the dev language page. |
 | Stickers and Emoji | `done` | ``src/Features/Settings/Pages/TGSettingsPagesCore.m`` | Opens pack management. |
 | Telegram Premium | `partial` | ``Features/Settings/TGSettingsViewController+Actions.m`` | Reads the state and explains that purchase happens in an official client. |
@@ -835,7 +835,7 @@ States: `done` (matches official client), `partial` (partially implemented), `mi
 | Sticker pack rows | `partial` | ``Features/Media/TGStickerPacksViewController.m`` | Subtitle row with short name, count and type; no sticker artwork. |
 | Root wording | `partial` | ``src/Features/Settings/Pages/TGSettingsPagesCore.m`` | Root has "Stickers and Emoji"; the sticker page is titled "Stickers". |
 | Settings navigation bar | `partial` | ``Features/Settings/TGSettingsViewController.m`` | Hides on scroll down and is not restored in `viewWillAppear:`. |
-| Dark background editing | `partial` | ``Features/Settings/TGBackgroundsViewController.m`` | A "Dark Theme Backgrounds" switch picks the dark list by hand instead of following the active theme. |
+| Dark background editing | `done` | ``Features/Settings/TGBackgroundsViewController.m`` | Automatically follows active theme dark/light state. |
 | Telegram Defaults presentation | `partial` | ``Features/Settings/TGSettingsViewController+AppearancePages.m`` | Alerts print raw ids and type names. |
 | Design: iOS 7+ navigation bar | `missing` | ``Core/Style/TGTheme.m`` | Blue `#517DA2` bar with white title on every OS. |
 | Design: iOS 7+ tab bar | `missing` | ``Core/Style/TGTheme.m`` | `barTintColor` and `tintColor` are both `#517DA2`. |
@@ -974,8 +974,8 @@ States: `done` (matches official client), `partial` (partially implemented), `mi
 | Push payload privacy | `partial` | ``Core/Client/TGClient+Auth.m`` | The token is registered; the payload privacy is TDLib's and is not tested here. |
 | Pinned and mention flags | `partial` | ``Core/Client/Chats/TGClient+ChatFolders.mm`` | Muting replaces the record with two fields, so mention and pinned flags reset. |
 | Add an exception | `missing` | `—` | No Add Exception action. |
-| Notification permission banner | `missing` | `—` | The page never says notifications are denied. |
-| Badge settings | `missing` | `—` | No badge section. |
+| Notification permission banner | `done` | ``Features/Settings/TGSettingsViewController+PrivacyPages.m`` | Permission denial warning shown when notifications disabled in iOS Settings. |
+| Badge settings | `done` | ``Features/Settings/TGSettingsViewController+PrivacyPages.m`` | Include Muted Chats and Count Unread Messages switches. |
 | In-app sounds and vibration | `missing` | `—` | Previews are server-synced; no in-app sound or vibration setting. |
 | Display names on the lock screen | `missing` | `—` | No lock-screen presentation setting. |
 | Contact joined Telegram | `missing` | `—` | No switch; TDLib has no server-side field for it. |

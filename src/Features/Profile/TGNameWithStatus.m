@@ -5,6 +5,7 @@
 #import "TGCustomEmojiStore.h"
 #import "TGStyle.h"
 #import "TGTheme.h"
+#import "TGIcons.h"
 #import <math.h>
 
 @interface NSAttributedString (TGNameWithStatusAttachment)
@@ -17,6 +18,10 @@
 @end
 
 NSAttributedString *TGNameWithStatus(NSString *name, int64_t statusEmojiId, UIFont *font, UIColor *colour) {
+	return TGNameWithBadges(name, statusEmojiId, NO, NO, font, colour);
+}
+
+NSAttributedString *TGNameWithBadges(NSString *name, int64_t statusEmojiId, BOOL verified, BOOL premium, UIFont *font, UIColor *colour) {
 	if (!name) {
 		name = @"";
 	}
@@ -32,7 +37,7 @@ NSAttributedString *TGNameWithStatus(NSString *name, int64_t statusEmojiId, UIFo
 		NSForegroundColorAttributeName: colour
 	};
 
-	if (statusEmojiId == 0) {
+	if (statusEmojiId == 0 && !verified && !premium) {
 		return [[NSAttributedString alloc] initWithString:name attributes:baseAttrs];
 	}
 
@@ -46,26 +51,52 @@ NSAttributedString *TGNameWithStatus(NSString *name, int64_t statusEmojiId, UIFo
 	}
 
 	CGFloat side = font ? ceilf(font.lineHeight) : TGMetricLineBody;
-	UIImage *image = [[TGCustomEmojiStore shared] imageForId:statusEmojiId side:side];
-	if (!image) {
-		return [[NSAttributedString alloc] initWithString:name attributes:baseAttrs];
-	}
-
-	id attachment = [[attachmentClass alloc] init];
-	if ([attachment respondsToSelector:@selector(setImage:)]) {
-		[attachment setImage:image];
-	}
-	if ([attachment respondsToSelector:@selector(setBounds:)]) {
-		CGFloat descender = font ? roundf(font.descender) : TGMetricZero;
-		[attachment setBounds:CGRectMake(TGMetricZero, descender, side, side)];
-	}
+	CGFloat descender = font ? roundf(font.descender) : TGMetricZero;
 
 	NSMutableAttributedString *res = [[NSMutableAttributedString alloc] initWithString:name attributes:baseAttrs];
-	[res appendAttributedString:[[NSAttributedString alloc] initWithString:@" " attributes:baseAttrs]];
-	// ios7-guarded: the respondsToSelector: check and return near the top.
-	NSAttributedString *attachStr = [NSAttributedString attributedStringWithAttachment:attachment];
-	if (attachStr) {
-		[res appendAttributedString:attachStr];
+
+	if (verified) {
+		UIImage *badge = [TGIcons verifiedBadge];
+		if (badge) {
+			id attachment = [[attachmentClass alloc] init];
+			if ([attachment respondsToSelector:@selector(setImage:)])
+				[attachment setImage:badge];
+			if ([attachment respondsToSelector:@selector(setBounds:)])
+				[attachment setBounds:CGRectMake(TGMetricZero, descender, side, side)];
+			[res appendAttributedString:[[NSAttributedString alloc] initWithString:@" " attributes:baseAttrs]];
+			NSAttributedString *attachStr = [NSAttributedString attributedStringWithAttachment:attachment];
+			if (attachStr)
+				[res appendAttributedString:attachStr];
+		}
 	}
+
+	if (statusEmojiId != 0) {
+		UIImage *image = [[TGCustomEmojiStore shared] imageForId:statusEmojiId side:side];
+		if (image) {
+			id attachment = [[attachmentClass alloc] init];
+			if ([attachment respondsToSelector:@selector(setImage:)])
+				[attachment setImage:image];
+			if ([attachment respondsToSelector:@selector(setBounds:)])
+				[attachment setBounds:CGRectMake(TGMetricZero, descender, side, side)];
+			[res appendAttributedString:[[NSAttributedString alloc] initWithString:@" " attributes:baseAttrs]];
+			NSAttributedString *attachStr = [NSAttributedString attributedStringWithAttachment:attachment];
+			if (attachStr)
+				[res appendAttributedString:attachStr];
+		}
+	} else if (premium && !verified) {
+		UIImage *star = [TGIcons glyphNamed:@"star" colour:colour side:side];
+		if (star) {
+			id attachment = [[attachmentClass alloc] init];
+			if ([attachment respondsToSelector:@selector(setImage:)])
+				[attachment setImage:star];
+			if ([attachment respondsToSelector:@selector(setBounds:)])
+				[attachment setBounds:CGRectMake(TGMetricZero, descender, side, side)];
+			[res appendAttributedString:[[NSAttributedString alloc] initWithString:@" " attributes:baseAttrs]];
+			NSAttributedString *attachStr = [NSAttributedString attributedStringWithAttachment:attachment];
+			if (attachStr)
+				[res appendAttributedString:attachStr];
+		}
+	}
+
 	return res;
 }

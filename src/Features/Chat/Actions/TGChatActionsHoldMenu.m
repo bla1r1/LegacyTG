@@ -515,7 +515,7 @@ static const CGFloat kHoldBlurRadius = 28.0f;
 	if (!messageId)
 		return;
 
-	if ([action isEqualToString:@"Reply"]){
+	if ([action isEqualToString:@"Reply"] || [action isEqualToString:@"Quote"]){
 		// A chat can forbid replies to this particular message; can_be_replied
 		// is the server's word on it, and opening a composer that would be
 		// refused is worse than one line saying so.
@@ -536,7 +536,14 @@ static const CGFloat kHoldBlurRadius = 28.0f;
 			NSString *who = [m[@"outgoing"] boolValue] ? TGLocalized(@"You")
 					: ([[TGMessageStore shared] nameForUserId:
 							[m[@"senderId"] longLongValue]] ?: self.chatTitle ?: TGLocalized(@"Reply"));
-			[me showComposeBanner:who subtitle:TGComposePreview(m)];
+			if ([action isEqualToString:@"Quote"]){
+				NSString *quote = TGComposePreview(m);
+				me.replyQuoteText = quote;
+				[me showComposeBanner:who subtitle:[NSString stringWithFormat:@"\"%@\"", quote]];
+			} else {
+				me.replyQuoteText = nil;
+				[me showComposeBanner:who subtitle:TGComposePreview(m)];
+			}
 			[me.input becomeFirstResponder];
 		}];
 

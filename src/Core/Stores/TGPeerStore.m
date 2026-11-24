@@ -167,6 +167,7 @@ static TGPeer *TGPeerFromRecords(NSDictionary *user, NSDictionary *chat,
                           title:(NSString *)title
                        username:(NSString *)username
                        verified:(BOOL)verified
+                      isPremium:(BOOL)isPremium
                   emojiStatusId:(int64_t)emojiStatusId
                          online:(BOOL)online
                    lastSeenText:(NSString *)lastSeenText
@@ -183,6 +184,7 @@ static TGPeer *TGPeerFromRecords(NSDictionary *user, NSDictionary *chat,
                           title:(NSString *)title
                        username:(NSString *)username
                        verified:(BOOL)verified
+                      isPremium:(BOOL)isPremium
                   emojiStatusId:(int64_t)emojiStatusId
                          online:(BOOL)online
                    lastSeenText:(NSString *)lastSeenText
@@ -199,6 +201,7 @@ static TGPeer *TGPeerFromRecords(NSDictionary *user, NSDictionary *chat,
 	_initials = [TGPeerInitials(title) copy];
 	_username = [username copy];
 	_verified = verified;
+	_isPremium = isPremium;
 	_emojiStatusId = emojiStatusId;
 	_online = online;
 	_lastSeenText = [lastSeenText copy];
@@ -277,6 +280,8 @@ static TGPeer *TGPeerFromRecords(NSDictionary *user, NSDictionary *chat,
 								 username:username
 								 verified:TGPeerRecordVerified(chat) ||
 										  TGPeerRecordVerified(user)
+								isPremium:[user[@"is_premium"] boolValue] ||
+										  [chat[@"is_premium"] boolValue]
 							emojiStatusId:emojiStatusId
 								   online:online
 							 lastSeenText:lastSeen

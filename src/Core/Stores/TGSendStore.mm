@@ -120,6 +120,16 @@ NSString *TGErrorMessage(NSDictionary *message, NSDictionary *fallback) {
 	NSDictionary *options = (silent || schedulingState[@"@type"])
 			? [TGClient messageSendOptionsSilent:silent schedulingState:schedulingState]
 			: nil;
+	[self sendFormattedText:formattedText toChat:chatId thread:threadId
+					replyTo:replyToId schedulingState:schedulingState options:options];
+}
+
+- (void)sendFormattedText:(NSDictionary *)formattedText
+				   toChat:(int64_t)chatId
+				   thread:(int64_t)threadId
+				  replyTo:(int64_t)replyToId
+		  schedulingState:(NSDictionary *)schedulingState
+				  options:(NSDictionary *)options {
 	__weak __typeof__(self) weakSelf = self;
 	[[TGClient shared] sendFormattedText:formattedText
 								  toChat:chatId

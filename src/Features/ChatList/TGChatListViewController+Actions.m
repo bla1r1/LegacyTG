@@ -19,9 +19,6 @@ static const CGFloat kSwipeFlickVelocity = 500.0f;
 - (NSString *)titleForCurrentList {
 	if (self.showsArchive)
 		return TGLocalized(@"Archived Chats");
-	for (NSDictionary *f in [TGChatListStore shared].folders)
-		if ([f[@"id"] integerValue] == self.folderId)
-			return f[@"title"] ?: TGLocalized(@"Chats");
 	return TGLocalized(@"Chats");
 }
 

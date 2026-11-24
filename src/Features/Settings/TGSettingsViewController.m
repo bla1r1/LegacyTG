@@ -512,7 +512,7 @@
 			NSString *name = current;
 			for (NSDictionary *language in languages)
 				if ([language[@"id"] isEqualToString:current ?: @""]){
-					name = language[@"name"] ?: current;
+					name = language[@"native_name"] ?: language[@"name"] ?: current;
 					break;
 				}
 			weakSelf.rootLanguageName = name;

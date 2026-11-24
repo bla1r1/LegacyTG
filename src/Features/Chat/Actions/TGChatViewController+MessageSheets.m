@@ -260,11 +260,13 @@ static NSString *TGSheetDate(NSTimeInterval unix) {
 									   inView:live.view];
 					return;
 				}
-				[TGAlertSheet showMessage:
-						[NSString stringWithFormat:@"“%@” starts at character %ld.",
-								quote, (long)position]
-								   title:@"Quote"
-								   inView:live.view];
+				live.replyToId = messageId;
+				live.replyQuoteText = quote;
+				NSString *who = [m[@"outgoing"] boolValue] ? TGLocalized(@"You")
+						: ([[TGMessageStore shared] nameForUserId:
+								[m[@"senderId"] longLongValue]] ?: live.chatTitle ?: TGLocalized(@"Reply"));
+				[live showComposeBanner:who subtitle:[NSString stringWithFormat:@"\"%@\"", quote]];
+				[live.input becomeFirstResponder];
 			}];
 		}];
 	}];

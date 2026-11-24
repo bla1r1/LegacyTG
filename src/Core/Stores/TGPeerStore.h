@@ -34,6 +34,7 @@ extern NSString *const TGPeerStoreChangedNotification;
 @property (nonatomic, copy, readonly) NSString *initials;
 @property (nonatomic, copy, readonly) NSString *username;
 @property (nonatomic, assign, readonly) BOOL verified;
+@property (nonatomic, assign, readonly) BOOL isPremium;
 @property (nonatomic, assign, readonly) int64_t emojiStatusId;
 @property (nonatomic, assign, readonly) BOOL online;
 @property (nonatomic, copy, readonly) NSString *lastSeenText;

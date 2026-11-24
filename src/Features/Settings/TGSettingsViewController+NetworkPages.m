@@ -467,6 +467,11 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 					continue;
 				NSDictionary *folder = folders[(NSUInteger)index];
 				row[TGRowOpens] = @YES;
+				NSString *rawCount = descriptor[TGPageModelRowDetail];
+				if (rawCount.length){
+					NSInteger c = rawCount.integerValue;
+					row[TGRowDetail] = TGLocalizedPluralValue(@"%@ chat", @"%@ chats", [@(c) stringValue], c);
+				}
 				row[TGRowTap] = [^{
 					[weakSelf runFolderActionFor:folder];
 				} copy];

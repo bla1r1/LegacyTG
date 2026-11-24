@@ -3,7 +3,7 @@
 
 NSArray *TGSearchScopeTitles(void) {
 	return @[@"All", @"Chats", @"Messages", @"Media", @"Links",
-			 @"Files", @"Music", @"Voice"];
+			 @"Files", @"Music", @"Voice", @"Downloads"];
 }
 
 NSString *TGPublicPostText(NSDictionary *message) {

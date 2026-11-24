@@ -47,6 +47,7 @@ extern NSString *const TGRowAvatarUser;  // NSNumber BOOL, load through the memb
 extern NSString *const TGRowAvatarImage; // UIImage already decoded by the screen
 extern NSString *const TGRowStatusEmojiId; // NSNumber, emoji status beside the name
 extern NSString *const TGRowVerified;    // NSNumber BOOL, verified mark after the name
+extern NSString *const TGRowPremium;     // NSNumber BOOL, premium star badge after the name
 extern NSString *const TGRowOnline;      // NSNumber BOOL, subtitle in the accent colour
 extern NSString *const TGRowPin;         // NSNumber BOOL, pin before the title
 extern NSString *const TGRowAccessory;   // one of TGRowAccessory* below, or trailing text

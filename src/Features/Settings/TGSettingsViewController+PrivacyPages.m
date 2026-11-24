@@ -141,29 +141,64 @@ static NSString *TGNotificationWhen(NSNumber *stamp) {
 	NSUInteger activeGroups = [TGSettingsStore shared].activeNotificationGroups.count;
 	(void)activeGroups;
 
-	return @[
-		TGSection(@"MESSAGE NOTIFICATIONS", nil, show),
-		TGSection(@"IN-APP NOTIFICATIONS", nil, inAppRows),
-		TGSection(@"REACTIONS", nil, reactionRows),
-		TGSection(@"BACKGROUND NOTIFICATIONS",
-				@"Keeps a minimal connection in background for notifications without APNs certificate.",
-				keepAliveRows),
+	BOOL permissionDenied = NO;
+	UIApplication *app = [UIApplication sharedApplication];
+	if ([app respondsToSelector:@selector(currentUserNotificationSettings)]){
+		UIUserNotificationSettings *s = [app currentUserNotificationSettings];
+		permissionDenied = (s && s.types == UIUserNotificationTypeNone);
+	} else if ([app respondsToSelector:@selector(enabledRemoteNotificationTypes)]){
+		permissionDenied = ([app enabledRemoteNotificationTypes] == 0);
+	}
 
-		TGSection(nil,
-				@"Undo all custom notification settings for all your contacts and groups.",
-				@[
-			TGRedRow(@"Reset All Notifications", ^{
-			[TGAlertSheet showConfirm:@"Are you sure you want to reset all notification settings to default?"
-								title:@"Reset All Notifications"
-							   action:@"Reset"
-						  destructive:YES
-							   inView:weakSelf.view
-							onConfirm:^{
-				[[TGSettingsStore shared] resetAllNotificationSettings];
-				[weakSelf loadForPage];
-			}];
-		})]),
+	NSMutableArray *sections = [NSMutableArray array];
+	if (permissionDenied){
+		[sections addObject:TGSection(nil, nil, @[
+			TGRow(TGKindPlain, @"Notifications are disabled in iOS Settings. Turn them on to receive alerts.")
+		])];
+	}
+	[sections addObject:TGSection(@"MESSAGE NOTIFICATIONS", nil, show)];
+	[sections addObject:TGSection(@"IN-APP NOTIFICATIONS", nil, inAppRows)];
+
+	BOOL includeMuted = [[NSUserDefaults standardUserDefaults] boolForKey:@"TGNotificationBadgeIncludeMuted"];
+	BOOL countMessages = [[NSUserDefaults standardUserDefaults] objectForKey:@"TGNotificationBadgeCountMessages"]
+			? [[NSUserDefaults standardUserDefaults] boolForKey:@"TGNotificationBadgeCountMessages"] : YES;
+
+	NSArray *badgeRows = @[
+		TGSwitchRow(@"Include Muted Chats", includeMuted, ^(BOOL on){
+			[[NSUserDefaults standardUserDefaults] setBool:on forKey:@"TGNotificationBadgeIncludeMuted"];
+			[[NSUserDefaults standardUserDefaults] synchronize];
+			[weakSelf rebuild];
+		}),
+		TGSwitchRow(@"Count Unread Messages", countMessages, ^(BOOL on){
+			[[NSUserDefaults standardUserDefaults] setBool:on forKey:@"TGNotificationBadgeCountMessages"];
+			[[NSUserDefaults standardUserDefaults] synchronize];
+			[weakSelf rebuild];
+		}),
 	];
+	[sections addObject:TGSection(@"BADGE ICON",
+			@"Turn this off to count unread chats instead of messages.",
+			badgeRows)];
+	[sections addObject:TGSection(@"REACTIONS", nil, reactionRows)];
+	[sections addObject:TGSection(@"BACKGROUND NOTIFICATIONS",
+			@"Keeps a minimal connection in background for notifications without APNs certificate.",
+			keepAliveRows)];
+
+	[sections addObject:TGSection(nil,
+			@"Undo all custom notification settings for all your contacts and groups.",
+			@[
+		TGRedRow(@"Reset All Notifications", ^{
+		[TGAlertSheet showConfirm:@"Are you sure you want to reset all notification settings to default?"
+							title:@"Reset All Notifications"
+						   action:@"Reset"
+					  destructive:YES
+						   inView:weakSelf.view
+						onConfirm:^{
+			[[TGSettingsStore shared] resetAllNotificationSettings];
+			[weakSelf loadForPage];
+		}];
+	})])];
+
+	return sections;
 }
 
 - (NSArray *)soundSections {

@@ -43,6 +43,12 @@ extern NSString *const TGSendStoreCanRetryKey;
 				  replyTo:(int64_t)replyToId
 		  schedulingState:(NSDictionary *)schedulingState
 				   silent:(BOOL)silent;
+- (void)sendFormattedText:(NSDictionary *)formattedText
+				   toChat:(int64_t)chatId
+				   thread:(int64_t)threadId
+				  replyTo:(int64_t)replyToId
+		  schedulingState:(NSDictionary *)schedulingState
+				  options:(NSDictionary *)options;
 - (void)sendText:(NSString *)text
 		  toChat:(int64_t)chatId
 		  thread:(int64_t)threadId

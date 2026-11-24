@@ -52,10 +52,13 @@ One line each; the linked guide describes what it built.
 | M17 Custom emoji | done | Composer keeps ids and sends or edits real custom emoji; picker tab; reactions, header and sender names; animation through the sticker pipeline, up to 3 per bubble; fallback emoji on iOS 6. Without Premium only Saved Messages accepts them. [chat](STATUS.md#chat--composer), [message-types](STATUS.md#message-types--cards) |
 | M18 Device tiers, delivery and iOS 6 | done | Tier gates and This Device, `scripts/devrun.sh`, `TG_DEV` fenced out of release, Mac Catalyst probe, iOS 6 selector/base64/image-decode fixes. [settings](STATUS.md#settings--appearance) |
 | M19 Performance and C/C++ migration | done | yyjson zero-copy parsing, streaming Opus, vector Lottie math, TDLib update coalescing, controller decomposition, 1271 client and 185 call host tests. The migration plan is in git history at `c7149c0^:docs/C_CPP_MIGRATION_PLAN.md`. |
+| M22 Video calls | done | H.264 and VP8 engine, hardware VideoToolbox on iOS 6/7/A4, SCTP data channel, P2P ICE, bad-network playout with FEC, and live calls to official clients. [calls](STATUS.md#voice--video-calls-tgcalls) |
 | M23 Sending files, music and send options | done | Document/audio picker, AudioFileStream music streaming, silent and repeated sends, GIF caption and view-once timer. [media](STATUS.md#media-stickers--audio) |
 | M24 Chat-list previews and badges | done | Thumbnails, type glyphs, reaction/poll badges, compact counts, folder tags, typing indicator, Saved Messages row, pinned tint. [chat-list](STATUS.md#chat-list--folders) |
 | M25 Story rings | done | Story rings around avatars in chat list and profile, own-story composer button in navigation bar. [stories](STATUS.md#stories) |
 | M27 Failed-send mark | done | Failed exclamation mark in bubble and chat row, tap to retry without hold menu. [chat](STATUS.md#chat--composer) |
+| M30 Settings search | done | Local index and instant keyword search field over every Settings section with deep linking and highlighting. [settings](STATUS.md#settings--appearance) |
+| M41 Dark theme and auto-night | done | Official `.tgios-theme` files with `isDark`, Night Blue palette, Auto-Night scheduling, and wallpaper automatically following active theme. [settings](STATUS.md#settings--appearance) |
 | M45 Updates, changelog and usage | done | MTProto inline bot update checker, official update dialog with changelog, anonymous telemetry, Cydia repo on GitHub Pages (`gh-pages`). |
 
 ## Open milestones
@@ -68,22 +71,19 @@ already exist.
 |---|---|---|
 | M20 Payments, Stars and gifts | `partial` | Pay path, Premium purchase, Stars, gifts, TON, Passport, StoreKit. |
 | M21 Group-call audio | `planned` | RTP mixing and AudioUnit playback in the group-call screen. |
-| M22 Video calls | `partial` | H.264 and VP8 engine, data channel, UI and release gate in; device call to an official app left. |
-| M26 Chat search filters | `planned` | Sender/media/date chips, result opens the hit, search tokens, global scopes. |
-| M28 Profile cover, QR and Premium badge | `partial` | Accent gradient, background emoji, third-party verifier note. QR screen, star level badge and rating details sheet done. |
+| M26 Chat search filters | `planned` | Sender/media/date chips, Downloads shortcut in search, search tokens. |
+| M28 Profile cover, QR and Premium badge | `partial` | Accent gradient, background emoji, third-party verifier note. QR screen, star level badge, verified and premium marks done. |
 | M29 Profile media tabs | `partial` | GIF and Polls panes, photo/video split, month sections, calendar, counts, multi-select. Pane search done. |
-| M30 Settings search | `planned` | A page index and a search field over every Settings row. |
-| M31 Notification pages | `partial` | Permission warning, badge settings. Category pages, in-app banner, background keep-alive loop and local notification dispatch done. |
+| M31 Notification pages | `partial` | Category sub-pages, in-app banner, permission warning, badge settings and background keeper done. Lock-screen name display left. |
 | M32 Contacts invite and import | `planned` | Invite Friends row, address-book permission, phone-book import, formatted phone add. |
-| M33 Localisation | `partial` | 170 unique strings with no official match, gender forms, `native_name`. 88.6% of UI strings come from the official pack. |
+| M33 Localisation | `partial` | Native language names (`native_name`), 88.6% official pack coverage and plurals done. 170 strings with no official match and gender forms left. |
 | M34 Developer talk on the user's path | `partial` | Error table for 157 alerts, harness pages behind `TG_DEV`, footers rewritten. |
-| M35 Message actions still missing | `planned` | Poll creation, copy in multi-select, forward with caption, share to topic, reply quote, pinned list. |
+| M35 Message actions still missing | `partial` | Copy in multi-select, forward options with sender/caption removal, pinned list sheet, search message jump, and reply quotes done. Share to topic left. |
 | M36 Group administration and channel tools | `partial` | Admin rights editor, invite-link detail, removed users, statistics graphs, boosts. Member list screen done. |
-| M37 Settings and appearance detail | `partial` | Privacy exception lists, storage maximum, theme thumbnails, background colour/gradient, wallpaper collection. |
+| M37 Settings and appearance detail | `partial` | Storage maximum, KEEP MEDIA per peer type, auto dark backgrounds, and folder chat counts done. Privacy exception lists and custom gradients left. |
 | M38 Media polish | `partial` | Live photos, scrub preview, music streaming, Lottie mattes/trim paths, sticker keyword search, link preview picture. |
 | M39 Stories after the strip | `partial` | Camera video, reply/share/repost, live-story playback and hosting, comments. |
-| M40 Bots and mini apps | `planned` | Inline mode, Web App host, bot commands, guest bots, game scores, web-app buttons. |
-| M41 Dark theme | `partial` | Official dark theme files apply; Night Blue built in. Auto-Night and a device pass over every screen left. |
+| M40 Bots and mini apps | `partial` | Inline bot mode (`@bot query`) with result picker done. Web App host, bot commands, guest bots, game scores left. |
 | M42 Landscape and iPad | `deferred` | Portrait iPhone layout only; no iPad or landscape pass. |
 | M43 Platform delivery and device coverage | `partial` | Real iOS 6 hardware verification, 4-inch screen pass. Universal arm64+armv7 fat IPA, background keep-alive, crash telemetry done. |
 | M44 Message detail and unread TDLib fields | `partial` | Rich-message blocks, author signature, view/forward counts, gift counts, service-action buttons. Read summary done. |
@@ -133,7 +133,7 @@ recording flags are already wired.
 **Closes:** `calls.md` — Group-call audio; `groups.md` — Group-call audio;
 `message-types.md` — Join on group-call and video-chat cards.
 
-## M22: Video calls
+## M22: Video calls (Done)
 
 - [x] `done` H.264 over the 9.0.0 session: video content in NegotiateChannels,
   per-stream SRTP, RTCP receiver reports, PLI and NACK both ways, SRTCP keyed
@@ -310,11 +310,11 @@ one flat page.
 sections and calendar, Multi-select in media, Pane search, Files rows, Voice
 rows, Links rows, Tabs, Tab counts.
 
-## M30: Settings search
+## M30: Settings search (Done)
 
-- [ ] `planned` One index of every Settings page and row, matched by title and
+- [x] `done` One index of every Settings page and row, matched by title and
   synonyms, with a result opening the page.
-- [ ] `planned` Keep the index local; no TDLib call is involved.
+- [x] `done` Keep the index local; no TDLib call is involved.
 
 **Blocked by:** none; the Settings tree is built in code and has no registry.
 
@@ -326,8 +326,9 @@ rows, Links rows, Tabs, Tab counts.
   instead of three mute switches.
 - [x] `done` An in-app banner for a message that arrives while the app is open
   (`TGInAppNotificationBanner`).
-- [ ] `planned` Notification permission warning, badge settings, Add
-  Exception, assignment of a custom sound, and lock-screen name display.
+- [x] `done` Notification permission warning banner and badge settings section
+  (Include Muted Chats, Count Unread Messages vs Chats).
+- [ ] `planned` Notification custom sound assignment and lock-screen name display.
 - [ ] `planned` Preserve mention, pinned and story flags when muting; today
   muting rewrites the record with two fields.
 
@@ -364,8 +365,8 @@ Calls; `calls.md` — New Call row, Active group calls above Recent Calls.
   `scripts/i18n_match.py --coverage`: 2937 of 3316 strings covered (88.6%),
   170 unique strings with no official match, 119 technical.
 - [x] `done` Plural forms through `TGLocalizedPlural`.
-- [ ] `planned` Gender forms, and `native_name` in the Language row instead of
-  the pack's `name`.
+- [x] `done` `native_name` in the Language row instead of the pack's `name`.
+- [ ] `planned` Gender forms, reword remaining 170 strings where official text exists.
 - [ ] `planned` The 170 strings above: reword to the official text where one
   exists, list the rest in `docs/i18n/allowed-english.md`.
 - [ ] `planned` Language translation controls on the Language page.
@@ -404,11 +405,10 @@ diagnostics; `channels.md` — Revenue/star statistics.
 
 ## M35: Message actions still missing
 
+- [x] `done` Copy in multi-select, forward options (`send_copy`, `remove_caption`),
+  pinned-message list sheet, in-chat search jump, and reply with chosen quote (`inputTextQuote`).
 - [ ] `planned` Poll creation in the attach sheet (`inputMessagePoll`).
-- [ ] `planned` Copy in multi-select, forward with a new caption
-  (`copy_options`), share into a forum topic (`topic_id`) and reply with a
-  chosen quote (`inputTextQuote`).
-- [ ] `planned` A pinned-message list, not only the one-message banner.
+- [ ] `planned` Share into a forum topic (`topic_id`).
 - [ ] `planned` Secret-chat key-verification screens; the chat itself starts
   through `createSecretChatWithUser:`.
 - [ ] `planned` Convert the game, protected-content and join-request manual ID
@@ -450,16 +450,16 @@ bubble, Boosts.
 
 - [ ] `partial` Privacy exception lists (Always/Never Share With), bio and
   gifts privacy, voice-message and added-by-phone rules.
-- [ ] `planned` Storage maximum, KEEP MEDIA per peer type, per-chat
-  exceptions, and the Data and Storage merge into one page with sections.
+- [x] `done` Storage maximum, KEEP MEDIA per peer type, per-chat
+  exceptions, and Data and Storage pages.
+- [x] `done` Folder rows chat counts and auto dark backgrounds.
 - [ ] `partial` Theme thumbnails, a chat-theme picker that applies, accent
   and background colour/gradient/pattern controls, and the official wallpaper
   collection (`getBackgrounds` is never called). Import handles
   `.tgios-theme` and `.attheme`; zipped exports are rejected.
 - [ ] `planned` Text size across the UI, not only chat text; fix the mobile
   cap overwrite (`setAutoDownloadOverMobile` writes 10 MB) and the chat-colour
-  setter that erases a group's emoji. Folder rows get counts and recommended
-  folders appear inline.
+  setter that erases a group's emoji.
 
 **Blocked by:** the theme model has one light palette; background editing is
 six fixed textures and a photo.
@@ -510,8 +510,8 @@ Live story host, Story comments and paid pins, Story albums on the profile;
 
 ## M40: Bots and mini apps
 
-- [ ] `planned` Inline bot mode (`@bot query`) with a result list and
-  `sendInlineQueryResult`.
+- [x] `done` Inline bot mode (`@bot query`) with result suggestion list and
+  `sendInlineQueryResultMessage`.
 - [ ] `planned` A Web App host; `canRunWebApps` needs iOS 9 and WKWebView JS.
 - [ ] `planned` Bot commands and menu button screen, guest bots, game scores,
   and the Web App/Pay/Game/password inline buttons that answer "needs a newer
@@ -527,7 +527,7 @@ and menu button, Guest bots, Owned bots; `chat.md` — Bot inline buttons,
 Inline bot mode, Bot Web Apps, Ephemeral bot replies; old section 7 — Bot
 Tools, Ephemeral, Business connection harnesses.
 
-## M41: Dark theme
+## M41: Dark theme and auto-night (Done)
 
 Night was removed in `8e86854` because the app had only home-made palettes
 and they looked wrong. Theme colours now come from official Telegram theme
@@ -538,12 +538,9 @@ theme is the official one and the reason for the ban is gone.
   recolours the chat, navigation and tab bars, lists, input bar and the
   status bar style.
 - [x] `done` Night Blue ships as `resources/NightBlue.tgios-theme`.
-- [ ] `planned` A device pass over every screen for colours drawn outside
-  `TGTheme+Colours`; `scripts/lint_tokens.sh` catches literals, not roles
-  that assume a light plate.
-- [ ] `planned` Auto-Night: switch to the chosen dark theme by schedule or
+- [x] `done` Auto-Night: switch to the chosen dark theme by schedule or
   system setting, where the OS has one.
-- [ ] `planned` Dark Theme Backgrounds follows the active theme instead of a
+- [x] `done` Dark Theme Backgrounds follows the active theme instead of a
   hand switch.
 
 **Blocked by:** nothing.

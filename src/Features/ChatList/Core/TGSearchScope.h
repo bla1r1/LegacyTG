@@ -15,6 +15,7 @@ typedef NS_ENUM(NSInteger, TGSearchScope) {
 	TGSearchScopeFiles,
 	TGSearchScopeMusic,
 	TGSearchScopeVoice,
+	TGSearchScopeDownloads,
 };
 
 FOUNDATION_EXPORT NSArray *TGSearchScopeTitles(void);

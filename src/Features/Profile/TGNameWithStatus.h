@@ -13,6 +13,9 @@ extern "C" {
 /// name with font and colour applied.
 FOUNDATION_EXPORT NSAttributedString *TGNameWithStatus(NSString *name, int64_t statusEmojiId, UIFont *font, UIColor *colour);
 
+/// Appends verified badge and/or custom status or premium star badge.
+FOUNDATION_EXPORT NSAttributedString *TGNameWithBadges(NSString *name, int64_t statusEmojiId, BOOL verified, BOOL premium, UIFont *font, UIColor *colour);
+
 #ifdef __cplusplus
 }
 #endif
