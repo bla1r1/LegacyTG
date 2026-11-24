@@ -36,3 +36,9 @@ typedef NS_ENUM(NSInteger, TGCustomEmojiShow) {
 FOUNDATION_EXPORT TGCustomEmojiShow TGCustomEmojiChoose(BOOL animatedAllowed,
 		NSUInteger playing, NSUInteger cap, BOOL hasAnimation, BOOL fileLocal,
 		BOOL playedOnce);
+
+/// How many custom emoji animate at once in one bubble, by device tier
+/// (TGDeviceTier: 0 Vintage ... 3 Full); the rest show their still picture.
+/// Official animates all of them; an A4 drops frames past three, a 5s
+/// plays ten without trouble.
+FOUNDATION_EXPORT NSUInteger TGCustomEmojiAnimationCap(NSInteger tier);

@@ -141,6 +141,20 @@
 	XCTAssertEqual(TGCustomEmojiChoose(YES, 0, 3, NO, NO, NO), TGCustomEmojiShowStill);
 }
 
+/// A 5s and newer animate more than an A4 can: three on Vintage, five on
+/// Legacy, ten on Modern, twenty on Full, and an unknown tier is Vintage's.
+- (void)testEmoji_TheAnimationCapGrowsWithTheTier {
+	XCTAssertEqual(TGCustomEmojiAnimationCap(0), (NSUInteger)3);
+	XCTAssertEqual(TGCustomEmojiAnimationCap(1), (NSUInteger)5);
+	XCTAssertEqual(TGCustomEmojiAnimationCap(2), (NSUInteger)10);
+	XCTAssertEqual(TGCustomEmojiAnimationCap(3), (NSUInteger)20);
+	XCTAssertEqual(TGCustomEmojiAnimationCap(-1), (NSUInteger)3);
+	XCTAssertEqual(TGCustomEmojiAnimationCap(9), (NSUInteger)20);
+	// The eleventh emoji on a 5s rests as its still picture.
+	XCTAssertEqual(TGCustomEmojiChoose(YES, 10, TGCustomEmojiAnimationCap(2), YES, YES, NO),
+			TGCustomEmojiShowStill);
+}
+
 - (void)testEmoji_RestsAsStillAfterItsOneLoop {
 	XCTAssertEqual(TGCustomEmojiChoose(YES, 0, 3, YES, YES, YES), TGCustomEmojiShowStill);
 }

@@ -68,7 +68,6 @@ static UIImage *TGLinkFillImage(NSArray *colours) {
 	[cell.bubble bringSubviewToFront:cell.viewsEye];
 }
 
-static const NSUInteger kMaxCustomEmojiPerBubble = 3;
 static char kTGReactionChipInfoKey;
 /// Rows on each side of the one coming into view whose body text is drawn ahead.
 static const NSInteger kTGBodyPrefetchRows = 4;
@@ -626,6 +625,7 @@ static char kTGReactionChipsShownKey;
 
 	NSUInteger lottieCount = 0;
 	NSUInteger staticCount = 0;
+	NSUInteger animationCap = TGCustomEmojiAnimationCap([TGDevice tier]);
 
 	// Every emoji is drawn; the cap is on how many of them animate. Applied
 	// to the loop itself it left the fourth emoji onward as blank space on
@@ -642,13 +642,13 @@ static char kTGReactionChipsShownKey;
 		if (CGRectIsEmpty(rect))
 			continue;
 
-		NSDictionary *anim = animatedAllowed && lottieCount < kMaxCustomEmojiPerBubble
+		NSDictionary *anim = animatedAllowed && lottieCount < animationCap
 				? [[TGCustomEmojiStore shared] animationForId:emojiId] : nil;
 		NSNumber *fileId = anim[@"fileId"];
 		BOOL hasAnimation = [fileId isKindOfClass:NSNumber.class] && fileId.longLongValue > 0;
 		NSString *animPath = hasAnimation ? self.lottiePaths[fileId] : nil;
 		TGCustomEmojiShow show = TGCustomEmojiChoose(animatedAllowed, lottieCount,
-				kMaxCustomEmojiPerBubble, hasAnimation, animPath.length > 0,
+				animationCap, hasAnimation, animPath.length > 0,
 				animPath.length && [self.playedAnimations containsObject:animPath]);
 		BOOL animated = NO;
 		if (show == TGCustomEmojiShowStillAndFetch &&

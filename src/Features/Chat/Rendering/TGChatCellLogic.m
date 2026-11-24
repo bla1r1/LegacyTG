@@ -16,3 +16,10 @@ BOOL TGChatStillConfirmed(double now, double firstLook) {
 	double since = now - firstLook;
 	return since >= TGChatStillRecheckSeconds && since <= 2 * TGChatStillRecheckSeconds;
 }
+
+NSUInteger TGCustomEmojiAnimationCap(NSInteger tier) {
+	static const NSUInteger caps[] = {3, 5, 10, 20};
+	if (tier < 0)
+		return caps[0];
+	return caps[MIN((NSUInteger)tier, sizeof(caps) / sizeof(caps[0]) - 1)];
+}
