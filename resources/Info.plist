@@ -57,7 +57,7 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.5</string>
+	<string>2.0</string>
 	<key>CFBundleSignature</key>
 	<string>????</string>
 	<key>CFBundleSupportedPlatforms</key>
@@ -88,24 +88,28 @@
 		</dict>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>5</string>
+	<string>6</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>MinimumOSVersion</key>
 	<string>6.0</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Record round video messages and take photos for stories.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Record voice and video messages.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Send photos and videos from your library.</string>
 	<key>NSUserActivityTypes</key>
 	<array>
 		<string>org.telegram.conversation</string>
 	</array>
-	<!-- Music from a chat goes on playing with the screen off, which is the
-	     difference between a track and a voice note. -->
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>audio</string>
-	</array>
 	<key>UIAppFonts</key>
 	<array>
 		<string>AppleColorEmojiCompat.ttf</string>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
 	</array>
 	<key>UIDeviceFamily</key>
 	<array>
@@ -181,11 +185,5 @@
 	</array>
 	<key>UIViewGroupOpacity</key>
 	<false/>
-	<key>NSCameraUsageDescription</key>
-	<string>Record round video messages and take photos for stories.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Record voice and video messages.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Send photos and videos from your library.</string>
 </dict>
 </plist>

@@ -607,7 +607,10 @@ NSDictionary *TGFormattedText(NSString *text) {
 		@"system_language_code"   : @"en",
 		@"device_model"           : dev.model ?: @"iPhone",
 		@"system_version"         : dev.systemVersion ?: @"7.1.2",
-		@"application_version"    : @"1.0",
+		// What the other sessions list shows for this one: the real version,
+		// not a constant that said 1.0 through every release.
+		@"application_version"    : [[NSBundle mainBundle]
+				objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"1.0",
 	} completion:^(NSDictionary *result){
 		if (databaseKey.length && [result[@"@type"] isEqualToString:@"error"] &&
 			[result[@"code"] intValue] == 401){
