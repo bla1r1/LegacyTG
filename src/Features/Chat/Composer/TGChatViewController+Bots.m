@@ -9,6 +9,7 @@
 #import "TGDevShowcase.h"
 #import "TGForwardPicker.h"
 #import "TGPresent.h"
+#import "TGMediaStore.h"
 
 @implementation TGChatViewController (Bots)
 
@@ -359,88 +360,83 @@
 
 #pragma mark - inline bot mode
 
-- (void)checkInlineBotQuery {
-	NSString *text = self.input.text ?: @"";
-	[NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(performInlineBotQuery) object:nil];
-
-	if (![text hasPrefix:@"@"]) {
-		[self hideInlineBotResults];
-		return;
-	}
-
-	static NSRegularExpression *regex = nil;
-	static dispatch_once_t onceToken;
-	dispatch_once(&onceToken, ^{
-		regex = [NSRegularExpression regularExpressionWithPattern:@"^@([A-Za-z0-9_]{3,32})\\s+(.*)$"
-		                                                  options:0
-		                                                    error:nil];
-	});
-
-	NSTextCheckingResult *match = [regex firstMatchInString:text options:0 range:NSMakeRange(0, text.length)];
-	if (!match || match.numberOfRanges < 3) {
-		[self hideInlineBotResults];
-		return;
-	}
-
-	[self performSelector:@selector(performInlineBotQuery) withObject:nil afterDelay:0.35];
+static NSData *TGDecodeMiniThumb(id value) {
+	if ([value isKindOfClass:NSData.class])
+		return value;
+	if (![value isKindOfClass:NSString.class] || ![value length])
+		return nil;
+	return [[NSData alloc] initWithBase64Encoding:value];
 }
 
-- (void)performInlineBotQuery {
-	NSString *text = self.input.text ?: @"";
-	static NSRegularExpression *regex = nil;
-	static dispatch_once_t onceToken;
-	dispatch_once(&onceToken, ^{
-		regex = [NSRegularExpression regularExpressionWithPattern:@"^@([A-Za-z0-9_]{3,32})\\s+(.*)$"
-		                                                  options:0
-		                                                    error:nil];
-	});
-
-	NSTextCheckingResult *match = [regex firstMatchInString:text options:0 range:NSMakeRange(0, text.length)];
-	if (!match || match.numberOfRanges < 3) {
-		[self hideInlineBotResults];
-		return;
-	}
-
-	NSString *botName = [text substringWithRange:[match rangeAtIndex:1]];
-	NSString *query = [text substringWithRange:[match rangeAtIndex:2]];
-
-	__weak typeof(self) weakSelf = self;
-	[[TGMessageStore shared] queryInlineBot:botName query:query inChat:self.chatId completion:^(NSArray *results, int64_t queryId){
-		TGChatViewController *me = weakSelf;
-		if (!me)
-			return;
-		if (![me.input.text hasPrefix:[NSString stringWithFormat:@"@%@", botName]]) {
-			[me hideInlineBotResults];
-			return;
+static void TGInlineResultThumbnailInfo(NSDictionary *item, NSInteger *outFileId, NSData **outMiniThumb) {
+	NSInteger fileId = 0;
+	NSData *mini = nil;
+	NSDictionary *thumb = [item[@"thumbnail"] isKindOfClass:NSDictionary.class] ? item[@"thumbnail"] : nil;
+	if (!thumb) {
+		for (NSString *k in @[@"animation", @"video", @"document", @"sticker"]) {
+			NSDictionary *media = [item[k] isKindOfClass:NSDictionary.class] ? item[k] : nil;
+			if (!media)
+				continue;
+			if ([media[@"thumbnail"] isKindOfClass:NSDictionary.class])
+				thumb = media[@"thumbnail"];
+			if (media[@"minithumbnail"][@"data"])
+				mini = TGDecodeMiniThumb(media[@"minithumbnail"][@"data"]);
+			break;
 		}
-		[me showInlineBotResults:results queryId:queryId];
+	}
+	if (thumb && [thumb[@"file"][@"id"] isKindOfClass:NSNumber.class]) {
+		fileId = [thumb[@"file"][@"id"] integerValue];
+	}
+	if (!fileId && [item[@"photo"] isKindOfClass:NSDictionary.class]) {
+		NSDictionary *photo = item[@"photo"];
+		if (!mini && photo[@"minithumbnail"][@"data"])
+			mini = TGDecodeMiniThumb(photo[@"minithumbnail"][@"data"]);
+		NSArray *sizes = [photo[@"sizes"] isKindOfClass:NSArray.class] ? photo[@"sizes"] : nil;
+		if (sizes.count) {
+			NSDictionary *pick = sizes.count > 1 ? sizes[1] : sizes[0];
+			if ([pick[@"photo"][@"id"] isKindOfClass:NSNumber.class])
+				fileId = [pick[@"photo"][@"id"] integerValue];
+		}
+	}
+	if (outFileId) *outFileId = fileId;
+	if (outMiniThumb) *outMiniThumb = mini;
+}
+
+static BOOL TGInlineResultIsMediaTile(NSDictionary *item) {
+	NSString *type = [item[@"@type"] isKindOfClass:NSString.class] ? item[@"@type"] : @"";
+	BOOL isMedia = [type isEqualToString:@"inlineQueryResultAnimation"]
+			|| [type isEqualToString:@"inlineQueryResultPhoto"]
+			|| [type isEqualToString:@"inlineQueryResultSticker"]
+			|| [type isEqualToString:@"inlineQueryResultVideo"];
+	NSString *title = [item[@"title"] isKindOfClass:NSString.class] ? item[@"title"] : @"";
+	return isMedia && !title.length;
+}
+
+- (void)loadInlineThumbnailInto:(UIImageView *)imageView fileId:(NSInteger)fileId miniThumb:(NSData *)mini {
+	if (mini.length) {
+		UIImage *miniImg = [UIImage imageWithData:mini];
+		if (miniImg)
+			imageView.image = miniImg;
+	}
+	if (fileId <= 0)
+		return;
+	__weak UIImageView *weakIV = imageView;
+	[[TGMediaStore shared] downloadFile:fileId completion:^(NSString *path){
+		UIImageView *iv = weakIV;
+		if (!iv || !path.length)
+			return;
+		UIImage *img = [UIImage imageWithContentsOfFile:path];
+		if (img)
+			iv.image = img;
 	}];
 }
 
-- (void)hideInlineBotResults {
-	if (self.inlineBotPanel) {
-		[self.inlineBotPanel removeFromSuperview];
-		self.inlineBotPanel = nil;
-		self.inlineBotResults = nil;
-		self.inlineBotQueryId = 0;
-	}
-}
-
-- (void)showInlineBotResults:(NSArray *)results queryId:(int64_t)queryId {
-	if (!results.count) {
-		[self hideInlineBotResults];
-		return;
-	}
-
-	self.inlineBotResults = results;
-	self.inlineBotQueryId = queryId;
-
+- (UIScrollView *)prepareInlineBotPanelWithHeight:(CGFloat)panelH {
 	TGTheme *theme = [TGTheme shared];
 	CGFloat width = self.view.bounds.size.width;
-	CGFloat rowH = TGMetricRow;
-	CGFloat maxRows = 4.0f;
-	CGFloat height = MIN((CGFloat)results.count, maxRows) * rowH;
 	CGFloat bottom = CGRectGetMinY(self.inputBar.frame);
+	CGFloat maxH = MAX(TGMetricPersonRow, bottom - TGMetricNavigationBarHeight - TGMetricPadWide);
+	CGFloat height = MIN(panelH, maxH);
 
 	if (!self.inlineBotPanel) {
 		UIScrollView *panel = [[UIScrollView alloc] initWithFrame:CGRectMake(0, bottom - height, width, height)];
@@ -455,33 +451,324 @@
 		}
 	}
 
-	self.inlineBotPanel.contentSize = CGSizeMake(width, results.count * rowH);
+	UIView *topBorder = [[UIView alloc] initWithFrame:CGRectMake(0, 0, width, TGMetricHairline)];
+	topBorder.backgroundColor = [theme separatorColour];
+	[self.inlineBotPanel addSubview:topBorder];
+	return self.inlineBotPanel;
+}
 
-	for (NSUInteger i = 0; i < results.count; i++) {
-		NSDictionary *item = results[i];
+- (void)checkInlineBotQuery {
+	NSString *text = self.input.text ?: @"";
+	[NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(performInlineBotQuery) object:nil];
+
+	if (![text hasPrefix:@"@"]) {
+		[self hideInlineBotResults];
+		return;
+	}
+
+	static NSRegularExpression *prefixRegex = nil;
+	static NSRegularExpression *queryRegex = nil;
+	static dispatch_once_t onceToken;
+	dispatch_once(&onceToken, ^{
+		prefixRegex = [NSRegularExpression regularExpressionWithPattern:@"^@([A-Za-z0-9_]{0,32})$"
+		                                                        options:0
+		                                                          error:nil];
+		queryRegex = [NSRegularExpression regularExpressionWithPattern:@"^@([A-Za-z0-9_]{3,32})\\s+(.*)$"
+		                                                       options:NSRegularExpressionDotMatchesLineSeparators
+		                                                         error:nil];
+	});
+
+	NSTextCheckingResult *prefixMatch = [prefixRegex firstMatchInString:text options:0 range:NSMakeRange(0, text.length)];
+	if (prefixMatch && prefixMatch.numberOfRanges >= 2) {
+		NSString *prefix = [[text substringWithRange:[prefixMatch rangeAtIndex:1]] lowercaseString];
+		__weak typeof(self) weakSelf = self;
+		[[TGMessageStore shared] recentInlineBots:^(NSArray *bots){
+			TGChatViewController *me = weakSelf;
+			if (!me || ![me.input.text isEqualToString:text])
+				return;
+			NSMutableArray *filtered = [NSMutableArray array];
+			for (NSDictionary *bot in bots) {
+				NSString *uname = [bot[@"username"] lowercaseString] ?: @"";
+				if (!prefix.length || [uname hasPrefix:prefix])
+					[filtered addObject:bot];
+			}
+			if (filtered.count)
+				[me showInlineBotSuggestions:filtered];
+			else
+				[me hideInlineBotResults];
+		}];
+		return;
+	}
+
+	NSTextCheckingResult *match = [queryRegex firstMatchInString:text options:0 range:NSMakeRange(0, text.length)];
+	if (!match || match.numberOfRanges < 3) {
+		[self hideInlineBotResults];
+		return;
+	}
+
+	[self performSelector:@selector(performInlineBotQuery) withObject:nil afterDelay:0.35];
+}
+
+- (void)performInlineBotQuery {
+	NSString *text = self.input.text ?: @"";
+	static NSRegularExpression *regex = nil;
+	static dispatch_once_t onceToken;
+	dispatch_once(&onceToken, ^{
+		regex = [NSRegularExpression regularExpressionWithPattern:@"^@([A-Za-z0-9_]{3,32})\\s+(.*)$"
+		                                                  options:NSRegularExpressionDotMatchesLineSeparators
+		                                                    error:nil];
+	});
+
+	NSTextCheckingResult *match = [regex firstMatchInString:text options:0 range:NSMakeRange(0, text.length)];
+	if (!match || match.numberOfRanges < 3) {
+		[self hideInlineBotResults];
+		return;
+	}
+
+	NSString *botName = [text substringWithRange:[match rangeAtIndex:1]];
+	NSString *query = [text substringWithRange:[match rangeAtIndex:2]];
+
+	__weak typeof(self) weakSelf = self;
+	[[TGMessageStore shared] queryInlineBot:botName query:query inChat:self.chatId offset:@""
+	                         fullCompletion:^(NSArray *results, int64_t queryId, NSDictionary *button, NSString *nextOffset, int64_t botUserId){
+		TGChatViewController *me = weakSelf;
+		if (!me)
+			return;
+		NSString *current = me.input.text ?: @"";
+		NSString *expectedPrefix = [NSString stringWithFormat:@"@%@", botName.lowercaseString];
+		if (![current.lowercaseString hasPrefix:expectedPrefix]) {
+			[me hideInlineBotResults];
+			return;
+		}
+		me.inlineBotName = botName;
+		[me showInlineBotResults:results queryId:queryId button:button botUserId:botUserId];
+	}];
+}
+
+- (void)hideInlineBotResults {
+	if (self.inlineBotPanel) {
+		[self.inlineBotPanel removeFromSuperview];
+		self.inlineBotPanel = nil;
+		self.inlineBotResults = nil;
+		self.inlineBotSuggestions = nil;
+		self.inlineBotButton = nil;
+		self.inlineBotQueryId = 0;
+		self.inlineBotUserId = 0;
+	}
+}
+
+- (void)showInlineBotSuggestions:(NSArray *)bots {
+	if (!bots.count) {
+		[self hideInlineBotResults];
+		return;
+	}
+	self.inlineBotSuggestions = bots;
+	self.inlineBotResults = nil;
+	self.inlineBotButton = nil;
+	self.inlineBotQueryId = 0;
+
+	TGTheme *theme = [TGTheme shared];
+	CGFloat width = self.view.bounds.size.width;
+	CGFloat rowH = TGMetricPersonRow;
+	CGFloat maxH = TGMetricSettingsProfileRow + TGMetricRow;
+	CGFloat contentH = bots.count * rowH;
+	UIScrollView *panel = [self prepareInlineBotPanelWithHeight:MIN(contentH, maxH)];
+	panel.contentSize = CGSizeMake(width, contentH);
+
+	for (NSUInteger i = 0; i < bots.count; i++) {
+		NSDictionary *bot = bots[i];
 		UIButton *row = [UIButton buttonWithType:UIButtonTypeCustom];
 		row.frame = CGRectMake(0, i * rowH, width, rowH);
 		row.tag = (NSInteger)i;
+		[row addTarget:self action:@selector(inlineBotSuggestionTapped:) forControlEvents:UIControlEventTouchUpInside];
+
+		CGFloat avatarSide = TGMetricListAvatar;
+		UIImageView *avatar = [[UIImageView alloc] initWithFrame:CGRectMake(
+				TGMetricPadLarge, TGCenteredOrigin(rowH, avatarSide), avatarSide, avatarSide)];
+		avatar.backgroundColor = [theme separatorColour];
+		avatar.layer.cornerRadius = TGHalf(avatarSide);
+		avatar.clipsToBounds = YES;
+		avatar.contentMode = UIViewContentModeScaleAspectFill;
+		[row addSubview:avatar];
+		NSInteger photoId = [bot[@"photoFileId"] integerValue];
+		if (photoId > 0)
+			[self loadInlineThumbnailInto:avatar fileId:photoId miniThumb:nil];
+
+		CGFloat textX = TGMetricPadLarge + avatarSide + TGMetricPadMedium;
+		CGFloat textW = width - textX - TGMetricPadLarge;
+
+		UILabel *nameLabel = [[UILabel alloc] initWithFrame:CGRectMake(textX, TGMetricPadSmall, textW, TGHalf(rowH))];
+		nameLabel.backgroundColor = [UIColor clearColor];
+		nameLabel.font = TGFontBodyStrong();
+		nameLabel.textColor = [theme primaryTextColour];
+		nameLabel.text = bot[@"name"] ?: bot[@"username"];
+		[row addSubview:nameLabel];
+
+		UILabel *userLabel = [[UILabel alloc] initWithFrame:CGRectMake(textX, TGHalf(rowH) - TGMetricPadTiny, textW, TGHalf(rowH) - TGMetricPadSmall)];
+		userLabel.backgroundColor = [UIColor clearColor];
+		userLabel.font = TGFontCaption();
+		userLabel.textColor = [theme secondaryTextColour];
+		userLabel.text = [@"@" stringByAppendingString:(bot[@"username"] ?: @"")];
+		[row addSubview:userLabel];
+
+		UIView *sep = [[UIView alloc] initWithFrame:CGRectMake(textX, rowH - TGMetricHairline, textW, TGMetricHairline)];
+		sep.backgroundColor = [theme separatorColour];
+		[row addSubview:sep];
+
+		[panel addSubview:row];
+	}
+}
+
+- (void)inlineBotSuggestionTapped:(UIButton *)btn {
+	NSInteger index = btn.tag;
+	if (index < 0 || index >= (NSInteger)self.inlineBotSuggestions.count)
+		return;
+	NSDictionary *bot = self.inlineBotSuggestions[(NSUInteger)index];
+	NSString *username = bot[@"username"];
+	if (!username.length)
+		return;
+	self.input.text = [NSString stringWithFormat:@"@%@ ", username];
+	[self inputChanged];
+	[self.input becomeFirstResponder];
+}
+
+- (void)showInlineBotResults:(NSArray *)results
+                     queryId:(int64_t)queryId
+                      button:(NSDictionary *)button
+                   botUserId:(int64_t)botUserId {
+	NSString *buttonText = [button[@"text"] isKindOfClass:NSString.class] ? button[@"text"] : @"";
+	if (!results.count && !buttonText.length) {
+		[self hideInlineBotResults];
+		return;
+	}
+
+	self.inlineBotSuggestions = nil;
+	self.inlineBotResults = results;
+	self.inlineBotQueryId = queryId;
+	self.inlineBotButton = button;
+	self.inlineBotUserId = botUserId;
+
+	TGTheme *theme = [TGTheme shared];
+	CGFloat width = self.view.bounds.size.width;
+	CGFloat yOffset = 0.0f;
+
+	BOOL useGrid = results.count > 0;
+	for (NSDictionary *item in results) {
+		if (!TGInlineResultIsMediaTile(item)) {
+			useGrid = NO;
+			break;
+		}
+	}
+
+	CGFloat headerH = buttonText.length ? TGMetricRow : 0.0f;
+	CGFloat bodyH = 0.0f;
+	NSInteger cols = TGMetricThemeGridColumns;
+	CGFloat gap = TGMetricGridGap;
+	CGFloat tileSide = floorf((width - (cols + 1) * gap) / cols);
+
+	if (results.count) {
+		if (useGrid) {
+			NSInteger rows = ((NSInteger)results.count + cols - 1) / cols;
+			bodyH = gap + rows * (tileSide + gap);
+		} else {
+			bodyH = results.count * TGMetricPersonRow;
+		}
+	}
+
+	CGFloat contentH = headerH + bodyH;
+	CGFloat maxPanelH = TGMetricSettingsProfileRow + TGMetricRow;
+	UIScrollView *panel = [self prepareInlineBotPanelWithHeight:MIN(contentH, maxPanelH)];
+	panel.contentSize = CGSizeMake(width, contentH);
+
+	if (buttonText.length) {
+		UIButton *pmBtn = [UIButton buttonWithType:UIButtonTypeCustom];
+		pmBtn.frame = CGRectMake(0, 0, width, TGMetricRow);
+		[pmBtn setTitle:buttonText forState:UIControlStateNormal];
+		[pmBtn setTitleColor:[theme accentColour] forState:UIControlStateNormal];
+		pmBtn.titleLabel.font = TGFontBodyStrong();
+		[pmBtn addTarget:self action:@selector(inlineBotButtonTapped:) forControlEvents:UIControlEventTouchUpInside];
+		UIView *sep = [[UIView alloc] initWithFrame:CGRectMake(0, TGMetricRow - TGMetricHairline, width, TGMetricHairline)];
+		sep.backgroundColor = [theme separatorColour];
+		[pmBtn addSubview:sep];
+		[panel addSubview:pmBtn];
+		yOffset += TGMetricRow;
+	}
+
+	if (useGrid) {
+		for (NSUInteger i = 0; i < results.count; i++) {
+			NSDictionary *item = results[i];
+			NSInteger col = (NSInteger)(i % cols);
+			NSInteger rowIdx = (NSInteger)(i / cols);
+			CGFloat x = gap + col * (tileSide + gap);
+			CGFloat y = yOffset + gap + rowIdx * (tileSide + gap);
+
+			UIButton *tile = [UIButton buttonWithType:UIButtonTypeCustom];
+			tile.frame = CGRectMake(x, y, tileSide, tileSide);
+			tile.tag = (NSInteger)i;
+			tile.backgroundColor = [theme separatorColour];
+			tile.layer.cornerRadius = TGMetricCornerSmall;
+			tile.clipsToBounds = YES;
+			[tile addTarget:self action:@selector(inlineBotResultTapped:) forControlEvents:UIControlEventTouchUpInside];
+
+			UIImageView *iv = [[UIImageView alloc] initWithFrame:tile.bounds];
+			iv.contentMode = UIViewContentModeScaleAspectFill;
+			iv.clipsToBounds = YES;
+			[tile addSubview:iv];
+
+			NSInteger fileId = 0;
+			NSData *mini = nil;
+			TGInlineResultThumbnailInfo(item, &fileId, &mini);
+			[self loadInlineThumbnailInto:iv fileId:fileId miniThumb:mini];
+
+			[panel addSubview:tile];
+		}
+		return;
+	}
+
+	CGFloat rowH = TGMetricPersonRow;
+	for (NSUInteger i = 0; i < results.count; i++) {
+		NSDictionary *item = results[i];
+		UIButton *row = [UIButton buttonWithType:UIButtonTypeCustom];
+		row.frame = CGRectMake(0, yOffset + i * rowH, width, rowH);
+		row.tag = (NSInteger)i;
 		[row addTarget:self action:@selector(inlineBotResultTapped:) forControlEvents:UIControlEventTouchUpInside];
 
-		NSString *title = item[@"title"];
-		NSString *desc = item[@"description"] ?: item[@"performer"];
+		NSInteger fileId = 0;
+		NSData *mini = nil;
+		TGInlineResultThumbnailInfo(item, &fileId, &mini);
+		BOOL hasThumb = (fileId > 0 || mini.length > 0);
+
+		CGFloat textX = TGMetricPadLarge;
+		if (hasThumb) {
+			CGFloat thumbSide = TGMetricListAvatar;
+			UIImageView *iv = [[UIImageView alloc] initWithFrame:CGRectMake(
+					TGMetricPadLarge, TGCenteredOrigin(rowH, thumbSide), thumbSide, thumbSide)];
+			iv.backgroundColor = [theme separatorColour];
+			iv.layer.cornerRadius = TGMetricCornerSmall;
+			iv.clipsToBounds = YES;
+			iv.contentMode = UIViewContentModeScaleAspectFill;
+			[row addSubview:iv];
+			[self loadInlineThumbnailInto:iv fileId:fileId miniThumb:mini];
+			textX = TGMetricPadLarge + thumbSide + TGMetricPadMedium;
+		}
+
+		NSString *title = [item[@"title"] isKindOfClass:NSString.class] ? item[@"title"] : nil;
+		NSString *desc = [item[@"description"] isKindOfClass:NSString.class] ? item[@"description"]
+				: ([item[@"performer"] isKindOfClass:NSString.class] ? item[@"performer"] : nil);
 		if (!title.length && !desc.length) {
 			title = [item[@"@type"] stringByReplacingOccurrencesOfString:@"inlineQueryResult" withString:@""];
 		}
 
-		CGFloat textX = TGMetricPadLarge;
 		CGFloat textW = width - textX - TGMetricPadLarge;
-
 		if (desc.length && title.length) {
-			UILabel *titleLabel = [[UILabel alloc] initWithFrame:CGRectMake(textX, 0, textW, TGHalf(rowH) + TGMetricPadSmall)];
+			UILabel *titleLabel = [[UILabel alloc] initWithFrame:CGRectMake(textX, TGMetricPadSmall, textW, TGHalf(rowH))];
 			titleLabel.backgroundColor = [UIColor clearColor];
 			titleLabel.font = TGFontBodyStrong();
 			titleLabel.textColor = [theme primaryTextColour];
 			titleLabel.text = title;
 			[row addSubview:titleLabel];
 
-			UILabel *descLabel = [[UILabel alloc] initWithFrame:CGRectMake(textX, TGHalf(rowH), textW, TGHalf(rowH) - TGMetricPadSmall)];
+			UILabel *descLabel = [[UILabel alloc] initWithFrame:CGRectMake(textX, TGHalf(rowH) - TGMetricPadTiny, textW, TGHalf(rowH) - TGMetricPadSmall)];
 			descLabel.backgroundColor = [UIColor clearColor];
 			descLabel.font = TGFontCaption();
 			descLabel.textColor = [theme secondaryTextColour];
@@ -500,7 +787,34 @@
 		sep.backgroundColor = [theme separatorColour];
 		[row addSubview:sep];
 
-		[self.inlineBotPanel addSubview:row];
+		[panel addSubview:row];
+	}
+}
+
+- (void)inlineBotButtonTapped:(UIButton *)btn {
+	NSDictionary *button = self.inlineBotButton;
+	NSDictionary *type = [button[@"type"] isKindOfClass:NSDictionary.class] ? button[@"type"] : nil;
+	NSString *kind = type[@"@type"];
+	if ([kind isEqualToString:@"inlineQueryResultsButtonTypeWebApp"]) {
+		NSString *url = type[@"url"];
+		if (url.length)
+			[self handleOpenLink:url];
+		return;
+	}
+	if ([kind isEqualToString:@"inlineQueryResultsButtonTypeStartBot"] && self.inlineBotUserId) {
+		NSString *param = [type[@"parameter"] isKindOfClass:NSString.class] ? type[@"parameter"] : @"";
+		__weak typeof(self) weakSelf = self;
+		[[TGMessageStore shared] openBot:self.inlineBotUserId startParameter:param
+		                      completion:^(int64_t chatId){
+			TGChatViewController *me = weakSelf;
+			if (!me || !chatId)
+				return;
+			TGChatViewController *vc = [[TGChatViewController alloc] init];
+			vc.chatId = chatId;
+			vc.chatTitle = me.inlineBotName ?: @"Bot";
+			vc.hidesBottomBarWhenPushed = YES;
+			[me.navigationController pushViewController:vc animated:YES];
+		}];
 	}
 }
 
@@ -517,6 +831,7 @@
 		                                     thread:self.threadId];
 	}
 	self.input.text = @"";
+	[self clearComposeState];
 	[self inputChanged];
 	[self hideInlineBotResults];
 }

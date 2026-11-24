@@ -23,53 +23,68 @@
 
 - (UIColor *)calloutBackgroundColour {
 	///< the satin glass plate behind popup callouts and reaction bars
-	// iOS 6 authentic dark satin glass for callout menus
-	return [UIColor colorWithRed:0x1C / 255.0f green:0x1D / 255.0f blue:0x21 / 255.0f alpha:0.95f];
+	if ([self isDark])
+		return [UIColor colorWithRed:0x1C / 255.0f green:0x1D / 255.0f blue:0x21 / 255.0f alpha:0.95f];
+	return [UIColor colorWithRed:0xF2 / 255.0f green:0xF2 / 255.0f blue:0xF7 / 255.0f alpha:0.96f];
 }
 
 - (UIColor *)calloutTrayColour {
-	///< recessed dark well for reactions
-	return [UIColor colorWithWhite:0.0f alpha:0.25f];
+	///< recessed well for reactions
+	if ([self isDark])
+		return [UIColor colorWithWhite:0.0f alpha:0.25f];
+	return [UIColor colorWithWhite:0.0f alpha:0.06f];
 }
 
 - (UIColor *)calloutBorderColour {
-	return [UIColor colorWithWhite:1.0f alpha:0.18f];
+	if ([self isDark])
+		return [UIColor colorWithWhite:1.0f alpha:0.18f];
+	return [UIColor colorWithWhite:0.0f alpha:0.15f];
 }
 
 - (UIColor *)calloutDividerDarkColour {
 	///< etched dark groove
-	return [UIColor colorWithWhite:0.0f alpha:0.50f];
+	if ([self isDark])
+		return [UIColor colorWithWhite:0.0f alpha:0.50f];
+	return [UIColor colorWithWhite:0.0f alpha:0.12f];
 }
 
 - (UIColor *)calloutDividerLightColour {
 	///< etched specular highlight
-	return [UIColor colorWithWhite:1.0f alpha:0.12f];
+	if ([self isDark])
+		return [UIColor colorWithWhite:1.0f alpha:0.12f];
+	return [UIColor colorWithWhite:1.0f alpha:0.65f];
 }
 
 - (UIColor *)calloutTextColour {
-	return [UIColor whiteColor];
+	if ([self isDark])
+		return [UIColor whiteColor];
+	return [UIColor colorWithRed:0x1C / 255.0f green:0x1C / 255.0f blue:0x1E / 255.0f alpha:1.0f];
 }
 
 - (UIColor *)calloutTextShadowColour {
-	return [UIColor colorWithWhite:0.0f alpha:0.6f];
+	if ([self isDark])
+		return [UIColor colorWithWhite:0.0f alpha:0.6f];
+	return [TGTheme drawsSkeuomorphicChrome] ? [UIColor colorWithWhite:1.0f alpha:0.75f] : [UIColor clearColor];
 }
 
 - (UIColor *)calloutIconColour {
-	return [UIColor colorWithWhite:0.92f alpha:1.0f];
+	if ([self isDark])
+		return [UIColor colorWithWhite:0.92f alpha:1.0f];
+	return [UIColor colorWithRed:0x3C / 255.0f green:0x3C / 255.0f blue:0x43 / 255.0f alpha:1.0f];
 }
 
 - (UIColor *)calloutGlossTopColour {
 	///< specular top reflection for callout popup menu
 	if ([self isDark])
 		return [UIColor colorWithWhite:1.0f alpha:0.04f];
-	return TGRole(@"calloutGlossTop", [UIColor colorWithWhite:1.0f alpha:0.65f]);
+	return TGRole(@"calloutGlossTop", [UIColor colorWithWhite:1.0f alpha:0.28f]);
 }
 
 - (UIColor *)calloutGlossBottomColour {
 	///< specular fade for callout popup menu
 	if ([self isDark])
 		return [UIColor clearColor];
-	return TGRole(@"calloutGlossBottom", [UIColor colorWithWhite:1.0f alpha:0.10f]);
+	return TGRole(@"calloutGlossBottom", [UIColor colorWithWhite:1.0f alpha:0.04f]);
 }
 
 #pragma mark - shadows and etching

@@ -537,9 +537,22 @@ static const CGFloat kHoldBlurRadius = 28.0f;
 					: ([[TGMessageStore shared] nameForUserId:
 							[m[@"senderId"] longLongValue]] ?: self.chatTitle ?: TGLocalized(@"Reply"));
 			if ([action isEqualToString:@"Quote"] || [action isEqualToString:@"Find Quote"]){
-				NSString *quote = TGComposePreview(m);
-				me.replyQuoteText = quote;
-				[me showComposeBanner:who subtitle:[NSString stringWithFormat:@"\"%@\"", quote]];
+				NSString *fullText = [m[@"text"] isKindOfClass:NSString.class] && [m[@"text"] length]
+						? m[@"text"]
+						: ([m[@"caption"] isKindOfClass:NSString.class] && [m[@"caption"] length]
+								? m[@"caption"] : TGComposePreview(m));
+				TGQuotePickerController *picker = [[TGQuotePickerController alloc] initWithText:fullText onQuote:^(NSString *quote){
+					TGChatViewController *live = weakSelf;
+					if (!live)
+						return;
+					live.replyToId = messageId;
+					live.editingId = 0;
+					live.replyQuoteText = quote;
+					[live showComposeBanner:who subtitle:[NSString stringWithFormat:@"\"%@\"", quote]];
+					[live.input becomeFirstResponder];
+				}];
+				[TGPresent presentModal:picker kind:TGModalForm from:me];
+				return;
 			} else {
 				me.replyQuoteText = nil;
 				[me showComposeBanner:who subtitle:TGComposePreview(m)];

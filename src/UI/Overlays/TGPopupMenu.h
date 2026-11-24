@@ -77,4 +77,8 @@ onDefaultReaction:(nullable void (^)(NSString *emoji))defaultChoice
 
 @end
 
+@interface TGQuotePickerController : UIViewController
+- (instancetype)initWithText:(NSString *)text onQuote:(void (^)(NSString *quote))onQuote;
+@end
+
 NS_ASSUME_NONNULL_END

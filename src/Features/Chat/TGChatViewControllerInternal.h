@@ -335,10 +335,17 @@ UIImage *TGImageFromMinithumbnail(id mini);
 @property (nonatomic, strong) UIScrollView *inlineBotPanel;
 @property (nonatomic, strong) NSArray *inlineBotResults;
 @property (nonatomic, assign) int64_t inlineBotQueryId;
+@property (nonatomic, strong) NSDictionary *inlineBotButton;
+@property (nonatomic, assign) int64_t inlineBotUserId;
+@property (nonatomic, copy) NSString *inlineBotName;
+@property (nonatomic, strong) NSArray *inlineBotSuggestions;
 - (void)checkInlineBotQuery;
 - (void)performInlineBotQuery;
 - (void)hideInlineBotResults;
-- (void)showInlineBotResults:(NSArray *)results queryId:(int64_t)queryId;
+- (void)showInlineBotResults:(NSArray *)results
+                     queryId:(int64_t)queryId
+                      button:(NSDictionary *)button
+                   botUserId:(int64_t)botUserId;
 - (void)inlineBotResultTapped:(UIButton *)btn;
 - (BOOL)botKeyboardShown;
 - (void)toggleBotKeyboard;

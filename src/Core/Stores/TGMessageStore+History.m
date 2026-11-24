@@ -211,7 +211,19 @@ static const NSInteger kTGHistoryFromLastOffset = -1;
                  query:(NSString *)query
                 inChat:(int64_t)chatId
             completion:(void (^)(NSArray *results, int64_t queryId))completion {
-	void (^fail)(void) = ^{ if (completion) completion(@[], 0); };
+	[self queryInlineBot:botUsername query:query inChat:chatId offset:@""
+	      fullCompletion:^(NSArray *results, int64_t queryId, NSDictionary *button, NSString *nextOffset, int64_t botUserId){
+		if (completion)
+			completion(results, queryId);
+	}];
+}
+
+- (void)queryInlineBot:(NSString *)botUsername
+                 query:(NSString *)query
+                inChat:(int64_t)chatId
+                offset:(NSString *)offset
+        fullCompletion:(void (^)(NSArray *results, int64_t queryId, NSDictionary *button, NSString *nextOffset, int64_t botUserId))completion {
+	void (^fail)(void) = ^{ if (completion) completion(@[], 0, nil, @"", 0); };
 	if (!botUsername.length || !chatId) {
 		fail();
 		return;
@@ -229,12 +241,14 @@ static const NSInteger kTGHistoryFromLastOffset = -1;
 			@"bot_user_id" : botUserId,
 			@"chat_id"     : @(chatId),
 			@"query"       : query ?: @"",
-			@"offset"      : @"",
+			@"offset"      : offset ?: @"",
 		} completion:^(NSDictionary *result){
 			NSArray *items = [result[@"results"] isKindOfClass:NSArray.class] ? result[@"results"] : @[];
 			int64_t queryId = [result[@"inline_query_id"] longLongValue];
+			NSDictionary *button = [result[@"button"] isKindOfClass:NSDictionary.class] ? result[@"button"] : nil;
+			NSString *nextOffset = [result[@"next_offset"] isKindOfClass:NSString.class] ? result[@"next_offset"] : @"";
 			if (completion)
-				completion(items, queryId);
+				completion(items, queryId, button, nextOffset, [botUserId longLongValue]);
 		}];
 	};
 
@@ -253,6 +267,63 @@ static const NSInteger kTGHistoryFromLastOffset = -1;
 		}
 		sBotUserIdCache[cleanUsername.lowercaseString] = botUserId;
 		performQuery(botUserId);
+	}];
+}
+
+- (void)recentInlineBots:(void (^)(NSArray *bots))completion {
+	[[TGClient shared] request:@{@"@type" : @"getRecentInlineBots"} completion:^(NSDictionary *result){
+		NSMutableArray *out = [NSMutableArray array];
+		NSArray *users = [result[@"users"] isKindOfClass:NSArray.class] ? result[@"users"] : nil;
+		for (NSDictionary *user in users) {
+			if (![user isKindOfClass:NSDictionary.class])
+				continue;
+			NSArray *active = [user[@"usernames"][@"active_usernames"] isKindOfClass:NSArray.class]
+					? user[@"usernames"][@"active_usernames"] : nil;
+			NSString *username = active.count ? active[0]
+					: ([user[@"username"] isKindOfClass:NSString.class] ? user[@"username"] : nil);
+			if (!username.length)
+				continue;
+			NSString *first = [user[@"first_name"] isKindOfClass:NSString.class] ? user[@"first_name"] : @"";
+			NSString *last = [user[@"last_name"] isKindOfClass:NSString.class] ? user[@"last_name"] : @"";
+			NSString *name = [[NSString stringWithFormat:@"%@ %@", first, last]
+					stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+			if (!name.length)
+				name = username;
+			NSNumber *photoId = user[@"profile_photo"][@"small"][@"id"];
+			NSMutableDictionary *entry = [NSMutableDictionary dictionaryWithDictionary:@{
+				@"id"       : user[@"id"] ?: @0,
+				@"username" : username,
+				@"name"     : name,
+			}];
+			if ([photoId isKindOfClass:NSNumber.class] && [photoId integerValue] > 0)
+				entry[@"photoFileId"] = photoId;
+			[out addObject:entry];
+		}
+		if (completion)
+			completion(out);
+	}];
+}
+
+- (void)openBot:(int64_t)botUserId
+ startParameter:(NSString *)parameter
+     completion:(void (^)(int64_t chatId))completion {
+	if (!botUserId) {
+		if (completion) completion(0);
+		return;
+	}
+	[[TGClient shared] request:@{@"@type" : @"createPrivateChat", @"user_id" : @(botUserId), @"force" : @YES}
+	                completion:^(NSDictionary *chat){
+		int64_t chatId = [chat[@"id"] longLongValue];
+		if (chatId && parameter.length) {
+			[[TGClient shared] send:@{
+				@"@type"       : @"sendBotStartMessage",
+				@"bot_user_id" : @(botUserId),
+				@"chat_id"     : @(chatId),
+				@"parameter"   : parameter,
+			}];
+		}
+		if (completion)
+			completion(chatId);
 	}];
 }
 

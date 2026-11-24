@@ -5,6 +5,7 @@
 #import <QuartzCore/QuartzCore.h>
 #import "TGStyle.h"
 #import "TGReactionPicker.h"
+#import "TGLocalization.h"
 
 static const CGFloat kMenuCardW        = 220.0f;
 static const CGFloat kMenuRowH         = 36.0f;
@@ -445,7 +446,7 @@ onDefaultReaction:(void (^)(NSString *))defaultChoice
 		row.frame = CGRectMake(0, currentY, kMenuCardW, kMenuRowH);
 		row.tag = (NSInteger)i;
 		[row addTarget:self action:@selector(rowTapped:) forControlEvents:UIControlEventTouchUpInside];
-		[row setBackgroundImage:[TGTheme skeuomorphicButtonImageWithColor:[theme accentColour] height:kMenuRowH highlighted:YES cornerRadius:0.0f] forState:UIControlStateHighlighted];
+		[row setBackgroundImage:[TGTheme skeuomorphicButtonImageWithColor:([theme isDark] ? [theme accentColour] : [theme buttonHighlightColour]) height:kMenuRowH highlighted:YES cornerRadius:0.0f] forState:UIControlStateHighlighted];
 		[rowParent addSubview:row];
 
 		UIImage *glyph = [TGIcons menuGlyphNamed:item[@"icon"]];
@@ -473,7 +474,7 @@ onDefaultReaction:(void (^)(NSString *))defaultChoice
 			small.backgroundColor = [UIColor clearColor];
 			small.textColor = destructive ? [theme destructiveColour] : [theme secondaryTextColour];
 			small.shadowColor = [theme calloutTextShadowColour];
-			small.shadowOffset = CGSizeMake(0, -1.0f);
+			small.shadowOffset = [theme isDark] ? CGSizeMake(0, -1.0f) : ([TGTheme drawsSkeuomorphicChrome] ? CGSizeMake(0, 1.0f) : CGSizeZero);
 			[row addSubview:small];
 		}
 		label.text = title;
@@ -481,7 +482,7 @@ onDefaultReaction:(void (^)(NSString *))defaultChoice
 		label.backgroundColor = [UIColor clearColor];
 		label.textColor = destructive ? [theme destructiveColour] : [theme calloutTextColour];
 		label.shadowColor = [theme calloutTextShadowColour];
-		label.shadowOffset = CGSizeMake(0, -1.0f);
+		label.shadowOffset = [theme isDark] ? CGSizeMake(0, -1.0f) : ([TGTheme drawsSkeuomorphicChrome] ? CGSizeMake(0, 1.0f) : CGSizeZero);
 		[row addSubview:label];
 
 		currentY += kMenuRowH;
@@ -511,6 +512,91 @@ onDefaultReaction:(void (^)(NSString *))defaultChoice
 		(!_reactionWrapper || !CGRectContainsPoint(_reactionWrapper.frame, where))) {
 		[TGPopupMenu dismiss];
 	}
+}
+
+@end
+
+@interface TGQuotePickerController () {
+	UITextView *_textView;
+	NSString *_fullText;
+	void (^_onQuote)(NSString *quote);
+}
+@end
+
+@implementation TGQuotePickerController
+
+- (instancetype)initWithText:(NSString *)text onQuote:(void (^)(NSString *quote))onQuote {
+	if ((self = [super init])){
+		_fullText = [text copy] ?: @"";
+		_onQuote = [onQuote copy];
+		self.title = TGLocalized(@"Quote");
+	}
+	return self;
+}
+
+- (void)viewDidLoad {
+	[super viewDidLoad];
+	TGTheme *theme = [TGTheme shared];
+	self.view.backgroundColor = [theme listBackgroundColour];
+
+	self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc]
+			initWithBarButtonSystemItem:UIBarButtonSystemItemCancel
+								 target:self
+								 action:@selector(cancelTapped)];
+	self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
+			initWithTitle:TGLocalized(@"Quote")
+					style:UIBarButtonItemStyleDone
+				   target:self
+				   action:@selector(quoteTapped)];
+
+	CGFloat pad = TGMetricPadLarge;
+	UITextView *tv = [[UITextView alloc] initWithFrame:CGRectInset(self.view.bounds, pad, pad)];
+	tv.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+	tv.backgroundColor = [UIColor clearColor];
+	tv.textColor = [theme primaryTextColour];
+	tv.font = TGFontBody();
+	tv.editable = NO;
+	tv.text = _fullText;
+	_textView = tv;
+	[self.view addSubview:tv];
+
+	UIMenuItem *quoteItem = [[UIMenuItem alloc] initWithTitle:TGLocalized(@"Quote")
+														action:@selector(quoteSelectionFromMenu:)];
+	[UIMenuController sharedMenuController].menuItems = @[quoteItem];
+}
+
+- (void)viewDidAppear:(BOOL)animated {
+	[super viewDidAppear:animated];
+	[_textView becomeFirstResponder];
+	_textView.selectedRange = NSMakeRange(0, _fullText.length);
+}
+
+- (BOOL)canPerformAction:(SEL)action withSender:(id)sender {
+	if (action == @selector(quoteSelectionFromMenu:))
+		return _textView.selectedRange.length > 0;
+	return [super canPerformAction:action withSender:sender];
+}
+
+- (void)quoteSelectionFromMenu:(id)sender {
+	[self quoteTapped];
+}
+
+- (void)cancelTapped {
+	[self dismissViewControllerAnimated:YES completion:nil];
+}
+
+- (void)quoteTapped {
+	NSRange sel = _textView.selectedRange;
+	NSString *picked = (sel.length > 0 && NSMaxRange(sel) <= _fullText.length)
+			? [_fullText substringWithRange:sel]
+			: _fullText;
+	picked = [picked stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+	if (!picked.length)
+		picked = _fullText;
+	void (^cb)(NSString *) = _onQuote;
+	[self dismissViewControllerAnimated:YES completion:^{
+		if (cb) cb(picked);
+	}];
 }
 
 @end
