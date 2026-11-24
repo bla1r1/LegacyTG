@@ -46,7 +46,7 @@ NSInteger TGUpdateParseDatacenterFromBinlogData(NSData *data);
 /// Parses the active datacenter ID (1..5) from a binlog file (encrypted or unencrypted), or 0 if absent/invalid.
 NSInteger TGUpdateParseDatacenterFromBinlogFile(NSString *path);
 
-/// YES when no check has run yet or the last one is at least a day old.
+/// YES when no check has run yet or the last one is at least an hour old.
 BOOL TGUpdateCheckIsDue(NSDate *now, NSDate *lastCheck);
 
 @class TGUpdateInfo;

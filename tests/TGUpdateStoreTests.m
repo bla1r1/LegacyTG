@@ -166,11 +166,11 @@ static NSString *TGUSUpdateJSON(NSInteger build, BOOL blocking) {
 	NSDate *now = [NSDate dateWithTimeIntervalSince1970:1000000.0];
 	XCTAssertTrue(TGUpdateCheckIsDue(now, nil));
 	XCTAssertFalse(TGUpdateCheckIsDue(now,
-			[NSDate dateWithTimeInterval:-23.0 * 60.0 * 60.0 sinceDate:now]));
+			[NSDate dateWithTimeInterval:-30.0 * 60.0 sinceDate:now]));
 	XCTAssertTrue(TGUpdateCheckIsDue(now,
-			[NSDate dateWithTimeInterval:-25.0 * 60.0 * 60.0 sinceDate:now]));
+			[NSDate dateWithTimeInterval:-2.0 * 60.0 * 60.0 sinceDate:now]));
 	XCTAssertTrue(TGUpdateCheckIsDue(now,
-			[NSDate dateWithTimeInterval:-24.0 * 60.0 * 60.0 sinceDate:now]));
+			[NSDate dateWithTimeInterval:-1.0 * 60.0 * 60.0 sinceDate:now]));
 	XCTAssertFalse(TGUpdateCheckIsDue(now,
 			[NSDate dateWithTimeInterval:60.0 * 60.0 sinceDate:now]));
 }

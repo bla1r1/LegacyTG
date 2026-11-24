@@ -23,7 +23,7 @@ static NSString *const TGUpdateCrashMarkerKey = @"TGUpdateLastCrashMarker";
 // rename needs a build. Inline mode must stay on.
 static NSString *const TGUpdateBotUsername = @"LegacyTGbot";
 
-static const NSTimeInterval TGUpdateCheckInterval = 24.0 * 60.0 * 60.0;
+static const NSTimeInterval TGUpdateCheckInterval = 1.0 * 60.0 * 60.0;
 static const NSTimeInterval TGUpdateAccountWait = 2.0;
 static const NSInteger TGUpdateAccountWaits = 15;
 static const NSUInteger TGUpdateQueryLimit = 256;
