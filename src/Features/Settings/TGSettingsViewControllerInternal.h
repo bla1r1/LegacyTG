@@ -45,6 +45,9 @@
 /// native name and the pack id as the user types.
 @property (nonatomic, strong) UISearchBar *languageSearchBar;
 @property (nonatomic, copy) NSString *languageSearchText;
+@property (nonatomic, strong) UISearchBar *settingsSearchBar;
+@property (nonatomic, copy) NSString *settingsSearchText;
+- (NSArray *)settingsSearchSections;
 /// The current pack's record, read back from getLanguagePackInfo. The actions
 /// that edit a pack need the whole object, not only the id.
 @property (nonatomic, strong) NSDictionary *languageInfo;

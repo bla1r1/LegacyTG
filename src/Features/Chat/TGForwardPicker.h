@@ -19,6 +19,9 @@ static inline NSString *TGForwardPickerSectionHeader(NSString *query,
 
 @interface TGForwardPicker : TGRowsViewController
 @property (nonatomic, copy) void (^onPicked)(int64_t chatId);
+@property (nonatomic, copy) void (^onPickedWithOptions)(int64_t chatId, BOOL hideSenderName, BOOL hideCaptions);
+@property (nonatomic, assign) BOOL hideSenderName;
+@property (nonatomic, assign) BOOL hideCaptions;
 /// The chat the messages came from; it is not a destination and never appears
 /// in the recent strip.
 @property (nonatomic, assign) int64_t sourceChatId;

@@ -544,10 +544,12 @@ static const CGFloat kHoldBlurRadius = 28.0f;
 		TGForwardPicker *picker = [[TGForwardPicker alloc] init];
 		picker.sourceChatId = self.chatId;
 		__weak typeof(self) weakSelf = self;
-		picker.onPicked = ^(int64_t targetChatId){
+		picker.onPickedWithOptions = ^(int64_t targetChatId, BOOL hideSenderName, BOOL hideCaptions){
 			[[TGMessageStore shared] forwardMessages:@[@(messageId)]
 									  fromChat:weakSelf.chatId
-										toChat:targetChatId];
+										toChat:targetChatId
+									  sendCopy:hideSenderName
+								 removeCaption:hideCaptions];
 		};
 		[TGPresent presentModal:picker kind:TGModalForm from:self];
 

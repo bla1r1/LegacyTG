@@ -11,6 +11,8 @@
 #import "TGBarItem.h"
 #import "TGLabel.h"
 #import "TGControls.h"
+#import "TGPresent.h"
+#import "TGAlertSheet.h"
 
 /// The sheet's title view: "Share" over "Select Chats", as official has it.
 static const CGFloat kPickerTitleWidth  = TGMetricShareTitleWidth;
@@ -65,7 +67,9 @@ static const CGFloat kPickerPanelHeight = TGMetricRow;
 			colour:[[TGTheme shared] barButtonColour] side:TGMetricMenuGlyph],
 			CGRectMake(0, 0, TGMetricRow, TGMetricRow), self, @selector(cancel));
 	self.navigationItem.leftBarButtonItem = [TGBarItem itemWithView:close];
-	self.navigationItem.rightBarButtonItem = nil;
+	self.navigationItem.rightBarButtonItem = [TGBarItem plainItemWithTitle:TGLocalized(@"Options")
+	                                                                target:self
+	                                                                action:@selector(showForwardOptions)];
 
 	[self buildTitleView];
 
@@ -217,13 +221,49 @@ static const CGFloat kPickerPanelHeight = TGMetricRow;
 	return TGSelectedChatIdsInOrder(self.chats, self.selectedChatIds);
 }
 
+- (void)showForwardOptions {
+	NSString *senderOpt = self.hideSenderName
+			? TGLocalized(@"Show Sender Name")
+			: TGLocalized(@"Hide Sender Name");
+	NSString *captionOpt = self.hideCaptions
+			? TGLocalized(@"Show Captions")
+			: TGLocalized(@"Hide Captions");
+
+	__weak typeof(self) weakSelf = self;
+	[TGPresent showMenuTitles:@[senderOpt, captionOpt]
+	         destructiveIndex:-1
+	                 fromView:nil
+	             onController:self
+	                 onChoice:^(NSInteger picked){
+		if (picked == 0) {
+			weakSelf.hideSenderName = !weakSelf.hideSenderName;
+			NSString *msg = weakSelf.hideSenderName
+					? TGLocalized(@"Sender names will be hidden.")
+					: TGLocalized(@"Sender names will be shown.");
+			[weakSelf toast:msg];
+		} else if (picked == 1) {
+			weakSelf.hideCaptions = !weakSelf.hideCaptions;
+			NSString *msg = weakSelf.hideCaptions
+					? TGLocalized(@"Captions will be removed.")
+					: TGLocalized(@"Captions will be kept.");
+			[weakSelf toast:msg];
+		}
+	}];
+}
+
 - (void)send {
 	NSArray *ids = [self selectedChatIdsInOrder];
 	if (!ids.count)
 		return;
-	if (self.onPicked)
-		for (NSNumber *chatId in ids)
+	BOOL hideName = self.hideSenderName;
+	BOOL hideCap = self.hideCaptions;
+	for (NSNumber *chatId in ids) {
+		if (self.onPickedWithOptions) {
+			self.onPickedWithOptions(chatId.longLongValue, hideName, hideCap);
+		} else if (self.onPicked) {
 			self.onPicked(chatId.longLongValue);
+		}
+	}
 	[self cancel];
 }
 

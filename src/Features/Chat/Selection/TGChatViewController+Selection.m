@@ -390,10 +390,12 @@ static void TGAnimateSelectionCheckbox(TGChatViewController *chat, int64_t messa
 	TGForwardPicker *picker = [[TGForwardPicker alloc] init];
 	picker.sourceChatId = chatId;
 	__weak typeof(self) weakSelf = self;
-	picker.onPicked = ^(int64_t targetChatId){
+	picker.onPickedWithOptions = ^(int64_t targetChatId, BOOL hideSenderName, BOOL hideCaptions){
 		[[TGMessageStore shared] forwardMessages:ids
 								  fromChat:chatId
-									toChat:targetChatId];
+									toChat:targetChatId
+								  sendCopy:hideSenderName
+							 removeCaption:hideCaptions];
 		[weakSelf exitEditMode];
 		NSString *title = [[TGMessageStore shared] titleForChat:targetChatId] ?: @"";
 		NSString *text = TGLocalizedPluralValue(@"Message forwarded to **%@**.",

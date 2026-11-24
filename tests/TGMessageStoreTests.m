@@ -153,4 +153,27 @@
 	XCTAssertEqualObjects(request[@"username"], @"gif");
 }
 
+- (void)testForwardMessagesWithOptionsBuildsCorrectRequest {
+	[[TGMessageStore shared] forwardMessages:@[@(123), @(456)]
+	                                fromChat:10
+	                                  toChat:20
+	                                sendCopy:YES
+	                           removeCaption:YES];
+	NSDictionary *request = nil;
+	for (NSData *data in [TGClient shared].outbox){
+		NSString *json = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+		NSString *trimmed = [json componentsSeparatedByString:@"\0"][0];
+		NSDictionary *parsed = [NSJSONSerialization JSONObjectWithData:
+				[trimmed dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil];
+		if ([parsed[@"@type"] isEqualToString:@"forwardMessages"])
+			request = parsed;
+	}
+	XCTAssertNotNil(request);
+	XCTAssertEqualObjects(request[@"from_chat_id"], @(10));
+	XCTAssertEqualObjects(request[@"chat_id"], @(20));
+	XCTAssertEqualObjects(request[@"message_ids"], (@[@(123), @(456)]));
+	XCTAssertEqualObjects(request[@"send_copy"], @YES);
+	XCTAssertEqualObjects(request[@"remove_caption"], @YES);
+}
+
 @end

@@ -106,6 +106,16 @@
 				label:@"QR Code" target:self action:@selector(openQRCode)];
 		self.navigationItem.rightBarButtonItem = [TGBarItem itemWithRole:TGBarRoleEdit
 				target:self action:@selector(openEditProfile)];
+
+		UISearchBar *search = [[UISearchBar alloc] initWithFrame:
+				CGRectMake(0, 0, CGRectGetWidth(self.tableView.bounds) ?: TGMetricScreenWidth,
+						TGMetricRow)];
+		search.delegate = self;
+		search.placeholder = TGLocalized(@"Search");
+		search.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+		[[TGTheme shared] styleSearchBar:search];
+		self.settingsSearchBar = search;
+		self.tableView.tableHeaderView = search;
 	} else if (self.page == TGSettingsPageLanguage){
 		// Official LocalizationListController keeps the "Language" title and
 		// puts the field under it (NavigationBarSearchContentNode, inline),
@@ -222,6 +232,7 @@
 	[super applyTheme];
 	[[TGTheme shared] styleGroupedTable:self.tableView];
 	[[TGTheme shared] styleSearchBar:self.languageSearchBar];
+	[[TGTheme shared] styleSearchBar:self.settingsSearchBar];
 }
 
 

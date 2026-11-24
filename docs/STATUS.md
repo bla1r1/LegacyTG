@@ -129,7 +129,7 @@ States: `done` (matches official client), `partial` (partially implemented), `mi
 | Custom emoji tab in picker | `done` | ``Features/Chat/Views/TGEmojiPanel.m`` | Custom tab with the installed packs; without Premium only Saved Messages takes them. |
 | Reply | `done` | ``src/Features/Chat/Actions/TGChatActionsHoldMenu.m`` | Sets reply target and opens the composer. |
 | Forward | `done` | ``src/Features/Chat/Actions/TGChatActionsHoldMenu.m`` | Single and batched forwards through `TGForwardPicker`. |
-| Forward with a new caption | `missing` | ``Features/Chat/TGForwardPicker.m`` | Picker chooses chats only and calls `forwardMessages`; no `copy_options`. |
+| Forward options and hide author/caption | `done` | ``Features/Chat/TGForwardPicker.m`` | Options sheet in forward picker: toggle hide sender name (`send_copy`) and remove media captions (`remove_caption`). |
 | Share into a forum topic | `missing` | ``Features/Chat/TGForwardPicker.m`` | Picker lists chats, not topics, and sends no `topic_id`. |
 | Edit text | `done` | ``src/Features/Chat/Actions/TGChatActionsHoldMenu.m`` | Prefills with `getMarkdownText` result, then `editMessage:text:`. |
 | Edit caption | `done` | ``Features/Chat/Composer/TGChatViewController+Input.m`` | `editCaption:ofMessage:inChat:` when the original has a photo or document. |
@@ -336,7 +336,7 @@ States: `done` (matches official client), `partial` (partially implemented), `mi
 | Document and audio attachments | `done` | ``Features/Chat/Views/TGAttachSheet.h`` | File and music are in the attach sheet and send as documents/audio through `TGSendStore`. |
 | File information | `done` | ``Features/Media/TGFileInfoViewController.m`` | `getFile`, `getRemoteFile`, downloaded-prefix size and name helpers. |
 | Link preview picture | `partial` | ``Features/Chat/Rendering/TGChatViewController+Layout.m`` | Site, title and description only; the preview picture is never fetched. |
-| Forward with a new caption | `missing` | ``Features/Chat/TGForwardPicker.m`` | Picker sends `forwardMessages` directly; no `copy_options`. |
+| Forward options and hide author/caption | `done` | ``Features/Chat/TGForwardPicker.m`` | Options sheet in forward picker: toggle hide sender name (`send_copy`) and remove media captions (`remove_caption`). |
 | Share into a forum topic | `missing` | ``Features/Chat/TGForwardPicker.m`` | Picker lists chats, not topics, and sends no `topic_id`. |
 | Sticker pack preview | `partial` | ``Features/Media/TGStickerPacksViewController.m`` | The trending sheet shows a count and Install only. |
 | Sticker pack search by keyword | `partial` | ``Features/Media/TGStickerPacksViewController.m`` | Store search accepts a t.me short name only. |
@@ -778,7 +778,7 @@ States: `done` (matches official client), `partial` (partially implemented), `mi
 | Tab bar follows an emoji theme | `done` | ``Core/Style/TGTheme.m`` | The tab bar's colour is part of its repaint check: an emoji theme's palette arrives after launch with the same theme id, and the bar had kept the fallback blue. |
 | Root list | `done` | ``src/Features/Settings/Pages/TGSettingsPagesCore.m`` | Profile card, account rows, app settings, help, This Device, Log out. |
 | Settings tab icon is the account photo | `missing` | ``App/RootViewController.m`` | Always the sliders glyph; no badge or avatar. |
-| Settings search | `missing` | ``src/Features/Settings/Pages/TGSettingsPagesCore.m`` | No search field or page index. |
+| Settings search | `done` | ``src/Features/Settings/Pages/TGSettingsPagesCore.m`` | Search bar in root settings header filters pages and actions by title and keywords. |
 | Accounts switcher | `partial` | ``Features/Settings/TGSettingsViewController+Actions.m`` | Action sheet of names with a check; no avatars, badges or per-account logout. |
 | Four account slots | `partial` | ``Core/Client/TGClient+Accounts.m`` | Three slots for every account. |
 | My Profile row | `done` | ``src/Features/Settings/Pages/TGSettingsPagesCore.m`` | Opens the account's own profile. |
@@ -824,7 +824,7 @@ States: `done` (matches official client), `partial` (partially implemented), `mi
 | Background colour, gradient and pattern | `done` | ``Features/Settings/TGBackgroundEditorViewController.m`` | Full color and linear gradient wallpaper editor with live bubble preview and palette presets. |
 | Photo wallpaper crop, blur and motion | `partial` | ``Features/Settings/TGSettingsViewController+AppearancePages.m`` | One image picker scaled to 640 px and saved as JPEG; no crop, blur or motion. |
 | Your Color row | `done` | ``Features/Settings/TGSettingsViewController+AppearancePages.m`` | One "Your Color" row opens the profile appearance screen. |
-| Night Theme and Auto-Night | `partial` | ``Core/Style/TGTheme.h`` | A dark official theme file applies (`isDark`, `9c93e8f`) and Night Blue is built in; no Auto-Night. |
+| Night Theme and Auto-Night | `done` | ``Core/Style/TGTheme.h`` | Dark themes and Night Blue built-in; Auto-Night scheduled mode with From/To time picker in Appearance settings. |
 | Bubble corners editor | `missing` | ``Core/Style/TGTheme+Effects.m`` | Fixed radius; `TGMetricCornerBubbleFlat` is never used. |
 | Folder editor | `partial` | ``Features/Settings/TGSettingsViewController+NetworkPages.m`` | Eight-item action sheet plus add/remove chats; no excluded-read/muted/archived or tag colour. |
 | Sticker and emoji settings | `missing` | ``Features/Media/TGStickerPacksViewController.m`` | Sticker page is packs, archive and custom emoji only. |
@@ -926,8 +926,8 @@ States: `done` (matches official client), `partial` (partially implemented), `mi
 | My link | `done` | ``Features/Settings/TGSettingsViewController+PrivacyPages.m`` | Copies the account's t.me link. |
 | Protected content flag | `done` | ``Features/Chat/TGChatToolsViewController.m`` | Copy/forward/save are blocked in a protected chat; no screenshot guard. |
 | Session secret-chat and call switches | `done` | ``Features/Settings/TGSessionsViewController.m`` | Per-session accept calls / accept secret chats. |
-| Storage: KEEP MEDIA per peer type | `missing` | ``Features/Settings/TGStorageViewController.m`` | The page is ring + categories + one Clear Cache row. |
-| Storage: maximum cache size | `missing` | ``Features/Settings/TGStorageViewController.m`` | No maximum-cache row. |
+| Storage: KEEP MEDIA options | `done` | ``Features/Settings/TGStorageViewController.m`` | Keep Media options sheet (3 days, 1 week, 1 month, Forever) backed by TDLib option. |
+| Storage: maximum cache size | `done` | ``Features/Settings/TGStorageViewController.m`` | Maximum Cache Size options sheet (5 GB, 20 GB, 50 GB, No Limit) backed by TDLib option. |
 | Storage: category rows and selection | `partial` | ``Features/Settings/TGStorageViewController.m`` | Tapping a category clears that whole type after a sheet; no selection or per-type clear button. |
 | Storage: chats view and per-chat exceptions | `missing` | ``Features/Settings/TGStorageViewController.m`` | No chats view and no per-chat exceptions. |
 | Storage: category split and colours | `partial` | ``Core/Client/TGClient+Files.mm`` | Five buckets plus Other; profile photos and thumbnails sit inside Photos. |

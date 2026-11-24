@@ -25,6 +25,8 @@
 #import "TGAffiliateProgramsViewController.h"
 #import "TGSupportInfoViewController.h"
 #import "TGCallViewController.h"
+#import "TGBackgroundsViewController.h"
+#import "TGProfileAppearanceViewController.h"
 #import "TGAccountStore.h"
 #import "TGProfileStore.h"
 #import "TGSessionsStore.h"
@@ -60,6 +62,8 @@ static BOOL TGNotificationsWarning(void) {
 #pragma mark - pages
 
 - (NSArray *)buildSections {
+	if (self.page == TGSettingsPageRoot && self.settingsSearchText.length > 0)
+		return [self settingsSearchSections];
 	switch (self.page){
 		case TGSettingsPageAppearance:    return [self appearanceSections];
 		case TGSettingsPageData:          return [self dataSections];
@@ -249,12 +253,213 @@ static BOOL TGNotificationsWarning(void) {
 }
 
 - (void)searchBar:(UISearchBar *)searchBar textDidChange:(NSString *)searchText {
-	self.languageSearchText = searchText;
+	if (searchBar == self.languageSearchBar) {
+		self.languageSearchText = searchText;
+	} else {
+		self.settingsSearchText = searchText;
+	}
 	[self rebuild];
 }
 
 - (void)searchBarSearchButtonClicked:(UISearchBar *)searchBar {
 	[searchBar resignFirstResponder];
+}
+
+- (NSArray *)settingsSearchSections {
+	NSString *query = [self.settingsSearchText stringByTrimmingCharactersInSet:
+			[NSCharacterSet whitespaceAndNewlineCharacterSet]].lowercaseString;
+	if (!query.length)
+		return [self rootSections];
+
+	__weak typeof(self) weakSelf = self;
+	NSMutableArray *rows = [NSMutableArray array];
+
+	NSArray *catalog = @[
+		@{
+			@"title": @"Notifications and Sounds",
+			@"subtitle": @"Settings > Notifications",
+			@"icon": @"bell",
+			@"kw": @"notifications sounds alert ringtone vibration badge reply tone",
+			@"action": ^{ [weakSelf openPage:TGSettingsPageNotifications]; }
+		},
+		@{
+			@"title": @"Privacy and Security",
+			@"subtitle": @"Settings > Privacy",
+			@"icon": @"lock",
+			@"kw": @"privacy security passcode password 2fa two-step verification blocked users last seen profile photos calls forward groups",
+			@"action": ^{ [weakSelf openPage:TGSettingsPagePrivacy]; }
+		},
+		@{
+			@"title": @"Passcode Lock",
+			@"subtitle": @"Settings > Privacy > Passcode",
+			@"icon": @"lock",
+			@"kw": @"passcode lock password pin touch id face id biometrics auto-lock",
+			@"action": ^{ [weakSelf openPage:TGSettingsPagePasscode]; }
+		},
+		@{
+			@"title": @"Data and Storage",
+			@"subtitle": @"Settings > Data and Storage",
+			@"icon": @"storage",
+			@"kw": @"data storage cache usage clear memory network usage disk bandwidth download",
+			@"action": ^{ [weakSelf openPage:TGSettingsPageData]; }
+		},
+		@{
+			@"title": @"Storage Usage",
+			@"subtitle": @"Settings > Data and Storage > Storage",
+			@"icon": @"storage",
+			@"kw": @"storage cache clean clear disk usage keep media maximum size",
+			@"action": ^{
+				TGStorageViewController *storage = [[TGStorageViewController alloc] init];
+				storage.hidesBottomBarWhenPushed = YES;
+				[weakSelf.navigationController pushViewController:storage animated:YES];
+			}
+		},
+		@{
+			@"title": @"Appearance",
+			@"subtitle": @"Settings > Appearance",
+			@"icon": @"star",
+			@"kw": @"appearance theme night mode dark mode auto-night color wallpaper chat themes font size text size",
+			@"action": ^{ [weakSelf openPage:TGSettingsPageAppearance]; }
+		},
+		@{
+			@"title": @"Auto-Night Theme",
+			@"subtitle": @"Settings > Appearance > Auto-Night",
+			@"icon": @"star",
+			@"kw": @"auto-night night dark scheduled theme schedule sunset sunrise time",
+			@"action": ^{ [weakSelf openPage:TGSettingsPageAutoNight]; }
+		},
+		@{
+			@"title": @"Chat Wallpaper",
+			@"subtitle": @"Settings > Appearance > Wallpaper",
+			@"icon": @"star",
+			@"kw": @"wallpaper background chat wallpaper photo image",
+			@"action": ^{
+				TGBackgroundsViewController *bg = [[TGBackgroundsViewController alloc] init];
+				bg.hidesBottomBarWhenPushed = YES;
+				[weakSelf.navigationController pushViewController:bg animated:YES];
+			}
+		},
+		@{
+			@"title": @"Chat Themes",
+			@"subtitle": @"Settings > Appearance > Chat Themes",
+			@"icon": @"star",
+			@"kw": @"chat themes emoji themes bubble color palette custom classic",
+			@"action": ^{ [weakSelf openPage:TGSettingsPageChatThemes]; }
+		},
+		@{
+			@"title": @"Your Color",
+			@"subtitle": @"Settings > Appearance > Your Color",
+			@"icon": @"star",
+			@"kw": @"your color profile color name color accent reply color",
+			@"action": ^{
+				TGProfileAppearanceViewController *colours = [[TGProfileAppearanceViewController alloc] init];
+				colours.hidesBottomBarWhenPushed = YES;
+				[weakSelf.navigationController pushViewController:colours animated:YES];
+			}
+		},
+		@{
+			@"title": @"Chat Folders",
+			@"subtitle": @"Settings > Folders",
+			@"icon": @"folder",
+			@"kw": @"folders chat folders tabs organize groups unread archive",
+			@"action": ^{ [weakSelf openPage:TGSettingsPageFolders]; }
+		},
+		@{
+			@"title": @"Devices",
+			@"subtitle": @"Settings > Devices",
+			@"icon": @"laptop",
+			@"kw": @"devices sessions active sessions terminate link desktop qr login web mac windows",
+			@"action": ^{
+				TGSessionsViewController *sessions = [[TGSessionsViewController alloc] init];
+				sessions.hidesBottomBarWhenPushed = YES;
+				[weakSelf.navigationController pushViewController:sessions animated:YES];
+			}
+		},
+		@{
+			@"title": @"Language",
+			@"subtitle": @"Settings > Language",
+			@"icon": @"globe",
+			@"kw": @"language translate interface english russian pack translation",
+			@"action": ^{ [weakSelf openPage:TGSettingsPageLanguage]; }
+		},
+		@{
+			@"title": @"Power Saving",
+			@"subtitle": @"Settings > Power Saving",
+			@"icon": @"battery",
+			@"kw": @"power saving battery animations sticker animation performance tuning vintage capabilities low power",
+			@"action": ^{ [weakSelf openPage:TGSettingsPagePowerSaving]; }
+		},
+		@{
+			@"title": @"Stickers and Emoji",
+			@"subtitle": @"Settings > Stickers",
+			@"icon": @"star",
+			@"kw": @"stickers emoji animated stickers sticker packs trending custom emoji reactions",
+			@"action": ^{
+				TGStickerPacksViewController *packs = [[TGStickerPacksViewController alloc] init];
+				packs.hidesBottomBarWhenPushed = YES;
+				[weakSelf.navigationController pushViewController:packs animated:YES];
+			}
+		},
+		@{
+			@"title": @"Saved Messages",
+			@"subtitle": @"Cloud storage",
+			@"icon": @"pin",
+			@"kw": @"saved messages cloud notes bookmarks files personal",
+			@"action": ^{
+				int64_t savedId = [[TGMessageStore shared] savedMessagesChatId];
+				if (savedId) {
+					TGChatViewController *chat = [[TGChatViewController alloc] init];
+					chat.chatId = savedId;
+					chat.chatTitle = TGLocalized(@"Saved Messages");
+					chat.hidesBottomBarWhenPushed = YES;
+					[weakSelf.navigationController pushViewController:chat animated:YES];
+				}
+			}
+		},
+		@{
+			@"title": @"Recent Calls",
+			@"subtitle": @"Settings > Recent Calls",
+			@"icon": @"phone",
+			@"kw": @"recent calls phone missed history audio video call",
+			@"action": ^{ [weakSelf openPage:TGSettingsPageRecentCalls]; }
+		},
+		@{
+			@"title": @"Proxy Settings",
+			@"subtitle": @"Settings > Data and Storage > Proxy",
+			@"icon": @"storage",
+			@"kw": @"proxy socks5 mtproto network connection bypass vpn",
+			@"action": ^{ [weakSelf openPage:TGSettingsPageProxy]; }
+		},
+		@{
+			@"title": @"Edit Profile",
+			@"subtitle": @"Account",
+			@"icon": @"contacts",
+			@"kw": @"edit profile name bio username avatar photo change phone number",
+			@"action": ^{ [weakSelf openEditProfile]; }
+		},
+	];
+
+	for (NSDictionary *item in catalog) {
+		NSString *title = item[@"title"];
+		NSString *kw = item[@"kw"];
+		if ([title.lowercaseString rangeOfString:query].location != NSNotFound ||
+			[kw rangeOfString:query].location != NSNotFound) {
+			void (^act)(void) = item[@"action"];
+			NSMutableDictionary *row = [TGSubtitleOpenRow(TGLocalized(title), TGLocalized(item[@"subtitle"]), act) mutableCopy];
+			row[TGRowRawTitle] = @YES;
+			row[TGRowRawDetail] = @YES;
+			[rows addObject:row];
+		}
+	}
+
+	if (!rows.count) {
+		NSMutableDictionary *emptyRow = [TGRow(TGKindPlain, TGLocalized(@"No Results")) mutableCopy];
+		emptyRow[TGRowCentred] = @YES;
+		emptyRow[TGRowTitleColour] = [[TGTheme shared] secondaryTextColour];
+		[rows addObject:emptyRow];
+	}
+
+	return @[TGSection(TGLocalized(@"SEARCH RESULTS"), nil, rows)];
 }
 
 - (NSArray *)languageSections {

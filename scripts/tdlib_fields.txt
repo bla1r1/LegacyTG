@@ -244,7 +244,6 @@ skip  -         messageChatHasProtectedContentToggled.old_has_protected_content 
 skip  -         messageCopyOptions.new_caption  request options this client builds, never reads
 skip  -         messageCopyOptions.new_show_caption_above_media  request options this client builds, never reads
 skip  -         messageCopyOptions.replace_caption  request options this client builds, never reads
-skip  -         messageCopyOptions.send_copy  request options this client builds, never reads
 skip  -         messageGameScore.game_id  official ignores it: the game is the replied message (ServiceMessageStrings.swift, .gameScore(gameId: _, score))
 todo  later     messageGift.is_from_auction  gift upgrade details
 todo  later     messageGift.is_prepaid_upgrade  gift upgrade details

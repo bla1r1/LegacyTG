@@ -545,11 +545,21 @@ NSArray *TGBotCommandRows(NSArray *sets) {
 }
 
 - (void)forwardMessages:(NSArray *)messageIds fromChat:(int64_t)fromChatId toChat:(int64_t)toChatId {
+	[self forwardMessages:messageIds fromChat:fromChatId toChat:toChatId sendCopy:NO removeCaption:NO];
+}
+
+- (void)forwardMessages:(NSArray *)messageIds
+               fromChat:(int64_t)fromChatId
+                 toChat:(int64_t)toChatId
+               sendCopy:(BOOL)sendCopy
+          removeCaption:(BOOL)removeCaption {
 	[[TGClient shared] send:@{
-		@"@type"        : @"forwardMessages",
-		@"chat_id"      : @(toChatId),
-		@"from_chat_id" : @(fromChatId),
-		@"message_ids"  : messageIds ?: @[],
+		@"@type"          : @"forwardMessages",
+		@"chat_id"        : @(toChatId),
+		@"from_chat_id"   : @(fromChatId),
+		@"message_ids"    : messageIds ?: @[],
+		@"send_copy"      : @(sendCopy),
+		@"remove_caption" : @(removeCaption),
 	}];
 }
 
@@ -991,77 +1001,6 @@ NSArray *TGBotCommandRows(NSArray *sets) {
 
 - (void)pinnedMessageForChat:(int64_t)chatId completion:(void (^)(NSDictionary *message))completion {
 	[[TGClient shared] pinnedMessageForChat:chatId completion:completion];
-}
-
-- (void)pinnedMessagesForChat:(int64_t)chatId completion:(void (^)(NSArray *messages))completion {
-	[[TGClient shared] request:@{
-		@"@type"           : @"searchChatMessages",
-		@"chat_id"         : @(chatId),
-		@"query"           : @"",
-		@"from_message_id" : @0,
-		@"offset"          : @0,
-		@"limit"           : @100,
-		@"filter"          : @{@"@type" : @"searchMessagesFilterPinned"},
-	} completion:^(NSDictionary *result){
-		NSMutableArray *out = [NSMutableArray array];
-		NSArray *raw = [result[@"messages"] isKindOfClass:NSArray.class] ? result[@"messages"] : nil;
-		for (NSDictionary *m in raw) {
-			NSDictionary *flat = TGFlattenMessage(m);
-			if (flat)
-				[out addObject:flat];
-		}
-		if (completion)
-			completion(out);
-	}];
-}
-
-- (void)queryInlineBot:(NSString *)botUsername
-                 query:(NSString *)query
-                inChat:(int64_t)chatId
-            completion:(void (^)(NSArray *results, int64_t queryId))completion {
-	void (^fail)(void) = ^{ if (completion) completion(@[], 0); };
-	if (!botUsername.length || !chatId) {
-		fail();
-		return;
-	}
-	NSString *cleanUsername = [botUsername hasPrefix:@"@"] ? [botUsername substringFromIndex:1] : botUsername;
-	static NSMutableDictionary *sBotUserIdCache = nil;
-	static dispatch_once_t onceToken;
-	dispatch_once(&onceToken, ^{
-		sBotUserIdCache = [NSMutableDictionary dictionary];
-	});
-
-	void (^performQuery)(NSNumber *) = ^(NSNumber *botUserId){
-		[[TGClient shared] request:@{
-			@"@type"       : @"getInlineQueryResults",
-			@"bot_user_id" : botUserId,
-			@"chat_id"     : @(chatId),
-			@"query"       : query ?: @"",
-			@"offset"      : @"",
-		} completion:^(NSDictionary *result){
-			NSArray *items = [result[@"results"] isKindOfClass:NSArray.class] ? result[@"results"] : @[];
-			int64_t queryId = [result[@"inline_query_id"] longLongValue];
-			if (completion)
-				completion(items, queryId);
-		}];
-	};
-
-	NSNumber *cachedId = sBotUserIdCache[cleanUsername.lowercaseString];
-	if (cachedId) {
-		performQuery(cachedId);
-		return;
-	}
-
-	[[TGClient shared] request:@{@"@type" : @"searchPublicChat", @"username" : cleanUsername}
-	                completion:^(NSDictionary *bot){
-		NSNumber *botUserId = bot[@"type"][@"user_id"];
-		if (![botUserId isKindOfClass:NSNumber.class]) {
-			fail();
-			return;
-		}
-		sBotUserIdCache[cleanUsername.lowercaseString] = botUserId;
-		performQuery(botUserId);
-	}];
 }
 
 - (void)pollVoteStatisticsOfMessage:(int64_t)messageId inChat:(int64_t)chatId completion:(void (^)(NSDictionary *graph))completion {

@@ -335,6 +335,12 @@ FOUNDATION_EXPORT NSArray *TGBotCommandRows(NSArray *sets);
                fromChat:(int64_t)fromChatId
                  toChat:(int64_t)toChatId;
 
+- (void)forwardMessages:(NSArray *)messageIds
+               fromChat:(int64_t)fromChatId
+                 toChat:(int64_t)toChatId
+               sendCopy:(BOOL)sendCopy
+          removeCaption:(BOOL)removeCaption;
+
 - (void)gameHighScoresForChat:(int64_t)chatId
 					  message:(int64_t)messageId
 						 user:(int64_t)userId
