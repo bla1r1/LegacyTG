@@ -669,6 +669,8 @@ UIImage *TGImageFromMinithumbnail(id mini);
 - (void)buildChrome;
 - (void)applyChromeTheme:(TGTheme *)theme;
 - (void)layoutChrome;
+- (void)updateJumpButton;
+- (void)layoutUnreadJumps;
 - (void)showChatStatistics;
 - (void)speakActionMessage;
 - (void)updateTitleEmojiStatus;

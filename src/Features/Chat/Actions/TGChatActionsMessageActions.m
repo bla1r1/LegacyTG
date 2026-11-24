@@ -13,6 +13,7 @@
 #import "TGSponsoredMessagesViewController.h"
 #import "TGGameScoresViewController.h"
 #import "TGPollPresentation.h"
+#import "TGDevShowcase.h"
 #import <CoreImage/CoreImage.h>
 #import <QuartzCore/QuartzCore.h>
 
@@ -68,23 +69,25 @@
 		return;
 
 	NSDictionary *m = self.messages[row];
+	int64_t heldMessageId = [m[@"id"] longLongValue];
 	if ([m[@"service"] boolValue])
 		return;
 
 	// What this message may do is TDLib's answer, not a guess: Copy in a
 	// protected chat, Pin, and Delete on an incoming message all hang on it.
 	// The request is local and answers within a frame or two.
-	int64_t heldMessageId = [m[@"id"] longLongValue];
-	if (heldMessageId > 0 && self.actionPropertiesFor != heldMessageId){
+	if (heldMessageId > 0 && !TGIsDevChat(self.chatId) && self.actionPropertiesFor != heldMessageId){
 		__weak typeof(self) weakSelf = self;
 		[[TGMessageStore shared] messagePropertiesForChat:self.chatId messageId:heldMessageId
 											   completion:^(NSDictionary *properties){
-			TGChatViewController *me = weakSelf;
-			if (!me)
-				return;
-			me.actionProperties = properties;
-			me.actionPropertiesFor = heldMessageId;
-			[me showActionsForRow:row atPoint:point];
+			dispatch_async(dispatch_get_main_queue(), ^{
+				TGChatViewController *me = weakSelf;
+				if (!me)
+					return;
+				me.actionProperties = properties;
+				me.actionPropertiesFor = heldMessageId;
+				[me showActionsForRow:row atPoint:point];
+			});
 		}];
 		return;
 	}

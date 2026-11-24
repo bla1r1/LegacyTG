@@ -455,7 +455,7 @@ onDefaultReaction:(void (^)(NSString *))defaultChoice
 			icon.image = glyph;
 			icon.contentMode = UIViewContentModeScaleAspectFit;
 			[TGIcons tintImageView:icon colour:(destructive ? [theme destructiveColour]
-					: [theme primaryTextColour])];
+					: [theme calloutIconColour])];
 			[row addSubview:icon];
 		}
 
@@ -472,14 +472,16 @@ onDefaultReaction:(void (^)(NSString *))defaultChoice
 			small.font = TGFontMicro();
 			small.backgroundColor = [UIColor clearColor];
 			small.textColor = destructive ? [theme destructiveColour] : [theme secondaryTextColour];
+			small.shadowColor = [theme calloutTextShadowColour];
+			small.shadowOffset = CGSizeMake(0, -1.0f);
 			[row addSubview:small];
 		}
 		label.text = title;
 		label.font = TGFontRowStrong();
 		label.backgroundColor = [UIColor clearColor];
-		label.textColor = destructive ? [theme destructiveColour] : [theme primaryTextColour];
-		label.shadowColor = [theme etchedTextShadowColour];
-		label.shadowOffset = CGSizeMake(0, 1.0f);
+		label.textColor = destructive ? [theme destructiveColour] : [theme calloutTextColour];
+		label.shadowColor = [theme calloutTextShadowColour];
+		label.shadowOffset = CGSizeMake(0, -1.0f);
 		[row addSubview:label];
 
 		currentY += kMenuRowH;

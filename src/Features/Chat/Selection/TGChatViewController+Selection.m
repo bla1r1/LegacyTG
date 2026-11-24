@@ -111,6 +111,8 @@ static void TGAnimateSelectionCheckbox(TGChatViewController *chat, int64_t messa
 
 	[self updateEditToolbar];
 	[self.table reloadData];
+	[self layoutUnreadJumps];
+	[self updateJumpButton];
 
 	// Move the toolbar with a transform rather than its frame: a frame change
 	// relayouts every button inside it, which is the expensive part on an A4.
@@ -140,6 +142,8 @@ static void TGAnimateSelectionCheckbox(TGChatViewController *chat, int64_t messa
 	self.navigationItem.rightBarButtonItem = self.savedRightBarButtonItem;
 	self.title = nil;
 	[self.table reloadData];
+	[self layoutUnreadJumps];
+	[self updateJumpButton];
 
 	// The reverse: the toolbar drops away while the composer fades back in.
 	// It is hidden only after the animation, and only if the mode is still off,
@@ -162,6 +166,8 @@ static void TGAnimateSelectionCheckbox(TGChatViewController *chat, int64_t messa
 	[self.selectedMessageIds removeAllObjects];
 	[self updateEditToolbar];
 	[self.table reloadData];
+	[self layoutUnreadJumps];
+	[self updateJumpButton];
 }
 
 /// Clear All is the clear-history action, not a deselect. Only a private
@@ -226,6 +232,8 @@ static void TGAnimateSelectionCheckbox(TGChatViewController *chat, int64_t messa
 	}
 	[self updateEditToolbar];
 	[self.table reloadData];
+	[self layoutUnreadJumps];
+	[self updateJumpButton];
 
 	if (selecting) {
 		// The reload may have built the visible row only on the next layout

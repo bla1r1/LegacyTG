@@ -93,6 +93,7 @@ INCLUDES  := -I$(ROOT_DIR)/vendor/include \
              -I$(ROOT_DIR)/third_party/opus/include/opus \
              -I$(ROOT_DIR)/third_party/opusenc \
              -I$(ROOT_DIR)/third_party/opusfile \
+             -I$(ROOT_DIR)/third_party/qrcodegen \
              -I$(ROOT_DIR)/tdlib/td \
              -I$(ROOT_DIR)/tdlib/include \
              -I$(BUILD_DIR)/armv7/tdlib/include \
@@ -224,7 +225,8 @@ VENDOR_SRC_C := \
 	third_party/ogg/ogg/bitwise.c \
 	third_party/opusenc/opus_header.c \
 	third_party/opusenc/picture.c \
-	third_party/opusenc/diag_range.c
+	third_party/opusenc/diag_range.c \
+	third_party/qrcodegen/qrcodegen.c
 
 APP_SRC_M := \
 	src/App/AppDelegate.m \

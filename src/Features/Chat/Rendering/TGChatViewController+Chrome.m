@@ -646,6 +646,13 @@ static const NSInteger kUnreadJumpBadgeTag = 0x9101;
 - (void)layoutUnreadJumps {
 	if (!self.reactionsJumpButton)
 		return;
+	if (self.isEditingMessages) {
+		self.mentionsJumpButton.hidden = YES;
+		self.reactionsJumpButton.hidden = YES;
+		self.pollVotesJumpButton.hidden = YES;
+		self.jumpButton.hidden = YES;
+		return;
+	}
 	BOOL down = !self.jumpButton.hidden && self.jumpButton.alpha > TGAlphaEpsilon;
 	CGFloat mentionsY, reactionsY, pollY;
 	TGChatNavigationButtonOffsets(down, self.unreadMentionJumps, self.unreadReactionJumps,
@@ -832,7 +839,7 @@ static UIImage *TGJumpChevron(UIColor *colour) {
 }
 
 - (void)updateJumpButton {
-	BOOL show = ![self isNearBottom] && self.messages.count > 0;
+	BOOL show = ![self isNearBottom] && self.messages.count > 0 && !self.isEditingMessages;
 	if (show){
 		// Mid-fade counts as hidden, so an unread landing during the fade in
 		// starts it again instead of being swallowed by the early return.

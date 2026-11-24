@@ -23,37 +23,39 @@
 
 - (UIColor *)calloutBackgroundColour {
 	///< the satin glass plate behind popup callouts and reaction bars
-	// Night: official contextMenu.backgroundColor #252525; the light card
-	// with the theme's white text was unreadable.
-	if ([self isDark])
-		return [UIColor colorWithRed:0x25 / 255.0f green:0x25 / 255.0f blue:0x25 / 255.0f alpha:0.98f];
-	// Light / White theme: luminous white/pearl skeuomorphic card
-	return [UIColor colorWithRed:0.96f green:0.97f blue:0.98f alpha:0.98f];
+	// iOS 6 authentic dark satin glass for callout menus
+	return [UIColor colorWithRed:0x1C / 255.0f green:0x1D / 255.0f blue:0x21 / 255.0f alpha:0.95f];
 }
 
 - (UIColor *)calloutTrayColour {
 	///< recessed dark well for reactions
-	return [UIColor colorWithWhite:0.0f alpha:0.06f];
+	return [UIColor colorWithWhite:0.0f alpha:0.25f];
 }
 
 - (UIColor *)calloutBorderColour {
-	if ([self isDark])
-		return [UIColor colorWithWhite:1.0f alpha:0.10f];
-	return [UIColor colorWithRed:0.72f green:0.75f blue:0.78f alpha:0.90f];
+	return [UIColor colorWithWhite:1.0f alpha:0.18f];
 }
 
 - (UIColor *)calloutDividerDarkColour {
 	///< etched dark groove
-	if ([self isDark])
-		return [UIColor colorWithWhite:1.0f alpha:0.15f];   // official itemSeparatorColor
-	return [UIColor colorWithWhite:0.0f alpha:0.12f];
+	return [UIColor colorWithWhite:0.0f alpha:0.50f];
 }
 
 - (UIColor *)calloutDividerLightColour {
 	///< etched specular highlight
-	if ([self isDark])
-		return [UIColor clearColor];
-	return [UIColor colorWithWhite:1.0f alpha:0.85f];
+	return [UIColor colorWithWhite:1.0f alpha:0.12f];
+}
+
+- (UIColor *)calloutTextColour {
+	return [UIColor whiteColor];
+}
+
+- (UIColor *)calloutTextShadowColour {
+	return [UIColor colorWithWhite:0.0f alpha:0.6f];
+}
+
+- (UIColor *)calloutIconColour {
+	return [UIColor colorWithWhite:0.92f alpha:1.0f];
 }
 
 - (UIColor *)calloutGlossTopColour {

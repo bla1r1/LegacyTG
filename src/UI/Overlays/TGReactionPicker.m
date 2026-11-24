@@ -1,6 +1,7 @@
 #import "TGReactionPicker.h"
 #import "TGTheme.h"
 #import "TGStyle.h"
+#import "TGIcons.h"
 
 static const CGFloat kReactionItemWidth   = 26.0f;
 static const CGFloat kReactionItemHeight  = 26.0f;
@@ -79,9 +80,14 @@ static const NSTimeInterval kReactionAnimDuration = TGAnimationDurationFast;
 	for (NSUInteger i = 0; i < _emojis.count; i++) {
 		NSString *emoji = _emojis[i];
 		UIButton *btn = [UIButton buttonWithType:UIButtonTypeCustom];
-		btn.titleLabel.font = TGFontEmoji();
-		[btn setTitle:emoji forState:UIControlStateNormal];
 		btn.tag = (NSInteger)i;
+		UIImage *glyph = [TGIcons emojiGlyph:emoji side:kReactionItemHeight];
+		if (glyph) {
+			[btn setImage:glyph forState:UIControlStateNormal];
+		} else {
+			btn.titleLabel.font = TGFontEmoji();
+			[btn setTitle:emoji forState:UIControlStateNormal];
+		}
 		[btn addTarget:self action:@selector(emojiTapped:) forControlEvents:UIControlEventTouchUpInside];
 		// Hold is the second verb: tap reacts, hold asks for this emoji to
 		// lead the bar from now on. It does not take the tap away.

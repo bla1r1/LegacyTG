@@ -515,7 +515,7 @@ static const CGFloat kHoldBlurRadius = 28.0f;
 	if (!messageId)
 		return;
 
-	if ([action isEqualToString:@"Reply"] || [action isEqualToString:@"Quote"]){
+	if ([action isEqualToString:@"Reply"] || [action isEqualToString:@"Quote"] || [action isEqualToString:@"Find Quote"]){
 		// A chat can forbid replies to this particular message; can_be_replied
 		// is the server's word on it, and opening a composer that would be
 		// refused is worse than one line saying so.
@@ -536,7 +536,7 @@ static const CGFloat kHoldBlurRadius = 28.0f;
 			NSString *who = [m[@"outgoing"] boolValue] ? TGLocalized(@"You")
 					: ([[TGMessageStore shared] nameForUserId:
 							[m[@"senderId"] longLongValue]] ?: self.chatTitle ?: TGLocalized(@"Reply"));
-			if ([action isEqualToString:@"Quote"]){
+			if ([action isEqualToString:@"Quote"] || [action isEqualToString:@"Find Quote"]){
 				NSString *quote = TGComposePreview(m);
 				me.replyQuoteText = quote;
 				[me showComposeBanner:who subtitle:[NSString stringWithFormat:@"\"%@\"", quote]];
@@ -998,8 +998,6 @@ static const CGFloat kHoldBlurRadius = 28.0f;
 	} else if ([action isEqualToString:@"Translate"]){
 		[self translateActionMessage];
 
-	} else if ([action isEqualToString:@"Find Quote"]){
-		[self findQuoteInActionMessage];
 
 	} else if ([action isEqualToString:@"Search by Hashtag"]){
 		NSString *query = m[@"text"] ?: @"";

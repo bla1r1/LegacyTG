@@ -2,6 +2,7 @@
 // depends on: a post link must resolve to its chat, a login token to a token.
 #import "TGTestRunner.h"
 #import "TGQRCodeLink.h"
+#import "TGQRCode.h"
 #import "TGPhoneNumberRules.h"
 #import "TGLocalization.h"
 #import "TGStoryText.h"
@@ -31,6 +32,15 @@
 	XCTAssertEqualObjects(TGQRCodeAuthToken(@"tg://login?token=abc&x=1"), @"abc");
 	XCTAssertFalse(TGQRCodeIsAuthTransferLink(@"t.me/name"));
 	XCTAssertNil(TGQRCodeAuthToken(@"t.me/name"));
+}
+
+- (void)testQRCodeImageGeneratesValidImage {
+	UIImage *qr = TGQRCodeImage(@"https://t.me/telegram", 220.0f);
+	XCTAssertNotNil(qr, @"QR code image must not be nil");
+	XCTAssertTrue(qr.size.width > 0 && qr.size.height > 0);
+	XCTAssertNil(TGQRCodeImage(nil, 220.0f));
+	XCTAssertNil(TGQRCodeImage(@"", 220.0f));
+	XCTAssertNil(TGQRCodeImage(@"https://t.me/telegram", 0));
 }
 
 /// The device and network country lookups race. A late device answer must not

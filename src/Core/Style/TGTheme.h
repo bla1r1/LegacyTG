@@ -380,6 +380,9 @@ typedef NS_ENUM(NSInteger, TGButtonStyle) {
 - (UIColor *)calloutDividerLightColour; ///< etched specular highlight
 - (UIColor *)calloutGlossTopColour;   ///< specular top reflection for callout popup menu
 - (UIColor *)calloutGlossBottomColour;///< specular fade reflection for callout popup menu
+- (UIColor *)calloutTextColour;       ///< primary text on callout popup menu
+- (UIColor *)calloutTextShadowColour; ///< drop shadow for text on callout popup menu
+- (UIColor *)calloutIconColour;       ///< icon tint for callout popup menu
 
 #pragma mark - shadows, gloss and bevels
 

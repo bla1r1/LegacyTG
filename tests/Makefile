@@ -33,6 +33,7 @@ CFLAGS  := \
     -I$(SRC)/Compat \
     $(SRC_INCLUDES) \
     -I$(ROOT)/third_party \
+    -I$(ROOT)/third_party/qrcodegen \
     -I$(ROOT)/third_party/nanosvg \
     -I$(ROOT)/third_party/tlottie/include \
     -I$(ROOT)/vendor/libs \
@@ -126,6 +127,8 @@ CLIENT_OBJC_SRCS := \
     src/Features/Dev/TGiPadSimulator.m \
     src/Features/Dev/TGDevScreenRoute.m \
     src/Core/Support/TGUpdateType.c \
+    src/Core/Support/TGQRCode.m \
+    third_party/qrcodegen/qrcodegen.c \
     src/Views/Icons/TGSVGPath.c \
     src/Views/Icons/TGIconPaths.m \
     src/Core/Stores/TGOptions.mm \

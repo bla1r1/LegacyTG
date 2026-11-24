@@ -38,6 +38,13 @@ static UIDevice *TGSharedDevice = nil;
 }
 @end
 
+@implementation NSImage (UIKitHostShim)
++ (instancetype)imageWithCGImage:(CGImageRef)cgImage {
+	if (!cgImage) return nil;
+	return [[NSImage alloc] initWithCGImage:cgImage size:NSZeroSize];
+}
+@end
+
 @implementation NSValue (UIKitHostShim)
 + (NSValue *)valueWithCGSize:(CGSize)size {
 	return [self valueWithBytes:&size objCType:@encode(CGSize)];

@@ -1,54 +1,60 @@
 #import "TGQRCode.h"
-#import <CoreImage/CoreImage.h>
+#import "qrcodegen.h"
 
 UIImage *TGQRCodeImage(NSString *string, CGFloat size) {
 	if (!string.length || size <= 0)
 		return nil;
-	CIFilter *filter = [CIFilter filterWithName:@"CIQRCodeGenerator"];
-	// iOS 6 ships this filter unannounced and without a correction-level
-	// input: setting that key raises NSUnknownKeyException. Only keys the
-	// filter lists are set.
-	NSArray *keys = filter.inputKeys;
-	if (![keys containsObject:@"inputMessage"])
-		return nil;
-	[filter setValue:[string dataUsingEncoding:NSUTF8StringEncoding]
-			  forKey:@"inputMessage"];
-	if ([keys containsObject:@"inputCorrectionLevel"])
-		[filter setValue:@"M" forKey:@"inputCorrectionLevel"];
-	CIImage *output = filter.outputImage;
-	if (!output)
+
+	uint8_t qrcode[qrcodegen_BUFFER_LEN_MAX];
+	uint8_t tempBuffer[qrcodegen_BUFFER_LEN_MAX];
+	bool ok = qrcodegen_encodeText([string UTF8String], tempBuffer, qrcode,
+								   qrcodegen_Ecc_MEDIUM,
+								   qrcodegen_VERSION_MIN, qrcodegen_VERSION_MAX,
+								   qrcodegen_Mask_AUTO, true);
+	if (!ok)
 		return nil;
 
-	CGRect extent = CGRectIntegral(output.extent);
-	if (CGRectIsEmpty(extent))
+	int qrSize = qrcodegen_getSize(qrcode);
+	if (qrSize <= 0)
 		return nil;
-	CGFloat scale = MIN(size / CGRectGetWidth(extent), size / CGRectGetHeight(extent));
-	size_t width = (size_t)(CGRectGetWidth(extent) * scale);
-	size_t height = (size_t)(CGRectGetHeight(extent) * scale);
-	// The software renderer: a GPU-backed CIContext faulted on the A4, and a
-	// QR code is a few hundred black squares.
-	CIContext *context = [CIContext contextWithOptions:
-			@{kCIContextUseSoftwareRenderer : @YES}];
-	CGImageRef code = [context createCGImage:output fromRect:extent];
-	if (!code)
-		return nil;
+
+	int margin = 2; // quiet zone
+	int totalModules = qrSize + margin * 2;
+	CGFloat scale = floorf(size / (CGFloat)totalModules);
+	if (scale < 1.0f)
+		scale = 1.0f;
+	CGFloat actualDim = (CGFloat)totalModules * scale;
+	size_t pixelDim = (size_t)actualDim;
+
 	CGColorSpaceRef gray = CGColorSpaceCreateDeviceGray();
-	CGContextRef bitmap = CGBitmapContextCreate(NULL, width, height, 8, 0, gray,
-			(CGBitmapInfo)kCGImageAlphaNone);
+	CGContextRef bitmap = CGBitmapContextCreate(NULL, pixelDim, pixelDim, 8, 0, gray,
+												(CGBitmapInfo)kCGImageAlphaNone);
 	CGColorSpaceRelease(gray);
-	if (!bitmap){
-		CGImageRelease(code);
+	if (!bitmap)
 		return nil;
+
+	// Fill background white
+	CGContextSetGrayFillColor(bitmap, 1.0f, 1.0f);
+	CGContextFillRect(bitmap, CGRectMake(0, 0, actualDim, actualDim));
+
+	// Draw black modules
+	CGContextSetGrayFillColor(bitmap, 0.0f, 1.0f);
+	for (int y = 0; y < qrSize; y++) {
+		for (int x = 0; x < qrSize; x++) {
+			if (qrcodegen_getModule(qrcode, x, y)) {
+				// CoreGraphics coordinate space has origin at bottom-left:
+				CGRect r = CGRectMake((x + margin) * scale,
+									  (qrSize - 1 - y + margin) * scale,
+									  scale, scale);
+				CGContextFillRect(bitmap, r);
+			}
+		}
 	}
-	// Nearest-neighbour keeps the modules sharp when scaled up.
-	CGContextSetInterpolationQuality(bitmap, kCGInterpolationNone);
-	CGContextScaleCTM(bitmap, scale, scale);
-	CGContextDrawImage(bitmap, extent, code);
-	CGImageRef scaled = CGBitmapContextCreateImage(bitmap);
+
+	CGImageRef imgRef = CGBitmapContextCreateImage(bitmap);
 	CGContextRelease(bitmap);
-	CGImageRelease(code);
-	UIImage *image = scaled ? [UIImage imageWithCGImage:scaled] : nil;
-	if (scaled)
-		CGImageRelease(scaled);
+	UIImage *image = imgRef ? [UIImage imageWithCGImage:imgRef] : nil;
+	if (imgRef)
+		CGImageRelease(imgRef);
 	return image;
 }

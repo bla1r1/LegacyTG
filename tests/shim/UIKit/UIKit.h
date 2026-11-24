@@ -25,6 +25,10 @@ typedef NSFont UIFont;
 typedef NSColor UIColor;
 typedef NSImage UIImage;
 
+@interface NSImage (UIKitHostShim)
++ (instancetype)imageWithCGImage:(CGImageRef)cgImage;
+@end
+
 // Host gaps AppKit does not cover. NSFont lacks the italic convenience and
 // the geometry NSValue accessors only exist on iOS in this spelling.
 @interface NSFont (UIKitHostShim)
