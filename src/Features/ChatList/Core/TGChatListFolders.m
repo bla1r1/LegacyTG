@@ -13,6 +13,7 @@
 #import "TGPasscode.h"
 #import "TGPasscodeViewController.h"
 #import "TGChatListRowGeometry.h"
+#import "TGCapabilities.h"
 
 
 // Height of the folder pill strip above the chat list (official-style tabs).
@@ -173,19 +174,36 @@
 	self.tableView.contentOffset = CGPointMake(0, self.parkOffset);
 }
 
+- (void)releaseUpdatesWhenStill {
+	if (self.tableView.isDragging || self.tableView.isDecelerating)
+		return;
+	[[TGChatListStore shared] setUpdatesHeld:NO];
+}
+
 - (void)scrollViewDidEndDecelerating:(UIScrollView *)scrollView {
-	if (scrollView == self.tableView)
+	if (scrollView == self.tableView){
 		[self fetchMissingAvatars];
+		[[TGChatListStore shared] setUpdatesHeld:NO];
+	}
 }
 
 - (void)scrollViewDidEndDragging:(UIScrollView *)scrollView willDecelerate:(BOOL)decelerate {
-	if (scrollView == self.tableView && !decelerate)
+	if (scrollView == self.tableView && !decelerate){
 		[self fetchMissingAvatars];
+		[[TGChatListStore shared] setUpdatesHeld:NO];
+	}
 }
 
 - (void)scrollViewDidScroll:(UIScrollView *)scrollView {
 	if (scrollView != self.tableView)
 		return;
+	if ([TGCapabilities pauseUpdatesDuringScrollWanted]){
+		[[TGChatListStore shared] setUpdatesHeld:YES];
+		[NSObject cancelPreviousPerformRequestsWithTarget:self
+				selector:@selector(releaseUpdatesWhenStill) object:nil];
+		[self performSelector:@selector(releaseUpdatesWhenStill) withObject:nil
+				   afterDelay:0.25 inModes:@[ NSRunLoopCommonModes ]];
+	}
 	// Pulling the list down unfolds the stories; walking the list collapses
 	// them again, which is the header's compact state.
 	if (!self.storiesExpanded && scrollView.contentOffset.y < -TGMetricRow &&

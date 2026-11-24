@@ -1,0 +1,5 @@
+[bench-all]
+01-chatlist-bench    tab/1 bench/scroll/8
+02-showcase-bench    showcase bench/scroll/8
+03-durov-open        tab/1 chatindex/0
+04-durov-bench       tab/1 chatindex/0 bench/scroll/8

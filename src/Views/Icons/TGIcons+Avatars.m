@@ -2,12 +2,18 @@
 #import "TGTextDraw.h"
 #import "TGIconsInternal.h"
 #import "TGStyle.h"
+#import "TGDevice.h"
 #import <ImageIO/ImageIO.h>
 #import <objc/runtime.h>
 
 #pragma mark - avatars
 
 static char kTGAvatarPathKey;
+static NSCache *sTGAvatarCache = nil;
+
+void TGIconsClearAvatarCaches(void) {
+	[sTGAvatarCache removeAllObjects];
+}
 
 static UIImage *TGGlyphAvatar(CGFloat side, void (^draw)(CGContextRef ctx, CGFloat s)) {
 	UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), NO, 0);
@@ -105,15 +111,21 @@ static UIImage *TGGlyphAvatar(CGFloat side, void (^draw)(CGContextRef ctx, CGFlo
                            size:(CGFloat)size
                        colourId:(int64_t)colourId
 {
-	static NSCache *avatarCache = nil;
 	static dispatch_once_t onceToken;
 	dispatch_once(&onceToken, ^{
-		avatarCache = [[NSCache alloc] init];
-		avatarCache.countLimit = 200; // Keep up to 200 avatars in memory
+		sTGAvatarCache = [[NSCache alloc] init];
+		TGDeviceTier tier = [TGDevice tier];
+		sTGAvatarCache.countLimit = (tier == TGDeviceTierVintage) ? 30 : ((tier == TGDeviceTierLegacy) ? 60 : 150);
+		[[NSNotificationCenter defaultCenter] addObserverForName:@"UIApplicationDidReceiveMemoryWarningNotification"
+		                                                  object:nil
+		                                                   queue:[NSOperationQueue mainQueue]
+		                                              usingBlock:^(NSNotification *note) {
+			[sTGAvatarCache removeAllObjects];
+		}];
 	});
 
 	NSString *cacheKey = [NSString stringWithFormat:@"%@_%.1f_%lld", initials ?: @"?", size, colourId];
-	UIImage *cached = [avatarCache objectForKey:cacheKey];
+	UIImage *cached = [sTGAvatarCache objectForKey:cacheKey];
 	if (cached) return cached;
 
 	// Telegram's own placeholder colours, and its own mapping: the palette is
@@ -159,12 +171,18 @@ static UIImage *TGGlyphAvatar(CGFloat side, void (^draw)(CGContextRef ctx, CGFlo
 	UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
 	UIGraphicsEndImageContext();
 	
-	if (image) [avatarCache setObject:image forKey:cacheKey];
+	if (image) [sTGAvatarCache setObject:image forKey:cacheKey];
 	return image;
 }
 
-/// Pre-decodes image onto offscreen bitmap context and scales to target size using ImageIO DCT downsampling.
-#define TGDECODE_MAX_PIXEL 1024.0f
+static CGFloat TGDecodeMaxPixel(void) {
+	TGDeviceTier tier = [TGDevice tier];
+	if (tier == TGDeviceTierVintage)
+		return 640.0f;
+	if (tier == TGDeviceTierLegacy)
+		return 800.0f;
+	return 1024.0f;
+}
 
 + (UIImage *)decodedImage:(UIImage *)image
 			  fittingSize:(CGSize)target
@@ -208,7 +226,8 @@ static UIImage *TGGlyphAvatar(CGFloat side, void (^draw)(CGContextRef ctx, CGFlo
 
 					if (maxPixelSize < 1.0f) maxPixelSize = 1.0f;
 					// Same device cap as the from-file decode.
-					if (maxPixelSize > TGDECODE_MAX_PIXEL) maxPixelSize = TGDECODE_MAX_PIXEL;
+					CGFloat maxCap = TGDecodeMaxPixel();
+					if (maxPixelSize > maxCap) maxPixelSize = maxCap;
 
 					NSDictionary *options = @{
 						(id)kCGImageSourceCreateThumbnailFromImageAlways : @YES,

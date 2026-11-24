@@ -125,6 +125,7 @@
 	- (BOOL)databaseEncryptionKeyIsKnown;
 	- (BOOL)databaseEncryptionKeyIsSet;
 	- (void)setDatabaseEncryptionKey:(NSData *)newKey completion:(void (^)(BOOL ok, NSString *error))completion;
+	- (void)decryptDatabaseWithCompletion:(void (^)(BOOL ok, NSString *error))completion;
 @end
 
 

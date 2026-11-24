@@ -27,6 +27,9 @@
 @property (nonatomic, readonly) TGUpdateCoalescer *coalescer;
 @property (nonatomic, assign) BOOL batchingUpdates;
 @property (nonatomic, assign) BOOL chatsNeedRebuild;
+@property (nonatomic, assign) BOOL updatesHeld;
+
+- (void)setUpdatesHeld:(BOOL)held;
 
 /// Coalesced (100 ms) "messages in these chats changed" batch. userInfo
 /// "chatIds" is an NSArray of NSNumber chat ids. Posted from the client side;

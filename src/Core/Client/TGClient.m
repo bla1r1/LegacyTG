@@ -8,6 +8,7 @@
 #import "TGUpdateHandlers.h"
 #import "TGBase64.h"
 #import "TGDatabaseKey.h"
+#import "TGCapabilities.h"
 #import "TGOptions.h"
 #import "TGCall.h"
 #import "TGJson.h"
@@ -540,7 +541,11 @@ NSDictionary *TGFormattedText(NSString *text) {
 		self.readyAt = [NSDate date].timeIntervalSince1970;
 		[self loadChats];
 		[self send:@{@"@type" : @"getMe"}];
-		[self encryptDatabaseIfNeeded];
+		if ([TGCapabilities databaseEncryptionWanted])
+			[self encryptDatabaseIfNeeded];
+		else
+			[self decryptDatabaseIfNeeded];
+		[self optimizeStorageIfNeeded];
 		if (!TGAppInBackground())
 			[self send:TGOnlineOptionRequest(YES)];
 	}
@@ -570,11 +575,14 @@ NSDictionary *TGFormattedText(NSString *text) {
 		return;
 	}
 
-	// Every database is encrypted; the key sits in the keychain. One made
-	// before encryption was the default opens only with the empty key: TDLib
-	// answers 401 to ours, the empty key opens it, and it is re-keyed once
-	// the account is ready.
-	NSData *databaseKey = [TGDatabaseKey ensureKey];
+	// Every database is encrypted by default on Legacy+; the key sits in the keychain.
+	// On Vintage (or if encryption is turned off), we only use a key if an existing
+	// database was already encrypted, so it opens without 401 and decrypts once ready.
+	NSData *databaseKey = nil;
+	if ([TGCapabilities databaseEncryptionWanted])
+		databaseKey = [TGDatabaseKey ensureKey];
+	else
+		databaseKey = [TGDatabaseKey currentKey];
 	[self sendTdlibParametersWithDirectory:db key:databaseKey];
 }
 
@@ -623,6 +631,8 @@ NSDictionary *TGFormattedText(NSString *text) {
 /// An unencrypted database from an older build gets the keychain key. If the
 /// re-key fails, the next launch opens it unencrypted again and retries.
 - (void)encryptDatabaseIfNeeded {
+	if (![TGCapabilities databaseEncryptionWanted])
+		return;
 	NSData *key = self.databaseOpenedWithoutKey ? [TGDatabaseKey currentKey] : nil;
 	if (!key.length)
 		return;
@@ -634,6 +644,48 @@ NSDictionary *TGFormattedText(NSString *text) {
 			self.databaseOpenedWithoutKey = NO;
 		NSLog(@"TGClient: database encryption %@", ok ? @"on" : result[@"message"]);
 	}];
+}
+
+/// Decrypts the database if encryption was disabled (e.g. Vintage tier to avoid
+/// software AES overhead, or user preference).
+- (void)decryptDatabaseIfNeeded {
+	if ([TGCapabilities databaseEncryptionWanted])
+		return;
+	NSData *key = [TGDatabaseKey currentKey];
+	if (!key.length)
+		return;
+	NSLog(@"TGClient: decrypting database for Vintage/performance");
+	[self request:@{@"@type" : @"setDatabaseEncryptionKey",
+					@"new_encryption_key" : @""}
+	   completion:^(NSDictionary *result){
+		BOOL ok = ![result[@"@type"] isEqualToString:@"error"];
+		if (ok){
+			[TGDatabaseKey storeKey:nil error:NULL];
+			self.databaseOpenedWithoutKey = YES;
+		}
+		NSLog(@"TGClient: database decryption %@", ok ? @"succeeded" : result[@"message"]);
+	}];
+}
+
+/// Runs TDLib storage optimization and SQLite memory trimming periodically.
+- (void)optimizeStorageIfNeeded {
+	NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+	NSTimeInterval last = [defaults doubleForKey:@"TGLastStorageOptimizationTime"];
+	NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
+	if (last > 0 && (now - last) < (3 * 86400))
+		return;
+	[defaults setDouble:now forKey:@"TGLastStorageOptimizationTime"];
+	[defaults synchronize];
+
+	NSLog(@"TGClient: running storage and database optimization");
+	[self send:@{
+		@"@type" : @"optimizeStorage",
+		@"size"  : @(-1),
+		@"count" : @(-1),
+		@"ttl"   : @([TGDevice tier] <= TGDeviceTierVintage ? (3 * 86400) : (14 * 86400)),
+		@"chat_limit" : @(0)
+	}];
+	[[TGTransport shared] trimMemory];
 }
 
 - (void)handleInAppNotificationForNewMessage:(NSDictionary *)m {

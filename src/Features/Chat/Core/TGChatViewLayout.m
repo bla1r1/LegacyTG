@@ -123,6 +123,7 @@ static char kTGTableContentSizeContext;
 	self.table.separatorStyle = UITableViewCellSeparatorStyleNone;
 	self.table.backgroundColor = [UIColor clearColor];
 	self.table.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+	self.table.clipsToBounds = YES;
 	// The wallpaper goes behind the table, which is transparent over it.
 	self.wallpaperView = [[UIImageView alloc] initWithFrame:self.view.bounds];
 	self.wallpaperView.contentMode = UIViewContentModeScaleAspectFill;
@@ -296,6 +297,7 @@ static char kTGTableContentSizeContext;
 	// can be drawn.
 	if (self.inputBar && self.composerWell && !self.composerWell.image)
 		[self updateComposerHeightAnimated:NO];
+	[self layoutChrome];
 }
 
 /// A two-line header: the chat name with member count or status beneath it,
@@ -573,6 +575,8 @@ FOUNDATION_EXPORT void TGBubbleFlushCache(void);
 		[self.quotes removeAllObjects];
 		[self.quotesRequested removeAllObjects];
 		[self.layoutCache removeAllObjects];
+		[self.lottiePaths removeAllObjects];
+		[self.playedAnimations removeAllObjects];
 	}
 }
 

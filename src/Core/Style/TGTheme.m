@@ -6,6 +6,7 @@
 #import "TGStyle.h"
 #import "TGThemeList.h"
 #import "TGChatThemeStore.h"
+#import "TGCapabilities.h"
 
 #define rgb TGThemeRGB
 
@@ -31,12 +32,9 @@ static const NSTimeInterval kAutoNightCheckInterval = 60.0;
 }
 
 + (BOOL)drawsSkeuomorphicChrome {
-	static BOOL draws;
-	static dispatch_once_t once;
-	dispatch_once(&once, ^{
-		draws = NSFoundationVersionNumber <= NSFoundationVersionNumber_iOS_6_1;
-	});
-	return draws;
+	if (NSFoundationVersionNumber > NSFoundationVersionNumber_iOS_6_1)
+		return NO;
+	return [TGCapabilities skeuomorphicChromeWanted];
 }
 
 - (id)init {
@@ -746,13 +744,18 @@ static char kTabOffMaskKey;
 	// iOS 6 draws its own bar: tinted, it is the real gloss, edge and shadow,
 	// and its Back and Done buttons match it because they come from the same
 	// place.
-	if ([TGTheme drawsSkeuomorphicChrome]) {
-		// On an iPad idiom iOS 6 fills a tinted bar flat, so the list's bar and
-		// the chat's beside it differed; both get the phone's gloss, drawn here.
-		UIImage *padBar = TGIsPad() ? [TGTheme skeuomorphicBarImageWithColor:[self barColour]
-				height:TGMetricNavigationBarHeight] : nil;
-		if ([bar respondsToSelector:@selector(setBackgroundImage:forBarMetrics:)])
-			[bar setBackgroundImage:padBar forBarMetrics:UIBarMetricsDefault];
+	if (NSFoundationVersionNumber <= NSFoundationVersionNumber_iOS_6_1) {
+		if ([TGTheme drawsSkeuomorphicChrome]) {
+			// On an iPad idiom iOS 6 fills a tinted bar flat, so the list's bar and
+			// the chat's beside it differed; both get the phone's gloss, drawn here.
+			UIImage *padBar = TGIsPad() ? [TGTheme skeuomorphicBarImageWithColor:[self barColour]
+					height:TGMetricNavigationBarHeight] : nil;
+			if ([bar respondsToSelector:@selector(setBackgroundImage:forBarMetrics:)])
+				[bar setBackgroundImage:padBar forBarMetrics:UIBarMetricsDefault];
+		} else {
+			if ([bar respondsToSelector:@selector(setBackgroundImage:forBarMetrics:)])
+				[bar setBackgroundImage:nil forBarMetrics:UIBarMetricsDefault];
+		}
 		if ([bar respondsToSelector:@selector(setShadowImage:)])
 			[bar setShadowImage:nil];
 		bar.tintColor = [self barColour];

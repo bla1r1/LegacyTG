@@ -189,6 +189,32 @@ static TGFlattenedMessage TGIndexFromDictionary(NSDictionary *m) {
 	return NO;
 }
 
+- (NSUInteger)trimNewerToLimit:(NSUInteger)limit {
+	if (limit == 0 || _messagesVector.size() <= limit) return 0;
+	size_t removed = _messagesVector.size() - limit;
+	for (size_t i = limit; i < _messagesVector.size(); i++) {
+		int64_t mid = _index[i].messageId;
+		if (mid > 0) _messageIds.erase(mid);
+	}
+	_messagesVector.resize(limit);
+	_index.resize(limit);
+	_reachedEnd = NO;
+	return removed;
+}
+
+- (NSUInteger)trimOlderToLimit:(NSUInteger)limit {
+	if (limit == 0 || _messagesVector.size() <= limit) return 0;
+	size_t removed = _messagesVector.size() - limit;
+	for (size_t i = 0; i < removed; i++) {
+		int64_t mid = _index[i].messageId;
+		if (mid > 0) _messageIds.erase(mid);
+	}
+	_messagesVector.erase(_messagesVector.begin(), _messagesVector.begin() + (long)removed);
+	_index.erase(_index.begin(), _index.begin() + (long)removed);
+	_reachedStart = NO;
+	return removed;
+}
+
 #pragma mark - flat index
 
 - (int64_t)messageIdAtIndex:(NSUInteger)index {

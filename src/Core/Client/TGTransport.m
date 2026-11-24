@@ -19,8 +19,10 @@ static BOOL TGTransportVerboseLog(void) {
 	return verbose;
 }
 
-/// How long the receive thread rests when TDLib has nothing: 20 ms.
-static const int64_t kIdlePollNanoseconds = 20 * NSEC_PER_MSEC;
+/// How long the receive thread rests when TDLib has nothing: 20 ms (60 ms on Vintage).
+static int64_t TGIdlePollNanoseconds(void) {
+	return ([TGDevice tier] <= TGDeviceTierVintage ? 60LL : 20LL) * NSEC_PER_MSEC;
+}
 
 @interface TGTransport ()
 @property (nonatomic, strong) NSMutableArray *outbox;
@@ -134,7 +136,7 @@ static const int64_t kIdlePollNanoseconds = 20 * NSEC_PER_MSEC;
 				while (dispatch_semaphore_wait(self.outboxSignal, DISPATCH_TIME_NOW) == 0)
 					;
 				dispatch_semaphore_wait(self.outboxSignal,
-						dispatch_time(DISPATCH_TIME_NOW, kIdlePollNanoseconds));
+						dispatch_time(DISPATCH_TIME_NOW, TGIdlePollNanoseconds()));
 				continue;
 			}
 
@@ -277,7 +279,7 @@ static const int64_t kIdlePollNanoseconds = 20 * NSEC_PER_MSEC;
 	int (*relMem)(int) = dlsym(lookup, "tdsqlite3_release_memory");
 	if (!relMem) relMem = dlsym(lookup, "sqlite3_release_memory");
 	if (relMem) {
-		int released = relMem(0);
+		int released = relMem(64 * 1024 * 1024);
 		NSLog(@"[TGTransport] tdsqlite3_release_memory released %d bytes", released);
 	}
 }

@@ -1,0 +1,4 @@
+[bench-durov-test]
+01-chats-list      tab/1
+02-durov-chat      tab/1 chatindex/0
+03-durov-scroll    tab/1 chatindex/0 bench/scroll/3

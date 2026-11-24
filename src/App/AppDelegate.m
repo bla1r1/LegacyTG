@@ -48,6 +48,7 @@
 #import "TGPeerStore.h"
 #import "TGChatListStore.h"
 #import "TGMediaStore.h"
+#import "TGIcons.h"
 #import "TGChatListViewController.h"
 #import "TGDevice.h"
 #include <dlfcn.h>
@@ -505,6 +506,7 @@ static void TGRecursivePurgeVC(UIViewController *vc) {
 	[[TGChatListStore shared] clearMemoryCaches];
 	[[TGCustomEmojiStore shared] clearMemoryCaches];
 	[[TGMediaStore shared] clearMemoryCaches];
+	[TGIcons flush];
 
 	UIWindow *window = [UIApplication sharedApplication].keyWindow;
 	if (window.rootViewController) {

@@ -78,6 +78,27 @@
 + (BOOL)gifAutoplayWanted;
 + (void)setGifAutoplayWanted:(BOOL)wanted;
 
+/// Performance & hardware tuning toggles.
++ (BOOL)databaseEncryptionWanted;
++ (void)setDatabaseEncryptionWanted:(BOOL)wanted;
++ (BOOL)customEmojiWanted;
++ (void)setCustomEmojiWanted:(BOOL)wanted;
++ (BOOL)canRenderCustomEmoji;
++ (BOOL)chatThumbnailsWanted;
++ (void)setChatThumbnailsWanted:(BOOL)wanted;
++ (BOOL)groupAvatarsWanted;
++ (void)setGroupAvatarsWanted:(BOOL)wanted;
++ (BOOL)skeuomorphicChromeWanted;
++ (void)setSkeuomorphicChromeWanted:(BOOL)wanted;
++ (BOOL)pauseUpdatesDuringScrollWanted;
++ (void)setPauseUpdatesDuringScrollWanted:(BOOL)wanted;
+
+/// How many messages to load per pagination step based on hardware tier.
++ (NSInteger)chatHistoryPageLimit;
+
+/// Maximum number of messages kept in memory in active chat stream.
++ (NSUInteger)chatMessageWindowLimit;
+
 /// Every capability with its state, for the Device screen.
 + (NSArray *)all;
 

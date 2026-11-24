@@ -906,4 +906,6 @@ FOUNDATION_EXPORT NSArray *TGBotCommandRows(NSArray *sets);
 - (void)webBrowserTypeForURL:(NSString *)url
 				  completion:(void (^)(NSString *kind))completion;
 
+- (void)setUpdatesHeld:(BOOL)held;
+
 @end

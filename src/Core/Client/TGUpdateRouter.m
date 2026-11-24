@@ -6,6 +6,7 @@
 
 @interface TGUpdateRouter ()
 @property (nonatomic, strong) TGUpdateCoalescer *coalescer;
+@property (nonatomic, strong) NSMutableArray *heldUpdates;
 @end
 
 NSString *const TGMessagesChangedNotification = @"TGMessagesChangedNotification";
@@ -38,18 +39,7 @@ NSString *const TGMessagesChangedNotification = @"TGMessagesChangedNotification"
 	return router;
 }
 
-- (void)routeBatch:(NSArray *)batch {
-	NSMutableArray *updates = [NSMutableArray arrayWithCapacity:batch.count];
-	for (NSDictionary *obj in batch){
-		if (![obj isKindOfClass:NSDictionary.class])
-			continue;
-		if ([self deliverResponse:obj])
-			continue;
-		[updates addObject:obj];
-	}
-	if (!updates.count)
-		return;
-
+- (void)flushUpdates:(NSArray *)updates {
 	self.batchingUpdates = YES;
 	for (NSDictionary *obj in updates){
 		if (self.onUpdate)
@@ -62,6 +52,39 @@ NSString *const TGMessagesChangedNotification = @"TGMessagesChangedNotification"
 		if (self.onChatsRebuilt)
 			self.onChatsRebuilt();
 	}
+}
+
+- (void)setUpdatesHeld:(BOOL)held {
+	if (_updatesHeld == held)
+		return;
+	_updatesHeld = held;
+	if (!held && self.heldUpdates.count > 0){
+		NSArray *flushing = [self.heldUpdates copy];
+		[self.heldUpdates removeAllObjects];
+		[self flushUpdates:flushing];
+	}
+}
+
+- (void)routeBatch:(NSArray *)batch {
+	NSMutableArray *updates = [NSMutableArray arrayWithCapacity:batch.count];
+	for (NSDictionary *obj in batch){
+		if (![obj isKindOfClass:NSDictionary.class])
+			continue;
+		if ([self deliverResponse:obj])
+			continue;
+		[updates addObject:obj];
+	}
+	if (!updates.count)
+		return;
+
+	if (self.updatesHeld){
+		if (!self.heldUpdates)
+			self.heldUpdates = [NSMutableArray array];
+		[self.heldUpdates addObjectsFromArray:updates];
+		return;
+	}
+
+	[self flushUpdates:updates];
 }
 
 - (BOOL)deliverResponse:(NSDictionary *)obj {
@@ -111,6 +134,8 @@ NSString *const TGMessagesChangedNotification = @"TGMessagesChangedNotification"
 - (void)reset {
 	self.batchingUpdates = NO;
 	self.chatsNeedRebuild = NO;
+	_updatesHeld = NO;
+	[self.heldUpdates removeAllObjects];
 	[self.coalescer reset];
 }
 

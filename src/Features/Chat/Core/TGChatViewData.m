@@ -402,7 +402,8 @@ static const double kTGHoldBottomSeconds = 6.0;
 	__weak typeof(self) weakSelf = self;
 	double chatStart = TGPerfNow();
 	int64_t threadId = self.threadId;
-	[[TGMessageStore shared] historyForChat:self.chatId thread:self.threadId limit:60 completion:^(NSArray *loaded){
+	NSInteger pageLimit = [TGCapabilities chatHistoryPageLimit];
+	[[TGMessageStore shared] historyForChat:self.chatId thread:self.threadId limit:pageLimit completion:^(NSArray *loaded){
 		TGPerfReport("chat load", "history wait", chatStart, 300.0);
 		TGChatViewController *me = weakSelf;
 		if (!me)

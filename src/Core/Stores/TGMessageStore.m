@@ -1720,5 +1720,8 @@ NSArray *TGBotCommandRows(NSArray *sets) {
 	return [TGClient shared].onFileProgress;
 }
 
+- (void)setUpdatesHeld:(BOOL)held {
+	[[TGUpdateRouter shared] setUpdatesHeld:held];
+}
 
 @end

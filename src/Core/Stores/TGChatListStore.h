@@ -102,4 +102,7 @@ extern NSString *const TGChatListPreviewImageLoadedNotification;
 /// Drops decoded in-memory preview thumbnails to reduce RAM footprint in background.
 - (void)clearMemoryCaches;
 
+/// Pauses TDLib update dispatching to the main queue during scrolling.
+- (void)setUpdatesHeld:(BOOL)held;
+
 @end

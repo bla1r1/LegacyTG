@@ -8,6 +8,8 @@
 #import "TGProfileStore.h"
 #import "TGClientInternal.h"
 #import "TGMediaSupport.h"
+#import "TGDevice.h"
+#import <UIKit/UIKit.h>
 
 
 
@@ -21,13 +23,32 @@
 	dispatch_once(&once, ^{
 		one = [[TGMediaStore alloc] init];
 		one->_buffers = [[NSCache alloc] init];
-		one->_buffers.totalCostLimit = (sizeof(void *) == 4)
-				? 16 * 1024 * 1024 : 32 * 1024 * 1024;
+		TGDeviceTier tier = [TGDevice tier];
+		NSUInteger limit;
+		switch (tier) {
+			case TGDeviceTierVintage:
+				limit = 4 * 1024 * 1024;
+				break;
+			case TGDeviceTierLegacy:
+				limit = 8 * 1024 * 1024;
+				break;
+			case TGDeviceTierModern:
+				limit = 16 * 1024 * 1024;
+				break;
+			case TGDeviceTierFull:
+			default:
+				limit = 32 * 1024 * 1024;
+				break;
+		}
+		one->_buffers.totalCostLimit = limit;
 		// Keyed by TDLib file id, and every account's database numbers its
 		// files from the start: after a switch the same id is another file.
 		[[NSNotificationCenter defaultCenter] addObserver:one
 				selector:@selector(accountDidSwitch:)
 					name:TGAccountDidSwitchNotification object:nil];
+		[[NSNotificationCenter defaultCenter] addObserver:one
+				selector:@selector(clearMemoryCaches)
+					name:@"UIApplicationDidReceiveMemoryWarningNotification" object:nil];
 	});
 	return one;
 }

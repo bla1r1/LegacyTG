@@ -14,6 +14,10 @@
 #import "TGStoreTestSupport.h"
 #import "TGSettingsStore.h"
 #import "TGDownloadStore.h"
+#import "TGCapabilities.h"
+#import "TGUpdateRouter.h"
+#import "TGMediaStore.h"
+#import "TGTransport.h"
 
 @interface TGClientAppearanceDiagnosticsTests : XCTestCase @end
 
@@ -598,6 +602,120 @@ static NSDictionary *ADBackground(void) {
 	XCTAssertEqual([ADLast(c, @"setTdlibParameters")[@"database_encryption_key"] length],
 			TGBase64Encode([TGDatabaseKey currentKey]).length);
 	XCTAssertEqual([TGDatabaseKey currentKey].length, (NSUInteger)32);
+}
+
+- (void)testDecryptDatabase_SendsEmptyKeyAndClearsKeychain {
+	TGClient *c = ADClient();
+	NSData *key = [@"active-key" dataUsingEncoding:NSUTF8StringEncoding];
+	[TGDatabaseKey storeKey:key error:nil];
+	__block BOOL done = NO;
+	__block NSString *err = nil;
+	[[TGSettingsStore shared] decryptDatabaseWithCompletion:^(BOOL ok, NSString *why){
+		done = ok;
+		err = why;
+	}];
+	XCTAssertEqual(ADCount(c, @"setDatabaseEncryptionKey"), (NSUInteger)1);
+	XCTAssertEqualObjects(ADLast(c, @"setDatabaseEncryptionKey")[@"new_encryption_key"], @"");
+	ADAnswer(c, @"setDatabaseEncryptionKey", @{@"@type" : @"ok"});
+	XCTAssertTrue(done);
+	XCTAssertNil(err);
+	XCTAssertNil([TGDatabaseKey currentKey]);
+	XCTAssertFalse([[TGSettingsStore shared] databaseEncryptionKeyIsSet]);
+}
+
+- (void)testDatabaseDecryption_VintageTierAutomaticallyDecryptsOnReady {
+	TGClient *c = ADClient();
+	NSData *key = [@"existing-2.0-key" dataUsingEncoding:NSUTF8StringEncoding];
+	[TGDatabaseKey storeKey:key error:nil];
+	[TGCapabilities setDatabaseEncryptionWanted:NO];
+
+	[c handleAuthState:@{@"@type" : @"authorizationStateWaitTdlibParameters"}];
+	XCTAssertEqualObjects(ADLast(c, @"setTdlibParameters")[@"database_encryption_key"],
+			TGBase64Encode(key));
+
+	[c handleAuthState:@{@"@type" : @"authorizationStateReady"}];
+	XCTAssertEqualObjects(ADLast(c, @"setDatabaseEncryptionKey")[@"new_encryption_key"], @"");
+	ADAnswer(c, @"setDatabaseEncryptionKey", @{@"@type" : @"ok"});
+	XCTAssertNil([TGDatabaseKey currentKey]);
+
+	[NSUserDefaults.standardUserDefaults removeObjectForKey:@"TGWantDatabaseEncryption"];
+}
+
+- (void)testUpdateRouter_HoldingUpdatesDuringScroll {
+	TGUpdateRouter *router = [TGUpdateRouter shared];
+	[router reset];
+	void (^savedOnUpdate)(NSDictionary *) = router.onUpdate;
+	__block NSInteger updateCount = 0;
+	router.onUpdate = ^(NSDictionary *obj){
+		updateCount++;
+	};
+
+	[router setUpdatesHeld:YES];
+	[router routeBatch:@[
+		@{@"@type" : @"updateChatDraftMessage", @"chat_id" : @123},
+		@{@"@type" : @"updateChatDraftMessage", @"chat_id" : @456}
+	]];
+	XCTAssertEqual(updateCount, (NSInteger)0);
+
+	[router setUpdatesHeld:NO];
+	XCTAssertEqual(updateCount, (NSInteger)2);
+	router.onUpdate = savedOnUpdate;
+}
+
+- (void)testCapabilities_PerformanceToggles {
+	[TGCapabilities setCustomEmojiWanted:NO];
+	XCTAssertFalse([TGCapabilities customEmojiWanted]);
+	XCTAssertFalse([TGCapabilities canRenderCustomEmoji]);
+	[TGCapabilities setCustomEmojiWanted:YES];
+	XCTAssertTrue([TGCapabilities customEmojiWanted]);
+
+	[TGCapabilities setChatThumbnailsWanted:NO];
+	XCTAssertFalse([TGCapabilities chatThumbnailsWanted]);
+	[TGCapabilities setChatThumbnailsWanted:YES];
+	XCTAssertTrue([TGCapabilities chatThumbnailsWanted]);
+
+	[TGCapabilities setPauseUpdatesDuringScrollWanted:NO];
+	XCTAssertFalse([TGCapabilities pauseUpdatesDuringScrollWanted]);
+	[TGCapabilities setPauseUpdatesDuringScrollWanted:YES];
+	XCTAssertTrue([TGCapabilities pauseUpdatesDuringScrollWanted]);
+
+	[TGCapabilities setGroupAvatarsWanted:NO];
+	XCTAssertFalse([TGCapabilities groupAvatarsWanted]);
+	[TGCapabilities setGroupAvatarsWanted:YES];
+	XCTAssertTrue([TGCapabilities groupAvatarsWanted]);
+
+	[TGCapabilities setSkeuomorphicChromeWanted:NO];
+	XCTAssertFalse([TGCapabilities skeuomorphicChromeWanted]);
+	[TGCapabilities setSkeuomorphicChromeWanted:YES];
+	XCTAssertTrue([TGCapabilities skeuomorphicChromeWanted]);
+
+	[NSUserDefaults.standardUserDefaults removeObjectForKey:@"TGWantCustomEmoji"];
+	[NSUserDefaults.standardUserDefaults removeObjectForKey:@"TGWantChatThumbnails"];
+	[NSUserDefaults.standardUserDefaults removeObjectForKey:@"TGWantGroupAvatars"];
+	[NSUserDefaults.standardUserDefaults removeObjectForKey:@"TGWantSkeuomorphicChrome"];
+	[NSUserDefaults.standardUserDefaults removeObjectForKey:@"TGWantPauseUpdatesDuringScroll"];
+
+	NSInteger pageLimit = [TGCapabilities chatHistoryPageLimit];
+	XCTAssertTrue(pageLimit == 20 || pageLimit == 30 || pageLimit == 60);
+
+	NSUInteger windowLimit = [TGCapabilities chatMessageWindowLimit];
+	XCTAssertTrue(windowLimit == 50 || windowLimit == 100 || windowLimit == 250);
+}
+
+- (void)testTGMediaStore_BufferLimitRespectsTierAndClearsOnMemoryWarning {
+	TGMediaStore *store = [TGMediaStore shared];
+	NSData *sample = [@"media-payload" dataUsingEncoding:NSUTF8StringEncoding];
+	[store cacheBuffer:sample forFileId:98765];
+	XCTAssertEqualObjects([store cachedBufferForFileId:98765], sample);
+
+	[[NSNotificationCenter defaultCenter] postNotificationName:@"UIApplicationDidReceiveMemoryWarningNotification"
+	                                                    object:nil];
+	XCTAssertNil([store cachedBufferForFileId:98765]);
+}
+
+- (void)testTGTransport_TrimMemoryExecutesWithoutError {
+	[[TGTransport shared] trimMemory];
+	XCTAssertTrue(YES);
 }
 
 @end

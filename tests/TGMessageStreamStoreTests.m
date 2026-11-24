@@ -91,4 +91,46 @@
 	XCTAssertFalse(removedNonExistent);
 }
 
+- (void)testTrimNewerToLimit {
+	TGMessageStreamStore *store = [[TGMessageStreamStore alloc] init];
+	[store resetWithMessages:@[
+		@{@"id": @(10), @"text": @"1"},
+		@{@"id": @(20), @"text": @"2"},
+		@{@"id": @(30), @"text": @"3"},
+		@{@"id": @(40), @"text": @"4"}
+	]];
+
+	NSUInteger removed = [store trimNewerToLimit:2];
+	XCTAssertEqual((NSUInteger)2, removed);
+	XCTAssertEqual((NSUInteger)2, store.count);
+	XCTAssertEqual((int64_t)10, store.oldestMessageId);
+	XCTAssertEqual((int64_t)20, store.newestMessageId);
+	XCTAssertTrue([store containsMessageId:10]);
+	XCTAssertTrue([store containsMessageId:20]);
+	XCTAssertFalse([store containsMessageId:30]);
+	XCTAssertFalse([store containsMessageId:40]);
+	XCTAssertFalse(store.reachedEnd);
+}
+
+- (void)testTrimOlderToLimit {
+	TGMessageStreamStore *store = [[TGMessageStreamStore alloc] init];
+	[store resetWithMessages:@[
+		@{@"id": @(10), @"text": @"1"},
+		@{@"id": @(20), @"text": @"2"},
+		@{@"id": @(30), @"text": @"3"},
+		@{@"id": @(40), @"text": @"4"}
+	]];
+
+	NSUInteger removed = [store trimOlderToLimit:2];
+	XCTAssertEqual((NSUInteger)2, removed);
+	XCTAssertEqual((NSUInteger)2, store.count);
+	XCTAssertEqual((int64_t)30, store.oldestMessageId);
+	XCTAssertEqual((int64_t)40, store.newestMessageId);
+	XCTAssertFalse([store containsMessageId:10]);
+	XCTAssertFalse([store containsMessageId:20]);
+	XCTAssertTrue([store containsMessageId:30]);
+	XCTAssertTrue([store containsMessageId:40]);
+	XCTAssertFalse(store.reachedStart);
+}
+
 @end

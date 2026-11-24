@@ -497,4 +497,28 @@ static NSArray *TGStatisticalGraphLines(id json, NSString *raw) {
 	}];
 }
 
+- (void)decryptDatabaseWithCompletion:(void (^)(BOOL ok, NSString *error))completion {
+	if (![self databaseEncryptionKeyIsKnown]){
+		if (completion)
+			completion(NO, @"The current database key could not be read, so "
+						   @"changing it could lock the database.");
+		return;
+	}
+
+	[[TGClient shared] request:@{@"@type" : @"setDatabaseEncryptionKey",
+					@"new_encryption_key" : @""}
+	   completion:^(NSDictionary *result){
+		if (![result[@"@type"] isEqualToString:@"error"]){
+			NSString *clearError = nil;
+			[TGDatabaseKey storeKey:nil error:&clearError];
+			if (completion)
+				completion(YES, nil);
+			return;
+		}
+		NSString *message = TGDiagnosticsError(result);
+		if (completion)
+			completion(NO, message);
+	}];
+}
+
 @end

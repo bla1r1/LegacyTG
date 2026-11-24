@@ -102,11 +102,7 @@ static const CGFloat kActionBarCloseSide = TGMetricButtonLargeH;
 				 @"paused" : @NO, @"canReply" : @YES, @"manageUrl" : @"https://t.me/devbot"}};
 	// The private showcase chat stands for a stranger's archived chat.
 	if (self.chatId == kDevDurovChatId)
-		return @{@"id" : @(kDevDurovChatId), @"actionBarKind" : @"chatActionBarReportAddBlock",
-				 @"actionBarCanUnarchive" : @YES,
-				 @"actionBarAccount" : @{@"registrationMonth" : @3, @"registrationYear" : @2021,
-					@"country" : @"AE", @"nameChanged" : @([[NSDate date] timeIntervalSince1970] - 3 * 86400),
-					@"photoChanged" : @0}};
+		return nil;
 #endif
 	for (NSDictionary *chat in [TGMessageStore shared].chats)
 		if ([chat[@"id"] longLongValue] == self.chatId)
@@ -609,6 +605,7 @@ static const NSInteger kUnreadJumpBadgeTag = 0x9101;
 	button.layer.shadowRadius = TGMetricShadowButtonRadius;
 	button.layer.shadowOffset = TGMetricShadowOffsetEtched;
 	button.layer.shadowPath = [UIBezierPath bezierPathWithOvalInRect:button.bounds].CGPath;
+	button.clipsToBounds = NO;
 	button.hidden = YES;
 	[button addTarget:self action:action forControlEvents:UIControlEventTouchUpInside];
 	UILabel *badge = [[UILabel alloc] init];
@@ -779,15 +776,27 @@ static UIImage *TGJumpChevron(UIColor *colour) {
 	// Clear of the reply / edit strip when one is showing over the table. The
 	// strip rides directly on the composer, so it has to be placed here rather
 	// than where it was built: the keyboard moves the bar out from under it.
-	CGFloat bottom = CGRectGetMaxY(table);
+	CGFloat bottom = self.view.bounds.size.height;
+	if (self.inputBar && !self.inputBar.hidden) {
+		bottom = MIN(bottom, CGRectGetMinY(self.inputBar.frame));
+	}
+	UIView *channelBar = [self.view viewWithTag:kChatChannelBottomBarTag];
+	if (channelBar && !channelBar.hidden) {
+		bottom = MIN(bottom, CGRectGetMinY(channelBar.frame));
+	}
 	if (self.composeBanner && !self.composeBanner.hidden &&
 		CGAffineTransformIsIdentity(self.composeBanner.transform)){
 		self.composeBanner.frame = TGChatComposeBannerPlace(self.view.bounds.size.width,
-				CGRectGetMinY(self.inputBar.frame), NO).plate;
+				bottom, NO).plate;
 		bottom = MIN(bottom, CGRectGetMinY(self.composeBanner.frame));
 	}
-	self.jumpButton.frame = CGRectMake(CGRectGetMaxX(table) - kJumpSide - TGMetricJumpMarginRight,
-									   bottom - kJumpSide - TGMetricJumpMarginBottom, kJumpSide, kJumpSide);
+	if (table.size.height > 0) {
+		bottom = MIN(bottom, CGRectGetMaxY(table));
+	}
+	CGFloat rightX = self.view.bounds.size.width - kJumpSide - TGMetricJumpMarginRight;
+	self.jumpButton.frame = CGRectMake(rightX,
+									   bottom - kJumpSide - TGMetricJumpMarginBottom,
+									   kJumpSide, kJumpSide);
 	CGSize badge = [self.jumpBadge sizeThatFits:CGSizeMake(kJumpBadgeMaxW,
 			TGMetricJumpBadgeHeight)];
 	CGFloat bw = MAX(18, ceilf(badge.width) + TGMetricPadMedium);
@@ -797,12 +806,23 @@ static UIImage *TGJumpChevron(UIColor *colour) {
 	self.jumpButton.clipsToBounds = NO;
 	[self layoutUnreadJumps];
 
-	CGSize date = [self.floatingDate sizeThatFits:CGSizeMake(table.size.width,
-			TGMetricFloatingDateHeight)];
-	CGFloat dw = ceilf(date.width) + TGMetricPadWide;
-	CGFloat top = self.table.contentInset.top;
-	self.floatingDate.frame = CGRectMake(TGCenteredOrigin(table.size.width, dw), top + TGMetricFloatingDateTopOffset, dw,
-			TGMetricFloatingDateHeight);
+	[self.view bringSubviewToFront:self.jumpButton];
+	if (self.mentionsJumpButton) [self.view bringSubviewToFront:self.mentionsJumpButton];
+	if (self.reactionsJumpButton) [self.view bringSubviewToFront:self.reactionsJumpButton];
+	if (self.pollVotesJumpButton) [self.view bringSubviewToFront:self.pollVotesJumpButton];
+
+	if (!self.floatingDate.text.length) {
+		self.floatingDate.hidden = YES;
+		self.floatingDate.alpha = 0;
+	} else {
+		self.floatingDate.hidden = NO;
+		CGSize date = [self.floatingDate sizeThatFits:CGSizeMake(table.size.width,
+				TGMetricFloatingDateHeight)];
+		CGFloat dw = ceilf(date.width) + TGMetricPadWide;
+		CGFloat top = self.table.contentInset.top;
+		self.floatingDate.frame = CGRectMake(TGCenteredOrigin(table.size.width, dw), top + TGMetricFloatingDateTopOffset, dw,
+				TGMetricFloatingDateHeight);
+	}
 }
 
 - (BOOL)isNearBottom {
@@ -905,7 +925,7 @@ static UIImage *TGJumpChevron(UIColor *colour) {
 	[self updateJumpButton];
 	if (self.table.isDragging || self.table.isDecelerating){
 		[self updateFloatingDate];
-		if (self.floatingDate.alpha < 1){
+		if (self.floatingDate.text.length > 0 && self.floatingDate.alpha < 1){
 			[UIView animateWithDuration:TGAnimationDurationFast animations:^{ self.floatingDate.alpha = 1; }];
 		}
 		[NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(fadeFloatingDate) object:nil];

@@ -31,8 +31,121 @@ static const CGFloat kPinGlyph      = 16.0f;
 static const CGFloat kBadgePad      = TGMetricPadMedium + TGMetricPadTiny;
 /// Three buttons fit beside a 320 pt row without clipping.
 static const CGFloat kSwipeActionWidth = 76.0f;
+static const CGFloat kOnlineDotSide = 15.0f;
+
+/// A single composite view that renders the date, delivery ticks, unread count badge,
+/// mention badge, and pinned icon in one drawRect: pass. Consolidates 5 CALayers into 1.
+@interface TGChatRowMetaView : UIView
+
+@property (nonatomic, strong) UIImage *tickImage;
+@property (nonatomic, assign) CGRect tickRect;
+
+@property (nonatomic, copy) NSString *dateText;
+@property (nonatomic, strong) UIFont *dateFont;
+@property (nonatomic, strong) UIColor *dateColor;
+@property (nonatomic, assign) CGRect dateRect;
+
+@property (nonatomic, strong) UIImage *pinImage;
+@property (nonatomic, assign) CGRect pinRect;
+
+@property (nonatomic, copy) NSString *badgeText;
+@property (nonatomic, strong) UIFont *badgeFont;
+@property (nonatomic, strong) UIColor *badgeTextColor;
+@property (nonatomic, strong) UIColor *badgeColor;
+@property (nonatomic, assign) CGRect badgeRect;
+
+@property (nonatomic, assign) BOOL hasMention;
+@property (nonatomic, strong) UIColor *mentionColor;
+@property (nonatomic, strong) UIColor *mentionTextColor;
+@property (nonatomic, assign) CGRect mentionRect;
+
+@property (nonatomic, strong) UIColor *separatorColor;
+@property (nonatomic, assign) CGRect separatorRect;
+
+- (void)reset;
+
+@end
+
+@implementation TGChatRowMetaView
+
+- (id)initWithFrame:(CGRect)frame {
+	self = [super initWithFrame:frame];
+	if (self) {
+		self.backgroundColor = [UIColor clearColor];
+		self.opaque = NO;
+		self.userInteractionEnabled = NO;
+	}
+	return self;
+}
+
+- (void)reset {
+	self.tickImage = nil;
+	self.tickRect = CGRectZero;
+	self.dateText = nil;
+	self.dateFont = nil;
+	self.dateColor = nil;
+	self.dateRect = CGRectZero;
+	self.pinImage = nil;
+	self.pinRect = CGRectZero;
+	self.badgeText = nil;
+	self.badgeFont = nil;
+	self.badgeTextColor = nil;
+	self.badgeColor = nil;
+	self.badgeRect = CGRectZero;
+	self.hasMention = NO;
+	self.mentionColor = nil;
+	self.mentionTextColor = nil;
+	self.mentionRect = CGRectZero;
+	self.separatorColor = nil;
+	self.separatorRect = CGRectZero;
+	[self setNeedsDisplay];
+}
+
+- (void)drawRect:(CGRect)rect {
+	[super drawRect:rect];
+	CGContextRef ctx = UIGraphicsGetCurrentContext();
+	if (self.separatorColor && !CGRectIsEmpty(self.separatorRect)) {
+		[self.separatorColor setFill];
+		UIRectFill(self.separatorRect);
+	}
+	if (self.tickImage && !CGRectIsEmpty(self.tickRect)) {
+		[self.tickImage drawInRect:self.tickRect];
+	}
+	if (self.dateText.length && !CGRectIsEmpty(self.dateRect)) {
+		if (ctx) {
+			CGContextSaveGState(ctx);
+			CGContextClipToRect(ctx, self.dateRect);
+		}
+		TGDrawText(self.dateText, self.dateRect, self.dateFont ?: TGFontSubhead(),
+				   self.dateColor ?: [UIColor grayColor], NSTextAlignmentRight, nil);
+		if (ctx)
+			CGContextRestoreGState(ctx);
+	}
+	if (self.pinImage && !CGRectIsEmpty(self.pinRect)) {
+		[self.pinImage drawInRect:self.pinRect];
+	}
+	if (self.badgeText.length && !CGRectIsEmpty(self.badgeRect)) {
+		UIBezierPath *p = [UIBezierPath bezierPathWithRoundedRect:self.badgeRect
+													 cornerRadius:TGHalf(self.badgeRect.size.height)];
+		[self.badgeColor setFill];
+		[p fill];
+		TGDrawText(self.badgeText, self.badgeRect, self.badgeFont ?: TGFontCaptionStrong(),
+				   self.badgeTextColor ?: [UIColor whiteColor], NSTextAlignmentCenter, nil);
+	}
+	if (self.hasMention && !CGRectIsEmpty(self.mentionRect)) {
+		UIBezierPath *p = [UIBezierPath bezierPathWithRoundedRect:self.mentionRect
+													 cornerRadius:TGHalf(self.mentionRect.size.height)];
+		[self.mentionColor setFill];
+		[p fill];
+		TGDrawText(@"@", self.mentionRect, self.badgeFont ?: TGFontCaptionStrong(),
+				   self.mentionTextColor ?: [UIColor whiteColor], NSTextAlignmentCenter, nil);
+	}
+}
+
+@end
 
 @interface TGChatRowCell ()
+@property (nonatomic, strong) TGChatRowMetaView *metaView;
 @property (nonatomic, strong) UIImageView *avatar;
 @property (nonatomic, strong) UILabel *titleLabel;
 @property (nonatomic, strong) UILabel *previewLabel;
@@ -46,7 +159,6 @@ static const CGFloat kSwipeActionWidth = 76.0f;
 @property (nonatomic, strong) UIImageView *statusIcon; // the emoji status after the title
 @property (nonatomic, strong) UIImageView *lockIcon;   // a secret chat's padlock before it
 @property (nonatomic, strong) UIImageView *muteIcon;   // beside the title of a muted chat
-@property (nonatomic, strong) UIView *separator;   // starts under the text, not the picture
 
 @property (nonatomic, strong) NSMutableArray *trailingActionButtons;
 @property (nonatomic, assign) CGFloat trailingActionsWidth;
@@ -192,13 +304,6 @@ static UIImage *TGChatRowStoryRingImage(CGSize side, UIColor *colour) {
 	self.avatar.backgroundColor = [UIColor clearColor];
 	[self.contentView addSubview:self.avatar];
 
-	// Stories: a ring round the picture with a gap, unseen in the accent and
-	// seen in grey (official ChatListItem avatar story ring, gradient dropped).
-	CGFloat ringOut = TGMetricPadTiny + TGMetricBorderMedium;
-	self.storyRing = [[UIImageView alloc] initWithFrame:CGRectInset(self.avatar.frame, -ringOut, -ringOut)];
-	self.storyRing.hidden = YES;
-	[self.contentView addSubview:self.storyRing];
-
 	self.titleLabel = [[UILabel alloc] init];
 	// Clear, or iOS 6 paints the label's default white box.
 	self.titleLabel.backgroundColor = [UIColor clearColor];
@@ -216,80 +321,79 @@ static UIImage *TGChatRowStoryRingImage(CGSize side, UIColor *colour) {
 	self.previewLabel.lineBreakMode = NSLineBreakByTruncatingTail;
 	[self.contentView addSubview:self.previewLabel];
 
+	self.metaView = [[TGChatRowMetaView alloc] init];
+	[self.contentView addSubview:self.metaView];
+
+	// Layout and measurement helpers: NOT added to contentView so backboardd
+	// has 0 CALayers allocated for them during table scroll.
 	self.dateLabel = [[UILabel alloc] init];
-	// Clear, or iOS 6 paints the label's default white box.
-	self.dateLabel.backgroundColor = [UIColor clearColor];
 	self.dateLabel.font = TGFontSubhead();
 	self.dateLabel.textColor = [theme listDateColour];
-	self.dateLabel.textAlignment = NSTextAlignmentRight;
-	[self.contentView addSubview:self.dateLabel];
 
 	self.badge = [[UILabel alloc] init];
-	self.badge.font = TGFontCaptionStrong();
-	self.badge.textColor = [[TGTheme shared] onAccentColour];
-	self.badge.backgroundColor = [theme badgeColour];
-	self.badge.textAlignment = NSTextAlignmentCenter;
-	self.badge.layer.cornerRadius = TGHalf(TGMetricChatBadgeHeight);
-	self.badge.clipsToBounds = YES;
-
-	self.badge.hidden = YES;
-	[self.contentView addSubview:self.badge];
-
 	self.mentionBadge = [[UILabel alloc] init];
-	self.mentionBadge.text = @"@";
-	self.mentionBadge.font = TGFontCaptionStrong();
-	self.mentionBadge.textColor = [[TGTheme shared] onAccentColour];
-	self.mentionBadge.backgroundColor = [theme accentColour];
-	self.mentionBadge.textAlignment = NSTextAlignmentCenter;
-	self.mentionBadge.layer.cornerRadius = TGHalf(TGMetricChatBadgeHeight);
-	self.mentionBadge.clipsToBounds = YES;
-	self.mentionBadge.hidden = YES;
-	[self.contentView addSubview:self.mentionBadge];
-
-	CGFloat dot = 15;
-	self.onlineDot = [[UIView alloc] initWithFrame:
-			CGRectMake(kInset + kAvatar - dot, TGCenteredOrigin(kRowHeight, kAvatar) + kAvatar - dot, dot, dot)];
-	self.onlineDot.backgroundColor = [theme onlineColour];
-	self.onlineDot.layer.cornerRadius = TGHalf(dot);
-	self.onlineDot.layer.borderWidth = TGMetricBorderThick;
-	self.onlineDot.layer.borderColor = [theme listBackgroundColour].CGColor;
-	self.onlineDot.hidden = YES;
-	[self.contentView addSubview:self.onlineDot];
-
 	self.tick = [[UIImageView alloc] init];
-	self.tick.contentMode = UIViewContentModeScaleAspectFit;
-	self.tick.hidden = YES;
-	[self.contentView addSubview:self.tick];
-
 	self.pin = [[UIImageView alloc] init];
-	self.pin.contentMode = UIViewContentModeScaleAspectFit;
-	self.pin.hidden = YES;
-	[self.contentView addSubview:self.pin];
-
-	self.statusIcon = [[UIImageView alloc] init];
-	self.statusIcon.contentMode = UIViewContentModeScaleAspectFit;
-	self.statusIcon.hidden = YES;
-	[self.contentView addSubview:self.statusIcon];
-
-	self.lockIcon = [[UIImageView alloc] init];
-	self.lockIcon.contentMode = UIViewContentModeScaleAspectFit;
-	self.lockIcon.hidden = YES;
-	[self.contentView addSubview:self.lockIcon];
-
-	self.muteIcon = [[UIImageView alloc] init];
-	self.muteIcon.contentMode = UIViewContentModeScaleAspectFit;
-	self.muteIcon.hidden = YES;
-	[self.contentView addSubview:self.muteIcon];
-
-	// The table's own separator runs under the picture and cannot be inset
-	// before iOS 7, so the row draws its own.
-	self.separator = [[UIView alloc] init];
-	self.separator.backgroundColor = [theme separatorColour];
-	[self.contentView addSubview:self.separator];
 
 	// No disclosure arrow: a chat row is not a settings row.
 	self.accessoryType = UITableViewCellAccessoryNone;
 	return self;
+}
+
+- (UIImageView *)storyRing {
+	if (!_storyRing) {
+		CGFloat ringOut = TGMetricPadTiny + TGMetricBorderMedium;
+		_storyRing = [[UIImageView alloc] initWithFrame:CGRectInset(self.avatar.frame, -ringOut, -ringOut)];
+		_storyRing.hidden = YES;
+		[self.contentView insertSubview:_storyRing belowSubview:self.avatar];
+	}
+	return _storyRing;
+}
+
+- (UIView *)onlineDot {
+	if (!_onlineDot) {
+		TGTheme *theme = [TGTheme shared];
+		CGFloat dot = kOnlineDotSide;
+		_onlineDot = [[UIView alloc] initWithFrame:
+				CGRectMake(kInset + kAvatar - dot, TGCenteredOrigin(kRowHeight, kAvatar) + kAvatar - dot, dot, dot)];
+		_onlineDot.backgroundColor = [theme onlineColour];
+		_onlineDot.layer.cornerRadius = TGHalf(dot);
+		_onlineDot.layer.borderWidth = TGMetricBorderThick;
+		_onlineDot.layer.borderColor = [theme listBackgroundColour].CGColor;
+		_onlineDot.hidden = YES;
+		[self.contentView addSubview:_onlineDot];
+	}
+	return _onlineDot;
+}
+
+- (UIImageView *)muteIcon {
+	if (!_muteIcon) {
+		_muteIcon = [[UIImageView alloc] init];
+		_muteIcon.contentMode = UIViewContentModeScaleAspectFit;
+		_muteIcon.hidden = YES;
+		[self.contentView addSubview:_muteIcon];
+	}
+	return _muteIcon;
+}
+
+- (UIImageView *)lockIcon {
+	if (!_lockIcon) {
+		_lockIcon = [[UIImageView alloc] init];
+		_lockIcon.contentMode = UIViewContentModeScaleAspectFit;
+		_lockIcon.hidden = YES;
+		[self.contentView addSubview:_lockIcon];
+	}
+	return _lockIcon;
+}
+
+- (UIImageView *)statusIcon {
+	if (!_statusIcon) {
+		_statusIcon = [[UIImageView alloc] init];
+		_statusIcon.contentMode = UIViewContentModeScaleAspectFit;
+		_statusIcon.hidden = YES;
+		[self.contentView addSubview:_statusIcon];
+	}
+	return _statusIcon;
 }
 
 #pragma mark - row
@@ -314,8 +418,13 @@ static UIImage *TGChatRowStoryRingImage(CGSize side, UIColor *colour) {
 	self.dateLabel.opaque = YES;
 	self.dateLabel.textColor = [theme listDateColour];
 	self.dateLabel.text = @"";
-	self.onlineDot.layer.borderColor = bg.CGColor;
-	self.separator.backgroundColor = [theme separatorColour];
+	if (_onlineDot) {
+		_onlineDot.layer.borderColor = bg.CGColor;
+		_onlineDot.hidden = YES;
+	}
+	if (_storyRing)
+		_storyRing.hidden = YES;
+	self.metaView.separatorColor = [theme separatorColour];
 	if ([theme isDark]) {
 		UIView *selection = [[UIView alloc] init];
 		selection.backgroundColor = [theme inputBarColour];
@@ -324,15 +433,22 @@ static UIImage *TGChatRowStoryRingImage(CGSize side, UIColor *colour) {
 		self.selectedBackgroundView = nil;
 	}
 
-	self.onlineDot.hidden = YES;
 	self.tick.hidden = YES;
 	self.tick.image = nil;
-	self.muteIcon.hidden = YES;
-	self.muteIcon.image = nil;
+	if (_muteIcon) {
+		_muteIcon.hidden = YES;
+		_muteIcon.image = nil;
+	}
 	self.pin.hidden = YES;
 	self.pin.image = nil;
-	self.statusIcon.hidden = YES;
-	self.statusIcon.image = nil;
+	if (_statusIcon) {
+		_statusIcon.hidden = YES;
+		_statusIcon.image = nil;
+	}
+	if (_lockIcon) {
+		_lockIcon.hidden = YES;
+		_lockIcon.image = nil;
+	}
 	self.mentionBadge.hidden = YES;
 	self.badge.hidden = YES;
 	self.badge.text = @"";
@@ -348,9 +464,14 @@ static UIImage *TGChatRowStoryRingImage(CGSize side, UIColor *colour) {
 	int64_t statusId = saved ? 0
 			: [row[TGRowChatStatusEmojiId] longLongValue];
 	BOOL secret = [row[TGRowChatSecret] boolValue];
-	self.lockIcon.hidden = !secret;
-	self.lockIcon.image = secret ? [TGIcons glyphNamed:@"lock" colour:[theme onlineColour]
-												  side:kMuteGlyph] : nil;
+	if (secret) {
+		self.lockIcon.hidden = NO;
+		self.lockIcon.image = [TGIcons glyphNamed:@"lock" colour:[theme onlineColour]
+											  side:kMuteGlyph];
+	} else if (_lockIcon) {
+		_lockIcon.hidden = YES;
+		_lockIcon.image = nil;
+	}
 	self.titleLabel.attributedText = TGNameWithStatus(title, statusId,
 			self.titleLabel.font, [self titleColour]);
 
@@ -370,12 +491,21 @@ static UIImage *TGChatRowStoryRingImage(CGSize side, UIColor *colour) {
 			 customEmoji:row[TGRowChatCustomEmoji]];
 	}
 
-	self.onlineDot.hidden = ![row[TGRowChatOnline] boolValue];
+	BOOL online = [row[TGRowChatOnline] boolValue];
+	if (online) {
+		self.onlineDot.hidden = NO;
+	} else if (_onlineDot) {
+		_onlineDot.hidden = YES;
+	}
+
 	NSInteger ring = [row[TGRowChatStoryRing] integerValue];
-	self.storyRing.hidden = ring == 0;
-	if (ring)
+	if (ring) {
+		self.storyRing.hidden = NO;
 		self.storyRing.image = TGChatRowStoryRingImage(self.storyRing.bounds.size,
 				ring == 2 ? [theme accentColour] : [theme secondaryTextColour]);
+	} else if (_storyRing) {
+		_storyRing.hidden = YES;
+	}
 
 	// Your own last message shows whether it has been read, beside the date.
 	// Saved Messages has no one to read it. A refused message takes the tick's
@@ -392,11 +522,15 @@ static UIImage *TGChatRowStoryRingImage(CGSize side, UIColor *colour) {
 	}
 
 	BOOL muted = [row[TGRowChatMuted] boolValue];
-	self.muteIcon.hidden = !muted;
-	if (muted)
+	if (muted) {
+		self.muteIcon.hidden = NO;
 		self.muteIcon.image = [TGIcons glyphNamed:@"mute"
 										   colour:[theme listDateColour]
 											 side:kRowGlyph];
+	} else if (_muteIcon) {
+		_muteIcon.hidden = YES;
+		_muteIcon.image = nil;
+	}
 
 	NSInteger unread = [row[TGRowChatUnread] integerValue];
 	NSInteger mentions = [row[TGRowChatMentions] integerValue];
@@ -469,6 +603,9 @@ static NSString *TGSafeEmojiFallback(NSString *emoji) {
 		self.previewLabel.text = [TGChatRowPreviewPrefix(author) stringByAppendingString:text];
 		return;
 	}
+
+	if (![TGCapabilities canRenderCustomEmoji])
+		customEmoji = nil;
 
 	BOOL undrawable = TGTextHasUndrawableEmoji(text);
 	self.previewLabel.font = TGFontBody();
@@ -630,45 +767,52 @@ static NSString *TGSafeEmojiFallback(NSString *emoji) {
 	// The first line: the date pinned to the right edge, the ticks before it,
 	// and the title taking whatever is left.
 	CGSize date = TGChatRowCellTextSize(self.dateLabel.text, self.dateLabel.font);
-	self.dateLabel.frame = CGRectMake(right - ceilf(date.width), kFirstLineTop + TGMetricBorderWidth,
+	CGRect dateFrame = CGRectMake(right - ceilf(date.width), kFirstLineTop + TGMetricBorderWidth,
 			ceilf(date.width), TGMetricLineBody);
-	CGFloat titleRight = CGRectGetMinX(self.dateLabel.frame) - TGMetricChatCellDateGap;
+	self.dateLabel.frame = dateFrame;
+	CGFloat titleRight = CGRectGetMinX(dateFrame) - TGMetricChatCellDateGap;
+	CGRect tickFrame = CGRectZero;
 	if (!self.tick.hidden) {
-		self.tick.frame = CGRectMake(titleRight - TGMetricTicksWidth,
+		tickFrame = CGRectMake(titleRight - TGMetricTicksWidth,
 				kFirstLineTop + TGMetricPadSmall, TGMetricTicksWidth,
 				TGMetricTicksHeight);
+		self.tick.frame = tickFrame;
 		titleRight -= (TGMetricTicksWidth + TGMetricPadSmall);
 	}
 
 	// Title, then the status, then the mute glyph: the title gives way to both.
-	CGFloat muteW = self.muteIcon.hidden ? 0 : kMuteRoom;
-	CGFloat statusW = self.statusIcon.hidden ? 0 : kStatusRoom;
+	CGFloat muteW = (_muteIcon && !_muteIcon.hidden) ? kMuteRoom : 0;
+	CGFloat statusW = (_statusIcon && !_statusIcon.hidden) ? kStatusRoom : 0;
 	CGFloat titleLeft = kTextLeft;
-	if (!self.lockIcon.hidden){
-		self.lockIcon.frame = CGRectMake(kTextLeft, kFirstLineTop + TGMetricPadTiny,
+	if (_lockIcon && !_lockIcon.hidden){
+		_lockIcon.frame = CGRectMake(kTextLeft, kFirstLineTop + TGMetricPadTiny,
 				kMuteGlyph, kMuteGlyph);
 		titleLeft += kMuteRoom;
 	}
 	CGFloat titleRoom = MAX(0, titleRight - titleLeft - muteW - statusW);
-	CGFloat textW = 0;
-	if (self.titleLabel.attributedText.length > 0 && [self.titleLabel.attributedText respondsToSelector:@selector(boundingRectWithSize:options:context:)]) {
-		CGRect r = [self.titleLabel.attributedText boundingRectWithSize:CGSizeMake(CGFLOAT_MAX, TGMetricLineRow)
-															   options:NSStringDrawingUsesLineFragmentOrigin | NSStringDrawingUsesFontLeading
-															   context:nil];
-		textW = ceilf(r.size.width);
-	} else {
-		textW = ceilf(TGChatRowCellTextSize(self.titleLabel.text, self.titleLabel.font).width);
+	CGFloat titleW = titleRoom;
+	if (muteW > 0 || statusW > 0) {
+		CGFloat textW = 0;
+		if (self.titleLabel.attributedText.length > 0 && [self.titleLabel.attributedText respondsToSelector:@selector(boundingRectWithSize:options:context:)]) {
+			CGRect r = [self.titleLabel.attributedText boundingRectWithSize:CGSizeMake(titleRoom, TGMetricLineRow)
+															        options:NSStringDrawingUsesLineFragmentOrigin | NSStringDrawingUsesFontLeading
+															        context:nil];
+			textW = ceilf(r.size.width) + TGMetricPadSmall;
+		} else {
+			NSString *titleStr = self.titleLabel.text.length ? self.titleLabel.text : (self.row[TGRowTitle] ?: @"");
+			textW = ceilf(TGChatRowCellTextSize(titleStr, self.titleLabel.font).width) + TGMetricPadSmall;
+		}
+		titleW = MIN(textW, titleRoom);
 	}
-	CGFloat titleW = MIN(textW, titleRoom);
 	self.titleLabel.frame = CGRectMake(titleLeft, kFirstLineTop, titleW, TGMetricLineRow);
 	CGFloat afterTitle = titleLeft + titleW + TGMetricBubbleRowInset;
-	if (!self.statusIcon.hidden){
-		self.statusIcon.frame = CGRectMake(afterTitle,
+	if (_statusIcon && !_statusIcon.hidden){
+		_statusIcon.frame = CGRectMake(afterTitle,
 				kFirstLineTop + TGCenteredOrigin(TGMetricLineRow, kStatusGlyph), kStatusGlyph, kStatusGlyph);
 		afterTitle += statusW;
 	}
-	if (!self.muteIcon.hidden)
-		self.muteIcon.frame = CGRectMake(afterTitle,
+	if (_muteIcon && !_muteIcon.hidden)
+		_muteIcon.frame = CGRectMake(afterTitle,
 				kFirstLineTop + TGMetricPadTiny, kMuteGlyph, kMuteGlyph);
 
 	// The second line: the unread count at the right edge, the pin beside it,
@@ -684,13 +828,69 @@ static NSString *TGSafeEmojiFallback(NSString *emoji) {
 		self.mentionBadge.frame = accessories.mentionFrame;
 	CGFloat previewRight = accessories.previewRight;
 
+	// Flatten trailing accessories (date, ticks, badge, mentionBadge, pin) and hairline separator into self.metaView
+	CGFloat metaLeft = kTextLeft;
+	self.metaView.frame = CGRectMake(metaLeft, 0, w - metaLeft, h);
+
+	CGFloat hair = TGMetricHairline;
+	self.metaView.separatorColor = [[TGTheme shared] separatorColour];
+	self.metaView.separatorRect = CGRectMake(0, h - hair, w - metaLeft, hair);
+
+	self.metaView.dateText = self.dateLabel.text;
+	self.metaView.dateFont = TGFontSubhead();
+	self.metaView.dateColor = self.dateLabel.textColor;
+	self.metaView.dateRect = CGRectOffset(dateFrame, -metaLeft, 0);
+
+	if (!self.tick.hidden && self.tick.image) {
+		self.metaView.tickImage = self.tick.image;
+		self.metaView.tickRect = CGRectOffset(tickFrame, -metaLeft, 0);
+	} else {
+		self.metaView.tickImage = nil;
+		self.metaView.tickRect = CGRectZero;
+	}
+
+	if (!self.badge.hidden && self.badge.text.length) {
+		self.metaView.badgeText = self.badge.text;
+		self.metaView.badgeFont = TGFontCaptionStrong();
+		self.metaView.badgeColor = self.badge.backgroundColor;
+		self.metaView.badgeTextColor = self.badge.textColor;
+		self.metaView.badgeRect = CGRectOffset(accessories.badgeFrame, -metaLeft, 0);
+	} else {
+		self.metaView.badgeText = nil;
+		self.metaView.badgeRect = CGRectZero;
+	}
+
+	if (!self.pin.hidden && self.pin.image) {
+		self.metaView.pinImage = self.pin.image;
+		self.metaView.pinRect = CGRectOffset(accessories.pinFrame, -metaLeft, 0);
+	} else {
+		self.metaView.pinImage = nil;
+		self.metaView.pinRect = CGRectZero;
+	}
+
+	if (!self.mentionBadge.hidden) {
+		self.metaView.hasMention = YES;
+		self.metaView.mentionColor = self.mentionBadge.backgroundColor;
+		self.metaView.mentionTextColor = self.mentionBadge.textColor;
+		self.metaView.mentionRect = CGRectOffset(accessories.mentionFrame, -metaLeft, 0);
+	} else {
+		self.metaView.hasMention = NO;
+		self.metaView.mentionRect = CGRectZero;
+	}
+
+	[self.metaView setNeedsDisplay];
+
+	// Keep individual accessories hidden so CALayer skips compositing them
+	self.dateLabel.hidden = YES;
+	self.tick.hidden = YES;
+	self.badge.hidden = YES;
+	self.mentionBadge.hidden = YES;
+	self.pin.hidden = YES;
+
 	CGFloat previewW = MAX(0, previewRight - kTextLeft);
 	CGSize fit = [self.previewLabel sizeThatFits:CGSizeMake(previewW, kPreviewMax)];
 	self.previewLabel.frame = CGRectMake(kTextLeft, kSecondLineTop, previewW,
 			MIN(ceilf(fit.height), kPreviewMax - TGMetricPadTiny));
-
-	CGFloat hair = TGMetricHairline;
-	self.separator.frame = CGRectMake(kTextLeft, h - hair, w - kTextLeft, hair);
 
 	// Layout trailing buttons along the right edge
 	if (self.trailingActionButtons.count){
@@ -727,9 +927,13 @@ static NSString *TGSafeEmojiFallback(NSString *emoji) {
 	self.dateLabel.textColor = [theme listDateColour];
 	self.badge.backgroundColor = [theme badgeColour];
 	self.mentionBadge.backgroundColor = [theme accentColour];
-	self.onlineDot.backgroundColor = [theme onlineColour];
-	self.onlineDot.layer.borderColor = bg.CGColor;
-	self.separator.backgroundColor = [theme separatorColour];
+	if (_onlineDot) {
+		_onlineDot.backgroundColor = [theme onlineColour];
+		_onlineDot.layer.borderColor = bg.CGColor;
+	}
+	self.metaView.separatorColor = [theme separatorColour];
+	self.metaView.dateColor = [theme listDateColour];
+	[self.metaView setNeedsDisplay];
 }
 
 - (CGFloat)swipeActionsWidth {
@@ -936,31 +1140,43 @@ static NSString *TGSafeEmojiFallback(NSString *emoji) {
 	TGTheme *theme = [TGTheme shared];
 	if (selected) {
 		self.contentView.backgroundColor = [theme accentColour];
+		self.contentView.opaque = YES;
 		self.titleLabel.backgroundColor = [UIColor clearColor];
+		self.titleLabel.opaque = NO;
 		self.titleLabel.textColor = [UIColor whiteColor];
 		self.previewLabel.backgroundColor = [UIColor clearColor];
+		self.previewLabel.opaque = NO;
 		self.previewLabel.textColor = [UIColor whiteColor];
 		self.dateLabel.backgroundColor = [UIColor clearColor];
+		self.dateLabel.opaque = NO;
 		self.dateLabel.textColor = [UIColor whiteColor];
+		self.metaView.dateColor = [UIColor whiteColor];
 	} else {
 		BOOL pinnedRow = [self.row[TGRowChatPinned] boolValue];
 		UIColor *bg = pinnedRow ? [theme cardBackgroundColour] : [theme listBackgroundColour];
 		self.contentView.backgroundColor = bg;
+		self.contentView.opaque = YES;
 		self.titleLabel.backgroundColor = bg;
+		self.titleLabel.opaque = YES;
 		self.titleLabel.textColor = [self titleColour];
 		self.previewLabel.backgroundColor = bg;
+		self.previewLabel.opaque = YES;
 		self.previewLabel.textColor = [theme secondaryTextColour];
 		self.dateLabel.backgroundColor = bg;
+		self.dateLabel.opaque = YES;
 		self.dateLabel.textColor = [theme listDateColour];
+		self.metaView.dateColor = [theme listDateColour];
 	}
+	[self.metaView setNeedsDisplay];
 }
 
 - (void)prepareForReuse {
 	[super prepareForReuse];
 	[self closeSwipeActionsAnimated:NO];
+	[self.metaView reset];
 	self.row = nil;
 	self.hasAccessories = NO;
-	self.dateLabel.hidden = NO;
+	self.dateLabel.hidden = YES;
 }
 
 @end

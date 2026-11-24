@@ -1,0 +1,4361 @@
+diff --git a/src/App/AppDelegate.m b/src/App/AppDelegate.m
+index d7ec1213..949cf825 100644
+--- a/src/App/AppDelegate.m
++++ b/src/App/AppDelegate.m
+@@ -48,6 +48,7 @@
+ #import "TGPeerStore.h"
+ #import "TGChatListStore.h"
+ #import "TGMediaStore.h"
++#import "TGIcons.h"
+ #import "TGChatListViewController.h"
+ #import "TGDevice.h"
+ #include <dlfcn.h>
+@@ -505,6 +506,7 @@ static void TGRecursivePurgeVC(UIViewController *vc) {
+ 	[[TGChatListStore shared] clearMemoryCaches];
+ 	[[TGCustomEmojiStore shared] clearMemoryCaches];
+ 	[[TGMediaStore shared] clearMemoryCaches];
++	[TGIcons flush];
+ 
+ 	UIWindow *window = [UIApplication sharedApplication].keyWindow;
+ 	if (window.rootViewController) {
+diff --git a/src/Core/Client/TGClient.m b/src/Core/Client/TGClient.m
+index c1bd0b22..430afcb3 100644
+--- a/src/Core/Client/TGClient.m
++++ b/src/Core/Client/TGClient.m
+@@ -8,6 +8,7 @@
+ #import "TGUpdateHandlers.h"
+ #import "TGBase64.h"
+ #import "TGDatabaseKey.h"
++#import "TGCapabilities.h"
+ #import "TGOptions.h"
+ #import "TGCall.h"
+ #import "TGJson.h"
+@@ -540,7 +541,11 @@ NSDictionary *TGFormattedText(NSString *text) {
+ 		self.readyAt = [NSDate date].timeIntervalSince1970;
+ 		[self loadChats];
+ 		[self send:@{@"@type" : @"getMe"}];
+-		[self encryptDatabaseIfNeeded];
++		if ([TGCapabilities databaseEncryptionWanted])
++			[self encryptDatabaseIfNeeded];
++		else
++			[self decryptDatabaseIfNeeded];
++		[self optimizeStorageIfNeeded];
+ 		if (!TGAppInBackground())
+ 			[self send:TGOnlineOptionRequest(YES)];
+ 	}
+@@ -570,11 +575,14 @@ NSDictionary *TGFormattedText(NSString *text) {
+ 		return;
+ 	}
+ 
+-	// Every database is encrypted; the key sits in the keychain. One made
+-	// before encryption was the default opens only with the empty key: TDLib
+-	// answers 401 to ours, the empty key opens it, and it is re-keyed once
+-	// the account is ready.
+-	NSData *databaseKey = [TGDatabaseKey ensureKey];
++	// Every database is encrypted by default on Legacy+; the key sits in the keychain.
++	// On Vintage (or if encryption is turned off), we only use a key if an existing
++	// database was already encrypted, so it opens without 401 and decrypts once ready.
++	NSData *databaseKey = nil;
++	if ([TGCapabilities databaseEncryptionWanted])
++		databaseKey = [TGDatabaseKey ensureKey];
++	else
++		databaseKey = [TGDatabaseKey currentKey];
+ 	[self sendTdlibParametersWithDirectory:db key:databaseKey];
+ }
+ 
+@@ -623,6 +631,8 @@ NSDictionary *TGFormattedText(NSString *text) {
+ /// An unencrypted database from an older build gets the keychain key. If the
+ /// re-key fails, the next launch opens it unencrypted again and retries.
+ - (void)encryptDatabaseIfNeeded {
++	if (![TGCapabilities databaseEncryptionWanted])
++		return;
+ 	NSData *key = self.databaseOpenedWithoutKey ? [TGDatabaseKey currentKey] : nil;
+ 	if (!key.length)
+ 		return;
+@@ -636,6 +646,48 @@ NSDictionary *TGFormattedText(NSString *text) {
+ 	}];
+ }
+ 
++/// Decrypts the database if encryption was disabled (e.g. Vintage tier to avoid
++/// software AES overhead, or user preference).
++- (void)decryptDatabaseIfNeeded {
++	if ([TGCapabilities databaseEncryptionWanted])
++		return;
++	NSData *key = [TGDatabaseKey currentKey];
++	if (!key.length)
++		return;
++	NSLog(@"TGClient: decrypting database for Vintage/performance");
++	[self request:@{@"@type" : @"setDatabaseEncryptionKey",
++					@"new_encryption_key" : @""}
++	   completion:^(NSDictionary *result){
++		BOOL ok = ![result[@"@type"] isEqualToString:@"error"];
++		if (ok){
++			[TGDatabaseKey storeKey:nil error:NULL];
++			self.databaseOpenedWithoutKey = YES;
++		}
++		NSLog(@"TGClient: database decryption %@", ok ? @"succeeded" : result[@"message"]);
++	}];
++}
++
++/// Runs TDLib storage optimization and SQLite memory trimming periodically.
++- (void)optimizeStorageIfNeeded {
++	NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
++	NSTimeInterval last = [defaults doubleForKey:@"TGLastStorageOptimizationTime"];
++	NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
++	if (last > 0 && (now - last) < (3 * 86400))
++		return;
++	[defaults setDouble:now forKey:@"TGLastStorageOptimizationTime"];
++	[defaults synchronize];
++
++	NSLog(@"TGClient: running storage and database optimization");
++	[self send:@{
++		@"@type" : @"optimizeStorage",
++		@"size"  : @(-1),
++		@"count" : @(-1),
++		@"ttl"   : @([TGDevice tier] <= TGDeviceTierVintage ? (3 * 86400) : (14 * 86400)),
++		@"chat_limit" : @(0)
++	}];
++	[[TGTransport shared] trimMemory];
++}
++
+ - (void)handleInAppNotificationForNewMessage:(NSDictionary *)m {
+ 	if (!m || [m[@"is_outgoing"] boolValue])
+ 		return;
+diff --git a/src/Core/Client/TGTransport.m b/src/Core/Client/TGTransport.m
+index 4f33c579..d2f9a09a 100644
+--- a/src/Core/Client/TGTransport.m
++++ b/src/Core/Client/TGTransport.m
+@@ -19,8 +19,10 @@ static BOOL TGTransportVerboseLog(void) {
+ 	return verbose;
+ }
+ 
+-/// How long the receive thread rests when TDLib has nothing: 20 ms.
+-static const int64_t kIdlePollNanoseconds = 20 * NSEC_PER_MSEC;
++/// How long the receive thread rests when TDLib has nothing: 20 ms (60 ms on Vintage).
++static int64_t TGIdlePollNanoseconds(void) {
++	return ([TGDevice tier] <= TGDeviceTierVintage ? 60LL : 20LL) * NSEC_PER_MSEC;
++}
+ 
+ @interface TGTransport ()
+ @property (nonatomic, strong) NSMutableArray *outbox;
+@@ -134,7 +136,7 @@ static const int64_t kIdlePollNanoseconds = 20 * NSEC_PER_MSEC;
+ 				while (dispatch_semaphore_wait(self.outboxSignal, DISPATCH_TIME_NOW) == 0)
+ 					;
+ 				dispatch_semaphore_wait(self.outboxSignal,
+-						dispatch_time(DISPATCH_TIME_NOW, kIdlePollNanoseconds));
++						dispatch_time(DISPATCH_TIME_NOW, TGIdlePollNanoseconds()));
+ 				continue;
+ 			}
+ 
+@@ -277,7 +279,7 @@ static const int64_t kIdlePollNanoseconds = 20 * NSEC_PER_MSEC;
+ 	int (*relMem)(int) = dlsym(lookup, "tdsqlite3_release_memory");
+ 	if (!relMem) relMem = dlsym(lookup, "sqlite3_release_memory");
+ 	if (relMem) {
+-		int released = relMem(0);
++		int released = relMem(64 * 1024 * 1024);
+ 		NSLog(@"[TGTransport] tdsqlite3_release_memory released %d bytes", released);
+ 	}
+ }
+diff --git a/src/Core/Client/TGUpdateRouter.h b/src/Core/Client/TGUpdateRouter.h
+index 3dc8f430..9cf40de3 100644
+--- a/src/Core/Client/TGUpdateRouter.h
++++ b/src/Core/Client/TGUpdateRouter.h
+@@ -27,6 +27,9 @@
+ @property (nonatomic, readonly) TGUpdateCoalescer *coalescer;
+ @property (nonatomic, assign) BOOL batchingUpdates;
+ @property (nonatomic, assign) BOOL chatsNeedRebuild;
++@property (nonatomic, assign) BOOL updatesHeld;
++
++- (void)setUpdatesHeld:(BOOL)held;
+ 
+ /// Coalesced (100 ms) "messages in these chats changed" batch. userInfo
+ /// "chatIds" is an NSArray of NSNumber chat ids. Posted from the client side;
+diff --git a/src/Core/Client/TGUpdateRouter.m b/src/Core/Client/TGUpdateRouter.m
+index 78419c7d..0321f6b5 100644
+--- a/src/Core/Client/TGUpdateRouter.m
++++ b/src/Core/Client/TGUpdateRouter.m
+@@ -6,6 +6,7 @@
+ 
+ @interface TGUpdateRouter ()
+ @property (nonatomic, strong) TGUpdateCoalescer *coalescer;
++@property (nonatomic, strong) NSMutableArray *heldUpdates;
+ @end
+ 
+ NSString *const TGMessagesChangedNotification = @"TGMessagesChangedNotification";
+@@ -38,6 +39,32 @@ NSString *const TGMessagesChangedNotification = @"TGMessagesChangedNotification"
+ 	return router;
+ }
+ 
++- (void)flushUpdates:(NSArray *)updates {
++	self.batchingUpdates = YES;
++	for (NSDictionary *obj in updates){
++		if (self.onUpdate)
++			self.onUpdate(obj);
++	}
++	self.batchingUpdates = NO;
++
++	if (self.chatsNeedRebuild){
++		self.chatsNeedRebuild = NO;
++		if (self.onChatsRebuilt)
++			self.onChatsRebuilt();
++	}
++}
++
++- (void)setUpdatesHeld:(BOOL)held {
++	if (_updatesHeld == held)
++		return;
++	_updatesHeld = held;
++	if (!held && self.heldUpdates.count > 0){
++		NSArray *flushing = [self.heldUpdates copy];
++		[self.heldUpdates removeAllObjects];
++		[self flushUpdates:flushing];
++	}
++}
++
+ - (void)routeBatch:(NSArray *)batch {
+ 	NSMutableArray *updates = [NSMutableArray arrayWithCapacity:batch.count];
+ 	for (NSDictionary *obj in batch){
+@@ -50,18 +77,14 @@ NSString *const TGMessagesChangedNotification = @"TGMessagesChangedNotification"
+ 	if (!updates.count)
+ 		return;
+ 
+-	self.batchingUpdates = YES;
+-	for (NSDictionary *obj in updates){
+-		if (self.onUpdate)
+-			self.onUpdate(obj);
++	if (self.updatesHeld){
++		if (!self.heldUpdates)
++			self.heldUpdates = [NSMutableArray array];
++		[self.heldUpdates addObjectsFromArray:updates];
++		return;
+ 	}
+-	self.batchingUpdates = NO;
+ 
+-	if (self.chatsNeedRebuild){
+-		self.chatsNeedRebuild = NO;
+-		if (self.onChatsRebuilt)
+-			self.onChatsRebuilt();
+-	}
++	[self flushUpdates:updates];
+ }
+ 
+ - (BOOL)deliverResponse:(NSDictionary *)obj {
+@@ -111,6 +134,8 @@ NSString *const TGMessagesChangedNotification = @"TGMessagesChangedNotification"
+ - (void)reset {
+ 	self.batchingUpdates = NO;
+ 	self.chatsNeedRebuild = NO;
++	_updatesHeld = NO;
++	[self.heldUpdates removeAllObjects];
+ 	[self.coalescer reset];
+ }
+ 
+diff --git a/src/Core/Platform/TGCapabilities.h b/src/Core/Platform/TGCapabilities.h
+index 8a27a8ba..0e3d2861 100644
+--- a/src/Core/Platform/TGCapabilities.h
++++ b/src/Core/Platform/TGCapabilities.h
+@@ -78,6 +78,27 @@
+ + (BOOL)gifAutoplayWanted;
+ + (void)setGifAutoplayWanted:(BOOL)wanted;
+ 
++/// Performance & hardware tuning toggles.
+++ (BOOL)databaseEncryptionWanted;
+++ (void)setDatabaseEncryptionWanted:(BOOL)wanted;
+++ (BOOL)customEmojiWanted;
+++ (void)setCustomEmojiWanted:(BOOL)wanted;
+++ (BOOL)canRenderCustomEmoji;
+++ (BOOL)chatThumbnailsWanted;
+++ (void)setChatThumbnailsWanted:(BOOL)wanted;
+++ (BOOL)groupAvatarsWanted;
+++ (void)setGroupAvatarsWanted:(BOOL)wanted;
+++ (BOOL)skeuomorphicChromeWanted;
+++ (void)setSkeuomorphicChromeWanted:(BOOL)wanted;
+++ (BOOL)pauseUpdatesDuringScrollWanted;
+++ (void)setPauseUpdatesDuringScrollWanted:(BOOL)wanted;
++
++/// How many messages to load per pagination step based on hardware tier.
+++ (NSInteger)chatHistoryPageLimit;
++
++/// Maximum number of messages kept in memory in active chat stream.
+++ (NSUInteger)chatMessageWindowLimit;
++
+ /// Every capability with its state, for the Device screen.
+ + (NSArray *)all;
+ 
+diff --git a/src/Core/Platform/TGCapabilities.m b/src/Core/Platform/TGCapabilities.m
+index 69f66156..2c034c31 100644
+--- a/src/Core/Platform/TGCapabilities.m
++++ b/src/Core/Platform/TGCapabilities.m
+@@ -61,6 +61,84 @@ static void TGSetWanted(NSString *key, BOOL wanted) {
+ 	TGSetWanted(@"TGWantGifAutoplay", wanted);
+ }
+ 
+++ (BOOL)databaseEncryptionWanted {
++	NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
++	if (![defaults objectForKey:@"TGWantDatabaseEncryption"])
++		return [TGDevice tier] > TGDeviceTierVintage;
++	return [defaults boolForKey:@"TGWantDatabaseEncryption"];
++}
+++ (void)setDatabaseEncryptionWanted:(BOOL)wanted {
++	TGSetWanted(@"TGWantDatabaseEncryption", wanted);
++}
++
+++ (BOOL)customEmojiWanted {
++	NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
++	if (![defaults objectForKey:@"TGWantCustomEmoji"])
++		return [TGDevice tier] > TGDeviceTierVintage;
++	return [defaults boolForKey:@"TGWantCustomEmoji"];
++}
+++ (void)setCustomEmojiWanted:(BOOL)wanted {
++	TGSetWanted(@"TGWantCustomEmoji", wanted);
++}
+++ (BOOL)canRenderCustomEmoji {
++	return [self customEmojiWanted];
++}
++
+++ (BOOL)chatThumbnailsWanted {
++	NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
++	if (![defaults objectForKey:@"TGWantChatThumbnails"])
++		return [TGDevice tier] > TGDeviceTierVintage;
++	return [defaults boolForKey:@"TGWantChatThumbnails"];
++}
+++ (void)setChatThumbnailsWanted:(BOOL)wanted {
++	TGSetWanted(@"TGWantChatThumbnails", wanted);
++}
++
+++ (BOOL)groupAvatarsWanted {
++	NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
++	if (![defaults objectForKey:@"TGWantGroupAvatars"])
++		return [TGDevice tier] > TGDeviceTierVintage;
++	return [defaults boolForKey:@"TGWantGroupAvatars"];
++}
+++ (void)setGroupAvatarsWanted:(BOOL)wanted {
++	TGSetWanted(@"TGWantGroupAvatars", wanted);
++}
++
+++ (BOOL)skeuomorphicChromeWanted {
++	NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
++	if (![defaults objectForKey:@"TGWantSkeuomorphicChrome"])
++		return YES;
++	return [defaults boolForKey:@"TGWantSkeuomorphicChrome"];
++}
+++ (void)setSkeuomorphicChromeWanted:(BOOL)wanted {
++	TGSetWanted(@"TGWantSkeuomorphicChrome", wanted);
++}
++
+++ (BOOL)pauseUpdatesDuringScrollWanted {
++	return TGWanted(@"TGWantPauseUpdatesDuringScroll");
++}
+++ (void)setPauseUpdatesDuringScrollWanted:(BOOL)wanted {
++	TGSetWanted(@"TGWantPauseUpdatesDuringScroll", wanted);
++}
++
+++ (NSInteger)chatHistoryPageLimit {
++	TGDeviceTier tier = [TGDevice tier];
++	if (tier <= TGDeviceTierVintage)
++		return 20;
++	if (tier == TGDeviceTierLegacy)
++		return 30;
++	return 60;
++}
++
+++ (NSUInteger)chatMessageWindowLimit {
++	TGDeviceTier tier = [TGDevice tier];
++	if (tier <= TGDeviceTierVintage)
++		return 50;
++	if (tier == TGDeviceTierLegacy)
++		return 100;
++	return 250;
++}
++
+ + (BOOL)canPlayAnimatedStickers {
+ 	// TGLottieView renders vector animations with C++ optimization.
+ 	// Dual-core runs at 18 fps, single-core (A4) throttles to 12 fps with model caching.
+@@ -247,7 +325,8 @@ static BOOL TGEmojiFontHasGlyphs(CTFontRef font, NSString *s) {
+ 		@[@"Video profile pictures",  @([self canPlayVideoAvatars]),   @"Modern+ - the A7's decoder; older devices show the still"],
+ 		@[@"Premium sticker effects", @([self canPlayStickerEffects]), @"Full - a second, larger animation over the list"],
+ 		@[@"Multiple accounts",       @([self canHoldMultipleAccounts]), @"every device, one active at a time"],
+-		@[@"Custom emoji",            @YES,  @"every device, static on Vintage"],
++		@[@"Custom emoji",            @([self canRenderCustomEmoji]),  @"Legacy+ - disabled on Vintage to save CPU & RAM"],
++		@[@"Database encryption",     @([self databaseEncryptionWanted]), @"Legacy+ - disabled on Vintage to avoid software AES overhead"],
+ 		@[@"Mini apps",               @([self canRunWebApps]),         @"iOS 9 or later"],
+ 		@[@"H.264 High video",        @([TGDevice tier] > TGDeviceTierVintage), @"Legacy - the A4's decoder stops at Main Profile, 720p, 30 fps"],
+ 		@[@"Video calls",             @([self canEncodeVideoCall]),    @"H.264 in hardware (VideoToolbox); VP8 in software on A5 and later"],
+diff --git a/src/Core/Stores/TGChatListStore.h b/src/Core/Stores/TGChatListStore.h
+index 47b425cc..c9b34419 100644
+--- a/src/Core/Stores/TGChatListStore.h
++++ b/src/Core/Stores/TGChatListStore.h
+@@ -102,4 +102,7 @@ extern NSString *const TGChatListPreviewImageLoadedNotification;
+ /// Drops decoded in-memory preview thumbnails to reduce RAM footprint in background.
+ - (void)clearMemoryCaches;
+ 
++/// Pauses TDLib update dispatching to the main queue during scrolling.
++- (void)setUpdatesHeld:(BOOL)held;
++
+ @end
+diff --git a/src/Core/Stores/TGChatListStore.m b/src/Core/Stores/TGChatListStore.m
+index de004e4c..ed964f55 100644
+--- a/src/Core/Stores/TGChatListStore.m
++++ b/src/Core/Stores/TGChatListStore.m
+@@ -8,6 +8,7 @@
+ #import "TGLocalization.h"
+ #import "TGImageLruCache.h"
+ #import "TGDevice.h"
++#import "TGCapabilities.h"
+ #import "TGDownloadStore.h"
+ 
+ NSString *const TGChatListStoreChangedNotification = @"TGChatListStoreChangedNotification";
+@@ -318,12 +319,16 @@ NSString *const TGChatListPreviewImageLoadedNotification = @"TGChatListPreviewIm
+ #pragma mark - preview thumbnails
+ 
+ - (UIImage *)cachedPreviewImageForFileId:(NSNumber *)fileId {
++	if (![TGCapabilities chatThumbnailsWanted])
++		return nil;
+ 	if (![fileId isKindOfClass:NSNumber.class] || fileId.longLongValue <= 0)
+ 		return nil;
+ 	return [_previewImages objectForKey:fileId];
+ }
+ 
+ - (void)loadPreviewImageForFileId:(NSNumber *)fileId {
++	if (![TGCapabilities chatThumbnailsWanted])
++		return;
+ 	if (![fileId isKindOfClass:NSNumber.class] || fileId.longLongValue <= 0)
+ 		return;
+ 	if ([_previewImages objectForKey:fileId] || [_previewRequests containsObject:fileId])
+@@ -349,4 +354,8 @@ NSString *const TGChatListPreviewImageLoadedNotification = @"TGChatListPreviewIm
+ 	}];
+ }
+ 
++- (void)setUpdatesHeld:(BOOL)held {
++	[[TGMessageStore shared] setUpdatesHeld:held];
++}
++
+ @end
+diff --git a/src/Core/Stores/TGMediaStore.m b/src/Core/Stores/TGMediaStore.m
+index 8a57fdef..af777227 100644
+--- a/src/Core/Stores/TGMediaStore.m
++++ b/src/Core/Stores/TGMediaStore.m
+@@ -8,6 +8,8 @@
+ #import "TGProfileStore.h"
+ #import "TGClientInternal.h"
+ #import "TGMediaSupport.h"
++#import "TGDevice.h"
++#import <UIKit/UIKit.h>
+ 
+ 
+ 
+@@ -21,13 +23,32 @@
+ 	dispatch_once(&once, ^{
+ 		one = [[TGMediaStore alloc] init];
+ 		one->_buffers = [[NSCache alloc] init];
+-		one->_buffers.totalCostLimit = (sizeof(void *) == 4)
+-				? 16 * 1024 * 1024 : 32 * 1024 * 1024;
++		TGDeviceTier tier = [TGDevice tier];
++		NSUInteger limit;
++		switch (tier) {
++			case TGDeviceTierVintage:
++				limit = 4 * 1024 * 1024;
++				break;
++			case TGDeviceTierLegacy:
++				limit = 8 * 1024 * 1024;
++				break;
++			case TGDeviceTierModern:
++				limit = 16 * 1024 * 1024;
++				break;
++			case TGDeviceTierFull:
++			default:
++				limit = 32 * 1024 * 1024;
++				break;
++		}
++		one->_buffers.totalCostLimit = limit;
+ 		// Keyed by TDLib file id, and every account's database numbers its
+ 		// files from the start: after a switch the same id is another file.
+ 		[[NSNotificationCenter defaultCenter] addObserver:one
+ 				selector:@selector(accountDidSwitch:)
+ 					name:TGAccountDidSwitchNotification object:nil];
++		[[NSNotificationCenter defaultCenter] addObserver:one
++				selector:@selector(clearMemoryCaches)
++					name:@"UIApplicationDidReceiveMemoryWarningNotification" object:nil];
+ 	});
+ 	return one;
+ }
+diff --git a/src/Core/Stores/TGMessageStore.h b/src/Core/Stores/TGMessageStore.h
+index ed2d476f..48f9882a 100644
+--- a/src/Core/Stores/TGMessageStore.h
++++ b/src/Core/Stores/TGMessageStore.h
+@@ -906,4 +906,6 @@ FOUNDATION_EXPORT NSArray *TGBotCommandRows(NSArray *sets);
+ - (void)webBrowserTypeForURL:(NSString *)url
+ 				  completion:(void (^)(NSString *kind))completion;
+ 
++- (void)setUpdatesHeld:(BOOL)held;
++
+ @end
+diff --git a/src/Core/Stores/TGMessageStore.m b/src/Core/Stores/TGMessageStore.m
+index 8c71977d..339e7102 100644
+--- a/src/Core/Stores/TGMessageStore.m
++++ b/src/Core/Stores/TGMessageStore.m
+@@ -1720,5 +1720,8 @@ NSArray *TGBotCommandRows(NSArray *sets) {
+ 	return [TGClient shared].onFileProgress;
+ }
+ 
++- (void)setUpdatesHeld:(BOOL)held {
++	[[TGUpdateRouter shared] setUpdatesHeld:held];
++}
+ 
+ @end
+diff --git a/src/Core/Stores/TGMessageStreamStore.h b/src/Core/Stores/TGMessageStreamStore.h
+index 2975ec7d..7a6de6e3 100644
+--- a/src/Core/Stores/TGMessageStreamStore.h
++++ b/src/Core/Stores/TGMessageStreamStore.h
+@@ -30,6 +30,12 @@
+ /// Remove a message by ID.
+ - (BOOL)removeMessageId:(int64_t)msgId;
+ 
++/// Trims messages from the newer (bottom) end so count <= limit.
++- (NSUInteger)trimNewerToLimit:(NSUInteger)limit;
++
++/// Trims messages from the older (top) end so count <= limit.
++- (NSUInteger)trimOlderToLimit:(NSUInteger)limit;
++
+ /// Clear the entire stream.
+ - (void)clear;
+ 
+diff --git a/src/Core/Stores/TGMessageStreamStore.mm b/src/Core/Stores/TGMessageStreamStore.mm
+index 0d1c5be0..25ce4f65 100644
+--- a/src/Core/Stores/TGMessageStreamStore.mm
++++ b/src/Core/Stores/TGMessageStreamStore.mm
+@@ -189,6 +189,32 @@ static TGFlattenedMessage TGIndexFromDictionary(NSDictionary *m) {
+ 	return NO;
+ }
+ 
++- (NSUInteger)trimNewerToLimit:(NSUInteger)limit {
++	if (limit == 0 || _messagesVector.size() <= limit) return 0;
++	size_t removed = _messagesVector.size() - limit;
++	for (size_t i = limit; i < _messagesVector.size(); i++) {
++		int64_t mid = _index[i].messageId;
++		if (mid > 0) _messageIds.erase(mid);
++	}
++	_messagesVector.resize(limit);
++	_index.resize(limit);
++	_reachedEnd = NO;
++	return removed;
++}
++
++- (NSUInteger)trimOlderToLimit:(NSUInteger)limit {
++	if (limit == 0 || _messagesVector.size() <= limit) return 0;
++	size_t removed = _messagesVector.size() - limit;
++	for (size_t i = 0; i < removed; i++) {
++		int64_t mid = _index[i].messageId;
++		if (mid > 0) _messageIds.erase(mid);
++	}
++	_messagesVector.erase(_messagesVector.begin(), _messagesVector.begin() + (long)removed);
++	_index.erase(_index.begin(), _index.begin() + (long)removed);
++	_reachedStart = NO;
++	return removed;
++}
++
+ #pragma mark - flat index
+ 
+ - (int64_t)messageIdAtIndex:(NSUInteger)index {
+diff --git a/src/Core/Stores/TGSettingsStore+Diagnostics.m b/src/Core/Stores/TGSettingsStore+Diagnostics.m
+index 36b6468b..a82a4cff 100644
+--- a/src/Core/Stores/TGSettingsStore+Diagnostics.m
++++ b/src/Core/Stores/TGSettingsStore+Diagnostics.m
+@@ -497,4 +497,28 @@ static NSArray *TGStatisticalGraphLines(id json, NSString *raw) {
+ 	}];
+ }
+ 
++- (void)decryptDatabaseWithCompletion:(void (^)(BOOL ok, NSString *error))completion {
++	if (![self databaseEncryptionKeyIsKnown]){
++		if (completion)
++			completion(NO, @"The current database key could not be read, so "
++						   @"changing it could lock the database.");
++		return;
++	}
++
++	[[TGClient shared] request:@{@"@type" : @"setDatabaseEncryptionKey",
++					@"new_encryption_key" : @""}
++	   completion:^(NSDictionary *result){
++		if (![result[@"@type"] isEqualToString:@"error"]){
++			NSString *clearError = nil;
++			[TGDatabaseKey storeKey:nil error:&clearError];
++			if (completion)
++				completion(YES, nil);
++			return;
++		}
++		NSString *message = TGDiagnosticsError(result);
++		if (completion)
++			completion(NO, message);
++	}];
++}
++
+ @end
+diff --git a/src/Core/Stores/TGSettingsStore.h b/src/Core/Stores/TGSettingsStore.h
+index 934cfac2..dc33c9e5 100644
+--- a/src/Core/Stores/TGSettingsStore.h
++++ b/src/Core/Stores/TGSettingsStore.h
+@@ -125,6 +125,7 @@
+ 	- (BOOL)databaseEncryptionKeyIsKnown;
+ 	- (BOOL)databaseEncryptionKeyIsSet;
+ 	- (void)setDatabaseEncryptionKey:(NSData *)newKey completion:(void (^)(BOOL ok, NSString *error))completion;
++	- (void)decryptDatabaseWithCompletion:(void (^)(BOOL ok, NSString *error))completion;
+ @end
+ 
+ 
+diff --git a/src/Core/Style/TGTheme.m b/src/Core/Style/TGTheme.m
+index bed73207..a5724d30 100644
+--- a/src/Core/Style/TGTheme.m
++++ b/src/Core/Style/TGTheme.m
+@@ -6,6 +6,7 @@
+ #import "TGStyle.h"
+ #import "TGThemeList.h"
+ #import "TGChatThemeStore.h"
++#import "TGCapabilities.h"
+ 
+ #define rgb TGThemeRGB
+ 
+@@ -31,12 +32,9 @@ static const NSTimeInterval kAutoNightCheckInterval = 60.0;
+ }
+ 
+ + (BOOL)drawsSkeuomorphicChrome {
+-	static BOOL draws;
+-	static dispatch_once_t once;
+-	dispatch_once(&once, ^{
+-		draws = NSFoundationVersionNumber <= NSFoundationVersionNumber_iOS_6_1;
+-	});
+-	return draws;
++	if (NSFoundationVersionNumber > NSFoundationVersionNumber_iOS_6_1)
++		return NO;
++	return [TGCapabilities skeuomorphicChromeWanted];
+ }
+ 
+ - (id)init {
+@@ -746,13 +744,18 @@ static char kTabOffMaskKey;
+ 	// iOS 6 draws its own bar: tinted, it is the real gloss, edge and shadow,
+ 	// and its Back and Done buttons match it because they come from the same
+ 	// place.
+-	if ([TGTheme drawsSkeuomorphicChrome]) {
+-		// On an iPad idiom iOS 6 fills a tinted bar flat, so the list's bar and
+-		// the chat's beside it differed; both get the phone's gloss, drawn here.
+-		UIImage *padBar = TGIsPad() ? [TGTheme skeuomorphicBarImageWithColor:[self barColour]
+-				height:TGMetricNavigationBarHeight] : nil;
+-		if ([bar respondsToSelector:@selector(setBackgroundImage:forBarMetrics:)])
+-			[bar setBackgroundImage:padBar forBarMetrics:UIBarMetricsDefault];
++	if (NSFoundationVersionNumber <= NSFoundationVersionNumber_iOS_6_1) {
++		if ([TGTheme drawsSkeuomorphicChrome]) {
++			// On an iPad idiom iOS 6 fills a tinted bar flat, so the list's bar and
++			// the chat's beside it differed; both get the phone's gloss, drawn here.
++			UIImage *padBar = TGIsPad() ? [TGTheme skeuomorphicBarImageWithColor:[self barColour]
++					height:TGMetricNavigationBarHeight] : nil;
++			if ([bar respondsToSelector:@selector(setBackgroundImage:forBarMetrics:)])
++				[bar setBackgroundImage:padBar forBarMetrics:UIBarMetricsDefault];
++		} else {
++			if ([bar respondsToSelector:@selector(setBackgroundImage:forBarMetrics:)])
++				[bar setBackgroundImage:nil forBarMetrics:UIBarMetricsDefault];
++		}
+ 		if ([bar respondsToSelector:@selector(setShadowImage:)])
+ 			[bar setShadowImage:nil];
+ 		bar.tintColor = [self barColour];
+diff --git a/src/Features/Chat/Core/TGChatViewData.m b/src/Features/Chat/Core/TGChatViewData.m
+index a3f15602..bc200906 100644
+--- a/src/Features/Chat/Core/TGChatViewData.m
++++ b/src/Features/Chat/Core/TGChatViewData.m
+@@ -402,7 +402,8 @@ static const double kTGHoldBottomSeconds = 6.0;
+ 	__weak typeof(self) weakSelf = self;
+ 	double chatStart = TGPerfNow();
+ 	int64_t threadId = self.threadId;
+-	[[TGMessageStore shared] historyForChat:self.chatId thread:self.threadId limit:60 completion:^(NSArray *loaded){
++	NSInteger pageLimit = [TGCapabilities chatHistoryPageLimit];
++	[[TGMessageStore shared] historyForChat:self.chatId thread:self.threadId limit:pageLimit completion:^(NSArray *loaded){
+ 		TGPerfReport("chat load", "history wait", chatStart, 300.0);
+ 		TGChatViewController *me = weakSelf;
+ 		if (!me)
+diff --git a/src/Features/Chat/Core/TGChatViewLayout.m b/src/Features/Chat/Core/TGChatViewLayout.m
+index 3383ab5b..81fd857a 100644
+--- a/src/Features/Chat/Core/TGChatViewLayout.m
++++ b/src/Features/Chat/Core/TGChatViewLayout.m
+@@ -123,6 +123,7 @@ static char kTGTableContentSizeContext;
+ 	self.table.separatorStyle = UITableViewCellSeparatorStyleNone;
+ 	self.table.backgroundColor = [UIColor clearColor];
+ 	self.table.autoresizingMask = UIViewAutoresizingFlexibleWidth;
++	self.table.clipsToBounds = YES;
+ 	// The wallpaper goes behind the table, which is transparent over it.
+ 	self.wallpaperView = [[UIImageView alloc] initWithFrame:self.view.bounds];
+ 	self.wallpaperView.contentMode = UIViewContentModeScaleAspectFill;
+@@ -296,6 +297,7 @@ static char kTGTableContentSizeContext;
+ 	// can be drawn.
+ 	if (self.inputBar && self.composerWell && !self.composerWell.image)
+ 		[self updateComposerHeightAnimated:NO];
++	[self layoutChrome];
+ }
+ 
+ /// A two-line header: the chat name with member count or status beneath it,
+@@ -573,6 +575,8 @@ FOUNDATION_EXPORT void TGBubbleFlushCache(void);
+ 		[self.quotes removeAllObjects];
+ 		[self.quotesRequested removeAllObjects];
+ 		[self.layoutCache removeAllObjects];
++		[self.lottiePaths removeAllObjects];
++		[self.playedAnimations removeAllObjects];
+ 	}
+ }
+ 
+diff --git a/src/Features/Chat/Core/TGChatViewPagination.m b/src/Features/Chat/Core/TGChatViewPagination.m
+index 607ea442..cb255b9f 100644
+--- a/src/Features/Chat/Core/TGChatViewPagination.m
++++ b/src/Features/Chat/Core/TGChatViewPagination.m
+@@ -153,6 +153,7 @@
+ 	self.backgroundHeld = NO;
+ 	TGTextRenderHold(NO);
+ 	[[TGCustomEmojiStore shared] setDecodesHeld:NO];
++	[[TGMessageStore shared] setUpdatesHeld:NO];
+ }
+ 
+ - (void)scrollViewWillBeginDragging:(UIScrollView *)scrollView {
+@@ -177,6 +178,8 @@
+ 			self.backgroundHeld = YES;
+ 			TGTextRenderHold(YES);
+ 			[[TGCustomEmojiStore shared] setDecodesHeld:YES];
++			if ([TGCapabilities pauseUpdatesDuringScrollWanted])
++				[[TGMessageStore shared] setUpdatesHeld:YES];
+ 			[self performSelector:@selector(releaseBackgroundWhenStill) withObject:nil
+ 					   afterDelay:TGChatRedrawSettleSeconds inModes:@[ NSRunLoopCommonModes ]];
+ 		}
+@@ -193,10 +196,13 @@
+ 	if (scrollView.contentOffset.y < (CGFloat)TGMetricHistoryTopGate && !self.pageFromCache &&
+ 		!self.streamStore.loadingOlder && !self.streamStore.reachedStart){
+ 		__weak typeof(self) weakScroll = self;
+-		[self.streamStore loadOlderInChat:self.chatId limit:60 completion:^(BOOL added){
++		NSInteger pageLimit = [TGCapabilities chatHistoryPageLimit];
++		[self.streamStore loadOlderInChat:self.chatId limit:pageLimit completion:^(BOOL added){
+ 			TGChatViewController *me = weakScroll;
+ 			if (!me || !added)
+ 				return;
++			NSUInteger windowLimit = [TGCapabilities chatMessageWindowLimit];
++			[me.streamStore trimNewerToLimit:windowLimit];
+ 			NSArray *raw = [me.streamStore messages];
+ 			[me measureTextsOf:raw then:^{
+ 				TGChatViewController *again = weakScroll;
+@@ -224,10 +230,15 @@
+ 	if (distanceFromBottom < (CGFloat)TGMetricHistoryTopGate &&
+ 		!self.streamStore.loadingNewer && !self.streamStore.reachedEnd){
+ 		__weak typeof(self) weakScroll = self;
+-		[self.streamStore loadNewerInChat:self.chatId limit:60 completion:^(BOOL added){
++		NSInteger pageLimit = [TGCapabilities chatHistoryPageLimit];
++		[self.streamStore loadNewerInChat:self.chatId limit:pageLimit completion:^(BOOL added){
+ 			TGChatViewController *me = weakScroll;
+ 			if (!me || !added)
+ 				return;
++			CGFloat preTrimHeight = me.table.contentSize.height;
++			CGFloat preTrimOffset = me.table.contentOffset.y;
++			NSUInteger windowLimit = [TGCapabilities chatMessageWindowLimit];
++			BOOL trimmedOlder = [me.streamStore trimOlderToLimit:windowLimit] > 0;
+ 			[me measureTextsOf:[me.streamStore messages] then:^{
+ 				TGChatViewController *again = weakScroll;
+ 				if (!again)
+@@ -236,6 +247,10 @@
+ 				again.messages = [again groupedMessagesFromMessages:again.rawMessages];
+ 				[UIView setAnimationsEnabled:NO];
+ 				[again.table reloadData];
++				if (trimmedOlder) {
++					CGFloat shift = again.table.contentSize.height - preTrimHeight;
++					again.table.contentOffset = CGPointMake(0, MAX(0, preTrimOffset + shift));
++				}
+ 				[UIView setAnimationsEnabled:YES];
+ 				[again fetchMissingImages];
+ 			}];
+diff --git a/src/Features/Chat/Rendering/TGChatViewController+Cells.m b/src/Features/Chat/Rendering/TGChatViewController+Cells.m
+index 4d1ac19d..8472dee0 100644
+--- a/src/Features/Chat/Rendering/TGChatViewController+Cells.m
++++ b/src/Features/Chat/Rendering/TGChatViewController+Cells.m
+@@ -128,17 +128,28 @@ static char kTGReactionChipsShownKey;
+ 	// voice note skipping it looked shifted under an empty strip.
+ 	int64_t senderId = [m[@"senderId"] longLongValue];
+ 	if (layout.senderName.length) {
+-		cell.senderAvatar.hidden = NO;
+-		cell.senderAvatar.image = [TGIcons roundedImage:[self avatarForUser:senderId name:layout.senderName]
+-												   size:layout.senderAvatarFrame.size
+-												 radius:TGHalf(layout.senderAvatarFrame.size.width)
+-												corners:UIRectCornerAllCorners];
+-		cell.senderAvatar.frame = layout.senderAvatarFrame;
++		if (CGRectIsEmpty(layout.senderAvatarFrame)) {
++			cell.senderAvatar.hidden = YES;
++		} else {
++			cell.senderAvatar.hidden = NO;
++			UIImage *rawAvatar = [self avatarForUser:senderId name:layout.senderName];
++			if (rawAvatar && CGSizeEqualToSize(rawAvatar.size, layout.senderAvatarFrame.size))
++				cell.senderAvatar.image = rawAvatar;
++			else
++				cell.senderAvatar.image = [TGIcons roundedImage:rawAvatar
++														   size:layout.senderAvatarFrame.size
++														 radius:TGHalf(layout.senderAvatarFrame.size.width)
++														corners:UIRectCornerAllCorners];
++			cell.senderAvatar.frame = layout.senderAvatarFrame;
++		}
+ 
+-		cell.sender.hidden = NO;
+ 		int64_t statusId = [[TGMessageStore shared] emojiStatusIdForUser:senderId];
++		cell.sender.hidden = NO;
+ 		cell.sender.attributedText = TGNameWithStatus(layout.senderName, statusId, cell.sender.font, TGSenderColour(senderId));
+ 		cell.sender.frame = layout.senderFrame;
++	} else {
++		if (cell.hasSender)
++			cell.sender.hidden = YES;
+ 	}
+ 	// A booster's bolt, with the count past one, at the end of the name
+ 	// line in the name's colour (ChatMessageBubbleItemNode's boost badge).
+@@ -198,54 +209,46 @@ static char kTGReactionChipsShownKey;
+ 	}
+ 
+ 	// 5. Quote headers & replies
+-	cell.quoteBar.hidden = YES;
+-	cell.quote.hidden = YES;
+-	cell.quoteAuthor.hidden = YES;
++	[[cell.bubble viewWithTag:0x900D] removeFromSuperview];
+ 
+ 	[self layoutForwardIn:cell message:m width:layout.bubbleFrame.size.width];
+ 
+ 	if (layout.quoteText) {
+-		cell.quoteBar.hidden = NO;
+-		cell.quoteBar.backgroundColor = [theme bubbleAccentColour:mine];
+-		cell.quoteBar.frame = layout.quoteBarFrame;
+-
+-		cell.quoteAuthor.hidden = NO;
+-		cell.quoteAuthor.font = TGFontCaptionStrong();
+-		cell.quoteAuthor.textColor = [theme bubbleAccentColour:mine];
++		CGRect quoteUnion = CGRectUnion(layout.quoteBarFrame, layout.quoteFrame);
+ 		NSString *qAuthor = layout.quoteAuthor ?: TGLocalized(@"Reply");
+ 		int64_t authorStatusId = [self quoteAuthorStatusIdFor:m];
+-		cell.quoteAuthor.attributedText = TGNameWithStatus(qAuthor, authorStatusId, cell.quoteAuthor.font, [theme accentColour]);
+-		cell.quoteAuthor.frame = layout.quoteAuthorFrame;
++		CGRect author = layout.quoteAuthorFrame;
++		if (!CGRectIsEmpty(author))
++			quoteUnion = CGRectUnion(quoteUnion, author);
+ 
+-		cell.quote.hidden = NO;
+-		cell.quote.numberOfLines = 1;
+-		cell.quote.font = TGFontCaption();
+-		cell.quote.textColor = bodyColor;
+-		if (layout.quoteEntities.count) {
+-			cell.quote.attributedText = TGAttributedMessageText(layout.quoteText, layout.quoteEntities, cell.quote.font, cell.quote.textColor);
+-		} else {
+-			cell.quote.text = layout.quoteText;
+-		}
+-		cell.quote.frame = layout.quoteFrame;
+-		// A quote the sender picked by hand wears official's quote mark in
+-		// the reply's top right corner (ChatMessageReplyInfoNode).
+-		UIImageView *mark = (UIImageView *)[cell.bubble viewWithTag:0x900D];
+-		if ([m[@"replyQuoteManual"] boolValue]){
+-			if (!mark){
+-				mark = [[UIImageView alloc] init];
+-				mark.tag = 0x900D;
+-				[cell.bubble addSubview:mark];
+-			}
++		cell.quoteView.frame = quoteUnion;
++		cell.quoteView.barColor = [theme bubbleAccentColour:mine];
++		cell.quoteView.barRect = CGRectOffset(layout.quoteBarFrame, -quoteUnion.origin.x, -quoteUnion.origin.y);
++		cell.quoteView.authorAttributedText = TGNameWithStatus(qAuthor, authorStatusId, TGFontCaptionStrong(), [theme bubbleAccentColour:mine]);
++
++		if ([m[@"replyQuoteManual"] boolValue]) {
+ 			CGFloat side = TGMetricLineMicro;
+-			mark.image = [TGIcons glyphNamed:@"quote" colour:[theme bubbleAccentColour:mine] side:side];
+-			CGRect author = layout.quoteAuthorFrame;
+-			mark.frame = CGRectMake(CGRectGetMaxX(layout.quoteFrame) - side, author.origin.y, side, side);
+-			mark.hidden = NO;
++			cell.quoteView.quoteMarkImage = [TGIcons glyphNamed:@"quote" colour:[theme bubbleAccentColour:mine] side:side];
++			cell.quoteView.markRect = CGRectOffset(CGRectMake(CGRectGetMaxX(layout.quoteFrame) - side,
++															  author.origin.y, side, side),
++												   -quoteUnion.origin.x, -quoteUnion.origin.y);
+ 			author.size.width = MAX(TGMetricZero, author.size.width - side - TGMetricPadSmall);
+-			cell.quoteAuthor.frame = author;
+ 		} else {
+-			mark.hidden = YES;
++			cell.quoteView.quoteMarkImage = nil;
++			cell.quoteView.markRect = CGRectZero;
++		}
++		cell.quoteView.authorRect = CGRectOffset(author, -quoteUnion.origin.x, -quoteUnion.origin.y);
++
++		cell.quoteView.quoteFont = TGFontCaption();
++		cell.quoteView.quoteTextColor = bodyColor;
++		if (layout.quoteEntities.count) {
++			cell.quoteView.quoteAttributedText = TGAttributedMessageText(layout.quoteText, layout.quoteEntities, cell.quoteView.quoteFont, cell.quoteView.quoteTextColor);
++			cell.quoteView.quoteText = nil;
++		} else {
++			cell.quoteView.quoteAttributedText = nil;
++			cell.quoteView.quoteText = layout.quoteText;
+ 		}
++		cell.quoteView.textRect = CGRectOffset(layout.quoteFrame, -quoteUnion.origin.x, -quoteUnion.origin.y);
+ 
+ 		NSNumber *replyId = [m[@"replyId"] isKindOfClass:NSNumber.class]
+ 				? m[@"replyId"] : nil;
+@@ -253,6 +256,12 @@ static char kTGReactionChipsShownKey;
+ 		cell.onQuoteTapped = replyId ? ^{
+ 			[weakCells jumpToReplyById:replyId.longLongValue];
+ 		} : nil;
++		cell.quoteView.hidden = NO;
++		[cell.quoteView setNeedsDisplay];
++	} else {
++		if (cell.hasQuoteView)
++			cell.quoteView.hidden = YES;
++		cell.onQuoteTapped = nil;
+ 	}
+ 
+ 	cell.mediaStamp.hidden = YES;
+@@ -290,45 +299,60 @@ static char kTGReactionChipsShownKey;
+ 
+ 	// 7b. Link preview block
+ 	if (!CGRectIsEmpty(layout.linkPreviewFrame)) {
+-		cell.linkPreviewBar.hidden = NO;
+-		cell.linkPreviewBar.backgroundColor = [theme bubbleAccentColour:mine];
+-		cell.linkPreviewBar.frame = layout.linkBarFrame;
++		CGRect previewUnion = layout.linkBarFrame;
++		if (!CGRectIsEmpty(layout.linkPreviewFrame))
++			previewUnion = CGRectUnion(previewUnion, layout.linkPreviewFrame);
++		if (!CGRectIsEmpty(layout.linkActionFrame))
++			previewUnion = CGRectUnion(previewUnion, layout.linkActionFrame);
++
++		cell.linkPreviewView.frame = previewUnion;
++		cell.linkPreviewView.hidden = NO;
++		[cell ensureInTree:cell.linkPreviewView];
++
++		cell.linkPreviewView.barColor = [theme bubbleAccentColour:mine];
++		cell.linkPreviewView.barRect = CGRectOffset(layout.linkBarFrame, -previewUnion.origin.x, -previewUnion.origin.y);
+ 
+ 		if (layout.linkSite.length) {
+-			cell.linkPreviewSite.hidden = NO;
+-			cell.linkPreviewSite.textColor = [theme bubbleAccentColour:mine];
+-			cell.linkPreviewSite.text = layout.linkSite;
+-			cell.linkPreviewSite.frame = layout.linkSiteFrame;
++			cell.linkPreviewView.site = layout.linkSite;
++			cell.linkPreviewView.siteColor = [theme bubbleAccentColour:mine];
++			cell.linkPreviewView.siteRect = CGRectOffset(layout.linkSiteFrame, -previewUnion.origin.x, -previewUnion.origin.y);
++		} else {
++			cell.linkPreviewView.site = nil;
++			cell.linkPreviewView.siteRect = CGRectZero;
+ 		}
+ 
+ 		if (layout.linkTitle.length) {
+-			cell.linkPreviewTitle.hidden = NO;
+-			cell.linkPreviewTitle.textColor = [theme primaryTextColour];
+-			cell.linkPreviewTitle.text = layout.linkTitle;
+-			cell.linkPreviewTitle.frame = layout.linkTitleFrame;
++			cell.linkPreviewView.title = layout.linkTitle;
++			cell.linkPreviewView.titleColor = [theme primaryTextColour];
++			cell.linkPreviewView.titleRect = CGRectOffset(layout.linkTitleFrame, -previewUnion.origin.x, -previewUnion.origin.y);
++		} else {
++			cell.linkPreviewView.title = nil;
++			cell.linkPreviewView.titleRect = CGRectZero;
+ 		}
+ 
+ 		if (layout.linkDesc.length) {
+-			cell.linkPreviewDesc.hidden = NO;
+-			cell.linkPreviewDesc.textColor = [theme bubbleSecondaryColour:mine];
+-			cell.linkPreviewDesc.text = layout.linkDesc;
+-			cell.linkPreviewDesc.frame = layout.linkDescFrame;
++			cell.linkPreviewView.desc = layout.linkDesc;
++			cell.linkPreviewView.descColor = [theme bubbleSecondaryColour:mine];
++			cell.linkPreviewView.descRect = CGRectOffset(layout.linkDescFrame, -previewUnion.origin.x, -previewUnion.origin.y);
++		} else {
++			cell.linkPreviewView.desc = nil;
++			cell.linkPreviewView.descRect = CGRectZero;
+ 		}
+ 
+-		// The button opens the link, as a tap on the preview does
+-		// (official linkButtonNode under the preview).
+ 		if (layout.linkAction.length) {
+-			cell.linkPreviewAction.hidden = NO;
+-			cell.linkPreviewAction.textColor = [theme bubbleAccentColour:mine];
+-			cell.linkPreviewAction.text = layout.linkAction;
+-			cell.linkPreviewAction.frame = layout.linkActionFrame;
++			cell.linkPreviewView.action = layout.linkAction;
++			cell.linkPreviewView.actionColor = [theme bubbleAccentColour:mine];
++			cell.linkPreviewView.actionRect = CGRectOffset(layout.linkActionFrame, -previewUnion.origin.x, -previewUnion.origin.y);
++		} else {
++			cell.linkPreviewView.action = nil;
++			cell.linkPreviewView.actionRect = CGRectZero;
+ 		}
+ 
+-		cell.linkPreviewButton.hidden = NO;
+-		cell.linkPreviewButton.frame = CGRectIsEmpty(layout.linkActionFrame)
+-				? layout.linkPreviewFrame
+-				: CGRectUnion(layout.linkPreviewFrame, layout.linkActionFrame);
+ 		cell.linkPreviewUrl = layout.linkUrl;
++		[cell.linkPreviewView setNeedsDisplay];
++	} else {
++		cell.linkPreviewView.hidden = YES;
++		[cell.linkPreviewView reset];
+ 	}
+ 	// The preview's picture rides the same image cache as a photo's.
+ 	UIImageView *linkMedia = (UIImageView *)[cell.bubble viewWithTag:0x900C];
+@@ -489,45 +513,72 @@ static char kTGReactionChipsShownKey;
+ 		viewCount = [rawViews longLongValue];
+ 	UIColor *stampColour = (onPicture || onWallpaper) ? [theme onMediaColour]
+ 			: (mine ? [theme timeMineColour] : [theme timeColour]);
+-	cell.stampPlate.hidden = !onWallpaper;
+-	if (onWallpaper){
++	cell.stampPlate.hidden = YES;
++	cell.viewsEye.hidden = YES;
++	cell.time.hidden = YES;
++	cell.ticks.hidden = YES;
++
++	if (hideStamp || !layout.stamp.length || CGRectIsEmpty(layout.timeFrame)) {
++		if (cell.hasTime) cell.time.hidden = YES;
++		if (cell.hasTicks) cell.ticks.hidden = YES;
++		if (cell.hasViewsEye) cell.viewsEye.hidden = YES;
++		if (cell.hasStampPlate) cell.stampPlate.hidden = YES;
++	} else {
+ 		CGRect group = layout.timeFrame;
+-		if (!CGRectIsEmpty(layout.stampEyeFrame))
++		BOOL showEye = (viewCount > 0 && !CGRectIsEmpty(layout.stampEyeFrame));
++		if (showEye)
+ 			group = CGRectUnion(group, layout.stampEyeFrame);
+-		if (mine && !CGRectIsEmpty(layout.stampTicksFrame))
++		BOOL showTicks = (mine && !CGRectIsEmpty(layout.stampTicksFrame));
++		if (showTicks)
+ 			group = CGRectUnion(group, layout.stampTicksFrame);
+-		cell.stampPlate.backgroundColor = [theme mediaStampColour];
+-		cell.stampPlate.frame = CGRectMake(group.origin.x - TGMetricPadSmall,
+-				CGRectGetMidY(layout.timeFrame) - TGHalf(TGMetricLineCaption),
+-				group.size.width + TGDoubled(TGMetricPadSmall), TGMetricLineCaption);
+-		[cell ensureInTree:cell.time];
+-		[cell.bubble insertSubview:cell.stampPlate belowSubview:cell.time];
+-	}
+-	cell.viewsEye.hidden = !(viewCount > 0 && !hideStamp && !CGRectIsEmpty(layout.stampEyeFrame));
+-	if (!cell.viewsEye.hidden){
+-		cell.viewsEye.image = [TGIcons glyphNamed:@"eye" colour:stampColour side:kStampEyeSide];
+-		cell.viewsEye.frame = layout.stampEyeFrame;
+-		[cell.bubble bringSubviewToFront:cell.viewsEye];
+-	}
+ 
+-	cell.time.text = hideStamp ? @"" : layout.stamp;
+-	cell.time.textColor = stampColour;
+-	cell.time.textAlignment = NSTextAlignmentRight;
+-	cell.time.frame = layout.timeFrame;
++		if (onWallpaper) {
++			CGRect stampFrame = CGRectMake(group.origin.x - TGMetricPadSmall,
++					CGRectGetMidY(layout.timeFrame) - TGHalf(TGMetricLineCaption),
++					group.size.width + TGDoubled(TGMetricPadSmall), TGMetricLineCaption);
++			cell.stampPlate.backgroundColor = [theme mediaStampColour];
++			cell.stampPlate.frame = stampFrame;
++			cell.stampPlate.hidden = NO;
++		} else if (cell.hasStampPlate) {
++			cell.stampPlate.hidden = YES;
++		}
++
++		if (showEye) {
++			cell.viewsEye.image = [TGIcons glyphNamed:@"eye" colour:stampColour side:kStampEyeSide];
++			cell.viewsEye.frame = layout.stampEyeFrame;
++			cell.viewsEye.hidden = NO;
++		} else if (cell.hasViewsEye) {
++			cell.viewsEye.hidden = YES;
++		}
++
++		cell.time.text = layout.stamp;
++		cell.time.font = TGFontMicro();
++		cell.time.frame = layout.timeFrame;
++		cell.time.textAlignment = NSTextAlignmentRight;
++		cell.time.hidden = NO;
++
++		if (showTicks) {
++			cell.ticks.image = [self ticksForMessage:m white:onPicture || onWallpaper];
++			cell.ticks.frame = layout.stampTicksFrame;
++			cell.ticks.hidden = NO;
++		} else if (cell.hasTicks) {
++			cell.ticks.hidden = YES;
++		}
+ 
+-	cell.ticks.hidden = !mine || hideStamp;
+-	if (!cell.ticks.hidden){
+-		cell.ticks.image = [self ticksForMessage:m white:onPicture || onWallpaper];
+-		cell.ticks.frame = layout.stampTicksFrame;
+-		[cell.bubble bringSubviewToFront:cell.ticks];
++		if (!layout.isService && !layout.isSticker && !layout.isRound) {
++			cell.time.textColor = mine ? [theme timeMineColour] : [theme timeColour];
++			cell.time.shadowColor = [theme etchedTextShadowColour];
++			cell.time.shadowOffset = TGMetricShadowOffsetEtched;
++		} else {
++			cell.time.textColor = stampColour;
++			cell.time.shadowColor = nil;
++			cell.time.shadowOffset = CGSizeZero;
++		}
+ 	}
+-	[cell.bubble bringSubviewToFront:cell.time];
+ 
+ 	// 10. Text shadows on the printed plate; service/sticker/round rows sit
+ 	// shell-flat and cast nothing.
+ 	if (!layout.isService && !layout.isSticker && !layout.isRound) {
+-		cell.shineBar.hidden = YES;
+-		cell.shineGradientLayer.hidden = YES;
+ 		UIColor *bodyColor = mine ? [theme bubbleMineTextColour] : [theme bubbleTheirsTextColour];
+ 		// iOS 6 paints textColor over the whole attributed string, so links,
+ 		// mentions and dates lost their colour here; the attributed text
+@@ -536,16 +587,9 @@ static char kTGReactionChipsShownKey;
+ 			cell.body.textColor = bodyColor;
+ 		cell.body.shadowColor = [theme etchedTextShadowColour];
+ 		cell.body.shadowOffset = TGMetricShadowOffsetEtched;
+-		cell.time.textColor = mine ? [theme timeMineColour] : [theme timeColour];
+-		cell.time.shadowColor = [theme etchedTextShadowColour];
+-		cell.time.shadowOffset = TGMetricShadowOffsetEtched;
+ 	} else {
+-		cell.shineBar.hidden = YES;
+-		cell.shineGradientLayer.hidden = YES;
+ 		cell.body.shadowColor = nil;
+ 		cell.body.shadowOffset = CGSizeZero;
+-		cell.time.shadowColor = nil;
+-		cell.time.shadowOffset = CGSizeZero;
+ 	}
+ 
+ 	UITableViewCell *done = [self finalizeCell:cell message:m layout:layout isMine:mine];
+@@ -612,6 +656,12 @@ static char kTGReactionChipsShownKey;
+ 		return;
+ 	}
+ 
++	if (![TGCapabilities canRenderCustomEmoji]) {
++		[cell hideCustomEmojiViewsFromIndex:0];
++		[cell hideStaticCustomEmojiViewsFromIndex:0];
++		return;
++	}
++
+ 	// Still emoji draw on every OS; only the animations obey the budget.
+ 	BOOL animatedAllowed = [TGCapabilities canPlayAnimatedStickers];
+ 	if (animatedAllowed) {
+@@ -959,9 +1009,14 @@ UIImage *TGBubbleBackImage(TGTheme *theme, BOOL mine, BOOL first, BOOL last) {
+ 	BOOL mine = [m[@"outgoing"] boolValue];
+ 	CGSize size = cell.bubble.bounds.size;
+ 	CGRect backFrame = cell.bubble.bounds;
++	CGFloat contentOffsetX = 0.0f;
+ 	if (last) {
+-		backFrame = mine ? CGRectMake(0, 0, size.width + kTailWidth, size.height)
+-						 : CGRectMake(-kTailWidth, 0, size.width + kTailWidth, size.height);
++		if (mine) {
++			backFrame = CGRectMake(0, 0, size.width + kTailWidth, size.height);
++		} else {
++			backFrame = CGRectMake(-kTailWidth, 0, size.width + kTailWidth, size.height);
++			contentOffsetX = kTailWidth;
++		}
+ 	}
+ 
+ 	cell.bubble.clipsToBounds = NO;
+@@ -973,9 +1028,6 @@ UIImage *TGBubbleBackImage(TGTheme *theme, BOOL mine, BOOL first, BOOL last) {
+ 	cell.bubbleBack.frame = backFrame;
+ 	cell.bubbleBack.hidden = NO;
+ 
+-	cell.shineBar.hidden = YES;
+-	cell.shineGradientLayer.hidden = YES;
+-
+ 	cell.tail.hidden = YES;
+ 	[cell settleHiddenViews];
+ }
+diff --git a/src/Features/Chat/Rendering/TGChatViewController+Chrome.m b/src/Features/Chat/Rendering/TGChatViewController+Chrome.m
+index 1ed78405..640a789e 100644
+--- a/src/Features/Chat/Rendering/TGChatViewController+Chrome.m
++++ b/src/Features/Chat/Rendering/TGChatViewController+Chrome.m
+@@ -102,11 +102,7 @@ static const CGFloat kActionBarCloseSide = TGMetricButtonLargeH;
+ 				 @"paused" : @NO, @"canReply" : @YES, @"manageUrl" : @"https://t.me/devbot"}};
+ 	// The private showcase chat stands for a stranger's archived chat.
+ 	if (self.chatId == kDevDurovChatId)
+-		return @{@"id" : @(kDevDurovChatId), @"actionBarKind" : @"chatActionBarReportAddBlock",
+-				 @"actionBarCanUnarchive" : @YES,
+-				 @"actionBarAccount" : @{@"registrationMonth" : @3, @"registrationYear" : @2021,
+-					@"country" : @"AE", @"nameChanged" : @([[NSDate date] timeIntervalSince1970] - 3 * 86400),
+-					@"photoChanged" : @0}};
++		return nil;
+ #endif
+ 	for (NSDictionary *chat in [TGMessageStore shared].chats)
+ 		if ([chat[@"id"] longLongValue] == self.chatId)
+@@ -609,6 +605,7 @@ static const NSInteger kUnreadJumpBadgeTag = 0x9101;
+ 	button.layer.shadowRadius = TGMetricShadowButtonRadius;
+ 	button.layer.shadowOffset = TGMetricShadowOffsetEtched;
+ 	button.layer.shadowPath = [UIBezierPath bezierPathWithOvalInRect:button.bounds].CGPath;
++	button.clipsToBounds = NO;
+ 	button.hidden = YES;
+ 	[button addTarget:self action:action forControlEvents:UIControlEventTouchUpInside];
+ 	UILabel *badge = [[UILabel alloc] init];
+@@ -779,15 +776,27 @@ static UIImage *TGJumpChevron(UIColor *colour) {
+ 	// Clear of the reply / edit strip when one is showing over the table. The
+ 	// strip rides directly on the composer, so it has to be placed here rather
+ 	// than where it was built: the keyboard moves the bar out from under it.
+-	CGFloat bottom = CGRectGetMaxY(table);
++	CGFloat bottom = self.view.bounds.size.height;
++	if (self.inputBar && !self.inputBar.hidden) {
++		bottom = MIN(bottom, CGRectGetMinY(self.inputBar.frame));
++	}
++	UIView *channelBar = [self.view viewWithTag:kChatChannelBottomBarTag];
++	if (channelBar && !channelBar.hidden) {
++		bottom = MIN(bottom, CGRectGetMinY(channelBar.frame));
++	}
+ 	if (self.composeBanner && !self.composeBanner.hidden &&
+ 		CGAffineTransformIsIdentity(self.composeBanner.transform)){
+ 		self.composeBanner.frame = TGChatComposeBannerPlace(self.view.bounds.size.width,
+-				CGRectGetMinY(self.inputBar.frame), NO).plate;
++				bottom, NO).plate;
+ 		bottom = MIN(bottom, CGRectGetMinY(self.composeBanner.frame));
+ 	}
+-	self.jumpButton.frame = CGRectMake(CGRectGetMaxX(table) - kJumpSide - TGMetricJumpMarginRight,
+-									   bottom - kJumpSide - TGMetricJumpMarginBottom, kJumpSide, kJumpSide);
++	if (table.size.height > 0) {
++		bottom = MIN(bottom, CGRectGetMaxY(table));
++	}
++	CGFloat rightX = self.view.bounds.size.width - kJumpSide - TGMetricJumpMarginRight;
++	self.jumpButton.frame = CGRectMake(rightX,
++									   bottom - kJumpSide - TGMetricJumpMarginBottom,
++									   kJumpSide, kJumpSide);
+ 	CGSize badge = [self.jumpBadge sizeThatFits:CGSizeMake(kJumpBadgeMaxW,
+ 			TGMetricJumpBadgeHeight)];
+ 	CGFloat bw = MAX(18, ceilf(badge.width) + TGMetricPadMedium);
+@@ -797,12 +806,23 @@ static UIImage *TGJumpChevron(UIColor *colour) {
+ 	self.jumpButton.clipsToBounds = NO;
+ 	[self layoutUnreadJumps];
+ 
+-	CGSize date = [self.floatingDate sizeThatFits:CGSizeMake(table.size.width,
+-			TGMetricFloatingDateHeight)];
+-	CGFloat dw = ceilf(date.width) + TGMetricPadWide;
+-	CGFloat top = self.table.contentInset.top;
+-	self.floatingDate.frame = CGRectMake(TGCenteredOrigin(table.size.width, dw), top + TGMetricFloatingDateTopOffset, dw,
+-			TGMetricFloatingDateHeight);
++	[self.view bringSubviewToFront:self.jumpButton];
++	if (self.mentionsJumpButton) [self.view bringSubviewToFront:self.mentionsJumpButton];
++	if (self.reactionsJumpButton) [self.view bringSubviewToFront:self.reactionsJumpButton];
++	if (self.pollVotesJumpButton) [self.view bringSubviewToFront:self.pollVotesJumpButton];
++
++	if (!self.floatingDate.text.length) {
++		self.floatingDate.hidden = YES;
++		self.floatingDate.alpha = 0;
++	} else {
++		self.floatingDate.hidden = NO;
++		CGSize date = [self.floatingDate sizeThatFits:CGSizeMake(table.size.width,
++				TGMetricFloatingDateHeight)];
++		CGFloat dw = ceilf(date.width) + TGMetricPadWide;
++		CGFloat top = self.table.contentInset.top;
++		self.floatingDate.frame = CGRectMake(TGCenteredOrigin(table.size.width, dw), top + TGMetricFloatingDateTopOffset, dw,
++				TGMetricFloatingDateHeight);
++	}
+ }
+ 
+ - (BOOL)isNearBottom {
+@@ -905,7 +925,7 @@ static UIImage *TGJumpChevron(UIColor *colour) {
+ 	[self updateJumpButton];
+ 	if (self.table.isDragging || self.table.isDecelerating){
+ 		[self updateFloatingDate];
+-		if (self.floatingDate.alpha < 1){
++		if (self.floatingDate.text.length > 0 && self.floatingDate.alpha < 1){
+ 			[UIView animateWithDuration:TGAnimationDurationFast animations:^{ self.floatingDate.alpha = 1; }];
+ 		}
+ 		[NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(fadeFloatingDate) object:nil];
+diff --git a/src/Features/Chat/Rendering/TGChatViewController+Layout.m b/src/Features/Chat/Rendering/TGChatViewController+Layout.m
+index cc009bd8..dea1ba7b 100644
+--- a/src/Features/Chat/Rendering/TGChatViewController+Layout.m
++++ b/src/Features/Chat/Rendering/TGChatViewController+Layout.m
+@@ -60,17 +60,16 @@ UIColor *TGSenderColour(int64_t userId) {
+ {
+ 	NSString *from = m[@"forward"];
+ 	if (![from length]){
+-		cell.forwardLabel.hidden = YES;
++		if (cell.hasForwardLabel) cell.forwardLabel.hidden = YES;
+ 		return 0;
+ 	}
+ 
+ 	TGTheme *theme = [TGTheme shared];
+-	cell.forwardLabel.hidden = NO;
+ 	CGFloat topY = kPadV;
+ 	if (self.isGroup && ![m[@"outgoing"] boolValue]) {
+ 		topY += TGMetricSenderLineHeight;
+ 	}
+-	cell.forwardLabel.frame = CGRectMake(kPadH, topY, width - TGDoubled(kPadH), TGMetricSenderLineHeight);
++	CGRect forwardFrame = CGRectMake(kPadH, topY, width - TGDoubled(kPadH), TGMetricSenderLineHeight);
+ 
+ 	int64_t forwardStatusId = 0;
+ 	id forwardUid = m[@"forwardUserId"] ?: m[@"forwardSenderId"];
+@@ -83,25 +82,22 @@ UIColor *TGSenderColour(int64_t userId) {
+ 			forwardStatusId = [[TGMessageStore shared] emojiStatusIdForChat:[forwardCid longLongValue]];
+ 		}
+ 	}
+-	if ([cell.forwardLabel respondsToSelector:@selector(setAttributedText:)]){
+-		NSString *line = TGForwardHeaderLine(from, m[@"forwardPsa"]);
+-		NSMutableAttributedString *styled =
+-				[[NSMutableAttributedString alloc] initWithString:line
+-													   attributes:@{
+-					NSForegroundColorAttributeName: [theme secondaryTextColour],
+-					NSFontAttributeName: cell.forwardLabel.font ?: TGFontMeta()
+-				}];
+-		NSRange nameRange = [line rangeOfString:from options:NSBackwardsSearch];
+-		if (nameRange.location != NSNotFound){
+-			NSAttributedString *name = TGNameWithStatus(from, forwardStatusId,
+-					TGFontMetaStrong(), [theme accentColour]);
+-			[styled replaceCharactersInRange:nameRange withAttributedString:name];
+-		}
+-		cell.forwardLabel.attributedText = styled;
+-	} else {
+-		cell.forwardLabel.textColor = [theme accentColour];
+-		cell.forwardLabel.text = TGForwardHeaderLine(from, m[@"forwardPsa"]);
++	NSString *line = TGForwardHeaderLine(from, m[@"forwardPsa"]);
++	NSMutableAttributedString *styled =
++			[[NSMutableAttributedString alloc] initWithString:line
++												   attributes:@{
++				NSForegroundColorAttributeName: [theme secondaryTextColour],
++				NSFontAttributeName: cell.forwardLabel.font ?: TGFontMeta()
++			}];
++	NSRange nameRange = [line rangeOfString:from options:NSBackwardsSearch];
++	if (nameRange.location != NSNotFound){
++		NSAttributedString *name = TGNameWithStatus(from, forwardStatusId,
++				TGFontMetaStrong(), [theme accentColour]);
++		[styled replaceCharactersInRange:nameRange withAttributedString:name];
+ 	}
++	cell.forwardLabel.attributedText = styled;
++	cell.forwardLabel.frame = forwardFrame;
++	cell.forwardLabel.hidden = NO;
+ 	return TGMetricQuoteForwardLine;
+ }
+ 
+diff --git a/src/Features/Chat/Rendering/TGMessageRowLayout.m b/src/Features/Chat/Rendering/TGMessageRowLayout.m
+index 622196b5..91b05ecc 100644
+--- a/src/Features/Chat/Rendering/TGMessageRowLayout.m
++++ b/src/Features/Chat/Rendering/TGMessageRowLayout.m
+@@ -5,6 +5,7 @@
+ #import "TGMessageCardView.h"
+ #import "TGStyle.h"
+ #import "TGLocalization.h"
++#import "TGCapabilities.h"
+ 
+ @implementation TGMessageRowInput
+ @end
+@@ -107,11 +108,17 @@ static CGFloat TGPlaceGroupSender(TGMessageLayout *layout, NSString *senderName,
+ 	if (!senderName.length)
+ 		return height;
+ 	height += TGMetricSenderLineHeight;
+-	*x += kAvatarSide + TGMetricPadSmall + kTailWidth;
++	BOOL showAvatar = [TGCapabilities groupAvatarsWanted];
++	if (showAvatar)
++		*x += kAvatarSide + TGMetricPadSmall + kTailWidth;
+ 	layout.senderName = senderName;
+ 	layout.senderFrame = CGRectMake(kPadH, kPadV, width - TGDoubled(kPadH), TGMetricLineMicro);
+-	layout.senderAvatarFrame = CGRectMake(TGMetricPad,
+-			MAX(TGMetricPadTiny, TGMetricBubbleRowInset + height - kAvatarSide), kAvatarSide, kAvatarSide);
++	if (showAvatar) {
++		layout.senderAvatarFrame = CGRectMake(TGMetricPad,
++				MAX(TGMetricPadTiny, TGMetricBubbleRowInset + height - kAvatarSide), kAvatarSide, kAvatarSide);
++	} else {
++		layout.senderAvatarFrame = CGRectZero;
++	}
+ 	return height;
+ }
+ 
+@@ -583,11 +590,17 @@ TGMessageLayout *TGMessageRowLayout(TGMessageRowInput *in) {
+ 	CGFloat top = in.continuesAlbum ? TGMetricZero : TGMetricBubbleRowInset;
+ 
+ 	if (senderName.length) {
+-		x += kAvatarSide + TGMetricPadSmall + kTailWidth;   // the tail hangs between picture and bubble
++		BOOL showAvatar = [TGCapabilities groupAvatarsWanted];
++		if (showAvatar)
++			x += kAvatarSide + TGMetricPadSmall + kTailWidth;   // the tail hangs between picture and bubble
+ 		layout.senderName = senderName;
+ 		layout.senderFrame = CGRectMake(kPadH, kPadV, bubbleW - TGDoubled(kPadH), TGMetricLineMicro);
+-		CGFloat avatarY = MAX(TGMetricPadTiny, top + bubbleH - kAvatarSide);
+-		layout.senderAvatarFrame = CGRectMake(TGMetricPad, avatarY, kAvatarSide, kAvatarSide);
++		if (showAvatar) {
++			CGFloat avatarY = MAX(TGMetricPadTiny, top + bubbleH - kAvatarSide);
++			layout.senderAvatarFrame = CGRectMake(TGMetricPad, avatarY, kAvatarSide, kAvatarSide);
++		} else {
++			layout.senderAvatarFrame = CGRectZero;
++		}
+ 	}
+ 
+ 	layout.bubbleFrame = CGRectMake(x, top, bubbleW, bubbleH);
+diff --git a/src/Features/ChatList/Core/TGChatListFolders.m b/src/Features/ChatList/Core/TGChatListFolders.m
+index 58c3b9ac..60d2b47d 100644
+--- a/src/Features/ChatList/Core/TGChatListFolders.m
++++ b/src/Features/ChatList/Core/TGChatListFolders.m
+@@ -13,6 +13,7 @@
+ #import "TGPasscode.h"
+ #import "TGPasscodeViewController.h"
+ #import "TGChatListRowGeometry.h"
++#import "TGCapabilities.h"
+ 
+ 
+ // Height of the folder pill strip above the chat list (official-style tabs).
+@@ -173,19 +174,36 @@
+ 	self.tableView.contentOffset = CGPointMake(0, self.parkOffset);
+ }
+ 
++- (void)releaseUpdatesWhenStill {
++	if (self.tableView.isDragging || self.tableView.isDecelerating)
++		return;
++	[[TGChatListStore shared] setUpdatesHeld:NO];
++}
++
+ - (void)scrollViewDidEndDecelerating:(UIScrollView *)scrollView {
+-	if (scrollView == self.tableView)
++	if (scrollView == self.tableView){
+ 		[self fetchMissingAvatars];
++		[[TGChatListStore shared] setUpdatesHeld:NO];
++	}
+ }
+ 
+ - (void)scrollViewDidEndDragging:(UIScrollView *)scrollView willDecelerate:(BOOL)decelerate {
+-	if (scrollView == self.tableView && !decelerate)
++	if (scrollView == self.tableView && !decelerate){
+ 		[self fetchMissingAvatars];
++		[[TGChatListStore shared] setUpdatesHeld:NO];
++	}
+ }
+ 
+ - (void)scrollViewDidScroll:(UIScrollView *)scrollView {
+ 	if (scrollView != self.tableView)
+ 		return;
++	if ([TGCapabilities pauseUpdatesDuringScrollWanted]){
++		[[TGChatListStore shared] setUpdatesHeld:YES];
++		[NSObject cancelPreviousPerformRequestsWithTarget:self
++				selector:@selector(releaseUpdatesWhenStill) object:nil];
++		[self performSelector:@selector(releaseUpdatesWhenStill) withObject:nil
++				   afterDelay:0.25 inModes:@[ NSRunLoopCommonModes ]];
++	}
+ 	// Pulling the list down unfolds the stories; walking the list collapses
+ 	// them again, which is the header's compact state.
+ 	if (!self.storiesExpanded && scrollView.contentOffset.y < -TGMetricRow &&
+diff --git a/src/Features/Dev/TGDevShowcase.m b/src/Features/Dev/TGDevShowcase.m
+index d982e321..730ec599 100644
+--- a/src/Features/Dev/TGDevShowcase.m
++++ b/src/Features/Dev/TGDevShowcase.m
+@@ -35,11 +35,14 @@
+ 		[self devChatInfo],
+ 		@{
+ 			@"id"          : @(kDevDurovChatId),
+-			@"title"       : @"Pavel Durov",
+-			@"type"        : @"chatTypePrivate",
+-			@"isGroup"     : @NO,
+-			@"text"        : @"Freedom and privacy for everyone.",
+-			@"previewText" : @"Freedom and privacy for everyone.",
++			@"title"       : @"Du Rove's Channel",
++			@"type"        : @"chatTypeSupergroup",
++			@"isGroup"     : @YES,
++			@"isChannel"   : @YES,
++			@"isBroadcast" : @YES,
++			@"memberCount" : @2500000,
++			@"text"        : @"Telegram reached 950 million active users. On track to 1 billion! 🚀",
++			@"previewText" : @"Telegram reached 950 million active users. On track to 1 billion! 🚀",
+ 			@"unread"      : @1,
+ 			@"time"        : @"19:16",
+ 			@"date"        : @(now - 120),
+@@ -93,74 +96,63 @@
+ 	double now = [[NSDate date] timeIntervalSince1970];
+ 	double baseTime = now - 600.0;
+ 	int64_t senderPeer = 20002;
+-	int64_t senderMe = 10001;
+ 
+-	[[TGDevStore shared] setDisplayName:@"Pavel Durov" forUserId:senderPeer];
++	[[TGDevStore shared] setDisplayName:@"Du Rove's Channel" forUserId:senderPeer];
+ 
+ 	NSMutableArray *list = [NSMutableArray array];
+-	[list addObject:@{
+-		@"id"       : @1,
+-		@"chatId"   : @(kDevDurovChatId),
+-		@"senderId" : @(senderPeer),
+-		@"outgoing" : @NO,
+-		@"date"     : @(baseTime),
+-		@"text"     : @"Pavel Durov joined Telegram",
+-		@"kind"     : @"messageChatAddMembers",
+-		@"service"  : @YES,
+-	}];
+-
+-	[list addObject:@{
+-		@"id"       : @2,
+-		@"chatId"   : @(kDevDurovChatId),
+-		@"senderId" : @(senderMe),
+-		@"outgoing" : @YES,
+-		@"date"     : @(baseTime + 60),
+-		@"text"     : @"Hello Pavel! Welcome to LegacyTG running on iPhone 4S with iOS 6 design.",
+-		@"kind"     : @"messageText",
+-	}];
+-
+-	[list addObject:@{
+-		@"id"       : @3,
+-		@"chatId"   : @(kDevDurovChatId),
+-		@"senderId" : @(senderPeer),
+-		@"outgoing" : @NO,
+-		@"date"     : @(baseTime + 120),
+-		@"text"     : @"Hello! Impressive work on the skeuomorphic iOS 6 design and TDLib integration.",
+-		@"kind"     : @"messageText",
+-	}];
+-
+-	[list addObject:@{
+-		@"id"       : @4,
+-		@"chatId"   : @(kDevDurovChatId),
+-		@"senderId" : @(senderPeer),
+-		@"outgoing" : @NO,
+-		@"date"     : @(baseTime + 180),
+-		@"kind"     : @"messageSticker",
+-		@"extra"    : @"👍",
+-		@"photoId"  : @(-201),
+-	}];
+-
+-	[list addObject:@{
+-		@"id"       : @5,
+-		@"chatId"   : @(kDevDurovChatId),
+-		@"senderId" : @(senderMe),
+-		@"outgoing" : @YES,
+-		@"date"     : @(baseTime + 240),
+-		@"text"     : @"Vector Lottie stickers and VP9 video stickers are working smoothly too!",
+-		@"kind"     : @"messageText",
+-	}];
+-
+-	[list addObject:@{
+-		@"id"       : @6,
+-		@"chatId"   : @(kDevDurovChatId),
+-		@"senderId" : @(senderPeer),
+-		@"outgoing" : @NO,
+-		@"date"     : @(baseTime + 300),
+-		@"kind"     : @"messagePhoto",
+-		@"photoId"  : @(-301),
+-		@"text"     : @"Freedom and privacy for everyone.",
+-		@"width"    : @400,
+-		@"height"   : @300,
++	// Real post #551 from https://t.me/durov
++	[list addObject:@{
++		@"id"          : @551,
++		@"chatId"      : @(kDevDurovChatId),
++		@"senderId"    : @(senderPeer),
++		@"author"      : @"Du Rove's Channel",
++		@"outgoing"    : @NO,
++		@"date"        : @(baseTime),
++		@"text"        : @"💸 If your wallet doesn’t look like this, don’t even bother sending me money for my birthday! 🎂",
++		@"kind"        : @"messageText",
++		@"channelPost" : @YES,
++		@"views"       : @3440000,
++		@"replyCount"  : @980,
++		@"canComment"  : @YES,
++	}];
++
++	// Real post #552 from https://t.me/durov with real blockquote
++	[list addObject:@{
++		@"id"          : @552,
++		@"chatId"      : @(kDevDurovChatId),
++		@"senderId"    : @(senderPeer),
++		@"author"      : @"Du Rove's Channel",
++		@"outgoing"    : @NO,
++		@"date"        : @(baseTime + 180),
++		@"replyId"     : @551,
++		@"replyAuthor" : @"Pavel Durov",
++		@"replyText"   : @"💸 If your wallet doesn’t look like this...",
++		@"text"        : @"✨ Designers × AI\n\n🆕 The mockup era is over. Today’s AI tools give every designer a superpower: you can now craft your ideas, not just draw them.\n\n“The gap between ‘what if…?’ and ‘look, it works!’ has never been smaller, and that changed how we build features in Telegram.”\n\nMessage @designers to submit your concepts.",
++		@"quoteText"   : @"The gap between “what if…?” and “look, it works!” has never been smaller, and that changed how we build features in Telegram.",
++		@"kind"        : @"messageText",
++		@"channelPost" : @YES,
++		@"views"       : @3120000,
++		@"replyCount"  : @1420,
++		@"canComment"  : @YES,
++	}];
++
++	// Real post #553 from https://t.me/durov
++	[list addObject:@{
++		@"id"          : @553,
++		@"chatId"      : @(kDevDurovChatId),
++		@"senderId"    : @(senderPeer),
++		@"author"      : @"Du Rove's Channel",
++		@"outgoing"    : @NO,
++		@"date"        : @(baseTime + 360),
++		@"replyId"     : @552,
++		@"replyAuthor" : @"Du Rove's Channel",
++		@"replyText"   : @"✨ Designers × AI: The mockup era is over...",
++		@"text"        : @"700K+ self-custodial wallets created on Telegram in the last 48 hours alone.\n\n🦠 Adoption spreads virally. A wallet activates the moment someone receives Grams.\n\n💪 The crypto revolution is going strong.",
++		@"kind"        : @"messageText",
++		@"channelPost" : @YES,
++		@"views"       : @2070000,
++		@"replyCount"  : @2150,
++		@"canComment"  : @YES,
+ 	}];
+ 
+ 	return list;
+diff --git a/src/Features/Settings/TGDeviceViewController.m b/src/Features/Settings/TGDeviceViewController.m
+index 32deb3a6..5f0bd6a9 100644
+--- a/src/Features/Settings/TGDeviceViewController.m
++++ b/src/Features/Settings/TGDeviceViewController.m
+@@ -8,6 +8,8 @@
+ #import "TGRows.h"
+ #import "TGRowCell.h"
+ #import "TGAccountStore.h"
++#import "TGSettingsStore.h"
++#import "TGDatabaseKey.h"
+ 
+ 
+ @interface TGDeviceViewController ()
+@@ -51,6 +53,87 @@
+ 		TGTapRow(TGLocalized(@"Device Tier"), [TGDevice tierName], nil),
+ 	])];
+ 
++	__weak typeof(self) weakSelf = self;
++	NSMutableArray *tuningRows = [NSMutableArray array];
++
++	[tuningRows addObject:TGSwitchRow(TGLocalized(@"Database Encryption"),
++			[TGCapabilities databaseEncryptionWanted], ^(BOOL on){
++		[TGCapabilities setDatabaseEncryptionWanted:on];
++		if (on){
++			NSData *newKey = [TGDatabaseKey ensureKey];
++			[[TGSettingsStore shared] setDatabaseEncryptionKey:newKey
++					completion:^(BOOL ok, NSString *error){
++				if (!ok){
++					[TGCapabilities setDatabaseEncryptionWanted:NO];
++					[TGAlertSheet showMessage:(error ?: @"Could not encrypt database.")
++										title:TGLocalized(@"Database Encryption")
++									   inView:weakSelf.view];
++				}
++				[weakSelf rebuildSections];
++			}];
++		} else {
++			[[TGSettingsStore shared] decryptDatabaseWithCompletion:^(BOOL ok, NSString *error){
++				if (!ok){
++					[TGCapabilities setDatabaseEncryptionWanted:YES];
++					[TGAlertSheet showMessage:(error ?: @"Could not decrypt database.")
++										title:TGLocalized(@"Database Encryption")
++									   inView:weakSelf.view];
++				}
++				[weakSelf rebuildSections];
++			}];
++		}
++	})];
++
++	[tuningRows addObject:TGSwitchRow(TGLocalized(@"Custom Emoji"),
++			[TGCapabilities customEmojiWanted], ^(BOOL on){
++		[TGCapabilities setCustomEmojiWanted:on];
++		[weakSelf rebuildSections];
++	})];
++
++	[tuningRows addObject:TGSwitchRow(TGLocalized(@"Chat List Thumbnails"),
++			[TGCapabilities chatThumbnailsWanted], ^(BOOL on){
++		[TGCapabilities setChatThumbnailsWanted:on];
++		[weakSelf rebuildSections];
++	})];
++
++	[tuningRows addObject:TGSwitchRow(TGLocalized(@"Group Chat Avatars"),
++			[TGCapabilities groupAvatarsWanted], ^(BOOL on){
++		[TGCapabilities setGroupAvatarsWanted:on];
++		[weakSelf rebuildSections];
++	})];
++
++	[tuningRows addObject:TGSwitchRow(TGLocalized(@"Pause Updates on Scroll"),
++			[TGCapabilities pauseUpdatesDuringScrollWanted], ^(BOOL on){
++		[TGCapabilities setPauseUpdatesDuringScrollWanted:on];
++		[weakSelf rebuildSections];
++	})];
++
++	[tuningRows addObject:TGSwitchRow(TGLocalized(@"Chat Wallpaper"),
++			[TGCapabilities wallpaperWanted], ^(BOOL on){
++		[TGCapabilities setWallpaperWanted:on];
++		[weakSelf rebuildSections];
++	})];
++
++	[tuningRows addObject:TGSwitchRow(TGLocalized(@"GIF Autoplay"),
++			[TGCapabilities gifAutoplayWanted], ^(BOOL on){
++		[TGCapabilities setGifAutoplayWanted:on];
++		[weakSelf rebuildSections];
++	})];
++
++	if (NSFoundationVersionNumber <= NSFoundationVersionNumber_iOS_6_1) {
++		[tuningRows addObject:TGSwitchRow(TGLocalized(@"Skeuomorphic Chrome"),
++				[TGCapabilities skeuomorphicChromeWanted], ^(BOOL on){
++			[TGCapabilities setSkeuomorphicChromeWanted:on];
++			[[NSNotificationCenter defaultCenter] postNotificationName:TGThemeChangedNotification object:nil];
++			[weakSelf rebuildSections];
++		})];
++	}
++
++	[sections addObject:TGSection(TGSettingsHeaderText(@"PERFORMANCE & TUNING"),
++			TGLocalized(@"Disable heavy features to reduce memory pressure and eliminate scroll stutter on older hardware."),
++			tuningRows)];
++
++	self.capabilities = [TGCapabilities all];
+ 	NSMutableArray *featureRows = [NSMutableArray array];
+ 	for (TGCapability *capability in self.capabilities){
+ 		NSMutableDictionary *row = [TGDeviceCapabilityRowModel(capability.name,
+@@ -62,7 +145,6 @@
+ 	[sections addObject:TGSection(TGSettingsHeaderText(@"FEATURES"), nil,
+ 			featureRows)];
+ 
+-	__weak typeof(self) weakSelf = self;
+ 	[sections addObject:TGSection(nil, nil, @[
+ 		TGCentredDestructiveRow(TGLocalized(@"Log out"), ^{
+ 			[TGAlertSheet showConfirm:
+diff --git a/src/UI/Messages/TGMessageBubbleCell.h b/src/UI/Messages/TGMessageBubbleCell.h
+index d90cbe82..80636066 100644
+--- a/src/UI/Messages/TGMessageBubbleCell.h
++++ b/src/UI/Messages/TGMessageBubbleCell.h
+@@ -15,6 +15,84 @@
+ 
+ @class TGTheme;
+ 
++/// A single composite view that renders the reply bar, author, quote text,
++/// and manual quote mark in one drawRect: pass. Consolidates 4 CALayers into 1.
++@interface TGQuoteView : UIView
++
++@property (nonatomic, strong) UIColor *barColor;
++@property (nonatomic, assign) CGRect barRect;
++
++@property (nonatomic, copy) NSAttributedString *authorAttributedText;
++@property (nonatomic, assign) CGRect authorRect;
++
++@property (nonatomic, copy) NSAttributedString *quoteAttributedText;
++@property (nonatomic, copy) NSString *quoteText;
++@property (nonatomic, strong) UIColor *quoteTextColor;
++@property (nonatomic, strong) UIFont *quoteFont;
++@property (nonatomic, assign) CGRect textRect;
++
++@property (nonatomic, strong) UIImage *quoteMarkImage;
++@property (nonatomic, assign) CGRect markRect;
++
++- (void)reset;
++
++@end
++
++/// A single composite view that renders the time string, views eye glyph,
++/// delivery ticks, and optional wallpaper plate in one drawRect: pass.
++/// Consolidates 4 CALayers into 1.
++@interface TGMessageStampView : UIView
++
++@property (nonatomic, strong) UIColor *plateColor;
++@property (nonatomic, assign) CGRect plateRect;
++
++@property (nonatomic, strong) UIImage *eyeImage;
++@property (nonatomic, assign) CGRect eyeRect;
++
++@property (nonatomic, copy) NSString *timeText;
++@property (nonatomic, strong) UIFont *timeFont;
++@property (nonatomic, strong) UIColor *timeColor;
++@property (nonatomic, strong) UIColor *timeShadowColor;
++@property (nonatomic, assign) CGSize timeShadowOffset;
++@property (nonatomic, assign) CGRect timeRect;
++
++@property (nonatomic, strong) UIImage *ticksImage;
++@property (nonatomic, assign) CGRect ticksRect;
++
++- (void)reset;
++
++@end
++
++/// A single composite view that renders the link preview vertical bar, site,
++/// title, description, and action label in one drawRect: pass. Consolidates 6 CALayers into 1.
++@interface TGLinkPreviewView : UIView
++
++@property (nonatomic, strong) UIColor *barColor;
++@property (nonatomic, assign) CGRect barRect;
++
++@property (nonatomic, copy) NSString *site;
++@property (nonatomic, strong) UIColor *siteColor;
++@property (nonatomic, assign) CGRect siteRect;
++
++@property (nonatomic, copy) NSString *title;
++@property (nonatomic, strong) UIColor *titleColor;
++@property (nonatomic, assign) CGRect titleRect;
++
++@property (nonatomic, copy) NSString *desc;
++@property (nonatomic, strong) UIColor *descColor;
++@property (nonatomic, assign) CGRect descRect;
++
++@property (nonatomic, copy) NSString *action;
++@property (nonatomic, strong) UIColor *actionColor;
++@property (nonatomic, assign) CGRect actionRect;
++
++@property (nonatomic, copy) void (^onTap)(void);
++
++- (void)reset;
++
++@end
++
++
+ /// Tags of the four views a slot machine lays over its background
+ /// (reels, then the lever); a reused cell hides them.
+ static const NSInteger TGBubbleSlotLayerTag = 0x9320;
+@@ -53,26 +131,24 @@ static const NSInteger TGBubbleStickerEffectTag = 0x9330;
+ @property (nonatomic, strong) UILabel *icon;
+ @property (nonatomic, strong) UILabel *subtitle;
+ @property (nonatomic, strong) UILabel *sender;
+-@property (nonatomic, strong) UIView  *quoteBar;
+-@property (nonatomic, strong) UILabel *quote;
+-@property (nonatomic, strong) UILabel *quoteAuthor;
+-@property (nonatomic, strong) UIView  *linkPreviewBar;
+-@property (nonatomic, strong) UILabel *linkPreviewSite;
+-@property (nonatomic, strong) UILabel *linkPreviewTitle;
+-@property (nonatomic, strong) UILabel *linkPreviewDesc;
+-@property (nonatomic, strong) UILabel *linkPreviewAction;
+-@property (nonatomic, strong) UIButton *linkPreviewButton;
++@property (nonatomic, strong) TGQuoteView *quoteView;
++@property (nonatomic, strong) TGMessageStampView *stampView;
++@property (nonatomic, strong) TGLinkPreviewView *linkPreviewView;
+ @property (nonatomic, copy)   NSString *linkPreviewUrl;
+ @property (nonatomic, strong) UIImageView *ticks;
+-/// Skeuomorphic top specular highlight reflection line for tactile iOS 6 bubbles.
+-@property (nonatomic, strong) UIView *shineBar;
+-@property (nonatomic, strong) CAGradientLayer *shineGradientLayer;
+ /// Gradient, edge and tail of the bubble as one stretchable picture. It
+ /// replaced a CAShapeLayer mask, a gradient layer and a stroked shape layer
+ /// per bubble: on an A4 backboardd re-rendered the mask offscreen and
+ /// stroked the path on the CPU every frame, which was 3.4 s of every 8 s
+ /// of scrolling.
+ @property (nonatomic, strong) UIImageView *bubbleBack;
++- (BOOL)hasSender;
++- (BOOL)hasQuoteView;
++- (BOOL)hasForwardLabel;
++- (BOOL)hasTime;
++- (BOOL)hasTicks;
++- (BOOL)hasViewsEye;
++- (BOOL)hasStampPlate;
+ 
+ /// The dot that says a voice note has not been listened to or a round note
+ /// has not been watched. It lives beside the clock, not inside the bubble,
+diff --git a/src/UI/Messages/TGMessageBubbleCell.m b/src/UI/Messages/TGMessageBubbleCell.m
+index 1c3fb1e7..07b8201a 100644
+--- a/src/UI/Messages/TGMessageBubbleCell.m
++++ b/src/UI/Messages/TGMessageBubbleCell.m
+@@ -10,6 +10,220 @@
+ #import "TGStyle.h"
+ #import "TGAppActivity.h"
+ #import <CoreText/CoreText.h>
++#import "TGTextDraw.h"
++
++@implementation TGQuoteView
++
++- (id)initWithFrame:(CGRect)frame {
++	self = [super initWithFrame:frame];
++	if (self) {
++		self.backgroundColor = [UIColor clearColor];
++		self.opaque = NO;
++		self.userInteractionEnabled = YES;
++	}
++	return self;
++}
++
++- (void)reset {
++	self.barColor = nil;
++	self.barRect = CGRectZero;
++	self.authorAttributedText = nil;
++	self.authorRect = CGRectZero;
++	self.quoteAttributedText = nil;
++	self.quoteText = nil;
++	self.quoteTextColor = nil;
++	self.quoteFont = nil;
++	self.textRect = CGRectZero;
++	self.quoteMarkImage = nil;
++	self.markRect = CGRectZero;
++	self.hidden = YES;
++	[self setNeedsDisplay];
++}
++
++- (void)drawRect:(CGRect)rect {
++	[super drawRect:rect];
++	CGContextRef ctx = UIGraphicsGetCurrentContext();
++	if (self.barColor && !CGRectIsEmpty(self.barRect)) {
++		[self.barColor setFill];
++		UIRectFill(self.barRect);
++	}
++	if (self.authorAttributedText.length && !CGRectIsEmpty(self.authorRect)) {
++		if (ctx) {
++			CGContextSaveGState(ctx);
++			CGContextClipToRect(ctx, self.authorRect);
++		}
++		[self.authorAttributedText drawInRect:self.authorRect];
++		if (ctx)
++			CGContextRestoreGState(ctx);
++	}
++	if (self.quoteMarkImage && !CGRectIsEmpty(self.markRect)) {
++		[self.quoteMarkImage drawInRect:self.markRect];
++	}
++	if (self.quoteAttributedText.length && !CGRectIsEmpty(self.textRect)) {
++		if (ctx) {
++			CGContextSaveGState(ctx);
++			CGContextClipToRect(ctx, self.textRect);
++		}
++		[self.quoteAttributedText drawInRect:self.textRect];
++		if (ctx)
++			CGContextRestoreGState(ctx);
++	} else if (self.quoteText.length && !CGRectIsEmpty(self.textRect)) {
++		TGDrawText(self.quoteText, self.textRect, self.quoteFont ?: TGFontCaption(),
++				   self.quoteTextColor ?: [UIColor blackColor],
++				   NSTextAlignmentLeft, nil);
++	}
++}
++
++@end
++
++@implementation TGMessageStampView
++
++- (id)initWithFrame:(CGRect)frame {
++	self = [super initWithFrame:frame];
++	if (self) {
++		self.backgroundColor = [UIColor clearColor];
++		self.opaque = NO;
++		self.userInteractionEnabled = NO;
++	}
++	return self;
++}
++
++- (void)reset {
++	self.plateColor = nil;
++	self.plateRect = CGRectZero;
++	self.eyeImage = nil;
++	self.eyeRect = CGRectZero;
++	self.timeText = nil;
++	self.timeFont = nil;
++	self.timeColor = nil;
++	self.timeShadowColor = nil;
++	self.timeShadowOffset = CGSizeZero;
++	self.timeRect = CGRectZero;
++	self.ticksImage = nil;
++	self.ticksRect = CGRectZero;
++	self.hidden = YES;
++	[self setNeedsDisplay];
++}
++
++- (void)drawRect:(CGRect)rect {
++	[super drawRect:rect];
++	if (self.plateColor && !CGRectIsEmpty(self.plateRect)) {
++		UIBezierPath *path = [UIBezierPath bezierPathWithRoundedRect:self.plateRect cornerRadius:TGMetricCornerControl];
++		[self.plateColor setFill];
++		[path fill];
++	}
++	if (self.eyeImage && !CGRectIsEmpty(self.eyeRect)) {
++		[self.eyeImage drawInRect:self.eyeRect];
++	}
++	if (self.timeText.length && !CGRectIsEmpty(self.timeRect)) {
++		NSShadow *shadow = nil;
++		if (self.timeShadowColor && !CGSizeEqualToSize(self.timeShadowOffset, CGSizeZero)) {
++			shadow = [[NSShadow alloc] init];
++			shadow.shadowColor = self.timeShadowColor;
++			shadow.shadowOffset = self.timeShadowOffset;
++		}
++		TGDrawText(self.timeText, self.timeRect, self.timeFont ?: TGFontMicro(),
++				   self.timeColor ?: [UIColor whiteColor],
++				   NSTextAlignmentRight, shadow);
++	}
++	if (self.ticksImage && !CGRectIsEmpty(self.ticksRect)) {
++		[self.ticksImage drawInRect:self.ticksRect];
++	}
++}
++
++@end
++
++@implementation TGLinkPreviewView
++
++- (id)initWithFrame:(CGRect)frame {
++	self = [super initWithFrame:frame];
++	if (self) {
++		self.backgroundColor = [UIColor clearColor];
++		self.opaque = NO;
++		self.userInteractionEnabled = YES;
++		UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc]
++				initWithTarget:self action:@selector(viewTapped:)];
++		[self addGestureRecognizer:tap];
++	}
++	return self;
++}
++
++- (void)viewTapped:(UITapGestureRecognizer *)tap {
++	if (tap.state != UIGestureRecognizerStateEnded) return;
++	if (self.onTap) self.onTap();
++}
++
++- (void)reset {
++	self.barColor = nil;
++	self.barRect = CGRectZero;
++	self.site = nil;
++	self.siteColor = nil;
++	self.siteRect = CGRectZero;
++	self.title = nil;
++	self.titleColor = nil;
++	self.titleRect = CGRectZero;
++	self.desc = nil;
++	self.descColor = nil;
++	self.descRect = CGRectZero;
++	self.action = nil;
++	self.actionColor = nil;
++	self.actionRect = CGRectZero;
++	self.onTap = nil;
++	self.hidden = YES;
++	[self setNeedsDisplay];
++}
++
++- (void)drawRect:(CGRect)rect {
++	[super drawRect:rect];
++	CGContextRef ctx = UIGraphicsGetCurrentContext();
++	if (self.barColor && !CGRectIsEmpty(self.barRect)) {
++		[self.barColor setFill];
++		UIRectFill(self.barRect);
++	}
++	if (self.site.length && !CGRectIsEmpty(self.siteRect)) {
++		if (ctx) {
++			CGContextSaveGState(ctx);
++			CGContextClipToRect(ctx, self.siteRect);
++		}
++		TGDrawText(self.site, self.siteRect, TGFontMetaStrong(),
++				   self.siteColor ?: [UIColor blackColor], NSTextAlignmentLeft, nil);
++		if (ctx)
++			CGContextRestoreGState(ctx);
++	}
++	if (self.title.length && !CGRectIsEmpty(self.titleRect)) {
++		if (ctx) {
++			CGContextSaveGState(ctx);
++			CGContextClipToRect(ctx, self.titleRect);
++		}
++		TGDrawText(self.title, self.titleRect, TGFontCaptionStrong(),
++				   self.titleColor ?: [UIColor blackColor], NSTextAlignmentLeft, nil);
++		if (ctx)
++			CGContextRestoreGState(ctx);
++	}
++	if (self.desc.length && !CGRectIsEmpty(self.descRect)) {
++		if (ctx) {
++			CGContextSaveGState(ctx);
++			CGContextClipToRect(ctx, self.descRect);
++		}
++		TGDrawText(self.desc, self.descRect, TGFontCaption(),
++				   self.descColor ?: [UIColor grayColor], NSTextAlignmentLeft, nil);
++		if (ctx)
++			CGContextRestoreGState(ctx);
++	}
++	if (self.action.length && !CGRectIsEmpty(self.actionRect)) {
++		if (ctx) {
++			CGContextSaveGState(ctx);
++			CGContextClipToRect(ctx, self.actionRect);
++		}
++		TGDrawText(self.action, self.actionRect, TGFontMetaStrong(),
++				   self.actionColor ?: [UIColor blueColor], NSTextAlignmentCenter, nil);
++		if (ctx)
++			CGContextRestoreGState(ctx);
++	}
++}
++
++@end
++
+ 
+ /// How visible the part of a voice note nobody has heard yet is.
+ static const CGFloat kWaveUnplayedAlpha = TGAlphaHighlight;
+@@ -39,6 +253,37 @@ static const NSUInteger kMaxCustomEmojiViews = 3;
+ 
+ @implementation TGBubbleCell
+ 
++@synthesize artwork = _artwork;
++@synthesize disc = _disc;
++@synthesize wave = _wave;
++@synthesize senderAvatar = _senderAvatar;
++@synthesize unreadDot = _unreadDot;
++@synthesize checkbox = _checkbox;
++@synthesize lottie = _lottie;
++@synthesize collageView = _collageView;
++@synthesize collageMoreLabel = _collageMoreLabel;
++@synthesize captionLabel = _captionLabel;
++@synthesize transcriptionLabel = _transcriptionLabel;
++@synthesize bubbleBack = _bubbleBack;
++@synthesize picture = _picture;
++@synthesize icon = _icon;
++@synthesize subtitle = _subtitle;
++@synthesize forwardLabel = _forwardLabel;
++@synthesize sender = _sender;
++@synthesize quoteView = _quoteView;
++@synthesize stampView = _stampView;
++@synthesize linkPreviewView = _linkPreviewView;
++@synthesize time = _time;
++@synthesize viewsEye = _viewsEye;
++@synthesize ticks = _ticks;
++@synthesize stampPlate = _stampPlate;
++@synthesize mediaStamp = _mediaStamp;
++@synthesize tail = _tail;
++@synthesize contactCallButton = _contactCallButton;
++@synthesize contactAddButton = _contactAddButton;
++@synthesize contactSeparatorH = _contactSeparatorH;
++@synthesize contactSeparatorV = _contactSeparatorV;
++
+ - (id)initWithStyle:(UITableViewCellStyle)style reuseIdentifier:(NSString *)reuseIdentifier {
+ 	self = [super initWithStyle:style reuseIdentifier:reuseIdentifier];
+ 	if (!self)
+@@ -60,18 +305,10 @@ static const NSUInteger kMaxCustomEmojiViews = 3;
+ 	[self.contentView addSubview:self.bubble];
+ 
+ 	self.bubbleBack = [[UIImageView alloc] init];
++	self.bubbleBack.userInteractionEnabled = NO;
+ 	self.bubbleBack.hidden = YES;
+ 	[self.bubble addSubview:self.bubbleBack];
+ 
+-	self.picture = [[UIImageView alloc] init];
+-	self.picture.contentMode = UIViewContentModeScaleAspectFill;
+-	// Pictures arrive pre-cropped and pre-rounded (TGIcons roundedImage:);
+-	// cornerRadius here only shapes the placeholder fill, which costs nothing.
+-	self.picture.layer.borderColor = [theme separatorColour].CGColor;
+-	self.picture.layer.borderWidth = TGMetricBorderNone;
+-	self.picture.layer.cornerRadius = TGMetricCornerSmall;
+-	[self.bubble addSubview:self.picture];
+-
+ 	// On iOS 6 the body's text is a picture TGTextRender drew, usually ahead
+ 	// of time on another thread; elsewhere UILabel draws it.
+ 	self.body = [TGRenderedLabel wanted] ? [[TGRenderedLabel alloc] init] : [[UILabel alloc] init];
+@@ -81,251 +318,9 @@ static const NSUInteger kMaxCustomEmojiViews = 3;
+ 	self.body.backgroundColor = [UIColor clearColor];
+ 	[self.bubble addSubview:self.body];
+ 
+-	self.captionLabel = [[UILabel alloc] init];
+-	self.captionLabel.numberOfLines = 0;
+-	self.captionLabel.lineBreakMode = NSLineBreakByWordWrapping;
+-	self.captionLabel.font = TGFontBody();
+-	self.captionLabel.backgroundColor = [UIColor clearColor];
+-	self.captionLabel.hidden = YES;
+-	[self.bubble addSubview:self.captionLabel];
+-
+-	self.transcriptionLabel = [[UILabel alloc] init];
+-	self.transcriptionLabel.numberOfLines = 0;
+-	self.transcriptionLabel.lineBreakMode = NSLineBreakByWordWrapping;
+-	self.transcriptionLabel.font = TGFontSubhead();
+-	self.transcriptionLabel.backgroundColor = [UIColor clearColor];
+-	self.transcriptionLabel.hidden = YES;
+-	[self.bubble addSubview:self.transcriptionLabel];
+-
+-	self.sender = [[UILabel alloc] init];
+-	self.sender.font = TGFontMetaStrong();
+-	self.sender.lineBreakMode = NSLineBreakByTruncatingTail;
+-	self.sender.backgroundColor = [UIColor clearColor];
+-	self.sender.hidden = YES;
+-	[self.bubble addSubview:self.sender];
+-
+-	// Under the disc: the play arrow sits over the album art.
+-	self.artwork = [[UIImageView alloc] init];
+-	self.artwork.hidden = YES;
+-	self.artwork.contentMode = UIViewContentModeScaleAspectFill;
+-	self.artwork.clipsToBounds = YES;
+-	self.artwork.layer.cornerRadius = TGMetricCornerSmall;
+-	[self.bubble addSubview:self.artwork];
+-
+-	self.disc = [[UIImageView alloc] init];
+-	self.disc.hidden = YES;
+-	[self.bubble addSubview:self.disc];
+-
+-	self.wave = [[UIImageView alloc] init];
+-	self.wave.hidden = YES;
+-	[self.bubble addSubview:self.wave];
+-
+-	self.tail = [[UIImageView alloc] init];
+-	self.tail.hidden = YES;
+-	[self.contentView addSubview:self.tail];
+-
+-	self.senderAvatar = [[UIImageView alloc] init];
+-	self.senderAvatar.layer.cornerRadius = TGHalf(TGMetricGroupAvatarSide);
+-	self.senderAvatar.hidden = YES;
+-	[self.contentView addSubview:self.senderAvatar];
+-
+-	self.ticks = [[UIImageView alloc] init];
+-	self.ticks.contentMode = UIViewContentModeScaleAspectFit;
+-	self.ticks.hidden = YES;
+-	[self.bubble addSubview:self.ticks];
+-
+-	self.shineBar = [[UIView alloc] init];
+-	self.shineBar.userInteractionEnabled = NO;
+-	self.shineBar.hidden = YES;
+-	self.shineGradientLayer = [CAGradientLayer layer];
+-	self.shineGradientLayer.colors = [theme skeuoShineGradientColours];
+-	[self.shineBar.layer addSublayer:self.shineGradientLayer];
+-	[self.bubble addSubview:self.shineBar];
+-
+-	self.unreadDot = [[UIView alloc] init];
+-	self.unreadDot.hidden = YES;
+-	self.unreadDot.backgroundColor = [[TGTheme shared] accentColour];
+-	[self.contentView addSubview:self.unreadDot];
+-
+-	self.checkbox = [[UIImageView alloc] init];
+-	self.checkbox.hidden = YES;
+-	self.checkbox.contentMode = UIViewContentModeCenter;
+-	[self.contentView addSubview:self.checkbox];
+-
+-	self.quoteBar = [[UIView alloc] init];
+-	self.quoteBar.hidden = YES;
+-	self.quoteBar.userInteractionEnabled = YES;
+-	[self.bubble addSubview:self.quoteBar];
+-
+-	self.quoteAuthor = [[UILabel alloc] init];
+-	self.quoteAuthor.font = TGFontCaptionStrong();
+-	self.quoteAuthor.backgroundColor = [UIColor clearColor];
+-	self.quoteAuthor.hidden = YES;
+-	// The label with interaction off swallows nothing, so both halves of the
+-	// quote are a hit target: the head the same as the text under it.
+-	self.quoteAuthor.userInteractionEnabled = YES;
+-	[self.bubble addSubview:self.quoteAuthor];
+-
+-	self.quote = [[UILabel alloc] init];
+-	self.quote.font = TGFontCaption();
+-	self.quote.numberOfLines = 2;
+-	self.quote.backgroundColor = [UIColor clearColor];
+-	self.quote.hidden = YES;
+-	self.quote.userInteractionEnabled = YES;
+-	[self.bubble addSubview:self.quote];
+-
+-	// Following a reply: the quote header is the button, the way their client
+-	// treats it. One recognizer per half, both aimed at the same callback.
+-	for (UILabel *label in @[self.quoteAuthor, self.quote]){
+-		UITapGestureRecognizer *quoteTap = [[UITapGestureRecognizer alloc]
+-				initWithTarget:self action:@selector(quoteTapped:)];
+-		[label addGestureRecognizer:quoteTap];
+-	}
+-
+-	self.linkPreviewBar = [[UIView alloc] init];
+-	self.linkPreviewBar.hidden = YES;
+-	[self.bubble addSubview:self.linkPreviewBar];
+-
+-	self.linkPreviewSite = [[UILabel alloc] init];
+-	self.linkPreviewSite.font = TGFontMetaStrong();
+-	self.linkPreviewSite.backgroundColor = [UIColor clearColor];
+-	self.linkPreviewSite.hidden = YES;
+-	[self.bubble addSubview:self.linkPreviewSite];
+-
+-	self.linkPreviewTitle = [[UILabel alloc] init];
+-	self.linkPreviewTitle.font = TGFontCaptionStrong();
+-	self.linkPreviewTitle.numberOfLines = 2;
+-	self.linkPreviewTitle.lineBreakMode = NSLineBreakByTruncatingTail;
+-	self.linkPreviewTitle.backgroundColor = [UIColor clearColor];
+-	self.linkPreviewTitle.hidden = YES;
+-	[self.bubble addSubview:self.linkPreviewTitle];
+-
+-	self.linkPreviewDesc = [[UILabel alloc] init];
+-	self.linkPreviewDesc.font = TGFontCaption();
+-	self.linkPreviewDesc.numberOfLines = 2;
+-	self.linkPreviewDesc.lineBreakMode = NSLineBreakByTruncatingTail;
+-	self.linkPreviewDesc.backgroundColor = [UIColor clearColor];
+-	self.linkPreviewDesc.hidden = YES;
+-	[self.bubble addSubview:self.linkPreviewDesc];
+-
+-	self.linkPreviewAction = [[UILabel alloc] init];
+-	self.linkPreviewAction.font = TGFontMetaStrong();
+-	self.linkPreviewAction.textAlignment = NSTextAlignmentCenter;
+-	self.linkPreviewAction.backgroundColor = [UIColor clearColor];
+-	self.linkPreviewAction.hidden = YES;
+-	[self.bubble addSubview:self.linkPreviewAction];
+-
+-	self.linkPreviewButton = [UIButton buttonWithType:UIButtonTypeCustom];
+-	self.linkPreviewButton.hidden = YES;
+-	[self.linkPreviewButton addTarget:self action:@selector(linkPreviewTapped) forControlEvents:UIControlEventTouchUpInside];
+-	[self.bubble addSubview:self.linkPreviewButton];
+-
+-	self.icon = [[UILabel alloc] init];
+-	// Clear, or iOS 6 paints the label's default white box.
+-	self.icon.backgroundColor = [UIColor clearColor];
+-	self.icon.textAlignment = NSTextAlignmentCenter;
+-	self.icon.textColor = [[TGTheme shared] onAccentColour];
+-	self.icon.font = TGFontHeader();
+-	// Unclipped: the rounded corners are its background colour's, and the
+-	// glyph never leaves the tile, so a clip would buy an offscreen pass for
+-	// nothing.
+-	self.icon.hidden = YES;
+-	[self.bubble addSubview:self.icon];
+-
+-	self.subtitle = [[UILabel alloc] init];
+-	self.subtitle.font = TGFontCaption();
+-	self.subtitle.textColor = [[TGTheme shared] fileMetaColour];
+-	self.subtitle.backgroundColor = [UIColor clearColor];
+-	self.subtitle.hidden = YES;
+-	[self.bubble addSubview:self.subtitle];
+-
+-	self.lottie = [[TGLottieView alloc] initWithFrame:CGRectZero];
+-	self.lottie.hidden = YES;
+-	[self.bubble addSubview:self.lottie];
+-
+ 	self.customEmojiViews = [[NSMutableArray alloc] initWithCapacity:kMaxCustomEmojiViews];
+ 	self.staticCustomEmojiViews = [[NSMutableArray alloc] initWithCapacity:kMaxCustomEmojiViews];
+ 
+-	self.forwardLabel = [[UILabel alloc] init];
+-	self.forwardLabel.font = TGFontMeta();
+-	self.forwardLabel.backgroundColor = [UIColor clearColor];
+-	self.forwardLabel.hidden = YES;
+-	[self.bubble addSubview:self.forwardLabel];
+-
+-	self.mediaStamp = [[UILabel alloc] init];
+-	// Clear, or iOS 6 paints the label's default white box.
+-	self.mediaStamp.backgroundColor = [UIColor clearColor];
+-	self.mediaStamp.font = TGFontMicro();
+-	self.mediaStamp.textColor = [[TGTheme shared] onMediaColour];
+-	self.mediaStamp.textAlignment = NSTextAlignmentCenter;
+-	self.mediaStamp.layer.cornerRadius = TGMetricCornerControl;
+-	self.mediaStamp.hidden = YES;
+-	[self.bubble addSubview:self.mediaStamp];
+-
+-	self.stampPlate = [[UIView alloc] init];
+-	self.stampPlate.layer.cornerRadius = TGMetricCornerControl;
+-	self.stampPlate.hidden = YES;
+-	[self.bubble addSubview:self.stampPlate];
+-
+-	self.time = [[UILabel alloc] init];
+-	self.time.font = TGFontMicro();
+-	self.time.backgroundColor = [UIColor clearColor];
+-	self.time.textAlignment = NSTextAlignmentRight;
+-	[self.bubble addSubview:self.time];
+-
+-	self.viewsEye = [[UIImageView alloc] init];
+-	self.viewsEye.hidden = YES;
+-	[self.bubble addSubview:self.viewsEye];
+-
+-	self.contactSeparatorH = [[UIView alloc] init];
+-	self.contactSeparatorH.hidden = YES;
+-	[self.bubble addSubview:self.contactSeparatorH];
+-
+-	self.contactSeparatorV = [[UIView alloc] init];
+-	self.contactSeparatorV.hidden = YES;
+-	[self.bubble addSubview:self.contactSeparatorV];
+-
+-	self.contactCallButton = [UIButton buttonWithType:UIButtonTypeCustom];
+-	self.contactCallButton.titleLabel.font = TGFontSubhead();
+-	self.contactCallButton.hidden = YES;
+-	[self.contactCallButton setTitle:@"Call" forState:UIControlStateNormal];
+-	[self.contactCallButton setTitleColor:[theme accentColour] forState:UIControlStateNormal];
+-	[self.bubble addSubview:self.contactCallButton];
+-
+-	self.contactAddButton = [UIButton buttonWithType:UIButtonTypeCustom];
+-	self.contactAddButton.titleLabel.font = TGFontSubhead();
+-	self.contactAddButton.hidden = YES;
+-	[self.contactAddButton setTitle:@"Add" forState:UIControlStateNormal];
+-	[self.contactAddButton setTitleColor:[theme accentColour] forState:UIControlStateNormal];
+-	[self.bubble addSubview:self.contactAddButton];
+-
+-	// Album collage container
+-	self.collageView = [[UIView alloc] init];
+-	self.collageView.hidden = YES;
+-	self.collageView.clipsToBounds = YES;
+-	self.collageViews = [NSMutableArray arrayWithCapacity:4];
+-	for (NSInteger i = 0; i < 4; i++) {
+-		UIImageView *cv = [[UIImageView alloc] init];
+-		cv.contentMode = UIViewContentModeScaleAspectFill;
+-		cv.layer.cornerRadius = TGMetricCornerSmall;
+-		cv.userInteractionEnabled = YES;
+-		cv.tag = i;
+-		UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(collageItemTapped:)];
+-		[cv addGestureRecognizer:tap];
+-		[self.collageViews addObject:cv];
+-		[self.collageView addSubview:cv];
+-	}
+-	self.collageMoreLabel = [[UILabel alloc] init];
+-	self.collageMoreLabel.textAlignment = NSTextAlignmentCenter;
+-	self.collageMoreLabel.textColor = [[TGTheme shared] onMediaColour];
+-	self.collageMoreLabel.font = TGFontHeader();
+-	self.collageMoreLabel.backgroundColor = [[TGTheme shared] mediaOverlayColour];
+-	self.collageMoreLabel.layer.cornerRadius = TGMetricCornerSmall;
+-	self.collageMoreLabel.clipsToBounds = YES;
+-	self.collageMoreLabel.hidden = YES;
+-	[self.collageView addSubview:self.collageMoreLabel];
+-	[self.bubble addSubview:self.collageView];
+-
+ 	// Link tap recognizer on body label
+ 	self.body.userInteractionEnabled = YES;
+ 	UITapGestureRecognizer *bodyTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(bodyTapped:)];
+@@ -398,13 +393,24 @@ static const NSUInteger kMaxCustomEmojiViews = 3;
+ 	BOOL mine = layout.mine;
+ 	self.bubble.frame = layout.bubbleFrame;
+ 	UIColor *fill = mine ? [theme bubbleMineColour] : [theme bubbleTheirsColour];
+-	self.bubble.backgroundColor = layout.isSticker ? [UIColor clearColor] : fill;
++	BOOL isTransparent = layout.isSticker;
++	self.bubble.backgroundColor = isTransparent ? [UIColor clearColor] : fill;
++	self.bubble.opaque = !isTransparent;
+ 
+ 	self.tail.hidden = YES;
+ 	self.bubble.layer.borderWidth = TGMetricBorderNone;
+ 	self.bubble.layer.borderColor = [UIColor clearColor].CGColor;
+ 	self.bubble.layer.cornerRadius = [theme bubbleCornerRadius];
+ 	self.body.textColor = mine ? [theme bubbleMineTextColour] : [theme bubbleTheirsTextColour];
++
++	self.body.backgroundColor = [UIColor clearColor];
++	self.body.opaque = NO;
++	self.captionLabel.backgroundColor = [UIColor clearColor];
++	self.captionLabel.opaque = NO;
++	self.sender.backgroundColor = [UIColor clearColor];
++	self.sender.opaque = NO;
++	self.time.backgroundColor = [UIColor clearColor];
++	self.time.opaque = NO;
+ }
+ 
+ /// Which character sits under `point`, or NSNotFound off any glyph. The
+@@ -664,29 +670,55 @@ static const NSUInteger kMaxCustomEmojiViews = 3;
+ 	self.veilView.hidden = YES;
+ 	[self stopLoopingVideo];
+ 	[self hideSendRing];
+-	self.icon.hidden = YES;
+-	self.subtitle.hidden = YES;
+-	self.subtitle.text = nil;
+-	self.sender.hidden = YES;
+-	self.sender.text = nil;
+-	self.senderAvatar.hidden = YES;
+-	self.tail.hidden = YES;
++	if (_quoteView) {
++		[_quoteView reset];
++		_quoteView.hidden = YES;
++	}
++	if (_forwardLabel) {
++		_forwardLabel.hidden = YES;
++		_forwardLabel.text = nil;
++		_forwardLabel.attributedText = nil;
++	}
++	if (_linkPreviewView) {
++		[_linkPreviewView reset];
++		_linkPreviewView.hidden = YES;
++	}
++	if (_stampView) {
++		[_stampView reset];
++		_stampView.hidden = YES;
++	}
++	if (_icon) _icon.hidden = YES;
++	if (_subtitle) {
++		_subtitle.hidden = YES;
++		_subtitle.text = nil;
++	}
++	if (_sender) {
++		_sender.hidden = YES;
++		_sender.text = nil;
++	}
++	if (_senderAvatar) _senderAvatar.hidden = YES;
++	if (_tail) _tail.hidden = YES;
+ 	self.bubble.layer.borderWidth = 0;
+ 	self.bubble.layer.borderColor = [UIColor clearColor].CGColor;
+ 	self.bubble.backgroundColor = [UIColor clearColor];
+-	self.bubbleBack.hidden = YES;
++	if (_bubbleBack) _bubbleBack.hidden = YES;
+ 	self.bubble.clipsToBounds = NO;
+-	self.shineBar.hidden = YES;
+-	self.checkbox.hidden = YES;
+-	self.disc.hidden = YES;
+-	self.artwork.hidden = YES;
+-	self.artwork.image = nil;
+-	self.wave.hidden = YES;
+-	self.picture.hidden = YES;
+-	// Also forgets a rounded copy still being drawn for the last message.
+-	[TGIcons setRoundedImage:nil inView:self.picture size:CGSizeZero radius:0];
+-	for (UIImageView *cv in self.collageViews)
+-		[TGIcons setRoundedImage:nil inView:cv size:CGSizeZero radius:0];
++	if (_checkbox) _checkbox.hidden = YES;
++	if (_disc) _disc.hidden = YES;
++	if (_artwork) {
++		_artwork.hidden = YES;
++		_artwork.image = nil;
++	}
++	if (_wave) _wave.hidden = YES;
++	if (_picture) {
++		_picture.hidden = YES;
++		// Also forgets a rounded copy still being drawn for the last message.
++		[TGIcons setRoundedImage:nil inView:_picture size:CGSizeZero radius:0];
++	}
++	if (_collageViews) {
++		for (UIImageView *cv in _collageViews)
++			[TGIcons setRoundedImage:nil inView:cv size:CGSizeZero radius:0];
++	}
+ 	self.body.hidden = YES;
+ 	if ([self.body isKindOfClass:TGRenderedLabel.class])
+ 		((TGRenderedLabel *)self.body).renderKey = nil;
+@@ -696,30 +728,42 @@ static const NSUInteger kMaxCustomEmojiViews = 3;
+ 	self.body.textAlignment = NSTextAlignmentLeft;
+ 	self.body.shadowColor = nil;
+ 	self.body.shadowOffset = CGSizeZero;
+-	self.captionLabel.shadowColor = nil;
+-	self.captionLabel.shadowOffset = CGSizeZero;
+-	self.captionLabel.hidden = YES;
+-	self.captionLabel.text = nil;
+-	self.captionLabel.attributedText = nil;
+-	self.captionLabel.numberOfLines = 0;
+-	self.transcriptionLabel.hidden = YES;
+-	self.transcriptionLabel.text = nil;
+-	self.transcriptionLabel.numberOfLines = 0;
+-	self.time.text = nil;
+-	self.time.shadowColor = nil;
+-	self.time.shadowOffset = CGSizeZero;
+-	self.viewsEye.hidden = YES;
+-	self.viewsEye.image = nil;
+-	self.ticks.hidden = YES;
+-	self.ticks.image = nil;
+-	self.contactCallButton.hidden = YES;
+-	self.contactAddButton.hidden = YES;
+-	self.contactSeparatorH.hidden = YES;
+-	self.contactSeparatorV.hidden = YES;
+-	self.mediaStamp.hidden = YES;
+-	self.mediaStamp.text = nil;
+-	self.stampPlate.hidden = YES;
+-	self.unreadDot.hidden = YES;
++	if (_captionLabel) {
++		_captionLabel.shadowColor = nil;
++		_captionLabel.shadowOffset = CGSizeZero;
++		_captionLabel.hidden = YES;
++		_captionLabel.text = nil;
++		_captionLabel.attributedText = nil;
++		_captionLabel.numberOfLines = 0;
++	}
++	if (_transcriptionLabel) {
++		_transcriptionLabel.hidden = YES;
++		_transcriptionLabel.text = nil;
++		_transcriptionLabel.numberOfLines = 0;
++	}
++	if (_time) {
++		_time.text = nil;
++		_time.shadowColor = nil;
++		_time.shadowOffset = CGSizeZero;
++	}
++	if (_viewsEye) {
++		_viewsEye.hidden = YES;
++		_viewsEye.image = nil;
++	}
++	if (_ticks) {
++		_ticks.hidden = YES;
++		_ticks.image = nil;
++	}
++	if (_contactCallButton) _contactCallButton.hidden = YES;
++	if (_contactAddButton) _contactAddButton.hidden = YES;
++	if (_contactSeparatorH) _contactSeparatorH.hidden = YES;
++	if (_contactSeparatorV) _contactSeparatorV.hidden = YES;
++	if (_mediaStamp) {
++		_mediaStamp.hidden = YES;
++		_mediaStamp.text = nil;
++	}
++	if (_stampPlate) _stampPlate.hidden = YES;
++	if (_unreadDot) _unreadDot.hidden = YES;
+ 	self.docMessageId = 0;
+ 
+ 	// The poll's option rows are five views apiece and were torn down and
+@@ -736,50 +780,53 @@ static const NSUInteger kMaxCustomEmojiViews = 3;
+ 	// own coordinates, so a reused cell has to get them back first.
+ 	// A view out of the tree because it was hidden is settleHiddenViews' to
+ 	// put back, at its depth.
+-	if (self.time.superview && self.time.superview != self.bubble)
+-		[self.bubble addSubview:self.time];
+-	if (self.viewsEye.superview && self.viewsEye.superview != self.bubble)
+-		[self.bubble addSubview:self.viewsEye];
+-	if (self.ticks.superview && self.ticks.superview != self.bubble)
+-		[self.bubble addSubview:self.ticks];
+-	if (self.stampPlate.superview && self.stampPlate.superview != self.bubble) {
++	if (_time && _time.superview && _time.superview != self.bubble)
++		[self.bubble addSubview:_time];
++	if (_viewsEye && _viewsEye.superview && _viewsEye.superview != self.bubble)
++		[self.bubble addSubview:_viewsEye];
++	if (_ticks && _ticks.superview && _ticks.superview != self.bubble)
++		[self.bubble addSubview:_ticks];
++	if (_stampPlate && _stampPlate.superview && _stampPlate.superview != self.bubble) {
+ 		[self ensureInTree:self.time];
+-		[self.bubble insertSubview:self.stampPlate belowSubview:self.time];
+-	}
+-	if (self.mediaStamp.superview && self.mediaStamp.superview != self.bubble) {
+-		[self.bubble addSubview:self.mediaStamp];
+-		self.mediaStamp.layer.cornerRadius = TGMetricCornerControl;
+-		self.mediaStamp.textColor = [[TGTheme shared] onMediaColour];
+-	}
+-	self.quoteBar.hidden = YES;
+-	self.quote.hidden = YES;
+-	self.quote.text = nil;
+-	self.quoteAuthor.hidden = YES;
+-	self.quoteAuthor.text = nil;
+-	self.linkPreviewBar.hidden = YES;
+-	self.linkPreviewSite.hidden = YES;
+-	self.linkPreviewSite.text = nil;
+-	self.linkPreviewTitle.hidden = YES;
+-	self.linkPreviewTitle.text = nil;
+-	self.linkPreviewDesc.hidden = YES;
+-	self.linkPreviewDesc.text = nil;
+-	self.linkPreviewAction.hidden = YES;
+-	self.linkPreviewAction.text = nil;
+-	self.linkPreviewButton.hidden = YES;
++		[self.bubble insertSubview:_stampPlate belowSubview:self.time];
++	}
++	if (_mediaStamp && _mediaStamp.superview && _mediaStamp.superview != self.bubble) {
++		[self.bubble addSubview:_mediaStamp];
++		_mediaStamp.layer.cornerRadius = TGMetricCornerControl;
++		_mediaStamp.textColor = [[TGTheme shared] onMediaColour];
++	}
++	if (_quoteView) {
++		_quoteView.hidden = YES;
++		[_quoteView reset];
++	}
++	if (_stampView) {
++		_stampView.hidden = YES;
++		[_stampView reset];
++	}
++	if (_linkPreviewView) {
++		_linkPreviewView.hidden = YES;
++		[_linkPreviewView reset];
++	}
+ 	self.linkPreviewUrl = nil;
+-	self.forwardLabel.hidden = YES;
+-	self.forwardLabel.text = nil;
+-	self.forwardLabel.attributedText = nil;
+-	self.lottie.hidden = YES;
+-	[self.lottie stop];
++	if (_forwardLabel) {
++		_forwardLabel.hidden = YES;
++		_forwardLabel.text = nil;
++		_forwardLabel.attributedText = nil;
++	}
++	if (_lottie) {
++		_lottie.hidden = YES;
++		[_lottie stop];
++	}
+ 	[self stopCustomEmojiAnimations];
+ 	[self hideStaticCustomEmojiViewsFromIndex:0];
+ 
+-	self.collageView.hidden = YES;
+-	self.collageMoreLabel.hidden = YES;
+-	for (UIImageView *v in self.collageViews) {
+-		v.hidden = YES;
+-		v.image = nil;
++	if (_collageView) _collageView.hidden = YES;
++	if (_collageMoreLabel) _collageMoreLabel.hidden = YES;
++	if (_collageViews) {
++		for (UIImageView *v in _collageViews) {
++			v.hidden = YES;
++			v.image = nil;
++		}
+ 	}
+ 	self.onCollageItemTapped = nil;
+ 	self.onLinkTapped = nil;
+@@ -848,4 +895,357 @@ static const NSUInteger kMaxCustomEmojiViews = 3;
+ 	}
+ }
+ 
++#pragma mark - Lazy specialized subviews
++
++- (UIImageView *)artwork {
++	if (!_artwork) {
++		_artwork = [[UIImageView alloc] init];
++		_artwork.hidden = YES;
++		_artwork.contentMode = UIViewContentModeScaleAspectFill;
++		_artwork.clipsToBounds = YES;
++		_artwork.layer.cornerRadius = TGMetricCornerSmall;
++		[self.bubble addSubview:_artwork];
++	}
++	return _artwork;
++}
++
++- (UIImageView *)disc {
++	if (!_disc) {
++		_disc = [[UIImageView alloc] init];
++		_disc.hidden = YES;
++		[self.bubble addSubview:_disc];
++	}
++	return _disc;
++}
++
++- (UIImageView *)wave {
++	if (!_wave) {
++		_wave = [[UIImageView alloc] init];
++		_wave.hidden = YES;
++		[self.bubble addSubview:_wave];
++	}
++	return _wave;
++}
++
++- (UIImageView *)senderAvatar {
++	if (!_senderAvatar) {
++		_senderAvatar = [[UIImageView alloc] init];
++		_senderAvatar.layer.cornerRadius = TGHalf(TGMetricGroupAvatarSide);
++		_senderAvatar.hidden = YES;
++		[self.contentView addSubview:_senderAvatar];
++	}
++	return _senderAvatar;
++}
++
++- (UIView *)unreadDot {
++	if (!_unreadDot) {
++		_unreadDot = [[UIView alloc] init];
++		_unreadDot.hidden = YES;
++		_unreadDot.backgroundColor = [[TGTheme shared] accentColour];
++		[self.contentView addSubview:_unreadDot];
++	}
++	return _unreadDot;
++}
++
++- (UIImageView *)checkbox {
++	if (!_checkbox) {
++		_checkbox = [[UIImageView alloc] init];
++		_checkbox.hidden = YES;
++		_checkbox.contentMode = UIViewContentModeCenter;
++		[self.contentView addSubview:_checkbox];
++	}
++	return _checkbox;
++}
++
++- (TGLottieView *)lottie {
++	if (!_lottie) {
++		_lottie = [[TGLottieView alloc] initWithFrame:CGRectZero];
++		_lottie.hidden = YES;
++		[self.bubble addSubview:_lottie];
++	}
++	return _lottie;
++}
++
++- (UIView *)collageView {
++	if (!_collageView) {
++		_collageView = [[UIView alloc] init];
++		_collageView.hidden = YES;
++		_collageView.clipsToBounds = YES;
++		self.collageViews = [NSMutableArray arrayWithCapacity:4];
++		for (NSInteger i = 0; i < 4; i++) {
++			UIImageView *cv = [[UIImageView alloc] init];
++			cv.contentMode = UIViewContentModeScaleAspectFill;
++			cv.layer.cornerRadius = TGMetricCornerSmall;
++			cv.userInteractionEnabled = YES;
++			cv.tag = i;
++			UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(collageItemTapped:)];
++			[cv addGestureRecognizer:tap];
++			[self.collageViews addObject:cv];
++			[_collageView addSubview:cv];
++		}
++		[self.bubble addSubview:_collageView];
++	}
++	return _collageView;
++}
++
++- (UILabel *)collageMoreLabel {
++	if (!_collageMoreLabel) {
++		_collageMoreLabel = [[UILabel alloc] init];
++		_collageMoreLabel.textAlignment = NSTextAlignmentCenter;
++		_collageMoreLabel.textColor = [[TGTheme shared] onMediaColour];
++		_collageMoreLabel.font = TGFontHeader();
++		_collageMoreLabel.backgroundColor = [[TGTheme shared] mediaOverlayColour];
++		_collageMoreLabel.layer.cornerRadius = TGMetricCornerSmall;
++		_collageMoreLabel.clipsToBounds = YES;
++		_collageMoreLabel.hidden = YES;
++		[self.collageView addSubview:_collageMoreLabel];
++	}
++	return _collageMoreLabel;
++}
++
++- (UILabel *)captionLabel {
++	if (!_captionLabel) {
++		_captionLabel = [[UILabel alloc] init];
++		_captionLabel.numberOfLines = 0;
++		_captionLabel.lineBreakMode = NSLineBreakByWordWrapping;
++		_captionLabel.font = TGFontBody();
++		_captionLabel.backgroundColor = [UIColor clearColor];
++		_captionLabel.hidden = YES;
++		[self.bubble addSubview:_captionLabel];
++	}
++	return _captionLabel;
++}
++
++- (UILabel *)transcriptionLabel {
++	if (!_transcriptionLabel) {
++		_transcriptionLabel = [[UILabel alloc] init];
++		_transcriptionLabel.numberOfLines = 0;
++		_transcriptionLabel.lineBreakMode = NSLineBreakByWordWrapping;
++		_transcriptionLabel.font = TGFontSubhead();
++		_transcriptionLabel.backgroundColor = [UIColor clearColor];
++		_transcriptionLabel.hidden = YES;
++		[self.bubble addSubview:_transcriptionLabel];
++	}
++	return _transcriptionLabel;
++}
++
++- (UIImageView *)bubbleBack {
++	if (!_bubbleBack) {
++		_bubbleBack = [[UIImageView alloc] init];
++		_bubbleBack.userInteractionEnabled = NO;
++		_bubbleBack.hidden = YES;
++		[self.bubble insertSubview:_bubbleBack atIndex:0];
++	}
++	return _bubbleBack;
++}
++
++- (BOOL)hasSender { return _sender != nil; }
++- (BOOL)hasQuoteView { return _quoteView != nil; }
++- (BOOL)hasForwardLabel { return _forwardLabel != nil; }
++- (BOOL)hasTime { return _time != nil; }
++- (BOOL)hasTicks { return _ticks != nil; }
++- (BOOL)hasViewsEye { return _viewsEye != nil; }
++- (BOOL)hasStampPlate { return _stampPlate != nil; }
++
++- (UIImageView *)picture {
++	if (!_picture) {
++		_picture = [[UIImageView alloc] init];
++		_picture.contentMode = UIViewContentModeScaleAspectFill;
++		_picture.layer.borderColor = [[TGTheme shared] separatorColour].CGColor;
++		_picture.layer.borderWidth = TGMetricBorderNone;
++		_picture.layer.cornerRadius = TGMetricCornerSmall;
++		_picture.hidden = YES;
++		[self.bubble addSubview:_picture];
++	}
++	return _picture;
++}
++
++- (UILabel *)icon {
++	if (!_icon) {
++		_icon = [[UILabel alloc] init];
++		_icon.backgroundColor = [UIColor clearColor];
++		_icon.textAlignment = NSTextAlignmentCenter;
++		_icon.textColor = [[TGTheme shared] onAccentColour];
++		_icon.font = TGFontHeader();
++		_icon.hidden = YES;
++		[self.bubble addSubview:_icon];
++	}
++	return _icon;
++}
++
++- (UILabel *)subtitle {
++	if (!_subtitle) {
++		_subtitle = [[UILabel alloc] init];
++		_subtitle.font = TGFontCaption();
++		_subtitle.textColor = [[TGTheme shared] fileMetaColour];
++		_subtitle.backgroundColor = [UIColor clearColor];
++		_subtitle.hidden = YES;
++		[self.bubble addSubview:_subtitle];
++	}
++	return _subtitle;
++}
++
++- (UILabel *)sender {
++	if (!_sender) {
++		_sender = [[UILabel alloc] init];
++		_sender.font = TGFontMetaStrong();
++		_sender.lineBreakMode = NSLineBreakByTruncatingTail;
++		_sender.backgroundColor = [UIColor clearColor];
++		_sender.hidden = YES;
++		[self.bubble addSubview:_sender];
++	}
++	return _sender;
++}
++
++- (UILabel *)forwardLabel {
++	if (!_forwardLabel) {
++		_forwardLabel = [[UILabel alloc] init];
++		_forwardLabel.font = TGFontMeta();
++		_forwardLabel.backgroundColor = [UIColor clearColor];
++		_forwardLabel.hidden = YES;
++		[self.bubble addSubview:_forwardLabel];
++	}
++	return _forwardLabel;
++}
++
++- (TGQuoteView *)quoteView {
++	if (!_quoteView) {
++		_quoteView = [[TGQuoteView alloc] init];
++		_quoteView.hidden = YES;
++		UITapGestureRecognizer *qvTap = [[UITapGestureRecognizer alloc]
++				initWithTarget:self action:@selector(quoteTapped:)];
++		[_quoteView addGestureRecognizer:qvTap];
++		[self.bubble addSubview:_quoteView];
++	}
++	return _quoteView;
++}
++
++- (TGMessageStampView *)stampView {
++	if (!_stampView) {
++		_stampView = [[TGMessageStampView alloc] init];
++		_stampView.hidden = YES;
++		[self.bubble addSubview:_stampView];
++	}
++	return _stampView;
++}
++
++- (TGLinkPreviewView *)linkPreviewView {
++	if (!_linkPreviewView) {
++		_linkPreviewView = [[TGLinkPreviewView alloc] init];
++		_linkPreviewView.hidden = YES;
++		__weak typeof(self) weakCell = self;
++		_linkPreviewView.onTap = ^{
++			[weakCell linkPreviewTapped];
++		};
++		[self.bubble addSubview:_linkPreviewView];
++	}
++	return _linkPreviewView;
++}
++
++- (UIButton *)contactCallButton {
++	if (!_contactCallButton) {
++		_contactCallButton = [UIButton buttonWithType:UIButtonTypeCustom];
++		_contactCallButton.titleLabel.font = TGFontSubhead();
++		_contactCallButton.hidden = YES;
++		[_contactCallButton setTitle:@"Call" forState:UIControlStateNormal];
++		[_contactCallButton setTitleColor:[[TGTheme shared] accentColour] forState:UIControlStateNormal];
++		[self.bubble addSubview:_contactCallButton];
++	}
++	return _contactCallButton;
++}
++
++- (UIButton *)contactAddButton {
++	if (!_contactAddButton) {
++		_contactAddButton = [UIButton buttonWithType:UIButtonTypeCustom];
++		_contactAddButton.titleLabel.font = TGFontSubhead();
++		_contactAddButton.hidden = YES;
++		[_contactAddButton setTitle:@"Add" forState:UIControlStateNormal];
++		[_contactAddButton setTitleColor:[[TGTheme shared] accentColour] forState:UIControlStateNormal];
++		[self.bubble addSubview:_contactAddButton];
++	}
++	return _contactAddButton;
++}
++
++- (UIView *)contactSeparatorH {
++	if (!_contactSeparatorH) {
++		_contactSeparatorH = [[UIView alloc] init];
++		_contactSeparatorH.hidden = YES;
++		[self.bubble addSubview:_contactSeparatorH];
++	}
++	return _contactSeparatorH;
++}
++
++- (UIView *)contactSeparatorV {
++	if (!_contactSeparatorV) {
++		_contactSeparatorV = [[UIView alloc] init];
++		_contactSeparatorV.hidden = YES;
++		[self.bubble addSubview:_contactSeparatorV];
++	}
++	return _contactSeparatorV;
++}
++
++- (UIImageView *)tail {
++	if (!_tail) {
++		_tail = [[UIImageView alloc] init];
++		_tail.hidden = YES;
++		[self.contentView addSubview:_tail];
++	}
++	return _tail;
++}
++
++- (UIImageView *)ticks {
++	if (!_ticks) {
++		_ticks = [[UIImageView alloc] init];
++		_ticks.contentMode = UIViewContentModeScaleAspectFit;
++		_ticks.hidden = YES;
++		[self.bubble addSubview:_ticks];
++	}
++	return _ticks;
++}
++
++- (UILabel *)time {
++	if (!_time) {
++		_time = [[UILabel alloc] init];
++		_time.font = TGFontMicro();
++		_time.backgroundColor = [UIColor clearColor];
++		_time.textAlignment = NSTextAlignmentRight;
++		_time.hidden = YES;
++		[self.bubble addSubview:_time];
++	}
++	return _time;
++}
++
++- (UIImageView *)viewsEye {
++	if (!_viewsEye) {
++		_viewsEye = [[UIImageView alloc] init];
++		_viewsEye.hidden = YES;
++		[self.bubble addSubview:_viewsEye];
++	}
++	return _viewsEye;
++}
++
++- (UIView *)stampPlate {
++	if (!_stampPlate) {
++		_stampPlate = [[UIView alloc] init];
++		_stampPlate.layer.cornerRadius = TGMetricCornerControl;
++		_stampPlate.hidden = YES;
++		[self.bubble addSubview:_stampPlate];
++	}
++	return _stampPlate;
++}
++
++- (UILabel *)mediaStamp {
++	if (!_mediaStamp) {
++		_mediaStamp = [[UILabel alloc] init];
++		_mediaStamp.backgroundColor = [UIColor clearColor];
++		_mediaStamp.font = TGFontMicro();
++		_mediaStamp.textColor = [[TGTheme shared] onMediaColour];
++		_mediaStamp.textAlignment = NSTextAlignmentCenter;
++		_mediaStamp.layer.cornerRadius = TGMetricCornerControl;
++		_mediaStamp.hidden = YES;
++		[self.bubble addSubview:_mediaStamp];
++	}
++	return _mediaStamp;
++}
++
+ @end
+diff --git a/src/UI/Messages/TGMessageCellFactory.m b/src/UI/Messages/TGMessageCellFactory.m
+index 976593d6..29165d44 100644
+--- a/src/UI/Messages/TGMessageCellFactory.m
++++ b/src/UI/Messages/TGMessageCellFactory.m
+@@ -39,7 +39,11 @@
+ 				break;
+ 		}
+ 	}
+-	[(TGBubbleCell *)cell configureWithLayout:layout theme:[TGTheme shared]];
++	if ([cell isKindOfClass:TGMessageServiceCell.class]) {
++		[(TGMessageServiceCell *)cell configureWithLayout:layout theme:[TGTheme shared]];
++	} else {
++		[(TGBubbleCell *)cell configureWithLayout:layout theme:[TGTheme shared]];
++	}
+ 	return cell;
+ }
+ 
+diff --git a/src/UI/Messages/TGMessageDateHeaderCell.m b/src/UI/Messages/TGMessageDateHeaderCell.m
+index c2e26cb6..9669783b 100644
+--- a/src/UI/Messages/TGMessageDateHeaderCell.m
++++ b/src/UI/Messages/TGMessageDateHeaderCell.m
+@@ -10,7 +10,8 @@
+ 
+ - (void)configureWithLayout:(TGMessageLayout *)layout theme:(TGTheme *)theme {
+ 	[super configureWithLayout:layout theme:theme];
+-	self.body.font = TGFontMetaStrong();
++	self.plateView.font = TGFontMetaStrong();
++	[self.plateView setNeedsDisplay];
+ }
+ 
+ @end
+diff --git a/src/UI/Messages/TGMessageServiceCell.h b/src/UI/Messages/TGMessageServiceCell.h
+index 82a8821e..d6fe6c60 100644
+--- a/src/UI/Messages/TGMessageServiceCell.h
++++ b/src/UI/Messages/TGMessageServiceCell.h
+@@ -6,10 +6,29 @@
+ // paints them from the theme. The message list is an element family, not a
+ // TGRows row kind: a row here is a message.
+ //
+-#import "TGMessageBubbleCell.h"
++#import <UIKit/UIKit.h>
+ 
+ @class TGTheme;
++@class TGMessageLayout;
+ 
+-@interface TGMessageServiceCell : TGBubbleCell
++/// A single composite view that renders the service / date / unread plate and its text
++/// in one drawRect: pass. Consolidates background pill layer and label layer into 1.
++@interface TGServicePlateView : UIView
++
++@property (nonatomic, strong) UIColor *fillColor;
++@property (nonatomic, assign) CGFloat cornerRadius;
++@property (nonatomic, copy) NSString *text;
++@property (nonatomic, strong) UIColor *textColor;
++@property (nonatomic, strong) UIFont *font;
++
++- (void)reset;
++
++@end
++
++@interface TGMessageServiceCell : UITableViewCell
++
++@property (nonatomic, strong, readonly) TGServicePlateView *plateView;
++
++- (void)configureWithLayout:(TGMessageLayout *)layout theme:(TGTheme *)theme;
+ 
+ @end
+diff --git a/src/UI/Messages/TGMessageServiceCell.m b/src/UI/Messages/TGMessageServiceCell.m
+index 7c178c64..217385cc 100644
+--- a/src/UI/Messages/TGMessageServiceCell.m
++++ b/src/UI/Messages/TGMessageServiceCell.m
+@@ -5,26 +5,85 @@
+ #import "TGMessageLayout.h"
+ #import "TGStyle.h"
+ #import "TGTheme.h"
++#import <math.h>
++
++@implementation TGServicePlateView
++
++- (instancetype)initWithFrame:(CGRect)frame {
++	self = [super initWithFrame:frame];
++	if (self) {
++		self.backgroundColor = [UIColor clearColor];
++		self.opaque = NO;
++		self.userInteractionEnabled = NO;
++	}
++	return self;
++}
++
++- (void)reset {
++	self.fillColor = nil;
++	self.cornerRadius = TGMetricCornerNone;
++	self.text = nil;
++	self.textColor = nil;
++	self.font = nil;
++	self.frame = CGRectZero;
++}
++
++- (void)drawRect:(CGRect)rect {
++	(void)rect;
++	if (!self.fillColor || !self.text.length)
++		return;
++
++	CGRect bounds = self.bounds;
++	[self.fillColor setFill];
++	if (self.cornerRadius > TGMetricCornerNone) {
++		UIBezierPath *path = [UIBezierPath bezierPathWithRoundedRect:bounds cornerRadius:self.cornerRadius];
++		[path fill];
++	} else {
++		UIRectFill(bounds);
++	}
++
++	if (self.textColor && self.font) {
++		[self.textColor set];
++		CGFloat maxW = bounds.size.width;
++		CGSize textSize = [self.text sizeWithFont:self.font];
++		CGFloat w = MIN(ceilf(textSize.width), maxW);
++		CGFloat h = ceilf(textSize.height);
++		CGFloat x = floorf((maxW - w) * 0.5f);
++		CGFloat y = floorf((bounds.size.height - h) * 0.5f);
++		CGRect textRect = CGRectMake(x, y, w, h);
++		[self.text drawInRect:textRect withFont:self.font lineBreakMode:NSLineBreakByTruncatingTail alignment:NSTextAlignmentCenter];
++	}
++}
++
++@end
+ 
+ @implementation TGMessageServiceCell
+ 
++- (instancetype)initWithStyle:(UITableViewCellStyle)style reuseIdentifier:(NSString *)reuseIdentifier {
++	self = [super initWithStyle:style reuseIdentifier:reuseIdentifier];
++	if (self) {
++		self.backgroundColor = [UIColor clearColor];
++		self.selectionStyle = UITableViewCellSelectionStyleNone;
++		_plateView = [[TGServicePlateView alloc] initWithFrame:CGRectZero];
++		[self.contentView addSubview:_plateView];
++	}
++	return self;
++}
++
++- (void)prepareForReuse {
++	[super prepareForReuse];
++	[self.plateView reset];
++	[self.plateView setNeedsDisplay];
++}
++
+ - (void)configureWithLayout:(TGMessageLayout *)layout theme:(TGTheme *)theme {
+-	[self resetForReuse];
+-
+-	self.bubble.frame = layout.bubbleFrame;
+-	self.bubble.backgroundColor = [theme serviceBubbleColour];
+-	self.bubble.layer.borderWidth = TGMetricBorderNone;
+-	self.bubble.layer.cornerRadius = [theme bubbleCornerRadius];
+-
+-	self.picture.hidden = YES;
+-	self.time.text = @"";
+-	self.body.hidden = NO;
+-	self.body.numberOfLines = 1;
+-	self.body.font = TGFontMeta();
+-	self.body.textAlignment = NSTextAlignmentCenter;
+-	self.body.textColor = [theme serviceTextColour];
+-	self.body.text = layout.serviceText ?: @"";
+-	self.body.frame = layout.bodyFrame;
++	self.plateView.frame = layout.bubbleFrame;
++	self.plateView.fillColor = [theme serviceBubbleColour];
++	self.plateView.cornerRadius = [theme bubbleCornerRadius];
++	self.plateView.text = layout.serviceText ?: @"";
++	self.plateView.textColor = [theme serviceTextColour];
++	self.plateView.font = TGFontMeta();
++	[self.plateView setNeedsDisplay];
+ }
+ 
+ @end
+diff --git a/src/UI/Messages/TGMessageUnreadSeparatorCell.m b/src/UI/Messages/TGMessageUnreadSeparatorCell.m
+index 804846ed..303eeae6 100644
+--- a/src/UI/Messages/TGMessageUnreadSeparatorCell.m
++++ b/src/UI/Messages/TGMessageUnreadSeparatorCell.m
+@@ -10,10 +10,11 @@
+ 
+ - (void)configureWithLayout:(TGMessageLayout *)layout theme:(TGTheme *)theme {
+ 	[super configureWithLayout:layout theme:theme];
+-	self.bubble.backgroundColor = [theme unreadSeparatorColour];
+-	self.bubble.layer.cornerRadius = TGMetricCornerNone;
+-	self.body.font = TGFontCaptionStrong();
+-	self.body.textColor = [theme secondaryTextColour];
++	self.plateView.fillColor = [theme unreadSeparatorColour];
++	self.plateView.cornerRadius = TGMetricCornerNone;
++	self.plateView.font = TGFontCaptionStrong();
++	self.plateView.textColor = [theme secondaryTextColour];
++	[self.plateView setNeedsDisplay];
+ }
+ 
+ @end
+diff --git a/src/UI/Rows/TGChatRowCell.m b/src/UI/Rows/TGChatRowCell.m
+index dd05deff..650aef80 100644
+--- a/src/UI/Rows/TGChatRowCell.m
++++ b/src/UI/Rows/TGChatRowCell.m
+@@ -31,8 +31,121 @@ static const CGFloat kPinGlyph      = 16.0f;
+ static const CGFloat kBadgePad      = TGMetricPadMedium + TGMetricPadTiny;
+ /// Three buttons fit beside a 320 pt row without clipping.
+ static const CGFloat kSwipeActionWidth = 76.0f;
++static const CGFloat kOnlineDotSide = 15.0f;
++
++/// A single composite view that renders the date, delivery ticks, unread count badge,
++/// mention badge, and pinned icon in one drawRect: pass. Consolidates 5 CALayers into 1.
++@interface TGChatRowMetaView : UIView
++
++@property (nonatomic, strong) UIImage *tickImage;
++@property (nonatomic, assign) CGRect tickRect;
++
++@property (nonatomic, copy) NSString *dateText;
++@property (nonatomic, strong) UIFont *dateFont;
++@property (nonatomic, strong) UIColor *dateColor;
++@property (nonatomic, assign) CGRect dateRect;
++
++@property (nonatomic, strong) UIImage *pinImage;
++@property (nonatomic, assign) CGRect pinRect;
++
++@property (nonatomic, copy) NSString *badgeText;
++@property (nonatomic, strong) UIFont *badgeFont;
++@property (nonatomic, strong) UIColor *badgeTextColor;
++@property (nonatomic, strong) UIColor *badgeColor;
++@property (nonatomic, assign) CGRect badgeRect;
++
++@property (nonatomic, assign) BOOL hasMention;
++@property (nonatomic, strong) UIColor *mentionColor;
++@property (nonatomic, strong) UIColor *mentionTextColor;
++@property (nonatomic, assign) CGRect mentionRect;
++
++@property (nonatomic, strong) UIColor *separatorColor;
++@property (nonatomic, assign) CGRect separatorRect;
++
++- (void)reset;
++
++@end
++
++@implementation TGChatRowMetaView
++
++- (id)initWithFrame:(CGRect)frame {
++	self = [super initWithFrame:frame];
++	if (self) {
++		self.backgroundColor = [UIColor clearColor];
++		self.opaque = NO;
++		self.userInteractionEnabled = NO;
++	}
++	return self;
++}
++
++- (void)reset {
++	self.tickImage = nil;
++	self.tickRect = CGRectZero;
++	self.dateText = nil;
++	self.dateFont = nil;
++	self.dateColor = nil;
++	self.dateRect = CGRectZero;
++	self.pinImage = nil;
++	self.pinRect = CGRectZero;
++	self.badgeText = nil;
++	self.badgeFont = nil;
++	self.badgeTextColor = nil;
++	self.badgeColor = nil;
++	self.badgeRect = CGRectZero;
++	self.hasMention = NO;
++	self.mentionColor = nil;
++	self.mentionTextColor = nil;
++	self.mentionRect = CGRectZero;
++	self.separatorColor = nil;
++	self.separatorRect = CGRectZero;
++	[self setNeedsDisplay];
++}
++
++- (void)drawRect:(CGRect)rect {
++	[super drawRect:rect];
++	CGContextRef ctx = UIGraphicsGetCurrentContext();
++	if (self.separatorColor && !CGRectIsEmpty(self.separatorRect)) {
++		[self.separatorColor setFill];
++		UIRectFill(self.separatorRect);
++	}
++	if (self.tickImage && !CGRectIsEmpty(self.tickRect)) {
++		[self.tickImage drawInRect:self.tickRect];
++	}
++	if (self.dateText.length && !CGRectIsEmpty(self.dateRect)) {
++		if (ctx) {
++			CGContextSaveGState(ctx);
++			CGContextClipToRect(ctx, self.dateRect);
++		}
++		TGDrawText(self.dateText, self.dateRect, self.dateFont ?: TGFontSubhead(),
++				   self.dateColor ?: [UIColor grayColor], NSTextAlignmentRight, nil);
++		if (ctx)
++			CGContextRestoreGState(ctx);
++	}
++	if (self.pinImage && !CGRectIsEmpty(self.pinRect)) {
++		[self.pinImage drawInRect:self.pinRect];
++	}
++	if (self.badgeText.length && !CGRectIsEmpty(self.badgeRect)) {
++		UIBezierPath *p = [UIBezierPath bezierPathWithRoundedRect:self.badgeRect
++													 cornerRadius:TGHalf(self.badgeRect.size.height)];
++		[self.badgeColor setFill];
++		[p fill];
++		TGDrawText(self.badgeText, self.badgeRect, self.badgeFont ?: TGFontCaptionStrong(),
++				   self.badgeTextColor ?: [UIColor whiteColor], NSTextAlignmentCenter, nil);
++	}
++	if (self.hasMention && !CGRectIsEmpty(self.mentionRect)) {
++		UIBezierPath *p = [UIBezierPath bezierPathWithRoundedRect:self.mentionRect
++													 cornerRadius:TGHalf(self.mentionRect.size.height)];
++		[self.mentionColor setFill];
++		[p fill];
++		TGDrawText(@"@", self.mentionRect, self.badgeFont ?: TGFontCaptionStrong(),
++				   self.mentionTextColor ?: [UIColor whiteColor], NSTextAlignmentCenter, nil);
++	}
++}
++
++@end
+ 
+ @interface TGChatRowCell ()
++@property (nonatomic, strong) TGChatRowMetaView *metaView;
+ @property (nonatomic, strong) UIImageView *avatar;
+ @property (nonatomic, strong) UILabel *titleLabel;
+ @property (nonatomic, strong) UILabel *previewLabel;
+@@ -46,7 +159,6 @@ static const CGFloat kSwipeActionWidth = 76.0f;
+ @property (nonatomic, strong) UIImageView *statusIcon; // the emoji status after the title
+ @property (nonatomic, strong) UIImageView *lockIcon;   // a secret chat's padlock before it
+ @property (nonatomic, strong) UIImageView *muteIcon;   // beside the title of a muted chat
+-@property (nonatomic, strong) UIView *separator;   // starts under the text, not the picture
+ 
+ @property (nonatomic, strong) NSMutableArray *trailingActionButtons;
+ @property (nonatomic, assign) CGFloat trailingActionsWidth;
+@@ -192,13 +304,6 @@ static UIImage *TGChatRowStoryRingImage(CGSize side, UIColor *colour) {
+ 	self.avatar.backgroundColor = [UIColor clearColor];
+ 	[self.contentView addSubview:self.avatar];
+ 
+-	// Stories: a ring round the picture with a gap, unseen in the accent and
+-	// seen in grey (official ChatListItem avatar story ring, gradient dropped).
+-	CGFloat ringOut = TGMetricPadTiny + TGMetricBorderMedium;
+-	self.storyRing = [[UIImageView alloc] initWithFrame:CGRectInset(self.avatar.frame, -ringOut, -ringOut)];
+-	self.storyRing.hidden = YES;
+-	[self.contentView addSubview:self.storyRing];
+-
+ 	self.titleLabel = [[UILabel alloc] init];
+ 	// Clear, or iOS 6 paints the label's default white box.
+ 	self.titleLabel.backgroundColor = [UIColor clearColor];
+@@ -216,80 +321,79 @@ static UIImage *TGChatRowStoryRingImage(CGSize side, UIColor *colour) {
+ 	self.previewLabel.lineBreakMode = NSLineBreakByTruncatingTail;
+ 	[self.contentView addSubview:self.previewLabel];
+ 
++	self.metaView = [[TGChatRowMetaView alloc] init];
++	[self.contentView addSubview:self.metaView];
++
++	// Layout and measurement helpers: NOT added to contentView so backboardd
++	// has 0 CALayers allocated for them during table scroll.
+ 	self.dateLabel = [[UILabel alloc] init];
+-	// Clear, or iOS 6 paints the label's default white box.
+-	self.dateLabel.backgroundColor = [UIColor clearColor];
+ 	self.dateLabel.font = TGFontSubhead();
+ 	self.dateLabel.textColor = [theme listDateColour];
+-	self.dateLabel.textAlignment = NSTextAlignmentRight;
+-	[self.contentView addSubview:self.dateLabel];
+ 
+ 	self.badge = [[UILabel alloc] init];
+-	self.badge.font = TGFontCaptionStrong();
+-	self.badge.textColor = [[TGTheme shared] onAccentColour];
+-	self.badge.backgroundColor = [theme badgeColour];
+-	self.badge.textAlignment = NSTextAlignmentCenter;
+-	self.badge.layer.cornerRadius = TGHalf(TGMetricChatBadgeHeight);
+-	self.badge.clipsToBounds = YES;
+-
+-	self.badge.hidden = YES;
+-	[self.contentView addSubview:self.badge];
+-
+ 	self.mentionBadge = [[UILabel alloc] init];
+-	self.mentionBadge.text = @"@";
+-	self.mentionBadge.font = TGFontCaptionStrong();
+-	self.mentionBadge.textColor = [[TGTheme shared] onAccentColour];
+-	self.mentionBadge.backgroundColor = [theme accentColour];
+-	self.mentionBadge.textAlignment = NSTextAlignmentCenter;
+-	self.mentionBadge.layer.cornerRadius = TGHalf(TGMetricChatBadgeHeight);
+-	self.mentionBadge.clipsToBounds = YES;
+-	self.mentionBadge.hidden = YES;
+-	[self.contentView addSubview:self.mentionBadge];
+-
+-	CGFloat dot = 15;
+-	self.onlineDot = [[UIView alloc] initWithFrame:
+-			CGRectMake(kInset + kAvatar - dot, TGCenteredOrigin(kRowHeight, kAvatar) + kAvatar - dot, dot, dot)];
+-	self.onlineDot.backgroundColor = [theme onlineColour];
+-	self.onlineDot.layer.cornerRadius = TGHalf(dot);
+-	self.onlineDot.layer.borderWidth = TGMetricBorderThick;
+-	self.onlineDot.layer.borderColor = [theme listBackgroundColour].CGColor;
+-	self.onlineDot.hidden = YES;
+-	[self.contentView addSubview:self.onlineDot];
+-
+ 	self.tick = [[UIImageView alloc] init];
+-	self.tick.contentMode = UIViewContentModeScaleAspectFit;
+-	self.tick.hidden = YES;
+-	[self.contentView addSubview:self.tick];
+-
+ 	self.pin = [[UIImageView alloc] init];
+-	self.pin.contentMode = UIViewContentModeScaleAspectFit;
+-	self.pin.hidden = YES;
+-	[self.contentView addSubview:self.pin];
+ 
+-	self.statusIcon = [[UIImageView alloc] init];
+-	self.statusIcon.contentMode = UIViewContentModeScaleAspectFit;
+-	self.statusIcon.hidden = YES;
+-	[self.contentView addSubview:self.statusIcon];
++	// No disclosure arrow: a chat row is not a settings row.
++	self.accessoryType = UITableViewCellAccessoryNone;
++	return self;
++}
++
++- (UIImageView *)storyRing {
++	if (!_storyRing) {
++		CGFloat ringOut = TGMetricPadTiny + TGMetricBorderMedium;
++		_storyRing = [[UIImageView alloc] initWithFrame:CGRectInset(self.avatar.frame, -ringOut, -ringOut)];
++		_storyRing.hidden = YES;
++		[self.contentView insertSubview:_storyRing belowSubview:self.avatar];
++	}
++	return _storyRing;
++}
+ 
+-	self.lockIcon = [[UIImageView alloc] init];
+-	self.lockIcon.contentMode = UIViewContentModeScaleAspectFit;
+-	self.lockIcon.hidden = YES;
+-	[self.contentView addSubview:self.lockIcon];
++- (UIView *)onlineDot {
++	if (!_onlineDot) {
++		TGTheme *theme = [TGTheme shared];
++		CGFloat dot = kOnlineDotSide;
++		_onlineDot = [[UIView alloc] initWithFrame:
++				CGRectMake(kInset + kAvatar - dot, TGCenteredOrigin(kRowHeight, kAvatar) + kAvatar - dot, dot, dot)];
++		_onlineDot.backgroundColor = [theme onlineColour];
++		_onlineDot.layer.cornerRadius = TGHalf(dot);
++		_onlineDot.layer.borderWidth = TGMetricBorderThick;
++		_onlineDot.layer.borderColor = [theme listBackgroundColour].CGColor;
++		_onlineDot.hidden = YES;
++		[self.contentView addSubview:_onlineDot];
++	}
++	return _onlineDot;
++}
+ 
+-	self.muteIcon = [[UIImageView alloc] init];
+-	self.muteIcon.contentMode = UIViewContentModeScaleAspectFit;
+-	self.muteIcon.hidden = YES;
+-	[self.contentView addSubview:self.muteIcon];
++- (UIImageView *)muteIcon {
++	if (!_muteIcon) {
++		_muteIcon = [[UIImageView alloc] init];
++		_muteIcon.contentMode = UIViewContentModeScaleAspectFit;
++		_muteIcon.hidden = YES;
++		[self.contentView addSubview:_muteIcon];
++	}
++	return _muteIcon;
++}
+ 
+-	// The table's own separator runs under the picture and cannot be inset
+-	// before iOS 7, so the row draws its own.
+-	self.separator = [[UIView alloc] init];
+-	self.separator.backgroundColor = [theme separatorColour];
+-	[self.contentView addSubview:self.separator];
++- (UIImageView *)lockIcon {
++	if (!_lockIcon) {
++		_lockIcon = [[UIImageView alloc] init];
++		_lockIcon.contentMode = UIViewContentModeScaleAspectFit;
++		_lockIcon.hidden = YES;
++		[self.contentView addSubview:_lockIcon];
++	}
++	return _lockIcon;
++}
+ 
+-	// No disclosure arrow: a chat row is not a settings row.
+-	self.accessoryType = UITableViewCellAccessoryNone;
+-	return self;
++- (UIImageView *)statusIcon {
++	if (!_statusIcon) {
++		_statusIcon = [[UIImageView alloc] init];
++		_statusIcon.contentMode = UIViewContentModeScaleAspectFit;
++		_statusIcon.hidden = YES;
++		[self.contentView addSubview:_statusIcon];
++	}
++	return _statusIcon;
+ }
+ 
+ #pragma mark - row
+@@ -314,8 +418,13 @@ static UIImage *TGChatRowStoryRingImage(CGSize side, UIColor *colour) {
+ 	self.dateLabel.opaque = YES;
+ 	self.dateLabel.textColor = [theme listDateColour];
+ 	self.dateLabel.text = @"";
+-	self.onlineDot.layer.borderColor = bg.CGColor;
+-	self.separator.backgroundColor = [theme separatorColour];
++	if (_onlineDot) {
++		_onlineDot.layer.borderColor = bg.CGColor;
++		_onlineDot.hidden = YES;
++	}
++	if (_storyRing)
++		_storyRing.hidden = YES;
++	self.metaView.separatorColor = [theme separatorColour];
+ 	if ([theme isDark]) {
+ 		UIView *selection = [[UIView alloc] init];
+ 		selection.backgroundColor = [theme inputBarColour];
+@@ -324,15 +433,22 @@ static UIImage *TGChatRowStoryRingImage(CGSize side, UIColor *colour) {
+ 		self.selectedBackgroundView = nil;
+ 	}
+ 
+-	self.onlineDot.hidden = YES;
+ 	self.tick.hidden = YES;
+ 	self.tick.image = nil;
+-	self.muteIcon.hidden = YES;
+-	self.muteIcon.image = nil;
++	if (_muteIcon) {
++		_muteIcon.hidden = YES;
++		_muteIcon.image = nil;
++	}
+ 	self.pin.hidden = YES;
+ 	self.pin.image = nil;
+-	self.statusIcon.hidden = YES;
+-	self.statusIcon.image = nil;
++	if (_statusIcon) {
++		_statusIcon.hidden = YES;
++		_statusIcon.image = nil;
++	}
++	if (_lockIcon) {
++		_lockIcon.hidden = YES;
++		_lockIcon.image = nil;
++	}
+ 	self.mentionBadge.hidden = YES;
+ 	self.badge.hidden = YES;
+ 	self.badge.text = @"";
+@@ -348,9 +464,14 @@ static UIImage *TGChatRowStoryRingImage(CGSize side, UIColor *colour) {
+ 	int64_t statusId = saved ? 0
+ 			: [row[TGRowChatStatusEmojiId] longLongValue];
+ 	BOOL secret = [row[TGRowChatSecret] boolValue];
+-	self.lockIcon.hidden = !secret;
+-	self.lockIcon.image = secret ? [TGIcons glyphNamed:@"lock" colour:[theme onlineColour]
+-												  side:kMuteGlyph] : nil;
++	if (secret) {
++		self.lockIcon.hidden = NO;
++		self.lockIcon.image = [TGIcons glyphNamed:@"lock" colour:[theme onlineColour]
++											  side:kMuteGlyph];
++	} else if (_lockIcon) {
++		_lockIcon.hidden = YES;
++		_lockIcon.image = nil;
++	}
+ 	self.titleLabel.attributedText = TGNameWithStatus(title, statusId,
+ 			self.titleLabel.font, [self titleColour]);
+ 
+@@ -370,12 +491,21 @@ static UIImage *TGChatRowStoryRingImage(CGSize side, UIColor *colour) {
+ 			 customEmoji:row[TGRowChatCustomEmoji]];
+ 	}
+ 
+-	self.onlineDot.hidden = ![row[TGRowChatOnline] boolValue];
++	BOOL online = [row[TGRowChatOnline] boolValue];
++	if (online) {
++		self.onlineDot.hidden = NO;
++	} else if (_onlineDot) {
++		_onlineDot.hidden = YES;
++	}
++
+ 	NSInteger ring = [row[TGRowChatStoryRing] integerValue];
+-	self.storyRing.hidden = ring == 0;
+-	if (ring)
++	if (ring) {
++		self.storyRing.hidden = NO;
+ 		self.storyRing.image = TGChatRowStoryRingImage(self.storyRing.bounds.size,
+ 				ring == 2 ? [theme accentColour] : [theme secondaryTextColour]);
++	} else if (_storyRing) {
++		_storyRing.hidden = YES;
++	}
+ 
+ 	// Your own last message shows whether it has been read, beside the date.
+ 	// Saved Messages has no one to read it. A refused message takes the tick's
+@@ -392,11 +522,15 @@ static UIImage *TGChatRowStoryRingImage(CGSize side, UIColor *colour) {
+ 	}
+ 
+ 	BOOL muted = [row[TGRowChatMuted] boolValue];
+-	self.muteIcon.hidden = !muted;
+-	if (muted)
++	if (muted) {
++		self.muteIcon.hidden = NO;
+ 		self.muteIcon.image = [TGIcons glyphNamed:@"mute"
+ 										   colour:[theme listDateColour]
+ 											 side:kRowGlyph];
++	} else if (_muteIcon) {
++		_muteIcon.hidden = YES;
++		_muteIcon.image = nil;
++	}
+ 
+ 	NSInteger unread = [row[TGRowChatUnread] integerValue];
+ 	NSInteger mentions = [row[TGRowChatMentions] integerValue];
+@@ -470,6 +604,9 @@ static NSString *TGSafeEmojiFallback(NSString *emoji) {
+ 		return;
+ 	}
+ 
++	if (![TGCapabilities canRenderCustomEmoji])
++		customEmoji = nil;
++
+ 	BOOL undrawable = TGTextHasUndrawableEmoji(text);
+ 	self.previewLabel.font = TGFontBody();
+ 	if (!author.length && !undrawable && (!canUseAttachments || customEmoji.count == 0)) {
+@@ -630,45 +767,52 @@ static NSString *TGSafeEmojiFallback(NSString *emoji) {
+ 	// The first line: the date pinned to the right edge, the ticks before it,
+ 	// and the title taking whatever is left.
+ 	CGSize date = TGChatRowCellTextSize(self.dateLabel.text, self.dateLabel.font);
+-	self.dateLabel.frame = CGRectMake(right - ceilf(date.width), kFirstLineTop + TGMetricBorderWidth,
++	CGRect dateFrame = CGRectMake(right - ceilf(date.width), kFirstLineTop + TGMetricBorderWidth,
+ 			ceilf(date.width), TGMetricLineBody);
+-	CGFloat titleRight = CGRectGetMinX(self.dateLabel.frame) - TGMetricChatCellDateGap;
++	self.dateLabel.frame = dateFrame;
++	CGFloat titleRight = CGRectGetMinX(dateFrame) - TGMetricChatCellDateGap;
++	CGRect tickFrame = CGRectZero;
+ 	if (!self.tick.hidden) {
+-		self.tick.frame = CGRectMake(titleRight - TGMetricTicksWidth,
++		tickFrame = CGRectMake(titleRight - TGMetricTicksWidth,
+ 				kFirstLineTop + TGMetricPadSmall, TGMetricTicksWidth,
+ 				TGMetricTicksHeight);
++		self.tick.frame = tickFrame;
+ 		titleRight -= (TGMetricTicksWidth + TGMetricPadSmall);
+ 	}
+ 
+ 	// Title, then the status, then the mute glyph: the title gives way to both.
+-	CGFloat muteW = self.muteIcon.hidden ? 0 : kMuteRoom;
+-	CGFloat statusW = self.statusIcon.hidden ? 0 : kStatusRoom;
++	CGFloat muteW = (_muteIcon && !_muteIcon.hidden) ? kMuteRoom : 0;
++	CGFloat statusW = (_statusIcon && !_statusIcon.hidden) ? kStatusRoom : 0;
+ 	CGFloat titleLeft = kTextLeft;
+-	if (!self.lockIcon.hidden){
+-		self.lockIcon.frame = CGRectMake(kTextLeft, kFirstLineTop + TGMetricPadTiny,
++	if (_lockIcon && !_lockIcon.hidden){
++		_lockIcon.frame = CGRectMake(kTextLeft, kFirstLineTop + TGMetricPadTiny,
+ 				kMuteGlyph, kMuteGlyph);
+ 		titleLeft += kMuteRoom;
+ 	}
+ 	CGFloat titleRoom = MAX(0, titleRight - titleLeft - muteW - statusW);
+-	CGFloat textW = 0;
+-	if (self.titleLabel.attributedText.length > 0 && [self.titleLabel.attributedText respondsToSelector:@selector(boundingRectWithSize:options:context:)]) {
+-		CGRect r = [self.titleLabel.attributedText boundingRectWithSize:CGSizeMake(CGFLOAT_MAX, TGMetricLineRow)
+-															   options:NSStringDrawingUsesLineFragmentOrigin | NSStringDrawingUsesFontLeading
+-															   context:nil];
+-		textW = ceilf(r.size.width);
+-	} else {
+-		textW = ceilf(TGChatRowCellTextSize(self.titleLabel.text, self.titleLabel.font).width);
++	CGFloat titleW = titleRoom;
++	if (muteW > 0 || statusW > 0) {
++		CGFloat textW = 0;
++		if (self.titleLabel.attributedText.length > 0 && [self.titleLabel.attributedText respondsToSelector:@selector(boundingRectWithSize:options:context:)]) {
++			CGRect r = [self.titleLabel.attributedText boundingRectWithSize:CGSizeMake(titleRoom, TGMetricLineRow)
++															        options:NSStringDrawingUsesLineFragmentOrigin | NSStringDrawingUsesFontLeading
++															        context:nil];
++			textW = ceilf(r.size.width) + TGMetricPadSmall;
++		} else {
++			NSString *titleStr = self.titleLabel.text.length ? self.titleLabel.text : (self.row[TGRowTitle] ?: @"");
++			textW = ceilf(TGChatRowCellTextSize(titleStr, self.titleLabel.font).width) + TGMetricPadSmall;
++		}
++		titleW = MIN(textW, titleRoom);
+ 	}
+-	CGFloat titleW = MIN(textW, titleRoom);
+ 	self.titleLabel.frame = CGRectMake(titleLeft, kFirstLineTop, titleW, TGMetricLineRow);
+ 	CGFloat afterTitle = titleLeft + titleW + TGMetricBubbleRowInset;
+-	if (!self.statusIcon.hidden){
+-		self.statusIcon.frame = CGRectMake(afterTitle,
++	if (_statusIcon && !_statusIcon.hidden){
++		_statusIcon.frame = CGRectMake(afterTitle,
+ 				kFirstLineTop + TGCenteredOrigin(TGMetricLineRow, kStatusGlyph), kStatusGlyph, kStatusGlyph);
+ 		afterTitle += statusW;
+ 	}
+-	if (!self.muteIcon.hidden)
+-		self.muteIcon.frame = CGRectMake(afterTitle,
++	if (_muteIcon && !_muteIcon.hidden)
++		_muteIcon.frame = CGRectMake(afterTitle,
+ 				kFirstLineTop + TGMetricPadTiny, kMuteGlyph, kMuteGlyph);
+ 
+ 	// The second line: the unread count at the right edge, the pin beside it,
+@@ -684,14 +828,70 @@ static NSString *TGSafeEmojiFallback(NSString *emoji) {
+ 		self.mentionBadge.frame = accessories.mentionFrame;
+ 	CGFloat previewRight = accessories.previewRight;
+ 
++	// Flatten trailing accessories (date, ticks, badge, mentionBadge, pin) and hairline separator into self.metaView
++	CGFloat metaLeft = kTextLeft;
++	self.metaView.frame = CGRectMake(metaLeft, 0, w - metaLeft, h);
++
++	CGFloat hair = TGMetricHairline;
++	self.metaView.separatorColor = [[TGTheme shared] separatorColour];
++	self.metaView.separatorRect = CGRectMake(0, h - hair, w - metaLeft, hair);
++
++	self.metaView.dateText = self.dateLabel.text;
++	self.metaView.dateFont = TGFontSubhead();
++	self.metaView.dateColor = self.dateLabel.textColor;
++	self.metaView.dateRect = CGRectOffset(dateFrame, -metaLeft, 0);
++
++	if (!self.tick.hidden && self.tick.image) {
++		self.metaView.tickImage = self.tick.image;
++		self.metaView.tickRect = CGRectOffset(tickFrame, -metaLeft, 0);
++	} else {
++		self.metaView.tickImage = nil;
++		self.metaView.tickRect = CGRectZero;
++	}
++
++	if (!self.badge.hidden && self.badge.text.length) {
++		self.metaView.badgeText = self.badge.text;
++		self.metaView.badgeFont = TGFontCaptionStrong();
++		self.metaView.badgeColor = self.badge.backgroundColor;
++		self.metaView.badgeTextColor = self.badge.textColor;
++		self.metaView.badgeRect = CGRectOffset(accessories.badgeFrame, -metaLeft, 0);
++	} else {
++		self.metaView.badgeText = nil;
++		self.metaView.badgeRect = CGRectZero;
++	}
++
++	if (!self.pin.hidden && self.pin.image) {
++		self.metaView.pinImage = self.pin.image;
++		self.metaView.pinRect = CGRectOffset(accessories.pinFrame, -metaLeft, 0);
++	} else {
++		self.metaView.pinImage = nil;
++		self.metaView.pinRect = CGRectZero;
++	}
++
++	if (!self.mentionBadge.hidden) {
++		self.metaView.hasMention = YES;
++		self.metaView.mentionColor = self.mentionBadge.backgroundColor;
++		self.metaView.mentionTextColor = self.mentionBadge.textColor;
++		self.metaView.mentionRect = CGRectOffset(accessories.mentionFrame, -metaLeft, 0);
++	} else {
++		self.metaView.hasMention = NO;
++		self.metaView.mentionRect = CGRectZero;
++	}
++
++	[self.metaView setNeedsDisplay];
++
++	// Keep individual accessories hidden so CALayer skips compositing them
++	self.dateLabel.hidden = YES;
++	self.tick.hidden = YES;
++	self.badge.hidden = YES;
++	self.mentionBadge.hidden = YES;
++	self.pin.hidden = YES;
++
+ 	CGFloat previewW = MAX(0, previewRight - kTextLeft);
+ 	CGSize fit = [self.previewLabel sizeThatFits:CGSizeMake(previewW, kPreviewMax)];
+ 	self.previewLabel.frame = CGRectMake(kTextLeft, kSecondLineTop, previewW,
+ 			MIN(ceilf(fit.height), kPreviewMax - TGMetricPadTiny));
+ 
+-	CGFloat hair = TGMetricHairline;
+-	self.separator.frame = CGRectMake(kTextLeft, h - hair, w - kTextLeft, hair);
+-
+ 	// Layout trailing buttons along the right edge
+ 	if (self.trailingActionButtons.count){
+ 		CGFloat x = self.bounds.size.width - self.trailingActionsWidth;
+@@ -727,9 +927,13 @@ static NSString *TGSafeEmojiFallback(NSString *emoji) {
+ 	self.dateLabel.textColor = [theme listDateColour];
+ 	self.badge.backgroundColor = [theme badgeColour];
+ 	self.mentionBadge.backgroundColor = [theme accentColour];
+-	self.onlineDot.backgroundColor = [theme onlineColour];
+-	self.onlineDot.layer.borderColor = bg.CGColor;
+-	self.separator.backgroundColor = [theme separatorColour];
++	if (_onlineDot) {
++		_onlineDot.backgroundColor = [theme onlineColour];
++		_onlineDot.layer.borderColor = bg.CGColor;
++	}
++	self.metaView.separatorColor = [theme separatorColour];
++	self.metaView.dateColor = [theme listDateColour];
++	[self.metaView setNeedsDisplay];
+ }
+ 
+ - (CGFloat)swipeActionsWidth {
+@@ -936,31 +1140,43 @@ static NSString *TGSafeEmojiFallback(NSString *emoji) {
+ 	TGTheme *theme = [TGTheme shared];
+ 	if (selected) {
+ 		self.contentView.backgroundColor = [theme accentColour];
++		self.contentView.opaque = YES;
+ 		self.titleLabel.backgroundColor = [UIColor clearColor];
++		self.titleLabel.opaque = NO;
+ 		self.titleLabel.textColor = [UIColor whiteColor];
+ 		self.previewLabel.backgroundColor = [UIColor clearColor];
++		self.previewLabel.opaque = NO;
+ 		self.previewLabel.textColor = [UIColor whiteColor];
+ 		self.dateLabel.backgroundColor = [UIColor clearColor];
++		self.dateLabel.opaque = NO;
+ 		self.dateLabel.textColor = [UIColor whiteColor];
++		self.metaView.dateColor = [UIColor whiteColor];
+ 	} else {
+ 		BOOL pinnedRow = [self.row[TGRowChatPinned] boolValue];
+ 		UIColor *bg = pinnedRow ? [theme cardBackgroundColour] : [theme listBackgroundColour];
+ 		self.contentView.backgroundColor = bg;
++		self.contentView.opaque = YES;
+ 		self.titleLabel.backgroundColor = bg;
++		self.titleLabel.opaque = YES;
+ 		self.titleLabel.textColor = [self titleColour];
+ 		self.previewLabel.backgroundColor = bg;
++		self.previewLabel.opaque = YES;
+ 		self.previewLabel.textColor = [theme secondaryTextColour];
+ 		self.dateLabel.backgroundColor = bg;
++		self.dateLabel.opaque = YES;
+ 		self.dateLabel.textColor = [theme listDateColour];
++		self.metaView.dateColor = [theme listDateColour];
+ 	}
++	[self.metaView setNeedsDisplay];
+ }
+ 
+ - (void)prepareForReuse {
+ 	[super prepareForReuse];
+ 	[self closeSwipeActionsAnimated:NO];
++	[self.metaView reset];
+ 	self.row = nil;
+ 	self.hasAccessories = NO;
+-	self.dateLabel.hidden = NO;
++	self.dateLabel.hidden = YES;
+ }
+ 
+ @end
+diff --git a/src/UI/Rows/TGPeerRowCell.m b/src/UI/Rows/TGPeerRowCell.m
+index 70a5d1e3..70a09b40 100644
+--- a/src/UI/Rows/TGPeerRowCell.m
++++ b/src/UI/Rows/TGPeerRowCell.m
+@@ -63,11 +63,6 @@ static void TGPeerRowAppendVerified(NSMutableAttributedString *name, UIFont *fon
+ 	_faceView.clipsToBounds = YES;
+ 	[self.contentView addSubview:_faceView];
+ 
+-	_pinView = [[UIImageView alloc] initWithFrame:CGRectZero];
+-	_pinView.contentMode = UIViewContentModeScaleAspectFit;
+-	_pinView.hidden = YES;
+-	[self.contentView addSubview:_pinView];
+-
+ 	_nameLabel = [[UILabel alloc] initWithFrame:CGRectZero];
+ 	_nameLabel.font = TGFontRow();
+ 	_nameLabel.backgroundColor = [UIColor clearColor];
+@@ -82,42 +77,81 @@ static void TGPeerRowAppendVerified(NSMutableAttributedString *name, UIFont *fon
+ 	_subtitleLabel.numberOfLines = 1;
+ 	[self.contentView addSubview:_subtitleLabel];
+ 
+-	_trailingLabel = [[UILabel alloc] initWithFrame:CGRectZero];
+-	_trailingLabel.font = TGFontCaption();
+-	_trailingLabel.textAlignment = NSTextAlignmentRight;
+-	_trailingLabel.backgroundColor = [UIColor clearColor];
+-	[self.contentView addSubview:_trailingLabel];
+-
+-	_checkView = [[UIImageView alloc] initWithFrame:CGRectZero];
+-	_checkView.contentMode = UIViewContentModeCenter;
+-	_checkView.hidden = YES;
+-	[self.contentView addSubview:_checkView];
+-
+-	// iOS 6's own info glyph: official CallListCallItem has one per call.
+-	_infoButton = [UIButton buttonWithType:UIButtonTypeInfoDark];
+-	_infoButton.hidden = YES;
+-	[_infoButton addTarget:self action:@selector(infoTapped:)
+-		  forControlEvents:UIControlEventTouchUpInside];
+-	[self.contentView addSubview:_infoButton];
+-
+-	_chevronView = [[UIImageView alloc] initWithFrame:CGRectZero];
+-	_chevronView.contentMode = UIViewContentModeCenter;
+-	_chevronView.hidden = YES;
+-	[self.contentView addSubview:_chevronView];
+-
+-	_toggleSwitch = [[UISwitch alloc] initWithFrame:CGRectZero];
+-	_toggleSwitch.hidden = YES;
+-	[_toggleSwitch addTarget:self action:@selector(toggleChanged:)
+-			forControlEvents:UIControlEventValueChanged];
+-	[self.contentView addSubview:_toggleSwitch];
+-
+-	_badgeView = [TGBadge badgeWithCount:0];
+-	_badgeView.hidden = YES;
+-	[self.contentView addSubview:_badgeView];
+-
+ 	return self;
+ }
+ 
++- (UIImageView *)pinView {
++	if (!_pinView) {
++		_pinView = [[UIImageView alloc] initWithFrame:CGRectZero];
++		_pinView.contentMode = UIViewContentModeScaleAspectFit;
++		_pinView.hidden = YES;
++		[self.contentView addSubview:_pinView];
++	}
++	return _pinView;
++}
++
++- (UIImageView *)checkView {
++	if (!_checkView) {
++		_checkView = [[UIImageView alloc] initWithFrame:CGRectZero];
++		_checkView.contentMode = UIViewContentModeCenter;
++		_checkView.hidden = YES;
++		[self.contentView addSubview:_checkView];
++	}
++	return _checkView;
++}
++
++- (UIImageView *)chevronView {
++	if (!_chevronView) {
++		_chevronView = [[UIImageView alloc] initWithFrame:CGRectZero];
++		_chevronView.contentMode = UIViewContentModeCenter;
++		_chevronView.hidden = YES;
++		[self.contentView addSubview:_chevronView];
++	}
++	return _chevronView;
++}
++
++- (UISwitch *)toggleSwitch {
++	if (!_toggleSwitch) {
++		_toggleSwitch = [[UISwitch alloc] initWithFrame:CGRectZero];
++		_toggleSwitch.hidden = YES;
++		[_toggleSwitch addTarget:self action:@selector(toggleChanged:)
++				forControlEvents:UIControlEventValueChanged];
++		[self.contentView addSubview:_toggleSwitch];
++	}
++	return _toggleSwitch;
++}
++
++- (UIButton *)infoButton {
++	if (!_infoButton) {
++		_infoButton = [UIButton buttonWithType:UIButtonTypeInfoDark];
++		_infoButton.hidden = YES;
++		[_infoButton addTarget:self action:@selector(infoTapped:)
++			  forControlEvents:UIControlEventTouchUpInside];
++		[self.contentView addSubview:_infoButton];
++	}
++	return _infoButton;
++}
++
++- (TGBadge *)badgeView {
++	if (!_badgeView) {
++		_badgeView = [TGBadge badgeWithCount:0];
++		_badgeView.hidden = YES;
++		[self.contentView addSubview:_badgeView];
++	}
++	return _badgeView;
++}
++
++- (UILabel *)trailingLabel {
++	if (!_trailingLabel) {
++		_trailingLabel = [[UILabel alloc] initWithFrame:CGRectZero];
++		_trailingLabel.font = TGFontCaption();
++		_trailingLabel.textAlignment = NSTextAlignmentRight;
++		_trailingLabel.backgroundColor = [UIColor clearColor];
++		[self.contentView addSubview:_trailingLabel];
++	}
++	return _trailingLabel;
++}
++
+ - (void)prepareForReuse {
+ 	[super prepareForReuse];
+ 	self.row = nil;
+@@ -125,12 +159,13 @@ static void TGPeerRowAppendVerified(NSMutableAttributedString *name, UIFont *fon
+ 	self.switchToggleBlock = nil;
+ 	self.avatarPeer = 0;
+ 	self.faceView.image = nil;
+-	self.pinView.hidden = YES;
+-	self.checkView.hidden = YES;
+-	self.chevronView.hidden = YES;
+-	self.toggleSwitch.hidden = YES;
+-	self.badgeView.hidden = YES;
+-	self.trailingLabel.text = nil;
++	if (_pinView) _pinView.hidden = YES;
++	if (_checkView) _checkView.hidden = YES;
++	if (_chevronView) _chevronView.hidden = YES;
++	if (_toggleSwitch) _toggleSwitch.hidden = YES;
++	if (_badgeView) _badgeView.hidden = YES;
++	if (_infoButton) _infoButton.hidden = YES;
++	if (_trailingLabel) _trailingLabel.text = nil;
+ 	self.subtitleLabel.text = nil;
+ 	self.nameLabel.attributedText = nil;
+ 	self.accessoryView = nil;
+@@ -183,10 +218,15 @@ static void TGPeerRowAppendVerified(NSMutableAttributedString *name, UIFont *fon
+ 		self.subtitleLabel.text = nil;
+ 	}
+ 
+-	self.pinView.hidden = ![row[TGRowPin] boolValue];
+-	self.pinView.image = self.pinView.hidden ? nil
+-			: [TGIcons glyphNamed:@"pin" colour:[theme secondaryTextColour]
+-							side:TGMetricLineCaption];
++	BOOL pinned = [row[TGRowPin] boolValue];
++	if (pinned) {
++		self.pinView.hidden = NO;
++		self.pinView.image = [TGIcons glyphNamed:@"pin" colour:[theme secondaryTextColour]
++								side:TGMetricLineCaption];
++	} else if (_pinView) {
++		_pinView.hidden = YES;
++		_pinView.image = nil;
++	}
+ 
+ 	[self configureAccessory:row theme:theme];
+ 	[self configureBadge:row theme:theme];
+@@ -196,13 +236,17 @@ static void TGPeerRowAppendVerified(NSMutableAttributedString *name, UIFont *fon
+ 
+ - (void)configureAccessory:(NSDictionary *)row theme:(TGTheme *)theme {
+ 	NSString *accessory = row[TGRowAccessory];
+-	self.checkView.hidden = YES;
+-	self.chevronView.hidden = YES;
+-	self.toggleSwitch.hidden = YES;
+-	self.trailingLabel.text = nil;
++	if (_checkView) _checkView.hidden = YES;
++	if (_chevronView) _chevronView.hidden = YES;
++	if (_toggleSwitch) _toggleSwitch.hidden = YES;
++	if (_trailingLabel) _trailingLabel.text = nil;
+ 	self.switchToggleBlock = nil;
+ 	self.infoTapBlock = row[TGRowInfoTap];
+-	self.infoButton.hidden = self.infoTapBlock == nil;
++	if (self.infoTapBlock != nil) {
++		self.infoButton.hidden = NO;
++	} else if (_infoButton) {
++		_infoButton.hidden = YES;
++	}
+ 
+ 	BOOL check = [accessory isEqualToString:TGRowAccessoryCheck];
+ 	if (!accessory && row[TGRowChecked] != nil)
+@@ -240,17 +284,27 @@ static void TGPeerRowAppendVerified(NSMutableAttributedString *name, UIFont *fon
+ - (void)configureBadge:(NSDictionary *)row theme:(TGTheme *)theme {
+ 	id badge = row[TGRowBadge];
+ 	(void)theme;
++	BOOL hasBadge = NO;
+ 	if ([badge isKindOfClass:NSNumber.class]){
+-		self.badgeView.count = [badge integerValue];
++		NSInteger count = [badge integerValue];
++		if (count > 0) {
++			self.badgeView.count = count;
++			hasBadge = YES;
++		}
+ 	} else if ([badge isKindOfClass:NSString.class] && [badge length]){
+ 		self.badgeView.text = badge;
+-	} else {
+-		self.badgeView.text = nil;
++		hasBadge = YES;
++	}
++	if (hasBadge) {
++		self.badgeView.hidden = NO;
++		NSNumber *variant = row[TGRowBadgeVariant];
++		self.badgeView.variant = variant
++				? (TGBadgeVariant)[variant integerValue]
++				: TGBadgeVariantNotification;
++	} else if (_badgeView) {
++		_badgeView.hidden = YES;
++		_badgeView.text = nil;
+ 	}
+-	NSNumber *variant = row[TGRowBadgeVariant];
+-	self.badgeView.variant = variant
+-			? (TGBadgeVariant)[variant integerValue]
+-			: TGBadgeVariantNotification;
+ }
+ 
+ - (void)configureAvatar:(NSDictionary *)row {
+@@ -350,21 +404,21 @@ static void TGPeerRowAppendVerified(NSMutableAttributedString *name, UIFont *fon
+ 	}
+ 
+ 	CGFloat accessoryWidth = 0;
+-	if (!self.checkView.hidden)
++	if (_checkView && !_checkView.hidden)
+ 		accessoryWidth = MAX(accessoryWidth, TGMetricMenuGlyph);
+-	if (!self.chevronView.hidden)
++	if (_chevronView && !_chevronView.hidden)
+ 		accessoryWidth = MAX(accessoryWidth, TGMetricMenuGlyph);
+-	if (!self.toggleSwitch.hidden)
++	if (_toggleSwitch && !_toggleSwitch.hidden)
+ 		accessoryWidth = MAX(accessoryWidth, self.toggleSwitch.bounds.size.width);
+-	CGFloat infoSide = self.infoButton.hidden ? 0
++	CGFloat infoSide = (_infoButton == nil || _infoButton.hidden) ? 0
+ 			: self.infoButton.bounds.size.width;
+ 	CGFloat labelWidth = 0;
+-	if (self.trailingLabel.text.length)
++	if (_trailingLabel && _trailingLabel.text.length)
+ 		labelWidth = [self.trailingLabel sizeThatFits:
+ 				CGSizeMake(TGMetricCallLabelWidth, TGMetricLineCaption)].width;
+ 	accessoryWidth = MAX(accessoryWidth, TGPeerRowTrailingWidth(labelWidth, infoSide));
+ 	BOOL inlineBadge = [self.row[TGRowBadgeInline] boolValue];
+-	if (!self.badgeView.hidden && !inlineBadge){
++	if (_badgeView && !_badgeView.hidden && !inlineBadge){
+ 		CGSize size = [self.badgeView sizeThatFits:CGSizeZero];
+ 		accessoryWidth = MAX(accessoryWidth, size.width);
+ 	}
+@@ -385,36 +439,36 @@ static void TGPeerRowAppendVerified(NSMutableAttributedString *name, UIFont *fon
+ 				textWidth, subtitleHeight);
+ 	}
+ 
+-	if (!self.checkView.hidden){
++	if (_checkView && !_checkView.hidden){
+ 		CGFloat side = TGMetricMenuGlyph;
+ 		self.checkView.frame = CGRectMake(right - side,
+ 				TGCenteredOrigin(height, side), side, side);
+ 	}
+-	if (!self.chevronView.hidden){
++	if (_chevronView && !_chevronView.hidden){
+ 		CGFloat side = TGMetricMenuGlyph;
+ 		self.chevronView.frame = CGRectMake(right - side,
+ 				TGCenteredOrigin(height, side), side, side);
+ 	}
+-	if (!self.toggleSwitch.hidden){
++	if (_toggleSwitch && !_toggleSwitch.hidden){
+ 		CGSize size = self.toggleSwitch.bounds.size;
+ 		self.toggleSwitch.frame = CGRectMake(right - size.width,
+ 				TGCenteredOrigin(height, size.height), size.width, size.height);
+ 	}
+ 	CGFloat labelRight = right;
+-	if (!self.infoButton.hidden){
++	if (_infoButton && !_infoButton.hidden){
+ 		CGSize size = self.infoButton.bounds.size;
+ 		self.infoButton.frame = CGRectMake(right - size.width,
+ 				TGCenteredOrigin(height, size.height), size.width, size.height);
+ 		labelRight = right - size.width - TGMetricPadSmall;
+ 	}
+-	if (self.trailingLabel.text.length){
++	if (_trailingLabel && _trailingLabel.text.length){
+ 		CGSize size = [self.trailingLabel sizeThatFits:
+ 				CGSizeMake(TGMetricCallLabelWidth, TGMetricLineCaption)];
+ 		self.trailingLabel.frame = CGRectMake(labelRight - size.width, top,
+ 				size.width, TGMetricLineCaption);
+ 	}
+ 
+-	if (!self.badgeView.hidden){
++	if (_badgeView && !_badgeView.hidden){
+ 		CGSize size = [self.badgeView sizeThatFits:CGSizeZero];
+ 		if (inlineBadge){
+ 			CGSize nameSize = [self.nameLabel sizeThatFits:
+@@ -424,7 +478,7 @@ static void TGPeerRowAppendVerified(NSMutableAttributedString *name, UIFont *fon
+ 			self.badgeView.frame = CGRectMake(badgeX,
+ 					TGCenteredOrigin(height, size.height), size.width, size.height);
+ 		} else {
+-			CGFloat badgeY = self.trailingLabel.text.length
++			CGFloat badgeY = (_trailingLabel && _trailingLabel.text.length)
+ 					? CGRectGetMaxY(self.trailingLabel.frame) + TGMetricPadTiny
+ 					: TGCenteredOrigin(height, size.height);
+ 			self.badgeView.frame = CGRectMake(right - size.width, badgeY,
+diff --git a/src/Views/Icons/TGIcons+Avatars.m b/src/Views/Icons/TGIcons+Avatars.m
+index c7060861..24bc2c7e 100644
+--- a/src/Views/Icons/TGIcons+Avatars.m
++++ b/src/Views/Icons/TGIcons+Avatars.m
+@@ -2,12 +2,18 @@
+ #import "TGTextDraw.h"
+ #import "TGIconsInternal.h"
+ #import "TGStyle.h"
++#import "TGDevice.h"
+ #import <ImageIO/ImageIO.h>
+ #import <objc/runtime.h>
+ 
+ #pragma mark - avatars
+ 
+ static char kTGAvatarPathKey;
++static NSCache *sTGAvatarCache = nil;
++
++void TGIconsClearAvatarCaches(void) {
++	[sTGAvatarCache removeAllObjects];
++}
+ 
+ static UIImage *TGGlyphAvatar(CGFloat side, void (^draw)(CGContextRef ctx, CGFloat s)) {
+ 	UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), NO, 0);
+@@ -105,15 +111,21 @@ static UIImage *TGGlyphAvatar(CGFloat side, void (^draw)(CGContextRef ctx, CGFlo
+                            size:(CGFloat)size
+                        colourId:(int64_t)colourId
+ {
+-	static NSCache *avatarCache = nil;
+ 	static dispatch_once_t onceToken;
+ 	dispatch_once(&onceToken, ^{
+-		avatarCache = [[NSCache alloc] init];
+-		avatarCache.countLimit = 200; // Keep up to 200 avatars in memory
++		sTGAvatarCache = [[NSCache alloc] init];
++		TGDeviceTier tier = [TGDevice tier];
++		sTGAvatarCache.countLimit = (tier == TGDeviceTierVintage) ? 30 : ((tier == TGDeviceTierLegacy) ? 60 : 150);
++		[[NSNotificationCenter defaultCenter] addObserverForName:@"UIApplicationDidReceiveMemoryWarningNotification"
++		                                                  object:nil
++		                                                   queue:[NSOperationQueue mainQueue]
++		                                              usingBlock:^(NSNotification *note) {
++			[sTGAvatarCache removeAllObjects];
++		}];
+ 	});
+ 
+ 	NSString *cacheKey = [NSString stringWithFormat:@"%@_%.1f_%lld", initials ?: @"?", size, colourId];
+-	UIImage *cached = [avatarCache objectForKey:cacheKey];
++	UIImage *cached = [sTGAvatarCache objectForKey:cacheKey];
+ 	if (cached) return cached;
+ 
+ 	// Telegram's own placeholder colours, and its own mapping: the palette is
+@@ -159,12 +171,18 @@ static UIImage *TGGlyphAvatar(CGFloat side, void (^draw)(CGContextRef ctx, CGFlo
+ 	UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+ 	UIGraphicsEndImageContext();
+ 	
+-	if (image) [avatarCache setObject:image forKey:cacheKey];
++	if (image) [sTGAvatarCache setObject:image forKey:cacheKey];
+ 	return image;
+ }
+ 
+-/// Pre-decodes image onto offscreen bitmap context and scales to target size using ImageIO DCT downsampling.
+-#define TGDECODE_MAX_PIXEL 1024.0f
++static CGFloat TGDecodeMaxPixel(void) {
++	TGDeviceTier tier = [TGDevice tier];
++	if (tier == TGDeviceTierVintage)
++		return 640.0f;
++	if (tier == TGDeviceTierLegacy)
++		return 800.0f;
++	return 1024.0f;
++}
+ 
+ + (UIImage *)decodedImage:(UIImage *)image
+ 			  fittingSize:(CGSize)target
+@@ -208,7 +226,8 @@ static UIImage *TGGlyphAvatar(CGFloat side, void (^draw)(CGContextRef ctx, CGFlo
+ 
+ 					if (maxPixelSize < 1.0f) maxPixelSize = 1.0f;
+ 					// Same device cap as the from-file decode.
+-					if (maxPixelSize > TGDECODE_MAX_PIXEL) maxPixelSize = TGDECODE_MAX_PIXEL;
++					CGFloat maxCap = TGDecodeMaxPixel();
++					if (maxPixelSize > maxCap) maxPixelSize = maxCap;
+ 
+ 					NSDictionary *options = @{
+ 						(id)kCGImageSourceCreateThumbnailFromImageAlways : @YES,
+diff --git a/src/Views/Icons/TGIcons.m b/src/Views/Icons/TGIcons.m
+index 94bb7316..33396161 100644
+--- a/src/Views/Icons/TGIcons.m
++++ b/src/Views/Icons/TGIcons.m
+@@ -122,7 +122,9 @@ static NSCache *TGEmojiGlyphCache(void) {
+ 
+ + (void)flush {
+ 	[sCache removeAllObjects];
++	[TGEmojiGlyphCache() removeAllObjects];
+ 	TGIconsClearSettingsIconCache();
++	TGIconsClearAvatarCaches();
+ }
+ 
+ BOOL TGIconAddPath(CGContextRef ctx, const char *name, CGRect box) {
+diff --git a/src/Views/Icons/TGIconsInternal.h b/src/Views/Icons/TGIconsInternal.h
+index b5654ec2..fabb698d 100644
+--- a/src/Views/Icons/TGIconsInternal.h
++++ b/src/Views/Icons/TGIconsInternal.h
+@@ -5,6 +5,7 @@
+ UIImage *TGIconsGetCached(NSString *key);
+ void TGIconsSetCached(NSString *key, UIImage *img);
+ void TGIconsClearSettingsIconCache(void);
++void TGIconsClearAvatarCaches(void);
+ 
+ /// One weight for the whole line-art family. The set was drawn at ten
+ /// different widths - 1.3 through 5.0 - and send sat next to attach in the
+diff --git a/tests/TGClientAppearanceDiagnosticsTests.m b/tests/TGClientAppearanceDiagnosticsTests.m
+index d696020c..5877f1c9 100644
+--- a/tests/TGClientAppearanceDiagnosticsTests.m
++++ b/tests/TGClientAppearanceDiagnosticsTests.m
+@@ -14,6 +14,10 @@
+ #import "TGStoreTestSupport.h"
+ #import "TGSettingsStore.h"
+ #import "TGDownloadStore.h"
++#import "TGCapabilities.h"
++#import "TGUpdateRouter.h"
++#import "TGMediaStore.h"
++#import "TGTransport.h"
+ 
+ @interface TGClientAppearanceDiagnosticsTests : XCTestCase @end
+ 
+@@ -600,4 +604,118 @@ static NSDictionary *ADBackground(void) {
+ 	XCTAssertEqual([TGDatabaseKey currentKey].length, (NSUInteger)32);
+ }
+ 
++- (void)testDecryptDatabase_SendsEmptyKeyAndClearsKeychain {
++	TGClient *c = ADClient();
++	NSData *key = [@"active-key" dataUsingEncoding:NSUTF8StringEncoding];
++	[TGDatabaseKey storeKey:key error:nil];
++	__block BOOL done = NO;
++	__block NSString *err = nil;
++	[[TGSettingsStore shared] decryptDatabaseWithCompletion:^(BOOL ok, NSString *why){
++		done = ok;
++		err = why;
++	}];
++	XCTAssertEqual(ADCount(c, @"setDatabaseEncryptionKey"), (NSUInteger)1);
++	XCTAssertEqualObjects(ADLast(c, @"setDatabaseEncryptionKey")[@"new_encryption_key"], @"");
++	ADAnswer(c, @"setDatabaseEncryptionKey", @{@"@type" : @"ok"});
++	XCTAssertTrue(done);
++	XCTAssertNil(err);
++	XCTAssertNil([TGDatabaseKey currentKey]);
++	XCTAssertFalse([[TGSettingsStore shared] databaseEncryptionKeyIsSet]);
++}
++
++- (void)testDatabaseDecryption_VintageTierAutomaticallyDecryptsOnReady {
++	TGClient *c = ADClient();
++	NSData *key = [@"existing-2.0-key" dataUsingEncoding:NSUTF8StringEncoding];
++	[TGDatabaseKey storeKey:key error:nil];
++	[TGCapabilities setDatabaseEncryptionWanted:NO];
++
++	[c handleAuthState:@{@"@type" : @"authorizationStateWaitTdlibParameters"}];
++	XCTAssertEqualObjects(ADLast(c, @"setTdlibParameters")[@"database_encryption_key"],
++			TGBase64Encode(key));
++
++	[c handleAuthState:@{@"@type" : @"authorizationStateReady"}];
++	XCTAssertEqualObjects(ADLast(c, @"setDatabaseEncryptionKey")[@"new_encryption_key"], @"");
++	ADAnswer(c, @"setDatabaseEncryptionKey", @{@"@type" : @"ok"});
++	XCTAssertNil([TGDatabaseKey currentKey]);
++
++	[NSUserDefaults.standardUserDefaults removeObjectForKey:@"TGWantDatabaseEncryption"];
++}
++
++- (void)testUpdateRouter_HoldingUpdatesDuringScroll {
++	TGUpdateRouter *router = [TGUpdateRouter shared];
++	[router reset];
++	void (^savedOnUpdate)(NSDictionary *) = router.onUpdate;
++	__block NSInteger updateCount = 0;
++	router.onUpdate = ^(NSDictionary *obj){
++		updateCount++;
++	};
++
++	[router setUpdatesHeld:YES];
++	[router routeBatch:@[
++		@{@"@type" : @"updateChatDraftMessage", @"chat_id" : @123},
++		@{@"@type" : @"updateChatDraftMessage", @"chat_id" : @456}
++	]];
++	XCTAssertEqual(updateCount, (NSInteger)0);
++
++	[router setUpdatesHeld:NO];
++	XCTAssertEqual(updateCount, (NSInteger)2);
++	router.onUpdate = savedOnUpdate;
++}
++
++- (void)testCapabilities_PerformanceToggles {
++	[TGCapabilities setCustomEmojiWanted:NO];
++	XCTAssertFalse([TGCapabilities customEmojiWanted]);
++	XCTAssertFalse([TGCapabilities canRenderCustomEmoji]);
++	[TGCapabilities setCustomEmojiWanted:YES];
++	XCTAssertTrue([TGCapabilities customEmojiWanted]);
++
++	[TGCapabilities setChatThumbnailsWanted:NO];
++	XCTAssertFalse([TGCapabilities chatThumbnailsWanted]);
++	[TGCapabilities setChatThumbnailsWanted:YES];
++	XCTAssertTrue([TGCapabilities chatThumbnailsWanted]);
++
++	[TGCapabilities setPauseUpdatesDuringScrollWanted:NO];
++	XCTAssertFalse([TGCapabilities pauseUpdatesDuringScrollWanted]);
++	[TGCapabilities setPauseUpdatesDuringScrollWanted:YES];
++	XCTAssertTrue([TGCapabilities pauseUpdatesDuringScrollWanted]);
++
++	[TGCapabilities setGroupAvatarsWanted:NO];
++	XCTAssertFalse([TGCapabilities groupAvatarsWanted]);
++	[TGCapabilities setGroupAvatarsWanted:YES];
++	XCTAssertTrue([TGCapabilities groupAvatarsWanted]);
++
++	[TGCapabilities setSkeuomorphicChromeWanted:NO];
++	XCTAssertFalse([TGCapabilities skeuomorphicChromeWanted]);
++	[TGCapabilities setSkeuomorphicChromeWanted:YES];
++	XCTAssertTrue([TGCapabilities skeuomorphicChromeWanted]);
++
++	[NSUserDefaults.standardUserDefaults removeObjectForKey:@"TGWantCustomEmoji"];
++	[NSUserDefaults.standardUserDefaults removeObjectForKey:@"TGWantChatThumbnails"];
++	[NSUserDefaults.standardUserDefaults removeObjectForKey:@"TGWantGroupAvatars"];
++	[NSUserDefaults.standardUserDefaults removeObjectForKey:@"TGWantSkeuomorphicChrome"];
++	[NSUserDefaults.standardUserDefaults removeObjectForKey:@"TGWantPauseUpdatesDuringScroll"];
++
++	NSInteger pageLimit = [TGCapabilities chatHistoryPageLimit];
++	XCTAssertTrue(pageLimit == 20 || pageLimit == 30 || pageLimit == 60);
++
++	NSUInteger windowLimit = [TGCapabilities chatMessageWindowLimit];
++	XCTAssertTrue(windowLimit == 50 || windowLimit == 100 || windowLimit == 250);
++}
++
++- (void)testTGMediaStore_BufferLimitRespectsTierAndClearsOnMemoryWarning {
++	TGMediaStore *store = [TGMediaStore shared];
++	NSData *sample = [@"media-payload" dataUsingEncoding:NSUTF8StringEncoding];
++	[store cacheBuffer:sample forFileId:98765];
++	XCTAssertEqualObjects([store cachedBufferForFileId:98765], sample);
++
++	[[NSNotificationCenter defaultCenter] postNotificationName:@"UIApplicationDidReceiveMemoryWarningNotification"
++	                                                    object:nil];
++	XCTAssertNil([store cachedBufferForFileId:98765]);
++}
++
++- (void)testTGTransport_TrimMemoryExecutesWithoutError {
++	[[TGTransport shared] trimMemory];
++	XCTAssertTrue(YES);
++}
++
+ @end
+diff --git a/tests/TGMessageStreamStoreTests.m b/tests/TGMessageStreamStoreTests.m
+index 031c1509..79c41d62 100644
+--- a/tests/TGMessageStreamStoreTests.m
++++ b/tests/TGMessageStreamStoreTests.m
+@@ -91,4 +91,46 @@
+ 	XCTAssertFalse(removedNonExistent);
+ }
+ 
++- (void)testTrimNewerToLimit {
++	TGMessageStreamStore *store = [[TGMessageStreamStore alloc] init];
++	[store resetWithMessages:@[
++		@{@"id": @(10), @"text": @"1"},
++		@{@"id": @(20), @"text": @"2"},
++		@{@"id": @(30), @"text": @"3"},
++		@{@"id": @(40), @"text": @"4"}
++	]];
++
++	NSUInteger removed = [store trimNewerToLimit:2];
++	XCTAssertEqual((NSUInteger)2, removed);
++	XCTAssertEqual((NSUInteger)2, store.count);
++	XCTAssertEqual((int64_t)10, store.oldestMessageId);
++	XCTAssertEqual((int64_t)20, store.newestMessageId);
++	XCTAssertTrue([store containsMessageId:10]);
++	XCTAssertTrue([store containsMessageId:20]);
++	XCTAssertFalse([store containsMessageId:30]);
++	XCTAssertFalse([store containsMessageId:40]);
++	XCTAssertFalse(store.reachedEnd);
++}
++
++- (void)testTrimOlderToLimit {
++	TGMessageStreamStore *store = [[TGMessageStreamStore alloc] init];
++	[store resetWithMessages:@[
++		@{@"id": @(10), @"text": @"1"},
++		@{@"id": @(20), @"text": @"2"},
++		@{@"id": @(30), @"text": @"3"},
++		@{@"id": @(40), @"text": @"4"}
++	]];
++
++	NSUInteger removed = [store trimOlderToLimit:2];
++	XCTAssertEqual((NSUInteger)2, removed);
++	XCTAssertEqual((NSUInteger)2, store.count);
++	XCTAssertEqual((int64_t)30, store.oldestMessageId);
++	XCTAssertEqual((int64_t)40, store.newestMessageId);
++	XCTAssertFalse([store containsMessageId:10]);
++	XCTAssertFalse([store containsMessageId:20]);
++	XCTAssertTrue([store containsMessageId:30]);
++	XCTAssertTrue([store containsMessageId:40]);
++	XCTAssertFalse(store.reachedStart);
++}
++
+ @end

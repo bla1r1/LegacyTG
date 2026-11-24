@@ -8,6 +8,8 @@
 #import "TGRows.h"
 #import "TGRowCell.h"
 #import "TGAccountStore.h"
+#import "TGSettingsStore.h"
+#import "TGDatabaseKey.h"
 
 
 @interface TGDeviceViewController ()
@@ -51,6 +53,87 @@
 		TGTapRow(TGLocalized(@"Device Tier"), [TGDevice tierName], nil),
 	])];
 
+	__weak typeof(self) weakSelf = self;
+	NSMutableArray *tuningRows = [NSMutableArray array];
+
+	[tuningRows addObject:TGSwitchRow(TGLocalized(@"Database Encryption"),
+			[TGCapabilities databaseEncryptionWanted], ^(BOOL on){
+		[TGCapabilities setDatabaseEncryptionWanted:on];
+		if (on){
+			NSData *newKey = [TGDatabaseKey ensureKey];
+			[[TGSettingsStore shared] setDatabaseEncryptionKey:newKey
+					completion:^(BOOL ok, NSString *error){
+				if (!ok){
+					[TGCapabilities setDatabaseEncryptionWanted:NO];
+					[TGAlertSheet showMessage:(error ?: @"Could not encrypt database.")
+										title:TGLocalized(@"Database Encryption")
+									   inView:weakSelf.view];
+				}
+				[weakSelf rebuildSections];
+			}];
+		} else {
+			[[TGSettingsStore shared] decryptDatabaseWithCompletion:^(BOOL ok, NSString *error){
+				if (!ok){
+					[TGCapabilities setDatabaseEncryptionWanted:YES];
+					[TGAlertSheet showMessage:(error ?: @"Could not decrypt database.")
+										title:TGLocalized(@"Database Encryption")
+									   inView:weakSelf.view];
+				}
+				[weakSelf rebuildSections];
+			}];
+		}
+	})];
+
+	[tuningRows addObject:TGSwitchRow(TGLocalized(@"Custom Emoji"),
+			[TGCapabilities customEmojiWanted], ^(BOOL on){
+		[TGCapabilities setCustomEmojiWanted:on];
+		[weakSelf rebuildSections];
+	})];
+
+	[tuningRows addObject:TGSwitchRow(TGLocalized(@"Chat List Thumbnails"),
+			[TGCapabilities chatThumbnailsWanted], ^(BOOL on){
+		[TGCapabilities setChatThumbnailsWanted:on];
+		[weakSelf rebuildSections];
+	})];
+
+	[tuningRows addObject:TGSwitchRow(TGLocalized(@"Group Chat Avatars"),
+			[TGCapabilities groupAvatarsWanted], ^(BOOL on){
+		[TGCapabilities setGroupAvatarsWanted:on];
+		[weakSelf rebuildSections];
+	})];
+
+	[tuningRows addObject:TGSwitchRow(TGLocalized(@"Pause Updates on Scroll"),
+			[TGCapabilities pauseUpdatesDuringScrollWanted], ^(BOOL on){
+		[TGCapabilities setPauseUpdatesDuringScrollWanted:on];
+		[weakSelf rebuildSections];
+	})];
+
+	[tuningRows addObject:TGSwitchRow(TGLocalized(@"Chat Wallpaper"),
+			[TGCapabilities wallpaperWanted], ^(BOOL on){
+		[TGCapabilities setWallpaperWanted:on];
+		[weakSelf rebuildSections];
+	})];
+
+	[tuningRows addObject:TGSwitchRow(TGLocalized(@"GIF Autoplay"),
+			[TGCapabilities gifAutoplayWanted], ^(BOOL on){
+		[TGCapabilities setGifAutoplayWanted:on];
+		[weakSelf rebuildSections];
+	})];
+
+	if (NSFoundationVersionNumber <= NSFoundationVersionNumber_iOS_6_1) {
+		[tuningRows addObject:TGSwitchRow(TGLocalized(@"Skeuomorphic Chrome"),
+				[TGCapabilities skeuomorphicChromeWanted], ^(BOOL on){
+			[TGCapabilities setSkeuomorphicChromeWanted:on];
+			[[NSNotificationCenter defaultCenter] postNotificationName:TGThemeChangedNotification object:nil];
+			[weakSelf rebuildSections];
+		})];
+	}
+
+	[sections addObject:TGSection(TGSettingsHeaderText(@"PERFORMANCE & TUNING"),
+			TGLocalized(@"Disable heavy features to reduce memory pressure and eliminate scroll stutter on older hardware."),
+			tuningRows)];
+
+	self.capabilities = [TGCapabilities all];
 	NSMutableArray *featureRows = [NSMutableArray array];
 	for (TGCapability *capability in self.capabilities){
 		NSMutableDictionary *row = [TGDeviceCapabilityRowModel(capability.name,
@@ -62,7 +145,6 @@
 	[sections addObject:TGSection(TGSettingsHeaderText(@"FEATURES"), nil,
 			featureRows)];
 
-	__weak typeof(self) weakSelf = self;
 	[sections addObject:TGSection(nil, nil, @[
 		TGCentredDestructiveRow(TGLocalized(@"Log out"), ^{
 			[TGAlertSheet showConfirm:

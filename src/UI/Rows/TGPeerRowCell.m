@@ -63,11 +63,6 @@ static void TGPeerRowAppendVerified(NSMutableAttributedString *name, UIFont *fon
 	_faceView.clipsToBounds = YES;
 	[self.contentView addSubview:_faceView];
 
-	_pinView = [[UIImageView alloc] initWithFrame:CGRectZero];
-	_pinView.contentMode = UIViewContentModeScaleAspectFit;
-	_pinView.hidden = YES;
-	[self.contentView addSubview:_pinView];
-
 	_nameLabel = [[UILabel alloc] initWithFrame:CGRectZero];
 	_nameLabel.font = TGFontRow();
 	_nameLabel.backgroundColor = [UIColor clearColor];
@@ -82,40 +77,79 @@ static void TGPeerRowAppendVerified(NSMutableAttributedString *name, UIFont *fon
 	_subtitleLabel.numberOfLines = 1;
 	[self.contentView addSubview:_subtitleLabel];
 
-	_trailingLabel = [[UILabel alloc] initWithFrame:CGRectZero];
-	_trailingLabel.font = TGFontCaption();
-	_trailingLabel.textAlignment = NSTextAlignmentRight;
-	_trailingLabel.backgroundColor = [UIColor clearColor];
-	[self.contentView addSubview:_trailingLabel];
-
-	_checkView = [[UIImageView alloc] initWithFrame:CGRectZero];
-	_checkView.contentMode = UIViewContentModeCenter;
-	_checkView.hidden = YES;
-	[self.contentView addSubview:_checkView];
-
-	// iOS 6's own info glyph: official CallListCallItem has one per call.
-	_infoButton = [UIButton buttonWithType:UIButtonTypeInfoDark];
-	_infoButton.hidden = YES;
-	[_infoButton addTarget:self action:@selector(infoTapped:)
-		  forControlEvents:UIControlEventTouchUpInside];
-	[self.contentView addSubview:_infoButton];
-
-	_chevronView = [[UIImageView alloc] initWithFrame:CGRectZero];
-	_chevronView.contentMode = UIViewContentModeCenter;
-	_chevronView.hidden = YES;
-	[self.contentView addSubview:_chevronView];
-
-	_toggleSwitch = [[UISwitch alloc] initWithFrame:CGRectZero];
-	_toggleSwitch.hidden = YES;
-	[_toggleSwitch addTarget:self action:@selector(toggleChanged:)
-			forControlEvents:UIControlEventValueChanged];
-	[self.contentView addSubview:_toggleSwitch];
-
-	_badgeView = [TGBadge badgeWithCount:0];
-	_badgeView.hidden = YES;
-	[self.contentView addSubview:_badgeView];
-
 	return self;
+}
+
+- (UIImageView *)pinView {
+	if (!_pinView) {
+		_pinView = [[UIImageView alloc] initWithFrame:CGRectZero];
+		_pinView.contentMode = UIViewContentModeScaleAspectFit;
+		_pinView.hidden = YES;
+		[self.contentView addSubview:_pinView];
+	}
+	return _pinView;
+}
+
+- (UIImageView *)checkView {
+	if (!_checkView) {
+		_checkView = [[UIImageView alloc] initWithFrame:CGRectZero];
+		_checkView.contentMode = UIViewContentModeCenter;
+		_checkView.hidden = YES;
+		[self.contentView addSubview:_checkView];
+	}
+	return _checkView;
+}
+
+- (UIImageView *)chevronView {
+	if (!_chevronView) {
+		_chevronView = [[UIImageView alloc] initWithFrame:CGRectZero];
+		_chevronView.contentMode = UIViewContentModeCenter;
+		_chevronView.hidden = YES;
+		[self.contentView addSubview:_chevronView];
+	}
+	return _chevronView;
+}
+
+- (UISwitch *)toggleSwitch {
+	if (!_toggleSwitch) {
+		_toggleSwitch = [[UISwitch alloc] initWithFrame:CGRectZero];
+		_toggleSwitch.hidden = YES;
+		[_toggleSwitch addTarget:self action:@selector(toggleChanged:)
+				forControlEvents:UIControlEventValueChanged];
+		[self.contentView addSubview:_toggleSwitch];
+	}
+	return _toggleSwitch;
+}
+
+- (UIButton *)infoButton {
+	if (!_infoButton) {
+		_infoButton = [UIButton buttonWithType:UIButtonTypeInfoDark];
+		_infoButton.hidden = YES;
+		[_infoButton addTarget:self action:@selector(infoTapped:)
+			  forControlEvents:UIControlEventTouchUpInside];
+		[self.contentView addSubview:_infoButton];
+	}
+	return _infoButton;
+}
+
+- (TGBadge *)badgeView {
+	if (!_badgeView) {
+		_badgeView = [TGBadge badgeWithCount:0];
+		_badgeView.hidden = YES;
+		[self.contentView addSubview:_badgeView];
+	}
+	return _badgeView;
+}
+
+- (UILabel *)trailingLabel {
+	if (!_trailingLabel) {
+		_trailingLabel = [[UILabel alloc] initWithFrame:CGRectZero];
+		_trailingLabel.font = TGFontCaption();
+		_trailingLabel.textAlignment = NSTextAlignmentRight;
+		_trailingLabel.backgroundColor = [UIColor clearColor];
+		[self.contentView addSubview:_trailingLabel];
+	}
+	return _trailingLabel;
 }
 
 - (void)prepareForReuse {
@@ -125,12 +159,13 @@ static void TGPeerRowAppendVerified(NSMutableAttributedString *name, UIFont *fon
 	self.switchToggleBlock = nil;
 	self.avatarPeer = 0;
 	self.faceView.image = nil;
-	self.pinView.hidden = YES;
-	self.checkView.hidden = YES;
-	self.chevronView.hidden = YES;
-	self.toggleSwitch.hidden = YES;
-	self.badgeView.hidden = YES;
-	self.trailingLabel.text = nil;
+	if (_pinView) _pinView.hidden = YES;
+	if (_checkView) _checkView.hidden = YES;
+	if (_chevronView) _chevronView.hidden = YES;
+	if (_toggleSwitch) _toggleSwitch.hidden = YES;
+	if (_badgeView) _badgeView.hidden = YES;
+	if (_infoButton) _infoButton.hidden = YES;
+	if (_trailingLabel) _trailingLabel.text = nil;
 	self.subtitleLabel.text = nil;
 	self.nameLabel.attributedText = nil;
 	self.accessoryView = nil;
@@ -183,10 +218,15 @@ static void TGPeerRowAppendVerified(NSMutableAttributedString *name, UIFont *fon
 		self.subtitleLabel.text = nil;
 	}
 
-	self.pinView.hidden = ![row[TGRowPin] boolValue];
-	self.pinView.image = self.pinView.hidden ? nil
-			: [TGIcons glyphNamed:@"pin" colour:[theme secondaryTextColour]
-							side:TGMetricLineCaption];
+	BOOL pinned = [row[TGRowPin] boolValue];
+	if (pinned) {
+		self.pinView.hidden = NO;
+		self.pinView.image = [TGIcons glyphNamed:@"pin" colour:[theme secondaryTextColour]
+								side:TGMetricLineCaption];
+	} else if (_pinView) {
+		_pinView.hidden = YES;
+		_pinView.image = nil;
+	}
 
 	[self configureAccessory:row theme:theme];
 	[self configureBadge:row theme:theme];
@@ -196,13 +236,17 @@ static void TGPeerRowAppendVerified(NSMutableAttributedString *name, UIFont *fon
 
 - (void)configureAccessory:(NSDictionary *)row theme:(TGTheme *)theme {
 	NSString *accessory = row[TGRowAccessory];
-	self.checkView.hidden = YES;
-	self.chevronView.hidden = YES;
-	self.toggleSwitch.hidden = YES;
-	self.trailingLabel.text = nil;
+	if (_checkView) _checkView.hidden = YES;
+	if (_chevronView) _chevronView.hidden = YES;
+	if (_toggleSwitch) _toggleSwitch.hidden = YES;
+	if (_trailingLabel) _trailingLabel.text = nil;
 	self.switchToggleBlock = nil;
 	self.infoTapBlock = row[TGRowInfoTap];
-	self.infoButton.hidden = self.infoTapBlock == nil;
+	if (self.infoTapBlock != nil) {
+		self.infoButton.hidden = NO;
+	} else if (_infoButton) {
+		_infoButton.hidden = YES;
+	}
 
 	BOOL check = [accessory isEqualToString:TGRowAccessoryCheck];
 	if (!accessory && row[TGRowChecked] != nil)
@@ -240,17 +284,27 @@ static void TGPeerRowAppendVerified(NSMutableAttributedString *name, UIFont *fon
 - (void)configureBadge:(NSDictionary *)row theme:(TGTheme *)theme {
 	id badge = row[TGRowBadge];
 	(void)theme;
+	BOOL hasBadge = NO;
 	if ([badge isKindOfClass:NSNumber.class]){
-		self.badgeView.count = [badge integerValue];
+		NSInteger count = [badge integerValue];
+		if (count > 0) {
+			self.badgeView.count = count;
+			hasBadge = YES;
+		}
 	} else if ([badge isKindOfClass:NSString.class] && [badge length]){
 		self.badgeView.text = badge;
-	} else {
-		self.badgeView.text = nil;
+		hasBadge = YES;
 	}
-	NSNumber *variant = row[TGRowBadgeVariant];
-	self.badgeView.variant = variant
-			? (TGBadgeVariant)[variant integerValue]
-			: TGBadgeVariantNotification;
+	if (hasBadge) {
+		self.badgeView.hidden = NO;
+		NSNumber *variant = row[TGRowBadgeVariant];
+		self.badgeView.variant = variant
+				? (TGBadgeVariant)[variant integerValue]
+				: TGBadgeVariantNotification;
+	} else if (_badgeView) {
+		_badgeView.hidden = YES;
+		_badgeView.text = nil;
+	}
 }
 
 - (void)configureAvatar:(NSDictionary *)row {
@@ -350,21 +404,21 @@ static void TGPeerRowAppendVerified(NSMutableAttributedString *name, UIFont *fon
 	}
 
 	CGFloat accessoryWidth = 0;
-	if (!self.checkView.hidden)
+	if (_checkView && !_checkView.hidden)
 		accessoryWidth = MAX(accessoryWidth, TGMetricMenuGlyph);
-	if (!self.chevronView.hidden)
+	if (_chevronView && !_chevronView.hidden)
 		accessoryWidth = MAX(accessoryWidth, TGMetricMenuGlyph);
-	if (!self.toggleSwitch.hidden)
+	if (_toggleSwitch && !_toggleSwitch.hidden)
 		accessoryWidth = MAX(accessoryWidth, self.toggleSwitch.bounds.size.width);
-	CGFloat infoSide = self.infoButton.hidden ? 0
+	CGFloat infoSide = (_infoButton == nil || _infoButton.hidden) ? 0
 			: self.infoButton.bounds.size.width;
 	CGFloat labelWidth = 0;
-	if (self.trailingLabel.text.length)
+	if (_trailingLabel && _trailingLabel.text.length)
 		labelWidth = [self.trailingLabel sizeThatFits:
 				CGSizeMake(TGMetricCallLabelWidth, TGMetricLineCaption)].width;
 	accessoryWidth = MAX(accessoryWidth, TGPeerRowTrailingWidth(labelWidth, infoSide));
 	BOOL inlineBadge = [self.row[TGRowBadgeInline] boolValue];
-	if (!self.badgeView.hidden && !inlineBadge){
+	if (_badgeView && !_badgeView.hidden && !inlineBadge){
 		CGSize size = [self.badgeView sizeThatFits:CGSizeZero];
 		accessoryWidth = MAX(accessoryWidth, size.width);
 	}
@@ -385,36 +439,36 @@ static void TGPeerRowAppendVerified(NSMutableAttributedString *name, UIFont *fon
 				textWidth, subtitleHeight);
 	}
 
-	if (!self.checkView.hidden){
+	if (_checkView && !_checkView.hidden){
 		CGFloat side = TGMetricMenuGlyph;
 		self.checkView.frame = CGRectMake(right - side,
 				TGCenteredOrigin(height, side), side, side);
 	}
-	if (!self.chevronView.hidden){
+	if (_chevronView && !_chevronView.hidden){
 		CGFloat side = TGMetricMenuGlyph;
 		self.chevronView.frame = CGRectMake(right - side,
 				TGCenteredOrigin(height, side), side, side);
 	}
-	if (!self.toggleSwitch.hidden){
+	if (_toggleSwitch && !_toggleSwitch.hidden){
 		CGSize size = self.toggleSwitch.bounds.size;
 		self.toggleSwitch.frame = CGRectMake(right - size.width,
 				TGCenteredOrigin(height, size.height), size.width, size.height);
 	}
 	CGFloat labelRight = right;
-	if (!self.infoButton.hidden){
+	if (_infoButton && !_infoButton.hidden){
 		CGSize size = self.infoButton.bounds.size;
 		self.infoButton.frame = CGRectMake(right - size.width,
 				TGCenteredOrigin(height, size.height), size.width, size.height);
 		labelRight = right - size.width - TGMetricPadSmall;
 	}
-	if (self.trailingLabel.text.length){
+	if (_trailingLabel && _trailingLabel.text.length){
 		CGSize size = [self.trailingLabel sizeThatFits:
 				CGSizeMake(TGMetricCallLabelWidth, TGMetricLineCaption)];
 		self.trailingLabel.frame = CGRectMake(labelRight - size.width, top,
 				size.width, TGMetricLineCaption);
 	}
 
-	if (!self.badgeView.hidden){
+	if (_badgeView && !_badgeView.hidden){
 		CGSize size = [self.badgeView sizeThatFits:CGSizeZero];
 		if (inlineBadge){
 			CGSize nameSize = [self.nameLabel sizeThatFits:
@@ -424,7 +478,7 @@ static void TGPeerRowAppendVerified(NSMutableAttributedString *name, UIFont *fon
 			self.badgeView.frame = CGRectMake(badgeX,
 					TGCenteredOrigin(height, size.height), size.width, size.height);
 		} else {
-			CGFloat badgeY = self.trailingLabel.text.length
+			CGFloat badgeY = (_trailingLabel && _trailingLabel.text.length)
 					? CGRectGetMaxY(self.trailingLabel.frame) + TGMetricPadTiny
 					: TGCenteredOrigin(height, size.height);
 			self.badgeView.frame = CGRectMake(right - size.width, badgeY,

@@ -122,7 +122,9 @@ static NSCache *TGEmojiGlyphCache(void) {
 
 + (void)flush {
 	[sCache removeAllObjects];
+	[TGEmojiGlyphCache() removeAllObjects];
 	TGIconsClearSettingsIconCache();
+	TGIconsClearAvatarCaches();
 }
 
 BOOL TGIconAddPath(CGContextRef ctx, const char *name, CGRect box) {

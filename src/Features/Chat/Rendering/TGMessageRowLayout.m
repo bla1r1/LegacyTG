@@ -5,6 +5,7 @@
 #import "TGMessageCardView.h"
 #import "TGStyle.h"
 #import "TGLocalization.h"
+#import "TGCapabilities.h"
 
 @implementation TGMessageRowInput
 @end
@@ -107,11 +108,17 @@ static CGFloat TGPlaceGroupSender(TGMessageLayout *layout, NSString *senderName,
 	if (!senderName.length)
 		return height;
 	height += TGMetricSenderLineHeight;
-	*x += kAvatarSide + TGMetricPadSmall + kTailWidth;
+	BOOL showAvatar = [TGCapabilities groupAvatarsWanted];
+	if (showAvatar)
+		*x += kAvatarSide + TGMetricPadSmall + kTailWidth;
 	layout.senderName = senderName;
 	layout.senderFrame = CGRectMake(kPadH, kPadV, width - TGDoubled(kPadH), TGMetricLineMicro);
-	layout.senderAvatarFrame = CGRectMake(TGMetricPad,
-			MAX(TGMetricPadTiny, TGMetricBubbleRowInset + height - kAvatarSide), kAvatarSide, kAvatarSide);
+	if (showAvatar) {
+		layout.senderAvatarFrame = CGRectMake(TGMetricPad,
+				MAX(TGMetricPadTiny, TGMetricBubbleRowInset + height - kAvatarSide), kAvatarSide, kAvatarSide);
+	} else {
+		layout.senderAvatarFrame = CGRectZero;
+	}
 	return height;
 }
 
@@ -583,11 +590,17 @@ TGMessageLayout *TGMessageRowLayout(TGMessageRowInput *in) {
 	CGFloat top = in.continuesAlbum ? TGMetricZero : TGMetricBubbleRowInset;
 
 	if (senderName.length) {
-		x += kAvatarSide + TGMetricPadSmall + kTailWidth;   // the tail hangs between picture and bubble
+		BOOL showAvatar = [TGCapabilities groupAvatarsWanted];
+		if (showAvatar)
+			x += kAvatarSide + TGMetricPadSmall + kTailWidth;   // the tail hangs between picture and bubble
 		layout.senderName = senderName;
 		layout.senderFrame = CGRectMake(kPadH, kPadV, bubbleW - TGDoubled(kPadH), TGMetricLineMicro);
-		CGFloat avatarY = MAX(TGMetricPadTiny, top + bubbleH - kAvatarSide);
-		layout.senderAvatarFrame = CGRectMake(TGMetricPad, avatarY, kAvatarSide, kAvatarSide);
+		if (showAvatar) {
+			CGFloat avatarY = MAX(TGMetricPadTiny, top + bubbleH - kAvatarSide);
+			layout.senderAvatarFrame = CGRectMake(TGMetricPad, avatarY, kAvatarSide, kAvatarSide);
+		} else {
+			layout.senderAvatarFrame = CGRectZero;
+		}
 	}
 
 	layout.bubbleFrame = CGRectMake(x, top, bubbleW, bubbleH);

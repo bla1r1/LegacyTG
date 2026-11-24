@@ -61,6 +61,84 @@ static void TGSetWanted(NSString *key, BOOL wanted) {
 	TGSetWanted(@"TGWantGifAutoplay", wanted);
 }
 
++ (BOOL)databaseEncryptionWanted {
+	NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+	if (![defaults objectForKey:@"TGWantDatabaseEncryption"])
+		return [TGDevice tier] > TGDeviceTierVintage;
+	return [defaults boolForKey:@"TGWantDatabaseEncryption"];
+}
++ (void)setDatabaseEncryptionWanted:(BOOL)wanted {
+	TGSetWanted(@"TGWantDatabaseEncryption", wanted);
+}
+
++ (BOOL)customEmojiWanted {
+	NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+	if (![defaults objectForKey:@"TGWantCustomEmoji"])
+		return [TGDevice tier] > TGDeviceTierVintage;
+	return [defaults boolForKey:@"TGWantCustomEmoji"];
+}
++ (void)setCustomEmojiWanted:(BOOL)wanted {
+	TGSetWanted(@"TGWantCustomEmoji", wanted);
+}
++ (BOOL)canRenderCustomEmoji {
+	return [self customEmojiWanted];
+}
+
++ (BOOL)chatThumbnailsWanted {
+	NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+	if (![defaults objectForKey:@"TGWantChatThumbnails"])
+		return [TGDevice tier] > TGDeviceTierVintage;
+	return [defaults boolForKey:@"TGWantChatThumbnails"];
+}
++ (void)setChatThumbnailsWanted:(BOOL)wanted {
+	TGSetWanted(@"TGWantChatThumbnails", wanted);
+}
+
++ (BOOL)groupAvatarsWanted {
+	NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+	if (![defaults objectForKey:@"TGWantGroupAvatars"])
+		return [TGDevice tier] > TGDeviceTierVintage;
+	return [defaults boolForKey:@"TGWantGroupAvatars"];
+}
++ (void)setGroupAvatarsWanted:(BOOL)wanted {
+	TGSetWanted(@"TGWantGroupAvatars", wanted);
+}
+
++ (BOOL)skeuomorphicChromeWanted {
+	NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+	if (![defaults objectForKey:@"TGWantSkeuomorphicChrome"])
+		return YES;
+	return [defaults boolForKey:@"TGWantSkeuomorphicChrome"];
+}
++ (void)setSkeuomorphicChromeWanted:(BOOL)wanted {
+	TGSetWanted(@"TGWantSkeuomorphicChrome", wanted);
+}
+
++ (BOOL)pauseUpdatesDuringScrollWanted {
+	return TGWanted(@"TGWantPauseUpdatesDuringScroll");
+}
++ (void)setPauseUpdatesDuringScrollWanted:(BOOL)wanted {
+	TGSetWanted(@"TGWantPauseUpdatesDuringScroll", wanted);
+}
+
++ (NSInteger)chatHistoryPageLimit {
+	TGDeviceTier tier = [TGDevice tier];
+	if (tier <= TGDeviceTierVintage)
+		return 20;
+	if (tier == TGDeviceTierLegacy)
+		return 30;
+	return 60;
+}
+
++ (NSUInteger)chatMessageWindowLimit {
+	TGDeviceTier tier = [TGDevice tier];
+	if (tier <= TGDeviceTierVintage)
+		return 50;
+	if (tier == TGDeviceTierLegacy)
+		return 100;
+	return 250;
+}
+
 + (BOOL)canPlayAnimatedStickers {
 	// TGLottieView renders vector animations with C++ optimization.
 	// Dual-core runs at 18 fps, single-core (A4) throttles to 12 fps with model caching.
@@ -247,7 +325,8 @@ static BOOL TGEmojiFontHasGlyphs(CTFontRef font, NSString *s) {
 		@[@"Video profile pictures",  @([self canPlayVideoAvatars]),   @"Modern+ - the A7's decoder; older devices show the still"],
 		@[@"Premium sticker effects", @([self canPlayStickerEffects]), @"Full - a second, larger animation over the list"],
 		@[@"Multiple accounts",       @([self canHoldMultipleAccounts]), @"every device, one active at a time"],
-		@[@"Custom emoji",            @YES,  @"every device, static on Vintage"],
+		@[@"Custom emoji",            @([self canRenderCustomEmoji]),  @"Legacy+ - disabled on Vintage to save CPU & RAM"],
+		@[@"Database encryption",     @([self databaseEncryptionWanted]), @"Legacy+ - disabled on Vintage to avoid software AES overhead"],
 		@[@"Mini apps",               @([self canRunWebApps]),         @"iOS 9 or later"],
 		@[@"H.264 High video",        @([TGDevice tier] > TGDeviceTierVintage), @"Legacy - the A4's decoder stops at Main Profile, 720p, 30 fps"],
 		@[@"Video calls",             @([self canEncodeVideoCall]),    @"H.264 in hardware (VideoToolbox); VP8 in software on A5 and later"],

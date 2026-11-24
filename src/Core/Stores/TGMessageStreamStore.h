@@ -30,6 +30,12 @@
 /// Remove a message by ID.
 - (BOOL)removeMessageId:(int64_t)msgId;
 
+/// Trims messages from the newer (bottom) end so count <= limit.
+- (NSUInteger)trimNewerToLimit:(NSUInteger)limit;
+
+/// Trims messages from the older (top) end so count <= limit.
+- (NSUInteger)trimOlderToLimit:(NSUInteger)limit;
+
 /// Clear the entire stream.
 - (void)clear;
 

@@ -35,11 +35,14 @@
 		[self devChatInfo],
 		@{
 			@"id"          : @(kDevDurovChatId),
-			@"title"       : @"Pavel Durov",
-			@"type"        : @"chatTypePrivate",
-			@"isGroup"     : @NO,
-			@"text"        : @"Freedom and privacy for everyone.",
-			@"previewText" : @"Freedom and privacy for everyone.",
+			@"title"       : @"Du Rove's Channel",
+			@"type"        : @"chatTypeSupergroup",
+			@"isGroup"     : @YES,
+			@"isChannel"   : @YES,
+			@"isBroadcast" : @YES,
+			@"memberCount" : @2500000,
+			@"text"        : @"Telegram reached 950 million active users. On track to 1 billion! 🚀",
+			@"previewText" : @"Telegram reached 950 million active users. On track to 1 billion! 🚀",
 			@"unread"      : @1,
 			@"time"        : @"19:16",
 			@"date"        : @(now - 120),
@@ -93,74 +96,63 @@
 	double now = [[NSDate date] timeIntervalSince1970];
 	double baseTime = now - 600.0;
 	int64_t senderPeer = 20002;
-	int64_t senderMe = 10001;
 
-	[[TGDevStore shared] setDisplayName:@"Pavel Durov" forUserId:senderPeer];
+	[[TGDevStore shared] setDisplayName:@"Du Rove's Channel" forUserId:senderPeer];
 
 	NSMutableArray *list = [NSMutableArray array];
+	// Real post #551 from https://t.me/durov
 	[list addObject:@{
-		@"id"       : @1,
-		@"chatId"   : @(kDevDurovChatId),
-		@"senderId" : @(senderPeer),
-		@"outgoing" : @NO,
-		@"date"     : @(baseTime),
-		@"text"     : @"Pavel Durov joined Telegram",
-		@"kind"     : @"messageChatAddMembers",
-		@"service"  : @YES,
+		@"id"          : @551,
+		@"chatId"      : @(kDevDurovChatId),
+		@"senderId"    : @(senderPeer),
+		@"author"      : @"Du Rove's Channel",
+		@"outgoing"    : @NO,
+		@"date"        : @(baseTime),
+		@"text"        : @"💸 If your wallet doesn’t look like this, don’t even bother sending me money for my birthday! 🎂",
+		@"kind"        : @"messageText",
+		@"channelPost" : @YES,
+		@"views"       : @3440000,
+		@"replyCount"  : @980,
+		@"canComment"  : @YES,
 	}];
 
+	// Real post #552 from https://t.me/durov with real blockquote
 	[list addObject:@{
-		@"id"       : @2,
-		@"chatId"   : @(kDevDurovChatId),
-		@"senderId" : @(senderMe),
-		@"outgoing" : @YES,
-		@"date"     : @(baseTime + 60),
-		@"text"     : @"Hello Pavel! Welcome to LegacyTG running on iPhone 4S with iOS 6 design.",
-		@"kind"     : @"messageText",
+		@"id"          : @552,
+		@"chatId"      : @(kDevDurovChatId),
+		@"senderId"    : @(senderPeer),
+		@"author"      : @"Du Rove's Channel",
+		@"outgoing"    : @NO,
+		@"date"        : @(baseTime + 180),
+		@"replyId"     : @551,
+		@"replyAuthor" : @"Pavel Durov",
+		@"replyText"   : @"💸 If your wallet doesn’t look like this...",
+		@"text"        : @"✨ Designers × AI\n\n🆕 The mockup era is over. Today’s AI tools give every designer a superpower: you can now craft your ideas, not just draw them.\n\n“The gap between ‘what if…?’ and ‘look, it works!’ has never been smaller, and that changed how we build features in Telegram.”\n\nMessage @designers to submit your concepts.",
+		@"quoteText"   : @"The gap between “what if…?” and “look, it works!” has never been smaller, and that changed how we build features in Telegram.",
+		@"kind"        : @"messageText",
+		@"channelPost" : @YES,
+		@"views"       : @3120000,
+		@"replyCount"  : @1420,
+		@"canComment"  : @YES,
 	}];
 
+	// Real post #553 from https://t.me/durov
 	[list addObject:@{
-		@"id"       : @3,
-		@"chatId"   : @(kDevDurovChatId),
-		@"senderId" : @(senderPeer),
-		@"outgoing" : @NO,
-		@"date"     : @(baseTime + 120),
-		@"text"     : @"Hello! Impressive work on the skeuomorphic iOS 6 design and TDLib integration.",
-		@"kind"     : @"messageText",
-	}];
-
-	[list addObject:@{
-		@"id"       : @4,
-		@"chatId"   : @(kDevDurovChatId),
-		@"senderId" : @(senderPeer),
-		@"outgoing" : @NO,
-		@"date"     : @(baseTime + 180),
-		@"kind"     : @"messageSticker",
-		@"extra"    : @"👍",
-		@"photoId"  : @(-201),
-	}];
-
-	[list addObject:@{
-		@"id"       : @5,
-		@"chatId"   : @(kDevDurovChatId),
-		@"senderId" : @(senderMe),
-		@"outgoing" : @YES,
-		@"date"     : @(baseTime + 240),
-		@"text"     : @"Vector Lottie stickers and VP9 video stickers are working smoothly too!",
-		@"kind"     : @"messageText",
-	}];
-
-	[list addObject:@{
-		@"id"       : @6,
-		@"chatId"   : @(kDevDurovChatId),
-		@"senderId" : @(senderPeer),
-		@"outgoing" : @NO,
-		@"date"     : @(baseTime + 300),
-		@"kind"     : @"messagePhoto",
-		@"photoId"  : @(-301),
-		@"text"     : @"Freedom and privacy for everyone.",
-		@"width"    : @400,
-		@"height"   : @300,
+		@"id"          : @553,
+		@"chatId"      : @(kDevDurovChatId),
+		@"senderId"    : @(senderPeer),
+		@"author"      : @"Du Rove's Channel",
+		@"outgoing"    : @NO,
+		@"date"        : @(baseTime + 360),
+		@"replyId"     : @552,
+		@"replyAuthor" : @"Du Rove's Channel",
+		@"replyText"   : @"✨ Designers × AI: The mockup era is over...",
+		@"text"        : @"700K+ self-custodial wallets created on Telegram in the last 48 hours alone.\n\n🦠 Adoption spreads virally. A wallet activates the moment someone receives Grams.\n\n💪 The crypto revolution is going strong.",
+		@"kind"        : @"messageText",
+		@"channelPost" : @YES,
+		@"views"       : @2070000,
+		@"replyCount"  : @2150,
+		@"canComment"  : @YES,
 	}];
 
 	return list;

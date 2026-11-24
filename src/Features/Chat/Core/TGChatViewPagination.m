@@ -153,6 +153,7 @@
 	self.backgroundHeld = NO;
 	TGTextRenderHold(NO);
 	[[TGCustomEmojiStore shared] setDecodesHeld:NO];
+	[[TGMessageStore shared] setUpdatesHeld:NO];
 }
 
 - (void)scrollViewWillBeginDragging:(UIScrollView *)scrollView {
@@ -177,6 +178,8 @@
 			self.backgroundHeld = YES;
 			TGTextRenderHold(YES);
 			[[TGCustomEmojiStore shared] setDecodesHeld:YES];
+			if ([TGCapabilities pauseUpdatesDuringScrollWanted])
+				[[TGMessageStore shared] setUpdatesHeld:YES];
 			[self performSelector:@selector(releaseBackgroundWhenStill) withObject:nil
 					   afterDelay:TGChatRedrawSettleSeconds inModes:@[ NSRunLoopCommonModes ]];
 		}
@@ -193,10 +196,13 @@
 	if (scrollView.contentOffset.y < (CGFloat)TGMetricHistoryTopGate && !self.pageFromCache &&
 		!self.streamStore.loadingOlder && !self.streamStore.reachedStart){
 		__weak typeof(self) weakScroll = self;
-		[self.streamStore loadOlderInChat:self.chatId limit:60 completion:^(BOOL added){
+		NSInteger pageLimit = [TGCapabilities chatHistoryPageLimit];
+		[self.streamStore loadOlderInChat:self.chatId limit:pageLimit completion:^(BOOL added){
 			TGChatViewController *me = weakScroll;
 			if (!me || !added)
 				return;
+			NSUInteger windowLimit = [TGCapabilities chatMessageWindowLimit];
+			[me.streamStore trimNewerToLimit:windowLimit];
 			NSArray *raw = [me.streamStore messages];
 			[me measureTextsOf:raw then:^{
 				TGChatViewController *again = weakScroll;
@@ -224,10 +230,15 @@
 	if (distanceFromBottom < (CGFloat)TGMetricHistoryTopGate &&
 		!self.streamStore.loadingNewer && !self.streamStore.reachedEnd){
 		__weak typeof(self) weakScroll = self;
-		[self.streamStore loadNewerInChat:self.chatId limit:60 completion:^(BOOL added){
+		NSInteger pageLimit = [TGCapabilities chatHistoryPageLimit];
+		[self.streamStore loadNewerInChat:self.chatId limit:pageLimit completion:^(BOOL added){
 			TGChatViewController *me = weakScroll;
 			if (!me || !added)
 				return;
+			CGFloat preTrimHeight = me.table.contentSize.height;
+			CGFloat preTrimOffset = me.table.contentOffset.y;
+			NSUInteger windowLimit = [TGCapabilities chatMessageWindowLimit];
+			BOOL trimmedOlder = [me.streamStore trimOlderToLimit:windowLimit] > 0;
 			[me measureTextsOf:[me.streamStore messages] then:^{
 				TGChatViewController *again = weakScroll;
 				if (!again)
@@ -236,6 +247,10 @@
 				again.messages = [again groupedMessagesFromMessages:again.rawMessages];
 				[UIView setAnimationsEnabled:NO];
 				[again.table reloadData];
+				if (trimmedOlder) {
+					CGFloat shift = again.table.contentSize.height - preTrimHeight;
+					again.table.contentOffset = CGPointMake(0, MAX(0, preTrimOffset + shift));
+				}
 				[UIView setAnimationsEnabled:YES];
 				[again fetchMissingImages];
 			}];

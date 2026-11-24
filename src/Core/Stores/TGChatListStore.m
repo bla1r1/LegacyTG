@@ -8,6 +8,7 @@
 #import "TGLocalization.h"
 #import "TGImageLruCache.h"
 #import "TGDevice.h"
+#import "TGCapabilities.h"
 #import "TGDownloadStore.h"
 
 NSString *const TGChatListStoreChangedNotification = @"TGChatListStoreChangedNotification";
@@ -318,12 +319,16 @@ NSString *const TGChatListPreviewImageLoadedNotification = @"TGChatListPreviewIm
 #pragma mark - preview thumbnails
 
 - (UIImage *)cachedPreviewImageForFileId:(NSNumber *)fileId {
+	if (![TGCapabilities chatThumbnailsWanted])
+		return nil;
 	if (![fileId isKindOfClass:NSNumber.class] || fileId.longLongValue <= 0)
 		return nil;
 	return [_previewImages objectForKey:fileId];
 }
 
 - (void)loadPreviewImageForFileId:(NSNumber *)fileId {
+	if (![TGCapabilities chatThumbnailsWanted])
+		return;
 	if (![fileId isKindOfClass:NSNumber.class] || fileId.longLongValue <= 0)
 		return;
 	if ([_previewImages objectForKey:fileId] || [_previewRequests containsObject:fileId])
@@ -347,6 +352,10 @@ NSString *const TGChatListPreviewImageLoadedNotification = @"TGChatListPreviewIm
 								userInfo:@{@"fileId" : fileId}];
 		});
 	}];
+}
+
+- (void)setUpdatesHeld:(BOOL)held {
+	[[TGMessageStore shared] setUpdatesHeld:held];
 }
 
 @end
