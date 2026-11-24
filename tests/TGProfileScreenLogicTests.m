@@ -40,7 +40,7 @@
 }
 
 - (void)testTabs_GridOrList {
-	for (NSString *kind in @[@"media", @"stories", @"archive", @"gifts"])
+	for (NSString *kind in @[@"media", @"stories", @"archive", @"gifts", @"gifs"])
 		XCTAssertTrue(TGProfileTabIsGrid(kind), @"%@", kind);
 	for (NSString *kind in @[@"files", @"music", @"voice", @"links", @"groups", @"similar"])
 		XCTAssertFalse(TGProfileTabIsGrid(kind), @"%@", kind);

@@ -357,7 +357,27 @@ heightForHeaderInSection:(NSInteger)section {
 	} else if ([kind isEqualToString:@"voice"] &&
 			   ![m[@"kind"] isEqualToString:@"messageVideoNote"]){
 		[self toggleVoiceRow:m];
-	} else if ([kind isEqualToString:@"files"] || [kind isEqualToString:@"voice"]){
+	} else if ([kind isEqualToString:@"files"]){
+		NSNumber *docId = m[@"docId"];
+		if ([docId isKindOfClass:NSNumber.class] && docId.longLongValue > 0){
+			__weak typeof(self) weakSelf = self;
+			[[TGProfileStore shared] downloadFile:docId.integerValue completion:^(NSString *path){
+				dispatch_async(dispatch_get_main_queue(), ^{
+					TGProfileViewController *me = weakSelf;
+					if (!me || !path.length) return;
+					NSURL *url = [NSURL fileURLWithPath:path];
+					me.docInteractionController = [UIDocumentInteractionController interactionControllerWithURL:url];
+					me.docInteractionController.delegate = (id<UIDocumentInteractionControllerDelegate>)me;
+					if (![me.docInteractionController presentPreviewAnimated:YES]){
+						CGRect rect = CGRectMake(TGHalf(me.view.bounds.size.width), TGHalf(me.view.bounds.size.height), TGMetricHairline, TGMetricHairline);
+						[me.docInteractionController presentOpenInMenuFromRect:rect inView:me.view animated:YES];
+					}
+				});
+			}];
+		} else {
+			[self openChat:self.chatId title:self.name message:messageId];
+		}
+	} else if ([kind isEqualToString:@"voice"]){
 		[self openChat:self.chatId title:self.name message:messageId];
 	}
 }
@@ -400,6 +420,20 @@ heightForHeaderInSection:(NSInteger)section {
 	self.voicePlayer = nil;
 	self.playingVoiceId = 0;
 	[self reloadTableDebounced];
+}
+
+#pragma mark - UIDocumentInteractionControllerDelegate
+
+- (UIViewController *)documentInteractionControllerViewControllerForPreview:(UIDocumentInteractionController *)controller {
+	return self;
+}
+
+- (UIView *)documentInteractionControllerViewForPreview:(UIDocumentInteractionController *)controller {
+	return self.view;
+}
+
+- (CGRect)documentInteractionControllerRectForPreview:(UIDocumentInteractionController *)controller {
+	return self.view.bounds;
 }
 
 - (void)viewDidAppear:(BOOL)animated {

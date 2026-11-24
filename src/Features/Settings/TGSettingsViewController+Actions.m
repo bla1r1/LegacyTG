@@ -40,34 +40,13 @@ static UIImage *TGSettingsQRIcon(void) {
 	return image;
 }
 
-/// Your own account's QR, not the login scanner. The code points at the
-/// account's public link when it has one; without a username it points at the
-/// account id Telegram knows.
-@interface TGSettingsAccountQRViewController : UIViewController
-@property (nonatomic, copy) NSString *code;
+#import "TGAccountQRViewController.h"
+
+// TGSettingsAccountQRViewController alias for backwards compatibility
+@interface TGSettingsAccountQRViewController : TGAccountQRViewController
 @end
 
 @implementation TGSettingsAccountQRViewController
-- (void)viewDidLoad {
-	[super viewDidLoad];
-	self.title = TGLocalized(@"QR Code");
-	self.view.backgroundColor = [[TGTheme shared] groupedBackgroundColour];
-	CGFloat side = kSettingsQRSide;
-	UIImageView *image = [[UIImageView alloc] initWithFrame:CGRectMake(0, 0, side, side)];
-	image.center = CGPointMake(CGRectGetMidX(self.view.bounds),
-			CGRectGetMidY(self.view.bounds) - kSettingsQRTopOffset);
-	image.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin |
-			UIViewAutoresizingFlexibleRightMargin;
-	image.image = TGQRCodeImage(self.code, side);
-	[self.view addSubview:image];
-	UILabel *caption = TGLabelWith(TGLabelBodySecondary, CGRectMake(TGMetricPadLarge,
-			CGRectGetMaxY(image.frame) + TGMetricPadLarge,
-			self.view.bounds.size.width - TGDoubled(TGMetricPadLarge), TGMetricLineRow), nil);
-	caption.autoresizingMask = UIViewAutoresizingFlexibleWidth;
-	caption.textAlignment = NSTextAlignmentCenter;
-	caption.text = self.code;
-	[self.view addSubview:caption];
-}
 @end
 
 /// ThemeSettingsFontSizeItem is a slider of seven positions. It edits the

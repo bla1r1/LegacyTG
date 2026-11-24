@@ -29,7 +29,8 @@ NSArray *TGProfileTabKinds(BOOL hasStories, BOOL hasGifts, BOOL hasCommonGroups,
 NSArray *TGProfileMediaTabs(NSArray *kinds, BOOL similarChannels) {
 	NSDictionary *titles = @{@"stories" : @"Stories", @"gifts" : @"Gifts",
 			@"media" : @"Media", @"files" : @"Files", @"music" : @"Music",
-			@"voice" : @"Voice", @"links" : @"Links", @"groups" : @"Groups",
+			@"voice" : @"Voice", @"links" : @"Links", @"gifs" : @"GIFs",
+			@"groups" : @"Groups",
 			@"archive" : @"Archive", @"similar" : @"Similar Channels"};
 	NSMutableArray *out = [NSMutableArray array];
 	for (NSString *kind in kinds)
@@ -57,5 +58,5 @@ BOOL TGProfileTabIsStories(NSString *kind) {
 
 BOOL TGProfileTabIsGrid(NSString *kind) {
 	return [kind isEqualToString:@"media"] || TGProfileTabIsStories(kind) ||
-			[kind isEqualToString:@"gifts"];
+			[kind isEqualToString:@"gifts"] || [kind isEqualToString:@"gifs"];
 }

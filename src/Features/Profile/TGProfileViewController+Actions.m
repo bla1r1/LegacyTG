@@ -23,6 +23,7 @@
 #import "TGBarItem.h"
 #import "TGPresent.h"
 #import "TGLabel.h"
+#import "TGAccountQRViewController.h"
 #import <CoreImage/CoreImage.h>
 
 @implementation TGProfileViewController (Actions)
@@ -291,6 +292,7 @@
 			[items addObject:@{@"title" : @"Share Contact", @"icon" : @"forward"}];
 		if (self.userId == [[TGProfileStore shared].me[@"id"] longLongValue])
 			[items addObject:@{@"title" : @"Copy Link", @"icon" : @"forward"}];
+		[items addObject:@{@"title" : @"QR Code", @"icon" : @"settings"}];
 		// Bots cannot have secret chats.
 		if (!self.isBot)
 			[items addObject:@{@"title" : @"Start Secret Chat", @"icon" : @"privacy"}];
@@ -448,6 +450,17 @@
 		return;
 	if ([title isEqualToString:@"Edit Profile"]){
 		[self editProfileTapped];
+		return;
+	}
+	if ([title isEqualToString:@"QR Code"]){
+		NSString *username = self.username;
+		NSString *code = username.length
+				? [NSString stringWithFormat:@"https://t.me/%@", username]
+				: [NSString stringWithFormat:@"tg://user?id=%lld", (long long)self.userId];
+		TGAccountQRViewController *qr = [[TGAccountQRViewController alloc] init];
+		qr.code = code;
+		qr.hidesBottomBarWhenPushed = YES;
+		[self.navigationController pushViewController:qr animated:YES];
 		return;
 	}
 	if ([title isEqualToString:@"Copy Link"]){

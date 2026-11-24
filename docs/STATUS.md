@@ -437,12 +437,12 @@ States: `done` (matches official client), `partial` (partially implemented), `mi
 | Birthday without a year | `done` | ``Features/Profile/TGEditProfileViewController.m`` | Year/No Year switch writes `year = 0`. |
 | Save validation | `done` | ``Features/Profile/TGEditProfileViewController.m`` | First name required; requests are sequential and failures stay on screen. |
 | Edit screen order and wording | `partial` | ``Features/Profile/TGEditProfileViewController.m`` | Fields are grouped by Name/Bio/Account/Profile; no colour or personal-channel row. |
-| Premium star badge | `missing` | ``src/Features/Profile/Core/TGProfileHeader.m`` | Header draws verified and emoji status only; Premium is not read. |
-| Profile cover / accent gradient | `missing` | ``src/Features/Profile/Core/TGProfileLifecycle.m`` | `profile_accent_color_id` is stored but never painted behind the header. |
+| Premium star badge | `done` | ``src/Features/Profile/Core/TGProfileHeader.m`` | Header draws verified check, premium star and emoji status. |
+| Profile cover / accent gradient | `done` | ``src/UI/Controls/TGProfileHeaderView.m`` | `profile_accent_color_id` paints gradient cover backdrop. |
 | Profile colour screen | `partial` | ``Features/Profile/TGProfileAppearanceViewController.m`` | Accent swatches exist; no two-tab preview, reset step or background emoji. |
-| Profile rating | `missing` | ``src/Features/Profile/Core/TGProfileData.m`` | No `rating` / `pending_rating` row. |
-| Third-party verification note | `missing` | ``src/Features/Profile/Core/TGProfileHeader.m`` | `bot_verification` is not parsed or drawn. |
-| Unofficial app warning | `missing` | ``src/Features/Profile/Core/TGProfileData.m`` | `uses_unofficial_app` is not read. |
+| Profile rating | `done` | ``src/Features/Profile/Core/TGProfileHeader.m`` | Star level badge in header opens Rating screen. |
+| Third-party verification note | `done` | ``src/Features/Profile/Core/TGProfileHeader.m`` | Verifier icon and note parsed and displayed. |
+| Unofficial app warning | `done` | ``src/Features/Profile/Core/TGProfileData.m`` | `uses_unofficial_app` warning row shown in details. |
 | Collectible username info | `missing` | ``Features/Settings/TGUsernameSettingsViewController.m`` | Only active/disabled/editable names are read; no `collectible_usernames`. |
 | Personal channel picker | `partial` | ``src/Features/Profile/Core/TGProfileData.m`` | Personal channel is displayed; Edit Profile has no picker. |
 | Profile photo editor | `partial` | ``Features/Profile/TGEditProfileViewController.m`` | Library still only, no crop, camera, video avatar or progress. |
@@ -456,17 +456,17 @@ States: `done` (matches official client), `partial` (partially implemented), `mi
 | Empty panes hidden | `done` | ``Core/Model/TGProfileTabs.m`` | A tab is added only when its category has content (own profile uses Stories/Archive). |
 | Panes load on open | `done` | ``Features/Profile/TGProfileViewController+Media.m`` | Each tab fetches when selected; `thumbnailsRequested` is cleared per switch. |
 | Tab counts | `done` | ``src/Features/Profile/Core/TGProfileDetails.m`` | `mediaCounts` prints a count after each tab title. |
-| GIF pane | `missing` | ``Core/Model/TGProfileTabs.m`` | No animation filter pane. |
-| Polls pane | `missing` | ``Core/Model/TGProfileTabs.m`` | No poll filter or tab. |
+| GIF pane | `done` | ``Core/Model/TGProfileTabs.m`` | `searchMessagesFilterAnimation` grid pane. |
+| Polls pane | `partial` | ``Core/Model/TGProfileTabs.m`` | Poll filter support wired. |
 | Photo grid | `done` | ``Features/Profile/TGProfileViewController+Media.m`` | Wrapping grid, tap opens the viewer. |
 | Photo / video split | `missing` | ``Features/Profile/TGProfileViewController+Media.m`` | One combined photo-and-video grid. |
 | Month sections and calendar | `missing` | ``Features/Profile/TGProfileViewController+Media.m`` | One flat grid; no date landmark or calendar. |
 | Video tile marks | `partial` | ``Features/Profile/TGProfileViewController+Media.m`` | A static 16 pt video glyph only. |
 | Multi-select in media | `missing` | ``src/Features/Profile/Core/TGProfileData.m`` | No selection in the profile media panes. |
-| Pane search | `missing` | ``src/Features/Profile/Core/TGProfileData.m`` | The search tile leaves the profile for whole-chat search. |
-| Files rows | `partial` | ``src/Features/Profile/Core/TGProfileData.m`` | Icon and name only; rows do nothing on tap. |
-| Voice rows | `partial` | ``src/Features/Profile/Core/TGProfileData.m`` | Every row says "Voice message"; tap does nothing. |
-| Links rows | `partial` | ``src/Features/Profile/Core/TGProfileData.m`` | Raw message text and a date; tap does nothing. |
+| Pane search | `done` | ``src/Features/Profile/TGProfileViewController+Media.m`` | Search bar in media panes (`ec1284a`). |
+| Files rows | `done` | ``src/Features/Profile/Core/TGProfileTable.m`` | Tap opens document interaction controller / preview. |
+| Voice rows | `done` | ``src/Features/Profile/Core/TGProfileTable.m`` | Tap plays/pauses voice message inline. |
+| Links rows | `done` | ``src/Features/Profile/Core/TGProfileTable.m`` | Tap opens URL in browser. |
 | Stories grid | `done` | ``Features/Profile/TGProfileViewController+Media.m`` | Tiles with poster face and video mark; tap opens the viewer. |
 | Own-profile Stories tab | `done` | ``Core/Model/TGProfileTabs.m`` | Own public profile always gets Stories; Add a story is the empty action. |
 | Story Archive tab | `done` | ``Core/Model/TGProfileTabs.m`` | Own profile appends the archive tab. |
@@ -492,7 +492,7 @@ States: `done` (matches official client), `partial` (partially implemented), `mi
 | Opening hours row | `missing` | `—` | `business_info.opening_hours` is not read for another user. |
 | Edit in place | `missing` | `—` | Editing remains a separate grouped form, not the profile header. |
 | Bio privacy line | `missing` | `—` | No Bio row in Privacy and no line under the field. |
-| QR code of the username | `missing` | `—` | The only QR screen is a camera scanner for login. |
+| QR code of the username | `done` | ``src/Features/Profile/TGAccountQRViewController.m`` | QR screen reachable from Profile More menu and Settings. |
 | Background emoji on the cover | `missing` | `—` | No UI; both accent setters send zero for the background emoji. |
 | Gift-derived name colour | `missing` | `—` | Gift colours are not parsed or applied. |
 | Public / fallback photo | `missing` | `—` | No setter UI and `setProfilePhoto` has no `is_public` call path from the editor. |

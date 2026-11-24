@@ -49,6 +49,7 @@ static NSString *TGProfileJoin(NSString *left, NSString *right) {
 		@"music" : @"searchMessagesFilterAudio",
 		@"voice" : @"searchMessagesFilterVoiceAndVideoNote",
 		@"links" : @"searchMessagesFilterUrl",
+		@"gifs"  : @"searchMessagesFilterAnimation",
 	};
 	__weak typeof(self) weakSelf = self;
 	[filters enumerateKeysAndObjectsUsingBlock:^(NSString *kind, NSString *filterType, BOOL *stop){
@@ -78,7 +79,8 @@ static NSString *TGProfileJoin(NSString *left, NSString *right) {
 							  @"files" : @"searchMessagesFilterDocument",
 							  @"music" : @"searchMessagesFilterAudio",
 							  @"voice" : @"searchMessagesFilterVoiceAndVideoNote",
-							  @"links" : @"searchMessagesFilterUrl"};
+							  @"links" : @"searchMessagesFilterUrl",
+							  @"gifs"  : @"searchMessagesFilterAnimation"};
 	NSString *filterForCount = filters[kind];
 	__weak typeof(self) weakSelf = self;
 	void (^done)(NSArray *) = ^(NSArray *rows){
@@ -98,6 +100,8 @@ static NSString *TGProfileJoin(NSString *left, NSString *right) {
 			me.voice = safe;
 		else if ([kind isEqualToString:@"links"])
 			me.links = safe;
+		else if ([kind isEqualToString:@"gifs"])
+			me.gifs = safe;
 		else if ([kind isEqualToString:@"groups"])
 			me.groupsInCommon = safe;
 		else if ([kind isEqualToString:@"stories"])
@@ -254,6 +258,7 @@ static NSString *TGProfileJoin(NSString *left, NSString *right) {
 	else if ([kind isEqualToString:@"music"])   rows = self.music ?: @[];
 	else if ([kind isEqualToString:@"voice"])   rows = self.voice ?: @[];
 	else if ([kind isEqualToString:@"links"])   rows = self.links ?: @[];
+	else if ([kind isEqualToString:@"gifs"])    rows = self.gifs ?: @[];
 	else if ([kind isEqualToString:@"groups"])  rows = self.groupsInCommon ?: @[];
 	else if ([kind isEqualToString:@"archive"]) rows = self.archivedStories ?: @[];
 	else if ([kind isEqualToString:@"stories"]) rows = self.stories ?: @[];
@@ -706,6 +711,9 @@ static NSString *TGProfileJoin(NSString *left, NSString *right) {
 	} else if ([kind isEqualToString:@"links"]) {
 		filter = @"searchMessagesFilterUrl";
 		currentList = self.links;
+	} else if ([kind isEqualToString:@"gifs"]) {
+		filter = @"searchMessagesFilterAnimation";
+		currentList = self.gifs;
 	}
 	if (!filter || !currentList.count) return;
 	int64_t lastId = [currentList.lastObject[@"id"] longLongValue];

@@ -66,7 +66,9 @@ static const NSInteger kSectionMedia           = 8;
 static const NSInteger kStoryGridCols  = 3;
 static const CGFloat   kStoryGridGap   = TGMetricCollageGap;
 
-@interface TGProfileViewController () <TGStreamingVoicePlayerDelegate, UISearchBarDelegate>
+@interface TGProfileViewController () <TGStreamingVoicePlayerDelegate, UISearchBarDelegate, UIDocumentInteractionControllerDelegate>
+
+@property (nonatomic, strong) UIDocumentInteractionController *docInteractionController;
 
 @property (nonatomic, strong) NSMutableSet *thumbnailsRequested;
 @property (nonatomic, assign) int64_t chatId;
@@ -77,6 +79,7 @@ static const CGFloat   kStoryGridGap   = TGMetricCollageGap;
 @property (nonatomic, strong) NSArray *files;
 @property (nonatomic, strong) NSArray *voice;
 @property (nonatomic, strong) NSArray *links;
+@property (nonatomic, strong) NSArray *gifs;
 @property (nonatomic, strong) NSArray *music;     // audio messages (Music tab)
 @property (nonatomic, strong) NSArray *groupsInCommon;
 @property (nonatomic, strong) NSMutableDictionary *coverImages;
@@ -131,6 +134,8 @@ static const CGFloat   kStoryGridGap   = TGMetricCollageGap;
 @property (nonatomic, assign) NSInteger onlineCount;
 @property (nonatomic, assign) NSInteger commonGroupCount;
 @property (nonatomic, assign) BOOL isVerified;
+@property (nonatomic, assign) BOOL isPremium;
+@property (nonatomic, assign) NSInteger profileAccentColorId;
 @property (nonatomic, assign) BOOL isScam;
 @property (nonatomic, assign) BOOL isFake;
 @property (nonatomic, assign) BOOL isContact;

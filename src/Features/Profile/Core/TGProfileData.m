@@ -52,6 +52,8 @@
 					   [chat[@"type"][@"is_channel"] boolValue];
 		me.chatPermissions = [chat[@"permissions"] isKindOfClass:NSDictionary.class]
 				? chat[@"permissions"] : @{};
+		me.profileAccentColorId = chat[@"profile_accent_color_id"]
+				? [chat[@"profile_accent_color_id"] integerValue] : -1;
 		[me updateGroupStatus];
 		[me buildHeader];
 		// A channel label built before this answer used the group words;
@@ -247,6 +249,9 @@
 		// the plain user record; none needs the full-info call.
 		NSDictionary *verification = user[@"verification_status"];
 		weakSelf.isVerified = [verification[@"is_verified"] boolValue];
+		weakSelf.isPremium = [user[@"is_premium"] boolValue];
+		weakSelf.profileAccentColorId = user[@"profile_accent_color_id"]
+				? [user[@"profile_accent_color_id"] integerValue] : -1;
 		weakSelf.isScam = [verification[@"is_scam"] boolValue];
 		weakSelf.isFake = [verification[@"is_fake"] boolValue];
 		[weakSelf fetchBotVerificationImage:

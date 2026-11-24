@@ -16,7 +16,9 @@ NSString *const TGProfileHeaderInitials = @"initials";
 NSString *const TGProfileHeaderColourId = @"colourId";
 NSString *const TGProfileHeaderEmojiStatusId = @"emojiStatusId";
 NSString *const TGProfileHeaderVerified = @"verified";
+NSString *const TGProfileHeaderPremium = @"premium";
 NSString *const TGProfileHeaderBotVerification = @"botVerification";
+NSString *const TGProfileHeaderCoverColour = @"coverColour";
 NSString *const TGProfileHeaderStatus = @"status";
 NSString *const TGProfileHeaderStatusColour = @"statusColour";
 NSString *const TGProfileHeaderActions = @"actions";
@@ -107,6 +109,18 @@ static UIImage *TGHeaderSolidImage(UIColor *colour) {
 	self.music = [model[TGProfileHeaderMusic] isKindOfClass:NSDictionary.class]
 			? model[TGProfileHeaderMusic] : nil;
 
+	UIColor *coverColour = model[TGProfileHeaderCoverColour];
+	if ([coverColour isKindOfClass:UIColor.class]){
+		CGFloat coverHeight = kHeaderAvatarTop + side + TGMetricPadLarge;
+		CAGradientLayer *gradient = [CAGradientLayer layer];
+		gradient.frame = CGRectMake(0, 0, width, coverHeight);
+		gradient.colors = @[
+			(id)[coverColour colorWithAlphaComponent:TGAlphaHighlight].CGColor,
+			(id)[coverColour colorWithAlphaComponent:TGAlphaTransparent].CGColor,
+		];
+		[self.layer insertSublayer:gradient atIndex:0];
+	}
+
 	_avatarView = [[UIImageView alloc] initWithFrame:
 			CGRectMake(TGCenteredOrigin(width, side), kHeaderAvatarTop,
 					side, side)];
@@ -175,6 +189,12 @@ static UIImage *TGHeaderSolidImage(UIColor *colour) {
 		UIImageView *badge = [[UIImageView alloc] initWithFrame:
 				CGRectMake(markX, markY, kHeaderNameBadge, kHeaderNameBadge)];
 		badge.image = [TGIcons verifiedBadge];
+		badge.contentMode = UIViewContentModeScaleAspectFit;
+		[self addSubview:badge];
+	} else if ([model[TGProfileHeaderPremium] boolValue]){
+		UIImageView *badge = [[UIImageView alloc] initWithFrame:
+				CGRectMake(markX, markY, kHeaderNameBadge, kHeaderNameBadge)];
+		badge.image = [TGIcons glyphNamed:@"star" colour:[theme accentColour] side:kHeaderNameBadge];
 		badge.contentMode = UIViewContentModeScaleAspectFit;
 		[self addSubview:badge];
 	}

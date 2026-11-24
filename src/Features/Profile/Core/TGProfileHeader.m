@@ -94,8 +94,14 @@
 		TGProfileHeaderColourId : @(self.userId ?: self.chatId),
 		TGProfileHeaderEmojiStatusId : @(self.emojiStatusId),
 		TGProfileHeaderVerified : @(self.isVerified),
+		TGProfileHeaderPremium : @(self.isPremium),
 		TGProfileHeaderActions : actions,
 	} mutableCopy];
+	if (self.profileAccentColorId >= 0){
+		UIColor *coverColour = [[TGProfileStore shared] accentColourForId:self.profileAccentColorId profile:YES];
+		if (coverColour)
+			model[TGProfileHeaderCoverColour] = coverColour;
+	}
 	if (self.avatarImage)
 		model[TGProfileHeaderAvatar] = self.avatarImage;
 	if (self.botVerificationImage)

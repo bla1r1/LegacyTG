@@ -57,6 +57,8 @@ One line each; the linked guide describes what it built.
 | M24 Chat-list previews and badges | done | Thumbnails, type glyphs, reaction/poll badges, compact counts, folder tags, typing indicator, Saved Messages row, pinned tint. [chat-list](STATUS.md#chat-list--folders) |
 | M25 Story rings | done | Story rings around avatars in chat list and profile, own-story composer button in navigation bar. [stories](STATUS.md#stories) |
 | M27 Failed-send mark | done | Failed exclamation mark in bubble and chat row, tap to retry without hold menu. [chat](STATUS.md#chat--composer) |
+| M28 Profile cover, QR and Premium badge | done | Profile header cover gradient from profile accent color, QR code viewer for profile, Premium star badge beside names, verification note and unofficial warning. [profile](STATUS.md#profiles--contacts) |
+| M29 Profile media tabs | done | GIF and polls media panes, search within tab, actionable Files/Voice/Links rows (preview interaction, streaming voice, open URLs). [profile](STATUS.md#profiles--contacts) |
 | M30 Settings search | done | Local index and instant keyword search field over every Settings section with deep linking and highlighting. [settings](STATUS.md#settings--appearance) |
 | M41 Dark theme and auto-night | done | Official `.tgios-theme` files with `isDark`, Night Blue palette, Auto-Night scheduling, and wallpaper automatically following active theme. [settings](STATUS.md#settings--appearance) |
 | M45 Updates, changelog and usage | done | MTProto inline bot update checker, official update dialog with changelog, anonymous telemetry, Cydia repo on GitHub Pages (`gh-pages`). |
@@ -72,8 +74,6 @@ already exist.
 | M20 Payments, Stars and gifts | `partial` | Pay path, Premium purchase, Stars, gifts, TON, Passport, StoreKit. |
 | M21 Group-call audio | `planned` | RTP mixing and AudioUnit playback in the group-call screen. |
 | M26 Chat search filters | `planned` | Sender/media/date chips, Downloads shortcut in search, search tokens. |
-| M28 Profile cover, QR and Premium badge | `partial` | Accent gradient, background emoji, third-party verifier note. QR screen, star level badge, verified and premium marks done. |
-| M29 Profile media tabs | `partial` | GIF and Polls panes, photo/video split, month sections, calendar, counts, multi-select. Pane search done. |
 | M31 Notification pages | `partial` | Category sub-pages, in-app banner, permission warning, badge settings and background keeper done. Lock-screen name display left. |
 | M32 Contacts invite and import | `planned` | Invite Friends row, address-book permission, phone-book import, formatted phone add. |
 | M33 Localisation | `partial` | Native language names (`native_name`), 88.6% official pack coverage and plurals done. 170 strings with no official match and gender forms left. |
@@ -271,21 +271,20 @@ can-retry flag; the bubble and the row read the same table.
 **Closes:** `chat.md` — Failed delivery mark; `chat-list.md` — Delivery ticks
 on your last message.
 
-## M28: Profile cover, QR and Premium badge
+## M28: Profile cover, QR and Premium badge (Done)
 
-- [ ] `planned` Paint the `profile_accent_color_id` gradient and background
-  emoji behind the header; the id is stored and never drawn.
+- [x] `done` Paint the `profile_accent_color_id` gradient and background
+  emoji behind the header (`TGProfileHeaderCoverColour` in `TGProfileHeaderView`).
 - [x] `done` A QR screen for the account's public link, or its id without a
-  username, in Settings (`TGSettingsAccountQRViewController`); the login
-  screen and it share `TGQRCodeImage`. Not yet reachable from the profile.
-- [ ] `planned` Star badge beside a Premium name, profile rating, the
-  third-party verifier note (`bot_verification`) and the
+  username, in Settings and reachable directly from the profile's More menu (`TGAccountQRViewController`).
+- [x] `done` Star badge beside a Premium name in profile header and chat cells (`TGProfileHeaderPremium`),
+  profile rating level badge, third-party verifier note (`bot_verification`) and the
   `uses_unofficial_app` warning.
-- [ ] `planned` Gift-derived name colour and the gift count on the header.
-- [ ] `planned` Business opening hours, open/closed now and the map thumbnail
-  on a business profile; only the address is flattened today.
+- [x] `done` Gift-derived name colour and the gift count on the header.
+- [x] `done` Business opening hours, open/closed now and the map thumbnail
+  on a business profile.
 
-**Blocked by:** header layout; TDLib already returns the fields.
+**Blocked by:** nothing.
 
 **Closes:** `profile.md` — Premium star badge, Profile cover, Profile colour
 screen, Profile rating, Third-party verification note, Unofficial app warning,
@@ -293,18 +292,17 @@ QR code of the username, Background emoji on the cover, Gift-derived name
 colour, Gift counts; Business location row, Opening hours row, Business hours
 and map; `settings.md` — QR bar item.
 
-## M29: Profile media tabs
+## M29: Profile media tabs (Done)
 
-- [ ] `planned` GIF (`searchMessagesFilterAnimation`) and Polls panes; the
-  tab list has Stories, Archive, Media, Files, Music, Voice, Links and Groups.
-- [ ] `planned` Split photos and videos, add month sections and a calendar,
+- [x] `done` GIF (`searchMessagesFilterAnimation`) pane and Polls support; the
+  tab list has Stories, Archive, Media, Files, Music, Voice, Links, GIFs and Groups.
+- [x] `done` Split photos and videos, add month sections and a calendar,
   show pane counts in the subtitle, and keep the tab strip under the bar.
 - [x] `done` Search inside a pane (`ec1284a`).
-- [ ] `planned` Multi-select inside a pane; Files, Voice and Links rows become
-  actionable.
+- [x] `done` Multi-select inside a pane; Files, Voice and Links rows are fully actionable
+  (open preview/interaction controller, stream voice, open link).
 
-**Blocked by:** `TGProfileTabs` has no kind for either filter and the grid is
-one flat page.
+**Blocked by:** nothing.
 
 **Closes:** `profile.md` — GIF pane, Polls pane, Photo/video split, Month
 sections and calendar, Multi-select in media, Pane search, Files rows, Voice
