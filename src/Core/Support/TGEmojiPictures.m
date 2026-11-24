@@ -235,8 +235,13 @@ NSArray *TGEmojiPictureRanges(NSString *text) {
 
 #if TARGET_OS_IPHONE
 NSAttributedString *TGEmojiPictureText(NSAttributedString *text, UIFont *font) {
+	// Inline pictures are iOS 7 TextKit: iOS 6 has a private NSTextAttachment
+	// without bounds and no attachment string. TGEmojiPicturesActive() keeps
+	// iOS 6 out already; this keeps the function safe on its own.
 	Class attachmentClass = NSClassFromString(@"NSTextAttachment");
-	if (!text.length || !font || !attachmentClass)
+	if (!text.length || !font || !attachmentClass ||
+			![attachmentClass instancesRespondToSelector:@selector(setBounds:)] ||
+			![NSAttributedString respondsToSelector:@selector(attributedStringWithAttachment:)])
 		return nil;
 	NSArray *ranges = TGEmojiPictureRanges(text.string);
 	if (!ranges.count)
@@ -255,6 +260,7 @@ NSAttributedString *TGEmojiPictureText(NSAttributedString *text, UIFont *font) {
 		UIImage *picture = TGEmojiPicture([text.string substringWithRange:range], side);
 		if (!picture)
 			continue;
+		// ios7-guarded: the respondsToSelector: checks at the top of this function.
 		NSTextAttachment *attachment = [[attachmentClass alloc] init];
 		attachment.image = picture;
 		attachment.bounds = CGRectMake(0, font.descender, side, side);
