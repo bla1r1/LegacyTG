@@ -36,6 +36,48 @@ LegacyTG repository.</p>
 </tr></table>
 
 <h2>Changelog</h2>
+<h2>2.0 (6) - 2026-11-24</h2>
+<ul>
+<li>The local Telegram database is now encrypted. On the first launch of 2.0 an existing database is re-encrypted with a key kept in the keychain; chats, media and the login stay. After that, 1.5 and older cannot open it: going back to an older version means signing in again and downloading the chats anew.</li>
+<li>App files are protected until the phone is first unlocked after a restart. Until that first unlock the app waits instead of opening the database.</li>
+<li>Video calls: one-to-one video calls with the official Telegram apps over the 9.0.0 protocol. H.264 through the phone&#x27;s hardware encoder and decoder on every iOS from 6 (VideoToolbox, which iOS 6 and 7 do not expose publicly), VP8 when the other side has no H.264, the camera can be turned off mid-call. Checked between an iPod touch 4 on iOS 6.1.6 and the official iOS app, both ways.</li>
+<li>Clear sound on old phones: the crackle and the 400 ms delay on the iPod touch 4 came from encoding on the audio thread, which skipped 60% of its cycles. Encoding and decoding now run on their own threads; audio goes in 60 ms Opus packets with forward error correction sized from the loss the other side reports, and a playout buffer stretches speech over gaps instead of clicking.</li>
+<li>Steadier video: lost packets are asked for again with a wait matched to the round trip, keyframes are requested again when they do not arrive, the send rate follows measured loss, the other side is asked for less when the phone falls behind, and frames are decoded in the camera&#x27;s own colour range (55-85 ms per frame were spent converting).</li>
+<li>Peer-to-peer calls: when both sides&#x27; privacy settings allow it, the call goes straight between the two devices (on the same Wi-Fi it connected directly within a second), and returns to Telegram&#x27;s relay within 3 s if the direct path goes quiet.</li>
+<li>Network changes: switching between Wi-Fi and mobile data or losing the network for 3-20 s no longer ends the call; the screen says &quot;Connecting...&quot; meanwhile.</li>
+<li>Ringing: incoming calls ring with the bundled ringtone and vibrate, respecting the mute switch; outgoing calls play a ringback once the other phone rings.</li>
+<li>Calls in the background: with the app behind another one, an incoming call arrives as a notification with the ring, and opening it brings up the call screen.</li>
+<li>Interruptions and audio routes: a phone call, an alarm or Siri pauses the call and it resumes afterwards; headphones and Bluetooth take the sound and give it back to the speaker when they leave; the proximity sensor darkens the screen at the ear.</li>
+<li>Fixed: every second call within one launch never started; versions 3.0.0 and 2.4.4 were offered to the other side without being implemented.</li>
+<li>Secret chats work: start one from a profile with the official confirmation, see the official panel (&quot;You have invited ... to join a secret chat&quot; and what secret chats do) while it is empty, a green padlock and green name in the chat list, the padlock beside the name in the chat, the encryption key picture to compare, the self-destruct timer, and on iOS 7+ the &quot;took a screenshot&quot; notice to the other side.</li>
+<li>Fixed: starting a secret chat showed &quot;An error occurred.&quot; even when it worked, and its profile opened without the person.</li>
+<li>As in every Telegram app, a secret chat exists only on the device it was started or accepted on.</li>
+<li>Create polls and quizzes: Attach &gt; Poll opens the official New Poll screen with a question and description, up to 12 options that appear as you type, Show Who Voted, Allow Multiple Answers, Allow Adding Options, Allow Revoting, Shuffle Options, and Set Correct Answer with an explanation. Cancel asks before discarding a filled poll.</li>
+<li>iOS 7: emoji are drawn from the bundled Apple Color Emoji pictures directly, in messages, names, chat previews and the emoji panel, every sequence up to Unicode 15.1 including flags, keycaps, skin tones and families. iOS 7 could not draw the bundled font under load: the app closed or froze for half a minute when the phone was turned with the emoji panel open.</li>
+<li>The right-facing people emoji of Unicode 15.1 no longer crash older iOS, and the font no longer carries picture metadata that iOS 7 misread.</li>
+<li>The emoji panel draws each emoji once and keeps the picture, so scrolling and turning the phone stay light on every device; the category strip shows the new emoji as well.</li>
+<li>Custom emoji: more of them animate in one message on stronger phones: 3 on iPhone 3GS/4 and iPod touch 4, 5 on iPhone 4S/5, 10 on iPhone 5s/6, 20 on newer; the rest show their still picture.</li>
+<li>Fixed: custom emoji overlapping in a row, country flags drawn as two letters, emoji cut at the bottom, bubbles too narrow for their emoji.</li>
+<li>Master-detail split view: the chat list beside the open chat, with the iOS 6 bar gloss and tab bar chrome, a doodle wallpaper behind an empty chat, and the open chat kept selected in the list.</li>
+<li>Every list screen follows one layout: the same empty states, add rows and sections across Settings, chats, contacts, groups, Business and Stars. Along the way: the Topics menu under its button, archive and Saved Messages rows, the notifications footer, the theme carousel, language search, Edit Profile, the Your Color header, login headings, the recent calls row, the call info button, wallpaper checkmarks, the AI compose bar, code entry boxes.</li>
+<li>The message field stays above the keyboard and the emoji panel through rotation and on iOS 7.</li>
+<li>The tab bar follows an emoji chat theme used for the whole app.</li>
+<li>Switch rows with a description no longer overlap the row below on iOS 6.</li>
+<li>Chat list: search and the archive row stay hidden above the list at launch; Saved Messages no longer shows an online dot; empty Stories and Archive panes in a profile are centred.</li>
+<li>Captions widen their bubbles, the composer footer no longer overlaps the text, and swipe actions in the chat list take taps.</li>
+<li>The sticker panel scrolls without end again and opens the right pack from the strip.</li>
+<li>Phone numbers typed without + or 00 stay national (Kyrgyz 996... is no longer taken for a country code); a pasted international number is split correctly.</li>
+<li>Log Out returns to the login screen.</li>
+<li>Country flags show in the country list on iOS 6.</li>
+<li>The sessions list on your other devices shows this app&#x27;s real version.</li>
+<li>A background keep-alive keeps Telegram connected behind other apps and shows new messages as notifications.</li>
+<li>Leaving the app pauses animated stickers, video stickers and GIFs, sets you offline and defers list reloads.</li>
+<li>Smaller caches and memory-warning cleanup on 256 MB devices, so the system closes the app less often.</li>
+<li>Stickers, animated emoji, wallpapers, video and voice messages from other people are checked for size and structure before they are decoded, so a crafted file cannot exhaust memory or crash the app.</li>
+<li>The Telegram datacenter is read reliably from the session file for diagnostics.</li>
+<li>A smaller download: emoji pictures at 32 px, stripped binaries and JPEG artwork.</li>
+<li>Installing from Cydia or Zebra asks to restart SpringBoard so the icon appears at once, and the package is built in the format older dpkg expects.</li>
+</ul>
 <h2>1.5 (5) - 2026-11-19</h2>
 <ul>
 <li>Apple Color Emoji: cartoon OpenMoji replaced with native 32-bit TrueColor Apple Color Emoji font (<code>AppleColorEmojiCompat.ttf</code>) extracted from macOS, with 40/64 ppem strikes covering Unicode 15.1 and 249 country flag ligatures. Glyphs render in full fidelity with smooth Apple gradients and calibrated gamma without blown highlights or quantization dithering.</li>
