@@ -406,7 +406,7 @@ static BOOL TGNotificationsWarning(void) {
 			@"icon": @"pin",
 			@"kw": @"saved messages cloud notes bookmarks files personal",
 			@"action": ^{
-				int64_t savedId = [[TGMessageStore shared] savedMessagesChatId];
+				int64_t savedId = [[TGProfileStore shared] savedMessagesChatId];
 				if (savedId) {
 					TGChatViewController *chat = [[TGChatViewController alloc] init];
 					chat.chatId = savedId;

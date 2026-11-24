@@ -570,6 +570,7 @@ APP_SRC_M := \
 	src/Features/Chat/TGChatViewController.m \
 	src/Features/Chat/Core/TGChatViewLayout.m \
 	src/Features/Chat/Core/TGChatViewData.m \
+	src/Features/Chat/TGPinnedMessagesViewController.m \
 	src/Features/Chat/Core/TGChatViewPinned.m \
 	src/Features/Chat/Core/TGChatViewTaps.m \
 	src/Features/Chat/Core/TGChatViewDocumentDelegate.m \
@@ -662,6 +663,7 @@ APP_SRC_M := \
 	src/Features/Profile/Core/TGProfileAvatars.m \
 	src/Features/Profile/Core/TGProfileTable.m \
 	src/Features/Profile/TGProfileViewController+Actions.m \
+	src/Features/Profile/TGAccountQRViewController.m \
 	src/Features/Profile/TGProfileViewController+Media.m \
 	src/Features/Profile/TGProfileViewController+Tier2.m \
 	src/Features/BotsPayments/TGGiftViewController.m \

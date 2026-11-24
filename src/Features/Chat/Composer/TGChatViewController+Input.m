@@ -761,7 +761,7 @@ static void TGTextFieldSetSelectedRange(UITextView *tf, NSRange range) {
 		} else {
 			NSMutableDictionary *opts = [NSMutableDictionary dictionary];
 			if (self.silentPosting)
-				[opts addEntriesFromDictionary:[TGClient messageSendOptionsSilent:YES schedulingState:nil]];
+				opts[@"disable_notification"] = @YES;
 			if (self.replyQuoteText.length)
 				opts[@"quote"] = self.replyQuoteText;
 			[[TGSendStore shared] sendFormattedText:ft
