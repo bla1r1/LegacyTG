@@ -431,6 +431,7 @@ APP_SRC_M := \
 	src/Core/Stores/TGSettingsStore+Diagnostics.m \
 	src/Core/Stores/TGSettingsStore+Language.m \
 	src/Core/Stores/TGSettingsStore+Proxy.m \
+	src/Core/Stores/TGAutoProxyManager.m \
 	src/Core/Stores/TGSettingsStore+SystemNotifications.m \
 	src/Core/Stores/TGSettingsStore+Tools.m \
 	src/Core/Stores/TGSettingsStore+Downloads.m \
@@ -656,6 +657,7 @@ APP_SRC_M := \
 	src/UI/Controllers/TGKeyboardDismissal.m \
 	src/UI/Controls/TGTableViewCell.m \
 	src/Features/Settings/TGNetworkViewController.m \
+	src/Features/Settings/TGProxySetupViewController.m \
 	src/Features/Chat/TGChatToolsViewController.m \
 	src/Features/Chat/TGStatisticsViewController.m \
 	src/Features/Profile/TGProfileViewController.m \

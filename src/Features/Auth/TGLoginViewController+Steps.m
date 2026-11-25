@@ -11,6 +11,7 @@
 #import "TGSettingsStore.h"
 #import "TGPresent.h"
 #import "TGBarItem.h"
+#import "TGProxySetupViewController.h"
 
 /// The code step is a row of digit boxes, as official draws it. The real text
 /// field stays behind them so the number pad and the paste menu keep working;
@@ -373,10 +374,12 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
     self.headingLabel.text = @"Your Phone";
     self.subtitleLabel.text = @"Please confirm your country code\nand enter your phone number.";
 
-    // Official has no Reset: a screen button must never destroy the TDLib
-    // session. The root phone screen has no left item; Close belongs to the
-    // add-another-account flow, which is not wired here.
-    self.navigationItem.leftBarButtonItem = nil;
+    // The root phone screen offers Proxy setup in the left bar item so users in
+    // blocked regions can configure or trigger fallback before signing in.
+    self.navigationItem.leftBarButtonItem = [TGBarItem itemWithTitle:TGLocalized(@"Proxy")
+                                                             primary:NO
+                                                              target:self
+                                                              action:@selector(proxyButtonTapped)];
 
     self.inputContainer.hidden = NO;
     self.inputContainer.backgroundColor = [[TGTheme shared] cardBackgroundColour];
@@ -1197,6 +1200,11 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
     [self applyTheme];
     [self updateActionEnabled];
     [self.inputField becomeFirstResponder];
+}
+
+- (void)proxyButtonTapped {
+    TGProxySetupViewController *vc = [[TGProxySetupViewController alloc] init];
+    [self.navigationController pushViewController:vc animated:YES];
 }
 
 @end

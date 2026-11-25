@@ -101,6 +101,7 @@
 #import "TGStarsStoreTests.m"
 #import "TGAuthStoreTests.m"
 #import "TGAuthRouteTests.m"
+#import "TGAutoProxyManagerTests.m"
 #import "TGSettingsStoreTests.m"
 #import "TGGroupStoreTests.m"
 #import "TGMessageStoreTests.m"

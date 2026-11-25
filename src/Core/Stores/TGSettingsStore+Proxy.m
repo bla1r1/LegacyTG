@@ -8,6 +8,7 @@
 // accepts, and which one is on.
 //
 #import "TGClientInternal.h"
+#import "TGAutoProxyManager.h"
 
 /// A proxy's type as TDLib wants it, from the kind name this app uses and
 /// the three strings a proxy can carry. Unknown kinds become SOCKS5, which
@@ -280,6 +281,40 @@ static NSDictionary *TGProxyObject(NSString *server, NSInteger port, NSString *k
 			completion(ok, ok ? nil : ([reply isKindOfClass:NSString.class]
 					? reply : @"TDLib refused that carrier error."));
 	}];
+}
+
+#pragma mark - Auto-Proxy
+
+- (void)startAutoProxyObserver {
+	[[TGAutoProxyManager shared] startObserving];
+}
+
+- (BOOL)autoProxyEnabled {
+	return [TGAutoProxyManager shared].isEnabled;
+}
+
+- (void)setAutoProxyEnabled:(BOOL)enabled {
+	[TGAutoProxyManager shared].enabled = enabled;
+}
+
+- (NSString *)autoProxyBootstrapURL {
+	return [TGAutoProxyManager shared].bootstrapURL;
+}
+
+- (void)setAutoProxyBootstrapURL:(NSString *)url {
+	[TGAutoProxyManager shared].bootstrapURL = url;
+}
+
+- (NSString *)autoProxyStatusText {
+	return [TGAutoProxyManager shared].statusText;
+}
+
+- (BOOL)autoProxyIsProbing {
+	return [TGAutoProxyManager shared].isProbing;
+}
+
+- (void)triggerAutoProxyFallbackNow {
+	[[TGAutoProxyManager shared] triggerFallbackNow];
 }
 
 @end

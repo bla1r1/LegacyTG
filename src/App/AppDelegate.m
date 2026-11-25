@@ -296,6 +296,7 @@ static UIImage *TGCustomEmojiFromStore(int64_t emojiId, CGFloat side) {
 		TGTextHasUndrawableEmoji(@"\u2604");
 	});
 	TGWatchForIncomingCalls();
+	[[TGSettingsStore shared] startAutoProxyObserver];
 
 	// The pack arrives after the first screen exists. When it does, repaint
 	// the chrome that was built while the lookup was still empty.

@@ -21,6 +21,7 @@
 #import "TGProfileStore.h"
 #import "TGSettingsStore.h"
 #import "TGPresent.h"
+#import "TGProxySetupViewController.h"
 
 
 static char TGAutoDownloadBaselineKey;
@@ -961,7 +962,21 @@ static NSString *TGChatNameForId(NSNumber *chatId) {
 		}
 		[sectionRows addObject:rows];
 	}
-	return TGPageSectionsFromModel(model, sectionRows);
+	NSArray *base = TGPageSectionsFromModel(model, sectionRows);
+	NSMutableArray *allSections = [base mutableCopy];
+	NSString *autoStatus = [[TGSettingsStore shared] autoProxyStatusText];
+	[allSections addObject:TGSection(TGLocalized(@"Automatic Fallback"), autoStatus, @[
+		TGSwitchRow(TGLocalized(@"Auto-Proxy (Anti-DPI)"),
+					[[TGSettingsStore shared] autoProxyEnabled], ^(BOOL on){
+			[[TGSettingsStore shared] setAutoProxyEnabled:on];
+			[weakSelf rebuild];
+		}),
+		TGOpenRow(TGLocalized(@"Fallback & Bootstrap"), autoStatus, ^{
+			TGProxySetupViewController *vc = [[TGProxySetupViewController alloc] init];
+			[weakSelf.navigationController pushViewController:vc animated:YES];
+		}),
+	])];
+	return allSections;
 }
 
 - (BOOL)canEditProxyRowAtIndexPath:(NSIndexPath *)indexPath {

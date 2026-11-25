@@ -152,6 +152,8 @@
 
 
 #pragma mark - Proxy
+extern NSString *const TGAutoProxyStatusChangedNotification;
+
 @interface TGSettingsStore (Proxy)
 
 	- (void)proxiesWithCompletion:(void (^)(NSArray *proxies))completion;
@@ -166,6 +168,14 @@
 	- (void)processWebProxyCarrierMessage:(NSInteger)carrierId text:(NSString *)text completion:(void (^)(BOOL ok, NSString *error))completion;
 	- (void)processWebProxyCarrierMessage:(NSInteger)carrierId base64:(NSString *)base64 completion:(void (^)(BOOL ok, NSString *error))completion;
 	- (void)reportWebProxyCarrierError:(NSInteger)carrierId kind:(NSString *)kind message:(NSString *)message completion:(void (^)(BOOL ok, NSString *error))completion;
+	- (void)startAutoProxyObserver;
+	- (BOOL)autoProxyEnabled;
+	- (void)setAutoProxyEnabled:(BOOL)enabled;
+	- (NSString *)autoProxyBootstrapURL;
+	- (void)setAutoProxyBootstrapURL:(NSString *)url;
+	- (NSString *)autoProxyStatusText;
+	- (BOOL)autoProxyIsProbing;
+	- (void)triggerAutoProxyFallbackNow;
 @end
 
 

@@ -172,6 +172,7 @@ CLIENT_OBJC_SRCS := \
     src/Core/Stores/TGSettingsStore+Diagnostics.m \
     src/Core/Stores/TGSettingsStore+Language.m \
     src/Core/Stores/TGSettingsStore+Proxy.m \
+    src/Core/Stores/TGAutoProxyManager.m \
     src/Core/Stores/TGSettingsStore+SystemNotifications.m \
     src/Core/Stores/TGSettingsStore+Tools.m \
     src/Core/Stores/TGSettingsStore+Downloads.m \
@@ -519,6 +520,7 @@ CLIENT_TEST_SRCS := \
     $(TESTS)/TGStarsStoreTests.m \
     $(TESTS)/TGAuthStoreTests.m \
     $(TESTS)/TGAuthRouteTests.m \
+    $(TESTS)/TGAutoProxyManagerTests.m \
     $(TESTS)/TGSettingsStoreTests.m \
     $(TESTS)/TGGroupStoreTests.m \
     $(TESTS)/TGMessageStoreTests.m \
