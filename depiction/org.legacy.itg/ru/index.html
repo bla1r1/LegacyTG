@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LegacyTG</title>
+<style>
+/* Plain CSS compatible with iOS 6 Safari / Cydia WebView: no JS, no CSS vars, no flex/grid. */
+* { -webkit-box-sizing: border-box; box-sizing: border-box; }
+body {
+  margin: 0;
+  padding: 16px 12px 28px;
+  background: #f2f4f8;
+  color: #1c2430;
+  font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+.wrap { max-width: 580px; margin: 0 auto; }
+.topbar { margin: 0 0 10px; overflow: hidden; }
+.back {
+  float: left;
+  padding: 5px 0;
+  color: #0077b5;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
+}
+.lang-switch {
+  float: right;
+  padding: 3px;
+  background: #e4e9f2;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.lang-switch span, .lang-switch a {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  text-decoration: none;
+}
+.lang-switch span.active { background: #ffffff; color: #1c2430; }
+.lang-switch a { color: #5b6778; }
+.card {
+  margin: 0 0 14px;
+  padding: 16px;
+  background: #ffffff;
+  border: 1px solid #e1e6ef;
+  border-radius: 16px;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
+}
+.head-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  float: left;
+  margin-right: 12px;
+}
+.head-text { overflow: hidden; }
+h1 { margin: 0 0 2px; font-size: 22px; font-weight: 700; }
+.sub { margin: 0; color: #5b6778; font-size: 13px; }
+.clear { clear: both; }
+.badges { margin-top: 12px; }
+.badge {
+  display: inline-block;
+  margin: 0 4px 4px 0;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #e7f4fd;
+  color: #0077b5;
+  font-size: 12px;
+  font-weight: 600;
+}
+h2 { margin: 0 0 10px; font-size: 16px; font-weight: 700; }
+h3 { margin: 14px 0 6px; font-size: 15px; font-weight: 700; color: #0077b5; }
+.repo {
+  margin: 10px 0 0;
+  padding: 9px 11px;
+  background: #f5f7fa;
+  border: 1px solid #dce2ec;
+  border-radius: 10px;
+  font: 12px/1.4 Menlo, Monaco, Courier, monospace;
+  color: #334155;
+  word-wrap: break-word;
+}
+.shots-scroll {
+  overflow-x: auto;
+  white-space: nowrap;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 4px;
+}
+.shot {
+  display: inline-block;
+  width: 175px;
+  margin-right: 8px;
+  border-radius: 12px;
+  border: 1px solid #dce2ec;
+  vertical-align: top;
+}
+.shot:last-child { margin-right: 0; }
+ul { margin: 0 0 6px 18px; padding: 0; }
+li { margin: 0 0 6px; font-size: 14px; }
+code {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: #eef2f7;
+  font: 12px Menlo, Monaco, Courier, monospace;
+}
+details { margin-top: 10px; border-top: 1px solid #edf1f7; padding-top: 8px; }
+summary { cursor: pointer; font-weight: 600; color: #0077b5; font-size: 14px; margin-bottom: 6px; }
+
+@media (prefers-color-scheme: dark) {
+  body { background: #0e141b; color: #e6edf3; }
+  .lang-switch { background: #1e2936; }
+  .lang-switch span.active { background: #2c3b4d; color: #e6edf3; }
+  .lang-switch a { color: #8b9bb0; }
+  .card { background: #17202b; border-color: #263241; box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35); }
+  .sub { color: #8b9bb0; }
+  .back, h3, summary { color: #58b8eb; }
+  .badge { background: #143248; color: #58b8eb; }
+  .repo { background: #111821; border-color: #2a3747; color: #cbd5e1; }
+  .shot { border-color: #2a3747; }
+  code { background: #1e2936; color: #e2e8f0; }
+  details { border-top-color: #263241; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <a class="back" href="../../../ru/">&larr; Репозиторий LegacyTG</a>
+    <div class="lang-switch"><a href="../">EN</a><span class="active">RU</span></div>
+  </div>
+
+  <div class="card">
+    <img class="head-icon" src="../../../Icon.png" alt="">
+    <div class="head-text">
+      <h1>LegacyTG</h1>
+      <p class="sub">Клиент Telegram на TDLib для классических устройств iOS.</p>
+    </div>
+    <div class="clear"></div>
+    <div class="badges">
+      <span class="badge">iOS 6.0 – 12.5.7</span>
+      <span class="badge">armv7 и arm64</span>
+      <span class="badge">Open Source</span>
+    </div>
+    <div class="repo">https://bla1r1.github.io/LegacyTG/</div>
+  </div>
+
+  <div class="card">
+    <h2>Скриншоты</h2>
+    <div class="shots-scroll">
+      <img class="shot" src="../shots/1-channel.png" alt="Канал">
+      <img class="shot" src="../shots/2-profile.png" alt="Профиль">
+      <img class="shot" src="../shots/3-folders.png" alt="Папки чатов">
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>История изменений</h2>
+    <!--changelog-->
+<h3>2.1 (7) - 2026-11-25</h3>
+<ul>
+<li>Quote selection: select a span of text inside a message bubble and reply quoting that fragment (<code>inputTextQuote</code>).</li>
+<li>Inline bots (<code>@bot query</code>): recent inline bot suggestions, richer result cards and action buttons.</li>
+<li>Multi-select copy: select multiple messages and copy their text together.</li>
+<li>Forward options: sheet to hide sender names or strip media captions before forwarding.</li>
+<li>Pinned messages list: dedicated sheet listing all pinned messages in a chat, plus in-chat search jump.</li>
+<li>Scroll jump buttons: anchored cleanly above the input bar and channel bottom bar so they no longer overlap.</li>
+<li>Video notes: rear-camera hardware LED torch toggle when recording, and screen lamp on the front camera.</li>
+<li>Callouts and menus: popup menus and reaction emoji adapt cleanly across light and dark themes.</li>
+<li>Profile header: accent cover gradient, Premium star badge, profile rating badge, third-party verification note (<code>bot_verification</code>), unofficial client notice, gift-derived name colour and gift count.</li>
+<li>Business profiles: opening hours with open/closed status and location map thumbnail.</li>
+<li>Profile QR code: reachable directly from the profile menu, rendered with bundled <code>qrcodegen</code> so it works on iOS 6 without Core Image.</li>
+<li>Profile media tabs: GIF and Polls panes, photo/video split, month sections and calendar, pane counts, in-pane search, multi-select, and actionable Files, Voice and Links rows.</li>
+<li>Avatars: placeholder gradients aligned with official Telegram, fixed avatar caching (<code>avatars_v2</code>), late-download handling and stale <code>file_id</code> cleanup.</li>
+<li>Settings search: local instant search over every Settings section with deep linking and row highlighting.</li>
+<li>Folders and search: unread counts on folder tabs and a Downloads shortcut in global search.</li>
+<li>Notifications: system permission warning banner and badge settings (include muted chats, count messages vs chats).</li>
+<li>Dark theme and Auto-Night: <code>.tgios-theme</code> support, built-in Night Blue theme, scheduled Auto-Night and wallpaper switching with the active theme.</li>
+<li>Update check: checks for new app releases hourly.</li>
+<li>Chat list: cell accessories consolidated into one <code>TGChatRowMetaView</code> (6 layers per row instead of 16, worst scroll frame latency reduced from 35 ms to 22 ms).</li>
+<li>Chat cache and memory: message page cache moved to <code>pages.sqlite</code> with TDLib&#x27;s message DB disabled, <code>TGMessageModel</code> replaces per-message dictionaries, and chat layout caches are shared across chats with memory-warning eviction.</li>
+<li>Off-main rendering: background text rendering (<code>TGTextRenderAsync</code>), cached <code>CTFont</code>, targeted cell reloads, C++ throttling of noisy TDLib updates and <code>yyjson</code> for synchronous queries.</li>
+<li>Audio and video notes: <code>AVAudioSession</code> and player setup moved off the main thread; redundant contacts reloads removed.</li>
+<li>Passcode privacy: privacy cover shown when backgrounding the app with a passcode set, and notification text hidden (&quot;New message&quot;).</li>
+<li>Link and parser safety: external URL allowlist (<code>http</code>, <code>https</code>, <code>tg</code>, <code>telegram</code>, <code>mailto</code>), timed pasteboard clear for sensitive values, and hardened parsers across core, calls (ICE/STUN/DTLS/SRTP), themes, Lottie and the video player.</li>
+<li>Fixes: chat pagination stays anchored during trimming, login code length and focused box border fixed, story viewer hides the status bar on iOS 6+.</li>
+</ul>
+<details><summary>2.0 (6) - 2026-11-24</summary>
+<ul>
+<li>The local Telegram database is now encrypted. On the first launch of 2.0 an existing database is re-encrypted with a key kept in the keychain; chats, media and the login stay. After that, 1.5 and older cannot open it: going back to an older version means signing in again and downloading the chats anew.</li>
+<li>App files are protected until the phone is first unlocked after a restart. Until that first unlock the app waits instead of opening the database.</li>
+<li>Video calls: one-to-one video calls with the official Telegram apps over the 9.0.0 protocol. H.264 through the phone&#x27;s hardware encoder and decoder on every iOS from 6 (VideoToolbox, which iOS 6 and 7 do not expose publicly), VP8 when the other side has no H.264, the camera can be turned off mid-call. Checked between an iPod touch 4 on iOS 6.1.6 and the official iOS app, both ways.</li>
+<li>Clear sound on old phones: the crackle and the 400 ms delay on the iPod touch 4 came from encoding on the audio thread, which skipped 60% of its cycles. Encoding and decoding now run on their own threads; audio goes in 60 ms Opus packets with forward error correction sized from the loss the other side reports, and a playout buffer stretches speech over gaps instead of clicking.</li>
+<li>Steadier video: lost packets are asked for again with a wait matched to the round trip, keyframes are requested again when they do not arrive, the send rate follows measured loss, the other side is asked for less when the phone falls behind, and frames are decoded in the camera&#x27;s own colour range (55-85 ms per frame were spent converting).</li>
+<li>Peer-to-peer calls: when both sides&#x27; privacy settings allow it, the call goes straight between the two devices (on the same Wi-Fi it connected directly within a second), and returns to Telegram&#x27;s relay within 3 s if the direct path goes quiet.</li>
+<li>Network changes: switching between Wi-Fi and mobile data or losing the network for 3-20 s no longer ends the call; the screen says &quot;Connecting...&quot; meanwhile.</li>
+<li>Ringing: incoming calls ring with the bundled ringtone and vibrate, respecting the mute switch; outgoing calls play a ringback once the other phone rings.</li>
+<li>Calls in the background: with the app behind another one, an incoming call arrives as a notification with the ring, and opening it brings up the call screen.</li>
+<li>Interruptions and audio routes: a phone call, an alarm or Siri pauses the call and it resumes afterwards; headphones and Bluetooth take the sound and give it back to the speaker when they leave; the proximity sensor darkens the screen at the ear.</li>
+<li>Fixed: every second call within one launch never started; versions 3.0.0 and 2.4.4 were offered to the other side without being implemented.</li>
+<li>Secret chats work: start one from a profile with the official confirmation, see the official panel (&quot;You have invited ... to join a secret chat&quot; and what secret chats do) while it is empty, a green padlock and green name in the chat list, the padlock beside the name in the chat, the encryption key picture to compare, the self-destruct timer, and on iOS 7+ the &quot;took a screenshot&quot; notice to the other side.</li>
+<li>Fixed: starting a secret chat showed &quot;An error occurred.&quot; even when it worked, and its profile opened without the person.</li>
+<li>As in every Telegram app, a secret chat exists only on the device it was started or accepted on.</li>
+<li>Create polls and quizzes: Attach &gt; Poll opens the official New Poll screen with a question and description, up to 12 options that appear as you type, Show Who Voted, Allow Multiple Answers, Allow Adding Options, Allow Revoting, Shuffle Options, and Set Correct Answer with an explanation. Cancel asks before discarding a filled poll.</li>
+<li>iOS 7: emoji are drawn from the bundled Apple Color Emoji pictures directly, in messages, names, chat previews and the emoji panel, every sequence up to Unicode 15.1 including flags, keycaps, skin tones and families. iOS 7 could not draw the bundled font under load: the app closed or froze for half a minute when the phone was turned with the emoji panel open.</li>
+<li>The right-facing people emoji of Unicode 15.1 no longer crash older iOS, and the font no longer carries picture metadata that iOS 7 misread.</li>
+<li>The emoji panel draws each emoji once and keeps the picture, so scrolling and turning the phone stay light on every device; the category strip shows the new emoji as well.</li>
+<li>Custom emoji: more of them animate in one message on stronger phones: 3 on iPhone 3GS/4 and iPod touch 4, 5 on iPhone 4S/5, 10 on iPhone 5s/6, 20 on newer; the rest show their still picture.</li>
+<li>Fixed: custom emoji overlapping in a row, country flags drawn as two letters, emoji cut at the bottom, bubbles too narrow for their emoji.</li>
+<li>Master-detail split view: the chat list beside the open chat, with the iOS 6 bar gloss and tab bar chrome, a doodle wallpaper behind an empty chat, and the open chat kept selected in the list.</li>
+<li>Every list screen follows one layout: the same empty states, add rows and sections across Settings, chats, contacts, groups, Business and Stars. Along the way: the Topics menu under its button, archive and Saved Messages rows, the notifications footer, the theme carousel, language search, Edit Profile, the Your Color header, login headings, the recent calls row, the call info button, wallpaper checkmarks, the AI compose bar, code entry boxes.</li>
+<li>The message field stays above the keyboard and the emoji panel through rotation and on iOS 7.</li>
+<li>The tab bar follows an emoji chat theme used for the whole app.</li>
+<li>Switch rows with a description no longer overlap the row below on iOS 6.</li>
+<li>Chat list: search and the archive row stay hidden above the list at launch; Saved Messages no longer shows an online dot; empty Stories and Archive panes in a profile are centred.</li>
+<li>Captions widen their bubbles, the composer footer no longer overlaps the text, and swipe actions in the chat list take taps.</li>
+<li>The sticker panel scrolls without end again and opens the right pack from the strip.</li>
+<li>Phone numbers typed without + or 00 stay national (Kyrgyz 996... is no longer taken for a country code); a pasted international number is split correctly.</li>
+<li>Log Out returns to the login screen.</li>
+<li>Country flags show in the country list on iOS 6.</li>
+<li>The sessions list on your other devices shows this app&#x27;s real version.</li>
+<li>A background keep-alive keeps Telegram connected behind other apps and shows new messages as notifications.</li>
+<li>Leaving the app pauses animated stickers, video stickers and GIFs, sets you offline and defers list reloads.</li>
+<li>Smaller caches and memory-warning cleanup on 256 MB devices, so the system closes the app less often.</li>
+<li>Stickers, animated emoji, wallpapers, video and voice messages from other people are checked for size and structure before they are decoded, so a crafted file cannot exhaust memory or crash the app.</li>
+<li>The Telegram datacenter is read reliably from the session file for diagnostics.</li>
+<li>A smaller download: emoji pictures at 32 px, stripped binaries and JPEG artwork.</li>
+<li>Installing from Cydia or Zebra asks to restart SpringBoard so the icon appears at once, and the package is built in the format older dpkg expects.</li>
+</ul>
+</details>
+<details><summary>1.5 (5) - 2026-11-19</summary>
+<ul>
+<li>Apple Color Emoji: cartoon OpenMoji replaced with native 32-bit TrueColor Apple Color Emoji font (<code>AppleColorEmojiCompat.ttf</code>) extracted from macOS, with 40/64 ppem strikes covering Unicode 15.1 and 249 country flag ligatures. Glyphs render in full fidelity with smooth Apple gradients and calibrated gamma without blown highlights or quantization dithering.</li>
+<li>Animated stickers (.tgs): rendered via <code>tlottie</code> (no_std Rust engine compiled for armv7 iOS 6 softfp), with <code>TGLottieRender</code> C++ fallback and <code>TGCrashGuard</code> signal isolation to prevent malformed animation files from crashing the process.</li>
+<li>Chat performance: chats open instantly on the last-viewed page (<code>TGChatPageCache</code>) without blank screen flashes. Message bubbles are recycled through <code>TGChatCellPool</code> and drawn off the main thread via <code>TGTextRender</code> LRU cache, bringing smooth 60 fps scrolling on iPod touch 4 and iPhone 4S.</li>
+<li>Panel performance: instant loading and smooth scrolling across stickers, custom emoji and GIFs. Sticker shelves are cached on disk and in memory (<code>TGBitmapFile</code>, <code>TGJSONCache</code>), GIF minithumbnails stay in memory to avoid main-thread JPEG decode stalls, and grid clearing on tab switch is eliminated.</li>
+<li>TDLib 1.8.70: updated to TDLib 1.8.70 and compiled with size optimization (<code>-Oz</code>), shrinking the <code>__TEXT</code> segment by ~2 MB for a significantly lower RAM footprint on 256–512 MB devices.</li>
+<li>Telegram Stars &amp; Giveaways: stars subscriptions, giveaways results with prize codes and participating channels, and unique gift releasing channels (&quot;released by @channel&quot;).</li>
+<li>Profile enhancements: Star rating level badge and details sheet, video avatars looping in headers on Modern and Full tiers, and sticker profile pictures played over the background fill.</li>
+<li>Link previews &amp; rich chat items: official action buttons under link previews (SEND MESSAGE, VIEW CHANNEL, VIEW THEME, etc.), Saved Messages reactions displayed as tag chips, big emoji pre-sized before sticker arrival, external album covers for tracks without artwork, and animated slot machine dice reels and lever.</li>
+<li>Secret media, polls and 18+ veil: self-destructing secret chat media with one-time view, open poll &quot;Add an Option&quot; support up to 100 characters, service line shortcuts leading directly to referenced polls/checklists/games, and 18+ sensitive media under official veil and confirmation alert.</li>
+<li>Stories and navigation: tappable links and message areas in stories with official hit testing and menus, deep-linking into specific Settings sub-pages (<code>tg://settings/blocked</code>, <code>passcode</code>, <code>storage</code>, etc.), and Instant View folding details, anchors and button rows.</li>
+<li>Recent Actions: channel name and profile colour changes are displayed with official text, colour dots and emoji swatches.</li>
+<li>Telemetry &amp; stability: crash markers (<code>OOM@Screen</code>) recorded and reported on next launch, install distribution channel tracking (<code>src=ipa</code> vs <code>src=deb</code>), and active Telegram datacenter (DC 1–5) resolved directly from session binlogs.</li>
+<li>Cydia repository tooling: <code>update_repo.py</code> orders debs by control file Version rather than file timestamp, preventing old packages from overriding fresh builds.</li>
+</ul>
+</details>
+<details><summary>1.4 (4) - 2026-11-16</summary>
+<ul>
+<li>Sign-in works again. 1.3 was built with placeholder API keys, so Telegram refused every new sign-in, and the screen kept loading because the error was never shown. Errors from Telegram are shown again on every sign-in step.</li>
+<li>A fresh install opens on the phone number instead of an empty &quot;Chats / Loading...&quot; list, and Log Out waits on a spinner rather than an empty chat list.</li>
+<li>The phone step names your country and its code before you sign in. Country opens Telegram&#x27;s full list: A to Z with an index and search by name or code.</li>
+<li>Log in by QR Code is back under the phone number.</li>
+<li>The keyboard closes when you tap empty space or drag the screen, on iOS 6 too, where the number pad had no way to close.</li>
+<li>Recent Actions for supergroup and channel admins: the last 48 hours of service actions in Telegram&#x27;s own words.</li>
+<li>The passcode and the database key are kept on jailbroken installs: the 1.3 package had lost its keychain permission.</li>
+<li>More of what Telegram sends is shown: when someone was last online, story rings, chat list notices, the full hold menu, SMS word codes, call status and rating, extra usernames, the join request bar, slow mode, jumps to unread reactions and poll votes, why a message failed to send, link preview pictures, commenters&#x27; photos, auto-delete timers, quotes, bot commands, business hours and the public photo.</li>
+<li>The API keys are no longer readable as plain text in the app.</li>
+</ul>
+</details>
+<details><summary>1.3 (3) - 2026-11-14</summary>
+<ul>
+<li>iOS 6: the dark theme no longer closes the app at launch. It set a section-index background colour and a bar tint that only exist from iOS 7; both are checked now.</li>
+<li>One download for every device: <code>LegacyTG.ipa</code> carries the 32-bit (armv7) and 64-bit (arm64) app in one package, and the Cydia repository installs the same build.</li>
+<li>A message that failed to send is marked in the chat and in the chat list; one tap sends it again.</li>
+<li>Send files and music: the document picker on iOS 8 and later, songs from the music library on every version, plus silent and repeating scheduled messages. Music plays while it is still downloading.</li>
+<li>The chat list shows what a message is (photo, voice, sticker) with its thumbnail, who is typing in a group, reaction, poll and folder badges, and counts as 99+.</li>
+<li>Profile photos open full screen and swipe through every photo a person has; before, the gallery always said &quot;No Photos&quot;.</li>
+<li>Fixes for iOS 6: the sign-in code screen, the terms screen, sending music and the profile music strip no longer close the app; the passcode is stored again on jailbroken installs.</li>
+<li>Switching accounts no longer shows the other account&#x27;s themes, wallpapers or media; screens stop listening for updates when they close.</li>
+<li>Custom emoji: every emoji in a message is drawn (five identical ones were drawn once), and one the renderer cannot animate keeps its picture instead of a blank.</li>
+<li>Dates, file sizes and durations read the same everywhere: in the app&#x27;s language, with the pack&#x27;s units, and an hour-long track as 1:00:00.</li>
+<li>Search looks like iOS 6: the field and Cancel sit on the navigation bar, scopes are a bar segmented control, and &quot;No Results&quot; is said once.</li>
+<li>Chat Folders opens with the official explanation; Recent Calls shows photos and the official empty text; privacy pages use Telegram&#x27;s own help text, so they translate.</li>
+<li>Reordering chat folders moves the folder you drag.</li>
+<li>Gift pages keep the navigation bar and show the Star for a gift of Stars.</li>
+<li>Decoded pictures stay under 16 MB on 32-bit devices (32 MB on 64-bit), and the chat applies new messages in batches every 100 ms.</li>
+</ul>
+</details>
+<details><summary>1.2 (2) - 2026-11-09</summary>
+<ul>
+<li>Official Telegram themes: light and dark, chat themes with their paired wallpapers, patterns, Night Blue and scheduled Auto-Night.</li>
+<li>The composer grows with the text; Return starts a new line. The AI screen can translate, restyle or fix a message before you send it.</li>
+<li>Faster launch: the first screen appears in about a second instead of three to five, with custom emoji already drawn in the chat list.</li>
+<li>The app checks for updates through our bot once a day and shows the official update screen with the changelog.</li>
+<li>A &quot;Share Statistics&quot; switch in Privacy and Security. It sends the app version, iOS, device, tier, jailbreak flag and language; never the account id.</li>
+<li>The blocked list shows real blocked accounts with their avatars; deleted accounts are left out.</li>
+<li>An empty Downloads screen now says that files downloaded in chats will appear there.</li>
+</ul>
+</details>
+<details><summary>1.1 (1) - 2026-11-08</summary>
+<ul>
+<li>Telegram for iOS 6 to 12.5: phone, code, password and QR sign-in, three accounts, and a Telegram-shaped Settings.</li>
+<li>Chats, groups, channels and forums with replies, forwards, edits, pins, reactions, folders, archive, scheduled messages and secret chats.</li>
+<li>Photos, videos, GIFs, documents, voice messages, round video, stickers and custom emoji, with downloads and saving to the camera roll.</li>
+<li>Stories, profiles, contacts, 1:1 calls, notifications, privacy controls, passcode lock and two-step verification.</li>
+<li>Search in a chat and across the app, with text from the official Telegram language packs.</li>
+<li>Release builds for 32-bit and 64-bit devices, with checksums for every download.</li>
+</ul>
+</details>
+<!--/changelog-->
+  </div>
+
+</div>
+</body>
+</html>

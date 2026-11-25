@@ -1,42 +1,177 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LegacyTG</title>
 <style>
-body { margin: 0; padding: 16px; background: #fff; color: #222;
-       font: 15px Helvetica, Arial, sans-serif; line-height: 1.4; }
-h1 { margin: 0 0 4px; font-size: 24px; }
-h2 { margin: 22px 0 8px; font-size: 18px; border-bottom: 1px solid #ccc;
-     padding-bottom: 4px; }
-p, li { font-size: 15px; }
-ul { margin: 0 0 0 18px; padding: 0; }
-li { margin: 0 0 6px; }
-.repo { margin: 8px 0 0; padding: 8px; background: #f2f2f2;
-        border: 1px solid #ccc; font-family: Menlo, Courier, monospace;
-        font-size: 12px; word-wrap: break-word; }
-.shots { width: 100%; border-collapse: collapse; margin: 8px 0; }
-.shots td { width: 33%; padding: 3px; vertical-align: top; }
-.shot { width: 100%; border: 1px solid #ccc; display: block; }
+/* Plain CSS compatible with iOS 6 Safari / Cydia WebView: no JS, no CSS vars, no flex/grid. */
+* { -webkit-box-sizing: border-box; box-sizing: border-box; }
+body {
+  margin: 0;
+  padding: 16px 12px 28px;
+  background: #f2f4f8;
+  color: #1c2430;
+  font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+.wrap { max-width: 580px; margin: 0 auto; }
+.topbar { margin: 0 0 10px; overflow: hidden; }
+.back {
+  float: left;
+  padding: 5px 0;
+  color: #0077b5;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
+}
+.lang-switch {
+  float: right;
+  padding: 3px;
+  background: #e4e9f2;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.lang-switch span, .lang-switch a {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  text-decoration: none;
+}
+.lang-switch span.active { background: #ffffff; color: #1c2430; }
+.lang-switch a { color: #5b6778; }
+.card {
+  margin: 0 0 14px;
+  padding: 16px;
+  background: #ffffff;
+  border: 1px solid #e1e6ef;
+  border-radius: 16px;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
+}
+.head-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  float: left;
+  margin-right: 12px;
+}
+.head-text { overflow: hidden; }
+h1 { margin: 0 0 2px; font-size: 22px; font-weight: 700; }
+.sub { margin: 0; color: #5b6778; font-size: 13px; }
+.clear { clear: both; }
+.badges { margin-top: 12px; }
+.badge {
+  display: inline-block;
+  margin: 0 4px 4px 0;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #e7f4fd;
+  color: #0077b5;
+  font-size: 12px;
+  font-weight: 600;
+}
+h2 { margin: 0 0 10px; font-size: 16px; font-weight: 700; }
+h3 { margin: 14px 0 6px; font-size: 15px; font-weight: 700; color: #0077b5; }
+.repo {
+  margin: 10px 0 0;
+  padding: 9px 11px;
+  background: #f5f7fa;
+  border: 1px solid #dce2ec;
+  border-radius: 10px;
+  font: 12px/1.4 Menlo, Monaco, Courier, monospace;
+  color: #334155;
+  word-wrap: break-word;
+}
+.shots-scroll {
+  overflow-x: auto;
+  white-space: nowrap;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 4px;
+}
+.shot {
+  display: inline-block;
+  width: 175px;
+  margin-right: 8px;
+  border-radius: 12px;
+  border: 1px solid #dce2ec;
+  vertical-align: top;
+}
+.shot:last-child { margin-right: 0; }
+ul { margin: 0 0 6px 18px; padding: 0; }
+li { margin: 0 0 6px; font-size: 14px; }
+code {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: #eef2f7;
+  font: 12px Menlo, Monaco, Courier, monospace;
+}
+details {
+  margin-top: 10px;
+  border-top: 1px solid #edf1f7;
+  padding-top: 8px;
+}
+summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: #0077b5;
+  font-size: 14px;
+  margin-bottom: 6px;
+}
+
+@media (prefers-color-scheme: dark) {
+  body { background: #0e141b; color: #e6edf3; }
+  .card {
+    background: #17202b;
+    border-color: #263241;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+  }
+  .sub { color: #8b9bb0; }
+  .back, h3, summary { color: #58b8eb; }
+  .badge { background: #143248; color: #58b8eb; }
+  .repo { background: #111821; border-color: #2a3747; color: #cbd5e1; }
+  .shot { border-color: #2a3747; }
+  code { background: #1e2936; color: #e2e8f0; }
+  details { border-top-color: #263241; }
+}
 </style>
 </head>
 <body>
-<h1>LegacyTG</h1>
-<p>LegacyTG: Telegram for iOS 6.0-12.5.7 on old iPhones and iPads.</p>
-<p>Add <b>https://bla1r1.github.io/LegacyTG</b> as a Cydia source, then install LegacyTG from the
-LegacyTG repository.</p>
-<p class="repo">https://bla1r1.github.io/LegacyTG</p>
+<div class="wrap">
 
-<h2>Screenshots</h2>
-<table class="shots"><tr>
-<td><img class="shot" src="shots/1-channel.png" alt="A channel"></td>
-<td><img class="shot" src="shots/2-profile.png" alt="A channel profile"></td>
-<td><img class="shot" src="shots/3-folders.png" alt="Chat Folders"></td>
-</tr></table>
+  <div class="topbar">
+    <a class="back" href="../../">&larr; LegacyTG Repository</a>
+    <div class="lang-switch"><span class="active">EN</span><a href="ru/">RU</a></div>
+  </div>
 
-<h2>Changelog</h2>
-<h2>2.1 (7) - 2026-11-25</h2>
+  <div class="card">
+    <img class="head-icon" src="../../Icon.png" alt="">
+    <div class="head-text">
+      <h1>LegacyTG</h1>
+      <p class="sub">Telegram client over TDLib for classic iOS hardware.</p>
+    </div>
+    <div class="clear"></div>
+    <div class="badges">
+      <span class="badge">iOS 6.0 – 12.5.7</span>
+      <span class="badge">armv7 &amp; arm64</span>
+      <span class="badge">Open Source</span>
+    </div>
+    <div class="repo">https://bla1r1.github.io/LegacyTG/</div>
+  </div>
+
+  <div class="card">
+    <h2>Screenshots</h2>
+    <div class="shots-scroll">
+      <img class="shot" src="shots/1-channel.png" alt="Channel">
+      <img class="shot" src="shots/2-profile.png" alt="Profile">
+      <img class="shot" src="shots/3-folders.png" alt="Chat Folders">
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Changelog</h2>
+    <!--changelog-->
+<h3>2.1 (7) - 2026-11-25</h3>
 <ul>
 <li>Quote selection: select a span of text inside a message bubble and reply quoting that fragment (<code>inputTextQuote</code>).</li>
 <li>Inline bots (<code>@bot query</code>): recent inline bot suggestions, richer result cards and action buttons.</li>
@@ -64,7 +199,7 @@ LegacyTG repository.</p>
 <li>Link and parser safety: external URL allowlist (<code>http</code>, <code>https</code>, <code>tg</code>, <code>telegram</code>, <code>mailto</code>), timed pasteboard clear for sensitive values, and hardened parsers across core, calls (ICE/STUN/DTLS/SRTP), themes, Lottie and the video player.</li>
 <li>Fixes: chat pagination stays anchored during trimming, login code length and focused box border fixed, story viewer hides the status bar on iOS 6+.</li>
 </ul>
-<h2>2.0 (6) - 2026-11-24</h2>
+<details><summary>2.0 (6) - 2026-11-24</summary>
 <ul>
 <li>The local Telegram database is now encrypted. On the first launch of 2.0 an existing database is re-encrypted with a key kept in the keychain; chats, media and the login stay. After that, 1.5 and older cannot open it: going back to an older version means signing in again and downloading the chats anew.</li>
 <li>App files are protected until the phone is first unlocked after a restart. Until that first unlock the app waits instead of opening the database.</li>
@@ -106,7 +241,8 @@ LegacyTG repository.</p>
 <li>A smaller download: emoji pictures at 32 px, stripped binaries and JPEG artwork.</li>
 <li>Installing from Cydia or Zebra asks to restart SpringBoard so the icon appears at once, and the package is built in the format older dpkg expects.</li>
 </ul>
-<h2>1.5 (5) - 2026-11-19</h2>
+</details>
+<details><summary>1.5 (5) - 2026-11-19</summary>
 <ul>
 <li>Apple Color Emoji: cartoon OpenMoji replaced with native 32-bit TrueColor Apple Color Emoji font (<code>AppleColorEmojiCompat.ttf</code>) extracted from macOS, with 40/64 ppem strikes covering Unicode 15.1 and 249 country flag ligatures. Glyphs render in full fidelity with smooth Apple gradients and calibrated gamma without blown highlights or quantization dithering.</li>
 <li>Animated stickers (.tgs): rendered via <code>tlottie</code> (no_std Rust engine compiled for armv7 iOS 6 softfp), with <code>TGLottieRender</code> C++ fallback and <code>TGCrashGuard</code> signal isolation to prevent malformed animation files from crashing the process.</li>
@@ -122,7 +258,8 @@ LegacyTG repository.</p>
 <li>Telemetry &amp; stability: crash markers (<code>OOM@Screen</code>) recorded and reported on next launch, install distribution channel tracking (<code>src=ipa</code> vs <code>src=deb</code>), and active Telegram datacenter (DC 1–5) resolved directly from session binlogs.</li>
 <li>Cydia repository tooling: <code>update_repo.py</code> orders debs by control file Version rather than file timestamp, preventing old packages from overriding fresh builds.</li>
 </ul>
-<h2>1.4 (4) - 2026-11-16</h2>
+</details>
+<details><summary>1.4 (4) - 2026-11-16</summary>
 <ul>
 <li>Sign-in works again. 1.3 was built with placeholder API keys, so Telegram refused every new sign-in, and the screen kept loading because the error was never shown. Errors from Telegram are shown again on every sign-in step.</li>
 <li>A fresh install opens on the phone number instead of an empty &quot;Chats / Loading...&quot; list, and Log Out waits on a spinner rather than an empty chat list.</li>
@@ -134,7 +271,8 @@ LegacyTG repository.</p>
 <li>More of what Telegram sends is shown: when someone was last online, story rings, chat list notices, the full hold menu, SMS word codes, call status and rating, extra usernames, the join request bar, slow mode, jumps to unread reactions and poll votes, why a message failed to send, link preview pictures, commenters&#x27; photos, auto-delete timers, quotes, bot commands, business hours and the public photo.</li>
 <li>The API keys are no longer readable as plain text in the app.</li>
 </ul>
-<h2>1.3 (3) - 2026-11-14</h2>
+</details>
+<details><summary>1.3 (3) - 2026-11-14</summary>
 <ul>
 <li>iOS 6: the dark theme no longer closes the app at launch. It set a section-index background colour and a bar tint that only exist from iOS 7; both are checked now.</li>
 <li>One download for every device: <code>LegacyTG.ipa</code> carries the 32-bit (armv7) and 64-bit (arm64) app in one package, and the Cydia repository installs the same build.</li>
@@ -152,7 +290,8 @@ LegacyTG repository.</p>
 <li>Gift pages keep the navigation bar and show the Star for a gift of Stars.</li>
 <li>Decoded pictures stay under 16 MB on 32-bit devices (32 MB on 64-bit), and the chat applies new messages in batches every 100 ms.</li>
 </ul>
-<h2>1.2 (2) - 2026-11-09</h2>
+</details>
+<details><summary>1.2 (2) - 2026-11-09</summary>
 <ul>
 <li>Official Telegram themes: light and dark, chat themes with their paired wallpapers, patterns, Night Blue and scheduled Auto-Night.</li>
 <li>The composer grows with the text; Return starts a new line. The AI screen can translate, restyle or fix a message before you send it.</li>
@@ -162,7 +301,8 @@ LegacyTG repository.</p>
 <li>The blocked list shows real blocked accounts with their avatars; deleted accounts are left out.</li>
 <li>An empty Downloads screen now says that files downloaded in chats will appear there.</li>
 </ul>
-<h2>1.1 (1) - 2026-11-08</h2>
+</details>
+<details><summary>1.1 (1) - 2026-11-08</summary>
 <ul>
 <li>Telegram for iOS 6 to 12.5: phone, code, password and QR sign-in, three accounts, and a Telegram-shaped Settings.</li>
 <li>Chats, groups, channels and forums with replies, forwards, edits, pins, reactions, folders, archive, scheduled messages and secret chats.</li>
@@ -171,5 +311,10 @@ LegacyTG repository.</p>
 <li>Search in a chat and across the app, with text from the official Telegram language packs.</li>
 <li>Release builds for 32-bit and 64-bit devices, with checksums for every download.</li>
 </ul>
+</details>
+<!--/changelog-->
+  </div>
+
+</div>
 </body>
 </html>

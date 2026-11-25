@@ -1,68 +1,190 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LegacyTG repository</title>
-<link rel="apple-touch-icon" href="CydiaIcon.png">
+<title>LegacyTG Repository</title>
+<link rel="apple-touch-icon" href="Icon.png">
 <style>
-/* Plain CSS that Safari on iOS 6 draws: no flexbox, no variables. */
-body { margin: 0; padding: 20px 16px; background: #dfe3ea; color: #222;
-       font: 15px Helvetica, Arial, sans-serif; line-height: 1.4; }
-.card { max-width: 520px; margin: 0 auto 14px; padding: 16px; background: #fff;
-        border: 1px solid #b9bfc9; border-radius: 10px; }
-.head { text-align: center; }
-.head img { width: 72px; height: 72px; border-radius: 16px; }
-h1 { margin: 8px 0 2px; font-size: 24px; }
-.sub { margin: 0; color: #666; }
-.ver { margin: 8px 0 0; color: #2e6db4; font-weight: bold; }
-h2 { margin: 0 0 10px; font-size: 17px; }
-.btn { display: block; margin: 0 0 8px; padding: 11px; border-radius: 8px;
-       text-align: center; text-decoration: none; font-weight: bold; color: #fff;
-       background: #3b7fd0; border: 1px solid #2c64a8; }
-.btn.alt { background: #f4f5f7; color: #2e6db4; border-color: #b9bfc9; }
-.repo { padding: 9px; background: #f2f2f2; border: 1px solid #ccc; border-radius: 6px;
-        font: 13px Menlo, Courier, monospace; word-wrap: break-word; }
-.note { margin: 8px 0 0; color: #666; font-size: 13px; }
-ul { margin: 0 0 0 18px; padding: 0; }
-li { margin: 0 0 4px; }
-a { color: #2e6db4; }
+/* Plain CSS compatible with iOS 6 Safari / Cydia WebView: no JS, no CSS vars, no flex/grid. */
+* { -webkit-box-sizing: border-box; box-sizing: border-box; }
+body {
+  margin: 0;
+  padding: 16px 14px 32px;
+  background: #f2f4f8;
+  color: #1c2430;
+  font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+.wrap { max-width: 560px; margin: 0 auto; }
+.topbar { text-align: right; margin: 0 0 10px; }
+.lang-switch {
+  display: inline-block;
+  padding: 3px;
+  background: #e4e9f2;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.lang-switch span, .lang-switch a {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  text-decoration: none;
+}
+.lang-switch span.active { background: #ffffff; color: #1c2430; }
+.lang-switch a { color: #5b6778; }
+.card {
+  margin: 0 0 14px;
+  padding: 18px;
+  background: #ffffff;
+  border: 1px solid #e1e6ef;
+  border-radius: 16px;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
+}
+.hero { text-align: center; padding: 24px 18px 20px; }
+.hero img {
+  width: 76px;
+  height: 76px;
+  border-radius: 17px;
+  display: inline-block;
+}
+h1 { margin: 12px 0 4px; font-size: 25px; font-weight: 700; letter-spacing: -0.3px; }
+.sub { margin: 0 auto; max-width: 400px; color: #5b6778; font-size: 14px; }
+.pill {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: #e7f4fd;
+  color: #0077b5;
+  font-size: 13px;
+  font-weight: 600;
+}
+h2 { margin: 0 0 12px; font-size: 16px; font-weight: 700; color: #1c2430; }
+.btn {
+  display: block;
+  margin: 0 0 8px;
+  padding: 12px 14px;
+  border-radius: 11px;
+  text-align: center;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 15px;
+  color: #ffffff;
+  background: #229ed9;
+  background: -webkit-linear-gradient(top, #2aabee, #1d8ec7);
+  background: linear-gradient(to bottom, #2aabee, #1d8ec7);
+  border: 1px solid #1882b8;
+}
+.btn.alt { background: #f5f7fa; color: #0077b5; border: 1px solid #d9e0eb; }
+.btn-row { font-size: 0; margin: 0 0 10px; }
+.btn-half { display: inline-block; width: 48.5%; font-size: 14px; margin: 0; }
+.btn-half.left { margin-right: 3%; }
+.repo {
+  padding: 10px 12px;
+  background: #f5f7fa;
+  border: 1px solid #dce2ec;
+  border-radius: 10px;
+  font: 12px/1.4 Menlo, Monaco, Courier, monospace;
+  color: #334155;
+  word-wrap: break-word;
+  text-align: center;
+}
+.note { margin: 9px 0 0; color: #64748b; font-size: 13px; }
+.pkg {
+  display: block;
+  padding: 11px 12px;
+  margin: 0 0 8px;
+  border: 1px solid #e5eaf2;
+  border-radius: 12px;
+  background: #f9fbfd;
+  text-decoration: none;
+  color: inherit;
+}
+.pkg:last-child { margin-bottom: 0; }
+.pkg-title { font-weight: 700; font-size: 15px; color: #0077b5; }
+.pkg-meta { font-size: 12px; color: #64748b; margin-top: 2px; }
+.pkg-desc { font-size: 13px; color: #334155; margin-top: 4px; }
+ul.links { margin: 0; padding: 0; list-style: none; }
+ul.links li { border-top: 1px solid #edf1f7; }
+ul.links li:first-child { border-top: 0; }
+ul.links a { display: block; padding: 9px 2px; color: #0077b5; text-decoration: none; font-weight: 500; }
+
+@media (prefers-color-scheme: dark) {
+  body { background: #0e141b; color: #e6edf3; }
+  .lang-switch { background: #1e2936; }
+  .lang-switch span.active { background: #2c3b4d; color: #e6edf3; }
+  .lang-switch a { color: #8b9bb0; }
+  .card { background: #17202b; border-color: #263241; box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35); }
+  .sub, .note, .pkg-meta { color: #8b9bb0; }
+  h2 { color: #e6edf3; }
+  .pill { background: #143248; color: #58b8eb; }
+  .btn.alt { background: #1e2936; color: #58b8eb; border-color: #2f3e50; }
+  .repo { background: #111821; border-color: #2a3747; color: #cbd5e1; }
+  .pkg { background: #1c2734; border-color: #2a3747; }
+  .pkg-title, ul.links a { color: #58b8eb; }
+  .pkg-desc { color: #cbd5e1; }
+  ul.links li { border-top-color: #263241; }
+}
 </style>
 </head>
 <body>
+<div class="wrap">
 
-<div class="card head">
-<img src="CydiaIcon.png" alt="">
-<h1>LegacyTG</h1>
-<p class="sub">Telegram for iOS 6.0–12.5.7 on old iPhones, iPads and iPod touch.</p>
-<p class="ver"><!--version-->Version 2.1 (7)<!--/version--></p>
+  <div class="topbar">
+    <div class="lang-switch">
+      <span class="active">EN</span><a href="ru/">RU</a>
+    </div>
+  </div>
+
+  <div class="card hero">
+    <img src="Icon.png" alt="LegacyTG">
+    <h1>LegacyTG</h1>
+    <p class="sub">Native Telegram client for iOS 6.0–12.5.7 on classic iPhones, iPads and iPod touch.</p>
+    <div class="pill"><!--version-->Version 2.1 (7)<!--/version--></div>
+  </div>
+
+  <div class="card">
+    <h2>Add Repository</h2>
+    <a class="btn" href="cydia://url/https://cydia.saurik.com/api/share#?source=https://bla1r1.github.io/LegacyTG/">Add to Cydia</a>
+    <div class="btn-row">
+      <a class="btn alt btn-half left" href="sileo://source/https://bla1r1.github.io/LegacyTG/">Add to Sileo</a>
+      <a class="btn alt btn-half" href="zbra://sources/add/https://bla1r1.github.io/LegacyTG/">Add to Zebra</a>
+    </div>
+    <div class="repo">https://bla1r1.github.io/LegacyTG/</div>
+    <p class="note">In Cydia: Sources → Edit → Add, and paste the address above.</p>
+  </div>
+
+  <div class="card">
+    <h2>Packages</h2>
+    <a class="pkg" href="depiction/org.legacy.itg/">
+      <div class="pkg-title">LegacyTG</div>
+      <div class="pkg-meta">org.legacy.itg · armv7 &amp; arm64 · iOS 6.0–12.5.7</div>
+      <div class="pkg-desc">Telegram client over TDLib, built for 32-bit and 64-bit legacy devices.</div>
+    </a>
+    <a class="pkg" href="depiction/net.angelxwind.appsyncunified/">
+      <div class="pkg-title">AppSync Unified</div>
+      <div class="pkg-meta">net.angelxwind.appsyncunified · Author: Karen (angelXwind)</div>
+      <div class="pkg-desc">Allows installing ad-hoc / self-signed IPA packages on jailbroken iOS devices.</div>
+    </a>
+  </div>
+
+  <div class="card">
+    <h2>Without a Jailbreak</h2>
+    <a class="btn alt" href="https://github.com/bla1r1/LegacyTG/releases/latest/download/LegacyTG.ipa">Download LegacyTG.ipa</a>
+    <p class="note">Universal binary (armv7 + arm64). Install with Sideloadly, AltStore or Xcode.</p>
+  </div>
+
+  <div class="card">
+    <h2>More</h2>
+    <ul class="links">
+      <li><a href="depiction/org.legacy.itg/">What's new and screenshots</a></li>
+      <li><a href="https://github.com/bla1r1/LegacyTG/releases">All releases and SHA-256</a></li>
+      <li><a href="https://github.com/bla1r1/LegacyTG">Source code on GitHub</a></li>
+    </ul>
+  </div>
+
 </div>
-
-<div class="card">
-<h2>Add the repository · Добавить репозиторий</h2>
-<a class="btn" href="cydia://url/https://cydia.saurik.com/api/share#?source=https://bla1r1.github.io/LegacyTG/">Add to Cydia</a>
-<a class="btn alt" href="sileo://source/https://bla1r1.github.io/LegacyTG/">Add to Sileo</a>
-<a class="btn alt" href="zbra://sources/add/https://bla1r1.github.io/LegacyTG/">Add to Zebra</a>
-<div class="repo">https://bla1r1.github.io/LegacyTG/</div>
-<p class="note">Or in Cydia: Sources → Edit → Add, and paste the address above.
-В Cydia: Источники → Изменить → Добавить, и вставьте адрес выше.</p>
-</div>
-
-<div class="card">
-<h2>Without a jailbreak · Без джейлбрейка</h2>
-<a class="btn alt" href="https://github.com/bla1r1/LegacyTG/releases/latest/download/LegacyTG.ipa">Download LegacyTG.ipa</a>
-<p class="note">One file for armv7 and arm64. Install it with any IPA installer that signs it for your device.
-Один файл для armv7 и arm64; ставится любым установщиком IPA.</p>
-</div>
-
-<div class="card">
-<h2>More · Ещё</h2>
-<ul>
-<li><a href="depiction/org.legacy.itg/">What's new and screenshots</a></li>
-<li><a href="https://github.com/bla1r1/LegacyTG/releases">All releases and SHA-256</a></li>
-<li><a href="https://github.com/bla1r1/LegacyTG">Source code on GitHub</a></li>
-</ul>
-</div>
-
 </body>
 </html>
