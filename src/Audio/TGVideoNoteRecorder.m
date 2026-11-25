@@ -355,6 +355,29 @@ static const NSTimeInterval kExportProgressStep = 1.0 / 5.0;
 		self.onCameraSwitched();
 }
 
+- (BOOL)setTorchEnabled:(BOOL)enabled {
+	if (!self.session)
+		return NO;
+	AVCaptureDevice *device = nil;
+	for (AVCaptureDeviceInput *input in self.session.inputs) {
+		if ([input.device hasMediaType:AVMediaTypeVideo]) {
+			device = input.device;
+			break;
+		}
+	}
+	if (!device || !device.hasTorch)
+		return NO;
+	AVCaptureTorchMode mode = enabled ? AVCaptureTorchModeOn : AVCaptureTorchModeOff;
+	if (![device isTorchModeSupported:mode])
+		return NO;
+	NSError *error = nil;
+	if (![device lockForConfiguration:&error])
+		return NO;
+	device.torchMode = mode;
+	[device unlockForConfiguration];
+	return YES;
+}
+
 - (void)flipCameraWithCompletion:(void (^)(void))completion {
 	void (^finished)(void) = completion ? [completion copy] : [^{} copy];
 	if (!self.startedAt){

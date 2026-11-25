@@ -63,6 +63,36 @@ static char kTGTableContentSizeContext;
 
 #pragma mark - layout
 
+static TGMessageLayoutCache *TGSharedChatLayoutCache(int64_t chatId, CGFloat width, TGDeviceTier tier) {
+	static NSCache *sharedCaches = nil;
+	static id sharedObservers[3];
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{
+		sharedCaches = [[NSCache alloc] init];
+		sharedCaches.countLimit = (tier == TGDeviceTierVintage) ? 4 : 8;
+		NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+		sharedObservers[0] = [nc addObserverForName:UIApplicationDidReceiveMemoryWarningNotification
+											 object:nil queue:[NSOperationQueue mainQueue]
+										 usingBlock:^(NSNotification *n){ [sharedCaches removeAllObjects]; }];
+		sharedObservers[1] = [nc addObserverForName:TGThemeChangedNotification
+											 object:nil queue:[NSOperationQueue mainQueue]
+										 usingBlock:^(NSNotification *n){ [sharedCaches removeAllObjects]; }];
+		sharedObservers[2] = [nc addObserverForName:TGAccountDidSwitchNotification
+											 object:nil queue:[NSOperationQueue mainQueue]
+										 usingBlock:^(NSNotification *n){ [sharedCaches removeAllObjects]; }];
+	});
+	if (!chatId)
+		return [[TGMessageLayoutCache alloc] initWithCapacity:tier == TGDeviceTierVintage ? 80 : 500];
+	NSString *key = [NSString stringWithFormat:@"%lld:%ld:%.1f",
+			(long long)chatId, (long)lround(width), [[TGTheme shared] messageFontSize]];
+	TGMessageLayoutCache *cache = [sharedCaches objectForKey:key];
+	if (!cache) {
+		cache = [[TGMessageLayoutCache alloc] initWithCapacity:tier == TGDeviceTierVintage ? 80 : 500];
+		[sharedCaches setObject:cache forKey:key];
+	}
+	return cache;
+}
+
 - (void)viewDidLoad {
 	[super viewDidLoad];
 
@@ -85,8 +115,10 @@ static char kTGTableContentSizeContext;
 	self.streamStore = [[TGMessageStreamStore alloc] init];
 	self.messages = @[];
 	TGDeviceTier tier = [TGDevice tier];
-	self.layoutCache = [[TGMessageLayoutCache alloc] initWithCapacity:
-			tier == TGDeviceTierVintage ? 80 : 500];
+	self.layoutCache = !self.threadId
+			? TGSharedChatLayoutCache(self.chatId, self.view.bounds.size.width, tier)
+			: [[TGMessageLayoutCache alloc] initWithCapacity:
+					tier == TGDeviceTierVintage ? 80 : 500];
 	self.gifPaths = [NSMutableDictionary dictionary];
 	self.gifsRequested = [NSMutableSet set];
 	self.senderAvatars = [[TGImageLruCache alloc] initWithCapacity:

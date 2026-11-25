@@ -17,6 +17,7 @@
 		_coverImages = [NSMutableDictionary dictionary];
 		_mediaImages = [NSMutableDictionary dictionary];
 		_memberCount = 0;
+		_profileAccentColorId = -1;
 		_canManage = NO;
 		_canInvite = NO;
 		_chatAvatars = [NSMutableDictionary dictionary];

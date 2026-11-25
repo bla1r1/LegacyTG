@@ -46,6 +46,7 @@
 /// Changes lens without losing the note: the running file closes, the lens
 /// changes, a new file opens. `completion` runs on the main queue.
 - (void)flipCameraWithCompletion:(void (^)(void))completion;
+- (BOOL)setTorchEnabled:(BOOL)enabled;
 - (void)cancel;
 
 @end

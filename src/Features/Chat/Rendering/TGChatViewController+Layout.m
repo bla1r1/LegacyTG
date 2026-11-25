@@ -260,6 +260,12 @@ UIImage *TGImageFromMinithumbnail(id mini) {
 		[inputs addObject:input];
 	}
 	self.messages = shown;
+	if (!inputs.count) {
+		then();
+		if (self.messages.count)
+			[self prefetchBodyTextsAroundRow:(NSInteger)self.messages.count - 1];
+		return;
+	}
 	dispatch_async(queue, ^{
 		pthread_setname_np("tg.chat-layout");
 		double start = TGPerfNow();

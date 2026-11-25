@@ -324,6 +324,7 @@ static const CGFloat kStageScaleOver = 1.03f;
 	// completion is what clears it.
 	[self.timer invalidate];
 	self.timer = nil;
+	[recorder setTorchEnabled:NO];
 	[self restoreBrightness];
 	[self.spinner stopAnimating];
 	self.previewHost.clipsToBounds = YES;
@@ -442,11 +443,22 @@ static const CGFloat kStageScaleOver = 1.03f;
 	}
 }
 
-/// The screen as the lamp: everything around the circle turns white and the
-/// backlight goes to full, which is what lights a face on a phone with no light
-/// on its front. The circle itself stays clear, the bar stays readable.
+/// On the rear camera, toggles the hardware LED torch; on the front camera,
+/// turns the screen around the circle into a white lamp.
 - (void)flashToggled {
+	TGVideoNoteRecorder *recorder = [TGVideoNoteRecorder shared];
 	self.lampOn = !self.lampOn;
+	if (!recorder.isFrontCamera) {
+		[self restoreBrightness];
+		[recorder setTorchEnabled:self.lampOn];
+		[UIView animateWithDuration:TGAnimationDurationFast animations:^{
+			self.lampBackdrop.alpha = TGAlphaTransparent;
+			self.lampCover.alpha = TGAlphaTransparent;
+		}];
+		[self showLampButtonOn:self.lampOn];
+		return;
+	}
+	[recorder setTorchEnabled:NO];
 	UIScreen *screen = [UIScreen mainScreen];
 	if (self.lampOn){
 		if (!self.lampCover.image)
@@ -490,6 +502,14 @@ static const CGFloat kStageScaleOver = 1.03f;
 	[UIView animateWithDuration:TGAnimationDurationFast animations:^{
 		self.previewHost.alpha = TGAlphaTransparent;
 	}];
+	if (self.lampOn) {
+		[[TGVideoNoteRecorder shared] setTorchEnabled:NO];
+		[self restoreBrightness];
+		self.lampOn = NO;
+		self.lampBackdrop.alpha = TGAlphaTransparent;
+		self.lampCover.alpha = TGAlphaTransparent;
+		[self showLampButtonOn:NO];
+	}
 	__weak typeof(self) weakSelf = self;
 	[[TGVideoNoteRecorder shared] flipCameraWithCompletion:^{
 		TGVideoNoteViewController *me = weakSelf;

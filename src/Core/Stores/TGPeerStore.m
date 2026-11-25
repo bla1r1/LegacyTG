@@ -127,7 +127,7 @@ static NSString *TGPeerAvatarDiskDirectory(void) {
 	NSString *caches = [NSSearchPathForDirectoriesInDomains(NSCachesDirectory,
 			NSUserDomainMask, YES) firstObject];
 	NSUInteger slot = [TGClient activeAccountSlot] + 1;
-	return [[caches stringByAppendingPathComponent:@"avatars"]
+	return [[caches stringByAppendingPathComponent:@"avatars_v2"]
 			stringByAppendingPathComponent:[NSString stringWithFormat:@"%lu",
 					(unsigned long)slot]];
 }
