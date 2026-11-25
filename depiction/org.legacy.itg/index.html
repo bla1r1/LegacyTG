@@ -36,6 +36,34 @@ LegacyTG repository.</p>
 </tr></table>
 
 <h2>Changelog</h2>
+<h2>2.1 (7) - 2026-11-25</h2>
+<ul>
+<li>Quote selection: select a span of text inside a message bubble and reply quoting that fragment (<code>inputTextQuote</code>).</li>
+<li>Inline bots (<code>@bot query</code>): recent inline bot suggestions, richer result cards and action buttons.</li>
+<li>Multi-select copy: select multiple messages and copy their text together.</li>
+<li>Forward options: sheet to hide sender names or strip media captions before forwarding.</li>
+<li>Pinned messages list: dedicated sheet listing all pinned messages in a chat, plus in-chat search jump.</li>
+<li>Scroll jump buttons: anchored cleanly above the input bar and channel bottom bar so they no longer overlap.</li>
+<li>Video notes: rear-camera hardware LED torch toggle when recording, and screen lamp on the front camera.</li>
+<li>Callouts and menus: popup menus and reaction emoji adapt cleanly across light and dark themes.</li>
+<li>Profile header: accent cover gradient, Premium star badge, profile rating badge, third-party verification note (<code>bot_verification</code>), unofficial client notice, gift-derived name colour and gift count.</li>
+<li>Business profiles: opening hours with open/closed status and location map thumbnail.</li>
+<li>Profile QR code: reachable directly from the profile menu, rendered with bundled <code>qrcodegen</code> so it works on iOS 6 without Core Image.</li>
+<li>Profile media tabs: GIF and Polls panes, photo/video split, month sections and calendar, pane counts, in-pane search, multi-select, and actionable Files, Voice and Links rows.</li>
+<li>Avatars: placeholder gradients aligned with official Telegram, fixed avatar caching (<code>avatars_v2</code>), late-download handling and stale <code>file_id</code> cleanup.</li>
+<li>Settings search: local instant search over every Settings section with deep linking and row highlighting.</li>
+<li>Folders and search: unread counts on folder tabs and a Downloads shortcut in global search.</li>
+<li>Notifications: system permission warning banner and badge settings (include muted chats, count messages vs chats).</li>
+<li>Dark theme and Auto-Night: <code>.tgios-theme</code> support, built-in Night Blue theme, scheduled Auto-Night and wallpaper switching with the active theme.</li>
+<li>Update check: checks for new app releases hourly.</li>
+<li>Chat list: cell accessories consolidated into one <code>TGChatRowMetaView</code> (6 layers per row instead of 16, worst scroll frame latency reduced from 35 ms to 22 ms).</li>
+<li>Chat cache and memory: message page cache moved to <code>pages.sqlite</code> with TDLib&#x27;s message DB disabled, <code>TGMessageModel</code> replaces per-message dictionaries, and chat layout caches are shared across chats with memory-warning eviction.</li>
+<li>Off-main rendering: background text rendering (<code>TGTextRenderAsync</code>), cached <code>CTFont</code>, targeted cell reloads, C++ throttling of noisy TDLib updates and <code>yyjson</code> for synchronous queries.</li>
+<li>Audio and video notes: <code>AVAudioSession</code> and player setup moved off the main thread; redundant contacts reloads removed.</li>
+<li>Passcode privacy: privacy cover shown when backgrounding the app with a passcode set, and notification text hidden (&quot;New message&quot;).</li>
+<li>Link and parser safety: external URL allowlist (<code>http</code>, <code>https</code>, <code>tg</code>, <code>telegram</code>, <code>mailto</code>), timed pasteboard clear for sensitive values, and hardened parsers across core, calls (ICE/STUN/DTLS/SRTP), themes, Lottie and the video player.</li>
+<li>Fixes: chat pagination stays anchored during trimming, login code length and focused box border fixed, story viewer hides the status bar on iOS 6+.</li>
+</ul>
 <h2>2.0 (6) - 2026-11-24</h2>
 <ul>
 <li>The local Telegram database is now encrypted. On the first launch of 2.0 an existing database is re-encrypted with a key kept in the keychain; chats, media and the login stay. After that, 1.5 and older cannot open it: going back to an older version means signing in again and downloading the chats anew.</li>
