@@ -1,5 +1,42 @@
 # Changelog
 
+## 2.1 (7) - 2026-11-25
+
+### Chats and messages
+- Quote selection: select a span of text inside a message bubble and reply quoting that fragment (`inputTextQuote`).
+- Inline bots (`@bot query`): recent inline bot suggestions, richer result cards and action buttons.
+- Multi-select copy: select multiple messages and copy their text together.
+- Forward options: sheet to hide sender names or strip media captions before forwarding.
+- Pinned messages list: dedicated sheet listing all pinned messages in a chat, plus in-chat search jump.
+- Scroll jump buttons: anchored cleanly above the input bar and channel bottom bar so they no longer overlap.
+- Video notes: rear-camera hardware LED torch toggle when recording, and screen lamp on the front camera.
+- Callouts and menus: popup menus and reaction emoji adapt cleanly across light and dark themes.
+
+### Profiles and media
+- Profile header: accent cover gradient, Premium star badge, profile rating badge, third-party verification note (`bot_verification`), unofficial client notice, gift-derived name colour and gift count.
+- Business profiles: opening hours with open/closed status and location map thumbnail.
+- Profile QR code: reachable directly from the profile menu, rendered with bundled `qrcodegen` so it works on iOS 6 without Core Image.
+- Profile media tabs: GIF and Polls panes, photo/video split, month sections and calendar, pane counts, in-pane search, multi-select, and actionable Files, Voice and Links rows.
+- Avatars: placeholder gradients aligned with official Telegram, fixed avatar caching (`avatars_v2`), late-download handling and stale `file_id` cleanup.
+
+### Settings, folders and notifications
+- Settings search: local instant search over every Settings section with deep linking and row highlighting.
+- Folders and search: unread counts on folder tabs and a Downloads shortcut in global search.
+- Notifications: system permission warning banner and badge settings (include muted chats, count messages vs chats).
+- Dark theme and Auto-Night: `.tgios-theme` support, built-in Night Blue theme, scheduled Auto-Night and wallpaper switching with the active theme.
+- Update check: checks for new app releases hourly.
+
+### Performance (armv7 and older hardware)
+- Chat list: cell accessories consolidated into one `TGChatRowMetaView` (6 layers per row instead of 16, worst scroll frame latency reduced from 35 ms to 22 ms).
+- Chat cache and memory: message page cache moved to `pages.sqlite` with TDLib's message DB disabled, `TGMessageModel` replaces per-message dictionaries, and chat layout caches are shared across chats with memory-warning eviction.
+- Off-main rendering: background text rendering (`TGTextRenderAsync`), cached `CTFont`, targeted cell reloads, C++ throttling of noisy TDLib updates and `yyjson` for synchronous queries.
+- Audio and video notes: `AVAudioSession` and player setup moved off the main thread; redundant contacts reloads removed.
+
+### Security and fixes
+- Passcode privacy: privacy cover shown when backgrounding the app with a passcode set, and notification text hidden ("New message").
+- Link and parser safety: external URL allowlist (`http`, `https`, `tg`, `telegram`, `mailto`), timed pasteboard clear for sensitive values, and hardened parsers across core, calls (ICE/STUN/DTLS/SRTP), themes, Lottie and the video player.
+- Fixes: chat pagination stays anchored during trimming, login code length and focused box border fixed, story viewer hides the status bar on iOS 6+.
+
 ## 2.0 (6) - 2026-11-24
 
 ### Irreversible: read before updating
