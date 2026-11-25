@@ -40,14 +40,14 @@ static const CGFloat kDefaultAvatarSide = 40.0f;
 }
 
 - (void)commonInit {
-	CGFloat scale = [UIScreen mainScreen].scale;
-
 	_imageView = [[UIImageView alloc] initWithFrame:CGRectMake(0, 0, _avatarSide, _avatarSide)];
 	_imageView.contentMode = UIViewContentModeScaleAspectFill;
 	_imageView.clipsToBounds = YES;
 	_imageView.layer.cornerRadius = TGHalf(_avatarSide);
-	_imageView.layer.shouldRasterize = YES;
-	_imageView.layer.rasterizationScale = scale;
+	// No shouldRasterize: the avatar is static between fetches, and
+	// rasterizing a rounded layer with masksToBounds costs an extra offscreen
+	// pass on every layout (chat list, profile header). clipsToBounds is kept
+	// because TGAvatarView receives raw square images, not pre-baked circles.
 	_imageView.layer.borderWidth = 1.0f;
 	_imageView.layer.borderColor = [TGTheme shared].separatorColour.CGColor;
 	[self addSubview:_imageView];

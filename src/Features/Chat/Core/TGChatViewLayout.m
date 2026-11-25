@@ -166,7 +166,6 @@ static char kTGTableContentSizeContext;
 
 	[self buildInputBar:b];
 	TGPerfReport("chat vc", "input bar", vcStart, 100.0);
-	[self buildChrome];
 	[self refreshReplyKeyboard];
 	// After the input bar exists: the kind decides what replaces it. Called
 	// from the title build before, it framed the channel bar on a nil input
@@ -192,8 +191,6 @@ static char kTGTableContentSizeContext;
 	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(speedLimited:)
 			name:TGSpeedLimitNotification object:nil];
 	TGPerfReport("chat vc", "chrome", vcStart, 50.0);
-	[self installSwipeToReply];
-	TGPerfReport("chat vc", "swipe + load", vcStart, 100.0);
 
 	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(keyboardWillShow:)
 			name:UIKeyboardWillShowNotification object:nil];
@@ -432,12 +429,29 @@ FOUNDATION_EXPORT void TGBubbleFlushCache(void);
 - (void)viewWillAppear:(BOOL)animated {
 	[super viewWillAppear:animated];
 	sActiveChatId = self.chatId;
+	self.pushAnimatingUntil = animated ? CACurrentMediaTime() + 0.38 : 0.0;
 	[self installLiveHandlers];
-	[self refreshUnreadJumps];
+	if (self.jumpButton)
+		[self refreshUnreadJumps];
 	if (self.readWhenShown.count) {
 		[[TGMessageStore shared] markRead:self.readWhenShown inChat:self.chatId];
 		[self.readWhenShown removeAllObjects];
 	}
+}
+
+- (void)viewDidAppear:(BOOL)animated {
+	[super viewDidAppear:animated];
+	self.pushAnimatingUntil = 0.0;
+	// Jump buttons, floating date and swipe-to-reply are invisible during the
+	// push transition: building them here keeps them off frame 1 of open.
+	if (!self.jumpButton) {
+		[self buildChrome];
+		[self installSwipeToReply];
+		[self refreshUnreadJumps];
+		[self layoutChrome];
+	}
+	if (self.pendingHistoryPage)
+		[self applyPendingHistoryPage];
 }
 
 /// This chat's live feed. A listener of its own, so a chat pushed on top of

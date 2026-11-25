@@ -276,6 +276,8 @@ UIImage *TGImageFromMinithumbnail(id mini) {
 					self.layoutCache[ids[i]] = layout;
 			}
 			then();
+			if (self.messages.count)
+				[self prefetchBodyTextsAroundRow:(NSInteger)self.messages.count - 1];
 		});
 	});
 }

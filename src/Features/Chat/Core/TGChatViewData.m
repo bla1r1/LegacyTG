@@ -42,6 +42,7 @@
 #import "TGMessageLayout.h"
 #import "TGBubbleCell.h"
 #import "TGChatViewControllerInternal.h"
+#import "TGMessageModel.h"
 #import "TGMessageStreamStore.h"
 #import "TGPeerStore.h"
 #import "TGStyle.h"
@@ -79,8 +80,12 @@ static const double kTGHoldBottomSeconds = 6.0;
 }
 
 - (void)readOutboxChanged:(NSNotification *)note {
+	// Only the double-tick on each visible bubble changes; heights are
+	// unaffected, so a targeted redraw is enough and avoids the 1550 ms
+	// full reloadData that reloadTableDebounced would trigger at @durov
+	// channel update frequency.
 	if ([note.userInfo[@"chatId"] longLongValue] == self.chatId)
-		[self reloadTableDebounced];
+		[self redrawVisibleRows];
 }
 
 /// The store moved a message between sending, sent and failed. Only this
@@ -95,6 +100,23 @@ static const double kTGHoldBottomSeconds = 6.0;
 	int64_t oldId = [note.userInfo[TGSendStoreOldMessageIdKey] longLongValue];
 	if (oldId > 0)
 		[self.layoutCache removeLayoutForMessageId:oldId];
+	[self reloadSpecificMessageId:messageId orFallback:oldId];
+}
+
+/// Reloads only the row that matches msgId (or oldId for a pending→sent
+/// rename). Falls back to reloadTableDebounced when the row is not on screen,
+/// because the layout cache for it may need a full rebuild that only
+/// cellForRowAtIndexPath triggers.
+- (void)reloadSpecificMessageId:(int64_t)msgId orFallback:(int64_t)oldId {
+	for (NSIndexPath *ip in self.table.indexPathsForVisibleRows) {
+		if (ip.row >= (NSInteger)self.messages.count) continue;
+		int64_t mid = TGMsgId(self.messages[(NSUInteger)ip.row]);
+		if (mid == msgId || (oldId > 0 && mid == oldId)) {
+			[self.table reloadRowsAtIndexPaths:@[ip]
+					  withRowAnimation:UITableViewRowAnimationNone];
+			return;
+		}
+	}
 	[self reloadTableDebounced];
 }
 
@@ -236,6 +258,8 @@ static const double kTGHoldBottomSeconds = 6.0;
 - (BOOL)tableStillOrRetry:(SEL)action {
 	double now = CACurrentMediaTime();
 	double wait = TGChatRedrawDelay(now, self.lastScrollTime);
+	if (now < self.pushAnimatingUntil)
+		wait = MAX(wait, self.pushAnimatingUntil - now);
 	if (self.table.isDragging || self.table.isDecelerating)
 		wait = MAX(wait, TGChatRedrawSettleSeconds);
 	if (wait == 0 && (self.stillCheckedAt != self.lastScrollTime ||
@@ -412,7 +436,7 @@ static const double kTGHoldBottomSeconds = 6.0;
 		me.historyArrived = YES;
 		if (!threadId && loaded.count)
 			[TGChatPageCache savePage:loaded chat:me.chatId account:account];
-		if (!me.pageFromCache) {
+		if (!me.pageFromCache && CACurrentMediaTime() >= me.pushAnimatingUntil) {
 			[me applyHistoryPage:loaded cached:NO];
 			return;
 		}

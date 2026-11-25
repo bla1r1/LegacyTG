@@ -50,7 +50,10 @@ static void TGSetWanted(NSString *key, BOOL wanted) {
 + (BOOL)wallpaperWanted {
 	NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
 	if (![defaults objectForKey:@"TGWantWallpaper"])
-		return [TGDevice tier] >= TGDeviceTierLegacy;
+		// Legacy (iPhone 4S/5) is opt-in: a texture under every bubble costs
+		// GPU fill-rate on each scrolled frame, and the user should choose.
+		// Modern and Full tiers have the headroom and get it by default.
+		return [TGDevice tier] > TGDeviceTierLegacy;
 	return [defaults boolForKey:@"TGWantWallpaper"];
 }
 + (void)setWallpaperWanted:(BOOL)wanted {

@@ -337,7 +337,9 @@ size_t TGTextCacheLimit(void) {
 	static size_t limit;
 	static dispatch_once_t once;
 	dispatch_once(&once, ^{
-		limit = ([TGCapabilities memoryMB] <= 256 ? 4u : 8u) * 1024 * 1024;
+		// 6 MB on 256 MB devices holds ~1.5-2 screens of long posts so a
+		// back-and-forth scroll does not evict and re-render on main thread.
+		limit = ([TGCapabilities memoryMB] <= 256 ? 6u : 8u) * 1024 * 1024;
 	});
 	return limit;
 }
@@ -447,6 +449,37 @@ void TGTextRenderPrefetch(NSString *key, CGSize size, CGFloat scale, NSAttribute
 		dispatch_async(dispatch_get_main_queue(), ^{
 			[gInFlight removeObject:name];
 			TGTextRenderStoreWithRects(name, image, rects);
+			if (image)
+				CGImageRelease(image);
+		});
+	});
+}
+
+void TGTextRenderAsync(NSString *key, NSAttributedString *text, CGSize size, CGFloat scale,
+		void (^completion)(CGImageRef image)) {
+	if (!key || !text.length) {
+		if (completion) completion(NULL);
+		return;
+	}
+	CGImageRef cached = TGTextRenderCached(key);
+	if (cached) {
+		if (completion) completion(cached);
+		return;
+	}
+	NSString *name = [key copy];
+	NSAttributedString *snapshot = [text copy];
+	dispatch_queue_t queue = size.height > TGMetricTextHoldMaxHeight ? TGTextRenderTallQueue() : TGTextRenderQueue();
+	dispatch_async(queue, ^{
+		pthread_setname_np("tg.text-render");
+		double start = TGPerfNow();
+		CGImageRef image = TGTextRenderCan(snapshot) ? TGTextRenderCreateImage(snapshot, size, scale) : NULL;
+		NSArray *rects = image ? TGCustomEmojiRectsCoreText(snapshot, size.width) : nil;
+		TGPerfReport("text render", "background", start, 50.0);
+		dispatch_async(dispatch_get_main_queue(), ^{
+			TGTextRenderStoreWithRects(name, image, rects);
+			CGImageRef stored = TGTextRenderCached(name);
+			if (completion)
+				completion(stored);
 			if (image)
 				CGImageRelease(image);
 		});

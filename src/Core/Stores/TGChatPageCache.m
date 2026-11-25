@@ -2,14 +2,14 @@
 // TGChatPageCache.m - see TGChatPageCache.h.
 //
 #import "TGChatPageCache.h"
-#import "TGJSONCache.h"
+#import "TGBase64.h"
+#import <sqlite3.h>
 
-/// A first screen and a little above it. Each message is measured before the
-/// page shows: thirty long posts were 315 ms of reading on the main thread
-/// and seconds of measuring on the iPod touch 4; TDLib's page follows.
-static const NSUInteger kTGChatPageMessages = 10;
-/// Chats whose page is kept; older files are deleted on the next save.
-static const NSUInteger kTGChatPagesKept = 10;
+/// 30 newest messages per chat: covers a full screen plus scrollback when
+/// TDLib's own message database is off.
+static const NSUInteger kTGChatPageMessages = 30;
+/// Chats kept in the local SQLite page cache; older rows are trimmed on save.
+static const NSUInteger kTGChatPagesKept = 50;
 
 BOOL TGChatPageIsCurrent(NSArray *page, int64_t lastMessageId) {
 	if (![page isKindOfClass:NSArray.class] || !page.count || lastMessageId <= 0)
@@ -56,9 +56,81 @@ static dispatch_queue_t TGChatPageQueue(void) {
 			stringByAppendingPathComponent:[NSString stringWithFormat:@"%lld", accountId]];
 }
 
-static NSString *TGChatPagePath(int64_t chatId, int64_t accountId) {
+static NSString *TGChatPageDBPath(int64_t accountId) {
 	return [[TGChatPageCache directoryForAccount:accountId]
-			stringByAppendingPathComponent:[NSString stringWithFormat:@"%lld.json", chatId]];
+			stringByAppendingPathComponent:@"pages.sqlite"];
+}
+
+static id TGPageJSONSafe(id value) {
+	if ([value isKindOfClass:NSData.class])
+		return @{ @"$data" : TGBase64Encode(value) ?: @"" };
+	if ([value isKindOfClass:NSDictionary.class]) {
+		NSMutableDictionary *out = [NSMutableDictionary dictionaryWithCapacity:[value count]];
+		[(NSDictionary *)value enumerateKeysAndObjectsUsingBlock:^(id key, id obj, BOOL *stop) {
+			out[key] = TGPageJSONSafe(obj);
+		}];
+		return out;
+	}
+	if ([value isKindOfClass:NSArray.class]) {
+		NSMutableArray *out = [NSMutableArray arrayWithCapacity:[value count]];
+		for (id obj in (NSArray *)value)
+			[out addObject:TGPageJSONSafe(obj)];
+		return out;
+	}
+	return value;
+}
+
+static id TGPageJSONRestored(id value) {
+	if ([value isKindOfClass:NSDictionary.class]) {
+		NSDictionary *dict = value;
+		if (dict.count == 1 && [dict[@"$data"] isKindOfClass:NSString.class])
+			return TGBase64Decode(dict[@"$data"]) ?: [NSData data];
+		NSMutableDictionary *out = [NSMutableDictionary dictionaryWithCapacity:dict.count];
+		[dict enumerateKeysAndObjectsUsingBlock:^(id key, id obj, BOOL *stop) {
+			out[key] = TGPageJSONRestored(obj);
+		}];
+		return out;
+	}
+	if ([value isKindOfClass:NSArray.class]) {
+		NSMutableArray *out = [NSMutableArray arrayWithCapacity:[value count]];
+		for (id obj in (NSArray *)value)
+			[out addObject:TGPageJSONRestored(obj)];
+		return out;
+	}
+	return value;
+}
+
+static sqlite3 *TGOpenPageDB(int64_t accountId, BOOL create) {
+	NSString *path = TGChatPageDBPath(accountId);
+	if (!create && ![[NSFileManager defaultManager] fileExistsAtPath:path])
+		return NULL;
+	if (create) {
+		[[NSFileManager defaultManager] createDirectoryAtPath:[path stringByDeletingLastPathComponent]
+				withIntermediateDirectories:YES attributes:nil error:NULL];
+	}
+	sqlite3 *db = NULL;
+	int flags = create ? (SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE) : SQLITE_OPEN_READONLY;
+	if (sqlite3_open_v2(path.UTF8String, &db, flags, NULL) != SQLITE_OK) {
+		if (db) sqlite3_close(db);
+		return NULL;
+	}
+	sqlite3_busy_timeout(db, 1000);
+	if (create) {
+		sqlite3_exec(db,
+				"PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;"
+				"CREATE TABLE IF NOT EXISTS chat_pages ("
+				"  chat_id INTEGER PRIMARY KEY,"
+				"  updated_at REAL NOT NULL,"
+				"  payload BLOB NOT NULL"
+				");"
+				"CREATE INDEX IF NOT EXISTS idx_chat_pages_updated ON chat_pages(updated_at);"
+				"CREATE TABLE IF NOT EXISTS chat_list ("
+				"  slot INTEGER PRIMARY KEY,"
+				"  payload BLOB NOT NULL"
+				");",
+				NULL, NULL, NULL);
+	}
+	return db;
 }
 
 + (void)savePage:(NSArray *)messages chat:(int64_t)chatId account:(int64_t)accountId {
@@ -67,35 +139,116 @@ static NSString *TGChatPagePath(int64_t chatId, int64_t accountId) {
 	NSUInteger keep = MIN(messages.count, kTGChatPageMessages);
 	NSArray *page = [messages subarrayWithRange:NSMakeRange(messages.count - keep, keep)];
 	dispatch_async(TGChatPageQueue(), ^{
-		NSString *path = TGChatPagePath(chatId, accountId);
-		if (!TGJSONCacheWrite(page, path))
-			return;   // something in a message with no JSON form: no page
-		NSString *dir = [self directoryForAccount:accountId];
-		NSFileManager *fm = [NSFileManager defaultManager];
-
-		NSArray *names = [fm contentsOfDirectoryAtPath:dir error:NULL];
-		if (names.count <= kTGChatPagesKept)
+		id json = TGPageJSONSafe(page);
+		if (![NSJSONSerialization isValidJSONObject:json])
 			return;
-		NSMutableArray *files = [NSMutableArray array];
-		for (NSString *name in names) {
-			NSString *path = [dir stringByAppendingPathComponent:name];
-			NSDate *date = [fm attributesOfItemAtPath:path error:NULL].fileModificationDate;
-			if (date)
-				[files addObject:@[ date, path ]];
+		NSData *blob = [NSJSONSerialization dataWithJSONObject:json options:0 error:NULL];
+		if (!blob.length)
+			return;
+		sqlite3 *db = TGOpenPageDB(accountId, YES);
+		if (!db)
+			return;
+		sqlite3_stmt *stmt = NULL;
+		if (sqlite3_prepare_v2(db,
+				"INSERT OR REPLACE INTO chat_pages (chat_id, updated_at, payload) VALUES (?, ?, ?);",
+				-1, &stmt, NULL) == SQLITE_OK) {
+			sqlite3_bind_int64(stmt, 1, chatId);
+			sqlite3_bind_double(stmt, 2, CFAbsoluteTimeGetCurrent());
+			sqlite3_bind_blob(stmt, 3, blob.bytes, (int)blob.length, SQLITE_TRANSIENT);
+			sqlite3_step(stmt);
+			sqlite3_finalize(stmt);
 		}
-		[files sortUsingComparator:^NSComparisonResult(NSArray *a, NSArray *b) {
-			return [b[0] compare:a[0]];
-		}];
-		for (NSUInteger i = kTGChatPagesKept; i < files.count; i++)
-			[fm removeItemAtPath:files[i][1] error:NULL];
+		if (sqlite3_prepare_v2(db,
+				"DELETE FROM chat_pages WHERE chat_id NOT IN "
+				"(SELECT chat_id FROM chat_pages ORDER BY updated_at DESC LIMIT ?);",
+				-1, &stmt, NULL) == SQLITE_OK) {
+			sqlite3_bind_int(stmt, 1, (int)kTGChatPagesKept);
+			sqlite3_step(stmt);
+			sqlite3_finalize(stmt);
+		}
+		sqlite3_close(db);
 	});
 }
 
 + (NSArray *)pageForChat:(int64_t)chatId account:(int64_t)accountId {
 	if (!chatId || !accountId)
 		return nil;
-	id page = TGJSONCacheRead(TGChatPagePath(chatId, accountId));
-	return [page isKindOfClass:NSArray.class] ? page : nil;
+	sqlite3 *db = TGOpenPageDB(accountId, NO);
+	if (!db)
+		return nil;
+	NSData *blob = nil;
+	sqlite3_stmt *stmt = NULL;
+	if (sqlite3_prepare_v2(db,
+			"SELECT payload FROM chat_pages WHERE chat_id = ? LIMIT 1;",
+			-1, &stmt, NULL) == SQLITE_OK) {
+		sqlite3_bind_int64(stmt, 1, chatId);
+		if (sqlite3_step(stmt) == SQLITE_ROW) {
+			const void *bytes = sqlite3_column_blob(stmt, 0);
+			int len = sqlite3_column_bytes(stmt, 0);
+			if (bytes && len > 0)
+				blob = [NSData dataWithBytes:bytes length:(NSUInteger)len];
+		}
+		sqlite3_finalize(stmt);
+	}
+	sqlite3_close(db);
+	if (!blob.length)
+		return nil;
+	id object = [NSJSONSerialization JSONObjectWithData:blob options:0 error:NULL];
+	id restored = object ? TGPageJSONRestored(object) : nil;
+	return [restored isKindOfClass:NSArray.class] ? restored : nil;
+}
+
++ (void)saveChats:(NSArray *)chats account:(int64_t)accountId {
+	if (!accountId || !chats.count)
+		return;
+	NSArray *snapshot = [chats copy];
+	dispatch_async(TGChatPageQueue(), ^{
+		id json = TGPageJSONSafe(snapshot);
+		if (![NSJSONSerialization isValidJSONObject:json])
+			return;
+		NSData *blob = [NSJSONSerialization dataWithJSONObject:json options:0 error:NULL];
+		if (!blob.length)
+			return;
+		sqlite3 *db = TGOpenPageDB(accountId, YES);
+		if (!db)
+			return;
+		sqlite3_stmt *stmt = NULL;
+		if (sqlite3_prepare_v2(db,
+				"INSERT OR REPLACE INTO chat_list (slot, payload) VALUES (1, ?);",
+				-1, &stmt, NULL) == SQLITE_OK) {
+			sqlite3_bind_blob(stmt, 1, blob.bytes, (int)blob.length, SQLITE_TRANSIENT);
+			sqlite3_step(stmt);
+			sqlite3_finalize(stmt);
+		}
+		sqlite3_close(db);
+	});
+}
+
++ (NSArray *)chatsForAccount:(int64_t)accountId {
+	if (!accountId)
+		return nil;
+	sqlite3 *db = TGOpenPageDB(accountId, NO);
+	if (!db)
+		return nil;
+	NSData *blob = nil;
+	sqlite3_stmt *stmt = NULL;
+	if (sqlite3_prepare_v2(db,
+			"SELECT payload FROM chat_list WHERE slot = 1 LIMIT 1;",
+			-1, &stmt, NULL) == SQLITE_OK) {
+		if (sqlite3_step(stmt) == SQLITE_ROW) {
+			const void *bytes = sqlite3_column_blob(stmt, 0);
+			int len = sqlite3_column_bytes(stmt, 0);
+			if (bytes && len > 0)
+				blob = [NSData dataWithBytes:bytes length:(NSUInteger)len];
+		}
+		sqlite3_finalize(stmt);
+	}
+	sqlite3_close(db);
+	if (!blob.length)
+		return nil;
+	id object = [NSJSONSerialization JSONObjectWithData:blob options:0 error:NULL];
+	id restored = object ? TGPageJSONRestored(object) : nil;
+	return [restored isKindOfClass:NSArray.class] ? restored : nil;
 }
 
 @end

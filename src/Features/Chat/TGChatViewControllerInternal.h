@@ -234,6 +234,7 @@ UIImage *TGImageFromMinithumbnail(id mini);
 @property (nonatomic, assign) CGFloat heightsFontSize;
 /// When the table last moved; rows waiting for a redraw wait for it to stop.
 @property (nonatomic, assign) double lastScrollTime;
+@property (nonatomic, assign) double pushAnimatingUntil;
 /// Text pictures and emoji decodes are held while the table moves.
 @property (nonatomic, assign) BOOL backgroundHeld;
 - (void)releaseBackgroundWhenStill;
@@ -489,6 +490,8 @@ UIImage *TGImageFromMinithumbnail(id mini);
 - (void)executeDeleteMessages:(NSArray *)ids revoke:(BOOL)revoke;
 - (void)updateEditToolbar;
 - (void)reloadTableDebounced;
+- (void)reloadSpecificMessageId:(int64_t)msgId orFallback:(int64_t)oldId;
+- (void)applyPendingHistoryPage;
 - (void)playOnce:(TGLottieView *)view path:(NSString *)path settled:(BOOL)settled;
 - (void)showChannelBottomBar;
 - (UIImage *)composerBarBackgroundImageForHeight:(CGFloat)height;

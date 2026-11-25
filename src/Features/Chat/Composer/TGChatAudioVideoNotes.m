@@ -50,15 +50,16 @@
 	circle.backgroundColor = [[TGTheme shared] mediaViewerBackdropColour];
 	circle.tag = 0xF119;
 
-	[[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayback error:nil];
-	[[AVAudioSession sharedInstance] setActive:YES error:nil];
+	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+		[[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayback error:nil];
+		[[AVAudioSession sharedInstance] setActive:YES error:nil];
+	});
 
 	MPMoviePlayerController *player = [[MPMoviePlayerController alloc]
 			initWithContentURL:[NSURL fileURLWithPath:path]];
 	player.controlStyle = MPMovieControlStyleNone;
 	player.scalingMode = MPMovieScalingModeAspectFill;
 	player.view.frame = circle.bounds;
-	player.view.clipsToBounds = YES;
 	player.view.userInteractionEnabled = NO;
 	player.shouldAutoplay = YES;
 	[circle addSubview:player.view];
@@ -92,7 +93,12 @@
 	[self showPlayerBar];
 	self.playerLabel.text = @"Video message";
 	[self startPlaybackTimer];
-	[self.table reloadData];
+	if (row >= 0 && row < (NSInteger)self.messages.count) {
+		[self.table reloadRowsAtIndexPaths:@[[NSIndexPath indexPathForRow:row inSection:0]]
+						withRowAnimation:UITableViewRowAnimationNone];
+	} else {
+		[self.table reloadData];
+	}
 }
 
 - (void)videoNoteLoopNotification:(NSNotification *)note {

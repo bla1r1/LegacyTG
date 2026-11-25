@@ -978,9 +978,9 @@ static NSUInteger sButtonImageCount;
 	CGSize size = image.size;
 	if (!image.CGImage || size.width < 2 || size.height < 2)
 		return nil;
-	// A quarter of the side: three box passes on it are a good Gaussian, cheap
-	// on the A4, and an image view scales the answer up smoothly.
-	const CGFloat shrink = 4.0f;
+	// Half the point size: three NEON vImage box passes give a smooth Gaussian
+	// without the blocky 0.25x look on Retina screens, and still finish in ~5 ms.
+	const CGFloat shrink = 2.0f;
 	size_t w = MAX((size_t)1, (size_t)ceilf(size.width / shrink));
 	size_t h = MAX((size_t)1, (size_t)ceilf(size.height / shrink));
 	size_t rowBytes = w * 4;

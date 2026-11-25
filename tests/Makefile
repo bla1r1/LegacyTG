@@ -59,6 +59,7 @@ LDFLAGS := \
     -lwebp \
     $(VPX_HOST) \
     -lz \
+    -lsqlite3 \
     -lc++ \
     -framework Foundation \
     -framework AppKit \
@@ -216,6 +217,7 @@ CLIENT_OBJC_SRCS := \
     src/Core/Client/Messages/TGClient+MessageRecord.m \
     src/Core/Client/Messages/TGClient+InlineMessages.m \
     src/Core/Model/TGMessageFlatten.m \
+    src/Core/Model/TGMessageModel.m \
     src/Core/Model/TGLinkPreviewAction.m \
     src/Core/Model/TGUserRating.m \
     src/Core/Model/TGVideoAvatar.m \

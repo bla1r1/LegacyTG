@@ -16,6 +16,7 @@
 #import "TGCustomEmojiStore.h"
 #import "TGStickerBudget.h"
 #import "TGDevice.h"
+#import "TGMessageModel.h"
 
 /// A background link's colours as the swatch official draws for a plain or
 /// gradient wallpaper: one colour, or the colours top to bottom. Small and
@@ -70,7 +71,12 @@ static UIImage *TGLinkFillImage(NSArray *colours) {
 
 static char kTGReactionChipInfoKey;
 /// Rows on each side of the one coming into view whose body text is drawn ahead.
-static const NSInteger kTGBodyPrefetchRows = 4;
+/// Rows ahead-of-time rendered on each side of the visible centre.
+/// Vintage hardware has one slow core: more prefetch rows mean fewer
+/// sync layout stalls on the main thread when the user scrolls fast.
+static NSInteger TGBodyPrefetchRows(void) {
+	return [TGDevice tier] <= TGDeviceTierVintage ? 8 : 4;
+}
 static char kTGReactionChipsShownKey;
 
 #pragma mark - table
@@ -82,7 +88,7 @@ static char kTGReactionChipsShownKey;
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
 	NSDictionary *m = self.messages[indexPath.row];
-	BOOL mine = [m[@"outgoing"] boolValue];
+	BOOL mine = TGMsgOutgoing(m);
 	// One row has a sixtieth of a second if the scroll is to hold 60 fps, and
 	// a thirtieth before it is visibly jerky on an A4. Anything over that
 	// names itself and its kind in the log; under it this costs one
@@ -337,8 +343,9 @@ static char kTGReactionChipsShownKey;
 			linkMedia = [[UIImageView alloc] init];
 			linkMedia.tag = 0x900C;
 			linkMedia.contentMode = UIViewContentModeScaleAspectFill;
-			linkMedia.clipsToBounds = YES;
-			linkMedia.layer.cornerRadius = TGMetricCornerSmall;
+			// No clipsToBounds / cornerRadius: images arrive pre-rounded via
+			// TGIcons roundedImage:size:radius:corners:, so the GPU never needs
+			// an offscreen mask pass for each link preview thumbnail.
 			[cell.bubble addSubview:linkMedia];
 		}
 		NSArray *fill = [m[@"linkPreviewFill"] isKindOfClass:NSArray.class] ? m[@"linkPreviewFill"] : nil;
@@ -346,9 +353,16 @@ static char kTGReactionChipsShownKey;
 			linkMedia.image = TGLinkFillImage(fill);
 		} else {
 			NSDictionary *picture = @{@"photoId" : m[@"linkPreviewPhotoId"]};
-			linkMedia.image = [self imageFor:picture];
-			if (!linkMedia.image)
+			UIImage *raw = [self imageFor:picture];
+			if (raw) {
+				// Async round + cache via TGIcons so linkMedia never blocks main.
+				[TGIcons setRoundedImage:raw inView:linkMedia
+									size:layout.linkMediaFrame.size
+								  radius:TGMetricCornerSmall];
+			} else {
+				[TGIcons setRoundedImage:nil inView:linkMedia size:CGSizeZero radius:0];
 				[self fetchImageForMessage:picture];
+			}
 		}
 		linkMedia.backgroundColor = [theme separatorColour];
 		linkMedia.frame = layout.linkMediaFrame;
@@ -1010,7 +1024,12 @@ UIImage *TGBubbleBackImage(TGTheme *theme, BOOL mine, BOOL first, BOOL last) {
 	// them was there when they were drawn.
 	TGTheme *theme = [TGTheme shared];
 	NSArray *shown = objc_getAssociatedObject(holder, &kTGReactionChipsShownKey);
-	if (shown.firstObject == groups && [shown.lastObject isEqual:[theme currentThemeId] ?: @""] &&
+	// Use isEqual: (value comparison) not == (pointer): after any reloadData
+	// the array object is new even when reactions did not change, so the
+	// pointer check always missed and rebaked every chip row. At @durov's
+	// view/reaction update rate that was the main cause of main-thread spikes.
+	if ([shown.firstObject isEqual:groups] &&
+			[shown.lastObject isEqual:[theme currentThemeId] ?: @""] &&
 			CGRectEqualToRect(holder.frame, layout.reactionChipsFrame))
 		return;
 	objc_setAssociatedObject(holder, &kTGReactionChipsShownKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
@@ -1186,25 +1205,31 @@ UIImage *TGBubbleBackImage(TGTheme *theme, BOOL mine, BOOL first, BOOL last) {
 	TGTheme *theme = [TGTheme shared];
 	CGFloat scale = [UIScreen mainScreen].scale;
 	UIFont *font = TGFontAtSize(theme.messageFontSize);
-	for (NSInteger offset = -kTGBodyPrefetchRows; offset <= kTGBodyPrefetchRows; offset++) {
+	for (NSInteger offset = -TGBodyPrefetchRows(); offset <= TGBodyPrefetchRows(); offset++) {
 		NSInteger r = row + offset;
 		if (offset == 0 || r < 0 || r >= (NSInteger)messages.count)
 			continue;
 		NSDictionary *m = messages[(NSUInteger)r];
-		NSNumber *msgId = m[@"id"];
+		int64_t rawId = TGMsgId(m);
+		NSNumber *msgId = rawId ? @(rawId) : nil;
 		TGMessageLayout *layout = msgId ? self.layoutCache[msgId] : nil;
-		NSString *text = m[@"text"];
-		if (!layout || layout.bodyPrefetched || layout.isService || layout.isVoice || layout.isSticker ||
+		NSString *text = TGMsgText(m);
+		if (!layout || layout.isService || layout.isVoice || layout.isSticker ||
 				layout.bodySize.height <= 0 || ![text isKindOfClass:NSString.class] || !text.length)
 			continue;
-		layout.bodyPrefetched = YES;
-		BOOL mine = [m[@"outgoing"] boolValue];
+		BOOL mine = TGMsgOutgoing(m);
 		BOOL revealed = [self.revealedSpoilers containsObject:msgId];
+		NSString *renderKey = [self bodyRenderKeyFor:m layout:layout mine:mine revealed:revealed];
+		// Check the cache directly instead of a one-way flag on layout: if
+		// TGTextEvict() evicted this post while scrolling elsewhere, it must
+		// be re-prefetched before it comes back on screen.
+		if (TGTextRenderCached(renderKey) != NULL)
+			continue;
 		UIColor *colour = mine ? [theme bubbleMineTextColour] : [theme bubbleTheirsTextColour];
 		NSArray *entities = [m[@"entities"] isKindOfClass:NSArray.class] ? m[@"entities"] : nil;
 		NSAttributedString *built = !revealed && [layout.attributedBodyColour isEqual:colour]
 				? layout.attributedBody : nil;
-		TGTextRenderPrefetch([self bodyRenderKeyFor:m layout:layout mine:mine revealed:revealed],
+		TGTextRenderPrefetch(renderKey,
 				layout.bodyFrame.size, scale, ^NSAttributedString *{
 			if (built)
 				return built;

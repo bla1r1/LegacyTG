@@ -151,7 +151,6 @@
 		return;
 	}
 	self.backgroundHeld = NO;
-	TGTextRenderHold(NO);
 	[[TGCustomEmojiStore shared] setDecodesHeld:NO];
 	[[TGMessageStore shared] setUpdatesHeld:NO];
 }
@@ -173,10 +172,10 @@
 				scrollView.contentInset.bottom - TGDoubled(scrollView.bounds.size.height))
 			self.anchorToBottom = NO;
 		if (!self.backgroundHeld) {
-			// The core and CoreGraphics' glyph lock go to the frames while
-			// the table moves; what was asked meanwhile is drawn after.
+			// Emoji decodes and store updates wait for scroll to settle, while
+			// TGTextRenderQueue keeps running at LOW priority so prefetched
+			// body bitmaps are ready before their rows hit displayLayer:.
 			self.backgroundHeld = YES;
-			TGTextRenderHold(YES);
 			[[TGCustomEmojiStore shared] setDecodesHeld:YES];
 			if ([TGCapabilities pauseUpdatesDuringScrollWanted])
 				[[TGMessageStore shared] setUpdatesHeld:YES];

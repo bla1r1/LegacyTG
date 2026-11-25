@@ -604,9 +604,10 @@ NSDictionary *TGFormattedText(NSString *text) {
 		@"database_directory"     : db,
 		@"files_directory"        : [db stringByAppendingPathComponent:@"files"],
 		@"database_encryption_key": TGBase64Encode(databaseKey),
-		@"use_message_database"   : @YES,
-		// Chat rows and downloaded files have to survive a launch, or every
-		// start is a cold sync: the list, avatars and media are fetched again.
+		@"use_message_database"   : @NO,
+		// Chat/user/supergroup metadata stays in TDLib: disabling it saved
+		// ~10 MB RAM and 9x CPU in contacts, but TDLib still re-fetches
+		// supergroup/user info mid-scroll on @durov (61% / 901 ms cold).
 		@"use_chat_info_database" : @YES,
 		@"use_file_database"      : @YES,
 		@"use_secret_chats"       : @YES,

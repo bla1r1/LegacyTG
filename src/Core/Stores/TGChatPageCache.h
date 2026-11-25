@@ -32,4 +32,9 @@ FOUNDATION_EXPORT int64_t TGChatPageNewestId(NSArray *page);
 /// Where an account's pages live, for tests and an account's removal.
 + (NSString *)directoryForAccount:(int64_t)accountId;
 
+/// Keeps the chat list rows for `accountId` in the same SQLite store so
+/// TDLib's chat_info_database can stay off without a blank list at launch.
++ (void)saveChats:(NSArray *)chats account:(int64_t)accountId;
++ (NSArray *)chatsForAccount:(int64_t)accountId;
+
 @end

@@ -160,7 +160,7 @@ TDLIB_LIBS_ARM64 := $(TDLIB_KEEP_ARM64) \
                     -ltde2e -ltdutils -ltdtl -lssl
 # libcrypto: TDLib brings its own copy inside the dylib, but libtgvoip is
 # linked into the app and needs AES and SHA here.
-DEPS_LIBS  := -lopus -lvpx -lstdc++ -lz -lcrypto -ltlottie
+DEPS_LIBS  := -lopus -lvpx -lstdc++ -lz -lcrypto -ltlottie -lsqlite3
 # 9.0.0 needs DTLS, which lives in libssl. The armv7 tree has it beside
 # libcrypto; arm64 already names -lssl on its TDLib link line.
 ARMV7_SSL_LIBS := -L$(BUILD_DIR)/armv7/openssl -lssl
@@ -300,6 +300,7 @@ APP_SRC_M := \
 	src/Core/Client/Messages/TGClient+MessageRecord.m \
 	src/Core/Client/Messages/TGClient+InlineMessages.m \
 	src/Core/Model/TGMessageFlatten.m \
+	src/Core/Model/TGMessageModel.m \
 	src/Core/Model/TGLinkPreviewAction.m \
 	src/Core/Model/TGUserRating.m \
 	src/Core/Model/TGVideoAvatar.m \

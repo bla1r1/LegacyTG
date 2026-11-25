@@ -1,5 +1,6 @@
 #import "TGClient+Chats.h"
 #import "TGClientInternal.h"
+#import "TGChatPageCache.h"
 #ifndef typeof
 #define typeof __typeof__
 #endif
@@ -10,6 +11,19 @@
 #pragma mark - chats
 
 - (void)loadChats {
+	if (!self.chatsById.count) {
+		int64_t slotKey = (int64_t)[TGClient activeAccountSlot] + 1;
+		NSArray *cached = [TGChatPageCache chatsForAccount:slotKey];
+		if (cached.count) {
+			for (NSDictionary *row in cached) {
+				NSNumber *cid = [row isKindOfClass:NSDictionary.class] ? row[@"id"] : nil;
+				if (cid)
+					self.chatsById[cid] = [row mutableCopy];
+			}
+			if (self.onChatsChanged)
+				self.onChatsChanged();
+		}
+	}
 	// TDLib only emits updateNewChat/updateChatPosition after the list is
 	// asked for. One call is one batch, and the answer says what to do next:
 	// ok means "ask again", error 404 means this list is complete. Each list
@@ -48,6 +62,8 @@
 			// well; the next authorizationStateReady starts it again.
 			if (isMain && [result[@"code"] intValue] == 404){
 				me.chatListComplete = YES;
+				int64_t slotKey = (int64_t)[TGClient activeAccountSlot] + 1;
+				[TGChatPageCache saveChats:me.chatsById.allValues account:slotKey];
 				NSLog(@"TGClient: chat list complete (%lu)",
 						(unsigned long)me.chatsById.count);
 			}

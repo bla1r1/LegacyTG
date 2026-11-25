@@ -287,17 +287,13 @@ static int64_t TGIdlePollNanoseconds(void) {
 - (NSDictionary *)executeSynchronously:(NSDictionary *)request {
 	if (!self.td_exec || !request)
 		return nil;
-	NSData *json = [NSJSONSerialization dataWithJSONObject:request options:0 error:nil];
-	if (!json)
+	NSMutableData *json = TGJsonSerializeForSend(request);
+	if (!json.length)
 		return nil;
-	const char *answer = self.td_exec(NULL, [[[NSString alloc]
-			initWithData:json encoding:NSUTF8StringEncoding] UTF8String]);
+	const char *answer = self.td_exec(NULL, (const char *)json.bytes);
 	if (!answer)
 		return nil;
-	NSData *data = [[NSString stringWithUTF8String:answer]
-			dataUsingEncoding:NSUTF8StringEncoding];
-	NSDictionary *parsed = [NSJSONSerialization JSONObjectWithData:data
-														   options:0 error:nil];
+	id parsed = TGJsonParse(answer, strlen(answer), nil);
 	return [parsed isKindOfClass:NSDictionary.class] ? parsed : nil;
 }
 

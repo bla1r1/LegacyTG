@@ -498,9 +498,11 @@ static NSString *TGClockText(NSTimeInterval position, NSTimeInterval duration) {
 		[self stopVideoNote];
 	[self.playbackTimer invalidate];
 	self.playbackTimer = nil;
+	int64_t wasPlaying = self.playingMessageId;
 	self.playingMessageId = 0;
 	[self hidePlayerBar];
-	[self.table reloadData];
+	if (wasPlaying)
+		[self reloadSpecificMessageId:wasPlaying orFallback:0];
 }
 
 - (void)audioPlayerDidFinishPlaying:(id)player successfully:(BOOL)flag {
@@ -535,34 +537,50 @@ static NSString *TGClockText(NSTimeInterval position, NSTimeInterval duration) {
 	[self beginDownloadHUDForFile:[docId integerValue]];
 	__weak typeof(self) weakSelf = self;
 	[[TGMessageStore shared] downloadFile:[docId integerValue] priority:32 completion:^(NSString *path){
-		dispatch_async(dispatch_get_main_queue(), ^{
-			[weakSelf endDownloadHUD];
-			TGChatViewController *me = weakSelf;
-			if (!me) return;
-			NSLog(@"voice: file %@", path.lastPathComponent ?: @"(not downloaded)");
-			if (!path){
+		if (!path){
+			dispatch_async(dispatch_get_main_queue(), ^{
+				[weakSelf endDownloadHUD];
+				TGChatViewController *me = weakSelf;
+				if (!me) return;
+				NSLog(@"voice: file (not downloaded)");
 				[me showPlaybackFailure];
-				return;
-			}
-			NSError *err = nil;
+			});
+			return;
+		}
+		// AVAudioSession IPC to mediaserverd and Opus header/decoder setup cost
+		// 100-400 ms on an A4: run them on a background queue before touching UI.
+		dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
 			[[AVAudioSession sharedInstance]
 					setCategory:AVAudioSessionCategoryPlayback error:nil];
 			[[AVAudioSession sharedInstance] setActive:YES error:nil];
-			me.voicePlayer = [[TGStreamingVoicePlayer alloc] initWithPath:path error:&err];
-			if (err || !me.voicePlayer){
-				NSLog(@"voice playback: %@", err);
-				[me showPlaybackFailure];
-				return;
-			}
-			NSLog(@"voice: playing %.1f s (streaming)", me.voicePlayer.duration);
-			me.voicePlayer.delegate = (id<TGStreamingVoicePlayerDelegate>)me;
-			me.voicePlayer.enableRate = YES;   // for the speed button
-			me.voicePlayer.rate = me.playbackRate ?: TGPlaybackSpeedNormal;
-			me.playingMessageId = [m[@"id"] longLongValue];
-			[me.voicePlayer play];
-			[me showPlayerBar];
-			[me startPlaybackTimer];
-			[me.table reloadData];
+			NSError *err = nil;
+			TGStreamingVoicePlayer *player = [[TGStreamingVoicePlayer alloc] initWithPath:path error:&err];
+			dispatch_async(dispatch_get_main_queue(), ^{
+				[weakSelf endDownloadHUD];
+				TGChatViewController *me = weakSelf;
+				if (!me) return;
+				NSLog(@"voice: file %@", path.lastPathComponent);
+				if (err || !player){
+					NSLog(@"voice playback: %@", err);
+					[me showPlaybackFailure];
+					return;
+				}
+				me.voicePlayer = player;
+				NSLog(@"voice: playing %.1f s (streaming)", me.voicePlayer.duration);
+				me.voicePlayer.delegate = (id<TGStreamingVoicePlayerDelegate>)me;
+				me.voicePlayer.enableRate = YES;   // for the speed button
+				me.voicePlayer.rate = me.playbackRate ?: TGPlaybackSpeedNormal;
+				me.playingMessageId = [m[@"id"] longLongValue];
+				[me.voicePlayer play];
+				[me showPlayerBar];
+				[me startPlaybackTimer];
+				if (row >= 0 && row < (NSInteger)me.messages.count) {
+					[me.table reloadRowsAtIndexPaths:@[[NSIndexPath indexPathForRow:row inSection:0]]
+									withRowAnimation:UITableViewRowAnimationNone];
+				} else {
+					[me.table reloadData];
+				}
+			});
 		});
 	}];
 }

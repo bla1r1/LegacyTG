@@ -396,10 +396,15 @@ static CGFloat TGChatMediaCorner(void) {
 		[TGIcons setRoundedImage:img inView:cell.picture
 							size:layout.isSticker ? CGSizeZero : layout.pictureFrame.size
 						  radius:TGChatMediaCorner()];
-		// The tile shows while the rounded copy is still being drawn.
-		cell.picture.backgroundColor = layout.isSticker ? [UIColor clearColor] : [theme bubblePlaceholderColour:mine];
+		// Only show the rounded placeholder tile while the pre-rounded image
+		// is still decoding; once set, clear both so CoreAnimation does not
+		// composite a rounded background layer behind every photo.
+		BOOL hasImg = (img != nil);
+		cell.picture.backgroundColor = (layout.isSticker || hasImg)
+				? [UIColor clearColor] : [theme bubblePlaceholderColour:mine];
 		cell.picture.frame = layout.pictureFrame;
-		cell.picture.layer.cornerRadius = layout.isSticker ? TGMetricCornerNone : TGChatMediaCorner();
+		cell.picture.layer.cornerRadius = (layout.isSticker || hasImg)
+				? TGMetricCornerNone : TGChatMediaCorner();
 		// No frame round a photo: no iOS release draws one, and the grey
 		// line read as a heavy border in both themes.
 		cell.picture.layer.borderWidth = TGMetricBorderNone;

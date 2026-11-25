@@ -48,6 +48,10 @@ void TGTextRenderStore(NSString *key, CGImageRef image);
 /// it under `key`, unless it is cached or already on the way. Main thread;
 /// `build` runs on the render queue.
 void TGTextRenderPrefetch(NSString *key, CGSize size, CGFloat scale, NSAttributedString *(^build)(void));
+/// Renders `text` on the background render queue, stores it under `key`, and
+/// invokes `completion` on the main thread with the resulting image (or NULL).
+void TGTextRenderAsync(NSString *key, NSAttributedString *text, CGSize size, CGFloat scale,
+		void (^completion)(CGImageRef image));
 /// The custom emoji rects (TGCustomEmojiRectsCoreText) worked out with the
 /// prefetched picture, from the same layout; nil when not prefetched.
 NSArray *TGTextRenderCachedEmojiRects(NSString *key);

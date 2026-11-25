@@ -5,6 +5,11 @@
 //   itglegacy://bench/scroll/<seconds>[/prof]   fling the front table up and down
 //   itglegacy://bench/open/<row>[/prof]         tap a chat-list row, time it, go back
 //   itglegacy://bench/watch/<seconds>[/prof]    touch nothing, just measure
+//   itglegacy://bench/playvoice[/seconds]       play newest voice note & measure
+//   itglegacy://bench/playround[/seconds]       play newest round video & measure
+//   itglegacy://bench/recordvoice[/seconds]     record voice note (then cancel) & measure
+//   itglegacy://bench/recordround[/seconds]     record round video (then cancel) & measure
+//   itglegacy://bench/hold[/row]                open hold menu on row & measure
 //   itglegacy://bench/pref/<key>/<0|1>          flip a user default, for A/B runs
 //   itglegacy://bench/mem/<label>                resident memory by VM tag
 //   itglegacy://bench/memwarn                    post a memory warning

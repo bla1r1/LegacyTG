@@ -344,6 +344,8 @@ onDefaultReaction:(void (^)(NSString *))defaultChoice
 		_reactionWrapper.layer.shadowOpacity = TGMetricShadowMenuOpacity;
 		_reactionWrapper.layer.shadowRadius = TGMetricShadowMenuRadius;
 		_reactionWrapper.layer.shadowOffset = TGMetricShadowOffsetMenu;
+		_reactionWrapper.layer.shadowPath = [UIBezierPath bezierPathWithRoundedRect:_reactionWrapper.bounds
+																	  cornerRadius:TGHalf(reactionH)].CGPath;
 		[self addSubview:_reactionWrapper];
 
 		_reactionCard = [[UIView alloc] initWithFrame:_reactionWrapper.bounds];
@@ -352,6 +354,10 @@ onDefaultReaction:(void (^)(NSString *))defaultChoice
 		_reactionCard.layer.masksToBounds = YES;
 		_reactionCard.layer.borderColor = [theme calloutBorderColour].CGColor;
 		_reactionCard.layer.borderWidth = 1.0f;
+		// No shouldRasterize: the picker inside animates (emoji spring-in),
+		// so the raster cache would be invalidated and re-created every frame,
+		// costing more than the masksToBounds clip it was meant to amortise.
+		// masksToBounds (above) clips the picker correctly without rasterizing.
 		[_reactionWrapper addSubview:_reactionCard];
 
 		UIImage *rGlossImage = [TGTheme calloutGlossImageWithSize:CGSizeMake(reactionW, TGHalf(reactionH))];
@@ -372,21 +378,37 @@ onDefaultReaction:(void (^)(NSString *))defaultChoice
 	_actionWrapper.layer.shadowOpacity = TGMetricShadowMenuOpacity;
 	_actionWrapper.layer.shadowRadius = TGMetricShadowMenuRadius;
 	_actionWrapper.layer.shadowOffset = TGMetricShadowOffsetMenu;
+	_actionWrapper.layer.shadowPath = [UIBezierPath bezierPathWithRoundedRect:_actionWrapper.bounds
+																  cornerRadius:TGMetricCornerCard].CGPath;
 	[self addSubview:_actionWrapper];
 
 	_actionCard = [[UIView alloc] initWithFrame:_actionWrapper.bounds];
-	_actionCard.backgroundColor = [theme calloutBackgroundColour];
-	_actionCard.layer.cornerRadius = TGMetricCornerCard;
-	_actionCard.layer.masksToBounds = YES;
-	_actionCard.layer.borderColor = [theme calloutBorderColour].CGColor;
-	_actionCard.layer.borderWidth = 1.0f;
+	_actionCard.backgroundColor = [UIColor clearColor];
 	[_actionWrapper addSubview:_actionCard];
 
+	// Pre-bake rounded card + border + optional gloss into one flat image so
+	// scrolling _actionScroll never triggers an offscreen cornerRadius mask pass.
+	UIGraphicsBeginImageContextWithOptions(_actionCard.bounds.size, NO, [UIScreen mainScreen].scale);
+	UIBezierPath *cardPath = [UIBezierPath bezierPathWithRoundedRect:CGRectInset(_actionCard.bounds, 0.5f, 0.5f)
+														cornerRadius:TGMetricCornerCard];
+	[[theme calloutBackgroundColour] setFill];
+	[cardPath fill];
 	UIImage *glossImage = [TGTheme calloutGlossImageWithSize:CGSizeMake(kMenuCardW, TGHalf(actionCardH))];
 	if (glossImage) {
-		UIImageView *gloss = [[UIImageView alloc] initWithFrame:CGRectMake(0, 0, kMenuCardW, TGHalf(actionCardH))];
-		gloss.image = glossImage;
-		[_actionCard addSubview:gloss];
+		CGContextSaveGState(UIGraphicsGetCurrentContext());
+		[cardPath addClip];
+		[glossImage drawInRect:CGRectMake(0, 0, kMenuCardW, TGHalf(actionCardH))];
+		CGContextRestoreGState(UIGraphicsGetCurrentContext());
+	}
+	[[theme calloutBorderColour] setStroke];
+	cardPath.lineWidth = 1.0f;
+	[cardPath stroke];
+	UIImage *cardBg = UIGraphicsGetImageFromCurrentImageContext();
+	UIGraphicsEndImageContext();
+	if (cardBg) {
+		UIImageView *bgView = [[UIImageView alloc] initWithFrame:_actionCard.bounds];
+		bgView.image = cardBg;
+		[_actionCard addSubview:bgView];
 	}
 
 	// The lifted card is the one that can be taller than the room below the
@@ -395,7 +417,7 @@ onDefaultReaction:(void (^)(NSString *))defaultChoice
 	// rows straight to the card.
 	if (_lifted && actionCardH < _naturalCardH) {
 		_actionScroll = [[UIScrollView alloc] initWithFrame:CGRectMake(0, headerH,
-				kMenuCardW, actionCardH - headerH)];
+				kMenuCardW, actionCardH - headerH - TGMetricPadSmall)];
 		_actionScroll.backgroundColor = [UIColor clearColor];
 		_actionScroll.showsVerticalScrollIndicator = YES;
 		_actionScroll.alwaysBounceVertical = NO;

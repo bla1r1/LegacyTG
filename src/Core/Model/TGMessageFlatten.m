@@ -7,6 +7,7 @@
 // and the message stream store; declared in TGClientInternal.h.
 //
 #import "TGServiceMessageText.h"
+#import "TGMessageModel.h"
 #import "TGLinkPreviewAction.h"
 #import "TGMessageContentCommerce.h"
 #import "TGMessageContentInteractive.h"
@@ -1401,9 +1402,9 @@ NSDictionary *TGFlattenMessage(NSDictionary *m) {
 					? [content[@"community_id"] longLongValue] : 0;
 			richer[@"communityId"] = @(cid);
 		}
-		return richer;
+		return [[TGMessageModel alloc] initWithDictionary:richer];
 	}
-	return row;
+	return [[TGMessageModel alloc] initWithDictionary:row];
 }
 
 NSArray *TGMediaPageAppending(NSArray *existing, NSArray *more) {

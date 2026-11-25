@@ -181,8 +181,6 @@
 	TGComposerInputField *field = [[TGComposerInputField alloc] initWithFrame:fieldFrame];
 	field.backgroundColor = [UIColor clearColor];
 	field.layer.borderWidth = 0.0f;
-	field.layer.shouldRasterize = YES;
-	field.layer.rasterizationScale = scale;
 	field.textColor = [[TGTheme shared] primaryTextColour];
 	field.font = TGFontBody();
 	// Return is a line break now; Send is the button. Official's composer
@@ -229,8 +227,6 @@
 	[self.sendButton setBackgroundImage:[TGTheme buttonImageForStyle:TGButtonStyleAction highlighted:NO height:kSendSide] forState:UIControlStateNormal];
 	[self.sendButton setBackgroundImage:[TGTheme buttonImageForStyle:TGButtonStyleAction highlighted:YES height:kSendSide] forState:UIControlStateHighlighted];
 	self.sendButton.backgroundColor = [UIColor clearColor];
-	self.sendButton.layer.shouldRasterize = YES;
-	self.sendButton.layer.rasterizationScale = scale;
 	[self.sendButton setImage:[TGIcons sendOnAccent] forState:UIControlStateNormal];
 	self.sendButton.tintColor = [[TGTheme shared] onAccentColour];
 	self.sendButton.imageEdgeInsets = UIEdgeInsetsZero;

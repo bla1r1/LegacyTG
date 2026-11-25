@@ -1,4 +1,5 @@
 #import "TGChatViewControllerInternal.h"
+#import "TGDevice.h"
 #import "TGLocalization.h"
 #import "TGForwardPicker.h"
 #import "TGPopupMenu.h"
@@ -278,29 +279,34 @@ static const CGFloat kHoldBlurRadius = 28.0f;
 	CGFloat bubbleAlpha = cell.bubble.alpha, tailAlpha = cell.tail.alpha;
 	cell.bubble.alpha = TGAlphaTransparent;
 	cell.tail.alpha = TGAlphaTransparent;
-	UIImage *chat = TGHoldCaptureChat(self.view, self.wallpaperView, 0.25f);
+	UIImage *chat = TGHoldCaptureChat(self.view, self.wallpaperView, 0.5f);
 	cell.bubble.alpha = bubbleAlpha;
 	cell.tail.alpha = tailAlpha;
 	UIImage *blurred = chat ? [TGTheme softenedImage:chat radius:kHoldBlurRadius dim:0] : nil;
+	TGTheme *theme = [TGTheme shared];
+	if (blurred) {
+		// Bake frost + dim into the 0.5x image once so the GPU doesn't blend
+		// two extra 640x960 full-screen layers on every menu frame.
+		UIGraphicsBeginImageContextWithOptions(blurred.size, YES, 1.0f);
+		[blurred drawInRect:CGRectMake(0, 0, blurred.size.width, blurred.size.height)];
+		for (UIColor *wash in @[[theme holdFrostColour], [theme holdDimColour]]){
+			[wash setFill];
+			UIRectFillUsingBlendMode(CGRectMake(0, 0, blurred.size.width, blurred.size.height), kCGBlendModeNormal);
+		}
+		UIImage *baked = UIGraphicsGetImageFromCurrentImageContext();
+		UIGraphicsEndImageContext();
+		if (baked)
+			blurred = baked;
+	}
 	TGPerfReport("hold", "backdrop", start, 50.0);
 
-	TGTheme *theme = [TGTheme shared];
-	UIView *backdrop = [[UIView alloc] initWithFrame:self.view.bounds];
+	UIImageView *backdrop = [[UIImageView alloc] initWithFrame:self.view.bounds];
 	backdrop.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
 	backdrop.backgroundColor = [theme chatBackgroundColour];
+	backdrop.contentMode = UIViewContentModeScaleToFill;
+	backdrop.opaque = YES;
+	backdrop.image = blurred;
 	backdrop.alpha = TGAlphaTransparent;
-	UIImageView *picture = [[UIImageView alloc] initWithFrame:backdrop.bounds];
-	picture.autoresizingMask = backdrop.autoresizingMask;
-	picture.contentMode = UIViewContentModeScaleToFill;
-	picture.image = blurred;
-	[backdrop addSubview:picture];
-	// The material's frost, then official's dim over it.
-	for (UIColor *wash in @[[theme holdFrostColour], [theme holdDimColour]]){
-		UIView *layer = [[UIView alloc] initWithFrame:backdrop.bounds];
-		layer.autoresizingMask = backdrop.autoresizingMask;
-		layer.backgroundColor = wash;
-		[backdrop addSubview:layer];
-	}
 	[self.view addSubview:backdrop];
 
 	UIImageView *lift = [[UIImageView alloc] initWithImage:bubbleImage];

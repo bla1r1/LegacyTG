@@ -14,9 +14,9 @@ static NSArray *pageOf(int64_t from, int64_t to) {
 	return page;
 }
 
-static void waitForFile(NSString *path) {
+static void waitForPage(int64_t chatId, int64_t accountId) {
 	NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:2.0];
-	while (![[NSFileManager defaultManager] fileExistsAtPath:path] && [deadline timeIntervalSinceNow] > 0)
+	while (![TGChatPageCache pageForChat:chatId account:accountId] && [deadline timeIntervalSinceNow] > 0)
 		[[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
 }
 
@@ -27,13 +27,13 @@ static void waitForFile(NSString *path) {
 	[super tearDown];
 }
 
-/// The newest ten come back oldest first, as the chat shows them.
+/// The newest thirty come back oldest first, as the chat shows them.
 - (void)testSavedPage_KeepsTheNewestInOrder {
 	[TGChatPageCache savePage:pageOf(1, 50) chat:5 account:777];
-	waitForFile([[TGChatPageCache directoryForAccount:777] stringByAppendingPathComponent:@"5.json"]);
+	waitForPage(5, 777);
 	NSArray *page = [TGChatPageCache pageForChat:5 account:777];
-	XCTAssertEqual(page.count, (NSUInteger)10);
-	XCTAssertEqual([page.firstObject[@"id"] longLongValue], 41LL);
+	XCTAssertEqual(page.count, (NSUInteger)30);
+	XCTAssertEqual([page.firstObject[@"id"] longLongValue], 21LL);
 	XCTAssertEqual([page.lastObject[@"id"] longLongValue], 50LL);
 	XCTAssertEqualObjects(page.lastObject[@"reply"], [NSNull null]);
 	XCTAssertEqualObjects(page.lastObject[@"waveform"], [NSData dataWithBytes:"\x01\x02" length:2],
@@ -70,19 +70,27 @@ static void waitForFile(NSString *path) {
 	XCTAssertFalse(TGChatPageHasUnread(service, 5));
 }
 
-/// Only the most recently saved chats keep a page.
-- (void)testSavedPages_KeepTheLastTen {
-	NSString *dir = [TGChatPageCache directoryForAccount:777];
-	for (int64_t chat = 1; chat <= 12; chat++) {
+/// Only the most recently saved fifty chats keep a page.
+- (void)testSavedPages_KeepTheLastFifty {
+	for (int64_t chat = 1; chat <= 52; chat++) {
 		[TGChatPageCache savePage:pageOf(1, 2) chat:chat account:777];
-		waitForFile([dir stringByAppendingPathComponent:[NSString stringWithFormat:@"%lld.json", chat]]);
-		[[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.05]];
+		waitForPage(chat, 777);
 	}
-	[[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.2]];
-	NSArray *names = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:dir error:NULL];
-	XCTAssertEqual(names.count, (NSUInteger)10);
-	XCTAssertFalse([names containsObject:@"1.json"]);
-	XCTAssertTrue([names containsObject:@"12.json"]);
+	[[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.1]];
+	XCTAssertNil([TGChatPageCache pageForChat:1 account:777]);
+	XCTAssertNil([TGChatPageCache pageForChat:2 account:777]);
+	XCTAssertNotNil([TGChatPageCache pageForChat:52 account:777]);
+}
+
+- (void)testSavedChats_RoundTripsChatList {
+	NSArray *rows = @[ @{ @"id" : @100LL, @"title" : @"Pavel Durov" } ];
+	[TGChatPageCache saveChats:rows account:777];
+	NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:2.0];
+	while (![TGChatPageCache chatsForAccount:777] && [deadline timeIntervalSinceNow] > 0)
+		[[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+	NSArray *got = [TGChatPageCache chatsForAccount:777];
+	XCTAssertEqual(got.count, (NSUInteger)1);
+	XCTAssertEqualObjects(got.firstObject[@"title"], @"Pavel Durov");
 }
 
 @end

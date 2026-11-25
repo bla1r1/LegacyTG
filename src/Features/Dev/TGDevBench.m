@@ -22,6 +22,17 @@ enum { kMaxFrames = 4096 };
 static const double kOpenWatchSeconds = 2.5;
 static const double kPopWatchSeconds = 1.0;
 
+@protocol TGDevBenchChatActions <NSObject>
+@optional
+- (void)playVoiceNoteForMessage:(NSDictionary *)m atRow:(NSInteger)row;
+- (void)playVideoNoteForMessage:(NSDictionary *)m atRow:(NSInteger)row;
+- (void)stopPlayback;
+- (void)recordStart;
+- (void)recordCancel;
+- (void)showActionsForRow:(NSInteger)row;
+- (void)cancelTapped;
+@end
+
 @interface TGDevBench ()
 @property (nonatomic, strong) CADisplayLink *link;
 @property (nonatomic, weak) UIScrollView *scroll;
@@ -464,6 +475,76 @@ static void TGDevBenchVTOutput(void *ref, void *frameRef, OSStatus status,
 		// No input at all: what the screen costs while someone only reads it.
 		b.duration = num.length ? [num doubleValue] : 8.0;
 		b.what = [NSString stringWithFormat:@"watch-%@", NSStringFromClass(frontController(window).class)];
+		[b begin];
+	} else if ([mode isEqualToString:@"playvoice"] || [mode isEqualToString:@"playround"]) {
+		BOOL round = [mode isEqualToString:@"playround"];
+		UIViewController *vc = frontController(window);
+		NSArray *msgs = [vc respondsToSelector:@selector(messages)] ? [vc valueForKey:@"messages"] : nil;
+		NSString *want = round ? @"messageVideoNote" : @"messageVoiceNote";
+		NSInteger row = NSNotFound;
+		NSDictionary *target = nil;
+		for (NSInteger i = (NSInteger)msgs.count - 1; i >= 0; i--) {
+			NSDictionary *m = msgs[(NSUInteger)i];
+			if ([m[@"kind"] isEqualToString:want]) { target = m; row = i; break; }
+		}
+		if (!target) {
+			NSLog(@"[bench] %@ no %@ in front chat", mode, want);
+			return;
+		}
+		UITableView *tbl = (UITableView *)largestScroll(vc.view);
+		if ([tbl isKindOfClass:UITableView.class])
+			[tbl scrollToRowAtIndexPath:[NSIndexPath indexPathForRow:row inSection:0]
+					   atScrollPosition:UITableViewScrollPositionMiddle animated:NO];
+		id<TGDevBenchChatActions> chat = (id<TGDevBenchChatActions>)vc;
+		if (round) [chat playVideoNoteForMessage:target atRow:row];
+		else       [chat playVoiceNoteForMessage:target atRow:row];
+		b.duration = num.length ? [num doubleValue] : 5.0;
+		b.what = mode;
+		b.afterWatch = ^{ [chat stopPlayback]; };
+		TGPerfReportMemory("bench start");
+		[b begin];
+	} else if ([mode isEqualToString:@"recordvoice"] || [mode isEqualToString:@"recordround"]) {
+		BOOL round = [mode isEqualToString:@"recordround"];
+		UIViewController *vc = frontController(window);
+		if (![vc respondsToSelector:@selector(recordStart)]) {
+			NSLog(@"[bench] %@ front vc %@ cannot record", mode, vc.class);
+			return;
+		}
+		[vc setValue:@(round) forKey:@"videoNoteMode"];
+		id<TGDevBenchChatActions> chat = (id<TGDevBenchChatActions>)vc;
+		[chat recordStart];
+		b.duration = num.length ? [num doubleValue] : 4.0;
+		b.what = mode;
+		b.afterWatch = ^{
+			if (round) {
+				UIViewController *ov = [vc valueForKey:@"videoNoteOverlay"];
+				if (ov && [ov respondsToSelector:@selector(cancelTapped)])
+					[(id<TGDevBenchChatActions>)ov cancelTapped];
+				else
+					[ov dismissViewControllerAnimated:NO completion:nil];
+			} else {
+				[chat recordCancel];
+			}
+		};
+		TGPerfReportMemory("bench start");
+		[b begin];
+	} else if ([mode isEqualToString:@"hold"]) {
+		UIViewController *vc = frontController(window);
+		if (![vc respondsToSelector:@selector(showActionsForRow:)]) {
+			NSLog(@"[bench] hold front vc %@ has no showActionsForRow:", vc.class);
+			return;
+		}
+		NSInteger row = num.length ? [num integerValue] : -1;
+		id<TGDevBenchChatActions> chat = (id<TGDevBenchChatActions>)vc;
+		[chat showActionsForRow:row];
+		b.duration = 2.0;
+		b.what = @"hold";
+		b.afterWatch = ^{
+			for (UIView *v in [window.subviews copy])
+				if ([NSStringFromClass(v.class) isEqualToString:@"TGPopupMenu"])
+					[v removeFromSuperview];
+		};
+		TGPerfReportMemory("bench start");
 		[b begin];
 	} else if ([mode isEqualToString:@"open"]) {
 		// A beat first: uiopen, sshd and SpringBoard's openURL are still on the

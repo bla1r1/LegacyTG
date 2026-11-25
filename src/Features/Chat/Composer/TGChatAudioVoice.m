@@ -1,4 +1,5 @@
 #import "TGChatViewControllerInternal.h"
+#import "TGDevice.h"
 #import "TGLocalization.h"
 #import "TGVideoNoteRecorder.h"
 #import "TGVideoNoteViewController.h"
@@ -455,7 +456,8 @@ static const NSTimeInterval kRecordHintSeconds = 1.6;
 		// hold it: a shot of the chat alone came out stretched to fit.
 		UIView *shown = (self.tabBarController ?: self.navigationController ?: self).view;
 		CGRect covered = [shown convertRect:[UIScreen mainScreen].applicationFrame fromView:nil];
-		UIGraphicsBeginImageContextWithOptions(covered.size, YES, 0.0f);
+		CGFloat snapScale = [TGDevice tier] <= TGDeviceTierVintage ? 0.5f : 1.0f;
+		UIGraphicsBeginImageContextWithOptions(covered.size, YES, snapScale);
 		CGContextTranslateCTM(UIGraphicsGetCurrentContext(), -covered.origin.x, -covered.origin.y);
 		[shown.layer renderInContext:UIGraphicsGetCurrentContext()];
 		UIImage *background = UIGraphicsGetImageFromCurrentImageContext();

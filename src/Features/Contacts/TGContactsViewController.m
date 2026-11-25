@@ -312,12 +312,21 @@ static NSArray *TGContactSections(NSArray *users) {
 - (void)viewWillAppear:(BOOL)animated {
 	[super viewWillAppear:animated];
 	[[TGTheme shared] styleNavigationBar:self.navigationController.navigationBar];
-	[self loadContacts];
+	if (!self.users.count)
+		[self loadContacts];
 }
 
 - (void)reloadTableDebounced {
-	[NSObject cancelPreviousPerformRequestsWithTarget:self.tableView selector:@selector(reloadData) object:nil];
-	[self.tableView performSelector:@selector(reloadData) withObject:nil afterDelay:0.05];
+	[NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(reloadTableWhenStill) object:nil];
+	[self performSelector:@selector(reloadTableWhenStill) withObject:nil afterDelay:0.05];
+}
+
+- (void)reloadTableWhenStill {
+	if (self.tableView.isDragging || self.tableView.isDecelerating) {
+		[self performSelector:@selector(reloadTableWhenStill) withObject:nil afterDelay:0.25];
+		return;
+	}
+	[self.tableView reloadData];
 }
 
 static NSString *TGContactName(NSDictionary *u) {

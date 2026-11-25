@@ -872,29 +872,49 @@ BOOL TGCustomEmojiInlineSupported(void) {
 // upward from the frame's bottom while the label draws downward, so a line's
 // top sits at frameH - origin.y - ascent; the frame is made tall enough that
 // the first line still lands at the top.
+#import <pthread.h>
+
+static id TGCachedCTFont(id font) {
+	if (![font respondsToSelector:@selector(fontName)] || ![font respondsToSelector:@selector(pointSize)])
+		return nil;
+	NSString *name = [font fontName];
+	CGFloat size = [font pointSize];
+	if (!name.length)
+		return nil;
+	NSString *key = [NSString stringWithFormat:@"%@/%.2f", name, size];
+	static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+	static NSMutableDictionary *cache = nil;
+	pthread_mutex_lock(&lock);
+	if (!cache)
+		cache = [[NSMutableDictionary alloc] init];
+	id ctFont = cache[key];
+	pthread_mutex_unlock(&lock);
+	if (ctFont)
+		return ctFont;
+	ctFont = CFBridgingRelease(CTFontCreateWithName((__bridge CFStringRef)name, size, NULL));
+	if (ctFont) {
+		pthread_mutex_lock(&lock);
+		if (cache.count > 64)
+			[cache removeAllObjects];
+		cache[key] = ctFont;
+		pthread_mutex_unlock(&lock);
+	}
+	return ctFont;
+}
+
 NSAttributedString *TGCoreTextFonts(NSAttributedString *text) {
 	if (!text.length)
 		return text;
 	NSMutableAttributedString *out = nil;
-	NSMutableDictionary *made = [NSMutableDictionary dictionary];
 	NSRange all = NSMakeRange(0, text.length);
 	NSRange range;
 	for (NSUInteger i = 0; i < text.length; i = NSMaxRange(range)) {
 		id font = [text attribute:NSFontAttributeName atIndex:i longestEffectiveRange:&range inRange:all];
 		if (!font || CFGetTypeID((__bridge CFTypeRef)font) == CTFontGetTypeID())
 			continue;
-		if (![font respondsToSelector:@selector(fontName)] || ![font respondsToSelector:@selector(pointSize)])
+		id ctFont = TGCachedCTFont(font);
+		if (!ctFont)
 			continue;
-		NSString *name = [font fontName];
-		CGFloat size = [font pointSize];
-		NSString *key = [NSString stringWithFormat:@"%@/%.2f", name, size];
-		id ctFont = made[key];
-		if (!ctFont) {
-			ctFont = CFBridgingRelease(CTFontCreateWithName((__bridge CFStringRef)name, size, NULL));
-			if (!ctFont)
-				continue;
-			made[key] = ctFont;
-		}
 		if (!out)
 			out = [text mutableCopy];
 		[out addAttribute:(__bridge NSString *)kCTFontAttributeName value:ctFont range:range];
@@ -902,7 +922,23 @@ NSAttributedString *TGCoreTextFonts(NSAttributedString *text) {
 	return out ?: text;
 }
 
+static BOOL TGHasCustomEmojiAttribute(NSAttributedString *text) {
+	NSUInteger len = text.length;
+	if (!len)
+		return NO;
+	NSRange all = NSMakeRange(0, len);
+	NSRange range;
+	for (NSUInteger i = 0; i < len; i = NSMaxRange(range)) {
+		id val = [text attribute:@"TGCustomEmojiId" atIndex:i longestEffectiveRange:&range inRange:all];
+		if ([val isKindOfClass:NSNumber.class] && [val longLongValue] != 0)
+			return YES;
+	}
+	return NO;
+}
+
 NSArray *TGCustomEmojiRectsCoreText(NSAttributedString *text, CGFloat width) {
+	if (!TGHasCustomEmojiAttribute(text))
+		return @[];
 	// iOS 6 has no toll-free UIFont/CTFont bridge: handed the label's string
 	// as is, CoreText laid it out in its default 12 pt face, wrapped it in
 	// other places than the label did, and every custom emoji after the first
@@ -990,7 +1026,7 @@ NSArray *TGCustomEmojiRectsCoreText(NSAttributedString *text, CGFloat width) {
 }
 
 NSArray *TGCustomEmojiRectsInText(NSAttributedString *text, CGFloat width) {
-	if (!text.length || width <= 0)
+	if (!text.length || width <= 0 || !TGHasCustomEmojiAttribute(text))
 		return @[];
 
 	Class lmClass = NSClassFromString(@"NSLayoutManager");
@@ -1124,7 +1160,11 @@ CGSize TGTextSizeWithEntities(NSString *text, NSArray *entities, UIFont *font, C
 				CFRelease(setter);
 			}
 			CGRect rect = CGRectZero;
-			if ([rich respondsToSelector:@selector(boundingRectWithSize:options:context:)]) {
+			// On iOS 6 (!TGCustomEmojiInlineSupported()), TGRenderedLabel draws
+			// via CoreText directly; boundingRectWithSize: would run WebCore's
+			// string drawing a second time for every rich post.
+			if (TGCustomEmojiInlineSupported() &&
+					[rich respondsToSelector:@selector(boundingRectWithSize:options:context:)]) {
 				rect = [rich boundingRectWithSize:CGSizeMake(width, TGMetricTextMeasureHeight)
 										 options:NSStringDrawingUsesLineFragmentOrigin | NSStringDrawingUsesFontLeading
 										 context:nil];
