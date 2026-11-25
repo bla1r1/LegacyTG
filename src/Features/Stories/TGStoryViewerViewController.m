@@ -1001,14 +1001,36 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 		[self resume];
 }
 
+- (BOOL)prefersStatusBarHidden {
+	return YES;
+}
+
 - (void)viewWillAppear:(BOOL)animated {
 	[super viewWillAppear:animated];
 	[self.navigationController setNavigationBarHidden:YES animated:NO];
+	if ([[[UIDevice currentDevice] systemVersion] floatValue] < 7.0f) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+		[[UIApplication sharedApplication] setStatusBarHidden:YES
+												withAnimation:UIStatusBarAnimationNone];
+#pragma clang diagnostic pop
+	}
+	if ([self respondsToSelector:@selector(setNeedsStatusBarAppearanceUpdate)])
+		[self setNeedsStatusBarAppearanceUpdate];
+	if ([self.navigationController respondsToSelector:@selector(setNeedsStatusBarAppearanceUpdate)])
+		[self.navigationController setNeedsStatusBarAppearanceUpdate];
 }
 
 - (void)viewWillDisappear:(BOOL)animated {
 	[super viewWillDisappear:animated];
 	[self.navigationController setNavigationBarHidden:NO animated:NO];
+	if ([[[UIDevice currentDevice] systemVersion] floatValue] < 7.0f) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+		[[UIApplication sharedApplication] setStatusBarHidden:NO
+												withAnimation:UIStatusBarAnimationNone];
+#pragma clang diagnostic pop
+	}
 }
 
 - (void)viewDidAppear:(BOOL)animated {

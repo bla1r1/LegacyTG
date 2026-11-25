@@ -17,8 +17,14 @@
 		if (cached.count) {
 			for (NSDictionary *row in cached) {
 				NSNumber *cid = [row isKindOfClass:NSDictionary.class] ? row[@"id"] : nil;
-				if (cid)
-					self.chatsById[cid] = [row mutableCopy];
+				if (cid) {
+					NSMutableDictionary *copy = [row mutableCopy];
+					// TDLib file_ids are not guaranteed to match across
+					// launches/storage trims; let live updates supply them.
+					[copy removeObjectForKey:@"photoFileId"];
+					[copy removeObjectForKey:@"previewFileId"];
+					self.chatsById[cid] = copy;
+				}
 			}
 			if (self.onChatsChanged)
 				self.onChatsChanged();

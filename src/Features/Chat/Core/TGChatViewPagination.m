@@ -38,6 +38,7 @@
 #import "TGMusicPlayer.h"
 #import "TGDevShowcase.h"
 #import "TGMessageLayout.h"
+#import "TGMessageModel.h"
 #import "TGBubbleCell.h"
 #import "TGChatViewControllerInternal.h"
 #import "TGMessageStreamStore.h"
@@ -53,6 +54,48 @@
 
 #pragma mark - controller
 
+
+static NSInteger TGChatFindMessageRow(NSArray *messages, int64_t msgId) {
+	if (msgId <= 0)
+		return NSNotFound;
+	for (NSUInteger i = 0; i < messages.count; i++) {
+		if (TGMsgId(messages[i]) == msgId)
+			return (NSInteger)i;
+	}
+	return NSNotFound;
+}
+
+static int64_t TGChatVisibleAnchor(UITableView *table, NSArray *messages, CGFloat offset, CGFloat *outDelta) {
+	for (NSIndexPath *ip in [table indexPathsForVisibleRows]) {
+		if (ip.row >= (NSInteger)messages.count)
+			continue;
+		int64_t mid = TGMsgId(messages[(NSUInteger)ip.row]);
+		if (mid > 0) {
+			if (outDelta)
+				*outDelta = offset - [table rectForRowAtIndexPath:ip].origin.y;
+			return mid;
+		}
+	}
+	if (outDelta)
+		*outDelta = 0.0f;
+	return 0;
+}
+
+static void TGChatRestoreAnchor(UITableView *table, NSArray *messages, int64_t anchorMsgId,
+		CGFloat anchorDelta, CGFloat fallbackOffset) {
+	[table layoutIfNeeded];
+	UIEdgeInsets inset = table.contentInset;
+	CGFloat minY = -inset.top;
+	CGFloat maxY = MAX(minY, table.contentSize.height + inset.bottom - table.bounds.size.height);
+	NSInteger newRow = TGChatFindMessageRow(messages, anchorMsgId);
+	CGFloat targetY = fallbackOffset;
+	if (newRow != NSNotFound) {
+		CGFloat newRowY = [table rectForRowAtIndexPath:
+				[NSIndexPath indexPathForRow:newRow inSection:0]].origin.y;
+		targetY = newRowY + anchorDelta;
+	}
+	table.contentOffset = CGPointMake(0, MIN(MAX(minY, targetY), maxY));
+}
 
 @implementation TGChatViewController (TGChatViewPagination)
 
@@ -207,15 +250,21 @@
 				TGChatViewController *again = weakScroll;
 				if (!again)
 					return;
-				// Read where the reader is now: the page was measured while
-				// they kept scrolling.
+				// Anchor to the top visible message rather than contentSize
+				// delta: trimNewerToLimit removes rows from the bottom at the
+				// same time as older rows are prepended at the top, so
+				// contentSize.height - oldHeight under-shifts by the trimmed
+				// height and sends the reader's messages flying down.
 				CGFloat oldHeight = again.table.contentSize.height;
 				CGFloat oldOffset = again.table.contentOffset.y;
+				CGFloat anchorDelta = 0.0f;
+				int64_t anchorMsgId = TGChatVisibleAnchor(again.table, again.messages,
+						oldOffset, &anchorDelta);
 				again.rawMessages = [again.streamStore messages];
 				again.messages = [again groupedMessagesFromMessages:again.rawMessages];
 				[UIView setAnimationsEnabled:NO];
 				[again.table reloadData];
-				again.table.contentOffset = CGPointMake(0,
+				TGChatRestoreAnchor(again.table, again.messages, anchorMsgId, anchorDelta,
 						oldOffset + (again.table.contentSize.height - oldHeight));
 				[UIView setAnimationsEnabled:YES];
 				[again fetchMissingImages];
@@ -234,21 +283,25 @@
 			TGChatViewController *me = weakScroll;
 			if (!me || !added)
 				return;
-			CGFloat preTrimHeight = me.table.contentSize.height;
-			CGFloat preTrimOffset = me.table.contentOffset.y;
 			NSUInteger windowLimit = [TGCapabilities chatMessageWindowLimit];
 			BOOL trimmedOlder = [me.streamStore trimOlderToLimit:windowLimit] > 0;
 			[me measureTextsOf:[me.streamStore messages] then:^{
 				TGChatViewController *again = weakScroll;
 				if (!again)
 					return;
+				CGFloat preTrimHeight = again.table.contentSize.height;
+				CGFloat preTrimOffset = again.table.contentOffset.y;
+				CGFloat anchorDelta = 0.0f;
+				int64_t anchorMsgId = trimmedOlder
+						? TGChatVisibleAnchor(again.table, again.messages, preTrimOffset, &anchorDelta)
+						: 0;
 				again.rawMessages = [again.streamStore messages];
 				again.messages = [again groupedMessagesFromMessages:again.rawMessages];
 				[UIView setAnimationsEnabled:NO];
 				[again.table reloadData];
 				if (trimmedOlder) {
-					CGFloat shift = again.table.contentSize.height - preTrimHeight;
-					again.table.contentOffset = CGPointMake(0, MAX(0, preTrimOffset + shift));
+					TGChatRestoreAnchor(again.table, again.messages, anchorMsgId, anchorDelta,
+							preTrimOffset + (again.table.contentSize.height - preTrimHeight));
 				}
 				[UIView setAnimationsEnabled:YES];
 				[again fetchMissingImages];

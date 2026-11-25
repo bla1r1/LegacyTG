@@ -128,36 +128,47 @@ static UIImage *TGGlyphAvatar(CGFloat side, void (^draw)(CGContextRef ctx, CGFlo
 	UIImage *cached = [sTGAvatarCache objectForKey:cacheKey];
 	if (cached) return cached;
 
-	// Telegram's own placeholder colours, and its own mapping: the palette is
-	// indexed through [0,7,4,1,6,3,5] so that the same person gets the same
-	// colour here as in every other client.
-	static NSArray *palette = nil;
-	if (!palette)
-		palette = @[@[@0.882f, @0.443f, @0.463f],   // red
-					@[@0.929f, @0.659f, @0.424f],   // orange
-					@[@0.651f, @0.584f, @0.906f],   // violet
-					@[@0.482f, @0.784f, @0.384f],   // green
-					@[@0.431f, @0.788f, @0.796f],   // cyan
-					@[@0.396f, @0.667f, @0.867f],   // blue
-					@[@0.933f, @0.478f, @0.682f],   // pink
-					@[@0.882f, @0.443f, @0.463f]];  // the 8th slot repeats red
-	static const NSUInteger order[7] = {0, 7, 4, 1, 6, 3, 5};
-	NSArray *c = palette[order[(NSUInteger)llabs(colourId) % 7]];
+	// Official Telegram 7-colour avatar gradient palette (top -> bottom).
+	// Strip TDLib's -100 supergroup/channel prefix so channels match
+	// official's bare peer-id colour mapping.
+	static const CGFloat kTop[7][3] = {
+		{1.000f, 0.533f, 0.369f}, // 0: red-coral (#FF885E)
+		{1.000f, 0.804f, 0.416f}, // 1: orange    (#FFCD6A)
+		{0.714f, 0.537f, 0.961f}, // 2: violet    (#B689F5)
+		{0.627f, 0.871f, 0.494f}, // 3: green     (#A0DE7E)
+		{0.325f, 0.929f, 0.839f}, // 4: cyan      (#53EDD6)
+		{0.447f, 0.835f, 0.992f}, // 5: blue      (#72D5FD)
+		{0.878f, 0.635f, 0.953f}, // 6: pink      (#E0A2F3)
+	};
+	static const CGFloat kBot[7][3] = {
+		{1.000f, 0.318f, 0.416f}, // 0: red       (#FF516A)
+		{1.000f, 0.659f, 0.361f}, // 1: orange    (#FFA85C)
+		{0.549f, 0.322f, 0.898f}, // 2: violet    (#8C52E5)
+		{0.329f, 0.796f, 0.408f}, // 3: green     (#54CB68)
+		{0.157f, 0.788f, 0.718f}, // 4: cyan      (#28C9B7)
+		{0.165f, 0.620f, 0.945f}, // 5: blue      (#2A9EF1)
+		{0.839f, 0.412f, 0.929f}, // 6: pink      (#D669ED)
+	};
+	int64_t bareId = colourId;
+	if (bareId <= -1000000000000LL)
+		bareId = -(bareId + 1000000000000LL);
+	NSUInteger slot = (NSUInteger)(llabs(bareId) % 7);
 
 	UIGraphicsBeginImageContextWithOptions(CGSizeMake(size, size), NO, TGMainScreenScale());
 	CGContextRef ctx = UIGraphicsGetCurrentContext();
 
-	CGContextSetRGBFillColor(ctx, [c[0] floatValue], [c[1] floatValue],
-								  [c[2] floatValue], 1.0f);
-	CGContextFillEllipseInRect(ctx, CGRectMake(0, 0, size, size));
-
-	// a glassy highlight across the top half
 	CGContextSaveGState(ctx);
 	CGContextAddEllipseInRect(ctx, CGRectMake(0, 0, size, size));
 	CGContextClip(ctx);
-	CGContextSetRGBFillColor(ctx, 1, 1, 1, 0.20f);
-	CGContextFillEllipseInRect(ctx,
-			CGRectMake(-size * 0.2f, -size * 0.55f, size * 1.4f, size * 0.95f));
+	CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
+	CGFloat comps[8] = {
+		kTop[slot][0], kTop[slot][1], kTop[slot][2], 1.0f,
+		kBot[slot][0], kBot[slot][1], kBot[slot][2], 1.0f,
+	};
+	CGGradientRef grad = CGGradientCreateWithColorComponents(space, comps, NULL, 2);
+	CGContextDrawLinearGradient(ctx, grad, CGPointZero, CGPointMake(0, size), 0);
+	CGGradientRelease(grad);
+	CGColorSpaceRelease(space);
 	CGContextRestoreGState(ctx);
 
 	NSString *text = initials.length ? initials : @"?";

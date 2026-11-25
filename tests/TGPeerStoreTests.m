@@ -161,4 +161,38 @@
 	[[TGClient shared].userPhotosById removeObjectForKey:@(peerId)];
 }
 
+- (void)testTimeoutNilFollowedByLatePathStillCompletes {
+	int64_t peerId = 902;
+	NSInteger fileId = 778;
+	[TGClient shared].userPhotosById[@(peerId)] = @(fileId);
+
+	__block void (^savedCompletion)(NSString *) = nil;
+	[TGPeerStore setAvatarLoaderForTesting:^(NSInteger askedFileId,
+			void (^completion)(NSString *path)) {
+		XCTAssertEqual(askedFileId, fileId);
+		savedCompletion = [completion copy];
+	}];
+
+	__block NSInteger completions = 0;
+	[[TGPeerStore shared] loadAvatarForPeer:peerId side:48
+								completion:^(UIImage *image){
+		(void)image;
+		completions++;
+	}];
+
+	// Simulate watchdog timeout (nil) while TGDownloadStore still holds the record,
+	// followed by a late file completion.
+	XCTAssertNotNil(savedCompletion);
+	savedCompletion(nil);
+	savedCompletion(@"/nonexistent/TGPeerStoreTests-late.png");
+
+	NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:2.0];
+	while (completions < 2 && [deadline timeIntervalSinceNow] > 0)
+		[[NSRunLoop currentRunLoop] runUntilDate:
+				[NSDate dateWithTimeIntervalSinceNow:0.01]];
+
+	XCTAssertEqual(completions, (NSInteger)1);
+	[[TGClient shared].userPhotosById removeObjectForKey:@(peerId)];
+}
+
 @end

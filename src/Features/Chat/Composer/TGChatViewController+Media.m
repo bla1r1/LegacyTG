@@ -375,8 +375,10 @@
 		if (!me)
 			return;
 		[me.senderAvatarsRequested removeObject:key];
-		if (!photo)
+		if (!photo){
+			[me.senderAvatars removeObjectForKey:key];
 			return;
+		}
 		me.senderAvatars[key] = photo;
 		// One reload per arriving avatar loaded the whole table once per
 		// participant in a busy group; the debounce keeps that to a tick.

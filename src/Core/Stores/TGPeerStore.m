@@ -122,6 +122,47 @@ static BOOL TGPeerRecordOnline(NSDictionary *record) {
 /// own decode is lazy and would land on the main thread at draw time, which is
 /// a dropped frame on an A4. Host tests have no UIKit drawing; they inject a
 /// loader and only count downloads, so this half is device-only.
+#if TARGET_OS_IPHONE
+static NSString *TGPeerAvatarDiskDirectory(void) {
+	NSString *caches = [NSSearchPathForDirectoriesInDomains(NSCachesDirectory,
+			NSUserDomainMask, YES) firstObject];
+	NSUInteger slot = [TGClient activeAccountSlot] + 1;
+	return [[caches stringByAppendingPathComponent:@"avatars"]
+			stringByAppendingPathComponent:[NSString stringWithFormat:@"%lu",
+					(unsigned long)slot]];
+}
+
+static NSString *TGPeerAvatarDiskPath(int64_t peerId, CGFloat side) {
+	return [TGPeerAvatarDiskDirectory() stringByAppendingPathComponent:
+			[NSString stringWithFormat:@"%lld_%ld.png",
+					(long long)peerId, (long)lround(side)]];
+}
+
+static UIImage *TGPeerAvatarLoadFromDisk(int64_t peerId, CGFloat side) {
+	if (!peerId || side <= 0)
+		return nil;
+	NSString *path = TGPeerAvatarDiskPath(peerId, side);
+	NSData *data = [NSData dataWithContentsOfFile:path];
+	if (!data.length)
+		return nil;
+	return [UIImage imageWithData:data scale:[UIScreen mainScreen].scale];
+}
+
+static void TGPeerAvatarSaveToDisk(UIImage *image, int64_t peerId, CGFloat side) {
+	if (!image || !peerId || side <= 0)
+		return;
+	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_BACKGROUND, 0), ^{
+		NSData *png = UIImagePNGRepresentation(image);
+		if (!png.length)
+			return;
+		NSString *dir = TGPeerAvatarDiskDirectory();
+		[[NSFileManager defaultManager] createDirectoryAtPath:dir
+				withIntermediateDirectories:YES attributes:nil error:NULL];
+		[png writeToFile:TGPeerAvatarDiskPath(peerId, side) atomically:YES];
+	});
+}
+#endif
+
 static UIImage *TGPeerAvatarImageAtPath(NSString *path, CGFloat side) {
 #if TARGET_OS_IPHONE
 	if (!path.length || side <= 0)
@@ -338,7 +379,7 @@ static void (^TGPeerStoreAvatarLoader)(NSInteger fileId,
 		return nil;
 	TGDeviceTier tier = [TGDevice tier];
 	_photos = [[TGImageLruCache alloc] initWithCapacity:
-			tier == TGDeviceTierVintage ? 30 : tier == TGDeviceTierLegacy ? 60 : 120];
+			tier == TGDeviceTierVintage ? 60 : tier == TGDeviceTierLegacy ? 100 : 160];
 	_photoFileIds = [NSMutableDictionary dictionary];
 	_lookupWaiters = [NSMutableDictionary dictionary];
 	_downloadWaiters = [NSMutableDictionary dictionary];
@@ -441,7 +482,20 @@ static void (^TGPeerStoreAvatarLoader)(NSInteger fileId,
 - (UIImage *)cachedAvatarForPeer:(int64_t)peerId side:(CGFloat)side {
 	if (!peerId || side <= 0)
 		return nil;
-	return [_photos objectForKey:[self cacheKeyForPeer:peerId side:side]];
+	NSString *key = [self cacheKeyForPeer:peerId side:side];
+	UIImage *cached = [_photos objectForKey:key];
+	if (cached)
+		return cached;
+#if TARGET_OS_IPHONE
+	if (!TGPeerStoreAvatarLoader) {
+		UIImage *disk = TGPeerAvatarLoadFromDisk(peerId, side);
+		if (disk) {
+			[_photos setObject:disk forKey:key];
+			return disk;
+		}
+	}
+#endif
+	return nil;
 }
 
 - (void)loadAvatarForPeer:(int64_t)peerId
@@ -516,21 +570,37 @@ static void (^TGPeerStoreAvatarLoader)(NSInteger fileId,
 	_downloadWaiters[key] = waiters;
 
 	__weak typeof(self) weakSelf = self;
+	NSInteger fid = fileId.integerValue;
 	void (^done)(NSString *) = ^(NSString *path){
 		TGPeerStore *me = weakSelf;
 		if (!me)
 			return;
 		NSArray *queued = [me->_downloadWaiters[key] copy];
-		[me->_downloadWaiters removeObjectForKey:key];
 		if (!path.length){
+			// Keep waiters when TGDownloadStore only timed out (its record
+			// stays alive for a late updateFile); drop them on a real error.
+			if (![[TGDownloadStore shared] hasFileWaiterRecord:fid])
+				[me->_downloadWaiters removeObjectForKey:key];
 			for (TGPeerAvatarRequest *one in queued)
 				if (one.completion) one.completion(nil);
 			return;
 		}
-		// One file, possibly several sizes. Each decode is off the main
-		// thread; the cache write and the completion are main-queue work.
+		[me->_downloadWaiters removeObjectForKey:key];
+		// One file, possibly several sizes, and possibly duplicate requests
+		// from table reloads mid-fetch. Decode once per unique side off-main.
+		NSMutableDictionary *bySide = [NSMutableDictionary dictionary];
 		for (TGPeerAvatarRequest *one in queued){
-			CGFloat side = one.side;
+			NSNumber *sideKey = @((long)lround(one.side));
+			NSMutableArray *group = bySide[sideKey];
+			if (!group){
+				group = [NSMutableArray array];
+				bySide[sideKey] = group;
+			}
+			[group addObject:one];
+		}
+		for (NSNumber *sideKey in bySide){
+			NSArray *group = bySide[sideKey];
+			CGFloat side = ((TGPeerAvatarRequest *)group.firstObject).side;
 			dispatch_async(dispatch_get_global_queue(
 					DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
 				UIImage *image = TGPeerAvatarImageAtPath(path, side);
@@ -538,7 +608,8 @@ static void (^TGPeerStoreAvatarLoader)(NSInteger fileId,
 					TGPeerStore *last = weakSelf;
 					if (!last)
 						return;
-					[last finishRequest:one image:image];
+					for (TGPeerAvatarRequest *one in group)
+						[last finishRequest:one image:image];
 				});
 			});
 		}
@@ -554,9 +625,14 @@ static void (^TGPeerStoreAvatarLoader)(NSInteger fileId,
 }
 
 - (void)finishRequest:(TGPeerAvatarRequest *)request image:(UIImage *)image {
-	if (image)
+	if (image) {
 		[_photos setObject:image forKey:
 				[self cacheKeyForPeer:request.peerId side:request.side]];
+#if TARGET_OS_IPHONE
+		if (!TGPeerStoreAvatarLoader)
+			TGPeerAvatarSaveToDisk(image, request.peerId, request.side);
+#endif
+	}
 	if (request.completion)
 		request.completion(image);
 }

@@ -16,6 +16,10 @@
 	return self.navigationBarHidden ? self.topViewController : nil;
 }
 
+- (UIViewController *)childViewControllerForStatusBarHidden {
+	return self.navigationBarHidden ? self.topViewController : nil;
+}
+
 - (UIStatusBarStyle)preferredStatusBarStyle {
 	if ([[TGTheme shared] isDark]) {
 		return UIStatusBarStyleLightContent;

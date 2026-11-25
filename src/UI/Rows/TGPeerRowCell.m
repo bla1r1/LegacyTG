@@ -341,10 +341,13 @@ static void TGPeerRowAppendVerified(NSMutableAttributedString *name, UIFont *fon
 		__weak UITableView *weakTable = self.ownerTable;
 		[[TGPeerStore shared] loadAvatarForPeer:peer
 				side:TGMetricListAvatar completion:^(UIImage *image){
-			if (!image)
-				return;
 			TGPeerRowCell *cell = weakSelf;
 			UITableView *table = weakTable;
+			if (!image){
+				if (cell && cell.avatarPeer == peer)
+					cell.avatarPeer = 0;
+				return;
+			}
 			if (!cell || !table || cell.avatarPeer != peer)
 				return;
 			[cell setFaceImage:image];

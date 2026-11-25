@@ -40,7 +40,10 @@
     };
     NSInteger focus = TGLoginCodeFocusedBox(self.code.length, count);
     for (NSInteger i = 0; i < count; i++) {
-        CGRect box = CGRectMake(x, 0, boxWidth, TGMetricRow);
+        BOOL focused = !self.errorState && i == focus;
+        CGFloat lineWidth = (self.errorState || focused) ? TGMetricBorderThick : TGMetricHairline;
+        CGFloat inset = lineWidth * 0.5f;
+        CGRect box = CGRectInset(CGRectMake(x, 0, boxWidth, TGMetricRow), inset, inset);
         UIBezierPath *path = [UIBezierPath bezierPathWithRoundedRect:box
                 cornerRadius:TGMetricCornerControl];
         // D23: a hairline on the page was all a box had, and it vanished on
@@ -48,13 +51,12 @@
         // fields, and the one the next digit goes into wears the accent.
         [[[TGTheme shared] cardBackgroundColour] setFill];
         [path fill];
-        BOOL focused = !self.errorState && i == focus;
         UIColor *border = self.errorState
                 ? [[TGTheme shared] destructiveColour]
                 : (focused ? [[TGTheme shared] accentColour]
                         : (self.boxBorderColour ?: [[TGTheme shared] separatorColour]));
         [border setStroke];
-        path.lineWidth = (self.errorState || focused) ? TGMetricBorderThick : TGMetricHairline;
+        path.lineWidth = lineWidth;
         [path stroke];
         if ((NSUInteger)i < self.code.length) {
             NSString *digit = [self.code substringWithRange:NSMakeRange((NSUInteger)i, 1)];
@@ -638,7 +640,8 @@ static void TGCrossFadeStepChange(UIScrollView *scrollView) {
                                                                  withString:@""];
 
     self.countryLabel.hidden = YES;
-    self.expectedCodeLength = [info[@"length"] integerValue];
+    self.expectedCodeLength = [info[@"type"][@"length"] integerValue]
+            ?: [info[@"length"] integerValue];
     [self useSingleFieldLayout];
     [self.inputField resignFirstResponder];   // or the number pad never shows
     // The boxes paint the code; the field behind them stays the responder.

@@ -261,7 +261,7 @@ static UIImage *TGHoldCapture(UIView *view, CGFloat scale) {
 /// slow part (a full-screen picture scaled down: 170 ms on the A4) and does
 /// not change between holds, so its small copy is kept per picture and size;
 /// the views over it (the list, the composer, the pinned strip) take 5-15 ms.
-static UIImage *TGHoldCaptureChat(UIView *root, UIImageView *wallpaper, CGFloat scale) {
+static UIImage *TGHoldCaptureHost(UIView *host, UIView *chatView, UIImageView *wallpaper, CGFloat scale) {
 	static UIImage *cachedWallpaper = nil;
 	static __weak UIImage *cachedSource = nil;
 	static CGSize cachedSize;
@@ -271,6 +271,7 @@ static UIImage *TGHoldCaptureChat(UIView *root, UIImageView *wallpaper, CGFloat 
 		cachedSource = wallpaper.image;
 		cachedSize = wallpaper.bounds.size;
 	}
+	UIView *root = host ?: chatView;
 	UIGraphicsBeginImageContextWithOptions(root.bounds.size, YES, scale);
 	CGContextRef ctx = UIGraphicsGetCurrentContext();
 	if (!ctx){
@@ -278,17 +279,28 @@ static UIImage *TGHoldCaptureChat(UIView *root, UIImageView *wallpaper, CGFloat 
 		return nil;
 	}
 	CGContextSetInterpolationQuality(ctx, kCGInterpolationLow);
-	[root.backgroundColor ?: [UIColor blackColor] setFill];
+	[chatView.backgroundColor ?: [UIColor blackColor] setFill];
 	UIRectFill(root.bounds);
 	if (wallpaper.image && cachedWallpaper)
 		[cachedWallpaper drawInRect:[wallpaper convertRect:wallpaper.bounds toView:root]];
-	for (UIView *sub in root.subviews){
+	for (UIView *sub in chatView.subviews){
 		if (sub == wallpaper || sub.hidden || sub.alpha < TGAlphaEpsilon)
 			continue;
+		CGPoint origin = (root == chatView) ? sub.frame.origin : [sub convertPoint:CGPointZero toView:root];
 		CGContextSaveGState(ctx);
-		CGContextTranslateCTM(ctx, CGRectGetMinX(sub.frame), CGRectGetMinY(sub.frame));
+		CGContextTranslateCTM(ctx, origin.x, origin.y);
 		[sub.layer renderInContext:ctx];
 		CGContextRestoreGState(ctx);
+	}
+	if (root != chatView){
+		for (UIView *sub in root.subviews){
+			if (sub == chatView || [chatView isDescendantOfView:sub] || sub.hidden || sub.alpha < TGAlphaEpsilon)
+				continue;
+			CGContextSaveGState(ctx);
+			CGContextTranslateCTM(ctx, CGRectGetMinX(sub.frame), CGRectGetMinY(sub.frame));
+			[sub.layer renderInContext:ctx];
+			CGContextRestoreGState(ctx);
+		}
 	}
 	UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
 	UIGraphicsEndImageContext();
@@ -337,9 +349,7 @@ static const CGFloat kHoldBlurRadius = 28.0f;
 	CGFloat bubbleAlpha = cell.bubble.alpha, tailAlpha = cell.tail.alpha;
 	cell.bubble.alpha = TGAlphaTransparent;
 	cell.tail.alpha = TGAlphaTransparent;
-	UIImage *chat = (host == self.view)
-			? TGHoldCaptureChat(self.view, self.wallpaperView, 0.5f)
-			: TGHoldCapture(host, 0.5f);
+	UIImage *chat = TGHoldCaptureHost(host, self.view, self.wallpaperView, 0.5f);
 	cell.bubble.alpha = bubbleAlpha;
 	cell.tail.alpha = tailAlpha;
 	UIImage *blurred = chat ? [TGTheme softenedImage:chat radius:kHoldBlurRadius dim:0] : nil;
@@ -379,6 +389,8 @@ static const CGFloat kHoldBlurRadius = 28.0f;
 			? cell.body
 			: ((!cell.captionLabel.hidden && !CGRectIsEmpty(cell.captionLabel.frame))
 					? cell.captionLabel : nil);
+	CGRect quoteFrame = textLabel ? textLabel.frame : CGRectZero;
+	UIFont *quoteFont = textLabel ? textLabel.font : nil;
 	NSString *heldText = ([heldMsg[@"text"] isKindOfClass:NSString.class] && [heldMsg[@"text"] length])
 			? heldMsg[@"text"]
 			: (([heldMsg[@"caption"] isKindOfClass:NSString.class] && [heldMsg[@"caption"] length])
@@ -386,32 +398,6 @@ static const CGFloat kHoldBlurRadius = 28.0f;
 	id canCopyVal = [self.actionProperties isKindOfClass:NSDictionary.class]
 			? self.actionProperties[@"can_be_copied"] : nil;
 	BOOL copyAllowed = !canCopyVal || [canCopyVal boolValue];
-	if (heldText.length && textLabel && copyAllowed) {
-		TGQuoteSelectionTextView *qtv = [[TGQuoteSelectionTextView alloc] initWithFrame:textLabel.frame];
-		qtv.font = textLabel.font;
-		qtv.text = heldText;
-		int64_t heldMsgId = [heldMsg[@"id"] longLongValue];
-		NSString *who = [heldMsg[@"outgoing"] boolValue] ? TGLocalized(@"You")
-				: ([[TGMessageStore shared] nameForUserId:
-						[heldMsg[@"senderId"] longLongValue]] ?: self.chatTitle ?: TGLocalized(@"Reply"));
-		NSArray *entities = [heldMsg[@"entities"] isKindOfClass:NSArray.class]
-				? heldMsg[@"entities"] : nil;
-		__weak typeof(self) weakSelf = self;
-		qtv.onQuote = ^(NSString *quote, NSRange range) {
-			TGChatViewController *me = weakSelf;
-			if (!me)
-				return;
-			[TGPopupMenu dismiss];
-			me.replyToId = heldMsgId;
-			me.editingId = 0;
-			me.replyQuoteText = quote;
-			me.replyQuotePosition = (NSInteger)range.location;
-			me.replyQuoteEntities = TGQuoteSliceEntities(entities, range);
-			[me showComposeBanner:who subtitle:[NSString stringWithFormat:@"\"%@\"", quote]];
-			[me.input becomeFirstResponder];
-		};
-		[lift addSubview:qtv];
-	}
 
 	self.holdBackdropView = backdrop;
 	self.holdLiftView = lift;
@@ -441,6 +427,33 @@ static const CGFloat kHoldBlurRadius = 28.0f;
 			return;
 		if (didLift)
 			didLift(target);
+		// UITextView triggers WebKit setup on iOS 6; attach after the lift
+		// animation settles so the menu open stays at 60 fps.
+		if (heldText.length && quoteFont && !CGRectIsEmpty(quoteFrame) && copyAllowed) {
+			TGQuoteSelectionTextView *qtv = [[TGQuoteSelectionTextView alloc] initWithFrame:quoteFrame];
+			qtv.font = quoteFont;
+			qtv.text = heldText;
+			int64_t heldMsgId = [heldMsg[@"id"] longLongValue];
+			NSString *who = [heldMsg[@"outgoing"] boolValue] ? TGLocalized(@"You")
+					: ([[TGMessageStore shared] nameForUserId:
+							[heldMsg[@"senderId"] longLongValue]] ?: me.chatTitle ?: TGLocalized(@"Reply"));
+			NSArray *entities = [heldMsg[@"entities"] isKindOfClass:NSArray.class]
+					? heldMsg[@"entities"] : nil;
+			qtv.onQuote = ^(NSString *quote, NSRange range) {
+				TGChatViewController *live = weakSelf;
+				if (!live)
+					return;
+				[TGPopupMenu dismiss];
+				live.replyToId = heldMsgId;
+				live.editingId = 0;
+				live.replyQuoteText = quote;
+				live.replyQuotePosition = (NSInteger)range.location;
+				live.replyQuoteEntities = TGQuoteSliceEntities(entities, range);
+				[live showComposeBanner:who subtitle:[NSString stringWithFormat:@"\"%@\"", quote]];
+				[live.input becomeFirstResponder];
+			};
+			[lift addSubview:qtv];
+		}
 	});
 	return target;
 }
