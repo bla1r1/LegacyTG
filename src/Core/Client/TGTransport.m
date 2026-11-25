@@ -11,12 +11,16 @@
 /// formatted and written to syslogd on the A4's one core. Turned on when a trace
 /// is wanted: itglegacy://bench/pref/TGVerboseClientLog/1
 static BOOL TGTransportVerboseLog(void) {
+#if TG_DEV
 	static BOOL verbose;
 	static dispatch_once_t once;
 	dispatch_once(&once, ^{
 		verbose = [[NSUserDefaults standardUserDefaults] boolForKey:@"TGVerboseClientLog"];
 	});
 	return verbose;
+#else
+	return NO;
+#endif
 }
 
 /// How long the receive thread rests when TDLib has nothing: 20 ms (60 ms on Vintage).
@@ -187,7 +191,7 @@ static int64_t TGIdlePollNanoseconds(void) {
 		return;
 	NSMutableData *z = TGJsonSerializeForSend(request);
 	if (!z){
-		NSLog(@"TGClient: cannot encode %@", request);
+		NSLog(@"TGClient: cannot encode %@", request[@"@type"]);
 		return;
 	}
 

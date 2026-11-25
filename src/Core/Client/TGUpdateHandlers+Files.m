@@ -135,13 +135,17 @@
 
 	case TGUpdateNewCallSignalingData: {
 		NSData *data = TGBase64Decode(obj[@"data"]);
+#if TG_DEV
 		NSLog(@"TGClient: <<< updateNewCallSignalingData call_id=%@ len=%lu", obj[@"call_id"], (unsigned long)data.length);
+#endif
 		[[TGCall shared] handleSignalingData:data];
 		return YES;
 	}
 
 	case TGUpdateCall: {
+#if TG_DEV
 		NSLog(@"TGClient: <<< updateCall: %@", obj[@"call"]);
+#endif
 		// TDLib signals the call; TGCall owns the audio.
 		[[TGCall shared] handleUpdate:obj[@"call"]];
 		return YES;

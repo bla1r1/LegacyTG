@@ -18,6 +18,7 @@
 #import "TGSponsoredMessagesViewController.h"
 #import "TGStoryComposerViewController.h"
 #import "TGDevBotConsoleViewController.h"
+#import "TGURLSafety.h"
 #import "TGAffiliateProgramsViewController.h"
 #import "TGGroupLogic.h"
 #import "TGBarItem.h"
@@ -195,7 +196,7 @@
 			url = @"https://telegram.org/privacy";
 		NSURL *target = [NSURL URLWithString:url];
 		if (target)
-			[[UIApplication sharedApplication] openURL:target];
+			TGOpenSafeExternalURL(target);
 	}];
 }
 

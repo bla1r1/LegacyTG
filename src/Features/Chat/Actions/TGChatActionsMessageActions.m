@@ -147,9 +147,11 @@
 			[weakSelf runMessageAction:title];
 		};
 		if (lifted) {
+			UIView *holdHost = me.navigationController.view ?: me.view;
 			[TGPopupMenu showItems:items
 						anchoredAt:anchor
-							inView:me.view
+						liftedView:me.holdLiftView
+							inView:holdHost
 						headerView:summary
 						 reactions:reactions
 				  selectedReaction:myReaction

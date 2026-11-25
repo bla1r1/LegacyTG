@@ -27,6 +27,7 @@ typedef struct {
 	uint32_t roc;          // rollover counter for the SSRC in this direction
 	uint16_t highestSeq;
 	int      haveHighest;
+	uint64_t replayMask;   // 64-packet sliding replay window
 } TGSrtpContext;
 
 /// Derive the session keys from the 16-byte master key and 14-byte salt.

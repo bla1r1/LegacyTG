@@ -491,19 +491,15 @@ NSArray<NSDictionary *> *TGChatActionMenuRows(NSDictionary *message,
 				: TGLocalized(@"View Thread"), @"View Thread", @"reply", NO);
 	}
 
-	// Copy, Quote, Translate and Speak are text actions. A voice note, a
-	// sticker or a bare photo carries a system description in `text`, not
-	// words the sender typed, and official does not offer any of them there.
+	// Copy and Translate are text actions. A voice note, a sticker or a bare
+	// photo carries a system description in `text`, not words the sender typed.
+	// Quoting is done directly via text selection on the lifted bubble.
 	if (bodyText && saveable && (!context.hasProperties || context.canCopy))
 		add(TGLocalized(@"Copy"), @"Copy", @"copy", NO);
-	if (bodyText)
-		add(TGLocalized(@"Quote"), @"Find Quote", @"data", NO);
 	if (bodyText && [text rangeOfString:@"#"].location != NSNotFound)
 		add(TGLocalized(@"Search by Hashtag"), @"Search by Hashtag", @"data", NO);
 	if (bodyText && context.canTranslate)
 		add(TGLocalized(@"Translate"), @"Translate", @"edit", NO);
-	if (bodyText && context.canSpeak)
-		add(TGLocalized(@"Speak"), @"Speak", @"microphone", NO);
 
 	// The discussion row sits where official puts View Replies: after the
 	// text/media verbs, before Edit.
@@ -628,7 +624,6 @@ NSArray<NSDictionary *> *TGChatActionMenuRows(NSDictionary *message,
 #if TG_DEV
 	// Developer rows stay together at the end. Message Tools is not one of
 	// them: it is reached from the dev hub, never from a held message.
-	add(TGLocalized(@"Shared Media"), @"Shared Media Map", @"data", NO);
 	if (context.hasMessageEffects)
 		add(TGLocalized(@"Message Effects"), @"Message Effects", @"react", NO);
 	if ([message[@"kind"] isEqualToString:@"messageAnimatedEmoji"])
@@ -703,4 +698,63 @@ NSString *TGTranscriptionCooldownText(NSInteger left, NSInteger weekly,
 	NSString *text = [NSString stringWithFormat:@"%@ %@", used, wait];
 	text = [text stringByReplacingOccurrencesOfString:@"**" withString:@""];
 	return [text stringByReplacingOccurrencesOfString:@"[Telegram Premium]()" withString:@"Telegram Premium"];
+}
+
+TGHoldScrollMetrics TGHoldScrollLayout(CGRect bubble, CGFloat above,
+		CGFloat cardGap, CGFloat cardH, CGFloat top, CGFloat bottom,
+		CGFloat hostH, CGFloat bottomPad) {
+	TGHoldScrollMetrics out = {0};
+	CGFloat h = CGRectGetHeight(bubble);
+	CGFloat below = cardGap + cardH;
+	CGFloat totalH = above + h + below;
+	CGFloat availH = bottom - top;
+
+	if (totalH <= availH) {
+		out.bubbleY = TGHoldLiftY(bubble, above, below, top, bottom);
+		out.reactionBaseY = out.bubbleY - above;
+		out.cardY = out.bubbleY + h + cardGap;
+		out.contentH = hostH;
+		out.initialOffsetY = 0.0f;
+	} else {
+		out.reactionBaseY = top;
+		out.bubbleY = top + above;
+		out.cardY = out.bubbleY + h + cardGap;
+		out.contentH = MAX(hostH, out.cardY + cardH + bottomPad);
+		CGFloat maxOffset = MAX(0.0f, out.contentH - hostH);
+		out.initialOffsetY = maxOffset;
+	}
+	return out;
+}
+
+CGFloat TGHoldStickyReactionY(CGFloat baseY, CGFloat bubbleMaxY,
+		CGFloat reactionH, CGFloat gap, CGFloat offsetY, CGFloat topInset) {
+	CGFloat maxY = MAX(baseY, bubbleMaxY - reactionH - gap);
+	return MAX(baseY, MIN(maxY, offsetY + topInset));
+}
+
+NSArray<NSDictionary *> *TGQuoteSliceEntities(NSArray *entities, NSRange range) {
+	if (![entities isKindOfClass:NSArray.class] || !entities.count || range.length == 0)
+		return @[];
+	NSInteger qStart = (NSInteger)range.location;
+	NSInteger qEnd = (NSInteger)NSMaxRange(range);
+	NSMutableArray *sliced = [NSMutableArray array];
+	for (NSDictionary *entity in entities) {
+		if (![entity isKindOfClass:NSDictionary.class] || !entity[@"type"])
+			continue;
+		NSInteger start = [entity[@"offset"] integerValue];
+		NSInteger len = [entity[@"length"] integerValue];
+		if (len <= 0)
+			continue;
+		NSInteger oStart = MAX(start, qStart);
+		NSInteger oEnd = MIN(start + len, qEnd);
+		if (oEnd <= oStart)
+			continue;
+		[sliced addObject:@{
+			@"@type"  : @"textEntity",
+			@"offset" : @(oStart - qStart),
+			@"length" : @(oEnd - oStart),
+			@"type"   : entity[@"type"],
+		}];
+	}
+	return sliced;
 }

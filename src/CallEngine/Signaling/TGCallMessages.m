@@ -321,11 +321,11 @@ NSUInteger TGCallParseMediaPacketSlices(const uint8_t *bytes, NSUInteger length,
 
 	NSMutableArray *candidates = [NSMutableArray array];
 	for (uint8_t i = 0; i < count; i++){
-		if (at + 4 > length)
+		if (length - at < 4)
 			return nil;
 		uint32_t size = TGReadU32(bytes + at);
 		at += 4;
-		if (at + size > length)
+		if (size > length - at)
 			return nil;
 		NSString *candidate = [[NSString alloc]
 				initWithBytes:bytes + at length:size encoding:NSUTF8StringEncoding];
@@ -338,11 +338,11 @@ NSUInteger TGCallParseMediaPacketSlices(const uint8_t *bytes, NSUInteger length,
 	// check has to be signed with.
 	NSString *ufrag = nil, *pwd = nil;
 	for (int i = 0; i < 2; i++){
-		if (at + 4 > length)
+		if (length - at < 4)
 			break;
 		uint32_t size = TGReadU32(bytes + at);
 		at += 4;
-		if (at + size > length)
+		if (size > length - at)
 			break;
 		NSString *value = [[NSString alloc]
 				initWithBytes:bytes + at length:size encoding:NSUTF8StringEncoding];

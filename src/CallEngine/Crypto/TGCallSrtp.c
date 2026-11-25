@@ -152,16 +152,38 @@ static uint32_t TGSrtpRocForSequence(const TGSrtpContext *ctx, uint16_t seq) {
 	return ctx->roc;
 }
 
-/// Only a packet past the highest one moves it: a retransmission or a late
-/// packet must not drag the counter back.
+static int TGSrtpReplayCheck(const TGSrtpContext *ctx, uint64_t index) {
+	if (!ctx->haveHighest)
+		return 0;
+	uint64_t highest = ((uint64_t)ctx->roc << 16) | ctx->highestSeq;
+	if (index > highest)
+		return 0;
+	uint64_t delta = highest - index;
+	if (delta >= 64 || (ctx->replayMask & (1ULL << delta)) != 0)
+		return -1;
+	return 0;
+}
+
 static void TGSrtpAdvance(TGSrtpContext *ctx, uint32_t roc, uint16_t seq) {
 	uint64_t index = ((uint64_t)roc << 16) | seq;
-	uint64_t highest = ((uint64_t)ctx->roc << 16) | ctx->highestSeq;
-	if (ctx->haveHighest && index <= highest)
+	if (!ctx->haveHighest){
+		ctx->roc = roc;
+		ctx->highestSeq = seq;
+		ctx->replayMask = 1ULL;
+		ctx->haveHighest = 1;
 		return;
-	ctx->roc = roc;
-	ctx->highestSeq = seq;
-	ctx->haveHighest = 1;
+	}
+	uint64_t highest = ((uint64_t)ctx->roc << 16) | ctx->highestSeq;
+	if (index > highest){
+		uint64_t shift = index - highest;
+		ctx->replayMask = (shift < 64) ? ((ctx->replayMask << shift) | 1ULL) : 1ULL;
+		ctx->roc = roc;
+		ctx->highestSeq = seq;
+	} else {
+		uint64_t delta = highest - index;
+		if (delta < 64)
+			ctx->replayMask |= (1ULL << delta);
+	}
 }
 
 int TGSrtpProtect(TGSrtpContext *ctx, uint8_t *packet, size_t length,
@@ -204,6 +226,10 @@ int TGSrtpUnprotect(TGSrtpContext *ctx, uint8_t *packet, size_t length,
 	                ((uint32_t)packet[10] << 8) | packet[11];
 
 	uint32_t roc = TGSrtpRocForSequence(ctx, seq);
+	uint64_t index = ((uint64_t)roc << 16) | seq;
+	if (TGSrtpReplayCheck(ctx, index) != 0)
+		return -1;
+
 	size_t plainLength = length - TGSrtpTagLength;
 
 	// The tag is checked before anything is decrypted: a forged packet must
@@ -216,7 +242,6 @@ int TGSrtpUnprotect(TGSrtpContext *ctx, uint8_t *packet, size_t length,
 	                     packet + plainLength) != 0)
 		return -1;
 
-	uint64_t index = ((uint64_t)roc << 16) | seq;
 	uint8_t iv[16];
 	TGSrtpIv(ctx, ssrc, index, iv);
 	TGSrtpCtr(ctx, iv, packet + 12, plainLength - 12);
@@ -265,6 +290,8 @@ int TGSrtcpUnprotect(TGSrtpContext *ctx, uint8_t *packet, size_t length,
 	if ((word & 0x80000000u) == 0)
 		return -1;
 	uint32_t index = word & 0x7FFFFFFFu;
+	if (TGSrtpReplayCheck(ctx, (uint64_t)index) != 0)
+		return -1;
 
 	if (TGSrtpTagMatches(ctx, packet, plainLength + 4, NULL,
 	                     packet + plainLength + 4) != 0)
@@ -276,6 +303,7 @@ int TGSrtcpUnprotect(TGSrtpContext *ctx, uint8_t *packet, size_t length,
 	TGSrtpIv(ctx, ssrc, index, iv);
 	TGSrtpCtr(ctx, iv, packet + 8, plainLength - 8);
 
+	TGSrtpAdvance(ctx, (uint32_t)((uint64_t)index >> 16), (uint16_t)(index & 0xFFFFu));
 	if (outLength)
 		*outLength = plainLength;
 	return 0;

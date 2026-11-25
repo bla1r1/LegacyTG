@@ -1199,7 +1199,7 @@ static void TGSoftVideoAudioCallback(void *userData, AudioQueueRef queue,
 		sourceChannels = 1;
 	int outChannels = _audioChannels;
 	int frames = frame->nb_samples;
-	if (frames <= 0)
+	if (frames <= 0 || outChannels <= 0 || frames > INT_MAX / outChannels)
 		return;
 	int needed = frames * outChannels;
 	if (needed > _pcmCapacity)
@@ -1218,13 +1218,13 @@ static void TGSoftVideoAudioCallback(void *userData, AudioQueueRef queue,
 		for (int channel = 0; channel < outChannels; channel++){
 			int sourceChannel = MIN(channel, sourceChannels - 1);
 			float sample = 0.0f;
-			if (frame->format == AV_SAMPLE_FMT_FLTP){
+			if (frame->format == AV_SAMPLE_FMT_FLTP && frame->data[sourceChannel]){
 				sample = ((const float *)frame->data[sourceChannel])[i];
-			} else if (frame->format == AV_SAMPLE_FMT_FLT){
+			} else if (frame->format == AV_SAMPLE_FMT_FLT && frame->data[0]){
 				sample = ((const float *)frame->data[0])[i * sourceChannels + sourceChannel];
-			} else if (frame->format == AV_SAMPLE_FMT_S16P){
+			} else if (frame->format == AV_SAMPLE_FMT_S16P && frame->data[sourceChannel]){
 				sample = ((const int16_t *)frame->data[sourceChannel])[i] / 32768.0f;
-			} else if (frame->format == AV_SAMPLE_FMT_S16){
+			} else if (frame->format == AV_SAMPLE_FMT_S16 && frame->data[0]){
 				sample = ((const int16_t *)frame->data[0])[i * sourceChannels + sourceChannel] / 32768.0f;
 			}
 			if (sample > 1.0f) sample = 1.0f;

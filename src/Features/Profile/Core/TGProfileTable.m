@@ -15,6 +15,7 @@
 #import "TGLocalization.h"
 #import "TGIcons.h"
 #import "TGPresent.h"
+#import "TGURLSafety.h"
 #import <AVFoundation/AVFoundation.h>
 
 /// The card's own height is the label over the value, with the value wrapping
@@ -245,7 +246,7 @@ heightForHeaderInSection:(NSInteger)section {
 				NSUTF8StringEncoding];
 		NSString *maps = [NSString stringWithFormat:
 				@"http://maps.apple.com/?q=%@", encoded ?: @""];
-		[[UIApplication sharedApplication] openURL:[NSURL URLWithString:maps]];
+		TGOpenSafeExternalURL([NSURL URLWithString:maps]);
 	} else if ([kind isEqualToString:@"addContact"]){
 		[self addToContactsTapped];
 	} else if ([kind isEqualToString:@"addBotToChat"]){
@@ -268,7 +269,7 @@ heightForHeaderInSection:(NSInteger)section {
 	} else if ([kind isEqualToString:@"bio"]){
 		NSURL *url = TGProfileFirstURL(row[@"value"], self.bioEntities);
 		if (url)
-			[[UIApplication sharedApplication] openURL:url];
+			TGOpenSafeExternalURL(url);
 	} else if ([kind isEqualToString:@"about"]){
 		if (!self.descriptionExpanded){
 			self.descriptionExpanded = YES;
@@ -347,7 +348,7 @@ heightForHeaderInSection:(NSInteger)section {
 	} else if ([kind isEqualToString:@"links"]){
 		NSURL *url = TGProfileFirstURL(m[@"text"], m[@"entities"]);
 		if (url)
-			[[UIApplication sharedApplication] openURL:url];
+			TGOpenSafeExternalURL(url);
 	} else if ([kind isEqualToString:@"groups"]){
 		[self openChat:[m[@"chatId"] longLongValue] title:m[@"title"] message:0];
 	} else if ([kind isEqualToString:@"similar"]){

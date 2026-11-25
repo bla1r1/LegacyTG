@@ -314,10 +314,13 @@ static void TGV2DeliverVideo(void *context, const uint8_t *rtp, size_t length) {
 		NSArray *fingerprints = json[@"fingerprints"];
 		NSDictionary *first = [fingerprints isKindOfClass:[NSArray class]] &&
 		                      [fingerprints count] ? fingerprints[0] : nil;
-		NSString *fingerprint = first[@"fingerprint"];
-		self.peerUfrag = json[@"ufrag"];
-		self.peerPwd = json[@"pwd"];
+		if (![first isKindOfClass:[NSDictionary class]])
+			first = nil;
+		NSString *fingerprint = [first[@"fingerprint"] isKindOfClass:[NSString class]] ? first[@"fingerprint"] : nil;
+		self.peerUfrag = [json[@"ufrag"] isKindOfClass:[NSString class]] ? json[@"ufrag"] : nil;
+		self.peerPwd = [json[@"pwd"] isKindOfClass:[NSString class]] ? json[@"pwd"] : nil;
 		self.peerFingerprint = fingerprint;
+		self.dtls.expectedPeerFingerprint = fingerprint;
 		NSLog(@"TGCallV2: peer InitialSetup ufrag=%@ pwd=%d setup=%@ fingerprint=%d",
 		      self.peerUfrag, self.peerPwd.length > 0,
 		      first[@"setup"], fingerprint.length > 0);
@@ -338,10 +341,14 @@ static void TGV2DeliverVideo(void *context, const uint8_t *rtp, size_t length) {
 		[self handleNegotiation:json];
 	} else if ([type isEqualToString:@"Candidates"]){
 		NSArray *items = json[@"candidates"];
+		if (![items isKindOfClass:[NSArray class]])
+			return;
 		NSMutableArray *candidates = [NSMutableArray array];
 		for (NSDictionary *item in items){
+			if (![item isKindOfClass:[NSDictionary class]])
+				continue;
 			NSString *sdp = item[@"sdpString"];
-			if (sdp.length)
+			if ([sdp isKindOfClass:[NSString class]] && sdp.length)
 				[candidates addObject:sdp];
 		}
 		if (candidates.count && self.onRemoteCandidates)

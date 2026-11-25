@@ -55,7 +55,7 @@
 		@{@"offset" : @0, @"length" : @2, @"type" : @{@"@type" : @"textEntityTypeBold"}},
 		@{@"offset" : @4, @"length" : @6, @"type" : @{@"@type" : @"textEntityTypeUrl"}}];
 	XCTAssertEqualObjects(TGProfileFirstURL(@"hi, t.me/x now", entities).absoluteString,
-			@"http://t.me/x");
+			@"https://t.me/x");
 	NSArray *link = @[@{@"offset" : @0, @"length" : @4,
 			@"type" : @{@"@type" : @"textEntityTypeTextUrl", @"url" : @"https://a.b/c"}}];
 	XCTAssertEqualObjects(TGProfileFirstURL(@"here", link).host, @"a.b");

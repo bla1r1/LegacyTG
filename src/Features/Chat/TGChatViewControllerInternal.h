@@ -125,6 +125,8 @@ UIImage *TGImageFromMinithumbnail(id mini);
 @property (nonatomic, assign) BOOL holdReturning;
 @property (nonatomic, assign) int64_t replyToId;             // composing a reply
 @property (nonatomic, copy) NSString *replyQuoteText;        // quoted excerpt for reply
+@property (nonatomic, assign) NSInteger replyQuotePosition;  // UTF-16 offset in source text
+@property (nonatomic, copy) NSArray *replyQuoteEntities;     // sliced entities for quote
 @property (nonatomic, assign) int64_t editingId;             // editing instead
 @property (nonatomic, strong) UIView *composeBanner;         // "Reply to ..."
 @property (nonatomic, strong) UIButton *micButton;

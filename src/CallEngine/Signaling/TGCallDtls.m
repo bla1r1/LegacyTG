@@ -9,6 +9,9 @@
 #include <openssl/srtp.h>
 #include <openssl/bio.h>
 #include <openssl/pem.h>
+#if !TARGET_OS_IPHONE
+#include <dlfcn.h>
+#endif
 
 static const char *kSrtpProfiles = "SRTP_AES128_CM_SHA1_80";
 
@@ -178,6 +181,48 @@ static int TGAcceptCertificate(int preverifyOk, X509_STORE_CTX *store) {
 		[self drain];
 }
 
+- (BOOL)verifyPeerFingerprint {
+	NSString *expected = self.expectedPeerFingerprint;
+	if (!expected.length || !self.ssl)
+		return NO;
+
+#if TARGET_OS_IPHONE
+	X509 *peer = SSL_get_peer_certificate(self.ssl);
+#else
+	X509 *(*getPeerCert)(const SSL *) = (X509 *(*)(const SSL *))dlsym(RTLD_DEFAULT, "SSL_get1_peer_certificate");
+	if (!getPeerCert)
+		getPeerCert = (X509 *(*)(const SSL *))dlsym(RTLD_DEFAULT, "SSL_get_peer_certificate");
+	X509 *peer = getPeerCert ? getPeerCert(self.ssl) : NULL;
+#endif
+	if (!peer)
+		return NO;
+
+	unsigned char digest[EVP_MAX_MD_SIZE];
+	unsigned int digestLength = 0;
+	int ok = X509_digest(peer, EVP_sha256(), digest, &digestLength);
+	X509_free(peer);
+	if (ok != 1 || digestLength == 0)
+		return NO;
+
+	NSMutableString *actual = [NSMutableString stringWithCapacity:digestLength * 3];
+	for (unsigned int i = 0; i < digestLength; i++){
+		if (i) [actual appendString:@":"];
+		[actual appendFormat:@"%02X", digest[i]];
+	}
+
+	NSData *aData = [actual dataUsingEncoding:NSUTF8StringEncoding];
+	NSData *eData = [[expected uppercaseString] dataUsingEncoding:NSUTF8StringEncoding];
+	if (!aData || !eData || aData.length != eData.length)
+		return NO;
+
+	const uint8_t *ab = (const uint8_t *)aData.bytes;
+	const uint8_t *eb = (const uint8_t *)eData.bytes;
+	volatile uint8_t diff = 0;
+	for (NSUInteger i = 0; i < aData.length; i++)
+		diff |= (uint8_t)(ab[i] ^ eb[i]);
+	return diff == 0;
+}
+
 - (void)pump {
 	if (!self.ssl)
 		return;
@@ -187,6 +232,11 @@ static int TGAcceptCertificate(int preverifyOk, X509_STORE_CTX *store) {
 
 	if (result == 1){
 		if (!self.connected){
+			if (![self verifyPeerFingerprint]){
+				if (self.onFailure)
+					self.onFailure(@"DTLS peer fingerprint mismatch");
+				return;
+			}
 			self.connected = YES;
 			if (self.onConnected)
 				self.onConnected();

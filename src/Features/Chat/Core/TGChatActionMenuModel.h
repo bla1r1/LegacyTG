@@ -238,6 +238,35 @@ NSDictionary *TGAiComposeInputModel(NSString *text, int64_t chatId,
 /// rest, so every screen that bakes a bitmap asks this first.
 BOOL TGChatDrawableSize(CGSize size);
 
+/// Vertical layout for the full-screen scrollable hold presentation.
+typedef struct {
+	CGFloat reactionBaseY;
+	CGFloat bubbleY;
+	CGFloat cardY;
+	CGFloat contentH;
+	CGFloat initialOffsetY;
+} TGHoldScrollMetrics;
+
+/// Computes the full-size scrollable layout for a held message, its reaction
+/// bar (`above` = reactionH + gap), and the full-height action card (`cardH`
+/// + `cardGap`). When everything fits in `[top, bottom]`, `initialOffsetY`
+/// is 0 and `bubbleY` matches `TGHoldLiftY`. When taller, everything keeps
+/// its full size inside a scrollable canvas and `initialOffsetY` preserves
+/// the bubble's on-screen position without jumping.
+TGHoldScrollMetrics TGHoldScrollLayout(CGRect bubble, CGFloat above,
+		CGFloat cardGap, CGFloat cardH, CGFloat top, CGFloat bottom,
+		CGFloat hostH, CGFloat bottomPad);
+
+/// Sticky Y for the reaction capsule while scrolling a tall lifted bubble:
+/// stays pinned at `offsetY + topInset` over the bubble without colliding
+/// with the action card below.
+CGFloat TGHoldStickyReactionY(CGFloat baseY, CGFloat bubbleMaxY,
+		CGFloat reactionH, CGFloat gap, CGFloat offsetY, CGFloat topInset);
+
+/// Slices TDLib `textEntity` dictionaries to a quoted UTF-16 `range`,
+/// shifting offsets relative to `range.location` and clamping lengths.
+NSArray<NSDictionary *> *TGQuoteSliceEntities(NSArray *entities, NSRange range);
+
 #ifdef __cplusplus
 }
 #endif

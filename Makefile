@@ -330,6 +330,7 @@ APP_SRC_M := \
 	src/Core/Client/TGClient+Appearance.m \
 	src/Core/Client/TGClient+Diagnostics.m \
 	src/Core/Support/TGDatabaseKey.m \
+	src/Core/Support/TGURLSafety.m \
 	src/Core/Client/TGClient+Profile.m \
 	src/Core/Client/TGClient+ProfileAudio.m \
 	src/Core/Client/TGClient+EmojiStatus.m \
@@ -900,7 +901,7 @@ ARM64_ALL_OBJS   := $(ARM64_LIBTG_OBJS) $(ARM64_APP_OBJS)
 # changed header re-triggers the translation units that include it. Without
 # this the linker happily mixes pre-rename and post-rename objects, and the
 # result crashes with unrecognized selectors at runtime (2026-10-25).
-CFLAGS_ARMV7    := -arch armv7 -mthumb -O2 -isysroot $(SDK_PATH) $(MIN_IOS) $(INCLUDES) $(ARMV7_FFMPEG_INC) $(DEFINES) -fPIC \
+CFLAGS_ARMV7    := -arch armv7 -mthumb -O2 -fstack-protector-strong -isysroot $(SDK_PATH) $(MIN_IOS) $(INCLUDES) $(ARMV7_FFMPEG_INC) $(DEFINES) -fPIC \
                    -MMD -MP \
                    -Wunguarded-availability \
                    -Wno-macro-redefined -Wno-incompatible-pointer-types -Wno-deprecated-declarations \
@@ -908,7 +909,7 @@ CFLAGS_ARMV7    := -arch armv7 -mthumb -O2 -isysroot $(SDK_PATH) $(MIN_IOS) $(IN
 OBJCFLAGS_ARMV7 := $(CFLAGS_ARMV7) -fobjc-arc
 CXXFLAGS_ARMV7  := $(CFLAGS_ARMV7) $(CXX_STDLIB_INC) -std=c++11 -fno-use-cxa-atexit -fno-threadsafe-statics -Wno-error
 
-CFLAGS_ARM64    := -arch arm64 -O2 -isysroot $(SDK_PATH) $(MIN_IOS) $(INCLUDES) $(DEFINES) -fPIC \
+CFLAGS_ARM64    := -arch arm64 -O2 -fstack-protector-strong -isysroot $(SDK_PATH) $(MIN_IOS) $(INCLUDES) $(DEFINES) -fPIC \
                    -MMD -MP \
                    -Wunguarded-availability \
                    -Wno-macro-redefined -Wno-incompatible-pointer-types -Wno-deprecated-declarations
@@ -978,7 +979,7 @@ ipa-armv7: $(MACHOFIX) $(TLOTTIE_STAMP) $(ARMV7_ALL_OBJS)
 	@mkdir -p "$(IPA_DIR)"
 	@rm -rf "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app"
 	@mkdir -p "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app"
-	$(CC) -arch armv7 -isysroot $(SDK_PATH) $(MIN_IOS) -Wl,-dead_strip -ObjC -Wl,-pagezero_size,0x1000 \
+	$(CC) -arch armv7 -isysroot $(SDK_PATH) $(MIN_IOS) -Wl,-dead_strip -ObjC -Wl,-pagezero_size,0x1000 -Wl,-pie \
 		-L$(BUILD_DIR)/armv7/libs -L$(BUILD_DIR)/armv7/tdlib/lib -L$(ROOT_DIR)/third_party/opus/lib \
 		$(ARMV7_ALL_OBJS) $(FRAMEWORKS) $(WEBP_ARMV7) $(ARMV7_FFMPEG_LIBS) $(TDLIB_LIBS) $(DEPS_LIBS) $(ARMV7_SSL_LIBS) -o "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/$(APP_NAME)"
 	@strip -x "$(BUILD_DIR)/armv7/app$(DEV_SUFFIX)/$(APP_NAME).app/$(APP_NAME)"

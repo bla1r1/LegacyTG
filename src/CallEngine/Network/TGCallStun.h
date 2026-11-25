@@ -34,6 +34,14 @@
 /// Checks if a STUN binding request contains the USE-CANDIDATE attribute (0x0025).
 + (BOOL)hasUseCandidate:(NSData *)packet;
 
+/// Verifies FINGERPRINT (if present), MESSAGE-INTEGRITY (HMAC-SHA1), and optional USERNAME.
++ (BOOL)verifyPacket:(NSData *)packet
+            password:(NSString *)password
+    expectedUsername:(NSString *)expectedUsername;
+
+/// 12-byte STUN transaction ID, or nil if packet is shorter than 20 bytes.
++ (NSData *)transactionIdOf:(NSData *)packet;
+
 /// For holding two packets side by side in the log.
 + (NSString *)hexOf:(NSData *)data;
 

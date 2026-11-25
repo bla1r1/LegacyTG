@@ -283,7 +283,7 @@ static const CGFloat kQRTextInset = 24.0f;
 			continue;
 		self.handled = YES;
 		[self.session stopRunning];
-		NSLog(@"qr: %@", code.stringValue);
+		NSLog(@"qr: scanned %lu chars", (unsigned long)code.stringValue.length);
 		[self actOn:code.stringValue];
 		return;
 	}

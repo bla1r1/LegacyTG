@@ -321,6 +321,7 @@ CLIENT_OBJC_SRCS := \
     src/Core/Client/TGClient+Appearance.m \
     src/Core/Client/TGClient+Diagnostics.m \
     src/Core/Support/TGDatabaseKey.m \
+    src/Core/Support/TGURLSafety.m \
     src/Core/Client/TGClient+Profile.m \
     src/Core/Client/TGClient+ProfileAudio.m \
     src/Core/Client/TGClient+EmojiStatus.m \

@@ -180,6 +180,63 @@ static NSInteger TGStickerFileId(NSDictionary *m) {
 
 @end
 
+static const NSInteger TGQuoteOverlayTag = 0x909E;
+
+@interface TGQuoteSelectionTextView : UITextView
+@property (nonatomic, copy) void (^onQuote)(NSString *quote, NSRange range);
+@end
+
+@implementation TGQuoteSelectionTextView
+
+- (instancetype)initWithFrame:(CGRect)frame {
+	self = [super initWithFrame:frame];
+	if (!self)
+		return nil;
+	self.tag = TGQuoteOverlayTag;
+	self.editable = NO;
+	self.scrollEnabled = NO;
+	self.backgroundColor = [UIColor clearColor];
+	self.textColor = [UIColor clearColor];
+	if ([self respondsToSelector:@selector(setTextContainerInset:)]) {
+		self.textContainerInset = UIEdgeInsetsZero;
+		self.textContainer.lineFragmentPadding = 0.0f;
+	} else {
+		self.contentInset = UIEdgeInsetsMake(-TGMetricPadSmall, -TGMetricPadSmall, -TGMetricPadSmall, -TGMetricPadSmall);
+	}
+	UIMenuItem *quoteItem = [[UIMenuItem alloc] initWithTitle:TGLocalized(@"Quote")
+														action:@selector(quoteSelection:)];
+	[UIMenuController sharedMenuController].menuItems = @[quoteItem];
+	return self;
+}
+
+- (BOOL)canPerformAction:(SEL)action withSender:(id)sender {
+	if (action == @selector(quoteSelection:))
+		return self.selectedRange.length > 0;
+	if (action == @selector(copy:))
+		return self.selectedRange.length > 0;
+	return NO;
+}
+
+- (void)quoteSelection:(id)sender {
+	NSRange sel = self.selectedRange;
+	NSString *raw = self.text ?: @"";
+	if (sel.length == 0 || NSMaxRange(sel) > raw.length)
+		return;
+	NSString *sub = [raw substringWithRange:sel];
+	NSCharacterSet *ws = [NSCharacterSet whitespaceAndNewlineCharacterSet];
+	NSRange nonWs = [sub rangeOfCharacterFromSet:[ws invertedSet]];
+	if (nonWs.location == NSNotFound)
+		return;
+	NSRange back = [sub rangeOfCharacterFromSet:[ws invertedSet] options:NSBackwardsSearch];
+	NSRange trimmedRange = NSMakeRange(sel.location + nonWs.location,
+			NSMaxRange(back) - nonWs.location);
+	NSString *picked = [raw substringWithRange:trimmedRange];
+	if (_onQuote)
+		_onQuote(picked, trimmedRange);
+}
+
+@end
+
 @implementation TGChatViewController (TGChatActionsHoldMenu)
 
 /// One picture of `view`, at `scale` pixels per point. renderInContext is
@@ -266,7 +323,8 @@ static const CGFloat kHoldBlurRadius = 28.0f;
 	if (!cell.bubble || CGRectIsEmpty(cell.bubble.bounds))
 		return CGRectZero;
 
-	CGRect origin = [cell.bubble convertRect:cell.bubble.bounds toView:self.view];
+	UIView *host = self.navigationController.view ?: self.view;
+	CGRect origin = [cell.bubble convertRect:cell.bubble.bounds toView:host];
 	if (CGRectIsEmpty(origin))
 		return CGRectZero;
 
@@ -279,7 +337,9 @@ static const CGFloat kHoldBlurRadius = 28.0f;
 	CGFloat bubbleAlpha = cell.bubble.alpha, tailAlpha = cell.tail.alpha;
 	cell.bubble.alpha = TGAlphaTransparent;
 	cell.tail.alpha = TGAlphaTransparent;
-	UIImage *chat = TGHoldCaptureChat(self.view, self.wallpaperView, 0.5f);
+	UIImage *chat = (host == self.view)
+			? TGHoldCaptureChat(self.view, self.wallpaperView, 0.5f)
+			: TGHoldCapture(host, 0.5f);
 	cell.bubble.alpha = bubbleAlpha;
 	cell.tail.alpha = tailAlpha;
 	UIImage *blurred = chat ? [TGTheme softenedImage:chat radius:kHoldBlurRadius dim:0] : nil;
@@ -300,19 +360,58 @@ static const CGFloat kHoldBlurRadius = 28.0f;
 	}
 	TGPerfReport("hold", "backdrop", start, 50.0);
 
-	UIImageView *backdrop = [[UIImageView alloc] initWithFrame:self.view.bounds];
+	UIImageView *backdrop = [[UIImageView alloc] initWithFrame:host.bounds];
 	backdrop.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
 	backdrop.backgroundColor = [theme chatBackgroundColour];
 	backdrop.contentMode = UIViewContentModeScaleToFill;
 	backdrop.opaque = YES;
 	backdrop.image = blurred;
 	backdrop.alpha = TGAlphaTransparent;
-	[self.view addSubview:backdrop];
+	[host addSubview:backdrop];
 
 	UIImageView *lift = [[UIImageView alloc] initWithImage:bubbleImage];
 	lift.frame = origin;
-	lift.userInteractionEnabled = NO;
-	[self.view addSubview:lift];
+	lift.userInteractionEnabled = YES;
+	[host addSubview:lift];
+
+	NSDictionary *heldMsg = self.actionMessage;
+	UILabel *textLabel = (!cell.body.hidden && !CGRectIsEmpty(cell.body.frame))
+			? cell.body
+			: ((!cell.captionLabel.hidden && !CGRectIsEmpty(cell.captionLabel.frame))
+					? cell.captionLabel : nil);
+	NSString *heldText = ([heldMsg[@"text"] isKindOfClass:NSString.class] && [heldMsg[@"text"] length])
+			? heldMsg[@"text"]
+			: (([heldMsg[@"caption"] isKindOfClass:NSString.class] && [heldMsg[@"caption"] length])
+					? heldMsg[@"caption"] : nil);
+	id canCopyVal = [self.actionProperties isKindOfClass:NSDictionary.class]
+			? self.actionProperties[@"can_be_copied"] : nil;
+	BOOL copyAllowed = !canCopyVal || [canCopyVal boolValue];
+	if (heldText.length && textLabel && copyAllowed) {
+		TGQuoteSelectionTextView *qtv = [[TGQuoteSelectionTextView alloc] initWithFrame:textLabel.frame];
+		qtv.font = textLabel.font;
+		qtv.text = heldText;
+		int64_t heldMsgId = [heldMsg[@"id"] longLongValue];
+		NSString *who = [heldMsg[@"outgoing"] boolValue] ? TGLocalized(@"You")
+				: ([[TGMessageStore shared] nameForUserId:
+						[heldMsg[@"senderId"] longLongValue]] ?: self.chatTitle ?: TGLocalized(@"Reply"));
+		NSArray *entities = [heldMsg[@"entities"] isKindOfClass:NSArray.class]
+				? heldMsg[@"entities"] : nil;
+		__weak typeof(self) weakSelf = self;
+		qtv.onQuote = ^(NSString *quote, NSRange range) {
+			TGChatViewController *me = weakSelf;
+			if (!me)
+				return;
+			[TGPopupMenu dismiss];
+			me.replyToId = heldMsgId;
+			me.editingId = 0;
+			me.replyQuoteText = quote;
+			me.replyQuotePosition = (NSInteger)range.location;
+			me.replyQuoteEntities = TGQuoteSliceEntities(entities, range);
+			[me showComposeBanner:who subtitle:[NSString stringWithFormat:@"\"%@\"", quote]];
+			[me.input becomeFirstResponder];
+		};
+		[lift addSubview:qtv];
+	}
 
 	self.holdBackdropView = backdrop;
 	self.holdLiftView = lift;
@@ -320,14 +419,16 @@ static const CGFloat kHoldBlurRadius = 28.0f;
 	self.holdTableWasScrollable = self.table.scrollEnabled;
 	self.table.scrollEnabled = NO;
 
-	// Clear of the pinned strip, inside this screen (it does not run under
-	// the navigation bar).
-	CGFloat top = TGMetricPad;
-	if (self.pinnedBannerView && !self.pinnedBannerView.hidden)
-		top = MAX(top, CGRectGetMaxY(self.pinnedBannerView.frame) + TGMetricPadSmall);
-	CGFloat bottom = CGRectGetHeight(self.view.bounds) - TGMetricPad;
+	// Full-screen over the navigation bar: clear only the status bar at top.
+	CGFloat statusH = (host != self.view) ? 20.0f : 0.0f;
+	CGFloat top = statusH + TGMetricPad;
+	CGFloat hostH = CGRectGetHeight(host.bounds);
+	CGFloat bottom = hostH - TGMetricPad;
+	CGFloat cardH = MAX(0.0f, below - TGMetricPadSmall);
+	TGHoldScrollMetrics sm = TGHoldScrollLayout(origin, above, TGMetricPadSmall,
+			cardH, top, bottom, hostH, TGMetricPad);
 	CGRect target = origin;
-	target.origin.y = TGHoldLiftY(origin, above, below, top, bottom);
+	target.origin.y = sm.bubbleY - sm.initialOffsetY;
 
 	NSInteger generation = ++self.holdGeneration;
 	__weak typeof(self) weakSelf = self;
@@ -367,6 +468,7 @@ static const CGFloat kHoldBlurRadius = 28.0f;
 
 	UIView *backdrop = self.holdBackdropView;
 	UIImageView *lift = self.holdLiftView;
+	[[lift viewWithTag:TGQuoteOverlayTag] removeFromSuperview];
 	CGRect home = self.holdLiftOrigin;
 	TGMotionQuick(^{
 		backdrop.alpha = TGAlphaTransparent;
@@ -551,9 +653,13 @@ static const CGFloat kHoldBlurRadius = 28.0f;
 					TGChatViewController *live = weakSelf;
 					if (!live)
 						return;
+					NSRange found = [fullText rangeOfString:quote];
 					live.replyToId = messageId;
 					live.editingId = 0;
 					live.replyQuoteText = quote;
+					live.replyQuotePosition = found.location != NSNotFound ? (NSInteger)found.location : 0;
+					live.replyQuoteEntities = found.location != NSNotFound
+							? TGQuoteSliceEntities(m[@"entities"], found) : nil;
 					[live showComposeBanner:who subtitle:[NSString stringWithFormat:@"\"%@\"", quote]];
 					[live.input becomeFirstResponder];
 				}];

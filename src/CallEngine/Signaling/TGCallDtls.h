@@ -23,6 +23,8 @@
 
 /// SHA-256 of the DER certificate, colon-separated uppercase hex.
 @property (nonatomic, readonly) NSString *fingerprint;
+/// Expected SHA-256 fingerprint of the peer's DER certificate from signalling.
+@property (nonatomic, copy) NSString *expectedPeerFingerprint;
 
 @property (nonatomic, readonly, getter=isConnected) BOOL connected;
 

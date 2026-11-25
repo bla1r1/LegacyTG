@@ -79,9 +79,9 @@
     ice.transport = ^(NSData *pkt){ [sent addObject:pkt]; };
     [ice start];
 
-    // Build a synthetic STUN binding request from the "peer".
+    // Build a synthetic STUN binding request from the "peer" (signed with our localPwd).
     NSData *req = [TGCallStun bindingRequestWithUsername:@"EEEE:FFFF"
-                                               password:ice.peerPwd
+                                               password:ice.localPwd
                                             tieBreaker:42
                                            useCandidate:YES];
     [ice handleRelayedPacket:req];
@@ -109,7 +109,7 @@
     [ice start];
 
     NSData *req = [TGCallStun bindingRequestWithUsername:@"GGGG:HHHH"
-                                               password:ice.peerPwd
+                                               password:ice.localPwd
                                             tieBreaker:1
                                            useCandidate:YES];
     [ice handleRelayedPacket:req];
@@ -127,18 +127,15 @@
     ice.peerPwd    = @"peerpwd123456789012345";
 
     __block BOOL connected = NO;
+    __block NSData *sentCheck = nil;
     ice.onConnected = ^(NSString *addr, uint16_t port){ connected = YES; };
-    ice.transport   = ^(NSData *pkt){};
+    ice.transport   = ^(NSData *pkt){ if (!sentCheck) sentCheck = pkt; };
     [ice start];
+    XCTAssertTrue(TGWaitForCondition(^{ return (BOOL)(sentCheck != nil); }, 1.0));
 
-    // Build a fake request just to have a valid transaction ID.
-    NSData *fakeReq = [TGCallStun bindingRequestWithUsername:@"IIII:JJJJ"
-                                                   password:ice.peerPwd
-                                                tieBreaker:0
-                                               useCandidate:NO];
-    // Build a success response from that request.
-    NSData *resp = [TGCallStun bindingResponseTo:fakeReq
-                                       password:ice.localPwd
+    // Build a success response matching the real sent check and signed with peerPwd.
+    NSData *resp = [TGCallStun bindingResponseTo:sentCheck
+                                       password:ice.peerPwd
                                     fromAddress:[NSData data]];
     [ice handleRelayedPacket:resp];
     [ice stop];
@@ -310,7 +307,7 @@
     // address the check came from, which is TGCallIce's own socket.
     NSData *iceAddress = [NSData dataWithBytes:&sender length:sizeof(sender)];
     NSData *response = [TGCallStun bindingResponseTo:check
-                                            password:ice.localPwd
+                                            password:ice.peerPwd
                                          fromAddress:iceAddress];
     XCTAssertNotNil(response);
     XCTAssertTrue(TGTestSendTo(peer, response, ntohs(sender.sin_port)));

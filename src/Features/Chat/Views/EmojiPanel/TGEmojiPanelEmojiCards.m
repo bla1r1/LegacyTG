@@ -16,6 +16,7 @@
 #import "TGCustomEmojiStore.h"
 #import <objc/runtime.h>
 #import "TGEmojiPanelInternal.h"
+#import "TGURLSafety.h"
 
 
 static const CGFloat   kPreviewHeaderWidth = 240.0f;
@@ -163,7 +164,7 @@ static const CGFloat   kEmojiCardHeaderHeight = 100.0f;
 			} else if (index == 1){
 				NSURL *link = [NSURL URLWithString:url];
 				if (link)
-					[[UIApplication sharedApplication] openURL:link];
+					TGOpenSafeExternalURL(link);
 			}
 		}];
 	}];

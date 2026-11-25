@@ -254,6 +254,11 @@
     } else {
         if (nalType == TGCallNalUnitTypeSliceIDR)
             _currentFrameIsKeyframe = YES;
+        if (_currentFrameNals.count >= 64) {
+            [_currentFrameNals removeAllObjects];
+            _currentFrameIsKeyframe = NO;
+            return;
+        }
         [_currentFrameNals addObject:nalData];
     }
 
@@ -332,12 +337,22 @@
         size_t fuDataLen = payloadLen - 2;
 
         if (isStart) {
+            if (fuDataLen > (1024 * 1024)) {
+                [_fuBuffer setLength:0];
+                _fuInProgress = NO;
+                return;
+            }
             [_fuBuffer setLength:0];
             [_fuBuffer appendBytes:&reconstructedHeader length:1];
             [_fuBuffer appendBytes:fuData length:fuDataLen];
             _fuTimestamp = timestamp;
             _fuInProgress = YES;
         } else if (_fuInProgress && timestamp == _fuTimestamp) {
+            if (fuDataLen > (1024 * 1024) || _fuBuffer.length > (1024 * 1024) - fuDataLen) {
+                [_fuBuffer setLength:0];
+                _fuInProgress = NO;
+                return;
+            }
             [_fuBuffer appendBytes:fuData length:fuDataLen];
         }
 

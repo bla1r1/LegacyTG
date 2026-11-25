@@ -16,6 +16,7 @@
 #import "TGStoryAreas.h"
 #import "TGChatViewController.h"
 #import "TGMessageStore.h"
+#import "TGURLSafety.h"
 #import <AVFoundation/AVFoundation.h>
 #import <QuartzCore/QuartzCore.h>
 #import "TGMediaStore.h"
@@ -916,7 +917,7 @@ static NSString *TGStoryRelativeTime(NSTimeInterval timestamp) {
 		if (link) {
 			NSURL *url = [NSURL URLWithString:area[@"url"]];
 			if (url)
-				[[UIApplication sharedApplication] openURL:url];
+				TGOpenSafeExternalURL(url);
 			[me resume];
 			return;
 		}

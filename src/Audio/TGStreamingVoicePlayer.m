@@ -105,8 +105,16 @@ static void TGStreamingAudioQueueOutputCallback(void *inUserData, AudioQueueRef 
 		UInt32 bufferByteSize = kBufferSamples * _format.mBytesPerFrame;
 		for (int i = 0; i < kNumBuffers; i++){
 			status = AudioQueueAllocateBuffer(_audioQueue, bufferByteSize, &_buffers[i]);
-			if (status != noErr){
+			if (status != noErr || !_buffers[i]){
 				NSLog(@"TGStreamingVoicePlayer: AudioQueueAllocateBuffer failed %d", (int)status);
+				AudioQueueDispose(_audioQueue, true);
+				_audioQueue = NULL;
+				op_free(_opusFile);
+				_opusFile = NULL;
+				if (outError)
+					*outError = [NSError errorWithDomain:@"TGStreamingVoicePlayer" code:status
+												 userInfo:@{NSLocalizedDescriptionKey : @"AudioQueueAllocateBuffer failed"}];
+				return nil;
 			}
 		}
 	}

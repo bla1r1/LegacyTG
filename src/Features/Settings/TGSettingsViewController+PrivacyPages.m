@@ -7,6 +7,7 @@
 #import "TGAlertSheet.h"
 #import "TGPasscode.h"
 #import "TGPasscodeViewController.h"
+#import "TGURLSafety.h"
 #import "TGCloseFriendsViewController.h"
 #import "TGSessionsViewController.h"
 #import "TGChatViewController.h"
@@ -768,7 +769,7 @@ static NSInteger TGBlockedPersonIndex(NSIndexPath *indexPath) {
 			 destructiveIndex:-1
 					   inView:self.view
 					 onChoice:^(NSInteger index){
-		[UIPasteboard generalPasteboard].string = key;
+		TGCopySensitiveStringToPasteboard(key, 60.0);
 		[weakSelf toast:@"Text copied."];
 	}];
 }

@@ -18,6 +18,7 @@
 #import "TGDateFormat.h"
 #import "TGUIFormat.h"
 #import "TGOptions.h"
+#import "TGURLSafety.h"
 #import "TGSearchScope.h"
 #import "TGEmptyView.h"
 #import "TGBarItem.h"
@@ -1100,7 +1101,7 @@ static NSString *TGSearchDateText(NSNumber *stamp) {
 		}
 		NSURL *url = [NSURL URLWithString:link];
 		if (url)
-			[[UIApplication sharedApplication] openURL:url];
+			TGOpenSafeExternalURL(url);
 	}];
 }
 

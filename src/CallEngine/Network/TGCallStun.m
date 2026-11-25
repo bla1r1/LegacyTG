@@ -190,6 +190,93 @@ static void TGAppendIntegrityAndFingerprint(NSMutableData *message, NSString *pa
 	return message;
 }
 
++ (NSData *)transactionIdOf:(NSData *)packet {
+	if (packet.length < 20)
+		return nil;
+	return [packet subdataWithRange:NSMakeRange(8, 12)];
+}
+
++ (BOOL)verifyPacket:(NSData *)packet
+            password:(NSString *)password
+    expectedUsername:(NSString *)expectedUsername {
+	if (packet.length < 20 || !password.length)
+		return NO;
+	const uint8_t *bytes = (const uint8_t *)packet.bytes;
+	if ((bytes[0] & 0xC0) != 0)
+		return NO;
+	uint32_t cookie = ((uint32_t)bytes[4] << 24) | ((uint32_t)bytes[5] << 16) |
+					  ((uint32_t)bytes[6] << 8) | bytes[7];
+	if (cookie != kMagicCookie)
+		return NO;
+	uint16_t msgLen = ((uint16_t)bytes[2] << 8) | bytes[3];
+	if ((msgLen & 3) != 0 || (size_t)20 + msgLen > packet.length)
+		return NO;
+
+	size_t total = 20 + msgLen;
+	size_t offset = 20;
+	BOOL hasIntegrity = NO;
+	size_t integrityOffset = 0;
+	BOOL hasFingerprint = NO;
+	size_t fingerprintOffset = 0;
+	NSString *username = nil;
+
+	while (offset + 4 <= total) {
+		uint16_t attrType = ((uint16_t)bytes[offset] << 8) | bytes[offset + 1];
+		uint16_t attrLen = ((uint16_t)bytes[offset + 2] << 8) | bytes[offset + 3];
+		size_t padded = (attrLen + 3) & ~3u;
+		if (offset + 4 + padded > total)
+			return NO;
+		if (attrType == kAttrUsername) {
+			username = [[NSString alloc] initWithBytes:bytes + offset + 4
+												length:attrLen
+											  encoding:NSUTF8StringEncoding];
+		} else if (attrType == kAttrMessageInteg) {
+			if (attrLen != 20)
+				return NO;
+			hasIntegrity = YES;
+			integrityOffset = offset;
+		} else if (attrType == kAttrFingerprint) {
+			if (attrLen != 4 || offset + 8 != total)
+				return NO;
+			hasFingerprint = YES;
+			fingerprintOffset = offset;
+		}
+		offset += 4 + padded;
+	}
+
+	if (!hasIntegrity)
+		return NO;
+	if (expectedUsername.length && ![username isEqualToString:expectedUsername])
+		return NO;
+
+	if (hasFingerprint) {
+		NSMutableData *fpBuf = [NSMutableData dataWithBytes:bytes length:fingerprintOffset];
+		TGSetLength(fpBuf, 8);
+		uLong crc = crc32(0L, Z_NULL, 0);
+		crc = crc32(crc, fpBuf.bytes, (uInt)fpBuf.length);
+		uint32_t expectedFp = (uint32_t)crc ^ 0x5354554E;
+		const uint8_t *fpVal = bytes + fingerprintOffset + 4;
+		uint32_t actualFp = ((uint32_t)fpVal[0] << 24) | ((uint32_t)fpVal[1] << 16) |
+							((uint32_t)fpVal[2] << 8) | fpVal[3];
+		if (actualFp != expectedFp)
+			return NO;
+	}
+
+	NSMutableData *miBuf = [NSMutableData dataWithBytes:bytes length:integrityOffset];
+	TGSetLength(miBuf, 24);
+	NSData *key = [password dataUsingEncoding:NSUTF8StringEncoding];
+	uint8_t digest[20];
+	unsigned int digestLength = sizeof(digest);
+	HMAC(EVP_sha1(), key.bytes, (int)key.length,
+		 miBuf.bytes, miBuf.length, digest, &digestLength);
+
+	const uint8_t *actualMi = bytes + integrityOffset + 4;
+	volatile uint8_t diff = 0;
+	for (size_t i = 0; i < 20; i++)
+		diff |= (uint8_t)(digest[i] ^ actualMi[i]);
+	return diff == 0;
+}
+
 + (NSString *)hexOf:(NSData *)data {
 	const uint8_t *bytes = (const uint8_t *)data.bytes;
 	NSMutableString *hex = [NSMutableString string];

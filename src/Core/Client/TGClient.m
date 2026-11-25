@@ -8,6 +8,7 @@
 #import "TGUpdateHandlers.h"
 #import "TGBase64.h"
 #import "TGDatabaseKey.h"
+#import "TGPasscode.h"
 #import "TGCapabilities.h"
 #import "TGOptions.h"
 #import "TGCall.h"
@@ -562,6 +563,16 @@ NSDictionary *TGFormattedText(NSString *text) {
 	// runs on WaitTdlibParameters, before TDLib has opened anything.
 	NSString *db = TGAccountResolvedDatabaseDirectory([TGClient activeAccountSlot]);
 
+	if ([TGPasscode hasPasscode] && [TGPasscode isLocked]){
+		NSLog(@"TGClient: passcode locked, the database waits for unlock");
+		[[NSNotificationCenter defaultCenter] removeObserver:self
+				name:TGPasscodeDidUnlockNotification object:nil];
+		[[NSNotificationCenter defaultCenter] addObserver:self
+				selector:@selector(passcodeDidUnlock:)
+					name:TGPasscodeDidUnlockNotification object:nil];
+		return;
+	}
+
 	// Before the first unlock after a boot (a keep-alive launch) the keychain
 	// cannot be read; the empty key would only earn a 401 and leave TDLib
 	// stuck. The database waits for the unlock instead.
@@ -589,6 +600,12 @@ NSDictionary *TGFormattedText(NSString *text) {
 - (void)protectedDataBecameAvailable:(NSNotification *)note {
 	[[NSNotificationCenter defaultCenter] removeObserver:self
 			name:UIApplicationProtectedDataDidBecomeAvailable object:nil];
+	[self sendTdlibParameters];
+}
+
+- (void)passcodeDidUnlock:(NSNotification *)note {
+	[[NSNotificationCenter defaultCenter] removeObserver:self
+			name:TGPasscodeDidUnlockNotification object:nil];
 	[self sendTdlibParameters];
 }
 
@@ -703,7 +720,9 @@ NSDictionary *TGFormattedText(NSString *text) {
 	int64_t chatId = [chatIdNum longLongValue];
 	if ([self isChatMuted:chatId])
 		return;
+#if TG_DEV
 	NSLog(@"[TGClient] notify for chat %lld msg %lld", chatId, [m[@"id"] longLongValue]);
+#endif
 	[[NSNotificationCenter defaultCenter]
 			postNotificationName:TGInAppNotificationReceivedNotification
 						  object:self

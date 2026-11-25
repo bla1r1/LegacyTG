@@ -249,10 +249,14 @@
 										  @"message_id" : @(replyToId)} mutableCopy];
 		NSString *quote = options[@"quote"];
 		if ([quote isKindOfClass:[NSString class]] && quote.length){
+			NSNumber *pos = [options[@"quotePosition"] isKindOfClass:[NSNumber class]]
+					? options[@"quotePosition"] : @0;
+			NSArray *qEntities = [options[@"quoteEntities"] isKindOfClass:[NSArray class]]
+					? options[@"quoteEntities"] : @[];
 			replyTo[@"quote"] = @{
 				@"@type" : @"inputTextQuote",
-				@"text" : @{@"@type" : @"formattedText", @"text" : quote, @"entities" : @[]},
-				@"position" : @0
+				@"text" : @{@"@type" : @"formattedText", @"text" : quote, @"entities" : qEntities},
+				@"position" : pos
 			};
 		}
 		request[@"reply_to"] = replyTo;
@@ -395,10 +399,14 @@
 										  @"message_id" : @(replyToId)} mutableCopy];
 		NSString *quote = options[@"quote"];
 		if ([quote isKindOfClass:[NSString class]] && quote.length){
+			NSNumber *pos = [options[@"quotePosition"] isKindOfClass:[NSNumber class]]
+					? options[@"quotePosition"] : @0;
+			NSArray *qEntities = [options[@"quoteEntities"] isKindOfClass:[NSArray class]]
+					? options[@"quoteEntities"] : @[];
 			replyTo[@"quote"] = @{
 				@"@type" : @"inputTextQuote",
-				@"text" : @{@"@type" : @"formattedText", @"text" : quote, @"entities" : @[]},
-				@"position" : @0
+				@"text" : @{@"@type" : @"formattedText", @"text" : quote, @"entities" : qEntities},
+				@"position" : pos
 			};
 		}
 		request[@"reply_to"] = replyTo;

@@ -280,7 +280,9 @@ static void TGMusicStreamerBufferCallback(void *clientData, AudioQueueRef queue,
 			packet.hasDescription = NO;
 		}
 		if (description.mDataByteSize == 0 ||
-			description.mStartOffset + description.mDataByteSize > numBytes)
+			description.mStartOffset < 0 ||
+			(uint64_t)description.mStartOffset > (uint64_t)numBytes ||
+			(uint64_t)description.mDataByteSize > (uint64_t)numBytes - (uint64_t)description.mStartOffset)
 			continue;
 		packet.data = [NSData dataWithBytes:bytes + description.mStartOffset
 									 length:description.mDataByteSize];
@@ -367,6 +369,7 @@ static void TGMusicStreamerBufferCallback(void *clientData, AudioQueueRef queue,
 					// A single packet above the buffer: allocate a larger one
 					// and restart this fill with it.
 					AudioQueueFreeBuffer(_queue, buffer);
+					_buffers[index] = NULL;
 					if (AudioQueueAllocateBuffer(_queue, packetSize + 16, &buffer) != noErr){
 						[self failWithStatus:-1 text:@"AudioQueueAllocateBuffer failed"];
 						return;
@@ -395,6 +398,10 @@ static void TGMusicStreamerBufferCallback(void *clientData, AudioQueueRef queue,
 		AudioStreamPacketDescription *copies = NULL;
 		if (count > 0){
 			copies = malloc(count * sizeof(*copies));
+			if (!copies){
+				[self failWithStatus:-1 text:@"Out of memory"];
+				return;
+			}
 			memcpy(copies, descriptions.bytes, count * sizeof(*copies));
 			_descriptions[index] = copies;
 		} else {

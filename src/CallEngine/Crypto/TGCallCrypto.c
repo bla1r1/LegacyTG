@@ -4,6 +4,7 @@
 #include <openssl/sha.h>
 #include <openssl/aes.h>
 #include <openssl/modes.h>
+#include <openssl/crypto.h>
 
 /// Which part of the key is in play. The two directions use different halves
 /// and signalling uses a different 128 again, so nothing collides. Reading and
@@ -42,6 +43,9 @@ static void TGPrepareKeyIv(const uint8_t *key, const uint8_t *msgKey, int x,
 	memcpy(aesIv,      b,      4);
 	memcpy(aesIv + 4,  a + 8,  8);
 	memcpy(aesIv + 12, b + 24, 4);
+
+	OPENSSL_cleanse(a, sizeof(a));
+	OPENSSL_cleanse(b, sizeof(b));
 }
 
 static void TGAesCtr(const uint8_t *in, uint8_t *out, size_t length,
@@ -52,6 +56,8 @@ static void TGAesCtr(const uint8_t *in, uint8_t *out, size_t length,
 	AES_set_encrypt_key(aesKey, 256, &aes);
 	CRYPTO_ctr128_encrypt(in, out, length, &aes, aesIv, ecount, &offset,
 						  (block128_f)AES_encrypt);
+	OPENSSL_cleanse(&aes, sizeof(aes));
+	OPENSSL_cleanse(ecount, sizeof(ecount));
 }
 
 /// Compare without letting the time taken say how far the match got.
@@ -82,6 +88,8 @@ int TGCallDecryptPacket(const uint8_t *key, int outgoing, int signaling,
 
 	size_t dataSize = length - 16;
 	TGAesCtr(packet + 16, out, dataSize, aesKey, aesIv);
+	OPENSSL_cleanse(aesKey, sizeof(aesKey));
+	OPENSSL_cleanse(aesIv, sizeof(aesIv));
 
 	uint8_t digest[SHA256_DIGEST_LENGTH];
 	SHA256_CTX ctx;
@@ -90,7 +98,9 @@ int TGCallDecryptPacket(const uint8_t *key, int outgoing, int signaling,
 	SHA256_Update(&ctx, out, dataSize);
 	SHA256_Final(digest, &ctx);
 
-	if (TGDiffers(digest + 8, packet, 16))
+	int bad = TGDiffers(digest + 8, packet, 16);
+	OPENSSL_cleanse(digest, sizeof(digest));
+	if (bad)
 		return -1;   // not ours, or tampered with
 
 	if (seq)
@@ -129,6 +139,9 @@ int TGCallEncryptPacket(const uint8_t *key, int outgoing, int signaling,
 	uint8_t aesKey[32], aesIv[16];
 	TGPrepareKeyIv(key, out, x, aesKey, aesIv);
 	TGAesCtr(plain, plain, plainSize, aesKey, aesIv);
+	OPENSSL_cleanse(aesKey, sizeof(aesKey));
+	OPENSSL_cleanse(aesIv, sizeof(aesIv));
+	OPENSSL_cleanse(digest, sizeof(digest));
 
 	return (int)(16 + plainSize);
 }

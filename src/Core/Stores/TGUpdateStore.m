@@ -163,6 +163,8 @@ NSInteger TGUpdateParseDatacenterFromBinlogFile(NSString *path) {
 
 				CCCryptorRef cryptor = NULL;
 				CCCryptorStatus st = CCCryptorCreateWithMode(kCCDecrypt, kCCModeCTR, kCCAlgorithmAES, ccNoPadding, iv, key, 32, NULL, 0, 0, kCCModeOptionCTR_BE, &cryptor);
+				volatile uint8_t *kp = key;
+				for (size_t ki = 0; ki < sizeof(key); ki++) kp[ki] = 0;
 				if (st == kCCSuccess && cryptor) {
 					unsigned long long readLen = MIN(fileSize - 128, (unsigned long long)131072);
 					[handle seekToFileOffset:128];

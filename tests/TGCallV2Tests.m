@@ -245,6 +245,8 @@ static void makeRtp(uint8_t *packet, uint16_t seq, uint32_t ssrc,
     TGCallDtls *server = [[TGCallDtls alloc] initWithClient:NO];
     XCTAssertTrue([client setupWithError:NULL]);
     XCTAssertTrue([server setupWithError:NULL]);
+    client.expectedPeerFingerprint = server.fingerprint;
+    server.expectedPeerFingerprint = client.fingerprint;
     client.sendRecord = ^(const uint8_t *bytes, size_t length){
         [server feed:bytes length:length];
     };

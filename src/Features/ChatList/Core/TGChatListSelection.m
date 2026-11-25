@@ -16,6 +16,7 @@
 #import "TGSettingsViewController.h"
 #import "TGiPadSplitViewController.h"
 #import "TGiPadSimulator.h"
+#import "TGURLSafety.h"
 
 
 // Height of the folder pill strip above the chat list (official-style tabs).
@@ -75,7 +76,7 @@
 		dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.4 * NSEC_PER_SEC)),
 				dispatch_get_main_queue(), ^{ [settings showTwoStepState]; });
 	} else if ([notice[@"url"] length]){
-		[[UIApplication sharedApplication] openURL:[NSURL URLWithString:notice[@"url"]]];
+		TGOpenSafeExternalURL([NSURL URLWithString:notice[@"url"]]);
 	}
 }
 

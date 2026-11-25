@@ -42,6 +42,11 @@
 }
 
 + (NSDictionary *)paletteFromFile:(NSString *)path name:(NSString **)name {
+	NSDictionary *attrs = [[NSFileManager defaultManager] attributesOfItemAtPath:path error:nil];
+	unsigned long long fileSize = [attrs[NSFileSize] unsignedLongLongValue];
+	if (fileSize == 0 || fileSize > (2ULL * 1024ULL * 1024ULL))
+		return nil;
+
 	NSData *data = [NSData dataWithContentsOfFile:path];
 	if (!data.length)
 		return nil;

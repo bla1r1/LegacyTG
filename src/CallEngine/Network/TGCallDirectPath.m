@@ -48,6 +48,7 @@ static BOOL TGDirectDead(double startedAt) {
 	NSMutableArray *_stunServers; // NSData of sockaddr_in; under @synchronized(self)
 	NSArray *_stunNames;          // [host, port] as given, resolved by the reader
 	struct sockaddr_in _chosen;   // under @synchronized(self)
+	NSMutableArray *_sentTransactions; // NSData of 12-byte txIds; under @synchronized(self)
 	BOOL _hasChosen;
 	double _lastHeard, _lastCheck;
 	uint64_t _tieBreaker;
@@ -60,6 +61,7 @@ static BOOL TGDirectDead(double startedAt) {
 		_socket = -1;
 		_peers = [NSMutableArray array];
 		_stunServers = [NSMutableArray array];
+		_sentTransactions = [NSMutableArray array];
 		arc4random_buf(&_tieBreaker, sizeof(_tieBreaker));
 	}
 	return self;
@@ -238,6 +240,14 @@ static NSData *TGAddress(NSString *ip, int port) {
 	NSData *check = [TGCallStun bindingRequestWithUsername:username password:peerPwd
 	                                            tieBreaker:_tieBreaker useCandidate:self.controlling
 	                                           controlling:self.controlling];
+	NSData *txId = [TGCallStun transactionIdOf:check];
+	if (txId) {
+		@synchronized (self) {
+			[_sentTransactions addObject:txId];
+			if (_sentTransactions.count > 64)
+				[_sentTransactions removeObjectAtIndex:0];
+		}
+	}
 	for (NSData *target in targets)
 		sendto(_socket, check.bytes, check.length, 0, (const struct sockaddr *)target.bytes, (socklen_t)target.length);
 }
@@ -393,11 +403,16 @@ static BOOL TGMappedAddress(const uint8_t *p, size_t length, char *ip, uint16_t 
 		}
 		NSData *address = [NSData dataWithBytes:&from length:sizeof(from)];
 		if (type == 0x0001){
+			NSString *localPwd = self.localPwd;
+			NSString *expectedUser = (self.localUfrag.length && self.peerUfrag.length)
+					? [NSString stringWithFormat:@"%@:%@", self.localUfrag, self.peerUfrag]
+					: nil;
+			if (![TGCallStun verifyPacket:packet password:localPwd expectedUsername:expectedUser])
+				continue;
 			// Their check: answer it, and remember where it came from (a
 			// peer-reflexive address when it is not one they listed).
-			NSString *localPwd = self.localPwd;
-			NSData *response = localPwd.length ? [TGCallStun bindingResponseTo:packet password:localPwd
-			                                                       fromAddress:address] : nil;
+			NSData *response = [TGCallStun bindingResponseTo:packet password:localPwd
+			                                             fromAddress:address];
 			if (response)
 				sendto(_socket, response.bytes, response.length, 0, (const struct sockaddr *)&from, sizeof(from));
 			@synchronized (self) {
@@ -412,6 +427,17 @@ static BOOL TGMappedAddress(const uint8_t *p, size_t length, char *ip, uint16_t 
 			if (!self.controlling && [TGCallStun hasUseCandidate:packet])
 				[self choose:&from why:@"nominated by the peer"];
 		} else if (type == 0x0101){
+			if (![TGCallStun verifyPacket:packet password:self.peerPwd expectedUsername:nil])
+				continue;
+			NSData *txId = [TGCallStun transactionIdOf:packet];
+			BOOL knownTx = NO;
+			if (txId) {
+				@synchronized (self) {
+					knownTx = [_sentTransactions containsObject:txId];
+				}
+			}
+			if (!knownTx)
+				continue;
 			[self choose:&from why:@"check answered"];
 		}
 	}

@@ -9,6 +9,7 @@
 #import "TGThemeFile.h"
 #import "TGCapabilities.h"
 #import "TGDevice.h"
+#import "TGURLSafety.h"
 #import <AddressBookUI/AddressBookUI.h>
 #import <CoreLocation/CoreLocation.h>
 #import <AssetsLibrary/AssetsLibrary.h>
@@ -136,7 +137,7 @@
 		} else if (index == 1){
 			[me presentAddContactForMessage:m];
 		} else {
-			[UIPasteboard generalPasteboard].string = phone ?: @"";
+			TGCopySensitiveStringToPasteboard(phone ?: @"", 60.0);
 			[TGSnackbar showInView:me.view text:@"Phone number copied to clipboard."
 						   seconds:2 onCommit:^{}];
 		}
@@ -287,9 +288,9 @@
 			NSString *urlStr = nil;
 			if (title.length){
 				NSString *esc = [title stringByAddingPercentEscapesUsingEncoding:NSUTF8StringEncoding];
-				urlStr = [NSString stringWithFormat:@"http://maps.apple.com/?q=%@&ll=%f,%f", esc, lat, lon];
+				urlStr = [NSString stringWithFormat:@"https://maps.apple.com/?q=%@&ll=%f,%f", esc, lat, lon];
 			} else {
-				urlStr = [NSString stringWithFormat:@"http://maps.apple.com/?ll=%f,%f", lat, lon];
+				urlStr = [NSString stringWithFormat:@"https://maps.apple.com/?ll=%f,%f", lat, lon];
 			}
 			[[UIApplication sharedApplication] openURL:[NSURL URLWithString:urlStr]];
 			return;

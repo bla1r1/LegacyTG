@@ -60,10 +60,12 @@
 
 @interface AppDelegate ()
 @property (nonatomic, assign) BOOL updateInfoPresented;
+@property (nonatomic, strong) UIView *privacyCoverView;
 /// TDLib logged out or closed (Log Out, a revoked session) and no account has
 /// signed in since. Kept across launches, or a relaunch went back to the
 /// showcase instead of login.
 @property (nonatomic, assign) BOOL signedOutOfAccount;
+@property (nonatomic, assign) int64_t pendingNotificationChatId;
 - (void)presentUpdateInfo:(TGUpdateInfo *)info;
 @end
 
@@ -234,17 +236,22 @@ static UIImage *TGCustomEmojiFromStore(int64_t emojiId, CGFloat side) {
 		didFinishLaunchingWithOptions:(NSDictionary *)launchOptions
 {
 	TGSetCustomEmojiProvider(TGCustomEmojiFromStore);
+	NSFileManager *fm = [NSFileManager defaultManager];
+#if TG_DEV
 	NSArray *paths = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES);
 	NSString *cacheDir = paths.firstObject;
 
 	// Direct diagnostics log to file so crashes persist for analysis
 	NSString *logPath = [cacheDir stringByAppendingPathComponent:@"log.txt"];
 	NSString *prevLogPath = [cacheDir stringByAppendingPathComponent:@"lastlog.txt"];
-	NSFileManager *fm = [NSFileManager defaultManager];
 	[fm removeItemAtPath:prevLogPath error:nil];
 	[fm copyItemAtPath:logPath toPath:prevLogPath error:nil];
 	[fm removeItemAtPath:logPath error:nil];
 	self.log = freopen(logPath.UTF8String, "a+", stderr);
+	NSDictionary *logProt = @{NSFileProtectionKey : NSFileProtectionCompleteUntilFirstUserAuthentication};
+	[fm setAttributes:logProt ofItemAtPath:logPath error:nil];
+	[fm setAttributes:logProt ofItemAtPath:prevLogPath error:nil];
+#endif
 
 	TGDeviceTier tier = [TGDevice tier];
 	if (tier <= TGDeviceTierLegacy) {
@@ -448,6 +455,18 @@ static UIImage *TGCustomEmojiFromStore(int64_t emojiId, CGFloat side) {
 	}
 #endif
 
+	[[NSNotificationCenter defaultCenter]
+			addObserverForName:TGPasscodeDidUnlockNotification
+						object:nil
+						 queue:[NSOperationQueue mainQueue]
+					usingBlock:^(NSNotification *note) {
+		int64_t chatId = self.pendingNotificationChatId;
+		if (chatId != 0) {
+			self.pendingNotificationChatId = 0;
+			[AppDelegate openChatWithId:chatId];
+		}
+	}];
+
 	if ([TGPasscode hasPasscode]) {
 		[TGPasscode setLocked:YES];
 		[TGPasscodeViewController presentUnlockIfLocked];
@@ -534,7 +553,34 @@ static void TGRecursivePurgeVC(UIViewController *vc) {
 
 #pragma mark - TDLib
 
+- (void)showPrivacyCoverIfNeeded {
+	if (![TGPasscode hasPasscode] || !self.window)
+		return;
+	if (!self.privacyCoverView) {
+		UIView *cover = [[UIView alloc] initWithFrame:self.window.bounds];
+		cover.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+		self.privacyCoverView = cover;
+	}
+	self.privacyCoverView.backgroundColor = [[TGTheme shared] chatBackgroundColour];
+	self.privacyCoverView.frame = self.window.bounds;
+	[self.window addSubview:self.privacyCoverView];
+	[self.window bringSubviewToFront:self.privacyCoverView];
+}
+
+- (void)hidePrivacyCover {
+	[self.privacyCoverView removeFromSuperview];
+}
+
+- (void)applicationWillResignActive:(UIApplication *)application {
+	[self showPrivacyCoverIfNeeded];
+}
+
+- (void)applicationDidBecomeActive:(UIApplication *)application {
+	[self hidePrivacyCover];
+}
+
 - (void)applicationDidEnterBackground:(UIApplication *)application {
+	[self showPrivacyCoverIfNeeded];
 	[TGPasscode noteAppBackgrounded];
 	[TGUpdateStore sessionDidEnd];
 	[AppDelegate purgeMemoryCaches];
@@ -899,11 +945,17 @@ static void TGRecursivePurgeVC(UIViewController *vc) {
                                     title:(NSString *)title
                                      text:(NSString *)text
                                 messageId:(int64_t)messageId {
-	NSLog(@"[AppDelegate] local notification: chatId=%lld title='%@' text='%@'", chatId, title, text);
+#if TG_DEV
+	NSLog(@"[AppDelegate] local notification: chatId=%lld msgId=%lld", chatId, messageId);
+#endif
 	UILocalNotification *local = [[UILocalNotification alloc] init];
 	if (!local)
 		return;
-	local.alertBody = text.length ? [NSString stringWithFormat:@"%@: %@", title, text] : title;
+	if ([TGPasscode hasPasscode]) {
+		local.alertBody = TGLocalized(@"New message");
+	} else {
+		local.alertBody = text.length ? [NSString stringWithFormat:@"%@: %@", title, text] : title;
+	}
 	local.soundName = UILocalNotificationDefaultSoundName;
 	local.userInfo = @{
 		@"chatId" : @(chatId),
@@ -911,7 +963,9 @@ static void TGRecursivePurgeVC(UIViewController *vc) {
 	};
 	local.applicationIconBadgeNumber = [UIApplication sharedApplication].applicationIconBadgeNumber + 1;
 	[[UIApplication sharedApplication] presentLocalNotificationNow:local];
+#if TG_DEV
 	NSLog(@"[AppDelegate] presentLocalNotificationNow sent");
+#endif
 }
 
 - (void)application:(UIApplication *)application
@@ -922,7 +976,12 @@ static void TGRecursivePurgeVC(UIViewController *vc) {
 	}
 	NSNumber *chatIdNum = notification.userInfo[@"chatId"];
 	if (chatIdNum && [chatIdNum longLongValue] != 0) {
-		[AppDelegate openChatWithId:[chatIdNum longLongValue]];
+		int64_t chatId = [chatIdNum longLongValue];
+		if ([TGPasscode hasPasscode] && [TGPasscode isLocked]) {
+			self.pendingNotificationChatId = chatId;
+			return;
+		}
+		[AppDelegate openChatWithId:chatId];
 	}
 }
 

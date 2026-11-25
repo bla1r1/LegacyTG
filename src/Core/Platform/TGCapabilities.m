@@ -67,7 +67,7 @@ static void TGSetWanted(NSString *key, BOOL wanted) {
 + (BOOL)databaseEncryptionWanted {
 	NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
 	if (![defaults objectForKey:@"TGWantDatabaseEncryption"])
-		return [TGDevice tier] > TGDeviceTierVintage;
+		return YES;
 	return [defaults boolForKey:@"TGWantDatabaseEncryption"];
 }
 + (void)setDatabaseEncryptionWanted:(BOOL)wanted {

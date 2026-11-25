@@ -59,6 +59,21 @@ onDefaultReaction:(nullable void (^)(NSString *emoji))defaultChoice
          onChoice:(void (^)(NSInteger index, NSString *title))choice
        onDismiss:(nullable void (^)(void))dismissal;
 
+/// Same lifted presentation, optionally hosting `liftedView` inside the
+/// full-screen vertical scroll container so tall bubbles and full-size
+/// action cards scroll together without clipping on small screens.
++ (void)showItems:(NSArray *)items
+       anchoredAt:(CGRect)anchor
+       liftedView:(nullable UIView *)liftedView
+           inView:(UIView *)host
+       headerView:(nullable UIView *)headerView
+        reactions:(nullable NSArray<NSString *> *)reactions
+   selectedReaction:(nullable NSString *)selectedReaction
+       onReaction:(nullable void (^)(NSString *emoji))reactionChoice
+onDefaultReaction:(nullable void (^)(NSString *emoji))defaultChoice
+         onChoice:(void (^)(NSInteger index, NSString *title))choice
+       onDismiss:(nullable void (^)(void))dismissal;
+
 /// Convenience API: displays popup menu without reactions bar.
 + (void)showItems:(NSArray *)items
           atPoint:(CGPoint)point

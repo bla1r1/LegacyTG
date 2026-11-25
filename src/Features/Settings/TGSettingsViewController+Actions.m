@@ -15,6 +15,7 @@
 #import "TGPresent.h"
 #import "TGLabel.h"
 #import "TGControls.h"
+#import "TGURLSafety.h"
 
 #include <time.h>
 
@@ -238,7 +239,7 @@ static UIImage *TGSettingsQRIcon(void) {
 }
 
 - (void)openURL:(NSString *)url {
-	[[UIApplication sharedApplication] openURL:[NSURL URLWithString:url]];
+	TGOpenSafeExternalURL([NSURL URLWithString:url]);
 }
 
 /// Saved Messages is a real chat - your own - so it opens as one rather than

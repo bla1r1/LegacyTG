@@ -16,11 +16,11 @@ size_t TGV2ParsePlaintext(const uint8_t *bytes, size_t length,
 		const uint8_t *body = NULL;
 		size_t bodyLength = 0;
 		if (type == 0x7F){
-			if (at + 4 > length)
+			if (length - at < 4)
 				break;
 			bodyLength = TGReadU32(bytes + at);
 			at += 4;
-			if (at + bodyLength > length)
+			if (bodyLength > length - at)
 				break;
 			body = bytes + at;
 			at += bodyLength;
@@ -35,7 +35,7 @@ size_t TGV2ParsePlaintext(const uint8_t *bytes, size_t length,
 		out[count].body = body;
 		out[count].bodyLength = bodyLength;
 		count++;
-		if (at + 4 > length)
+		if (length - at < 4)
 			break;
 		currentSeq = TGReadU32(bytes + at);
 		at += 4;

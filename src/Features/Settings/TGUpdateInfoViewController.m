@@ -106,6 +106,19 @@ static UIImage *TGUpdateAppIcon(void) {
 	[presented dismissViewControllerAnimated:YES completion:nil];
 }
 
+static BOOL TGIsTrustedUpdateHost(NSString *host) {
+	if (!host.length)
+		return NO;
+	NSString *lower = host.lowercaseString;
+	NSArray *allowed = @[@"github.com", @"githubusercontent.com", @"t.me", @"legacytg.org"];
+	for (NSString *domain in allowed) {
+		if ([lower isEqualToString:domain] ||
+			[lower hasSuffix:[@"." stringByAppendingString:domain]])
+			return YES;
+	}
+	return NO;
+}
+
 - (void)openUpdate {
 	NSString *url = nil;
 	if ([TGUpdateStore isJailbroken] && self.info.cydiaURL.length)
@@ -114,7 +127,20 @@ static UIImage *TGUpdateAppIcon(void) {
 		url = self.info.ipaURL;
 	if (!url.length)
 		return;
-	[[UIApplication sharedApplication] openURL:[NSURL URLWithString:url]];
+	NSURL *target = [NSURL URLWithString:url];
+	NSString *scheme = target.scheme.lowercaseString;
+	if (!target)
+		return;
+	if ([scheme isEqualToString:@"https"]) {
+		if (!TGIsTrustedUpdateHost(target.host))
+			return;
+	} else if ([scheme isEqualToString:@"cydia"]) {
+		if (!target.host.length && !target.path.length)
+			return;
+	} else {
+		return;
+	}
+	[[UIApplication sharedApplication] openURL:target];
 }
 
 @end

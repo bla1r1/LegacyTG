@@ -38,11 +38,16 @@ CGImageRef TGBitmapCreate(NSString *path) {
 	TGBitmapHeader header;
 	memcpy(&header, data.bytes, sizeof(header));
 	if (header.magic != kTGBitmapMagic || !header.width || !header.height ||
-			header.bytesPerRow < header.width * 4 ||
-			data.length < sizeof(header) + (NSUInteger)header.bytesPerRow * header.height)
+			header.width > 4096 || header.height > 4096)
+		return NULL;
+	uint64_t minRow = (uint64_t)header.width * 4ULL;
+	uint64_t pixelBytes = (uint64_t)header.bytesPerRow * (uint64_t)header.height;
+	if ((uint64_t)header.bytesPerRow < minRow ||
+			pixelBytes > (64ULL * 1024ULL * 1024ULL) ||
+			(uint64_t)data.length - sizeof(header) < pixelBytes)
 		return NULL;
 	CFDataRef pixels = CFDataCreate(NULL, (const UInt8 *)data.bytes + sizeof(header),
-			(CFIndex)header.bytesPerRow * header.height);
+			(CFIndex)pixelBytes);
 	CGDataProviderRef provider = CGDataProviderCreateWithCFData(pixels);
 	CFRelease(pixels);
 	CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();

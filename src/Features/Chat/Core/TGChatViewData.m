@@ -12,6 +12,7 @@
 #import "TGThemeFile.h"
 #import "TGCapabilities.h"
 #import "TGDevice.h"
+#import "TGURLSafety.h"
 #import <AddressBookUI/AddressBookUI.h>
 #import <CoreLocation/CoreLocation.h>
 #import <AssetsLibrary/AssetsLibrary.h>
@@ -1607,7 +1608,7 @@ static NSMutableDictionary *TGChatProfileMemo(void) {
 			dispatch_async(dispatch_get_main_queue(), ^{
 				TGChatViewController *me = weakSelf;
 				if (url.length)
-					[[UIApplication sharedApplication] openURL:[NSURL URLWithString:url]];
+					TGOpenSafeExternalURL([NSURL URLWithString:url]);
 				else if (me)
 					[TGSnackbar showInView:me.view text:(text.length ? text : @"An error occurred.")
 								   seconds:2 onCommit:nil];

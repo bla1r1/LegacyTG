@@ -282,8 +282,10 @@ static BOOL TGProgressWorthTelling(TGProgressMark *marks, NSInteger fileId, floa
 			NSString *title = TGUFolderTitle(f);
 			// A raw dump only when tdlib's nested naming defeats us again -
 			// the syslog line then tells the exact key it moved to.
+#if TG_DEV
 			if (!title.length)
 				NSLog(@"TGClient: B3 chat_folders raw: %@", f);
+#endif
 			[out addObject:@{@"id" : @(f[@"id"] ? [f[@"id"] longLongValue] : 0),
 							 @"title" : title}];
 		}

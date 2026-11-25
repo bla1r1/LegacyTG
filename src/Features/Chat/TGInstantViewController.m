@@ -9,6 +9,7 @@
 #import "TGBarItem.h"
 #import "TGPresent.h"
 #import "TGControls.h"
+#import "TGURLSafety.h"
 
 static NSString *const TGInstantRule = @"────────────────────────────────";
 
@@ -617,14 +618,14 @@ static void TGInstantAppendBlocks(NSMutableAttributedString *out,
 	} else if ([action hasPrefix:@"url:"]) {
 		NSURL *url = [NSURL URLWithString:[action substringFromIndex:4]];
 		if (url)
-			[[UIApplication sharedApplication] openURL:url];
+			TGOpenSafeExternalURL(url);
 	} else if ([action hasPrefix:@"copy:"]) {
 		[UIPasteboard generalPasteboard].string = [action substringFromIndex:5];
 		[TGAlertSheet showMessage:TGLocalized(@"Copied to clipboard.") title:nil inView:self.view];
 	} else if ([action isEqualToString:@"feedback"]) {
 		NSURL *url = [NSURL URLWithString:TGInstantFeedbackURL(self.feedbackLink) ?: @""];
 		if (url)
-			[[UIApplication sharedApplication] openURL:url];
+			TGOpenSafeExternalURL(url);
 	}
 }
 
@@ -671,12 +672,12 @@ static void TGInstantAppendBlocks(NSMutableAttributedString *out,
 			return;
 		if (index == 0) {
 			NSURL *url = [NSURL URLWithString:me.sourceURL ?: @""];
-			if (!url || ![[UIApplication sharedApplication] canOpenURL:url]) {
+			if (!url || !TGIsSafeExternalURL(url) || ![[UIApplication sharedApplication] canOpenURL:url]) {
 				[TGAlertSheet showMessage:@"There is no address for this page."
 									  title:@"Instant View" inView:me.view];
 				return;
 			}
-			[[UIApplication sharedApplication] openURL:url];
+			TGOpenSafeExternalURL(url);
 			return;
 		}
 		[UIPasteboard generalPasteboard].string = me.sourceURL;

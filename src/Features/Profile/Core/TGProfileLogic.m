@@ -632,7 +632,7 @@ NSURL *TGProfileFirstURL(NSString *text, NSArray *entities) {
 			continue;
 		NSURL *parsed = [NSURL URLWithString:url];
 		return parsed.scheme.length ? parsed
-				: [NSURL URLWithString:[@"http://" stringByAppendingString:url]];
+				: [NSURL URLWithString:[@"https://" stringByAppendingString:url]];
 	}
 	return nil;
 }

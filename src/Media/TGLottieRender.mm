@@ -63,10 +63,21 @@ struct LottieProperty {
 					return n;
 				}
 
+				if (!std::isfinite(frame))
+					return 0;
+
 				auto it = std::lower_bound(keyframes.begin(), keyframes.end(), frame,
 					[](const LottieKeyframe &kf, double val) {
 						return kf.t <= val;
 					});
+
+				if (it == keyframes.begin() || it == keyframes.end()) {
+					const auto &kf = (it == keyframes.begin()) ? keyframes.front() : keyframes.back();
+					int n = std::min(kf.s_count, maxVals);
+					for (int i = 0; i < n; i++)
+						outVals[i] = kf.s[i];
+					return n;
+				}
 
 				const auto &after = *it;
 				const auto &before = *(it - 1);
@@ -211,7 +222,7 @@ static inline float TGScalarAtFast(NSDictionary *prop, double frame, float fallb
 /// multiplies down a group or precomp, and does not pass through parenting,
 /// so the caller decides whose alpha it joins.
 static void TGApplyTransform(NSDictionary *ks, double frame, CGContextRef ctx) {
-	if (!ks)
+	if (![ks isKindOfClass:NSDictionary.class])
 		return;
 
 	float pos[2]    = {0};
@@ -219,12 +230,13 @@ static void TGApplyTransform(NSDictionary *ks, double frame, CGContextRef ctx) {
 	float scale[2]  = {100.0f, 100.0f};
 
 	int posCount = 0;
-	if (ks[@"p"][@"x"] && ks[@"p"][@"y"]) {
-		pos[0] = TGScalarAtFast(ks[@"p"][@"x"], frame, 0.0f);
-		pos[1] = TGScalarAtFast(ks[@"p"][@"y"], frame, 0.0f);
+	id pObj = ks[@"p"];
+	if ([pObj isKindOfClass:NSDictionary.class] && pObj[@"x"] && pObj[@"y"]) {
+		pos[0] = TGScalarAtFast(pObj[@"x"], frame, 0.0f);
+		pos[1] = TGScalarAtFast(pObj[@"y"], frame, 0.0f);
 		posCount = 2;
 	} else {
-		posCount = TGValueAtFast(ks[@"p"], frame, pos, 2);
+		posCount = TGValueAtFast(pObj, frame, pos, 2);
 	}
 	int anchorCount = TGValueAtFast(ks[@"a"], frame, anchor, 2);
 	int scaleCount  = TGValueAtFast(ks[@"s"], frame, scale, 2);
@@ -591,29 +603,37 @@ static void TGAddRoundedRect(CGMutablePathRef path, CGRect r, CGFloat radius) {
 
 /// `alpha` is what the layer, its precomps and the enclosing groups leave;
 /// a group multiplies its own opacity in for its items.
-static void TGDrawShapes(NSArray *shapes, double frame, CGContextRef ctx, float alpha) {
-	if (![shapes isKindOfClass:NSArray.class])
+static const int kTGLottieMaxShapeDepth = 16;
+
+static void TGDrawShapesDepth(NSArray *shapes, double frame, CGContextRef ctx, float alpha, int depth) {
+	if (depth >= kTGLottieMaxShapeDepth || ![shapes isKindOfClass:NSArray.class])
 		return;
 
 	CGMutablePathRef path = CGPathCreateMutable();
 
 	for (NSDictionary *shape in shapes){
+		if (![shape isKindOfClass:NSDictionary.class])
+			continue;
 		NSString *ty = shape[@"ty"];
+		if (![ty isKindOfClass:NSString.class])
+			continue;
 
 		if ([ty isEqualToString:@"gr"]){
 			NSArray *items = shape[@"it"];
+			if (![items isKindOfClass:NSArray.class])
+				continue;
 			float groupAlpha = alpha;
 			for (NSDictionary *item in items)
-				if ([item[@"ty"] isEqualToString:@"tr"])
+				if ([item isKindOfClass:NSDictionary.class] && [item[@"ty"] isEqualToString:@"tr"])
 					groupAlpha *= TGOpacity(item, frame);
 			if (groupAlpha <= 0.0f)
 				continue;
 			CGContextSaveGState(ctx);
 			for (NSDictionary *item in items)
-				if ([item[@"ty"] isEqualToString:@"tr"])
+				if ([item isKindOfClass:NSDictionary.class] && [item[@"ty"] isEqualToString:@"tr"])
 					TGApplyTransform(item, frame, ctx);
 			CGContextSetAlpha(ctx, groupAlpha);
-			TGDrawShapes(items, frame, ctx, groupAlpha);
+			TGDrawShapesDepth(items, frame, ctx, groupAlpha, depth + 1);
 			CGContextRestoreGState(ctx);
 
 		} else if ([ty isEqualToString:@"sh"]){
@@ -836,7 +856,7 @@ static void TGDrawComp(const TGLottieScene &scene, int compIndex, double frame,
 			TGDrawComp(scene, layer.comp, TGPrecompFrame(scene, layer, frame), ctx, layerAlpha, depth + 1);
 		} else {
 			CGContextSetAlpha(ctx, layerAlpha);
-			TGDrawShapes(layer.shapes, frame, ctx, layerAlpha);
+			TGDrawShapesDepth(layer.shapes, frame, ctx, layerAlpha, 0);
 		}
 		TGEraseByMasks(layer.masks, frame, ctx);
 		CGContextRestoreGState(ctx);

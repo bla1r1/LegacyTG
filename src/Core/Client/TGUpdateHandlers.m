@@ -103,7 +103,11 @@
 
 	if ([type isEqualToString:@"error"]){
 		NSString *msg = obj[@"message"] ?: @"An error occurred.";
+#if TG_DEV
 		NSLog(@"TGClient: <<< ERROR code=%@ msg=%@ details: %@", obj[@"code"], msg, obj);
+#else
+		NSLog(@"TGClient: <<< ERROR code=%@ msg=%@", obj[@"code"], msg);
+#endif
 		// An unclaimed 404 stays quiet, as before - but it no longer says
 		// anything about the chat list: loadChats reads its own answer now.
 		if ([obj[@"code"] intValue] == 404)

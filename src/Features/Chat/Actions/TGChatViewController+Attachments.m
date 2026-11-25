@@ -16,6 +16,7 @@
 #import "TGPresent.h"
 #import "TGLabel.h"
 #import "TGControls.h"
+#import "TGURLSafety.h"
 #import <CoreImage/CoreImage.h>
 #import <QuartzCore/QuartzCore.h>
 
@@ -543,7 +544,7 @@
 
 	NSURL *u = [NSURL URLWithString:clean];
 	if (!u.scheme.length) {
-		u = [NSURL URLWithString:[NSString stringWithFormat:@"http://%@", clean]];
+		u = [NSURL URLWithString:[NSString stringWithFormat:@"https://%@", clean]];
 	}
 
 	NSString *host = u.host.lowercaseString;
@@ -883,8 +884,7 @@
 /// Anything that is not a Telegram link: Safari, which is the whole of what
 /// this app does with the web.
 - (void)openPlainLink:(NSURL *)url {
-	if (url)
-		[[UIApplication sharedApplication] openURL:url];
+	TGOpenSafeExternalURL(url);
 }
 
 /// An external link gets one sheet before it leaves the app. Telegram is

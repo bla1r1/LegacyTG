@@ -6,23 +6,21 @@
 #import "TGStyle.h"
 #import "TGReactionPicker.h"
 #import "TGLocalization.h"
+#import "TGChatActionMenuModel.h"
 
-static const CGFloat kMenuCardW        = 220.0f;
+static const CGFloat kMenuCardW        = 212.0f;
 static const CGFloat kMenuRowH         = 36.0f;
+static const CGFloat kMenuRowHCompact  = 32.0f;
 static const CGFloat kMenuHeaderH      = TGMetricPadSmall;
 static const CGFloat kMenuGlyphSide    = 18.0f;
 static const CGFloat kMenuGlyphX       = 16.0f;
 static const CGFloat kMenuLabelX       = 46.0f;
 static const CGFloat kReactionPadH     = 12.0f;
 static const CGFloat kReactionPadV     = 6.0f;
-/// A lifted menu keeps at least this much of itself on screen. Anything the
-/// card cannot show at once scrolls inside the card, so the same actions are
-/// still there on a 3.5" screen as on a 4" one.
-static const CGFloat kMenuLiftedMinH   = 4.0f * kMenuRowH;
 
 static TGPopupMenu *sOpenMenu = nil;
 
-@interface TGPopupMenu () {
+@interface TGPopupMenu () <UIScrollViewDelegate, UIGestureRecognizerDelegate> {
 	UIView *_reactionWrapper;
 	UIView *_reactionCard;
 	UIView *_actionWrapper;
@@ -37,15 +35,16 @@ static TGPopupMenu *sOpenMenu = nil;
 	void (^_onDismiss)(void);
 	NSTimeInterval _shownAt;
 
-	/// The lifted-bubble presentation. The card hangs from the anchor's
-	/// bottom edge and the reaction bar sits over its top; a card that cannot
-	/// fit is scrolled rather than run off screen.
+	/// The lifted-bubble presentation: a full-screen vertical scroll view
+	/// holding the reaction capsule, lifted bubble, and full-size action card.
 	BOOL _lifted;
 	CGRect _anchorRect;
-	UIScrollView *_actionScroll;
-	/// The card's height before it was capped to the room below the anchor,
-	/// so the row loop knows whether it is scrolling.
-	CGFloat _naturalCardH;
+	UIView *_liftedView;
+	UIScrollView *_pageScroll;
+	CGFloat _reactionBaseY;
+	CGFloat _reactionH;
+	CGFloat _bubbleMaxY;
+	CGFloat _topInset;
 }
 @end
 
@@ -57,7 +56,8 @@ static TGPopupMenu *sOpenMenu = nil;
 					 above:(CGFloat *)above
 					 below:(CGFloat *)below {
 	CGFloat headerH = headerView ? headerView.bounds.size.height : kMenuHeaderH;
-	CGFloat cardH = headerH + (CGFloat)items.count * kMenuRowH + TGMetricPadSmall;
+	CGFloat rowH = ([UIScreen mainScreen].bounds.size.height <= 500.0f) ? kMenuRowHCompact : kMenuRowH;
+	CGFloat cardH = headerH + (CGFloat)items.count * rowH + TGMetricPadSmall;
 	for (NSDictionary *it in items)
 		if ([it[@"title"] isEqualToString:@"Select"]){
 			cardH += TGMetricPadTiny;
@@ -78,6 +78,13 @@ static TGPopupMenu *sOpenMenu = nil;
 	// The block is copied and the menu released before it runs: it restores
 	// the held message, which must not happen while a new menu still holds
 	// this one as the open menu. A nil menu has no fields to read.
+	if (menu && menu->_liftedView && menu.superview &&
+		menu->_liftedView.superview == menu->_pageScroll) {
+		CGRect screenRect = [menu->_pageScroll convertRect:menu->_liftedView.frame
+													toView:menu.superview];
+		menu->_liftedView.frame = screenRect;
+		[menu.superview addSubview:menu->_liftedView];
+	}
 	void (^done)(void) = menu ? [menu->_onDismiss copy] : nil;
 	[menu removeFromSuperview];
 	if (done)
@@ -195,6 +202,24 @@ onDefaultReaction:(void (^)(NSString *))defaultChoice
          onChoice:(void (^)(NSInteger, NSString *))choice
        onDismiss:(void (^)(void))dismissal
 {
+	[self showItems:items anchoredAt:anchor liftedView:nil inView:host
+		 headerView:headerView reactions:reactions selectedReaction:selectedReaction
+		 onReaction:reactionChoice onDefaultReaction:defaultChoice
+		   onChoice:choice onDismiss:dismissal];
+}
+
++ (void)showItems:(NSArray *)items
+       anchoredAt:(CGRect)anchor
+       liftedView:(UIView *)liftedView
+           inView:(UIView *)host
+       headerView:(UIView *)headerView
+        reactions:(NSArray<NSString *> *)reactions
+   selectedReaction:(NSString *)selectedReaction
+       onReaction:(void (^)(NSString *))reactionChoice
+onDefaultReaction:(void (^)(NSString *))defaultChoice
+         onChoice:(void (^)(NSInteger, NSString *))choice
+       onDismiss:(void (^)(void))dismissal
+{
 	if ((!items.count && !reactions.count) || !host)
 		return;
 	[self dismiss];
@@ -202,6 +227,7 @@ onDefaultReaction:(void (^)(NSString *))defaultChoice
 	TGPopupMenu *menu = [[TGPopupMenu alloc] initWithFrame:host.bounds];
 	menu->_lifted = YES;
 	menu->_anchorRect = anchor;
+	menu->_liftedView = liftedView;
 	[menu buildWithItems:items
 				 atPoint:CGPointMake(CGRectGetMidX(anchor), CGRectGetMaxY(anchor))
 			  headerView:headerView
@@ -247,19 +273,18 @@ onDefaultReaction:(void (^)(NSString *))defaultChoice
 
 	CGFloat hostW = self.bounds.size.width;
 	CGFloat hostH = self.bounds.size.height;
+	CGFloat rowH = (_lifted && hostH <= 500.0f) ? kMenuRowHCompact : kMenuRowH;
 
-	// Calculate Action Card Height
+	// Calculate Action Card Height (always full natural height; when _lifted,
+	// _pageScroll scrolls the entire stack so nothing is clipped or squished).
 	CGFloat headerH = headerView ? headerView.bounds.size.height : kMenuHeaderH;
-	CGFloat actionCardH = headerH + (CGFloat)items.count * kMenuRowH + TGMetricPadSmall;
+	CGFloat actionCardH = headerH + (CGFloat)items.count * rowH + TGMetricPadSmall;
 	for (NSDictionary *it in items) {
 		if ([it[@"title"] isEqualToString:@"Select"]) {
 			actionCardH += TGMetricPadTiny;
 			break;
 		}
 	}
-	// Kept before the lifted layout caps the card: a card shorter than this
-	// is a card whose rows have to scroll inside it.
-	_naturalCardH = actionCardH;
 
 	CGFloat reactionW = 0.0f;
 	CGFloat reactionH = 0.0f;
@@ -299,24 +324,52 @@ onDefaultReaction:(void (^)(NSString *))defaultChoice
 	CGFloat cardY = 0.0f;
 	CGFloat reactionX = 0.0f;
 	CGFloat reactionY = 0.0f;
+	UIView *container = self;
 
 	if (_lifted) {
-		// The anchor is the lifted bubble itself. The bar belongs over its
-		// head, the card under its feet; neither answers to the finger.
+		_pageScroll = [[UIScrollView alloc] initWithFrame:self.bounds];
+		_pageScroll.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+		_pageScroll.backgroundColor = [UIColor clearColor];
+		_pageScroll.alwaysBounceVertical = YES;
+		_pageScroll.showsVerticalScrollIndicator = YES;
+		_pageScroll.scrollsToTop = NO;
+		_pageScroll.delegate = self;
+		[self addSubview:_pageScroll];
+
+		UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(backgroundTapped:)];
+		tap.cancelsTouchesInView = NO;
+		tap.delegate = self;
+		[_pageScroll addGestureRecognizer:tap];
+
+		container = _pageScroll;
+
+		CGFloat topPad = (hostH > 430.0f) ? (20.0f + TGMetricPad) : TGMetricPad;
+		CGFloat above = reactionH > 0 ? (reactionH + TGMetricPadSmall) : 0.0f;
+		TGHoldScrollMetrics m = TGHoldScrollLayout(_anchorRect, above, TGMetricPadSmall,
+				actionCardH, topPad, hostH - TGMetricPad, hostH, TGMetricPad);
+
+		if (_liftedView) {
+			_liftedView.frame = CGRectMake(CGRectGetMinX(_anchorRect), m.bubbleY,
+					CGRectGetWidth(_anchorRect), CGRectGetHeight(_anchorRect));
+			[_pageScroll addSubview:_liftedView];
+		}
+
+		_reactionBaseY = m.reactionBaseY;
+		_reactionH = reactionH;
+		_bubbleMaxY = m.bubbleY + CGRectGetHeight(_anchorRect);
+		_topInset = topPad;
+
 		CGFloat midX = CGRectGetMidX(_anchorRect);
 		reactionX = MIN(MAX(TGMetricPad, midX - TGHalf(reactionW)),
 						hostW - reactionW - TGMetricPad);
-		reactionY = MAX(TGMetricPad,
-				CGRectGetMinY(_anchorRect) - reactionH - TGMetricPadSmall);
+		reactionY = TGHoldStickyReactionY(_reactionBaseY, _bubbleMaxY, _reactionH,
+				TGMetricPadSmall, m.initialOffsetY, _topInset);
 		cardX = MIN(MAX(TGMetricPad, midX - TGHalf(kMenuCardW)),
 					hostW - kMenuCardW - TGMetricPad);
-		cardY = CGRectGetMaxY(_anchorRect) + TGMetricPadSmall;
+		cardY = m.cardY;
 
-		// Never let the card run off the bottom. When it would, it keeps a
-		// readable four-row window and the rest is reached by scrolling.
-		CGFloat room = hostH - cardY - TGMetricPad;
-		if (room < actionCardH)
-			actionCardH = MAX(room, kMenuLiftedMinH);
+		_pageScroll.contentSize = CGSizeMake(hostW, m.contentH);
+		_pageScroll.contentOffset = CGPointMake(0.0f, m.initialOffsetY);
 	} else if (reactions.count) {
 		reactionX = MIN(MAX(TGMetricPad, point.x - TGHalf(reactionW)), hostW - reactionW - TGMetricPad);
 		if (point.y + actionCardH + TGMetricPad < hostH) {
@@ -346,7 +399,7 @@ onDefaultReaction:(void (^)(NSString *))defaultChoice
 		_reactionWrapper.layer.shadowOffset = TGMetricShadowOffsetMenu;
 		_reactionWrapper.layer.shadowPath = [UIBezierPath bezierPathWithRoundedRect:_reactionWrapper.bounds
 																	  cornerRadius:TGHalf(reactionH)].CGPath;
-		[self addSubview:_reactionWrapper];
+		[container addSubview:_reactionWrapper];
 
 		_reactionCard = [[UIView alloc] initWithFrame:_reactionWrapper.bounds];
 		_reactionCard.backgroundColor = [theme calloutBackgroundColour];
@@ -380,7 +433,7 @@ onDefaultReaction:(void (^)(NSString *))defaultChoice
 	_actionWrapper.layer.shadowOffset = TGMetricShadowOffsetMenu;
 	_actionWrapper.layer.shadowPath = [UIBezierPath bezierPathWithRoundedRect:_actionWrapper.bounds
 																  cornerRadius:TGMetricCornerCard].CGPath;
-	[self addSubview:_actionWrapper];
+	[container addSubview:_actionWrapper];
 
 	_actionCard = [[UIView alloc] initWithFrame:_actionWrapper.bounds];
 	_actionCard.backgroundColor = [UIColor clearColor];
@@ -411,20 +464,6 @@ onDefaultReaction:(void (^)(NSString *))defaultChoice
 		[_actionCard addSubview:bgView];
 	}
 
-	// The lifted card is the one that can be taller than the room below the
-	// bubble. Its rows live in a scroll view so every action stays reachable;
-	// the ordinary callout is short enough by construction and keeps adding
-	// rows straight to the card.
-	if (_lifted && actionCardH < _naturalCardH) {
-		_actionScroll = [[UIScrollView alloc] initWithFrame:CGRectMake(0, headerH,
-				kMenuCardW, actionCardH - headerH - TGMetricPadSmall)];
-		_actionScroll.backgroundColor = [UIColor clearColor];
-		_actionScroll.showsVerticalScrollIndicator = YES;
-		_actionScroll.alwaysBounceVertical = NO;
-		_actionScroll.scrollsToTop = NO;
-		[_actionCard addSubview:_actionScroll];
-	}
-
 	CGFloat currentY = 0.0f;
 
 	if (headerView) {
@@ -439,11 +478,11 @@ onDefaultReaction:(void (^)(NSString *))defaultChoice
 		UIView *divLight = [[UIView alloc] initWithFrame:CGRectMake(TGMetricPadSmall, currentY, kMenuCardW - TGDoubled(TGMetricPadSmall), 0.5f)];
 		divLight.backgroundColor = [theme calloutDividerLightColour];
 		[_actionCard addSubview:divLight];
-	} else if (!_actionScroll) {
+	} else {
 		currentY = kMenuHeaderH;
 	}
 
-	UIView *rowParent = _actionScroll ?: _actionCard;
+	UIView *rowParent = _actionCard;
 
 	// Action Rows
 	for (NSUInteger i = 0; i < items.count; i++) {
@@ -465,16 +504,16 @@ onDefaultReaction:(void (^)(NSString *))defaultChoice
 		}
 
 		UIButton *row = [UIButton buttonWithType:UIButtonTypeCustom];
-		row.frame = CGRectMake(0, currentY, kMenuCardW, kMenuRowH);
+		row.frame = CGRectMake(0, currentY, kMenuCardW, rowH);
 		row.tag = (NSInteger)i;
 		[row addTarget:self action:@selector(rowTapped:) forControlEvents:UIControlEventTouchUpInside];
-		[row setBackgroundImage:[TGTheme skeuomorphicButtonImageWithColor:([theme isDark] ? [theme accentColour] : [theme buttonHighlightColour]) height:kMenuRowH highlighted:YES cornerRadius:0.0f] forState:UIControlStateHighlighted];
+		[row setBackgroundImage:[TGTheme skeuomorphicButtonImageWithColor:([theme isDark] ? [theme accentColour] : [theme buttonHighlightColour]) height:rowH highlighted:YES cornerRadius:0.0f] forState:UIControlStateHighlighted];
 		[rowParent addSubview:row];
 
 		UIImage *glyph = [TGIcons menuGlyphNamed:item[@"icon"]];
 		if (glyph) {
 			UIImageView *icon = [[UIImageView alloc] initWithFrame:CGRectMake(
-					kMenuGlyphX, TGCenteredOrigin(kMenuRowH, kMenuGlyphSide), kMenuGlyphSide, kMenuGlyphSide)];
+					kMenuGlyphX, TGCenteredOrigin(rowH, kMenuGlyphSide), kMenuGlyphSide, kMenuGlyphSide)];
 			icon.image = glyph;
 			icon.contentMode = UIViewContentModeScaleAspectFit;
 			[TGIcons tintImageView:icon colour:(destructive ? [theme destructiveColour]
@@ -485,7 +524,7 @@ onDefaultReaction:(void (^)(NSString *))defaultChoice
 		// A row with a subtitle (a timed message's Delete) puts the title in
 		// the upper part and the smaller line under it, in the row's colour.
 		NSString *subtitle = [item[@"subtitle"] isKindOfClass:NSString.class] ? item[@"subtitle"] : nil;
-		CGFloat titleH = subtitle.length ? kMenuRowH - TGMetricLineMicro : kMenuRowH;
+		CGFloat titleH = subtitle.length ? rowH - TGMetricLineMicro : rowH;
 		UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(
 				kMenuLabelX, 0, kMenuCardW - kMenuLabelX - TGMetricPad, titleH)];
 		if (subtitle.length){
@@ -507,12 +546,37 @@ onDefaultReaction:(void (^)(NSString *))defaultChoice
 		label.shadowOffset = [theme isDark] ? CGSizeMake(0, -1.0f) : ([TGTheme drawsSkeuomorphicChrome] ? CGSizeMake(0, 1.0f) : CGSizeZero);
 		[row addSubview:label];
 
-		currentY += kMenuRowH;
+		currentY += rowH;
 	}
+}
 
-	if (_actionScroll) {
-		_actionScroll.contentSize = CGSizeMake(kMenuCardW, currentY + TGMetricPadSmall);
+- (void)scrollViewDidScroll:(UIScrollView *)scrollView {
+	if (scrollView != _pageScroll || !_reactionWrapper)
+		return;
+	CGRect rf = _reactionWrapper.frame;
+	rf.origin.y = TGHoldStickyReactionY(_reactionBaseY, _bubbleMaxY, _reactionH,
+			TGMetricPadSmall, scrollView.contentOffset.y, _topInset);
+	_reactionWrapper.frame = rf;
+}
+
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer shouldReceiveTouch:(UITouch *)touch {
+	CGPoint where = [touch locationInView:_pageScroll];
+	if (CGRectContainsPoint(_actionWrapper.frame, where))
+		return NO;
+	if (_reactionWrapper && CGRectContainsPoint(_reactionWrapper.frame, where))
+		return NO;
+	if (_liftedView && CGRectContainsPoint(_liftedView.frame, where)) {
+		if ([touch.view isKindOfClass:[UITextView class]] ||
+			[_liftedView viewWithTag:0x909E] != nil)
+			return NO;
 	}
+	return YES;
+}
+
+- (void)backgroundTapped:(UITapGestureRecognizer *)tap {
+	if ([NSDate timeIntervalSinceReferenceDate] - _shownAt < 0.3)
+		return;
+	[TGPopupMenu dismiss];
 }
 
 - (void)rowTapped:(UIButton *)row {

@@ -543,6 +543,8 @@ static NSString *TGFirstLinkIn(NSString *text) {
 - (void)clearComposeState {
 	self.replyToId = 0;
 	self.replyQuoteText = nil;
+	self.replyQuotePosition = 0;
+	self.replyQuoteEntities = nil;
 	self.editingId = 0;
 	self.editingIsCaption = NO;
 	self.previewedLink = nil;
@@ -758,8 +760,12 @@ static void TGTextFieldSetSelectedRange(UITextView *tf, NSRange range) {
 			NSMutableDictionary *opts = [NSMutableDictionary dictionary];
 			if (self.silentPosting)
 				opts[@"disable_notification"] = @YES;
-			if (self.replyQuoteText.length)
+			if (self.replyQuoteText.length) {
 				opts[@"quote"] = self.replyQuoteText;
+				opts[@"quotePosition"] = @(self.replyQuotePosition);
+				if (self.replyQuoteEntities.count)
+					opts[@"quoteEntities"] = self.replyQuoteEntities;
+			}
 			[[TGSendStore shared] sendFormattedText:ft
 											toChat:self.chatId
 											thread:self.threadId

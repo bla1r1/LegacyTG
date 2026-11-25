@@ -110,6 +110,10 @@ static unsigned TGBitsUe(TGBits *r) {
 	int zeros = 0;
 	while (!TGBitsNext(r) && !r->failed && zeros < 32)
 		zeros++;
+	if (zeros >= 32 || r->failed) {
+		r->failed = 1;
+		return 0;
+	}
 	return zeros ? ((1u << zeros) - 1) + TGBitsRead(r, zeros) : 0;
 }
 

@@ -31,4 +31,8 @@
 /// not save.
 + (BOOL)storeKey:(NSData *)key error:(NSString **)error;
 
+/// Re-saves any existing key so its keychain accessibility matches whether
+/// an app passcode is active.
++ (void)refreshAccessibility;
+
 @end

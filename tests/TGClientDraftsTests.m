@@ -12,6 +12,7 @@
 #import "TGClient.h"
 #import "TGClientInternal.h"
 #import "TGPasscode.h"
+#import "TGURLSafety.h"
 
 @interface TGClientDraftsTests : XCTestCase @end
 
@@ -366,12 +367,32 @@ static NSUInteger countRequestsOfType(TGClient *c, NSString *type) {
 	XCTAssertFalse([TGPasscode verifyPasscode:@"1234"]);
 
 	// The wait is over: the right PIN opens and the count starts again.
-	[d setDouble:[NSDate timeIntervalSinceReferenceDate] - 1 forKey:@"TGPasscodeRetryAfter"];
+	[d setDouble:[NSProcessInfo processInfo].systemUptime - 1 forKey:@"TGPasscodeRetryAfter"];
 	XCTAssertEqual([TGPasscode retryDelay], (NSTimeInterval)0);
 	XCTAssertTrue([TGPasscode verifyPasscode:@"1234"]);
 	XCTAssertEqual([d integerForKey:@"TGPasscodeFailedAttempts"], (NSInteger)0);
 
 	[TGPasscode clearPasscode];
+}
+
+- (void)testURLSafety_AllowsOnlySafeSchemes {
+	XCTAssertTrue(TGIsSafeExternalURLString(@"https://telegram.org"));
+	XCTAssertTrue(TGIsSafeExternalURLString(@"HTTP://example.com/a"));
+	XCTAssertTrue(TGIsSafeExternalURLString(@"tg://resolve?domain=telegram"));
+	XCTAssertTrue(TGIsSafeExternalURLString(@"telegram://msg?text=hi"));
+	XCTAssertTrue(TGIsSafeExternalURLString(@"mailto:security@example.com"));
+
+	XCTAssertFalse(TGIsSafeExternalURLString(@"javascript:alert(1)"));
+	XCTAssertFalse(TGIsSafeExternalURLString(@"file:///etc/passwd"));
+	XCTAssertFalse(TGIsSafeExternalURLString(@"itms-services://?action=download-manifest&url=https://x"));
+	XCTAssertFalse(TGIsSafeExternalURLString(@"tel:+1234567890"));
+	XCTAssertFalse(TGIsSafeExternalURLString(@"sms:+1234567890"));
+	XCTAssertFalse(TGIsSafeExternalURLString(@"cydia://package/com.example"));
+	XCTAssertFalse(TGIsSafeExternalURLString(@"prefs:root=WIFI"));
+	XCTAssertFalse(TGIsSafeExternalURLString(@""));
+	XCTAssertFalse(TGIsSafeExternalURL(nil));
+	XCTAssertFalse(TGOpenSafeExternalURL([NSURL URLWithString:@"file:///etc/passwd"]));
+	XCTAssertTrue(TGOpenSafeExternalURL([NSURL URLWithString:@"https://t.me/telegram"]));
 }
 
 @end

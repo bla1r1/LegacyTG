@@ -2,6 +2,7 @@
 // TGPasscode.m - App passcode lock management and security.
 //
 #import "TGPasscode.h"
+#import "TGDatabaseKey.h"
 #import <CommonCrypto/CommonDigest.h>
 #import <CommonCrypto/CommonCryptor.h>
 #import <CommonCrypto/CommonKeyDerivation.h>
@@ -60,6 +61,13 @@ static BOOL TGDeriveKey(NSString *pin, const uint8_t *salt, uint32_t rounds,
 			kCCPRFHmacAlgSHA256, rounds, key, kKeySize) == kCCSuccess;
 }
 
+/// Overwrite key material on the stack so the compiler cannot elide it.
+static void TGWipeBytes(void *ptr, size_t size) {
+	volatile uint8_t *p = (volatile uint8_t *)ptr;
+	while (size--)
+		*p++ = 0;
+}
+
 /// Compare without letting the time taken say how far the match got.
 static BOOL TGSameBytes(const uint8_t *a, const uint8_t *b, size_t size) {
 	volatile uint8_t differs = 0;
@@ -75,9 +83,13 @@ static NSData *TGRecordForPIN(NSString *pin) {
 	record[2] = (uint8_t)(kRounds >> 8);
 	record[3] = (uint8_t)kRounds;
 	arc4random_buf(record + 4, kSaltSize);
-	if (!TGDeriveKey(pin, record + 4, kRounds, record + 4 + kSaltSize))
+	if (!TGDeriveKey(pin, record + 4, kRounds, record + 4 + kSaltSize)) {
+		TGWipeBytes(record, sizeof(record));
 		return nil;
-	return [NSData dataWithBytes:record length:kRecordSize];
+	}
+	NSData *out = [NSData dataWithBytes:record length:kRecordSize];
+	TGWipeBytes(record, sizeof(record));
+	return out;
 }
 
 static BOOL TGRecordMatchesPIN(NSData *record, NSString *pin) {
@@ -90,9 +102,10 @@ static BOOL TGRecordMatchesPIN(NSData *record, NSString *pin) {
 	if (rounds == 0 || rounds > 1000000)
 		return NO;
 	uint8_t key[kKeySize];
-	if (!TGDeriveKey(pin, bytes + 4, rounds, key))
-		return NO;
-	return TGSameBytes(key, bytes + 4 + kSaltSize, kKeySize);
+	BOOL ok = TGDeriveKey(pin, bytes + 4, rounds, key) &&
+			  TGSameBytes(key, bytes + 4 + kSaltSize, kKeySize);
+	TGWipeBytes(key, sizeof(key));
+	return ok;
 }
 
 #pragma mark - where the record lives
@@ -131,9 +144,77 @@ static BOOL TGWriteRecord(NSData *record) {
 	return SecItemAdd((__bridge CFDictionaryRef)query, NULL) == errSecSuccess;
 }
 
+typedef struct {
+	uint32_t version;
+	int32_t failedCount;
+	double retryAfter;
+	double wallRetryAfter;
+} TGLockStateRecord;
+
+static NSMutableDictionary *TGLockStateQuery(void) {
+	return [@{
+		(__bridge id)kSecClass       : (__bridge id)kSecClassGenericPassword,
+		(__bridge id)kSecAttrService : @"com.legacytg.passcode",
+		(__bridge id)kSecAttrAccount : @"lockstate",
+	} mutableCopy];
+}
+
+/// Lockout state lives in the keychain on iOS so editing NSUserDefaults cannot
+/// reset failed attempt counters or retry delays.
+static void TGReadLockState(NSInteger *outFailed, NSTimeInterval *outRetryAfter, NSTimeInterval *outWallRetryAfter) {
+	NSMutableDictionary *query = TGLockStateQuery();
+	query[(__bridge id)kSecReturnData] = @YES;
+	query[(__bridge id)kSecMatchLimit] = (__bridge id)kSecMatchLimitOne;
+	CFTypeRef result = NULL;
+	if (SecItemCopyMatching((__bridge CFDictionaryRef)query, &result) == errSecSuccess && result) {
+		NSData *data = (__bridge_transfer NSData *)result;
+		if (data.length == sizeof(TGLockStateRecord)) {
+			TGLockStateRecord rec;
+			memcpy(&rec, data.bytes, sizeof(rec));
+			if (rec.version == 2) {
+				if (outFailed) *outFailed = (NSInteger)rec.failedCount;
+				if (outRetryAfter) *outRetryAfter = (NSTimeInterval)rec.retryAfter;
+				if (outWallRetryAfter) *outWallRetryAfter = (NSTimeInterval)rec.wallRetryAfter;
+				return;
+			}
+		} else if (data.length == sizeof(uint32_t) + sizeof(int32_t) + sizeof(double)) {
+			// Legacy v1 record without wallRetryAfter.
+			struct { uint32_t version; int32_t failedCount; double retryAfter; } rec1;
+			memcpy(&rec1, data.bytes, sizeof(rec1));
+			if (rec1.version == 1) {
+				if (outFailed) *outFailed = (NSInteger)rec1.failedCount;
+				if (outRetryAfter) *outRetryAfter = (NSTimeInterval)rec1.retryAfter;
+				if (outWallRetryAfter) *outWallRetryAfter = 0;
+				return;
+			}
+		}
+	}
+	if (outFailed) *outFailed = 0;
+	if (outRetryAfter) *outRetryAfter = 0;
+	if (outWallRetryAfter) *outWallRetryAfter = 0;
+}
+
+static void TGWriteLockState(NSInteger failed, NSTimeInterval retryAfter, NSTimeInterval wallRetryAfter) {
+	NSMutableDictionary *query = TGLockStateQuery();
+	SecItemDelete((__bridge CFDictionaryRef)query);
+	if (failed <= 0 && retryAfter <= 0)
+		return;
+	TGLockStateRecord rec = {
+		.version = 2,
+		.failedCount = (int32_t)MIN(failed, (NSInteger)INT32_MAX),
+		.retryAfter = (double)retryAfter,
+		.wallRetryAfter = (double)wallRetryAfter,
+	};
+	query[(__bridge id)kSecValueData] = [NSData dataWithBytes:&rec length:sizeof(rec)];
+	query[(__bridge id)kSecAttrAccessible] =
+			(__bridge id)kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly;
+	SecItemAdd((__bridge CFDictionaryRef)query, NULL);
+}
+
 #else
 
 static NSString *const kPrefHostRecord = @"TGPasscodeRecord";
+static NSString *const kPrefWallRetryAfter = @"TGPasscodeWallRetryAfter";
 
 static NSData *TGReadRecord(void) {
 	return [[NSUserDefaults standardUserDefaults] dataForKey:kPrefHostRecord];
@@ -145,6 +226,32 @@ static BOOL TGWriteRecord(NSData *record) {
 	else
 		[[NSUserDefaults standardUserDefaults] removeObjectForKey:kPrefHostRecord];
 	return YES;
+}
+
+static void TGReadLockState(NSInteger *outFailed, NSTimeInterval *outRetryAfter, NSTimeInterval *outWallRetryAfter) {
+	NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+	if (outFailed) *outFailed = [defaults integerForKey:kPrefFailedCount];
+	if (outRetryAfter) *outRetryAfter = [defaults doubleForKey:kPrefRetryAfter];
+	if (outWallRetryAfter) *outWallRetryAfter = [defaults doubleForKey:kPrefWallRetryAfter];
+}
+
+static void TGWriteLockState(NSInteger failed, NSTimeInterval retryAfter, NSTimeInterval wallRetryAfter) {
+	NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+	if (failed <= 0 && retryAfter <= 0) {
+		[defaults removeObjectForKey:kPrefFailedCount];
+		[defaults removeObjectForKey:kPrefRetryAfter];
+		[defaults removeObjectForKey:kPrefWallRetryAfter];
+	} else {
+		[defaults setInteger:failed forKey:kPrefFailedCount];
+		if (retryAfter > 0) {
+			[defaults setDouble:retryAfter forKey:kPrefRetryAfter];
+			[defaults setDouble:wallRetryAfter forKey:kPrefWallRetryAfter];
+		} else {
+			[defaults removeObjectForKey:kPrefRetryAfter];
+			[defaults removeObjectForKey:kPrefWallRetryAfter];
+		}
+	}
+	[defaults synchronize];
 }
 
 #endif
@@ -173,37 +280,46 @@ static BOOL TGStorePIN(NSString *pin) {
 }
 
 + (NSTimeInterval)retryDelay {
-	NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-	NSTimeInterval after = [defaults doubleForKey:kPrefRetryAfter];
+	NSTimeInterval after = 0;
+	NSTimeInterval wallAfter = 0;
+	TGReadLockState(NULL, &after, &wallAfter);
 	if (after <= 0)
 		return 0;
-	NSTimeInterval left = after - [NSDate timeIntervalSinceReferenceDate];
+	NSTimeInterval uptime = [NSProcessInfo processInfo].systemUptime;
+	NSTimeInterval longest = kRetryWaits[sizeof(kRetryWaits) / sizeof(kRetryWaits[0]) - 1];
+	NSTimeInterval left = after - uptime;
+	// If the device rebooted, systemUptime reset to 0 while `after` is from the
+	// previous boot; fall back to wall clock when available.
+	if (left > longest && wallAfter > 0) {
+		NSTimeInterval wallLeft = wallAfter - CFAbsoluteTimeGetCurrent();
+		return wallLeft > 0 ? MIN(wallLeft, longest) : 0;
+	}
 	if (left <= 0)
 		return 0;
 	// A clock set back must not turn an hour into a year.
-	NSTimeInterval longest = kRetryWaits[sizeof(kRetryWaits) / sizeof(kRetryWaits[0]) - 1];
 	return MIN(left, longest);
 }
 
 + (void)noteAttempt:(BOOL)succeeded {
-	NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
 	if (succeeded){
-		[defaults removeObjectForKey:kPrefFailedCount];
-		[defaults removeObjectForKey:kPrefRetryAfter];
-		[defaults synchronize];
+		TGWriteLockState(0, 0, 0);
 		return;
 	}
-	NSInteger failed = [defaults integerForKey:kPrefFailedCount] + 1;
-	[defaults setInteger:failed forKey:kPrefFailedCount];
+	NSInteger failed = 0;
+	NSTimeInterval after = 0;
+	NSTimeInterval wallAfter = 0;
+	TGReadLockState(&failed, &after, &wallAfter);
+	failed += 1;
 	if (failed > kFreeAttempts){
 		NSInteger last = (NSInteger)(sizeof(kRetryWaits) / sizeof(kRetryWaits[0])) - 1;
 		NSInteger step = MIN(failed - kFreeAttempts - 1, last);
-		[defaults setDouble:[NSDate timeIntervalSinceReferenceDate] + kRetryWaits[step]
-					 forKey:kPrefRetryAfter];
+		NSTimeInterval wait = kRetryWaits[step];
+		after = [NSProcessInfo processInfo].systemUptime + wait;
+		wallAfter = CFAbsoluteTimeGetCurrent() + wait;
 	}
 	// Written before the answer is shown: killing the app does not hand the
 	// attempt back.
-	[defaults synchronize];
+	TGWriteLockState(failed, after, wallAfter);
 }
 
 + (BOOL)verifyPasscode:(NSString *)pin {
@@ -235,17 +351,20 @@ static BOOL TGStorePIN(NSString *pin) {
 		return;
 	}
 	[self noteAttempt:YES];
+	[TGDatabaseKey refreshAccessibility];
 	[[NSNotificationCenter defaultCenter] postNotificationName:TGPasscodeDidChangeNotification object:nil];
 }
 
 + (void)clearPasscode {
 	TGWriteRecord(nil);
+	TGWriteLockState(0, 0, 0);
 	NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
 	[defaults removeObjectForKey:kPrefPasscodeSet];
 	[defaults removeObjectForKey:kPrefLegacyHash];
 	[defaults removeObjectForKey:kPrefFailedCount];
 	[defaults removeObjectForKey:kPrefRetryAfter];
 	[defaults synchronize];
+	[TGDatabaseKey refreshAccessibility];
 	s_isLocked = NO;
 	[[NSNotificationCenter defaultCenter] postNotificationName:TGPasscodeDidChangeNotification object:nil];
 	[[NSNotificationCenter defaultCenter] postNotificationName:TGPasscodeDidUnlockNotification object:nil];
@@ -295,7 +414,7 @@ static BOOL TGStorePIN(NSString *pin) {
 	if (![self hasPasscode]) return;
 	NSInteger timeout = [self autoLockTimeout];
 	if (timeout < 0) return; // disabled
-	s_backgroundTime = [NSDate timeIntervalSinceReferenceDate];
+	s_backgroundTime = [NSProcessInfo processInfo].systemUptime;
 }
 
 + (BOOL)shouldLockOnForeground {
@@ -306,7 +425,7 @@ static BOOL TGStorePIN(NSString *pin) {
 	// every negative value, so an existing installation does not surprise
 	// the user with a lock the page calls Disabled.
 	if (timeout <= 0) return NO;
-	NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
+	NSTimeInterval now = [NSProcessInfo processInfo].systemUptime;
 	if (s_backgroundTime > 0 && (now - s_backgroundTime) >= (NSTimeInterval)timeout) {
 		s_isLocked = YES;
 		return YES;

@@ -78,12 +78,10 @@ static NSArray *TGMenuActions(NSDictionary *message, TGChatActionMenuContext con
 		@"canComment" : @NO, @"failed" : @NO, @"service" : @NO,
 	};
 	NSArray *actions = TGMenuActions(message, TGMenuContext(YES, YES, NO));
-	NSArray *expected = @[@"Reply", @"Copy", @"Find Quote", @"Translate",
-			@"Speak", @"Edit", @"Pin", @"Forward", @"Delete", @"Select"];
-	// "Find Quote" is the action key; the visible row is official's "Quote".
-	XCTAssertTrue(actions.count >= expected.count);
-	XCTAssertEqualObjects([actions subarrayWithRange:NSMakeRange(0, expected.count)],
-			expected, @"the one card must follow official's row order");
+	NSArray *expected = @[@"Reply", @"Copy", @"Translate",
+			@"Edit", @"Pin", @"Forward", @"Delete", @"Select"];
+	XCTAssertEqualObjects(actions, expected,
+			@"the one card must follow official's compact row order");
 	XCTAssertFalse([actions containsObject:@"More"],
 			@"the second card is gone");
 	XCTAssertFalse([actions containsObject:@"Who Read This"],
@@ -124,7 +122,7 @@ static NSArray *TGMenuActions(NSDictionary *message, TGChatActionMenuContext con
 	}
 }
 
-- (void)testQuoteSpeakAndTranslateNeedRealTextOrACaption {
+- (void)testTranslateNeedsRealTextOrACaption {
 	NSDictionary *photo = @{
 		@"id" : @11, @"text" : @"Photo", @"outgoing" : @NO,
 		@"kind" : @"messagePhoto", @"photoId" : @5, @"caption" : @"",
@@ -158,7 +156,7 @@ static NSArray *TGMenuActions(NSDictionary *message, TGChatActionMenuContext con
 	TGChatActionMenuContext own = TGMenuContext(YES, NO, NO);
 	NSArray *ownActions = TGMenuActions(caption, own);
 	XCTAssertTrue([ownActions containsObject:@"Replace Photo"]);
-	XCTAssertTrue([ownActions containsObject:@"Find Quote"],
+	XCTAssertTrue([ownActions containsObject:@"Translate"],
 			@"a caption is a text the sender wrote");
 
 	TGChatActionMenuContext other = TGMenuContext(NO, NO, NO);
@@ -507,6 +505,47 @@ static NSArray *TGMenuActions(NSDictionary *message, TGChatActionMenuContext con
 	XCTAssertEqual(TGHoldLiftY(high, 40, 100, 10, 470), (CGFloat)50);
 	CGRect tall = CGRectMake(10, 200, 200, 400);
 	XCTAssertEqual(TGHoldLiftY(tall, 40, 100, 10, 470), (CGFloat)50);
+}
+
+- (void)testHoldScrollLayout_FitsOrScrollsFullSizeOnSmallScreen {
+	// Small 3.5" screen: 416pt available height.
+	// 1. Short bubble + compact card fits without scrolling.
+	CGRect shortBubble = CGRectMake(10, 120, 200, 50);
+	TGHoldScrollMetrics fit = TGHoldScrollLayout(shortBubble, 44, 8, 180, 8, 408, 416, 8);
+	XCTAssertEqual(fit.initialOffsetY, (CGFloat)0);
+	XCTAssertEqual(fit.contentH, (CGFloat)416);
+	XCTAssertLessThanOrEqual(fit.cardY + 180, (CGFloat)408);
+
+	// 2. Tall bubble + full-size 360pt card overflows 416pt screen -> scrollable canvas,
+	// full sizes kept, and initialOffsetY opens scrolled to the full action card.
+	CGRect tallBubble = CGRectMake(10, 60, 200, 420);
+	TGHoldScrollMetrics scroll = TGHoldScrollLayout(tallBubble, 44, 8, 360, 8, 408, 416, 8);
+	XCTAssertEqual(scroll.reactionBaseY, (CGFloat)8);
+	XCTAssertEqual(scroll.bubbleY, (CGFloat)52);
+	XCTAssertEqual(scroll.cardY, (CGFloat)(52 + 420 + 8));
+	XCTAssertGreaterThanOrEqual(scroll.contentH, scroll.cardY + 360 + 8);
+	XCTAssertEqual(scroll.initialOffsetY, scroll.contentH - (CGFloat)416);
+}
+
+- (void)testHoldStickyReactionY_PinsWithinBubbleBounds {
+	CGFloat baseY = 8, bubbleMaxY = 472, reactionH = 36, gap = 8, topInset = 8;
+	XCTAssertEqual(TGHoldStickyReactionY(baseY, bubbleMaxY, reactionH, gap, 0, topInset), (CGFloat)8);
+	XCTAssertEqual(TGHoldStickyReactionY(baseY, bubbleMaxY, reactionH, gap, 100, topInset), (CGFloat)108);
+	// Clamped before bottom of bubble so it never overlaps action card.
+	XCTAssertEqual(TGHoldStickyReactionY(baseY, bubbleMaxY, reactionH, gap, 500, topInset), (CGFloat)(472 - 36 - 8));
+}
+
+- (void)testQuoteSliceEntities_ShiftsAndClampsToSelectedRange {
+	NSArray *entities = @[
+		@{ @"@type" : @"textEntity", @"offset" : @0, @"length" : @3, @"type" : @{ @"@type" : @"textEntityTypeBold" } },
+		@{ @"@type" : @"textEntity", @"offset" : @4, @"length" : @10, @"type" : @{ @"@type" : @"textEntityTypeItalic" } },
+		@{ @"@type" : @"textEntity", @"offset" : @20, @"length" : @4, @"type" : @{ @"@type" : @"textEntityTypeCode" } },
+	];
+	NSArray *sliced = TGQuoteSliceEntities(entities, NSMakeRange(6, 6));
+	XCTAssertEqual(sliced.count, (NSUInteger)1);
+	XCTAssertEqualObjects(sliced[0][@"offset"], @0);
+	XCTAssertEqualObjects(sliced[0][@"length"], @6);
+	XCTAssertEqualObjects(sliced[0][@"type"][@"@type"], @"textEntityTypeItalic");
 }
 
 - (void)testSlowModeWait_ReadsLikeOfficial {

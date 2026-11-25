@@ -14,6 +14,7 @@
 @property (nonatomic, assign) uint64_t tieBreaker;
 @property (nonatomic, assign) BOOL connectedOverRelay;
 @property (nonatomic, assign) BOOL peerAddressIsPublic;
+@property (nonatomic, strong) NSMutableArray *sentTransactions;
 @end
 
 @implementation TGCallIce
@@ -21,6 +22,7 @@
 - (instancetype)init {
 	if ((self = [super init])){
 		_targets = [NSMutableArray array];
+		_sentTransactions = [NSMutableArray array];
 		_socketHandle = -1;
 		_controlling = YES;
 		arc4random_buf(&_tieBreaker, sizeof(_tieBreaker));
@@ -110,6 +112,12 @@
 												  tieBreaker:self.tieBreaker
 												useCandidate:self.controlling
 												 controlling:self.controlling];
+	NSData *txId = [TGCallStun transactionIdOf:request];
+	if (txId) {
+		[self.sentTransactions addObject:txId];
+		if (self.sentTransactions.count > 64)
+			[self.sentTransactions removeObjectAtIndex:0];
+	}
 
 	if (self.transport){
 		self.transport(request);
@@ -140,11 +148,29 @@
 	}
 }
 
+- (BOOL)isValidIncomingRequest:(NSData *)packet {
+	NSString *expectedUser = (self.localUfrag.length && self.peerUfrag.length)
+			? [NSString stringWithFormat:@"%@:%@", self.localUfrag, self.peerUfrag]
+			: nil;
+	return [TGCallStun verifyPacket:packet password:self.localPwd expectedUsername:expectedUser];
+}
+
+- (BOOL)isValidIncomingResponse:(NSData *)packet {
+	if (![TGCallStun verifyPacket:packet password:self.peerPwd expectedUsername:nil])
+		return NO;
+	NSData *txId = [TGCallStun transactionIdOf:packet];
+	if (!txId || ![self.sentTransactions containsObject:txId])
+		return NO;
+	return YES;
+}
+
 // Handle STUN packet received via reflector
 - (void)handleRelayedPacket:(NSData *)packet {
 	int type = [TGCallStun messageTypeOf:packet];
 
 	if (type == 0x0001){
+		if (![self isValidIncomingRequest:packet])
+			return;
 		NSData *response = [TGCallStun bindingResponseTo:packet
 												password:self.localPwd
 											 fromAddress:self.peerAddress];
@@ -157,6 +183,8 @@
 		return;
 	}
 	if (type == 0x0101){
+		if (![self isValidIncomingResponse:packet])
+			return;
 		[self markConnected:nil];
 		return;
 	}
@@ -168,6 +196,8 @@
 	int type = [TGCallStun messageTypeOf:packet];
 
 	if (type == 0x0001){
+		if (![self isValidIncomingRequest:packet])
+			return;
 		// A check from the peer. Answering it is what makes the pair usable
 		// in their direction.
 		NSData *response = [TGCallStun bindingResponseTo:packet
@@ -181,6 +211,8 @@
 	}
 
 	if (type == 0x0101){
+		if (![self isValidIncomingResponse:packet])
+			return;
 		[self markConnected:address];
 		return;
 	}

@@ -117,7 +117,7 @@
 		<integer>2</integer>
 	</array>
 	<key>UIFileSharingEnabled</key>
-	<true/>
+	<false/>
 	<key>UILaunchImages</key>
 	<array>
 		<dict>

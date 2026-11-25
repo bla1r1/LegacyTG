@@ -3,6 +3,7 @@
 //
 #import "TGDatabaseKey.h"
 #import "TGBase64.h"
+#import "TGPasscode.h"
 
 #if TARGET_OS_IPHONE
 #import <Security/Security.h>
@@ -62,9 +63,12 @@ static NSString *const TGDatabaseKeyAccount = @"tdlib";
 		return NO;
 	}
 
+	CFTypeRef accessible = [TGPasscode hasPasscode]
+			? kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+			: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly;
 	NSMutableDictionary *attributes = [@{
 		(__bridge id)kSecValueData : key,
-		(__bridge id)kSecAttrAccessible : (__bridge id)kSecAttrAccessibleAfterFirstUnlock,
+		(__bridge id)kSecAttrAccessible : (__bridge id)accessible,
 	} mutableCopy];
 
 	OSStatus status;
@@ -108,6 +112,12 @@ static NSString *const TGDatabaseKeyAccount = @"tdlib";
 }
 
 #endif
+
++ (void)refreshAccessibility {
+	NSData *key = [self currentKey];
+	if (key.length)
+		[self storeKey:key error:NULL];
+}
 
 + (NSData *)ensureKey {
 	NSData *key = [self currentKey];
